@@ -175,6 +175,14 @@ const PHASES = new Set(["idle", "running", "choices", "unrelated", "stopped", "d
 
 const CHANGES = new Set(["new", "updated", "deleted"]);
 
+/** Every string a value holds, at any depth. */
+export function stringsOf(value: unknown): string[] {
+  if (typeof value === "string") return [value];
+  if (Array.isArray(value)) return value.flatMap(stringsOf);
+  if (value !== null && typeof value === "object") return Object.values(value).flatMap(stringsOf);
+  return [];
+}
+
 /** Every reply and broadcast carries the GroupsState shape (space-30). */
 export function assertGroupsState(state: GroupsState): void {
   assert.deepEqual(Object.keys(state).sort(), GROUPS_KEYS);
@@ -201,8 +209,13 @@ export function assertGroupsState(state: GroupsState): void {
     assert.deepEqual(Object.keys(role).sort(), ["id", "mayPush", "name"]);
     assert.ok(typeof role.id === "string" && typeof role.name === "string" && typeof role.mayPush === "boolean", JSON.stringify(role));
   }
+  // The instance alone is named (space-30, DR-120): no string beyond the
+  // sign-in's own pages lies under the host's URL — no Git URL, no page —
+  // and none names the Git system behind it.
+  const leaks = stringsOf({ ...state, signIn: null }).filter((text) => text.startsWith(`${state.host.url}/`) || /gitlab/i.test(text));
+  assert.deepEqual(leaks, [], "the Groups state names nothing behind the instance");
   for (const group of state.groups) {
-    assert.deepEqual(Object.keys(group).sort(), ["can", "fullPath", "id", "name", "own", "repositories", "url"]);
+    assert.deepEqual(Object.keys(group).sort(), ["can", "fullPath", "id", "name", "own", "repositories"]);
     assert.deepEqual(Object.keys(group.can).sort(), ["createSubgroup", "manageMembers"]);
     assert.ok(typeof group.can.createSubgroup === "boolean" && typeof group.can.manageMembers === "boolean", JSON.stringify(group.can));
     if (group.own) assert.deepEqual(group.can, { createSubgroup: false, manageMembers: false }, "your own group takes no subgroup or member");

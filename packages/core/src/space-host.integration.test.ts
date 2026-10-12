@@ -25,7 +25,7 @@ import { Home } from "./home.js";
 import { seedHistorySession } from "./testing/demo.js";
 import { holdingFetch, samePair, settled } from "./testing/holding-fetch.js";
 import { clonePath, createSpaceHarness, OWN, OWN_KEY, ownClone, prefsOf, repositoryOf } from "./testing/space-harness.js";
-import type { StandinHost } from "./testing/standin-host.js";
+import { STANDIN_STORAGE, type StandinHost } from "./testing/standin-host.js";
 import type { GroupsState, RepositoryState } from "./protocol.js";
 
 const fixture = createSpaceHarness();
@@ -43,8 +43,7 @@ const HOST_NAME = "Stand-in Git host";
 
 /** The stand-in's bare repository holding a key's records. */
 function bareOf(host: StandinHost, key: string): string {
-  const parts = key.split("/");
-  return join(host.dir, ...parts.slice(0, -1), `${parts[parts.length - 1]}.git`);
+  return host.bareOf(key);
 }
 
 /** The host's id of the repository whose creation by the core a clone's
@@ -128,7 +127,11 @@ test("space-37: the browser sign-in renames your own group after the login, push
   assert.equal(git(bareOf(host, HOST_OWN), "rev-parse", "spex"), git(clone, "rev-parse", "spex"));
   assert.equal(git(bareOf(host, HOST_OWN), "symbolic-ref", "HEAD"), "refs/heads/main");
   assert.equal(git(clone, "config", "--get", "spex.repositoryId"), own.id);
-  assert.ok(own.remote?.startsWith(`${host.gitOrigin}/${LOGIN}/`) && !own.remote.includes("@"), own.remote ?? "");
+  // The clone's remote is the Git URL the stand-in handed over; the
+  // state reads it as its path in the instance (space-30, DR-120).
+  assert.equal(own.remote, HOST_OWN);
+  const origin = git(clone, "remote", "get-url", "origin");
+  assert.ok(origin.startsWith(`${host.gitOrigin}/${LOGIN}/`) && !origin.includes("@"), origin);
   assert.equal((await home.client.expectOk("config.get", {})).status, "valid", "your own group's config moved with it");
   // A core restarted on the home reads the same account and last sync,
   // no read time, and the host it recorded whatever SPEX_HOST_URL says
@@ -585,7 +588,7 @@ test("space-37: a join pick and the first sync into a repository with other memb
   // Members, as the host names them, read on each ask (space-62).
   const members = await home.client.expectOk("space.members", { repository: "acme/team-spex" });
   assert.deepEqual(members.members.map((member) => [member.login, member.role]), [[LOGIN, "Owner"], ["bob", "Developer"]]);
-  assert.match(members.membersUrl, /\/acme\/team-spex\/-\/project_members$/);
+  assert.deepEqual(Object.keys(members), ["members"], "no page of the host");
   await home.client.expectError("space.members", { repository: "acme/nowhere-spex" }, "not_found");
   // Join: the spex repository under workspace/acme/, the code into the
   // folder named, the two paired (space-63).
@@ -1090,7 +1093,7 @@ test("space-73: a repository the host moved keeps the clone's sync and this devi
   assert.deepEqual(await home.client.expectOk("space.pick", { repository: key, choice: { kind: "join", hostId: id }, noticed: true }), { accepted: true });
   const joined = await home.client.repository(key);
   assert.equal(joined.state, "reachable");
-  assert.equal(joined.remote, `${host.gitOrigin}/acme/invites-spex.git`);
+  assert.equal(joined.remote, "acme/invites-spex");
   assert.equal(joined.id, id);
   assert.deepEqual(joined.lastSync, synced.lastSync, "this device's recorded sync is kept");
   assert.deepEqual(joined.branch?.agreed, { at, current: true }, "the sync the clone holds is kept");
@@ -1109,7 +1112,7 @@ test("space-73: a repository the host moved keeps the clone's sync and this devi
   const fromOther = home.client.mark();
   await home.client.expectOk("space.pick", { repository: moved, choice: { kind: "create", groupId: "2003", name: "invites" } });
   const other = await home.client.repository(moved);
-  assert.equal(other.remote, `${host.gitOrigin}/acme/research/invites-spex.git`);
+  assert.equal(other.remote, "acme/research/invites-spex");
   assert.ok(other.id && other.id !== id, JSON.stringify(other.id));
   assert.equal(other.lastSync, null);
   assert.equal(other.branch?.agreed, null);
@@ -1513,7 +1516,7 @@ test("space-38: a second home joins a project from the stand-in with its code; a
   assert.equal(moved.sync.phase, "done", JSON.stringify(moved.sync));
   assert.ok(existsSync(clonePath(b.dataDir, renamed)) && !existsSync(clonePath(b.dataDir, key)));
   assert.equal(Home.load(b.dataDir).keyForFolder(folderB), renamed);
-  assert.equal(git(clonePath(b.dataDir, renamed), "remote", "get-url", "origin"), `${host.gitOrigin}/acme/renamed-spex.git`);
+  assert.equal(git(clonePath(b.dataDir, renamed), "remote", "get-url", "origin"), `${host.gitOrigin}/${STANDIN_STORAGE}/acme/renamed-spex.git`);
   assert.ok((await b.client.expectOk("session.list", {})).some((session) => session.id === sessionA && session.projectId === renamed));
   const sessionA2 = await runTurn(a, key, "Second from A");
   const fromA2 = a.client.mark();
@@ -1563,14 +1566,14 @@ test("space-38, space-52: the stand-in's 401 stops reauth, its refusal names onl
   assert.ok(reauth.sync.phase === "stopped" && reauth.sync.cause === "reauth" && reauth.sync.message === "Sign in again", JSON.stringify(reauth.sync));
   assert.match(reauth.sync.guidance, /Sign in from the header/);
   host.script.unauthorizeTransport(false);
-  // A refusal names the host's own words and the members page, claims no
-  // role and offers no act the host did not name (space-50).
-  const words = "Your account is blocked by GitLab.com: contact support.";
+  // A refusal names the host's own words and Share, claims no role and
+  // offers no act the host did not name (space-50).
+  const words = "Your account is blocked: contact support.";
   host.script.refuseTransport(words);
   const refused = await home.client.settle("space.sync", { repository: HOST_OWN });
   assert.ok(refused.sync.phase === "stopped" && refused.sync.cause === "refused", JSON.stringify(refused.sync));
   assert.equal(refused.sync.message, `${HOST_NAME} refused: ${words}`);
-  assert.match(refused.sync.guidance, /members page/);
+  assert.equal(refused.sync.guidance, "Membership decides who may send here: use Share, or ask a member who may share it.");
   assert.doesNotMatch(`${refused.sync.message} ${refused.sync.guidance}`, /\b(Owner|Maintainer|Developer|Reporter|Guest|role)\b|SSH key|gh auth|credential helper/);
   assert.deepEqual([refused.state, refused.reason], ["read-only", refused.sync.message]);
   host.script.refuseTransport(null);
@@ -1835,14 +1838,12 @@ test("git-host-8, git-host-16, git-host-17: a group's members with their source;
   // A group's members, each with its source (git-host-8).
   const group = await home.client.expectOk("space.members", { group: "2003" });
   assert.deepEqual(group.members.map((m) => [m.login, m.role, m.direct, m.via]), [["grace", "Developer", true, null], [LOGIN, "Owner", false, "acme"]]);
-  assert.equal(group.membersUrl, `${host.url}/acme/research/-/group_members`);
 
   // Added by login at a role's id: to a group, to a spex repository this
   // device lacks, and to your own group's clone, each reply the
   // stand-in's members afterwards (git-host-16).
   const toGroup = await home.client.expectOk("space.share", { group: "2002", login: "alan", role: "maintainer" });
   assert.deepEqual(toGroup.members.map((m) => [m.login, m.role, m.direct]), [[LOGIN, "Owner", true], ["alan", "Maintainer", true]]);
-  assert.equal(toGroup.membersUrl, `${host.url}/acme/-/group_members`);
   const toRepository = await home.client.expectOk("space.share", { repository: "acme/team-spex", login: "grace", role: "developer" });
   assert.deepEqual(toRepository.members.map((m) => [m.login, m.role, m.direct, m.via]), [
     [LOGIN, "Owner", true, null], ["bob", "Developer", true, null], ["grace", "Developer", true, null], ["alan", "Maintainer", false, "acme"],

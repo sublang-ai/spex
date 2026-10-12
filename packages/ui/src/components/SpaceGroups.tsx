@@ -12,9 +12,12 @@
 // (space-63), the members the host reports (space-62), the first-push
 // notice (space-57) and the joining of unrelated histories (space-13).
 // Signed in, "New group" heads the list where the host lets the person
-// create one, and a group of the host carries Members and, where the
-// host lets them, "New subgroup" on its heading (space-68, DR-114);
-// your own group's heading carries neither.
+// create one, and where it says not, the one phrase naming who makes
+// groups, with no link and no control (DR-120); a group of the host
+// carries Members and, where the host lets them, "New subgroup" on its
+// heading (space-68, DR-114); your own group's heading carries neither,
+// nor does another account's login. No part of the list links a page
+// of the host, or names what stands behind the instance (space-1).
 // Every act is a command whose outcome arrives as state (space-29).
 
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
@@ -29,18 +32,27 @@ import {
   displayRemote,
   isGroupRepository,
   lastSegment,
+  cloneHere,
   lastSyncOf,
-  openHostPage,
   pickDirectoryBridge,
   repositoryStatePhrase,
   sameRemote,
 } from "../lib/space.js";
 import { Icon } from "./Icon.js";
 import { InlineConfirm } from "./InlineConfirm.js";
-import { GroupNameEditor, MembersPanel, pageHost } from "./SpaceMembers.js";
+import { GroupNameEditor, MembersPanel } from "./SpaceMembers.js";
+import { siteName } from "./SpaceSignIn.js";
 import { SECONDARY, syncRefusal, type Note } from "./SpaceSurface.js";
 
 type Group = GroupsState["groups"][number];
+
+/** A group entry's identity in the list (space-1, DR-120): your own
+ * once, a group of the host by its id, another account's login or a
+ * group no read lists by its path — never the path alone, which your
+ * own group and a group named like your login share. */
+export function groupKey(group: Group): string {
+  return group.own ? "own" : group.id !== null ? `id:${group.id}` : `path:${group.fullPath}`;
+}
 
 /** A repository's dot carries the status palette (DR-010 §8): neutral
  * idle, emerald running, amber choices and unrelated, red stopped. */
@@ -115,8 +127,9 @@ function rowControl(groups: GroupsState, group: Group, repo: RepositoryState): R
 }
 
 /** The groups list (space-1): "New group" at its head where the host
- * lets the person create one, then each group with its full path and,
- * under it, one row per spex repository in the core's order. */
+ * lets the person create one, the phrase naming who makes groups where
+ * it says not, then each group with its path and, under it, one row per
+ * spex repository in the core's order. */
 export function GroupsList({
   groups,
   now,
@@ -143,12 +156,12 @@ export function GroupsList({
     >
       {groups.account?.canCreateGroup ? (
         <NewGroup connected={connected} onNote={onNote} />
-      ) : groups.account ? (
-        <NewGroupAtHost groups={groups} />
+      ) : groups.account && groups.readAt !== null ? (
+        <GroupsMadeBy groups={groups} />
       ) : null}
       {groups.groups.map((group) => (
         <GroupSection
-          key={group.fullPath}
+          key={groupKey(group)}
           groups={groups}
           group={group}
           now={now}
@@ -199,42 +212,26 @@ function NewGroup({ connected, onNote }: { connected: boolean; onNote: Note }) {
 }
 
 /** Where the host's read says the person may not create a group, the
- * host's own site, where a group at the top is then made (space-1,
- * DR-118): the origin of your own group's page as the read gives it,
- * named by its host. Nothing stands before a read gives that page. */
-function NewGroupAtHost({ groups }: { groups: GroupsState }) {
-  const page = groups.groups.find((group) => group.own)?.url ?? null;
-  let site: string | null = null;
-  try {
-    site = page ? new URL(page).origin : null;
-  } catch {
-    site = null;
-  }
-  if (!site || site === "null") return null;
-  const label = i18n._({
-    id: "New group at {site}",
-    comment: "link to the Git host's own site, where a group at the top is made when Spex may not create one; {site} is that site's host name",
-    values: { site: pageHost(site, groups) },
-  });
+ * one phrase naming who makes groups in this instance, with no link and
+ * no control (space-1, DR-120); the caller shows it only once a read is
+ * held. */
+function GroupsMadeBy({ groups }: { groups: GroupsState }) {
   return (
-    <a
-      data-testid="space-new-group-at-host"
-      href={site}
-      target="_blank"
-      rel="noreferrer"
-      title={label}
-      onClick={(event) => openHostPage(event, site)}
-      className="min-w-0 max-w-full self-start truncate text-xs text-brand-600 hover:underline dark:text-brand-300"
-    >
-      {label}
-    </a>
+    <p data-testid="space-groups-made-by" className="min-w-0 text-xs text-neutral-500">
+      {i18n._({
+        id: "Groups are made by the people who run {name}",
+        comment: "the groups list's head where the person may not create a group; {name} is the instance's display name; no link, no control",
+        values: { name: groups.host.displayName ?? siteName(groups) },
+      })}
+    </p>
   );
 }
 
 /** One group (space-1): its heading — with Members and, where the
  * host lets the person, "New subgroup" on a group of the host, your
- * own group's carrying neither (DR-114) — and its repositories' rows.
- * What a heading's control opens stands beneath the heading. */
+ * own group's and another account's login's carrying neither (DR-114,
+ * DR-120) — and its repositories' rows. What a heading's control opens
+ * stands beneath the heading. */
 function GroupSection({
   groups,
   group,
@@ -272,7 +269,8 @@ function GroupSection({
         ? group.fullPath
         : null;
   // Your own group takes no subgroup and no member: what is there is
-  // shared on its spex repositories (DR-114).
+  // shared on its spex repositories (DR-114); another account's login,
+  // listed by no id, takes nothing either (DR-120).
   const hostGroup = groups.account !== null && !group.own && group.id !== null ? group.id : null;
   const close = (ref: { current: HTMLButtonElement | null }) => {
     setOpened(undefined);
@@ -634,9 +632,9 @@ function RepositoryRow({
       controlButton = null;
   }
 
-  // A clone whose code found no folder here is paired later (space-63).
-  const needsFolder =
-    !groupRepository && repo.folder === null && repo.state !== "absent" && repo.state !== "local-only";
+  // A clone whose code found no folder here is paired later (space-63);
+  // a row with no clone here has nothing to pair (space-61).
+  const needsFolder = cloneHere(repo) && !groupRepository && repo.folder === null && repo.state !== "local-only";
   const showMembers = repo.state === "reachable" && groups.account !== null;
 
   const code = repo.code
@@ -1017,8 +1015,9 @@ export function GroupPicker({
       )
       .map((other) => ({ group, repo: other })),
   );
-  // The host's own groups; GroupsState names no right to create, so
-  // every group is offered and a refusal waits on the row (space-64).
+  // Your own group and the host's own groups, never another account's
+  // login (space-58); GroupsState names no right to create a repository,
+  // so every group is offered and a refusal waits on the row (space-64).
   const creatable = groups.groups.filter((group) => group.id !== null || group.own);
   const defaultName = repo.folder ? lastSegment(repo.folder) : repo.name.replace(/-spex$/, "");
   const [name, setName] = useState(defaultName);
@@ -1135,7 +1134,7 @@ export function GroupPicker({
         </label>
         <ul className="flex min-w-0 flex-col gap-1">
           {creatable.map((group) => (
-            <li key={group.fullPath} className="min-w-0">
+            <li key={groupKey(group)} className="min-w-0">
               <button
                 ref={takeFirst()}
                 type="button"

@@ -7,6 +7,7 @@
 
 Accepted (2026-10-11).
 Amends [DR-114](114-groups-and-sharing-from-spex.md) in "where the host does not let this person act, nothing is shown": at the groups list's head, where the host's read says the person may not create a group, a link to the host's site stands in place of "New group".
+Superseded by [DR-120](120-the-instance-is-the-space.md): no link to the host's site stands at the groups list's head; where the host's read says the person may not create a group, the head reads "Groups are made by the people who run <display name>" with no link and no control.
 
 ## Context
 

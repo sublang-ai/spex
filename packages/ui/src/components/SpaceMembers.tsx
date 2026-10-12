@@ -15,7 +15,6 @@ import type { GroupsState, HostMemberInfo } from "@sublang/spex-core/protocol";
 
 import { useAppStore, type SpaceMembersReply, type SpaceMembersTarget } from "../state/store.js";
 import { i18n } from "../i18n.js";
-import { openHostPage } from "../lib/space.js";
 import { InlineConfirm } from "./InlineConfirm.js";
 import { siteName } from "./SpaceSignIn.js";
 import { SECONDARY, type Note } from "./SpaceSurface.js";
@@ -29,16 +28,6 @@ const REFUSAL = "min-w-0 text-xs text-red-600 dark:text-red-400";
  * is gone: closing never strands focus (DR-010 §6). */
 function focusLater(ref: { current: HTMLElement | null }): void {
   setTimeout(() => ref.current?.focus(), 0);
-}
-
-/** The host name of the host's page a link opens (space-62), else the
- * host as the sign-in names it. */
-export function pageHost(url: string, groups: GroupsState): string {
-  try {
-    return new URL(url).hostname || siteName(groups);
-  } catch {
-    return siteName(groups);
-  }
 }
 
 /** A group's path as the host derives it from its name (space-68):
@@ -319,20 +308,6 @@ export function MembersPanel({
                 {i18n._({ id: "Share", comment: "add a person on the Git host to a group or a spex repository" })}
               </button>
             ) : null}
-            <a
-              data-testid={`space-members-link-${id}`}
-              href={result.membersUrl}
-              target="_blank"
-              rel="noreferrer"
-              onClick={(event) => openHostPage(event, result.membersUrl)}
-              className="min-w-0 truncate text-xs text-brand-600 hover:underline dark:text-brand-300"
-            >
-              {i18n._({
-                id: "Open at {host}",
-                comment: "link to the Git host's own members page, where everything else about members is changed",
-                values: { host: pageHost(result.membersUrl, groups) },
-              })}
-            </a>
           </div>
           {sharing ? (
             <ShareEditor

@@ -29,6 +29,7 @@ import { absoluteTitle, relativeAge } from "../lib/time.js";
 import {
   STEP_LINES,
   STEP_NAMES,
+  cloneHere,
   clonePath,
   repositoryStatePhrase,
   revealBridge,
@@ -563,13 +564,18 @@ function RepositoryPanel({
 
   const dot = statusDot(repo);
   const root = clonePath(groups.home, repo.key);
-  const absent = repo.state === "absent";
+  // No clone here: a row the host lists that this device lacks, or one
+  // in a group named like a login (space-61).
+  const absent = !cloneHere(repo);
   return (
     <section
       id="space-repository"
       data-testid="space-repository"
       aria-label={repo.name}
-      className="flex min-h-0 min-w-0 flex-1 flex-col gap-3"
+      // The explorer fills the pane and scrolls inside itself; the Sync
+      // tab keeps its whole height, so a long groups list scrolls the
+      // surface instead of laying the foot over its lists (space-28).
+      className={`flex min-w-0 flex-1 flex-col gap-3 ${tab === "explore" ? "min-h-0" : ""}`}
     >
       <div
         data-testid="space-repository-header"

@@ -40,6 +40,14 @@ export function displayRemote(url: string): string {
   return embedded ? `${embedded[1]}${embedded[3]}` : url;
 }
 
+/** Whether a spex repository's clone is on this device: the core reads
+ * no branch where none is (space-30) — a row the host lists that this
+ * device lacks, or one in a group named like a login, which takes no
+ * folder (space-61). */
+export function cloneHere(repo: RepositoryState): boolean {
+  return repo.state === "local-only" || repo.branch !== null;
+}
+
 /** A spex repository's clone: its key is its path under `workspace/`
  * (storage-1). */
 export function clonePath(home: string, key: string): string {
@@ -411,18 +419,6 @@ export function openExternalBridge(): ((url: string) => Promise<boolean>) | unde
   return typeof native?.openExternal === "function"
     ? (native.openExternal as (url: string) => Promise<boolean>)
     : undefined;
-}
-
-/** Follow a link to a page at the host (space-1, space-62): through
- * the native bridge's system browser where the shell has one, else as
- * the link itself does, in a new tab. */
-export function openHostPage(event: { preventDefault(): void }, url: string): void {
-  const open = openExternalBridge();
-  if (!open) return;
-  event.preventDefault();
-  void open(url).then((shown) => {
-    if (!shown) window.open(url, "_blank", "noreferrer");
-  });
 }
 
 /** The native bridge's directory picker, where the shell offers one

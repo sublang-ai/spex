@@ -62,7 +62,6 @@ function teamGroup(repos?: RepositoryState[]): GroupsState["groups"][number] {
     id: "2",
     fullPath: "acme/team",
     name: "team",
-    url: "https://gitlab.example/acme/team",
     own: false,
     can: NO_CAN,
     repositories: repos ?? [
@@ -86,7 +85,7 @@ function signedOut(over: Partial<GroupsState> = {}): GroupsState {
   const project = repo({ state: "local-only", remote: null, id: null, code: CODE, branch: null, members: null });
   return {
     ...base({ account: null, readAt: null, ...over }),
-    groups: [{ id: null, fullPath: "jane", name: "jane", url: null, own: true, can: NO_CAN, repositories: [own, project] }],
+    groups: [{ id: null, fullPath: "jane", name: "jane", own: true, can: NO_CAN, repositories: [own, project] }],
   };
 }
 
@@ -104,7 +103,7 @@ describe("GROUPS: the header (space-1, space-2)", () => {
     expect(screen.getByTestId("space-surface").lastElementChild).toBe(home);
     expect(within(screen.getByTestId("space-header")).queryByRole("button", { name: "Copy path" })).toBeNull();
     // The host's name yields first below @md; the login stays.
-    expect(screen.getByTestId("space-account-wide").textContent).toBe("Signed in as @jane at GitLab");
+    expect(screen.getByTestId("space-account-wide").textContent).toBe("Signed in as @jane at Spex Example");
     expect(screen.getByTestId("space-account-wide").className).toContain("@md:inline");
     expect(screen.getByTestId("space-account-narrow").textContent).toBe("Signed in as @jane");
     expect(screen.getByTestId("space-account-narrow").className).toContain("@md:hidden");
@@ -139,12 +138,12 @@ describe("GROUPS: the header (space-1, space-2)", () => {
   test("a refused Refresh says why beside it", async () => {
     await renderGroups(base(), { open: false });
     commandMock.mockImplementation(async (type: string, fields?: Record<string, unknown>) => {
-      if (type === "space.refresh") throw new Error("Could not reach GitLab");
+      if (type === "space.refresh") throw new Error("Could not reach Spex Example");
       return answer(type, fields);
     });
     fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
-    expect((await screen.findByRole("alert")).textContent).toBe("Could not reach GitLab");
-    expect(live()).toBe("Could not reach GitLab");
+    expect((await screen.findByRole("alert")).textContent).toBe("Could not reach Spex Example");
+    expect(live()).toBe("Could not reach Spex Example");
   });
 
   test("signed out, the header is one card with what signing in brings and Sign in, and the list holds your own group alone", async () => {
@@ -213,7 +212,7 @@ describe("GROUPS: signing in (space-3, space-6)", () => {
     (window as { spexNative?: unknown }).spexNative = { pickDirectory: vi.fn(), openExternal };
     await renderGroups(signedOut(), { open: false });
     fireEvent.click(screen.getByTestId("space-signin"));
-    await waitFor(() => expect(openExternal).toHaveBeenCalledWith("https://gitlab.example/login/app?client_id=spex&state=s"));
+    await waitFor(() => expect(openExternal).toHaveBeenCalledWith("https://spex.example/login/app?client_id=spex&state=s"));
     expect(calls("space.signin.start")).toEqual([{}]);
     const control = screen.getByTestId("space-signin") as HTMLButtonElement;
     await waitFor(() => expect(control.textContent).toBe("Signing in…"));
@@ -221,11 +220,11 @@ describe("GROUPS: signing in (space-3, space-6)", () => {
     // Where the browser is open and what to do there, with the page
     // offered again through the bridge (space-3).
     expect(screen.getByTestId("space-signin-opened").textContent).toBe(
-      "Your browser is open at gitlab.example: sign in there and approve; you return here signed in. Open it again",
+      "Your browser is open at spex.example: sign in there and approve; you return here signed in. Open it again",
     );
     const again = screen.getByTestId("space-signin-link") as HTMLAnchorElement;
     expect(again.textContent).toBe("Open it again");
-    expect(again.href).toBe("https://gitlab.example/login/app?client_id=spex&state=s");
+    expect(again.href).toBe("https://spex.example/login/app?client_id=spex&state=s");
     fireEvent.click(again);
     expect(openExternal).toHaveBeenCalledTimes(2);
     expect(screen.getByRole("button", { name: "Cancel" })).toBeTruthy();
@@ -233,7 +232,7 @@ describe("GROUPS: signing in (space-3, space-6)", () => {
     deliver(signedOut({ signIn: { phase: "running", flow: "browser", since: NOW } }));
     expect(control.textContent).toBe("Signing in…");
     deliver(base());
-    expect(screen.getByTestId("space-account-wide").textContent).toBe("Signed in as @jane at GitLab");
+    expect(screen.getByTestId("space-account-wide").textContent).toBe("Signed in as @jane at Spex Example");
     expect(screen.getByRole("button", { name: "Sign out" })).toBeTruthy();
   });
 
@@ -241,8 +240,8 @@ describe("GROUPS: signing in (space-3, space-6)", () => {
     await renderGroups(signedOut(), { open: false });
     fireEvent.click(screen.getByTestId("space-signin"));
     const link = (await screen.findByTestId("space-signin-link")) as HTMLAnchorElement;
-    expect(link.href).toBe("https://gitlab.example/login/app?client_id=spex&state=s");
-    expect(link.textContent).toBe("Open gitlab.example to sign in");
+    expect(link.href).toBe("https://spex.example/login/app?client_id=spex&state=s");
+    expect(link.textContent).toBe("Open spex.example to sign in");
     expect(screen.getByTestId("space-signin-finish").textContent).toBe("Continue in your browser:");
     cleanup();
     const openExternal = vi.fn<(url: string) => Promise<boolean>>().mockResolvedValue(false);
@@ -295,7 +294,7 @@ describe("GROUPS: signing in (space-3, space-6)", () => {
       signedOut({ signIn: { phase: "running", flow: "device", userCode: "ABCD-EFGH", verificationUri: complete, since: NOW } }),
       { open: false },
     );
-    expect(screen.getByTestId("space-signin-link").textContent).toBe("Open gitlab.example to sign in");
+    expect(screen.getByTestId("space-signin-link").textContent).toBe("Open spex.example to sign in");
     expect((screen.getByTestId("space-signin-link") as HTMLAnchorElement).href).toBe(complete);
     expect(screen.getByTestId("space-signin-body").textContent).toContain("Sign in there and approve");
     expect(document.body.textContent).not.toContain("ABCD-EFGH");
@@ -303,9 +302,9 @@ describe("GROUPS: signing in (space-3, space-6)", () => {
   });
 
   test("a denial, an expiry or a refusal ends the flow with its cause beside the control, which reads Sign in again", async () => {
-    await renderGroups(signedOut({ signIn: { phase: "running", flow: "device", userCode: "ABCD-EFGH", verificationUri: "https://gitlab.example/oauth/device", since: NOW } }), { open: false });
-    deliver(signedOut({ signIn: { phase: "failed", cause: "denied", message: "The sign-in was denied at GitLab" } }));
-    expect(screen.getByTestId("space-signin-error").textContent).toBe("The sign-in was denied at GitLab.");
+    await renderGroups(signedOut({ signIn: { phase: "running", flow: "device", userCode: "ABCD-EFGH", verificationUri: "https://spex.example/oauth/device", since: NOW } }), { open: false });
+    deliver(signedOut({ signIn: { phase: "failed", cause: "denied", message: "The sign-in was denied at Spex Example" } }));
+    expect(screen.getByTestId("space-signin-error").textContent).toBe("The sign-in was denied at Spex Example.");
     expect(screen.getByTestId("space-signin").textContent).toBe("Sign in again");
     expect(screen.queryByTestId("space-signin-link")).toBeNull();
     // A start the core refuses says why in the same place.
@@ -323,8 +322,8 @@ describe("GROUPS: signing in (space-3, space-6)", () => {
     // The host's name is its URL's host name, as on the rest of the card.
     expect(screen.getByTestId("space-signin-body").textContent).toBe(
       language === "zh"
-        ? "gitlab.example 已让此设备退出登录。重新登录即可以 @jane 继续。在此之前，一切都只保存在此设备上，不会联系任何服务。"
-        : "gitlab.example signed this device out. Sign in again to continue as @jane." +
+        ? "spex.example 已让此设备退出登录。重新登录即可以 @jane 继续。在此之前，一切都只保存在此设备上，不会联系任何服务。"
+        : "spex.example signed this device out. Sign in again to continue as @jane." +
             "Until you do, everything stays on this device and nothing is contacted.",
     );
     expect(screen.getByTestId("space-signin").textContent).toBe(language === "zh" ? "重新登录" : "Sign in again");
@@ -342,10 +341,10 @@ describe("GROUPS: signing in (space-3, space-6)", () => {
     expect(screen.getByTestId("space-signin").textContent).toBe("Signing in…");
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     await waitFor(() => expect(screen.getByTestId("space-signin").textContent).toBe("Sign in again"));
-    expect(screen.getByTestId("space-signin-caption").textContent).toBe("gitlab.example signed this device out. Sign in again to continue as @jane.");
+    expect(screen.getByTestId("space-signin-caption").textContent).toBe("spex.example signed this device out. Sign in again to continue as @jane.");
     // A sign-in that completes reads the account, the sentence gone.
     deliver(base());
-    expect(screen.getByTestId("space-account-wide").textContent).toBe("Signed in as @jane at GitLab");
+    expect(screen.getByTestId("space-account-wide").textContent).toBe("Signed in as @jane at Spex Example");
     expect(screen.queryByTestId("space-signin-caption")).toBeNull();
   });
 
@@ -377,8 +376,8 @@ describe("GROUPS: the groups list and its rows (space-1, space-61, space-64)", (
     const mine = base({}, [repo({ local: [SESSION_UNIT], lastSync: { at: NOW - 2 * 60 * MIN, sent: 1, received: 0 } })]);
     // A personal group the host names after the login, its path apart
     // from its name, and a group whose name is its path (space-1).
-    const personal = { ...teamGroup([]), id: "3", fullPath: "jane1", name: "jane", url: "https://gitlab.example/jane1" };
-    const plain = { ...teamGroup([]), id: "4", fullPath: "lab", name: "lab", url: "https://gitlab.example/lab" };
+    const personal = { ...teamGroup([]), id: "3", fullPath: "jane1", name: "jane", url: "https://spex.example/jane1" };
+    const plain = { ...teamGroup([]), id: "4", fullPath: "lab", name: "lab", url: "https://spex.example/lab" };
     await renderGroups({ ...mine, groups: [...mine.groups, teamGroup(), personal, plain] }, { open: false });
     const groups = within(screen.getByTestId("space-groups")).getAllByRole("group");
     expect(groups.map((group) => group.getAttribute("aria-label"))).toEqual(["Your own group", "acme/team", "jane1", "lab"]);
@@ -702,8 +701,87 @@ describe("GROUPS: Join (space-63)", () => {
   });
 });
 
+describe("GROUPS: the instance's entries (space-1, space-58, space-61, DR-120)", () => {
+  /** Your own group; acme; another account's login under which the host
+   * lists a repository; and a group named like your login. */
+  function instanceHome(): GroupsState {
+    const home = base({}, [repo({ state: "local-only", remote: null, id: null, branch: null, members: null })]);
+    return {
+      ...home,
+      groups: [
+        home.groups[0]!,
+        { id: "3", fullPath: "acme", name: "Acme", own: false, can: { createSubgroup: true, manageMembers: true }, repositories: [] },
+        {
+          id: null,
+          fullPath: "bob",
+          name: "bob",
+          own: false,
+          can: NO_CAN,
+          repositories: [repo({ key: "bob/notes-spex", name: "notes-spex", id: "80", remote: "bob/notes-spex", code: null, folder: null, members: 2, can: { manageMembers: true } })],
+        },
+        {
+          id: "9",
+          fullPath: "jane",
+          name: "Jane's team",
+          own: false,
+          can: { createSubgroup: true, manageMembers: true },
+          repositories: [
+            repo({ key: "jane/jane-spex@81", name: "jane-spex", id: "81", remote: "jane/jane-spex", code: null, folder: null, state: "unreachable", reason: "a group named like your login", branch: null }),
+          ],
+        },
+      ],
+    };
+  }
+
+  test("another login's entry carries no control on its heading, its row its own Members; a group named like your login stands apart, unreachable with no Join and no Sync", async () => {
+    await renderGroups(instanceHome(), { open: false });
+    const own = screen.getByRole("group", { name: "Your own group" });
+    expect(within(own).getByRole("heading", { level: 2 }).textContent).toBe("Your own group · jane");
+    // bob: headed by the login, nothing on its heading (space-1).
+    const bob = screen.getByRole("group", { name: "bob" });
+    expect(within(bob).getByRole("heading", { level: 2 }).textContent).toBe("bob");
+    expect(screen.queryByTestId("space-group-members-bob")).toBeNull();
+    expect(screen.queryByTestId("space-group-subgroup-bob")).toBeNull();
+    // Its row carries its own Members, Share where the host says so (space-62).
+    fireEvent.click(screen.getByTestId("space-row-members-bob/notes-spex"));
+    const members = await screen.findByTestId("space-members-bob/notes-spex");
+    await within(members).findByTestId("space-member-jane");
+    expect(within(members).getByTestId("space-share-bob/notes-spex").textContent).toBe("Share");
+    // The group named like your login: its own entry, its row
+    // unreachable with the cause, Retry its one control (space-61).
+    const apart = screen.getByRole("group", { name: "jane" });
+    expect(within(apart).getByRole("heading", { level: 2 }).textContent).toBe("Jane's team · jane");
+    const row = within(apart).getByTestId("space-row-jane/jane-spex@81");
+    expect(within(row).getByTestId("space-repo-state-jane/jane-spex@81").textContent).toBe("Unreachable: a group named like your login");
+    expect(within(row).queryByTestId("space-row-join-jane/jane-spex@81")).toBeNull();
+    expect(within(row).queryByTestId("space-row-sync-jane/jane-spex@81")).toBeNull();
+    expect(within(row).getByTestId("space-row-retry-jane/jane-spex@81").textContent).toBe("Retry");
+    // No link anywhere, and no URL but a code remote as the reader set
+    // it (space-1).
+    const list = screen.getByTestId("space-groups");
+    expect(list.querySelector("a")).toBeNull();
+    expect(list.textContent ?? "").not.toMatch(/spex\.example\//);
+    expect(within(row).queryByTestId("space-row-folder-jane/jane-spex@81")).toBeNull();
+  });
+
+  test("a row with no clone here opens with no clone's path or tree, and the pick offers no login's entry", async () => {
+    await renderGroups(instanceHome(), { open: false });
+    fireEvent.click(screen.getByTestId("space-repo-jane/jane-spex@81"));
+    const panel = await screen.findByTestId("space-repository");
+    expect(within(panel).queryByTestId("space-clone-path")).toBeNull();
+    expect(within(screen.getByTestId("space-sync-tab")).getByText("Not on this device")).toBeTruthy();
+    // The pick offers your own group and the host's groups by their
+    // paths, never another account's login (space-58).
+    fireEvent.click(screen.getByTestId(`space-row-pick-${KEY}`));
+    const picker = await screen.findByTestId(`space-picker-${KEY}`);
+    const offered = within(picker).getAllByTestId(/^space-pick-group-/).map((button) => button.textContent);
+    expect(offered).toEqual(["jane", "acme", "jane"]);
+    expect(within(picker).queryByTestId("space-pick-group-bob")).toBeNull();
+  });
+});
+
 describe("GROUPS: Members (space-62)", () => {
-  test("Members lists the host's members with their role names and the host's members page, read on every opening and Refresh", async () => {
+  test("Members lists the host's members with their role names and no page of the host, read on every opening and Refresh", async () => {
     await renderGroups(base(), { open: false });
     const control = screen.getByTestId(`space-row-members-${KEY}`);
     expect(control.getAttribute("aria-label")).toBe("Members");
@@ -715,43 +793,33 @@ describe("GROUPS: Members (space-62)", () => {
     expect(screen.getByTestId("space-member-jane").textContent).toContain("Owner");
     expect(screen.getByTestId("space-member-bob").textContent).toContain("bob");
     expect(screen.getByTestId("space-member-bob").textContent).toContain("Developer");
-    const link = screen.getByTestId(`space-members-link-${KEY}`) as HTMLAnchorElement;
-    expect(link.textContent).toBe("Open at gitlab.example");
-    expect(link.href).toBe("https://gitlab.example/jane/academy-spex/-/project_members");
+    // No link to a page of the host (space-62, DR-120).
+    expect(list.querySelector("a")).toBeNull();
     // Refresh reads them again; nothing is cached across reads.
     fireEvent.click(screen.getByTestId("space-refresh"));
     await waitFor(() => expect(calls("space.members")).toHaveLength(2));
-    fireEvent.keyDown(link, { key: "Escape" });
+    fireEvent.keyDown(screen.getByTestId("space-member-jane"), { key: "Escape" });
     expect(screen.queryByRole("region", { name: "Members of academy-spex" })).toBeNull();
     await waitFor(() => expect(document.activeElement).toBe(control));
     fireEvent.click(control);
     await waitFor(() => expect(calls("space.members")).toHaveLength(3));
   });
 
-  test("with the bridge the members page opens in the system browser", async () => {
-    const openExternal = vi.fn<(url: string) => Promise<boolean>>().mockResolvedValue(true);
-    (window as { spexNative?: unknown }).spexNative = { pickDirectory: vi.fn(), openExternal };
-    await renderGroups(base(), { open: false });
-    fireEvent.click(screen.getByTestId(`space-row-members-${KEY}`));
-    fireEvent.click(await screen.findByTestId(`space-members-link-${KEY}`));
-    expect(openExternal).toHaveBeenCalledWith("https://gitlab.example/jane/academy-spex/-/project_members");
-  });
-
   test("a read the host refuses says so in place", async () => {
     commandMock.mockImplementation(async (type: string, fields?: Record<string, unknown>) => {
-      if (type === "space.members") throw new Error("GitLab refused: 404 Project Not Found");
+      if (type === "space.members") throw new Error("Spex Example refused: 404 Project Not Found");
       return answer(type, fields);
     });
     await renderGroups(base(), { open: false });
     fireEvent.click(screen.getByTestId(`space-row-members-${KEY}`));
-    expect((await screen.findByRole("alert")).textContent).toBe("GitLab refused: 404 Project Not Found");
+    expect((await screen.findByRole("alert")).textContent).toBe("Spex Example refused: 404 Project Not Found");
   });
 });
 
 describe("GROUPS: copy and fit (space-27, space-28)", () => {
   const states = (): GroupsState[] => [
     signedOut(),
-    signedOut({ signIn: { phase: "running", flow: "device", userCode: "ABCD-EFGH", verificationUri: "https://gitlab.example/oauth/device", since: NOW } }),
+    signedOut({ signIn: { phase: "running", flow: "device", userCode: "ABCD-EFGH", verificationUri: "https://spex.example/oauth/device", since: NOW } }),
     signedOut({ signIn: { phase: "failed", cause: "expired", message: "The code expired" } }),
     localProject(),
     base({}, [
@@ -771,7 +839,7 @@ describe("GROUPS: copy and fit (space-27, space-28)", () => {
       const members = screen.queryByTestId(`space-row-members-${KEY}`);
       if (members) {
         fireEvent.click(members);
-        await screen.findByTestId(`space-members-link-${KEY}`);
+        await screen.findByTestId("space-member-jane");
       }
       const text = document.body.textContent ?? "";
       expect(text).not.toMatch(GIT_WORDS);

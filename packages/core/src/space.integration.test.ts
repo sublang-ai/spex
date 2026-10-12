@@ -40,7 +40,7 @@ test("space-37: a fresh home lists your own group alone with its own repository,
   assert.equal(state.readAt, null);
   assert.equal(state.groups.length, 1, "your own group alone");
   const [group] = state.groups;
-  assert.deepEqual({ id: group.id, fullPath: group.fullPath, name: group.name, url: group.url, own: group.own }, { id: null, fullPath: OWN, name: OWN, url: null, own: true });
+  assert.deepEqual({ id: group.id, fullPath: group.fullPath, name: group.name, own: group.own }, { id: null, fullPath: OWN, name: OWN, own: true });
   assert.deepEqual(group.repositories.map((repository) => repository.key), [OWN_KEY]);
   const own = group.repositories[0];
   assert.equal(own.name, `${OWN}-spex`);

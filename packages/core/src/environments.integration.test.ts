@@ -31,6 +31,7 @@ import { fakeAdapterImports, type FakeScript } from "./testing/fake-adapter.js";
 import { createScriptedCaptain } from "./testing/scripted-captain.js";
 import { scratchDir } from "./testing/scratch.js";
 import { createSpaceHarness } from "./testing/space-harness.js";
+import { STANDIN_STORAGE } from "./testing/standin-host.js";
 import { makeRelease, startStandinRegistry } from "./testing/standin-registry.js";
 import { stubSlcSource } from "./testing/stub-slc.js";
 
@@ -739,7 +740,7 @@ test("environments-21 through a real core: the registry presents the access secr
   harness.git(work, "commit", "-q", "-m", "Release");
   harness.git(work, "push", "-q", "origin", "HEAD:main");
   const commit = harness.git(work, "rev-parse", "HEAD");
-  const repo = `${host.gitOrigin}/acme/toolbox.git`;
+  const repo = `${host.gitOrigin}/${STANDIN_STORAGE}/acme/toolbox.git`;
   seen = host.script.requests.length;
   from = home.client.mark();
   await home.client.expectOk("environment.request", { repository: own, name: "acme/toolbox", request: { kind: "git", git: repo, rev: "main", path: "pkg" } });
@@ -750,7 +751,7 @@ test("environments-21 through a real core: the registry presents the access secr
   assert.deepEqual(lock.packages["acme/toolbox"]!.source, { git: repo, commit, path: "pkg" });
   const asked = host.script.requests.slice(seen);
   assert.ok(asked.some((request) => request.method === "POST" && request.path === "/api/v1/host/credential"), "the host was asked for the credential");
-  assert.ok(asked.some((request) => request.path.startsWith("/git/acme/toolbox.git/") && request.authorization), "the transport carried it");
+  assert.ok(asked.some((request) => request.path.startsWith(`/git/${STANDIN_STORAGE}/acme/toolbox.git/`) && request.authorization), "the transport carried it");
 
   // Signed out, the registry is called with no bearer at all.
   from = home.client.mark();

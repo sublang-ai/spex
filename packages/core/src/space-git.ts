@@ -375,12 +375,13 @@ export function hostRefused(host: string, words: string | null): string {
       });
 }
 
-/** Where membership decides (space-50): the members page, no role
- * claimed and no act the host did not name. */
+/** Where membership decides (space-50, DR-120): Share, or a member who
+ * may share, in Spex — no role claimed, no act the host did not name,
+ * and no page of the host. */
 export function membersDecide(): string {
   return i18n._({
-    id: "The host's members page shows who may send here.",
-    comment: "Guidance under a transfer the Git host refused; it names the members page and claims no role",
+    id: "Membership decides who may send here: use Share, or ask a member who may share it.",
+    comment: "Guidance under a transfer the Git host refused; Share is the control in the members panel; it claims no role",
   });
 }
 
@@ -439,7 +440,62 @@ export function classifyHostTransportFailure(run: GitRun, host: string): GitFail
   if (/returned error: 403|HTTP 403|Permission denied|protected branch|pre-receive hook declined|You are not allowed/i.test(text)) {
     return { cause: "refused", message: hostRefused(host, hostWords(text)), guidance: membersDecide(), retry: true };
   }
+  // An HTTP status no rule above reads is the host's own error, never
+  // Git's words (space-15, DR-064); Git's own failures keep their lines.
+  const status = /returned error: (\d{3})|RPC failed; HTTP (\d{3})|HTTP (\d{3})/i.exec(text);
+  if (status && !/\[rejected\]|non-fast-forward|fetch first/i.test(text)) {
+    return {
+      cause: "git",
+      message: i18n._({
+        id: "{host} answered with an error (HTTP {status})",
+        values: { host, status: status[1] ?? status[2] ?? status[3] },
+        comment: "A stopped transfer: the Git host answered with an HTTP error no other message reads; {host} is its display name, {status} the HTTP status Git printed",
+      }),
+      guidance: i18n._({
+        id: "Retry; if it fails again, the host's error stands for now.",
+        comment: "Guidance under a transfer the Git host answered with an error",
+      }),
+      retry: true,
+    };
+  }
   return classifyTransportFailure(run, null);
+}
+
+/**
+ * The URL rule of space-15 (DR-120) over text a report carries: the
+ * clone's own remote — with or without `.git`, a trailing `/` and a
+ * user before its host — reads as `own.path`, its path in the instance;
+ * any other URL under the host's Git origin reads as `host`, its display
+ * name; and, where the origin's host is not the instance's own, that
+ * host's bare name reads as `host` too. Applied before any report
+ * carries Git's lines; idempotent.
+ */
+export function withoutHostUrls(
+  text: string,
+  rule: { origin?: string | null; host: string; instance?: string | null; own?: { remote: string; path: string } | null },
+): string {
+  let out = text;
+  const parsed = (url: string): { scheme: string; authority: string; path: string } | null => {
+    const match = /^([a-z][a-z0-9+.-]*):\/\/(?:[^/@\s]*@)?([^/\s]+)(\/[^\s]*)?$/i.exec(url.trim());
+    return match ? { scheme: match[1], authority: match[2], path: (match[3] ?? "").replace(/\/+$/, "") } : null;
+  };
+  const escape = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const prefix = (url: { scheme: string; authority: string }): string => `${escape(url.scheme)}:\\/\\/(?:[^/@\\s'"]*@)?${escape(url.authority)}`;
+  const own = rule.own ? parsed(rule.own.remote) : null;
+  if (own && rule.own) {
+    const path = own.path.replace(/\.git$/i, "");
+    const instancePath = rule.own.path;
+    out = out.replace(new RegExp(`${prefix(own)}${escape(path)}(?:\\.git)?\\/?(?![\\w.-])`, "gi"), () => instancePath);
+  }
+  const origin = rule.origin ? parsed(rule.origin) : null;
+  if (origin) {
+    out = out.replace(new RegExp(`${prefix(origin)}${escape(origin.path)}(?:\\/[^\\s'"<>()]*)?(?![\\w.-])`, "gi"), () => rule.host);
+    const instance = rule.instance ? parsed(rule.instance) : null;
+    if (!instance || instance.authority.toLowerCase() !== origin.authority.toLowerCase()) {
+      out = out.replace(new RegExp(`(?<![\\w.-])${escape(origin.authority)}(?![\\w.-])`, "gi"), () => rule.host);
+    }
+  }
+  return out;
 }
 
 /**

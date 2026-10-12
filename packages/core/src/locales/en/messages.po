@@ -150,6 +150,16 @@ msgstr "{file}: {reason}"
 msgid "{file}: damaged transcript after record {seq}"
 msgstr "{file}: damaged transcript after record {seq}"
 
+#. Refusal of a join or a pick: the group's path is your login's, so its records can have no folder of their own on this device; {group} is the group's path
+#: src/space-groups.ts
+msgid "{group} is a group named like your login"
+msgstr "{group} is a group named like your login"
+
+#. A stopped transfer: the Git host answered with an HTTP error no other message reads; {host} is its display name, {status} the HTTP status Git printed
+#: src/space-git.ts
+msgid "{host} answered with an error (HTTP {status})"
+msgstr "{host} answered with an error (HTTP {status})"
+
 #. The Git host's rate limit; {retry} is its own Retry-After value, kept as given
 #: src/space-groups.ts
 msgid "{host} asks to wait; try again after {retry}"
@@ -621,6 +631,11 @@ msgstr "a dispatched intent's text is history"
 #: src/space.ts
 msgid "a Git merge is pending; finish or abort it in a terminal before syncing"
 msgstr "a Git merge is pending; finish or abort it in a terminal before syncing"
+
+#. Why a spex repository is unreachable: its group's path is your login's, so it can have no folder of its own on this device; read after 'Unreachable: '
+#: src/space-groups.ts
+msgid "a group named like your login"
+msgstr "a group named like your login"
 
 #. Refusal: the license a new playbook's spec package names is empty, spans lines or is edged with spaces
 #: src/service.ts
@@ -1369,6 +1384,11 @@ msgstr "Media read begins beyond the file length."
 msgid "Media storage has stopped."
 msgstr "Media storage has stopped."
 
+#. Guidance under a transfer the Git host refused; Share is the control in the members panel; it claims no role
+#: src/space-git.ts
+msgid "Membership decides who may send here: use Share, or ask a member who may share it."
+msgstr "Membership decides who may send here: use Share, or ask a member who may share it."
+
 #. Migration diagnostic: the file changed under the migration, which wrote nothing
 #. Migration diagnostic: the file changed under the migration, which wrote nothing
 #: src/app-storage.ts
@@ -1868,6 +1888,11 @@ msgstr "Retry; if it fails again, run the same step in a terminal for detail."
 msgid "Retry; if it fails again, run the step in a terminal for detail."
 msgstr "Retry; if it fails again, run the step in a terminal for detail."
 
+#. Guidance under a transfer the Git host answered with an error
+#: src/space-git.ts
+msgid "Retry; if it fails again, the host's error stands for now."
+msgstr "Retry; if it fails again, the host's error stands for now."
+
 #. Refusal when the registry's scaffold CLI exits non-zero because the app supplied none; command and output are verbatim
 #: src/forge.ts
 msgid "scaffold failed running {command} (the app's own scaffold CLI was not supplied, so the registry's ran): {output}"
@@ -2199,11 +2224,6 @@ msgstr "The host changed again"
 #: src/space.ts
 msgid "The host lists no such group"
 msgstr "The host lists no such group"
-
-#. Guidance under a transfer the Git host refused; it names the members page and claims no role
-#: src/space-git.ts
-msgid "The host's members page shows who may send here."
-msgstr "The host's members page shows who may send here."
 
 #. Refusal: the work named is not this session's project's
 #: src/service.ts

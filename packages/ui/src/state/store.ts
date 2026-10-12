@@ -130,9 +130,9 @@ export type RegistryResult = CommandResults["environment.search"]["packages"][nu
  * its host id, or a spex repository by its key. */
 export type SpaceMembersTarget = { group: string } | { repository: string };
 
-/** The members of a group or a spex repository as the host lists them,
- * with the host's members page (space-62). */
-export type SpaceMembersReply = { members: HostMemberInfo[]; membersUrl: string };
+/** The members of a group or a spex repository as the host lists them
+ * (space-62): no page of the host (DR-120). */
+export type SpaceMembersReply = { members: HostMemberInfo[] };
 
 export interface ComposerState {
   /** Submissions waiting for the turn to end (RUN-8). A staged

@@ -1435,10 +1435,10 @@ export interface CommandResults {
   "space.signout": GroupsState;
   "space.pick": { accepted: true };
   "space.join": { accepted: true };
-  "space.members": { members: HostMemberInfo[]; membersUrl: string };
+  "space.members": { members: HostMemberInfo[] };
   "space.group.create": { group: { id: string; fullPath: string; name: string } };
-  "space.share": { members: HostMemberInfo[]; membersUrl: string };
-  "space.unshare": { members: HostMemberInfo[]; membersUrl: string };
+  "space.share": { members: HostMemberInfo[] };
+  "space.unshare": { members: HostMemberInfo[] };
   "space.remote.set": GroupsState;
   "space.fetch": { accepted: true };
   "space.sync": { accepted: true };
@@ -1842,6 +1842,8 @@ export type SpaceSyncPhase =
 
 /** One spex repository as the Groups surface reads it (space-30, space-61). */
 export interface RepositoryState {
+  /** The clone's path under `workspace/`; for a row the host lists in a
+   * group held as colliding, `<path>@<id>`, naming no clone (space-61). */
   key: string;
   /** `<name>-spex`, the clone's folder name. */
   name: string;
@@ -1853,7 +1855,9 @@ export interface RepositoryState {
   code: string | null;
   /** The working folder paired with it on this device, or null. */
   folder: string | null;
-  /** The clone's origin URL, null while local only. */
+  /** The clone's origin URL, one under the host's Git origin read as the
+   * repository's path in the instance (space-15, DR-120); null while
+   * local only. */
   remote: string | null;
   state: "local-only" | "reachable" | "read-only" | "unreachable" | "absent";
   /** The host's words for read-only or unreachable. */
@@ -1864,6 +1868,7 @@ export interface RepositoryState {
   /** What the host's last read said the person may do on it (space-30,
    * DR-114): false until a read is held. */
   can: { manageMembers: boolean };
+  /** Null where no clone is here. */
   branch: {
     ahead: number | null;
     behind: number | null;
@@ -1885,20 +1890,21 @@ export interface RepositoryState {
   sync: SpaceSyncPhase;
 }
 
-/** The home, its groups and their spex repositories (space-30). */
-/** A spex repository's member as the host reports them (space-62). */
+/** A spex repository's or a group's member as the host reports them
+ * (space-30, space-62): no page of the host (DR-120). */
 export interface HostMemberInfo {
   id: string;
   login: string;
   displayName: string | null;
   role: string;
-  url: string | null;
   /** The repository's or group's own membership (space-30, DR-114). */
   direct: boolean;
-  /** The full path of the group the membership comes through where it is
-   * not direct, else null. */
+  /** The path in the instance of the group the membership comes through
+   * where it is not direct, else null. */
   via: string | null;
 }
+
+/** The home, its groups and their spex repositories (space-30). */
 
 export interface GroupsState {
   home: string;
@@ -1914,11 +1920,17 @@ export interface GroupsState {
     | { phase: "running"; flow: "browser" | "device"; userCode?: string; verificationUri?: string; since: number }
     | { phase: "failed"; cause: "denied" | "expired" | "refused" | "unreachable"; message: string };
   readAt: number | null;
+  /** One entry per group the host lists, by its id; your own once; one
+   * per other account's login under which the host lists a spex
+   * repository (space-1, DR-120). */
   groups: {
+    /** The host's id; null for another account's login, and for a key's
+     * group no read lists. */
     id: string | null;
+    /** The path in the instance; your own group's folder name; or that
+     * login. */
     fullPath: string;
     name: string;
-    url: string | null;
     own: boolean;
     /** What the host's last read said the person may do there (DR-114):
      * both false until a read is held, and for your own group. */

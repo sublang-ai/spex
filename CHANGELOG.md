@@ -41,8 +41,7 @@ and `npm start` (desktop) or `npm run start:server` (server).
   groups and the spex repositories you can read in each, creates your
   own group's on the host, and creates a project's in the group you pick.
   The host's members of a spex repository see its records, with the
-  host's role names and a link to its members page; Spex keeps no member
-  list or access rule of its own. A step that needs rights you lack
+  host's role names; Spex keeps no member list or access rule of its own. A step that needs rights you lack
   waits for a member who has them, a rename or transfer on the host is
   followed, and a spex repository the host stops listing turns
   unreachable with nothing on the device deleted. Git receives the
@@ -242,6 +241,23 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Changed
 
+- Groups names the instance alone ([DR-120](specs/decisions/120-the-instance-is-the-space.md)).
+  A spex.pub instance is the one thing you sign in to and the only name
+  you see: Groups lists your own group, the instance's groups you belong
+  to by their paths in it, and the spex repositories another person
+  shares from their own group, under that person's login. Keys and
+  workspace folders follow the paths the instance answers, so a clone
+  filed under the old storage path moves once, on its next sync. No
+  link leads to the Git system behind the instance — no "Open at …" in
+  a members panel, no "New group at …" — and where you may not create a
+  group, the list's head reads "Groups are made by the people who run
+  <instance>". A group named like your login stands apart and takes no
+  folder of yours. A stopped sync never prints a Git URL of the storage:
+  the clone's own address reads as its path in the instance, any other
+  as the instance's name, and an HTTP error no message reads stops as
+  "<instance> answered with an error". Where membership decides, the
+  guidance names Share. The protocol drops `groups[].url`, `Member.url`
+  and `membersUrl`.
 - A failed workflow's notice folds its earlier steps behind one control ([DR-117](specs/decisions/117-the-earlier-steps-fold-behind-one-control.md)).
   The retry and Drop stand in the notice's row as before; every "Resume
   from: …" action waits behind "Resume from an earlier step…", which

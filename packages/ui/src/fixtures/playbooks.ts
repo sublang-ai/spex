@@ -116,7 +116,7 @@ export function home(
   return {
     home: "/home/me/.spex",
     git: { ok: true, version: "2.45.0" },
-    host: { url: "https://gitlab.example", displayName: "GitLab" },
+    host: { url: "https://spex.example", displayName: "Spex Example" },
     account: options.account === undefined ? { id: "7", login: "me", displayName: "Me", canCreateGroup: false } : options.account,
     signIn: { phase: "idle" },
     readAt: NOW,
@@ -125,7 +125,6 @@ export function home(
         id: "1",
         fullPath: "me",
         name: "me",
-        url: null,
         own: true,
         can: { createSubgroup: false, manageMembers: false },
         repositories: [
