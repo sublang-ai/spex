@@ -47,11 +47,18 @@ The aim was to find what stops a real team or makes the app hard to use, and to 
 | W-50 the Compile control promising 30 to 120 minutes | spex PR 136 |
 | W-51 the Now band titled with the Boss's answer | spex PR 139 |
 | W-52 a package's intent printing its markdown links as typed | spex PR 138 |
+| W-49 History reading "Nothing done here yet" for chat-turn runs; W-53 the Running band titled with the session's first turn | spex PR 142 |
+
+## The final-build walk
+
+On 2026-10-12, with every fix of the simulation merged (spex main `7af05f85`, spex-pub `b254a89`), each team ran its own procedure once more on its Day-3 project from its own home, an agent playing the representative through the protocol: T01 `/shape`, T02 `/verify`, T03 `/propose`, T04 `/sprint-plan`, T05 the adopted `/release`, T06 `/contrib` to a pull request on GitHub, T07 `/requirements`, T08 `/evaluate`, T09 `/prototype`, T10 `/incident`.
+Eight runs ended `committed` or `opened`; T05's ended `heldWithFindings` and T10's `notCleared`, the endings their procedures define; no run failed, parked on a defect or needed a Retry; W-23 and W-34 did not recur.
+Each team's page records the questions, answers, commits and rough edges; the rough edges became W-54 to W-59.
 
 ## What is still open
 
+- Found on the final-build walks (2026-10-12): W-54 (players' commit trailers; cligent), W-55 (the session list reads uncertain while an answer's turn runs; core), W-56 (a later reviewer never hears the Boss's answers; the preamble now says how a source asks for it, spex PR 143; the default is a Playbook decision), W-57 (raw machine names as status lines; run view), W-58 (English continuation lines in a Chinese flow; Playbook), W-59 (a closing reply without the commit hash or branch; Playbook).
 - Playbook: W-10 is settled, not fixed — DR-088 §4 declines an uncommitted-draft outcome with its reasons, drafts travel as text or each drafting step commits, and the preamble teaches the three effects.
-- Dashboard: W-53 (the Running band titled with the session's first turn, not the current work's opening turn; a one-rule change under DR-119 left for a decision); W-49 (a project whose runs were chat turns, not ledger intents, reads "Nothing done here yet" in History; a design question under DR-035 and DR-038, like W-35 was).
 
 ## Where the records live
 
@@ -104,20 +111,20 @@ The check afterwards: no team home's workspace holds a folder under the backend'
 
 ## By the numbers
 
-Read from each home's session list and usage at the end of the simulation, refreshed on 2026-10-12 for T01 (whose home now also lists the three sessions of the eval-harness project it joined) and T05 (the receipt-scan project and its `/release-notes` run) (tokens count every call's input, cache reads included; commits include the scaffold commit and the playbook-package commits).
+Read from each home's session list and usage after the final-build walks of 2026-10-12 (tokens count every call's input, cache reads included; commits include the scaffold commit and the playbook-package commits; T01's home also lists the three sessions of the eval-harness project it joined).
 
 | Team | Sessions | Turns | Agent active (min) | Input tokens | Output tokens | Commits (incl. scaffold) |
 | --- | --- | --- | --- | --- | --- | --- |
-| T01 | 6 | 10 | 213 | 59,689,658 | 1,204,866 | 13 |
-| T02 | 4 | 6 | 101 | 68,902,321 | 1,160,937 | 13 |
-| T03 | 6 | 16 | 90 | 114,229,237 | 1,806,432 | 27 |
-| T04 | 4 | 7 | 94 | 44,492,419 | 809,609 | 13 |
-| T05 | 3 | 11 | 40 | 14,129,909 | 609,186 | 9 |
-| T06 | 3 | 7 | 46 | 14,552,110 | 210,642 | 9 |
-| T07 | 4 | 8 | 96 | 54,419,764 | 1,379,422 | 14 |
-| T08 | 3 | 5 | 34 | 11,193,936 | 269,955 | 9 |
-| T09 | 3 | 4 | 40 | 3,128,546 | 77,937 | 7 |
-| T10 | 3 | 6 | 51 | 22,903,768 | 549,421 | 11 |
+| T01 | 7 | 12 | 252 | 65,015,042 | 1,328,960 | 14 |
+| T02 | 5 | 7 | 140 | 88,640,879 | 1,452,701 | 15 |
+| T03 | 7 | 17 | 100 | 115,985,692 | 1,903,817 | 28 |
+| T04 | 5 | 9 | 115 | 47,363,321 | 887,139 | 14 |
+| T05 | 4 | 13 | 44 | 15,623,906 | 633,962 | 10 |
+| T06 | 4 | 10 | 52 | 18,312,998 | 254,146 | 10 |
+| T07 | 5 | 10 | 136 | 67,066,849 | 2,043,795 | 15 |
+| T08 | 4 | 7 | 48 | 12,723,676 | 295,293 | 10 |
+| T09 | 4 | 5 | 42 | 3,450,888 | 82,972 | 8 |
+| T10 | 4 | 9 | 64 | 27,646,558 | 686,940 | 13 |
 
 ## Reuse map as walked
 
