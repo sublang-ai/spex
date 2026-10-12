@@ -487,7 +487,7 @@ export function AuthoringWorkspace({
                 title={
                   !connected
                     ? i18n._({ id: "Not connected", comment: "why a control is held: the page has no core" })
-                    : (compileReason ?? i18n._("Runs slc over the draft's source — 30 to 120 minutes"))
+                    : (compileReason ?? i18n._("Runs slc over the draft's source — a few minutes, longer for many roles"))
                 }
                 onClick={() => void compileDraft(draftId)}
                 className="rounded-md bg-brand-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-brand-500 disabled:opacity-40"

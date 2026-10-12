@@ -4976,8 +4976,8 @@ msgid "Running the workflow's control"
 msgstr "Running the workflow's control"
 
 #: src/components/AuthoringWorkspace.tsx
-msgid "Runs slc over the draft's source — 30 to 120 minutes"
-msgstr "Runs slc over the draft's source — 30 to 120 minutes"
+msgid "Runs slc over the draft's source — a few minutes, longer for many roles"
+msgstr "Runs slc over the draft's source — a few minutes, longer for many roles"
 
 #. subagent-model choice: every subagent runs on the agent's own model
 #: src/lib/agent-options.ts

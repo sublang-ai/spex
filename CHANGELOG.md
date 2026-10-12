@@ -858,6 +858,7 @@ and `npm start` (desktop) or `npm run start:server` (server).
   sharing notice before joining …" with nothing to read: where the
   repository has other members, or its count is unknown, the picker says
   the sharing notice beneath it, and Continue joins (space-57, space-58).
+- An authoring session's Compile control no longer says "30 to 120 minutes" but "a few minutes, longer for many roles", as compiles now take.
 
 ### Security
 
