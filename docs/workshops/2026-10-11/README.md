@@ -50,6 +50,14 @@ Every team's spex repository sits at `spex-internal/claude-workshop-261011/<team
 The registry org the teams publish to stays the top-level group `claude-workshop-261011`, because spex.pub binds an org to a top-level namespace only.
 The records were first placed under `slbeta1/claude-workshop-2026-10-11/<team>` and then under the top-level `claude-workshop-261011/<team>`, both wrong placements corrected on the owner's instruction by moving every repository with its full history through the protocol (W-39); the copies left under the two old paths are orphans the owner may delete.
 
+### How the placement went wrong, and what changes
+
+- **No concept of the instance's group.** spex.pub told clients nothing of the one group it keeps on GitLab.com; its `can_create_group` was false with the explanation that a first group is "made once on GitLab.com's own pages", and Spex rendered that as the first control on Groups ("New group at gitlab.com", DR-118, written mid-simulation on that wrong premise). Fixed: the host names its group, Spex shows it first and New group creates a private subgroup of it (DR-120).
+- **The registry's org rule pulled the other way.** An org could bind only to a top-level group, so publishing under the workshop's name forced a top-level group of that name — which then looked like the home for the teams. Fixed: an org may bind to a direct subgroup of the instance's group.
+- **A flat, unmarked list.** Groups listed every host group in name order with nothing marking the instance's group, so an unrelated top-level group the organizer owned read as hers. Fixed with DR-120's order and key phrase.
+- **No page said the right way.** The only text naming the instance's group was the test-environment runbook. Added: [docs/groups.md](../../groups.md).
+- **The simulator's own errors.** It fixed the top-level plan before reading the product or the runbook, created the first group by hand on GitLab.com, and read every later ambiguity through that premise instead of asking at the first one.
+
 ## By the numbers
 
 Read from each home's session list and usage at the end of the simulation (tokens count every call's input, cache reads included; commits include the scaffold commit and the playbook-package commits).

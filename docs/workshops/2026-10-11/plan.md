@@ -6,6 +6,9 @@
 Ten fictional teams go through Day 2 (one procedure per SDLC stage, shared across teams) and Day 3 (a project delivered with those procedures, spec packages reused across teams) on the Spex stack as it stands on `main` today.
 The aim is to find and fix what stops a real team or makes the app hard to use; every finding is recorded in [issues.md](issues.md), every team in its own file.
 
+
+> **Corrected on the owner's instruction (2026-10-12).** The workshop group is a private subgroup of the instance's own GitLab group, `spex-internal/claude-workshop-261011`, with one subgroup per team, all made from the organizer's Spex home; the top-level `claude-workshop-261011` this plan names was a mistake, and the three placements it led to are recorded in the README ("Where the records live") and in issues W-39 to W-44.
+
 ## The model
 
 | Thing in the course | Thing in the stack |
