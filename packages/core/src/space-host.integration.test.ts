@@ -920,6 +920,87 @@ test("space-58: a remote set while a pick asked the host is refused, never repla
   assert.equal(git(clone, "config", "--get-all", "remote.origin.url"), "/elsewhere/terminal.git");
 });
 
+test("space-73: a repository the host moved keeps the clone's sync and this device's record through a pick; another repository's remote clears them", async (t) => {
+  const host = await startHost();
+  const home = await startHome("moved-pick", { host, project: false, extra: { signIn: "browser" } });
+  t.after(() => home.stop());
+  t.after(() => host.script.sleepListing(0));
+  const signedIn = home.client.mark();
+  await signIn(home, host);
+  await home.client.waitRepository(signedIn, HOST_OWN, (repository) => repository.sync.phase === "done" || repository.sync.phase === "stopped", 30_000);
+  // Created in your own group on the host and synced from here.
+  await addFolder(home, gitFolder("invites"));
+  const key = `${LOGIN}/invites-spex`;
+  const fromCreate = home.client.mark();
+  await home.client.expectOk("space.pick", { repository: key, choice: { kind: "create", groupId: null, name: "invites" } });
+  const synced = await home.client.waitRepository(fromCreate, key, (repository) => repository.sync.phase === "done", 30_000);
+  const clone = clonePath(home.dataDir, key);
+  const pushed = git(clone, "rev-parse", "spex");
+  const at = Number(git(clone, "log", "-1", "--format=%ct", pushed)) * 1000;
+  const id = synced.id ?? "";
+  assert.ok(synced.lastSync && id, JSON.stringify(synced));
+  assert.deepEqual(synced.branch?.agreed, { at, current: true });
+
+  // The host moves it into acme, its id kept; the reader takes the remote
+  // away, the clone still recording that repository.
+  host.script.rename(id, { group: "acme" });
+  const away = repositoryOf(await home.client.expectOk("space.remote.set", { repository: key, url: null }), key);
+  assert.equal(away.state, "local-only");
+  assert.equal(away.id, id);
+  assert.equal(git(clone, "rev-parse", "refs/remotes/origin/spex"), pushed);
+  assert.deepEqual(prefsOf(home.dataDir)[`sync:${key}:last`], synced.lastSync);
+  const before = (await home.client.expectOk("space.get", {})).readAt ?? 0;
+  const fromRead = home.client.mark();
+  await home.client.expectOk("space.refresh", {});
+  await home.client.waitSpace(fromRead, (state) => (state.readAt ?? 0) > before);
+
+  // Picked into acme by the host's id: the same repository keeps the sync
+  // the clone holds and this device's record, read while the pick's sync
+  // waits on its host read (space-5).
+  host.script.sleepListing(2_000);
+  const fromJoin = home.client.mark();
+  assert.deepEqual(await home.client.expectOk("space.pick", { repository: key, choice: { kind: "join", hostId: id }, noticed: true }), { accepted: true });
+  const joined = await home.client.repository(key);
+  assert.equal(joined.state, "reachable");
+  assert.equal(joined.remote, `${host.gitOrigin}/acme/invites-spex.git`);
+  assert.equal(joined.id, id);
+  assert.deepEqual(joined.lastSync, synced.lastSync, "this device's recorded sync is kept");
+  assert.deepEqual(joined.branch?.agreed, { at, current: true }, "the sync the clone holds is kept");
+  assert.equal(git(clone, "config", "--get", "branch.spex.remote"), "origin");
+  host.script.sleepListing(0);
+  const moved = "acme/invites-spex";
+  const followed = await home.client.waitRepository(fromJoin, moved, (repository) => repository.sync.phase === "done", 30_000);
+  assert.ok(followed.lastSync && followed.lastSync.at >= (synced.lastSync?.at ?? 0), JSON.stringify(followed.lastSync));
+  assert.deepEqual(followed.branch?.agreed, { at, current: true });
+
+  // Taken away again and a group picked to create another repository: the
+  // host's remote for another id clears them (space-5).
+  const movedClone = clonePath(home.dataDir, moved);
+  await home.client.expectOk("space.remote.set", { repository: moved, url: null });
+  host.script.sleepListing(2_000);
+  const fromOther = home.client.mark();
+  await home.client.expectOk("space.pick", { repository: moved, choice: { kind: "create", groupId: "2003", name: "invites" } });
+  const other = await home.client.repository(moved);
+  assert.equal(other.remote, `${host.gitOrigin}/acme/research/invites-spex.git`);
+  assert.ok(other.id && other.id !== id, JSON.stringify(other.id));
+  assert.equal(other.lastSync, null);
+  assert.equal(other.branch?.agreed, null);
+  assert.equal(prefsOf(home.dataDir)[`sync:${moved}:last`], undefined);
+  assert.throws(() => git(movedClone, "rev-parse", "-q", "--verify", "refs/remotes/origin/spex"));
+  host.script.sleepListing(0);
+  const research = "acme/research/invites-spex";
+  const created = await home.client.waitRepository(fromOther, research, (repository) => repository.sync.phase === "done", 30_000);
+  assert.ok(created.lastSync, "its own sync is recorded");
+
+  // A remote the reader names is another repository too (space-5).
+  const named = repositoryOf(await home.client.expectOk("space.remote.set", { repository: research, url: bareRepo() }), research);
+  assert.equal(named.lastSync, null);
+  assert.equal(named.branch?.agreed, null);
+  assert.equal(named.branch?.checkedAt, null);
+  assert.equal(named.id, null);
+  assert.equal(prefsOf(home.dataDir)[`sync:${research}:last`], undefined);
+});
+
 /** A Playbook session lease `sessions/.<id>.lock` planted in a clone as
  * a writer of another process or machine leaves it, in Playbook's owner
  * shape; `fields` overrides or adds owner fields. */
