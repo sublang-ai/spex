@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// Authoring coverage (playbook-library-72..76, core-service-97):
+// Authoring coverage (playbook-library-72..76, -106, core-service-97):
 // drafts driven over the WebSocket protocol against the scripted fake
 // adapter and a stub slc — no network, no agent credentials, no real
 // compiler (DR-058).
@@ -917,7 +917,7 @@ const MATRIX_REPLY = [
   "That is all.",
 ].join("\n");
 
-test("playbook-library-76: only top-level, well-formed spex blocks act; malformed ones are named in the next prompt", async () => {
+test("playbook-library-76: only top-level, well-formed spex blocks act; malformed ones are named with why, and one naming no kind read is relayed", async () => {
   const script: FakeScript = {
     rules: [{ match: "Boss: matrix", response: { deltas: ["Reply."], result: MATRIX_REPLY } }],
     fallback: { deltas: ["Noted."], result: "Noted." },
@@ -935,7 +935,9 @@ test("playbook-library-76: only top-level, well-formed spex blocks act; malforme
   await until(() => client.latest("triage")?.activity === "idle" && harness.stats.runs.length === 1, 60_000, "the success turn");
 
   await client.expectOk("draft.send", { projectId, draftId: "triage", text: "matrix" });
-  await until(() => client.latest("triage")?.activity === "idle" && harness.stats.runs.length === 2, 60_000, "the matrix turn");
+  // The block that fails to parse names no kind a readable block
+  // carries: its relay follows the matrix turn at once.
+  await until(() => client.latest("triage")?.activity === "idle" && harness.stats.runs.length === 3, 60_000, "the matrix turn and its relay");
   await sleep(200);
   const draft = client.latest("triage");
   assert.ok(draft);
@@ -945,20 +947,150 @@ test("playbook-library-76: only top-level, well-formed spex blocks act; malforme
     players: { Triager: "dev.coder", Auditor: "dev.reviewer" },
   });
   assert.deepEqual(draft.compile?.roles, ["Triager", "Verifier"], "the derived roles stand; Auditor is a mismatch beside them");
-  assert.equal(draft.malformedDirectives?.length, 2);
-  assert.ok(draft.malformedDirectives?.some((b) => b.includes("extra: nope")));
-  assert.ok(draft.malformedDirectives?.some((b) => b.includes("kind: [unclosed")));
+  // Each malformed block was recorded with why (playbook-library-66).
+  const recorded = client.states("triage").find((d) => d.malformedDirectives !== undefined)?.malformedDirectives;
+  assert.equal(recorded?.length, 2);
+  assert.equal(recorded?.find((b) => b.text.includes("extra: nope"))?.reason, "unknown key extra");
+  assert.match(recorded?.find((b) => b.text.includes("kind: [unclosed"))?.reason ?? "", /^not YAML: Flow sequence in block collection must be sufficiently indented and end with a \] at line 1, column 16$/);
   assert.equal(client.statusLines("triage").filter((l) => l.startsWith("◇ Compiling")).length, 1, "the nested compile block acted as nothing");
   assert.equal(draft.activity, "idle");
+  // playbook-library-53: the relay's line names a spex block, the
+  // blocks naming no one kind a readable block left unread.
+  assert.ok(client.statusLines("triage").includes("◇ Could not read the agent's spex block — sent to the agent"));
+  assert.ok(client.turnStarts("triage").includes("Spex: could not read the agent's spex block — asking the agent to write it again"));
+  // playbook-library-65: the relay's prompt names both blocks with why
+  // at its head.
+  const relay = harness.stats.runs[2].prompt;
+  assert.match(relay, /^Spex could not read 2 spex blocks in your last reply/);
+  assert.match(relay, /extra: nope\n {2}Why: unknown key extra/);
+  assert.match(relay, /kind: \[unclosed\n {2}Why: not YAML: Flow sequence/);
+  assert.match(relay, /Spex: Write the spex block again so Spex can read it\.$/);
+  assert.equal(draft.malformedDirectives, undefined, "the relay's readable reply leaves none");
 
   await client.expectOk("draft.send", { projectId, draftId: "triage", text: "next" });
-  await until(() => harness.stats.runs.length === 3 && client.latest("triage")?.activity === "idle", 60_000, "the next turn");
-  const next = harness.stats.runs[2].prompt;
-  assert.match(next, /^Spex could not read 2 spex blocks in your last reply/);
-  assert.match(next, /extra: nope/);
-  assert.match(next, /kind: \[unclosed/);
+  await until(() => harness.stats.runs.length === 4 && client.latest("triage")?.activity === "idle", 60_000, "the next turn");
+  const next = harness.stats.runs[3].prompt;
+  assert.doesNotMatch(next, /Spex could not read/, "the relay named the blocks already");
   assert.match(next, /Boss: next$/);
   assert.equal(client.latest("triage")?.malformedDirectives, undefined);
+
+  client.close();
+  await harness.service.stop();
+});
+
+// ---------------------------------------------------------------------------
+// playbook-library-106: an unreadable block relayed at once, bounded
+// ---------------------------------------------------------------------------
+
+/** A register block whose unquoted intent holds ": ", as the workshop's
+ * agent wrote one: YAML refuses it at line 3, column 9. */
+function unreadableRegister(command: string): string {
+  return ["```spex", "kind: register", `command: ${command}`, `intent: The ${command} intent: unquoted`, "players:", "  Triager: dev.coder", "```"].join("\n");
+}
+
+function readableRegister(command: string): string {
+  return ["```spex", "kind: register", `command: ${command}`, `intent: "The ${command} intent: quoted"`, "players:", "  Triager: dev.coder", "  Verifier: dev.reviewer", "```"].join("\n");
+}
+
+const NESTED_MAPPING = "not YAML: Nested mappings are not allowed in compact mappings at line 3, column 9";
+const SENT = "◇ Could not read the agent's register block — sent to the agent";
+const STOPPED = "◇ Could not read the agent's register block — three in a row; tell the agent how to proceed";
+const WAITING = "◇ Could not read the agent's register block — waiting for your queued message";
+const RELAY_TURN = "Spex: could not read the agent's register block — asking the agent to write it again";
+
+test("playbook-library-106: an unreadable block is relayed to the agent at once, stops at three, and a Boss message resets the count", {timeout: 120_000}, async () => {
+  // First match wins: the Boss's own messages, then a relay of the
+  // "stuck" block, then any other relay, then the success turn.
+  const script: FakeScript = {
+    rules: [
+      { match: "Boss: slow", response: { deltas: ["Slow."], result: `Slow.\n\n${unreadableRegister("slow")}`, delayMs: 1500 } },
+      { match: "Boss: once", response: { deltas: ["Once."], result: unreadableRegister("once") } },
+      { match: "Boss: both", response: { deltas: ["Both."], result: `${readableRegister("both")}\n\n${unreadableRegister("other")}` } },
+      { match: "Boss: compile too", response: { deltas: ["Compiling."], result: `${unreadableRegister("early")}\n\n\`\`\`spex\nkind: compile\n\`\`\`` } },
+      { match: "stuck", response: { deltas: ["Stuck."], result: unreadableRegister("stuck") } },
+      { match: "block again", response: { deltas: ["Again."], result: readableRegister("promote") } },
+      { match: "succeeded", response: { deltas: ["Proposal."], result: `Proposal:\n\n${unreadableRegister("promote")}` } },
+    ],
+    fallback: { deltas: ["Noted."], result: "Noted." },
+  };
+  const harness = await startHarness({ script, slc: stubSlcSource("['Triager', 'Verifier']") });
+  const { projectId, stats } = harness;
+  const client = new Client(harness.service.port());
+  await client.open();
+  await client.expectOk("draft.create", { projectId, draftId: "triage", ...NEW_PACKAGE });
+  await client.expectOk("subscribe", { channel: { kind: "draft", draftId: "triage" } });
+  await client.expectOk("draft.source.write", { projectId, draftId: "triage", content: SOURCE });
+  const idleAfter = (runs: number, what: string) =>
+    until(() => stats.runs.length === runs && client.latest("triage")?.activity === "idle", 60_000, what);
+  const count = (line: string) => client.statusLines("triage").filter((l) => l === line).length;
+
+  // The success turn's block will not read: a relay follows at once,
+  // and its readable answer is the proposal.
+  await client.expectOk("draft.compile", { projectId, draftId: "triage" });
+  await idleAfter(2, "the success turn and its relay");
+  const recorded = client.states("triage").find((d) => d.malformedDirectives !== undefined)?.malformedDirectives;
+  assert.deepEqual(recorded?.map((b) => b.reason), [NESTED_MAPPING], "recorded with the YAML error as why");
+  const relay = stats.runs[1].prompt;
+  assert.match(relay, /^Spex could not read a spex block in your last reply/);
+  assert.ok(relay.includes(`command: promote\n  > intent: The promote intent: unquoted`), "the block named at the head");
+  assert.ok(relay.includes(`Why: ${NESTED_MAPPING}`), "with why");
+  assert.match(relay, /Spex: Write the register block again so Spex can read it\.$/);
+  assert.equal(count(SENT), 1);
+  assert.deepEqual(client.turnStarts("triage"), ["Spex: the compile succeeded — asking for a registration proposal", RELAY_TURN]);
+  assert.equal(client.latest("triage")?.proposal?.command, "promote");
+  assertAuthoringPermissions(stats.runs, join(harness.dir, "project", "spex-packages", "triage"));
+
+  // A readable register block beside an unreadable one answers it.
+  await client.expectOk("draft.send", { projectId, draftId: "triage", text: "both" });
+  await idleAfter(3, "the both turn");
+  await sleep(400);
+  assert.equal(stats.runs.length, 3, "no relay beside a readable block of its kind");
+  assert.equal(client.latest("triage")?.proposal?.command, "both");
+  // A compile started beside one owes none: the compile's success turn
+  // names the block at its head instead.
+  await client.expectOk("draft.send", { projectId, draftId: "triage", text: "compile too" });
+  await idleAfter(6, "the compile, its success turn and that turn's relay");
+  assert.equal(count("◇ Compiling — asked by the agent"), 1);
+  const success = stats.runs[4].prompt;
+  assert.match(success, /^Spex could not read a spex block in your last reply/);
+  assert.ok(success.includes("command: early") && success.includes(`Why: ${NESTED_MAPPING}`));
+  assert.match(success, /Spex: The compile of triage succeeded/);
+  assert.doesNotMatch(success, /block again/);
+  assert.equal(count(SENT), 2, "the compile turn's block relayed nothing; the success turn's did");
+
+  // Every relay answered with another unreadable block: the third reply
+  // to owe one relays nothing.
+  await client.expectOk("draft.send", { projectId, draftId: "triage", text: "stuck, please" });
+  await idleAfter(9, "the stuck turn and its two relays");
+  await sleep(400);
+  assert.equal(stats.runs.length, 9, "no turn after the third unreadable reply");
+  assert.equal(count(SENT), 4);
+  assert.equal(count(STOPPED), 1);
+  assert.equal(client.statusLines("triage").at(-1), STOPPED);
+  assert.equal(client.latest("triage")?.malformedDirectives?.[0]?.reason, NESTED_MAPPING);
+
+  // The Boss spoke: the count starts over, and the next unreadable
+  // block relays again.
+  await client.expectOk("draft.send", { projectId, draftId: "triage", text: "once" });
+  await idleAfter(11, "the once turn and its relay");
+  assert.ok(stats.runs[9].prompt.includes("command: stuck"), "the stopped block named at the Boss turn's head");
+  assert.equal(count(SENT), 5);
+  assert.equal(client.latest("triage")?.proposal?.command, "promote");
+
+  // A Boss message queued behind the reply carries the relay as its
+  // preface, after the block named at its head.
+  await client.expectOk("draft.send", { projectId, draftId: "triage", text: "slow" });
+  const queued = await client.expectOk("draft.send", { projectId, draftId: "triage", text: "after" });
+  assert.equal(queued.queued, true);
+  await idleAfter(13, "the slow turn and the queued message");
+  assert.equal(count(WAITING), 1);
+  const prefaced = stats.runs[12].prompt;
+  const blockAt = prefaced.indexOf("command: slow");
+  const askAt = prefaced.indexOf("Write the register block again so Spex can read it.");
+  const bossAt = prefaced.indexOf("Boss: after");
+  assert.ok(prefaced.startsWith("Spex could not read a spex block") && blockAt > 0 && askAt > blockAt && bossAt > askAt, "head, preface, then the message");
+  assert.equal(count(SENT), 5, "the queued message carried it; nothing relayed beside");
+  assert.equal(client.turnStarts("triage").filter((p) => p === RELAY_TURN).length, 5);
 
   client.close();
   await harness.service.stop();

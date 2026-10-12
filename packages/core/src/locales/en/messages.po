@@ -572,6 +572,21 @@ msgstr "◇ Compiling — asked by the agent"
 msgid "◇ Compiling — asked by you"
 msgstr "◇ Compiling — asked by you"
 
+#. Draft thread status line; {kind} is the directive's code word (compile, register or spex) and the ◇ stays
+#: src/authoring.ts
+msgid "◇ Could not read the agent's {kind} block — sent to the agent"
+msgstr "◇ Could not read the agent's {kind} block — sent to the agent"
+
+#. Draft thread status line; {kind} is the directive's code word (compile, register or spex) and the ◇ stays
+#: src/authoring.ts
+msgid "◇ Could not read the agent's {kind} block — three in a row; tell the agent how to proceed"
+msgstr "◇ Could not read the agent's {kind} block — three in a row; tell the agent how to proceed"
+
+#. Draft thread status line; {kind} is the directive's code word (compile, register or spex) and the ◇ stays
+#: src/authoring.ts
+msgid "◇ Could not read the agent's {kind} block — waiting for your queued message"
+msgstr "◇ Could not read the agent's {kind} block — waiting for your queued message"
+
 #. Draft thread status line: a roster player now answers, named by its id; the ◇ stays
 #: src/authoring.ts
 msgid "◇ Now answering: {playerId} — the conversation so far was replayed to it"
@@ -2018,6 +2033,11 @@ msgstr "Spex records of the group {group}"
 #: src/home.ts
 msgid "spex repository {key} is paired twice"
 msgstr "spex repository {key} is paired twice"
+
+#. Draft thread line for a turn Spex started; {kind} is the directive's code word (compile, register or spex), and keep the `Spex: ` opening
+#: src/authoring.ts
+msgid "Spex: could not read the agent's {kind} block — asking the agent to write it again"
+msgstr "Spex: could not read the agent's {kind} block — asking the agent to write it again"
 
 #. Draft thread line for a turn Spex started; {where} is the pipeline stage's name, and keep the `Spex: ` opening
 #: src/authoring.ts

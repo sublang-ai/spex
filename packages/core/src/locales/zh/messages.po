@@ -572,6 +572,21 @@ msgstr "◇ 编译中 — 由智能体发起"
 msgid "◇ Compiling — asked by you"
 msgstr "◇ 编译中 — 由你发起"
 
+#. Draft thread status line; {kind} is the directive's code word (compile, register or spex) and the ◇ stays
+#: src/authoring.ts
+msgid "◇ Could not read the agent's {kind} block — sent to the agent"
+msgstr "◇ 无法读取智能体的 {kind} 代码块 — 已发送给智能体"
+
+#. Draft thread status line; {kind} is the directive's code word (compile, register or spex) and the ◇ stays
+#: src/authoring.ts
+msgid "◇ Could not read the agent's {kind} block — three in a row; tell the agent how to proceed"
+msgstr "◇ 无法读取智能体的 {kind} 代码块 — 已连续三次；请告诉智能体如何继续"
+
+#. Draft thread status line; {kind} is the directive's code word (compile, register or spex) and the ◇ stays
+#: src/authoring.ts
+msgid "◇ Could not read the agent's {kind} block — waiting for your queued message"
+msgstr "◇ 无法读取智能体的 {kind} 代码块 — 正在等待你已排队的消息"
+
 #. Draft thread status line: a roster player now answers, named by its id; the ◇ stays
 #: src/authoring.ts
 msgid "◇ Now answering: {playerId} — the conversation so far was replayed to it"
@@ -2018,6 +2033,11 @@ msgstr "群组 {group} 的 Spex 记录"
 #: src/home.ts
 msgid "spex repository {key} is paired twice"
 msgstr "spex 仓库 {key} 被配对了两次"
+
+#. Draft thread line for a turn Spex started; {kind} is the directive's code word (compile, register or spex), and keep the `Spex: ` opening
+#: src/authoring.ts
+msgid "Spex: could not read the agent's {kind} block — asking the agent to write it again"
+msgstr "Spex: 无法读取智能体的 {kind} 代码块 — 正在请智能体重写"
 
 #. Draft thread line for a turn Spex started; {where} is the pipeline stage's name, and keep the `Spex: ` opening
 #: src/authoring.ts

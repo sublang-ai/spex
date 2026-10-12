@@ -33,6 +33,17 @@ export interface RegisterDirective {
 /** A directive as one block declares it. */
 export type Directive = { kind: "compile" } | ({ kind: "register" } & RegisterDirective);
 
+/** A spex block the core could not read (playbook-library-66). */
+export interface MalformedBlock {
+  /** The block's body, as the code fallback shows it. */
+  text: string;
+  /** Why it did not read: the YAML error, or the key or kind missing,
+   * unknown or invalid. */
+  reason: string;
+  /** The directive kind it names, where it names one Spex knows. */
+  kind?: Directive["kind"];
+}
+
 /** A reply split into prose and its top-level spex blocks. */
 export type TextPart =
   | { kind: "prose"; text: string }
@@ -51,8 +62,8 @@ export interface ParsedDirectives {
   compile: boolean;
   /** The last valid register block, when any. */
   register?: RegisterDirective;
-  /** The raw text of every spex block the core could not read. */
-  malformed: string[];
+  /** Every spex block the core could not read, with why. */
+  malformed: MalformedBlock[];
   /** Every top-level spex block in order, valid or not. */
   blocks: { text: string; kind?: "compile" | "register"; malformed: boolean }[];
 }
@@ -117,7 +128,9 @@ export function parseSpexBlock(body: string): { directive: Directive } | { error
   try {
     value = parseYaml(body, { logLevel: "error" });
   } catch (cause) {
-    return { error: `not YAML: ${(cause as Error).message.split("\n")[0]}` };
+    // The parser's first line names the fault and its place; the
+    // excerpt beneath it, and the colon leading there, stay behind.
+    return { error: `not YAML: ${(cause as Error).message.split("\n")[0].replace(/:\s*$/, "")}` };
   }
   if (!isPlainObject(value)) return { error: "not a mapping of keys to values" };
   const kind = value.kind;
@@ -148,6 +161,21 @@ export function parseSpexBlock(body: string): { directive: Directive } | { error
     return { directive: { kind: "register", command: command.trim(), intent: intent.trim(), players: mapped } };
   }
   return { error: `unknown kind ${String(kind)}` };
+}
+
+/** The kind a block names, where it names one Spex knows: its `kind`
+ * as YAML reads it, else — a block that will not parse — its top-level
+ * `kind:` line, so an unquoted colon further down leaves the kind
+ * named (playbook-library-66). */
+function namedKind(body: string): Directive["kind"] | undefined {
+  let kind: unknown;
+  try {
+    const value: unknown = parseYaml(body, { logLevel: "error" });
+    kind = isPlainObject(value) ? value.kind : undefined;
+  } catch {
+    kind = /^kind:[ \t]*(["']?)([A-Za-z]+)\1[ \t]*(?:#.*)?$/m.exec(body)?.[2];
+  }
+  return kind === "compile" || kind === "register" ? kind : undefined;
 }
 
 /**
@@ -185,14 +213,16 @@ export function splitDirectives(text: string): TextPart[] {
  * Parse the directives of one reply (playbook-library-66): every
  * top-level ```spex fence as YAML with a `kind` key; the last valid
  * block per kind wins; a block missing a key, carrying an unknown key
- * or kind, or failing to parse is malformed and stays visible as code.
+ * or kind, or failing to parse is malformed — kept with why and the
+ * kind it names — and stays visible as code.
  */
 export function parseDirectives(text: string): ParsedDirectives {
   const parsed: ParsedDirectives = { compile: false, malformed: [], blocks: [] };
   for (const part of splitDirectives(text)) {
     if (part.kind !== "directive") continue;
     if (!part.directive) {
-      parsed.malformed.push(part.body);
+      const kind = namedKind(part.body);
+      parsed.malformed.push({ text: part.body, reason: part.error ?? "", ...(kind ? { kind } : {}) });
       parsed.blocks.push({ text: part.body, malformed: true });
       continue;
     }
