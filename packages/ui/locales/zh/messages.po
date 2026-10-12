@@ -4976,8 +4976,8 @@ msgid "Running the workflow's control"
 msgstr "正在执行工作流的操作"
 
 #: src/components/AuthoringWorkspace.tsx
-msgid "Runs slc over the draft's source — 30 to 120 minutes"
-msgstr "对草稿源文运行 slc — 约 30 到 120 分钟"
+msgid "Runs slc over the draft's source — a few minutes, longer for many roles"
+msgstr "对草稿源文运行 slc — 通常几分钟，角色多则更久"
 
 #. subagent-model choice: every subagent runs on the agent's own model
 #: src/lib/agent-options.ts
