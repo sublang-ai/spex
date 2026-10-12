@@ -170,15 +170,15 @@ msgstr "{group} is not empty"
 msgid "{host} answered with an error (HTTP {status})"
 msgstr "{host} answered with an error (HTTP {status})"
 
-#. The Git host's rate limit; {retry} is its own Retry-After value, kept as given
+#. The Git host's rate limit; {seconds} is how long it asks to wait, read from its Retry-After
 #: src/space-groups.ts
-msgid "{host} asks to wait; try again after {retry}"
-msgstr "{host} asks to wait; try again after {retry}"
+msgid "{host} asks to wait {seconds, plural, one {# second} other {# seconds}}"
+msgstr "{host} asks to wait {seconds, plural, one {# second} other {# seconds}}"
 
-#. The Git host's rate limit, with no retry time of its own
+#. The Git host's rate limit, with no time of its own to wait
 #: src/space-groups.ts
-msgid "{host} asks to wait; try again later"
-msgstr "{host} asks to wait; try again later"
+msgid "{host} asks to wait a moment"
+msgstr "{host} asks to wait a moment"
 
 #. A stopped sync: the host's repository is empty, so spex waits for its default branch; {host} is its display name
 #: src/space.ts
@@ -1888,6 +1888,11 @@ msgstr "Resolving stopped: {cause}"
 msgid "Restore the interrupted turn first"
 msgstr "Restore the interrupted turn first"
 
+#. Guidance where the Git host asked to wait: Retry waits out the time it asked for before running the step
+#: src/space.ts
+msgid "Retry waits, then runs the step."
+msgstr "Retry waits, then runs the step."
+
 #. Guidance under a commit git failed; git commit is the command's own name
 #: src/space.ts
 msgid "Retry; if it fails again, run git commit in the home from a terminal for detail."
@@ -2114,6 +2119,11 @@ msgstr "state root {dir} is held by pid {pid} on this machine at {lock}; one cor
 #: src/root-lease.ts
 msgid "state root {dir} lock at {lock} cannot be verified: {reason}; stop every Spex writer before removing it (DR-108)"
 msgstr "state root {dir} lock at {lock} cannot be verified: {reason}; stop every Spex writer before removing it (DR-108)"
+
+#. A stopped step's message: the reader stopped it while the Git host's rate limit held its call; {host} is the host's display name
+#: src/space.ts
+msgid "Stopped while waiting for {host}"
+msgstr "Stopped while waiting for {host}"
 
 #. Guidance where the remote rejected the push
 #: src/space-git.ts

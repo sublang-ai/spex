@@ -1785,6 +1785,7 @@ export type SyncStep = "save" | "check" | "compare" | "apply" | "refresh" | "pus
 
 export type SyncCause =
   | "unreachable"
+  | "throttled"
   | "reauth"
   | "refused"
   | "gone"

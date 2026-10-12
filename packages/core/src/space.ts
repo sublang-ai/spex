@@ -217,8 +217,42 @@ const syncLater = (): string => i18n._({
   comment: "Guidance under a sync stopped because a step at the Git host waits for a member with the rights",
 });
 
-/** A failure of a call to the host as the stopped state of space-15. */
+/** Guidance under a stop the host's rate limit made, or a Stop of its
+ * wait (space-15, git-host-21): a key phrase, not an explanation. */
+const retryWaits = (): string => i18n._({
+  id: "Retry waits, then runs the step.",
+  comment: "Guidance where the Git host asked to wait: Retry waits out the time it asked for before running the step",
+});
+
+/** A step the reader stopped while its call to the host waited out the
+ * host's rate limit (space-15, space-16, git-host-21). */
+function waitStopped(step: SyncStep, host: string): SpaceStopped {
+  return new SpaceStopped(step, {
+    cause: "stopped",
+    message: i18n._({ id: "Stopped while waiting for {host}", values: { host }, comment: "A stopped step's message: the reader stopped it while the Git host's rate limit held its call; {host} is the host's display name" }),
+    guidance: retryWaits(),
+    retry: true,
+  });
+}
+
+/** `work`, ended early where `signal` aborts first; `work` itself runs
+ * on, its outcome then unread. */
+function stoppable<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
+  return new Promise<T>((resolveWork, rejectWork) => {
+    const onAbort = (): void => rejectWork(signal.reason);
+    if (signal.aborted) onAbort();
+    else signal.addEventListener("abort", onAbort, { once: true });
+    work.then(
+      (value) => { signal.removeEventListener("abort", onAbort); resolveWork(value); },
+      (error: unknown) => { signal.removeEventListener("abort", onAbort); rejectWork(error); },
+    );
+  });
+}
+
+/** A failure of a call to the host as the stopped state of space-15; a
+ * stop already phrased passes as it is. */
 function hostStop(step: SyncStep, error: unknown, host: string): SpaceStopped {
+  if (error instanceof SpaceStopped) return error;
   const message = relayHostError(error, host);
   if (!(error instanceof HostError)) return new SpaceStopped(step, { cause: "git", message: lastLines(message), guidance: retryGuidance(), retry: true });
   switch (error.kind) {
@@ -226,8 +260,11 @@ function hostStop(step: SyncStep, error: unknown, host: string): SpaceStopped {
       return new SpaceStopped(step, { cause: "reauth", message, guidance: signInThenRetry(), retry: true });
     case "not_found":
       return new SpaceStopped(step, { cause: "gone", message, guidance: nothingDeleted(), retry: true });
-    case "unreachable":
     case "rate_limited":
+      // The host answered: it asks to wait, which is no network failure
+      // (git-host-11), and a Retry waits that out (git-host-21).
+      return new SpaceStopped(step, { cause: "throttled", message, guidance: retryWaits(), retry: true });
+    case "unreachable":
       return new SpaceStopped(step, {
         cause: "unreachable",
         message,
@@ -680,20 +717,59 @@ class RepositorySync {
     return new SpaceGit(dir, this.host.env, {
       ...(this.host.transportTimeoutMs !== undefined ? { transportTimeoutMs: this.host.transportTimeoutMs } : {}),
       identity: () => this.owner.identity(),
-      onTransport: () => this.transportStarted(),
+      onTransport: () => this.offerStop(),
     });
   }
 
-  /** The step's Git child runs (space-16): the Check step offers Stop
-   * from now, the host read before it bounded by the client's own
-   * timeout. */
-  private transportStarted(): void {
+  /** The step's Git child runs, or a call of it to the host waits out
+   * the host's rate limit (space-16, git-host-21): the Check step offers
+   * Stop from now, the host read before it otherwise bounded by the
+   * client's own timeout. */
+  private offerStop(): void {
     if (this.phase.phase !== "running" || this.phase.cancelable) return;
     if (this.phase.step !== "check" && this.phase.step !== "push") return;
     this.phase = { ...this.phase, cancelable: true };
     void this.broadcast(false).catch((error: unknown) => {
       console.error(`spex: space state failed: ${error instanceof Error ? error.message : String(error)}`);
     });
+  }
+
+  /** The running step's calls to the host in flight, each with the Stop
+   * that ends its wait for the host's rate limit (git-host-21). */
+  private readonly hostCalls = new Set<AbortController>();
+
+  /**
+   * One call to the host for the running step (git-host-21): while the
+   * host's rate limit holds it, the step offers Stop (space-16), which
+   * ends the wait — a direct call sending nothing, a shared read left to
+   * answer later — and stops the step (space-15).
+   */
+  async hostCall<T>(step: SyncStep, call: (signal: AbortSignal) => Promise<T>): Promise<T> {
+    const controller = new AbortController();
+    this.hostCalls.add(controller);
+    if (this.host.client.holding()) this.offerStop();
+    try {
+      return await stoppable(call(controller.signal), controller.signal);
+    } catch (error) {
+      if (controller.signal.aborted) throw waitStopped(step, this.owner.hostName());
+      throw error;
+    } finally {
+      this.hostCalls.delete(controller);
+    }
+  }
+
+  /** The host's rate limit began holding the calls (git-host-21): a step
+   * with one in flight offers Stop. */
+  holdBegan(): void {
+    if (this.hostCalls.size > 0) this.offerStop();
+  }
+
+  /** End the waits of the running step's calls to the host, while the
+   * host's rate limit holds them; whether any was ended. */
+  private stopWaits(): boolean {
+    if (this.hostCalls.size === 0 || !this.host.client.holding()) return false;
+    for (const call of this.hostCalls) call.abort();
+    return true;
   }
 
   /** The clone moved (space-59, space-60): this machine follows it. */
@@ -1389,13 +1465,17 @@ class RepositorySync {
     return [...this.owner.storageDiagnostics().filter((d) => mine(d.file)), ...own].find((d) => d.blocking);
   }
 
+  /** Stop (space-16): end the step's Git child, or its calls' wait for
+   * the host's rate limit (git-host-21). */
   cancel(): boolean {
-    return this.git.cancel();
+    return this.git.cancel() || this.stopWaits();
   }
 
-  /** Cancel a transport and wait for the operation to settle (shutdown). */
+  /** Cancel a transport or a wait and wait for the operation to settle
+   * (shutdown). */
   async stop(): Promise<void> {
     this.git.cancel();
+    this.stopWaits();
     try { await this.current?.work; } catch { /* reported as state */ }
   }
 
@@ -1608,7 +1688,7 @@ class RepositorySync {
   private async check(remote: string, op: SpaceOp): Promise<{ empty: boolean; readOnly: boolean; atHost: boolean; remote: string }> {
     const host = await this.owner.hostCheck(this, op);
     const target = host?.remote ?? remote;
-    const credential = host ? await this.owner.credentialFor(target, "check") : null;
+    const credential = host ? await this.owner.credentialFor(target, "check", this) : null;
     const options = { transport: true, ...(credential ? { credential } : {}) };
     try {
       const heads = await this.git.run(["ls-remote", "--exit-code", "--heads", "origin", `refs/heads/${SPEX_BRANCH}`], options);
@@ -1652,7 +1732,7 @@ class RepositorySync {
     const blob = await this.git.ok(["hash-object", "-w", "--stdin"], { input: `# ${name}\n` });
     const tree = await this.git.ok(["mktree"], { input: `100644 blob ${blob}\tREADME.md\n` });
     const commit = await this.git.ok([...(await this.git.committerArgs()), "commit-tree", tree, "-m", "Initial commit"]);
-    const credential = await this.owner.credentialFor(remote, "check");
+    const credential = await this.owner.credentialFor(remote, "check", this);
     let run: GitRun;
     try {
       run = await this.git.run(["push", "-q", "origin", `${commit}:refs/heads/main`], { transport: true, ...(credential ? { credential } : {}) });
@@ -1849,7 +1929,7 @@ class RepositorySync {
     const head = await this.git.ok(["rev-parse", "HEAD"]);
     const origin = await this.git.run(["rev-parse", "-q", "--verify", `refs/remotes/origin/${SPEX_BRANCH}^{commit}`]);
     if (upstream && origin.code === 0 && origin.stdout.toString("utf8").trim() === head) return "nothing";
-    const credential = atHost ? await this.owner.credentialFor(remote, "push") : null;
+    const credential = atHost ? await this.owner.credentialFor(remote, "push", this) : null;
     let run: GitRun;
     try {
       run = await this.git.run(upstream ? ["push", "-q", "origin", SPEX_BRANCH] : ["push", "-q", "-u", "origin", SPEX_BRANCH], { transport: true, ...(credential ? { credential } : {}) });
@@ -3312,7 +3392,9 @@ export class SpaceManager {
     if (!this.atHost(facts)) return undefined;
     if (!this.signedIn()) throw new SpaceStopped("check", { cause: "reauth", message: signInAgain(), guidance: signInThenRetry(), retry: true });
     let view: HostView;
-    try { view = await this.readHost(); }
+    // A read begun during the host's rate limit is answered later; the
+    // step's Stop leaves it to answer (git-host-21).
+    try { view = await machine.hostCall("check", () => this.readHost()); }
     catch (error) { throw hostStop("check", error, this.hostName()); }
     const listing = listingFor(view, facts.id, facts.remote);
     if (!listing) {
@@ -3340,7 +3422,7 @@ export class SpaceManager {
       // `spex` beside the default branch, never as it (git-host-7).
       const group = repository.group.fullPath;
       try {
-        if (repository.empty && !(created && await this.defaultBranchArrives(repository.id))) {
+        if (repository.empty && !(created && await this.defaultBranchArrives(machine, repository.id))) {
           if (!created || this.stopping) {
             this.waiting.set(machine.key, { step: "branch", group, message: "" });
             throw new SpaceStopped("check", { cause: "refused", message: i18n._({ id: "{host} holds no default branch for it yet", values: { host: this.hostName() }, comment: "A stopped sync: the host's repository is empty, so spex waits for its default branch; {host} is its display name" }), guidance: syncLater(), retry: true });
@@ -3355,7 +3437,7 @@ export class SpaceManager {
         if (recorded !== null && !this.stopping) machine.forgetCreated();
       }
       let answer: Awaited<ReturnType<GitHostClient["prepareBranch"]>>;
-      try { answer = await this.host.client.prepareBranch(repository.id); }
+      try { answer = await machine.hostCall("check", (signal) => this.host.client.prepareBranch(repository.id, { signal })); }
       catch (error) { throw hostStop("check", error, this.hostName()); }
       if (answer.status === "pending") {
         this.waiting.set(machine.key, { step: "branch", group, message: answer.message });
@@ -3370,11 +3452,11 @@ export class SpaceManager {
    * reported empty, holds its default branch within the bound: read
    * again every CREATED_REREAD_MS, CREATED_REREADS times at most, as
    * the host may answer a creation before committing it (git-host-7). */
-  private async defaultBranchArrives(id: string): Promise<boolean> {
+  private async defaultBranchArrives(machine: RepositorySync, id: string): Promise<boolean> {
     for (let reads = 0; reads < CREATED_REREADS && !this.stopping; reads += 1) {
       await new Promise<void>((done) => { setTimeout(done, CREATED_REREAD_MS); });
       let empty: boolean;
-      try { empty = (await this.host.client.repository(id)).empty; }
+      try { empty = (await machine.hostCall("check", (signal) => this.host.client.repository(id, { signal }))).empty; }
       catch (error) { throw hostStop("check", error, this.hostName()); }
       if (!empty) return true;
     }
@@ -3382,14 +3464,19 @@ export class SpaceManager {
   }
 
   /** The brokered credential for a transport to the host's Git origin
-   * (git-host-9); none for any other origin. */
-  async credentialFor(remote: string, step: SyncStep): Promise<GitCredentialHandle | null> {
+   * (git-host-9); none for any other origin. Asked for a sync's step,
+   * it waits out the host's rate limit, which that step's Stop ends;
+   * asked otherwise, the limit refuses it (git-host-21). */
+  async credentialFor(remote: string, step: SyncStep, machine?: RepositorySync): Promise<GitCredentialHandle | null> {
     const origin = this.knownOrigin();
     if (!origin || !underOrigin(remote, origin)) return null;
     if (!this.signedIn()) throw new SpaceStopped(step, { cause: "reauth", message: signInAgain(), guidance: signInThenRetry(), retry: true });
     let credential: { username: string; secret: string; expiresAt: number };
-    try { credential = await this.host.client.credential(origin); }
-    catch (error) { throw hostStop(step, error, this.hostName()); }
+    try {
+      credential = machine
+        ? await machine.hostCall(step, (signal) => this.host.client.credential(origin, { signal }))
+        : await this.host.client.credential(origin);
+    } catch (error) { throw hostStop(step, error, this.hostName()); }
     return withGitCredential(credential, this.host.hostRuntime);
   }
 
@@ -3792,6 +3879,16 @@ export class SpaceManager {
   }
 
   cancel(key: string): boolean { return this.machine(key).cancel(); }
+
+  /** The host's rate limit began holding every call (git-host-21): each
+   * step with a call to the host in flight offers Stop (space-16). Read
+   * once the answer that set the hold has run its course, so the step
+   * whose own call it answered has stopped rather than offering Stop. */
+  holdBegan(): void {
+    setImmediate(() => {
+      for (const machine of this.machines.values()) machine.holdBegan();
+    });
+  }
 
   // A read resolves the clone's path at its instant; one that meets a
   // clone moved meanwhile fails, and the interface reads again on the

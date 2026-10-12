@@ -1,23 +1,27 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The Git host client (git-host-1..20, DR-103, DR-114, DR-120): signs a
+// The Git host client (git-host-1..21, DR-103, DR-114, DR-120): signs a
 // person in as a public client — the browser flow with PKCE on the
 // desktop, the device flow on the server shell — keeps the app token
 // current in `local/credentials.yaml` (storage-19), and reads and writes
 // the host's JSON routes under `/api/v1`: groups, spex repositories and
 // members, with what the host says the person may do and the roles it
 // grants, and the undo writes — a group renamed or deleted, a spex
-// repository moved. It composes no reader-facing prose: a failure is a
-// `HostError` carrying its kind and the host's own words, which the core
-// phrases where it speaks (git-host-11). No secret ever enters an error
-// message or a log line.
+// repository moved. A rate limit the host answers holds a sync step's
+// calls and the host read until the instant it asked for, and refuses
+// every other call meanwhile with the seconds that remain (git-host-21).
+// It composes no reader-facing prose: a failure is a `HostError` carrying
+// its kind and the host's own words, which the core phrases where it
+// speaks (git-host-11). No secret ever enters an error message or a log
+// line.
 
 import { createHash, randomBytes } from "node:crypto";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import { mkdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import { writeApplicationBytes } from "./files.js";
 
@@ -35,9 +39,56 @@ export const REFRESH_MARGIN_MS = 60_000;
  * (git-host-2). */
 export const BROWSER_SIGN_IN_TIMEOUT_MS = 10 * 60_000;
 
+/** The longest a rate limit holds the calls to the host (git-host-21). */
+export const RATE_LIMIT_HOLD_MAX_MS = 120_000;
+
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
 const SLOW_DOWN_STEP_MS = 5_000;
 const LABEL_MAX = 80;
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const MONTH = MONTHS.join("|");
+/** The three forms of an HTTP date (RFC 9110 §5.6.7), always GMT. */
+const IMF_FIXDATE = new RegExp(`^(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun), (\\d{2}) (${MONTH}) (\\d{4}) (\\d{2}):(\\d{2}):(\\d{2}) GMT$`);
+const RFC850_DATE = new RegExp(`^(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday), (\\d{2})-(${MONTH})-(\\d{2}) (\\d{2}):(\\d{2}):(\\d{2}) GMT$`);
+const ASCTIME_DATE = new RegExp(`^(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun) (${MONTH}) ( \\d|\\d{2}) (\\d{2}):(\\d{2}):(\\d{2}) (\\d{4})$`);
+
+/** An HTTP date as Unix milliseconds, or null where the text is none. */
+function httpDate(text: string, now: number): number | null {
+  const at = (year: number, month: string, day: string, h: string, m: string, s: string): number | null => {
+    const ms = Date.UTC(year, MONTHS.indexOf(month), Number(day), Number(h), Number(m), Number(s));
+    return Number.isFinite(ms) ? ms : null;
+  };
+  let match = IMF_FIXDATE.exec(text);
+  if (match) return at(Number(match[3]), match[2], match[1], match[4], match[5], match[6]);
+  match = RFC850_DATE.exec(text);
+  if (match) {
+    // A two-digit year more than 50 years ahead is of the past century.
+    const thisYear = new Date(now).getUTCFullYear();
+    let year = Math.floor(thisYear / 100) * 100 + Number(match[3]);
+    if (year > thisYear + 50) year -= 100;
+    return at(year, match[2], match[1], match[4], match[5], match[6]);
+  }
+  match = ASCTIME_DATE.exec(text);
+  if (match) return at(Number(match[6]), match[1], match[2].trim(), match[3], match[4], match[5]);
+  return null;
+}
+
+/**
+ * The seconds a host's `Retry-After` asks to wait (git-host-11): its
+ * number where it is all digits, the seconds from `now` until its HTTP
+ * date — none below zero — and null where it is absent or anything else.
+ */
+export function retryAfterSeconds(value: string | null | undefined, now: number = Date.now()): number | null {
+  if (typeof value !== "string") return null;
+  const text = value.trim();
+  if (/^\d+$/.test(text)) {
+    const seconds = Number(text);
+    return Number.isSafeInteger(seconds) ? seconds : null;
+  }
+  const at = httpDate(text, now);
+  return at === null ? null : Math.max(0, Math.ceil((at - now) / 1000));
+}
 
 /**
  * The host URL a home uses (git-host-1): a home that already records one
@@ -130,7 +181,8 @@ export type SignInCause = "denied" | "expired" | "stopped" | "refused" | "state"
 /**
  * A host answer other than success (git-host-11). `words` is the host's
  * own message, kept whole; `retryAfter` the host's `Retry-After` for
- * `rate_limited`; `code` the envelope's `error.code` where one came; and,
+ * `rate_limited`, raw, read as seconds by `retryAfterSeconds`; `code`
+ * the envelope's `error.code` where one came; and,
  * for a sign-in that ended without an account, `cause` names why.
  */
 export class HostError extends Error {
@@ -157,6 +209,25 @@ export class HostError extends Error {
     this.status = options.status ?? null;
   }
 }
+
+/** A call's own Stop ended its wait for the host's rate limit before it
+ * was sent (git-host-21). Local; not the host's. */
+export class HostWaitStopped extends Error {
+  readonly code = "stopped";
+  constructor() {
+    super("Stopped while waiting for the Git host");
+    this.name = "HostWaitStopped";
+  }
+}
+
+/**
+ * How a call meets the host's rate limit (git-host-21): one carrying
+ * `signal` — a sync step's, whose Stop aborts it and so ends the wait
+ * unsent — or `wait` — the host read's — waits the hold out; any other
+ * call made while the hold stands is refused at once as `rate_limited`
+ * with the seconds that remain.
+ */
+export interface HostCallOptions { signal?: AbortSignal; wait?: boolean }
 
 /** The pair a step used was no longer the stored one when its answer
  * came (git-host-4, git-host-10, storage-19): nothing was stored or
@@ -317,6 +388,12 @@ export interface GitHostClientOptions {
   onSignedOut?: (cause: HostErrorKind) => void;
   /** Bound on each host request; a request past it is unreachable. */
   requestTimeoutMs?: number;
+  /** Called when an answer of 429 sets the instant the calls are held
+   * until (git-host-21), with that instant in Unix milliseconds. */
+  onHold?: (until: number) => void;
+  /** Test seam (git-host-21): the longest a rate limit holds the calls;
+   * 120 s by default. */
+  holdMaxMs?: number;
 }
 
 /** A running browser sign-in (git-host-2). */
@@ -377,8 +454,13 @@ export class GitHostClient {
   private readonly now: () => number;
   private readonly onSignedOut?: (cause: HostErrorKind) => void;
   private readonly requestTimeoutMs: number;
+  private readonly onHold?: (until: number) => void;
+  private readonly holdMaxMs: number;
   private refreshing: Promise<StoredCredential> | null = null;
   private signIn: object | null = null;
+  /** The instant the host's last rate limit asked every call to wait
+   * until (git-host-21); 0 where none holds. */
+  private holdUntil = 0;
 
   constructor(options: GitHostClientOptions) {
     this.url = trimUrl(options.url);
@@ -390,12 +472,19 @@ export class GitHostClient {
     this.now = options.now ?? Date.now;
     this.onSignedOut = options.onSignedOut;
     this.requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
+    this.onHold = options.onHold;
+    this.holdMaxMs = options.holdMaxMs ?? RATE_LIMIT_HOLD_MAX_MS;
+  }
+
+  /** Whether the host's rate limit holds the calls now (git-host-21). */
+  holding(): boolean {
+    return this.holdUntil > this.now();
   }
 
   /** `GET /api/v1/host`: the host's display name, the Git origin its
    * credentials are valid for, and the roles it grants (git-host-5). */
-  async describe(): Promise<HostDescription> {
-    const answer = await this.send("GET", "/api/v1/host", {});
+  async describe(options: HostCallOptions = {}): Promise<HostDescription> {
+    const answer = await this.send("GET", "/api/v1/host", options);
     if (answer.status !== 200) throw answerError(answer);
     const body = record(answer.json);
     // A host that lists no roles grants none through Spex.
@@ -696,25 +785,25 @@ export class GitHostClient {
   }
 
   /** `GET /api/v1/host/me`: the person, as the host reports them. */
-  async me(): Promise<HostAccount> {
-    return accountFrom((await this.call("GET", "/api/v1/host/me")).json);
+  async me(options: HostCallOptions = {}): Promise<HostAccount> {
+    return accountFrom((await this.call("GET", "/api/v1/host/me", undefined, options)).json);
   }
 
   /** `GET /api/v1/host/groups`: the person's own group and every group
    * they belong to. */
-  async groups(): Promise<HostGroup[]> {
-    const body = record((await this.call("GET", "/api/v1/host/groups")).json);
+  async groups(options: HostCallOptions = {}): Promise<HostGroup[]> {
+    const body = record((await this.call("GET", "/api/v1/host/groups", undefined, options)).json);
     return list(body.groups).map(groupFrom);
   }
 
   /** `GET /api/v1/host/repositories`, every page. */
-  async repositories(): Promise<HostRepository[]> {
+  async repositories(options: HostCallOptions = {}): Promise<HostRepository[]> {
     const all: HostRepository[] = [];
     let cursor: string | null = null;
     const seen = new Set<string>();
     do {
       const path: string = cursor === null ? "/api/v1/host/repositories" : `/api/v1/host/repositories?cursor=${encodeURIComponent(cursor)}`;
-      const body = record((await this.call("GET", path)).json);
+      const body = record((await this.call("GET", path, undefined, options)).json);
       all.push(...list(body.repositories).map(repositoryFrom));
       const next: unknown = body.next_cursor;
       cursor = typeof next === "string" && next.length > 0 ? next : null;
@@ -728,16 +817,16 @@ export class GitHostClient {
 
   /** `GET /api/v1/host/repositories/:id`, with its read-only state and
    * the `spex` branch's. */
-  async repository(id: string): Promise<HostRepositoryDetail> {
-    const body = record((await this.call("GET", `/api/v1/host/repositories/${encodeURIComponent(id)}`)).json);
+  async repository(id: string, options: HostCallOptions = {}): Promise<HostRepositoryDetail> {
+    const body = record((await this.call("GET", `/api/v1/host/repositories/${encodeURIComponent(id)}`, undefined, options)).json);
     return detailFrom(body);
   }
 
   /** `GET /api/v1/host/repositories/:id/members` or
    * `GET /api/v1/host/groups/:id/members` (git-host-8): every member with
    * the host's role name and source. */
-  async members(target: MembersTarget): Promise<{ members: HostMember[] }> {
-    const body = record((await this.call("GET", membersPath(target))).json);
+  async members(target: MembersTarget, options: HostCallOptions = {}): Promise<{ members: HostMember[] }> {
+    const body = record((await this.call("GET", membersPath(target), undefined, options)).json);
     return { members: list(body.members).map(memberFrom) };
   }
 
@@ -821,8 +910,8 @@ export class GitHostClient {
   }
 
   /** `POST /api/v1/host/repositories/:id/spex-branch` (git-host-7). */
-  async prepareBranch(id: string): Promise<{ status: "ready" } | { status: "pending"; message: string }> {
-    const answer = await this.call("POST", `/api/v1/host/repositories/${encodeURIComponent(id)}/spex-branch`, {});
+  async prepareBranch(id: string, options: HostCallOptions = {}): Promise<{ status: "ready" } | { status: "pending"; message: string }> {
+    const answer = await this.call("POST", `/api/v1/host/repositories/${encodeURIComponent(id)}/spex-branch`, {}, options);
     const body = record(answer.json);
     if (answer.status === 202) return { status: "pending", message: pendingWords(body) };
     if (body.status !== "ready") throw new HostError("unreachable", { code: "malformed_answer", status: answer.status });
@@ -831,8 +920,8 @@ export class GitHostClient {
 
   /** `POST /api/v1/host/credential` (git-host-9): the Git credential for
    * the host's Git origin, with its expiry in Unix milliseconds. */
-  async credential(origin: string): Promise<{ username: string; secret: string; expiresAt: number }> {
-    const body = record((await this.call("POST", "/api/v1/host/credential", { origin })).json);
+  async credential(origin: string, options: HostCallOptions = {}): Promise<{ username: string; secret: string; expiresAt: number }> {
+    const body = record((await this.call("POST", "/api/v1/host/credential", { origin }, options)).json);
     const expiresAt = Date.parse(text(body.expires_at));
     return { username: text(body.username), secret: text(body.secret), expiresAt: Number.isFinite(expiresAt) ? expiresAt : 0 };
   }
@@ -901,13 +990,18 @@ export class GitHostClient {
   }
 
   /** A host route with the bearer kept current (git-host-4). Only a
-   * success, `202` included, comes back; everything else throws. */
-  private async call(method: string, path: string, body?: unknown): Promise<Answer> {
-    let credential = await this.current();
-    let answer = await this.send(method, path, { body, bearer: credential.access });
+   * success, `202` included, comes back; everything else throws.
+   * `signal` ends the call's wait for the host's rate limit (git-host-21). */
+  private async call(method: string, path: string, body?: unknown, options: HostCallOptions = {}): Promise<Answer> {
+    // A call that does not wait is refused while the hold stands before
+    // anything is sent for it, a refresh among them (git-host-21).
+    const waits = options.signal !== undefined || options.wait === true;
+    if (!waits) this.refuseWhileHeld();
+    let credential = await this.current(waits);
+    let answer = await this.send(method, path, { body, bearer: credential.access, ...options });
     if (answer.status === 401 && codeOf(answer) === "token_expired") {
-      credential = await this.refresh(credential);
-      answer = await this.send(method, path, { body, bearer: credential.access });
+      credential = await this.refresh(credential, waits);
+      answer = await this.send(method, path, { body, bearer: credential.access, ...options });
     }
     if (answer.status === 401 || REAUTH_CODES.has(codeOf(answer) ?? "")) {
       throw this.signOutLocally(credential, new HostError("reauth", { code: codeOf(answer), words: wordsOf(answer), status: answer.status }));
@@ -916,10 +1010,13 @@ export class GitHostClient {
     return answer;
   }
 
-  private async current(): Promise<StoredCredential> {
+  /** The pair a call presents, refreshed first near its expiry; the
+   * refresh waits out the host's rate limit where the call does
+   * (git-host-21). */
+  private async current(waits = false): Promise<StoredCredential> {
     const stored = await this.credentials.read();
     if (!stored) throw new HostError("reauth", { code: "signed_out" });
-    if (stored.accessExpiresAt - this.now() < REFRESH_MARGIN_MS) return this.refresh(stored);
+    if (stored.accessExpiresAt - this.now() < REFRESH_MARGIN_MS) return this.refresh(stored, waits);
     return stored;
   }
 
@@ -927,21 +1024,22 @@ export class GitHostClient {
    * and one arriving after it finds the rotated pair already stored.
    * Where another pair replaced the refreshed one meanwhile, the answer
    * stores and removes nothing, and `CredentialChanged` is thrown. */
-  private refresh(stale: StoredCredential): Promise<StoredCredential> {
+  private refresh(stale: StoredCredential, waits = false): Promise<StoredCredential> {
     if (this.refreshing) return this.refreshing;
-    const tracked: Promise<StoredCredential> = this.runRefresh(stale).finally(() => {
+    const tracked: Promise<StoredCredential> = this.runRefresh(stale, waits).finally(() => {
       if (this.refreshing === tracked) this.refreshing = null;
     });
     this.refreshing = tracked;
     return tracked;
   }
 
-  private async runRefresh(stale: StoredCredential): Promise<StoredCredential> {
+  private async runRefresh(stale: StoredCredential, waits: boolean): Promise<StoredCredential> {
     const latest = await this.credentials.read();
     if (!latest) throw new HostError("reauth", { code: "signed_out" });
     if (latest.access !== stale.access && latest.accessExpiresAt - this.now() >= REFRESH_MARGIN_MS) return latest;
     const answer = await this.send("POST", "/api/v1/auth/token", {
       body: { grant_type: "refresh_token", refresh_token: latest.refresh, client_id: this.clientId },
+      wait: waits,
     });
     if (answer.status === 200) {
       const next = tokenFrom(answer, this.now());
@@ -967,7 +1065,53 @@ export class GitHostClient {
     return refusal;
   }
 
-  private async send(method: string, path: string, init: { body?: unknown; bearer?: string }): Promise<Answer> {
+  /** Wait out the host's rate limit (git-host-21): until the instant it
+   * holds, again where a later answer moves it on meanwhile; `signal`
+   * ends the wait. The timer keeps no process alive. */
+  private async waitOut(signal?: AbortSignal): Promise<void> {
+    for (;;) {
+      if (signal?.aborted) throw new HostWaitStopped();
+      const ms = this.holdUntil - this.now();
+      if (ms <= 0) return;
+      try {
+        await sleep(ms, undefined, { ref: false, ...(signal ? { signal } : {}) });
+      } catch {
+        throw new HostWaitStopped();
+      }
+    }
+  }
+
+  /** An answer of 429 holds the calls until the instant it asks for —
+   * its time plus its seconds, `holdMaxMs` at most — keeping a later
+   * instant already held; none where its seconds are unknown
+   * (git-host-21). */
+  private hold(retryAfter: string | null, answeredAt: number): void {
+    const seconds = retryAfterSeconds(retryAfter, answeredAt);
+    if (seconds === null || seconds <= 0) return;
+    const until = answeredAt + Math.min(seconds * 1000, this.holdMaxMs);
+    if (until <= this.holdUntil) return;
+    this.holdUntil = until;
+    try {
+      this.onHold?.(until);
+    } catch {
+      // The listener's failure is its own.
+    }
+  }
+
+  /** A call that does not wait, made while the hold stands, is refused
+   * at once as the host asking to wait the seconds that remain
+   * (git-host-21). */
+  private refuseWhileHeld(): void {
+    const ms = this.holdUntil - this.now();
+    if (ms > 0) throw new HostError("rate_limited", { code: "rate_limited", retryAfter: String(Math.ceil(ms / 1000)) });
+  }
+
+  /** One request to the host. A call carrying a signal, or asked to
+   * wait, waits out the host's rate limit first; any other is refused
+   * while it holds (git-host-21). */
+  private async send(method: string, path: string, init: { body?: unknown; bearer?: string } & HostCallOptions): Promise<Answer> {
+    if (init.signal !== undefined || init.wait === true) await this.waitOut(init.signal);
+    else this.refuseWhileHeld();
     const headers: Record<string, string> = { accept: "application/json" };
     if (init.body !== undefined) headers["content-type"] = "application/json";
     if (init.bearer !== undefined) headers.authorization = `Bearer ${init.bearer}`;
@@ -985,6 +1129,8 @@ export class GitHostClient {
     } catch {
       throw new HostError("unreachable", { code: null, words: null });
     }
+    const retryAfter = response.headers.get("retry-after");
+    if (response.status === 429) this.hold(retryAfter, this.now());
     let json: unknown = null;
     if (raw.length > 0) {
       try {
@@ -993,7 +1139,7 @@ export class GitHostClient {
         json = null;
       }
     }
-    return { status: response.status, json, retryAfter: response.headers.get("retry-after") };
+    return { status: response.status, json, retryAfter };
   }
 }
 

@@ -391,6 +391,8 @@ When a sync or check step fails, the core shall stop leaving the clone in the st
 | Save | a staged path of an ignored family, or validation refusing a file | index reset, no commit, files untouched | the path or file and reason; "Nothing was saved" |
 | Save | `spex` moved while the Save validated — a commit from a terminal | no commit; that commit and every file stand | Git's last lines; Retry |
 | Check, Push | the host unreachable, or the device offline | commits stand | "Could not reach <host>"; check the network; Retry |
+| Check, Push | the host asking to wait — its rate limit [[git-host-11](git-host.md#git-host-11)] | commits stand | "<host> asks to wait N seconds" (or "a moment"); "Retry waits, then runs the step."; Retry, which waits the time out before the step [[git-host-21](git-host.md#git-host-21)] |
+| Check, Push | Stop while a call of the step waits out the host's rate limit [[git-host-21](git-host.md#git-host-21)] | commits stand | "Stopped while waiting for <host>"; "Retry waits, then runs the step."; Retry |
 | Check, Push | the host answering that this device must sign in again [[git-host-4](git-host.md#git-host-4)] | commits stand | "Sign in again"; the header's Sign in; Retry after |
 | Check, Push | the host refusing with its words — the repository read-only, the push rejected by a rule, the account's role too low | commits stand | "<host> refused: <the host's words>" [[space-50](#space-50)]; the repository turns read-only |
 | Check, Push | the host no longer listing the repository | commits stand | "No longer shared with you"; the repository turns unreachable; nothing deleted |
@@ -411,7 +413,7 @@ When a sync or check step fails, the core shall stop leaving the clone in the st
 
 #### space-16
 
-While a sync or check runs a transport step — Check or Push — the surface shall offer Stop, which ends the Git child and leaves that step's stopped state [[space-15](#space-15)]; Save, Compare, Apply and Refresh are bounded local steps and offer no Stop, and the Check step offers it only once its Git child runs, the host read before it being bounded by the client's own timeout.
+While a sync or check runs a transport step — Check or Push — the surface shall offer Stop, which ends the Git child, or the wait of the step's call to the host [[git-host-21](git-host.md#git-host-21)], and leaves that step's stopped state [[space-15](#space-15)]; Save, Compare, Apply and Refresh are bounded local steps and offer no Stop, and the Check step offers it only once its Git child runs or a call of it waits out the host's rate limit, the host read before it otherwise being bounded by the client's own timeout.
 
 #### space-50
 
@@ -649,8 +651,8 @@ interface RepositoryState {
     | { phase: "done"; at: number; sent: number; received: number; pushed: boolean };
 }
 type SyncStep = "save" | "check" | "compare" | "apply" | "refresh" | "push" | "code";   // code: a join's code clone
-type SyncCause = "unreachable" | "reauth" | "refused" | "gone" | "timeout" | "stopped" | "rejected"
-  | "validation" | "lease" | "writer" | "unrelated" | "git";
+type SyncCause = "unreachable" | "throttled" | "reauth" | "refused" | "gone" | "timeout" | "stopped" | "rejected"
+  | "validation" | "lease" | "writer" | "unrelated" | "git";   // throttled: the host asked to wait (space-15)
 interface SpaceUnit {
   unit: string;   // "sessions/<id>" | "intents/<id>" | "authoring/<id>" | "environment" | "config/playbook.config.yaml" | "project.json" | ".gitignore" | path
   kind: "session" | "intent" | "authoring" | "environment" | "settings" | "code" | "rules" | "other";
@@ -679,10 +681,10 @@ idle ─sync/join→ save ─→ check ─→ compare ─→ apply ─→ refres
 idle ─sync/join, repair marker standing→ repair ─→ save;  repair: lease | authoring turn | failure | blocking issue → stopped
 idle ─fetch→ check ─→ idle
 save: ignored path staged | validation | commit error → stopped
-check: host refused | reauth | gone | transport | timeout | Stop → stopped;  move: destination taken | lease | changed meanwhile → stopped;  host empty → push
+check: host refused | reauth | gone | throttled | transport | timeout | Stop → stopped;  move: destination taken | lease | changed meanwhile → stopped;  host empty → push
 compare: conflict without choice → choices;  no ancestor and not a join → unrelated;  nothing incoming → push
 apply: a written unit changed since Save (first) → save;  validation | lease | authoring turn | moved | changed twice → stopped
-push: rejected (first) → check;  rejected twice | refused | transport | timeout | Stop → stopped;  read-only → done
+push: rejected (first) → check;  rejected twice | refused | throttled | transport | timeout | Stop → stopped;  read-only → done
 choices ─sync with choices→ save;  unrelated ─sync with join→ save;  stopped ─Dismiss or next→ idle
 ```
 
@@ -810,7 +812,8 @@ When an integration suite runs two real cores on two scratch homes sharing one s
 - two Syncs sent together over a marker a released lease left are both accepted as one operation, with one merge of the recorded sides on the Save commit, the marker gone, and no state broadcast from the first send to that sync's end naming the marker as an issue [[space-67](#space-67)] [[space-21](#space-21)];
 - the stand-in renaming the repository moves the clone on the next sync, every pair rewritten and its key changed in the state [[space-60](#space-60)];
 - the stand-in archiving the repository turns it read-only with the host's reason, a sync bringing the peer's new session without pushing and the core's new session kept with its mark; the stand-in removing the account's membership turns it unreachable on the next read with the clone intact [[space-61](#space-61)] [[space-15](#space-15)] [[space-50](#space-50)];
-- a stand-in whose Git transport answers 401 stops "reauth" and a sleeping one stops "timeout" within a test-shortened limit, each carrying its guidance [[space-15](#space-15)] [[space-32](#space-32)].
+- a stand-in whose Git transport answers 401 stops "reauth" and a sleeping one stops "timeout" within a test-shortened limit, each carrying its guidance [[space-15](#space-15)] [[space-32](#space-32)];
+- a check the stand-in answers 429 stops `throttled` with "Retry waits, then runs the step.", reading "<display name> asks to wait 2 seconds" for `Retry-After: 2`, "3 seconds" for an HTTP date 3 s ahead and "a moment" for none [[space-15](#space-15)]; a Retry at once after the 2 s reads running at Check and completes, its first request reaching the stand-in no sooner than 2 s after the 429, and one after "a moment" reaches it at once [[space-15](#space-15)]; under `Retry-After: 5`, a Retry offers Stop while it waits, which stops it at once reading "Stopped while waiting for <display name>", nothing having reached the stand-in, and the next Retry waits out the rest before its step [[space-16](#space-16)] [[space-15](#space-15)].
 
 #### space-39
 

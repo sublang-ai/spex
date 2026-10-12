@@ -212,8 +212,9 @@ export interface StandinScript {
    * the listing taken as the request arrives — a read begun before a
    * change answering after it; 0 stops delaying. */
   sleepListing(ms: number): void;
-  /** Answer the next `count` admitted host requests 429 with `Retry-After`. */
-  rateLimit(count: number, retryAfter: string): void;
+  /** Answer the next `count` admitted host requests 429 with this
+   * `Retry-After`, or with none where it is null. */
+  rateLimit(count: number, retryAfter: string | null): void;
   /** Answer the next `count` admitted host requests 503 `provider_unavailable`. */
   unavailable(count: number): void;
   /** Answer the next `count` admitted host requests 403 `host_refused`
@@ -500,7 +501,7 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
   let groupRenameRefusal: string | null = null;
   let groupDeleteRefusal: string | null = null;
   let transferRefusal: string | null = null;
-  const hostFaults: ({ kind: "rate"; retryAfter: string } | { kind: "unavailable" } | { kind: "refused"; message: string })[] = [];
+  const hostFaults: ({ kind: "rate"; retryAfter: string | null } | { kind: "unavailable" } | { kind: "refused"; message: string })[] = [];
 
   await new Promise<void>((resolveListen, rejectListen) => {
     server.once("error", rejectListen);
@@ -1096,7 +1097,7 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
     const found = bearerDevice(bearerOf(req));
     if ("code" in found) return envelope(res, 401, found.code, found.message);
     const fault = hostFaults.shift();
-    if (fault?.kind === "rate") return envelope(res, 429, "rate_limited", "Too many requests to the Git host.", { "retry-after": fault.retryAfter });
+    if (fault?.kind === "rate") return envelope(res, 429, "rate_limited", "Too many requests to the Git host.", fault.retryAfter === null ? {} : { "retry-after": fault.retryAfter });
     if (fault?.kind === "unavailable") return envelope(res, 503, "provider_unavailable", "The Git host did not answer.");
     if (fault?.kind === "refused") return envelope(res, 403, "host_refused", fault.message);
 

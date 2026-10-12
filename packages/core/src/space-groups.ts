@@ -14,6 +14,7 @@
 import {
   CredentialChanged,
   HostError,
+  retryAfterSeconds,
   type GitHostClient,
   type HostAccount,
   type HostGroup,
@@ -78,14 +79,17 @@ async function mapLimit<T, R>(items: T[], limit: number, work: (item: T) => Prom
  * host.
  */
 export async function readHostView(client: GitHostClient, now: () => number = Date.now): Promise<HostView> {
+  // The read waits out the host's rate limit, never refused by it
+  // (git-host-21).
+  const wait = { wait: true };
   const [described, account, groups, repositories] = await Promise.all([
-    client.describe(),
-    client.me(),
-    client.groups(),
-    client.repositories(),
+    client.describe(wait),
+    client.me(wait),
+    client.groups(wait),
+    client.repositories(wait),
   ]);
   const listings = await mapLimit(repositories, DETAIL_CONCURRENCY, async (repository): Promise<HostListing> => {
-    const [detail, members] = await Promise.all([client.repository(repository.id), memberCount(client, repository.id)]);
+    const [detail, members] = await Promise.all([client.repository(repository.id, wait), memberCount(client, repository.id)]);
     return {
       repository,
       readOnly: detail.readOnly ?? (detail.archived ? { reason: "archived", message: "" } : null),
@@ -103,7 +107,7 @@ export async function readHostView(client: GitHostClient, now: () => number = Da
  * the whole read as any other failure does. */
 async function memberCount(client: GitHostClient, id: string): Promise<number | null> {
   try {
-    return (await client.members({ kind: "repository", id })).members.length;
+    return (await client.members({ kind: "repository", id }, { wait: true })).members.length;
   } catch (error) {
     if (error instanceof HostError && error.kind !== "reauth") return null;
     throw error;
@@ -380,10 +384,12 @@ export function relayHostError(error: unknown, host: string): string {
       return hostRefused(host, error.words);
     case "not_found":
       return noLongerShared();
-    case "rate_limited":
-      return error.retryAfter
-        ? i18n._({ id: "{host} asks to wait; try again after {retry}", values: { host, retry: error.retryAfter }, comment: "The Git host's rate limit; {retry} is its own Retry-After value, kept as given" })
-        : i18n._({ id: "{host} asks to wait; try again later", values: { host }, comment: "The Git host's rate limit, with no retry time of its own" });
+    case "rate_limited": {
+      const seconds = retryAfterSeconds(error.retryAfter);
+      return seconds !== null
+        ? i18n._({ id: "{host} asks to wait {seconds, plural, one {# second} other {# seconds}}", values: { host, seconds }, comment: "The Git host's rate limit; {seconds} is how long it asks to wait, read from its Retry-After" })
+        : i18n._({ id: "{host} asks to wait a moment", values: { host }, comment: "The Git host's rate limit, with no time of its own to wait" });
+    }
     case "reauth":
       return signInAgain();
     case "unreachable":
