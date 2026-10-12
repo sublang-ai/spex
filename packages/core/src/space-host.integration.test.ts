@@ -1709,11 +1709,14 @@ test("space-38, git-host-14: a check the stand-in answers 429 stops throttled in
   assert.equal(waited.settled.sync.phase, "idle", JSON.stringify(waited.settled.sync));
   assert.ok(waited.at - two.at >= 1_950, `the Retry reached the stand-in ${Math.round(waited.at - two.at)} ms after its 429`);
 
-  // An HTTP date three seconds ahead: the seconds until it (space-15).
-  while (Date.now() % 1_000 > 50) await sleep(5);
-  const date = Math.floor(Date.now() / 1_000) * 1_000 + 3_000;
+  // An HTTP date four seconds ahead: the seconds until it, read when the
+  // 429 is answered, so a slow machine may have spent a second or two of
+  // them by then (space-15).
+  const date = Math.floor(Date.now() / 1_000) * 1_000 + 4_000;
   const dated = await throttle(new Date(date).toUTCString());
-  assert.equal(dated.message, `${HOST_NAME} asks to wait 3 seconds`);
+  const datedSeconds = /asks to wait (\d+) seconds$/.exec(dated.message)?.[1];
+  assert.ok(datedSeconds !== undefined && Number(datedSeconds) >= 2 && Number(datedSeconds) <= 4, dated.message);
+  assert.ok(dated.message.startsWith(`${HOST_NAME} asks to wait `), dated.message);
 
   // No time of its own: "a moment", and a Retry runs at once (space-15).
   const moment = await throttle(null);
