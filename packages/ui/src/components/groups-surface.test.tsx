@@ -611,6 +611,97 @@ describe("GROUPS: Pick a group (space-58)", () => {
     );
   });
 
+  test("space-57: a pick joining a repository others may share says the sharing notice in the picker first; Continue joins with noticed", async () => {
+    // A project this device's reader has not been told about, beside a
+    // team's spex repository for the same code.
+    const LISTED = "acme/team/academy-spex";
+    const joining = (listed: Partial<RepositoryState>, local: Partial<RepositoryState> = {}): GroupsState => {
+      const state = base({}, [repo({ state: "local-only", remote: null, id: null, code: CODE, branch: null, members: null, noticed: false, ...local })]);
+      const team = repo({ key: LISTED, name: "academy-spex", id: "51", code: CODE, folder: null, members: 3, state: "absent", branch: null, ...listed });
+      return { ...state, groups: [...state.groups, teamGroup([team])] };
+    };
+    const option = () => screen.getByTestId(`space-pick-repo-${LISTED}`);
+    const notice = () => screen.getByTestId(`space-pick-notice-${KEY}`);
+
+    // With another member: the notice stands in the picker beneath the
+    // repository picked, Cancel focused, and sends nothing until
+    // Continue; Escape and Cancel close it alone, focus back on the
+    // repository (space-57, space-58).
+    await renderGroups(joining({}), { open: false });
+    fireEvent.click(screen.getByTestId(`space-row-pick-${KEY}`));
+    fireEvent.click(option());
+    const picker = screen.getByTestId(`space-picker-${KEY}`);
+    expect(picker.contains(notice())).toBe(true);
+    expect(option().closest("li")!.contains(notice())).toBe(true);
+    expect(notice().textContent).toContain("Every session goes there whole");
+    expect(notice().textContent).toContain("hidden parts and attachments included");
+    expect(notice().textContent).toContain("nothing recalls what others downloaded");
+    expect(notice().textContent).not.toContain("public");
+    expect(document.activeElement).toBe(within(notice()).getByRole("button", { name: "Cancel" }));
+    fireEvent.keyDown(document.activeElement!, { key: "Escape" });
+    expect(screen.queryByTestId(`space-pick-notice-${KEY}`)).toBeNull();
+    expect(screen.getByTestId(`space-picker-${KEY}`)).toBe(picker);
+    await waitFor(() => expect(document.activeElement).toBe(option()));
+    fireEvent.click(option());
+    fireEvent.click(within(notice()).getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByTestId(`space-pick-notice-${KEY}`)).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(option()));
+    expect(calls("space.pick")).toHaveLength(0);
+    fireEvent.click(option());
+    fireEvent.click(within(notice()).getByRole("button", { name: "Continue" }));
+    await waitFor(() =>
+      expect(calls("space.pick")).toEqual([{ repository: KEY, choice: { kind: "join", hostId: "51" }, noticed: true }]),
+    );
+    await waitFor(() => expect(screen.queryByTestId(`space-picker-${KEY}`)).toBeNull());
+    cleanup();
+
+    // With a count the host's last read lacks: the same notice, and a
+    // public repository says its records are public.
+    commandMock.mockClear();
+    await renderGroups(joining({ members: null, visibility: "public" }), { open: false });
+    fireEvent.click(screen.getByTestId(`space-row-pick-${KEY}`));
+    expect(option().textContent).not.toContain("member");
+    fireEvent.click(option());
+    expect(notice().textContent).toContain("Every session goes there whole");
+    expect(notice().textContent).toContain("its records are public");
+    fireEvent.click(within(notice()).getByRole("button", { name: "Continue" }));
+    await waitFor(() =>
+      expect(calls("space.pick")).toEqual([{ repository: KEY, choice: { kind: "join", hostId: "51" }, noticed: true }]),
+    );
+    cleanup();
+
+    // A refused join closes the notice, the refusal standing in the
+    // picker and focus back on the repository.
+    commandMock.mockClear();
+    commandMock.mockImplementation(async (type: string, fields?: Record<string, unknown>) => {
+      if (type === "space.pick") throw new Error("No longer shared with you");
+      return answer(type, fields);
+    });
+    await renderGroups(joining({}), { open: false });
+    fireEvent.click(screen.getByTestId(`space-row-pick-${KEY}`));
+    fireEvent.click(option());
+    fireEvent.click(within(notice()).getByRole("button", { name: "Continue" }));
+    await waitFor(() =>
+      expect(within(screen.getByTestId(`space-picker-${KEY}`)).getByRole("alert").textContent).toBe("No longer shared with you"),
+    );
+    expect(screen.queryByTestId(`space-pick-notice-${KEY}`)).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(option()));
+    cleanup();
+    commandMock.mockImplementation(answer);
+
+    // The account its only member, or the notice seen already: the pick
+    // joins at once, without noticed.
+    for (const [listed, local] of [[{ members: 1 }, {}], [{ members: 3 }, { noticed: true }], [{ members: null }, { noticed: true }]] as const) {
+      commandMock.mockClear();
+      await renderGroups(joining(listed, local), { open: false });
+      fireEvent.click(screen.getByTestId(`space-row-pick-${KEY}`));
+      fireEvent.click(option());
+      expect(screen.queryByTestId(`space-pick-notice-${KEY}`)).toBeNull();
+      await waitFor(() => expect(calls("space.pick")).toEqual([{ repository: KEY, choice: { kind: "join", hostId: "51" } }]));
+      cleanup();
+    }
+  });
+
   test("a taken or malformed name is refused in place and the field asks for another; an empty one is never sent", async () => {
     await renderGroups(localProject(), { open: false });
     fireEvent.click(screen.getByTestId(`space-row-pick-${KEY}`));
