@@ -23,7 +23,7 @@ While at least one attention entry derives across the registered projects' inten
 | Interrupted | one entry per interrupted intent, leading with the intent's title and showing its project, session, interruption reason — question or failure — and, for a failure the fold carries a cause for [[core-service-49](core-service.md#core-service-49)], why it failed in the catalogue's phrase [[run-view-147](run-view.md#run-view-147)] ([DR-075](../decisions/075-a-failure-says-what-and-what-now.md)), with the act line its state asks for [[dashboard-53](#dashboard-53)], the unacknowledged failure in the red chase tone ([DR-029](../decisions/029-session-history-home.md)) |
 | Finished | one entry per finished intent awaiting a verdict, leading with the intent's title and showing its project, session, and the run's stats [[dashboard-35](#dashboard-35)] with review rounds foremost, its verdict controls beside it [[dashboard-56](#dashboard-56)] |
 
-- A project's current conversation [[core-service-93](core-service.md#core-service-93)] serving no intent stands in with session-level entries: its question and failure conditions — the same conditions, holding outside any intent's turn range — join the interrupted band, and at most one unread-turn entry per session, for a finished Boss turn later than the session's persisted last-viewed marker, joins the finished band ([DR-051](../decisions/051-runtime-held-for-a-turn.md)).
+- A project's current conversation [[core-service-93](core-service.md#core-service-93)] serving no intent stands in with session-level entries: its question and failure conditions — the same conditions, holding outside any intent's turn range — join the interrupted band, and at most one unread-turn entry per session, for a finished Boss turn later than the session's persisted last-viewed marker, joins the finished band, each entry leading with the Boss turn that opened the work it stands for rather than an answer sent since [[core-service-49](core-service.md#core-service-49)] ([DR-051](../decisions/051-runtime-held-for-a-turn.md), [DR-119](../decisions/119-an-answer-continues-its-intent.md)).
 - An entry's title owns its row's slack; the project name truncates at 10rem with the full name in its title, and in a row narrower than 28rem the age hides, the project name too below 20rem ([DR-041](../decisions/041-chrome-that-fits.md)).
 
 #### dashboard-2
@@ -405,6 +405,13 @@ Where fixture intent rows, records, and review state are persisted to the app st
 #### dashboard-62
 
 Where the displayed Dashboard is filtered to one project while another project retains an attention entry, live Running row, and ledger group, when the filtered project leaves the registered project list, the test suite shall assert that the filter reads All projects in that same render, the remaining project's entry, Running row, and group are visible, and neither attention empty state stands [[dashboard-61](#dashboard-61)] [[dashboard-8](#dashboard-8)].
+
+#### dashboard-65
+
+Where the core runs a scripted Captain that parks a run on a Boss question, when the Boss answers it in the project's current conversation, the test suite shall assert the answer's place case by case:
+
+- with no intent bound, the question entry and then the unread finished entry lead with the turn that opened the work, never the answer, while a turn sent once no question stands leads its own entry [[dashboard-1](#dashboard-1)];
+- with an intent bound, the answer is one of its turns — the intent alone in the ledger, titled with its text's first line, its finished entry's stats counting both turns — and the History row its confirmation lists reads that title [[dashboard-1](#dashboard-1)] [[dashboard-33](#dashboard-33)] [[dashboard-35](#dashboard-35)] [[dashboard-27](#dashboard-27)].
 
 ### Ledger Coverage
 

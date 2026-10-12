@@ -351,6 +351,7 @@ While an intent is closed [[core-service-46](#core-service-46)], when a client s
 While a session is live, when a Boss submission for it — from a client [[core-service-5](#core-service-5)] or automatic advancement [[core-service-94](#core-service-94)] — carries an intent id, the core service shall validate the intent at submission — open, of the session's project, and queued — and stamp the dispatch (session, turn, and time) onto the intent when and only when the submitted turn starts, announcing the write [[core-service-51](#core-service-51)] ([DR-035](../decisions/035-intent-ledger.md)):
 
 - a submission whose intent fails validation is rejected and starts no turn;
+- while a run of the session stands parked on a Boss question [[core-service-107](#core-service-107)], a submission carrying an intent id is rejected `conflict`, the intent staying queued: a dispatch is new work, never an answer ([DR-119](../decisions/119-an-answer-continues-its-intent.md));
 - a submission that never starts a turn stamps nothing, and the intent stays queued;
 - a later dispatch of the same intent re-writes the stamps;
 - the stamp attributes turns: an intent's turns run from its dispatch turn up to, not including, the next turn in the session that is another intent's dispatch turn, so the newest dispatched open intent owns follow-up turns;
@@ -384,7 +385,7 @@ When a client sends `ledger.get`, the core service shall reply with the cross-pr
 | --- | --- |
 | Attention entries | two bands — intents standing interrupted on the Boss (a pending question or an unacknowledged failure among their turns), then intents finished and awaiting a verdict — each band ordered longest waiting first by condition onset, and no entry from a project whose stored state refuses the acts that would end it [[core-service-86](#core-service-86)] ([DR-066](../decisions/066-every-summons-has-a-door.md)) |
 | Run stats | each finished entry carries stats folded from its intent's attributed turns [[core-service-47](#core-service-47)]: turn count, elapsed time, and the review rounds when any |
-| Session stand-ins | a session bound to no intent enters the same bands for its own question, failure, or finished turn past the viewed marker [[core-service-48](#core-service-48)] |
+| Session stand-ins | a session bound to no intent enters the same bands for its own question, failure, or finished turn past the viewed marker [[core-service-48](#core-service-48)], titled with the Boss turn that opened that work: from the turn the entry points at — the latest where it points at none — back past every turn that started while a run of the session stood parked on a Boss question [[core-service-107](#core-service-107)], so an answer or a clarification folds under the turn it answers ([DR-119](../decisions/119-an-answer-continues-its-intent.md)) |
 | Project groups | per project: the current conversation's state [[core-service-93](#core-service-93)], the queue oldest first, its oldest queued intent as next with the scheduling standing, manual-start availability, and structured cause [[core-service-107](#core-service-107)], and the open intents' source-artifact references [[core-service-42](#core-service-42)] ([DR-077](../decisions/077-up-next-is-a-committed-queue.md)) |
 | Badge | the count of all attention entries |
 
@@ -903,6 +904,7 @@ Where a session is live on the fake adapter, the test suite shall submit Boss te
 - when the submitted turn starts, the intent carries that session, that turn, and a dispatch time;
 - a submission carrying the id of another project's intent, or of a closed one, is rejected and starts no turn;
 - a submission rejected busy while a turn is active [[core-service-5](#core-service-5)] stamps nothing and leaves the intent queued;
+- while a run of the session stands parked on a Boss question, a submission carrying a queued intent's id is rejected `conflict`, starts no turn, and stamps nothing, while the Boss's answer carrying no intent is accepted [[core-service-47](#core-service-47)];
 - a dispatch turn that is aborted [[core-service-6](#core-service-6)] keeps its stamps while the next `ledger.get` re-derives the intent as queued at its place by age [[core-service-49](#core-service-49)].
 
 #### core-service-95
@@ -937,7 +939,7 @@ Where a project's store holds twenty-five closed intents, the test suite shall p
 
 #### core-service-59
 
-Where a session finishes a turn bound to no intent, the test suite shall assert the review-state contract of [[core-service-48](#core-service-48)]: `ledger.get` lists a finished-band stand-in entry for the unviewed turn [[core-service-49](#core-service-49)], a `session.viewed` naming that turn clears the entry from the next reply, a `session.viewed` naming a turn still in flight is refused and leaves the entry standing, a marker no later than the stored one writing nothing, a player's permission request raises no entry at all [[core-service-49](#core-service-49)], and the entry stays cleared after a restart on the same store.
+Where a session finishes a turn bound to no intent, the test suite shall assert the review-state contract of [[core-service-48](#core-service-48)]: `ledger.get` lists a finished-band stand-in entry for the unviewed turn [[core-service-49](#core-service-49)], a `session.viewed` naming that turn clears the entry from the next reply, a `session.viewed` naming a turn still in flight is refused and leaves the entry standing, a marker no later than the stored one writing nothing, a player's permission request raises no entry at all [[core-service-49](#core-service-49)], the entry stays cleared after a restart on the same store, and, where the session's first turn left a run parked on a Boss question and a second turn answered it, the entry for that answer's finished turn is titled with the first turn's text [[core-service-49](#core-service-49)].
 
 ### Readiness Coverage
 
