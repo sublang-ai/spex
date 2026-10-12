@@ -122,16 +122,22 @@ export function rewriteSkillName(text: string, name: string): string {
   return `${match[1]}${rewritten}${match[3]}${text.slice(match[0].length)}`;
 }
 
-/** The SKILL.md generated for an exported playbook (environments-16). */
+/** The SKILL.md generated for an exported playbook (environments-16):
+ * for an agent a person runs in the working folder, never for a player
+ * Spex launches there, which sees the same skills. The description
+ * leaves the version to the body, so its bounded names keep it within
+ * the Agent Skills limit. */
 export function playbookSkill(options: { name: string; id: string; packageName: string; version: string }): string {
   const { name, id, packageName, version } = options;
   return [
     "---",
     `name: ${name}`,
-    `description: Runs the ${id} playbook of ${packageName} ${version} in this working folder.`,
+    `description: Starts the ${id} playbook of ${packageName} through Spex in this working folder. Not for an agent already playing a role in this or any playbook; that agent does the step it was given.`,
     "---",
     "",
     `Run the playbook \`${id}\` of the spec package \`${packageName}\`, version \`${version}\`, through Spex in this working folder: start the playbook's command in a Spex session of this working folder.`,
+    "",
+    "If you are already inside a Spex session as a player of a playbook, given a role and a step, this skill does not apply: do the step you were given.",
     "",
   ].join("\n");
 }

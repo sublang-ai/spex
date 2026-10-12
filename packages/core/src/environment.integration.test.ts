@@ -762,10 +762,16 @@ test("environments-22: skills and playbooks export to agent folders, the user's 
   const exclude = readFileSync(join(workingFolder, ".git/info/exclude"), "utf8");
   for (const name of report.skills) assert.ok(exclude.includes(`/.claude/skills/${name}/`), name);
   assert.equal(git(workingFolder, ["status", "--porcelain", "--untracked-files=all", "--", ".claude"]), "");
-  // The generated skill names the spec package, version and id.
+  // The generated skill names the spec package, version and id; its
+  // description and its last sentence send a player back to its step.
   const ship = readFileSync(join(workingFolder, ".claude/skills/ship/SKILL.md"), "utf8");
-  assert.match(ship, /^---\nname: ship\ndescription: Runs the ship playbook of acme\/kit2 1\.0\.0 in this working folder\.\n---\n/);
+  const shipFront = parseYaml(/^---\n([\s\S]*?)\n---\n/.exec(ship)![1]!) as Record<string, string>;
+  assert.deepEqual(Object.keys(shipFront), ["name", "description"]);
+  assert.equal(shipFront.name, "ship");
+  assert.equal(shipFront.description, "Starts the ship playbook of acme/kit2 through Spex in this working folder. Not for an agent already playing a role in this or any playbook; that agent does the step it was given.");
+  assert.ok(shipFront.description!.length <= 1024);
   assert.match(ship, /`ship`.*`acme\/kit2`.*`1\.0\.0`.*through Spex in this working folder/s);
+  assert.match(ship, /\n\nIf you are already inside a Spex session as a player of a playbook, given a role and a step, this skill does not apply: do the step you were given\.\n$/);
   // A path source's spec stands as a generated skill: the working
   // folder's spec file byte for byte, beside a SKILL.md naming the
   // spec package's org, name, version and description.

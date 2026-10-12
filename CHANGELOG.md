@@ -545,6 +545,11 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Fixed
 
+- A playbook's exported skill no longer takes over the players Spex
+  launches in the same working folder: its description says it starts
+  the playbook through Spex and is not for an agent already playing a
+  role in a playbook, and its last sentence sends such a player back to
+  the step it was given.
 - Create says why a project's first commit failed in the app's own words:
   that Git could not make the first commit, naming commit signing with no
   key configured, a signing program that failed, or a missing Git name and
