@@ -552,6 +552,10 @@ and `npm start` (desktop) or `npm run start:server` (server).
   `approval.list` and `approval.respond` operate on live requests from
   `approval.state`, independently of durable ledger attention.
 
+### Changed
+
+- The dependency lock takes Playbook 17.8.1 — the Captain ends a relayed question with the question's own words and reports a step's ending with the facts the step gave — and cligent 0.33.4 — the Claude Code adapter withholds the structured-question tool it cannot serve, so no refused call shows in the Captain's pane. The floors of DR-116 are unchanged.
+
 ### Fixed
 
 - The authoring agent learns before its first compile that a prompt's
