@@ -28,12 +28,16 @@ The aim was to find what stops a real team or makes the app hard to use, and to 
 | W-13 seven near-identical recovery rows; W-06 Git's raw words on a failed first commit | spex PR 113, DR-117 |
 | W-24 a clone's sync standing read from Git when no record exists; W-04 signed-out own-group name; W-05 name and path separator; W-20 "New group at <site>" where the host refuses creation | spex PR 114, DR-118 |
 | W-28 two tests each losing a CI run on a slow macOS runner (a pick-race hold taken by another reader; a two-pass push against a 15 s budget) | spex PR 116 |
+| W-27 a role's prompt carrying the procedure's later rounds | spex PR 118 (the preamble's rule) |
+| W-29 a repository moved into a team group reading "Never synced" | spex PR 119, space-5/space-73 |
+| W-34 a playbook's exported skill derailing its own player | spex PR 120, environments-16 |
 
 ## What is still open
 
-- Playbook: W-10 (uncommitted drafts cannot link; a stated non-goal of DR-088 with its reasons).
-- Authoring: W-27 (a role's prompt carries later rounds; a lesson for the course and for text2gears).
-- Groups: W-29 (a repository moved into a team group after its first sync reads "Never synced" until the next sync; minor).
+- Playbook: W-10 is settled, not fixed — DR-088 §4 declines an uncommitted-draft outcome with its reasons, drafts travel as text or each drafting step commits, and the preamble teaches the three effects; W-32 (the Captain rewords a playbook's one question and drops the facts its ending reports) and W-33 (a structured-question tool the Captain cannot use) are the Captain's prompt and adapter.
+- Playbooks surface: W-30 (an upgraded app keeps the lock's older built-ins with nothing saying a newer release is seeded; a resolve moves them), W-36 (the Org default under a nested group), W-37 (a source's first line as the Library title; minor).
+- Dashboard: W-35 (a finished row titled with the Boss's last answer; a design question under DR-035).
+- Authoring: W-38 (the source-order rule learned only from a failed compile; minor).
 
 ## By the numbers
 
@@ -42,27 +46,27 @@ Read from each home's session list and usage at the end of the simulation (token
 | Team | Sessions | Turns | Agent active (min) | Input tokens | Output tokens | Commits (incl. scaffold) |
 | --- | --- | --- | --- | --- | --- | --- |
 | T01 | 3 | 5 | 179 | 48,495,722 | 934,911 | 13 |
-| T02 | 3 | 4 | 89 | 62,969,995 | 1,051,862 | 9 |
-| T03 | 4 | 10 | 77 | 108,605,664 | 1,731,351 | 23 |
-| T04 | 3 | 5 | 75 | 42,124,330 | 738,826 | 12 |
-| T05 | 1 | 6 | 30 | 8,215,566 | 527,453 | 5 |
-| T06 | 2 | 5 | 32 | 9,621,434 | 133,988 | 7 |
-| T07 | 3 | 6 | 78 | 36,735,225 | 1,174,059 | 9 |
-| T08 | 2 | 2 | 28 | 8,721,056 | 227,028 | 6 |
+| T02 | 4 | 6 | 101 | 68,902,321 | 1,160,937 | 13 |
+| T03 | 6 | 16 | 90 | 114,229,237 | 1,806,432 | 27 |
+| T04 | 4 | 7 | 94 | 44,492,419 | 809,609 | 13 |
+| T05 | 2 | 8 | 35 | 11,412,683 | 566,161 | 6 |
+| T06 | 3 | 7 | 46 | 14,552,110 | 210,642 | 9 |
+| T07 | 4 | 8 | 96 | 54,419,764 | 1,379,422 | 14 |
+| T08 | 3 | 5 | 34 | 11,193,936 | 269,955 | 9 |
 | T09 | 3 | 4 | 40 | 3,128,546 | 77,937 | 7 |
-| T10 | 2 | 4 | 33 | 14,677,774 | 377,659 | 7 |
+| T10 | 3 | 6 | 51 | 22,903,768 | 549,421 | 11 |
 
 ## Reuse map as walked
 
-| Team | Published to `claude-workshop-261011` | Adopted from the registry | Run on the adopter's project |
-| --- | --- | --- | --- |
-| T01 | `shape` | `evaluate` (T08) | yes — pass |
-| T02 | `verify` | `requirements` (T07) | yes — committed |
-| T03 | `propose` | `rollout` (T10) | yes — plan committed, W-23 at the end |
-| T04 | `sprint-plan` | `shape` (T01) | yes — committed |
-| T05 | `design`, `trip-split` (spec only) | — | — |
-| T06 | `contrib` | `verify` (T02) | yes — files committed, W-25 at the end |
-| T07 | `requirements` | `sprint-plan` (T04) | yes — committed, W-23 at the end |
-| T08 | `evaluate` | `design` (T05) | enabled |
-| T09 | `prototype` | `contrib` (T06), `trip-split` (T05) | yes — committed; the spec recast in TypeScript |
-| T10 | `rollout` | `shape` (T01) | enabled |
+| Team | Published to `claude-workshop-261011` | Adopted from the registry | The adoption's run | The second procedure's own run |
+| --- | --- | --- | --- | --- |
+| T01 | `shape` | `evaluate` (T08) | pass | — |
+| T02 | `verify` (0.1.0, 0.1.1), `release-review` | `requirements` (T07) | committed | `release-review`: approved |
+| T03 | `propose`, `release` | `rollout` (T10) | plan committed, W-23 at the end; on `rollout` 0.1.1 rejected cleanly | `release`: approved |
+| T04 | `sprint-plan` | `shape` (T01) | committed | — |
+| T05 | `design`, `trip-split` (spec only) | `release` (T03) | held with findings, the owner never asked | — |
+| T06 | `contrib` | `verify` (T02) | files committed, W-25 at the end; on `verify` 0.1.1 two commits taken, parked on W-27 | — |
+| T07 | `requirements`, `compliance` | `sprint-plan` (T04) | committed, W-23 at the end | `compliance`: passed, twice |
+| T08 | `evaluate`, `promote` | `design` (T05) | enabled | `promote`: promoted to staging |
+| T09 | `prototype` | `contrib` (T06), `trip-split` (T05) | committed; the spec recast in TypeScript | — |
+| T10 | `rollout` (0.1.0, 0.1.1), `incident` | `shape` (T01) | enabled | `incident`: not cleared at the review limit |
