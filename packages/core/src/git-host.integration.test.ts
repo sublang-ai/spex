@@ -29,7 +29,7 @@ import {
 } from "./git-host.js";
 import { GIT_CREDENTIAL_FILE_ENV, currentRuntime, withGitCredential } from "./git-credential.js";
 import { holdingFetch, samePair, settled } from "./testing/holding-fetch.js";
-import { startStandinHost, type StandinHost } from "./testing/standin-host.js";
+import { STANDIN_STORAGE, startStandinHost, type StandinHost } from "./testing/standin-host.js";
 
 async function setup(options: { skew?: { ms: number } } = {}) {
   const scratch = mkdtempSync(join(tmpdir(), "spex-git-host-"));
@@ -688,8 +688,10 @@ test("git-host-5: groups and every spex repository across two pages, followed th
     const first = repositories[0];
     assert.equal(first.path, "a-spex");
     assert.equal(first.group.fullPath, "acme");
-    assert.equal(first.remoteUrl, `${t.host.gitOrigin}/acme/a-spex.git`);
-    assert.equal(first.webUrl, `${t.host.url}/acme/a-spex`);
+    // The remote is the Git system's, inside its storage group; the
+    // path is the instance's, and no page is answered (DR-120).
+    assert.equal(first.remoteUrl, `${t.host.gitOrigin}/${STANDIN_STORAGE}/acme/a-spex.git`);
+    assert.ok(!("webUrl" in first) && !("url" in first.group));
     assert.equal(first.visibility, "private");
     assert.equal(first.spexBranch, true);
     assert.equal(first.empty, false);
@@ -701,7 +703,7 @@ test("git-host-5: groups and every spex repository across two pages, followed th
     s.rename(b.id, { name: "bee-spex", group: "acme" });
     const renamed = (await t.client.repositories()).find((r) => r.id === b.id);
     assert.equal(renamed?.path, "bee-spex");
-    assert.equal(renamed?.remoteUrl, `${t.host.gitOrigin}/acme/bee-spex.git`);
+    assert.equal(renamed?.remoteUrl, `${t.host.gitOrigin}/${STANDIN_STORAGE}/acme/bee-spex.git`);
 
     s.removeMember(a.id);
     assert.deepEqual((await t.client.repositories()).map((r) => r.id), [b.id, c.id]);
@@ -749,7 +751,7 @@ test("git-host-6, git-host-7: creation answers created, pending or name taken; b
     assert.equal(repo.visibility, "private");
     assert.equal(repo.empty, false);
     assert.equal(repo.spexBranch, false);
-    const bare = join(t.host.dir, "acme", "widget-spex.git");
+    const bare = t.host.bareOf("acme/widget-spex");
     assert.equal(execFileSync("git", ["-C", bare, "ls-tree", "--name-only", "main"], { encoding: "utf8" }).trim(), "README.md");
 
     const own = await t.client.create({ groupId: null, name: "ada-spex", description: "Ada's own records" });
@@ -770,7 +772,7 @@ test("git-host-6, git-host-7: creation answers created, pending or name taken; b
   }
 });
 
-test("git-host-8: members with the host's role names and members page", async () => {
+test("git-host-8: members with the host's role names and no page", async () => {
   const t = await setup();
   try {
     const repo = t.host.script.addRepository({
@@ -779,10 +781,13 @@ test("git-host-8: members with the host's role names and members page", async ()
       members: [{ id: "1002", login: "grace", displayName: "Grace Hopper", role: "Developer" }, { id: "1003", login: "alan", displayName: null, role: "Guest" }],
     });
     await browserSignIn(t.client);
-    const { members, membersUrl } = await t.client.members({ kind: "repository", id: repo.id });
+    const answer = await t.client.members({ kind: "repository", id: repo.id });
+    const { members } = answer;
     assert.deepEqual(members.map((m) => [m.login, m.displayName, m.role]), [["ada", "Ada Lovelace", "Owner"], ["grace", "Grace Hopper", "Developer"], ["alan", null, "Guest"]]);
-    assert.ok(members.every((m) => typeof m.id === "string" && m.url !== null && m.direct && m.via === null));
-    assert.equal(membersUrl, `${t.host.url}/acme/team-spex/-/project_members`);
+    assert.ok(members.every((m) => typeof m.id === "string" && m.direct && m.via === null));
+    // No page of the host crosses (DR-120).
+    assert.deepEqual(Object.keys(answer), ["members"]);
+    assert.ok(members.every((m) => Object.keys(m).sort().join() === "direct,displayName,id,login,role,via"), JSON.stringify(members));
   } finally {
     await t.dispose();
   }
@@ -822,9 +827,8 @@ test("git-host-5, git-host-8: the host's roles, what it lets the person do per g
 
     // A group's members: its own first, then those it inherits, each
     // with the group it comes through (git-host-8).
-    const { members, membersUrl } = await t.client.members({ kind: "group", id: "2003" });
+    const { members } = await t.client.members({ kind: "group", id: "2003" });
     assert.deepEqual(members.map((m) => [m.login, m.role, m.direct, m.via]), [["grace", "Developer", true, null], ["ada", "Owner", false, "acme"]]);
-    assert.equal(membersUrl, `${t.host.url}/acme/research/-/group_members`);
     const inherited = await t.client.members({ kind: "repository", id: managed.id });
     assert.deepEqual(inherited.members.map((m) => [m.login, m.direct, m.via]), [["ada", true, null]]);
   } finally {
@@ -971,7 +975,7 @@ test("git-host-9: a push through the helper carries the brokered credential; one
     assert.equal(pushed.code, 0, pushed.stderr);
     assert.equal(existsSync(dirname(file)), false, "the credential's directory is removed after the child");
     assert.ok(t.host.script.requests.slice(from).some((r) => r.path.endsWith("/git-receive-pack") && r.authorization));
-    const bare = join(t.host.dir, "acme", "push-spex.git");
+    const bare = t.host.bareOf("acme/push-spex");
     assert.equal(execFileSync("git", ["-C", bare, "show", "spex:project.json"], { encoding: "utf8" }).trim(), JSON.stringify({ format: 1, name: "push", remote: null }));
     assert.equal(existsSync(recorded), false, "the device's own helper was never asked");
     const detail = await t.client.repository(created.repository.id);
@@ -1039,8 +1043,8 @@ test("git-host-11: each failure the host answers is a kind with the host's words
     await assert.rejects(t.client.groups(), hostError("rate_limited", { retryAfter: "30", words: "Too many requests to the Git host." }));
     s.unavailable(1);
     await assert.rejects(t.client.groups(), hostError("unreachable", { words: "The Git host did not answer." }));
-    s.refuseHost(1, "Your account is blocked by GitLab.com: contact support.");
-    await assert.rejects(t.client.groups(), hostError("host_refused", { words: "Your account is blocked by GitLab.com: contact support." }));
+    s.refuseHost(1, "Your account is blocked: contact support.");
+    await assert.rejects(t.client.groups(), hostError("host_refused", { words: "Your account is blocked: contact support." }));
     await assert.rejects(t.client.repository("9999"), hostError("not_found", { words: "The repository is not shared with this account." }));
     assert.equal((await t.client.groups()).length, 3, "a failure leaves the device signed in");
     assert.equal(t.signedOut.length, 0);
