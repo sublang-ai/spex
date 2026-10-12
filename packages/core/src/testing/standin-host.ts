@@ -17,7 +17,7 @@
 
 import { execFile, execFileSync, spawn, type ChildProcess } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
-import { existsSync, mkdirSync, renameSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import { dirname, join } from "node:path";
@@ -157,6 +157,17 @@ export interface StandinScript {
   accessLevel(id: string, role: string): void;
   /** While set, creation answers 202 pending with these words. */
   refuseCreate(message: string | null): void;
+  /** While set, a repository the stand-in creates holds no README on
+   * `main` — empty, with no default branch — for its first `reads` reads
+   * of it, its creation's answer among them, as a host answers a
+   * creation before its initial commit lands; the read after them
+   * commits it, and Infinity never does. Clearing it commits every
+   * README held; a push into the repository ends its hold. */
+  holdInitialization(reads: number | null): void;
+  /** While set, a push to `main` is refused by the host's receive check
+   * with these words, as a protected default branch refuses a member
+   * who may not push there; every other branch is received. */
+  refuseDefaultBranch(message: string | null): void;
   /** While set, branch preparation answers 202 pending with these words. */
   refuseBranch(message: string | null): void;
   /** While set, every transport request answers 403 with these words. */
@@ -396,6 +407,25 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
   let nextId = 3001;
   let createRefusal: string | null = null;
   let branchRefusal: string | null = null;
+  let initializationHold: number | null = null;
+  /** Created repositories whose README is held, with the reads left. */
+  const uninitialized = new Map<StandinRepository, number>();
+  let defaultBranchRefusal: string | null = null;
+  /** The receive check a refused default branch runs, named to Git by
+   * `core.hooksPath` only while that refusal is set. */
+  const hooks = join(dir, ".hooks");
+  mkdirSync(hooks, { recursive: true });
+  writeFileSync(join(hooks, "pre-receive"), [
+    "#!/bin/sh",
+    "while read -r old new ref; do",
+    "  if [ \"$ref\" = refs/heads/main ]; then",
+    "    printf '%s\\n' \"$STANDIN_MAIN_REFUSAL\" >&2",
+    "    exit 1",
+    "  fi",
+    "done",
+    "exit 0",
+    "",
+  ].join("\n"), { mode: 0o755 });
   let transportRefusal: string | null = null;
   let transportUnauthorized = false;
   let transportSleepMs = 0;
@@ -510,7 +540,34 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
     }
   }
 
+  /** The host's README on `main`, committed into a created repository
+   * whose initialization was held. */
+  function initialize(repo: StandinRepository): void {
+    uninitialized.delete(repo);
+    commitFile(repo.bare, "refs/heads/main", "README.md", `# ${repo.name}\n`, "Initial commit");
+  }
+
+  /** After a push into a repository, as a host does: a held README is
+   * written no more once a branch landed, and an empty repository takes
+   * the first branch it received as its default. */
+  function received(repo: StandinRepository, wasEmpty: boolean): void {
+    try {
+      const heads = gitSync(["-C", repo.bare, "for-each-ref", "--format=%(refname)", "refs/heads/"]).split("\n").filter(Boolean);
+      if (heads.length === 0) return;
+      uninitialized.delete(repo);
+      if (wasEmpty && !heads.includes(gitSync(["-C", repo.bare, "symbolic-ref", "HEAD"]))) {
+        gitSync(["-C", repo.bare, "symbolic-ref", "HEAD", heads[0]]);
+      }
+    } catch { /* the bare repository moved meanwhile */ }
+  }
+
   async function repositoryWire(repo: StandinRepository): Promise<Record<string, unknown>> {
+    // A held README: one read fewer to go, committed once none is.
+    const left = uninitialized.get(repo);
+    if (left !== undefined) {
+      if (left > 0) uninitialized.set(repo, left - 1);
+      else initialize(repo);
+    }
     const heads = await branches(repo.bare);
     const spex = heads.has("spex");
     return {
@@ -710,6 +767,11 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
     removeMember: (id) => { findRepository(id).listed = false; },
     accessLevel: (id, role) => { findRepository(id).role = role; },
     refuseCreate: (message) => { createRefusal = message; },
+    holdInitialization: (reads) => {
+      initializationHold = reads;
+      if (reads === null) for (const repo of [...uninitialized.keys()]) initialize(repo);
+    },
+    refuseDefaultBranch: (message) => { defaultBranchRefusal = message; },
     refuseBranch: (message) => { branchRefusal = message; },
     refuseTransport: (message) => { transportRefusal = message; },
     unauthorizeTransport: (on) => { transportUnauthorized = on; },
@@ -1038,7 +1100,7 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
     if (existsSync(bare) || script.repositories.some((r) => r.group.fullPath === group.fullPath && r.path === name)) {
       return envelope(res, 409, "name_taken", "A repository of that name exists in the group.");
     }
-    initBare(bare, { name, empty: false });
+    initBare(bare, { name, empty: initializationHold !== null });
     const repo: StandinRepository = {
       id: String(nextId++),
       name,
@@ -1055,6 +1117,7 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
       bare,
     };
     script.repositories.push(repo);
+    if (initializationHold !== null) uninitialized.set(repo, initializationHold);
     json(res, 201, { status: "created", repository: await repositoryWire(repo) });
   }
 
@@ -1183,7 +1246,13 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
       ...(header("content-length") !== undefined ? { CONTENT_LENGTH: header("content-length") } : {}),
       ...(header("git-protocol") !== undefined ? { GIT_PROTOCOL: header("git-protocol") } : {}),
       ...(header("content-encoding") !== undefined ? { HTTP_CONTENT_ENCODING: header("content-encoding") } : {}),
+      // A protected default branch: the receive check refuses `main`.
+      ...(receive && defaultBranchRefusal !== null
+        ? { GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "core.hooksPath", GIT_CONFIG_VALUE_0: hooks, STANDIN_MAIN_REFUSAL: defaultBranchRefusal }
+        : {}),
     };
+    const pushing = receive && req.method === "POST";
+    const wasEmpty = pushing && (await branches(repo.bare)).size === 0;
     const child = spawn("git", ["http-backend"], { env, stdio: ["pipe", "pipe", "pipe"] });
     children.add(child);
     child.on("close", () => children.delete(child));
@@ -1229,6 +1298,7 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
         if (!headersDone && !res.headersSent) {
           res.writeHead(500, { "content-type": "text/plain; charset=utf-8" });
         }
+        if (pushing) received(repo, wasEmpty);
         res.end();
         resolveRelay();
       });
