@@ -9,8 +9,10 @@
 // (space-41); the explorer with its privacy panel and Copy path
 // (space-42); fit at every width in both sidebar states (space-43);
 // axe in both themes (space-44); a second device joining a project a
-// peer pushed (space-36); and the organizer creating groups and
-// sharing them (space-71). Every host is the in-process stand-in on
+// peer pushed (space-36); the organizer creating groups, picking a
+// project into one and sharing them (space-71); and the surface naming
+// nothing behind the instance, in English and in Chinese (space-75).
+// Every host is the in-process stand-in on
 // loopback, every peer plain Git on its bare repositories, and the
 // exploring journey's remote a bare path: hermetic, no network, no
 // credential of the machine's.
@@ -19,7 +21,7 @@ import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { seedDemoProject } from "@sublang/spex-core/testing";
+import { STANDIN_STORAGE, seedDemoProject } from "@sublang/spex-core/testing";
 
 import {
   HOST_GROUP,
@@ -38,11 +40,13 @@ import {
   git,
   nav,
   open,
+  pickGroup,
   runTurn,
   seedHostProject,
   send,
   settled,
   signInThroughPage,
+  surfaceEntry,
   test,
   type App,
 } from "../src/harness";
@@ -370,12 +374,12 @@ test.describe("organizing", () => {
     page,
     app,
   }) => {
-    test.setTimeout(120_000);
+    test.setTimeout(150_000);
     const host = app.host!;
-    // The stand-in lets the person create groups at the top, and
-    // subgroups and members in `acme`, whose `can` it leaves unset
-    // (git-host-12): what the sign-in's read already said.
-    host.script.canCreateGroup = true;
+    // By default the stand-in lets the person create groups at the
+    // instance's root, and subgroups and members in `acme`, whose `can`
+    // it leaves unset (git-host-12): what the sign-in's read already said.
+    expect(host.script.canCreateGroup).toBe(true);
     const MEMBER = host.script.accounts.find((account) => account.login === "grace")!;
     const UNKNOWN = "zed";
     expect(host.script.accounts.some((account) => account.login === UNKNOWN)).toBe(false);
@@ -415,6 +419,26 @@ test.describe("organizing", () => {
     await expect(design.getByRole("heading")).toContainText("Design Team");
     await expect(design.getByRole("heading")).toContainText(SUBGROUP);
     expect(standinGroup(SUBGROUP)?.name).toBe("Design Team");
+
+    // A project added from the palette is offered your own group and
+    // then every group by its path, and picked into the new subgroup:
+    // `<name>-spex` stands there on the stand-in's `spex` (space-58).
+    seedDemoProject(app.projectDir);
+    await page.getByRole("button", { name: "Switch or add a project" }).click();
+    const palette = page.getByRole("dialog", { name: /Add a project|Choose a project/ });
+    await palette.getByTestId("palette-path").fill(app.projectDir);
+    await palette.getByTestId("palette-add").click();
+    const localKey = `${HOST_LOGIN}/demo-project-spex`;
+    const picker = palette.getByTestId(`space-picker-${localKey}`);
+    await expect(picker.locator('[data-testid^="space-pick-group-"]')).toHaveText([
+      HOST_LOGIN, HOST_GROUP, SUBGROUP, `${HOST_GROUP}/research`, "platform",
+    ]);
+    await picker.getByTestId(`space-pick-group-${SUBGROUP}`).click();
+    await expect(palette).toBeHidden();
+    await showGroups(page);
+    const picked = `${SUBGROUP}/demo-project-spex`;
+    await expect(design.getByTestId(`space-repo-state-${picked}`)).toHaveText("Synced just now", { timeout: 30_000 });
+    expect(headOf(bareOf(host, picked), "spex")).toMatch(/^[0-9a-f]{40}$/);
 
     // Share on the subgroup stands in the members panel its heading's
     // Members opens, listing the person who created it (space-69).
@@ -488,6 +512,75 @@ test.describe("organizing", () => {
     await expect(row).toHaveCount(0);
     await expect(members.getByTestId(`space-member-${HOST_LOGIN}`)).toBeVisible();
     expect(standinMembers(SUBGROUP).some((entry) => entry.startsWith(`${MEMBER.login}:`))).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// space-75: the instance alone, in both languages
+// ---------------------------------------------------------------------------
+
+test.describe("the instance alone", () => {
+  test.use({ appOptions: { host: true, project: true, signedIn: true } });
+
+  test("space-75: no link, no URL behind the instance and no Git system's name on Groups, in English and in Chinese", async ({
+    page,
+    app,
+  }) => {
+    test.setTimeout(150_000);
+    const host = app.host!;
+    // The project's records pushed into acme over the protocol, and a
+    // spex repository another account shares from its own group: every
+    // remote URL lies under the stand-in's Git origin (git-host-12).
+    await pickGroup(app);
+    host.script.addRepository({ group: "bob", name: "notes-spex", role: "Developer" });
+    expect(git(clonePath(app.dataDir, TEAM_KEY), "remote", "get-url", "origin").startsWith(`${host.gitOrigin}/${STANDIN_STORAGE}/`)).toBe(true);
+
+    /** Every text, title, accessible name and link target on the surface
+     * that names something behind the instance (space-1, space-62). */
+    const leaks = async (): Promise<string[]> => {
+      const surface = page.getByTestId("space-surface");
+      const said = await surface.evaluate((root) => {
+        const out = [(root as HTMLElement).innerText];
+        for (const element of Array.from(root.querySelectorAll("*"))) {
+          for (const name of ["title", "aria-label", "href", "src"]) {
+            const value = element.getAttribute(name);
+            if (value) out.push(value);
+          }
+        }
+        return out;
+      });
+      return said.filter((text) => text.includes(`${host.url}/`) || text.includes(STANDIN_STORAGE) || /gitlab/i.test(text));
+    };
+    const scan = async (where: string): Promise<void> => {
+      const surface = page.getByTestId("space-surface");
+      // bob's own group stands under his login, its heading carrying no
+      // control (space-1).
+      const bob = surface.getByTestId("space-group-bob");
+      await expect(bob.getByTestId("space-row-bob/notes-spex")).toBeVisible();
+      await expect(bob.getByTestId("space-group-members-bob")).toHaveCount(0);
+      await expect(bob.getByTestId("space-group-subgroup-bob")).toHaveCount(0);
+      // The project's members panel, open, links no page (space-62).
+      const members = surface.getByTestId(`space-members-${TEAM_KEY}`);
+      if (!(await members.isVisible())) await surface.getByTestId(`space-row-members-${TEAM_KEY}`).click();
+      await expect(members.getByTestId(`space-member-${HOST_LOGIN}`)).toBeVisible();
+      await expect(surface.locator("a")).toHaveCount(0);
+      expect(await leaks(), where).toEqual([]);
+    };
+
+    await open(page, app);
+    await showGroups(page);
+    await page.getByTestId("space-refresh").click();
+    await expect(page.getByTestId("space-group-bob")).toBeVisible();
+    await scan("English");
+
+    // Chinese, chosen in Settings: the same surface names nothing more
+    // (localization-10).
+    await surfaceEntry(page, "Settings").click();
+    await page.getByTestId("language-section").getByTestId("language-select").selectOption("zh");
+    await expect(page.locator("html")).toHaveAttribute("lang", "zh");
+    await surfaceEntry(page, "Space").click();
+    await expect(page.getByTestId("space-surface")).toBeVisible();
+    await scan("Chinese");
   });
 });
 
@@ -670,7 +763,7 @@ test.describe("daily sync", () => {
     await scanVocabulary(page, "check stopped", words);
 
     // Members lists the stand-in's members with the host's role names
-    // and its members page (space-62).
+    // and links no page of the host (space-62).
     const listed = host.script.repositories.find((repo) => `${repo.group.fullPath}/${repo.path}` === TEAM_KEY)!;
     listed.members.push(PEER_MEMBER);
     await page.getByTestId(`space-row-members-${TEAM_KEY}`).click();
@@ -679,9 +772,7 @@ test.describe("daily sync", () => {
     await expect(members.getByTestId(`space-member-${HOST_LOGIN}`)).toContainText("Owner");
     await expect(members.getByTestId(`space-member-${PEER_MEMBER.login}`)).toContainText(PEER_MEMBER.displayName);
     await expect(members.getByTestId(`space-member-${PEER_MEMBER.login}`)).toContainText("Developer");
-    const link = members.getByTestId(`space-members-link-${TEAM_KEY}`);
-    await expect(link).toHaveText(`Open at ${new URL(host.url).hostname}`);
-    await expect(link).toHaveAttribute("href", `${host.url}/${TEAM_KEY}/-/project_members`);
+    await expect(members.locator("a")).toHaveCount(0);
     await scanVocabulary(page, "members", words);
 
     // No visible text on the surface names Git's sides or calls the
