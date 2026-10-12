@@ -24,9 +24,10 @@ While the app is connected, the Groups surface — reached from the sidebar's Gr
 | issues | present while any repair or diagnostic stands, reading the count the core carries — the repairs this device's reader has not answered [[space-49](#space-49)] and every diagnostic no repair folds [[core-service-86](core-service.md#core-service-86)] — without a number where that count is none, and opening the issues list in place |
 | Git | "Git is not installed" with install guidance, replacing every other field, where no `git` runs |
 
-- the groups list stands beneath the header: your own group first, headed "Your own group" beside its full path while signed in and beside "named after your login at sign-in" while signed out, then every group the host lists, headed by its name beside its full path where the two differ and by its name alone where they are equal, and under each group one row per spex repository [[space-61](#space-61)], the group's own repository first; before sign-in the list holds your own group alone with its repositories;
+- the groups list stands beneath the header: your own group first, headed "Your own group" beside its full path while signed in and beside "named after your login at sign-in" while signed out, then the host's own group where the host's view names it and lists it [[git-host-5](git-host.md#git-host-5)], headed by its name beside "this host's group", then the groups inside it, then every other group the host lists — these two runs each in the order of full paths, each of their groups headed by its name beside its full path where the two differ and by its name alone where they are equal — and under each group one row per spex repository [[space-61](#space-61)], the group's own repository first; before sign-in the list holds your own group alone with its repositories ([DR-120](../decisions/120-groups-live-in-the-hosts-group.md));
 - what stands beside a heading's name follows the separator " · " in the surface's secondary tone;
-- while signed in, "New group" stands at the list's head where the host's view says the person may create one, and where the view says the person may not, a link reading "New group at <site>" stands there instead, leading to the origin of your own group's page as the view gives it, <site> being that origin's host name ([DR-118](../decisions/118-the-host-page-a-first-group-is-made-on.md)); a group's heading carries "New subgroup" and "Share" where the view says the person may create a subgroup in it and add a member to it [[git-host-5](git-host.md#git-host-5)] [[space-68](#space-68)] [[space-69](#space-69)] — nothing else is shown for an act the host does not let this person take, your own group's heading carrying neither ([DR-114](../decisions/114-groups-and-sharing-from-spex.md));
+- while signed in, the list's head holds, where the host's view names its own group [[git-host-5](git-host.md#git-host-5)] ([DR-120](../decisions/120-groups-live-in-the-hosts-group.md)): "New group", creating inside that group [[space-68](#space-68)], where the view lists it and says the person may create a subgroup in it; nothing where the view lists it and says the person may not; and the line "Groups are made in <name>; ask its owner to share it with you", <name> being that group's name, with no link, where the view does not list it; where the view names none ([DR-118](../decisions/118-the-host-page-a-first-group-is-made-on.md)): "New group" where the view says the person may create one, and where the view says the person may not, a link reading "New group at <site>", leading to the origin of your own group's page as the view gives it, <site> being that origin's host name;
+- a group's heading carries "New subgroup" and "Share" where the view says the person may create a subgroup in it and add a member to it [[git-host-5](git-host.md#git-host-5)] [[space-68](#space-68)] [[space-69](#space-69)], the host's own group's heading carrying no "New subgroup", the head's "New group" being that act ([DR-120](../decisions/120-groups-live-in-the-hosts-group.md)) — nothing else is shown for an act the host does not let this person take, your own group's heading carrying neither ([DR-114](../decisions/114-groups-and-sharing-from-spex.md));
 - a spex repository's row carries its name, where its code lives — the remote `project.json` names, "Group records" for a group's own, "Code not on a remote" for a project's whose `project.json` names none, or "Not on this device" — its reachability, its local-changes count [[space-7](#space-7)], the time of its last sync, and its Sync control, titled as sending what is here and bringing back anything new, or the control its state offers [[space-61](#space-61)];
 - activating a row opens that spex repository's Sync and Explore tabs beneath the list;
 - while signed in, the surface ends in one quiet line, "Spex keeps this device's files in <home>", the home's absolute path `~`-shortened under the user's home directory, selectable, with the full path in its title and no control.
@@ -39,7 +40,7 @@ The Groups surface shall re-read the core's state only on an event, never on a t
 
 #### space-3
 
-While the home is not signed in, the Groups surface's header shall be one card titled "Not signed in" that reads "Sign in to see your groups and share each project's records with the people in them." and "Until you do, everything stays on this device and nothing is contacted.", with Sign in as its one primary control ([DR-103](../decisions/103-the-home-and-its-groups.md)):
+While the home is not signed in, the Groups surface's header shall be one card titled "Not signed in" that reads "Sign in to make your groups and share each project's records with the people in them." and "Until you do, everything stays on this device and nothing is contacted.", with Sign in as its one primary control ([DR-103](../decisions/103-the-home-and-its-groups.md), [DR-120](../decisions/120-groups-live-in-the-hosts-group.md)):
 
 - on the desktop, Sign in starts the browser flow [[git-host-2](git-host.md#git-host-2)], and the card reads "Your browser is open at <host name>: sign in there and approve; you return here signed in." with the link "Open it again" to the sign-in URL; where the shell did not open the browser, the card reads as the device flow's with the sign-in URL as its link;
 - in a browser client of the server shell, Sign in starts the device flow [[git-host-3](git-host.md#git-host-3)], and the card reads "Continue in your browser:", the link "Open <host name> to sign in" to the verification URL in a new tab, and "Sign in there and approve; you return here signed in.", showing no code;
@@ -89,7 +90,7 @@ While a spex repository has other members and has never been pushed from this de
 
 #### space-58
 
-When a working folder is added while signed in [[storage-6](storage.md#storage-6)], or the reader activates a local-only spex repository's "Pick a group", the surface shall offer, in one picker, the spex repositories the host lists whose `project.json` names the folder's remote — each with its group and its members' count — and, below them, each group the host lists, since only the host knows where the account may create, the folder's name as the new repository's name in an editable field followed by `-spex` ([DR-103](../decisions/103-the-home-and-its-groups.md)):
+When a working folder is added while signed in [[storage-6](storage.md#storage-6)], or the reader activates a local-only spex repository's "Pick a group", the surface shall offer, in one picker, the spex repositories the host lists whose `project.json` names the folder's remote — each with its group and its members' count — and, below them, each group the host lists, those inside the host's own group first under the phrase "<name> · this host's group" [[space-1](#space-1)] ([DR-120](../decisions/120-groups-live-in-the-hosts-group.md)) and the others then in the list's order, since only the host knows where the account may create, the folder's name as the new repository's name in an editable field followed by `-spex` ([DR-103](../decisions/103-the-home-and-its-groups.md)):
 
 - picking a listed spex repository clones it and pairs it with the folder, or, for a local-only one, joins its history with the clone's as any two [[space-13](#space-13)];
 - picking a group creates `<name>-spex` there [[git-host-6](git-host.md#git-host-6)] and pushes the local branch; a name the host reports taken is refused in place and the field asks for another;
@@ -136,7 +137,7 @@ When the reader activates Members on a reachable spex repository's row, the surf
 
 #### space-68
 
-When the reader activates "New group" at the groups list's head, or "New subgroup" on a group's heading, the surface shall open an inline editor in that place with a field captioned "Group name", a field captioned "Path" that follows the name as the host derives it — lower-cased, each run outside letters, digits, `.`, `_` and `-` one `-`, leading and trailing `-` and `.` dropped — until the reader edits it, Create and Cancel, Escape cancelling ([DR-010](../decisions/010-interface-craft.md) §6), and on Create shall send `space.group.create` with the name, the path and, from a group, that group as the parent [[git-host-15](git-host.md#git-host-15)] ([DR-114](../decisions/114-groups-and-sharing-from-spex.md)):
+When the reader activates "New group" at the groups list's head, or "New subgroup" on a group's heading, the surface shall open an inline editor in that place with a field captioned "Group name", a field captioned "Path" that follows the name as the host derives it — lower-cased, each run outside letters, digits, `.`, `_` and `-` one `-`, leading and trailing `-` and `.` dropped — until the reader edits it, Create and Cancel, Escape cancelling ([DR-010](../decisions/010-interface-craft.md) §6), and on Create shall send `space.group.create` with the name, the path and, from a group, that group as the parent, the head's "New group" taking the host's own group where the view names one [[space-1](#space-1)] [[git-host-15](git-host.md#git-host-15)] ([DR-114](../decisions/114-groups-and-sharing-from-spex.md), [DR-120](../decisions/120-groups-live-in-the-hosts-group.md)):
 
 - Create reads "Creating…" and the editor refuses a second submission while the command runs;
 - a name that derives no path — one in Chinese, say — leaves the path field empty for the reader to fill, and an empty path disables Create;
@@ -572,13 +573,15 @@ The core shall shape `GroupsState` as:
 interface GroupsState {
   home: string;
   git: { ok: true; version: string } | { ok: false; guidance: string };
-  host: { url: string; displayName: string | null };
+  host: { url: string; displayName: string | null;
+          group: { id: string; fullPath: string; name: string; url: string | null } | null };   // group: the host's own group as its last read named it, null until one is held or where it names none
   account: { id: string; login: string; displayName: string | null; canCreateGroup: boolean } | null;   // canCreateGroup: as the host's last read said, false until one is held
   signIn: { phase: "idle"; signedOut?: { by: "host"; login: string } }   // signedOut: the host signed this device out, for the core's run
     | { phase: "running"; flow: "browser" | "device"; userCode?: string; verificationUri?: string; since: number }
     | { phase: "failed"; cause: "denied" | "expired" | "refused" | "unreachable"; message: string };
   readAt: number | null;
   groups: { id: string | null; fullPath: string; name: string; url: string | null; own: boolean;
+            instance: boolean;   // the host's last read marked it as the host's own group
             can: { createSubgroup: boolean; manageMembers: boolean };   // what the host's last read said the person may do there; both false until one is held
             repositories: RepositoryState[] }[];
   roles: { id: string; name: string; mayPush: boolean }[];   // the host's own roles in its order, empty until a read is held
@@ -725,6 +728,7 @@ The core shall build each `space.tree` level by reading one directory of the clo
 When an integration suite starts a real core with substitute agents on a scratch home against the stand-in Git host with an isolated Git configuration, it shall drive sign-in, the first push and the account's set-up over the protocol and assert:
 
 - `space.get` reads not signed in with your own group alone under this device's user name, and reads the `git` guidance on a `PATH` without `git` [[space-1](#space-1)] [[space-3](#space-3)];
+- signed in at a stand-in naming a group of its own, the state's `host.group` names it and its row alone is marked `instance`, the groups reading your own, that group, the groups inside it, then the others; with the person left out of that group, `host.group` still names it, no row is marked and the groups inside it still precede the others; with the stand-in naming none, `host.group` is null and the others follow your own in the order of full paths [[space-1](#space-1)] [[space-30](#space-30)];
 - a working folder added while signed out pairs with a local-only spex repository under your own group [[space-61](#space-61)];
 - `space.signin.start` in the browser flow returns a loopback URL the suite completes against the stand-in, after which the state carries the account, your own group's folder and clone bear the login, every pair naming it is rewritten, and your own group's spex repository stands on the stand-in with its clone pushed [[space-4](#space-4)] [[space-59](#space-59)] [[space-65](#space-65)], no state from the sign-in to that push reading it unreachable [[space-61](#space-61)];
 - `space.signin.start` in the device flow returns a verification URL carrying the user code, which the suite approves at the stand-in, with the same outcome; a denied code ends the sign-in `failed` with `denied` [[space-3](#space-3)] [[space-29](#space-29)];
@@ -826,7 +830,7 @@ Where the Groups surface renders over a home whose issues list holds three unans
 
 #### space-70
 
-Where the Groups surface renders over a signed-in home whose host read says the person may create a group, may create a subgroup in a group `acme` and add members to it, may do neither in a group `other`, and may add members to the repository `a-spex` but not to `b-spex`, with the host's five roles of which Developer upward may push, the test suite shall assert through the surface:
+Where the Groups surface renders over a signed-in home whose host read names no group of its own, says the person may create a group, may create a subgroup in a group `acme` and add members to it, may do neither in a group `other`, and may add members to the repository `a-spex` but not to `b-spex`, with the host's five roles of which Developer upward may push, the test suite shall assert through the surface:
 
 - "New group" stands at the list's head, `acme`'s heading carries "New subgroup" and "Share", `other`'s and your own group's carry neither, and `a-spex`'s members panel carries Share while `b-spex`'s does not [[space-1](#space-1)] [[space-62](#space-62)];
 - rendered again over a read that says the person may not create a group, the list's head holds no "New group" but the link "New group at <site>" to the origin of your own group's page, opening in a new tab, and no link before a read gives that page [[space-1](#space-1)];
@@ -834,6 +838,16 @@ Where the Groups surface renders over a signed-in home whose host read says the 
 - Share on `acme` opens the editor with "Login at <host name>", the five roles in the host's order with Developer preselected, Add disabled until a login is typed; Add sends `space.share` naming the group, the login and the role and reads "Adding…", a `not_found` reply standing in the editor with the login kept, and a success closing it and saying "@<login> added as Maintainer" [[space-69](#space-69)];
 - Share in `a-spex`'s members panel sends `space.share` naming the repository and lists the members the reply carries [[space-69](#space-69)] [[space-62](#space-62)];
 - every new control reads at most 14 characters at the 320-pixel floor [[space-28](#space-28)].
+
+#### space-74
+
+Where the Groups surface renders over a signed-in home whose host read names its own group "Spex Internal" at `spex-internal`, lists it with the person allowed to create a subgroup in it, and lists `spex-internal/workshop` and `acme`, with a local-only project's spex repository under your own group, the test suite shall assert through the surface:
+
+- the list reads your own group, then "Spex Internal · this host's group", then `spex-internal/workshop`, then `acme`, the host's group's heading carrying no "New subgroup" and the head no "New group at <site>" [[space-1](#space-1)];
+- the head's "New group" opens the inline editor, whose Create sends `space.group.create` with the name, the path and the host's group as the parent [[space-1](#space-1)] [[space-68](#space-68)];
+- rendered again over a read listing the host's group with no right to create a subgroup in it, the head holds neither "New group" nor a link [[space-1](#space-1)];
+- rendered again over a read naming the host's group and not listing it, the head reads "Groups are made in Spex Internal; ask its owner to share it with you", with no link and no "New group", in English and in Chinese [[space-1](#space-1)];
+- the project's Pick a group lists `spex-internal` and `spex-internal/workshop` first under "Spex Internal · this host's group", then your own group and `acme`, and picking the workshop sends `space.pick` creating there [[space-58](#space-58)].
 
 #### space-66
 
@@ -885,7 +899,11 @@ Where the harness boots the served shell with the demo project registered and a 
 
 #### space-71
 
-Where the harness boots the served shell signed in at the stand-in host, whose script lets the person create groups and subgroups in `acme` and add and remove members there, the test suite shall assert the organizer's journey through the page: a group created at the head and a subgroup under `acme`, each listed with its full path as Create closes its editor [[space-68](#space-68)] [[space-1](#space-1)]; a member added to the subgroup by login at Maintainer, the line "@<login> added as Maintainer" shown and the stand-in's members then listing them [[space-69](#space-69)]; a second addition of the same login refused in place with the stand-in's words, and a login the stand-in knows no account for refused naming it [[space-69](#space-69)]; the new controls fitting at the 320-pixel floor [[space-28](#space-28)]; and the member removed after the confirm, the stand-in's members then not listing them [[space-72](#space-72)].
+Where the harness boots the served shell signed in at the stand-in host, whose script names no group of its own and lets the person create groups and subgroups in `acme` and add and remove members there, the test suite shall assert the organizer's journey through the page: a group created at the head and a subgroup under `acme`, each listed with its full path as Create closes its editor [[space-68](#space-68)] [[space-1](#space-1)]; a member added to the subgroup by login at Maintainer, the line "@<login> added as Maintainer" shown and the stand-in's members then listing them [[space-69](#space-69)]; a second addition of the same login refused in place with the stand-in's words, and a login the stand-in knows no account for refused naming it [[space-69](#space-69)]; the new controls fitting at the 320-pixel floor [[space-28](#space-28)]; and the member removed after the confirm, the stand-in's members then not listing them [[space-72](#space-72)].
+
+#### space-75
+
+Where the harness boots the served shell signed in at the stand-in host, whose script names a group of its own the person may create subgroups in and lets nobody create a group at the top, the test suite shall assert the organizer's journey through the page: the list's head holding "New group" and no "New group at <site>", the host's group standing after your own group headed by its name beside "this host's group" [[space-1](#space-1)]; the head's "New group" creating a group inside the host's group and none at the top, listed with its full path as Create closes the editor, and that group's "New subgroup" creating a team's group inside it [[space-68](#space-68)] [[space-1](#space-1)]; Share on the team's group adding a member at Maintainer, the stand-in's members then listing them [[space-69](#space-69)]; and a project added from the palette, whose Pick a group lists the host's group's groups first under the same phrase, landing in the team's group, the stand-in holding `<name>-spex` there on its `spex` branch [[space-58](#space-58)].
 
 #### space-43
 

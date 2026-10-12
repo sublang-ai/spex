@@ -7,6 +7,7 @@
 
 Accepted (2026-10-11).
 Amends [DR-114](114-groups-and-sharing-from-spex.md) in "where the host does not let this person act, nothing is shown": at the groups list's head, where the host's read says the person may not create a group, a link to the host's site stands in place of "New group".
+Superseded by [DR-120](120-groups-live-in-the-hosts-group.md) where the host names a group of its own: every group is made inside it from Spex, and the link stands only where the host names none.
 
 ## Context
 
