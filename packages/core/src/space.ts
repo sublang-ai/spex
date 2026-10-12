@@ -722,7 +722,10 @@ class RepositorySync {
     const current = this.configNow("remote.origin.url");
     if (current !== expected) return false;
     if (next.url !== undefined && next.url !== current) {
-      git(next.url === null ? ["remote", "remove", "origin"] : current === null ? ["remote", "add", "origin", next.url] : ["remote", "set-url", "origin", next.url]);
+      // Taken away, the remote's own section goes alone: the host's `spex`
+      // the clone holds and its upstream stay with the repository it
+      // records (space-5), where `remote remove` would drop them.
+      git(next.url === null ? ["config", "--remove-section", "remote.origin"] : current === null ? ["remote", "add", "origin", next.url] : ["remote", "set-url", "origin", next.url]);
     }
     if (next.id === null) this.git.runSync(["config", "--unset", "spex.repositoryId"]);
     else if (next.id !== undefined) git(["config", "spex.repositoryId", next.id]);
@@ -754,14 +757,20 @@ class RepositorySync {
     const repo = await this.readRepository();
     this.requireGit(repo);
     if (!repo.root) throw new CoreError("invalid_request", initializeFirst());
+    // The id the clone records, read in the step that writes the remote:
+    // the host's id survives its renames and transfers (DR-103).
+    const same = this.configNow("spex.repositoryId") === id;
     // A remote already at the host's URL is the one this attaches.
     if (!this.publishRemote(repo.remote === url ? url : expected, { url, id })) {
       throw new CoreError("conflict", changedMeanwhile(splitKey(this.key).name));
     }
-    if (repo.remote !== url) {
+    // The same repository keeps what the clone holds of it and this
+    // device's last sync; another clears them (space-5).
+    if (repo.remote !== url && !same) {
       await this.git.run(["update-ref", "-d", `refs/remotes/origin/${SPEX_BRANCH}`]);
       await this.git.run(["config", "--unset", `branch.${SPEX_BRANCH}.remote`]);
       this.checkedAt = null;
+      this.host.store.deletePref(lastSyncPref(this.key));
       this.remoteEmpty = false;
       this.unrelated = false;
     }
@@ -1177,16 +1186,20 @@ class RepositorySync {
     }
     if (url !== repo.remote) {
       // Written over the remote read above, or refused (DR-111); a remote
-      // the reader names is no repository the host listed.
-      if (!this.publishRemote(repo.remote, { url, id: null })) {
+      // the reader names is no repository the host listed, while one
+      // taken away leaves the clone the repository it records.
+      if (!this.publishRemote(repo.remote, url === null ? { url } : { url, id: null })) {
         throw new CoreError("conflict", changedMeanwhile(splitKey(this.key).name));
       }
-      // A changed remote clears the last check and the last sync (space-5):
-      // what the old remote held says nothing about the new one.
-      await this.git.run(["update-ref", "-d", `refs/remotes/origin/${SPEX_BRANCH}`]);
-      await this.git.run(["config", "--unset", `branch.${SPEX_BRANCH}.remote`]);
+      // Another repository's remote clears what the clone holds of the
+      // old one and the last sync (space-5): what the old remote held says
+      // nothing about the new one. Every change clears the last check.
+      if (url !== null) {
+        await this.git.run(["update-ref", "-d", `refs/remotes/origin/${SPEX_BRANCH}`]);
+        await this.git.run(["config", "--unset", `branch.${SPEX_BRANCH}.remote`]);
+        this.host.store.deletePref(lastSyncPref(this.key));
+      }
       this.checkedAt = null;
-      this.host.store.deletePref(lastSyncPref(this.key));
       this.remoteEmpty = false;
       this.unrelated = false;
       this.hostOverride = undefined;
