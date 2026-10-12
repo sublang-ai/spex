@@ -46,8 +46,9 @@ The aim was to find what stops a real team or makes the app hard to use, and to 
 
 ## Where the records live
 
-Every team's spex repository now sits under the workshop's top-level group, `claude-workshop-261011/<team>/<name>-spex`, the same group that is the registry org the teams publish to, with each team's subgroup created from the organizer's Spex home.
-They were first created under `slbeta1/claude-workshop-2026-10-11/<team>`, a wrong placement corrected on the owner's instruction by moving every repository with its full history; the copies left under the old path are orphans the owner may delete.
+Every team's spex repository sits at `spex-internal/claude-workshop-261011/<team>/<name>-spex`: the workshop group is a private subgroup of the internal instance's public top-level group `spex-internal`, with one subgroup per team, all created from the organizer's Spex home, and the organizer shares the workshop group with each team's representative at Maintainer so that projects created there get their first commit.
+The registry org the teams publish to stays the top-level group `claude-workshop-261011`, because spex.pub binds an org to a top-level namespace only.
+The records were first placed under `slbeta1/claude-workshop-2026-10-11/<team>` and then under the top-level `claude-workshop-261011/<team>`, both wrong placements corrected on the owner's instruction by moving every repository with its full history through the protocol (W-39); the copies left under the two old paths are orphans the owner may delete.
 
 ## By the numbers
 
