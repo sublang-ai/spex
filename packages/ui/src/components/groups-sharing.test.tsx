@@ -65,7 +65,8 @@ const A_MEMBERS = [member("jane", "Owner", "acme", "Jane"), member("bob", "Devel
 
 /** The host's read: the person may create a group, may create a
  * subgroup in acme, manage its members, rename it and delete it, may do
- * none of these in other, may rename and delete the empty group empty,
+ * none of these in other, named "Other team" apart from its path, may
+ * rename and delete the empty group empty,
  * and may manage a-spex's members and move it but do neither on b-spex.
  * Your own group's flags, and its own repository's, are set too, to
  * show its heading and that row ignore them. */
@@ -93,7 +94,7 @@ function sharingHome(over: { canCreateGroup?: boolean } = {}): GroupsState {
       {
         id: OTHER,
         fullPath: "other",
-        name: "other",
+        name: "Other team",
         own: false,
         can: { createSubgroup: false, manageMembers: false, rename: false, delete: false },
         repositories: [repository(B_SPEX, "61", false)],
@@ -685,10 +686,14 @@ describe("GROUPS: Rename, Delete and Move (space-1, space-76, space-77, space-78
     expect(control().getAttribute("aria-expanded")).toBe("true");
     const picker = screen.getByRole("group", { name: "Move a-spex to another group" });
     expect(picker).toBe(screen.getByTestId(`space-move-${A_SPEX}`));
-    // Your own group first, then every group but the one it stands in;
-    // no link anywhere (DR-120).
+    // Your own group first, then every group but the one it stands in,
+    // each read as its heading reads: its name, then its path where the
+    // two differ (space-78); no link anywhere (DR-120).
     const options = within(picker).getAllByTestId(/^space-move-group-/);
-    expect(options.map((option) => option.textContent)).toEqual(["Your own group", "other", "empty"]);
+    expect(options.map((option) => option.textContent)).toEqual(["Your own group · jane", "Other team · other", "empty"]);
+    // The separator is the eye's: an option's name says the group's
+    // name first (space-78).
+    expect(within(picker).getByRole("button", { name: "Other team other" })).toBe(options[1]);
     expect(document.activeElement).toBe(options[0]);
     expect(picker.querySelector("a")).toBeNull();
     // Escape closes it, sending nothing, focus back on the control.
@@ -742,8 +747,10 @@ describe("GROUPS: the new controls fit (space-28)", () => {
     const seen = new Set<string>();
     const measure = () => {
       for (const button of screen.getAllByRole("button")) {
+        // A row, and a picker's option, is a list row whose words are
+        // its own (space-28).
         const id = button.dataset.testid ?? "";
-        if (id.startsWith("space-repo-")) continue;
+        if (id.startsWith("space-repo-") || id.startsWith("space-move-group-")) continue;
         const text = (button.textContent ?? "").trim();
         seen.add(text);
         expect(text.length, `"${text}"`).toBeLessThanOrEqual(14);
@@ -808,7 +815,7 @@ describe("GROUPS: the new controls fit (space-28)", () => {
     fireEvent.click(screen.getByTestId("space-group-delete-empty"));
     expect(screen.getByTestId("space-group-confirm-empty").textContent).toContain("要删除 empty 吗？");
     fireEvent.click(screen.getByTestId(`space-row-move-${A_SPEX}`));
-    expect(within(screen.getByTestId(`space-move-${A_SPEX}`)).getByTestId("space-move-group-own").textContent).toBe("你自己的群组");
+    expect(within(screen.getByTestId(`space-move-${A_SPEX}`)).getByTestId("space-move-group-own").textContent).toBe("你自己的群组 · jane");
     const list = await openGroupMembers("acme");
     const share = within(list).getByTestId("space-share-group:acme");
     expect(share.textContent).toBe("共享");

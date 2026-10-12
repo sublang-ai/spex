@@ -248,6 +248,47 @@ function GroupsMadeBy({ groups }: { groups: GroupsState }) {
   );
 }
 
+/** How a group reads (space-1), on its heading and in the picker
+ * (space-58) alike. Your own group is called so, never by a folder's or
+ * this device's user name; its path shows once the host names it, and
+ * until then the key phrase says it will. A group's path stands beside
+ * its name only where the two differ. */
+function groupReading(groups: GroupsState, group: Group): { name: string; beside: string | null } {
+  const name = group.own ? i18n._("Your own group") : group.name;
+  const beside =
+    group.own && !groups.account
+      ? i18n._({
+          id: "named after your login at sign-in",
+          comment: "beside the heading 'Your own group' before sign-in: its name and path come from the login",
+        })
+      : group.fullPath !== name
+        ? group.fullPath
+        : null;
+  return { name, beside };
+}
+
+/** A group as a picker names it (space-58, space-78): read as its
+ * heading reads (space-1), its name, then its path after the separator
+ * where the two differ — the separator the eye's, so the option's name
+ * says the group's name first. */
+function GroupOptionLabel({ groups, group }: { groups: GroupsState; group: Group }) {
+  const { name, beside } = groupReading(groups, group);
+  return (
+    <>
+      <span className="min-w-0 truncate" title={group.fullPath}>
+        {name}
+      </span>
+      {beside !== null ? " " : null}
+      {beside !== null ? (
+        <span className="min-w-0 truncate text-xs text-neutral-500" title={beside}>
+          <span aria-hidden>· </span>
+          {beside}
+        </span>
+      ) : null}
+    </>
+  );
+}
+
 /** Whether the list holds a spex repository under a group or a group
  * inside it (space-1): only an empty group offers Delete. */
 function holdsAnything(groups: GroupsState, group: Group): boolean {
@@ -289,20 +330,7 @@ function GroupSection({
   const subgroupRef = useRef<HTMLButtonElement>(null);
   const renameRef = useRef<HTMLButtonElement>(null);
   const deleteRef = useRef<HTMLButtonElement>(null);
-  // Your own group is called so, never by a folder's or this device's
-  // user name; its path shows once the host names it, and until then
-  // the key phrase says it will (space-1). A group's path stands beside
-  // its name only where the two differ.
-  const name = group.own ? i18n._("Your own group") : group.name;
-  const beside =
-    group.own && !groups.account
-      ? i18n._({
-          id: "named after your login at sign-in",
-          comment: "beside the heading 'Your own group' before sign-in: its name and path come from the login",
-        })
-      : group.fullPath !== name
-        ? group.fullPath
-        : null;
+  const { name, beside } = groupReading(groups, group);
   // Your own group takes no subgroup and no member: what is there is
   // shared on its spex repositories (DR-114); another account's login,
   // listed by no id, takes nothing either (DR-120).
@@ -1070,9 +1098,9 @@ function RepositoryRow({
 }
 
 /** Where a spex repository moves (space-78): a picker as space-58's,
- * "Your own group" first, then each group of the instance by its path
- * — never another account's login, never the group the row stands
- * under — with Cancel, Escape cancelling. A pick asks the host; a
+ * your own group first, then each group of the instance, each read as
+ * its heading reads — never another account's login, never the group
+ * the row stands under — with Cancel, Escape cancelling. A pick asks the host; a
  * refusal stands in the picker, the row kept where it stood. */
 function MovePicker({
   groups,
@@ -1098,11 +1126,11 @@ function MovePicker({
     firstRef.current?.focus();
   }, []);
   const own = groups.groups.find((entry) => entry.own);
-  const targets: { key: string; label: string; title: string; groupId: string | null }[] = [
-    ...(own && !group.own ? [{ key: "own", label: i18n._("Your own group"), title: own.fullPath, groupId: null }] : []),
+  const targets: { key: string; group: Group; groupId: string | null }[] = [
+    ...(own && !group.own ? [{ key: "own", group: own, groupId: null }] : []),
     ...groups.groups
       .filter((entry) => !entry.own && entry.id !== null && groupKey(entry) !== groupKey(group))
-      .map((entry) => ({ key: entry.fullPath, label: entry.fullPath, title: entry.name, groupId: entry.id })),
+      .map((entry) => ({ key: entry.fullPath, group: entry, groupId: entry.id })),
   ];
   const pick = async (groupId: string | null) => {
     if (busy) return;
@@ -1138,10 +1166,9 @@ function MovePicker({
               data-testid={`space-move-group-${target.key}`}
               className={option}
               disabled={!connected || busy}
-              title={target.title}
               onClick={() => void pick(target.groupId)}
             >
-              <span className="min-w-0 flex-1 truncate">{target.label}</span>
+              <GroupOptionLabel groups={groups} group={target.group} />
             </button>
           </li>
         ))}
@@ -1252,8 +1279,9 @@ function FolderEditor({
 
 /** Where a local-only project's records go on the host (space-58): in
  * one picker, the spex repositories the host lists for the same code —
- * each with its group and members' count — and, below them, every
- * group, the new repository's name in an editable field. Picking a
+ * each with its group, read as its heading reads, and members' count —
+ * and, below them, every group read so, the new repository's name in
+ * an editable field. Picking a
  * listed one that may have other members says the sharing notice
  * beneath it first, and joins with `noticed` only on Continue
  * (space-57). */
@@ -1403,8 +1431,11 @@ export function GroupPicker({
                   <span className="min-w-0 flex-1 truncate font-medium" title={other.name}>
                     {other.name}
                   </span>
-                  <span className="min-w-0 max-w-[40%] truncate text-xs text-neutral-500" title={group.fullPath}>
-                    {group.fullPath}
+                  <span
+                    data-testid={`space-pick-listed-group-${other.key}`}
+                    className="flex min-w-0 max-w-[40%] items-baseline gap-1 text-xs text-neutral-500"
+                  >
+                    <GroupOptionLabel groups={groups} group={group} />
                   </span>
                   {other.members !== null ? (
                     <span className="shrink-0 text-xs text-neutral-500">
@@ -1456,9 +1487,7 @@ export function GroupPicker({
                 disabled={disabled}
                 onClick={() => create(group)}
               >
-                <span className="min-w-0 flex-1 truncate" title={group.fullPath}>
-                  {group.fullPath}
-                </span>
+                <GroupOptionLabel groups={groups} group={group} />
               </button>
             </li>
           ))}
