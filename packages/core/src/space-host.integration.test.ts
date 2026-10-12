@@ -62,6 +62,15 @@ function assertNeverUnreachable(readings: RepositoryState[]): void {
   assert.deepEqual(unreachable.map((repository) => `${repository.key}: ${repository.reason ?? ""} (${repository.sync.phase})`), []);
 }
 
+/** Each repository creation the stand-in was asked for, as its name and
+ * the `group_id` its body named, in order (git-host-6). */
+function creationsAsked(host: StandinHost): [unknown, unknown][] {
+  return host.script.creations.map((body) => {
+    const { name, group_id: groupId } = body as { name?: unknown; group_id?: unknown };
+    return [name, groupId];
+  });
+}
+
 /** A project's code: a Git working folder with one commit. */
 function codeRepository(name: string): string {
   const dir = gitFolder(name);
@@ -121,6 +130,9 @@ test("space-37: the browser sign-in renames your own group after the login, push
   const own = await home.client.waitRepository(from, HOST_OWN, (repository) => repository.sync.phase === "done");
   const clone = clonePath(home.dataDir, HOST_OWN);
   assert.equal(own.state, "reachable");
+  // Asked of the stand-in in your own group by none, never by its id,
+  // which names no group of the instance there (git-host-6).
+  assert.deepEqual(creationsAsked(host), [[`${LOGIN}-spex`, null]]);
   // Created at the host, it goes straight to its sync: no state between
   // reads it no longer shared (space-61, git-host-5).
   assertNeverUnreachable(home.client.readings(from, [OWN_KEY, HOST_OWN]));
@@ -348,6 +360,11 @@ test("space-37: Pick a group creates <name>-spex there and pushes; a taken name 
   const row = repositoryOf(signed, local);
   assert.equal(row.state, "local-only");
   const sessionId = await runTurn(home, local, "Shared with Acme");
+  // Your own group's id names no group of the instance: refused before
+  // the stand-in is asked to create anything (git-host-6).
+  const asked = creationsAsked(host).length;
+  await home.client.expectError("space.pick", { repository: local, choice: { kind: "create", groupId: "2001", name: "alpha" } }, "not_found", /The host lists no such group/);
+  assert.equal(creationsAsked(host).length, asked);
   // A group picked: `<name>-spex` created there, the clone following it
   // under `workspace/acme/`, its `spex` pushed (space-58, space-60).
   const from = home.client.mark();
@@ -1064,6 +1081,8 @@ test("space-73: a repository the host moved keeps the clone's sync and this devi
   const key = `${LOGIN}/invites-spex`;
   const fromCreate = home.client.mark();
   await home.client.expectOk("space.pick", { repository: key, choice: { kind: "create", groupId: null, name: "invites" } });
+  // Your own group named to the stand-in by none (git-host-6).
+  assert.deepEqual(creationsAsked(host).at(-1), ["invites-spex", null]);
   const synced = await home.client.waitRepository(fromCreate, key, (repository) => repository.sync.phase === "done", 30_000);
   const clone = clonePath(home.dataDir, key);
   const pushed = git(clone, "rev-parse", "spex");
@@ -1111,6 +1130,7 @@ test("space-73: a repository the host moved keeps the clone's sync and this devi
   host.script.sleepListing(2_000);
   const fromOther = home.client.mark();
   await home.client.expectOk("space.pick", { repository: moved, choice: { kind: "create", groupId: "2003", name: "invites" } });
+  assert.deepEqual(creationsAsked(host).at(-1), ["invites-spex", "2003"]);
   const other = await home.client.repository(moved);
   assert.equal(other.remote, "acme/research/invites-spex");
   assert.ok(other.id && other.id !== id, JSON.stringify(other.id));

@@ -139,6 +139,9 @@ export interface StandinScript {
   requests: StandinRequest[];
   /** Every token grant, in order. */
   tokenGrants: { grantType: string; ok: boolean; error: string | null }[];
+  /** Every `POST /api/v1/host/repositories` body admitted, as it came,
+   * in order (host-6). */
+  creations: unknown[];
   /** The number of browser sign-ins held by `browser: "hold"`. */
   heldSignIns(): number;
   /** Approve the oldest held browser sign-in, delivering its callback to
@@ -776,6 +779,7 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
     refuseRefresh: false,
     requests: [],
     tokenGrants: [],
+    creations: [],
     heldSignIns: () => held.length,
     approveHeld: async () => {
       const request = held.shift();
@@ -1175,12 +1179,16 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
 
   async function create(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const body = await readJson(req);
+    script.creations.push(body);
     if (!isRecord(body)) return envelope(res, 400, "bad_request", "The body must be a JSON object.");
     const { group_id: groupId, name, description } = body;
     if (typeof name !== "string" || !SPEX_NAME.test(name)) return envelope(res, 400, "bad_request", "The name must be lowercase kebab-case ending in -spex.");
     if (groupId !== null && typeof groupId !== "string") return envelope(res, 400, "bad_request", "The group_id must be a string or null.");
     if (typeof description !== "string") return envelope(res, 400, "bad_request", "The description must be a string.");
-    const group = groupId === null ? own() : script.groups.find((g) => g.id === groupId);
+    // The person's own group where none is named; an id names a group of
+    // the instance alone, the own namespace's answered 404 as spex.pub
+    // answers it (host-6).
+    const group = groupId === null ? own() : script.groups.find((g) => g.kind === "group" && g.id === groupId);
     if (!group) return envelope(res, 404, "not_found", "The group is not known.");
     if (createRefusal !== null) return json(res, 202, { status: "pending", message: createRefusal });
     const bare = bareFor(group, name);

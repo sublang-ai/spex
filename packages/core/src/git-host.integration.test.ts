@@ -756,6 +756,10 @@ test("git-host-6, git-host-7: creation answers created, pending or name taken; b
 
     const own = await t.client.create({ groupId: null, name: "ada-spex", description: "Ada's own records" });
     assert.equal(own.status === "created" && own.repository.group.kind, "user");
+    // The own namespace's id names no group of the instance: the
+    // stand-in answers it 404, as spex.pub does (git-host-12).
+    await assert.rejects(t.client.create({ groupId: "2001", name: "mine-spex", description: "" }), hostError("not_found", { words: "The group is not known." }));
+    assert.deepEqual(t.host.script.creations.map((body) => (body as { group_id?: unknown }).group_id), ["2002", null, "2001"]);
 
     await assert.rejects(t.client.create({ groupId: "2002", name: "widget-spex", description: "" }), hostError("name_taken"));
     await assert.rejects(t.client.create({ groupId: "2002", name: "Widget", description: "" }), hostError("bad_request"));

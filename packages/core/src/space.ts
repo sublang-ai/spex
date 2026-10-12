@@ -2602,8 +2602,9 @@ export class SpaceManager {
     const machine = this.machine(key);
     const facts = await machine.readFacts();
     if (facts.remote !== null) return;
-    const user = userGroup(view);
-    const group = { id: user?.id ?? null, fullPath: user?.fullPath ?? store.home.ownName };
+    // Your own group is named to the host by none, never by its id,
+    // which names no group of the instance there (git-host-6).
+    const group = { id: null, fullPath: userGroup(view)?.fullPath ?? store.home.ownName };
     const name = splitKey(key).name;
     // Only your own namespace holds it: a group of the instance named
     // like your login never does (space-4, git-host-5).
@@ -2797,9 +2798,11 @@ export class SpaceManager {
       if (!base) {
         throw new CoreError("invalid_request", i18n._({ id: "The name must hold a letter or a digit", comment: "Refusal of a new spex repository's name with nothing of a name in it" }));
       }
+      // Your own group by none; any id only among the groups of the
+      // instance, your own group's id naming none of them (git-host-6).
       const group = choice.groupId === null
-        ? (userGroup(view) ?? { id: null, fullPath: this.host.store.home.ownName })
-        : this.listedGroups(view).find((entry) => entry.id === choice.groupId);
+        ? { id: null, fullPath: userGroup(view)?.fullPath ?? this.host.store.home.ownName }
+        : this.listedGroups(view).find((entry) => entry.kind === "group" && entry.id === choice.groupId);
       if (!group) throw new CoreError("not_found", i18n._({ id: "The host lists no such group", comment: "Refusal of a pick naming a group the Git host does not list" }));
       if ("kind" in group && this.collides(group, view)) {
         throw new CoreError("invalid_request", groupNamedLikeYourLogin(group.fullPath));
