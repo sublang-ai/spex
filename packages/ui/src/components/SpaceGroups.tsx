@@ -663,8 +663,10 @@ function RepositoryRow({
   const pending = busy !== undefined || accepted !== undefined || running;
   const refusal = control === "sync" || control === "unrelated" ? rowSyncRefusal(groups, repo) : undefined;
   // The first push into a repository others share says once what goes
-  // there (space-57); one whose only member is the account says nothing.
-  const needsNotice = !repo.noticed && (repo.members ?? 0) > 1;
+  // there (space-57); one whose only member is the account says nothing,
+  // and one whose count the host's read lacks, never synced from here,
+  // may have others.
+  const needsNotice = !repo.noticed && (repo.members === null ? repo.lastSync === null : repo.members > 1);
   const joining = busy === "join" || accepted?.op === "join" || (running && sync.op === "join");
   const syncing =
     busy === "sync" || accepted?.op === "sync" || (running && sync.op !== "join" && sync.op !== "check");
