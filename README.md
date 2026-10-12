@@ -43,6 +43,8 @@ Spex answers each with one systematic design:
 
 ## Getting started
 
+To set up a team or a workshop — where groups are made, who shares what, where a package publishes — read [docs/groups.md](docs/groups.md).
+
 Requires Node.js 22.19 or later. The desktop compiles playbooks on the Node
 inside its Electron; the server shell compiles them only when its Node, or a
 `node` on `PATH`, is 23.6 or later.
