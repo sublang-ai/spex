@@ -5,8 +5,9 @@
 // DR-081): run the app-supplied compiler on the app's own runtime —
 // Electron's Node in the desktop, the server's Node — or a Node
 // meeting slc's floor, in a managed library directory, then package
-// the TypeScript artifacts with esbuild (type stripping + dependency
-// inlining) so the registry loads in any Node and derive the
+// the TypeScript artifacts with esbuild — types stripped, the artifact
+// inlined, the engine imported from the app through the folder's
+// engine links, never carried (playbook-library-14) — and derive the
 // registry's state ids by FSM introspection.
 
 import { spawn } from "node:child_process";
@@ -43,7 +44,7 @@ function bundleNodePaths(): string[] {
 import { RUNTIME_ABI } from "@sublang/playbook/xstate-runtime";
 
 import { ARTIFACT_SCHEMAS, freshFileUrl, isValidRegistryEntry, REGISTRY_CONTRACT } from "./config.js";
-import { readVersioned, writeVersionedBytes } from "./files.js";
+import { readVersioned, VersionConflictError, writeVersionedBytes } from "./files.js";
 import { i18n } from "./i18n.js";
 
 /** The packages a compile resolves from the playbook's own directory:
@@ -81,6 +82,84 @@ export function provisionEngineLinks(dir: string, modulePaths: string[] = bundle
     provisioned.push(link);
   }
   return provisioned;
+}
+
+/** Where a working folder's Git is told to ignore every playbook
+ * artifact folder's engine links (playbook-library-12): a release-layout
+ * `playbooks/<language>/<id>/` folder anywhere in it. */
+export const ENGINE_LINKS_EXCLUDE = "**/playbooks/*/*/node_modules/";
+
+/** The engine a registry module imports rather than carries
+ * (playbook-library-14): each engine package and its subpaths. */
+const ENGINE_EXTERNALS = ENGINE_LINKS.flatMap((name) => [name, `${name}/*`]);
+
+/** Whether a registry module imports the engine — a specifier naming
+ * `@sublang/playbook` or one of its subpaths — rather than carrying it
+ * inside, as one bundled before the engine was imported does
+ * (playbook-library-46). */
+export function importsEngine(text: string): boolean {
+  return /(?:\bfrom\s*|\bimport\s*\(?\s*)["']@sublang\/playbook(?:\/[^"'\s]+)?["']/.test(text);
+}
+
+/**
+ * Bundle a registry wrapper into its module's bytes (playbook-library-14):
+ * the wrapper, the slc entry and the artifact it links inlined with
+ * their types stripped, the engine left as imports the module resolves
+ * at load through its folder's engine links. Paths the output names are
+ * the folder's own, so the same sources bundle to the same bytes in any
+ * folder.
+ */
+export async function bundleRegistryModule(registryTs: string, modulePaths: string[] = bundleNodePaths()): Promise<Buffer> {
+  const folder = dirname(resolve(registryTs));
+  const { outputFiles } = await build({
+    entryPoints: [resolve(registryTs)],
+    outfile: join(folder, `${basename(registryTs, ".ts")}.mjs`),
+    absWorkingDir: folder,
+    write: false,
+    bundle: true,
+    format: "esm",
+    platform: "node",
+    logLevel: "silent",
+    external: ENGINE_EXTERNALS,
+    nodePaths: modulePaths,
+  });
+  const output = outputFiles?.[0];
+  if (!output) throw new Error(`bundling ${basename(registryTs)} produced no module`);
+  return Buffer.from(output.contents);
+}
+
+/**
+ * Prepare an installed playbook artifact's folder to run on the app's
+ * engine (playbook-library-46): its engine links provisioned, and a
+ * registry module Spex bundled carrying its own engine bundled again
+ * from the wrapper shipped beside it, replacing it atomically under the
+ * bytes read — a hard link into the store keeps the store's copy. A
+ * module changed meanwhile stands as it is. Returns why a module
+ * carrying its engine was kept as it is, or null.
+ */
+export async function prepareArtifactEngine(folder: string, id: string, modulePaths?: string[]): Promise<string | null> {
+  provisionEngineLinks(folder, modulePaths);
+  const module = join(folder, `${id}.registry.mjs`);
+  const read = readVersioned(module);
+  if (read.bytes === null || importsEngine(read.bytes.toString("utf8"))) return null;
+  const wrapper = `${id}.registry.ts`;
+  if (!existsSync(join(folder, wrapper))) return `its ${wrapper} is missing`;
+  let bytes: Buffer;
+  try {
+    bytes = await bundleRegistryModule(join(folder, wrapper), modulePaths ?? bundleNodePaths());
+  } catch (error) {
+    const failure = (error as { errors?: { text?: string }[] }).errors?.[0]?.text ?? (error as Error).message;
+    return `bundling its ${wrapper} failed: ${failure}`;
+  }
+  if (bytes.equals(read.bytes)) return null;
+  try {
+    writeVersionedBytes(module, bytes, read.version, statSync(module).mode & 0o777);
+  } catch (error) {
+    // Changed or gone meanwhile: what stands there is not this write's.
+    if (error instanceof VersionConflictError || (error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    return `replacing it failed: ${(error as Error).message}`;
+  }
+  return null;
 }
 
 export const MIN_NODE_MAJOR = 23;
@@ -1012,8 +1091,8 @@ async function compileAdmitted(
       progress(`agent: ${agentEnv.SLC_AGENT} from the block`);
     }
     // The engine resolves from the playbook's own directory (see
-    // provisionEngineLinks): the compiler's checks and the entry it
-    // emits both look there.
+    // provisionEngineLinks): the compiler's checks, the entry it emits
+    // and the registry module packaged from it all look there.
     provisionEngineLinks(dir, options.runtime?.modulePaths ?? bundleNodePaths());
     progress(`running: ${toolchain.slc.command.join(" ")} playbook ${id}.md`);
     // Bare invocation (DR-019): slc >= 0.2 links against the installed
@@ -1075,18 +1154,15 @@ async function compileAdmitted(
   const registryTs = join(dir, `${id}.registry.ts`);
   writeFileSync(registryTs, wrapperSource(options, entryModulePath));
   const registryBundle = join(dir, `${id}.registry.mjs`);
-  await build({
-    entryPoints: [registryTs],
-    outfile: registryBundle,
-    bundle: true,
-    format: "esm",
-    platform: "node",
-    logLevel: "silent",
-    nodePaths: bundleNodePaths(),
-  });
+  // The module imports the engine rather than carrying it, so it runs on
+  // the engine of the app that loads it (playbook-library-14); a
+  // repackaging, which runs no compiler, finds the links all the same.
+  if (!toolchain) provisionEngineLinks(dir, options.runtime?.modulePaths ?? bundleNodePaths());
+  writeFileSync(registryBundle, await bundleRegistryModule(registryTs));
 
   // Fail-closed validation before anything touches the config
-  // (PBLIB-14): the bundle must satisfy the captain shell's checks.
+  // (PBLIB-14): the bundle must satisfy the captain shell's checks, its
+  // engine resolved through the folder's engine links.
   // The import is keyed by the file's change so a re-packaged bundle
   // — a draft registered with its confirmed command and intent — is
   // checked fresh, never served from the module cache.

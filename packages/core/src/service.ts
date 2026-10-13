@@ -123,7 +123,7 @@ import {
   resolveSpecPath,
   writeSpecFile,
 } from "./specs.js";
-import { ArtifactFolderBusy, checkToolchain, compilePlaybook, compilerAgentOf, type CompileResult, type LineSpawner, type ToolchainRuntime } from "./compile.js";
+import { ArtifactFolderBusy, checkToolchain, compilePlaybook, compilerAgentOf, ENGINE_LINKS_EXCLUDE, type CompileResult, type LineSpawner, type ToolchainRuntime } from "./compile.js";
 import { browserAgent } from "./browser.js";
 import { ApplicationMedia } from "./media.js";
 import { MediaTransferError } from "./media-transfers.js";
@@ -271,9 +271,10 @@ interface SpaceEnvironmentHooks {
 }
 
 /** The engine links a compile provisions in a spec package under
- * development stay out of the working folder's Git (playbook-library-12). */
+ * development stay out of the working folder's Git (playbook-library-12),
+ * as an install's in a path source's playbook folders do. */
 function excludeEngineLinks(workingFolder: string): void {
-  try { writeExcludeBlock(workingFolder, [`/${draftPackagePath("**")}/node_modules/`], "engine links"); }
+  try { writeExcludeBlock(workingFolder, [ENGINE_LINKS_EXCLUDE], "engine links"); }
   catch (error) { console.error(`spex: ${workingFolder}'s engine links are not excluded: ${String(error)}`); }
 }
 

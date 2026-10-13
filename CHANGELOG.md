@@ -870,6 +870,7 @@ and `npm start` (desktop) or `npm run start:server` (server).
 - An expanded package's intent in the Specs outline renders its links as an item body does, a record's ID opening the reader, and the collapsed line reads each link by its text, no longer printing `[DR-001](…)` as typed (spec-view-2).
 - The authoring preamble says that a Boss's answer reaches only the role that asked unless a behavior names a later role as receiving it, so a reviewer that judges work shaped by an answer is written to hear it (playbook-library-35).
 - While the answer to a run's question runs, the session list and its state reports no longer read the session as interrupted — no `recovery`, no "Restore the interrupted turn first" — nor as still parked on the question, which leaves once the answer is accepted; Restore stands only for a turn cut off with none running (core-service-32).
+- A compiled playbook runs on the app's own playbook engine, no longer on the engine it was compiled with: its registry module imports `@sublang/playbook` and `xstate` through its folder's engine links instead of carrying a copy, and an install — or the start that finds a lock installed — bundles again from its shipped `<id>.registry.ts` a module an earlier Spex packaged with the engine inside, so a playbook published before a Playbook fix gets that fix without being recompiled; a module whose wrapper is missing is kept and named in the log, and a path source's playbooks gain the engine links too (playbook-library-14, playbook-library-46).
 
 ### Security
 
