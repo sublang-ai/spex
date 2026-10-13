@@ -16,6 +16,39 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Added
 
+- Groups and sharing from Spex ([DR-114](specs/decisions/114-groups-and-sharing-from-spex.md)).
+  Signed in, "New group" heads the list where the instance says you may
+  create one, and a group's heading carries "New subgroup" where you
+  may; the editor asks a name and a path that follows the name as the
+  instance derives it, left for you when a name derives none, as a
+  Chinese one does. A members panel, on a group's heading or a
+  repository's row, lists each member with the instance's role and
+  "via <group>" where the membership is inherited, offers Share by login
+  with the instance's own roles, and Remove on members held directly,
+  each only where the instance says you may act. A group you create
+  lists at once, before the instance's next listing carries it.
+- A second device joins without choices. At a sign-in's join of your
+  own group's spex repository, a clone that holds nothing of its own,
+  no session, intent or authoring session and no commit but the
+  set-up's, takes the instance's side of every unit, so the seeded
+  environment and configuration never ask to be chosen over; any other
+  clone still asks for every unit.
+- Each selected spec reaches the agents as a generated skill ([DR-115](specs/decisions/115-a-spec-reaches-the-agents.md)).
+  The lock holds one export per selected spec, named `<org>-<pkg>`, or
+  `<pkg>` past 64 characters, or its alias; the exporter writes the
+  spec file byte for byte as `<pkg>.md` beside a SKILL.md naming the
+  spec package's org, name, version and description, a project's into
+  its working folder's agent folders and your own group's into the
+  agents' home folders, and both leave with the lock. A lock resolved
+  before this exports no spec until it is resolved again.
+- New playbook asks for "Org" and "License" beside the id, so a
+  playbook's first Publish no longer fails on a manifest naming your
+  login as its org and no license: the license starts from the working
+  folder's LICENSE where it reads as Apache-2.0 or MIT, both fields are
+  edited freely, an org outside the manifest's name rule is refused in
+  place naming the rule, and "New playbook" waits while either is
+  empty. After an authoring session's enabling, the card keeps "Commit
+  spex-packages/<id> with your code" until the surface is left.
 - Undo a misplacement in Spex ([DR-120](specs/decisions/120-the-instance-is-the-space.md)).
   Where the instance says you may, a group's heading carries Rename,
   which opens its name and path in place, and, while nothing stands in
@@ -253,6 +286,23 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Changed
 
+- The app requires Playbook 17.8.0 and slc 0.16.1 ([DR-116](specs/decisions/116-playbook-17-8-0-slc-0-16-1-adoption.md)).
+  A judge's reply is fitted to the machine and a parked judge is a
+  failure the catalogue phrases, every commit of a step is taken, a
+  role is one word, and the relay marker is language-neutral.
+- An authoring session writes in the project's language: the language
+  a brought-in folder already declares, else the project's "Authoring
+  language:" marker in `specs/meta.md`, else the interface language.
+  The session records it, so later opens keep the same folder, and the
+  preamble names it and, for a language other than English, the words
+  slc recognizes literally: the `Roles:` and `Results:` headings, the
+  Captain clauses, role and result names and the quoted lead-in. The
+  one-shot compile decides it the same way.
+- Every authoring preamble says a role's prompt describes only that
+  role's own step and ends by naming the result the step reports; later
+  rounds, the hand-over between roles and the ending belong to the
+  behaviors' prose, so a compiled run no longer parks on a reply that
+  waited for a later round.
 - Groups names the instance alone ([DR-120](specs/decisions/120-the-instance-is-the-space.md)).
   A spex.pub instance is the one thing you sign in to and the only name
   you see: Groups lists your own group, the instance's groups you belong
@@ -310,7 +360,7 @@ and `npm start` (desktop) or `npm run start:server` (server).
   asking again while it holds records the host has not received, and never
   touches the working folder. Groups syncs each spex repository on its own,
   and `scripts/storage-git.mjs` takes `--repository <key>`.
-- The app requires Playbook 17.7.0, slc 0.15.1 and Cligent 0.33.3 ([DR-111](specs/decisions/111-the-core-coordinates-as-git-does.md), [DR-108](specs/decisions/108-the-root-lease-names-the-machine.md), [DR-105](specs/decisions/105-playbook-17-5-0-adoption.md), [DR-088](specs/decisions/088-playbook-17-slc-0-12-cligent-0-27-adoption.md),
+- The app requires Playbook 17.9.0, slc 0.16.1 and Cligent 0.33.5 ([DR-121](specs/decisions/121-playbook-17-9-0-cligent-0-33-5-adoption.md), [DR-116](specs/decisions/116-playbook-17-8-0-slc-0-16-1-adoption.md), [DR-111](specs/decisions/111-the-core-coordinates-as-git-does.md), [DR-108](specs/decisions/108-the-root-lease-names-the-machine.md), [DR-105](specs/decisions/105-playbook-17-5-0-adoption.md), [DR-088](specs/decisions/088-playbook-17-slc-0-12-cligent-0-27-adoption.md),
   [DR-092](specs/decisions/092-playbook-17-1-slc-0-13-cligent-0-28-adoption.md),
   [DR-093](specs/decisions/093-a-players-subagent-model.md),
   [DR-094](specs/decisions/094-the-compiler-adopts-the-apps-cligent.md),
@@ -579,14 +629,29 @@ and `npm start` (desktop) or `npm run start:server` (server).
   and `browser.cancel` expose host readiness with `browser.progress`.
   `approval.list` and `approval.respond` operate on live requests from
   `approval.state`, independently of durable ledger attention.
-
-### Changed
+  Since then `space.signin.start`, `space.signin.cancel`,
+  `space.signout`, `space.refresh`, `space.pick`, `space.join`,
+  `space.members`, `space.share`, `space.unshare` and
+  `space.group.create` join, with `draft.defaults` and the
+  `environment.*` family; `intent.move`, `intent.link` and `space.init`
+  leave; and a draft's `malformedDirectives` entries carry `text` and
+  `reason`. The protocol is 26.
 
 - The dependency lock takes Playbook 17.8.1 — the Captain ends a relayed question with the question's own words and reports a step's ending with the facts the step gave — and cligent 0.33.4 — the Claude Code adapter withholds the structured-question tool it cannot serve, so no refused call shows in the Captain's pane. The floors of DR-116 are unchanged.
 - The app requires Playbook 17.9.0 and Cligent 0.33.5 ([DR-121](specs/decisions/121-playbook-17-9-0-cligent-0-33-5-adoption.md)). Claude Code runs with its own commit and pull-request attribution off, so a player's commits carry only the trailers the project asks for, and every player prompt opens with `Role: <role> · Model: <model>`, so such a trailer can name both. Every role after a Boss answer hears the run's questions and answers, whatever the playbook retains; a question and a reply reach a player behind `? ⟶` and `Boss ⟶` lines, and the lines the Captain appends to a reply read as marks — `✓`, `✕ <code>`, `▸ <label>` — not English sentences. The closing reply names each commit's hash and branch, and a judge's reply the machine admits is no longer forced into a string where the runtime could not read the field's shape. **Upgrade together:** stop every Playbook CLI and Spex shell sharing the home before the first new writer runs; an earlier Playbook rejects the run snapshots and ledgers this one writes.
 
 ### Fixed
 
+- A session lists failed only while its failure stands: a later turn
+  that settles clean clears an earlier turn's failure, while a parked
+  failure stands until its run leaves that state.
+- "Show earlier entries", in a player pane or the authoring draft,
+  reveals entries above the reader without raising the Latest pill, and
+  a player's text or tool event no longer raises one in a Captain pane
+  whose own content did not change.
+- The seven built-in playbooks' intents read in the reader's language,
+  on the quick-start card, the slash menu and Playbooks, translated in
+  the Chinese catalog.
 - A host's rate limit is its own cause, no longer a network failure: a sync stops "⟨host⟩ asks to wait N seconds" (or "a moment") with "Retry waits, then runs the step."; a sync's calls and the host read wait out the time asked, 120 s at most, a Stop ending the wait, and any other act meanwhile is refused at once with the seconds that remain.
 - The authoring agent learns before its first compile that a prompt's
   text stands where its instruction stands, in the source's order: text
