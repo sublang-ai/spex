@@ -9,7 +9,7 @@
 import { isValidElement, useEffect, useMemo, useState, type ReactNode, type RefObject } from "react";
 
 import type { CaptainLine, SessionView } from "../state/reducer.js";
-import { stateLabel } from "../lib/labels.js";
+import { stateLabel, statusWords } from "../lib/labels.js";
 import { readRecordFailure } from "../lib/failure-catalogue.js";
 import { FailureCard, type FailureContext } from "./FailureCard.js";
 import { parkedFailure } from "../lib/machine-frames.js";
@@ -283,11 +283,14 @@ const NARRATION_GLYPH = /^([\u25c7\u25c6\u25b8\u2b95\u2937\u2192])\s?/u;
  * small type step, left-aligned like the conversation it sits in, the
  * glyph standing as an icon in a fixed slot — never a centered grey
  * mono whisper the room cannot read. The text keeps its glyph, so the
- * line reads the same to a screen reader and a test. */
+ * line reads the same to a screen reader and a test. A line that is
+ * only a machine's event or result name reads as its words, the name
+ * kept in the words' tooltip (DR-010 §2). */
 export function SystemLine({ text, title }: { text: string; title: string }) {
-  const match = NARRATION_GLYPH.exec(text);
+  const shown = statusWords(text);
+  const match = NARRATION_GLYPH.exec(shown.text);
   const glyph = match?.[1];
-  const body = glyph ? text.slice(glyph.length) : text;
+  const body = glyph ? shown.text.slice(glyph.length) : shown.text;
   return (
     <div
       title={title}
@@ -300,7 +303,10 @@ export function SystemLine({ text, title }: { text: string; title: string }) {
       >
         {glyph}
       </span>
-      <span className="min-w-0 flex-1 whitespace-pre-wrap [overflow-wrap:anywhere]">
+      <span
+        title={shown.name}
+        className="min-w-0 flex-1 whitespace-pre-wrap [overflow-wrap:anywhere]"
+      >
         {body}
       </span>
     </div>
