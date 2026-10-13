@@ -362,6 +362,16 @@ export function currentSession(sessions: SessionInfo[], projectId: string): Sess
     .sort((a, b) => (b.endedAt ?? b.createdAt) - (a.endedAt ?? a.createdAt))[0];
 }
 
+/** A session's entry while this core holds its turn (core-service-32,
+ * DR-047). Playbook marks the checkpoint uncertain as a turn begins and
+ * settles it only with the turn — the evidence a turn cut off leaves —
+ * so while the turn is held its entry reads the turn, not that mark: no
+ * interrupted turn to restore, and no reason to restore it first. */
+function holdingTurn(session: SessionInfo): SessionInfo {
+  const { recovery: _recovery, continuationReason: _reason, ...held } = session;
+  return held;
+}
+
 export class SessionManager {
   private readonly store: Store;
   private readonly loadModule: LoadModule;
@@ -395,7 +405,8 @@ export class SessionManager {
     return this.store.listSessions().map((session) => {
       const live = this.live.get(session.id);
       const settling = this.settling.has(session.id);
-      return {...session, ...(live ? {externalWriter:undefined} : {}), live: !!live || session.live, turnActive: (live?.turnActive ?? (session.live ? session.turnActive ?? false : false)) || settling};
+      const listed = {...session, ...(live ? {externalWriter:undefined} : {}), live: !!live || session.live, turnActive: (live?.turnActive ?? (session.live ? session.turnActive ?? false : false)) || settling};
+      return live?.turnActive ? holdingTurn(listed) : listed;
     });
   }
   /** One lane per project: its current or recovery-bound conversation
@@ -923,6 +934,14 @@ export class SessionManager {
   private startTurn(entry: LiveSession, text: string | SessionTurnInput | undefined, restore: { input: string } | false, control?: { kind: "recovery" | "ending"; controlId: string }): void {
     entry.turnIntentId = undefined;
     entry.turnActive = true;
+    // A turn accepted while a run waits on the Boss's question answers
+    // it or asks it back (DR-119), so the question the last settlement
+    // read leaves now; this turn's own settlement reads the run afresh
+    // (core-service-32, core-service-91).
+    if (this.store.parkedRun(entry.info.id)?.reason === "question") {
+      try { this.store.setParkedRun(entry.info.id, undefined); }
+      catch (error) { console.error(`spex: parked-run controls not cleared: ${String(error)}`); }
+    }
     this.publish(entry.info.id);
     entry.operation = (async () => {
       let failed = false;
@@ -1047,7 +1066,9 @@ export class SessionManager {
   private publish(sessionId: string): void {
     const session = this.store.describeSession(sessionId);
     const entry = this.live.get(sessionId);
-    if (session) this.onSessionState({...session, ...(entry ? {externalWriter:undefined} : {}), live:!!entry, turnActive:entry?.turnActive ?? false});
+    if (!session) return;
+    const reported = {...session, ...(entry ? {externalWriter:undefined} : {}), live:!!entry, turnActive:entry?.turnActive ?? false};
+    this.onSessionState(entry?.turnActive ? holdingTurn(reported) : reported);
   }
 
   private requireLive(sessionId: string): LiveSession {

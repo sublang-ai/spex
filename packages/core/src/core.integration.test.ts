@@ -30,7 +30,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { readFileSync } from "node:fs";
 import { fakeAdapterImports, type FakeAdapterStats, type FakeScript } from "./testing/fake-adapter.js";
 import { createScriptedCaptain } from "./testing/scripted-captain.js";
-import { parkingScript } from "./testing/demo.js";
+import { ASKING, askingScript, parkingScript } from "./testing/demo.js";
 import type { LineSpawner } from "./compile.js";
 import { defaultSpawner } from "./compile.js";
 import { stubSlcSource } from "./testing/stub-slc.js";
@@ -2032,6 +2032,89 @@ test(
     assert.equal(row?.state, "queued");
     assert.deepEqual([row?.next?.standing, row?.next?.manualStart], ["stopped", true]);
     assert.deepEqual(ledger.attention.filter((entry) => entry.sessionId === session.id), []);
+  },
+);
+
+test(
+  "core-service-120: while the answer's turn runs, its session owes no restore and its question has left",
+  { timeout: 180_000 },
+  async (t) => {
+    // The real /code coder asks the Boss, and its resumed call holds
+    // long enough for the answer's turn to be read while it runs.
+    const harness = await startHarness(VALID_CONFIG, {
+      realShell: true,
+      script: askingScript({ delayMs: 1500 }),
+      seedCommit: true,
+    });
+    const client = new Client(harness.service.port());
+    t.after(async () => {
+      client.close();
+      await harness.service.stop();
+    });
+    await client.open();
+    const project = await client.expectOk("project.register", {
+      path: harness.projectDir,
+    });
+    const session = await client.expectOk("session.create", {
+      projectId: project.id,
+    });
+    await client.expectOk("subscribe", {
+      channel: { kind: "session", sessionId: session.id },
+    });
+    const listed = async () =>
+      (await client.expectOk("session.list", {})).find((entry) => entry.id === session.id);
+    await client.expectOk("turn.submit", { sessionId: session.id, text: ASKING.request });
+    const asked = await settledSession(client, session.id, 1);
+    // The settlement found the run waiting on the Boss and kept its
+    // park (core-service-32).
+    assert.equal(asked.parked?.reason, "question");
+    assert.equal(asked.recovery, undefined);
+
+    const mark = client.messages.length;
+    await client.expectOk("turn.submit", { sessionId: session.id, text: ASKING.answer });
+    await client.waitFor(
+      (m) =>
+        client.messages.indexOf(m) >= mark &&
+        m.type === "session.state" &&
+        m.session.id === session.id &&
+        m.session.turns === 2 &&
+        m.session.turnActive === true,
+    );
+    const running = await listed();
+    assert.equal(running?.turnActive, true);
+    // The checkpoint written ahead of the turn really reads uncertain
+    // now — the evidence a turn cut off would leave ...
+    const manifest = JSON.parse(
+      readFileSync(join(projectSessions(harness.dataDir), `${session.id}.json`), "utf8"),
+    ) as { state: string };
+    assert.equal(manifest.state, "uncertain");
+    // ... yet the summary reads the turn the core holds, listed and in
+    // every state reported since it was accepted: no interrupted turn,
+    // no reason to restore it, and the question it answers gone
+    // (core-service-32).
+    const reported = client.messages.slice(mark).flatMap((m) =>
+      m.type === "session.state" && m.session.id === session.id && m.session.turnActive
+        ? [m.session]
+        : []);
+    assert.ok(reported.length > 0);
+    for (const summary of [running, ...reported]) {
+      assert.equal(summary?.recovery, undefined, "no interrupted turn while it runs");
+      assert.equal(summary?.continuationReason, undefined, "no reason to restore it first");
+      assert.equal(summary?.parked, undefined, "the answered question has left");
+    }
+    assert.equal(
+      storedPrefs(harness.dataDir)[`session:${session.id}:parked`],
+      undefined,
+      "the park leaves the preferences when the answer is accepted",
+    );
+
+    // Settled, the run has finished: nothing is owed and nothing parks
+    // (core-service-32, core-service-91).
+    const answered = await settledSession(client, session.id, 2);
+    assert.equal(answered.recovery, undefined);
+    assert.equal(answered.parked, undefined);
+    assert.equal(answered.continuable, true, answered.continuationReason ?? "no reason given");
+    assert.equal((await listed())?.recovery, undefined);
   },
 );
 
