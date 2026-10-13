@@ -370,6 +370,16 @@ While a compile is running, the Playbooks surface shall render a secondary cance
 
 While your own group's config is missing or invalid, the Playbooks surface shall replace its content with a gate that (1) explains that the Captain can only run playbooks listed on this surface, (2) states that playbooks need a valid config and directs the user to fix it in Settings, and (3) renders "Settings" as a navigation control when the host app provides surface navigation, falling back to plain text otherwise.
 
+### Installed Playbooks
+
+#### playbook-library-46
+
+When an install places a spec package's files or finds them installed already [[environments-7](environments.md#environments-7)], the core shall prepare each of its playbook artifact folders to run on the app's engine, provisioning there the engine links a compile provisions [[playbook-library-12](#playbook-library-12)] and, where the folder's `<id>.registry.mjs` imports no `@sublang/playbook` specifier and so carries an engine of its own, bundling that module again from the `<id>.registry.ts` beside it as a compile bundles one [[playbook-library-14](#playbook-library-14)]:
+
+- the module bundled again replaces the installed one atomically under the bytes read, a module changed meanwhile standing, and leaves the store's copy and the lock's digests as they were ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md));
+- a `<id>.registry.ts` missing or failing to bundle leaves the module as it is, and the install goes on, its report naming the module and why;
+- a path source's playbook folders in the working folder get the engine links alone, listed in the working folder's `.git/info/exclude`, their files left as they are.
+
 ## Internal Behavior
 
 ### Toolchain Resolution
@@ -414,8 +424,7 @@ When a compile is started, the compile runner shall hand `slc` the block the com
 
 When `slc` completes successfully, the registry generator shall derive `idleStateId`, `finalStateId`, and `parkStateIds` by introspecting the emitted machine definition ([DR-005](../decisions/005-compilation-integration.md)), each derived id naming a state present in that machine, and shall report them as compile metadata for display [[playbook-library-22](#playbook-library-22)] — never as registry-entry fields ([DR-014](../decisions/014-released-toolchain.md)):
 
-- Ambiguous derivation: the registry generator surfaces the candidate state ids for user selection in the Enable form [[playbook-library-7](#playbook-library-7)] instead of choosing silently;
-- the engine links the compile provisions [[playbook-library-12](#playbook-library-12)] are provisioned again for every installed playbook artifact folder at install, so an installed module resolves the app's engine the same way.
+- Ambiguous derivation: the registry generator surfaces the candidate state ids for user selection in the Enable form [[playbook-library-7](#playbook-library-7)] instead of choosing silently.
 
 #### playbook-library-14
 
@@ -424,6 +433,7 @@ When the Enable form [[playbook-library-7](#playbook-library-7)] is submitted wi
 - the user's command and intent override the entry's;
 - every other member of the entry passes through unchanged, including the role ids in their authored casing and the artifact schema the entry advertises — under artifact schema 2 a role is a playbook-local slot a user binds to a player, not a host player id ([DR-032](../decisions/032-session-players.md));
 - the module carries the registry-contract marker;
+- the module holds the wrapper, the entry and the artifact the entry links, and imports the playbook engine — `xstate` and `@sublang/playbook`, each with its subpaths — rather than carrying it, resolving it at load through the engine links of its folder [[playbook-library-12](#playbook-library-12)], so it runs on the engine of the app that loads it;
 - two role ids colliding fails the compile naming the offending role.
 
 ### Registry Validation
@@ -584,6 +594,14 @@ When the conversation runner observes a `tool_result` event or the turn ends, it
 #### playbook-library-17
 
 Where a stub `slc` executable that emits a valid compiled playbook output is named as the configured compiler [[playbook-library-11](#playbook-library-11)], when the compile flow is driven end to end — source provided [[playbook-library-5](#playbook-library-5)], role names entered, the Enable form submitted [[playbook-library-7](#playbook-library-7)] — the test suite shall assert that the stub ran as an external process in the playbook artifact's folder of the spec package in the working folder [[playbook-library-12](#playbook-library-12)], that a registry manifest was emitted beside it whose entry passes the fail-closed registry validation [[playbook-library-15](#playbook-library-15)], that the project's `spex.yaml` gained a path request for the package and its lock exports the playbook [[playbook-library-7](#playbook-library-7)], that the project's config gained a `playbooks.<id>` entry with no `from` whose role bindings are keyed by the entry's derived role ids however the submission cased them [[playbook-library-32](#playbook-library-32)] [[playbook-library-14](#playbook-library-14)], that the surface lists the new playbook [[playbook-library-10](#playbook-library-10)], and that the stub ran with the Captain's block as `SLC_AGENT` and `SLC_MODEL` [[playbook-library-42](#playbook-library-42)].
+
+#### playbook-library-47
+
+Where a stub `slc` named as the configured compiler places an artifact as `slc` links one — Playbook's own `review`, its machine importing `xstate` and its runtime the engine, with the entry `slc` emits beside them — when the test suite compiles it through the compile runner, the test suite shall assert that the registry module imports `xstate` and `@sublang/playbook/xstate-runtime`, declares no `RUNTIME_ABI` and inlines no engine source while it inlines the linked artifact, and that its imports, as the compile's fail-closed import loaded it, resolved to the very engine and machine library modules the app runs [[playbook-library-14](#playbook-library-14)].
+
+#### playbook-library-108
+
+Where a registry release holds that compiled `review` with its module bundled carrying the engine, beside a playbook whose module ships without its `<id>.registry.ts`, and a Git working folder holds a path source whose module carries the engine, when the test suite installs both and then installs the same lock again over the release's module linked back from the store, the test suite shall assert after each install that the `review` module holds the very bytes the compile packaged, with the store's copy and the lock's digest still the release's and the engine links standing, and that the module without its wrapper is unchanged and named in the report with why [[playbook-library-46](#playbook-library-46)]; that loading the installed module through the core's module loader resolves its imports to the engine and machine library modules the app runs [[playbook-library-46](#playbook-library-46)]; and that the path source's playbook gained the engine links, ignored by its Git, its module unchanged [[playbook-library-46](#playbook-library-46)].
 
 #### playbook-library-98
 
