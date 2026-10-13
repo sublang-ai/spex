@@ -997,10 +997,15 @@ export class Store {
     const prior = this.sessions.get(id);
     const writer = live ? "idle" : await shared.readLeaseState(id);
     if (live === false && this.localSessions.has(id)) return;
+    // A session's last activity is the latest its own history records
+    // (core-service-32): Playbook rewrites the manifest's updatedAt
+    // whenever it releases the runtime, which need not be near the last
+    // turn, so the manifest speaks only for records that carry no time.
+    const lastRecorded = stored.reduce((last, {record}) => hasPresentationHeader(record) ? Math.max(last, record.timestamp) : last, 0);
     const meta: SessionMeta = {
       id, projectId: repository.key, cwd: manifest.cwd,
       createdAt: Date.parse(manifest.createdAt) || stored.find(({record}) => hasPresentationHeader(record))?.record.timestamp || 0,
-      endedAt: live ? null : Date.parse(manifest.updatedAt) || stored.reduce((last, entry) => Math.max(last, Number(entry.record.timestamp) || 0), 0),
+      endedAt: live ? null : lastRecorded || Date.parse(manifest.updatedAt) || 0,
       live: live ?? prior?.live ?? false,
       ...(writer !== "idle" ? {externalWriter: writer} : {}),
       players, initialVisible, originDir: shared.sessionsDir,
