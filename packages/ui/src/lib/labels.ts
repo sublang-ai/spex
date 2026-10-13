@@ -52,6 +52,32 @@ export function humanizeId(id: string): string {
     .trim();
 }
 
+/** A status line that is only a name of the machine's: the event a
+ * turn was classified as, with or without a glyph ("START_PROPOSE"),
+ * or a guard or result a run accepted after its arrow
+ * ("→ needsBossReply"). */
+const MACHINE_EVENT_LINE =
+  /^((?:[◇◆▸⮕⤷→]\s?)?)([A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*)$/u;
+const MACHINE_RESULT_LINE = /^(→\s?)([a-z][A-Za-z0-9]*)$/u;
+
+/** A status line as a person reads it (run-view-1, DR-010 §2): a line
+ * that is only a machine's event or result name reads as that name's
+ * lowercase words, its glyph or arrow kept — "start propose",
+ * "→ needs boss reply" — and the name as written comes back for the
+ * line's tooltip wherever the words differ from it. Any other line
+ * reads as it came. */
+export function statusWords(line: string): { text: string; name?: string } {
+  const text = String(line);
+  const match =
+    MACHINE_EVENT_LINE.exec(text.trim()) ?? MACHINE_RESULT_LINE.exec(text.trim());
+  if (!match) return { text };
+  const [, glyph, name] = match;
+  // An acronym inside a camelCase name is a word of its own
+  // ("hasPRLink" reads "has pr link", never "has prlink").
+  const words = humanizeId(name.replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2"));
+  return words === name ? { text } : { text: `${glyph}${words}`, name };
+}
+
 /** Human label + tone for a session state, with the raw state id the
  * label speaks for — the tooltip's business, never the copy. Tone
  * keys off signals the reducer derives (a pending question, a run

@@ -291,6 +291,15 @@ export const TURN_TWO_QUESTION: FixtureEntry[] = [
     timestamp: t + 20,
     turn: { id: 2, prompt: "review it", timestamp: t + 20 },
   }),
+  // With no frame open to absorb them, the runtime narrates the event
+  // the turn was classified as and a result the run accepted by the
+  // machine's own names (run-view-1).
+  rec(201, {
+    type: "captain_status",
+    turnId: 2,
+    timestamp: t + 20,
+    message: "START_PROPOSE",
+  }),
   rec(21, {
     type: "player_prompt",
     turnId: 2,
@@ -309,6 +318,12 @@ export const TURN_TWO_QUESTION: FixtureEntry[] = [
       turnId: 2,
       finalText: "Which auth flow should I prioritize?",
     },
+  }),
+  rec(221, {
+    type: "captain_status",
+    turnId: 2,
+    timestamp: t + 23,
+    message: "→ needsBossReply",
   }),
   rec(23, {
     type: "captain_telemetry",

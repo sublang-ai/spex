@@ -377,6 +377,25 @@ describe("RUN-19: pane structure from the fixture stream", () => {
     expect(screen.getByTestId("player-pane-dev.coder")).toBeTruthy();
     expect(screen.getByTestId("player-pane-dev.reviewer")).toBeTruthy();
   });
+
+  test("a status line that is only a machine's name reads as its words", () => {
+    renderRun([...TURN_ONE, ...TURN_TWO_QUESTION]);
+    // The classified event and the accepted result read as words, the
+    // arrow kept, the name as written in the words' tooltip
+    // (run-view-1, DR-010 §2).
+    const event = systemLine("start propose");
+    expect(event).toBeTruthy();
+    expect(event!.lastElementChild!.getAttribute("title")).toBe("START_PROPOSE");
+    const result = systemLine("→ needs boss reply");
+    expect(result).toBeTruthy();
+    expect(result!.firstElementChild!.textContent).toBe("→");
+    expect(result!.lastElementChild!.getAttribute("title")).toBe("needsBossReply");
+    expect(systemLine(/START_PROPOSE|needsBossReply/)).toBeNull();
+    // A line that names no machine reads as it came, its words with no
+    // name to keep.
+    const started = systemLine("◇ /code started");
+    expect(started!.lastElementChild!.hasAttribute("title")).toBe(false);
+  });
 });
 
 describe("RUN-21: awaitBossReply as a first-class chat moment", () => {
@@ -951,8 +970,8 @@ describe("run-view-66: the machine call tree from the trace", () => {
     // no glyph, which used to reach the reader as raw jargon.
     expect(systemLine("◇ /code started")).toBeTruthy();
     expect(systemLine(/⤷ Coder: implement/)).toBeNull();
-    expect(systemLine("START_CODE")).toBeNull();
-    expect(systemLine("→ directCommit")).toBeNull();
+    expect(systemLine(/^(?:START_CODE|start code)$/)).toBeNull();
+    expect(systemLine(/^→ ?(?:directCommit|direct commit)$/)).toBeNull();
   });
 
   test("collapsing the caller is arrangement, and the child stays drawn", () => {
