@@ -583,6 +583,7 @@ and `npm start` (desktop) or `npm run start:server` (server).
 ### Changed
 
 - The dependency lock takes Playbook 17.8.1 — the Captain ends a relayed question with the question's own words and reports a step's ending with the facts the step gave — and cligent 0.33.4 — the Claude Code adapter withholds the structured-question tool it cannot serve, so no refused call shows in the Captain's pane. The floors of DR-116 are unchanged.
+- The app requires Playbook 17.9.0 and Cligent 0.33.5 ([DR-121](specs/decisions/121-playbook-17-9-0-cligent-0-33-5-adoption.md)). Claude Code runs with its own commit and pull-request attribution off, so a player's commits carry only the trailers the project asks for, and every player prompt opens with `Role: <role> · Model: <model>`, so such a trailer can name both. Every role after a Boss answer hears the run's questions and answers, whatever the playbook retains; a question and a reply reach a player behind `? ⟶` and `Boss ⟶` lines, and the lines the Captain appends to a reply read as marks — `✓`, `✕ <code>`, `▸ <label>` — not English sentences. The closing reply names each commit's hash and branch, and a judge's reply the machine admits is no longer forced into a string where the runtime could not read the field's shape. **Upgrade together:** stop every Playbook CLI and Spex shell sharing the home before the first new writer runs; an earlier Playbook rejects the run snapshots and ledgers this one writes.
 
 ### Fixed
 
