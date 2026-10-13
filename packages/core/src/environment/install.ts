@@ -10,8 +10,11 @@
 // its path sources: an install overtaken meanwhile publishes nothing
 // (DR-111). A path source copies nothing and is reported missing where
 // the working folder lacks it; a stale lock installs nothing new.
-// No code runs: the only thing added beside the release files is the
-// engine links in each installed playbook artifact's folder.
+// No code runs: what an install adds to the release files is each
+// playbook artifact folder's engine links — a path source's in the
+// working folder too — and, for a registry module bundled carrying its
+// own engine, the module bundled again from the wrapper shipped beside
+// it, so every playbook runs on the app's engine (playbook-library-46).
 
 import { randomUUID } from "node:crypto";
 import {
@@ -28,10 +31,11 @@ import {
   writeFileSync,
 } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { dirname, join, relative } from "node:path";
 
-import { provisionEngineLinks } from "../compile.js";
+import { ENGINE_LINKS_EXCLUDE, prepareArtifactEngine, provisionEngineLinks } from "../compile.js";
 import { fileVersion, VersionConflictError, type FileVersion } from "../files.js";
+import { writeExcludeBlock } from "./exports.js";
 import { parseManifestText, portablePathIssues, type Manifest } from "./format.js";
 import type { GitCredential, GitSource } from "./git-source.js";
 import { isGitSource, isPathSource, isRegistrySource, lockStaleness, sourceValue, type Lock, type LockedFile, type Resolution } from "./lock.js";
@@ -71,6 +75,9 @@ export interface InstallReport {
   stale?: string[];
   /** True when the installed files already matched the lock. */
   unchanged: boolean;
+  /** Registry modules left carrying the engine they were bundled with,
+   * each with why (playbook-library-46). */
+  engineKept: { module: string; reason: string }[];
 }
 
 export class InstallError extends Error {
@@ -281,6 +288,61 @@ function linkOrCopy(from: string, to: string, executable: boolean): void {
   }
 }
 
+/** The playbook artifact folders of a spec package's selected
+ * artifacts under `root`, with their ids. */
+function playbookFolders(root: string, resolution: Resolution): { id: string; folder: string }[] {
+  const out: { id: string; folder: string }[] = [];
+  for (const [id, chosen] of Object.entries(resolution.artifacts)) {
+    if (chosen.language === null) continue;
+    const folder = join(root, "playbooks", chosen.language, id);
+    if (existsSync(folder)) out.push({ id, folder });
+  }
+  return out;
+}
+
+/** Prepare every playbook artifact folder under `target` to run on the
+ * app's engine (playbook-library-46), collecting the modules kept as
+ * they are; each is named at `named`'s spelling of its folder. A tree
+ * standing installed already is `tolerant`: a folder it cannot prepare
+ * is logged and left, since the install itself places nothing. */
+async function prepareInstalled(target: string, names: readonly string[], lock: Lock, modulePaths: string[] | undefined, named: (folder: string) => string, tolerant = false): Promise<InstallReport["engineKept"]> {
+  const kept: InstallReport["engineKept"] = [];
+  for (const name of names) {
+    for (const { id, folder } of playbookFolders(join(target, ...name.split("/")), lock.packages[name]!)) {
+      let reason: string | null;
+      try {
+        reason = await prepareArtifactEngine(folder, id, modulePaths);
+      } catch (error) {
+        if (!tolerant) throw error;
+        console.error(`spex: ${named(folder)} was not prepared for the app's engine: ${String(error)}`);
+        continue;
+      }
+      if (reason !== null) kept.push({ module: join(named(folder), `${id}.registry.mjs`), reason });
+    }
+  }
+  return kept;
+}
+
+/** A path source's playbook folders in the working folder get the
+ * engine links a compile there provisions, ignored by its Git
+ * (playbook-library-46); their files are left as they are, and a
+ * folder that takes no link is logged, never failing the install. */
+function linkPathSources(lock: Lock, workingFolder: string | null, modulePaths: string[] | undefined): void {
+  if (workingFolder === null) return;
+  let linked = false;
+  for (const name of Object.keys(lock.packages).sort()) {
+    const resolution = lock.packages[name]!;
+    if (!isPathSource(resolution.source)) continue;
+    for (const { folder } of playbookFolders(join(workingFolder, ...resolution.source.path.split("/")), resolution)) {
+      try { if (provisionEngineLinks(folder, modulePaths).length > 0) linked = true; }
+      catch (error) { console.error(`spex: ${folder} takes no engine links: ${String(error)}`); }
+    }
+  }
+  if (!linked) return;
+  try { writeExcludeBlock(workingFolder, [ENGINE_LINKS_EXCLUDE], "engine links"); }
+  catch (error) { console.error(`spex: ${workingFolder}'s engine links are not excluded: ${String(error)}`); }
+}
+
 /** Install a lock's selected files (environments-7). */
 export async function install(options: InstallOptions): Promise<InstallReport> {
   const { cloneDir, lock, store, workingFolder } = options;
@@ -289,7 +351,7 @@ export async function install(options: InstallOptions): Promise<InstallReport> {
     ? options.requestsText
     : existsSync(join(cloneDir, "spex.yaml")) ? readFileSync(join(cloneDir, "spex.yaml"), "utf8") : null;
   const staleness = lockStaleness(lock, requestsText, (path) => (workingFolder === null ? null : readPathManifest(join(workingFolder, ...path.split("/")))));
-  if (staleness.stale) return { installed: [], missingPaths, stale: staleness.reasons, unchanged: true };
+  if (staleness.stale) return { installed: [], missingPaths, stale: staleness.reasons, unchanged: true, engineKept: [] };
 
   const names = Object.keys(lock.packages).sort().filter((name) => !isPathSource(lock.packages[name]!.source));
   for (const name of names) {
@@ -297,9 +359,16 @@ export async function install(options: InstallOptions): Promise<InstallReport> {
     if (issues.length > 0) throw new InstallError(name, `${name}: ${issues.map((issue) => `${issue.path} ${issue.message}`).join("; ")}`);
   }
 
+  linkPathSources(lock, workingFolder, options.modulePaths);
   const target = join(cloneDir, "packages");
   const record = installRecord(lock);
-  if (treeMatches(target, lock, record)) return { installed: [], missingPaths, unchanged: true };
+  if (treeMatches(target, lock, record)) {
+    // Installed already, by this app or an earlier one: each playbook is
+    // prepared in place, where an earlier app left a module carrying the
+    // engine it was bundled with.
+    const engineKept = await prepareInstalled(target, names, lock, options.modulePaths, (folder) => folder, true);
+    return { installed: [], missingPaths, unchanged: true, engineKept };
+  }
 
   for (const name of names) {
     try {
@@ -312,6 +381,7 @@ export async function install(options: InstallOptions): Promise<InstallReport> {
 
   const id = randomUUID();
   const staging = join(options.cache, "staging", id);
+  let engineKept: InstallReport["engineKept"];
   try {
     mkdirSync(staging, { recursive: true });
     for (const name of names) {
@@ -322,12 +392,8 @@ export async function install(options: InstallOptions): Promise<InstallReport> {
         mkdirSync(dirname(to), { recursive: true });
         linkOrCopy(store.pathOf(file.sha256, file.executable), to, file.executable);
       }
-      for (const [artifact, chosen] of Object.entries(resolution.artifacts)) {
-        if (chosen.language === null) continue;
-        const folder = join(root, "playbooks", chosen.language, artifact);
-        if (existsSync(folder)) provisionEngineLinks(folder, options.modulePaths);
-      }
     }
+    engineKept = await prepareInstalled(staging, names, lock, options.modulePaths, (folder) => join(target, relative(staging, folder)));
     writeFileSync(join(staging, INSTALL_RECORD), JSON.stringify(record));
     await options.beforeReplace?.();
     // Checked at the instant before the swap, nothing awaited between.
@@ -338,7 +404,7 @@ export async function install(options: InstallOptions): Promise<InstallReport> {
     if (error instanceof InstallError || error instanceof VersionConflictError) throw error;
     throw new InstallError(undefined, `installing failed; the last files stay: ${(error as Error).message}`, error);
   }
-  return { installed: names, missingPaths, unchanged: false };
+  return { installed: names, missingPaths, unchanged: false, engineKept };
 }
 
 /** Swap a complete staged tree in for the installed one. */

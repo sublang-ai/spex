@@ -347,7 +347,7 @@ test("environments-24: a playbook authored in a project compiles, is requested b
   assert.equal(latest()?.state, "compiled");
   assert.ok(existsSync(join(folder, "playbooks", "en", "triage", "triage.registry.mjs")), "compiled in the playbook artifact");
   // The engine links stay out of the working folder's Git.
-  assert.match(readFileSync(join(working, ".git", "info", "exclude"), "utf8"), /\/spex-packages\/\*\*\/node_modules\//);
+  assert.match(readFileSync(join(working, ".git", "info", "exclude"), "utf8"), /^\*\*\/playbooks\/\*\/\*\/node_modules\/$/m);
 
   // Enabling requests it by path, installs and writes the project's entry.
   await core.client.expectOk("draft.register", {

@@ -10,12 +10,15 @@
 import { after, before, test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { cpSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { cpSync, existsSync, linkSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { join, relative } from "node:path";
 import { pathToFileURL } from "node:url";
+import { RUNTIME_ABI } from "@sublang/playbook/xstate-runtime";
+import { build } from "esbuild";
 import { parse as parseYaml } from "yaml";
 
-import { isValidRegistryEntry } from "./config.js";
+import { compilePlaybook, defaultSpawner, ENGINE_LINKS_EXCLUDE, moduleDirectoriesAbove, type LineSpawner } from "./compile.js";
+import { createModuleLoader, isValidRegistryEntry, type RegistryEntryLike } from "./config.js";
 import { fileVersion } from "./files.js";
 import {
   artifactLanguages,
@@ -58,8 +61,10 @@ import {
   type RunGit,
 } from "./environment/index.js";
 import { startGitHttpHost, testCredentialArgs } from "./testing/git-http-host.js";
+import { APP_ENGINE_URL, APP_XSTATE_URL, importsOf, LINKED_ID, recordingResolutions, writeLinkedFixture } from "./testing/linked-artifact.js";
 import { scratchDir } from "./testing/scratch.js";
 import { makeRelease, startStandinRegistry, type ReleaseFixture, type StandinRegistry } from "./testing/standin-registry.js";
+import { stubSlcScriptedSource } from "./testing/stub-slc.js";
 
 const machineIdentity = "machine-id:v1:00000000-0000-4000-8000-0000000000aa";
 
@@ -527,7 +532,7 @@ test("environments-21: files land with bytes and flags through a store keeping e
   await writeLock(join(home.clone, "spex.lock"), lock);
   const base = { cloneDir: home.clone, store: home.store, cache: home.cache, registry: client, git: gitSource(home.cache), workingFolder: null };
   const report = await installAsOnDisk({ ...base, lock });
-  assert.deepEqual(report, { installed: ["acme/kit"], missingPaths: [], unchanged: false });
+  assert.deepEqual(report, { installed: ["acme/kit"], missingPaths: [], unchanged: false, engineKept: [] });
 
   // Every selected file with its bytes and executable flag.
   const root = join(home.clone, "packages", "acme", "kit");
@@ -633,6 +638,138 @@ test("environments-21: a path source is used in place per working folder, missin
   await local(first, "0.1.0", "", false);
   const lacking = await installAsOnDisk({ ...base, workingFolder: first });
   assert.ok(lacking.stale?.some((reason) => /no longer holds the selected artifact tidy/.test(reason)), JSON.stringify(lacking));
+});
+
+// ---------------------------------------------------------------------------
+// playbook-library-108: an installed playbook runs on the app's engine
+// ---------------------------------------------------------------------------
+
+/** Every file under a folder, by its path there, the engine links and
+ * the stub compiler's run counter left out. */
+function folderFiles(dir: string, prefix: string): Record<string, Uint8Array> {
+  const out: Record<string, Uint8Array> = {};
+  const walk = (folder: string): void => {
+    for (const entry of readdirSync(folder, { withFileTypes: true })) {
+      if (entry.name === "node_modules" || entry.name === ".stub-slc-runs") continue;
+      const path = join(folder, entry.name);
+      if (entry.isDirectory()) walk(path);
+      else out[`${prefix}/${relative(dir, path).split("\\").join("/")}`] = readFileSync(path);
+    }
+  };
+  walk(dir);
+  return out;
+}
+
+/** Playbook's own `review` compiled through the real runner from a stub
+ * `slc` placing it as `slc` links it, with the module that compile
+ * packaged, and the same sources' module as an app bundled it before
+ * modules imported the engine: the engine inside. */
+async function compiledReview(): Promise<{ folder: string; compiled: Buffer; carried: Buffer }> {
+  const dir = scratchDir("spex-review-");
+  const fixture = writeLinkedFixture(join(dir, "fixture"));
+  const stub = join(dir, "stub-slc.cjs");
+  writeFileSync(stub, stubSlcScriptedSource(["ok"], "['coder', 'reviewer']", { fixtureDir: fixture }));
+  const spawner: LineSpawner = async (command, args, cwd, onLine) => {
+    if (args[0] === "--version") { onLine("v24.1.0"); return 0; }
+    return defaultSpawner(command, args, cwd, onLine);
+  };
+  const libraryDir = join(dir, "playbooks", "en");
+  await compilePlaybook({
+    playbookId: LINKED_ID, source: { text: readFileSync(join(fixture, `${LINKED_ID}.md`), "utf8") }, roles: ["coder", "reviewer"],
+    command: LINKED_ID, intent: "Review a change", libraryDir, env: { SPEX_SLC: `${process.execPath} ${stub}` }, spawner,
+  });
+  const folder = join(libraryDir, LINKED_ID);
+  const module = join(folder, `${LINKED_ID}.registry.mjs`);
+  const compiled = readFileSync(module);
+  await build({
+    entryPoints: [join(folder, `${LINKED_ID}.registry.ts`)], outfile: module,
+    bundle: true, format: "esm", platform: "node", logLevel: "silent", nodePaths: moduleDirectoriesAbove(import.meta.url),
+  });
+  return { folder, compiled, carried: readFileSync(module) };
+}
+
+const carriesEngine = (text: string): boolean => /\bRUNTIME_ABI\s*=/.test(text) && !/from "@sublang\/playbook\//.test(text);
+
+test("playbook-library-108: an install bundles again a module carrying its engine, keeps one without its wrapper, and links a path source's playbooks", async () => {
+  const { folder, compiled, carried } = await compiledReview();
+  assert.ok(carriesEngine(carried.toString("utf8")), "the fixture's module carries its engine, as an earlier app bundled it");
+  // One release ships the whole artifact; beside it a playbook whose
+  // module ships without the wrapper it was bundled from.
+  await publish(manifestOf("acme/review-kit", "1.0.0", {
+    [LINKED_ID]: { kind: "playbook", language: "en" },
+    nudge: { kind: "playbook", language: "en" },
+  }), {
+    ...folderFiles(folder, `playbooks/en/${LINKED_ID}`),
+    "playbooks/en/nudge/nudge.md": "# Nudge\n\nRoles:\n\n- Coder\n",
+    "playbooks/en/nudge/nudge.registry.mjs": carried,
+  });
+  // A path source in the working folder, its module carrying the engine.
+  const scratch = scratchDir("spex-review-wf-");
+  const { git } = hermeticGit(scratch);
+  const workingFolder = join(scratch, "project");
+  git(scratch, ["init", "--quiet", "-b", "main", workingFolder]);
+  await makeRelease(join(workingFolder, "tools", "local"), manifestOf("acme/local-kit", "0.1.0", { walk: { kind: "playbook", language: "en" } }), {
+    "playbooks/en/walk/walk.md": "# Walk\n\nRoles:\n\n- Walker\n",
+    "playbooks/en/walk/walk.registry.mjs": carried,
+  });
+
+  const home = makeHome("acme/review-spex");
+  const lock = locked(await resolveText(home.clone, requestsYaml({ "acme/review-kit": { version: "^1.0.0" }, "acme/local-kit": { path: "tools/local" } }), { workingFolder }));
+  await writeLock(join(home.clone, "spex.lock"), lock);
+  const base = { cloneDir: home.clone, lock, store: home.store, cache: home.cache, registry: client, git: gitSource(home.cache), workingFolder };
+  const report = await installAsOnDisk(base);
+  assert.deepEqual(report.installed, ["acme/review-kit"]);
+
+  const installed = join(home.clone, "packages", "acme", "review-kit", "playbooks", "en");
+  const module = join(installed, LINKED_ID, `${LINKED_ID}.registry.mjs`);
+  const lockedModule = lock.packages["acme/review-kit"]!.files.find((file) => file.path === `playbooks/en/${LINKED_ID}/${LINKED_ID}.registry.mjs`)!;
+  const assertEngineImported = (when: string): void => {
+    // [playbook-library-46] bundled again by the compile's own rule: the
+    // very bytes the compile packaged, the engine imported.
+    assert.ok(readFileSync(module).equals(compiled), `[playbook-library-46] ${when}: the module is bundled again as a compile bundles it`);
+    // [playbook-library-46] the store's copy and the lock's digest stay.
+    assert.equal(lockedModule.sha256, sha256Hex(carried));
+    assert.ok(readFileSync(home.store.pathOf(lockedModule.sha256, false)).equals(carried), `[playbook-library-46] ${when}: the store keeps the release's bytes`);
+    for (const name of ["xstate", "@sublang/playbook"]) {
+      assert.ok(lstatSync(join(installed, LINKED_ID, "node_modules", name)).isSymbolicLink(), `[playbook-library-46] ${when}: ${name} is linked`);
+    }
+  };
+  assertEngineImported("installed");
+  // [playbook-library-46] a module whose wrapper is missing stays as it
+  // is, and the install goes on naming it and why.
+  assert.ok(readFileSync(join(installed, "nudge", "nudge.registry.mjs")).equals(carried), "[playbook-library-46] the module without its wrapper stays");
+  assert.deepEqual(report.engineKept, [{ module: join(installed, "nudge", "nudge.registry.mjs"), reason: "its nudge.registry.ts is missing" }]);
+
+  // [playbook-library-46] loaded through the core's own module loader,
+  // the installed playbook runs on the very engine module the app runs.
+  const location = moduleLocations(lock, home.clone, workingFolder).get(LINKED_ID)!;
+  assert.equal(location.module, module);
+  const { value, resolutions } = await recordingResolutions(() => createModuleLoader({})(location.module));
+  const imports = importsOf(resolutions, module);
+  assert.equal(imports.get("@sublang/playbook/xstate-runtime"), APP_ENGINE_URL, "[playbook-library-46] the app's engine");
+  assert.equal(imports.get("xstate"), APP_XSTATE_URL, "[playbook-library-46] the app's machine library");
+  const entry = (value as { default: RegistryEntryLike & { runtimeProfile: { compat: { runtimeAbi: number } } } }).default;
+  assert.ok(isValidRegistryEntry(entry));
+  assert.deepEqual([entry.id, entry.runtimeProfile.compat.runtimeAbi], [LINKED_ID, RUNTIME_ABI]);
+
+  // [playbook-library-46] a path source's playbook gets the engine links
+  // alone, ignored by the working folder's Git, its module as it was.
+  const walk = join(workingFolder, "tools", "local", "playbooks", "en", "walk");
+  for (const name of ["xstate", "@sublang/playbook"]) assert.ok(lstatSync(join(walk, "node_modules", name)).isSymbolicLink(), `[playbook-library-46] ${name} is linked in the path source`);
+  assert.ok(readFileSync(join(walk, "walk.registry.mjs")).equals(carried), "[playbook-library-46] a path source's files are left as they are");
+  assert.match(readFileSync(join(workingFolder, ".git", "info", "exclude"), "utf8"), new RegExp(`^${ENGINE_LINKS_EXCLUDE.replaceAll("*", "\\*")}$`, "m"));
+  assert.equal(git(workingFolder, ["status", "--porcelain", "--untracked-files=all", "--", "tools"]).split("\n").filter((line) => line.includes("node_modules")).length, 0, "[playbook-library-46] Git ignores the links");
+
+  // [playbook-library-46] a tree an earlier app installed — its module
+  // the release's, linked from the store — is prepared where it stands
+  // when an install finds the lock installed already.
+  rmSync(module);
+  linkSync(home.store.pathOf(lockedModule.sha256, false), module);
+  const again = await installAsOnDisk(base);
+  assert.equal(again.unchanged, true);
+  assertEngineImported("found installed");
+  assert.notEqual(statSync(module).ino, statSync(home.store.pathOf(lockedModule.sha256, false)).ino, "[playbook-library-46] replaced, never written through the store's link");
+  assert.deepEqual(again.engineKept, report.engineKept);
 });
 
 test("environments-21: a Git source at a branch locks its commit and installs it through the host's credential", async () => {

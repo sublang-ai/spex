@@ -27,7 +27,8 @@ import { parse as parseYaml } from "yaml";
 
 import type { RegistryEntryLike } from "./config.js";
 import { ARTIFACT_SCHEMAS } from "./config.js";
-import { stubSlcSource } from "./testing/stub-slc.js";
+import { APP_ENGINE_URL, APP_XSTATE_URL, importsOf, LINKED_ID, recordingResolutions, writeLinkedFixture } from "./testing/linked-artifact.js";
+import { stubSlcScriptedSource, stubSlcSource } from "./testing/stub-slc.js";
 import { scratchDir } from "./testing/scratch.js";
 
 const STUB_SLC = stubSlcSource();
@@ -150,6 +151,48 @@ test("compile pipeline: stub slc to a runnable bundled registry", async () => {
     () => entry.validateOptions({ mystery: 1 }),
     /unknown option "mystery"/,
   );
+});
+
+// --- The registry module imports the engine (playbook-library-47) ---------
+
+test("a compiled registry module imports the app's engine rather than carrying one (playbook-library-47)", async () => {
+  const dir = scratchDir("spex-compile-linked-");
+  // A stub slc placing an artifact as slc links it: Playbook's own
+  // review, its machine importing xstate and its runtime the engine.
+  const fixture = writeLinkedFixture(join(dir, "fixture"));
+  const stubPath = join(dir, "stub-slc.cjs");
+  writeFileSync(stubPath, stubSlcScriptedSource(["ok"], "['coder', 'reviewer']", { fixtureDir: fixture }));
+  const libraryDir = join(dir, "library");
+  const module = join(libraryDir, LINKED_ID, `${LINKED_ID}.registry.mjs`);
+
+  // The compile's own fail-closed import is the module's first load, so
+  // what its imports resolved to is recorded there.
+  const { value: result, resolutions } = await recordingResolutions(() => compilePlaybook({
+    playbookId: LINKED_ID,
+    source: { text: readFileSync(join(fixture, `${LINKED_ID}.md`), "utf8") },
+    roles: ["coder", "reviewer"],
+    command: LINKED_ID,
+    intent: "Review a change",
+    libraryDir,
+    env: { SPEX_SLC: `${process.execPath} ${stubPath}` },
+    spawner: testSpawner(),
+  }));
+
+  // [playbook-library-14] the module carries the wrapper, the entry and
+  // the linked artifact, and imports the engine rather than carrying it.
+  assert.equal(result.from, module);
+  assert.deepEqual(result.roles, ["coder", "reviewer"]);
+  const text = readFileSync(module, "utf8");
+  assert.match(text, /^import \{[^}]*\} from "xstate";$/m, "[playbook-library-14] the machine imports xstate");
+  assert.match(text, /\} from "@sublang\/playbook\/xstate-runtime";$/m, "[playbook-library-14] the runtime imports the engine");
+  assert.doesNotMatch(text, /\bRUNTIME_ABI\s*=/, "[playbook-library-14] no engine declares its runtime ABI inside the module");
+  assert.doesNotMatch(text, /node_modules\/@sublang\/playbook\//, "[playbook-library-14] no engine source is inlined");
+  assert.match(text, /^\/\/ review\.playbook\/review\.playbook\.ts$/m, "[playbook-library-14] the linked artifact is inlined");
+  // [playbook-library-14] the module's engine is the app's own, through
+  // the folder's engine links: the very module the app runs.
+  const imports = importsOf(resolutions, module);
+  assert.equal(imports.get("@sublang/playbook/xstate-runtime"), APP_ENGINE_URL);
+  assert.equal(imports.get("xstate"), APP_XSTATE_URL);
 });
 
 test("an environment-set stall budget is left alone", async () => {

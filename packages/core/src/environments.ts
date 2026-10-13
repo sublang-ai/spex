@@ -575,6 +575,10 @@ export class EnvironmentManager {
         ...(this.options.modulePaths ? { modulePaths: this.options.modulePaths } : {}),
       });
       if (progress && report.installed.length > 0) progress.installed = true;
+      // A module kept carrying the engine it was bundled with runs on
+      // that engine, not the app's: the install says so and goes on
+      // (playbook-library-46).
+      for (const kept of report.engineKept) console.error(`spex: ${kept.module} keeps the playbook engine it was bundled with: ${kept.reason}`);
       // A stale lock installs nothing and exports nothing: the state's
       // stale phrases say resolving again is needed (environments-7),
       // and an awaiting caller is refused with them.
