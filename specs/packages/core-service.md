@@ -163,6 +163,7 @@ When a client requests the session list, the core service shall reply with every
 - a non-live session has no active turn; historical records alone never establish liveness, and a session acquired by this core is never reported as externally owned;
 - each entry says whether a Boss message continues it, using the shared checkpoint, replay and execution checks [[core-service-73](#core-service-73)], with a reason when history-only;
 - each uncertain entry carries `recovery: {state: "uncertain", input, discardable}` with the exact saved input and whether Playbook's shared discard predicate [[2]] allows Discard — no recorded step, no abandonment, unchanged repository evidence ([DR-088](../decisions/088-playbook-17-slc-0-12-cligent-0-27-adoption.md)); uncertainty is never reported as normal continuability;
+- while this core runs a turn of the session — from its acceptance until the turn transaction settles or fails — the entry carries no `recovery` and no continuation reason: Playbook marks the checkpoint uncertain as the turn begins and settles it only with the turn, the evidence a turn cut off leaves, so the uncertain entry is one whose last turn was cut off with no turn running ([DR-047](../decisions/047-explicit-session-recovery.md));
 - external session leases are observed through Playbook's shared API [[1]]: an active writer reports liveness, and active or unprovable ownership reports `externalWriter` and withholds recovery controls until ownership is idle;
 - each entry carries a title — the first Boss turn's text — absent when the session held no turn;
 - each entry carries a `workTitle` — the text of the Boss turn that opened the work the session is doing, traced back from its latest turn as its stand-in entries' titles are [[core-service-49](#core-service-49)], so an answer sent while a question stood never names it ([DR-119](../decisions/119-an-answer-continues-its-intent.md)) — absent when the session held no turn;
@@ -170,7 +171,7 @@ When a client requests the session list, the core service shall reply with every
 - each entry carries cumulative active time from complete stored history for every agent with a measured finished call [[core-service-102](#core-service-102)];
 - each entry carries, for every agent whose runtime reported a call's model, the latest such report with the settings its call began under [[core-service-115](#core-service-115)], which a client compares with what the agent is set to run ([DR-091](../decisions/091-models-named-by-the-runtime.md));
 - each entry carries the session's own agent settings [[core-service-100](#core-service-100)], which a client reads over the config's to say what each of the session's agents is set to run ([DR-067](../decisions/067-tuning-for-one-conversation.md));
-- each entry whose last settlement found a run parked on the Boss carries that park [[core-service-91](#core-service-91)] — its reason, the run's failure state or its question; every action that run advertised, in order; and the ending the shell advertised, each control by id and Boss-facing label with any standing the runtime reported for it — so a client draws one control per action and names the one it activates [[core-service-98](#core-service-98)] ([DR-074](../decisions/074-a-parked-run-survives.md)); the reading is this host's own, kept with its preferences [[storage-5](storage.md#storage-5)], and absent where that settlement found no parked run advertising anything.
+- each entry whose last settlement found a run parked on the Boss carries that park [[core-service-91](#core-service-91)] — its reason, the run's failure state or its question; every action that run advertised, in order; and the ending the shell advertised, each control by id and Boss-facing label with any standing the runtime reported for it — so a client draws one control per action and names the one it activates [[core-service-98](#core-service-98)] ([DR-074](../decisions/074-a-parked-run-survives.md)); the reading is this host's own, kept with its preferences [[storage-5](storage.md#storage-5)], absent where that settlement found no parked run advertising anything, and a question's leaves when a turn of the session is accepted, that turn answering it ([DR-119](../decisions/119-an-answer-continues-its-intent.md)) and its own settlement reading the run afresh.
 
 #### core-service-102
 
@@ -1049,6 +1050,14 @@ When an integration suite aborts a real session's turn while a scripted call is 
 - in either case the turn-aborted record streams, and the settled session lists continuable with no recovery owed [[core-service-6](#core-service-6)] [[core-service-32](#core-service-32)];
 - the player's stop leaves its summary carrying the park's reason, the actions the stopped run advertised in order, and the shell's own ending, kept with the preferences as at any settlement [[core-service-91](#core-service-91)] [[core-service-32](#core-service-32)];
 - the Captain's stop, which moves the shell's own machine to its failure state, keeps no park and leaves its dispatched intent Queued with the next row `stopped`, manual start available, and no summons [[core-service-107](#core-service-107)] [[core-service-49](#core-service-49)].
+
+#### core-service-120
+
+When an integration suite parks a real session's run on a Boss question — the real `/code` coder asking, the substitute judgment returning the question as awaiting the Boss — and answers it, it shall verify the summary across the answer's turn:
+
+- the settlement that parked the run leaves its summary carrying the question's park and no recovery [[core-service-32](#core-service-32)];
+- while the answer's turn runs, its checkpoint reading uncertain, the listing and every state reported since the answer was accepted carry `turnActive` with no `recovery`, no continuation reason and no park, and the park has left the preferences [[core-service-32](#core-service-32)] [[core-service-34](#core-service-34)];
+- once the answer's turn settles with the run finished, the session carries no recovery and no park and lists continuable [[core-service-32](#core-service-32)].
 
 ## References
 
