@@ -159,7 +159,7 @@ When a client requests deletion of any stored session, the core service shall ob
 
 When a client requests the session list, the core service shall reply with every stored session's lifecycle fields and its conversation summary ([DR-029](../decisions/029-session-history-home.md)):
 
-- each entry carries the session's resolved project, its creation time, its last activity — the wire field `endedAt`, null while live — liveness and `turnActive`, which stays true until the turn transaction settles or fails; host of origin is not an admission condition;
+- each entry carries the session's resolved project, its creation time, its last activity — the wire field `endedAt`, null while live and otherwise the latest time its own records carry, its manifest's last update only where none carries one — liveness and `turnActive`, which stays true until the turn transaction settles or fails; host of origin is not an admission condition;
 - a non-live session has no active turn; historical records alone never establish liveness, and a session acquired by this core is never reported as externally owned;
 - each entry says whether a Boss message continues it, using the shared checkpoint, replay and execution checks [[core-service-73](#core-service-73)], with a reason when history-only;
 - each uncertain entry carries `recovery: {state: "uncertain", input, discardable}` with the exact saved input and whether Playbook's shared discard predicate [[2]] allows Discard — no recorded step, no abandonment, unchanged repository evidence ([DR-088](../decisions/088-playbook-17-slc-0-12-cligent-0-27-adoption.md)); uncertainty is never reported as normal continuability;
@@ -699,12 +699,13 @@ Where a scripted captain calls one player twice within a turn, bracketing each c
 
 #### core-service-33
 
-Where stored sessions hold, respectively, a failed first turn followed by two turns settled clean; a latest settled turn whose failure named no turn, followed by a turn not yet settled; only a stop's own error; a run parked on a failure through a later clean turn; and no turn, the test suite shall assert the listing contract of [[core-service-32](#core-service-32)]:
+Where stored sessions hold, respectively, a failed first turn followed by two turns settled clean; a latest settled turn whose failure named no turn, followed by a turn not yet settled; only a stop's own error; a run parked on a failure through a later clean turn; a released turn whose manifest was updated an hour after its last record; and no turn, the test suite shall assert the listing contract of [[core-service-32](#core-service-32)]:
 
 - the first entry carries its first turn's text as its title, a turn count of three, and no failure marker;
 - the second carries the marker, loses it once its unsettled turn settles clean, and carries it again once a later turn fails;
 - the stopped entry carries no marker;
 - the parked entry carries the marker until its run leaves the failure state;
+- the released entry's last activity is its latest record's time, not its manifest's later update;
 - the last entry carries no title, a zero count, and no marker.
 
 #### core-service-35

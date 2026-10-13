@@ -718,6 +718,41 @@ test("core-service-32: a session's failure stands only until a later turn settle
   assert.equal((await turn("fail once more", 4))?.failed, true);
 });
 
+test("core-service-32: a session's last activity is its last record, not a later manifest update", async (t) => {
+  const harness = await startHarness();
+  const client = new Client(harness.service.port());
+  t.after(async () => {
+    client.close();
+    await harness.service.stop();
+    rmSync(harness.dir, { recursive: true, force: true });
+  });
+  await client.open();
+  const project = await client.expectOk("project.register", { path: harness.projectDir });
+  const session = await client.expectOk("session.create", { projectId: project.id });
+  await client.expectOk("turn.submit", { sessionId: session.id, text: "finish one turn" });
+  await client.waitFor((m) => m.type === "session.state" && m.session.id === session.id &&
+    m.session.turns === 1 && !m.session.turnActive && !m.session.live);
+
+  const sessionsDir = projectSessions(harness.dataDir);
+  const records = (await openSessionStore(sessionsDir).readStream(session.id)).entries.map(({ record }) => record);
+  const finished = records.filter((record) => record.type === "turn_finished").at(-1)?.timestamp;
+  const lastActivity = Math.max(...records.map(({ timestamp }) => typeof timestamp === "number" ? timestamp : 0));
+  // The release at settlement records its trace in the same moment.
+  assert.ok(typeof finished === "number" && lastActivity >= finished && lastActivity - finished < 5_000);
+  // Playbook rewrites the manifest's updatedAt when it releases the
+  // runtime, which can be long after the last turn: here, an hour.
+  const manifestPath = join(sessionsDir, `${session.id}.json`);
+  const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as { updatedAt: string };
+  manifest.updatedAt = new Date(lastActivity + 3_600_000).toISOString();
+  writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, { mode: 0o600 });
+  // Registering the project again rescans its session store.
+  await client.expectOk("project.register", { path: harness.projectDir });
+  const listed = (await client.expectOk("session.list", {})).find((item) => item.id === session.id);
+  assert.equal(listed?.live, false);
+  // [core-service-32]: the last activity its own history records.
+  assert.equal(listed?.endedAt, lastActivity);
+});
+
 test("CORE-23: readiness is adapter-keyed with positions and requirements", async () => {
   const harness = await startHarness(READINESS_CONFIG, {
     env: { ANTHROPIC_API_KEY: "test-key" },
