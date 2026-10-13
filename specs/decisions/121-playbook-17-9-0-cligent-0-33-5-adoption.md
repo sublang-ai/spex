@@ -26,6 +26,7 @@ Follows [DR-081](081-the-app-supplies-the-compiler.md)'s explicit-bump rule for 
 - **Floors.** The core requires `@sublang/playbook` `^17.9.0` and `@sublang/cligent` `^0.33.5`; both shells keep `@sublang/slc` `^0.16.1`.
 - **The lock.** The lockfile is regenerated from the public registry, with no links or overrides, and holds one Playbook, 17.9.0, and one Cligent, 0.33.5, at the tree's root, the compiler's ranges resolving to those copies; slc and the agent SDK locks stay where they are.
 - **The built-in spec package** follows, at 17.9.0, as the core seeds it at Playbook's version.
+- **The authoring preamble follows.** It says the runtime relays every Boss exchange to every later role of the run, and has a behavior name a later role as receiving the exchange only where that role's step must carry the answer in its own data, the source-kept guarantee Playbook keeps [[3]].
 - **The runtime's words stay the runtime's.** Spex composes none of the lines this release changes — the exchange and continuation markers, the role line, the shell's appended lines and the closing reply's facts — and shows them as the runtime gives them.
 
 Considered and declined:
