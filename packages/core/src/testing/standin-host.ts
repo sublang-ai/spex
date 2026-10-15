@@ -174,7 +174,8 @@ export interface StandinScript {
   /** Rename or transfer a repository: its bare repository moves and its
    * `path` and `remote_url` change; its id stays. */
   rename(id: string, change: { name?: string; group?: string }): void;
-  archive(id: string): void;
+  /** Archive a repository, or unarchive it with `false`. */
+  archive(id: string, archived?: boolean): void;
   /** Remove the person from a repository's members. */
   removeMember(id: string): void;
   /** Set the person's role on a repository. */
@@ -850,7 +851,7 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
       repo.group = group;
       repo.bare = bare;
     },
-    archive: (id) => { findRepository(id).archived = true; },
+    archive: (id, archived = true) => { findRepository(id).archived = archived; },
     removeMember: (id) => { findRepository(id).listed = false; },
     accessLevel: (id, role) => { findRepository(id).role = role; },
     refuseCreate: (message) => { createRefusal = message; },

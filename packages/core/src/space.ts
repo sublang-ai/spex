@@ -3416,8 +3416,9 @@ export class SpaceManager {
     // The core's creation the clone records, read as its other facts
     // are, is spent by this check once done with the default branch —
     // found or pushed; a check stopping before then, by the core
-    // stopping, the host not answering or the push refused, keeps it, so
-    // the next sync, or the next core, owes the branch still (git-host-7).
+    // stopping, the host not answering, the push refused or the empty
+    // repository read-only, keeps it, so the next sync, or the next core,
+    // owes the branch still (git-host-7).
     const recorded = machine.createdNow();
     const created = recorded === repository.id;
     // A creation recorded for another repository is stale.
@@ -3445,7 +3446,7 @@ export class SpaceManager {
         throw new SpaceStopped("check", { cause: "refused", message: waitingPhrase("branch", group, answer.message), guidance: syncLater(), retry: true });
       }
       if (this.waiting.get(machine.key)?.step === "branch") this.waiting.delete(machine.key);
-    } else if (created) machine.forgetCreated();
+    } else if (created && !repository.empty) machine.forgetCreated();
     return { remote: repository.remoteUrl, readOnly };
   }
 

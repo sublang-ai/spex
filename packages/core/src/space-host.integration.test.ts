@@ -529,6 +529,15 @@ test("git-host-14: a creation's first sync reads the stand-in again until the RE
   assert.equal(rereads(asked, stopped.id ?? ""), 5);
   assert.equal(git(refusedBare, "for-each-ref", "refs/heads/"), "");
   assert.equal(createdOn(clonePath(home.dataDir, key)), stopped.id, "a Retry refused keeps the creation");
+  // Read-only meanwhile — archived, say — the check stops at the host's
+  // state, pushing nothing, and keeps the creation too: the branch is
+  // owed still once the repository can be written again (git-host-7).
+  host.script.archive(stopped.id ?? "");
+  const archived = await home.client.settle("space.sync", { repository: key });
+  assert.ok(archived.state === "read-only" && archived.sync.phase === "done" && !archived.sync.pushed, JSON.stringify({ state: archived.state, sync: archived.sync }));
+  assert.equal(git(refusedBare, "for-each-ref", "refs/heads/"), "");
+  assert.equal(createdOn(clonePath(home.dataDir, key)), stopped.id, "a read-only check keeps the creation");
+  host.script.archive(stopped.id ?? "", false);
   host.script.refuseDefaultBranch(null);
   const synced = await home.client.settle("space.sync", { repository: key });
   assert.ok(synced.sync.phase === "done" && synced.sync.pushed, JSON.stringify(synced.sync));

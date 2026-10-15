@@ -642,6 +642,10 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Fixed
 
+- A creation keeps owing its default branch through a read-only check: a
+  spex repository the core created, found archived or below the pushing
+  role while still empty, keeps its recorded creation, so a later sync
+  pushes `main`, then `spex`, once it can be written again.
 - A session lists failed only while its failure stands: a later turn
   that settles clean clears an earlier turn's failure, while a parked
   failure stands until its run leaves that state.
