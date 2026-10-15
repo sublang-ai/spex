@@ -9,18 +9,21 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, lstatSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import {
+  type LineSpawner,
   checkToolchain,
   compilePlaybook,
   compilerAgentEnv,
   defaultSpawner,
   deriveStateIds,
+  prepareArtifactEngine,
+  provisionEngineLinks,
   suppliedCompiler,
-  type LineSpawner,
 } from "./compile.js";
 import { RUNTIME_ABI } from "@sublang/playbook/xstate-runtime";
 import { parse as parseYaml } from "yaml";
@@ -193,6 +196,17 @@ test("a compiled registry module imports the app's engine rather than carrying o
   const imports = importsOf(resolutions, module);
   assert.equal(imports.get("@sublang/playbook/xstate-runtime"), APP_ENGINE_URL);
   assert.equal(imports.get("xstate"), APP_XSTATE_URL);
+});
+
+test("a playbook folder gone before its preparation takes no link and is not made again (playbook-library-46)", async () => {
+  // A sync moved the clone while an earlier artifact's module bundled:
+  // the folder listed for preparation is gone, so nothing of the old
+  // place comes back.
+  const gone = join(mkdtempSync(join(tmpdir(), "spex-gone-")), "clone", "packages", "org", "pkg", "playbooks", "en", "x");
+  assert.deepEqual(provisionEngineLinks(gone), []);
+  assert.equal(existsSync(dirname(dirname(gone))), false, "no ancestor of the gone folder is recreated");
+  assert.equal(await prepareArtifactEngine(gone, "x"), null);
+  assert.equal(existsSync(gone), false);
 });
 
 test("an environment-set stall budget is left alone", async () => {

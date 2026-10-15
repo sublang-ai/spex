@@ -65,6 +65,9 @@ export const ENGINE_LINKS = ["xstate", "@sublang/playbook"] as const;
  */
 export function provisionEngineLinks(dir: string, modulePaths: string[] = bundleNodePaths()): string[] {
   const provisioned: string[] = [];
+  // A folder gone meanwhile — its clone moved by a sync — takes no
+  // link, and nothing of it is made again (playbook-library-46).
+  if (!existsSync(dir)) return provisioned;
   for (const name of ENGINE_LINKS) {
     const target = modulePaths.map((root) => join(root, name)).find((candidate) => existsSync(join(candidate, "package.json")));
     if (!target) continue;

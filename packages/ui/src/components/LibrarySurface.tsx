@@ -13,14 +13,7 @@
 // ways to add a spec package; the example closes the surface. An
 // authoring session opened here replaces the list with its workspace.
 
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type KeyboardEvent as ReactKeyboardEvent,
-  type ReactNode,
-} from "react";
+import { type KeyboardEvent as ReactKeyboardEvent, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import {
   playerIdSchema,
   type AgentBlockInput,
@@ -1204,17 +1197,24 @@ export function LibrarySurface({
   }, [connected, repository, loadEnvironment]);
 
   // New playbook's Org and License start from the project's defaults,
-  // read as the field is shown for it (playbook-library-51, -103).
+  // read as the field is shown for it (playbook-library-51, -103): a
+  // project change clears both and forgets what the person typed; a
+  // default that arrives later, or is read again on a reconnect, fills
+  // only a field the person has not edited since.
+  const touched = useRef({ org: false, license: false });
+  useEffect(() => {
+    touched.current = { org: false, license: false };
+    setNewOrg("");
+    setNewLicense("");
+  }, [projectId]);
   useEffect(() => {
     if (!connected || !projectId) return;
     let current = true;
-    setNewOrg("");
-    setNewLicense("");
     void loadDraftDefaults(projectId)
       .then((defaults) => {
         if (!current || !defaults) return;
-        setNewOrg(defaults.org);
-        setNewLicense(defaults.license ?? "");
+        if (!touched.current.org) setNewOrg(defaults.org);
+        if (!touched.current.license) setNewLicense(defaults.license ?? "");
       })
       .catch(() => {
         // The fields stand empty for the person to fill.
@@ -1223,6 +1223,14 @@ export function LibrarySurface({
       current = false;
     };
   }, [connected, projectId, loadDraftDefaults]);
+  const editOrg = useCallback((value: string) => {
+    touched.current.org = true;
+    setNewOrg(value);
+  }, []);
+  const editLicense = useCallback((value: string) => {
+    touched.current.license = true;
+    setNewLicense(value);
+  }, []);
   const newPackage = { org: newOrg.trim(), license: newLicense.trim() };
   const newPackageReady = isPackageOrg(newPackage.org) && newPackage.license.length > 0;
 
@@ -1442,8 +1450,8 @@ export function LibrarySurface({
       drafts={drafts}
       org={newOrg}
       license={newLicense}
-      onOrgChange={setNewOrg}
-      onLicenseChange={setNewLicense}
+      onOrgChange={editOrg}
+      onLicenseChange={editLicense}
       onCreate={(id) => createDraft(id, newPackage)}
       onOpenExisting={(id) => void openDraft(id)}
       autoFocus={focusNew}

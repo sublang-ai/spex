@@ -139,7 +139,7 @@ When the Playbooks surface is opened with a project chosen, the surface shall li
 When the user activates "New playbook" — at the Authoring section's foot, or from the Captain home's slash menu ([DR-009](../decisions/009-at-hand-interaction.md)) — the Playbooks surface shall ask for the playbook id in an inline field captioned "Lowercase; it names the spec package, the file and the /command — the command can change when you enable it", beside the fields "Org" and "License" ([DR-069](../decisions/069-key-phrases-not-sentences.md)), create the authoring session and its spec package under development with that org and license [[playbook-library-70](#playbook-library-70)] on Enter, and open its workspace [[playbook-library-52](#playbook-library-52)]:
 
 - an id outside the Agent Skills name rule — `^[a-z0-9]+(-[a-z0-9]+)*$`, at most 64 characters — or one a playbook of the project's or your own group's environment holds, is refused in place naming the rule, and nothing is created;
-- "Org" and "License" stand filled with the project's defaults [[playbook-library-103](#playbook-library-103)], read as the field is shown for that project, and the person edits both freely;
+- "Org" and "License" stand filled with the project's defaults [[playbook-library-103](#playbook-library-103)], read as the field is shown for that project, and the person edits both freely — a default arriving after the person typed, or read again on a reconnect, fills only a field the person has not edited since the project was chosen;
 - an org outside the manifest's name rule — lowercase kebab-case of at most 64 characters [[environments-1](environments.md#environments-1)] — is refused in place naming the rule, and nothing is created; "New playbook" stays disabled while the id, the org or the license is empty;
 - an id naming an existing authoring session opens that session;
 - an existing spec package folder at `spex-packages/<id>/` in the working folder with no authoring session becomes the new session's package, so a folder brought in by Git can be worked on.
@@ -379,6 +379,7 @@ When an install places a spec package's files or finds them installed already [[
 - the module bundled again replaces the installed one atomically under the bytes read, a module changed meanwhile standing, and leaves the store's copy and the lock's digests as they were ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md));
 - a `<id>.registry.ts` missing or failing to bundle leaves the module as it is, and the install goes on, its report naming the module and why;
 - a path source's playbook folders in the working folder get the engine links alone, listed in the working folder's `.git/info/exclude`, their files left as they are.
+- an artifact folder gone by the time it is prepared — its clone moved by a sync meanwhile [[environments-7](environments.md#environments-7)] — takes no link and is not made again, nothing of the moved clone's old place recreated.
 
 ## Internal Behavior
 

@@ -3414,28 +3414,29 @@ export class SpaceManager {
     if (facts.remote !== null && facts.remote !== repository.remoteUrl) machine.setOrigin(repository.remoteUrl, facts.remote);
     const readOnly = listing.readOnly !== null;
     // The core's creation the clone records, read as its other facts
-    // are, is spent by this check once done with the default branch; a
-    // core stopping before then leaves it to the next core (git-host-7).
+    // are, is spent by this check once done with the default branch —
+    // found or pushed; a check stopping before then, by the core
+    // stopping, the host not answering or the push refused, keeps it, so
+    // the next sync, or the next core, owes the branch still (git-host-7).
     const recorded = machine.createdNow();
     const created = recorded === repository.id;
+    // A creation recorded for another repository is stale.
+    if (recorded !== null && !created) machine.forgetCreated();
     if (!readOnly && !listing.branchPresent) {
       // `spex` beside the default branch, never as it (git-host-7).
       const group = repository.group.fullPath;
-      try {
-        if (repository.empty && !(created && await this.defaultBranchArrives(machine, repository.id))) {
-          if (!created || this.stopping) {
-            this.waiting.set(machine.key, { step: "branch", group, message: "" });
-            throw new SpaceStopped("check", { cause: "refused", message: i18n._({ id: "{host} holds no default branch for it yet", values: { host: this.hostName() }, comment: "A stopped sync: the host's repository is empty, so spex waits for its default branch; {host} is its display name" }), guidance: syncLater(), retry: true });
-          }
-          // Still empty: the host never committed its README — a protected
-          // default branch refusing a Developer's initial commit, say — so
-          // the core pushes that branch itself, and goes on as if the host
-          // had (git-host-7).
-          await machine.pushDefaultBranch(repository.remoteUrl, repository.name);
+      if (repository.empty && !(created && await this.defaultBranchArrives(machine, repository.id))) {
+        if (!created || this.stopping) {
+          this.waiting.set(machine.key, { step: "branch", group, message: "" });
+          throw new SpaceStopped("check", { cause: "refused", message: i18n._({ id: "{host} holds no default branch for it yet", values: { host: this.hostName() }, comment: "A stopped sync: the host's repository is empty, so spex waits for its default branch; {host} is its display name" }), guidance: syncLater(), retry: true });
         }
-      } finally {
-        if (recorded !== null && !this.stopping) machine.forgetCreated();
+        // Still empty: the host never committed its README — a protected
+        // default branch refusing a Developer's initial commit, say — so
+        // the core pushes that branch itself, and goes on as if the host
+        // had (git-host-7).
+        await machine.pushDefaultBranch(repository.remoteUrl, repository.name);
       }
+      if (created) machine.forgetCreated();
       let answer: Awaited<ReturnType<GitHostClient["prepareBranch"]>>;
       try { answer = await machine.hostCall("check", (signal) => this.host.client.prepareBranch(repository.id, { signal })); }
       catch (error) { throw hostStop("check", error, this.hostName()); }
@@ -3444,7 +3445,7 @@ export class SpaceManager {
         throw new SpaceStopped("check", { cause: "refused", message: waitingPhrase("branch", group, answer.message), guidance: syncLater(), retry: true });
       }
       if (this.waiting.get(machine.key)?.step === "branch") this.waiting.delete(machine.key);
-    } else if (recorded !== null) machine.forgetCreated();
+    } else if (created) machine.forgetCreated();
     return { remote: repository.remoteUrl, readOnly };
   }
 

@@ -17,14 +17,7 @@
 // and the 14-character budget on every workspace control (DR-041).
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import {
-  act,
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  within,
-} from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import type {
   CommandResults,
   ConfigState,
@@ -507,6 +500,34 @@ describe("playbook-library-51: New playbook asks for the id", () => {
     fireEvent.click(screen.getByTestId("new-playbook-button"));
     expect(screen.getByTestId("new-playbook-error").textContent).toBe("review is a built-in — enable it instead");
     expect(commandMock).not.toHaveBeenCalledWith("draft.create", expect.anything());
+  });
+
+  test("a default arriving after the person typed, or read again on a reconnect, fills only the untouched field (playbook-library-51)", async () => {
+    const base = commandMock.getMockImplementation()!;
+    let release: (() => void) | undefined;
+    commandMock.mockImplementation(async (type: string, params?: Record<string, unknown>) => {
+      if (type !== "draft.defaults") return base(type, params);
+      return new Promise((resolve) => {
+        release = () => resolve({ org: "me", license: "Apache-2.0" });
+      });
+    });
+    seed();
+    render(<LibrarySurface />);
+    await vi.waitFor(() => expect(release).toBeDefined());
+    const org = screen.getByTestId("new-playbook-org") as HTMLInputElement;
+    fireEvent.change(org, { target: { value: "typed" } });
+    // The default lands after the typing: Org keeps the typing, License takes the default.
+    release!();
+    await defaultsShown("typed");
+    // Read again on a reconnect: the same.
+    const reads = () => commandMock.mock.calls.filter((call) => call[0] === "draft.defaults").length;
+    const before = reads();
+    commandMock.mockImplementation(base);
+    act(() => useAppStore.setState({ connection: "closed" }));
+    act(() => useAppStore.setState({ connection: "open" }));
+    await vi.waitFor(() => expect(reads()).toBeGreaterThan(before));
+    await defaultsShown("typed");
+    expect(org.value).toBe("typed");
   });
 
   test("Enter creates the draft and opens its workspace; an existing draft's id opens that draft", async () => {

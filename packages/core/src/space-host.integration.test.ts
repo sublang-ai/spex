@@ -517,20 +517,25 @@ test("git-host-14: a creation's first sync reads the stand-in again until the RE
   assert.equal(rereads(asked, stopped.id ?? ""), 5);
   const refusedBare = bareOf(host, key);
   assert.equal(git(refusedBare, "for-each-ref", "refs/heads/"), "");
-  // A Retry is no creation's first sync: it stops at once, the host
-  // holding no default branch for it, reading the repository no more;
-  // once the README lands, a Retry pushes beside it, `main` alone being
-  // refused (git-host-7).
+  // The refused push keeps the creation recorded: a Retry owes the
+  // branch still — it reads the repository again and pushes `main` again,
+  // refused again in the host's words — and once the refusal is lifted,
+  // the host's branch still absent, a Retry pushes `main`, then `spex`,
+  // and the clone records the creation no more (git-host-7).
+  assert.equal(createdOn(clonePath(home.dataDir, key)), stopped.id, "the refused push keeps the creation");
   asked = host.script.requests.length;
   const retried = await home.client.settle("space.sync", { repository: key });
-  assert.ok(retried.sync.phase === "stopped" && retried.sync.message === `${HOST_NAME} holds no default branch for it yet`, JSON.stringify(retried.sync));
-  assert.equal(rereads(asked, stopped.id ?? ""), 0);
+  assert.ok(retried.sync.phase === "stopped" && retried.sync.message === `${HOST_NAME} refused: ${protectedWords}`, JSON.stringify(retried.sync));
+  assert.equal(rereads(asked, stopped.id ?? ""), 5);
   assert.equal(git(refusedBare, "for-each-ref", "refs/heads/"), "");
-  host.script.holdInitialization(null);
+  assert.equal(createdOn(clonePath(home.dataDir, key)), stopped.id, "a Retry refused keeps the creation");
+  host.script.refuseDefaultBranch(null);
   const synced = await home.client.settle("space.sync", { repository: key });
   assert.ok(synced.sync.phase === "done" && synced.sync.pushed, JSON.stringify(synced.sync));
   assert.equal(git(refusedBare, "ls-tree", "--name-only", "main"), "README.md");
+  assert.equal(git(refusedBare, "show", "main:README.md"), "# refused-spex");
   assert.equal(git(refusedBare, "rev-parse", "spex"), git(clonePath(home.dataDir, key), "rev-parse", "spex"));
+  assert.equal(createdOn(clonePath(home.dataDir, key)), null, "the pushed branch spends the creation");
   // A core stopped while a creation's first sync reads it again — the app
   // closed — leaves the creation recorded on the clone, so the next core
   // on the home reads it again and pushes `main`, then `spex` (git-host-7).
