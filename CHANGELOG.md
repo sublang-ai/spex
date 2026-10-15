@@ -693,8 +693,9 @@ and `npm start` (desktop) or `npm run start:server` (server).
   no longer stops its first sync at Check with "<host> holds no default
   branch for it yet": the host answers a creation before the commit that
   makes its default branch lands, so that first sync reads the new
-  repository again every 2 s, five times at most, before stopping; every
-  later sync, a Retry among them, stops at once as before (git-host-7).
+  repository again every 2 s, five times at most, before stopping, and a
+  later sync, a Retry among them, reads it again while the clone still
+  records the creation (git-host-7).
 - A spex repository Spex creates on the host for a person whose role
   there is Developer no longer stops its first sync at Check for good:
   GitLab's protected default branch refuses the README it would write,

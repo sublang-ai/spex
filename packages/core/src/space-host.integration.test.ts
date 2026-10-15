@@ -443,7 +443,7 @@ test("git-host-14: a repository created while a read begun before it is in fligh
   assert.equal((await home.client.repository("acme/delta-spex")).state, "reachable");
 });
 
-test("git-host-14: a creation's first sync reads the stand-in again until the README it held lands; one that never lands gets `main` from that sync before `spex`, or, that push refused, stops in the stand-in's words keeping the creation, so a Retry reads again and pushes again, a read-only check keeps it too, and a Retry once the refusal lifts pushes; a core stopped during those reads leaves the creation on the clone for the next core's sync", async (t) => {
+test("git-host-14: a creation's first sync reads the stand-in again until the README it held lands; one that never lands gets `main` from that sync before `spex`, or, that push refused, stops in the stand-in's words keeping the creation, so a Retry reads again and pushes again, a read-only check keeps it too, and a Retry once both lift pushes `main` before `spex`; a core stopped during those reads leaves the creation on the clone for the next core's sync", async (t) => {
   const host = await startHost();
   const home = await startHome("created-uninitialized", { host, project: false, extra: { signIn: "browser" } });
   t.after(() => home.stop());
@@ -542,6 +542,7 @@ test("git-host-14: a creation's first sync reads the stand-in again until the RE
   const synced = await home.client.settle("space.sync", { repository: key });
   assert.ok(synced.sync.phase === "done" && synced.sync.pushed, JSON.stringify(synced.sync));
   assert.equal(git(refusedBare, "ls-tree", "--name-only", "main"), "README.md");
+  assert.equal(git(refusedBare, "symbolic-ref", "HEAD"), "refs/heads/main");
   assert.equal(git(refusedBare, "show", "main:README.md"), "# refused-spex");
   assert.equal(git(refusedBare, "rev-parse", "spex"), git(clonePath(home.dataDir, key), "rev-parse", "spex"));
   assert.equal(createdOn(clonePath(home.dataDir, key)), null, "the pushed branch spends the creation");
