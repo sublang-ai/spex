@@ -443,7 +443,7 @@ test("git-host-14: a repository created while a read begun before it is in fligh
   assert.equal((await home.client.repository("acme/delta-spex")).state, "reachable");
 });
 
-test("git-host-14: a creation's first sync reads the stand-in again until the README it held lands; one that never lands gets `main` from that sync before `spex`, or, that push refused, stops in the stand-in's words, a Retry stopping with no read again until the README lands; a core stopped during those reads leaves the creation on the clone for the next core's sync", async (t) => {
+test("git-host-14: a creation's first sync reads the stand-in again until the README it held lands; one that never lands gets `main` from that sync before `spex`, or, that push refused, stops in the stand-in's words keeping the creation, so a Retry reads again and pushes again, a read-only check keeps it too, and a Retry once the refusal lifts pushes; a core stopped during those reads leaves the creation on the clone for the next core's sync", async (t) => {
   const host = await startHost();
   const home = await startHome("created-uninitialized", { host, project: false, extra: { signIn: "browser" } });
   t.after(() => home.stop());
