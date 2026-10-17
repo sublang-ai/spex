@@ -14,13 +14,6 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ## [Unreleased]
 
-### Fixed
-
-- A project's config reading and edits now reject invalid custom playbook
-  options before starting a session, naming the playbook and its validator's
-  reason. Validation uses the paired folder for injected working directories
-  and preserves explicitly configured options and working directories.
-
 ### Added
 
 - Groups and sharing from Spex ([DR-114](specs/decisions/114-groups-and-sharing-from-spex.md)).
@@ -647,6 +640,16 @@ and `npm start` (desktop) or `npm run start:server` (server).
 - The app requires Playbook 17.9.0 and Cligent 0.33.5 ([DR-121](specs/decisions/121-playbook-17-9-0-cligent-0-33-5-adoption.md)). Claude Code runs with its own commit and pull-request attribution off, so a player's commits carry only the trailers the project asks for, and every player prompt opens with `Role: <role> · Model: <model>`, so such a trailer can name both. Every role after a Boss answer hears the run's questions and answers, whatever the playbook retains; a question and a reply reach a player behind `? ⟶` and `Boss ⟶` lines, and the lines the Captain appends to a reply read as marks — `✓`, `✕ <code>`, `▸ <label>` — not English sentences. The closing reply names each commit's hash and branch, and a judge's reply the machine admits is no longer forced into a string where the runtime could not read the field's shape. **Upgrade together:** stop every Playbook CLI and Spex shell sharing the home before the first new writer runs; an earlier Playbook rejects the run snapshots and ledgers this one writes.
 
 ### Fixed
+
+- A project's config reading and edits now reject invalid custom playbook
+  options before starting a session, naming the playbook and its validator's
+  reason. Validation uses the paired folder for injected working directories
+  and preserves explicitly configured options and working directories.
+
+- Synchronizing one records repository no longer waits for unrelated
+  repository details. Each check reads the complete namespace catalog and
+  only its destination's details, retaining collision, access, account-change
+  and first-sharing notice safeguards.
 
 - Joining private code at the instance's reported Git origin now uses
   the app's brokered credential helper, as records do. Code at another
