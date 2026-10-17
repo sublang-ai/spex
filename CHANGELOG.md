@@ -27,12 +27,11 @@ and `npm start` (desktop) or `npm run start:server` (server).
   with the instance's own roles, and Remove on members held directly,
   each only where the instance says you may act. A group you create
   lists at once, before the instance's next listing carries it.
-- A second device joins without choices. At a sign-in's join of your
-  own group's spex repository, a clone that holds nothing of its own,
-  no session, intent or authoring session and no commit but the
-  set-up's, takes the instance's side of every unit, so the seeded
-  environment and configuration never ask to be chosen over; any other
-  clone still asks for every unit.
+- A second device can join your account's records without choices when
+  its own-group clone is proven to be an unchanged generated bootstrap,
+  also after a restart. Settings or environment edits made before sign-in,
+  preexisting or migrated state and missing proof use ordinary comparison,
+  with the choices that differing shared units require.
 - Each selected spec reaches the agents as a generated skill ([DR-115](specs/decisions/115-a-spec-reaches-the-agents.md)).
   The lock holds one export per selected spec, named `<org>-<pkg>`, or
   `<pkg>` past 64 characters, or its alias; the exporter writes the
@@ -642,6 +641,13 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Fixed
 
+- Joining private code at the instance's reported Git origin now uses
+  the app's brokered credential helper, as records do. Code at another
+  origin continues to use the device's own credentials.
+- Code addresses hosted by the instance no longer expose its backing
+  host in Groups, project status or cached forge guidance. After a restart,
+  a remote reads neutrally until the instance's description arrives; its
+  actual transport URL stays stored for Git.
 - A session whose current folder or stored-member configuration prevents
   continuation shows the reason beside its history and offers a new
   session before a message is attempted. Listings follow configuration
