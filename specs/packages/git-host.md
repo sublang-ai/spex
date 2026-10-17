@@ -57,7 +57,7 @@ While the home holds an app token, when a call to the host is made, the core sha
 
 #### git-host-5
 
-When the home is signed in and a read of the host is due — at sign-in, on Refresh, before a sync's Check step, and at the first `space.get` after the core started signed in with no read begun since — the core shall read, in one pass, the host's description with the roles it grants [[git-host-16](#git-host-16)], the person with whether they may create a group, every group with whether the person may create a subgroup in it, manage its members, rename it and delete it, and every spex repository the host lists across its pages with whether the person may manage its members and move it to another group, and shall hold the answer as the home's current view until the next read ([DR-103](../decisions/103-the-home-and-its-groups.md), [DR-114](../decisions/114-groups-and-sharing-from-spex.md), [DR-120](../decisions/120-the-instance-is-the-space.md)):
+When the home is signed in and a read of the host is due — at sign-in, on Refresh, and at the first `space.get` after the core started signed in with no full-view read begun since — the core shall read, in one pass, the host's description with the roles it grants [[git-host-16](#git-host-16)], the person with whether they may create a group, every group with whether the person may create a subgroup in it, manage its members, rename it and delete it, and every spex repository the host lists across its pages with whether the person may manage its members and move it to another group, and shall hold the answer as the home's current view until the next read ([DR-103](../decisions/103-the-home-and-its-groups.md), [DR-114](../decisions/114-groups-and-sharing-from-spex.md), [DR-120](../decisions/120-the-instance-is-the-space.md), [DR-122](../decisions/122-a-sync-reads-its-destination.md)):
 
 - every path the host answers is taken as given, a path in the instance, and the view holds no URL but each repository's remote, which the core hands to Git alone ([DR-120](../decisions/120-the-instance-is-the-space.md));
 - your own group is the listed group of kind `user` under the account's login; a listed spex repository's key is its group's path joined to its own [[storage-1](storage.md#storage-1)], none where that group is held as colliding — one of kind `group` whose path equals, ignoring case, your own group's folder name or the login of another account under which the host lists a spex repository, or lies beneath it ([DR-120](../decisions/120-the-instance-is-the-space.md));
@@ -69,6 +69,18 @@ When the home is signed in and a read of the host is due — at sign-in, on Refr
 - each listed repository is held with its members' count, the account among them, and one whose members the host fails to read — by any answer but one that signs the device out [[git-host-4](#git-host-4)] — with none, that failure failing nothing else, while any other failure fails the whole read;
 - the read due at the first `space.get` is begun once, however many clients ask, and that reply answers the state as it stands, never waiting for the read, whose outcome the core announces as any host read's [[space-2](space.md#space-2)];
 - a read that fails leaves the previous view with its time and reports the failure once.
+
+#### git-host-22
+
+When a sync checks a repository, or needs its first-sharing notice, the core shall read a fresh complete catalog — the host's description, person, every group and every repository across its pages — and only the matched repository's detail, branch, read-only state and members, independently of any full-view read [[git-host-5](#git-host-5)] ([DR-122](../decisions/122-a-sync-reads-its-destination.md)):
+
+- matching uses the clone's recorded id, else its exact remote URL, and collision detection uses every user namespace in the catalog as well as your own folder and the account's login, by the full-view rules [[git-host-5](#git-host-5)];
+- a failed first-notice read refuses admission with its cause and starts no sync; the catalog or target failing at Check stops it with that cause, an unmatched target being no longer shared; a members failure alone leaves its count unknown, except an answer that signs the device out or finds its credential pair replaced [[git-host-4](#git-host-4)], and an unknown count requires the first-sharing notice [[space-57](space.md#space-57)];
+- the target's latest answer governs its row, path, abilities and read-only state, without advancing the whole view's read time or refreshing unrelated rows; a full read begun before it cannot replace that authority on success or failure, while a full read begun after it supersedes it;
+- a creation, attachment, rename, deletion or move made by this core while a catalog read is in flight is reconciled by reading again before using that answer, as for a full read [[git-host-5](#git-host-5)];
+- Check rechecks the first-notice condition against its fresh membership before any branch or Git transport effect: a count that changed from the account alone to shared or unknown stops there with the sharing-notice phrase, leaves acknowledgement unset and offers the usual notice on the next Sync, while existing explicit setup and pick authorization stands;
+- a successful target answer crossing a core sign-out or sign-in is refused as sign-in changed meanwhile, stores no target authority and permits no path or remote update from that answer;
+- following a move and updating the remote retain their unchanged-clone guards [[space-60](space.md#space-60)], and sign-out or a changed credential retains its refusal [[git-host-4](#git-host-4)].
 
 #### git-host-6
 
@@ -259,6 +271,19 @@ When an integration suite drives host reads and writes against the stand-in [[gi
 - a 429 is relayed with `Retry-After: 2` as "asks to wait 2 seconds", with an HTTP date 3 s ahead "3 seconds", with a date past in RFC 850's or asctime's form "0 seconds", and with none "a moment" [[git-host-11](#git-host-11)]; a read the stand-in answers 429 keeps the previous view with its time, its rows reading unreachable with "<display name> asks to wait 30 seconds", in English and in Chinese [[git-host-5](#git-host-5)] [[git-host-11](#git-host-11)];
 - after a 429, the next call that waits reaches the stand-in no sooner than 2 s after `Retry-After: 2`'s answer, no sooner than 3 s after two calls in flight are answered 3 and 1 seconds, no sooner than a date 3 s ahead, at once after a date past or none, and about 1 s after `Retry-After: 30`'s under a test-shortened bound of 1 s; a call whose Stop comes while it waits ends at once, nothing reaching the stand-in; a members read during `Retry-After: 2`'s hold is refused at once as asking to wait 2 seconds, nothing reaching the stand-in [[git-host-21](#git-host-21)];
 - a core asked for a spex repository's members during a hold refuses at once with "<display name> asks to wait N seconds", N the seconds that remain, nothing reaching the stand-in, while a Check begun then waits the hold out [[git-host-21](#git-host-21)].
+
+#### git-host-23
+
+When a real-core integration suite checks a selected repository against the stand-in [[git-host-12](#git-host-12)], it shall verify the destination read [[git-host-22](#git-host-22)]:
+
+- an unrelated detail failure stops a full Refresh but not the selected sync, which makes no unrelated detail or members call and leaves the full read time unchanged;
+- target, catalog and authentication failures stop the selected check without a push, and missing targets retain their local files;
+- fresh namespace facts refuse a collision, an id follows a move with the remote guarded, and unknown target membership requires the notice;
+- older full-read success and failure completing around a target check never restore its old path or access, and a later full read supersedes it;
+- a creation or move during an in-flight catalog causes rereading before the target is used;
+- a target-only read before the first Groups request after a signed-in restart leaves that request's nonblocking full read due;
+- a failed first-notice read admits no later healthy Check or push, and membership changing from solo to shared at Check stops before transport without acknowledgement;
+- a held successful target answer released after sign-out or another account's sign-in stops as changed meanwhile, repopulates no target authority and changes no clone path or remote.
 
 ## References
 

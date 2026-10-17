@@ -86,7 +86,7 @@ When the reader activates Sign out, the core shall revoke this device at the hos
 
 While a spex repository has other members and has never been pushed from this device, when a sync of it, or a pick joining it [[space-58](#space-58)], is admitted, the surface shall first say once that every session goes there whole — hidden parts and attachments included — that nothing recalls what others downloaded, and, where the repository is public, that its records are public, with Continue and Cancel, Cancel focused and Escape cancelling ([DR-010](../decisions/010-interface-craft.md) §4) ([DR-103](../decisions/103-the-home-and-its-groups.md)):
 
-- a sync's notice stands beneath its row, and a pick's in the picker beneath the spex repository picked [[space-58](#space-58)];
+- a sync reads its target afresh for admission and rechecks the notice at Check before branch or transport effects, a failed admission read starting no sync [[git-host-22](git-host.md#git-host-22)]; its notice stands beneath its row, and a pick's in the picker beneath the spex repository picked [[space-58](#space-58)];
 - Continue records that this device's reader has seen it [[storage-5](storage.md#storage-5)] and starts the sync or the pick with `noticed`; Cancel starts nothing, focus returning to the control that asked;
 - a spex repository whose only member is the account says nothing, and one whose members' count the host's last read lacks [[git-host-5](git-host.md#git-host-5)] is taken to have other members.
 
@@ -123,7 +123,7 @@ The Groups surface shall show each spex repository in exactly one of these state
 | State | Holds while | Row reads | Control |
 | --- | --- | --- | --- |
 | local only | the clone has no remote on the host | "On this device only", your own group's reading "On this device only — shared once you sign in" while signed out [[space-3](#space-3)] | Pick a group [[space-58](#space-58)], none while signed out |
-| reachable | the home's current view lists it [[git-host-5](git-host.md#git-host-5)] and the clone is here, no join of it running [[space-63](#space-63)] | its last sync | Sync |
+| reachable | the latest full or selected-target read lists it [[git-host-5](git-host.md#git-host-5)] [[git-host-22](git-host.md#git-host-22)] and the clone is here, no join of it running [[space-63](#space-63)] | its last sync | Sync |
 | read-only | the host listed it archived, or with the account below the role that may push, or refused the push | "Read-only: <the host's reason>"; new sessions stay on this device, said so | Sync, bringing only |
 | unreachable | the host stopped listing it, refused the read, the device is offline, or the home is signed out while the clone has a remote | "Unreachable: <cause>" | Retry, none while signed out with the remote at the host |
 | not on this device | the host listed it and no clone is here, or its join still runs [[space-63](#space-63)] | "Not on this device" | Join [[space-63](#space-63)] |
@@ -357,7 +357,7 @@ When a sync is admitted, the core shall run these steps in order on the clone, t
 | Step | The core | The line reads |
 | --- | --- | --- |
 | 1 Save | refresh the managed rules [[storage-17](storage.md#storage-17)], stage the catalog files, refuse a staged ignored-family path, validate the staged tree in a private copy [[storage-12](storage.md#storage-12)], commit that tree, where it differs from `HEAD`'s, on the `HEAD` it was staged against by a conditional ref update | "Saving changes…" |
-| 2 Check | read the host for this repository [[git-host-5](git-host.md#git-host-5)], prepare its branch where the first push is ahead [[git-host-7](git-host.md#git-host-7)], fetch the host's `spex` branch with the brokered credential [[git-host-9](git-host.md#git-host-9)] | "Checking host…" |
+| 2 Check | read the fresh catalog and this repository alone [[git-host-22](git-host.md#git-host-22)], prepare its branch where the first push is ahead [[git-host-7](git-host.md#git-host-7)], fetch the host's `spex` branch with the brokered credential [[git-host-9](git-host.md#git-host-9)] | "Checking host…" |
 | 3 Compare | plan every unit against the common ancestor [[storage-11](storage.md#storage-11)] [[space-33](#space-33)]; nothing incoming skips to Push | "Comparing…" |
 | 4 Apply | write the selection and one merge commit, or fast-forward [[space-19](#space-19)] | "Applying…" |
 | 5 Refresh | re-validate and re-index [[space-20](#space-20)] | "Refreshing…" |
