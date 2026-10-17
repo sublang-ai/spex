@@ -603,6 +603,8 @@ export class CoreService {
       // helper (environments-13, git-host-9).
       token: () => this.registryToken(),
       gitCredential: (repo) => this.space.sourceCredential(repo),
+      gitLabel: (repo) => this.space.packageSourceAsShown(repo),
+      gitFailure: (repo, run) => this.space.packageSourceFailure(repo, run),
       credentialArgs: async (credential) => {
         const handle = await withGitCredential(credential, this.hostRuntime);
         const env: Record<string, string> = {};

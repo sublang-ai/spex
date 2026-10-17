@@ -29,6 +29,9 @@ import {
   exportEnvironment,
   FormatError,
   gitSource,
+  GitSourceError,
+  ResolveError,
+  isGitRequest,
   install,
   installedPackages,
   isGitSource,
@@ -75,7 +78,7 @@ import {
 } from "./environment/index.js";
 import { i18n } from "./i18n.js";
 import type { PlaybookModules } from "./config.js";
-import type { EnvironmentPackage, EnvironmentRequest, EnvironmentState, PublishPreview } from "./protocol.js";
+import type { EnvironmentPackage, EnvironmentRequest, EnvironmentRequestSummary, EnvironmentState, PublishPreview } from "./protocol.js";
 import { CoreError } from "./session.js";
 import type { Store } from "./store.js";
 
@@ -102,6 +105,9 @@ export interface EnvironmentManagerOptions {
   /** How that credential reaches Git: the app's own credential helper
    * (git-host-9). */
   credentialArgs: CredentialArgs;
+  /** Read-only labels and reports from the instance facts already read. */
+  gitLabel: (repo: string) => string;
+  gitFailure: (repo: string, run: import("./environment/git-source.js").GitRun) => string;
   broadcast: (repository: string, state: EnvironmentState) => void;
   /** An environment's installed files or exports changed. */
   changed?: (repository: string) => void;
@@ -191,14 +197,14 @@ function stalePhrases(lock: Lock, requestsText: string | null, workingFolder: st
   return phrases.length > 0 ? phrases : null;
 }
 
-function requestOf(request: Request): EnvironmentRequest {
+function requestOf(request: Request, label: (repo: string) => string): EnvironmentRequestSummary {
   const extras = {
     ...(request.select ? { select: request.select.map((entry) => ({ ...entry })) } : {}),
     ...(request.alias ? { alias: { ...request.alias } } : {}),
   };
   if (isRegistryRequest(request)) return { kind: "registry", version: request.version, ...extras };
   if (isPathRequest(request)) return { kind: "path", path: request.path, ...extras };
-  return { kind: "git", git: request.git, rev: request.rev, ...(request.path !== undefined ? { path: request.path } : {}), ...extras };
+  return { kind: "git", repository: label(request.git), rev: request.rev, ...(request.path !== undefined ? { path: request.path } : {}), ...extras };
 }
 
 /** A protocol request as `spex.yaml` holds it (environments-2). */
@@ -253,6 +259,32 @@ export class EnvironmentManager {
     // credential through the app's helper; any other with this device's
     // own Git (environments-13).
     this.git = gitSource(this.cacheDir, { credentialArgs: options.credentialArgs });
+  }
+
+  /** Only generated source fields are projected; authored documents and
+   * request/lock bytes never pass through this presentation boundary. */
+  private sourceText(text: string, repo: string): string {
+    return text.split(repo).join(this.options.gitLabel(repo));
+  }
+
+  private failure(stage: "resolve" | "install" | "publish", error: unknown, requests?: Requests): string {
+    if (error instanceof GitSourceError) {
+      error = new Error(error.run ? this.options.gitFailure(error.repo, error.run) : this.sourceText(error.message, error.repo));
+    } else if (error instanceof ResolveError && error.packageName) {
+      const request = requests?.packages[error.packageName];
+      if (request && isGitRequest(request)) error = new Error(this.sourceText(error.message, request.git));
+    }
+    return failurePhrase(stage, error);
+  }
+
+  private shownConflicts(conflicts: readonly Conflict[], requests: Requests | null): Conflict[] {
+    return conflicts.map((conflict) => {
+      const request = requests?.packages[conflict.name];
+      return { ...conflict, requirements: conflict.requirements.map((entry) => ({ ...entry,
+        requirement: request && isGitRequest(request) && entry.by === "spex.yaml" && entry.requirement.startsWith(`git ${request.git} at `)
+          ? this.sourceText(entry.requirement, request.git) : entry.requirement,
+      })) };
+    });
   }
 
   private get store(): Store {
@@ -500,13 +532,13 @@ export class EnvironmentManager {
     const workingFolder = this.workingFolder(key);
     const requestsPath = join(dir, "spex.yaml");
     const lockPath = join(dir, "spex.lock");
-    let read: ReturnType<typeof readRequestsAt>;
+    let read: ReturnType<typeof readRequestsAt> = null;
     let locked: ReturnType<typeof readLockAt>;
     try {
       read = readRequestsAt(requestsPath);
       locked = readLockAt(lockPath);
     } catch (error) {
-      state.error = failurePhrase("resolve", error);
+      state.error = this.failure("resolve", error, read?.requests);
       this.announce(state.key);
       if (strict) throw new CoreError("invalid_request", state.error);
       return;
@@ -529,7 +561,7 @@ export class EnvironmentManager {
       } catch (error) {
         const changed = this.changedSince(requestsPath, read.version, lockPath, lockVersion);
         if (changed) return this.overtaken(changed, strict);
-        state.error = failurePhrase("resolve", error);
+        state.error = this.failure("resolve", error, read?.requests);
         if (strict) throw new CoreError("invalid_request", state.error);
         return;
       }
@@ -539,7 +571,7 @@ export class EnvironmentManager {
         if (changed) return this.overtaken(changed, strict);
         state.conflicts = { requests: read.version, conflicts: result.conflicts };
         state.error = null;
-        if (strict) throw new CoreError("invalid_request", this.conflictPhrase(result.conflicts));
+        if (strict) throw new CoreError("invalid_request", this.conflictPhrase(this.shownConflicts(result.conflicts, read.requests)));
         return;
       }
       // The lock is written only while `spex.yaml` stands as resolved and
@@ -549,7 +581,7 @@ export class EnvironmentManager {
         lockVersion = sha256(await writeLock(lockPath, result.lock, lockVersion));
       } catch (error) {
         if (error instanceof VersionConflictError) return this.overtaken(error, strict);
-        state.error = failurePhrase("resolve", error);
+        state.error = this.failure("resolve", error, read?.requests);
         if (strict) throw new CoreError("invalid_request", state.error);
         return;
       }
@@ -610,7 +642,7 @@ export class EnvironmentManager {
       if (error instanceof VersionConflictError) return this.overtaken(error, strict);
       const changed = this.changedSince(requestsPath, read?.version ?? null, lockPath, lockVersion);
       if (changed) return this.overtaken(changed, strict);
-      state.error = failurePhrase("install", error);
+      state.error = this.failure("install", error, read?.requests);
       if (strict) throw new CoreError("invalid_request", state.error);
       return;
     }
@@ -1018,7 +1050,7 @@ export class EnvironmentManager {
         source: isRegistrySource(source)
           ? { kind: builtin ? "builtin" : "registry", detail: source.registry }
           : isGitSource(source)
-            ? { kind: "git", detail: `${source.git} ${source.commit.slice(0, 12)}${source.path ? ` ${source.path}` : ""}` }
+            ? { kind: "git", detail: `${this.options.gitLabel(source.git)} ${source.commit.slice(0, 12)}${source.path ? ` ${source.path}` : ""}` }
             : { kind: "path", detail: source.path },
         direct: requests?.packages[name] !== undefined,
         requiredBy: [...resolution.requiredBy],
@@ -1033,8 +1065,8 @@ export class EnvironmentManager {
         missingPath: missing && pathSource ? source.path : null,
       });
     }
-    const requestMap: Record<string, EnvironmentRequest> = {};
-    for (const [name, request] of Object.entries(requests?.packages ?? {})) requestMap[name] = requestOf(request);
+    const requestMap: Record<string, EnvironmentRequestSummary> = {};
+    for (const [name, request] of Object.entries(requests?.packages ?? {})) requestMap[name] = requestOf(request, this.options.gitLabel);
     const builtinUpdate = this.builtinUpdate(requests, lock);
     return {
       repository: key,
@@ -1042,7 +1074,7 @@ export class EnvironmentManager {
       requests: requestMap,
       packages,
       stale: lock ? stalePhrases(lock, requestsText, workingFolder) : null,
-      conflicts: conflicts ? conflicts.map((conflict) => ({ name: conflict.name, requirements: conflict.requirements.map((entry) => ({ ...entry })) })) : null,
+      conflicts: conflicts ? this.shownConflicts(conflicts, requests) : null,
       busy: this.busyOf(key),
       error,
       published: clone.published ? { ...clone.published } : null,

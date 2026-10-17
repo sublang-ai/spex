@@ -2709,3 +2709,7 @@ msgstr "你已停止传输；你的提交仍然有效。Git 以无交互方式�
 #: src/space.ts
 msgid "Your merge is saved locally; Retry to send it once the host settles."
 msgstr "合并已保存在本地；待托管平台稳定后重试即可发送。"
+
+#. A package Git source failed without a recognized status; raw backing-host or unclassified stderr stays inside the core
+msgid "{host} answered with an error"
+msgstr "{host} 返回了错误"

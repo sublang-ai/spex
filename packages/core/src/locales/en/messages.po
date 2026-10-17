@@ -2709,3 +2709,7 @@ msgstr "You stopped the transfer; your commits stand. Git runs without prompts, 
 #: src/space.ts
 msgid "Your merge is saved locally; Retry to send it once the host settles."
 msgstr "Your merge is saved locally; Retry to send it once the host settles."
+
+#. A package Git source failed without a recognized status; raw backing-host or unclassified stderr stays inside the core
+msgid "{host} answered with an error"
+msgstr "{host} answered with an error"

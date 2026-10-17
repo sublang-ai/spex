@@ -43,7 +43,7 @@ import type {
 } from "./protocol.js";
 import { CoreError } from "./session.js";
 import {
-  classifyHostTransportFailure, classifyTransportFailure, displayRemote, GitMissingError, lastLines, membersDecide, noLongerShared,
+  classifyHostTransportFailure, classifyTransportFailure, displayRemote, GitMissingError, lastLines, remoteHost, membersDecide, noLongerShared,
   signInAgain, SpaceGit, validateRemoteUrl, withoutHostUrls, type GitFailure, type GitRun, type GitRunOptions,
 } from "./space-git.js";
 import {
@@ -2362,7 +2362,62 @@ export class SpaceManager {
    * of the host and no inferred origin (space-1, projects-7, DR-120). */
   codeRemoteKind(remote: string): "unknown" | "instance" | "external" {
     const origin = this.knownOrigin();
-    return origin ? (underOrigin(remote, origin) ? "instance" : "external") : "unknown";
+    // Presentation recognizes an HTTP URL independently of its spelling
+    // or embedded user. Credential matching keeps its exact-origin rule.
+    const normalized = (value: string): string => {
+      try {
+        const url = new URL(value);
+        if (url.protocol === "http:" || url.protocol === "https:") {
+          url.username = ""; url.password = "";
+          return url.href.replace(/\/$/, "");
+        }
+      } catch { /* local paths and SSH forms retain their spelling */ }
+      return value;
+    };
+    return origin ? (underOrigin(normalized(remote), normalized(origin)) ? "instance" : "external") : "unknown";
+  }
+
+  private packageExternalRemote(remote: string): string {
+    try {
+      const url = new URL(remote);
+      if (url.protocol === "http:" || url.protocol === "https:") {
+        url.username = ""; url.password = "";
+        return url.href;
+      }
+    } catch { /* malformed authority: withhold every user segment */ }
+    return /^https?:\/\//i.test(remote) ? remoteHost(null) : remote;
+  }
+
+  /** Package-source presentation uses only facts already read. Local
+   * paths remain useful; a network locator waits for classification. */
+  packageSourceAsShown(remote: string): string {
+    const local = isAbsolute(remote) || /^file:/i.test(remote)
+      || (!/^[a-z][a-z0-9+.-]*:\/\//i.test(remote) && !/^[^/\\]+:/.test(remote));
+    if (local) return remote;
+    const kind = this.codeRemoteKind(remote);
+    return kind === "unknown" ? remoteHost(null) : kind === "instance" ? this.hostName() : this.packageExternalRemote(remote);
+  }
+
+  /** Generated Git failures never publish unknown or backing-host
+   * stderr. External failures keep useful, credential-free Git detail. */
+  packageSourceFailure(remote: string, run: GitRun): string {
+    const kind = this.codeRemoteKind(remote);
+    const shown = this.packageSourceAsShown(remote);
+    const local = shown === remote && (isAbsolute(remote) || /^file:/i.test(remote) || !/^[^/\\]+:/.test(remote));
+    const atInstance = !local && kind !== "external";
+    const status = /returned error: (\d{3})|RPC failed; HTTP (\d{3})|HTTP (\d{3})/i.exec(run.stderr);
+    const generic = status
+      ? i18n._("{host} answered with an error (HTTP {status})", { host: shown, status: status[1] ?? status[2] ?? status[3] })
+      : i18n._({ id: "{host} answered with an error", comment: "A package Git source failed without a recognized status; raw backing-host or unclassified stderr stays inside the core", values: { host: shown } });
+    if (atInstance && kind === "unknown") {
+      return `${generic} ${i18n._("Check the connection, then Retry.")}`;
+    }
+    const failure = atInstance
+      ? classifyHostTransportFailure({ ...run, stderr: run.stderr.replace(/^\s*remote:.*$/gm, "") }, shown)
+      : classifyTransportFailure(run, this.packageExternalRemote(remote));
+    const message = atInstance && failure.cause === "git" ? generic : failure.message;
+    const text = withoutHostUrls(`${message} ${failure.guidance}`.split(remote).join(this.packageExternalRemote(remote)), { origin: this.knownOrigin(), host: this.hostName(), instance: this.host.store.home.host.url });
+    return text.replace(/https?:\/\/[^\s'"<>]+/gi, (url) => this.packageExternalRemote(url));
   }
 
   // -- the instance's names (space-1, space-15, git-host-5, DR-120) ---------

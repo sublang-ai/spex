@@ -641,6 +641,10 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Fixed
 
+- Package-source labels, tooltips and generated environment reports use
+  the instance's name for its repositories, keeping internal storage
+  addresses out of the interface while preserving installation inputs.
+
 - A project's config reading and edits now reject invalid custom playbook
   options before starting a session, naming the playbook and its validator's
   reason. Validation uses the paired folder for injected working directories
