@@ -259,6 +259,7 @@ async function startHarness(
     discoverAgentModels?: import("./service.js").CoreServiceOptions["discoverAgentModels"];
     /** Watch the config files and the clones as a running app does. */
     watchConfig?: boolean;
+    loadModule?: import("./service.js").CoreServiceOptions["loadModule"];
   } = {},
 ): Promise<Harness> {
   const dir = scratchDir("spex-core-it-");
@@ -307,6 +308,7 @@ async function startHarness(
     home: join(dir, "home"),
     own: OWN,
     watchConfig: options.watchConfig ?? false,
+    ...(options.loadModule ? { loadModule: options.loadModule } : {}),
     ...(options.scaffoldCommand
       ? { scaffoldCommand: options.scaffoldCommand }
       : {}),
@@ -322,6 +324,187 @@ async function startHarness(
 // ---------------------------------------------------------------------------
 // CORE-19: end-to-end session over the protocol
 // ---------------------------------------------------------------------------
+
+test("core-service-121: paired project options validate before reads, writes and session creation with the actual cwd", async (t) => {
+  let mode: "exact" | "optional" | "none" = "exact";
+  let expectedCwd = "";
+  let explicitCwd = "";
+  let factories = 0;
+  const validations: Record<string, unknown>[] = [];
+  let heldImport: { reached: boolean; open: () => void; gate: Promise<void> } | undefined;
+  const allImports: NonNullable<typeof heldImport>[] = [];
+  const holdImport = () => {
+    let open!: () => void;
+    const held = { reached: false, open: () => open(), gate: new Promise<void>(resolve => { open = resolve; }) };
+    allImports.push(held);
+    heldImport = held;
+    return held;
+  };
+  const harness = await startHarness(VALID_CONFIG, {
+    loadModule: async (specifier) => {
+      const module = await import(isAbsoluteModule(specifier));
+      if (module.default?.id !== "code") return module;
+      const held = heldImport;
+      heldImport = undefined;
+      if (held) { held.reached = true; await held.gate; }
+      return { ...module, default: {
+        ...module.default,
+        validateOptions(value: unknown) {
+          const options = (value ?? {}) as Record<string, unknown>;
+          validations.push({ ...options });
+          if (options.marker !== "ready") throw new Error("custom marker must be ready");
+          if (mode === "exact" && options.cwd !== expectedCwd) throw new Error("custom cwd must be the paired folder");
+          if (mode === "optional" && options.cwd !== undefined && options.cwd !== "/" && options.cwd !== explicitCwd) throw new Error("custom selected folder is refused");
+          if (mode === "none" && options.cwd !== undefined) throw new Error("custom cwd is not an option");
+          return { ...options, normalizedDefault: "provided by the shared shell" };
+        },
+        createRuntime(...args: unknown[]) { factories += 1; return module.default.createRuntime(...args); },
+      } };
+    },
+  });
+  expectedCwd = harness.projectDir;
+  explicitCwd = join(harness.projectDir, "explicit");
+  const client = new Client(harness.service.port());
+  await client.open();
+  t.after(async () => { for (const held of allImports) held.open(); client.close(); await harness.service.stop(); });
+  const project = await client.expectOk("project.register", { path: harness.projectDir });
+  const config = join(clonePath(harness.dataDir, project.id), "config/playbook.config.yaml");
+  const ownBefore = readFileSync(join(harness.dir, "playbook.config.yaml"), "utf8");
+
+  await t.test("global composition defers context-dependent options; a selected project refuses before ownership or agents", async () => {
+    assert.equal((await client.expectOk("config.get", {})).status, "valid");
+    const state = await client.expectOk("config.get", { projectId: project.id });
+    assert.equal(state.status, "invalid");
+    if (state.status === "invalid") assert.match(state.errors.join("\n"), /playbooks\.code: custom marker must be ready/);
+    const refused = await client.command("session.create", { projectId: project.id });
+    assert.equal(refused.ok, false);
+    if (!refused.ok) { assert.equal(refused.error.code, "invalid_config"); assert.match(refused.error.message, /playbooks\.code: custom marker must be ready/); }
+    assert.deepEqual(await client.expectOk("session.list", {}), []);
+    const sessions = projectSessions(harness.dataDir, project.id);
+    assert.ok(!existsSync(sessions) || readdirSync(sessions).length === 0, "invalid configuration acquires no session lease or writes");
+    assert.equal(factories, 0);
+    assert.equal(harness.stats.runs.length, 0);
+  });
+
+  const set = (key: string, value: unknown) => client.command("config.edit", { repository: project.id, op: { kind: "playbook.option.set", playbookId: "code", key, value } });
+  await t.test("required exact real cwd accepts a repaired project declaration without writing defaults or cwd", async () => {
+    const accepted = await client.command("config.edit", { repository: project.id, op: { kind: "playbook.add", playbookId: "code", roles: { coder: "dev.coder" }, options: { marker: "ready" } } });
+    assert.equal(accepted.ok, true);
+    assert.equal((await client.expectOk("config.get", { projectId: project.id })).status, "valid");
+    assert.deepEqual(parseYaml(readFileSync(config, "utf8")).playbooks.code, { roles: { coder: "dev.coder" }, marker: "ready" });
+    const session = await client.expectOk("session.create", { projectId: project.id });
+    const manifest = JSON.parse(readFileSync(join(projectSessions(harness.dataDir, project.id), session.id + ".json"), "utf8"));
+    assert.equal(manifest.lastAppliedExecutionProjection.catalog.code.options.cwd, expectedCwd);
+    assert.equal(manifest.lastAppliedExecutionProjection.catalog.code.options.normalizedDefault, undefined, "the authored slice is retained; shell normalization is not persisted as configuration");
+    await client.expectOk("session.dispose", { sessionId: session.id });
+  });
+
+  await t.test("invalid option writes retain exact bytes and current valid state", async () => {
+    const before = readFileSync(config, "utf8");
+    const refused = await set("marker", "invalid");
+    assert.equal(refused.ok, false);
+    if (!refused.ok) assert.match(refused.error.message, /playbooks\.code: custom marker must be ready/);
+    assert.equal(readFileSync(config, "utf8"), before);
+    assert.equal((await client.expectOk("config.get", { projectId: project.id })).status, "valid");
+  });
+
+  await t.test("an external invalid non-cwd option is read as invalid before session admission", async () => {
+    const before = readFileSync(config, "utf8");
+    const beforeFactories = factories;
+    writeFileSync(config, before.replace("marker: ready", "marker: invalid"));
+    const state = await client.expectOk("config.get", { projectId: project.id });
+    assert.equal(state.status, "invalid");
+    if (state.status === "invalid") assert.match(state.errors.join("\n"), /playbooks\.code: custom marker must be ready/);
+    const refused = await client.command("session.create", { projectId: project.id });
+    assert.equal(refused.ok, false);
+    if (!refused.ok) assert.equal(refused.error.code, "invalid_config");
+    assert.equal(factories, beforeFactories);
+    writeFileSync(config, before);
+  });
+
+  await t.test("explicit cwd passes unchanged", async () => {
+    mode = "optional";
+    assert.equal((await set("cwd", explicitCwd)).ok, true);
+    const session = await client.expectOk("session.create", { projectId: project.id });
+    const manifest = JSON.parse(readFileSync(join(projectSessions(harness.dataDir, project.id), session.id + ".json"), "utf8"));
+    assert.equal(manifest.lastAppliedExecutionProjection.catalog.code.options.cwd, explicitCwd);
+    await client.expectOk("session.dispose", { sessionId: session.id });
+  });
+
+  await t.test("a known optional cwd capability cannot hide a rejected project path by falling back to defaults", async () => {
+    const before = readFileSync(config, "utf8");
+    const refused = await set("cwd", null);
+    assert.equal(refused.ok, false);
+    if (!refused.ok) assert.match(refused.error.message, /playbooks\.code: custom selected folder is refused/);
+    assert.equal(readFileSync(config, "utf8"), before);
+    assert.ok(validations.some(v => v.cwd === "/" && v.marker === "ready"));
+    assert.ok(validations.some(v => v.cwd === expectedCwd && v.marker === "ready"));
+  });
+
+  await t.test("an entry without cwd accepts its raw options and leaves normalizer defaults to the shell", async () => {
+    mode = "none";
+    assert.equal((await set("cwd", null)).ok, true);
+    assert.equal((await client.expectOk("config.get", { projectId: project.id })).status, "valid");
+    assert.deepEqual(parseYaml(readFileSync(config, "utf8")).playbooks.code, { roles: { coder: "dev.coder" }, marker: "ready" });
+    assert.equal(readFileSync(join(harness.dir, "playbook.config.yaml"), "utf8"), ownBefore);
+    assert.equal(harness.stats.runs.length, 0, "validation and idle initialization use no provider calls");
+  });
+
+  await t.test("a pairing changed during import is re-read, and refuses stale config writes and new sessions", async () => {
+    mode = "exact";
+    const other = join(harness.dir, "other");
+    mkdirSync(other);
+    execFileSync("git", ["init", "-q", other]);
+    const waitForImport = async (held: NonNullable<typeof heldImport>) => {
+      const deadline = Date.now() + 30_000;
+      while (!held.reached && Date.now() < deadline) await sleep(10);
+      assert.equal(held.reached, true, "selected project import reached its gate");
+    };
+    const rebind = (path: string) => client.expectOk("project.rebind", { projectId: project.id, path });
+    let held = holdImport();
+    const reading = client.expectOk("config.get", { projectId: project.id });
+    await waitForImport(held);
+    await rebind(other);
+    held.open();
+    const state = await reading;
+    assert.equal(state.status, "invalid", "the old folder's valid composition cannot publish after rebind");
+    if (state.status === "invalid") assert.match(state.errors.join("\n"), /custom cwd must be the paired folder/);
+
+    await rebind(harness.projectDir);
+    const before = readFileSync(config, "utf8");
+    held = holdImport();
+    const editing = set("extra", "must not publish");
+    await waitForImport(held);
+    await rebind(other);
+    held.open();
+    const edit = await editing;
+    assert.equal(edit.ok, false);
+    if (!edit.ok) { assert.equal(edit.error.code, "conflict"); assert.match(edit.error.message, /home\.yaml changed meanwhile/); }
+    assert.equal(readFileSync(config, "utf8"), before);
+
+    await rebind(harness.projectDir);
+    const beforeFactories = factories;
+    const beforeSessions = (await client.expectOk("session.list", {})).map(session => session.id);
+    held = holdImport();
+    const creating = client.command("session.create", { projectId: project.id });
+    await waitForImport(held);
+    // This folder is accepted by the validator after the retry, but the
+    // request's original ProjectInfo still names the previous folder.
+    expectedCwd = other;
+    await rebind(other);
+    held.open();
+    const created = await creating;
+    assert.equal(created.ok, false);
+    if (!created.ok) assert.equal(created.error.code, "conflict");
+    assert.equal(factories, beforeFactories);
+    assert.deepEqual((await client.expectOk("session.list", {})).map(session => session.id), beforeSessions);
+    assert.equal(harness.stats.runs.length, 0);
+  });
+});
+
+function isAbsoluteModule(specifier: string): string {
+  return specifier.startsWith("/") || /^[A-Za-z]:[\\/]/.test(specifier) ? pathToFileURL(specifier).href : specifier;
+}
 
 test("CORE-19: fake-adapter session end to end over the WebSocket", async () => {
   const harness = await startHarness();

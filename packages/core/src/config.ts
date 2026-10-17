@@ -81,6 +81,8 @@ export interface ComposeOptions {
   modules?: PlaybookModules;
   /** A project's or another group's own file, added on top of yours. */
   project?: { top: unknown; path: string };
+  /** The paired project's actual folder; absent for global composition. */
+  cwd?: string;
 }
 
 /** No environment at all: every enabled playbook is missing. */
@@ -1734,6 +1736,29 @@ export async function composeConfig(
         acceptsCwdOption = true;
       } catch {
         acceptsCwdOption = false;
+      }
+    }
+    if (options.cwd !== undefined) {
+      try {
+        let validated = false;
+        // A validator can require the real folder and reject the capability
+        // probe. A successful real candidate establishes injection too.
+        if (optionSlice.cwd === undefined && !acceptsCwdOption) {
+          try {
+            entry.validateOptions({ ...optionSlice, cwd: options.cwd });
+            acceptsCwdOption = true;
+            validated = true;
+          } catch { /* With no positive capability evidence, check the raw slice. */ }
+        }
+        if (!validated) entry.validateOptions({
+          ...optionSlice,
+          ...(acceptsCwdOption ? { cwd: options.cwd } : {}),
+        });
+      } catch (error) {
+        throw new Error(i18n._({
+          id: "{file}: {reason}", comment: "A storage fault as one line: the file, then the reason — itself a message",
+          values: { file: `playbooks.${id}`, reason: error instanceof Error ? error.message : String(error) },
+        }));
       }
     }
     captainOptions.playbooks[id] = {

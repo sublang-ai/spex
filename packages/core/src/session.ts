@@ -437,8 +437,8 @@ export class SessionManager {
     }
   }
 
-  async createSession(project: ProjectInfo, composed: ComposedConfig): Promise<SessionInfo> {
-    return this.open(project, composed, randomUUID(), "new");
+  async createSession(project: ProjectInfo, composed: ComposedConfig, assertCurrent?: () => void): Promise<SessionInfo> {
+    return this.open(project, composed, randomUUID(), "new", assertCurrent);
   }
   async continueSession(project: ProjectInfo, composed: ComposedConfig, session: SessionInfo): Promise<SessionInfo> {
     return this.open(project, composed, session.id, "continue");
@@ -508,7 +508,7 @@ export class SessionManager {
     if (info) await this.onSessionState(info);
   }
 
-  private async open(project: ProjectInfo, composed: ComposedConfig | undefined, sessionId: string, mode: "new" | "continue" | "recover"): Promise<SessionInfo> {
+  private async open(project: ProjectInfo, composed: ComposedConfig | undefined, sessionId: string, mode: "new" | "continue" | "recover", assertCurrent?: () => void): Promise<SessionInfo> {
     // One working turn per project (core-service-4, DR-051): only a
     // session whose runtime is held — a turn in flight or settling — or
     // one another host holds stands in the way, and it is named. A
@@ -571,6 +571,7 @@ export class SessionManager {
       const fixture = composed && this.options.captainFactory ? await this.options.captainFactory(composed, sessionId) : undefined;
       // Nothing awaited between: a clone gone meanwhile is refused here,
       // as one gone before the open is.
+      assertCurrent?.();
       if (!this.store.openSessionsDir(project.id)) throw new CoreError("not_found", i18n._({
         id: "no project {projectId}",
         comment: "Refusal: no project of this id is registered",
