@@ -10,7 +10,7 @@
 
 import type {
   EnvironmentPackage,
-  EnvironmentRequest,
+  EnvironmentRequestSummary,
   EnvironmentState,
   GroupsState,
   PlaybookAvailability,
@@ -94,7 +94,7 @@ export function sourceKindWord(kind: EnvironmentPackage["source"]["kind"]): stri
 
 /** A request as the environment lists it: its source and what it asks
  * for (playbook-library-92). */
-export function requestPhrase(request: EnvironmentRequest): string {
+export function requestPhrase(request: EnvironmentRequestSummary): string {
   switch (request.kind) {
     case "registry":
       return i18n._("registry {requirement}", { requirement: request.version });
@@ -102,8 +102,8 @@ export function requestPhrase(request: EnvironmentRequest): string {
       return i18n._("path {path}", { path: request.path });
     case "git":
       return request.path
-        ? i18n._("Git {repository} at {rev}, {path}", { repository: request.git, rev: request.rev, path: request.path })
-        : i18n._("Git {repository} at {rev}", { repository: request.git, rev: request.rev });
+        ? i18n._("Git {repository} at {rev}, {path}", { repository: request.repository, rev: request.rev, path: request.path })
+        : i18n._("Git {repository} at {rev}", { repository: request.repository, rev: request.rev });
   }
 }
 

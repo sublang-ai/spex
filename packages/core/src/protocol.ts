@@ -305,7 +305,7 @@ export interface MissingPlayer {
 export interface EnvironmentState {
   repository: string;
   language: string | null;
-  requests: Record<string, EnvironmentRequest>;
+  requests: Record<string, EnvironmentRequestSummary>;
   packages: EnvironmentPackage[];
   /** The lock is stale: what changed, phrased for the reader; null when current. */
   stale: string[] | null;
@@ -329,6 +329,12 @@ export type EnvironmentRequest = (
   | { kind: "path"; path: string }
   | { kind: "git"; git: string; rev: string; path?: string }
 ) & { select?: { artifact: string; language?: string }[]; alias?: Record<string, string> };
+/** Display-only sources: a Git label is never accepted as a command locator. */
+export type EnvironmentRequestSummary = Readonly<(
+  | { kind: "registry"; version: string }
+  | { kind: "path"; path: string }
+  | { kind: "git"; repository: string; rev: string; path?: string }
+) & { select?: readonly { artifact: string; language?: string }[]; alias?: Readonly<Record<string, string>> }>;
 export interface EnvironmentPackage {
   name: string;
   version: string | null;
