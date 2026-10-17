@@ -385,7 +385,7 @@ export class SessionManager {
   private readonly intentionalStops = new Set<string>();
   private readonly now: () => number;
   onRecord: (envelope: RecordEnvelope) => void = () => {};
-  onSessionState: (session: SessionInfo) => void = () => {};
+  onSessionState: (session: SessionInfo) => unknown = () => {};
   onLedgerChange: (projectId: string) => void = () => {};
   /** Local turn completion, after release and the durable read model agree. */
   onTurnSettled: (
@@ -505,7 +505,7 @@ export class SessionManager {
   private async refreshOwnership(sessionId: string): Promise<void> {
     await this.store.refreshSessionOwnership(sessionId);
     const info = this.store.describeSession(sessionId);
-    if (info) this.onSessionState(info);
+    if (info) await this.onSessionState(info);
   }
 
   private async open(project: ProjectInfo, composed: ComposedConfig | undefined, sessionId: string, mode: "new" | "continue" | "recover"): Promise<SessionInfo> {
@@ -562,11 +562,7 @@ export class SessionManager {
       // never after the provider hints are consumed (core-service-92).
       const stored = composed && mode === "continue" ? await this.storedStructure(sessionId) : undefined;
       const members = stored ? storedMembers(stored) : undefined;
-      const config = composed ? tunedExecution(composed, project.path, members, this.store.sessionAgentSettings(sessionId), stored) : undefined;
-      if (stored && config) {
-        try { assertCaptainSessionExecutionCompatible(stored, config); }
-        catch { throw new SettingsDriftError(describeStructuralDrift(stored, projectCaptainSessionStructure(config))); }
-      }
+      const config = composed ? this.checkedExecution(project, composed, sessionId, stored) : undefined;
       const memberPlaybooks = composed ? composed.playbooks.filter((playbook) => !members || members.playbookIds.includes(playbook.id)) : [];
       const graphs = composed ? await Promise.all(memberPlaybooks.map(async (playbook) => ({
         playbookId: playbook.id, graph: (await resolveArtifacts(playbook, this.options.env)).machine ?? null,
@@ -617,7 +613,7 @@ export class SessionManager {
         },
         onCheckpoint: async () => {
           await this.store.refreshSession(sessionId, true);
-          if (entry) this.publish(sessionId);
+          if (entry) await this.publish(sessionId);
         },
       });
       await this.store.refreshSession(sessionId, true);
@@ -634,7 +630,7 @@ export class SessionManager {
         try { await this.completeRestore(entry); }
         catch (error) { console.error(`spex: restored position not recorded: ${String(error)}`); }
       }
-      this.publish(sessionId);
+      await this.publish(sessionId);
       return {...info, live:true, turnActive:false};
     } catch (error) {
       if (controller) await controller.dispose();
@@ -650,6 +646,22 @@ export class SessionManager {
       const manifest = await this.store.sessionStoreFor(sessionId).readManifest(sessionId) as {schemaVersion?: unknown; structuralProjection?: SessionStructuralProjection};
       return manifest.schemaVersion === 7 ? manifest.structuralProjection : undefined;
     } catch { return undefined; }
+  }
+
+  /** The same execution check as opening, without a runtime, lease or hints. */
+  async checkContinuation(project: ProjectInfo, composed: ComposedConfig, sessionId: string): Promise<void> {
+    const executionProjection = this.checkedExecution(project, composed, sessionId, await this.storedStructure(sessionId));
+    const checked = await this.store.sessionStoreFor(sessionId).validate(sessionId, {cwd: project.path, executionProjection});
+    if (!checked.resumable) throw new CoreError("invalid_request", checked.reasons.join("; "));
+  }
+
+  private checkedExecution(project: ProjectInfo, composed: ComposedConfig, sessionId: string, stored: SessionStructuralProjection | undefined): SessionExecutionProjection {
+    const config = tunedExecution(composed, project.path, stored ? storedMembers(stored) : undefined, this.store.sessionAgentSettings(sessionId), stored);
+    if (stored) {
+      try { assertCaptainSessionExecutionCompatible(stored, config); }
+      catch { throw new SettingsDriftError(describeStructuralDrift(stored, projectCaptainSessionStructure(config))); }
+    }
+    return config;
   }
 
   /** The runtime is held only for a turn (core-service-91): once the
@@ -698,7 +710,7 @@ export class SessionManager {
     }
     this.onRecord({sessionId, seq: entry.seq, record, hidden: entry.record.visibility === "hidden", ...(entry.role ? {role:entry.role} : {})});
     if (live) {
-      this.publish(sessionId);
+      void this.publish(sessionId);
       this.onLedgerChange(live.info.projectId);
     }
   }
@@ -790,7 +802,7 @@ export class SessionManager {
             ...(entry.role ? { role: entry.role } : {}),
           });
         }
-        this.publish(session.id);
+        await this.publish(session.id);
         this.onLedgerChange(session.projectId);
       } catch (error) {
         console.error(`spex: restored position not recorded for ${session.id}: ${String(error)}`);
@@ -942,7 +954,7 @@ export class SessionManager {
       try { this.store.setParkedRun(entry.info.id, undefined); }
       catch (error) { console.error(`spex: parked-run controls not cleared: ${String(error)}`); }
     }
-    this.publish(entry.info.id);
+    void this.publish(entry.info.id);
     entry.operation = (async () => {
       let failed = false;
       try {
@@ -1001,7 +1013,7 @@ export class SessionManager {
             await this.releaseAtSettle(entry);
           }
           await this.store.refreshSession(entry.info.id, this.live.has(entry.info.id));
-          this.publish(entry.info.id);
+          await this.publish(entry.info.id);
           this.onLedgerChange(entry.info.projectId);
         });
         this.settling.set(entry.info.id, {projectId: entry.info.projectId, done});
@@ -1054,7 +1066,7 @@ export class SessionManager {
     this.live.delete(sessionId);
     this.store.setLocalSession(sessionId, false);
     await this.store.refreshSession(sessionId, false);
-    this.publish(sessionId);
+    await this.publish(sessionId);
     this.onLedgerChange(entry.info.projectId);
   }
   async disposeAll(): Promise<void> {
@@ -1063,12 +1075,12 @@ export class SessionManager {
     const failures = results.flatMap((result) => result.status === "rejected" ? [result.reason] : []);
     if (failures.length) throw new AggregateError(failures, "session cleanup failed");
   }
-  private publish(sessionId: string): void {
+  private async publish(sessionId: string): Promise<void> {
     const session = this.store.describeSession(sessionId);
     const entry = this.live.get(sessionId);
     if (!session) return;
     const reported = {...session, ...(entry ? {externalWriter:undefined} : {}), live:!!entry, turnActive:entry?.turnActive ?? false};
-    this.onSessionState(entry?.turnActive ? holdingTurn(reported) : reported);
+    await this.onSessionState(entry?.turnActive ? holdingTurn(reported) : reported);
   }
 
   private requireLive(sessionId: string): LiveSession {

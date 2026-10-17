@@ -492,7 +492,7 @@ export interface SessionInfo {
   initialVisible: string[];
   /** Legacy host label retained for older history; never recovery authority. */
   foreign?: true;
-  /** Shared validation permits an ordinary Boss message to continue it. */
+  /** The checkpoint and current path/config permit continuation; admission checks again. */
   continuable?: boolean;
   continuationReason?: string;
   /** Interrupted work awaiting the Boss (core-service-32): the saved

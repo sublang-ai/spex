@@ -642,6 +642,10 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Fixed
 
+- A session whose current folder or stored-member configuration prevents
+  continuation shows the reason beside its history and offers a new
+  session before a message is attempted. Listings follow configuration
+  and folder changes without opening a runtime or changing the session.
 - A creation keeps owing its default branch through a read-only check: a
   spex repository the core created, found archived or below the pushing
   role while still empty, keeps its recorded creation, so a later sync
