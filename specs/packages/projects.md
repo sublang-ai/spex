@@ -80,6 +80,10 @@ While a project is the workspace's current project, the Overview tab shall show 
 | dirty | an indicator shown while the work tree has uncommitted changes, and hidden while it is clean |
 | ahead/behind | commit counts relative to the upstream branch, hidden while no upstream is configured |
 
+#### projects-36
+
+When a client sends `project.status`, the core shall reply with the project's locally collected repository state [[projects-11](#projects-11)], carrying `originUrl` only once the instance has reported its Git origin [[git-host-5](git-host.md#git-host-5)] and the code's remote lies outside it, with any HTTP(S) user removed ([DR-120](../decisions/120-the-instance-is-the-space.md)).
+
 ### Forge Binding
 
 #### projects-5
@@ -100,12 +104,15 @@ Where a project has no GitHub binding, or the gh CLI is not installed or not aut
 | Unmet condition | Guidance |
 | --- | --- |
 | no `origin` remote | "No GitHub origin remote. Add one (git remote add origin …) to see issues and PRs." |
-| an `origin` remote not on GitHub | "Issues and PRs come from GitHub; this project's origin is at ⟨host⟩.", ⟨host⟩ being the remote's host name in its URL or scp-like form, or a local remote as written, and never a credential its URL carries |
+| an unbound `origin` remote, before the instance reports its Git origin [[git-host-5](git-host.md#git-host-5)] | "Issues and PRs come from GitHub; this project's code is on a remote." |
+| an unbound `origin` remote under the instance's reported Git origin [[git-host-5](git-host.md#git-host-5)] | "Issues and PRs come from GitHub; this project's code is on this instance." |
+| any other `origin` remote not on GitHub | "Issues and PRs come from GitHub; this project's origin is at ⟨host⟩.", ⟨host⟩ being the remote's host name in its URL or scp-like form, or a local remote as written, and never a credential its URL carries |
 | gh not installed | names that gh is not installed |
 | gh not authenticated | names that gh is not authenticated |
 
 - While the panel shows setup guidance, the Overview tab keeps showing repository state [[projects-4](#projects-4)] and its remove control remains functional.
 - While the Sources band is folded, the Overview's header names the guidance beside the repository state, so the reason GitHub is empty is read without opening the band; an open band carries the guidance itself and the header repeats nothing ([DR-069](../decisions/069-key-phrases-not-sentences.md)).
+- The guidance follows the current origin classification on every reply, a cached reply included, and names nothing behind the instance ([DR-120](../decisions/120-the-instance-is-the-space.md)).
 
 ### Session and Removal
 
@@ -200,7 +207,7 @@ Where the GitHub forge adapter performs an operation — auth status, issue list
 
 When a forge adapter operation fails — executable missing, not authenticated, network failure, non-zero exit, or unparsable output — the forge adapter shall return a typed failure carrying a condition category and human-readable guidance:
 
-- The core service forwards that guidance as the forge panel state for the affected project and neither crashes nor stops serving the project's other state.
+- The core service forwards that guidance as the forge panel state for the affected project, applying the instance's origin presentation [[projects-7](#projects-7)], and neither crashes nor stops serving the project's other state.
 
 ## Verification
 
@@ -246,7 +253,9 @@ Where a registered fixture repository's `origin` remote points at a GitHub repos
 Where the stub `gh` reports a not-authenticated state, or `gh` is absent from `PATH`, or the registered repository has no `origin` remote or one not on GitHub, when the project's forge panel is loaded, the test suite shall assert that setup guidance naming the specific unmet condition is shown instead of issue and pull-request lists [[projects-7](#projects-7)], that the project card still shows repository state, and that the core keeps serving subsequent commands [[projects-16](#projects-16)]:
 
 - No `origin` remote: the guidance is the no-remote sentence exactly [[projects-7](#projects-7)].
-- An `origin` remote at `gitlab.com`, in HTTPS form carrying a credential and in scp-like form: the guidance is "Issues and PRs come from GitHub; this project's origin is at gitlab.com." exactly, carrying no part of the credential [[projects-7](#projects-7)].
+- An `origin` remote before the instance has reported its Git origin: the guidance is the generic remote sentence, carrying no URL or hostname [[projects-7](#projects-7)].
+- Code cloned from the instance's reported Git origin: fresh and cached guidance are the instance sentence [[projects-7](#projects-7)], `project.status` omits `originUrl` while retaining its local branch state [[projects-36](#projects-36)], and a restarted core awaiting its first host description serves the generic sentence from the same cache [[projects-7](#projects-7)], exposes no origin in initial metadata [[projects-36](#projects-36)], and triggers no host read for either local command [[projects-11](#projects-11)].
+- Code outside the instance's reported Git origin: the guidance names that remote's host [[projects-7](#projects-7)] and `project.status` carries its credential-free URL [[projects-36](#projects-36)].
 
 #### projects-29
 

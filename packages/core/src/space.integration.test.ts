@@ -474,7 +474,7 @@ test("space-39: local changes of every unit kind list in order, incoming units a
   writeFileSync(join(clone, ".gitignore"), `${readFileSync(join(clone, ".gitignore"), "utf8")}# authored\n/scratch/\n`);
   writeFileSync(join(clone, "notes.txt"), "stray\n");
   const listed = await home.client.repository(key);
-  assert.equal(listed.code, "git@example.com:acme/app.git", "the row reads where the code lives");
+  assert.equal(listed.code, "Code on a remote", "the row withholds the remote until the instance reports its Git origin");
   const local = listed.local;
   assert.deepEqual(local.map((u) => u.kind), ["session", "intent", "authoring", "environment", "settings", "code", "rules", "other"], JSON.stringify(local));
   const [session, queued, authoring, environment, settings, code, rules, other] = local;

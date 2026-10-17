@@ -624,6 +624,8 @@ export interface RepoStatusInfo {
   dirty: boolean;
   ahead: number;
   behind: number;
+  /** Client replies omit a remote before the instance's Git origin is
+   * known and at that origin; an external HTTP(S) URL has no user. */
   originUrl?: string;
 }
 
