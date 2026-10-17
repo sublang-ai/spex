@@ -1606,8 +1606,8 @@ test("PROJ: work-tree validation, create flow, forge states, removal", async () 
 
   // Unbound, the guidance names which condition holds in place of the
   // lists while the repository state stays served (projects-20,
-  // projects-7): no origin at all, then an origin elsewhere, named by
-  // its host alone and never by the credential its URL carries.
+  // projects-7): no origin at all, then a remote withheld until the
+  // instance reports its Git origin, never carrying its credential.
   const unbound = () =>
     client.expectOk("forge.items", { projectId: created.id, refresh: true });
   const noOrigin = await unbound();
@@ -1627,7 +1627,7 @@ test("PROJ: work-tree validation, create flow, forge states, removal", async () 
   const elsewhere = await unbound();
   assert.equal(
     elsewhere.guidance,
-    "Issues and PRs come from GitHub; this project's origin is at gitlab.com.",
+    "Issues and PRs come from GitHub; this project's code is on a remote.",
   );
   assert.deepEqual([elsewhere.issues, elsewhere.prs], [[], []]);
   assert.equal(

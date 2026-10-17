@@ -60,6 +60,7 @@ import {
   type Channel,
   type Command,
   type ConfigState,
+  type ForgeState,
   type MediaUploadOwner,
   type ReadinessEntry,
   type ServerMessage,
@@ -132,7 +133,7 @@ import { SpaceManager, type SpaceHost } from "./space.js";
 import { GitHostClient, fileCredentialStore } from "./git-host.js";
 import { relayHostError } from "./space-groups.js";
 import { currentRuntime, withGitCredential } from "./git-credential.js";
-import { validateRemoteUrl } from "./space-git.js";
+import { displayRemote, validateRemoteUrl } from "./space-git.js";
 import type { SpaceOp, SyncStep } from "./protocol.js";
 import { isFastModeSupported, isSubagentModelSupported } from "@sublang/cligent";
 import type { PlayerAdapterImports } from "@sublang/cligent/tmux-play";
@@ -2144,13 +2145,29 @@ export class CoreService {
         if (!project) {
           throw noProject(command.projectId);
         }
-        return repoStatus(project.path, this.runCommand);
+        const { originUrl, ...status } = await repoStatus(project.path, this.runCommand);
+        return {
+          ...status,
+          ...(originUrl && this.space.codeRemoteKind(originUrl) === "external" ? { originUrl: displayRemote(originUrl) } : {}),
+        };
       }
       case "forge.items": {
         const project = this.store.getProject(command.projectId);
         if (!project) {
           throw noProject(command.projectId);
         }
+        // The real origin stays internal for binding. A response's
+        // guidance follows the origin known now, even from an older
+        // cache; local status never asks the host (projects-7, -11).
+        const status = await repoStatus(project.path, this.runCommand);
+        const shown = (state: ForgeState): ForgeState => {
+          if (!status.originUrl || state.repo) return state;
+          const kind = this.space.codeRemoteKind(status.originUrl);
+          if (kind === "external") return state;
+          return { ...state, guidance: kind === "instance"
+            ? i18n._({ id: "Issues and PRs come from GitHub; this project's code is on this instance.", comment: "Forge setup guidance for code on the instance's reported Git origin, whose underlying Git system is never named" })
+            : i18n._({ id: "Issues and PRs come from GitHub; this project's code is on a remote.", comment: "Forge setup guidance before the instance has reported its Git origin; the actual remote and hostname stay internal" }) };
+        };
         // The cache is persisted in the app store (dashboard-14), so a
         // restart serves the last lists rather than a blank.
         const cached = this.store.getForgeCache(project.id);
@@ -2161,12 +2178,11 @@ export class CoreService {
         ) {
           // The lists travel with their fetch moment, so a client reading
           // the cache shows the data's age, not its own read's.
-          return { ...cached.state, at: cached.at };
+          return { ...shown(cached.state), at: cached.at };
         }
-        const status = await repoStatus(project.path, this.runCommand);
         const at = Date.now();
         const state = {
-          ...(await this.forge.state(project.path, status.originUrl)),
+          ...shown(await this.forge.state(project.path, status.originUrl)),
           at,
         };
         this.store.setForgeCache(project.id, { at, state });

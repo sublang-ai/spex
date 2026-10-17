@@ -977,7 +977,7 @@ class RepositorySync {
     let code: string | null = null;
     try {
       const project = existsSync(this.repository.projectFile) ? readJsonFile(this.repository.projectFile) as { remote?: unknown } : undefined;
-      code = typeof project?.remote === "string" ? displayRemote(project.remote) : null;
+      code = typeof project?.remote === "string" ? this.owner.codeRemoteAsShown(project.remote) : null;
     } catch { code = null; }
     const remote = repo.root ? repo.remote : null;
     const state: RepositoryState = {
@@ -2334,6 +2334,23 @@ export class SpaceManager {
     return this.view?.gitOrigin ?? this.described?.gitOrigin;
   }
 
+  /** A code remote under the reported Git origin stays inside the core
+   * (space-1, DR-120); its transport URL and project file stay as given. */
+  codeRemoteAsShown(remote: string): string {
+    const kind = this.codeRemoteKind(remote);
+    if (kind === "unknown") return i18n._({ id: "Code on a remote", comment: "Where a project's code lives before the instance has reported its Git origin; the actual remote is withheld until it can be classified" });
+    return kind === "instance"
+      ? i18n._({ id: "Code on this instance", comment: "Where a project's code lives when its remote is under the instance's reported Git origin; the Git system behind the instance is never named" })
+      : displayRemote(remote);
+  }
+
+  /** Presentation only, against the origin already reported: no read
+   * of the host and no inferred origin (space-1, projects-7, DR-120). */
+  codeRemoteKind(remote: string): "unknown" | "instance" | "external" {
+    const origin = this.knownOrigin();
+    return origin ? (underOrigin(remote, origin) ? "instance" : "external") : "unknown";
+  }
+
   // -- the instance's names (space-1, space-15, git-host-5, DR-120) ---------
 
   /** The listing a clone stands for in the current view, or among what
@@ -3027,8 +3044,9 @@ export class SpaceManager {
   }
 
   /** The joined clone's working folder (space-63): the code cloned from
-   * the remote its `project.json` names with this device's own Git and
-   * credentials, or a folder already holding it, paired with the clone;
+   * the remote its `project.json` names with this device's own Git,
+   * brokered credentials at the reported Git origin and this device's
+   * elsewhere, or a folder already holding it, paired with the clone;
    * a group's own spex repository pairs the folder its sessions run in.
    * The join's Code step runs while the code clones (space-63), shown
    * through `step`; a failure comes back as the row's stopped state. */
@@ -3039,16 +3057,28 @@ export class SpaceManager {
     const at: SyncStep = remote ? "code" : "check";
     step({ phase: "running", op: "join", step: at, since: Date.now(), cancelable: false });
     await this.publish();
-    const stopped = (failure: GitFailure): SpaceSyncPhase => ({ phase: "stopped", op: "join", step: at, ...failure });
+    const stopped = (failure: GitFailure): SpaceSyncPhase => ({
+      phase: "stopped", op: "join", step: at,
+      ...this.withoutHostUrls(failure, { remote: null, id: null }, machine.key),
+    });
+    const chooseFolder = (): string => i18n._({ id: "The spex repository is here; choose a folder for its code to pair it.", comment: "Guidance after a join's code clone failed" });
     try {
       if (remote) {
         mkdirSync(dirname(folder), { recursive: true });
-        const run = await this.probe.run(["clone", "-q", remote, folder], { transport: true });
+        const credential = await this.credentialFor(remote, at);
+        let run: GitRun;
+        try {
+          run = await this.probe.run(["clone", "-q", remote, folder], { transport: true, ...(credential ? { credential } : {}) });
+        } finally {
+          await credential?.dispose();
+        }
         if (run.code !== 0) {
           return stopped({
-            cause: run.killed ?? "git",
-            message: lastLines(run.stderr) || i18n._({ id: "Git could not clone the code", comment: "A join's stop where git failed to clone the code and printed nothing" }),
-            guidance: i18n._({ id: "The spex repository is here; choose a folder for its code to pair it.", comment: "Guidance after a join's code clone failed" }),
+            ...(credential ? classifyHostTransportFailure(run, this.hostName()) : {
+              cause: run.killed ?? "git",
+              message: lastLines(run.stderr) || i18n._({ id: "Git could not clone the code", comment: "A join's stop where git failed to clone the code and printed nothing" }),
+            }),
+            guidance: chooseFolder(),
             retry: false,
           });
         }
@@ -3060,6 +3090,7 @@ export class SpaceManager {
       this.host.ledgerChanged([machine.key]);
       return undefined;
     } catch (error) {
+      if (error instanceof SpaceStopped) return stopped({ ...error.failure, guidance: chooseFolder(), retry: false });
       return stopped({ cause: "git", message: lastLines(error instanceof Error ? error.message : String(error)), guidance: retryGuidance(), retry: false });
     }
   }
@@ -3744,7 +3775,7 @@ export class SpaceManager {
       const path = `${repository.group.fullPath}/${repository.path}`;
       const key = colliding ? `${path}@${repository.id}` : hostKey(repository);
       if (!key || (!colliding && store.repository(key))) continue;
-      const code = repository.project && typeof repository.project.remote === "string" ? displayRemote(repository.project.remote) : null;
+      const code = repository.project && typeof repository.project.remote === "string" ? this.codeRemoteAsShown(repository.project.remote) : null;
       rows.push({
         row: {
           key,
