@@ -11,6 +11,8 @@ Amends [DR-102](102-playbook-17-4-1-adoption.md) in its slc floor alone: both sh
 Follows [DR-081](081-the-app-supplies-the-compiler.md)'s explicit-bump rule for the compiler and [DR-024](024-app-supplied-agent-runtimes.md)'s app-supplied agent runtimes; nothing either decided changes.
 Amended by [DR-121](121-playbook-17-9-0-cligent-0-33-5-adoption.md) in its floors alone: the core requires `@sublang/playbook` `^17.9.0` and `@sublang/cligent` `^0.33.5`; slc `^0.16.1` stands.
 
+Amended by [DR-122](122-run-scoped-skills.md) in its slc floor alone, now `^0.16.2`.
+
 ## Context
 
 - A ten-team workshop simulation on 2026-10-11 ended three finished runs as runtime defects: a judge forced into a reply shape the compiled machine refuses, a direct-Captain adjudication reply with an undeclared field thrown as an uncaught error, and a closing reply saying nothing was committed when the receipt showed the commit; two more runs failed because a step committed twice or found its work already committed.

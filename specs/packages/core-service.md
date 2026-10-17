@@ -102,7 +102,7 @@ When a session's runtime is opened for a message [[core-service-73](#core-servic
 | Case | Outcome |
 | --- | --- |
 | Same structure, same tuning | the runtime opens on the stored projection |
-| Same structure, changed model, subagent model, effort, subagent effort, fast mode, browser access, or supplied skills [[run-skills-2](run-skills.md#run-skills-2)] | the runtime opens on the new projection, applied from the next call |
+| Same structure, changed model, subagent model, effort, subagent effort, fast mode, browser access [[media-9](media.md#media-9)], or supplied skills [[run-skills-2](run-skills.md#run-skills-2)] | the runtime opens on the new projection, applied from the next call |
 | A stored playbook disabled, or changed in its source, command, options, or a binding's player; the Captain's or a stored player's adapter, instruction, or permissions changed; a stored player gone | refused `invalid_config` naming each changed field and offering a new session, the runtime never opened |
 
 - a playbook or player the session never had is left out of the projection and changes nothing;

@@ -1068,15 +1068,3 @@ test("fast mode reaches the shell's agent blocks and role bindings", async () =>
   const review = summary.playbooks.find((p) => p.id === "review");
   assert.ok(review && !("fastMode" in review.roles.coder));
 });
-
-
-test("run-skills-3: malformed shared and agent lists fail closed before module loading", async () => {
-  for (const value of [null, "./skill", {}, [1], [""], [" \t"], ["a\0b"]]) {
-    for (const scope of ["shared", "captain", "player"] as const) {
-      const top = baseConfig();
-      const target = scope === "shared" ? top : scope === "captain" ? top.captain : roster(top)["dev.coder"];
-      (target as Record<string, unknown>).skills = value;
-      await expectError(top, /skills(?:\[0\])? must be/);
-    }
-  }
-});

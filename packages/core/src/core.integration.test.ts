@@ -5371,7 +5371,7 @@ test("storage-29: session.create makes a paired clone's missing sessions/ privat
 
 test("run-skills-3: configuration paths, replacement, clearing and continued-turn records reach the real host", async (t) => {
   const source = `# Keep these relative paths\nskills: [./supplied/shared]\n${VALID_CONFIG}`;
-  const harness = await startHarness(source);
+  const harness = await startHarness();
   const client = new Client(harness.service.port());
   t.after(async () => { client.close(); await harness.service.stop(); });
   await client.open();
@@ -5387,31 +5387,40 @@ test("run-skills-3: configuration paths, replacement, clearing and continued-tur
       m.session.turns === turn && !m.session.turnActive && !m.session.live);
     const calls = harness.stats.runs.filter(call => call.prompt === text);
     assert.equal(calls.length, 1, "one player invocation through the real host");
-    assert.deepEqual(calls[0].skills, expected);
+    assert.deepEqual(calls[0].skills ?? [], expected);
     assert.equal(calls[0].cwd, harness.projectDir);
     const saved = await store.read(session.id);
-    assert.deepEqual(saved.lastAppliedExecutionProjection.players.find(player => player.id === "dev.coder")?.skills, expected);
+    const savedPlayer = saved.lastAppliedExecutionProjection.players.find(player => player.id === "dev.coder");
+    assert.ok(savedPlayer, "the accepted turn retains the player projection");
+    assert.deepEqual(savedPlayer.skills ?? [], expected);
     assert.equal(saved.structuralProjection.players.some(player => "skills" in player), false, "skills are mutable execution settings");
   };
   const inherited = [join(harness.dir, "supplied", "shared")];
-  await run(1, inherited);
+  assert.ok(existsSync(join(clonePath(harness.dataDir, project.id), "skills", "code", "SKILL.md")), "the project's environment really exports a skill");
+  assert.ok(existsSync(join(clonePath(harness.dataDir, `${OWN}/${OWN}-spex`), "skills", "review", "SKILL.md")), "the own-group environment really exports a skill");
+  await run(1, []);
+  const noSkillsCaptain = harness.stats.runs.find(call => call.prompt === "route: skill forwarding 1");
+  assert.ok(noSkillsCaptain, "the Captain is invoked without a configured skills list");
+  assert.deepEqual(noSkillsCaptain.skills ?? [], [], "exports add no implicit supplied entries");
+  writeFileSync(configPath, source);
+  await run(2, inherited);
   assert.equal(readFileSync(configPath, "utf8"), source);
   await client.expectOk("config.edit", { op: { kind: "player.set", playerId: "dev.coder", patch: { skills: ["./supplied/player/SKILL.md"] } } });
   const captainSkill = join(harness.dir, "supplied", "captain");
   await client.expectOk("config.edit", { op: { kind: "captain.set", patch: { skills: [captainSkill] } } });
-  await run(2, [join(harness.dir, "supplied", "player", "SKILL.md")]);
-  assert.deepEqual(harness.stats.runs.find(call => call.prompt === "route: skill forwarding 2")?.skills, [captainSkill]);
+  await run(3, [join(harness.dir, "supplied", "player", "SKILL.md")]);
+  assert.deepEqual(harness.stats.runs.find(call => call.prompt === "route: skill forwarding 3")?.skills, [captainSkill]);
   await client.expectOk("config.edit", { op: { kind: "player.set", playerId: "dev.coder", patch: { effort: "high" } } });
   assert.deepEqual(parseYaml(readFileSync(configPath, "utf8")).players["dev.coder"].skills, ["./supplied/player/SKILL.md"]);
   assert.match(readFileSync(configPath, "utf8"), /# Keep these relative paths/);
   await client.expectOk("config.edit", { op: { kind: "player.set", playerId: "dev.coder", patch: { skills: [] } } });
   await client.expectOk("config.edit", { op: { kind: "captain.set", patch: { skills: [] } } });
-  await run(3, []);
-  assert.deepEqual(harness.stats.runs.find(call => call.prompt === "route: skill forwarding 3")?.skills, []);
+  await run(4, []);
+  assert.deepEqual(harness.stats.runs.find(call => call.prompt === "route: skill forwarding 4")?.skills, []);
   await client.expectOk("config.edit", { op: { kind: "player.set", playerId: "dev.coder", patch: { skills: null } } });
   await client.expectOk("config.edit", { op: { kind: "captain.set", patch: { skills: null } } });
-  await run(4, inherited);
-  const captainCall = harness.stats.runs.find(call => call.prompt === "route: skill forwarding 4");
+  await run(5, inherited);
+  const captainCall = harness.stats.runs.find(call => call.prompt === "route: skill forwarding 5");
   assert.deepEqual(captainCall?.skills, inherited);
   const before = readFileSync(configPath, "utf8");
   const calls = harness.stats.runs.length;
@@ -5427,4 +5436,43 @@ test("run-skills-3: configuration paths, replacement, clearing and continued-tur
     }
   }
   assert.equal(harness.stats.runs.length, calls, "validation never calls a provider");
+});
+
+
+test("run-skills-7: real-core loading refuses malformed lists and project-level skills before execution", async (t) => {
+  const harness = await startHarness();
+  const client = new Client(harness.service.port());
+  t.after(async () => { client.close(); await harness.service.stop(); });
+  await client.open();
+  const configPath = join(harness.dir, "playbook.config.yaml");
+  const project = await client.expectOk("project.register", { path: harness.projectDir });
+  const refuse = async (path: string, source: string, field: string) => {
+    writeFileSync(path, source);
+    const state = await client.expectOk("config.get", { projectId: project.id });
+    assert.equal(state.status, "invalid", field);
+    if (state.status === "invalid") assert.ok(state.errors.some(error => error.includes(field)), state.errors.join("; "));
+    const rejected = await client.command("session.create", { projectId: project.id });
+    assert.ok(!rejected.ok && rejected.error.code === "invalid_config", field);
+    assert.equal(readFileSync(path, "utf8"), source, "refused loads retain the authored bytes");
+    assert.equal(harness.stats.runs.length, 0, "configuration refusal never calls a provider");
+  };
+  for (const scope of ["shared", "captain", "player"] as const) {
+    for (const skills of [null, "./skill", {}, [1], [""], [" \t"], ["a\0b"]]) {
+      const config = parseYaml(VALID_CONFIG);
+      const target = scope === "shared" ? config : scope === "captain" ? config.captain : config.players["dev.coder"];
+      target.skills = skills;
+      const field = scope === "shared" ? "skills" : scope === "captain" ? "captain.skills" : "players.dev.coder.skills";
+      await refuse(configPath, stringifyYaml(config), field);
+    }
+  }
+  writeFileSync(configPath, VALID_CONFIG);
+  const projectConfig = join(clonePath(harness.dataDir, project.id), "config", "playbook.config.yaml");
+  mkdirSync(dirname(projectConfig), { recursive: true });
+  for (const [config, field] of [
+    [{ skills: ["./skill"] }, "skills"],
+    [{ captain: { skills: ["./skill"] } }, "captain"],
+    [{ players: { "dev.coder": { skills: ["./skill"] } } }, "players"],
+  ] as const) {
+    await refuse(projectConfig, stringifyYaml(config), field);
+  }
 });

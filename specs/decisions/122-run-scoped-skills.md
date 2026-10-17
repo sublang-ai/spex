@@ -6,7 +6,7 @@
 ## Status
 
 Accepted (2026-10-16) on the owner's request to adopt cross-agent skill delivery through the released runtime and verify it at the host boundary and in a real playbook run.
-Amends [DR-019](019-inline-agent-configuration.md) in the admitted agent configuration and [DR-121](121-playbook-17-9-0-cligent-0-33-5-adoption.md) in the dependency floors: Cligent `^0.34.0`, Playbook `^17.10.1`, and slc `^0.16.2`, whose dependencies admit both.
+Amends [DR-019](019-inline-agent-configuration.md) in the admitted agent configuration, [DR-121](121-playbook-17-9-0-cligent-0-33-5-adoption.md) in its Cligent and Playbook floors, now `^0.34.0` and `^17.10.1`, and [DR-116](116-playbook-17-8-0-slc-0-16-1-adoption.md) in its slc floor, now `^0.16.2`, whose dependencies admit both.
 
 ## Context
 

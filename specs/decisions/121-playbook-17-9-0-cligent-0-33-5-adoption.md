@@ -9,6 +9,8 @@ Accepted (2026-10-12).
 Amends [DR-116](116-playbook-17-8-0-slc-0-16-1-adoption.md) in its floors alone: the core requires `@sublang/playbook` `^17.9.0` and `@sublang/cligent` `^0.33.5`; slc `^0.16.1` and everything else DR-116 decided stand.
 Follows [DR-081](081-the-app-supplies-the-compiler.md)'s explicit-bump rule for the compiler and [DR-024](024-app-supplied-agent-runtimes.md)'s app-supplied agent runtimes; nothing either decided changes.
 
+Amended by [DR-122](122-run-scoped-skills.md) in its Playbook and Cligent floors alone, now `^17.10.1` and `^0.34.0`.
+
 ## Context
 
 - A walk of ten workshop teams through the build on Playbook 17.8.1 and Cligent 0.33.4, on 2026-10-12, found players' commits carrying Claude Code's own attribution beside the trailer the project asks for, a trailer naming the wrong model, a reviewing role that never saw the Boss's answers, English framing in a Chinese run, a closing reply without its commit's hash or branch, and a step failed after its commit stood because the runtime forced a string the machine refuses.
