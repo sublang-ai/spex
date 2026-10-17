@@ -61,7 +61,6 @@ import {
   prepareStorageGitFiles,
   readStorageTree,
   resolveStorageChoices,
-  SET_UP_SUBJECT,
   SPEX_BRANCH,
   storageUnitName,
   StorageWriteRefused,
@@ -1486,8 +1485,8 @@ class RepositorySync {
     let restarts = 0;
     let rechecks = 0;
     let savedCommit: string | null = null;
-    // Every commit this operation's Saves made: a set-up join counts them
-    // as its own, never as the clone's (space-59).
+    // Saves may carry authored changes; only an exact generated-bootstrap
+    // tree can make a set-up join automatic (space-59).
     const saves = new Set<string>();
     let pending: Pending | undefined;
     let counts = { sent: 0, received: 0 };
@@ -1766,7 +1765,7 @@ class RepositorySync {
     if (await this.git.succeeds(["merge-base", "--is-ancestor", originRef, "HEAD"])) {
       return { outcome: "nothing", counts: { sent: local.length, received: 0 } };
     }
-    if (setUpSaves && conflicts.length > 0 && Object.keys(choices).length === 0 && await this.holdsNothingOfItsOwn(trees.ours, setUpSaves)) {
+    if (setUpSaves && conflicts.length > 0 && Object.keys(choices).length === 0 && await this.holdsNothingOfItsOwn(head, trees.ours, setUpSaves)) {
       choices = Object.fromEntries(conflicts.map((c) => [c.name, "theirs" as const]));
     }
     const mismatch = conflicts.some((c) => choices[c.name] === undefined)
@@ -1780,11 +1779,10 @@ class RepositorySync {
     return { outcome: "apply", pending: { head, origin, base, units, resolved, counts } };
   }
 
-  /** Whether this clone holds nothing of its own (space-59): no session,
-   * intent or authoring session among its files or in the tree its Save
-   * recorded, and no commit but the set-up's (storage-6) and `saves`,
-   * the Saves of the operation asking. */
-  private async holdsNothingOfItsOwn(saved: StorageTree, saves: ReadonlySet<string>): Promise<boolean> {
+  /** Whether the saved clone still holds its exact generated bootstrap
+   * (space-59). Missing proof asks choices; commit subjects and Saves
+   * cannot prove that configuration or environment bytes are unowned. */
+  private async holdsNothingOfItsOwn(head: string, saved: StorageTree, saves: ReadonlySet<string>): Promise<boolean> {
     const records = /^(?:sessions|intents|authoring)\//;
     if ([...saved.keys()].some((path) => records.test(path))) return false;
     for (const folder of ["sessions", "intents", "authoring"]) {
@@ -1797,15 +1795,16 @@ class RepositorySync {
       }
       if (entries.length > 0) return false;
     }
-    // A clone the core set up holds one set-up commit beneath the Saves:
-    // one more than those read means a commit of its own.
+    const proof = await this.git.run(["config", "--local", "--get", "spex.bootstrap"]);
+    const bootstrap = proof.stdout.toString("utf8").trim();
+    if (proof.code !== 0 || !/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(bootstrap)) return false;
+    // The recorded bootstrap must be the root beneath this operation's
+    // Saves, and every saved byte must still be exactly its generated tree.
     const limit = saves.size + 1;
-    const log = (await this.git.ok(["log", "--no-show-signature", "-n", String(limit + 1), "--format=%H %s", "HEAD"])).split("\n").filter(Boolean);
-    if (log.length > limit) return false;
-    return log.every((line) => {
-      const [commit] = line.split(" ", 1);
-      return saves.has(commit) || line.slice(commit.length + 1).startsWith(SET_UP_SUBJECT);
-    });
+    const log = (await this.git.ok(["log", "--no-show-signature", "-n", String(limit + 1), "--format=%H", head])).split("\n").filter(Boolean);
+    if (log.length > limit || log.at(-1) !== bootstrap || !log.slice(0, -1).every((commit) => saves.has(commit))) return false;
+    const trees = (await this.git.ok(["rev-parse", `${head}^{tree}`, `${bootstrap}^{tree}`])).split("\n");
+    return trees.length === 2 && trees[0] === trees[1];
   }
 
   private markerPath(): string { return join(this.dir, APPLY_MARKER); }

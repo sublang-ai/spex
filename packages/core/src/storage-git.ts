@@ -600,15 +600,14 @@ export function committerArgsSync(dir: string, env: NodeJS.ProcessEnv): string[]
   return args;
 }
 
-/** The subject that begins the commit starting a clone's `spex` branch
- * at set-up (storage-6), the host name following it: a history holding
- * only such commits holds none of its own (space-59). */
+/** The subject that begins a clone's `spex` branch at set-up (storage-6).
+ * It says nothing about authorship of the files it records (space-59). */
 export const SET_UP_SUBJECT = "Start the spex branch on ";
 
 /** Make a clone a repository on a new `spex` branch with one commit of
  * what it holds (storage-6, space-32); a clone that already is one is
  * left alone. Returns whether a repository was made. */
-export function initializeClone(dir: string, options: { env?: NodeJS.ProcessEnv; message?: string; unsupported?: string[] } = {}): boolean {
+export function initializeClone(dir: string, options: { env?: NodeJS.ProcessEnv; message?: string; unsupported?: string[]; generatedBootstrap?: boolean } = {}): boolean {
   mkdirSync(dir, { recursive: true, mode: 0o700 });
   if (existsSync(join(dir, ".git"))) return false;
   const env = gitEnvironment(options.env);
@@ -619,6 +618,7 @@ export function initializeClone(dir: string, options: { env?: NodeJS.ProcessEnv;
     prepareStorageGitFiles(dir, options.unsupported ?? []);
     git(dir, ["add", "-A", "--", "."], env);
     git(dir, [...committerArgsSync(dir, env), "commit", "-q", "--allow-empty", "-m", options.message ?? `${SET_UP_SUBJECT}${hostname()}`], env);
+    if (options.generatedBootstrap) git(dir, ["config", "--local", "spex.bootstrap", git(dir, ["rev-parse", "HEAD"], env).toString("utf8").trim()], env);
   } catch (error) {
     rmSync(join(dir, ".git"), { recursive: true, force: true });
     throw error;
