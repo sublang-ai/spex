@@ -920,7 +920,12 @@ export class EnvironmentManager {
     const dir = this.store.repository(key)?.dir;
     const lock = this.lockOf(key);
     if (!dir || !lock) return new Map();
-    return moduleLocations(lock, dir, this.workingFolder(key));
+    const locations = moduleLocations(lock, dir, this.workingFolder(key));
+    const installed = installedPackages(dir, lock);
+    for (const location of locations.values()) {
+      if (!isPathSource(lock.packages[location.package]!.source) && !installed.has(location.package)) location.present = false;
+    }
+    return locations;
   }
 
   /** Where a session's playbooks come from (environments-9): the

@@ -10,7 +10,7 @@ import { randomUUID } from "node:crypto";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { createServer, request as httpRequest } from "node:http";
 import type { AddressInfo } from "node:net";
 import { dirname, isAbsolute, join } from "node:path";
@@ -23,8 +23,8 @@ import type { EnvironmentManager } from "./environments.js";
 import { CoreError } from "./session.js";
 import type { Store } from "./store.js";
 import { defaultSpawner, type LineSpawner } from "./compile.js";
-import { starterText, templatePath } from "./config.js";
-import { builtinPackage, publishRelease, readRelease, RegistryClient, type BuiltinPackage } from "./environment/index.js";
+import { createModuleLoader, starterText, templatePath } from "./config.js";
+import { builtinPackage, INSTALL_RECORD, publishRelease, readRelease, RegistryClient, requestsDigest, type BuiltinPackage, type Lock } from "./environment/index.js";
 import type { Command, CommandResults, EnvironmentState, ServerMessage } from "./protocol.js";
 import { authoringScript } from "./testing/authoring.js";
 import { fakeAdapterImports, type FakeScript } from "./testing/fake-adapter.js";
@@ -315,6 +315,88 @@ test("environments-23: a fresh home with no registry reachable seeds the built-i
     && JSON.stringify(state.requests["sublang/playbooks"]) === JSON.stringify({ kind: "registry", version: shipped.version }));
   assert.deepEqual(exact.packages.map((pkg) => [pkg.version, pkg.installed]), [[shipped.version, true]]);
   assert.ok(!("builtinUpdate" in exact), "[environments-11] the request admits only the older release");
+});
+
+test("environments-22 through a real core: retained files of another lock are not imported before a successful same-process resolve", { timeout: 120_000 }, async (t) => {
+  const dir = scratchDir("spex-env-retained-module-");
+  // Install the shipped release without loading its registries yet.
+  let core = await startCore(dir, { hostUrl: UNREACHABLE, config: CONFIG.replace(/playbooks:[\s\S]*/, "playbooks: {}\n") });
+  t.after(() => core.stop());
+  const own = `${OWN}/${OWN}-spex`;
+  const clone = clonePath(core.dataDir, own);
+  await core.stop();
+  writeFileSync(core.configPath, CONFIG);
+
+  // A synced older lock cannot be restored. Its previous installed tree
+  // stays intact, including an engine link invalidated by a local move.
+  const major = builtinPackage().version.split(".")[0]!;
+  const requests = stringifyYaml({ format: 1, packages: { "sublang/playbooks": { version: `^${major}.0.0` } } });
+  writeFileSync(join(clone, "spex.yaml"), requests);
+  const lockPath = join(clone, "spex.lock");
+  const lock = parseYaml(readFileSync(lockPath, "utf8")) as Lock;
+  lock.requests = requestsDigest(requests);
+  const previous = lock.packages["sublang/playbooks"]!;
+  assert.ok("version" in previous.source);
+  previous.source.version = `${major}.0.0`;
+  previous.files[0]!.sha256 = "0".repeat(64);
+  writeFileSync(lockPath, stringifyYaml(lock));
+  for (const id of ["code", "review"]) {
+    const link = join(clone, "packages", "sublang", "playbooks", "playbooks", "en", id, "node_modules", "xstate");
+    rmSync(link, { recursive: true, force: true });
+    symlinkSync(join(dir, "retired-engine", "xstate"), link, process.platform === "win32" ? "junction" : "dir");
+  }
+  const loaded: string[] = [];
+  const loader = createModuleLoader();
+  core = await startCore(dir, { hostUrl: UNREACHABLE, extra: { loadModule: async (module) => { loaded.push(module); return loader(module); } } });
+  const before = await core.client.expectOk("environment.get", { repository: own });
+  assert.equal(before.packages[0]?.installed, false);
+  assert.ok(before.error, "the failed restoration remains visible");
+  const configBefore = await core.client.expectOk("config.get", {});
+  const importedBefore = loaded.length;
+
+  // One normal resolve selects the seeded release, installs it and
+  // prepares the engine links before the first registry import.
+  const mark = core.client.mark();
+  await core.client.expectOk("environment.resolve", { repository: own });
+  const after = await core.client.environment(own, mark, (state) => state.busy === null && state.packages[0]?.installed === true);
+  assert.equal(after.error, null);
+  assert.equal((await core.client.expectOk("config.get", {})).status, "valid", "a successful resolve repairs config without restarting the core");
+  assert.equal(configBefore.status, "invalid");
+  assert.match(JSON.stringify(configBefore), /exports no playbook code/);
+  assert.equal(importedBefore, 0, "no retained registry was imported while its package was uninstalled");
+  assert.ok(loaded.length > 0, "the installed registries were imported after recovery");
+
+  // Install-record changes matter even when config, lock and entry bytes
+  // stay unchanged, with watchers disabled. Restoring the exact record
+  // makes the already installed package available again.
+  const recordPath = join(clone, "packages", INSTALL_RECORD);
+  const record = readFileSync(recordPath);
+  rmSync(recordPath);
+  assert.equal((await core.client.expectOk("config.get", {})).status, "invalid");
+  writeFileSync(recordPath, record);
+  assert.equal((await core.client.expectOk("config.get", {})).status, "valid");
+
+  const machinePath = join(clone, "packages", "sublang", "playbooks", "playbooks", "en", "code", "code.playbook", "code.fsm.js");
+  const machine = readFileSync(machinePath);
+  rmSync(machinePath);
+  assert.equal((await core.client.expectOk("config.get", {})).status, "invalid", "a missing selected non-entry file invalidates cached availability");
+  writeFileSync(machinePath, machine);
+  assert.equal((await core.client.expectOk("config.get", {})).status, "valid");
+
+  // A Git source at another commit is equally unavailable: the retained
+  // registry files never establish that the new locked source installed.
+  const installedLock = readFileSync(lockPath);
+  const gitLock = parseYaml(installedLock.toString()) as Lock;
+  gitLock.packages["sublang/playbooks"]!.source = { git: pathToFileURL(join(dir, "not-fetched.git")).href, commit: "0".repeat(40) };
+  const beforeGitRead = loaded.length;
+  writeFileSync(lockPath, stringifyYaml(gitLock));
+  assert.equal((await core.client.expectOk("config.get", {})).status, "invalid");
+  assert.equal(loaded.length, beforeGitRead, "no files retained for a different Git source are imported");
+  writeFileSync(lockPath, installedLock);
+  assert.equal((await core.client.expectOk("config.get", {})).status, "valid");
+  assert.equal(readFileSync(core.configPath, "utf8"), CONFIG, "recovery preserves the authored configuration");
+  assert.equal(readFileSync(join(clone, "spex.yaml"), "utf8"), requests, "resolving again preserves the authored version requirement");
+  assert.deepEqual(readdirSync(join(clone, "sessions")), [], "no workflow or provider turn was needed");
 });
 
 // ---------------------------------------------------------------------------
