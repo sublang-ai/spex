@@ -11,7 +11,7 @@
 import { test } from "node:test";
 import { createHash, randomUUID } from "node:crypto";
 import assert from "node:assert/strict";
-import { appendFileSync, chmodSync, existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { appendFileSync, chmodSync, existsSync, mkdirSync, readdirSync, rmSync, statSync, watch, writeFileSync } from "node:fs";
 import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { hostname } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
@@ -3055,6 +3055,11 @@ test("core-service-85: a rebind keeps the clone's sessions listed, and a recorde
     const kept = (await client.expectOk("session.list", {})).find((entry) => entry.id === session.id);
     assert.equal(kept?.projectId, project.id);
     assert.equal(kept?.projectPath, relocated);
+    assert.equal(kept?.continuable, undefined);
+    assert.match(kept?.continuationReason ?? "", /continue it on the device whose folder it ran in/);
+    assert.ok(client.messages.some((message) => message.type === "session.state" && message.session.id === session.id &&
+      message.session.projectPath === relocated && !message.session.continuable &&
+      /continue it on the device whose folder it ran in/.test(message.session.continuationReason ?? "")));
     assert.deepEqual(await client.expectOk("history.get", { sessionId: session.id }), history);
     // ...but it ran in a directory that is neither the folder nor an
     // alias, so it cannot continue here (core-service-73).
@@ -3068,12 +3073,31 @@ test("core-service-85: a rebind keeps the clone's sessions listed, and a recorde
     // than the folder it would now run in, is then Playbook's to refuse
     // as a relocation, its history still readable (core-service-73).
     await client.expectOk("project.rebind", { projectId: project.id, path: relocated, aliases: [harness.projectDir] });
+    const aliasReading = (await client.expectOk("session.list", {})).find((entry) => entry.id === session.id);
+    assert.equal(aliasReading?.continuable, undefined);
+    assert.match(aliasReading?.continuationReason ?? "", /relocation is unsupported/);
     const relocation = await client.command("turn.submit", { sessionId: session.id, text: "second" });
     assert.ok(!relocation.ok && relocation.error.code === "invalid_request", JSON.stringify(relocation));
     assert.doesNotMatch(relocation.error.message, /continue it on the device whose folder it ran in/);
     assert.match(relocation.error.message, /relocation is unsupported/);
     assert.deepEqual(await client.expectOk("history.get", { sessionId: session.id }), history);
     assert.equal((await client.expectOk("session.list", {})).find((entry) => entry.id === session.id)?.projectId, project.id);
+    await client.expectOk("project.rebind", {projectId: project.id, path: harness.projectDir, aliases: []});
+    assert.equal((await client.expectOk("session.list", {})).find((entry) => entry.id === session.id)?.continuable, true);
+    assert.deepEqual(paths.map((path) => existsSync(path) ? readFileSync(path) : undefined), before);
+
+    // A sync/editor can change the binding before the watcher runs.
+    const homePath = join(harness.dataDir, "home.yaml");
+    const homeBytes = readFileSync(homePath);
+    const home = parseYaml(homeBytes.toString("utf8"));
+    home.folders.find((folder: {repository: string}) => folder.repository === project.id).path = relocated;
+    writeFileSync(homePath, stringifyYaml(home));
+    const edited = (await client.expectOk("session.list", {})).find((entry) => entry.id === session.id);
+    assert.equal(edited?.projectPath, relocated);
+    assert.equal(edited?.continuable, undefined);
+    assert.match(edited?.continuationReason ?? "", /continue it on the device whose folder it ran in/);
+    writeFileSync(homePath, homeBytes);
+    assert.equal((await client.expectOk("session.list", {})).find((entry) => entry.id === session.id)?.continuable, true);
   } finally {
     client.close();
     await harness.service.stop();
@@ -3538,6 +3562,164 @@ test("core-service-77: a real session continues after restart and respects anoth
   await client.waitFor((m) => m.type === "session.state" && m.session.id === session.id && !m.session.live && m.session.turns === 2);
   assert.deepEqual(turnIds((await client.expectOk("history.get",{sessionId:session.id})).records),[1,2]);
   assert.ok(readFileSync(stream,"utf8").startsWith(before),"continue appends to the same replay");
+});
+
+test("core-service-77: continuation summaries follow current configuration without opening or changing a session", async (t) => {
+  const base = VALID_CONFIG.slice(0, VALID_CONFIG.indexOf("  review:\n"));
+  const harness = await startHarness(base, {realShell: true, script: {fallback: {result: "not json on purpose"}}});
+  let service = harness.service;
+  let client = new Client(service.port());
+  t.after(async () => { client.close(); await service.stop(); rmSync(harness.dir, {recursive: true, force: true}); });
+  await client.open();
+  const project = await client.expectOk("project.register", {path: harness.projectDir});
+  const session = await client.expectOk("session.create", {projectId: project.id});
+  await client.expectOk("turn.submit", {sessionId: session.id, text: "first"});
+  const initial = await settledSession(client, session.id, 1);
+  assert.equal(initial.continuable, true);
+  assert.equal(initial.turnActive, false);
+  const history = await client.expectOk("history.get", {sessionId: session.id});
+  const sessionsDir = projectSessions(harness.dataDir);
+  const snapshot = (): unknown => readdirSync(sessionsDir, {recursive: true, encoding: "utf8"}).sort().map((name) => {
+    const path = join(sessionsDir, name);
+    const stat = statSync(path);
+    return [name, stat.mode, stat.isDirectory() ? null : [stat.mtimeMs, readFileSync(path)]];
+  });
+  const before = snapshot();
+  const constructed = harness.stats.constructed;
+  const runs = harness.stats.runs.length;
+  const changes: string[] = [];
+  const watcher = watch(sessionsDir, {recursive: true}, (event, name) => changes.push(`${event}:${name}`));
+  t.after(() => watcher.close());
+  const unchanged = async (): Promise<void> => {
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    assert.deepEqual(snapshot(), before, "checkpoint, replay, hints, assets and lease entries stay exact");
+    assert.deepEqual(changes, [], "no transient session lease or session-file write");
+    assert.equal(harness.stats.constructed, constructed, "no runtime constructed");
+    assert.equal(harness.stats.runs.length, runs, "no agent called");
+    assert.deepEqual(await client.expectOk("history.get", {sessionId: session.id}), history);
+  };
+  const listed = async (): Promise<SessionInfo | undefined> =>
+    (await client.expectOk("session.list", {})).find((entry) => entry.id === session.id);
+  const configPath = join(harness.dir, "playbook.config.yaml");
+
+  // Own tuning, session tuning and an unrelated playbook all preserve
+  // the stored-member projection. The config broadcast carries it too.
+  writeFileSync(configPath, base.replace("model: claude-test", "model: claude-tuned"));
+  await service.reloadConfig();
+  assert.equal((await listed())?.continuable, true);
+  await client.expectOk("session.agent.set", {sessionId: session.id, agentId: "dev.coder", model: "claude-session"});
+  assert.equal((await listed())?.continuable, true);
+  writeFileSync(configPath, base + "  review:\n    roles:\n      coder: dev.coder\n      reviewer: dev.coder\n");
+  await service.reloadConfig();
+  assert.equal((await listed())?.continuable, true);
+  await unchanged();
+
+  const broadcastStart = client.messages.length;
+  writeFileSync(configPath, base.replace(/dev\.coder/g, "dev.other"));
+  await service.reloadConfig();
+  const drifted = await listed();
+  assert.equal(drifted?.continuable, undefined);
+  assert.match(drifted?.continuationReason ?? "", /dev\.coder/);
+  assert.match(drifted?.continuationReason ?? "", /new session/);
+  assert.ok(client.messages.slice(broadcastStart).some((message) => message.type === "session.state" &&
+    message.session.id === session.id && message.session.continuationReason === drifted?.continuationReason));
+  await unchanged();
+
+  // No watcher or explicit reload: the next listing reads the current
+  // config, and an older negative reading cannot permanently block it.
+  writeFileSync(configPath, base);
+  assert.equal((await listed())?.continuable, true);
+  await unchanged();
+  // Conversely, a positive reading never admits a turn after a change.
+  writeFileSync(configPath, base.replace(/dev\.coder/g, "dev.other"));
+  const refused = await client.command("turn.submit", {sessionId: session.id, text: "must not run"});
+  assert.ok(!refused.ok && refused.error.code === "invalid_config");
+  assert.match(refused.error.message, /dev\.coder/);
+  await unchanged();
+  watcher.close();
+
+  // A restart derives the same current refusal, without a restoration.
+  client.close();
+  await service.stop();
+  service = await CoreService.start({token: "test", configPath, dataDir: harness.dataDir,
+    adapterImports: harness.imports, adapterRuntime: () => ({usable: true}), env: {},
+    home: join(harness.dir, "home"), own: OWN, watchConfig: false});
+  client = new Client(service.port());
+  await client.open();
+  assert.equal((await listed())?.continuable, undefined);
+  assert.match((await listed())?.continuationReason ?? "", /dev\.coder/);
+  assert.deepEqual(snapshot(), before);
+  assert.equal(harness.stats.constructed, constructed);
+  assert.equal(harness.stats.runs.length, runs);
+});
+
+test("core-service-77: continuation observations guard project inputs and preserve settlement and removals during races", async (t) => {
+  const harness = await startHarness(VALID_CONFIG, {realShell: true, script: {fallback: {result: "not json on purpose", delayMs: 50}}});
+  const client = new Client(harness.service.port());
+  let release = (): void => {};
+  t.after(async () => {release(); client.close(); await harness.service.stop(); rmSync(harness.dir, {recursive: true, force: true});});
+  await client.open();
+  const project = await client.expectOk("project.register", {path: harness.projectDir});
+  const session = await client.expectOk("session.create", {projectId: project.id});
+  await client.expectOk("turn.submit", {sessionId: session.id, text: "first"});
+  await settledSession(client, session.id, 1);
+  const store = harness.service["store"];
+  const repository = store.repository(project.id)!;
+  const shared = repository.store;
+  let afterValidation: (() => Promise<void>) | undefined;
+  repository.store = {...shared, validate: async (id, context) => {
+    const result = await shared.validate(id, context);
+    if (context && id === session.id) await afterValidation?.();
+    return result;
+  }};
+  const lock = join(repository.dir, "spex.lock");
+  const lockBytes = readFileSync(lock);
+  let edits = 0;
+  const editLock = (): void => {writeFileSync(lock, Buffer.concat([lockBytes, Buffer.from(`\n# concurrent edit ${++edits}\n`)]));};
+  // Composition has returned, but its lock still belongs to the
+  // reading while native checkpoint validation is awaited.
+  afterValidation = async () => {afterValidation = undefined; editLock();};
+  const raced = await client.command("session.list", {});
+  assert.ok(!raced.ok && raced.error.code === "conflict");
+  assert.match(raced.error.message, /changed/);
+  writeFileSync(lock, lockBytes);
+  assert.equal((await client.expectOk("session.list", {})).find((entry) => entry.id === session.id)?.continuable, true);
+
+  // Repeated concurrent edits cannot reject the durable settlement or
+  // lose its idle publication and queue-advancement notification.
+  const manager = harness.service["sessions"];
+  const onSettled = manager.onTurnSettled;
+  let settled = 0;
+  manager.onTurnSettled = (...args) => {settled += 1; return onSettled(...args);};
+  await client.expectOk("turn.submit", {sessionId: session.id, text: "second"});
+  afterValidation = async () => editLock();
+  const ended = await settledSession(client, session.id, 2);
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  assert.ok(edits >= 3, "both background observation attempts raced");
+  assert.equal(ended.continuable, undefined);
+  assert.equal(ended.turnActive, false);
+  assert.match(ended.continuationReason ?? "", /changed/);
+  assert.equal(settled, 1, "successful turn still notifies queue advancement");
+  afterValidation = undefined;
+  writeFileSync(lock, lockBytes);
+  assert.equal((await client.expectOk("session.list", {})).find((entry) => entry.id === session.id)?.continuable, true);
+
+  // Deletion may finish while an idle reading is in flight. An old
+  // callback must not resurrect its state after session.removed.
+  let entered!: () => void;
+  const observed = new Promise<void>((resolve) => {entered = resolve;});
+  const gate = new Promise<void>((resolve) => {release = resolve;});
+  afterValidation = async () => {afterValidation = undefined; entered(); await gate;};
+  const publishing = manager.onSessionState(store.describeSession(session.id)!);
+  await observed;
+  await client.expectOk("session.delete", {sessionId: session.id});
+  const removed = client.messages.map((message) => message.type === "session.removed" && message.sessionId === session.id).lastIndexOf(true);
+  assert.ok(removed >= 0);
+  release();
+  await publishing;
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  assert.ok(!client.messages.slice(removed + 1).some((message) => message.type === "session.state" && message.session.id === session.id));
+  assert.ok(!(await client.expectOk("session.list", {})).some((entry) => entry.id === session.id));
 });
 
 test("core-service-77: the real shell continues from its token-free snapshot, ledger intact, and refuses config drift", async (t) => {

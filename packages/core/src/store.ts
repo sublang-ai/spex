@@ -431,6 +431,8 @@ export class Store {
   private readonly prefs = new Map<string, unknown>();
   private readonly forgeCache = new Map<string, { at: number; state: ForgeState }>();
   private readonly sessionProblems = new Map<string, StorageDiagnostic>();
+  /** Current execution refusals are a read model, never session files. */
+  private readonly continuationRefusals = new Map<string, string>();
   private readonly untrackedSessions = new Set<string>();
   private readonly localSessions = new Set<string>();
   /** Which spex repository holds each session (storage-6). */
@@ -1625,6 +1627,7 @@ export class Store {
   /** Every in-memory trace of a session, gone. */
   private dropSession(id: string): void {
     this.sessions.delete(id);
+    this.continuationRefusals.delete(id);
     this.sessionProblems.delete(id);
     this.untrackedSessions.delete(id);
     this.records.delete(id);
@@ -1650,6 +1653,16 @@ export class Store {
     const project = this.getProject(meta.projectId);
     if (!project) return undefined;
     return this.summarize(meta, project.path);
+  }
+
+  hasContinuableCheckpoint(id: string): boolean {
+    const meta = this.sessions.get(id);
+    return !!meta?.continuable && !meta.live && !meta.externalWriter;
+  }
+
+  setContinuationRefusal(id: string, reason: string | undefined): void {
+    if (reason === undefined) this.continuationRefusals.delete(id);
+    else this.continuationRefusals.set(id, reason);
   }
 
   private summarize(meta: SessionMeta, path: string): SessionInfo {
@@ -1684,7 +1697,7 @@ export class Store {
     const opening = turns.length > 1
       ? openingTurn(turns, answeringTurnIds(this.getRecords(meta.id)))
       : turns[0];
-    return sessionInfo(
+    const summary = sessionInfo(
       meta,
       path,
       words(turns[0]),
@@ -1697,6 +1710,12 @@ export class Store {
       agentReportedModels,
       this.parkedRun(meta.id),
     );
+    const refusal = this.continuationRefusals.get(meta.id);
+    if (summary.continuable && refusal !== undefined) {
+      delete summary.continuable;
+      summary.continuationReason = refusal;
+    }
+    return summary;
   }
 
   listSessions(): SessionInfo[] {
