@@ -138,6 +138,14 @@ they run offline, and every new environment requests it. **Playbooks**
 shows each environment's spec packages and the playbooks they export;
 enable one there by choosing a player for each of its roles.
 
+**Skills for a run.** Add `skills: [../skills/team-guide]` to your
+`playbook.config.yaml` to supply a skill directory or `SKILL.md` to the
+Captain and players. Relative paths start at that configuration file's
+directory. A `skills` list on the Captain or a player replaces the shared
+list; `skills: []` clears it. The selected player also receives its skills
+when authoring a spec package. Keep the source files available for later
+turns ([run skills](specs/packages/run-skills.md)).
+
 **Sharing through a Git host.** Spex works offline; sign in on **Groups**
 when you want to share. The host is [spex.pub](https://spex.pub) unless
 `SPEX_HOST_URL` names another when the home is first created. The desktop

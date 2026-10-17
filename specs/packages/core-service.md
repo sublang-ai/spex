@@ -70,7 +70,7 @@ Where the shared config path is the default one and holds nothing, when the core
 
 - An explicit config path given by the shell moves nothing.
 - A former file inside the home is removed once the canonical file is published, and its directory with it when that leaves the directory empty; the XDG file is left in place.
-- A former file whose path-shaped `playbooks.<id>.from` locator would resolve to a different target from the shared path's directory is left where it is and reported, since moving it would retarget the locator; the shared config path is your own group's clone's [[storage-1](storage.md#storage-1)].
+- A former file whose path-shaped `playbooks.<id>.from`, relative `sessions`, or supplied `skills` entry (shared, Captain or player) would resolve to a different target from the shared path's directory is left where it is and reported, since moving it would retarget the locator; the shared config path is your own group's clone's [[storage-1](storage.md#storage-1)].
 
 ### Sessions
 
@@ -102,7 +102,7 @@ When a session's runtime is opened for a message [[core-service-73](#core-servic
 | Case | Outcome |
 | --- | --- |
 | Same structure, same tuning | the runtime opens on the stored projection |
-| Same structure, changed model, subagent model, effort, subagent effort, or fast mode | the runtime opens on the new projection, applied from the next call |
+| Same structure, changed model, subagent model, effort, subagent effort, fast mode, browser access, or supplied skills [[run-skills-2](run-skills.md#run-skills-2)] | the runtime opens on the new projection, applied from the next call |
 | A stored playbook disabled, or changed in its source, command, options, or a binding's player; the Captain's or a stored player's adapter, instruction, or permissions changed; a stored player gone | refused `invalid_config` naming each changed field and offering a new session, the runtime never opened |
 
 - a playbook or player the session never had is left out of the projection and changes nothing;
@@ -853,7 +853,7 @@ While a core service is serving a state root, the test suite shall start a secon
 
 #### core-service-68
 
-Where a config file with a comment and a non-default mode sits at a former location and the shared config path is absent, the test suite shall start the core service with a default config path and assert the relocation contract of [[core-service-66](#core-service-66)] from each former location: the shared path holds the same bytes and mode, the active config is reported valid and not seeded, and an edit to the shared file survives a second start; from the home's `playbook/` location, a relative `sessions` locator reaching outside the directory keeps its target, the former file and its emptied directory are gone, and an XDG file beside it is untouched; a home file whose relative locator points into its own directory is left where it is and reported, the XDG file beside it stays unpublished, and the shared path holds the seeded starter; from the XDG location, the previous file is untouched.
+Where a config file with a comment and a non-default mode sits at a former location and the shared config path is absent, the test suite shall start the core service with a default config path and assert the relocation contract of [[core-service-66](#core-service-66)] from each former location: the shared path holds the same bytes and mode, the active config is reported valid and not seeded, and an edit to the shared file survives a second start; from the home's `playbook/` location, a relative `sessions` locator reaching outside the directory keeps its target, the former file and its emptied directory are gone, and an XDG file beside it is untouched; a home file whose relative locator points into its own directory is left where it is and reported, including every shared, Captain and player skill path that would be retargeted, the XDG file beside it stays unpublished, and the shared path holds the seeded starter; from the XDG location, the previous file is untouched.
 
 #### core-service-69
 

@@ -119,6 +119,7 @@ export interface FakeRunOptions {
   disallowedTools?: string[];
   attachments?: readonly Attachment[];
   browser?: boolean;
+  skills?: readonly string[];
   abortSignal?: AbortSignal;
   approvalHandler?: ApprovalHandler;
 }
@@ -139,6 +140,7 @@ export interface FakeAdapterStats {
     disallowedTools?: string[];
     attachments?: readonly Attachment[];
     browser?: boolean;
+  skills?: readonly string[];
   }[];
 }
 
@@ -186,6 +188,7 @@ export function fakeAdapterImports(
         ...(options?.disallowedTools ? { disallowedTools: options.disallowedTools } : {}),
         ...(options?.attachments ? { attachments: options.attachments } : {}),
         ...(options?.browser !== undefined ? {browser: options.browser} : {}),
+        ...(options?.skills !== undefined ? {skills: [...options.skills]} : {}),
       });
       const sessionId = randomUUID();
       // `<id>` names the cwd's basename — the draft id — in paths,

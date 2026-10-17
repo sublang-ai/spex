@@ -2689,3 +2689,11 @@ msgstr "你已停止传输；你的提交仍然有效。Git 以无交互方式�
 #: src/space.ts
 msgid "Your merge is saved locally; Retry to send it once the host settles."
 msgstr "合并已保存在本地；待托管平台稳定后重试即可发送。"
+
+#. Config error; the path names the skills setting
+msgid "{path} must be an array of skill paths"
+msgstr "{path} 必须是技能路径数组"
+
+#. Config error; the path names one entry of the skills setting
+msgid "{path} must be a non-blank skill path without NUL"
+msgstr "{path} 必须是不含 NUL 的非空技能路径"

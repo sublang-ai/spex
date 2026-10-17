@@ -28,6 +28,7 @@ export interface AgentBlock {
   effort?: string;
   fastMode?: boolean;
   browser?: boolean;
+  skills?: readonly string[];
   instruction?: string;
   permissions?: {
     mode?: string;
@@ -50,6 +51,7 @@ export type AgentPatch = {
   /** `true`/`false` write the key; null removes it (DR-038). */
   fastMode?: boolean | null;
   browser?: boolean | null;
+  skills?: readonly string[] | null;
   instruction?: string | null;
   permissions?: AgentBlock["permissions"] | null;
 };

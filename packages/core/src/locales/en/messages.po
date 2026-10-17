@@ -2689,3 +2689,11 @@ msgstr "You stopped the transfer; your commits stand. Git runs without prompts, 
 #: src/space.ts
 msgid "Your merge is saved locally; Retry to send it once the host settles."
 msgstr "Your merge is saved locally; Retry to send it once the host settles."
+
+#. Config error; the path names the skills setting
+msgid "{path} must be an array of skill paths"
+msgstr "{path} must be an array of skill paths"
+
+#. Config error; the path names one entry of the skills setting
+msgid "{path} must be a non-blank skill path without NUL"
+msgstr "{path} must be a non-blank skill path without NUL"

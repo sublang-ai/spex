@@ -20,7 +20,9 @@
 // neutral reply, attached to the report (DR-089). The new-project
 // scenario lives in live-project.spec.ts.
 
-import { resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { randomUUID } from "node:crypto";
 import { parse } from "yaml";
 
 import {
@@ -448,4 +450,46 @@ test.describe("the changelog playbook", () => {
       contentType: "text/plain",
     });
   });
+});
+
+
+test("run-skills-4 @live: a configured skill reaches a real playbook player", async ({ page, app }) => {
+  test.skip(!LIVE, "live lane only");
+  test.setTimeout(45 * 60_000);
+  await open(page, app);
+  const config = parse(app.readConfig()) as { playbooks: { code: { roles: { coder: string | { player: string } } } } };
+  const binding = config.playbooks.code.roles.coder;
+  const player = typeof binding === "string" ? binding : binding.player;
+  const skill = join(dirname(app.configPath), "supplied", "spex-live-proof");
+  mkdirSync(skill, { recursive: true });
+  const marker = `skill-proof-${randomUUID()}`;
+  writeFileSync(join(skill, "SKILL.md"), `---\nname: spex-live-proof\ndescription: Produce the Spex live integration proof when explicitly requested.\n---\n\nWrite SKILL_RESULT.txt in the current project containing exactly this line:\n\n${marker}\n\nCommit that file. Do not invent a different marker.\n`);
+  const spelling = relative(dirname(app.configPath), skill);
+  await app.core.command("config.edit", { op: { kind: "player.set", playerId: player, patch: { skills: [spelling] } } });
+  expect((parse(app.readConfig()) as { players: Record<string, { skills: string[] }> }).players[player].skills).toEqual([spelling]);
+  commitIdentity(app.projectDir);
+  await surfaceEntry(page, "Workspace").click();
+  await send(page, "/code Invoke the cligent:spex-live-proof skill using the Skill tool, follow its instructions to create SKILL_RESULT.txt, and commit the result. The required contents are in the skill; do not guess them.");
+  await awaitCaptainLine(page, "/code finished", 40 * 60_000, 1, answeringWith(page));
+  const session = (await app.core.command("session.list", {})).find(item => item.projectId === app.projectId)!;
+  expect(session).toBeTruthy();
+  await expect.poll(async () => {
+    const current = (await app.core.command("session.list", {})).find(item => item.id === session.id);
+    return current !== undefined && !current.live && !current.turnActive;
+  }, { timeout: 5 * 60_000 }).toBe(true);
+  const settled = (await app.core.command("session.list", {})).find(item => item.id === session.id)!;
+  expect(settled.failed).toBe(false);
+  expect(settled.recovery).toBeUndefined();
+  await attachRun(page, "configured skill run");
+  expect(readFileSync(join(app.projectDir, "SKILL_RESULT.txt"), "utf8").trim()).toBe(marker);
+  expect(git(app.projectDir, "show", "HEAD:SKILL_RESULT.txt").trim()).toBe(marker);
+  const history = await app.core.command("history.get", { sessionId: session.id });
+  const completion = history.records.flatMap(({ record }) => record.type === "captain_telemetry" && record.topic === "playbook.trace"
+    ? [record.payload as { playbookId?: string; depth?: number; type?: string; payload?: unknown }] : [])
+    .filter(trace => trace?.playbookId === "code" && trace.depth === 0 && trace.type === "boss.input.settled").at(-1);
+  expect(completion?.payload).toMatchObject({ outcome: "terminal", terminal: { kind: "success" } });
+  expect(history.records.some(({ record }) => record.type === "player_event" &&
+    record.playerId === player && record.event.type === "tool_use" &&
+    record.event.payload.toolName === "Skill" && JSON.stringify(record.event.payload.input).includes("spex-live-proof")),
+  "the real player's transcript records native Skill invocation").toBe(true);
 });

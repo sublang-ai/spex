@@ -472,6 +472,7 @@ When an authoring turn starts, the conversation runner shall run the session's a
 | model, subagentModel, effort, subagentEffort, fastMode | the block's, an unset subagentModel taken as `inherit` on an adapter Cligent serves one for and a `false` one as absent, as Playbook's launcher resolves them ([DR-095](../decisions/095-a-subagents-effort-and-the-agents-own-model.md)) |
 | attachments | the current Boss turn's ordered verified authoring assets, supplied again on its resume-rejection retry [[media-5](media.md#media-5)] |
 | browser | the block's off-by-default setting [[media-9](media.md#media-9)] |
+| skills | the block's effective supplied skill list [[run-skills-2](run-skills.md#run-skills-2)] |
 | cwd | the spec package's folder in the working folder [[environments-10](environments.md#environments-10)] |
 | permissions | exactly `{ mode: "auto" }`, with no additional `writablePaths` — the block's own policy dropped ([DR-112](../decisions/112-authoring-permissions-use-the-package-working-directory.md)) |
 | allowedTools, disallowedTools, maxTurns | absent |

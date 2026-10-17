@@ -16,6 +16,11 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Added
 
+- Supplied skills in shared configuration: `skills` defaults at the top level,
+  replacement lists on the Captain and players, and `[]` to clear them. Paths
+  resolve from the configuration file and reach playbook and authoring calls
+  through Cligent's cross-agent transport ([DR-122](specs/decisions/122-run-scoped-skills.md)).
+
 - Groups and sharing from Spex ([DR-114](specs/decisions/114-groups-and-sharing-from-spex.md)).
   Signed in, "New group" heads the list where the instance says you may
   create one, and a group's heading carries "New subgroup" where you
@@ -285,6 +290,10 @@ and `npm start` (desktop) or `npm run start:server` (server).
   `builtinUpdate: { shipped, locked }`; the protocol version is unchanged.
 
 ### Changed
+
+- Runtime dependency floors are Cligent `^0.34.0`, Playbook `^17.10.1`, and
+  slc `^0.16.2`, sharing one registry-backed runtime installation for supplied
+  skills ([DR-122](specs/decisions/122-run-scoped-skills.md)).
 
 - The app requires Playbook 17.8.0 and slc 0.16.1 ([DR-116](specs/decisions/116-playbook-17-8-0-slc-0-16-1-adoption.md)).
   A judge's reply is fitted to the machine and a parked judge is a

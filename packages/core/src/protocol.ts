@@ -13,7 +13,7 @@ import type { AgentCapabilities, ApprovalDecision, ApprovalRequest, BrowserSetup
 import type { SessionRecord as RuntimeRecord } from "@sublang/playbook/session-assets";
 import { LANGUAGES, type Language } from "./language.js";
 
-export const PROTOCOL_VERSION = 26;
+export const PROTOCOL_VERSION = 27;
 
 /** The compile pipeline's phases and their human names, shared so the
  * core's thread lines and the UI's band name a phase alike. */
@@ -160,6 +160,8 @@ export interface AgentSummary {
    * (DR-095). The chip never reads it. */
   subagentEffort?: string;
   instruction?: string;
+  /** Effective supplied skills; saved spelling remains in the config. */
+  skills?: readonly string[];
   permissions?: AgentPermissionsSummary;
   /** Isolated browser on the execution host; omission is off. */
   browser?: boolean;
@@ -808,6 +810,7 @@ export const agentBlockSchema = z.object({
   effort: z.string().optional(),
   instruction: z.string().optional(),
   browser: z.boolean().optional(),
+  skills: z.array(z.string()).readonly().optional(),
   fastMode: z.boolean().optional(),
   permissions: z
     .object({
@@ -834,6 +837,7 @@ export const agentPatchSchema = z.object({
   fastMode: z.boolean().nullable().optional(),
   instruction: z.string().nullable().optional(),
   browser: z.boolean().nullable().optional(),
+  skills: z.array(z.string()).readonly().nullable().optional(),
   permissions: z
     .object({
       mode: z.string().nullable().optional(),

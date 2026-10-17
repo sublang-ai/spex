@@ -175,6 +175,7 @@ const AGENT_FIELDS = new Set([
   // (shared-config-roundtrip-1); cligent owns which adapters allow it.
   "fastMode",
   "browser",
+  "skills",
   // The model the agent's subagents run on (cligent 0.29, DR-093) — a
   // model, `inherit` for the agent's own, or `false` to send none
   // (cligent 0.30, DR-095); cligent owns which adapters serve it.
@@ -214,6 +215,8 @@ export interface ResolvedAgent {
   fastMode?: boolean;
   /** Managed browser tools; omission remains off. */
   browser?: boolean;
+  /** Effective configuration-relative run skills (DR-122). */
+  skills?: readonly string[];
   /** Adapter-scoped subagent model (DR-093) as the file says it: a
    * model, `inherit` for the agent's own, or `false` — Off; absent, the
    * delegation default, which composition resolves to `inherit` where
@@ -249,6 +252,8 @@ export interface SessionAgentBlock {
   fastMode?: boolean;
   /** Managed browser tools; omission remains off. */
   browser?: boolean;
+  /** Effective configuration-relative run skills (DR-122). */
+  skills?: readonly string[];
   /** The model every subagent runs on, `inherit` for the agent's own,
    * or `false` — Off — carried through composition and the session's
    * tuning so an effort set beside it is refused, and dropped only as
@@ -607,6 +612,19 @@ function retargetedLocators(
   const retargeted = (value: string): boolean =>
     resolve(formerDir, value) !== resolve(canonicalDir, value);
   const affected: string[] = [];
+  const checkSkills = (value: unknown, field: string): void => {
+    if (!Array.isArray(value)) return;
+    value.forEach((entry, index) => {
+      if (typeof entry === "string" && entry.trim() && !isAbsolute(entry) && retargeted(entry)) {
+        affected.push(`${field}[${index}]`);
+      }
+    });
+  };
+  checkSkills(top.skills, "skills");
+  if (isPlainObject(top.captain)) checkSkills(top.captain.skills, "captain.skills");
+  if (isPlainObject(top.players)) for (const [id, agent] of Object.entries(top.players)) {
+    if (isPlainObject(agent)) checkSkills(agent.skills, `players.${id}.skills`);
+  }
   const sessions = top.sessions;
   if (
     typeof sessions === "string" &&
@@ -899,9 +917,29 @@ export function resolveAgent(
   );
 }
 
+/** Resolve only the transport list: Cligent validates its files at invocation. */
+function configuredSkills(value: unknown, path: string, configPath?: string): readonly string[] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) throw new Error(i18n._({
+    id: "{path} must be an array of skill paths",
+    comment: "Config error; the path names the skills setting",
+    values: { path },
+  }));
+  return Object.freeze(value.map((entry, index) => {
+    if (typeof entry !== "string" || !entry.trim() || entry.includes("\0")) throw new Error(i18n._({
+      id: "{path} must be a non-blank skill path without NUL",
+      comment: "Config error; the path names one entry of the skills setting",
+      values: { path: `${path}[${index}]` },
+    }));
+    return resolve(configPath ? dirname(configPath) : process.cwd(), entry);
+  }));
+}
+
 function toResolvedAgent(
   block: Record<string, unknown>,
   path: string,
+  configPath?: string,
+  defaultSkills?: readonly string[],
 ): ResolvedAgent {
   validateAgentBlock(block, path);
   const adapter = block.adapter;
@@ -924,6 +962,8 @@ function toResolvedAgent(
   }
   const { reasoningEffort, ...rest } = block;
   if (reasoningEffort !== undefined) rest.effort = reasoningEffort;
+  const skills = configuredSkills(rest.skills, `${path}.skills`, configPath) ?? defaultSkills;
+  if (skills !== undefined) rest.skills = skills;
   const permissions = rest.permissions as PermissionPolicyLike | undefined;
   if (permissions?.writablePaths !== undefined) {
     // Normalize the runtime projection only. The source mapping is also the
@@ -1265,6 +1305,7 @@ function sessionAgentOf(agent: ResolvedAgent): SessionAgentBlock {
     effort: tuningOf(agent.effort),
     ...(agent.fastMode !== undefined ? { fastMode: agent.fastMode } : {}),
     ...(agent.browser !== undefined ? { browser: agent.browser } : {}),
+    ...(agent.skills !== undefined ? { skills: agent.skills } : {}),
     ...(subagentModel !== undefined ? { subagentModel } : {}),
     ...(agent.subagentEffort !== undefined
       ? { subagentEffort: agent.subagentEffort }
@@ -1330,6 +1371,7 @@ export async function composeConfig(
     );
   }
 
+  const defaultSkills = configuredSkills(top.skills, "skills", configPath);
   const captainBlock = resolveAgent(top.captain, "captain");
   if (
     typeof captainBlock.adapter !== "string" ||
@@ -1343,7 +1385,7 @@ export async function composeConfig(
       }),
     );
   }
-  const captainAgent = toResolvedAgent(captainBlock, "captain");
+  const captainAgent = toResolvedAgent(captainBlock, "captain", configPath, defaultSkills);
 
   // The Captain shell restricts control-call tools per the captain's
   // adapter (playbook 3.0, DR-019): without this field it fail-closes
@@ -1402,7 +1444,7 @@ export async function composeConfig(
           }),
         );
       }
-      sessionPlayers.set(playerId, toResolvedAgent(resolved, path));
+      sessionPlayers.set(playerId, toResolvedAgent(resolved, path, configPath, defaultSkills));
     }
   }
   // Only a referenced player enters the roster and the readiness gate;
@@ -1856,6 +1898,7 @@ export function summarizeConfig(loaded: LoadedConfig): ConfigSummary {
     ...(agent.effort !== undefined ? { effort: agent.effort } : {}),
     ...(agent.fastMode !== undefined ? { fastMode: agent.fastMode } : {}),
     ...(agent.browser !== undefined ? { browser: agent.browser } : {}),
+    ...(agent.skills !== undefined ? { skills: agent.skills } : {}),
     ...(agent.subagentModel !== undefined
       ? { subagentModel: agent.subagentModel }
       : {}),

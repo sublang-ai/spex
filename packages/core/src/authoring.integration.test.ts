@@ -2571,3 +2571,20 @@ test("playbook-library-96: work goes on beside work, settling only what is its o
   client.close();
   await harness.service.stop();
 });
+
+
+test("run-skills-5: an authoring turn uses the selected agent's configuration-relative skills", async (t) => {
+  const dir = scratchDir("spex-author-skills-");
+  writeFileSync(join(dir, "playbook.config.yaml"), `skills: [./supplied/author]\n${CONFIG}`);
+  const harness = await startHarness({ dir, script: { fallback: { result: "Noted." } }, slc: stubSlcSource("['Writer']") });
+  const client = new Client(harness.service.port());
+  t.after(async () => { client.close(); await harness.service.stop(); });
+  await client.open();
+  await client.expectOk("draft.create", { projectId: harness.projectId, draftId: "skill-author", ...NEW_PACKAGE });
+  await client.expectOk("subscribe", { channel: { kind: "draft", draftId: "skill-author" } });
+  await client.expectOk("draft.send", { projectId: harness.projectId, draftId: "skill-author", text: "Use the configured skill." });
+  await until(() => harness.stats.runs.length === 1 && client.latest("skill-author")?.activity === "idle", 10_000);
+  assert.deepEqual(harness.stats.runs[0].skills, [join(dir, "supplied", "author")]);
+  assert.equal(harness.stats.runs[0].cwd, join(dir, "project", "spex-packages", "skill-author"));
+  assert.equal(harness.slcCalls.length, 0);
+});

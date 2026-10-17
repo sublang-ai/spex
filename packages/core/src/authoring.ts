@@ -1415,6 +1415,7 @@ export class AuthorManager {
       ...(agent.model !== undefined ? { model: agent.model } : {}),
       ...(agent.effort !== undefined ? { effort: agent.effort } : {}),
       ...(agent.fastMode !== undefined ? { fastMode: agent.fastMode } : {}),
+      ...(agent.skills !== undefined ? { skills: agent.skills } : {}),
       ...subagentTuningOf(agent),
       permissions: { mode: "auto" },
       ...(agent.browser !== undefined ? {browser: agent.browser} : {}),
