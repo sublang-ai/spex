@@ -105,6 +105,7 @@ import { authoringLanguage, authoringManifest, DraftStore, draftPackagePath, new
 import { EnvironmentManager, toRequest } from "./environments.js";
 import {
   builtinPackage,
+  INSTALL_RECORD,
   isGitSource,
   isPathSource,
   isKebabName,
@@ -251,15 +252,19 @@ export interface CoreServiceOptions {
 const FORGE_CACHE_MS = 600_000;
 
 /** The files a config state was composed from, each at the version read
- * (DR-111): an unreadable one stands as its error, so it compares stably. */
-type ConfigInputs = Map<string, string | null>;
+ * (DR-111): an unreadable one stands as its error, so it compares stably.
+ * A boolean records only presence, where installed-package availability
+ * depends on a selected file standing, not its bytes. */
+type ConfigInputs = Map<string, string | null | boolean>;
 const inputVersion = (file: string): string | null => {
   try { return fileVersion(file); }
   catch (error) { return `!${(error as NodeJS.ErrnoException).code ?? "unreadable"}`; }
 };
 /** The first input no longer standing at the version read. */
 const changedInput = (inputs: ConfigInputs): string | undefined => {
-  for (const [file, version] of inputs) if (inputVersion(file) !== version) return file;
+  for (const [file, version] of inputs) {
+    if ((typeof version === "boolean" ? existsSync(file) : inputVersion(file)) !== version) return file;
+  }
   return undefined;
 };
 const changedMeanwhile = (file: string): CoreError => new CoreError("conflict", new VersionConflictError(file).message);
@@ -826,15 +831,26 @@ export class CoreService {
     return this.environments.modulesFor(projectId);
   }
 
-  /** {@link modules}, recording into `inputs` the locks it reads and,
-   * for each playbook composition asks for, the entry files those locks
-   * place it at — a missing one as absent, so its repair is a change
-   * (DR-111). Nothing an entry imports is recorded. */
+  /** {@link modules}, recording the locks, install records and selected
+   * file presence that establish availability, then each requested
+   * module entry's full version — a missing one as absent, so its repair
+   * is a change (DR-111). Other files' bytes are not recorded. */
   private modulesRead(projectId: string | null, inputs: ConfigInputs): PlaybookModules {
     const keys = [...new Set([...(projectId === null ? [] : [projectId]), this.store.home.own()])];
     for (const key of keys) {
       const dir = this.store.repository(key)?.dir;
-      if (dir) inputs.set(join(dir, "spex.lock"), inputVersion(join(dir, "spex.lock")));
+      if (dir) {
+        inputs.set(join(dir, "spex.lock"), inputVersion(join(dir, "spex.lock")));
+        const installed = join(dir, "packages", INSTALL_RECORD);
+        inputs.set(installed, inputVersion(installed));
+        for (const [name, resolution] of Object.entries(this.environments.lockOf(key)?.packages ?? {})) {
+          if (isPathSource(resolution.source)) continue;
+          for (const file of resolution.files) {
+            const path = join(dir, "packages", ...name.split("/"), ...file.path.split("/"));
+            if (!inputs.has(path)) inputs.set(path, existsSync(path));
+          }
+        }
+      }
     }
     const located = keys.map((key) => this.environments.locations(key));
     const modules = this.modules(projectId);
@@ -846,7 +862,9 @@ export class CoreService {
             if (name !== id && location.id !== id) continue;
             // A missing entry stands at its first candidate; any of them appearing repairs it.
             const entries = location.present ? [location.module] : playbookModuleCandidates(dirname(dirname(location.module)), location.id);
-            for (const entry of entries) if (!inputs.has(entry)) inputs.set(entry, inputVersion(entry));
+            for (const entry of entries) {
+              if (!inputs.has(entry) || typeof inputs.get(entry) === "boolean") inputs.set(entry, inputVersion(entry));
+            }
           }
         }
         return modules.find(id);
