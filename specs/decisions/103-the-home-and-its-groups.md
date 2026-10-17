@@ -27,6 +27,8 @@ Amended by [DR-114](114-groups-and-sharing-from-spex.md) in "What Spex does on a
 Amended by [DR-120](120-the-instance-is-the-space.md) in "What Spex does on a Git host" item 6 and its Consequences, whose link to the host's members page goes, and in its scenarios, which gain "Set up a workshop or a team"; the tree under `workspace/` mirrors the paths the host answers, which are paths in the instance.
 Proposed to be amended by [DR-113](113-a-projects-environment-lives-in-its-working-folder.md) in its principle and its tree: the environment is the code's configuration, not a record, so a project's `spex.yaml` and `spex.lock` live at its working folder's root, committed with the code by the reader, leaving its spex repository, while the unit `spex.yaml` with `spex.lock` stays for a group's own; Spex itself still commits nothing to the code.
 
+Amended by [DR-122](122-a-sync-reads-its-destination.md) in the pre-sync read: a fresh complete catalog and only the selected repository's detail establish its authority, separately from the full Groups view.
+
 ## Context
 
 - Until now the home, Spex's folder `~/.spex` or `SPEX_HOME`, was one Git repository with one remote, so every session and intent of every project had the same audience. A person could not keep private work beside a team's, and a team could not share one project without sharing all.
