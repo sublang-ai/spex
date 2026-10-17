@@ -1520,6 +1520,17 @@ export class CoreService {
     return this.composeProject(projectId, true);
   }
 
+  /** A selected folder's option context, guarded until its write or
+   * admission. Reading the project refreshes the pairing from disk. */
+  private projectConfigContext(projectId: string): { cwd?: string; assertCurrent: () => void } {
+    const file = join(this.store.dir, "home.yaml");
+    const version = inputVersion(file);
+    const cwd = this.store.getProject(projectId)?.path;
+    return { cwd, assertCurrent: () => {
+      if (inputVersion(file) !== version) throw new VersionConflictError(file);
+    } };
+  }
+
   /** The composition of {@link composedFor} on the config already
    * loaded: `ready` first waits for the project's environment, which a
    * reload's own broadcast does not, its environment announcing itself
@@ -1535,7 +1546,7 @@ export class CoreService {
     };
     own();
     const repository = this.store.repository(projectId);
-    if (!repository || resolve(repository.configPath) === resolve(this.configPath)) return own();
+    if (!repository) return own();
     // The session's playbooks come from the project's environment before
     // your own group's (environments-9), whether or not the project's
     // own file enables any; one not yet resolved resolves first.
@@ -1543,8 +1554,12 @@ export class CoreService {
     for (let attempt = 0; ; attempt += 1) {
       own();
       const inputs: ConfigInputs = new Map();
+      const homeFile = join(this.store.dir, "home.yaml");
+      inputs.set(homeFile, inputVersion(homeFile));
+      const current = this.store.repository(projectId);
+      if (!current) throw noProject(projectId);
       let result: { composed: ComposedConfig } | { error: unknown };
-      try { result = { composed: await this.composeProjectOnce(repository.configPath, projectId, inputs) }; }
+      try { result = { composed: await this.composeProjectOnce(current.configPath, projectId, inputs) }; }
       catch (error) { result = { error }; }
       const changed = changedInput(inputs);
       if (changed === undefined) {
@@ -1583,7 +1598,8 @@ export class CoreService {
     try {
       return await composeConfig(ownTop, this.options.loadModule, this.configPath, {
         modules: this.modulesRead(projectId, inputs),
-        ...(file === projectPath ? { project: { top: projectTop, path: projectPath } } : {}),
+        ...(file === projectPath && resolve(projectPath) !== resolve(this.configPath) ? { project: { top: projectTop, path: projectPath } } : {}),
+        cwd: this.store.getProject(projectId)?.path,
       });
     } catch (error) { throw cause(error); }
   }
@@ -2330,6 +2346,7 @@ export class CoreService {
         await this.refreshContinuationReadings();
         return this.sessions.listSessions();
       case "session.create": {
+        const context = this.projectConfigContext(command.projectId);
         const project = this.store.getProject(command.projectId);
         if (!project) {
           throw noProject(command.projectId);
@@ -2339,7 +2356,13 @@ export class CoreService {
         // never throws.
         void this.ensureGroupRepository(project.id).catch(() => {});
         // Yours with the project.s own on top (core-service-2).
-        return this.sessions.createSession(project, await this.composedFor(project.id));
+        const composed = await this.composedFor(project.id);
+        const assertCurrent = () => {
+          try { context.assertCurrent(); }
+          catch { throw changedMeanwhile(join(this.store.dir, "home.yaml")); }
+        };
+        assertCurrent();
+        return this.sessions.createSession(project, composed, assertCurrent);
       }
       case "session.dispose":
         await this.sessions.disposeSession(command.sessionId);
@@ -2502,7 +2525,7 @@ export class CoreService {
           : undefined;
         if (command.repository !== undefined && command.repository !== this.store.home.own() && !target) throw noProject(command.repository);
         const result = target
-          ? await editProjectConfigFile(target.configPath, this.configPath, op, this.options.loadModule, this.modules(target.key))
+          ? await editProjectConfigFile(target.configPath, this.configPath, op, this.options.loadModule, this.modules(target.key), this.projectConfigContext(target.key))
           : await editConfigFile(
             this.configPath,
             op,
@@ -3366,7 +3389,7 @@ export class CoreService {
         const ownBase = { ...ownTop, playbooks: { ...entries(ownTop) } } as Record<string, unknown>;
         await check("project", id, () => composeConfig(
           { ...ownBase, playbooks: { [id]: (ownBase.playbooks as Record<string, unknown>)[id] ?? {} } },
-          this.options.loadModule, this.configPath, { modules: this.modules(project.key), project: { top: projectOnly, path: project.path } },
+          this.options.loadModule, this.configPath, { modules: this.modules(project.key), project: { top: projectOnly, path: project.path }, cwd: this.store.getProject(project.key)?.path },
         ));
       }
     }
@@ -3427,6 +3450,8 @@ export class CoreService {
       repository: base.repository,
       find: (id) => (id === playbookId ? { module: result.from, builtin: false } : base.find(id)),
     };
+    const context = targetKey === own ? undefined : this.projectConfigContext(targetKey);
+    let validationFailure: { error: unknown } | undefined;
     try {
       let ownText = readFileSync(this.configPath, "utf8");
       for (const op of playerOps) ownText = applyConfigOp(ownText, op);
@@ -3438,9 +3463,15 @@ export class CoreService {
         const projectText = applyConfigOp(existsSync(target.configPath) ? readFileSync(target.configPath, "utf8") : "", entryOp);
         const projectTop = parseYaml(projectText) as unknown;
         validateProjectConfig(projectTop, target.configPath);
-        await composeConfig(ownTop, this.options.loadModule, this.configPath, { modules: overlay, project: { top: projectTop, path: target.configPath } });
+        await composeConfig(ownTop, this.options.loadModule, this.configPath, { modules: overlay, project: { top: projectTop, path: target.configPath }, cwd: context?.cwd });
       }
-    } catch (error) {
+    } catch (error) { validationFailure = { error }; }
+    // The preflight authorizes the first environment/player writes too,
+    // not just the final guarded config entry.
+    try { context?.assertCurrent(); }
+    catch { throw changedMeanwhile(join(this.store.dir, "home.yaml")); }
+    if (validationFailure) {
+      const { error } = validationFailure;
       throw new CoreError("invalid_config", i18n._({
         id: "compiled, but enabling was refused: {error}",
         comment: "Refusal after a successful compile; `error` is the config validation's own words",
@@ -3484,7 +3515,7 @@ export class CoreService {
       }
       const edit = targetKey === own
         ? await editConfigFile(this.configPath, entryOp, this.options.loadModule, { modules: this.modules(null) })
-        : await editProjectConfigFile(target.configPath, this.configPath, entryOp, this.options.loadModule, this.modules(targetKey));
+        : await editProjectConfigFile(target.configPath, this.configPath, entryOp, this.options.loadModule, this.modules(targetKey), this.projectConfigContext(targetKey));
       if (!edit.ok) {
         throw new CoreError(edit.conflict ? "conflict" : "invalid_config", i18n._({
           id: "compiled, but registration was refused: {error}",

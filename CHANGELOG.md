@@ -14,6 +14,13 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ## [Unreleased]
 
+### Fixed
+
+- A project's config reading and edits now reject invalid custom playbook
+  options before starting a session, naming the playbook and its validator's
+  reason. Validation uses the paired folder for injected working directories
+  and preserves explicitly configured options and working directories.
+
 ### Added
 
 - Groups and sharing from Spex ([DR-114](specs/decisions/114-groups-and-sharing-from-spex.md)).

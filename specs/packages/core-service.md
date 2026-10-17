@@ -52,7 +52,8 @@ On every load and reload:
 - On success, the resulting config state is broadcast to all connected clients.
 - On failure, a config error naming the offending entry and the violated rule is broadcast, and session creation requests are rejected while no valid config is active.
 - A turn in flight keeps the config it opened with; the next message opens with the current config, or is refused naming the config error [[core-service-73](#core-service-73)] ([DR-051](../decisions/051-runtime-held-for-a-turn.md)).
-- The state is a cache of the files it was composed from — both config files, the environments' locks, and each module entry those locks place an enabled playbook at, a missing one as absent — at the versions read: a command, turn or compile taking anything from it checks them first and reads again where one changed, with or without a watcher's notice, while what was already broadcast stays as broadcast ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md)).
+- The state is a cache of the files it was composed from — both config files, the environments' locks, each module entry those locks place an enabled playbook at, a missing one as absent, and the home's pairing where a selected project's folder supplies option context — at the versions read: a command, turn or compile taking anything from it checks them first and reads again where one changed, with or without a watcher's notice, while what was already broadcast stays as broadcast ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md)).
+- A project config write or new-session admission whose selected pairing changes during validation is refused as `conflict` before the config is written or the session host opens.
 - A load, composition, broadcast or readiness probe whose files changed while it ran publishes nothing it read, valid or not: it may read once more, else the command is refused as `conflict`, "changed meanwhile; retry".
 - Where the file is a profiles-era config, the load migrates it in place per the launcher's semantics ([DR-019](../decisions/019-inline-agent-configuration.md)): named profiles inline into agent blocks, the `profiles` map is deleted, the pre-migration file is backed up beside the config with comments surviving, and a `profile` naming a missing entry is a config error that leaves the file untouched.
 - Validation fails closed on the same defect classes as the playbook launcher [[core-service-16](#core-service-16)].
@@ -630,6 +631,10 @@ The core package shall compose the session-player roster, the playbook registry,
 | Roster scope | only players some binding references reach the composed session, so an unused roster entry gates no run |
 | Legacy | a surviving `playbooks.<id>.players` block is refused in the launcher's own words |
 | Module | a `playbooks.<id>.from` is refused [[core-service-2](#core-service-2)], while the launcher accepts one and takes ahead of it each playbook's module supplied at launch [[3]], so a configuration naming no `from` composes in both — in the launcher with each module supplied at launch, or on a record-backed reopen with the module the session records [[4]] |
+| Custom options | composition for a paired project validates each entry's options with its actual working folder, naming the playbook and retaining the validator's reason on refusal, before reporting valid or accepting a project config write; global composition without a working folder defers this check, and authored option slices stay unchanged for the shell's validation and normalization at construction |
+
+- For an omitted `cwd`, the existing successful `cwd: "/"` capability probe requires validation with the actual project folder and its rejection cannot fall back to the raw slice; where that probe rejects, a successful actual-folder candidate establishes injection, otherwise the raw slice must validate and retains the existing non-injected behavior without inferring an opaque validator's reason for rejecting either candidate [[core-service-29](#core-service-29)].
+- An explicitly configured `cwd` validates and passes through unchanged [[core-service-29](#core-service-29)]; a capability probe establishes no actual-folder validation.
 
 #### core-service-17
 
@@ -1062,6 +1067,15 @@ When an integration suite parks a real session's run on a Boss question — the 
 - the settlement that parked the run leaves its summary carrying the question's park and no recovery [[core-service-32](#core-service-32)];
 - while the answer's turn runs, its checkpoint reading uncertain, the listing and every state reported since the answer was accepted carry `turnActive` with no `recovery`, no continuation reason and no park, and the park has left the preferences [[core-service-32](#core-service-32)] [[core-service-34](#core-service-34)];
 - once the answer's turn settles with the run finished, the session carries no recovery and no park and lists continuable [[core-service-32](#core-service-32)].
+
+#### core-service-121
+
+When a real-core integration suite composes a paired project's custom options, it shall verify missing or invalid options are reported before a session lease, runtime or provider call, project config writes refuse invalid options without changing bytes, and valid options retain the authored slice [[core-service-16](#core-service-16)]:
+
+- exact real-folder injection and an explicit override pass unchanged to the shared host [[core-service-29](#core-service-29)];
+- an optional cwd accepted by the capability probe but rejected for the actual folder is refused, with no raw-default fallback [[core-service-16](#core-service-16)];
+- an entry rejecting cwd validates its raw options, while global composition without a working folder defers context-dependent validation [[core-service-16](#core-service-16)];
+- a pairing changed while a module imports is re-read before publishing a config state, and a config write or new-session request holding the previous pairing is refused without changing config bytes or opening a session [[core-service-2](#core-service-2)].
 
 ## References
 
