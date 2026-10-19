@@ -10,7 +10,7 @@ Amends [DR-111](111-the-core-coordinates-as-git-does.md) in its Playbook floor a
 Amends [DR-102](102-playbook-17-4-1-adoption.md) in its slc floor alone: both shells declare `@sublang/slc` `^0.16.1`; everything else DR-102 decided stands.
 Follows [DR-081](081-the-app-supplies-the-compiler.md)'s explicit-bump rule for the compiler and [DR-024](024-app-supplied-agent-runtimes.md)'s app-supplied agent runtimes; nothing either decided changes.
 Amended by [DR-121](121-playbook-17-9-0-cligent-0-33-5-adoption.md) in its floors alone: the core requires `@sublang/playbook` `^17.9.0` and `@sublang/cligent` `^0.33.5`; slc `^0.16.1` stands.
-Amended by [DR-123](123-playbook-17-10-1-cligent-0-34-0-slc-0-16-9-adoption.md) in its slc floor alone, now `^0.16.9`.
+Amended by [DR-123](123-playbook-17-10-1-cligent-0-34-0-slc-0-18-0-adoption.md) in its slc floor alone, now `^0.18.0`.
 
 ## Context
 
