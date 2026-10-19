@@ -343,6 +343,11 @@ msgstr "{path} 不是文件夹"
 msgid "{path} is not a spec package release: {issues}"
 msgstr "{path} 不是规约包发布版本：{issues}"
 
+#. Config error; `skills` is the config file's own field name, refused because skills come from environments
+#: src/config.ts
+msgid "{path} is not allowed: skills reach agents from the environments that install their spec packages"
+msgstr "不允许使用 {path}：技能来自安装其规约包的环境"
+
 #. Refusal: the folder offered for rebinding is no git repository
 #: src/service.ts
 msgid "{path} is not the root of a git work tree"

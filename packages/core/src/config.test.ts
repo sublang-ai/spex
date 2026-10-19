@@ -284,6 +284,24 @@ test("captain must resolve an adapter", async () => {
   );
 });
 
+test("core-service-2: a skills list in your own file is refused at the top, on the Captain and on a player (DR-123)", async () => {
+  const refused = (path: string) =>
+    new RegExp(`^${path.replace(/\./g, "\\.")} is not allowed: skills reach agents from the environments that install their spec packages$`);
+  const block = (value: unknown): Record<string, unknown> =>
+    typeof value === "string" ? { adapter: value } : (value as Record<string, unknown>);
+  const shared = baseConfig();
+  shared.skills = ["./team-guide"];
+  await expectError(shared, refused("skills"));
+  const captain = baseConfig();
+  captain.captain = { ...block(captain.captain), skills: [] };
+  await expectError(captain, refused("captain.skills"));
+  const player = baseConfig();
+  const players = player.players as Record<string, unknown>;
+  const [id] = Object.keys(players);
+  players[id!] = { ...block(players[id!]), skills: ["/elsewhere/team-guide"] };
+  await expectError(player, refused(`players.${id}.skills`));
+});
+
 test("core-service-2: a from in your own file is refused, and a module that will not import carries its cause", async () => {
   const top = baseConfig();
   codeBlock(top).from = "@sublang/playbook/code/registry";
