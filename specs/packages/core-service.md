@@ -46,7 +46,7 @@ Where your own group's spex repository holds its `config/playbook.config.yaml` [
 
 On every load and reload:
 
-- Your own group's file holds the captain, the players with what each runs on, the playbooks it enables with the player each role uses, notifications, theme and layout; a project's or another group's file holds only the playbooks it enables with the player each role uses, by name, and an option slice per playbook — a `captain`, `players` or model field in it, or a `from` in any file, is a config error naming the entry.
+- Your own group's file holds the captain, the players with what each runs on, the playbooks it enables with the player each role uses, notifications, theme and layout; a project's or another group's file holds only the playbooks it enables with the player each role uses, by name, and an option slice per playbook — a `captain`, `players` or model field in it, or a `from` or `skills` in any file, is a config error naming the entry.
 - A player the project's file names and your own group's lacks is reported before a session of that project starts, as a config error that names the player and offers to add it [[settings-46](settings.md#settings-46)]; sessions of other spex repositories are unaffected.
 
 - On success, the resulting config state is broadcast to all connected clients.
@@ -616,7 +616,7 @@ The core package shall own Spex application files through the versioned encoding
 
 #### core-service-16
 
-The core package shall compose the session-player roster, the playbook registry, and runtime options from the shared config with the same fail-closed validation rules as the playbook launcher — as recorded in [DR-004](../decisions/004-config-and-persistence.md) and amended by [DR-019](../decisions/019-inline-agent-configuration.md) and [DR-032](../decisions/032-session-players.md) — so that any config the launcher accepts or rejects is accepted or rejected identically by the core package, a playbook's `from` excepted ([DR-105](../decisions/105-playbook-17-5-0-adoption.md)):
+The core package shall compose the session-player roster, the playbook registry, and runtime options from the shared config with the same fail-closed validation rules as the playbook launcher — as recorded in [DR-004](../decisions/004-config-and-persistence.md) and amended by [DR-019](../decisions/019-inline-agent-configuration.md) and [DR-032](../decisions/032-session-players.md) — so that any config the launcher accepts or rejects is accepted or rejected identically by the core package, a playbook's `from` and a `skills` list excepted ([DR-105](../decisions/105-playbook-17-5-0-adoption.md), [DR-123](../decisions/123-playbook-17-10-1-cligent-0-34-0-slc-0-16-9-adoption.md)):
 
 | Rule | Composition |
 | --- | --- |
@@ -631,6 +631,7 @@ The core package shall compose the session-player roster, the playbook registry,
 | Roster scope | only players some binding references reach the composed session, so an unused roster entry gates no run |
 | Legacy | a surviving `playbooks.<id>.players` block is refused in the launcher's own words |
 | Module | a `playbooks.<id>.from` is refused [[core-service-2](#core-service-2)], while the launcher accepts one and takes ahead of it each playbook's module supplied at launch [[3]], so a configuration naming no `from` composes in both — in the launcher with each module supplied at launch, or on a record-backed reopen with the module the session records [[4]] |
+| Skills | a `skills` list at the top level, on the Captain or on a player is refused [[core-service-2](#core-service-2)], while the launcher accepts one; a session's agents carry no supplied skills, and skills reach agents from the environments that export them [[environments-8](environments.md#environments-8)] |
 | Custom options | composition for a paired project validates each entry's options with its actual working folder, naming the playbook and retaining the validator's reason on refusal, before reporting valid or accepting a project config write; global composition without a working folder defers this check, and authored option slices stay unchanged for the shell's validation and normalization at construction |
 
 - For an omitted `cwd`, the existing successful `cwd: "/"` capability probe requires validation with the actual project folder and its rejection cannot fall back to the raw slice; where that probe rejects, a successful actual-folder candidate establishes injection, otherwise the raw slice must validate and retains the existing non-injected behavior without inferring an opaque validator's reason for rejecting either candidate [[core-service-29](#core-service-29)].
@@ -781,7 +782,7 @@ Where the fake adapter script contains records marked hidden, the test suite sha
 
 #### core-service-21
 
-Where the config file carries a defect from each launcher fail-closed defect class recorded in [DR-004](../decisions/004-config-and-persistence.md) as amended by [DR-019](../decisions/019-inline-agent-configuration.md) — a subagent effort beside an Off, from the player or the binding, among them ([DR-095](../decisions/095-a-subagents-effort-and-the-agents-own-model.md)) — [[core-service-16](#core-service-16)], when the core loads each fixture, the integration suite shall assert a named configuration refusal before session execution [[core-service-2](#core-service-2)]:
+Where the config file carries a defect from each launcher fail-closed defect class recorded in [DR-004](../decisions/004-config-and-persistence.md) as amended by [DR-019](../decisions/019-inline-agent-configuration.md) — a subagent effort beside an Off, from the player or the binding, among them ([DR-095](../decisions/095-a-subagents-effort-and-the-agents-own-model.md)) — [[core-service-16](#core-service-16)], or a `from` or `skills` the core refuses where the launcher accepts it [[core-service-16](#core-service-16)], when the core loads each fixture, the integration suite shall assert a named configuration refusal before session execution [[core-service-2](#core-service-2)]:
 
 - Each defect names its offending entry and blocks session creation [[core-service-2](#core-service-2)].
 - Captain and player writable paths exercise every refusal class and valid canonical form, agreeing with the installed Cligent configuration loader [[core-service-16](#core-service-16)].
