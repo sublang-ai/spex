@@ -528,6 +528,7 @@ test("environments-22 through a real core: a spec-only spec package requested fr
   const { id: key } = await client.expectOk("project.register", { path: working });
   const own = `${OWN}/${OWN}-spex`;
   const exported = join(working, ".claude", "skills", "acme-trip-split");
+  const shared = join(working, ".agents", "skills", "acme-trip-split");
   const atHome = join(dir, "user", ".claude", "skills", "acme-trip-split");
   const exclude = (): string => readFileSync(join(working, ".git", "info", "exclude"), "utf8");
   const request = { kind: "registry", version: "^1.0.0" } as const;
@@ -545,7 +546,12 @@ test("environments-22 through a real core: a spec-only spec package requested fr
   assert.match(skill, /^---\nname: acme-trip-split\n/);
   assert.match(skill, /`acme\/trip-split` — org `acme`, name `trip-split`, version `1\.0\.0`: Split a trip's costs fairly/);
   assert.match(exclude(), /^\/\.claude\/skills\/acme-trip-split\/$/m);
-  assert.equal(execFileSync("git", ["-C", working, "status", "--porcelain", "--untracked-files=all", "--", ".claude"], { encoding: "utf8" }), "", "Git ignores the export");
+  // The same skill stands where Codex, Gemini CLI, Kimi Code and OpenCode
+  // read skills, whatever agents this device has (environments-16).
+  assert.deepEqual(readdirSync(shared).sort(), ["SKILL.md", "trip-split.md"]);
+  assert.ok(readFileSync(join(shared, "trip-split.md")).equals(released), "the shared folder's copy is the release's too");
+  assert.match(exclude(), /^\/\.agents\/skills\/acme-trip-split\/$/m);
+  assert.equal(execFileSync("git", ["-C", working, "status", "--porcelain", "--untracked-files=all", "--", ".claude", ".agents"], { encoding: "utf8" }), "", "Git ignores the export");
   assert.equal(existsSync(atHome), false, "a project's spec stays in its working folder");
 
   // Requested in your own group's environment: your agents' home folder holds it.
@@ -554,6 +560,11 @@ test("environments-22 through a real core: a spec-only spec package requested fr
   await client.environment(own, mark, (state) => state.busy === null && holds(state));
   assert.deepEqual(readdirSync(atHome).sort(), ["SKILL.md", "trip-split.md"]);
   assert.ok(readFileSync(join(atHome, "trip-split.md")).equals(released), "your own group's copy is the release's too");
+  // Only claude has a home folder here: no user-level folder of the other
+  // four, and no agent's home folder, is made (environments-16).
+  for (const folder of [".agents", ".codex", ".gemini", ".kimi-code", ".config/opencode", ".local/share/opencode"]) {
+    assert.equal(existsSync(join(dir, "user", folder)), false, folder);
+  }
 
   // Removed and installed again: the skill, its exclude line and the
   // home folder's copy leave with the spec package.
@@ -561,6 +572,7 @@ test("environments-22 through a real core: a spec-only spec package requested fr
   await client.expectOk("environment.remove", { repository: key, name: "acme/trip-split" });
   await client.environment(key, mark, (state) => state.busy === null && !holds(state));
   assert.equal(existsSync(exported), false, "the removed spec package's skill is gone");
+  assert.equal(existsSync(shared), false, "and so is its copy in the shared folder");
   assert.doesNotMatch(exclude(), /acme-trip-split/);
   mark = client.mark();
   await client.expectOk("environment.remove", { repository: own, name: "acme/trip-split" });

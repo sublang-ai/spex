@@ -131,7 +131,10 @@ Spex home — `~/.spex`, or `SPEX_HOME` — in spex repositories under
 environment: `spex.yaml` requests spec packages — specs with the skills
 and playbooks made from them — from the Git host's registry, a Git
 repository, or a folder in the working folder, and `spex.lock` pins what
-was resolved ([environments](specs/packages/environments.md)). The app
+was resolved ([environments](specs/packages/environments.md)). Their
+skills and specs reach every agent Spex runs: a working folder's
+`.claude/skills` for Claude Code and `.agents/skills` for Codex, Gemini
+CLI, Kimi Code and OpenCode, and your own group's in your home's. The app
 ships the built-in spec package `sublang/playbooks`, which holds `/code`,
 `/review`, `/decide` and the other built-ins: the first start seeds it, so
 they run offline, and every new environment requests it. **Playbooks**
