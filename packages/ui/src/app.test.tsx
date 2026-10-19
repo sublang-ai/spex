@@ -39,7 +39,7 @@ function defaultReply(type: string): object {
         : type === "space.get"
           ? {
               home: "/home/.spex", git: { ok: true, version: "2.50" }, host: { url: "https://host.test", displayName: null },
-              account: null, signIn: { phase: "idle" }, readAt: null, groups: [], diagnostics: [], issues: 0,
+              account: null, signIn: { phase: "idle" }, read: { phase: "idle" }, readAt: null, groups: [], diagnostics: [], issues: 0,
             }
           : {};
 }
@@ -753,7 +753,7 @@ describe("space-59, space-60, space-63: the page follows a project a move re-key
   });
   const groups = (...repositories: object[]) => ({
     home: "/home/.spex", git: { ok: true, version: "2.50" }, host: { url: "https://host.test", displayName: null },
-    account: null, signIn: { phase: "idle" }, readAt: null, diagnostics: [], issues: 0,
+    account: null, signIn: { phase: "idle" }, read: { phase: "idle" }, readAt: null, diagnostics: [], issues: 0,
     groups: [{ id: null, fullPath: "me", name: "me", url: null, own: true, repositories }],
   }) as never;
   const ALPHA = { id: "acme/alpha-spex", name: "alpha", path: "/tmp/alpha", registeredAt: 0, repository: { key: "acme/alpha-spex", name: "alpha-spex", group: "acme", own: false } };
@@ -878,7 +878,7 @@ describe("run-view-58, projects-4: the Overview tab pins the project's group", (
     });
     const groups = (repository: object) => ({
       home: "/home/.spex", git: { ok: true, version: "2.50" }, host: { url: "https://host.test", displayName: "Host" },
-      account: null, signIn: { phase: "idle" }, readAt: null, diagnostics: [], issues: 0, roles: [],
+      account: null, signIn: { phase: "idle" }, read: { phase: "idle" }, readAt: null, diagnostics: [], issues: 0, roles: [],
       groups: [{ id: null, fullPath: "me", name: "me", url: null, own: true, can: { createSubgroup: false, manageMembers: false }, repositories: [repository] }],
     });
     commandMock.mockImplementation(async (type: string) =>

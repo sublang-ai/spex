@@ -119,6 +119,7 @@ export function home(
     host: { url: "https://spex.example", displayName: "Spex Example" },
     account: options.account === undefined ? { id: "7", login: "me", displayName: "Me", canCreateGroup: false } : options.account,
     signIn: { phase: "idle" },
+    read: { phase: "idle" },
     readAt: NOW,
     groups: [
       {

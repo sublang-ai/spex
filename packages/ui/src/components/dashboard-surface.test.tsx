@@ -93,7 +93,7 @@ function q(
  * field reads its row from it (projects-4). */
 const EMPTY_GROUPS = {
   home: "/home/.spex", git: { ok: true, version: "2.50" }, host: { url: "https://host.test", displayName: null },
-  account: null, signIn: { phase: "idle" }, readAt: null, groups: [], diagnostics: [], issues: 0,
+  account: null, signIn: { phase: "idle" }, read: { phase: "idle" }, readAt: null, groups: [], diagnostics: [], issues: 0,
 };
 
 /** Seed the real store; the client is faked via setClientForTests. */

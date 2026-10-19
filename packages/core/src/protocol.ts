@@ -1952,6 +1952,8 @@ export interface GroupsState {
     | { phase: "idle"; signedOut?: { by: "host"; login: string } }
     | { phase: "running"; flow: "browser" | "device"; userCode?: string; verificationUri?: string; since: number }
     | { phase: "failed"; cause: "denied" | "expired" | "refused" | "unreachable"; message: string };
+  /** The full host read and accepted Refresh setup, independent of sign-in and the last complete view. */
+  read: { phase: "idle" } | { phase: "running" } | { phase: "failed"; message: string };
   readAt: number | null;
   /** One entry per group the host lists, by its id; your own once; one
    * per other account's login under which the host lists a spex

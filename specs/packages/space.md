@@ -24,6 +24,7 @@ While the app is connected, the Groups surface — reached from the sidebar's Gr
 | issues | present while any repair or diagnostic stands, reading the count the core carries — the repairs this device's reader has not answered [[space-49](#space-49)] and every diagnostic no repair folds [[core-service-86](core-service.md#core-service-86)] — without a number where that count is none, and opening the issues list in place |
 | Git | "Git is not installed" with install guidance, replacing every other field, where no `git` runs |
 
+- while a full host read or the surrounding account setup accepted by Refresh is running, Refresh reads "Reading…" and stays disabled until its actual outcome; a failed read shows the core's sanitized message beside Refresh, which offers the same ordinary retry even when only local-only rows exist; neither state replaces the last complete view or its time [[git-host-5](git-host.md#git-host-5)];
 - the groups list stands beneath the header: your own group first, headed "Your own group" beside its path while signed in and beside "named after your login at sign-in" while signed out, then, in the order of their paths, every group the host lists, headed by its name beside its path in the instance where the two differ and by its name alone where they are equal, and every other account's login under which the host lists a spex repository, headed by that login; under each, one row per spex repository [[space-61](#space-61)], the group's own repository first; before sign-in the list holds your own group alone with its repositories ([DR-120](../decisions/120-the-instance-is-the-space.md));
 - a row stands under the group the host's last read names for its spex repository [[git-host-5](git-host.md#git-host-5)], and under its key's group only where the host lists nothing for it, so a clone the host moved stands under its new heading, its key unchanged until its sync moves it [[space-60](#space-60)]; no group the host lists displaces your own group or takes its rows;
 - what stands beside a heading's name follows the separator " · " in the surface's secondary tone;
@@ -599,7 +600,7 @@ The core shall expose Groups through these commands and one message, each reply 
 | `space.repair.decline` | `{ repair: string, declined: boolean }` | `GroupsState` | `invalid_request` (no repair of that name stands) |
 
 - the device flow's `verificationUri` is the verification URL the host completed with the user code where it gave one [[git-host-3](git-host.md#git-host-3)], and `userCode` is carried for clients and tests, never shown by the surface [[space-3](#space-3)];
-- `space.state { state: GroupsState }` is broadcast to every client on each transition of any repository's machine [[space-31](#space-31)], on a sign-in's start and end, and after a host read; long commands reply `accepted` at once and their outcome is state, never a hung reply ([DR-010](../decisions/010-interface-craft.md) §5);
+- `space.state { state: GroupsState }` is broadcast to every client on each transition of any repository's machine [[space-31](#space-31)], on a sign-in's start and end, and when a full host read starts or settles; long commands reply `accepted` at once and their outcome is state, never a hung reply ([DR-010](../decisions/010-interface-craft.md) §5);
 - the interface re-pulls `space.get` when the surface mounts, on window focus, and — debounced — on `session.state`, `session.removed`, `intents.changed` and `config.state` while the surface is shown.
 
 #### space-30
@@ -615,7 +616,8 @@ interface GroupsState {
   signIn: { phase: "idle"; signedOut?: { by: "host"; login: string } }   // signedOut: the host signed this device out, for the core's run
     | { phase: "running"; flow: "browser" | "device"; userCode?: string; verificationUri?: string; since: number }
     | { phase: "failed"; cause: "denied" | "expired" | "refused" | "unreachable"; message: string };
-  readAt: number | null;
+  read: { phase: "idle" } | { phase: "running" } | { phase: "failed"; message: string }; // full host read and accepted Refresh setup; idle while signed out
+  readAt: number | null; // last complete view, retained while reading or after failure
   groups: { id: string | null; fullPath: string; name: string; own: boolean;   // id: the host's, null for another account's login and a key's group no read lists; fullPath: the path in the instance, your own group's folder name, or that login
             can: { createSubgroup: boolean; manageMembers: boolean; rename: boolean; delete: boolean };   // what the host's last read said the person may do there; all false until one is held
             repositories: RepositoryState[] }[];   // one entry per group by its id, your own once, one per other account's login (space-1)
@@ -764,6 +766,7 @@ The core shall build each `space.tree` level by reading one directory of the clo
 When an integration suite starts a real core with substitute agents on a scratch home against the stand-in Git host with an isolated Git configuration, it shall drive sign-in, the first push and the account's set-up over the protocol and assert:
 
 - `space.get` reads not signed in with your own group alone under this device's user name, and reads the `git` guidance on a `PATH` without `git` [[space-1](#space-1)] [[space-3](#space-3)];
+- a full read held after Refresh replies accepted broadcasts `read.phase: running`, preserving the last complete view and time; its failure broadcasts `failed` with the existing sanitized host message, including on a signed-in startup with only local-only rows; retry success clears the failure, sign-out reads idle, and a new sign-in accepted during a held older Refresh or direct read stays running until its own fresh read settles [[space-1](#space-1)] [[space-29](#space-29)] [[space-30](#space-30)];
 - a working folder added while signed out pairs with a local-only spex repository under your own group [[space-61](#space-61)];
 - `space.signin.start` in the browser flow returns a loopback URL the suite completes against the stand-in, after which the state carries the account, your own group's folder and clone bear the login, every pair naming it is rewritten, and your own group's spex repository stands on the stand-in with its clone pushed [[space-4](#space-4)] [[space-59](#space-59)] [[space-65](#space-65)], no state from the sign-in to that push reading it unreachable [[space-61](#space-61)];
 - `space.signin.start` in the device flow returns a verification URL carrying the user code, which the suite approves at the stand-in, with the same outcome; a denied code ends the sign-in `failed` with `denied` [[space-3](#space-3)] [[space-29](#space-29)];

@@ -2260,7 +2260,9 @@ export class SpaceManager {
   /** The last read's failure, in the reader's words, until a read
    * succeeds (git-host-5). */
   private readFailure?: string;
+  private readState: GroupsState["read"] = { phase: "idle" };
   private reading?: Promise<HostView>;
+  private readingGeneration?: number;
   private fullReadBegun = false;
   private viewRead = 0;
   private failureRead = 0;
@@ -2292,6 +2294,7 @@ export class SpaceManager {
   private startRead = true;
   private flow?: { cancel(): void };
   private settingUp?: Promise<void>;
+  private settingUpGeneration?: number;
   /** Steps at the host waiting for a member with the rights (space-64),
    * by the clone's key; asked again at the next read. */
   private readonly waiting = new Map<string, Waiting>();
@@ -2562,6 +2565,7 @@ export class SpaceManager {
       this.targets.clear();
       this.releaseHeld();
       this.readFailure = undefined;
+      this.readState = { phase: "idle" };
       await this.publish();
       await this.setUp();
     } catch (error) {
@@ -2586,6 +2590,7 @@ export class SpaceManager {
     const account = this.host.store.home.account();
     if (account) this.hostSignedOut = account.login;
     this.host.store.signOut();
+    this.readState = { phase: "idle" };
     this.accountGeneration += 1;
     this.view = undefined;
     this.targets.clear();
@@ -2608,6 +2613,7 @@ export class SpaceManager {
         this.targets.clear();
         this.releaseHeld();
         this.readFailure = undefined;
+        this.readState = { phase: "idle" };
         this.waiting.clear();
         // A join still running keeps its progress; its transport holds its
         // own brokered credential or stops asking to sign in (space-15).
@@ -2633,23 +2639,55 @@ export class SpaceManager {
     return { accepted: true };
   }
 
+  private failRead(error: unknown, generation: number): void {
+    if (generation !== this.accountGeneration || !this.signedIn()) return;
+    this.readState = {
+      phase: "failed",
+      message: error instanceof HostError || error instanceof CredentialChanged ? relayHostError(error, this.hostName()) : i18n._({
+        id: "Could not refresh groups; try again",
+        comment: "An unexpected local failure stopped Refresh; technical details stay in diagnostics",
+      }),
+    };
+  }
+
   /** The account's set-up, in order (space-4): your own group renamed
    * after the login, the host read, your own group's spex repository on
    * the host, and every step left waiting asked again. */
   private setUp(): Promise<void> {
-    if (this.settingUp) return this.settingUp;
-    const work = this.runSetUp().finally(() => { if (this.settingUp === work) this.settingUp = undefined; });
+    const generation = this.accountGeneration;
+    if (this.settingUp && this.settingUpGeneration === generation) return this.settingUp;
+    const previous = this.settingUp;
+    this.readState = { phase: "running" };
+    const work = (async () => {
+      // Accepted Refresh work is visible before the existing rename/read awaits.
+      await this.publish();
+      await previous?.catch(() => undefined);
+      if (generation !== this.accountGeneration || !this.signedIn()) return;
+      await this.runSetUp(generation);
+    })().catch((error: unknown) => {
+      this.failRead(error, generation);
+      throw error;
+    }).finally(async () => {
+      if (this.settingUp === work) { this.settingUp = undefined; this.settingUpGeneration = undefined; }
+      if (generation === this.accountGeneration && this.readState.phase === "running") this.readState = { phase: "idle" };
+      try { await this.publish(); }
+      catch (error) { this.failRead(error, generation); throw error; }
+    });
     this.settingUp = work;
+    this.settingUpGeneration = generation;
     return work;
   }
 
-  private async runSetUp(): Promise<void> {
+  private async runSetUp(generation: number): Promise<void> {
     const account = this.host.store.home.account();
     if (!account) return;
-    const renamed = await this.renameOwn(account);
+    const renamed = await this.renameOwn(account, generation);
+    if (generation !== this.accountGeneration) return;
     let view: HostView;
     try { view = await this.readHost(); } catch { return; }
+    if (generation !== this.accountGeneration) return;
     if (renamed !== "conflict") await this.ensureOwnOnHost(view);
+    if (generation !== this.accountGeneration) return;
     await this.retryWaiting(view);
     await this.publish();
   }
@@ -2677,16 +2715,24 @@ export class SpaceManager {
    * group was created, cannot list it: it is made again before it is
    * held. */
   readHost(): Promise<HostView> {
-    if (this.reading) return this.reading;
+    const generation = this.accountGeneration;
+    if (this.reading && this.readingGeneration === generation) return this.reading;
+    const previous = this.reading;
     this.fullReadBegun = true;
-    const work = (async (): Promise<HostView> => {
+    this.readState = { phase: "running" };
+    let work!: Promise<HostView>;
+    work = (async (): Promise<HostView> => {
       let begun = 0;
       try {
+        await this.publish();
+        await previous?.catch(() => undefined);
+        if (generation !== this.accountGeneration) throw new CredentialChanged();
         let view: HostView;
         do {
           begun = (this.readsBegun += 1);
           view = await readHostView(this.host.client);
         } while (begun <= this.changedAfter);
+        if (generation !== this.accountGeneration) throw new CredentialChanged();
         this.view = view;
         this.viewRead = begun;
         for (const [machine, target] of this.targets) if (target.begun <= begun) this.targets.delete(machine);
@@ -2699,6 +2745,7 @@ export class SpaceManager {
           const machine = this.machine(repository.key);
           if ((this.targets.get(machine)?.begun ?? 0) <= begun) machine.hostOverride = undefined;
           const facts = await machine.readFacts().catch(() => ({ remote: null, id: null }));
+          if (generation !== this.accountGeneration) throw new CredentialChanged();
           if (facts.id === null && facts.remote !== null) {
             const listing = listingFor(view, null, facts.remote);
             if (listing) { try { machine.recordId(listing.repository.id, facts.remote); } catch { /* recorded at the next read */ } }
@@ -2708,16 +2755,23 @@ export class SpaceManager {
       } catch (error) {
         // A refusal signed out where its pair was removed (git-host-4);
         // here, only a home whose app token is gone is, checked now.
-        if (error instanceof HostError && error.code === "signed_out" && this.signedIn() && this.host.client.holdsNone()) this.signedOutByHost();
-        this.readFailure = relayHostError(error, this.hostName());
-        this.failureRead = begun;
+        if (generation === this.accountGeneration) {
+          if (error instanceof HostError && error.code === "signed_out" && this.signedIn() && this.host.client.holdsNone()) this.signedOutByHost();
+          if (generation === this.accountGeneration) {
+            this.readFailure = relayHostError(error, this.hostName());
+            this.failRead(error, generation);
+            this.failureRead = begun;
+          }
+        }
         throw error;
       } finally {
-        this.reading = undefined;
+        if (this.reading === work) { this.reading = undefined; this.readingGeneration = undefined; }
+        if (!this.settingUp && generation === this.accountGeneration && this.readState.phase === "running") this.readState = { phase: "idle" };
         void this.publish();
       }
     })();
     this.reading = work;
+    this.readingGeneration = generation;
     work.catch(() => undefined);
     return work;
   }
@@ -2774,11 +2828,12 @@ export class SpaceManager {
    * naming one rewritten. A destination already taken is a conflict:
    * nothing moves, and the next set-up asks again. Writers beneath the
    * clones resolve their paths at their own instants. */
-  private async renameOwn(account: Pick<HostAccount, "login">): Promise<"none" | "done" | "conflict"> {
+  private async renameOwn(account: Pick<HostAccount, "login">, generation: number): Promise<"none" | "done" | "conflict"> {
     const store = this.host.store;
     const target = ownNameFor(account.login);
     if (!target || target === store.home.ownName) return "none";
     const identity = await this.machineIdentity();
+    if (generation !== this.accountGeneration) return "none";
     // Nothing is awaited from here to the last rename.
     const current = store.home.ownName;
     if (target === current) return "none";
@@ -3853,6 +3908,7 @@ export class SpaceManager {
       // it grants: nothing until a read is held (DR-114).
       account: ((a) => (a ? { ...a, canCreateGroup: this.view?.account.canCreateGroup ?? false } : null))(store.home.account()),
       signIn: this.signInView(),
+      read: this.signedIn() ? this.readState : { phase: "idle" },
       readAt: this.signedIn() ? this.view?.readAt ?? null : null,
       groups: this.groupsOf(repositories),
       roles: this.signedIn() ? (this.view?.roles ?? []).map((role) => ({ id: role.id, name: role.name, mayPush: role.mayPush })) : [],

@@ -165,7 +165,7 @@ class Client {
 
 function sleep(ms: number): Promise<void> { return new Promise((resolveSleep) => setTimeout(resolveSleep, ms)); }
 
-const GROUPS_KEYS = ["account", "diagnostics", "git", "groups", "home", "host", "issues", "readAt", "roles", "signIn"];
+const GROUPS_KEYS = ["account", "diagnostics", "git", "groups", "home", "host", "issues", "read", "readAt", "roles", "signIn"];
 
 const REPOSITORY_KEYS = ["branch", "can", "code", "conflicts", "folder", "id", "incoming", "key", "lastSync", "local", "members", "name", "noticed", "own", "reason", "remote", "state", "sync", "visibility", "waiting"];
 
@@ -204,6 +204,10 @@ export function assertGroupsState(state: GroupsState): void {
     assert.deepEqual(Object.keys(state.account).sort(), ["canCreateGroup", "displayName", "id", "login"]);
     assert.equal(typeof state.account.canCreateGroup, "boolean");
   }
+  assert.ok(["idle", "running", "failed"].includes(state.read.phase));
+  assert.deepEqual(Object.keys(state.read).sort(), state.read.phase === "failed" ? ["message", "phase"] : ["phase"]);
+  if (state.read.phase === "failed") assert.equal(typeof state.read.message, "string");
+  if (state.account === null) assert.deepEqual(state.read, { phase: "idle" });
   assert.ok(Array.isArray(state.roles));
   for (const role of state.roles) {
     assert.deepEqual(Object.keys(role).sort(), ["id", "mayPush", "name"]);

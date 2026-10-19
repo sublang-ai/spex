@@ -135,6 +135,34 @@ describe("GROUPS: the header (space-1, space-2)", () => {
     expect(screen.queryByRole("button", { name: "Refresh" })).toBeNull();
   });
 
+  test("accepted Refresh stays visibly running until its actual outcome, and asynchronous failure offers retry", async () => {
+    await renderGroups(base(), { open: false });
+    commandMock.mockImplementation(async (type: string, fields?: Record<string, unknown>) => {
+      if (type === "space.refresh") { deliver(base({ read: { phase: "running" } })); return { accepted: true }; }
+      return answer(type, fields);
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
+    await waitFor(() => expect(calls("space.refresh")).toHaveLength(1));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Reading…" })).toHaveProperty("disabled", true));
+    deliver(base({ read: { phase: "failed", message: "Could not reach Spex Example" } }));
+    expect(screen.getByRole("alert").textContent).toBe("Could not reach Spex Example");
+    expect(screen.getByRole("button", { name: "Refresh" })).toHaveProperty("disabled", false);
+    fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
+    await waitFor(() => expect(calls("space.refresh")).toHaveLength(2));
+    deliver(base({ read: { phase: "idle" }, readAt: NOW }));
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.getByRole("button", { name: "Refresh" })).toHaveProperty("disabled", false);
+  });
+
+  test("first-read failure is visible with local-only rows and no previous read", async () => {
+    const row = repo({ state: "local-only", reason: null, remote: null, id: null });
+    await renderGroups(base({ readAt: null, read: { phase: "failed", message: "Could not reach Spex Example" } }, [row]), { open: false });
+    expect(screen.getByRole("alert").textContent).toBe("Could not reach Spex Example");
+    expect(screen.getByTestId("space-read-at").textContent).toBe("Not read yet");
+    deliver(base({ account: null, read: { phase: "idle" }, readAt: null }));
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
   test("a refused Refresh says why beside it", async () => {
     await renderGroups(base(), { open: false });
     commandMock.mockImplementation(async (type: string, fields?: Record<string, unknown>) => {
