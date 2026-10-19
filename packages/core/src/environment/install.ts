@@ -56,7 +56,10 @@ export interface InstallOptions {
   registry: RegistrySource;
   git: GitSource;
   gitCredential?: (repo: string) => Promise<GitCredential | undefined>;
-  workingFolder: string | null;
+  /** The folder a path source's path is relative to (environments-2):
+   * the paired working folder's root, or your own group's clone's; null
+   * where this device has none. */
+  pathRoot: string | null;
   /** `spex.yaml`'s text; read from the clone when omitted. */
   requestsText?: string | null;
   /** Where the engine links point (the app's node_modules). */
@@ -69,7 +72,7 @@ export interface InstallOptions {
 export interface InstallReport {
   /** The spec packages whose files this install placed. */
   installed: string[];
-  /** Path sources this device's working folder lacks. */
+  /** Path sources this device lacks where their paths resolve. */
   missingPaths: string[];
   /** Why the lock is stale, where it is: nothing new was installed. */
   stale?: string[];
@@ -98,13 +101,14 @@ function readPathManifest(dir: string): Manifest | null {
   return manifest;
 }
 
-/** The path sources of a lock this device's working folder lacks. */
-export function missingPathSources(lock: Lock, workingFolder: string | null): string[] {
+/** The path sources of a lock this device lacks where their paths
+ * resolve (environments-7). */
+export function missingPathSources(lock: Lock, pathRoot: string | null): string[] {
   const missing: string[] = [];
   for (const name of Object.keys(lock.packages).sort()) {
     const source = lock.packages[name]!.source;
     if (!isPathSource(source)) continue;
-    if (workingFolder === null || !existsSync(join(workingFolder, ...source.path.split("/"), "meta.yaml"))) missing.push(name);
+    if (pathRoot === null || !existsSync(join(pathRoot, ...source.path.split("/"), "meta.yaml"))) missing.push(name);
   }
   return missing;
 }
@@ -176,7 +180,7 @@ export function installedPackages(cloneDir: string, lock: Lock): Set<string> {
  * lock no longer at the version installed, or the lock no longer
  * matching `spex.yaml` or a path source's manifest. */
 function assertCurrent(options: InstallOptions): void {
-  const { cloneDir, lock, workingFolder } = options;
+  const { cloneDir, lock, pathRoot } = options;
   const lockFile = join(cloneDir, "spex.lock");
   if (!existsSync(cloneDir)) throw new VersionConflictError(cloneDir);
   if (fileVersion(lockFile) !== options.lockVersion) throw new VersionConflictError(lockFile);
@@ -184,7 +188,7 @@ function assertCurrent(options: InstallOptions): void {
   const requestsText = existsSync(requestsFile) ? readFileSync(requestsFile, "utf8") : null;
   let stale = false;
   try {
-    stale = lockStaleness(lock, requestsText, (path) => (workingFolder === null ? null : readPathManifest(join(workingFolder, ...path.split("/"))))).stale;
+    stale = lockStaleness(lock, requestsText, (path) => (pathRoot === null ? null : readPathManifest(join(pathRoot, ...path.split("/"))))).stale;
   } catch {
     stale = true;
   }
@@ -323,34 +327,36 @@ async function prepareInstalled(target: string, names: readonly string[], lock: 
   return kept;
 }
 
-/** A path source's playbook folders in the working folder get the
- * engine links a compile there provisions, ignored by its Git
- * (playbook-library-46); their files are left as they are, and a
- * folder that takes no link is logged, never failing the install. */
-function linkPathSources(lock: Lock, workingFolder: string | null, modulePaths: string[] | undefined): void {
-  if (workingFolder === null) return;
+/** A path source's playbook folders where its path resolves get the
+ * engine links a compile provisions, ignored by the Git of the working
+ * folder or of your own group's clone holding them, so a sync never
+ * carries them (playbook-library-46, DR-125); their files are left as
+ * they are, and a folder that takes no link is logged, never failing
+ * the install. */
+function linkPathSources(lock: Lock, pathRoot: string | null, modulePaths: string[] | undefined): void {
+  if (pathRoot === null) return;
   let linked = false;
   for (const name of Object.keys(lock.packages).sort()) {
     const resolution = lock.packages[name]!;
     if (!isPathSource(resolution.source)) continue;
-    for (const { folder } of playbookFolders(join(workingFolder, ...resolution.source.path.split("/")), resolution)) {
+    for (const { folder } of playbookFolders(join(pathRoot, ...resolution.source.path.split("/")), resolution)) {
       try { if (provisionEngineLinks(folder, modulePaths).length > 0) linked = true; }
       catch (error) { console.error(`spex: ${folder} takes no engine links: ${String(error)}`); }
     }
   }
   if (!linked) return;
-  try { writeExcludeBlock(workingFolder, [ENGINE_LINKS_EXCLUDE], "engine links"); }
-  catch (error) { console.error(`spex: ${workingFolder}'s engine links are not excluded: ${String(error)}`); }
+  try { writeExcludeBlock(pathRoot, [ENGINE_LINKS_EXCLUDE], "engine links"); }
+  catch (error) { console.error(`spex: ${pathRoot}'s engine links are not excluded: ${String(error)}`); }
 }
 
 /** Install a lock's selected files (environments-7). */
 export async function install(options: InstallOptions): Promise<InstallReport> {
-  const { cloneDir, lock, store, workingFolder } = options;
-  const missingPaths = missingPathSources(lock, workingFolder);
+  const { cloneDir, lock, store, pathRoot } = options;
+  const missingPaths = missingPathSources(lock, pathRoot);
   const requestsText = options.requestsText !== undefined
     ? options.requestsText
     : existsSync(join(cloneDir, "spex.yaml")) ? readFileSync(join(cloneDir, "spex.yaml"), "utf8") : null;
-  const staleness = lockStaleness(lock, requestsText, (path) => (workingFolder === null ? null : readPathManifest(join(workingFolder, ...path.split("/")))));
+  const staleness = lockStaleness(lock, requestsText, (path) => (pathRoot === null ? null : readPathManifest(join(pathRoot, ...path.split("/")))));
   if (staleness.stale) return { installed: [], missingPaths, stale: staleness.reasons, unchanged: true, engineKept: [] };
 
   const names = Object.keys(lock.packages).sort().filter((name) => !isPathSource(lock.packages[name]!.source));
@@ -359,7 +365,7 @@ export async function install(options: InstallOptions): Promise<InstallReport> {
     if (issues.length > 0) throw new InstallError(name, `${name}: ${issues.map((issue) => `${issue.path} ${issue.message}`).join("; ")}`);
   }
 
-  linkPathSources(lock, workingFolder, options.modulePaths);
+  linkPathSources(lock, pathRoot, options.modulePaths);
   const target = join(cloneDir, "packages");
   const record = installRecord(lock);
   if (treeMatches(target, lock, record)) {

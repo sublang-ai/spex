@@ -30,7 +30,7 @@ import { authoringScript } from "./testing/authoring.js";
 import { fakeAdapterImports, type FakeScript } from "./testing/fake-adapter.js";
 import { createScriptedCaptain } from "./testing/scripted-captain.js";
 import { scratchDir } from "./testing/scratch.js";
-import { createSpaceHarness } from "./testing/space-harness.js";
+import { createSpaceHarness, ownClone } from "./testing/space-harness.js";
 import { STANDIN_STORAGE } from "./testing/standin-host.js";
 import { makeRelease, startStandinRegistry } from "./testing/standin-registry.js";
 import { stubSlcSource } from "./testing/stub-slc.js";
@@ -695,6 +695,112 @@ test("environments-22 through a real core: a project rebound to a second working
 });
 
 // ---------------------------------------------------------------------------
+// environments-33: a spec package kept in your own group's clone
+// ---------------------------------------------------------------------------
+
+test("environments-33 through real cores: a skill your own group requests by a path in its clone exports at once, refuses paths that would not sync, and reaches a second home through the sync", { timeout: 240_000 }, async (t) => {
+  const harness = createSpaceHarness();
+  t.after(() => harness.dispose());
+  const ownKey = `${OWN}/${OWN}-spex`;
+  // Each home's agents read their own user home, Claude Code's and,
+  // through Codex's home folder, the folder the other four share.
+  const agentsHome = (name: string): string => {
+    const dir = join(harness.scratch, `${name}-user`);
+    for (const folder of [".claude", ".codex"]) mkdirSync(join(dir, folder), { recursive: true });
+    return dir;
+  };
+  const userA = agentsHome("a");
+  const userB = agentsHome("b");
+  const a = await harness.startHome("own-path-a", { project: false, extra: { home: userA } });
+  t.after(() => a.stop());
+  const b = await harness.startHome("own-path-b", { project: false, env: harness.otherDevice("own-path-b"), extra: { home: userB } });
+  t.after(() => b.stop());
+  const cloneA = ownClone(a.dataDir);
+  const cloneB = ownClone(b.dataDir);
+
+  // Both homes' own groups share one spex repository before the request.
+  const bare = harness.bareRepo();
+  await a.client.expectOk("space.remote.set", { repository: ownKey, url: bare });
+  assert.equal((await a.client.settle("space.sync", { repository: ownKey })).sync.phase, "done");
+  await b.client.expectOk("space.remote.set", { repository: ownKey, url: bare });
+  await harness.joinRemote(b, ownKey);
+  assert.equal((await a.client.settle("space.sync", { repository: ownKey })).sync.phase, "done");
+
+  const skill = (text: string): string => `---\nname: notes\ndescription: Keeps my notes.\n---\n\n${text}\n`;
+  await makeRelease(join(cloneA, "mine", "notes"), {
+    format: 2, org: OWN, name: "notes", version: "0.1.0", description: "My notes", license: "Apache-2.0",
+    artifacts: { notes: { kind: "skill", language: "en" } },
+  }, { "skills/en/notes/SKILL.md": skill("Write it down.") });
+  const holds = (state: EnvironmentState): boolean => state.packages.some((pkg) => pkg.name === `${OWN}/notes` && pkg.installed);
+  const settled = async (client: typeof a.client, check: (state: EnvironmentState) => boolean): Promise<EnvironmentState> => {
+    const start = Date.now();
+    for (;;) {
+      const state = await client.expectOk("environment.get", { repository: ownKey });
+      if (state.busy === null && check(state)) return state;
+      if (Date.now() - start > 60_000) throw new Error(`the environment never settled: ${JSON.stringify(state)}`);
+      await sleep(50);
+    }
+  };
+
+  // Requested by its path in the clone: resolved in place, the lock
+  // holding the path and no files, and exported at once.
+  await a.client.expectOk("environment.request", { repository: ownKey, name: `${OWN}/notes`, request: { kind: "path", path: "mine/notes" } });
+  const state = await settled(a.client, holds);
+  assert.equal(state.pathRoot, cloneA, "your own group's paths are relative to its clone [environments-2]");
+  const lock = parseYaml(readFileSync(join(cloneA, "spex.lock"), "utf8")) as Lock;
+  assert.deepEqual(lock.packages[`${OWN}/notes`]?.source, { path: "mine/notes", version: "0.1.0", dependencies: {}, requires: {} });
+  assert.deepEqual(lock.packages[`${OWN}/notes`]?.files, []);
+  for (const folder of [".claude", ".agents"]) {
+    assert.equal(readFileSync(join(userA, folder, "skills", "notes", "SKILL.md"), "utf8"), skill("Write it down."), folder);
+  }
+  // Edited in place: the next export carries the edit.
+  writeFileSync(join(cloneA, "mine", "notes", "skills", "en", "notes", "SKILL.md"), skill("Write it down, then read it back."));
+  await a.client.expectOk("environment.install", { repository: ownKey });
+  await until(() => readFileSync(join(userA, ".agents", "skills", "notes", "SKILL.md"), "utf8") === skill("Write it down, then read it back."), 60_000, "the edit exported");
+  assert.equal(readFileSync(join(userA, ".claude", "skills", "notes", "SKILL.md"), "utf8"), skill("Write it down, then read it back."));
+  // Publishing reads the same folder by the same path.
+  const preview = await a.client.expectOk("environment.publish", { repository: ownKey, path: "mine/notes", dryRun: true });
+  assert.deepEqual(preview.preview, { name: `${OWN}/notes`, version: "0.1.0", files: ["meta.yaml", "skills/en/notes/SKILL.md"] });
+
+  // A path that would not sync with the clone is refused before any write.
+  symlinkSync(join(cloneA, "mine", "notes"), join(cloneA, "linked"));
+  await makeRelease(join(cloneA, "mine", "scratchy"), {
+    format: 2, org: OWN, name: "scratchy", version: "0.1.0", artifacts: { scratchy: { kind: "skill", language: "en" } },
+  }, { "skills/en/scratchy/SKILL.md": "---\nname: scratchy\ndescription: Scratch.\n---\n", "skills/en/scratchy/draft.tmp": "scratch" });
+  const requests = readFileSync(join(cloneA, "spex.yaml"));
+  const refusals: [string, RegExp][] = [
+    [".", /is not a folder below your own group's clone's root/],
+    ["../elsewhere", /is not a relative folder inside the working folder or your own group's clone/],
+    ...["config", "sessions", "intents", "authoring", "packages", "skills", "local"].map((first): [string, RegExp] => [`${first}/notes`, /is a path Spex keeps in your own group's clone/]),
+    ["drafts.tmp", /the clone's Git rules ignore/],
+    ["linked", /is reached through a link/],
+    ["mine/scratchy", /holds mine\/scratchy\/skills\/en\/scratchy\/draft\.tmp, which the clone's Git rules ignore/],
+  ];
+  for (const [path, why] of refusals) {
+    await a.client.expectError("environment.request", { repository: ownKey, name: `${OWN}/bad`, request: { kind: "path", path } }, "invalid_request", why);
+    assert.ok(readFileSync(join(cloneA, "spex.yaml")).equals(requests), `${path}: spex.yaml keeps its bytes`);
+  }
+  rmSync(join(cloneA, "linked"));
+  rmSync(join(cloneA, "mine", "scratchy"), { recursive: true });
+
+  // The sync carries the folder with the environment; the second home
+  // installs and exports it as its own.
+  assert.equal((await a.client.settle("space.sync", { repository: ownKey })).sync.phase, "done");
+  const received = await b.client.settle("space.sync", { repository: ownKey });
+  assert.equal(received.sync.phase, "done", JSON.stringify(received.sync));
+  assert.ok(readFileSync(join(cloneB, "spex.lock")).equals(readFileSync(join(cloneA, "spex.lock"))), "the lock arrived");
+  assert.ok(readFileSync(join(cloneB, "spex.yaml")).equals(readFileSync(join(cloneA, "spex.yaml"))), "the requests arrived");
+  assert.equal(readFileSync(join(cloneB, "mine", "notes", "meta.yaml"), "utf8"), readFileSync(join(cloneA, "mine", "notes", "meta.yaml"), "utf8"));
+  const there = await settled(b.client, holds);
+  assert.equal(there.pathRoot, cloneB);
+  for (const folder of [".claude", ".agents"]) {
+    const exported = join(userB, folder, "skills", "notes", "SKILL.md");
+    await until(() => existsSync(exported), 60_000, `${folder} on the second home`);
+    assert.equal(readFileSync(exported, "utf8"), skill("Write it down, then read it back."), folder);
+  }
+});
+
+// ---------------------------------------------------------------------------
 // environments-25: the commands over the protocol
 // ---------------------------------------------------------------------------
 
@@ -721,7 +827,8 @@ test("environments-25: every environment command replies and refuses as its tabl
   // environment.get carries every field the surface lists (environments-14).
   await client.expectError("environment.get", { repository: "nobody/none-spex" }, "not_found");
   const initial = await client.expectOk("environment.get", { repository: key });
-  assert.deepEqual(Object.keys(initial).sort(), ["busy", "conflicts", "error", "language", "packages", "published", "repository", "requests", "stale"]);
+  assert.deepEqual(Object.keys(initial).sort(), ["busy", "conflicts", "error", "language", "packages", "pathRoot", "published", "repository", "requests", "stale"]);
+  assert.equal(initial.pathRoot, project.path, "a project's paths are relative to its working folder (environments-2)");
   assert.deepEqual(Object.keys(initial.packages[0]!).sort(), ["artifacts", "direct", "exports", "installed", "missingPath", "name", "requiredBy", "source", "version"]);
   assert.deepEqual(initial.requests["sublang/playbooks"], { kind: "registry", version: `^${builtinPackage().version}` });
 
@@ -802,7 +909,7 @@ test("environments-25: every environment command replies and refuses as its tabl
   const peerHome = scratchDir("spex-env-peer-home-");
   const peerStore = new ContentStore(peerHome);
   const resolved = await resolve({
-    requests: parseRequests(peerRequests), requestsText: peerRequests, workingFolder: null, git: gitSource(join(peerHome, "cache")),
+    requests: parseRequests(peerRequests), requestsText: peerRequests, pathRoot: null, git: gitSource(join(peerHome, "cache")),
     registry: compositeRegistry(builtinRegistrySource({ store: peerStore, cacheDir: join(peerHome, "cache"), url: registry.url, shipped: builtinPackage() }), new RegistryClient({ url: registry.url })),
   });
   assert.ok(resolved.ok);

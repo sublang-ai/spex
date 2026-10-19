@@ -318,6 +318,10 @@ export interface EnvironmentState {
    * succeeded: what the registry now holds and its page there
    * (playbook-library-93). */
   published?: { name: string; version: string; url: string } | null;
+  /** The folder a request by path is relative to on this device
+   * (environments-2): the paired working folder, or your own group's
+   * clone; null where none is paired. */
+  pathRoot: string | null;
   /** The built-in spec package this app ships, where the lock selects an
    * older release and the requirement `spex.yaml` requests it at admits
    * the shipped one; absent otherwise. The lock stays until the reader

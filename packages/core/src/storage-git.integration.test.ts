@@ -381,6 +381,58 @@ test("storage-16: an authoring session and the environment are each one unit cho
   } finally { dispose(); }
 });
 
+test("storage-16: a spec package folder is one unit chosen whole, a folder nested in it and a file added on one side within it, and a file beside it its own", async () => {
+  const { home, key, clone, commit, dispose } = setup();
+  const write = (path: string, text: string): void => { mkdirSync(dirname(join(clone, path)), { recursive: true }); writeFileSync(join(clone, path), text); };
+  try {
+    for (const path of ["mine/notes/meta.yaml", "mine/notes/skills/en/notes/SKILL.md", "mine/notes/inner/meta.yaml", "mine/README.md"]) write(path, "base");
+    commit("base");
+    git(clone, "branch", "other");
+    write("mine/notes/meta.yaml", "ours"); write("mine/README.md", "ours"); commit("ours");
+    git(clone, "checkout", "-q", "other");
+    write("mine/notes/skills/en/notes/SKILL.md", "theirs"); write("mine/notes/skills/en/notes/extra.md", "theirs"); commit("theirs");
+    git(clone, "checkout", "-q", "spex");
+    const plan = planStorageMerge(clone, "HEAD", "other");
+    const folder = plan.units.find((u) => u.name === "mine/notes/");
+    assert.equal(folder?.choice, "conflict", "each side changed a different file of the one folder");
+    assert.deepEqual(folder?.paths, ["mine/notes/inner/meta.yaml", "mine/notes/meta.yaml", "mine/notes/skills/en/notes/SKILL.md", "mine/notes/skills/en/notes/extra.md"]);
+    assert.deepEqual(folder?.changed, { ours: true, theirs: true });
+    assert.ok(!plan.units.some((u) => u.name !== "mine/notes/" && u.name.startsWith("mine/notes/")), "no file or nested folder under it is a unit of its own");
+    assert.equal(plan.units.find((u) => u.name === "mine/README.md")?.choice, "ours", "a file beside it is its own unit");
+    merge(clone);
+    await assert.rejects(() => selectStorageMerge(home, key, { "mine/notes/meta.yaml": "ours" }), /unknown storage unit/);
+    await selectStorageMerge(home, key, { "mine/notes/": "theirs" });
+    assert.equal(readFileSync(join(clone, "mine", "notes", "meta.yaml"), "utf8"), "base", "the host's folder whole: its meta.yaml unchanged there");
+    assert.equal(readFileSync(join(clone, "mine", "notes", "skills", "en", "notes", "SKILL.md"), "utf8"), "theirs");
+    assert.equal(readFileSync(join(clone, "mine", "notes", "skills", "en", "notes", "extra.md"), "utf8"), "theirs");
+    assert.equal(readFileSync(join(clone, "mine", "README.md"), "utf8"), "ours");
+    assert.equal(git(clone, "diff", "--name-only", "--diff-filter=U"), "");
+  } finally { dispose(); }
+});
+
+test("storage-16: through the apply seam, a file added under a spec package folder since the Save refuses the folder's replacement, that file kept", async () => {
+  const { clone, commit, dispose } = setup();
+  const skill = join(clone, "mine", "notes", "skills", "en", "notes", "SKILL.md");
+  try {
+    mkdirSync(dirname(skill), { recursive: true });
+    writeFileSync(join(clone, "mine", "notes", "meta.yaml"), "base"); writeFileSync(skill, "base"); commit("base");
+    const ours = git(clone, "rev-parse", "HEAD");
+    git(clone, "checkout", "-q", "-b", "other"); writeFileSync(skill, "theirs"); commit("theirs"); const theirs = git(clone, "rev-parse", "HEAD");
+    git(clone, "checkout", "-q", "spex");
+    const plan = planStorageMerge(clone, ours, theirs);
+    assert.equal(plan.units.find((u) => u.name === "mine/notes/")?.choice, "theirs");
+    const added = join(clone, "mine", "notes", "skills", "en", "notes", "draft.md");
+    writeFileSync(added, "mine since the Save");
+    await assert.rejects(() => applyStorageSelection(clone, plan, {}), (error: StorageWriteRefused) =>
+      error instanceof StorageWriteRefused && error.reason === "changed" && error.unit === "mine/notes/" && /draft\.md changed since it was read/.test(error.message));
+    assert.equal(readFileSync(added, "utf8"), "mine since the Save");
+    assert.equal(readFileSync(skill, "utf8"), "base");
+    rmSync(added);
+    await applyStorageSelection(clone, plan, {});
+    assert.equal(readFileSync(skill, "utf8"), "theirs", "the folder taken whole once nothing stands beside its files");
+  } finally { dispose(); }
+});
+
 test("storage-16: unrelated histories refuse selection until joined, whereupon the empty tree is the ancestor", async () => {
   const { root, home, key, clone, sessionId, dispose } = setup();
   try {

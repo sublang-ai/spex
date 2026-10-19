@@ -28,6 +28,7 @@ import {
 import { specExportName } from "./exports.js";
 import type { GitCredential, GitSource } from "./git-source.js";
 import { manifestRequires, type Lock, type LockedArtifact, type LockedFile, type Resolution, type SourceLock } from "./lock.js";
+import { ownPathIssue, type OwnPathIssue } from "./own-paths.js";
 import { RegistryError, type RegistrySource, type VersionIndexEntry, KNOWN_FORMAT } from "./registry.js";
 import { isGitRequest, isInsidePath, isPathRequest, isRegistryRequest, requestsDigest, type Request, type Requests, type Selection } from "./requests.js";
 import { compareVersions, isVersion, parseRequirement, satisfies, type Requirement } from "./semver.js";
@@ -51,7 +52,13 @@ export interface ResolveInput {
    * `requests` digest is taken over these bytes. */
   requestsText?: string;
   registry: RegistrySource;
-  workingFolder: string | null;
+  /** The folder a request's `path` is relative to (environments-2): the
+   * paired working folder's root, or your own group's clone's; null
+   * where this device has none. */
+  pathRoot: string | null;
+  /** Whether `pathRoot` is your own group's clone, whose requests by
+   * path name only a folder that syncs with it (environments-32). */
+  confined?: boolean;
   git: GitSource;
   /** The credential for a Git repository, where one applies. */
   gitCredential?: (repo: string) => Promise<GitCredential | undefined>;
@@ -62,7 +69,7 @@ export interface ResolveInput {
   maxSteps?: number;
 }
 
-export type ResolveErrorKind = "no_working_folder" | "path_outside" | "path_missing" | "name_mismatch" | "bound";
+export type ResolveErrorKind = "no_working_folder" | "path_outside" | "path_confined" | "path_missing" | "name_mismatch" | "bound";
 
 export class ResolveError extends Error {
   constructor(readonly kind: ResolveErrorKind, readonly packageName: string | undefined, message: string) {
@@ -111,18 +118,43 @@ function selectionHolds(selection: readonly Selection[], artifacts: Candidate["a
   });
 }
 
+/** A path your own group's clone refuses, in the library's words
+ * (environments-32). */
+function confinedError(name: string, path: string, issue: OwnPathIssue): ResolveError {
+  const why = issue.reason === "ignored_file"
+    ? `holds ${issue.file}, which the clone's Git rules ignore, so it would not sync`
+    : {
+      root: "is not a folder below your own group's clone's root",
+      spex: "is a path Spex keeps in your own group's clone",
+      ignored: "is a path the clone's Git rules ignore, so it would not sync",
+      link: "is reached through a link, which the clone's sync does not carry",
+    }[issue.reason];
+  return new ResolveError("path_confined", name, `${name}: ${path} ${why}`);
+}
+
 async function loadFixed(name: string, request: Request, input: ResolveInput): Promise<Fixed | undefined> {
   if (isPathRequest(request)) {
-    if (input.workingFolder === null) throw new ResolveError("no_working_folder", name, `${name} is requested by path, and this spex repository has no working folder on this device`);
-    if (!isInsidePath(request.path)) throw new ResolveError("path_outside", name, `${name}: ${request.path} is outside the working folder`);
-    const dir = resolvePath(input.workingFolder, request.path);
-    const inside = relative(resolvePath(input.workingFolder), dir);
-    if (inside.startsWith("..") || inside.startsWith(sep)) throw new ResolveError("path_outside", name, `${name}: ${request.path} is outside the working folder`);
-    if (!existsSync(join(dir, "meta.yaml"))) throw new ResolveError("path_missing", name, `${name}: ${request.path} is missing in ${input.workingFolder}`);
-    // A link may not lead the path out of the working folder either.
-    const real = relative(realpathSync(input.workingFolder), realpathSync(dir));
-    if (real.startsWith("..") || isAbsolute(real)) throw new ResolveError("path_outside", name, `${name}: ${request.path} leads outside the working folder`);
+    const root = input.pathRoot;
+    if (root === null) throw new ResolveError("no_working_folder", name, `${name} is requested by path, and this spex repository has no working folder on this device`);
+    const place = input.confined ? "your own group's clone" : "the working folder";
+    if (!isInsidePath(request.path)) throw new ResolveError("path_outside", name, `${name}: ${request.path} is outside ${place}`);
+    const dir = resolvePath(root, request.path);
+    const inside = relative(resolvePath(root), dir);
+    if (inside.startsWith("..") || inside.startsWith(sep)) throw new ResolveError("path_outside", name, `${name}: ${request.path} is outside ${place}`);
+    if (input.confined) {
+      const issue = ownPathIssue(root, request.path);
+      if (issue) throw confinedError(name, request.path, issue);
+    }
+    if (!existsSync(join(dir, "meta.yaml"))) throw new ResolveError("path_missing", name, `${name}: ${request.path} is missing in ${root}`);
+    // A link may not lead the path out of the folder either.
+    const real = relative(realpathSync(root), realpathSync(dir));
+    if (real.startsWith("..") || isAbsolute(real)) throw new ResolveError("path_outside", name, `${name}: ${request.path} leads outside ${place}`);
     const release = await readRelease(dir);
+    // Every file of your own group's folder syncs with its clone.
+    if (input.confined) {
+      const issue = ownPathIssue(root, request.path, release.files.map((file) => file.path));
+      if (issue) throw confinedError(name, request.path, issue);
+    }
     const found = `${release.manifest.org}/${release.manifest.name}`;
     if (found !== name) throw new ResolveError("name_mismatch", name, `${name}: the folder ${request.path} holds ${found}`);
     return { kind: "path", release, path: request.path };

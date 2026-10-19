@@ -73,8 +73,8 @@ const REQUEST_FIELDS = new Set(["version", "path", "git", "rev", "select", "alia
 
 /** Every reason a request for a name is refused (environments-2,
  * environments-15): a bad name, no or several sources, a malformed
- * requirement, a path outside the working folder, a bad select or
- * alias. */
+ * requirement, a path that is not relative or leads out of the folder
+ * it is relative to, a bad select or alias. */
 export function requestIssues(name: string, request: unknown): Issue[] {
   const at = `packages.${name}`;
   const issues: Issue[] = [];
@@ -95,7 +95,7 @@ export function requestIssues(name: string, request: unknown): Issue[] {
     if (request.rev !== undefined || request.path !== undefined) issues.push({ path: at, rule: "source", message: `the request for ${name} must name exactly one source` });
   } else if (sources[0] === "path") {
     if (typeof request.path !== "string" || !isInsidePath(request.path)) {
-      issues.push({ path: at, rule: "path", message: `path ${JSON.stringify(request.path)} is not a relative folder inside the working folder` });
+      issues.push({ path: at, rule: "path", message: `path ${JSON.stringify(request.path)} is not a relative folder inside the working folder or your own group's clone` });
     }
     if (request.rev !== undefined) issues.push({ path: at, rule: "source", message: `rev belongs to a git request` });
   } else {

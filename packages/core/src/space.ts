@@ -62,6 +62,7 @@ import {
   readStorageTree,
   resolveStorageChoices,
   SPEX_BRANCH,
+  specPackageFolders,
   storageUnitName,
   StorageWriteRefused,
   UPLOAD_STAGING,
@@ -1664,7 +1665,8 @@ class RepositorySync {
     }
     await this.host.beforeStep?.({ op: "sync", step: "save", repository: this.key, at: "commit" });
     if (tree === await this.git.ok(["rev-parse", `${head}^{tree}`])) return null;
-    const units = [...new Set(staged.map(storageUnitName))].sort();
+    const packages = specPackageFolders(readStorageTree(this.dir, tree).keys());
+    const units = [...new Set(staged.map((file) => storageUnitName(file, packages)))].sort();
     const commit = await this.git.run([...(await this.git.committerArgs()), "commit-tree", tree, "-p", head, "-m", `Sync from ${hostname()}\n\n${units.join("\n")}`]);
     if (commit.code !== 0) {
       throw new SpaceStopped("save", {

@@ -359,6 +359,41 @@ msgstr "{path} is not the root of a git work tree"
 msgid "{path} is outside the working folder"
 msgstr "{path} is outside the working folder"
 
+#. Refusal: a request by path in your own group's environment names a folder holding a file the clone's sync rules drop; {file} is that file's path in the clone
+#: src/environments.ts
+msgid "{path} holds {file}, which the clone's Git rules ignore, so it would not sync"
+msgstr "{path} holds {file}, which the clone's Git rules ignore, so it would not sync"
+
+#. Refusal: a request by path in your own group's environment names a folder under Spex's own paths, such as sessions/ or skills/
+#: src/environments.ts
+msgid "{path} is a path Spex keeps in your own group's clone"
+msgstr "{path} is a path Spex keeps in your own group's clone"
+
+#. Refusal: a request by path in your own group's environment names a folder the clone's sync rules drop, such as one named *.tmp
+#: src/environments.ts
+msgid "{path} is a path the clone's Git rules ignore, so it would not sync"
+msgstr "{path} is a path the clone's Git rules ignore, so it would not sync"
+
+#. Refusal: a request by path in your own group's environment names its clone's root
+#: src/environments.ts
+msgid "{path} is not a folder below your own group's clone's root"
+msgstr "{path} is not a folder below your own group's clone's root"
+
+#. Refusal: a request by path in your own group's environment names a folder outside its spex repository's clone
+#: src/environments.ts
+msgid "{path} is outside your own group's clone"
+msgstr "{path} is outside your own group's clone"
+
+#. Refusal: a request by path in your own group's environment names a folder that is, or lies under, a link
+#: src/environments.ts
+msgid "{path} is reached through a link, which the clone's sync does not carry"
+msgstr "{path} is reached through a link, which the clone's sync does not carry"
+
+#. Refusal: your own group's request by path names a folder inside its spex repository's clone (environments-2), and this spec package lies elsewhere
+#: src/service.ts
+msgid "your own group's environment can request this spec package by path only from inside its clone; enable it in the project, or publish it and add it from the registry"
+msgstr "your own group's environment can request this spec package by path only from inside its clone; enable it in the project, or publish it and add it from the registry"
+
 #. Spec notice; `intents/` is a directory name and stays as it is
 #: src/specs.ts
 msgid "{path} is shadowed by the same-named file under intents/"
