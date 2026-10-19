@@ -820,6 +820,16 @@ msgstr "Check the URL, create the repository if it is not there yet, or {act}. T
 msgid "Choose the other side for this unit or fix the file, then Retry."
 msgstr "Choose the other side for this unit or fix the file, then Retry."
 
+#. Where a project's code lives before the instance has reported its Git origin; the actual remote is withheld until it can be classified
+#: src/space.ts
+msgid "Code on a remote"
+msgstr "Code on a remote"
+
+#. Where a project's code lives when its remote is under the instance's reported Git origin; the Git system behind the instance is never named
+#: src/space.ts
+msgid "Code on this instance"
+msgstr "Code on this instance"
+
 #. The project file's unit label: the remote of the code changed
 #: src/space.ts
 msgid "Code remote changed"
@@ -1321,6 +1331,16 @@ msgstr "invalid viewed marker {key}"
 #: src/home.ts
 msgid "invalid working folder pair"
 msgstr "invalid working folder pair"
+
+#. Forge setup guidance before the instance has reported its Git origin; the actual remote and hostname stay internal
+#: src/service.ts
+msgid "Issues and PRs come from GitHub; this project's code is on a remote."
+msgstr "Issues and PRs come from GitHub; this project's code is on a remote."
+
+#. Forge setup guidance for code on the instance's reported Git origin, whose underlying Git system is never named
+#: src/service.ts
+msgid "Issues and PRs come from GitHub; this project's code is on this instance."
+msgstr "Issues and PRs come from GitHub; this project's code is on this instance."
 
 #. Forge guidance where the project's origin remote is not on GitHub; {host} is that remote's host name, or a local remote as written
 #: src/forge.ts
@@ -2697,3 +2717,7 @@ msgstr "{path} must be an array of skill paths"
 #. Config error; the path names one entry of the skills setting
 msgid "{path} must be a non-blank skill path without NUL"
 msgstr "{path} must be a non-blank skill path without NUL"
+
+#. A package Git source failed without a recognized status; raw backing-host or unclassified stderr stays inside the core
+msgid "{host} answered with an error"
+msgstr "{host} answered with an error"

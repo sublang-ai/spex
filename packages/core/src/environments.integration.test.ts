@@ -10,7 +10,7 @@ import { randomUUID } from "node:crypto";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { createServer, request as httpRequest } from "node:http";
 import type { AddressInfo } from "node:net";
 import { dirname, isAbsolute, join } from "node:path";
@@ -23,8 +23,8 @@ import type { EnvironmentManager } from "./environments.js";
 import { CoreError } from "./session.js";
 import type { Store } from "./store.js";
 import { defaultSpawner, type LineSpawner } from "./compile.js";
-import { starterText, templatePath } from "./config.js";
-import { builtinPackage, publishRelease, readRelease, RegistryClient, type BuiltinPackage } from "./environment/index.js";
+import { createModuleLoader, starterText, templatePath } from "./config.js";
+import { builtinPackage, INSTALL_RECORD, publishRelease, readRelease, RegistryClient, requestsDigest, type BuiltinPackage, type Lock } from "./environment/index.js";
 import type { Command, CommandResults, EnvironmentState, ServerMessage } from "./protocol.js";
 import { authoringScript } from "./testing/authoring.js";
 import { fakeAdapterImports, type FakeScript } from "./testing/fake-adapter.js";
@@ -315,6 +315,88 @@ test("environments-23: a fresh home with no registry reachable seeds the built-i
     && JSON.stringify(state.requests["sublang/playbooks"]) === JSON.stringify({ kind: "registry", version: shipped.version }));
   assert.deepEqual(exact.packages.map((pkg) => [pkg.version, pkg.installed]), [[shipped.version, true]]);
   assert.ok(!("builtinUpdate" in exact), "[environments-11] the request admits only the older release");
+});
+
+test("environments-22 through a real core: retained files of another lock are not imported before a successful same-process resolve", { timeout: 120_000 }, async (t) => {
+  const dir = scratchDir("spex-env-retained-module-");
+  // Install the shipped release without loading its registries yet.
+  let core = await startCore(dir, { hostUrl: UNREACHABLE, config: CONFIG.replace(/playbooks:[\s\S]*/, "playbooks: {}\n") });
+  t.after(() => core.stop());
+  const own = `${OWN}/${OWN}-spex`;
+  const clone = clonePath(core.dataDir, own);
+  await core.stop();
+  writeFileSync(core.configPath, CONFIG);
+
+  // A synced older lock cannot be restored. Its previous installed tree
+  // stays intact, including an engine link invalidated by a local move.
+  const major = builtinPackage().version.split(".")[0]!;
+  const requests = stringifyYaml({ format: 1, packages: { "sublang/playbooks": { version: `^${major}.0.0` } } });
+  writeFileSync(join(clone, "spex.yaml"), requests);
+  const lockPath = join(clone, "spex.lock");
+  const lock = parseYaml(readFileSync(lockPath, "utf8")) as Lock;
+  lock.requests = requestsDigest(requests);
+  const previous = lock.packages["sublang/playbooks"]!;
+  assert.ok("version" in previous.source);
+  previous.source.version = `${major}.0.0`;
+  previous.files[0]!.sha256 = "0".repeat(64);
+  writeFileSync(lockPath, stringifyYaml(lock));
+  for (const id of ["code", "review"]) {
+    const link = join(clone, "packages", "sublang", "playbooks", "playbooks", "en", id, "node_modules", "xstate");
+    rmSync(link, { recursive: true, force: true });
+    symlinkSync(join(dir, "retired-engine", "xstate"), link, process.platform === "win32" ? "junction" : "dir");
+  }
+  const loaded: string[] = [];
+  const loader = createModuleLoader();
+  core = await startCore(dir, { hostUrl: UNREACHABLE, extra: { loadModule: async (module) => { loaded.push(module); return loader(module); } } });
+  const before = await core.client.expectOk("environment.get", { repository: own });
+  assert.equal(before.packages[0]?.installed, false);
+  assert.ok(before.error, "the failed restoration remains visible");
+  const configBefore = await core.client.expectOk("config.get", {});
+  const importedBefore = loaded.length;
+
+  // One normal resolve selects the seeded release, installs it and
+  // prepares the engine links before the first registry import.
+  const mark = core.client.mark();
+  await core.client.expectOk("environment.resolve", { repository: own });
+  const after = await core.client.environment(own, mark, (state) => state.busy === null && state.packages[0]?.installed === true);
+  assert.equal(after.error, null);
+  assert.equal((await core.client.expectOk("config.get", {})).status, "valid", "a successful resolve repairs config without restarting the core");
+  assert.equal(configBefore.status, "invalid");
+  assert.match(JSON.stringify(configBefore), /exports no playbook code/);
+  assert.equal(importedBefore, 0, "no retained registry was imported while its package was uninstalled");
+  assert.ok(loaded.length > 0, "the installed registries were imported after recovery");
+
+  // Install-record changes matter even when config, lock and entry bytes
+  // stay unchanged, with watchers disabled. Restoring the exact record
+  // makes the already installed package available again.
+  const recordPath = join(clone, "packages", INSTALL_RECORD);
+  const record = readFileSync(recordPath);
+  rmSync(recordPath);
+  assert.equal((await core.client.expectOk("config.get", {})).status, "invalid");
+  writeFileSync(recordPath, record);
+  assert.equal((await core.client.expectOk("config.get", {})).status, "valid");
+
+  const machinePath = join(clone, "packages", "sublang", "playbooks", "playbooks", "en", "code", "code.playbook", "code.fsm.js");
+  const machine = readFileSync(machinePath);
+  rmSync(machinePath);
+  assert.equal((await core.client.expectOk("config.get", {})).status, "invalid", "a missing selected non-entry file invalidates cached availability");
+  writeFileSync(machinePath, machine);
+  assert.equal((await core.client.expectOk("config.get", {})).status, "valid");
+
+  // A Git source at another commit is equally unavailable: the retained
+  // registry files never establish that the new locked source installed.
+  const installedLock = readFileSync(lockPath);
+  const gitLock = parseYaml(installedLock.toString()) as Lock;
+  gitLock.packages["sublang/playbooks"]!.source = { git: pathToFileURL(join(dir, "not-fetched.git")).href, commit: "0".repeat(40) };
+  const beforeGitRead = loaded.length;
+  writeFileSync(lockPath, stringifyYaml(gitLock));
+  assert.equal((await core.client.expectOk("config.get", {})).status, "invalid");
+  assert.equal(loaded.length, beforeGitRead, "no files retained for a different Git source are imported");
+  writeFileSync(lockPath, installedLock);
+  assert.equal((await core.client.expectOk("config.get", {})).status, "valid");
+  assert.equal(readFileSync(core.configPath, "utf8"), CONFIG, "recovery preserves the authored configuration");
+  assert.equal(readFileSync(join(clone, "spex.yaml"), "utf8"), requests, "resolving again preserves the authored version requirement");
+  assert.deepEqual(readdirSync(join(clone, "sessions")), [], "no workflow or provider turn was needed");
 });
 
 // ---------------------------------------------------------------------------
@@ -1309,4 +1391,181 @@ test("playbook-library-98: an enabling refused after some of its writes names th
   assert.equal(readFileSync(join(clone, "spex.yaml"), "utf8"), afterFailure!.requests, "the standing request is not written again");
   assert.match(readFileSync(join(clone, "config", "playbook.config.yaml"), "utf8"), /triage:\n\s+roles:/);
   await until(() => latest()?.state === "enabled", 10_000, "the enabled chip");
+});
+
+
+test("instance package sources keep transport locators out of state and broadcasts", { timeout: 180_000 }, async (t) => {
+  const harness = createSpaceHarness();
+  const homes: { stop(): Promise<void> }[] = [];
+  t.after(async () => {
+    // Stop every core before the harness removes its shared scratch:
+    // restarted cores may still be publishing their startup host read.
+    for (const home of [...homes].reverse()) await home.stop();
+    await harness.dispose();
+  });
+  const host = await harness.startHost();
+  const source = host.script.addRepository({ group: "acme", name: "toolbox" });
+  const work = join(harness.scratch, "source");
+  harness.git(harness.scratch, "clone", "-q", source.bare, work);
+  const release = skillRelease("acme", "toolbox");
+  await makeRelease(join(work, "pkg"), release.manifest, release.files);
+  harness.git(work, "add", "-A");
+  harness.git(work, "commit", "-q", "-m", "Release");
+  harness.git(work, "push", "-q", "origin", "HEAD:main");
+  const remote = `${host.gitOrigin}/${STANDIN_STORAGE}/acme/toolbox.git`;
+  const home = await harness.startHome("source-display", { project: false, host });
+  homes.push(home);
+  const own = `${host.script.person.login}/${host.script.person.login}-spex`;
+  const signed = home.client.mark();
+  await harness.signIn(home, host);
+  await home.client.waitRepository(signed, own, (row) => row.sync.phase === "done", 60_000);
+  const mark = home.client.mark();
+  await home.client.expectOk("environment.request", { repository: own, name: "acme/toolbox", request: { kind: "git", git: remote, rev: "main", path: "pkg" } });
+  let state: EnvironmentState;
+  const installDeadline = Date.now() + 30_000;
+  for (;;) {
+    assert.ok(Date.now() < installDeadline, "the synthetic install settles");
+    state = await home.client.expectOk("environment.get", { repository: own });
+    if (state.busy === null && state.packages.some((pkg) => pkg.name === "acme/toolbox" && pkg.installed)) break;
+    if (state.busy === null && state.error) assert.fail(state.error);
+    await sleep(15);
+  }
+  const instance = (await home.client.expectOk("space.get", {})).host.displayName;
+  assert.ok(instance);
+  const commitPrefix = harness.git(work, "rev-parse", "HEAD").slice(0, 12);
+  const safe = (value: unknown): void => {
+    const text = JSON.stringify(value);
+    assert.ok(!text.includes(host.gitOrigin), text);
+    assert.ok(!text.includes(STANDIN_STORAGE), text);
+    assert.ok(!text.includes("secret-user"), text);
+    assert.ok(!text.includes("password"), text);
+    assert.ok(!text.includes("secr@et"), text);
+    assert.ok(!text.includes("secr ret"), text);
+    assert.ok(!text.includes("ss@127."), text);
+    assert.ok(!text.includes("pa%22ss"), text);
+    assert.ok(!text.includes("backing-only-path"), text);
+  };
+  const summary = state.requests["acme/toolbox"] as unknown as Record<string, unknown>;
+  assert.equal(summary.git, undefined, "a displayed request is not a reusable command input");
+  assert.equal(summary.repository, instance);
+  assert.equal(state.packages.find((pkg) => pkg.name === "acme/toolbox")?.source.detail, `${instance} ${commitPrefix} pkg`);
+  safe(state);
+  for (const message of home.client.messages.slice(mark)) if (message.type === "environment.state") safe(message.state);
+  const clone = clonePath(home.dataDir, own);
+  const requests = readFileSync(join(clone, "spex.yaml"));
+  const locked = readFileSync(join(clone, "spex.lock"));
+  const config = readFileSync(join(clone, "config/playbook.config.yaml"));
+  assert.equal((parseYaml(requests.toString()) as { packages: Record<string, { git?: string }> }).packages["acme/toolbox"]?.git, remote);
+  const lock = parseYaml(locked.toString()) as Lock;
+  assert.deepEqual(lock.packages["acme/toolbox"]?.source, { git: remote, commit: harness.git(work, "rev-parse", "HEAD"), path: "pkg" });
+  assert.deepEqual(readFileSync(join(clone, "packages/acme/toolbox/skills/en/toolbox-skill/SKILL.md")), Buffer.from(release.files["skills/en/toolbox-skill/SKILL.md"]!));
+  // HTTP users are input bytes, never part of a summary; normalization
+  // affects presentation alone, including an instance URL with a user.
+  for (const [uri, label] of [
+    [remote.replace("http://", "HTTP://secret-user:password@"), instance],
+    ["https://secret-user:password@example.test/acme/toolbox.git", "https://example.test/acme/toolbox.git"],
+    ["https://secret-user:secr@et@example.test/acme/toolbox.git", "https://example.test/acme/toolbox.git"],
+    ["https://secret-user:secr ret@bad host/acme/toolbox.git", "the remote"],
+    [work, work], [pathToFileURL(work).href, pathToFileURL(work).href],
+  ] as const) {
+    const text = stringifyYaml({ ...parseYaml(requests.toString()), packages: { "acme/toolbox": { git: uri, rev: "main" } } });
+    const copied = structuredClone(lock);
+    copied.packages["acme/toolbox"]!.source = { git: uri, commit: harness.git(work, "rev-parse", "HEAD") };
+    writeFileSync(join(clone, "spex.yaml"), text);
+    writeFileSync(join(clone, "spex.lock"), stringifyYaml(copied));
+    const beforeLock = readFileSync(join(clone, "spex.lock"));
+    state = await home.client.expectOk("environment.get", { repository: own });
+    safe(state);
+    assert.equal((state.requests["acme/toolbox"] as unknown as { repository: string }).repository, label);
+    assert.equal(state.packages.find((pkg) => pkg.name === "acme/toolbox")?.source.detail, `${label} ${commitPrefix}`);
+    assert.deepEqual(readFileSync(join(clone, "spex.yaml")), Buffer.from(text));
+    assert.deepEqual(readFileSync(join(clone, "spex.lock")), beforeLock);
+  }
+  writeFileSync(join(clone, "spex.yaml"), requests);
+  writeFileSync(join(clone, "spex.lock"), locked);
+  const manager = (home.service as unknown as { environments: EnvironmentManager }).environments;
+  const failure = async (name: string, request: { git: string; rev: string; path?: string }, extra: Record<string, unknown> = {}): Promise<void> => {
+    const text = stringifyYaml({ ...parseYaml(requests.toString()), packages: { [name]: request, ...extra } });
+    writeFileSync(join(clone, "spex.yaml"), text);
+    const from = home.client.mark();
+    await home.client.expectOk("environment.resolve", { repository: own });
+    const deadline = Date.now() + 30_000;
+    for (;;) {
+      assert.ok(Date.now() < deadline, "the synthetic failed resolve settles");
+      state = await home.client.expectOk("environment.get", { repository: own });
+      if (state.busy === null && (state.error || state.conflicts)) break;
+      await sleep(15);
+    }
+    safe(state);
+    assert.ok(state.error || state.conflicts);
+    await assert.rejects(manager.installNow(own, true, { lockWritten: false, installed: false }), (error: unknown) => {
+      assert.ok(error instanceof CoreError);
+      safe((error as Error).message);
+      assert.ok(!(error as Error).message.includes("backing-only-path"));
+      return true;
+    });
+    for (const message of home.client.messages.slice(from)) if (message.type === "environment.state") safe(message.state);
+    assert.deepEqual(readFileSync(join(clone, "spex.yaml")), Buffer.from(text));
+    assert.deepEqual(readFileSync(join(clone, "spex.lock")), locked, "failed resolution does not change the lock");
+  };
+  await failure("acme/toolbox", { git: remote, rev: "missing-rev", path: "pkg" });
+  await failure("acme/toolbox", { git: remote, rev: "main", path: "missing" });
+  await failure("acme/other", { git: remote, rev: "main", path: "pkg" });
+  const needs = skillRelease("acme", "needs");
+  await makeRelease(join(work, "needs"), { ...needs.manifest, dependencies: { "acme/toolbox": "^2.0.0" } }, needs.files);
+  harness.git(work, "add", "-A");
+  harness.git(work, "commit", "-q", "-m", "Add a dependent release");
+  harness.git(work, "push", "-q", "origin", "HEAD:main");
+  await failure("acme/toolbox", { git: remote, rev: "main", path: "pkg" }, { "acme/needs": { git: remote, rev: "main", path: "needs" } });
+  assert.ok(state!.conflicts?.some((entry) => entry.name === "acme/toolbox" && entry.requirements.some((item) => item.requirement.includes(instance))));
+  host.script.refuseTransport(`Denied ${remote}: backing-only-path`);
+  await failure("acme/toolbox", { git: remote, rev: "main", path: "pkg" });
+  const failed = state!.error;
+  assert.ok(failed);
+  writeFileSync(join(clone, "spex.yaml"), stringifyYaml({ format: 1, packages: { "acme/toolbox": { git: "https://example.test/new.git", rev: "main" } } }));
+  assert.equal((await home.client.expectOk("environment.get", { repository: own })).error, failed, "a saved failure retains its original operation source after request edits");
+  // Signed out, no origin has been read: even a real denied Git
+  // transport cannot expose the backing locator in its unknown state.
+  const unknown = await harness.startHome("source-unknown", { project: false, env: { SPEX_HOST_URL: UNREACHABLE } });
+  homes.push(unknown);
+  const unknownKey = `${OWN}/${OWN}-spex`;
+  await unknown.client.expectOk("environment.request", { repository: unknownKey, name: "acme/toolbox", request: { kind: "git", git: remote, rev: "main", path: "pkg" } });
+  let unknownState: EnvironmentState;
+  const unknownDeadline = Date.now() + 30_000;
+  for (;;) {
+    assert.ok(Date.now() < unknownDeadline, "the synthetic unknown transport settles");
+    unknownState = await unknown.client.expectOk("environment.get", { repository: unknownKey });
+    if (unknownState.busy === null && unknownState.error) break;
+    await sleep(15);
+  }
+  safe(unknownState);
+  assert.doesNotMatch(unknownState.error!, /Share|Sign in|No longer shared/);
+  await unknown.stop();
+  host.script.refuseTransport(null);
+  const external = createServer((_request, response) => { response.writeHead(418); response.end("Synthetic refusal"); });
+  await new Promise<void>((done) => external.listen(0, "127.0.0.1", done));
+  t.after(() => new Promise<void>((done) => external.close(() => done())));
+  const externalPort = (external.address() as AddressInfo).port;
+  await failure("acme/toolbox", { git: `http://secret-user:pa"ss@127.0.0.1:${externalPort}/tools.git`, rev: "main" });
+  assert.match(state!.error!, /418/, "the real external Git refusal reached the unclassified stderr path");
+  writeFileSync(join(clone, "spex.yaml"), requests);
+  writeFileSync(join(clone, "spex.lock"), locked);
+  // A restart has no reported origin yet; local reads do not discover it.
+  await home.stop();
+  const restarted = await harness.startHome("source-restart", { dataDir: home.dataDir, project: false, host });
+  homes.push(restarted);
+  const seen = host.script.requests.length;
+  state = await restarted.client.expectOk("environment.get", { repository: own });
+  safe(state);
+  assert.equal((state.requests["acme/toolbox"] as unknown as { repository: string }).repository, "the remote");
+  assert.equal(state.packages.find((pkg) => pkg.name === "acme/toolbox")?.source.detail, `the remote ${commitPrefix} pkg`);
+  assert.equal(host.script.requests.length, seen, "environment.get does not read the host");
+  const reading = restarted.client.mark();
+  await restarted.client.expectOk("space.get", {});
+  await restarted.client.waitSpace(reading, (view) => view.readAt !== null);
+  state = await restarted.client.expectOk("environment.get", { repository: own });
+  assert.equal((state.requests["acme/toolbox"] as unknown as { repository: string }).repository, instance);
+  assert.deepEqual(readFileSync(join(clone, "spex.yaml")), requests);
+  assert.deepEqual(readFileSync(join(clone, "spex.lock")), locked);
+  assert.deepEqual(readFileSync(join(clone, "config/playbook.config.yaml")), config);
 });

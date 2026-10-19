@@ -32,12 +32,11 @@ and `npm start` (desktop) or `npm run start:server` (server).
   with the instance's own roles, and Remove on members held directly,
   each only where the instance says you may act. A group you create
   lists at once, before the instance's next listing carries it.
-- A second device joins without choices. At a sign-in's join of your
-  own group's spex repository, a clone that holds nothing of its own,
-  no session, intent or authoring session and no commit but the
-  set-up's, takes the instance's side of every unit, so the seeded
-  environment and configuration never ask to be chosen over; any other
-  clone still asks for every unit.
+- A second device can join your account's records without choices when
+  its own-group clone is proven to be an unchanged generated bootstrap,
+  also after a restart. Settings or environment edits made before sign-in,
+  preexisting or migrated state and missing proof use ordinary comparison,
+  with the choices that differing shared units require.
 - Each selected spec reaches the agents as a generated skill ([DR-115](specs/decisions/115-a-spec-reaches-the-agents.md)).
   The lock holds one export per selected spec, named `<org>-<pkg>`, or
   `<pkg>` past 64 characters, or its alias; the exporter writes the
@@ -651,6 +650,31 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Fixed
 
+- Package-source labels, tooltips and generated environment reports use
+  the instance's name for its repositories, keeping internal storage
+  addresses out of the interface while preserving installation inputs.
+
+- A project's config reading and edits now reject invalid custom playbook
+  options before starting a session, naming the playbook and its validator's
+  reason. Validation uses the paired folder for injected working directories
+  and preserves explicitly configured options and working directories.
+
+- Synchronizing one records repository no longer waits for unrelated
+  repository details. Each check reads the complete namespace catalog and
+  only its destination's details, retaining collision, access, account-change
+  and first-sharing notice safeguards.
+
+- Joining private code at the instance's reported Git origin now uses
+  the app's brokered credential helper, as records do. Code at another
+  origin continues to use the device's own credentials.
+- Code addresses hosted by the instance no longer expose its backing
+  host in Groups, project status or cached forge guidance. After a restart,
+  a remote reads neutrally until the instance's description arrives; its
+  actual transport URL stays stored for Git.
+- A session whose current folder or stored-member configuration prevents
+  continuation shows the reason beside its history and offers a new
+  session before a message is attempted. Listings follow configuration
+  and folder changes without opening a runtime or changing the session.
 - A creation keeps owing its default branch through a read-only check: a
   spex repository the core created, found archived or below the pushing
   role while still empty, keeps its recorded creation, so a later sync

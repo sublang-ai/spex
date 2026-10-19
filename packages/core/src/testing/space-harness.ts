@@ -472,10 +472,10 @@ playbooks:
 
   /** A real core on a scratch home whose configuration lies in your own
    * group's spex repository; `host` names the stand-in it signs in to. */
-  async function startHome(name: string, options: { model?: string; env?: Record<string, string>; dataDir?: string; project?: boolean; host?: StandinHost; extra?: Partial<CoreServiceOptions> } = {}): Promise<Home> {
+  async function startHome(name: string, options: { model?: string; starter?: boolean; env?: Record<string, string>; dataDir?: string; project?: boolean; host?: StandinHost; extra?: Partial<CoreServiceOptions> } = {}): Promise<Home> {
     const dataDir = options.dataDir ?? mkdtempSync(join(scratch, `${name}-`));
     const configPath = join(ownClone(dataDir), "config", "playbook.config.yaml");
-    if (!existsSync(configPath)) { mkdirSync(join(ownClone(dataDir), "config"), { recursive: true }); writeFileSync(configPath, config(options.model ?? "claude-test")); }
+    if (!options.starter && !existsSync(configPath)) { mkdirSync(join(ownClone(dataDir), "config"), { recursive: true }); writeFileSync(configPath, config(options.model ?? "claude-test")); }
     const projectDir = join(scratch, `${name}-project-${randomUUID().slice(0, 8)}`);
     if (options.project !== false) { mkdirSync(projectDir); git(projectDir, "init", "-q"); }
     const { imports } = fakeAdapterImports({

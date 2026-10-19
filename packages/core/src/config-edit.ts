@@ -280,6 +280,7 @@ export async function editProjectConfigFile(
   op: ConfigEditOp,
   loadModule: LoadModule | undefined,
   modules: PlaybookModules,
+  context: { cwd?: string; assertCurrent?: () => void } = {},
 ): Promise<EditResult> {
   if (!PROJECT_OPS.has(op.kind)) {
     return {
@@ -292,13 +293,20 @@ export async function editProjectConfigFile(
   }
   const { bytes, version } = readVersioned(path);
   const candidate = applyConfigOp(bytes === null ? "" : bytes.toString("utf8"), op);
+  let failure: { error: unknown } | undefined;
   try {
     const projectTop = parseDocument(candidate).toJS() as unknown;
     validateProjectConfig(projectTop, path);
     const ownTop = parseDocument(readFileSync(ownPath, "utf8")).toJS() as unknown;
-    await composeConfig(ownTop, loadModule, ownPath, { modules, project: { top: projectTop, path } });
-  } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    await composeConfig(ownTop, loadModule, ownPath, { modules, project: { top: projectTop, path }, cwd: context.cwd });
+  } catch (error) { failure = { error }; }
+  // A changed pairing invalidates a failed validation too. No await
+  // separates this check from publication of a successful candidate.
+  try { context.assertCurrent?.(); }
+  catch (error) { failure = { error }; }
+  if (failure) {
+    const { error } = failure;
+    return { ok: false, ...(error instanceof VersionConflictError ? { conflict: true } : {}), error: error instanceof Error ? error.message : String(error) };
   }
   // The file's folder is made inside its clone, never the clone itself.
   if (!existsSync(dirname(path))) {

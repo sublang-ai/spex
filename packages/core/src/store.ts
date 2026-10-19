@@ -431,6 +431,8 @@ export class Store {
   private readonly prefs = new Map<string, unknown>();
   private readonly forgeCache = new Map<string, { at: number; state: ForgeState }>();
   private readonly sessionProblems = new Map<string, StorageDiagnostic>();
+  /** Current execution refusals are a read model, never session files. */
+  private readonly continuationRefusals = new Map<string, string>();
   private readonly untrackedSessions = new Set<string>();
   private readonly localSessions = new Set<string>();
   /** Which spex repository holds each session (storage-6). */
@@ -562,6 +564,7 @@ export class Store {
    * starter and its `spex` branch begun with one commit (storage-6). */
   private ensureOwnRepository(): void {
     const dir = this.homeFile.clonePath(this.homeFile.own());
+    const empty = !existsSync(dir) || readdirSync(dir).length === 0;
     mkdirSync(dir, { recursive: true, mode: 0o700 });
     const config = join(dir, "config", "playbook.config.yaml");
     // A config at a former location moves in first, so the starter
@@ -570,15 +573,17 @@ export class Store {
     // The starter is the playbook CLI's own (core-service-3); where it
     // cannot be read, the core reports the missing config itself.
     try { this.seededConfig = seedConfig(config); } catch { /* reported as a missing config */ }
-    this.prepareRepository(dir, this.homeFile.own());
-    this.initializeRepository(dir);
+    const prepared = this.prepareRepository(dir, this.homeFile.own());
+    const generatedBootstrap = empty && this.seededConfig && prepared
+      && existsSync(join(dir, "spex.yaml")) && existsSync(join(dir, "spex.lock"));
+    this.initializeRepository(dir, generatedBootstrap);
   }
 
   /** The caller's filling of a clone; its failure leaves the clone as
    * it is, reported, never failing the open. */
-  private prepareRepository(dir: string, key: string): void {
-    try { this.options.prepareRepository?.(dir, key, this.homeFile.host.url); }
-    catch (error) { console.error(`spex: ${key} was not prepared: ${error instanceof Error ? error.message : String(error)}`); }
+  private prepareRepository(dir: string, key: string): boolean {
+    try { this.options.prepareRepository?.(dir, key, this.homeFile.host.url); return true; }
+    catch (error) { console.error(`spex: ${key} was not prepared: ${error instanceof Error ? error.message : String(error)}`); return false; }
   }
 
   /** Called before a project's pair is forgotten, with its working
@@ -587,8 +592,8 @@ export class Store {
 
   /** A clone becomes a repository on its `spex` branch with one commit;
    * where Git cannot run, it stays a plain folder until it can. */
-  private initializeRepository(dir: string): void {
-    try { initializeClone(dir, { env: this.env }); }
+  private initializeRepository(dir: string, generatedBootstrap = false): void {
+    try { initializeClone(dir, { env: this.env, generatedBootstrap }); }
     catch (error) { console.error(`spex: ${dir} is not a repository yet: ${error instanceof Error ? error.message : String(error)}`); }
   }
 
@@ -1622,6 +1627,7 @@ export class Store {
   /** Every in-memory trace of a session, gone. */
   private dropSession(id: string): void {
     this.sessions.delete(id);
+    this.continuationRefusals.delete(id);
     this.sessionProblems.delete(id);
     this.untrackedSessions.delete(id);
     this.records.delete(id);
@@ -1647,6 +1653,16 @@ export class Store {
     const project = this.getProject(meta.projectId);
     if (!project) return undefined;
     return this.summarize(meta, project.path);
+  }
+
+  hasContinuableCheckpoint(id: string): boolean {
+    const meta = this.sessions.get(id);
+    return !!meta?.continuable && !meta.live && !meta.externalWriter;
+  }
+
+  setContinuationRefusal(id: string, reason: string | undefined): void {
+    if (reason === undefined) this.continuationRefusals.delete(id);
+    else this.continuationRefusals.set(id, reason);
   }
 
   private summarize(meta: SessionMeta, path: string): SessionInfo {
@@ -1681,7 +1697,7 @@ export class Store {
     const opening = turns.length > 1
       ? openingTurn(turns, answeringTurnIds(this.getRecords(meta.id)))
       : turns[0];
-    return sessionInfo(
+    const summary = sessionInfo(
       meta,
       path,
       words(turns[0]),
@@ -1694,6 +1710,12 @@ export class Store {
       agentReportedModels,
       this.parkedRun(meta.id),
     );
+    const refusal = this.continuationRefusals.get(meta.id);
+    if (summary.continuable && refusal !== undefined) {
+      delete summary.continuable;
+      summary.continuationReason = refusal;
+    }
+    return summary;
   }
 
   listSessions(): SessionInfo[] {

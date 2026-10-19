@@ -42,13 +42,17 @@ export interface HostListing {
  * what it lets the person do — create a group (`account`), create a
  * subgroup and manage members in each group (`groups[].can`), manage
  * each spex repository's members (`repository.can`) — as it said. */
-export interface HostView {
-  readAt: number;
+export interface HostCatalog {
   displayName: string;
   gitOrigin: string;
   roles: HostRole[];
   account: HostAccount;
   groups: HostGroup[];
+  repositories: HostRepository[];
+}
+
+export interface HostView extends Omit<HostCatalog, "repositories"> {
+  readAt: number;
   listings: HostListing[];
 }
 
@@ -79,25 +83,31 @@ async function mapLimit<T, R>(items: T[], limit: number, work: (item: T) => Prom
  * host.
  */
 export async function readHostView(client: GitHostClient, now: () => number = Date.now): Promise<HostView> {
-  // The read waits out the host's rate limit, never refused by it
-  // (git-host-21).
+  const { repositories, ...catalog } = await readHostCatalog(client);
+  const listings = await mapLimit(repositories, DETAIL_CONCURRENCY, (repository) => readHostListing(client, repository));
+  return { ...catalog, readAt: now(), listings };
+}
+
+/** Complete identity and namespace discovery, without unrelated detail
+ * fanout (git-host-22). It is not a fresh full Groups view. */
+export async function readHostCatalog(client: GitHostClient): Promise<HostCatalog> {
   const wait = { wait: true };
   const [described, account, groups, repositories] = await Promise.all([
-    client.describe(wait),
-    client.me(wait),
-    client.groups(wait),
-    client.repositories(wait),
+    client.describe(wait), client.me(wait), client.groups(wait), client.repositories(wait),
   ]);
-  const listings = await mapLimit(repositories, DETAIL_CONCURRENCY, async (repository): Promise<HostListing> => {
-    const [detail, members] = await Promise.all([client.repository(repository.id, wait), memberCount(client, repository.id)]);
-    return {
-      repository,
-      readOnly: detail.readOnly ?? (detail.archived ? { reason: "archived", message: "" } : null),
-      branchPresent: detail.branch.present || detail.spexBranch,
-      members,
-    };
-  });
-  return { readAt: now(), displayName: described.displayName, gitOrigin: described.gitOrigin, roles: described.roles, account, groups, listings };
+  return { displayName: described.displayName, gitOrigin: described.gitOrigin, roles: described.roles, account, groups, repositories };
+}
+
+/** Enrich just one catalog entry; its detail is the latest target
+ * authority. Full views retain their catalog's paths (git-host-5). */
+export async function readHostListing(client: GitHostClient, repository: HostRepository, target = false): Promise<HostListing> {
+  const [detail, members] = await Promise.all([client.repository(repository.id, { wait: true }), memberCount(client, repository.id)]);
+  return {
+    repository: target ? detail : repository,
+    readOnly: detail.readOnly ?? (detail.archived ? { reason: "archived", message: "" } : null),
+    branchPresent: detail.branch.present || detail.spexBranch,
+    members,
+  };
 }
 
 /** A spex repository's members' count, the account among them, or null
@@ -127,9 +137,10 @@ export function hostKey(repository: HostRepository): string | null {
 /** The logins a view names besides groups (git-host-5, DR-120): your
  * own group's folder name, the account's login, and every other
  * account's under which the host lists a spex repository. */
-export function namedLogins(view: Pick<HostView, "listings" | "account">, ownName: string): string[] {
+export function namedLogins(view: Pick<HostCatalog, "account"> & (Pick<HostView, "listings"> | Pick<HostCatalog, "repositories">), ownName: string): string[] {
   const logins = new Set<string>([ownName, view.account.login]);
-  for (const listing of view.listings) if (listing.repository.group.kind === "user") logins.add(listing.repository.group.fullPath);
+  const repositories = "repositories" in view ? view.repositories : view.listings.map((listing) => listing.repository);
+  for (const repository of repositories) if (repository.group.kind === "user") logins.add(repository.group.fullPath);
   return [...logins];
 }
 

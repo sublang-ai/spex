@@ -60,6 +60,7 @@ import {
   type Channel,
   type Command,
   type ConfigState,
+  type ForgeState,
   type MediaUploadOwner,
   type ReadinessEntry,
   type ServerMessage,
@@ -104,6 +105,7 @@ import { authoringLanguage, authoringManifest, DraftStore, draftPackagePath, new
 import { EnvironmentManager, toRequest } from "./environments.js";
 import {
   builtinPackage,
+  INSTALL_RECORD,
   isGitSource,
   isPathSource,
   isKebabName,
@@ -132,7 +134,7 @@ import { SpaceManager, type SpaceHost } from "./space.js";
 import { GitHostClient, fileCredentialStore } from "./git-host.js";
 import { relayHostError } from "./space-groups.js";
 import { currentRuntime, withGitCredential } from "./git-credential.js";
-import { validateRemoteUrl } from "./space-git.js";
+import { displayRemote, validateRemoteUrl } from "./space-git.js";
 import type { SpaceOp, SyncStep } from "./protocol.js";
 import { isFastModeSupported, isSubagentModelSupported } from "@sublang/cligent";
 import type { PlayerAdapterImports } from "@sublang/cligent/tmux-play";
@@ -250,15 +252,19 @@ export interface CoreServiceOptions {
 const FORGE_CACHE_MS = 600_000;
 
 /** The files a config state was composed from, each at the version read
- * (DR-111): an unreadable one stands as its error, so it compares stably. */
-type ConfigInputs = Map<string, string | null>;
+ * (DR-111): an unreadable one stands as its error, so it compares stably.
+ * A boolean records only presence, where installed-package availability
+ * depends on a selected file standing, not its bytes. */
+type ConfigInputs = Map<string, string | null | boolean>;
 const inputVersion = (file: string): string | null => {
   try { return fileVersion(file); }
   catch (error) { return `!${(error as NodeJS.ErrnoException).code ?? "unreadable"}`; }
 };
 /** The first input no longer standing at the version read. */
 const changedInput = (inputs: ConfigInputs): string | undefined => {
-  for (const [file, version] of inputs) if (inputVersion(file) !== version) return file;
+  for (const [file, version] of inputs) {
+    if ((typeof version === "boolean" ? existsSync(file) : inputVersion(file)) !== version) return file;
+  }
   return undefined;
 };
 const changedMeanwhile = (file: string): CoreError => new CoreError("conflict", new VersionConflictError(file).message);
@@ -549,7 +555,17 @@ export class CoreService {
       this.dispatchRecord(envelope);
       this.events.onRecord?.(envelope);
     };
-    this.sessions.onSessionState = (session) => {
+    this.sessions.onSessionState = async (session) => {
+      if (!session.live && !session.turnActive && !session.externalWriter) {
+        await this.refreshReportedContinuations([session.id], true);
+        // The manager keeps its settlement reservation until this
+        // publication finishes; it is not a still-active turn here.
+        const current = this.sessions.getLive(session.id)
+          ? this.sessions.listSessions().find(({id}) => id === session.id)
+          : this.store.describeSession(session.id);
+        if (!current) return;
+        session = {...current, turnActive: current.turnActive ?? false};
+      }
       this.broadcast({ type: "session.state", session });
       this.events.onSessionState?.(session);
     };
@@ -587,6 +603,8 @@ export class CoreService {
       // helper (environments-13, git-host-9).
       token: () => this.registryToken(),
       gitCredential: (repo) => this.space.sourceCredential(repo),
+      gitLabel: (repo) => this.space.packageSourceAsShown(repo),
+      gitFailure: (repo, run) => this.space.packageSourceFailure(repo, run),
       credentialArgs: async (credential) => {
         const handle = await withGitCredential(credential, this.hostRuntime);
         const env: Record<string, string> = {};
@@ -815,15 +833,26 @@ export class CoreService {
     return this.environments.modulesFor(projectId);
   }
 
-  /** {@link modules}, recording into `inputs` the locks it reads and,
-   * for each playbook composition asks for, the entry files those locks
-   * place it at — a missing one as absent, so its repair is a change
-   * (DR-111). Nothing an entry imports is recorded. */
+  /** {@link modules}, recording the locks, install records and selected
+   * file presence that establish availability, then each requested
+   * module entry's full version — a missing one as absent, so its repair
+   * is a change (DR-111). Other files' bytes are not recorded. */
   private modulesRead(projectId: string | null, inputs: ConfigInputs): PlaybookModules {
     const keys = [...new Set([...(projectId === null ? [] : [projectId]), this.store.home.own()])];
     for (const key of keys) {
       const dir = this.store.repository(key)?.dir;
-      if (dir) inputs.set(join(dir, "spex.lock"), inputVersion(join(dir, "spex.lock")));
+      if (dir) {
+        inputs.set(join(dir, "spex.lock"), inputVersion(join(dir, "spex.lock")));
+        const installed = join(dir, "packages", INSTALL_RECORD);
+        inputs.set(installed, inputVersion(installed));
+        for (const [name, resolution] of Object.entries(this.environments.lockOf(key)?.packages ?? {})) {
+          if (isPathSource(resolution.source)) continue;
+          for (const file of resolution.files) {
+            const path = join(dir, "packages", ...name.split("/"), ...file.path.split("/"));
+            if (!inputs.has(path)) inputs.set(path, existsSync(path));
+          }
+        }
+      }
     }
     const located = keys.map((key) => this.environments.locations(key));
     const modules = this.modules(projectId);
@@ -835,7 +864,9 @@ export class CoreService {
             if (name !== id && location.id !== id) continue;
             // A missing entry stands at its first candidate; any of them appearing repairs it.
             const entries = location.present ? [location.module] : playbookModuleCandidates(dirname(dirname(location.module)), location.id);
-            for (const entry of entries) if (!inputs.has(entry)) inputs.set(entry, inputVersion(entry));
+            for (const entry of entries) {
+              if (!inputs.has(entry) || typeof inputs.get(entry) === "boolean") inputs.set(entry, inputVersion(entry));
+            }
           }
         }
         return modules.find(id);
@@ -1141,6 +1172,7 @@ export class CoreService {
       return;
     }
     const projectIds = new Set<string>();
+    await this.refreshReportedContinuations();
     for (const { id: sessionId, appended, replaced, unlistedProjectId } of changed) {
       if (unlistedProjectId) {
         this.broadcast({ type: "session.removed", sessionId, projectId: unlistedProjectId });
@@ -1487,6 +1519,7 @@ export class CoreService {
       throw new CoreError("invalid_config", cause instanceof Error ? cause.message : String(cause));
     }
     this.store.setSessionAgentSettingsMap(session.id, next);
+    await this.refreshContinuationReadings([session.id]);
     const updated = this.sessions.listSessions().find(({id}) => id === session.id) ?? this.store.describeSession(session.id);
     if (!updated) throw noSession(session.id);
     this.broadcast({ type: "session.state", session: updated });
@@ -1507,13 +1540,24 @@ export class CoreService {
     return this.composeProject(projectId, true);
   }
 
+  /** A selected folder's option context, guarded until its write or
+   * admission. Reading the project refreshes the pairing from disk. */
+  private projectConfigContext(projectId: string): { cwd?: string; assertCurrent: () => void } {
+    const file = join(this.store.dir, "home.yaml");
+    const version = inputVersion(file);
+    const cwd = this.store.getProject(projectId)?.path;
+    return { cwd, assertCurrent: () => {
+      if (inputVersion(file) !== version) throw new VersionConflictError(file);
+    } };
+  }
+
   /** The composition of {@link composedFor} on the config already
    * loaded: `ready` first waits for the project's environment, which a
    * reload's own broadcast does not, its environment announcing itself
    * when it settles (environments-17). The files are read after that
    * wait and checked after composing: one changed meanwhile composes
    * once more, then the caller is refused to retry (DR-111). */
-  private async composeProject(projectId: string, ready: boolean): Promise<ComposedConfig> {
+  private async composeProject(projectId: string, ready: boolean, observedInputs?: ConfigInputs): Promise<ComposedConfig> {
     const own = (): ComposedConfig => {
       if (this.configState.status !== "valid" || !this.composed) {
         throw new CoreError("invalid_config", this.configRefusal());
@@ -1522,7 +1566,7 @@ export class CoreService {
     };
     own();
     const repository = this.store.repository(projectId);
-    if (!repository || resolve(repository.configPath) === resolve(this.configPath)) return own();
+    if (!repository) return own();
     // The session's playbooks come from the project's environment before
     // your own group's (environments-9), whether or not the project's
     // own file enables any; one not yet resolved resolves first.
@@ -1530,11 +1574,16 @@ export class CoreService {
     for (let attempt = 0; ; attempt += 1) {
       own();
       const inputs: ConfigInputs = new Map();
+      const homeFile = join(this.store.dir, "home.yaml");
+      inputs.set(homeFile, inputVersion(homeFile));
+      const current = this.store.repository(projectId);
+      if (!current) throw noProject(projectId);
       let result: { composed: ComposedConfig } | { error: unknown };
-      try { result = { composed: await this.composeProjectOnce(repository.configPath, projectId, inputs) }; }
+      try { result = { composed: await this.composeProjectOnce(current.configPath, projectId, inputs) }; }
       catch (error) { result = { error }; }
       const changed = changedInput(inputs);
       if (changed === undefined) {
+        for (const [path, version] of inputs) observedInputs?.set(path, version);
         if ("error" in result) throw result.error;
         return result.composed;
       }
@@ -1569,7 +1618,8 @@ export class CoreService {
     try {
       return await composeConfig(ownTop, this.options.loadModule, this.configPath, {
         modules: this.modulesRead(projectId, inputs),
-        ...(file === projectPath ? { project: { top: projectTop, path: projectPath } } : {}),
+        ...(file === projectPath && resolve(projectPath) !== resolve(this.configPath) ? { project: { top: projectTop, path: projectPath } } : {}),
+        cwd: this.store.getProject(projectId)?.path,
       });
     } catch (error) { throw cause(error); }
   }
@@ -1635,8 +1685,76 @@ export class CoreService {
   private async broadcastConfig(generation: number, inputs = this.configInputs): Promise<boolean> {
     const projects = await this.projectConfigStates();
     if (generation !== this.reloadGeneration || this.cacheChanged(inputs) !== undefined) return false;
+    await this.refreshReportedContinuations();
+    if (generation !== this.reloadGeneration || this.cacheChanged(inputs) !== undefined) return false;
     this.broadcast({ type: "config.state", state: this.configState, ...(projects ? { projects } : {}) });
+    for (const session of this.sessions.listSessions()) {
+      this.broadcast({type: "session.state", session});
+      this.events.onSessionState?.(session);
+    }
     return true;
+  }
+
+  /** Deterministic continuation admission, without opening a runtime or
+   * touching hints/leases. The reading is volatile; admission checks again. */
+  private async refreshContinuationReadings(ids = this.store.listSessions().map(({id}) => id)): Promise<void> {
+    const ownInputs = this.configInputs;
+    const inputs: ConfigInputs = new Map(ownInputs);
+    const homeFile = join(this.store.dir, "home.yaml");
+    inputs.set(homeFile, inputVersion(homeFile));
+    const readings = new Map<string, string | undefined>();
+    const configurations = new Map<string, Promise<ComposedConfig>>();
+    for (const id of ids) {
+      let reason: string | undefined;
+      if (this.store.hasContinuableCheckpoint(id)) {
+        const session = this.store.describeSession(id)!;
+        const folder = this.store.home.folderOf(session.projectId);
+        const cwd = this.store.sessionCwd(id);
+        if (!folder || (cwd !== undefined && cwd !== folder.path && !folder.aliases?.includes(cwd))) {
+          reason = i18n._({
+            id: "this session ran in {cwd}; continue it on the device whose folder it ran in",
+            comment: "Refusal: the session's recorded working directory is not the project's working folder on this device",
+            values: {cwd: cwd ?? ""},
+          });
+        } else {
+          try {
+            let configuration = configurations.get(session.projectId);
+            if (!configuration) {
+              configuration = this.composeProject(session.projectId, false, inputs);
+              configurations.set(session.projectId, configuration);
+            }
+            const project = this.store.getProject(session.projectId);
+            if (!project) throw noProject(session.projectId);
+            await this.sessions.checkContinuation(project, await configuration, id);
+          } catch (error) {
+            if (error instanceof CoreError && error.code === "conflict") throw error;
+            reason = error instanceof Error ? error.message : String(error);
+          }
+        }
+      }
+      readings.set(id, reason);
+    }
+    const changed = changedInput(inputs);
+    if (ownInputs !== this.configInputs || changed !== undefined) throw changedMeanwhile(changed ?? this.configPath);
+    for (const [id, reason] of readings) this.store.setContinuationRefusal(id, reason);
+  }
+
+  /** An editor race must not lose a turn's settlement, a rescan's
+   * records or ledger notifications. Retry once, otherwise publish an
+   * unprovable reading as history-only; a later read checks it afresh. */
+  private async refreshReportedContinuations(ids = this.store.listSessions().map(({id}) => id), settleConfig = false): Promise<void> {
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        if (settleConfig) await this.settledConfig();
+        await this.refreshContinuationReadings(ids);
+        return;
+      } catch (error) {
+        if (attempt === 0 && error instanceof CoreError && error.code === "conflict") continue;
+        const reason = error instanceof Error ? error.message : String(error);
+        for (const id of ids) this.store.setContinuationRefusal(id, reason);
+        return;
+      }
+    }
   }
 
   /** The config state as its files stand now: a reload pending or in
@@ -2080,6 +2198,11 @@ export class CoreService {
         const project = this.store.rebindProject({ id: command.projectId, path,
           ...(command.aliases ? { aliases: command.aliases } : {}) });
         await this.syncForeignSessions();
+        for (const session of this.sessions.listSessions()) {
+          if (session.projectId !== project.id) continue;
+          this.broadcast({type: "session.state", session});
+          this.events.onSessionState?.(session);
+        }
         this.announceGroups();
         return project;
       }
@@ -2144,13 +2267,29 @@ export class CoreService {
         if (!project) {
           throw noProject(command.projectId);
         }
-        return repoStatus(project.path, this.runCommand);
+        const { originUrl, ...status } = await repoStatus(project.path, this.runCommand);
+        return {
+          ...status,
+          ...(originUrl && this.space.codeRemoteKind(originUrl) === "external" ? { originUrl: displayRemote(originUrl) } : {}),
+        };
       }
       case "forge.items": {
         const project = this.store.getProject(command.projectId);
         if (!project) {
           throw noProject(command.projectId);
         }
+        // The real origin stays internal for binding. A response's
+        // guidance follows the origin known now, even from an older
+        // cache; local status never asks the host (projects-7, -11).
+        const status = await repoStatus(project.path, this.runCommand);
+        const shown = (state: ForgeState): ForgeState => {
+          if (!status.originUrl || state.repo) return state;
+          const kind = this.space.codeRemoteKind(status.originUrl);
+          if (kind === "external") return state;
+          return { ...state, guidance: kind === "instance"
+            ? i18n._({ id: "Issues and PRs come from GitHub; this project's code is on this instance.", comment: "Forge setup guidance for code on the instance's reported Git origin, whose underlying Git system is never named" })
+            : i18n._({ id: "Issues and PRs come from GitHub; this project's code is on a remote.", comment: "Forge setup guidance before the instance has reported its Git origin; the actual remote and hostname stay internal" }) };
+        };
         // The cache is persisted in the app store (dashboard-14), so a
         // restart serves the last lists rather than a blank.
         const cached = this.store.getForgeCache(project.id);
@@ -2161,12 +2300,11 @@ export class CoreService {
         ) {
           // The lists travel with their fetch moment, so a client reading
           // the cache shows the data's age, not its own read's.
-          return { ...cached.state, at: cached.at };
+          return { ...shown(cached.state), at: cached.at };
         }
-        const status = await repoStatus(project.path, this.runCommand);
         const at = Date.now();
         const state = {
-          ...(await this.forge.state(project.path, status.originUrl)),
+          ...shown(await this.forge.state(project.path, status.originUrl)),
           at,
         };
         this.store.setForgeCache(project.id, { at, state });
@@ -2224,8 +2362,11 @@ export class CoreService {
         return null;
       }
       case "session.list":
+        await this.settledConfig();
+        await this.refreshContinuationReadings();
         return this.sessions.listSessions();
       case "session.create": {
+        const context = this.projectConfigContext(command.projectId);
         const project = this.store.getProject(command.projectId);
         if (!project) {
           throw noProject(command.projectId);
@@ -2235,7 +2376,13 @@ export class CoreService {
         // never throws.
         void this.ensureGroupRepository(project.id).catch(() => {});
         // Yours with the project.s own on top (core-service-2).
-        return this.sessions.createSession(project, await this.composedFor(project.id));
+        const composed = await this.composedFor(project.id);
+        const assertCurrent = () => {
+          try { context.assertCurrent(); }
+          catch { throw changedMeanwhile(join(this.store.dir, "home.yaml")); }
+        };
+        assertCurrent();
+        return this.sessions.createSession(project, composed, assertCurrent);
       }
       case "session.dispose":
         await this.sessions.disposeSession(command.sessionId);
@@ -2398,7 +2545,7 @@ export class CoreService {
           : undefined;
         if (command.repository !== undefined && command.repository !== this.store.home.own() && !target) throw noProject(command.repository);
         const result = target
-          ? await editProjectConfigFile(target.configPath, this.configPath, op, this.options.loadModule, this.modules(target.key))
+          ? await editProjectConfigFile(target.configPath, this.configPath, op, this.options.loadModule, this.modules(target.key), this.projectConfigContext(target.key))
           : await editConfigFile(
             this.configPath,
             op,
@@ -3262,7 +3409,7 @@ export class CoreService {
         const ownBase = { ...ownTop, playbooks: { ...entries(ownTop) } } as Record<string, unknown>;
         await check("project", id, () => composeConfig(
           { ...ownBase, playbooks: { [id]: (ownBase.playbooks as Record<string, unknown>)[id] ?? {} } },
-          this.options.loadModule, this.configPath, { modules: this.modules(project.key), project: { top: projectOnly, path: project.path } },
+          this.options.loadModule, this.configPath, { modules: this.modules(project.key), project: { top: projectOnly, path: project.path }, cwd: this.store.getProject(project.key)?.path },
         ));
       }
     }
@@ -3323,6 +3470,8 @@ export class CoreService {
       repository: base.repository,
       find: (id) => (id === playbookId ? { module: result.from, builtin: false } : base.find(id)),
     };
+    const context = targetKey === own ? undefined : this.projectConfigContext(targetKey);
+    let validationFailure: { error: unknown } | undefined;
     try {
       let ownText = readFileSync(this.configPath, "utf8");
       for (const op of playerOps) ownText = applyConfigOp(ownText, op);
@@ -3334,9 +3483,15 @@ export class CoreService {
         const projectText = applyConfigOp(existsSync(target.configPath) ? readFileSync(target.configPath, "utf8") : "", entryOp);
         const projectTop = parseYaml(projectText) as unknown;
         validateProjectConfig(projectTop, target.configPath);
-        await composeConfig(ownTop, this.options.loadModule, this.configPath, { modules: overlay, project: { top: projectTop, path: target.configPath } });
+        await composeConfig(ownTop, this.options.loadModule, this.configPath, { modules: overlay, project: { top: projectTop, path: target.configPath }, cwd: context?.cwd });
       }
-    } catch (error) {
+    } catch (error) { validationFailure = { error }; }
+    // The preflight authorizes the first environment/player writes too,
+    // not just the final guarded config entry.
+    try { context?.assertCurrent(); }
+    catch { throw changedMeanwhile(join(this.store.dir, "home.yaml")); }
+    if (validationFailure) {
+      const { error } = validationFailure;
       throw new CoreError("invalid_config", i18n._({
         id: "compiled, but enabling was refused: {error}",
         comment: "Refusal after a successful compile; `error` is the config validation's own words",
@@ -3380,7 +3535,7 @@ export class CoreService {
       }
       const edit = targetKey === own
         ? await editConfigFile(this.configPath, entryOp, this.options.loadModule, { modules: this.modules(null) })
-        : await editProjectConfigFile(target.configPath, this.configPath, entryOp, this.options.loadModule, this.modules(targetKey));
+        : await editProjectConfigFile(target.configPath, this.configPath, entryOp, this.options.loadModule, this.modules(targetKey), this.projectConfigContext(targetKey));
       if (!edit.ok) {
         throw new CoreError(edit.conflict ? "conflict" : "invalid_config", i18n._({
           id: "compiled, but registration was refused: {error}",
@@ -3689,7 +3844,9 @@ export class CoreService {
   private async continueSession(sessionId: string): Promise<void> {
     const session = this.store.describeSession(sessionId);
     if (!session) throw noSession(sessionId);
-    if (!session.continuable) {
+    // The summary's current-config refusal is advisory. Check admission
+    // again below, so a stale reading neither admits nor blocks a turn.
+    if (!this.store.hasContinuableCheckpoint(sessionId)) {
       throw new CoreError("invalid_request", session.recovery
         ? i18n._({
             id: "Restore the interrupted turn first",

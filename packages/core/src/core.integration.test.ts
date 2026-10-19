@@ -11,7 +11,7 @@
 import { test } from "node:test";
 import { createHash, randomUUID } from "node:crypto";
 import assert from "node:assert/strict";
-import { appendFileSync, chmodSync, existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { appendFileSync, chmodSync, existsSync, mkdirSync, readdirSync, rmSync, statSync, watch, writeFileSync } from "node:fs";
 import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { hostname } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
@@ -259,6 +259,7 @@ async function startHarness(
     discoverAgentModels?: import("./service.js").CoreServiceOptions["discoverAgentModels"];
     /** Watch the config files and the clones as a running app does. */
     watchConfig?: boolean;
+    loadModule?: import("./service.js").CoreServiceOptions["loadModule"];
   } = {},
 ): Promise<Harness> {
   const dir = scratchDir("spex-core-it-");
@@ -307,6 +308,7 @@ async function startHarness(
     home: join(dir, "home"),
     own: OWN,
     watchConfig: options.watchConfig ?? false,
+    ...(options.loadModule ? { loadModule: options.loadModule } : {}),
     ...(options.scaffoldCommand
       ? { scaffoldCommand: options.scaffoldCommand }
       : {}),
@@ -322,6 +324,187 @@ async function startHarness(
 // ---------------------------------------------------------------------------
 // CORE-19: end-to-end session over the protocol
 // ---------------------------------------------------------------------------
+
+test("core-service-121: paired project options validate before reads, writes and session creation with the actual cwd", async (t) => {
+  let mode: "exact" | "optional" | "none" = "exact";
+  let expectedCwd = "";
+  let explicitCwd = "";
+  let factories = 0;
+  const validations: Record<string, unknown>[] = [];
+  let heldImport: { reached: boolean; open: () => void; gate: Promise<void> } | undefined;
+  const allImports: NonNullable<typeof heldImport>[] = [];
+  const holdImport = () => {
+    let open!: () => void;
+    const held = { reached: false, open: () => open(), gate: new Promise<void>(resolve => { open = resolve; }) };
+    allImports.push(held);
+    heldImport = held;
+    return held;
+  };
+  const harness = await startHarness(VALID_CONFIG, {
+    loadModule: async (specifier) => {
+      const module = await import(isAbsoluteModule(specifier));
+      if (module.default?.id !== "code") return module;
+      const held = heldImport;
+      heldImport = undefined;
+      if (held) { held.reached = true; await held.gate; }
+      return { ...module, default: {
+        ...module.default,
+        validateOptions(value: unknown) {
+          const options = (value ?? {}) as Record<string, unknown>;
+          validations.push({ ...options });
+          if (options.marker !== "ready") throw new Error("custom marker must be ready");
+          if (mode === "exact" && options.cwd !== expectedCwd) throw new Error("custom cwd must be the paired folder");
+          if (mode === "optional" && options.cwd !== undefined && options.cwd !== "/" && options.cwd !== explicitCwd) throw new Error("custom selected folder is refused");
+          if (mode === "none" && options.cwd !== undefined) throw new Error("custom cwd is not an option");
+          return { ...options, normalizedDefault: "provided by the shared shell" };
+        },
+        createRuntime(...args: unknown[]) { factories += 1; return module.default.createRuntime(...args); },
+      } };
+    },
+  });
+  expectedCwd = harness.projectDir;
+  explicitCwd = join(harness.projectDir, "explicit");
+  const client = new Client(harness.service.port());
+  await client.open();
+  t.after(async () => { for (const held of allImports) held.open(); client.close(); await harness.service.stop(); });
+  const project = await client.expectOk("project.register", { path: harness.projectDir });
+  const config = join(clonePath(harness.dataDir, project.id), "config/playbook.config.yaml");
+  const ownBefore = readFileSync(join(harness.dir, "playbook.config.yaml"), "utf8");
+
+  await t.test("global composition defers context-dependent options; a selected project refuses before ownership or agents", async () => {
+    assert.equal((await client.expectOk("config.get", {})).status, "valid");
+    const state = await client.expectOk("config.get", { projectId: project.id });
+    assert.equal(state.status, "invalid");
+    if (state.status === "invalid") assert.match(state.errors.join("\n"), /playbooks\.code: custom marker must be ready/);
+    const refused = await client.command("session.create", { projectId: project.id });
+    assert.equal(refused.ok, false);
+    if (!refused.ok) { assert.equal(refused.error.code, "invalid_config"); assert.match(refused.error.message, /playbooks\.code: custom marker must be ready/); }
+    assert.deepEqual(await client.expectOk("session.list", {}), []);
+    const sessions = projectSessions(harness.dataDir, project.id);
+    assert.ok(!existsSync(sessions) || readdirSync(sessions).length === 0, "invalid configuration acquires no session lease or writes");
+    assert.equal(factories, 0);
+    assert.equal(harness.stats.runs.length, 0);
+  });
+
+  const set = (key: string, value: unknown) => client.command("config.edit", { repository: project.id, op: { kind: "playbook.option.set", playbookId: "code", key, value } });
+  await t.test("required exact real cwd accepts a repaired project declaration without writing defaults or cwd", async () => {
+    const accepted = await client.command("config.edit", { repository: project.id, op: { kind: "playbook.add", playbookId: "code", roles: { coder: "dev.coder" }, options: { marker: "ready" } } });
+    assert.equal(accepted.ok, true);
+    assert.equal((await client.expectOk("config.get", { projectId: project.id })).status, "valid");
+    assert.deepEqual(parseYaml(readFileSync(config, "utf8")).playbooks.code, { roles: { coder: "dev.coder" }, marker: "ready" });
+    const session = await client.expectOk("session.create", { projectId: project.id });
+    const manifest = JSON.parse(readFileSync(join(projectSessions(harness.dataDir, project.id), session.id + ".json"), "utf8"));
+    assert.equal(manifest.lastAppliedExecutionProjection.catalog.code.options.cwd, expectedCwd);
+    assert.equal(manifest.lastAppliedExecutionProjection.catalog.code.options.normalizedDefault, undefined, "the authored slice is retained; shell normalization is not persisted as configuration");
+    await client.expectOk("session.dispose", { sessionId: session.id });
+  });
+
+  await t.test("invalid option writes retain exact bytes and current valid state", async () => {
+    const before = readFileSync(config, "utf8");
+    const refused = await set("marker", "invalid");
+    assert.equal(refused.ok, false);
+    if (!refused.ok) assert.match(refused.error.message, /playbooks\.code: custom marker must be ready/);
+    assert.equal(readFileSync(config, "utf8"), before);
+    assert.equal((await client.expectOk("config.get", { projectId: project.id })).status, "valid");
+  });
+
+  await t.test("an external invalid non-cwd option is read as invalid before session admission", async () => {
+    const before = readFileSync(config, "utf8");
+    const beforeFactories = factories;
+    writeFileSync(config, before.replace("marker: ready", "marker: invalid"));
+    const state = await client.expectOk("config.get", { projectId: project.id });
+    assert.equal(state.status, "invalid");
+    if (state.status === "invalid") assert.match(state.errors.join("\n"), /playbooks\.code: custom marker must be ready/);
+    const refused = await client.command("session.create", { projectId: project.id });
+    assert.equal(refused.ok, false);
+    if (!refused.ok) assert.equal(refused.error.code, "invalid_config");
+    assert.equal(factories, beforeFactories);
+    writeFileSync(config, before);
+  });
+
+  await t.test("explicit cwd passes unchanged", async () => {
+    mode = "optional";
+    assert.equal((await set("cwd", explicitCwd)).ok, true);
+    const session = await client.expectOk("session.create", { projectId: project.id });
+    const manifest = JSON.parse(readFileSync(join(projectSessions(harness.dataDir, project.id), session.id + ".json"), "utf8"));
+    assert.equal(manifest.lastAppliedExecutionProjection.catalog.code.options.cwd, explicitCwd);
+    await client.expectOk("session.dispose", { sessionId: session.id });
+  });
+
+  await t.test("a known optional cwd capability cannot hide a rejected project path by falling back to defaults", async () => {
+    const before = readFileSync(config, "utf8");
+    const refused = await set("cwd", null);
+    assert.equal(refused.ok, false);
+    if (!refused.ok) assert.match(refused.error.message, /playbooks\.code: custom selected folder is refused/);
+    assert.equal(readFileSync(config, "utf8"), before);
+    assert.ok(validations.some(v => v.cwd === "/" && v.marker === "ready"));
+    assert.ok(validations.some(v => v.cwd === expectedCwd && v.marker === "ready"));
+  });
+
+  await t.test("an entry without cwd accepts its raw options and leaves normalizer defaults to the shell", async () => {
+    mode = "none";
+    assert.equal((await set("cwd", null)).ok, true);
+    assert.equal((await client.expectOk("config.get", { projectId: project.id })).status, "valid");
+    assert.deepEqual(parseYaml(readFileSync(config, "utf8")).playbooks.code, { roles: { coder: "dev.coder" }, marker: "ready" });
+    assert.equal(readFileSync(join(harness.dir, "playbook.config.yaml"), "utf8"), ownBefore);
+    assert.equal(harness.stats.runs.length, 0, "validation and idle initialization use no provider calls");
+  });
+
+  await t.test("a pairing changed during import is re-read, and refuses stale config writes and new sessions", async () => {
+    mode = "exact";
+    const other = join(harness.dir, "other");
+    mkdirSync(other);
+    execFileSync("git", ["init", "-q", other]);
+    const waitForImport = async (held: NonNullable<typeof heldImport>) => {
+      const deadline = Date.now() + 30_000;
+      while (!held.reached && Date.now() < deadline) await sleep(10);
+      assert.equal(held.reached, true, "selected project import reached its gate");
+    };
+    const rebind = (path: string) => client.expectOk("project.rebind", { projectId: project.id, path });
+    let held = holdImport();
+    const reading = client.expectOk("config.get", { projectId: project.id });
+    await waitForImport(held);
+    await rebind(other);
+    held.open();
+    const state = await reading;
+    assert.equal(state.status, "invalid", "the old folder's valid composition cannot publish after rebind");
+    if (state.status === "invalid") assert.match(state.errors.join("\n"), /custom cwd must be the paired folder/);
+
+    await rebind(harness.projectDir);
+    const before = readFileSync(config, "utf8");
+    held = holdImport();
+    const editing = set("extra", "must not publish");
+    await waitForImport(held);
+    await rebind(other);
+    held.open();
+    const edit = await editing;
+    assert.equal(edit.ok, false);
+    if (!edit.ok) { assert.equal(edit.error.code, "conflict"); assert.match(edit.error.message, /home\.yaml changed meanwhile/); }
+    assert.equal(readFileSync(config, "utf8"), before);
+
+    await rebind(harness.projectDir);
+    const beforeFactories = factories;
+    const beforeSessions = (await client.expectOk("session.list", {})).map(session => session.id);
+    held = holdImport();
+    const creating = client.command("session.create", { projectId: project.id });
+    await waitForImport(held);
+    // This folder is accepted by the validator after the retry, but the
+    // request's original ProjectInfo still names the previous folder.
+    expectedCwd = other;
+    await rebind(other);
+    held.open();
+    const created = await creating;
+    assert.equal(created.ok, false);
+    if (!created.ok) assert.equal(created.error.code, "conflict");
+    assert.equal(factories, beforeFactories);
+    assert.deepEqual((await client.expectOk("session.list", {})).map(session => session.id), beforeSessions);
+    assert.equal(harness.stats.runs.length, 0);
+  });
+});
+
+function isAbsoluteModule(specifier: string): string {
+  return specifier.startsWith("/") || /^[A-Za-z]:[\\/]/.test(specifier) ? pathToFileURL(specifier).href : specifier;
+}
 
 test("CORE-19: fake-adapter session end to end over the WebSocket", async () => {
   const harness = await startHarness();
@@ -1606,8 +1789,8 @@ test("PROJ: work-tree validation, create flow, forge states, removal", async () 
 
   // Unbound, the guidance names which condition holds in place of the
   // lists while the repository state stays served (projects-20,
-  // projects-7): no origin at all, then an origin elsewhere, named by
-  // its host alone and never by the credential its URL carries.
+  // projects-7): no origin at all, then a remote withheld until the
+  // instance reports its Git origin, never carrying its credential.
   const unbound = () =>
     client.expectOk("forge.items", { projectId: created.id, refresh: true });
   const noOrigin = await unbound();
@@ -1627,7 +1810,7 @@ test("PROJ: work-tree validation, create flow, forge states, removal", async () 
   const elsewhere = await unbound();
   assert.equal(
     elsewhere.guidance,
-    "Issues and PRs come from GitHub; this project's origin is at gitlab.com.",
+    "Issues and PRs come from GitHub; this project's code is on a remote.",
   );
   assert.deepEqual([elsewhere.issues, elsewhere.prs], [[], []]);
   assert.equal(
@@ -3055,6 +3238,11 @@ test("core-service-85: a rebind keeps the clone's sessions listed, and a recorde
     const kept = (await client.expectOk("session.list", {})).find((entry) => entry.id === session.id);
     assert.equal(kept?.projectId, project.id);
     assert.equal(kept?.projectPath, relocated);
+    assert.equal(kept?.continuable, undefined);
+    assert.match(kept?.continuationReason ?? "", /continue it on the device whose folder it ran in/);
+    assert.ok(client.messages.some((message) => message.type === "session.state" && message.session.id === session.id &&
+      message.session.projectPath === relocated && !message.session.continuable &&
+      /continue it on the device whose folder it ran in/.test(message.session.continuationReason ?? "")));
     assert.deepEqual(await client.expectOk("history.get", { sessionId: session.id }), history);
     // ...but it ran in a directory that is neither the folder nor an
     // alias, so it cannot continue here (core-service-73).
@@ -3068,12 +3256,31 @@ test("core-service-85: a rebind keeps the clone's sessions listed, and a recorde
     // than the folder it would now run in, is then Playbook's to refuse
     // as a relocation, its history still readable (core-service-73).
     await client.expectOk("project.rebind", { projectId: project.id, path: relocated, aliases: [harness.projectDir] });
+    const aliasReading = (await client.expectOk("session.list", {})).find((entry) => entry.id === session.id);
+    assert.equal(aliasReading?.continuable, undefined);
+    assert.match(aliasReading?.continuationReason ?? "", /relocation is unsupported/);
     const relocation = await client.command("turn.submit", { sessionId: session.id, text: "second" });
     assert.ok(!relocation.ok && relocation.error.code === "invalid_request", JSON.stringify(relocation));
     assert.doesNotMatch(relocation.error.message, /continue it on the device whose folder it ran in/);
     assert.match(relocation.error.message, /relocation is unsupported/);
     assert.deepEqual(await client.expectOk("history.get", { sessionId: session.id }), history);
     assert.equal((await client.expectOk("session.list", {})).find((entry) => entry.id === session.id)?.projectId, project.id);
+    await client.expectOk("project.rebind", {projectId: project.id, path: harness.projectDir, aliases: []});
+    assert.equal((await client.expectOk("session.list", {})).find((entry) => entry.id === session.id)?.continuable, true);
+    assert.deepEqual(paths.map((path) => existsSync(path) ? readFileSync(path) : undefined), before);
+
+    // A sync/editor can change the binding before the watcher runs.
+    const homePath = join(harness.dataDir, "home.yaml");
+    const homeBytes = readFileSync(homePath);
+    const home = parseYaml(homeBytes.toString("utf8"));
+    home.folders.find((folder: {repository: string}) => folder.repository === project.id).path = relocated;
+    writeFileSync(homePath, stringifyYaml(home));
+    const edited = (await client.expectOk("session.list", {})).find((entry) => entry.id === session.id);
+    assert.equal(edited?.projectPath, relocated);
+    assert.equal(edited?.continuable, undefined);
+    assert.match(edited?.continuationReason ?? "", /continue it on the device whose folder it ran in/);
+    writeFileSync(homePath, homeBytes);
+    assert.equal((await client.expectOk("session.list", {})).find((entry) => entry.id === session.id)?.continuable, true);
   } finally {
     client.close();
     await harness.service.stop();
@@ -3538,6 +3745,164 @@ test("core-service-77: a real session continues after restart and respects anoth
   await client.waitFor((m) => m.type === "session.state" && m.session.id === session.id && !m.session.live && m.session.turns === 2);
   assert.deepEqual(turnIds((await client.expectOk("history.get",{sessionId:session.id})).records),[1,2]);
   assert.ok(readFileSync(stream,"utf8").startsWith(before),"continue appends to the same replay");
+});
+
+test("core-service-77: continuation summaries follow current configuration without opening or changing a session", async (t) => {
+  const base = VALID_CONFIG.slice(0, VALID_CONFIG.indexOf("  review:\n"));
+  const harness = await startHarness(base, {realShell: true, script: {fallback: {result: "not json on purpose"}}});
+  let service = harness.service;
+  let client = new Client(service.port());
+  t.after(async () => { client.close(); await service.stop(); rmSync(harness.dir, {recursive: true, force: true}); });
+  await client.open();
+  const project = await client.expectOk("project.register", {path: harness.projectDir});
+  const session = await client.expectOk("session.create", {projectId: project.id});
+  await client.expectOk("turn.submit", {sessionId: session.id, text: "first"});
+  const initial = await settledSession(client, session.id, 1);
+  assert.equal(initial.continuable, true);
+  assert.equal(initial.turnActive, false);
+  const history = await client.expectOk("history.get", {sessionId: session.id});
+  const sessionsDir = projectSessions(harness.dataDir);
+  const snapshot = (): unknown => readdirSync(sessionsDir, {recursive: true, encoding: "utf8"}).sort().map((name) => {
+    const path = join(sessionsDir, name);
+    const stat = statSync(path);
+    return [name, stat.mode, stat.isDirectory() ? null : [stat.mtimeMs, readFileSync(path)]];
+  });
+  const before = snapshot();
+  const constructed = harness.stats.constructed;
+  const runs = harness.stats.runs.length;
+  const changes: string[] = [];
+  const watcher = watch(sessionsDir, {recursive: true}, (event, name) => changes.push(`${event}:${name}`));
+  t.after(() => watcher.close());
+  const unchanged = async (): Promise<void> => {
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    assert.deepEqual(snapshot(), before, "checkpoint, replay, hints, assets and lease entries stay exact");
+    assert.deepEqual(changes, [], "no transient session lease or session-file write");
+    assert.equal(harness.stats.constructed, constructed, "no runtime constructed");
+    assert.equal(harness.stats.runs.length, runs, "no agent called");
+    assert.deepEqual(await client.expectOk("history.get", {sessionId: session.id}), history);
+  };
+  const listed = async (): Promise<SessionInfo | undefined> =>
+    (await client.expectOk("session.list", {})).find((entry) => entry.id === session.id);
+  const configPath = join(harness.dir, "playbook.config.yaml");
+
+  // Own tuning, session tuning and an unrelated playbook all preserve
+  // the stored-member projection. The config broadcast carries it too.
+  writeFileSync(configPath, base.replace("model: claude-test", "model: claude-tuned"));
+  await service.reloadConfig();
+  assert.equal((await listed())?.continuable, true);
+  await client.expectOk("session.agent.set", {sessionId: session.id, agentId: "dev.coder", model: "claude-session"});
+  assert.equal((await listed())?.continuable, true);
+  writeFileSync(configPath, base + "  review:\n    roles:\n      coder: dev.coder\n      reviewer: dev.coder\n");
+  await service.reloadConfig();
+  assert.equal((await listed())?.continuable, true);
+  await unchanged();
+
+  const broadcastStart = client.messages.length;
+  writeFileSync(configPath, base.replace(/dev\.coder/g, "dev.other"));
+  await service.reloadConfig();
+  const drifted = await listed();
+  assert.equal(drifted?.continuable, undefined);
+  assert.match(drifted?.continuationReason ?? "", /dev\.coder/);
+  assert.match(drifted?.continuationReason ?? "", /new session/);
+  assert.ok(client.messages.slice(broadcastStart).some((message) => message.type === "session.state" &&
+    message.session.id === session.id && message.session.continuationReason === drifted?.continuationReason));
+  await unchanged();
+
+  // No watcher or explicit reload: the next listing reads the current
+  // config, and an older negative reading cannot permanently block it.
+  writeFileSync(configPath, base);
+  assert.equal((await listed())?.continuable, true);
+  await unchanged();
+  // Conversely, a positive reading never admits a turn after a change.
+  writeFileSync(configPath, base.replace(/dev\.coder/g, "dev.other"));
+  const refused = await client.command("turn.submit", {sessionId: session.id, text: "must not run"});
+  assert.ok(!refused.ok && refused.error.code === "invalid_config");
+  assert.match(refused.error.message, /dev\.coder/);
+  await unchanged();
+  watcher.close();
+
+  // A restart derives the same current refusal, without a restoration.
+  client.close();
+  await service.stop();
+  service = await CoreService.start({token: "test", configPath, dataDir: harness.dataDir,
+    adapterImports: harness.imports, adapterRuntime: () => ({usable: true}), env: {},
+    home: join(harness.dir, "home"), own: OWN, watchConfig: false});
+  client = new Client(service.port());
+  await client.open();
+  assert.equal((await listed())?.continuable, undefined);
+  assert.match((await listed())?.continuationReason ?? "", /dev\.coder/);
+  assert.deepEqual(snapshot(), before);
+  assert.equal(harness.stats.constructed, constructed);
+  assert.equal(harness.stats.runs.length, runs);
+});
+
+test("core-service-77: continuation observations guard project inputs and preserve settlement and removals during races", async (t) => {
+  const harness = await startHarness(VALID_CONFIG, {realShell: true, script: {fallback: {result: "not json on purpose", delayMs: 50}}});
+  const client = new Client(harness.service.port());
+  let release = (): void => {};
+  t.after(async () => {release(); client.close(); await harness.service.stop(); rmSync(harness.dir, {recursive: true, force: true});});
+  await client.open();
+  const project = await client.expectOk("project.register", {path: harness.projectDir});
+  const session = await client.expectOk("session.create", {projectId: project.id});
+  await client.expectOk("turn.submit", {sessionId: session.id, text: "first"});
+  await settledSession(client, session.id, 1);
+  const store = harness.service["store"];
+  const repository = store.repository(project.id)!;
+  const shared = repository.store;
+  let afterValidation: (() => Promise<void>) | undefined;
+  repository.store = {...shared, validate: async (id, context) => {
+    const result = await shared.validate(id, context);
+    if (context && id === session.id) await afterValidation?.();
+    return result;
+  }};
+  const lock = join(repository.dir, "spex.lock");
+  const lockBytes = readFileSync(lock);
+  let edits = 0;
+  const editLock = (): void => {writeFileSync(lock, Buffer.concat([lockBytes, Buffer.from(`\n# concurrent edit ${++edits}\n`)]));};
+  // Composition has returned, but its lock still belongs to the
+  // reading while native checkpoint validation is awaited.
+  afterValidation = async () => {afterValidation = undefined; editLock();};
+  const raced = await client.command("session.list", {});
+  assert.ok(!raced.ok && raced.error.code === "conflict");
+  assert.match(raced.error.message, /changed/);
+  writeFileSync(lock, lockBytes);
+  assert.equal((await client.expectOk("session.list", {})).find((entry) => entry.id === session.id)?.continuable, true);
+
+  // Repeated concurrent edits cannot reject the durable settlement or
+  // lose its idle publication and queue-advancement notification.
+  const manager = harness.service["sessions"];
+  const onSettled = manager.onTurnSettled;
+  let settled = 0;
+  manager.onTurnSettled = (...args) => {settled += 1; return onSettled(...args);};
+  await client.expectOk("turn.submit", {sessionId: session.id, text: "second"});
+  afterValidation = async () => editLock();
+  const ended = await settledSession(client, session.id, 2);
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  assert.ok(edits >= 3, "both background observation attempts raced");
+  assert.equal(ended.continuable, undefined);
+  assert.equal(ended.turnActive, false);
+  assert.match(ended.continuationReason ?? "", /changed/);
+  assert.equal(settled, 1, "successful turn still notifies queue advancement");
+  afterValidation = undefined;
+  writeFileSync(lock, lockBytes);
+  assert.equal((await client.expectOk("session.list", {})).find((entry) => entry.id === session.id)?.continuable, true);
+
+  // Deletion may finish while an idle reading is in flight. An old
+  // callback must not resurrect its state after session.removed.
+  let entered!: () => void;
+  const observed = new Promise<void>((resolve) => {entered = resolve;});
+  const gate = new Promise<void>((resolve) => {release = resolve;});
+  afterValidation = async () => {afterValidation = undefined; entered(); await gate;};
+  const publishing = manager.onSessionState(store.describeSession(session.id)!);
+  await observed;
+  await client.expectOk("session.delete", {sessionId: session.id});
+  const removed = client.messages.map((message) => message.type === "session.removed" && message.sessionId === session.id).lastIndexOf(true);
+  assert.ok(removed >= 0);
+  release();
+  await publishing;
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  assert.ok(!client.messages.slice(removed + 1).some((message) => message.type === "session.state" && message.session.id === session.id));
+  assert.ok(!(await client.expectOk("session.list", {})).some((entry) => entry.id === session.id));
 });
 
 test("core-service-77: the real shell continues from its token-free snapshot, ledger intact, and refuses config drift", async (t) => {

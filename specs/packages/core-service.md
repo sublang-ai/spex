@@ -52,7 +52,8 @@ On every load and reload:
 - On success, the resulting config state is broadcast to all connected clients.
 - On failure, a config error naming the offending entry and the violated rule is broadcast, and session creation requests are rejected while no valid config is active.
 - A turn in flight keeps the config it opened with; the next message opens with the current config, or is refused naming the config error [[core-service-73](#core-service-73)] ([DR-051](../decisions/051-runtime-held-for-a-turn.md)).
-- The state is a cache of the files it was composed from — both config files, the environments' locks, and each module entry those locks place an enabled playbook at, a missing one as absent — at the versions read: a command, turn or compile taking anything from it checks them first and reads again where one changed, with or without a watcher's notice, while what was already broadcast stays as broadcast ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md)).
+- The state is a cache of the files it was composed from — both config files, the environments' locks and install records, the presence of selected registry and Git files that establishes module availability [[environments-9](environments.md#environments-9)], each module entry those locks place an enabled playbook at, a missing one as absent, and the home's pairing where a selected project's folder supplies option context — at the versions read: a command, turn or compile taking anything from it checks them first and reads again where one changed, with or without a watcher's notice, while what was already broadcast stays as broadcast ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md)).
+- A project config write or new-session admission whose selected pairing changes during validation is refused as `conflict` before the config is written or the session host opens.
 - A load, composition, broadcast or readiness probe whose files changed while it ran publishes nothing it read, valid or not: it may read once more, else the command is refused as `conflict`, "changed meanwhile; retry".
 - Where the file is a profiles-era config, the load migrates it in place per the launcher's semantics ([DR-019](../decisions/019-inline-agent-configuration.md)): named profiles inline into agent blocks, the `profiles` map is deleted, the pre-migration file is backed up beside the config with comments surviving, and a `profile` naming a missing entry is a config error that leaves the file untouched.
 - Validation fails closed on the same defect classes as the playbook launcher [[core-service-16](#core-service-16)].
@@ -162,6 +163,8 @@ When a client requests the session list, the core service shall reply with every
 - each entry carries the session's resolved project, its creation time, its last activity — the wire field `endedAt`, null while live and otherwise the latest time its own records carry, its manifest's last update only where none carries one — liveness and `turnActive`, which stays true until the turn transaction settles or fails; host of origin is not an admission condition;
 - a non-live session has no active turn; historical records alone never establish liveness, and a session acquired by this core is never reported as externally owned;
 - each entry says whether a Boss message continues it, using the shared checkpoint, replay and execution checks [[core-service-73](#core-service-73)], with a reason when history-only;
+- a settled checkpoint whose current working-folder binding or stored-member configuration refuses continuation is history-only with that refusal's reason; listing and reporting this reading open no runtime, acquire no session lease, consume no provider hints and change no session files;
+- this reading follows current bindings and configuration, including changes since the preceding listing or report; unprovable current inputs produce no positive reading, compatible tuning changes and unrelated enabled playbooks remain continuable [[core-service-92](#core-service-92)], and submission still checks admission afresh [[core-service-73](#core-service-73)];
 - each uncertain entry carries `recovery: {state: "uncertain", input, discardable}` with the exact saved input and whether Playbook's shared discard predicate [[2]] allows Discard — no recorded step, no abandonment, unchanged repository evidence ([DR-088](../decisions/088-playbook-17-slc-0-12-cligent-0-27-adoption.md)); uncertainty is never reported as normal continuability;
 - while this core runs a turn of the session — from its acceptance until the turn transaction settles or fails — the entry carries no `recovery` and no continuation reason: Playbook marks the checkpoint uncertain as the turn begins and settles it only with the turn, the evidence a turn cut off leaves, so the uncertain entry is one whose last turn was cut off with no turn running ([DR-047](../decisions/047-explicit-session-recovery.md));
 - external session leases are observed through Playbook's shared API [[1]]: an active writer reports liveness, and active or unprovable ownership reports `externalWriter` and withholds recovery controls until ownership is idle;
@@ -628,6 +631,10 @@ The core package shall compose the session-player roster, the playbook registry,
 | Roster scope | only players some binding references reach the composed session, so an unused roster entry gates no run |
 | Legacy | a surviving `playbooks.<id>.players` block is refused in the launcher's own words |
 | Module | a `playbooks.<id>.from` is refused [[core-service-2](#core-service-2)], while the launcher accepts one and takes ahead of it each playbook's module supplied at launch [[3]], so a configuration naming no `from` composes in both — in the launcher with each module supplied at launch, or on a record-backed reopen with the module the session records [[4]] |
+| Custom options | composition for a paired project validates each entry's options with its actual working folder, naming the playbook and retaining the validator's reason on refusal, before reporting valid or accepting a project config write; global composition without a working folder defers this check, and authored option slices stay unchanged for the shell's validation and normalization at construction |
+
+- For an omitted `cwd`, the existing successful `cwd: "/"` capability probe requires validation with the actual project folder and its rejection cannot fall back to the raw slice; where that probe rejects, a successful actual-folder candidate establishes injection, otherwise the raw slice must validate and retains the existing non-injected behavior without inferring an opaque validator's reason for rejecting either candidate [[core-service-29](#core-service-29)].
+- An explicitly configured `cwd` validates and passes through unchanged [[core-service-29](#core-service-29)]; a capability probe establishes no actual-folder validation.
 
 #### core-service-17
 
@@ -792,6 +799,7 @@ Where the core watches no config file and a playbook module's import or a readin
 | edited again while the re-read's import is held | refused `conflict`, nothing broadcast; the retry reads what stands |
 | edited while a reload's readiness probe is held | no readiness broadcast for the earlier file; the re-read's follows its state |
 | the module entry the lock names removed, then restored | the missing module, then the valid state |
+| the matching install record, or a selected non-entry file, removed then restored without changing the lock or config | unavailable, then valid, with no restart or session |
 | edited while a reload's broadcast composes a project, its import held | only the re-read's state is broadcast |
 | a project's file edited while its composition's import is held | the project's state names the edit |
 | edited before an authoring turn, before a queued one, and before a compile | each runs on the edited agent; the running turn keeps its own |
@@ -842,6 +850,7 @@ When an integration suite changes stored history and folder pairs through a runn
 
 When the integration suite settles and restarts a shared-store session, it shall verify that either a desktop- or CLI-created supported checkpoint lists continuable [[core-service-32](#core-service-32)], that its runtime was released at settlement with the provider hints kept [[core-service-91](#core-service-91)], continues with the same identities and stream [[core-service-74](#core-service-74)], and persists recovery without provider tokens [[core-service-72](#core-service-72)]; that a message opens it on the current tuning while an added playbook changes nothing and a structural change is refused naming the field [[core-service-92](#core-service-92)]; and that active leases and turns in flight, history-only recovery, damaged digests, uncertain work, missing bindings and path/config drift shall refuse before a turn or intent stamp [[core-service-73](#core-service-73)]:
 
+- listing and state reports after configuration or binding changes name deterministic continuation refusals before submission, restore normal continuability when those causes are removed, and preserve exact checkpoint/replay/hint bytes and session lease state without opening a runtime or calling an agent [[core-service-32](#core-service-32)] [[core-service-34](#core-service-34)]; concurrent input edits produce no stale positive reading, lose no settlement notification, and never republish a removed session;
 - a session parked on a question keeps its summons across the release and answers where it waited [[core-service-93](#core-service-93)];
 - a session Spex created continues through the real CLI from a configuration naming no `from`, with no module supplied, on the module the session records [[core-service-16](#core-service-16)];
 - a rejected attachment handoff starts no turn or provider call, releases the runtime opened for the submission before its reply, and permits session deletion and another session for the project [[core-service-73](#core-service-73)]; the same refusal preserves a runtime that was already live [[core-service-5](#core-service-5)];
@@ -1059,6 +1068,15 @@ When an integration suite parks a real session's run on a Boss question — the 
 - the settlement that parked the run leaves its summary carrying the question's park and no recovery [[core-service-32](#core-service-32)];
 - while the answer's turn runs, its checkpoint reading uncertain, the listing and every state reported since the answer was accepted carry `turnActive` with no `recovery`, no continuation reason and no park, and the park has left the preferences [[core-service-32](#core-service-32)] [[core-service-34](#core-service-34)];
 - once the answer's turn settles with the run finished, the session carries no recovery and no park and lists continuable [[core-service-32](#core-service-32)].
+
+#### core-service-121
+
+When a real-core integration suite composes a paired project's custom options, it shall verify missing or invalid options are reported before a session lease, runtime or provider call, project config writes refuse invalid options without changing bytes, and valid options retain the authored slice [[core-service-16](#core-service-16)]:
+
+- exact real-folder injection and an explicit override pass unchanged to the shared host [[core-service-29](#core-service-29)];
+- an optional cwd accepted by the capability probe but rejected for the actual folder is refused, with no raw-default fallback [[core-service-16](#core-service-16)];
+- an entry rejecting cwd validates its raw options, while global composition without a working folder defers context-dependent validation [[core-service-16](#core-service-16)];
+- a pairing changed while a module imports is re-read before publishing a config state, and a config write or new-session request holding the previous pairing is refused without changing config bytes or opening a session [[core-service-2](#core-service-2)].
 
 ## References
 

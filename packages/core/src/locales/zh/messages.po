@@ -820,6 +820,16 @@ msgstr "请检查 URL，若仓库尚不存在请先创建，或者{act}。然后
 msgid "Choose the other side for this unit or fix the file, then Retry."
 msgstr "请为该单元改选另一个版本，或修好该文件，然后重试。"
 
+#. Where a project's code lives before the instance has reported its Git origin; the actual remote is withheld until it can be classified
+#: src/space.ts
+msgid "Code on a remote"
+msgstr "远程代码"
+
+#. Where a project's code lives when its remote is under the instance's reported Git origin; the Git system behind the instance is never named
+#: src/space.ts
+msgid "Code on this instance"
+msgstr "此实例上的代码"
+
 #. The project file's unit label: the remote of the code changed
 #: src/space.ts
 msgid "Code remote changed"
@@ -1321,6 +1331,16 @@ msgstr "已读标记 {key} 无效"
 #: src/home.ts
 msgid "invalid working folder pair"
 msgstr "工作文件夹配对无效"
+
+#. Forge setup guidance before the instance has reported its Git origin; the actual remote and hostname stay internal
+#: src/service.ts
+msgid "Issues and PRs come from GitHub; this project's code is on a remote."
+msgstr "Issue 与 PR 来自 GitHub；本项目的代码位于远程仓库。"
+
+#. Forge setup guidance for code on the instance's reported Git origin, whose underlying Git system is never named
+#: src/service.ts
+msgid "Issues and PRs come from GitHub; this project's code is on this instance."
+msgstr "Issue 与 PR 来自 GitHub；本项目的代码位于此实例上。"
 
 #. Forge guidance where the project's origin remote is not on GitHub; {host} is that remote's host name, or a local remote as written
 #: src/forge.ts
@@ -2697,3 +2717,7 @@ msgstr "{path} 必须是技能路径数组"
 #. Config error; the path names one entry of the skills setting
 msgid "{path} must be a non-blank skill path without NUL"
 msgstr "{path} 必须是不含 NUL 的非空技能路径"
+
+#. A package Git source failed without a recognized status; raw backing-host or unclassified stderr stays inside the core
+msgid "{host} answered with an error"
+msgstr "{host} 返回了错误"

@@ -307,7 +307,7 @@ export interface MissingPlayer {
 export interface EnvironmentState {
   repository: string;
   language: string | null;
-  requests: Record<string, EnvironmentRequest>;
+  requests: Record<string, EnvironmentRequestSummary>;
   packages: EnvironmentPackage[];
   /** The lock is stale: what changed, phrased for the reader; null when current. */
   stale: string[] | null;
@@ -331,6 +331,12 @@ export type EnvironmentRequest = (
   | { kind: "path"; path: string }
   | { kind: "git"; git: string; rev: string; path?: string }
 ) & { select?: { artifact: string; language?: string }[]; alias?: Record<string, string> };
+/** Display-only sources: a Git label is never accepted as a command locator. */
+export type EnvironmentRequestSummary = Readonly<(
+  | { kind: "registry"; version: string }
+  | { kind: "path"; path: string }
+  | { kind: "git"; repository: string; rev: string; path?: string }
+) & { select?: readonly { artifact: string; language?: string }[]; alias?: Readonly<Record<string, string>> }>;
 export interface EnvironmentPackage {
   name: string;
   version: string | null;
@@ -494,7 +500,7 @@ export interface SessionInfo {
   initialVisible: string[];
   /** Legacy host label retained for older history; never recovery authority. */
   foreign?: true;
-  /** Shared validation permits an ordinary Boss message to continue it. */
+  /** The checkpoint and current path/config permit continuation; admission checks again. */
   continuable?: boolean;
   continuationReason?: string;
   /** Interrupted work awaiting the Boss (core-service-32): the saved
@@ -626,6 +632,8 @@ export interface RepoStatusInfo {
   dirty: boolean;
   ahead: number;
   behind: number;
+  /** Client replies omit a remote before the instance's Git origin is
+   * known and at that origin; an external HTTP(S) URL has no user. */
   originUrl?: string;
 }
 

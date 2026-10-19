@@ -457,6 +457,9 @@ test("git-host-14: a creation's first sync reads the stand-in again until the RE
     const reads = host.script.requests.slice(asked).filter((request) => request.method === "GET");
     return reads.filter((request) => request.path === `/api/v1/host/repositories/${id}`).length - reads.filter((request) => request.path === "/api/v1/host/me").length;
   };
+  // A retry repeats five 2 s re-reads before the real Git/helper work.
+  // Give it the restarted creation's budget on slower macOS runners.
+  const createdSyncTimeoutMs = 60_000;
   // The stand-in answers the creation, and its first reads, before the
   // README lands on `main`: the creation's first sync reads it again and
   // pushes beside it with no stop (git-host-7).
@@ -524,7 +527,7 @@ test("git-host-14: a creation's first sync reads the stand-in again until the RE
   // and the clone records the creation no more (git-host-7).
   assert.equal(createdOn(clonePath(home.dataDir, key)), stopped.id, "the refused push keeps the creation");
   asked = host.script.requests.length;
-  const retried = await home.client.settle("space.sync", { repository: key });
+  const retried = await home.client.settle("space.sync", { repository: key }, createdSyncTimeoutMs);
   assert.ok(retried.sync.phase === "stopped" && retried.sync.message === `${HOST_NAME} refused: ${protectedWords}`, JSON.stringify(retried.sync));
   assert.equal(rereads(asked, stopped.id ?? ""), 5);
   assert.equal(git(refusedBare, "for-each-ref", "refs/heads/"), "");
@@ -539,7 +542,7 @@ test("git-host-14: a creation's first sync reads the stand-in again until the RE
   assert.equal(createdOn(clonePath(home.dataDir, key)), stopped.id, "a read-only check keeps the creation");
   host.script.archive(stopped.id ?? "", false);
   host.script.refuseDefaultBranch(null);
-  const synced = await home.client.settle("space.sync", { repository: key });
+  const synced = await home.client.settle("space.sync", { repository: key }, createdSyncTimeoutMs);
   assert.ok(synced.sync.phase === "done" && synced.sync.pushed, JSON.stringify(synced.sync));
   assert.equal(git(refusedBare, "ls-tree", "--name-only", "main"), "README.md");
   assert.equal(git(refusedBare, "symbolic-ref", "HEAD"), "refs/heads/main");
@@ -570,7 +573,7 @@ test("git-host-14: a creation's first sync reads the stand-in again until the RE
   asked = host.script.requests.length;
   // This sync holds the five 2 s re-reads by design, after the restarted
   // core's own set-up, so its budget is the creation cases' 30 s and more.
-  const resumed = await again.client.settle("space.sync", { repository: restartedKey }, 60_000);
+  const resumed = await again.client.settle("space.sync", { repository: restartedKey }, createdSyncTimeoutMs);
   assert.ok(resumed.sync.phase === "done" && resumed.sync.pushed, JSON.stringify(resumed.sync));
   assert.equal(rereads(asked, id), 5);
   assert.equal(git(restartedBare, "symbolic-ref", "HEAD"), "refs/heads/main");
@@ -1325,7 +1328,7 @@ test("space-60: a sync moving a renamed repository's clone stops naming a sessio
   assert.ok((await home.client.expectOk("session.list", {})).some((session) => session.id === sessionId && session.projectId === renamed));
 });
 
-test("space-37: a sign-in on a second home whose own group's clone holds only the set-up commits takes the host's environment and configuration without asking; one holding a session of its own asks", async (t) => {
+test("space-37: sign-in adopts an unchanged generated bootstrap after restart; authored settings, environments, preexisting files and sessions require choices", async (t) => {
   const host = await startHost();
   // The first device pushes your own group's spex repository, then
   // another environment and configuration into it.
@@ -1350,9 +1353,12 @@ test("space-37: a sign-in on a second home whose own group's clone holds only th
   // The second device: its own group's clone holds the set-up commit
   // alone, an unrelated history whose environment and configuration
   // each differ from the host's.
-  const second = await startHome("second-device", { host, project: false, model: "claude-test-second", extra: { signIn: "browser" } });
+  const generated = await startHome("second-device", { host, project: false, starter: true, extra: { signIn: "browser" } });
+  await generated.stop();
+  const second = await startHome("second-device-again", { host, dataDir: generated.dataDir, project: false, starter: true, extra: { signIn: "browser" } });
   t.after(() => second.stop());
   const before = ownClone(second.dataDir);
+  assert.equal(git(before, "config", "--local", "--get", "spex.bootstrap"), git(before, "rev-parse", "HEAD"), "generated bootstrap proof survived restart");
   assert.ok(git(before, "log", "--format=%s").split("\n").every((subject) => subject.startsWith("Start the spex branch on ")));
   assert.notEqual(git(before, "rev-list", "--max-parents=0", "HEAD"), hostRoot, "unrelated histories");
   for (const file of hostFiles) assert.notDeepEqual(readFileSync(join(before, file)), hosted.get(file), `the second device's own ${file}`);
@@ -1370,6 +1376,42 @@ test("space-37: a sign-in on a second home whose own group's clone holds only th
   const config = await second.client.expectOk("config.get", {});
   assert.ok(config.status === "valid" && config.summary.captain.model === "claude-test-host", "the configuration reloaded");
   assert.equal(git(bareOf(host, HOST_OWN), "rev-parse", "spex"), git(secondClone, "rev-parse", "spex"));
+
+  // Real local edits remain uncommitted until sign-in's Save. Its own
+  // commit cannot erase the authorship of the bytes it just saved.
+  const hostHead = git(bareOf(host, HOST_OWN), "rev-parse", "spex");
+  for (const authored of ["configuration", "environment", "restart", "preexisting"] as const) {
+    let local = await startHome(`authored-${authored}`, { host, project: false, starter: authored !== "preexisting", model: "claude-test-preexisting", extra: { signIn: "browser" } });
+    if (authored === "configuration" || authored === "restart") {
+      await local.client.expectOk("config.edit", { op: { kind: "captain.set", patch: { model: "claude-test-before-signin" } } });
+    }
+    if (authored === "environment" || authored === "restart") {
+      const from = local.client.mark();
+      const version = `~${builtin}`;
+      await local.client.expectOk("environment.request", { repository: OWN_KEY, name: "sublang/playbooks", request: { kind: "registry", version } });
+      await local.client.waitFor((message) => local.client.messages.indexOf(message) >= from && message.type === "environment.state" && message.repository === OWN_KEY && message.state.busy === null && message.state.stale === null && message.state.requests["sublang/playbooks"]?.kind === "registry" && (message.state.requests["sublang/playbooks"] as { version: string }).version === version, 60_000);
+    }
+    if (authored === "restart") {
+      await local.stop();
+      local = await startHome("authored-restarted", { host, dataDir: local.dataDir, project: false, starter: true, extra: { signIn: "browser" } });
+    }
+    t.after(() => local.stop());
+    const clone = ownClone(local.dataDir);
+    assert.equal(git(clone, "rev-list", "--count", "HEAD"), "1", `${authored}: no manual commit`);
+    assert.ok(git(clone, "log", "--format=%s").startsWith("Start the spex branch on "), `${authored}: even the initial subject looks like set-up`);
+    const proof = spawnSync("git", ["-C", clone, "config", "--local", "--get", "spex.bootstrap"], { encoding: "utf8" });
+    if (authored === "preexisting") assert.equal(proof.status, 1, "a preexisting config has no generated-bootstrap proof");
+    else { assert.equal(proof.status, 0); assert.equal(proof.stdout.trim(), git(clone, "rev-parse", "HEAD"), `${authored}: proof refers to the generated initial commit`); }
+    const kept = new Map(hostFiles.map((file) => [file, readFileSync(join(clone, file))]));
+    const from = local.client.mark();
+    await signIn(local, host);
+    const choice = await local.client.waitRepository(from, HOST_OWN, (repository) => repository.sync.phase !== "running" && repository.sync.phase !== "idle", 30_000);
+    assert.equal(choice.sync.phase, "choices", `${authored}: ${JSON.stringify(choice.sync)}`);
+    assert.ok(choice.conflicts.some((conflict) => conflict.unit.unit === "config/playbook.config.yaml"), `${authored}: configuration remains an explicit choice`);
+    if (authored === "environment" || authored === "restart") assert.ok(choice.conflicts.some((conflict) => conflict.unit.unit === "environment"));
+    for (const file of hostFiles) assert.deepEqual(readFileSync(join(clonePath(local.dataDir, HOST_OWN), file)), kept.get(file), `${authored}: local ${file} preserved`);
+    assert.equal(git(bareOf(host, HOST_OWN), "rev-parse", "spex"), hostHead, `${authored}: no host write while choices stand`);
+  }
 
   // A third device whose own group's clone holds a session of its own:
   // every unit on both sides is one choice (space-13).

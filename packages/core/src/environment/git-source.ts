@@ -44,7 +44,7 @@ export type CredentialArgs = (credential: GitCredential) => Promise<{
 }>;
 
 export class GitSourceError extends Error {
-  constructor(readonly repo: string, message: string) {
+  constructor(readonly repo: string, message: string, readonly run?: GitRun) {
     super(message);
     this.name = "GitSourceError";
   }
@@ -98,7 +98,7 @@ export function gitSource(cacheDir: string, options: GitSourceOptions = {}): Git
 
   async function git(repo: string, args: string[], env: Record<string, string> = {}): Promise<Buffer> {
     const run = await runGit(args, { env });
-    if (run.code !== 0) throw new GitSourceError(repo, `git ${args.find((arg) => !arg.startsWith("-") && !arg.includes("=")) ?? ""} failed for ${repo}: ${run.stderr.trim() || `exit ${run.code}`}`);
+    if (run.code !== 0) throw new GitSourceError(repo, `git ${args.find((arg) => !arg.startsWith("-") && !arg.includes("=")) ?? ""} failed for ${repo}: ${run.stderr.trim() || `exit ${run.code}`}`, run);
     return run.stdout;
   }
 

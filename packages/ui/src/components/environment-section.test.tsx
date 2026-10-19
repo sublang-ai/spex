@@ -133,6 +133,25 @@ afterEach(() => {
 });
 
 describe("playbook-library-94: each side's environment", () => {
+  test("Git request labels and tooltips use the display summary through live state updates", async () => {
+    const setSource = (repository: string): EnvironmentState => ({
+      ...PROJECT_ENVIRONMENT,
+      requests: { "acme/triage": { kind: "git", repository, rev: "v1", path: "pkg" } },
+      packages: PROJECT_ENVIRONMENT.packages.filter((pkg) => pkg.name === "acme/triage").map((pkg) => ({ ...pkg, source: { kind: "git" as const, detail: repository } })),
+    });
+    environments[PROJECT_ID] = setSource("the remote");
+    await renderSurface();
+    const source = screen.getByTestId("env-source-acme/triage");
+    expect(source.textContent).toBe("Git the remote at v1, pkg");
+    expect(source.title).toBe("the remote");
+    for (const label of ["Spex Example", "https://example.test/acme/flows.git"]) {
+      await act(async () => deliverServerMessageForTests({ type: "environment.state", repository: PROJECT_ID, state: setSource(label) }));
+      expect(source.textContent).toBe(`Git ${label} at v1, pkg`);
+      expect(source.title).toBe(label);
+    }
+    expect(screen.getByTestId("environment-section").innerHTML).not.toContain("secret-user");
+  });
+
   test("lists its spec packages with versions, sources, artifacts, languages, fallback marks and installed state", async () => {
     await renderSurface();
     const section = screen.getByTestId("environment-section");
