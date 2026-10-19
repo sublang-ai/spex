@@ -16,7 +16,7 @@ A **working folder** is where a project's or a group's sessions run, paired with
 
 #### environments-1
 
-When the core reads a release — from the registry, a Git commit, a path inside a working folder, or the app's own built-in spec package — it shall accept it only as a folder in the release layout with a `meta.yaml` manifest of `format: 2`, refusing any other with its reasons ([DR-104](../decisions/104-spec-package-format-and-client-environments.md)):
+When the core reads a release — from the registry, a Git commit, a path source's folder [[environments-2](#environments-2)], or the app's own built-in spec package — it shall accept it only as a folder in the release layout with a `meta.yaml` manifest of `format: 2`, refusing any other with its reasons ([DR-104](../decisions/104-spec-package-format-and-client-environments.md)):
 
 | Path in a release | Content |
 | --- | --- |
@@ -58,11 +58,26 @@ The core shall read an environment's `spex.yaml` [[environments-26](#environment
 | Source | Fields | Meaning |
 | --- | --- | --- |
 | registry | `version` | a version requirement [[environments-4](#environments-4)], met from the registry |
-| path | `path` | a folder inside the working folder, by a path relative to the working folder's root, which holds a project's `spex.yaml` [[environments-26](#environments-26)], used in place |
+| path | `path` | a folder inside the environment's path root, by a path relative to it, used in place |
 | Git | `git`, `rev`, optional `path` | a repository the Git host or this device's Git can read, at a branch, tag or commit, with an optional folder inside |
 
 - a request names exactly one source and may add `select`, a list of `{artifact, language}`, and `alias`, the id of a skill, playbook or spec to the Agent Skills name its skill is exported under;
+- an environment's path root is the root of the working folder paired with its spex repository on this device, which holds a project's `spex.yaml` [[environments-26](#environments-26)], for a project's or another group's environment, none while this device pairs no working folder, and the root of its clone, which holds its `spex.yaml`, for your own group's, confined as [[environments-32](#environments-32)] states ([DR-125](../decisions/125-your-own-groups-path-sources-live-in-its-clone.md));
 - a direct request fixes the source of that spec package for everything that requires it; every other spec package comes from the registry.
+
+#### environments-32
+
+When the core reads a request by path in your own group's environment — before writing it [[environments-15](#environments-15)] and at each resolution [[environments-5](#environments-5)] — it shall accept only a folder below its clone's root that lies outside Spex's own paths, is reached through no link, and holds no file the clone's Git rules ignore, refusing any other with the path and its reason, so the folder syncs with the clone ([DR-125](../decisions/125-your-own-groups-path-sources-live-in-its-clone.md)):
+
+| Refused | Reason |
+| --- | --- |
+| the clone's root, or a path leading out of it | not below the clone's root |
+| a path whose first segment is `config`, `sessions`, `intents`, `authoring`, `packages`, `skills`, `local`, `.git`, `.spex-uploads`, `spex.yaml`, `spex.lock`, `project.json`, `.gitignore`, `.gitattributes`, `.spex-apply.json` or a name beginning `.lock` | a path Spex keeps [[storage-1](storage.md#storage-1)] |
+| a path the clone's Git rules ignore, such as one under a folder named `*.tmp` [[storage-17](storage.md#storage-17)] | not synced |
+| a folder that is a link, or lies under one | reached through a link |
+| a folder holding a file of its release [[environments-1](#environments-1)] the clone's Git rules ignore | a file not synced, named |
+
+- a request is checked against what stands at its path when it arrives, so a folder not made yet passes the last two rows until a resolution reads it.
 
 #### environments-3
 
@@ -97,7 +112,7 @@ When a client sends `environment.resolve` for a spex repository, or its `spex.ya
 - a cycle in the dependency graph is allowed and adds nothing;
 - caret and tilde never pick a version its publisher yanked; an exact requirement, or installing from the lock, may; nothing picks a version the registry's operator suppressed;
 - among solutions the core takes the highest, comparing the requested spec packages' versions first, then the rest, each in name order; a newer release lacking a selected artifact never blocks an older solution;
-- a path source resolves to the manifest in the working folder, a Git source to the named commit's manifest, with their dependencies from the registry;
+- a path source resolves to the manifest in its folder [[environments-2](#environments-2)], your own group's once the folder passes [[environments-32](#environments-32)], a Git source to the named commit's manifest, with their dependencies from the registry;
 - when no solution exists, the core replies `invalid_request` naming the version requirements in conflict, before anything is installed or run;
 - the lock is written only while `spex.yaml` still holds the bytes resolved and `spex.lock` the bytes read before resolving, each checked at the instant of the write; a resolution overtaken meanwhile writes nothing, a caller awaiting it is refused `conflict` naming the file that changed meanwhile, to retry, and it records no failure in the environment's state ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md));
 - a resolution that fails, or finds no solution, once either file no longer holds the bytes it read is overtaken in the same way, its outcome recorded nowhere, so it never replaces what a later operation left.
@@ -121,8 +136,8 @@ When a client sends `environment.install` for a spex repository, or a resolve or
 
 - the store keeps each distinct file once under `store/<sha256>`, written once after its digest is verified, with an executable copy apart under `store/x/<sha256>`, and keeps a file while a lock of an environment on this device [[environments-26](#environments-26)] selects it; `cache/` holds fetched archives and metadata and may be deleted at any time;
 - a file is fetched by any transport the registry offers — the release archive, or raw files — or from the Git source at the locked commit, and stored only when its SHA-256 matches the lock's `files`; the portable-path rules [[environments-1](#environments-1)] are re-checked; no code runs;
-- a path source copies nothing: its files are used where they are, in the working folder, each working folder running its own; a device whose working folder lacks the path reports it missing, and the environment stays otherwise installed;
-- every playbook artifact folder of the lock, a path source's in the working folder included, is prepared to run on the app's engine [[playbook-library-46](playbook-library.md#playbook-library-46)], also where the installed files already match the lock;
+- a path source copies nothing: its files are used where its path resolves [[environments-2](#environments-2)] — in a working folder, each running its own, or in your own group's clone, each device running the copy its clone syncs —; a device lacking the folder reports it missing, and the environment stays otherwise installed;
+- every playbook artifact folder of the lock, a path source's where its path resolves included, is prepared to run on the app's engine [[playbook-library-46](playbook-library.md#playbook-library-46)], also where the installed files already match the lock;
 - the new installed files are complete, prepared privately, before they replace the old ones; an install that fails leaves the last files in place and reports its cause;
 - the replacement happens only while the clone stands, the environment's `spex.lock` [[environments-26](#environments-26)] still holds the bytes installed, and the lock still matches `spex.yaml` and its path sources, checked at the instant before the swap; an install overtaken meanwhile publishes nothing, the last files staying, a caller awaiting it is refused `conflict` naming the file that changed meanwhile, to retry, and it records no failure in the environment's state; a clone gone meanwhile is never made again, and an install awaited on it is refused ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md));
 - the exports of an install are written only while the lock and the installed files still stand as it left them, so no export mixes two locks; where either changed after the swap, the exports standing are not rewritten, the swapped-in files stay, and the install is overtaken as above;
@@ -143,7 +158,7 @@ When an environment is installed or a group's own lock applied by a sync, the co
 | your own group's skills | your agents' user-level folders on this device as well, so they reach every session run here |
 
 - the agent folders are the folders where each agent Spex drives reads project-level and user-level skills, as the core's agent table states them [[environments-16](#environments-16)];
-- an exported skill, playbook or spec is bound to the environment whose lock exported it: it runs or holds that environment's installed files, or a path source's files in the working folder it was exported to, never another environment's copy of the same name;
+- an exported skill, playbook or spec is bound to the environment whose lock exported it: it runs or holds that environment's installed files, or a path source's files where its path resolves for that environment [[environments-2](#environments-2)], never another environment's copy of the same name;
 - when a project and your own group export one skill name, both keep it, one in the project's agent folder and one in the agent's user-level folder, and the Playbooks surface lists both saying where each comes from [[playbook-library-1](playbook-library.md#playbook-library-1)];
 - an export leaves nothing it did not write: a folder the agent table names holds only the exported skills of that environment beside what the reader put there;
 - a folder the reader put in an agent folder under an exported name stays as it is, that skill left out of that agent folder alone, and an exported artifact whose files the export does not find, as a path source the working folder lacks [[environments-7](#environments-7)], is exported nowhere.
@@ -154,7 +169,7 @@ When a working folder is paired with a spex repository whose clone this device h
 
 #### environments-9
 
-When a session starts in a working folder, the core shall hand the launcher the module location of each playbook its composed configuration enables [[core-service-2](core-service.md#core-service-2)] — the installed playbook artifact's module in the project's environment, else your own group's, else, for a path source, the module in the working folder — and shall write no path into a shared file ([DR-104](../decisions/104-spec-package-format-and-client-environments.md)):
+When a session starts in a working folder, the core shall hand the launcher the module location of each playbook its composed configuration enables [[core-service-2](core-service.md#core-service-2)] — the installed playbook artifact's module in the project's environment, else your own group's, else, for a path source, the module where its path resolves [[environments-2](#environments-2)] — and shall write no path into a shared file ([DR-104](../decisions/104-spec-package-format-and-client-environments.md)):
 
 - a playbook the configuration enables and no environment of the session exports is a config error naming the playbook and the spex repository whose environment lacks it;
 - a registry or Git source supplies a module only while its package is installed as the current lock records it — the install record naming the same source, files and artifacts, every selected file there [[environments-14](#environments-14)]; retained files from another lock are unavailable and are not imported during configuration loading, including after a failed install [[environments-7](#environments-7)], while a path source is used in place;
@@ -168,7 +183,7 @@ When an authoring session [[storage-23](storage.md#storage-23)] writes a spec pa
 
 - publishing uploads the declared release files only, after the same checks the core makes on a release [[environments-1](#environments-1)], to the registry as the signed-in account [[environments-12](#environments-12)];
 - a manifest without a `description` or a `license`, which the registry requires, is refused naming each missing field before any upload, its preview included [[environments-17](#environments-17)];
-- to share before publishing, the folder is requested by `git` at a commit, or published as a prerelease to a private namespace at the registry;
+- to share before publishing, the folder is requested by `git` at a commit, or published as a prerelease to a private namespace at the registry; to use it yourself on every device, it is kept in your own group's clone and requested by path there [[environments-2](#environments-2)];
 - a working folder may hold any number of spec packages under development.
 
 #### environments-27
@@ -207,7 +222,7 @@ When the core resolves or installs a Git source, it shall fetch the repository a
 
 #### environments-14
 
-When a client sends `environment.get` for a spex repository, the core shall reply with the environment as the Playbooks surface lists it, read at the reply from the environment's files where it lives [[environments-26](#environments-26)] and the files installed in the spex repository's clone: every request with its source, every resolved spec package with its version, source, who required it, its selected artifacts with their chosen language and fallback mark, its exports, whether its files are installed as the lock locks them — recorded by the install that placed them, with the same source, files and artifacts, every file there — a path source missing on this device, what the core's last export of the environment left out where that export went into the working folder now paired, or into none while none is [[environments-8](#environments-8)] — each skill a folder the reader put under its name kept out of an agent folder, with that folder as the agent table names it [[environments-16](#environments-16)], and each spec package an exported artifact of which it did not find — the lock's staleness, the step of the latest operation still running — one begun before the clone moved counted, and its end announced, at the new address — the failure the last failing operation recorded, cleared by a later success and never recorded by an operation overtaken by a change of its files [[environments-5](#environments-5)] [[environments-7](#environments-7)], the conflict report while `spex.yaml` still holds the bytes the failed resolution read, and, for a project, whether its two files are committed with the code, both in the code's `HEAD`, or not and so this device's alone [[environments-26](#environments-26)] ([DR-104](../decisions/104-spec-package-format-and-client-environments.md), [DR-111](../decisions/111-the-core-coordinates-as-git-does.md)).
+When a client sends `environment.get` for a spex repository, the core shall reply with the environment as the Playbooks surface lists it, read at the reply from the environment's files where it lives [[environments-26](#environments-26)] and the files installed in the spex repository's clone: every request with its source, every resolved spec package with its version, source, who required it, its selected artifacts with their chosen language and fallback mark, its exports, whether its files are installed as the lock locks them — recorded by the install that placed them, with the same source, files and artifacts, every file there — a path source missing on this device, the environment's path root on this device or none [[environments-2](#environments-2)], what the core's last export of the environment left out where that export went into the working folder now paired, or into none while none is [[environments-8](#environments-8)] — each skill a folder the reader put under its name kept out of an agent folder, with that folder as the agent table names it [[environments-16](#environments-16)], and each spec package an exported artifact of which it did not find — the lock's staleness, the step of the latest operation still running — one begun before the clone moved counted, and its end announced, at the new address — the failure the last failing operation recorded, cleared by a later success and never recorded by an operation overtaken by a change of its files [[environments-5](#environments-5)] [[environments-7](#environments-7)], the conflict report while `spex.yaml` still holds the bytes the failed resolution read, and, for a project, whether its two files are committed with the code, both in the code's `HEAD`, or not and so this device's alone [[environments-26](#environments-26)] ([DR-104](../decisions/104-spec-package-format-and-client-environments.md), [DR-111](../decisions/111-the-core-coordinates-as-git-does.md)).
 
 #### environments-29
 
@@ -222,7 +237,7 @@ The core shall present generated environment source labels, conflict requirement
 
 When a client sends `environment.request` for a spex repository with a spec package name and a request [[environments-2](#environments-2)], or `environment.remove` with a name, the core shall write `spex.yaml` where the environment lives [[environments-26](#environments-26)], preserving comments and key order, then resolve [[environments-5](#environments-5)] and install [[environments-7](#environments-7)], and announce the environment changed:
 
-- a request naming a path outside the working folder, a malformed requirement, or a name that is not `<org>/<pkg>` is refused before any write;
+- a request naming a path while its environment has no path root on this device, a path outside that root [[environments-2](#environments-2)] or one your own group's clone refuses [[environments-32](#environments-32)], a malformed requirement, or a name that is not `<org>/<pkg>` is refused before any write;
 - a repository naming no clone on this device when the command arrives is refused `not_found` before any write;
 - the candidate is prepared from the bytes read and written under their version, so a file changed meanwhile, or a clone gone after the command read it, is refused `conflict` — changed meanwhile, retry — with the newer file kept and no folder made ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md));
 - every command starts at once, beside any operation still running on the environment, and none waits for or refuses another;
@@ -262,7 +277,7 @@ The core shall expose environments through these commands and one message, each 
 | `environment.resolve` | `{ repository }` | `{ accepted: true }` | `not_found` |
 | `environment.install` | `{ repository }` | `{ accepted: true }` | `not_found` |
 | `environment.search` | `{ query }` | `{ packages: [{ name, description, versions }] }` | `invalid_request` (signed out and the registry refusing) |
-| `environment.publish` | `{ repository, path, dryRun? }` | `{ accepted: true }`, a dry run uploading nothing and adding `preview: { name, version, files }` | `invalid_request` (not a release; no `description` or `license`; not signed in) |
+| `environment.publish` | `{ repository, path, dryRun? }`, `path` naming a folder inside the environment's path root [[environments-2](#environments-2)] | `{ accepted: true }`, a dry run uploading nothing and adding `preview: { name, version, files }` | `invalid_request` (no path root on this device; outside it; not a release; no `description` or `license`; not signed in) |
 
 - `environment.state { repository, state: EnvironmentState }` is broadcast after every resolve, install, publish, sync-applied lock and pairing's export [[environments-31](#environments-31)]; a long command replies `accepted` at once and reports through state, never a hung reply ([DR-010](../decisions/010-interface-craft.md) §5).
 
@@ -314,6 +329,15 @@ When an integration suite exports an installed environment to a working folder w
 - a re-export removes a skill the lock no longer selects and leaves a reader-placed skill beside it [[environments-8](#environments-8)], leaves an unchanged skill's files as they were, stands a changed skill whole with no staging copy left behind, and, where the changed skill cannot be moved or renaming its new copy in fails, leaves the previous one standing whole [[environments-30](#environments-30)];
 - through a real core, a spec-only spec package requested from the stand-in registry by `environment.request` exports its spec as a generated skill into the project's working folder's `.claude/skills/<org>-<pkg>/` and `.agents/skills/<org>-<pkg>/`, listed in its `.git/info/exclude`, its `<pkg>.md` byte-equal to the release's spec file [[environments-8](#environments-8)]; requested in your own group's environment, the same skill stands in the scratch user home's `.claude/skills/` [[environments-8](#environments-8)]; and after `environment.remove` and its install, the skill, its copy in the user home and its exclude line are gone [[environments-8](#environments-8)] [[environments-15](#environments-15)];
 - through a real core, a project whose environment requests two skills from the stand-in registry and a path source in its working folder, once installed and rebound to a second working folder, broadcasts its state [[environments-17](#environments-17)] and has both skills in the second folder's `.claude/skills/` and the one the reader did not shadow in its `.agents/skills/`, each listed in its `.git/info/exclude`, with no environment command sent [[environments-31](#environments-31)]; the reader's folder under the other skill's name in `.agents/skills/` stays byte for byte [[environments-8](#environments-8)], the path source the second folder lacks has its skill in neither agent folder there [[environments-8](#environments-8)], and `environment.get` names that skill with `.agents/skills`, and that path source, as left out [[environments-14](#environments-14)]; once the reader's folder is moved away and the path source copied in, `environment.install` exports both there and the state names nothing left out [[environments-8](#environments-8)] [[environments-14](#environments-14)]; rebound to a third working folder while the registry spec package's installed files are gone, it installs them [[environments-7](#environments-7)] and exports both skills there with no environment command sent [[environments-31](#environments-31)], the state naming the path source the third folder lacks as left out [[environments-14](#environments-14)]; and rebound to a fourth whose path source states another version, so the lock is stale there, the state names nothing left out [[environments-14](#environments-14)].
+
+#### environments-33
+
+When an integration suite, through real cores on two scratch homes whose own groups' clones sync through the stand-in host, requests by path in your own group's environment a spec package kept in its clone, it shall assert:
+
+- `environment.request` with a path below the clone's root resolves the folder's manifest, the lock holding the path and no files, and `environment.get` names the clone as the path root and the package installed [[environments-2](#environments-2)] [[environments-5](#environments-5)] [[environments-14](#environments-14)];
+- the package's skill stands in the first home's user `.claude/skills/` and `.agents/skills/`, and an edit to its `SKILL.md` in the clone stands there after `environment.install` [[environments-7](#environments-7)] [[environments-8](#environments-8)]; a dry run of `environment.publish` with the same path previews that folder's release [[environments-17](#environments-17)];
+- the clone's root, a path leading out of it, a path under each of Spex's own paths, a folder named `*.tmp`, a folder reached through a link and a folder holding a file named `*.tmp` are each refused naming its reason, `spex.yaml` keeping its bytes [[environments-32](#environments-32)] [[environments-15](#environments-15)];
+- once the second home's own group's clone syncs from the host, the folder, `spex.yaml` and `spex.lock` stand there, `environment.get` there names the package installed, and the skill stands in that home's user `.claude/skills/` and `.agents/skills/` with the bytes of the first home's edit [[environments-7](#environments-7)] [[environments-8](#environments-8)].
 
 #### environments-23
 

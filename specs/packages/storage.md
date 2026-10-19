@@ -30,6 +30,7 @@ The store shall persist core-owned data in Spex home using these locations:
 | `<clone>/intents/<id>.json`, optional `<clone>/intents/<id>.assets/` | one intent [[storage-4](#storage-4)] and its retained attachments [[media-4](media.md#media-4)] | Tracked, one unit |
 | `<clone>/sessions/<id>.json`, `<clone>/sessions/<id>.records.jsonl`, optional `<clone>/sessions/<id>.assets/` | a Playbook session bundle [[1]] | Tracked, one unit |
 | `<clone>/authoring/<id>.json`, `<clone>/authoring/<id>.records.jsonl`, optional `<clone>/authoring/<id>.assets/` | an authoring session [[storage-23](#storage-23)] | Tracked, one unit |
+| `<clone>/<folder>/` holding `meta.yaml`, below the root and outside the paths above | a spec package's folder, such as one your own group's environment requests by path [[environments-32](environments.md#environments-32)] ([DR-125](../decisions/125-your-own-groups-path-sources-live-in-its-clone.md)) | Tracked, one unit |
 | `<clone>/packages/`, `<clone>/skills/` | installed spec packages and exported skills [[environments-8](environments.md#environments-8)] | Ignored |
 | `<clone>/sessions/<id>.hints.json`, session leases, staging and atomic-write temporary files | provider hints and writer coordination [[1]] | Ignored |
 | `<clone>/local/`, `<clone>/.spex-uploads/`, `<clone>/.spex-apply.json` | Playbook's own migration receipts, which may hold provider tokens; upload staging; the sync repair marker | Ignored |
@@ -216,7 +217,7 @@ When invoked as `validate`, the storage Git tool shall reserve the home and vali
 When selecting stored data during a Git merge of a spex repository's `spex` branch, the validator shall compare both pre-merge revisions with their common ancestor:
 
 - compare complete file bytes and existence;
-- treat the manifest, matching replay stream, and owned assets as one session bundle [[1]]; each `intents/<id>.json` with its `intents/<id>.assets/` as one unit; each `authoring/<id>.json` with its records and assets as one unit; `spex.yaml` with `spex.lock`, where the spex repository holds them [[storage-1](#storage-1)], as one unit; and `config/playbook.config.yaml`, `project.json` and each other tracked file as a separate unit.
+- treat the manifest, matching replay stream, and owned assets as one session bundle [[1]]; each `intents/<id>.json` with its `intents/<id>.assets/` as one unit; each `authoring/<id>.json` with its records and assets as one unit; `spex.yaml` with `spex.lock`, where the spex repository holds them [[storage-1](#storage-1)], as one unit; each folder below the root holding `meta.yaml`, outside `config/`, `sessions/`, `intents/` and `authoring/`, with every file under it, as one unit, the outermost where two nest [[storage-1](#storage-1)] ([DR-125](../decisions/125-your-own-groups-path-sources-live-in-its-clone.md)); and `config/playbook.config.yaml`, `project.json` and each other tracked file as a separate unit.
 
 | Comparison | Selection |
 | --- | --- |
@@ -303,7 +304,7 @@ When an integration suite merges two real Git branches of a group's own spex rep
 - command results and refusals through the documented entry point with `--repository` [[storage-10](#storage-10)];
 - an unchanged index after planning and refused selection, followed by staged complete choices [[storage-20](#storage-20)] [[storage-21](#storage-21)];
 - stopped writers and reopening after a real Git checkout with umask `022`, and the pair restored through the rebind command [[storage-22](#storage-22)];
-- every whole-unit choice, including clean text merges and deletion; an intent added on each side present on both afterwards with no choice asked; the environment unit and the empty-ancestor join [[storage-11](#storage-11)] [[storage-20](#storage-20)];
+- every whole-unit choice, including clean text merges and deletion; an intent added on each side present on both afterwards with no choice asked; the environment unit and the empty-ancestor join [[storage-11](#storage-11)] [[storage-20](#storage-20)]; a spec package folder whose two sides changed different files, nested folders and a file added on one side included, one choice taken whole, a file beside it its own unit [[storage-11](#storage-11)], and, through the apply seam, a file added under it since the plan refusing its replacement with that file kept [[storage-11](#storage-11)] [[storage-14](#storage-14)];
 - reports of unpaired clones and folders, and rejection of duplicate sources, invalid dispatches and damaged bundles [[storage-12](#storage-12)]; a config naming a playbook the environment lacks is reported as a nonblocking diagnostic whether the core speaks English or Chinese [[storage-12](#storage-12)];
 - no repetition of actions omitted from selected history [[storage-13](#storage-13)];
 - through the apply seam, a versioned replacement refused where a file changed while its session's lease was awaited — against the Save commit, and under `select` against Git's merge output as it stood when the selection began — the change kept and the index unchanged, a session's lease free once its write lands, and the index holding the validated tree [[storage-14](#storage-14)] [[storage-21](#storage-21)];
