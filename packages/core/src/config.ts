@@ -217,7 +217,7 @@ export interface ResolvedAgent {
   fastMode?: boolean;
   /** Managed browser tools; omission remains off. */
   browser?: boolean;
-  /** Effective configuration-relative run skills (DR-122). */
+  /** Effective configuration-relative run skills (DR-123). */
   skills?: readonly string[];
   /** Adapter-scoped subagent model (DR-093) as the file says it: a
    * model, `inherit` for the agent's own, or `false` — Off; absent, the
@@ -254,7 +254,7 @@ export interface SessionAgentBlock {
   fastMode?: boolean;
   /** Managed browser tools; omission remains off. */
   browser?: boolean;
-  /** Effective configuration-relative run skills (DR-122). */
+  /** Effective configuration-relative run skills (DR-123). */
   skills?: readonly string[];
   /** The model every subagent runs on, `inherit` for the agent's own,
    * or `false` — Off — carried through composition and the session's

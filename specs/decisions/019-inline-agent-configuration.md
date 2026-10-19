@@ -13,7 +13,7 @@ Amended by [DR-052](052-runtime-model-options.md): model and tuning choices come
 Amended by [DR-093](093-a-players-subagent-model.md) in §"UX": the shared agent editor gains a subagent-model field where the adapter accepts one.
 Amended by [DR-095](095-a-subagents-effort-and-the-agents-own-model.md) in §"UX": the shared agent editor gains a subagent-effort field, and each model pairs with its effort on one row.
 
-Amended by [DR-122](122-run-scoped-skills.md) in the admitted agent configuration: shared supplied-skills defaults and Captain/player replacement lists.
+Amended by [DR-123](123-run-scoped-skills.md) in the admitted agent configuration: shared supplied-skills defaults and Captain/player replacement lists.
 
 ## Context
 

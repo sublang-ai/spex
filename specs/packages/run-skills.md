@@ -5,7 +5,7 @@
 
 ## Intent
 
-This package defines supplied skills in Spex's shared agent configuration and their delivery to session and authoring calls under [DR-122](../decisions/122-run-scoped-skills.md).
+This package defines supplied skills in Spex's shared agent configuration and their delivery to session and authoring calls under [DR-123](../decisions/123-run-scoped-skills.md).
 A supplied skill is a local skill directory or its `SKILL.md`; persistent environment exports keep their separate contract.
 
 ## External Behavior

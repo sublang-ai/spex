@@ -11,7 +11,7 @@ Amends [DR-102](102-playbook-17-4-1-adoption.md) in its slc floor alone: both sh
 Follows [DR-081](081-the-app-supplies-the-compiler.md)'s explicit-bump rule for the compiler and [DR-024](024-app-supplied-agent-runtimes.md)'s app-supplied agent runtimes; nothing either decided changes.
 Amended by [DR-121](121-playbook-17-9-0-cligent-0-33-5-adoption.md) in its floors alone: the core requires `@sublang/playbook` `^17.9.0` and `@sublang/cligent` `^0.33.5`; slc `^0.16.1` stands.
 
-Amended by [DR-122](122-run-scoped-skills.md) in its slc floor alone, now `^0.16.2`.
+Amended by [DR-123](123-run-scoped-skills.md) in its slc floor alone, now `^0.16.2`.
 
 ## Context
 

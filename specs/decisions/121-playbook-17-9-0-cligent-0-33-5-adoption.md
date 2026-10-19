@@ -9,7 +9,7 @@ Accepted (2026-10-12).
 Amends [DR-116](116-playbook-17-8-0-slc-0-16-1-adoption.md) in its floors alone: the core requires `@sublang/playbook` `^17.9.0` and `@sublang/cligent` `^0.33.5`; slc `^0.16.1` and everything else DR-116 decided stand.
 Follows [DR-081](081-the-app-supplies-the-compiler.md)'s explicit-bump rule for the compiler and [DR-024](024-app-supplied-agent-runtimes.md)'s app-supplied agent runtimes; nothing either decided changes.
 
-Amended by [DR-122](122-run-scoped-skills.md) in its Playbook and Cligent floors alone, now `^17.10.1` and `^0.34.0`.
+Amended by [DR-123](123-run-scoped-skills.md) in its Playbook and Cligent floors alone, now `^17.10.1` and `^0.34.0`.
 
 ## Context
 
