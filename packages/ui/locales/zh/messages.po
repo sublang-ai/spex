@@ -4512,8 +4512,10 @@ msgstr "正在读取你的群组…"
 msgid "reading…"
 msgstr "读取中…"
 
+#. A full read of the groups is still running
 #. the tree is being read
 #: src/components/SpaceExplorer.tsx
+#: src/components/SpaceSurface.tsx
 msgid "Reading…"
 msgstr "读取中…"
 

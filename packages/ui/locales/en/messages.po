@@ -4512,8 +4512,10 @@ msgstr "Reading your groups…"
 msgid "reading…"
 msgstr "reading…"
 
+#. A full read of the groups is still running
 #. the tree is being read
 #: src/components/SpaceExplorer.tsx
+#: src/components/SpaceSurface.tsx
 msgid "Reading…"
 msgstr "Reading…"
 

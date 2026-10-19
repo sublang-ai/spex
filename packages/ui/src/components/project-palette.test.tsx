@@ -312,7 +312,7 @@ describe("projects-1, space-58: a folder added while signed in asks for its grou
   const groups = (account: boolean, repositories: object[]) => ({
     home: "/home/.spex", git: { ok: true, version: "2.50" }, host: { url: "https://host.test", displayName: "Host" },
     account: account ? { id: "1", login: "ada", displayName: null, canCreateGroup: false } : null,
-    signIn: { phase: "idle" }, readAt: 1, diagnostics: [], issues: 0, roles: [],
+    signIn: { phase: "idle" }, read: { phase: "idle" }, readAt: 1, diagnostics: [], issues: 0, roles: [],
     groups: [
       { id: "10", fullPath: "ada", name: "ada", url: null, own: true, can, repositories },
       { id: "20", fullPath: "acme", name: "acme", url: null, own: false, can, repositories: [] },

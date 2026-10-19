@@ -914,6 +914,11 @@ msgstr "config must be a YAML mapping"
 msgid "Could not reach {host}"
 msgstr "Could not reach {host}"
 
+#. An unexpected local failure stopped Refresh; technical details stay in diagnostics
+#: src/space.ts
+msgid "Could not refresh groups; try again"
+msgstr "Could not refresh groups; try again"
+
 #. Storage diagnostic; Delete is the control's own name on the draft's row
 #: src/authoring.ts
 msgid "damaged transcript after record {seq}; the draft refuses everything but Delete"

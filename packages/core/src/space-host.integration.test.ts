@@ -20,7 +20,7 @@ import { homedir, hostname } from "node:os";
 import { basename, join } from "node:path";
 import { resolveMachineIdentity } from "@sublang/playbook/machine-identity";
 import { createSessionStore } from "@sublang/playbook/session-store";
-import { CredentialChanged, GitHostClient, fileCredentialStore, type CredentialStore, type HostAccount, type StoredCredential } from "./git-host.js";
+import { CredentialChanged, HostError, GitHostClient, fileCredentialStore, type CredentialStore, type HostAccount, type StoredCredential } from "./git-host.js";
 import { Home } from "./home.js";
 import { seedHistorySession } from "./testing/demo.js";
 import { holdingFetch, samePair, settled } from "./testing/holding-fetch.js";
@@ -1814,6 +1814,146 @@ test("space-38, git-host-14: a check the stand-in answers 429 stops throttled in
   assert.ok(rest.at - five.at >= 4_950, `the next Retry reached the stand-in ${Math.round(rest.at - five.at)} ms after its 429`);
 });
 
+test("git-host-5: full reads expose running and failure with only local rows, preserve the view and recover", async (t) => {
+  const host = await startHost();
+  const home = await startHome("full-read-outcome", { host, project: false, extra: { signIn: "browser" } });
+  t.after(() => home.stop());
+  const signed = home.client.mark();
+  await signIn(home, host);
+  await home.client.waitRepository(signed, HOST_OWN, (row) => row.sync.phase === "done");
+  await home.client.expectOk("space.remote.set", { repository: HOST_OWN, url: null });
+  const before = await home.client.expectOk("space.get", {});
+  assert.deepEqual(before.read, { phase: "idle" });
+  const client = (home.service as unknown as { hostClient: { fetchImpl: typeof fetch } }).hostClient;
+  const holds = holdingFetch(client.fetchImpl);
+  client.fetchImpl = holds.fetch;
+  host.script.unavailable(1);
+  const held = holds.hold((_path, status) => status === 503);
+  t.after(() => held.release());
+  const from = home.client.mark(), requests = host.script.requests.length;
+  await home.client.expectOk("space.refresh", {});
+  await held.reached;
+  const running = await home.client.waitSpace(from, (state) => state.read.phase === "running");
+  assert.equal(running.readAt, before.readAt);
+  assert.deepEqual(running.groups, before.groups);
+  await home.client.expectOk("space.refresh", {});
+  assert.equal(host.script.requests.slice(requests).filter((request) => request.path === "/api/v1/host").length, 1, "Refresh joins the one full read");
+  held.release();
+  const failed = await home.client.waitSpace(from, (state) => state.read.phase === "failed");
+  assert.deepEqual(failed.read, { phase: "failed", message: `Could not reach ${HOST_NAME}` });
+  assert.equal(failed.readAt, before.readAt);
+  assert.deepEqual(failed.groups, before.groups, "local rows stay local while the full-read failure is visible");
+  const retry = home.client.mark();
+  await home.client.expectOk("space.refresh", {});
+  const recovered = await home.client.waitSpace(retry, (state) => state.read.phase === "idle" && (state.readAt ?? 0) > (before.readAt ?? 0));
+  assert.deepEqual(recovered.read, { phase: "idle" });
+  assert.deepEqual((await home.client.expectOk("space.signout", {})).read, { phase: "idle" });
+});
+
+test("git-host-5: signed-in startup publishes a failed first read even with only local rows", async (t) => {
+  const host = await startHost();
+  const first = await startHome("startup-read-outcome", { host, project: false, extra: { signIn: "browser" } });
+  t.after(() => first.stop());
+  const signed = first.client.mark();
+  await signIn(first, host);
+  await first.client.waitRepository(signed, HOST_OWN, (row) => row.sync.phase === "done");
+  await first.client.expectOk("space.remote.set", { repository: HOST_OWN, url: null });
+  await first.stop();
+  const home = await startHome("startup-read-outcome", { host, dataDir: first.dataDir, project: false });
+  t.after(() => home.stop());
+  const client = (home.service as unknown as { hostClient: { fetchImpl: typeof fetch } }).hostClient;
+  const holds = holdingFetch(client.fetchImpl); client.fetchImpl = holds.fetch;
+  host.script.unavailable(1);
+  const held = holds.hold((_path, status) => status === 503); t.after(() => held.release());
+  const from = home.client.mark();
+  const initial = await home.client.expectOk("space.get", {});
+  assert.equal(initial.readAt, null);
+  await held.reached;
+  await home.client.waitSpace(from, (state) => state.read.phase === "running");
+  held.release();
+  const failed = await home.client.waitSpace(from, (state) => state.read.phase === "failed");
+  assert.equal(failed.readAt, null);
+  assert.ok(failed.groups.flatMap((group) => group.repositories).every((row) => row.state === "local-only" && row.reason === null));
+  assert.deepEqual(failed.read, { phase: "failed", message: "Could not reach 127.0.0.1" });
+  assert.deepEqual((await home.client.expectOk("space.signout", {})).read, { phase: "idle" });
+});
+
+for (const source of ["refresh", "direct-read"] as const) {
+  test(`git-host-5: a new account generation waits for an older ${source} then reads its own outcome`, async (t) => {
+    const host = await startHost();
+    const home = await startHome(`read-generation-${source}`, { host, project: false, extra: { signIn: "browser" } });
+    const signed = home.client.mark();
+    let release = (): void => {};
+    t.after(async () => { release(); await home.stop(); });
+    await signIn(home, host);
+    await home.client.waitRepository(signed, HOST_OWN, (row) => row.sync.phase === "done");
+    const core = home.service as unknown as { hostClient: { fetchImpl: typeof fetch }; space: { readHost(): Promise<unknown> } };
+    const holds = holdingFetch(core.hostClient.fetchImpl); core.hostClient.fetchImpl = holds.fetch;
+    host.script.unavailable(1);
+    const held = holds.hold((_path, status) => status === 503); release = held.release;
+    const mark = home.client.mark(), requests = host.script.requests.length;
+    const older = source === "refresh" ? home.client.expectOk("space.refresh", {}) : core.space.readHost();
+    older.catch(() => undefined);
+    await held.reached;
+    await home.client.expectOk("space.signout", {});
+    const started = await home.client.expectOk("space.signin.start", {});
+    assert.equal(started.flow, "browser");
+    const redirect = await fetch(started.flow === "browser" ? started.url : "", { redirect: "manual" });
+    await (await fetch(redirect.headers.get("location") ?? "")).text();
+    await home.client.waitSpace(mark, (state) => state.account !== null && state.read.phase === "running" && state.readAt === null);
+    await home.client.expectOk("space.refresh", {});
+    const waiting = await home.client.expectOk("space.get", {});
+    assert.deepEqual(waiting.read, { phase: "running" });
+    assert.equal(waiting.readAt, null);
+    const descriptions = (): number => host.script.requests.slice(requests).filter((request) => request.path === "/api/v1/host").length;
+    assert.equal(descriptions(), 1, "the current account waits instead of starting a concurrent read");
+    release();
+    if (source === "direct-read") await assert.rejects(older, (error: unknown) => error instanceof HostError && error.kind === "unreachable");
+    else await older;
+    const current = await home.client.waitSpace(mark, (state) => state.account !== null && state.signIn.phase === "idle" && state.read.phase === "idle" && state.readAt !== null);
+    assert.equal(current.account?.login, LOGIN);
+    assert.equal(descriptions(), 2, "the current account completes a fresh catalog read, joined by its Refresh");
+    assert.ok(current.groups.some((group) => group.fullPath === "acme"));
+  });
+}
+
+// Faults at the existing setup seams exercise the public accepted operation,
+// including work before and after the real stand-in catalog read.
+for (const stage of ["renameOwn", "ensureOwnOnHost"] as const) {
+  test(`git-host-5: accepted Refresh stays running through ${stage} and reports its failure`, async (t) => {
+    const host = await startHost();
+    const home = await startHome(`refresh-${stage}`, { host, project: false, extra: { signIn: "browser" } });
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    t.after(async () => { release(); await home.stop(); });
+    const signed = home.client.mark();
+    await signIn(home, host);
+    await home.client.waitRepository(signed, HOST_OWN, (row) => row.sync.phase === "done");
+    const before = await home.client.expectOk("space.get", {});
+    const space = (home.service as unknown as { space: Record<typeof stage, (...args: unknown[]) => Promise<unknown>> }).space;
+    const original = space[stage];
+    let reached!: () => void;
+    const arrived = new Promise<void>((resolve) => { reached = resolve; });
+    space[stage] = async () => { reached(); await gate; throw new Error("private filesystem failure at /private/internal"); };
+    const from = home.client.mark();
+    try {
+      await home.client.expectOk("space.refresh", {});
+      await arrived;
+      const running = await home.client.expectOk("space.get", {});
+      assert.deepEqual(running.read, { phase: "running" });
+      if (stage === "renameOwn") assert.equal(running.readAt, before.readAt, "the accepted setup has not read the catalog yet");
+      else assert.ok((running.readAt ?? 0) >= (before.readAt ?? 0), "the completed catalog does not finish the remaining setup");
+      release();
+      const failed = await home.client.waitSpace(from, (state) => state.read.phase === "failed");
+      assert.deepEqual(failed.read, { phase: "failed", message: "Could not refresh groups; try again" });
+      space[stage] = original;
+      const retry = home.client.mark();
+      await home.client.expectOk("space.refresh", {});
+      await home.client.waitSpace(retry, (state) => state.read.phase === "idle");
+    } finally { release(); space[stage] = original; }
+  });
+}
+
 test("git-host-11: a read the stand-in refuses keeps the previous view and its time, phrased in English and in Chinese", async (t) => {
   const host = await startHost();
   // The stand-in's 30 seconds hold the next read 1 s at most here, a
@@ -1830,6 +1970,7 @@ test("git-host-11: a read the stand-in refuses keeps the previous view and its t
     const row = await home.client.waitRepository(mark, HOST_OWN, (repository) => repository.reason === expected);
     assert.equal(row.state, "unreachable");
     const state = await home.client.expectOk("space.get", {});
+    assert.equal(state.read.phase, "failed");
     assert.equal(state.readAt, before.readAt, "the previous view keeps its time");
     assert.deepEqual(state.groups.map((group) => group.fullPath), before.groups.map((group) => group.fullPath));
   };

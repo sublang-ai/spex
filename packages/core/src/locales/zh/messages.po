@@ -914,6 +914,11 @@ msgstr "配置必须是 YAML 映射"
 msgid "Could not reach {host}"
 msgstr "无法连接 {host}"
 
+#. An unexpected local failure stopped Refresh; technical details stay in diagnostics
+#: src/space.ts
+msgid "Could not refresh groups; try again"
+msgstr "无法刷新群组，请重试"
+
 #. Storage diagnostic; Delete is the control's own name on the draft's row
 #: src/authoring.ts
 msgid "damaged transcript after record {seq}; the draft refuses everything but Delete"

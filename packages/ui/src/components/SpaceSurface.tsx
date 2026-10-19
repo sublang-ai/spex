@@ -425,6 +425,8 @@ function HomeHeader({
   // beneath it cannot drift: what the reader has not answered.
   const issueCount = groups.issues;
   const readAt = groups.readAt;
+  const reading = refreshing || groups.read.phase === "running";
+  const readError = refreshError ?? (groups.read.phase === "failed" ? groups.read.message : undefined);
   const row = "flex min-w-0 flex-col gap-1 @xs:flex-row @xs:flex-wrap @xs:items-center @xs:gap-x-3";
   const issues =
     groups.diagnostics.length > 0 ? (
@@ -474,9 +476,9 @@ function HomeHeader({
               </span>
             </Field>
             {issues}
-            {refreshError ? (
+            {readError ? (
               <span role="alert" className="min-w-0 text-xs text-red-600 dark:text-red-400">
-                {refreshError}
+                {readError}
               </span>
             ) : null}
             <button
@@ -485,7 +487,7 @@ function HomeHeader({
               // Only the primary control spans the width when the
               // fields stack (space-28).
               className={`${SECONDARY} self-start @xs:self-auto`}
-              disabled={!connected || refreshing}
+              disabled={!connected || reading}
               title={
                 readAt !== null
                   ? i18n._("Reads the host again · last read {at}", { at: absoluteTitle(readAt) })
@@ -493,7 +495,7 @@ function HomeHeader({
               }
               onClick={onRefresh}
             >
-              {i18n._({ id: "Refresh", comment: "re-read the groups and the Git host" })}
+              {reading ? i18n._({ id: "Reading…", comment: "A full read of the groups is still running" }) : i18n._({ id: "Refresh", comment: "re-read the groups and the Git host" })}
             </button>
           </div>
         </>

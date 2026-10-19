@@ -73,6 +73,8 @@ test("git-host-23: an unrelated detail failure fails Refresh but not target sync
   };
   await assert.rejects(core.space.readHost());
   assert.equal((await home.client.repository(OWN)).state, "unreachable");
+  const fullReadFailure = (await home.client.expectOk("space.get", {})).read;
+  assert.equal(fullReadFailure.phase, "failed");
   calls.length = 0;
   const done = await home.client.settle("space.sync", { repository: OWN });
   assert.deepEqual([done.sync.phase, done.state], ["done", "reachable"], JSON.stringify(done.sync));
@@ -80,7 +82,9 @@ test("git-host-23: an unrelated detail failure fails Refresh but not target sync
   assert.deepEqual(calls.filter((path) => /^\/api\/v1\/host\/repositories\/[^/]+(?:\/members)?$/.test(path)).sort(), [
     `/api/v1/host/repositories/${id}`, `/api/v1/host/repositories/${id}/members`,
   ].sort(), "no unrelated detail or members fanout");
-  assert.equal((await home.client.expectOk("space.get", {})).readAt, before.readAt);
+  const afterTarget = await home.client.expectOk("space.get", {});
+  assert.equal(afterTarget.readAt, before.readAt);
+  assert.deepEqual(afterTarget.read, fullReadFailure, "target Check does not clear the full-read failure");
   assert.equal(git(host.bareOf(OWN), "rev-parse", "spex"), git(clonePath(home.dataDir, OWN), "rev-parse", "spex"));
 });
 
@@ -151,6 +155,7 @@ for (const outcome of ["success", "failure"] as const) {
     }
     const full = core.space.readHost(); full.catch(() => undefined);
     await gate.reached;
+    assert.equal((await home.client.expectOk("space.get", {})).read.phase, "running");
     // Only hold the already-buffered answer, not the newer target read.
     core.hostClient.fetchImpl = fetch;
     host.script.rename(id, { name: "renamed-spex", group: "acme/research" });
@@ -160,6 +165,7 @@ for (const outcome of ["success", "failure"] as const) {
     const moved = "acme/research/renamed-spex";
     const row = await home.client.waitRepository(mark, moved, (candidate) => candidate.sync.phase !== "running", 30_000);
     assert.deepEqual([row.sync.phase, row.state, row.remote], ["done", "read-only", moved], JSON.stringify(row));
+    assert.equal((await home.client.expectOk("space.get", {})).read.phase, "running", "target Check does not settle the full read");
     failOld = outcome === "failure";
     gate.release();
     if (outcome === "failure") await assert.rejects(full); else await full;

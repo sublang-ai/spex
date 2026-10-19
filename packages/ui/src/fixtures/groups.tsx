@@ -221,6 +221,7 @@ export function base(over: Partial<GroupsState> = {}, repos: RepositoryState[] =
     host: { url: "https://spex.example", displayName: "Spex Example" },
     account: { id: "7", login: "jane", displayName: "Jane", canCreateGroup: false },
     signIn: { phase: "idle" },
+    read: { phase: "idle" },
     readAt: NOW - MIN,
     groups: [
       { id: "1", fullPath: "jane", name: "jane", own: true, can: NO_CAN, repositories: [OWN_REPO, ...repos] },
