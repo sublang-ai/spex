@@ -10,11 +10,12 @@
 import { after, before, test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { cpSync, existsSync, linkSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { join, relative } from "node:path";
+import { chmodSync, cpSync, existsSync, linkSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { join, relative, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { RUNTIME_ABI } from "@sublang/playbook/xstate-runtime";
 import { build } from "esbuild";
+import { KNOWN_PLAYER_ADAPTERS } from "@sublang/cligent/tmux-play";
 import { parse as parseYaml } from "yaml";
 
 import { compilePlaybook, defaultSpawner, ENGINE_LINKS_EXCLUDE, moduleDirectoriesAbove, type LineSpawner } from "./compile.js";
@@ -37,6 +38,7 @@ import {
   lockStoreKeys,
   moduleLocations,
   ORGS_TIMEOUT_MS,
+  playbookSkill,
   packFiles,
   parseRequests,
   parseRequirement,
@@ -48,10 +50,12 @@ import {
   RegistryError,
   requestsDigest,
   resolve,
+  rewriteSkillName,
   satisfies,
   seedBuiltinPackage,
   setRequest,
   sha256Hex,
+  specSkill,
   storeKey,
   writeLock,
   type InstallOptions,
@@ -60,6 +64,7 @@ import {
   type ResolveResult,
   type RunGit,
 } from "./environment/index.js";
+import { AGENT_FOLDERS } from "./environment/agent-folders.js";
 import { startGitHttpHost, testCredentialArgs } from "./testing/git-http-host.js";
 import { APP_ENGINE_URL, APP_XSTATE_URL, importsOf, LINKED_ID, recordingResolutions, writeLinkedFixture } from "./testing/linked-artifact.js";
 import { scratchDir } from "./testing/scratch.js";
@@ -926,19 +931,90 @@ test("environments-22: skills and playbooks export to agent folders, the user's 
   await installAsOnDisk({ ...base, cloneDir: home.clone, lock: projectLock, workingFolder });
   const report = await exportEnvironment({ cloneDir: home.clone, lock: projectLock, workingFolder, userHome: null, agents: ["claude", "codex"], packagesDir: join(home.clone, "packages") });
   assert.deepEqual(report.skills, ["acme-walker", "format-code", "lint", "ship", "walk"]);
-  assert.deepEqual(report.unsupportedAgents, ["codex"]);
-  assert.deepEqual(report.folders, [{ agent: "claude", level: "project", dir: join(workingFolder, ".claude/skills") }]);
+  // The table names every agent Spex drives (environments-16), and a
+  // working folder receives every project-level folder whatever agents
+  // the device has: Claude Code's, and the one the other four share.
+  assert.deepEqual(Object.keys(AGENT_FOLDERS).sort(), [...KNOWN_PLAYER_ADAPTERS].sort());
+  assert.deepEqual(report.folders, [
+    { agents: ["claude"], level: "project", dir: join(workingFolder, ".claude/skills") },
+    { agents: ["codex", "gemini", "kimi", "opencode"], level: "project", dir: join(workingFolder, ".agents/skills") },
+  ]);
+  // A playbook's generated skill goes only where Claude Code reads.
+  const playbooks = ["ship", "walk"];
   for (const name of report.skills) {
     assert.ok(existsSync(join(home.clone, "skills", name, "SKILL.md")), name);
     assert.ok(existsSync(join(workingFolder, ".claude/skills", name, "SKILL.md")), name);
+    assert.equal(existsSync(join(workingFolder, ".agents/skills", name)), !playbooks.includes(name), name);
   }
   // An aliased skill is copied with its name rewritten; the verified file is not changed.
   assert.match(readFileSync(join(workingFolder, ".claude/skills/format-code/SKILL.md"), "utf8"), /^---\nname: format-code\n/);
+  assert.match(readFileSync(join(workingFolder, ".agents/skills/format-code/SKILL.md"), "utf8"), /^---\nname: format-code\n/);
   assert.match(readFileSync(join(home.clone, "packages/acme/kit2/skills/en/fmt/SKILL.md"), "utf8"), /^---\nname: fmt\n/);
-  // Git ignores the exports.
+  // A name YAML would read as another type is written as a string, so an
+  // agent reading the skill by its name finds the one it is exported under.
+  const frontName = (text: string): unknown => (parseYaml(/^---\n([\s\S]*?)\n---\n/.exec(text)![1]!) as { name: unknown }).name;
+  for (const odd of ["true", "null", "123"]) {
+    assert.equal(frontName(rewriteSkillName(skillText("fmt"), odd)), odd);
+    assert.equal(frontName(playbookSkill({ name: odd, id: "ship", packageName: "acme/kit2", version: "1.0.0" })), odd);
+    assert.equal(frontName(specSkill({ name: odd, packageName: "acme/kit2", version: "1.0.0", file: "kit2.md" })), odd);
+  }
+  // Git ignores the exports, and no staging copy is left beside them.
   const exclude = readFileSync(join(workingFolder, ".git/info/exclude"), "utf8");
   for (const name of report.skills) assert.ok(exclude.includes(`/.claude/skills/${name}/`), name);
-  assert.equal(git(workingFolder, ["status", "--porcelain", "--untracked-files=all", "--", ".claude"]), "");
+  for (const name of report.skills.filter((name) => !playbooks.includes(name))) assert.ok(exclude.includes(`/.agents/skills/${name}/`), name);
+  assert.equal(git(workingFolder, ["status", "--porcelain", "--untracked-files=all", "--", ".claude", ".agents"]), "");
+  const stagingLeft = (): string[] => [".claude", ".agents"].flatMap((parent) => readdirSync(join(workingFolder, parent)).filter((name) => name.startsWith(".spex-staging-")));
+  assert.deepEqual(stagingLeft(), []);
+  // A re-export of the same lock leaves each unchanged skill's files as
+  // they were, and a changed one stands whole again (environments-30).
+  const lintFile = (folder: string): string => join(workingFolder, folder, "lint", "SKILL.md");
+  const before = { claude: statSync(lintFile(".claude/skills")).ino, agents: statSync(lintFile(".agents/skills")).ino };
+  writeFileSync(lintFile(".agents/skills"), "edited meanwhile\n");
+  await exportEnvironment({ cloneDir: home.clone, lock: projectLock, workingFolder, userHome: null, agents: ["claude"], packagesDir: join(home.clone, "packages") });
+  assert.equal(statSync(lintFile(".claude/skills")).ino, before.claude, "an unchanged skill is left as it stands");
+  assert.ok(readFileSync(lintFile(".agents/skills")).equals(readFileSync(join(home.clone, "skills/lint/SKILL.md"))), "a changed skill is replaced whole");
+  assert.deepEqual(stagingLeft(), []);
+  // Where renaming the new copy in fails, the replaced skill is put back.
+  const exportProject = (rename?: (from: string, to: string) => void) =>
+    exportEnvironment({ cloneDir: home.clone, lock: projectLock, workingFolder, userHome: null, agents: ["claude"], packagesDir: join(home.clone, "packages"), ...(rename ? { rename } : {}) });
+  writeFileSync(lintFile(".agents/skills"), "edited once more\n");
+  await assert.rejects(exportProject((from, to) => {
+    if (from.includes(`${sep}new${sep}`)) throw new Error("injected rename failure");
+    renameSync(from, to);
+  }), /injected rename failure/);
+  assert.equal(readFileSync(lintFile(".agents/skills"), "utf8"), "edited once more\n");
+  assert.deepEqual(stagingLeft(), []);
+  await exportProject();
+  assert.ok(readFileSync(lintFile(".agents/skills")).equals(readFileSync(join(home.clone, "skills/lint/SKILL.md"))), "the next export replaces it");
+  if (process.platform !== "win32" && process.getuid?.() !== 0) {
+    // Where a changed skill cannot be moved, the previous one stands
+    // whole: it is replaced by a rename, never deleted first.
+    writeFileSync(lintFile(".agents/skills"), "edited again\n");
+    chmodSync(join(workingFolder, ".agents/skills"), 0o555);
+    try {
+      await assert.rejects(exportEnvironment({ cloneDir: home.clone, lock: projectLock, workingFolder, userHome: null, agents: ["claude"], packagesDir: join(home.clone, "packages") }));
+    } finally {
+      chmodSync(join(workingFolder, ".agents/skills"), 0o755);
+    }
+    assert.equal(readFileSync(lintFile(".agents/skills"), "utf8"), "edited again\n");
+    assert.deepEqual(stagingLeft(), []);
+    await exportEnvironment({ cloneDir: home.clone, lock: projectLock, workingFolder, userHome: null, agents: ["claude"], packagesDir: join(home.clone, "packages") });
+    assert.ok(readFileSync(lintFile(".agents/skills")).equals(readFileSync(join(home.clone, "skills/lint/SKILL.md"))), "the next export replaces it");
+
+    // A working folder whose .agents/skills links to its .claude/skills,
+    // before that folder exists, has one folder: an export writes it
+    // once, the playbook's skill included, and a second leaves it so.
+    const linked = join(scratch, "linked");
+    git(scratch, ["init", "--quiet", "-b", "main", linked]);
+    mkdirSync(join(linked, ".agents"), { recursive: true });
+    symlinkSync("../.claude/skills", join(linked, ".agents/skills"));
+    for (let pass = 0; pass < 2; pass += 1) {
+      const once = await exportEnvironment({ cloneDir: home.clone, lock: projectLock, workingFolder: linked, userHome: null, agents: [], packagesDir: join(home.clone, "packages") });
+      assert.deepEqual(once.folders, [{ agents: ["claude", "codex", "gemini", "kimi", "opencode"], level: "project", dir: join(linked, ".claude/skills") }]);
+      assert.deepEqual(once.removed, []);
+      for (const name of ["format-code", "lint", "ship"]) assert.ok(existsSync(join(linked, ".claude/skills", name, "SKILL.md")), `${name} after export ${pass + 1}`);
+    }
+  }
   // The generated skill names the spec package, version and id; its
   // description and its last sentence send a player back to its step.
   const ship = readFileSync(join(workingFolder, ".claude/skills/ship/SKILL.md"), "utf8");
@@ -969,8 +1045,16 @@ test("environments-22: skills and playbooks export to agent folders, the user's 
   const ownLock = locked(await resolveText(ownClone, ownText));
   await installAsOnDisk({ ...base, cloneDir: ownClone, lock: ownLock, workingFolder: null });
   const ownReport = await exportEnvironment({ cloneDir: ownClone, lock: ownLock, workingFolder: null, userHome, agents: ["claude"], packagesDir: join(ownClone, "packages") });
-  assert.deepEqual(ownReport.folders, [{ agent: "claude", level: "user", dir: join(userHome, ".claude/skills") }]);
+  assert.deepEqual(ownReport.folders, [{ agents: ["claude"], level: "user", dir: join(userHome, ".claude/skills") }]);
   assert.match(readFileSync(join(userHome, ".claude/skills/lint/SKILL.md"), "utf8"), /my own lint/);
+  // The user-level folder the other four share is written only where
+  // the device has one of them; the playbook's skill stays out of it.
+  assert.equal(existsSync(join(userHome, ".agents")), false);
+  const withKimi = await exportEnvironment({ cloneDir: ownClone, lock: ownLock, workingFolder: null, userHome, agents: ["claude", "kimi"], packagesDir: join(ownClone, "packages") });
+  assert.deepEqual(withKimi.folders.map((folder) => folder.dir), [join(userHome, ".claude/skills"), join(userHome, ".agents/skills")]);
+  assert.match(readFileSync(join(userHome, ".agents/skills/lint/SKILL.md"), "utf8"), /my own lint/);
+  assert.equal(existsSync(join(userHome, ".agents/skills/own-pb")), false);
+  assert.ok(existsSync(join(userHome, ".claude/skills/own-pb/SKILL.md")));
   assert.match(readFileSync(join(workingFolder, ".claude/skills/lint/SKILL.md"), "utf8"), /the project's lint/);
 
   // A session hands the launcher the project's playbook, your own
@@ -998,6 +1082,7 @@ test("environments-22: skills and playbooks export to agent folders, the user's 
   const again = await exportEnvironment({ cloneDir: home.clone, lock: narrowed, workingFolder, userHome: null, agents: ["claude"], packagesDir: join(home.clone, "packages") });
   assert.deepEqual(again.removed.sort(), ["acme-walker", "lint", "walk"]);
   assert.equal(existsSync(join(workingFolder, ".claude/skills/lint")), false);
+  assert.equal(existsSync(join(workingFolder, ".agents/skills/lint")), false);
   assert.ok(existsSync(join(workingFolder, ".claude/skills/mine/SKILL.md")));
   assert.ok(!readFileSync(join(workingFolder, ".git/info/exclude"), "utf8").includes("/.claude/skills/lint/"));
 });

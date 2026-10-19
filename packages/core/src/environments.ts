@@ -291,14 +291,14 @@ export class EnvironmentManager {
     return this.options.store;
   }
 
-  /** The agents this device has, which exports reach (environments-8):
-   * each agent the folder table names whose own folder stands in the
-   * user's home — `~/.claude` for claude — until Cligent reports which
-   * this device has (environments-16). An agent never used here gets no
-   * folder made for it. */
+  /** The agents this device has, whose user-level folders your own
+   * group's exports reach (environments-16): each agent the folder table
+   * names one of whose home folders stands in the user's home — such as
+   * `~/.claude` for claude. An agent never used here gets no folder made
+   * for it. */
   agents(): string[] {
     return Object.entries(AGENT_FOLDERS)
-      .filter(([, folders]) => existsSync(join(this.options.deviceHome, folders.user.replace(/^~\//, "").split("/")[0]!)))
+      .filter(([, folders]) => folders.homes.some((home) => existsSync(join(this.options.deviceHome, ...home.replace(/^~\//, "").split("/")))))
       .map(([agent]) => agent);
   }
 

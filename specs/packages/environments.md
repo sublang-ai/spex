@@ -137,14 +137,14 @@ When an environment is installed or a group's own lock applied by a sync, the co
 
 | Export | Where |
 | --- | --- |
-| each selected skill, copied with its `name` rewritten where aliased [[1]] | `<clone>/skills/<name>/`, then into the agent folders of each working folder paired with the spex repository, listed in that folder's `.git/info/exclude` so Git ignores them |
-| a generated skill per selected playbook, under the playbook's id or alias, that runs the playbook in the working folder of the session and names the exact spec package and version it came from | the same places |
-| a generated skill per selected spec, under its exported name [[environments-6](#environments-6)], that holds the spec file in its chosen language copied byte for byte as `<pkg>.md` and names the spec package's org, name, version and description | the same places |
-| your own group's skills | your agents' home folders on this device as well, so they reach every session run here |
+| each selected skill, copied with its `name` rewritten, as a YAML string, where aliased [[1]] | `<clone>/skills/<name>/`, then into the agent folders of each working folder paired with the spex repository, listed in that folder's `.git/info/exclude` so Git ignores them |
+| a generated skill per selected playbook, under the playbook's id or alias, that runs the playbook in the working folder of the session and names the exact spec package and version it came from | `<clone>/skills/<name>/`, then Claude Code's agent folders of the places each selected skill goes [[environments-16](#environments-16)] |
+| a generated skill per selected spec, under its exported name [[environments-6](#environments-6)], that holds the spec file in its chosen language copied byte for byte as `<pkg>.md` and names the spec package's org, name, version and description | the places each selected skill goes |
+| your own group's skills | your agents' user-level folders on this device as well, so they reach every session run here |
 
-- the agent folders are, per agent this device has, the folders where that agent reads project-level and user-level skills, as the core's agent table states until Cligent says them [[environments-16](#environments-16)];
+- the agent folders are the folders where each agent Spex drives reads project-level and user-level skills, as the core's agent table states them [[environments-16](#environments-16)];
 - an exported skill, playbook or spec is bound to the environment whose lock exported it: it runs or holds that environment's installed files, or a path source's files in the working folder it was exported to, never another environment's copy of the same name;
-- when a project and your own group export one skill name, both keep it, one in the project's agent folder and one in the agent's home folder, and the Playbooks surface lists both saying where each comes from [[playbook-library-1](playbook-library.md#playbook-library-1)];
+- when a project and your own group export one skill name, both keep it, one in the project's agent folder and one in the agent's user-level folder, and the Playbooks surface lists both saying where each comes from [[playbook-library-1](playbook-library.md#playbook-library-1)];
 - an export leaves nothing it did not write: a folder the agent table names holds only the exported skills of that environment beside what the reader put there.
 
 #### environments-9
@@ -227,11 +227,23 @@ When a client sends `environment.request` for a spex repository with a spec pack
 
 #### environments-16
 
-The core package shall keep the agent folder table that exports read [[environments-8](#environments-8)] as one data file naming, per agent Cligent drives, the project-level folder relative to a working folder and the user-level folder relative to the user's home — `claude`: `.claude/skills` and `~/.claude/skills` — and shall replace the table with Cligent's answer once Cligent reports where each agent reads its skills ([DR-104](../decisions/104-spec-package-format-and-client-environments.md)):
+The core package shall keep the agent folder table that exports read [[environments-8](#environments-8)] as one data file naming, per agent Spex drives, the home folder that shows the device has it, the project-level folder relative to a working folder, the user-level folder relative to the user's home, and whether playbook skills go there, as Cligent's DR-036 names the folders [[5]] ([DR-104](../decisions/104-spec-package-format-and-client-environments.md), [DR-124](../decisions/124-skills-reach-every-agent.md)):
 
-- an agent absent from the table receives no export and is listed as such; an agent whose user-level folder's parent is absent on this device receives no user-level export, so Spex never creates an agent's own home folder, and your own group's user-level export runs only for the default home or one the shell names as the person's, never for a scratch home;
-- the generated skill for a playbook is a `SKILL.md` whose `description`, within the Agent Skills limit of 1024 characters [[1]], says that it starts the playbook, naming its id and spec package, through Spex in the working folder and that it is not for an agent already playing a role in a playbook, and whose body tells the agent to run the playbook's command through Spex in the working folder, naming the spec package, version and playbook id, then tells an agent already inside a Spex session as a player of a playbook, given a role and a step, that the skill does not apply and to do that step, and nothing else;
-- the generated skill for a spec is a `SKILL.md` whose `description`, within the Agent Skills limit of 1024 characters [[1]], names the spec package, its version and the manifest's `description` where it has one, and whose body names the org, name, version and that description and tells the agent the spec is the `<pkg>.md` beside it, and nothing else.
+| Agent | Home folder | Project-level | User-level | Playbook skills |
+| --- | --- | --- | --- | --- |
+| `claude` | `~/.claude` | `.claude/skills` | `~/.claude/skills` | yes |
+| `codex` | `~/.codex` | `.agents/skills` | `~/.agents/skills` | no |
+| `gemini` | `~/.gemini` | `.agents/skills` | `~/.agents/skills` | no |
+| `kimi` | `~/.kimi-code` | `.agents/skills` | `~/.agents/skills` | no |
+| `opencode` | `~/.config/opencode` or `~/.local/share/opencode` | `.agents/skills` | `~/.agents/skills` | no |
+
+- every working folder paired with the spex repository receives each project-level folder, whatever agents the device has, and two folders a link makes one are written once, taking playbook skills where either does; a user-level folder is written only where the home folder of an agent reading it exists on this device, so Spex never creates an agent's own home folder, and your own group's user-level export runs only for the default home or one the shell names as the person's, never for a scratch home;
+- the generated skill for a playbook is a `SKILL.md` whose `name` is a YAML string and whose `description`, within the Agent Skills limit of 1024 characters [[1]], says that it starts the playbook, naming its id and spec package, through Spex in the working folder and that it is not for an agent already playing a role in a playbook, and whose body tells the agent to run the playbook's command through Spex in the working folder, naming the spec package, version and playbook id, then tells an agent already inside a Spex session as a player of a playbook, given a role and a step, that the skill does not apply and to do that step, and nothing else;
+- the generated skill for a spec is a `SKILL.md` whose `name` is a YAML string and whose `description`, within the Agent Skills limit of 1024 characters [[1]], names the spec package, its version and the manifest's `description` where it has one, and whose body names the org, name, version and that description and tells the agent the spec is the `<pkg>.md` beside it, and nothing else.
+
+#### environments-30
+
+When an export mirrors a skill into an agent folder [[environments-8](#environments-8)], the core shall leave a folder whose files already match as it is and replace a changed one whole, renaming a complete copy staged beside the agent folder into place and restoring the replaced one where that rename fails, so a run reading the folder meanwhile never finds a skill half-written, a changed one being absent only between two renames ([DR-124](../decisions/124-skills-reach-every-agent.md)).
 
 #### environments-17
 
@@ -284,15 +296,17 @@ When an integration suite installs locked environments on a scratch home, it sha
 
 #### environments-22
 
-When an integration suite exports an installed environment to a working folder with the agent table naming `claude`, it shall assert:
+When an integration suite exports an installed environment to a working folder with the core's agent table, it shall assert:
 
-- each selected skill stands in `<clone>/skills/<name>/` and in the folder's `.claude/skills/<name>/`, an aliased one with its `name` rewritten, the folder's `.git/info/exclude` listing them, and your own group's skills in the scratch user home's `.claude/skills/` [[environments-8](#environments-8)];
-- a generated skill per playbook names the spec package, version and id and runs that playbook in the working folder [[environments-8](#environments-8)], its `description` within 1024 characters and saying it is not for an agent already playing a role in a playbook, and its body ending by sending such a player back to the step it was given [[environments-16](#environments-16)]; the project's and your own group's skill of one name both stand with their origins listed [[environments-8](#environments-8)] [[environments-16](#environments-16)];
+- each selected skill stands in `<clone>/skills/<name>/` and in the folder's `.claude/skills/<name>/` and `.agents/skills/<name>/`, an aliased one with its `name` rewritten as a YAML string even where YAML would read the alias as another type, the folder's `.git/info/exclude` listing them, and your own group's skills in the scratch user home's `.claude/skills/` and, once an agent reading it has a home folder there, `.agents/skills/` [[environments-8](#environments-8)] [[environments-16](#environments-16)];
+- the table names every agent Spex drives, and with no home folder of a reader in the scratch user home, no user-level `.agents/skills/` and no agent home folder is made, while the working folder still receives both project-level folders [[environments-16](#environments-16)];
+- where the working folder's `.agents/skills` links to its `.claude/skills` before that folder exists, an export, and a second one, leaves every skill and the playbook's generated skill standing there [[environments-16](#environments-16)];
+- a generated skill per playbook stands in `.claude/skills/` and not in `.agents/skills/`, and a generated playbook's or spec's `name` stays the string it is exported under even where YAML would read it as another type [[environments-16](#environments-16)]; it names the spec package, version and id and runs that playbook in the working folder [[environments-8](#environments-8)] [[environments-16](#environments-16)], its `description` within 1024 characters and saying it is not for an agent already playing a role in a playbook, and its body ending by sending such a player back to the step it was given [[environments-16](#environments-16)]; the project's and your own group's skill of one name both stand with their origins listed [[environments-8](#environments-8)] [[environments-16](#environments-16)];
 - a session started in the folder hands the launcher the installed playbook's module location, your own group's where the project lacks it, the path source's in the folder for a path request, and a config enabling a playbook no environment exports is refused naming both [[environments-9](#environments-9)];
 - through a real core, a failed startup restoration leaves another lock's files unavailable without importing them; one successful resolve installs and prepares the selected release and makes the same process's configuration valid without a restart or a session; a Git source absent from the install record does not import retained files [[environments-9](#environments-9)] [[environments-7](#environments-7)];
 - a path source's spec stands as a generated skill under `<org>-<pkg>` in the folder's `.claude/skills/`, its `<pkg>.md` byte-equal to the working folder's spec file and its `SKILL.md` naming the org, name, version and description [[environments-8](#environments-8)] [[environments-16](#environments-16)];
-- a re-export removes a skill the lock no longer selects and leaves a reader-placed skill beside it [[environments-8](#environments-8)];
-- through a real core, a spec-only spec package requested from the stand-in registry by `environment.request` exports its spec as a generated skill into the project's working folder's `.claude/skills/<org>-<pkg>/`, listed in its `.git/info/exclude`, its `<pkg>.md` byte-equal to the release's spec file [[environments-8](#environments-8)]; requested in your own group's environment, the same skill stands in the scratch user home's `.claude/skills/` [[environments-8](#environments-8)]; and after `environment.remove` and its install, the skill, its copy in the user home and its exclude line are gone [[environments-8](#environments-8)] [[environments-15](#environments-15)].
+- a re-export removes a skill the lock no longer selects and leaves a reader-placed skill beside it [[environments-8](#environments-8)], leaves an unchanged skill's files as they were, stands a changed skill whole with no staging copy left behind, and, where the changed skill cannot be moved or renaming its new copy in fails, leaves the previous one standing whole [[environments-30](#environments-30)];
+- through a real core, a spec-only spec package requested from the stand-in registry by `environment.request` exports its spec as a generated skill into the project's working folder's `.claude/skills/<org>-<pkg>/` and `.agents/skills/<org>-<pkg>/`, listed in its `.git/info/exclude`, its `<pkg>.md` byte-equal to the release's spec file [[environments-8](#environments-8)]; requested in your own group's environment, the same skill stands in the scratch user home's `.claude/skills/` [[environments-8](#environments-8)]; and after `environment.remove` and its install, the skill, its copy in the user home and its exclude line are gone [[environments-8](#environments-8)] [[environments-15](#environments-15)].
 
 #### environments-23
 
@@ -325,3 +339,4 @@ When an integration suite asks the stand-in registry [[environments-18](#environ
 [2]: https://semver.org/spec/v2.0.0.html "Semantic Versioning 2.0.0"
 [3]: https://www.rfc-editor.org/rfc/rfc5646 "BCP 47: Tags for Identifying Languages (RFC 5646)"
 [4]: https://learn.microsoft.com/en-us/windows/win32/fileio/naming-a-file "Naming Files, Paths, and Namespaces"
+[5]: https://github.com/sublang-ai/cligent/blob/v0.34.0/specs/decisions/036-cross-agent-skill-installation.md "Cligent DR-036: Cross-agent skill installation"
