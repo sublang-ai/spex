@@ -44,7 +44,8 @@ Considered and declined:
 - A Gemini CLI player whose block names no permission mode discovers the skills but cannot activate them.
 - Kimi Code reads a working folder's `.agents/skills` only where the folder is its repository's root.
 - OpenCode finds each skill in both folders, keeps one of the two identical copies, and logs a duplicate name.
-- A changed skill is absent from an agent folder for the moment between two renames, since a folder cannot be swapped for another in one step.
+- A changed skill is absent from an agent folder for the moment between two renames, since Node's file system API offers no atomic exchange of two folders.
+- Where a person links `.agents/skills` to `.claude/skills`, the playbook skills stand where all five agents read, since Claude Code's folder takes them; the link is the person's choice, and Spex keeps Claude Code's skills whole.
 
 ## References
 

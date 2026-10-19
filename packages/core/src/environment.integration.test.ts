@@ -10,8 +10,8 @@
 import { after, before, test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { chmodSync, cpSync, existsSync, linkSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
-import { join, relative } from "node:path";
+import { chmodSync, cpSync, existsSync, linkSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { join, relative, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { RUNTIME_ABI } from "@sublang/playbook/xstate-runtime";
 import { build } from "esbuild";
@@ -974,7 +974,19 @@ test("environments-22: skills and playbooks export to agent folders, the user's 
   assert.equal(statSync(lintFile(".claude/skills")).ino, before.claude, "an unchanged skill is left as it stands");
   assert.ok(readFileSync(lintFile(".agents/skills")).equals(readFileSync(join(home.clone, "skills/lint/SKILL.md"))), "a changed skill is replaced whole");
   assert.deepEqual(stagingLeft(), []);
-  if (process.platform !== "win32") {
+  // Where renaming the new copy in fails, the replaced skill is put back.
+  const exportProject = (rename?: (from: string, to: string) => void) =>
+    exportEnvironment({ cloneDir: home.clone, lock: projectLock, workingFolder, userHome: null, agents: ["claude"], packagesDir: join(home.clone, "packages"), ...(rename ? { rename } : {}) });
+  writeFileSync(lintFile(".agents/skills"), "edited once more\n");
+  await assert.rejects(exportProject((from, to) => {
+    if (from.includes(`${sep}new${sep}`)) throw new Error("injected rename failure");
+    renameSync(from, to);
+  }), /injected rename failure/);
+  assert.equal(readFileSync(lintFile(".agents/skills"), "utf8"), "edited once more\n");
+  assert.deepEqual(stagingLeft(), []);
+  await exportProject();
+  assert.ok(readFileSync(lintFile(".agents/skills")).equals(readFileSync(join(home.clone, "skills/lint/SKILL.md"))), "the next export replaces it");
+  if (process.platform !== "win32" && process.getuid?.() !== 0) {
     // Where a changed skill cannot be moved, the previous one stands
     // whole: it is replaced by a rename, never deleted first.
     writeFileSync(lintFile(".agents/skills"), "edited again\n");
@@ -989,12 +1001,11 @@ test("environments-22: skills and playbooks export to agent folders, the user's 
     await exportEnvironment({ cloneDir: home.clone, lock: projectLock, workingFolder, userHome: null, agents: ["claude"], packagesDir: join(home.clone, "packages") });
     assert.ok(readFileSync(lintFile(".agents/skills")).equals(readFileSync(join(home.clone, "skills/lint/SKILL.md"))), "the next export replaces it");
 
-    // A working folder whose .agents/skills links to its .claude/skills
-    // has one folder: an export writes it once, the playbook's skill
-    // included, and a second export leaves it so.
+    // A working folder whose .agents/skills links to its .claude/skills,
+    // before that folder exists, has one folder: an export writes it
+    // once, the playbook's skill included, and a second leaves it so.
     const linked = join(scratch, "linked");
     git(scratch, ["init", "--quiet", "-b", "main", linked]);
-    mkdirSync(join(linked, ".claude/skills"), { recursive: true });
     mkdirSync(join(linked, ".agents"), { recursive: true });
     symlinkSync("../.claude/skills", join(linked, ".agents/skills"));
     for (let pass = 0; pass < 2; pass += 1) {

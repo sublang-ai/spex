@@ -25,13 +25,14 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
+  readlinkSync,
   realpathSync,
   renameSync,
   rmSync,
   statSync,
   writeFileSync,
 } from "node:fs";
-import { basename, dirname, isAbsolute, join, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { parseDocument, stringify as stringifyYaml } from "yaml";
 
 import { readVersioned, writeVersionedBytes } from "../files.js";
@@ -65,6 +66,9 @@ export interface ExportOptions {
   agents: string[];
   /** `<clone>/packages`. */
   packagesDir: string;
+  /** The rename a mirror swaps a changed skill in with; the file
+   * system's, unless a test injects a failure (environments-30). */
+  rename?: (from: string, to: string) => void;
 }
 
 export interface ExportReport {
@@ -242,15 +246,23 @@ function standing(path: string): boolean {
 }
 
 /** Where a path is on disk: its nearest standing ancestor with every
- * link resolved, and the rest as written. Two agent folders that are
- * one folder by a link resolve alike. */
-function realLocation(path: string): string {
+ * link resolved, a link whose target is not there yet followed to that
+ * target, and the rest as written. Two agent folders that are one
+ * folder by a link resolve alike, before the folder exists too. */
+function realLocation(path: string, depth = 0): string {
   const rest: string[] = [];
   let current = path;
   for (;;) {
     try {
       return join(realpathSync.native(current), ...rest.reverse());
     } catch {
+      let link: string | null = null;
+      try {
+        if (lstatSync(current).isSymbolicLink()) link = readlinkSync(current);
+      } catch {
+        // Nothing stands here: an ancestor decides.
+      }
+      if (link !== null && depth < 16) return realLocation(join(resolve(dirname(current), link), ...rest.reverse()), depth + 1);
       const parent = dirname(current);
       if (parent === current) return path;
       rest.push(basename(current));
@@ -259,11 +271,13 @@ function realLocation(path: string): string {
   }
 }
 
-function mirror(skillsDir: string, names: string[], folder: string, report: ExportReport): string[] {
-  mkdirSync(folder, { recursive: true });
-  // The folder as it is on disk, so the staging copy beside it shares its
+function mirror(skillsDir: string, names: string[], folder: string, report: ExportReport, rename: (from: string, to: string) => void): string[] {
+  // The folder as it is on disk, made there where a link points at it
+  // before it exists, so the staging copy beside it shares its
   // filesystem even where a link puts it elsewhere.
-  const dir = realpathSync.native(folder);
+  const location = realLocation(folder);
+  mkdirSync(location, { recursive: true });
+  const dir = realpathSync.native(location);
   const previous = readExportsManifest(dir);
   for (const name of previous) {
     if (names.includes(name)) continue;
@@ -291,10 +305,10 @@ function mirror(skillsDir: string, names: string[], folder: string, report: Expo
       const hadTarget = standing(target);
       if (hadTarget) {
         mkdirSync(dirname(replaced), { recursive: true });
-        renameSync(target, replaced);
+        rename(target, replaced);
       }
       try {
-        renameSync(staged, target);
+        rename(staged, target);
       } catch (error) {
         if (hadTarget) renameSync(replaced, target);
         throw error;
@@ -452,19 +466,27 @@ export async function exportEnvironment(options: ExportOptions): Promise<ExportR
     return [...byLocation.values()];
   };
   const exported = (playbooks: boolean): string[] => report.skills.filter((name) => playbooks || !playbookSkills.has(name));
+  const rename = options.rename ?? renameSync;
   const excluded: string[] = [];
   if (workingFolder !== null) {
     for (const { folders, dir, agents, playbooks } of readers("project", workingFolder, () => true)) {
-      const written = mirror(skillsDir, exported(playbooks), dir, report);
+      const written = mirror(skillsDir, exported(playbooks), dir, report, rename);
       report.folders.push({ agents, level: "project", dir });
       for (const folder of folders) excluded.push(`/${folder}/${EXPORTS_MANIFEST}`, ...written.map((name) => `/${folder}/${name}/`), `/${dirname(folder)}/${STAGING_PREFIX}*/`);
+      // The staging copy sits beside the folder as it is on disk, which a
+      // link can move elsewhere in the working folder.
+      const staging = relative(realpathSync.native(workingFolder), dirname(realpathSync.native(dir)));
+      if (!staging.startsWith("..") && !isAbsolute(staging)) {
+        const line = `/${staging === "" ? "" : `${staging.split(sep).join("/")}/`}${STAGING_PREFIX}*/`;
+        if (!excluded.includes(line)) excluded.push(line);
+      }
     }
     writeExcludeBlock(workingFolder, excluded);
   }
   if (userHome !== null) {
     const present = new Set(options.agents);
     for (const { dir, agents, playbooks } of readers("user", userHome, (agent) => present.has(agent))) {
-      mirror(skillsDir, exported(playbooks), dir, report);
+      mirror(skillsDir, exported(playbooks), dir, report, rename);
       report.folders.push({ agents, level: "user", dir });
     }
   }
