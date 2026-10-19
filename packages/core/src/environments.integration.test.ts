@@ -565,6 +565,15 @@ test("environments-22 through a real core: a spec-only spec package requested fr
   for (const folder of [".agents", ".codex", ".gemini", ".kimi-code", ".config/opencode", ".local/share/opencode"]) {
     assert.equal(existsSync(join(dir, "user", folder)), false, folder);
   }
+  // Once OpenCode has a home folder here, an export writes the folder it
+  // shares with Codex, Gemini CLI and Kimi Code, and makes no other.
+  mkdirSync(join(dir, "user", ".local", "share", "opencode"), { recursive: true });
+  mark = client.mark();
+  await client.expectOk("environment.install", { repository: own });
+  await client.environment(own, mark, (state) => state.busy === null && holds(state));
+  const sharedAtHome = join(dir, "user", ".agents", "skills", "acme-trip-split");
+  assert.deepEqual(readdirSync(sharedAtHome).sort(), ["SKILL.md", "trip-split.md"]);
+  for (const folder of [".codex", ".gemini", ".kimi-code", ".config"]) assert.equal(existsSync(join(dir, "user", folder)), false, folder);
 
   // Removed and installed again: the skill, its exclude line and the
   // home folder's copy leave with the spec package.
@@ -578,6 +587,7 @@ test("environments-22 through a real core: a spec-only spec package requested fr
   await client.expectOk("environment.remove", { repository: own, name: "acme/trip-split" });
   await client.environment(own, mark, (state) => state.busy === null && !holds(state));
   assert.equal(existsSync(atHome), false, "your own group's copy is gone");
+  assert.equal(existsSync(sharedAtHome), false, "and so is its copy in the shared user folder");
 });
 
 // ---------------------------------------------------------------------------

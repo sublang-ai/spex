@@ -10,7 +10,7 @@
 import { after, before, test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { cpSync, existsSync, linkSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, cpSync, existsSync, linkSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { pathToFileURL } from "node:url";
 import { RUNTIME_ABI } from "@sublang/playbook/xstate-runtime";
@@ -55,6 +55,7 @@ import {
   seedBuiltinPackage,
   setRequest,
   sha256Hex,
+  specSkill,
   storeKey,
   writeLock,
   type InstallOptions,
@@ -955,6 +956,7 @@ test("environments-22: skills and playbooks export to agent folders, the user's 
   for (const odd of ["true", "null", "123"]) {
     assert.equal(frontName(rewriteSkillName(skillText("fmt"), odd)), odd);
     assert.equal(frontName(playbookSkill({ name: odd, id: "ship", packageName: "acme/kit2", version: "1.0.0" })), odd);
+    assert.equal(frontName(specSkill({ name: odd, packageName: "acme/kit2", version: "1.0.0", file: "kit2.md" })), odd);
   }
   // Git ignores the exports, and no staging copy is left beside them.
   const exclude = readFileSync(join(workingFolder, ".git/info/exclude"), "utf8");
@@ -972,6 +974,36 @@ test("environments-22: skills and playbooks export to agent folders, the user's 
   assert.equal(statSync(lintFile(".claude/skills")).ino, before.claude, "an unchanged skill is left as it stands");
   assert.ok(readFileSync(lintFile(".agents/skills")).equals(readFileSync(join(home.clone, "skills/lint/SKILL.md"))), "a changed skill is replaced whole");
   assert.deepEqual(stagingLeft(), []);
+  if (process.platform !== "win32") {
+    // Where a changed skill cannot be moved, the previous one stands
+    // whole: it is replaced by a rename, never deleted first.
+    writeFileSync(lintFile(".agents/skills"), "edited again\n");
+    chmodSync(join(workingFolder, ".agents/skills"), 0o555);
+    try {
+      await assert.rejects(exportEnvironment({ cloneDir: home.clone, lock: projectLock, workingFolder, userHome: null, agents: ["claude"], packagesDir: join(home.clone, "packages") }));
+    } finally {
+      chmodSync(join(workingFolder, ".agents/skills"), 0o755);
+    }
+    assert.equal(readFileSync(lintFile(".agents/skills"), "utf8"), "edited again\n");
+    assert.deepEqual(stagingLeft(), []);
+    await exportEnvironment({ cloneDir: home.clone, lock: projectLock, workingFolder, userHome: null, agents: ["claude"], packagesDir: join(home.clone, "packages") });
+    assert.ok(readFileSync(lintFile(".agents/skills")).equals(readFileSync(join(home.clone, "skills/lint/SKILL.md"))), "the next export replaces it");
+
+    // A working folder whose .agents/skills links to its .claude/skills
+    // has one folder: an export writes it once, the playbook's skill
+    // included, and a second export leaves it so.
+    const linked = join(scratch, "linked");
+    git(scratch, ["init", "--quiet", "-b", "main", linked]);
+    mkdirSync(join(linked, ".claude/skills"), { recursive: true });
+    mkdirSync(join(linked, ".agents"), { recursive: true });
+    symlinkSync("../.claude/skills", join(linked, ".agents/skills"));
+    for (let pass = 0; pass < 2; pass += 1) {
+      const once = await exportEnvironment({ cloneDir: home.clone, lock: projectLock, workingFolder: linked, userHome: null, agents: [], packagesDir: join(home.clone, "packages") });
+      assert.deepEqual(once.folders, [{ agents: ["claude", "codex", "gemini", "kimi", "opencode"], level: "project", dir: join(linked, ".claude/skills") }]);
+      assert.deepEqual(once.removed, []);
+      for (const name of ["format-code", "lint", "ship"]) assert.ok(existsSync(join(linked, ".claude/skills", name, "SKILL.md")), `${name} after export ${pass + 1}`);
+    }
+  }
   // The generated skill names the spec package, version and id; its
   // description and its last sentence send a player back to its step.
   const ship = readFileSync(join(workingFolder, ".claude/skills/ship/SKILL.md"), "utf8");

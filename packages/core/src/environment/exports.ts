@@ -25,12 +25,13 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
+  realpathSync,
   renameSync,
   rmSync,
   statSync,
   writeFileSync,
 } from "node:fs";
-import { dirname, isAbsolute, join, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { parseDocument, stringify as stringifyYaml } from "yaml";
 
 import { readVersioned, writeVersionedBytes } from "../files.js";
@@ -230,8 +231,39 @@ function sameTree(a: string, b: string): boolean {
  * every folder an agent reads skills from (environments-30). */
 const STAGING_PREFIX = ".spex-staging-";
 
-function mirror(skillsDir: string, names: string[], dir: string, report: ExportReport): string[] {
-  mkdirSync(dir, { recursive: true });
+/** Whether anything stands at a path, a link included, dangling or not. */
+function standing(path: string): boolean {
+  try {
+    lstatSync(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Where a path is on disk: its nearest standing ancestor with every
+ * link resolved, and the rest as written. Two agent folders that are
+ * one folder by a link resolve alike. */
+function realLocation(path: string): string {
+  const rest: string[] = [];
+  let current = path;
+  for (;;) {
+    try {
+      return join(realpathSync.native(current), ...rest.reverse());
+    } catch {
+      const parent = dirname(current);
+      if (parent === current) return path;
+      rest.push(basename(current));
+      current = parent;
+    }
+  }
+}
+
+function mirror(skillsDir: string, names: string[], folder: string, report: ExportReport): string[] {
+  mkdirSync(folder, { recursive: true });
+  // The folder as it is on disk, so the staging copy beside it shares its
+  // filesystem even where a link puts it elsewhere.
+  const dir = realpathSync.native(folder);
   const previous = readExportsManifest(dir);
   for (const name of previous) {
     if (names.includes(name)) continue;
@@ -240,14 +272,14 @@ function mirror(skillsDir: string, names: string[], dir: string, report: ExportR
   }
   const written: string[] = [];
   // A changed skill is made whole beside the agent folder and renamed
-  // into place; one whose files already match is left as it stands, so
-  // a run reading the folder meanwhile finds every skill whole.
+  // into place, the replaced one moved aside first and back where the
+  // rename fails; one whose files already match is left as it stands.
   const staging = join(dirname(dir), `${STAGING_PREFIX}${randomUUID()}`);
   try {
     for (const name of names) {
       const target = join(dir, name);
-      if (existsSync(target) && !previous.includes(name)) {
-        report.skipped.push({ name, dir, reason: "a folder the reader placed has this name" });
+      if (standing(target) && !previous.includes(name)) {
+        report.skipped.push({ name, dir: folder, reason: "a folder the reader placed has this name" });
         continue;
       }
       written.push(name);
@@ -256,11 +288,17 @@ function mirror(skillsDir: string, names: string[], dir: string, report: ExportR
       const staged = join(staging, "new", name);
       copyTree(source, staged);
       const replaced = join(staging, "old", name);
-      if (existsSync(target)) {
+      const hadTarget = standing(target);
+      if (hadTarget) {
         mkdirSync(dirname(replaced), { recursive: true });
         renameSync(target, replaced);
       }
-      renameSync(staged, target);
+      try {
+        renameSync(staged, target);
+      } catch (error) {
+        if (hadTarget) renameSync(replaced, target);
+        throw error;
+      }
     }
   } finally {
     rmSync(staging, { recursive: true, force: true });
@@ -394,34 +432,38 @@ export async function exportEnvironment(options: ExportOptions): Promise<ExportR
 
   // Every project-level folder the table names, whatever agents this
   // device has; a user-level folder only for an agent it has
-  // (environments-16). A folder several agents read is written once.
-  const readers = (level: "project" | "user", present: (agent: string) => boolean): Map<string, { agents: string[]; playbooks: boolean }> => {
-    const folders = new Map<string, { agents: string[]; playbooks: boolean }>();
+  // (environments-16). A folder several agents read is written once, and
+  // so are two folders a link makes one, with playbook skills where
+  // either takes them.
+  interface Readers { folders: string[]; dir: string; agents: string[]; playbooks: boolean }
+  const readers = (level: "project" | "user", root: string, present: (agent: string) => boolean): Readers[] => {
+    const byLocation = new Map<string, Readers>();
     for (const [agent, entry] of Object.entries(AGENT_FOLDERS).sort(([a], [b]) => a.localeCompare(b))) {
       if (!present(agent)) continue;
       const folder = level === "project" ? entry.project : entry.user;
-      const known = folders.get(folder) ?? { agents: [], playbooks: false };
+      const dir = level === "project" ? join(root, ...folder.split("/")) : userFolder(root, folder);
+      const location = realLocation(dir);
+      const known = byLocation.get(location) ?? { folders: [], dir, agents: [], playbooks: false };
+      if (!known.folders.includes(folder)) known.folders.push(folder);
       known.agents.push(agent);
       known.playbooks ||= entry.playbooks;
-      folders.set(folder, known);
+      byLocation.set(location, known);
     }
-    return folders;
+    return [...byLocation.values()];
   };
   const exported = (playbooks: boolean): string[] => report.skills.filter((name) => playbooks || !playbookSkills.has(name));
   const excluded: string[] = [];
   if (workingFolder !== null) {
-    for (const [folder, { agents, playbooks }] of readers("project", () => true)) {
-      const dir = join(workingFolder, ...folder.split("/"));
+    for (const { folders, dir, agents, playbooks } of readers("project", workingFolder, () => true)) {
       const written = mirror(skillsDir, exported(playbooks), dir, report);
       report.folders.push({ agents, level: "project", dir });
-      excluded.push(`/${folder}/${EXPORTS_MANIFEST}`, ...written.map((name) => `/${folder}/${name}/`), `/${dirname(folder)}/${STAGING_PREFIX}*/`);
+      for (const folder of folders) excluded.push(`/${folder}/${EXPORTS_MANIFEST}`, ...written.map((name) => `/${folder}/${name}/`), `/${dirname(folder)}/${STAGING_PREFIX}*/`);
     }
     writeExcludeBlock(workingFolder, excluded);
   }
   if (userHome !== null) {
     const present = new Set(options.agents);
-    for (const [folder, { agents, playbooks }] of readers("user", (agent) => present.has(agent))) {
-      const dir = userFolder(userHome, folder);
+    for (const { dir, agents, playbooks } of readers("user", userHome, (agent) => present.has(agent))) {
       mirror(skillsDir, exported(playbooks), dir, report);
       report.folders.push({ agents, level: "user", dir });
     }
