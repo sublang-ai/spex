@@ -1014,6 +1014,18 @@ test("environments-22: skills and playbooks export to agent folders, the user's 
       assert.deepEqual(once.removed, []);
       for (const name of ["format-code", "lint", "ship"]) assert.ok(existsSync(join(linked, ".claude/skills", name, "SKILL.md")), `${name} after export ${pass + 1}`);
     }
+    // A folder the reader put there under an exported name stays as it
+    // is, named under both of the folder's names (environments-8).
+    const linkedTheirs = join(scratch, "linked-theirs");
+    git(scratch, ["init", "--quiet", "-b", "main", linkedTheirs]);
+    mkdirSync(join(linkedTheirs, ".claude/skills/lint"), { recursive: true });
+    writeFileSync(join(linkedTheirs, ".claude/skills/lint/SKILL.md"), "the reader's own lint\n");
+    mkdirSync(join(linkedTheirs, ".agents"), { recursive: true });
+    symlinkSync("../.claude/skills", join(linkedTheirs, ".agents/skills"));
+    const linkedReport = await exportEnvironment({ cloneDir: home.clone, lock: projectLock, workingFolder: linkedTheirs, userHome: null, agents: [], packagesDir: join(home.clone, "packages") });
+    assert.deepEqual(linkedReport.skipped, [{ name: "lint", folder: ".claude/skills" }, { name: "lint", folder: ".agents/skills" }]);
+    assert.equal(readFileSync(join(linkedTheirs, ".claude/skills/lint/SKILL.md"), "utf8"), "the reader's own lint\n");
+    assert.ok(existsSync(join(linkedTheirs, ".claude/skills/format-code/SKILL.md")));
   }
   // The generated skill names the spec package, version and id; its
   // description and its last sentence send a player back to its step.
@@ -1055,6 +1067,17 @@ test("environments-22: skills and playbooks export to agent folders, the user's 
   assert.match(readFileSync(join(userHome, ".agents/skills/lint/SKILL.md"), "utf8"), /my own lint/);
   assert.equal(existsSync(join(userHome, ".agents/skills/own-pb")), false);
   assert.ok(existsSync(join(userHome, ".claude/skills/own-pb/SKILL.md")));
+  // A folder the reader put in a user-level folder under an exported
+  // name stays as it is, the skill standing in the other folder, and
+  // the export names that folder as the table does (environments-8).
+  const otherHome = join(scratch, "other-user");
+  mkdirSync(join(otherHome, ".agents/skills/lint"), { recursive: true });
+  writeFileSync(join(otherHome, ".agents/skills/lint/SKILL.md"), "the reader's own lint\n");
+  const shadowed = await exportEnvironment({ cloneDir: ownClone, lock: ownLock, workingFolder: null, userHome: otherHome, agents: ["claude", "kimi"], packagesDir: join(ownClone, "packages") });
+  assert.deepEqual(shadowed.skipped, [{ name: "lint", folder: "~/.agents/skills" }]);
+  assert.deepEqual(shadowed.missing, []);
+  assert.equal(readFileSync(join(otherHome, ".agents/skills/lint/SKILL.md"), "utf8"), "the reader's own lint\n");
+  assert.match(readFileSync(join(otherHome, ".claude/skills/lint/SKILL.md"), "utf8"), /my own lint/);
   assert.match(readFileSync(join(workingFolder, ".claude/skills/lint/SKILL.md"), "utf8"), /the project's lint/);
 
   // A session hands the launcher the project's playbook, your own
@@ -1085,6 +1108,30 @@ test("environments-22: skills and playbooks export to agent folders, the user's 
   assert.equal(existsSync(join(workingFolder, ".agents/skills/lint")), false);
   assert.ok(existsSync(join(workingFolder, ".claude/skills/mine/SKILL.md")));
   assert.ok(!readFileSync(join(workingFolder, ".git/info/exclude"), "utf8").includes("/.claude/skills/lint/"));
+
+  // Exported again, the skill finds a folder the reader put in
+  // `.agents/skills` under its name: that folder stays byte for byte,
+  // the skill stands in `.claude/skills`, and the export names it.
+  mkdirSync(join(workingFolder, ".agents/skills/lint"), { recursive: true });
+  writeFileSync(join(workingFolder, ".agents/skills/lint/SKILL.md"), "the reader's own lint\n");
+  const widenedLock = locked(await resolveText(home.clone, projectText, { workingFolder }));
+  await installAsOnDisk({ ...base, cloneDir: home.clone, lock: widenedLock, workingFolder });
+  const widened = await exportEnvironment({ cloneDir: home.clone, lock: widenedLock, workingFolder, userHome: null, agents: ["claude"], packagesDir: join(home.clone, "packages") });
+  assert.deepEqual(widened.skipped, [{ name: "lint", folder: ".agents/skills" }]);
+  assert.deepEqual(widened.missing, []);
+  assert.equal(readFileSync(join(workingFolder, ".agents/skills/lint/SKILL.md"), "utf8"), "the reader's own lint\n");
+  assert.match(readFileSync(join(workingFolder, ".claude/skills/lint/SKILL.md"), "utf8"), /the project's lint/);
+  const widenedExclude = readFileSync(join(workingFolder, ".git/info/exclude"), "utf8");
+  assert.ok(widenedExclude.includes("/.claude/skills/lint/"));
+  assert.ok(!widenedExclude.includes("/.agents/skills/lint/"), "the reader's folder is not Spex's to exclude");
+  // A working folder lacking the path source exports the rest and names it.
+  const bare = join(scratch, "bare");
+  git(scratch, ["init", "--quiet", "-b", "main", bare]);
+  const lacking = await exportEnvironment({ cloneDir: home.clone, lock: widenedLock, workingFolder: bare, userHome: null, agents: ["claude"], packagesDir: join(home.clone, "packages") });
+  assert.deepEqual(lacking.missing, ["acme/walker"]);
+  assert.deepEqual(lacking.skipped, []);
+  assert.ok(existsSync(join(bare, ".claude/skills/lint/SKILL.md")));
+  assert.equal(existsSync(join(bare, ".claude/skills/walk")), false);
 });
 
 // ---------------------------------------------------------------------------

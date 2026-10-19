@@ -10,7 +10,8 @@
 // so one overtaken meanwhile publishes nothing (DR-111); they report
 // through `environment.state`. Every install is exported into
 // the paired working folder's agent folders and, for your own group,
-// into your agents' home folders; a session's playbooks are found in
+// into your agents' home folders, and what the last export left out is
+// listed; a session's playbooks are found in
 // the project's environment before your own group's. The built-in spec
 // package is seeded at start and requested where an environment lacks
 // it, so the built-in playbooks work offline from the first start.
@@ -66,6 +67,7 @@ import {
   type BuiltinPackage,
   type Conflict,
   type CredentialArgs,
+  type ExportReport,
   type GitCredential,
   type GitSource,
   type Lock,
@@ -134,6 +136,9 @@ interface CloneState {
   conflicts: { requests: FileVersion; conflicts: Conflict[] } | null;
   error: string | null;
   published?: { name: string; version: string; url: string };
+  /** What the last export left out (environments-14): it stands until
+   * the next export, whatever overtakes the operation after it. */
+  unexported: NonNullable<EnvironmentState["unexported"]> | null;
 }
 
 /** What a strict settle wrote before it stopped, for the caller's report. */
@@ -353,7 +358,7 @@ export class EnvironmentManager {
   private cloneState(key: string): CloneState {
     let state = this.clones.get(key);
     if (!state) {
-      state = { key, running: new Set(), conflicts: null, error: null };
+      state = { key, running: new Set(), conflicts: null, error: null, unexported: null };
       this.clones.set(key, state);
     }
     return state;
@@ -631,7 +636,10 @@ export class EnvironmentManager {
       // mixes two locks (environments-8).
       if (fileVersion(lockPath) !== lockVersion) throw new VersionConflictError(lockPath);
       if (!this.installedWhole(dir, lock)) throw new VersionConflictError(join(dir, "packages"));
-      await this.exportNow(dir, key, lock);
+      const exported = await this.exportNow(dir, key, lock);
+      state.unexported = exported.skipped.length > 0 || exported.missing.length > 0
+        ? { skipped: exported.skipped, missing: exported.missing }
+        : null;
       // A success clears a failure only while its files still stand as
       // it read and wrote them; its exports stand either way.
       obsolete = this.changedSince(requestsPath, read?.version ?? null, lockPath, lockVersion);
@@ -658,8 +666,8 @@ export class EnvironmentManager {
 
   /** Export the installed environment into its working folder and, for
    * your own group, your agents' home folders (environments-8). */
-  private async exportNow(dir: string, key: string, lock: Lock): Promise<void> {
-    await exportEnvironment({
+  private exportNow(dir: string, key: string, lock: Lock): Promise<ExportReport> {
+    return exportEnvironment({
       cloneDir: dir,
       lock,
       workingFolder: this.workingFolder(key),
@@ -1079,6 +1087,7 @@ export class EnvironmentManager {
       error,
       published: clone.published ? { ...clone.published } : null,
       ...(builtinUpdate ? { builtinUpdate } : {}),
+      ...(clone.unexported ? { unexported: structuredClone(clone.unexported) } : {}),
     };
   }
 

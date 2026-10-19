@@ -323,6 +323,12 @@ export interface EnvironmentState {
    * the shipped one; absent otherwise. The lock stays until the reader
    * resolves again (environments-11). */
   builtinUpdate?: { shipped: string; locked: string };
+  /** What the last export of this environment left out, absent where it
+   * wrote everything (environments-14): each skill a folder the reader
+   * placed under its name kept out of an agent folder, that folder as
+   * the agent table names it, and each spec package an exported
+   * artifact of which it did not find on this device. */
+  unexported?: { skipped: { name: string; folder: string }[]; missing: string[] };
 }
 export type EnvironmentRequest = (
   | { kind: "registry"; version: string }

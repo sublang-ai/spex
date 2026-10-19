@@ -9,7 +9,8 @@
 // path source missing on this device — with the lock's staleness and
 // the conflict report, Resolve again and Install where they apply, the
 // built-in release this app ships where the lock runs an older one with
-// Update resolving again, and Remove behind the inline confirm. The
+// Update resolving again, what the last export left out with Export
+// again installing, and Remove behind the inline confirm. The
 // ways to add a spec package — from the registry, a folder or Git —
 // stand apart at the surface's foot. A sync, a resolve or an install running beside them refuses
 // nothing (DR-111): its progress shows by the heading, and a change the
@@ -44,6 +45,8 @@ const INPUT =
   "min-w-0 rounded border border-neutral-300 bg-white px-2 py-1 text-sm dark:border-neutral-700 dark:bg-neutral-950";
 const ERROR =
   "rounded border border-red-300 bg-red-50 px-2 py-1 text-xs text-red-700 [overflow-wrap:anywhere] dark:border-red-900 dark:bg-red-950 dark:text-red-300";
+const NOTICE =
+  "rounded border border-amber-300 bg-amber-50 px-2 py-1 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200";
 
 /** What the core is doing to this environment right now, as its line
  * reads; progress only, never a reason to wait. */
@@ -234,14 +237,15 @@ export function EnvironmentSection({
   const install = useAppStore((store) => store.installEnvironment);
   const remove = useAppStore((store) => store.removeSpecPackage);
   const [error, setError] = useState<string>();
-  const [pending, setPending] = useState<"resolve" | "update" | "install">();
+  const [pending, setPending] = useState<"resolve" | "update" | "install" | "export">();
   const progress = progressOf(state);
 
-  function act(kind: "resolve" | "update" | "install"): void {
+  function act(kind: "resolve" | "update" | "install" | "export"): void {
     setPending(kind);
     setError(undefined);
-    // Update resolves again as Resolve again does (environments-11).
-    void (kind === "install" ? install(repository) : resolve(repository))
+    // Update resolves again as Resolve again does (environments-11), and
+    // Export again installs, which exports, as Install does.
+    void (kind === "install" || kind === "export" ? install(repository) : resolve(repository))
       .catch((cause: Error) => setError(cause.message))
       .finally(() => setPending(undefined));
   }
@@ -265,7 +269,7 @@ export function EnvironmentSection({
           <p
             data-testid="environment-stale"
             title={state.stale.join("\n") || undefined}
-            className="rounded border border-amber-300 bg-amber-50 px-2 py-1 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200"
+            className={NOTICE}
           >
             {i18n._("Requests changed; resolve again to install")}
           </p>
@@ -309,6 +313,45 @@ export function EnvironmentSection({
                 ? i18n._({ id: "Updating…", comment: "the environment is being resolved again to run the built-in playbooks this app ships" })
                 : i18n._({ id: "Update", comment: "resolve the environment again to run the built-in playbooks this app ships" })}
             </button>
+          </div>
+        ) : null}
+        {state.unexported ? (
+          <div data-testid="environment-unexported" className={`${NOTICE} flex flex-col gap-1 [overflow-wrap:anywhere]`}>
+            <p>{i18n._({ id: "Not exported", comment: "heading of the skills and spec packages the last export left out of the agents' folders" })}</p>
+            <ul className="flex flex-col gap-0.5">
+              {state.unexported.skipped.map((entry) => (
+                <li key={`${entry.folder}:${entry.name}`} data-testid={`environment-unexported-${entry.folder}-${entry.name}`}>
+                  <span className="font-mono">{entry.name}</span>
+                  {" — "}
+                  {i18n._({
+                    id: "{folder} holds a folder of yours by that name",
+                    comment: "an exported skill left out of an agent folder because the reader placed a folder of that name there; {folder} is the agent folder, such as .agents/skills",
+                    values: { folder: entry.folder },
+                  })}
+                </li>
+              ))}
+              {state.unexported.missing.map((name) => (
+                <li key={name} data-testid={`environment-unexported-package-${name}`}>
+                  <span className="font-mono">{name}</span>
+                  {" — "}
+                  {i18n._("Its files are not on this device")}
+                </li>
+              ))}
+            </ul>
+            <div>
+              <button
+                type="button"
+                data-testid="environment-export-again"
+                disabled={pending !== undefined}
+                title={i18n._("Export this environment's skills to the agents' folders again")}
+                onClick={() => act("export")}
+                className={PRIMARY}
+              >
+                {pending === "export"
+                  ? i18n._({ id: "Exporting…", comment: "the environment's skills are being exported again" })
+                  : i18n._({ id: "Export again", comment: "export the environment's skills to the agents' folders again" })}
+              </button>
+            </div>
           </div>
         ) : null}
         {state.error ? (
