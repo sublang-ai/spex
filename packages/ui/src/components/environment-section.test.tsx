@@ -458,6 +458,32 @@ describe("playbook-library-94: the environment's controls", () => {
     );
   });
 
+  test("on your own group's side, Add from folder asks for a folder inside its clone and requests the path there", async () => {
+    await renderSurface();
+    fireEvent.click(screen.getByTestId("side-own"));
+    await screen.findByTestId("env-package-sublang/playbooks");
+    fireEvent.click(screen.getByTestId("add-from-folder"));
+    expect(screen.getByTestId("folder-request").textContent).toContain(`Folder inside ${OWN_ENVIRONMENT.pathRoot}`);
+    fireEvent.change(screen.getByTestId("folder-request-name"), { target: { value: "me/notes" } });
+    fireEvent.change(screen.getByTestId("folder-request-path"), { target: { value: "mine/notes" } });
+    fireEvent.click(screen.getByTestId("folder-request-submit"));
+    await vi.waitFor(() =>
+      expect(commandMock).toHaveBeenCalledWith("environment.request", {
+        repository: OWN_KEY,
+        name: "me/notes",
+        request: { kind: "path", path: "mine/notes" },
+      }),
+    );
+  });
+
+  test("Add from folder waits for a path root: a state naming none disables it", async () => {
+    environments[PROJECT_ID] = { ...PROJECT_ENVIRONMENT, pathRoot: null };
+    await renderSurface();
+    const control = screen.getByTestId("add-from-folder") as HTMLButtonElement;
+    expect(control.disabled).toBe(true);
+    expect(control.title).toBe("No working folder on this device");
+  });
+
   test("every control stays available while that spex repository syncs: the sync refuses nothing", async () => {
     environments[PROJECT_ID] = {
       ...PROJECT_ENVIRONMENT,

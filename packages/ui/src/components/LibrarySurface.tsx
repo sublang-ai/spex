@@ -51,7 +51,6 @@ import {
 import {
   chosenProject,
   ownRepositoryKey,
-  repositoryOf,
   sourceKindWord,
 } from "../lib/environments.js";
 import { i18n } from "../i18n.js";
@@ -1363,8 +1362,6 @@ export function LibrarySurface({
   const projectDrafts = Object.values(drafts)
     .filter((draft) => draft.projectId === projectId)
     .sort((a, b) => b.touchedAt - a.touchedAt);
-  const sideRepository = repository ? repositoryOf(space, repository) : undefined;
-  const workingFolder = side === "project" ? project?.path : sideRepository?.folder;
 
   const hintsFor = (entry: PlaybookAvailability): ReactNode => {
     const notes: ReactNode[] = [];
@@ -1597,7 +1594,7 @@ export function LibrarySurface({
       ) : null}
 
       {repository ? (
-        <AddSpecPackages repository={repository} folder={workingFolder} />
+        <AddSpecPackages repository={repository} />
       ) : null}
 
       <section className="flex flex-col gap-2">

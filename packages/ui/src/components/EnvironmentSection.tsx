@@ -443,16 +443,11 @@ type AddMode = "registry" | "folder" | "git";
 
 /** The ways to add a spec package to one spex repository's requests
  * (playbook-library-92): from the registry by search, from a folder
- * inside the working folder, or from Git at a rev. */
-export function AddSpecPackages({
-  repository,
-  folder,
-}: {
-  repository: string;
-  /** The working folder paired with the repository on this device. */
-  folder: string | null | undefined;
-}) {
+ * inside the environment's path root — the paired working folder, or
+ * your own group's clone (environments-2) — or from Git at a rev. */
+export function AddSpecPackages({ repository }: { repository: string }) {
   const request = useAppStore((store) => store.requestSpecPackage);
+  const folder = useAppStore((store) => store.environments[repository]?.pathRoot ?? null);
   const [mode, setMode] = useState<AddMode>();
   const [added, setAdded] = useState<string>();
 
@@ -471,7 +466,7 @@ export function AddSpecPackages({
     {
       key: "folder",
       label: i18n._({ id: "Add from folder", comment: "request a spec package by its folder in the working folder" }),
-      title: i18n._("Request a folder inside the working folder"),
+      title: i18n._("Request a spec package by its folder"),
       testId: "add-from-folder",
       disabledWhy: folder ? undefined : i18n._("No working folder on this device"),
     },

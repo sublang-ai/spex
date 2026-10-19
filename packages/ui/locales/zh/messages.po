@@ -4798,8 +4798,8 @@ msgid "Request {requirement}"
 msgstr "请求 {requirement}"
 
 #: src/components/EnvironmentSection.tsx
-msgid "Request a folder inside the working folder"
-msgstr "请求工作文件夹内的一个文件夹"
+msgid "Request a spec package by its folder"
+msgstr "按文件夹请求一个规约包"
 
 #: src/components/EnvironmentSection.tsx
 msgid "Request a Git repository at a branch, tag or commit"
