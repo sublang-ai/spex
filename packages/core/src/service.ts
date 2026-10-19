@@ -2197,6 +2197,9 @@ export class CoreService {
         }
         const project = this.store.rebindProject({ id: command.projectId, path,
           ...(command.aliases ? { aliases: command.aliases } : {}) });
+        // The folder now paired gets the environment's exports before its
+        // first session (environments-31).
+        void this.environments.paired(project.id).catch(() => {});
         await this.syncForeignSessions();
         for (const session of this.sessions.listSessions()) {
           if (session.projectId !== project.id) continue;

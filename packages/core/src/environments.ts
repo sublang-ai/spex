@@ -10,8 +10,8 @@
 // so one overtaken meanwhile publishes nothing (DR-111); they report
 // through `environment.state`. Every install is exported into
 // the paired working folder's agent folders and, for your own group,
-// into your agents' home folders, and what the last export left out is
-// listed; a session's playbooks are found in
+// into your agents' home folders, as is a folder once paired, and what
+// the last export left out is listed; a session's playbooks are found in
 // the project's environment before your own group's. The built-in spec
 // package is seeded at start and requested where an environment lacks
 // it, so the built-in playbooks work offline from the first start.
@@ -840,6 +840,15 @@ export class EnvironmentManager {
   /** A sync applied a lock (environments-8, environments-17): install
    * from it and export, broadcasting the state. */
   applied(key: string): Promise<void> {
+    if (!this.store.repository(key)) return Promise.resolve();
+    return this.settle(key, "auto", false);
+  }
+
+  /** A working folder was paired with a clone this device holds
+   * (environments-31): its environment installs where the lock is not
+   * installed as it locks and exports into the folder, as an install
+   * does, its state broadcast. */
+  paired(key: string): Promise<void> {
     if (!this.store.repository(key)) return Promise.resolve();
     return this.settle(key, "auto", false);
   }

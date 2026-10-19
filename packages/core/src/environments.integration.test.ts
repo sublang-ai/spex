@@ -590,6 +590,78 @@ test("environments-22 through a real core: a spec-only spec package requested fr
   assert.equal(existsSync(sharedAtHome), false, "and so is its copy in the shared user folder");
 });
 
+test("environments-22 through a real core: a project rebound to a second working folder is exported there, and its state names what the export left out until an install exports it", { timeout: 180_000 }, async (t) => {
+  const registry = await startStandinRegistry({ dir: scratchDir("spex-env-pair-registry-") });
+  t.after(() => registry.close());
+  const skill = (name: string, body: string): string => `---\nname: ${name}\ndescription: The ${name} skill.\n---\n\n${body}\n`;
+  const releaseDir = await makeRelease(join(scratchDir("spex-env-pair-release-"), "kit"), {
+    format: 2, org: "acme", name: "kit", version: "1.0.0", description: "Lint and format", license: "Apache-2.0",
+    artifacts: { lint: { kind: "skill", language: "en" }, fmt: { kind: "skill", language: "en" } },
+  }, { "skills/en/lint/SKILL.md": skill("lint", "Lint the code."), "skills/en/fmt/SKILL.md": skill("fmt", "Format the code.") });
+  await publishRelease(new RegistryClient({ url: registry.url }), releaseDir);
+
+  const dir = scratchDir("spex-env-pair-");
+  const core = await startCore(dir, { hostUrl: registry.url });
+  t.after(() => core.stop());
+  const { client } = core;
+  // The first working folder holds a spec package under development,
+  // requested by path beside the registry's.
+  const first = gitFolder(join(dir, "first"));
+  await makeRelease(join(first, "tools", "tidy"), {
+    format: 2, org: "acme", name: "tidy", version: "0.1.0",
+    artifacts: { tidy: { kind: "skill", language: "en" } },
+  }, { "skills/en/tidy/SKILL.md": skill("tidy", "Tidy up.") });
+  const { id: key } = await client.expectOk("project.register", { path: first });
+  const holds = (state: EnvironmentState, name: string): boolean => state.packages.some((pkg) => pkg.name === name && pkg.installed);
+  let mark = client.mark();
+  await client.expectOk("environment.request", { repository: key, name: "acme/kit", request: { kind: "registry", version: "^1.0.0" } });
+  await client.environment(key, mark, (state) => state.busy === null && holds(state, "acme/kit"));
+  mark = client.mark();
+  await client.expectOk("environment.request", { repository: key, name: "acme/tidy", request: { kind: "path", path: "tools/tidy" } });
+  const installed = await client.environment(key, mark, (state) => state.busy === null && holds(state, "acme/kit") && holds(state, "acme/tidy"));
+  assert.equal(installed.unexported, undefined, "the first folder took every export");
+  for (const name of ["fmt", "lint", "tidy"]) {
+    for (const folder of [".claude/skills", ".agents/skills"]) assert.ok(existsSync(join(first, folder, name, "SKILL.md")), `${folder}/${name}`);
+  }
+
+  // A second working folder, where the reader keeps a lint skill of
+  // their own in the folder Codex, Gemini CLI, Kimi Code and OpenCode
+  // read, and which lacks the path source.
+  const second = gitFolder(join(dir, "second"));
+  const theirs = join(second, ".agents", "skills", "lint");
+  mkdirSync(theirs, { recursive: true });
+  writeFileSync(join(theirs, "SKILL.md"), "the reader's own lint\n");
+  // Rebound with no environment command: the pairing exports there and
+  // broadcasts the state (environments-31, environments-17).
+  mark = client.mark();
+  await client.expectOk("project.rebind", { projectId: key, path: second });
+  const paired = await client.environment(key, mark, (state) => state.busy === null && state.unexported !== undefined);
+  for (const name of ["fmt", "lint"]) assert.ok(existsSync(join(second, ".claude", "skills", name, "SKILL.md")), `.claude/skills/${name}`);
+  assert.ok(existsSync(join(second, ".agents", "skills", "fmt", "SKILL.md")), ".agents/skills/fmt");
+  const exclude = (): string[] => readFileSync(join(second, ".git", "info", "exclude"), "utf8").split("\n");
+  for (const line of ["/.claude/skills/fmt/", "/.claude/skills/lint/", "/.agents/skills/fmt/"]) assert.ok(exclude().includes(line), line);
+  // The reader's folder stays byte for byte, out of Spex's exclude lines,
+  // and the state names it, with the path source this folder lacks
+  // (environments-14).
+  assert.equal(readFileSync(join(theirs, "SKILL.md"), "utf8"), "the reader's own lint\n");
+  assert.ok(!exclude().includes("/.agents/skills/lint/"));
+  assert.equal(existsSync(join(second, ".claude", "skills", "tidy")), false);
+  assert.deepEqual(paired.unexported, { skipped: [{ name: "lint", folder: ".agents/skills" }], missing: ["acme/tidy"] });
+  assert.equal(paired.packages.find((pkg) => pkg.name === "acme/tidy")?.missingPath, "tools/tidy");
+
+  // The reader moves their folder away and copies the path source in:
+  // an install exports both, and the state names nothing left out.
+  renameSync(theirs, join(dir, "their-lint"));
+  cpSync(join(first, "tools"), join(second, "tools"), { recursive: true });
+  mark = client.mark();
+  await client.expectOk("environment.install", { repository: key });
+  const whole = await client.environment(key, mark, (state) => state.busy === null && state.unexported === undefined);
+  assert.ok(holds(whole, "acme/tidy"), "the path source stands in the second folder");
+  assert.match(readFileSync(join(second, ".agents", "skills", "lint", "SKILL.md"), "utf8"), /Lint the code\./);
+  for (const folder of [".claude/skills", ".agents/skills"]) assert.ok(existsSync(join(second, folder, "tidy", "SKILL.md")), `${folder}/tidy`);
+  assert.ok(exclude().includes("/.agents/skills/lint/"));
+});
+
 // ---------------------------------------------------------------------------
 // environments-25: the commands over the protocol
 // ---------------------------------------------------------------------------
