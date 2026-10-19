@@ -46,7 +46,7 @@ Where your own group's spex repository holds its `config/playbook.config.yaml` [
 
 On every load and reload:
 
-- Your own group's file holds the captain, the players with what each runs on, the playbooks it enables with the player each role uses, notifications, theme and layout; a project's or another group's file holds only the playbooks it enables with the player each role uses, by name, and an option slice per playbook — a `captain`, `players` or model field in it, or a `from` or `skills` in any file, is a config error naming the entry.
+- Your own group's file holds the captain, the players with what each runs on, the playbooks it enables with the player each role uses, notifications, theme and layout; a project's or another group's file holds only the playbooks it enables with the player each role uses, by name, and an option slice per playbook — a `captain`, `players` or model field in it, a `from` in any file, or a `skills` list at the top of your own group's file, on its Captain or on a player, is a config error naming the entry.
 - A player the project's file names and your own group's lacks is reported before a session of that project starts, as a config error that names the player and offers to add it [[settings-46](settings.md#settings-46)]; sessions of other spex repositories are unaffected.
 
 - On success, the resulting config state is broadcast to all connected clients.
@@ -616,7 +616,7 @@ The core package shall own Spex application files through the versioned encoding
 
 #### core-service-16
 
-The core package shall compose the session-player roster, the playbook registry, and runtime options from the shared config with the same fail-closed validation rules as the playbook launcher — as recorded in [DR-004](../decisions/004-config-and-persistence.md) and amended by [DR-019](../decisions/019-inline-agent-configuration.md) and [DR-032](../decisions/032-session-players.md) — so that any config the launcher accepts or rejects is accepted or rejected identically by the core package, a playbook's `from` and a `skills` list excepted ([DR-105](../decisions/105-playbook-17-5-0-adoption.md), [DR-123](../decisions/123-playbook-17-10-1-cligent-0-34-0-slc-0-16-9-adoption.md)):
+The core package shall compose the session-player roster, the playbook registry, and runtime options from the shared config with the same fail-closed validation rules as the playbook launcher — as recorded in [DR-004](../decisions/004-config-and-persistence.md) and amended by [DR-019](../decisions/019-inline-agent-configuration.md) and [DR-032](../decisions/032-session-players.md) — so that any config the launcher accepts or rejects is accepted or rejected identically by the core package, a playbook's `from` and a `skills` list excepted ([DR-105](../decisions/105-playbook-17-5-0-adoption.md), [DR-123](../decisions/123-playbook-17-10-1-cligent-0-34-0-slc-0-18-0-adoption.md)):
 
 | Rule | Composition |
 | --- | --- |
@@ -787,6 +787,7 @@ Where the config file carries a defect from each launcher fail-closed defect cla
 - Each defect names its offending entry and blocks session creation [[core-service-2](#core-service-2)].
 - Captain and player writable paths exercise every refusal class and valid canonical form, agreeing with the installed Cligent configuration loader [[core-service-16](#core-service-16)].
 - Accepted paths reach the runtime projection canonically while their on-disk spelling stays unchanged [[core-service-16](#core-service-16)].
+- From a valid file, a session the core creates records its Captain and players with no `skills` [[core-service-16](#core-service-16)].
 
 #### core-service-117
 

@@ -777,6 +777,28 @@ test("CORE-21: each launcher defect class yields a named config error and blocks
   }
 });
 
+test("CORE-21: a session from a valid file records its agents with no supplied skills", async () => {
+  // Skills reach agents from environments, so the core composes none and
+  // no session record carries a key an earlier Playbook refuses
+  // (core-service-16, DR-123).
+  const harness = await startHarness(VALID_CONFIG);
+  const client = new Client(harness.service.port());
+  await client.open();
+  try {
+    const project = await client.expectOk("project.register", { path: harness.projectDir });
+    const session = await client.expectOk("session.create", { projectId: project.id });
+    const manifest = JSON.parse(readFileSync(join(projectSessions(harness.dataDir, project.id), session.id + ".json"), "utf8")) as {
+      lastAppliedExecutionProjection: { captain: Record<string, unknown>; players: Record<string, unknown>[] };
+    };
+    const { captain, players } = manifest.lastAppliedExecutionProjection;
+    assert.ok(players.length > 0, "the session records its players");
+    for (const agent of [captain, ...players]) assert.equal(Object.hasOwn(agent, "skills"), false, JSON.stringify(agent));
+  } finally {
+    client.close();
+    await harness.service.stop();
+  }
+});
+
 // ---------------------------------------------------------------------------
 // CORE-22: restart persistence
 // ---------------------------------------------------------------------------
