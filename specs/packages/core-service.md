@@ -71,7 +71,7 @@ Where the shared config path is the default one and holds nothing, when the core
 
 - An explicit config path given by the shell moves nothing.
 - A former file inside the home is removed once the canonical file is published, and its directory with it when that leaves the directory empty; the XDG file is left in place.
-- A former file whose path-shaped `playbooks.<id>.from` locator would resolve to a different target from the shared path's directory is left where it is and reported, since moving it would retarget the locator; the shared config path is your own group's clone's [[storage-1](storage.md#storage-1)].
+- A former file whose path-shaped `playbooks.<id>.from` or relative `sessions` locator would resolve to a different target from the shared path's directory is left where it is and reported, since moving it would retarget the locator; the shared config path is your own group's clone's [[storage-1](storage.md#storage-1)].
 
 ### Sessions
 
@@ -103,7 +103,7 @@ When a session's runtime is opened for a message [[core-service-73](#core-servic
 | Case | Outcome |
 | --- | --- |
 | Same structure, same tuning | the runtime opens on the stored projection |
-| Same structure, changed model, subagent model, effort, subagent effort, or fast mode | the runtime opens on the new projection, applied from the next call |
+| Same structure, changed model, subagent model, effort, subagent effort, fast mode, or browser access [[media-9](media.md#media-9)] | the runtime opens on the new projection, applied from the next call |
 | A stored playbook disabled, or changed in its source, command, options, or a binding's player; the Captain's or a stored player's adapter, instruction, or permissions changed; a stored player gone | refused `invalid_config` naming each changed field and offering a new session, the runtime never opened |
 
 - a playbook or player the session never had is left out of the projection and changes nothing;
