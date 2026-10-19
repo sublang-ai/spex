@@ -777,7 +777,7 @@ test("CORE-21: each launcher defect class yields a named config error and blocks
   }
 });
 
-test("CORE-21: a session from a valid file records its agents with no supplied skills", async () => {
+test("core-service-122: a session from a valid file records its agents with no supplied skills", async () => {
   // Skills reach agents from environments, so the core composes none and
   // no session record carries a key an earlier Playbook refuses
   // (core-service-16, DR-123).

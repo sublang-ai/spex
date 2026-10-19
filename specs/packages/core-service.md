@@ -787,7 +787,10 @@ Where the config file carries a defect from each launcher fail-closed defect cla
 - Each defect names its offending entry and blocks session creation [[core-service-2](#core-service-2)].
 - Captain and player writable paths exercise every refusal class and valid canonical form, agreeing with the installed Cligent configuration loader [[core-service-16](#core-service-16)].
 - Accepted paths reach the runtime projection canonically while their on-disk spelling stays unchanged [[core-service-16](#core-service-16)].
-- From a valid file, a session the core creates records its Captain and players with no `skills` [[core-service-16](#core-service-16)].
+
+#### core-service-122
+
+Where your own group's file is valid, when the core creates a session, the integration suite shall assert that the session records its Captain and players with no `skills` [[core-service-16](#core-service-16)].
 
 #### core-service-117
 
