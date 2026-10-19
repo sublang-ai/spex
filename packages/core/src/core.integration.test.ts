@@ -654,6 +654,23 @@ const DEFECT_CONFIGS: { name: string; pattern: RegExp; config: string }[] = [
     pattern: /playbooks\.code\.from is not allowed: a playbook's module comes from the environment/,
     config: VALID_CONFIG.replace("  code:\n", '  code:\n    from: "@sublang/playbook/code/registry"\n'),
   },
+  // Skills reach agents from the environments that install them, never
+  // from a path in a shared file (core-service-2, DR-123).
+  {
+    name: "a skills list at the top of your own file",
+    pattern: /(?:^|; )skills is not allowed: skills reach agents from the environments/,
+    config: `skills: [./team-guide]\n${VALID_CONFIG}`,
+  },
+  {
+    name: "a skills list on the Captain",
+    pattern: /captain\.skills is not allowed: skills reach agents from the environments/,
+    config: VALID_CONFIG.replace("  model: claude-test\nplayers:", "  model: claude-test\n  skills: [./team-guide]\nplayers:"),
+  },
+  {
+    name: "a skills list on a player",
+    pattern: /players\.dev\.coder\.skills is not allowed: skills reach agents from the environments/,
+    config: VALID_CONFIG.replace("    model: claude-test\nplaybooks:", "    model: claude-test\n    skills: [./team-guide]\nplaybooks:"),
+  },
   {
     name: "a playbook no environment of the session exports",
     pattern: /playbooks\.triage is enabled, but the environment of tester\/tester-spex exports no playbook triage/,
@@ -755,6 +772,28 @@ test("CORE-21: each launcher defect class yields a named config error and blocks
       defect.name,
     );
 
+    client.close();
+    await harness.service.stop();
+  }
+});
+
+test("core-service-122: a session from a valid file records its agents with no supplied skills", async () => {
+  // Skills reach agents from environments, so the core composes none and
+  // no session record carries a key an earlier Playbook refuses
+  // (core-service-16, DR-123).
+  const harness = await startHarness(VALID_CONFIG);
+  const client = new Client(harness.service.port());
+  await client.open();
+  try {
+    const project = await client.expectOk("project.register", { path: harness.projectDir });
+    const session = await client.expectOk("session.create", { projectId: project.id });
+    const manifest = JSON.parse(readFileSync(join(projectSessions(harness.dataDir, project.id), session.id + ".json"), "utf8")) as {
+      lastAppliedExecutionProjection: { captain: Record<string, unknown>; players: Record<string, unknown>[] };
+    };
+    const { captain, players } = manifest.lastAppliedExecutionProjection;
+    assert.ok(players.length > 0, "the session records its players");
+    for (const agent of [captain, ...players]) assert.equal(Object.hasOwn(agent, "skills"), false, JSON.stringify(agent));
+  } finally {
     client.close();
     await harness.service.stop();
   }

@@ -5,7 +5,9 @@
 // composition into runtime options. Validation and composition keep
 // behavioral parity with the playbook launcher (DR-004, CORE-16): any
 // config the launcher accepts or rejects is treated identically here,
-// with the same error messages wherever the rule exists upstream.
+// with the same error messages wherever the rule exists upstream —
+// except a playbook's `from` and any `skills` list, which name a path on
+// one device and are refused here (DR-105, DR-123).
 
 import {
   chmodSync,
@@ -762,10 +764,23 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   );
 }
 
+/** The refusal of the launcher's `skills` (DR-123): skills reach agents
+ * from the environments that install them, never from a path in a
+ * shared file (core-service-2, DR-104). */
+function skillsRefusal(path: string): string {
+  return i18n._({
+    id: "{path} is not allowed: skills reach agents from the environments that install their spec packages",
+    comment:
+      "Config error; `skills` is the config file's own field name, refused because skills come from environments",
+    values: { path },
+  });
+}
+
 function validateAgentBlock(
   block: Record<string, unknown>,
   path: string,
 ): void {
+  if (Object.hasOwn(block, "skills")) throw new Error(skillsRefusal(`${path}.skills`));
   for (const key of Object.keys(block)) {
     if (!AGENT_FIELDS.has(key)) {
       throw new Error(
@@ -1294,6 +1309,7 @@ export async function composeConfig(
       }),
     );
   }
+  if (Object.hasOwn(ownTop, "skills")) throw new Error(skillsRefusal("skills"));
   // A session's configuration is yours with the project's on top
   // (core-service-2); the project's file is checked before it layers.
   if (options.project) validateProjectConfig(options.project.top, options.project.path);

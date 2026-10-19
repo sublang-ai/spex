@@ -55,9 +55,9 @@ const entry = {
   concurrentRoleSets: [] as readonly (readonly string[])[],
   requiredRoleIds: [...REQUIRED_ROLE_IDS],
   validateOptions,
-  createRuntime(options: { captainOptions?: unknown },
+  createRuntime(configuredOptions: unknown,
     hostCapabilities: HostCapabilities) {
-    const validated = validateOptions(options.captainOptions);
+    const validated = validateOptions(configuredOptions);
     return createPlaybookRuntime({
       configuredOptions: validated,
       hostCapabilities,
