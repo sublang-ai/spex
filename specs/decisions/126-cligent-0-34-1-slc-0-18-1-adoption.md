@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
 
-# DR-125: Cligent 0.34.1 and slc 0.18.1 Adoption
+# DR-126: Cligent 0.34.1 and slc 0.18.1 Adoption
 
 ## Status
 
