@@ -10,6 +10,7 @@ Amends [DR-121](121-playbook-17-9-0-cligent-0-33-5-adoption.md) in its floors al
 Amends [DR-116](116-playbook-17-8-0-slc-0-16-1-adoption.md) in its slc floor alone: both shells require `@sublang/slc` `^0.18.0`.
 Amends [DR-105](105-playbook-17-5-0-adoption.md) in its parity claim alone: the core refuses a `skills` list beside a playbook's `from`.
 Amended by [DR-126](126-cligent-0-34-1-slc-0-18-1-adoption.md) in its Cligent and slc floors and lock resolutions alone: Cligent `^0.34.1` and slc `^0.18.1`; Playbook and the skills decisions stand.
+Amended by [DR-130](130-playbook-17-11-0-cligent-0-36-0-slc-0-19-0-adoption.md) in its floors and lock resolutions alone: Playbook `^17.11.0`, Cligent `^0.36.0` and slc `^0.19.0`; the skills decisions stand.
 Follows [DR-081](081-the-app-supplies-the-compiler.md)'s explicit-bump rule for the compiler and [DR-024](024-app-supplied-agent-runtimes.md)'s app-supplied agent runtimes; nothing either decided changes.
 
 ## Context

@@ -7,6 +7,7 @@
 
 Accepted (2026-10-19).
 Amends [DR-123](123-playbook-17-10-1-cligent-0-34-0-slc-0-18-0-adoption.md) in its Cligent and slc floors and lock resolutions alone; Playbook `^17.10.1`, the skills decisions and every other constraint stand.
+Amended by [DR-130](130-playbook-17-11-0-cligent-0-36-0-slc-0-19-0-adoption.md) in its floors and lock resolutions alone: Playbook `^17.11.0`, Cligent `^0.36.0` and slc `^0.19.0`.
 
 ## Context
 
