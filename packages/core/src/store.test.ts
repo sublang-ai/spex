@@ -785,8 +785,7 @@ test("storage-2: home.yaml lists every instance by its origin, the first the def
   // The origin-less sign-in signs the default in; a second instance follows the first.
   home.signIn({ ...ada, displayName: "Ada L." });
   assert.deepEqual(home.instances(), [{ origin: "http://127.0.0.1:4100", clientId: "spex", account: { ...ada, displayName: "Ada L." } }]);
-  assert.deepEqual(home.addInstance("HTTPS://Spex.pub"), { origin: "https://spex.pub", clientId: "spex" });
-  home.signIn("https://spex.pub", { id: "77", login: "lovelace", displayName: null });
+  home.signIn("HTTPS://Spex.pub", { id: "77", login: "lovelace", displayName: null });
   assert.equal(home.setDisplayName("https://spex.pub", "spex.pub"), true);
   assert.equal(home.setDisplayName("https://elsewhere.test", "Elsewhere"), false);
   assert.deepEqual(home.instances().map((entry) => [entry.origin, entry.account?.login, entry.displayName]),
@@ -801,8 +800,8 @@ test("storage-2: home.yaml lists every instance by its origin, the first the def
   assert.throws(() => home.signIn("https://spex.pub", ada), (error: unknown) => error instanceof InstanceRefused && error.reason === "another-account" && error.origin === "https://spex.pub");
   assert.equal(home.account("https://spex.pub")?.login, "lovelace");
   // An origin that is none, or whose folder a listed one's equals, is refused.
-  assert.throws(() => home.addInstance("http://spex.pub"), (error: unknown) => error instanceof StorageFormatError && /is not an instance's origin/.test(error.reason));
-  assert.throws(() => home.addInstance("https://127.0.0.1:4100"), (error: unknown) => error instanceof StorageFormatError &&
+  assert.throws(() => home.signIn("http://spex.pub", ada), (error: unknown) => error instanceof StorageFormatError && /is not an instance's origin/.test(error.reason));
+  assert.throws(() => home.signIn("https://127.0.0.1:4100", ada), (error: unknown) => error instanceof StorageFormatError &&
     error.reason === "instances http://127.0.0.1:4100 and https://127.0.0.1:4100 share the folder @127.0.0.1_4100");
   assert.equal(home.instances().length, 2);
   // Sign out keeps the entry; Forget refuses one signed in and takes one signed out.
@@ -829,7 +828,8 @@ test("storage-1, storage-2: home.yaml in format 1 is refused until the instances
   const dir = scratchDir("spex-home-format-");
   const file = join(dir, "home.yaml");
   const device = "71000000-0000-4000-8000-0000000000ff";
-  const valid = { format: 2, device, origin: "https://spex.pub", instances: [{ origin: "https://spex.pub", clientId: "spex" }], own: "tester", folders: [] };
+  const account = { id: "1", login: "ada", displayName: null };
+  const valid = { format: 2, device, origin: "https://spex.pub", instances: [{ origin: "https://spex.pub", clientId: "spex", account }], own: "tester", folders: [] };
   const write = (value: unknown): void => writeFileSync(file, stringifyYaml(value));
   const refusal = (value: unknown): string => {
     write(value);
@@ -841,13 +841,14 @@ test("storage-1, storage-2: home.yaml in format 1 is refused until the instances
     "format 1: the instances migration has not run; preserved unchanged");
   assert.equal(refusal({ ...valid, format: 3 }), "unsupported format 3; preserved unchanged");
   assert.equal(refusal({ ...valid, origin: "https://spex.pub/" }), "https://spex.pub/ is not an instance's origin");
-  assert.equal(refusal({ ...valid, instances: [{ origin: "https://Spex.pub", clientId: "spex" }] }), "https://Spex.pub is not an instance's origin");
-  assert.equal(refusal({ ...valid, instances: [{ origin: "https://ada:secret@spex.pub", clientId: "spex" }] }), "https://…@spex.pub is not an instance's origin");
+  assert.equal(refusal({ ...valid, instances: [{ origin: "https://Spex.pub", clientId: "spex", account }] }), "https://Spex.pub is not an instance's origin");
+  assert.equal(refusal({ ...valid, instances: [{ origin: "https://ada:secret@spex.pub", clientId: "spex", account }] }), "https://…@spex.pub is not an instance's origin");
   assert.equal(refusal({ ...valid, instances: [valid.instances[0], valid.instances[0]] }), "instances https://spex.pub and https://spex.pub share the folder @spex.pub");
-  assert.equal(refusal({ ...valid, instances: [{ origin: "http://localhost:8443", clientId: "spex" }, { origin: "https://localhost:8443", clientId: "spex" }] }),
+  assert.equal(refusal({ ...valid, instances: [{ origin: "http://localhost:8443", clientId: "spex", account }, { origin: "https://localhost:8443", clientId: "spex", account }] }),
     "instances http://localhost:8443 and https://localhost:8443 share the folder @localhost_8443");
-  assert.equal(refusal({ ...valid, instances: [{ origin: "https://spex.pub", clientId: "spex", signedOut: "yes" }] }), "invalid home file");
-  assert.match(refusal({ ...valid, instances: [{ url: "https://spex.pub", clientId: "spex" }] }), /^expected fields /, "an entry names its origin as origin");
+  assert.equal(refusal({ ...valid, instances: [{ origin: "https://spex.pub", clientId: "spex", account, signedOut: "yes" }] }), "invalid home file");
+  assert.match(refusal({ ...valid, instances: [{ url: "https://spex.pub", clientId: "spex", account }] }), /^expected fields /, "an entry names its origin as origin");
+  assert.match(refusal({ ...valid, instances: [{ origin: "https://spex.pub", clientId: "spex" }] }), /^expected fields /, "an entry carries its account");
   assert.match(refusal({ ...valid, host: valid.instances[0] }), /^expected fields /);
   // Your own group's config path reads either format's folder name.
   write({ format: 1, device, host: { url: "https://spex.pub", clientId: "spex" }, own: "bob", folders: [] });

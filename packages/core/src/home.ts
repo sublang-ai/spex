@@ -143,12 +143,12 @@ export function parseHomeFile(value: unknown, file: string): HomeFile {
   need(isOrigin(value.origin), file, notAnOrigin(value.origin));
   const folders = new Map<string, string>();
   for (const instance of value.instances) {
-    closed(instance, ["origin", "clientId"], ["account", "signedOut", "displayName"], file);
+    closed(instance, ["origin", "clientId", "account"], ["signedOut", "displayName"], file);
     need(isText(instance.origin) && instance.clientId === CLIENT_ID &&
       (instance.signedOut === undefined || typeof instance.signedOut === "boolean") &&
       (instance.displayName === undefined || typeof instance.displayName === "string"), file, invalidHome());
     need(isOrigin(instance.origin), file, notAnOrigin(instance.origin));
-    if (instance.account !== undefined) parseAccount(instance.account, file);
+    parseAccount(instance.account, file);
     // One entry per origin, and no two origins at one folder (DR-127).
     const folder = instanceFolder(instance.origin);
     const first = folders.get(folder);
@@ -363,21 +363,10 @@ export class Home {
     return folder === null ? undefined : this.instanceByFolder(folder);
   }
 
-  /** List an instance where it is not listed, after those that are;
-   * an origin that is none, or whose folder a listed one's equals, is
-   * refused. */
-  addInstance(origin: string): HomeInstance {
-    const canonical = this.originOf(origin);
-    const index = this.indexOf(canonical);
-    if (index >= 0) return structuredClone(this.data.instances[index]);
-    const instance: HomeInstance = { origin: canonical, clientId: CLIENT_ID };
-    this.take({ ...this.data, instances: [...this.data.instances, instance] });
-    return structuredClone(instance);
-  }
-
   /** The account a sign-in read (storage-2): the instance listed where
-   * it is not, its entry signed in again, and a sign-in as another
-   * account than the one it lists refused. The origin is the default
+   * it is not, after those that are — an origin that is none, or whose
+   * folder a listed one's equals, refused — its entry signed in again,
+   * and a sign-in as another account than the one it lists refused. The origin is the default
    * instance's where none is named. */
   signIn(account: HomeAccount): void;
   signIn(origin: string, account: HomeAccount): void;
