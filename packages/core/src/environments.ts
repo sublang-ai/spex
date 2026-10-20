@@ -848,9 +848,9 @@ export class EnvironmentManager {
   }
 
   /** A working folder was paired with a clone this device holds
-   * (environments-31): its environment installs where the lock is not
-   * installed as it locks and exports into the folder, as an install
-   * does, its state broadcast. */
+   * (environments-31): its environment is exported into the folder as
+   * an install does, after any install the pairing's read starts
+   * (environments-7), its state broadcast. */
   paired(key: string): Promise<void> {
     if (!this.store.repository(key)) return Promise.resolve();
     return this.settle(key, "auto", false);
