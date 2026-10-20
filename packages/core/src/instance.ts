@@ -11,14 +11,15 @@
 // begins with. This module composes no reader-facing prose: a refusal
 // carries its reason, which the core phrases where it speaks.
 
+import { INSTANCE_FOLDER_PATTERN } from "./protocol.js";
+
 /** The instance a new home records unless `SPEX_HOST_URL` names another
  * (git-host-1). */
 export const DEFAULT_HOST_URL = "https://spex.pub";
 
-/** An instance's folder under `workspace/`: `@`, the host in lowercase
- * as a key segment spells it, and `_<port>` where the origin names one
- * or its scheme is `http`. */
-export const INSTANCE_FOLDER_PATTERN = /^@[a-z0-9.-]+(?:_[0-9]+)?$/;
+/** An instance's folder under `workspace/`, defined beside the key whose
+ * first segment it may be. */
+export { INSTANCE_FOLDER_PATTERN };
 
 const HOST = /^[a-z0-9.-]+$/;
 const LOOPBACK_V4 = /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/;

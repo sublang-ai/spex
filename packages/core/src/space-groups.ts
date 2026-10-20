@@ -23,7 +23,7 @@ import {
   type SignInCause,
 } from "./git-host.js";
 import { i18n } from "./i18n.js";
-import { REPOSITORY_KEY_PATTERN } from "./protocol.js";
+import { INSTANCE_FOLDER_PATTERN, REPOSITORY_KEY_PATTERN } from "./protocol.js";
 import { hostRefused, noLongerShared, signInAgain } from "./space-git.js";
 
 /** One spex repository the host listed, with what its state needs. */
@@ -126,12 +126,16 @@ async function memberCount(client: GitHostClient, id: string): Promise<number | 
 
 /** The key a listed repository's clone takes under `workspace/`: its
  * group's path in the instance joined to its own, as the host answers
- * them (git-host-5, DR-120); null where those names cannot stand as a
- * key. A group held as colliding is the caller's to refuse
+ * them (git-host-5, DR-120), under the instance's folder where one is
+ * named (DR-127); null where those names cannot stand as a key — a path
+ * beginning with `@` among them, which would read as an instance's
+ * folder. A group held as colliding is the caller's to refuse
  * ([[collidingGroup]]). */
-export function hostKey(repository: HostRepository): string | null {
-  const key = `${repository.group.fullPath}/${repository.path}`;
-  return REPOSITORY_KEY_PATTERN.test(key) ? key : null;
+export function hostKey(repository: HostRepository, instance?: string): string | null {
+  const path = `${repository.group.fullPath}/${repository.path}`;
+  if (path.startsWith("@") || !REPOSITORY_KEY_PATTERN.test(path)) return null;
+  if (instance === undefined) return path;
+  return INSTANCE_FOLDER_PATTERN.test(instance) ? `${instance}/${path}` : null;
 }
 
 /** The logins a view names besides groups (git-host-5, DR-120): your

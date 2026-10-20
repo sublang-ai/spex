@@ -2,7 +2,8 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // Instances by their origin (DR-127): the canonical origin and folder a
-// URL names, and every URL the origin rule refuses.
+// URL names, every URL the origin rule refuses, and keys naming the
+// instance by its folder.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -16,6 +17,10 @@ import {
   parseOrigin,
   type OriginRefusal,
 } from "./instance.js";
+import { splitKey } from "./home.js";
+import type { HostRepository } from "./git-host.js";
+import { REPOSITORY_KEY_PATTERN } from "./protocol.js";
+import { hostKey } from "./space-groups.js";
 
 // input, canonical origin, folder
 const CANONICAL: Array<[string, string, string]> = [
@@ -118,4 +123,39 @@ test("instance folders: a key's instance segment is its first segment where that
   assert.equal(instanceSegmentOf("acme/platform/b-spex"), null);
   assert.equal(instanceSegmentOf("a-spex"), null);
   assert.equal(instanceSegmentOf("@spex_pub/a-spex"), null);
+});
+
+test("keys: a key splits into its instance's folder, the group path in that instance and its name", () => {
+  assert.deepEqual(splitKey("@spex.pub/acme/platform/a-spex"), { instance: "@spex.pub", group: "acme/platform", name: "a-spex" });
+  assert.deepEqual(splitKey("@127.0.0.1_4100/ada/x-spex"), { instance: "@127.0.0.1_4100", group: "ada", name: "x-spex" });
+  assert.deepEqual(splitKey("@spex.pub/a-spex"), { instance: "@spex.pub", group: "", name: "a-spex" });
+  // Your own group's and the local-only clones lie outside every
+  // instance's folder.
+  assert.deepEqual(splitKey("me/me-spex"), { instance: null, group: "me", name: "me-spex" });
+  assert.deepEqual(splitKey("acme/platform/b-spex"), { instance: null, group: "acme/platform", name: "b-spex" });
+  assert.deepEqual(splitKey("a-spex"), { instance: null, group: "", name: "a-spex" });
+  // Every folder an origin names stands as a key's first segment.
+  for (const [input, , folder] of CANONICAL) {
+    const key = `${instanceFolder(input)}/acme/a-spex`;
+    assert.ok(REPOSITORY_KEY_PATTERN.test(key), key);
+    assert.deepEqual(splitKey(key), { instance: folder, group: "acme", name: "a-spex" });
+  }
+});
+
+test("keys: a listed repository's key is its path in the instance, under the instance's folder where one is named", () => {
+  const listed = (fullPath: string, path: string): HostRepository => ({
+    id: "17", name: path, path, remoteUrl: "", visibility: "private", archived: false, empty: false, lfs: false, spexBranch: true, project: null,
+    group: { id: "3", fullPath, name: fullPath, kind: "group", can: { createSubgroup: false, manageMembers: false, rename: false, delete: false } },
+    can: { manageMembers: false, transfer: false },
+  });
+  assert.equal(hostKey(listed("acme/platform", "a-spex")), "acme/platform/a-spex");
+  assert.equal(hostKey(listed("acme/platform", "a-spex"), "@spex.pub"), "@spex.pub/acme/platform/a-spex");
+  assert.equal(hostKey(listed("ada", "x-spex"), "@127.0.0.1_4100"), "@127.0.0.1_4100/ada/x-spex");
+  // A path that cannot stand as a key, a path beginning with `@`, or a
+  // name that is no instance's folder takes none.
+  assert.equal(hostKey(listed("acme", "a"), "@spex.pub"), null);
+  assert.equal(hostKey(listed("@spex.pub", "a-spex")), null);
+  assert.equal(hostKey(listed("@spex.pub/acme", "a-spex"), "@spex.pub"), null);
+  assert.equal(hostKey(listed("acme", "a-spex"), "spex.pub"), null);
+  assert.equal(hostKey(listed("acme", "a-spex"), "@Spex.pub"), null);
 });

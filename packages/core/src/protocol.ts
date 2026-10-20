@@ -45,13 +45,22 @@ export const mediaAssetSchema = z.object({
 }).strict();
 /** Wire-validated form of Playbook's SessionAssetRef. */
 export type MediaAsset = z.infer<typeof mediaAssetSchema>;
+const KEY_SEGMENT = "[A-Za-z0-9_][A-Za-z0-9._-]*";
+const INSTANCE_SEGMENT = "@[a-z0-9.-]+(?:_[0-9]+)?";
+/** An instance's folder under `workspace/` (DR-127): `@`, its host in
+ * lowercase as a key segment spells it, and `_<port>` where its origin
+ * names a port or its scheme is `http` — `@spex.pub`, `@127.0.0.1_4100`. */
+export const INSTANCE_FOLDER_PATTERN = new RegExp(`^${INSTANCE_SEGMENT}$`);
 /** A spex repository's key: its clone's path under `workspace/`, the
- * name ending in `-spex` (storage-1, projects-10), each segment spelled
- * as the Git host spells its paths — letters, digits, `.`, `_` and `-`,
+ * name ending in `-spex` (storage-1, projects-10). A clone at an
+ * instance lies under that instance's folder, its key's first segment
+ * (`@spex.pub/acme/a-spex`, DR-127); every other segment is spelled as
+ * the Git host spells its paths — letters, digits, `.`, `_` and `-`,
  * never starting with a dot or a hyphen — so a host's group or
- * repository name stands as a segment unchanged. A project is named by
- * its spex repository's key. */
-export const REPOSITORY_KEY_PATTERN = /^[A-Za-z0-9_][A-Za-z0-9._-]*(?:\/[A-Za-z0-9_][A-Za-z0-9._-]*)*-spex$/;
+ * repository name stands as a segment unchanged, and only an instance's
+ * folder begins with `@`. A project is named by its spex repository's
+ * key. */
+export const REPOSITORY_KEY_PATTERN = new RegExp(`^(?:${INSTANCE_SEGMENT}/)?${KEY_SEGMENT}(?:/${KEY_SEGMENT})*-spex$`);
 export const repositoryKeySchema = z.string().regex(REPOSITORY_KEY_PATTERN);
 
 /** A request in `spex.yaml` (environments-2): exactly one source. */
@@ -1885,8 +1894,10 @@ export type SpaceSyncPhase =
 
 /** One spex repository as the Groups surface reads it (space-30, space-61). */
 export interface RepositoryState {
-  /** The clone's path under `workspace/`; for a row the host lists in a
-   * group held as colliding, `<path>@<id>`, naming no clone (space-61). */
+  /** The clone's path under `workspace/`, beginning with its instance's
+   * folder where it lies at an instance (`@spex.pub/acme/a-spex`,
+   * DR-127); for a row the host lists in a group held as colliding,
+   * `<path>@<id>`, naming no clone (space-61). */
   key: string;
   /** `<name>-spex`, the clone's folder name. */
   name: string;

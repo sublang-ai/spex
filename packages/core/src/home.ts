@@ -16,7 +16,7 @@ import {
   StorageFormatError, writeApplicationBytes,
 } from "./files.js";
 import { i18n } from "./i18n.js";
-import { hostUrlFor } from "./instance.js";
+import { hostUrlFor, instanceSegmentOf } from "./instance.js";
 import { REPOSITORY_KEY_PATTERN } from "./protocol.js";
 
 export { hostUrlFor };
@@ -64,10 +64,16 @@ export function isRepositoryKey(value: unknown): value is string {
   return typeof value === "string" && REPOSITORY_KEY_PATTERN.test(value);
 }
 
-/** The group path and the name of a key: `acme/platform` and `a-spex`. */
-export function splitKey(key: string): { group: string; name: string } {
-  const at = key.lastIndexOf("/");
-  return at < 0 ? { group: "", name: key } : { group: key.slice(0, at), name: key.slice(at + 1) };
+/** The instance folder, the group path in that instance and the name
+ * of a key: `@spex.pub`, `acme/platform` and `a-spex` of
+ * `@spex.pub/acme/platform/a-spex`; the instance null for a key outside
+ * every instance's folder, as your own group's and the local-only
+ * clones' are (DR-127). */
+export function splitKey(key: string): { instance: string | null; group: string; name: string } {
+  const instance = instanceSegmentOf(key);
+  const path = instance === null ? key : key.slice(instance.length + 1);
+  const at = path.lastIndexOf("/");
+  return at < 0 ? { instance, group: "", name: path } : { instance, group: path.slice(0, at), name: path.slice(at + 1) };
 }
 
 const invalidHome = (): string =>
@@ -227,8 +233,9 @@ export class Home {
   rename(oldKey: string, newKey: string): void {
     this.data = { ...this.data, folders: this.data.folders.map((folder) => folder.repository === oldKey ? { ...folder, repository: newKey } : folder) };
     if (oldKey === this.own()) {
-      const { group, name } = splitKey(newKey);
-      if (`${group}-spex` === name && GROUP_NAME.test(group)) this.data = { ...this.data, own: group };
+      // Your own group's folder lies outside every instance's (DR-127).
+      const { instance, group, name } = splitKey(newKey);
+      if (instance === null && `${group}-spex` === name && GROUP_NAME.test(group)) this.data = { ...this.data, own: group };
     }
   }
 

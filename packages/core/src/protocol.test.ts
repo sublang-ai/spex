@@ -100,6 +100,21 @@ test("storage: a key's segments are spelled as the host spells its paths", () =>
   }
 });
 
+test("storage: a key may begin with its instance's folder, and only there may a segment begin with @", () => {
+  // DR-127: `@<host>` in lowercase with `_<port>` where the origin
+  // names one, as the key's first segment alone.
+  for (const key of ["@spex.pub/acme/a-spex", "@127.0.0.1_4100/ada/x-spex", "@internal.spex.pub/acme/platform/web-spex", "@spex.pub/a-spex"]) {
+    assert.ok(REPOSITORY_KEY_PATTERN.test(key), key);
+    assert.ok(parseCommand({ type: "space.fetch", id: "k1", repository: key }).ok, key);
+  }
+  // Never a host with capitals, `@` past the first segment, an empty
+  // host or port, `_` in the host, two ports, or the folder alone.
+  for (const key of ["@Spex.pub/a-spex", "acme/@h/a-spex", "@/a-spex", "@h_/a-spex", "@spex_pub/a-spex", "@h_80_1/a-spex", "@h/@g/a-spex", "@spex.pub-spex", "@spex.pub/", "@spex.pub//a-spex"]) {
+    assert.ok(!REPOSITORY_KEY_PATTERN.test(key), key);
+    assert.ok(!parseCommand({ type: "space.fetch", id: "k1", repository: key }).ok, key);
+  }
+});
+
 test("parseCommand rejects a space command with an unknown field or side", () => {
   const extra = parseCommand({ type: "space.get", id: "s1", verbose: true });
   assert.ok(!extra.ok);
