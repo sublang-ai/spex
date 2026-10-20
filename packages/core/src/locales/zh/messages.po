@@ -213,6 +213,11 @@ msgstr "{host} 拒绝了本机的访问"
 msgid "{host} refused: {words}"
 msgstr "{host} 拒绝了：{words}"
 
+#. A sign-in refused, nothing stored: the person signed in at an instance the home lists as another account than the one it lists there; {host} is the instance's display name, {login} the listed account's login
+#: src/space-groups.ts
+msgid "{host} signed you in as another account; this device uses @{login} there"
+msgstr "{host} 登录的是另一个账户；本设备在那里使用 @{login}"
+
 #. Refusal: the authoring session's file changed, or another session took its id, since the page read it
 #: src/authoring.ts
 msgid "{id} changed meanwhile; retry"

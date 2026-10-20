@@ -916,6 +916,71 @@ test("space-37: Sign out revokes this device and keeps every clone, its reposito
   assert.deepEqual(Home.load(home.dataDir).file.instances.map((entry) => [entry.url, entry.account?.login, entry.signedOut]), [[host.url, LOGIN, undefined]]);
 });
 
+test("git-host-2: a sign-in at a listed instance as another account ends failed naming the entry's login, storing nothing and signing nothing out", async (t) => {
+  const host = await startHost();
+  const home = await startHome("another-account", { host, project: false, extra: { signIn: "browser" } });
+  t.after(() => home.stop());
+  const from = home.client.mark();
+  await signIn(home, host);
+  await home.client.waitRepository(from, HOST_OWN, (repository) => repository.sync.phase === "done");
+  const ada = host.script.person;
+  const bob = { id: "1002", login: "bob", displayName: "Bob" };
+  const credentials = fileCredentialStore(home.dataDir, host.url);
+  /** A sign-in followed through the browser's redirect as the stand-in's
+   * current person, and the first state after it failed. */
+  const refusedSignIn = async (): Promise<GroupsState> => {
+    const started = await home.client.expectOk("space.signin.start", {});
+    // Marked once this flow runs, so an earlier failure is not read.
+    const mark = home.client.mark();
+    assert.equal(started.flow, "browser");
+    if (started.flow !== "browser") throw new Error("not the browser flow");
+    const location = (await fetch(started.url, { redirect: "manual" })).headers.get("location");
+    assert.ok(location, "the stand-in redirects to the loopback");
+    const page = await fetch(location);
+    assert.equal(page.status, 400, "the browser reads that the sign-in did not complete");
+    await page.text();
+    return home.client.waitSpace(mark, (state) => state.signIn.phase === "failed");
+  };
+  const assertRefused = (state: GroupsState): void => {
+    assert.equal(state.signIn.phase, "failed");
+    if (state.signIn.phase !== "failed") return;
+    assert.equal(state.signIn.cause, "refused");
+    assert.match(state.signIn.message, /signed you in as another account; this device uses @ada there/, "naming the entry's login");
+  };
+  const entries = (): unknown[] => Home.load(home.dataDir).file.instances.map((entry) => [entry.url, entry.account?.id, entry.account?.login, entry.signedOut]);
+
+  // Signed in as ada, a sign-in as bob: ada's pair and entry stay, and
+  // the home still reads signed in as her.
+  const pair = await credentials.read();
+  assert.ok(pair, "ada's pair is stored");
+  host.script.person = bob;
+  const whileIn = await refusedSignIn();
+  assertRefused(whileIn);
+  assert.equal(whileIn.account?.login, LOGIN, "the home does not read signed out");
+  assert.ok(samePair(await credentials.read(), pair), "ada's pair is kept, bob's never stored");
+  assert.deepEqual(entries(), [[host.url, ada.id, LOGIN, undefined]]);
+
+  // Signed out, the same: nothing stored, the entry kept signed out as
+  // ada, and the state saying the sign-in failed — never that the host
+  // signed this device out.
+  host.script.person = ada;
+  await home.client.expectOk("space.signout", {});
+  host.script.person = bob;
+  const whileOut = await refusedSignIn();
+  assertRefused(whileOut);
+  assert.equal(whileOut.account, null);
+  assert.equal(await credentials.read(), null, "nothing is stored");
+  assert.ok(!existsSync(join(home.dataDir, "local", "credentials.yaml")), "no credentials file is written");
+  assert.deepEqual(entries(), [[host.url, ada.id, LOGIN, true]]);
+  assert.deepEqual((await home.client.expectOk("space.get", {})).signIn, whileOut.signIn, "the failure stands until the next sign-in");
+
+  // As ada again, the entry signs in again.
+  host.script.person = ada;
+  const back = await signIn(home, host);
+  assert.deepEqual([back.account?.login, back.signIn], [LOGIN, { phase: "idle" }]);
+  assert.deepEqual(entries(), [[host.url, ada.id, LOGIN, undefined]]);
+});
+
 test("git-host-4: a refresh the stand-in refuses, or a device it revoked, signs this device out, the state saying the host did it as whom until the next sign-in", async (t) => {
   const host = await startHost();
   const home = await startHome("host-signout", { host, project: false, extra: { signIn: "browser" } });

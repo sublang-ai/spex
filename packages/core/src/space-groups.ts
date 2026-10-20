@@ -427,6 +427,9 @@ export function signInFailure(error: unknown, host: string): { cause: "denied" |
       return { cause, message: i18n._({ id: "The sign-in expired before it was approved", comment: "A sign-in that ended because nobody approved it in time" }) };
     case "unreachable":
       return { cause, message: couldNotReach(host) };
+    case "account":
+      return { cause: "refused", message: i18n._({ id: "{host} signed you in as another account; this device uses @{login} there", values: { host, login: words ?? "" },
+        comment: "A sign-in refused, nothing stored: the person signed in at an instance the home lists as another account than the one it lists there; {host} is the instance's display name, {login} the listed account's login" }) };
     case "state":
     case "refused":
     default:

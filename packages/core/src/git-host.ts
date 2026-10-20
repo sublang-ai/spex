@@ -162,7 +162,7 @@ export type HostErrorKind =
   | "bad_request";
 
 /** Why a sign-in ended without an account (git-host-2, git-host-3). */
-export type SignInCause = "denied" | "expired" | "stopped" | "refused" | "state" | "unreachable";
+export type SignInCause = "denied" | "expired" | "stopped" | "refused" | "state" | "unreachable" | "account";
 
 /**
  * A host answer other than success (git-host-11). `words` is the host's
@@ -383,6 +383,17 @@ export interface GitHostClientOptions {
   holdMaxMs?: number;
 }
 
+/** Whether a sign-in may store its token for the person it read
+ * (git-host-2): null admits them; a refusal ends the sign-in `failed`
+ * with it, storing nothing. Called in the turn that would store it. */
+export type AdmitAccount = (account: HostAccount) => HostError | null;
+
+/** The refusal of a sign-in at a listed instance as another person than
+ * its entry's account (git-host-2): `words` carries the entry's login. */
+export function anotherAccountError(login: string): HostError {
+  return signInError("account", { words: login });
+}
+
 /** A running browser sign-in (git-host-2). */
 export interface BrowserSignIn {
   /** The host's `/login/app` URL for the system browser. */
@@ -494,7 +505,7 @@ export class GitHostClient {
    * `127.0.0.1` at an OS-assigned port for one callback, an S256
    * challenge, and the host's `/login/app` URL to open.
    */
-  async startBrowserSignIn(options: { timeoutMs?: number; pages?: CallbackPages } = {}): Promise<BrowserSignIn> {
+  async startBrowserSignIn(options: { timeoutMs?: number; pages?: CallbackPages; admit?: AdmitAccount } = {}): Promise<BrowserSignIn> {
     const { slot, expected } = await this.beginSignIn();
     const pages = options.pages ?? DEFAULT_PAGES;
     const server = createServer();
@@ -566,7 +577,7 @@ export class GitHostClient {
           return;
         }
         // Stored and ended in one turn: no cancel falls between them.
-        const outcome = "issued" in answered ? this.publish(expected, answered.issued) : answered;
+        const outcome = "issued" in answered ? this.publish(expected, answered.issued, options.admit) : answered;
         // The page goes out before the listener closes, so the browser
         // always sees how the sign-in ended.
         end(outcome, true);
@@ -610,7 +621,7 @@ export class GitHostClient {
    * URL, completed with the code where the host gives it, then polling the token endpoint at its interval, five seconds
    * slower on each `slow_down`, until the token, a denial or the expiry.
    */
-  async startDeviceSignIn(): Promise<DeviceSignIn> {
+  async startDeviceSignIn(options: { admit?: AdmitAccount } = {}): Promise<DeviceSignIn> {
     const { slot, expected } = await this.beginSignIn();
     let start: { deviceCode: string; userCode: string; verificationUri: string; expiresIn: number; interval: number };
     try {
@@ -683,7 +694,7 @@ export class GitHostClient {
           }
           if (settled) return;
           // Stored and ended in one turn: no cancel falls between them.
-          end("issued" in answered ? this.publish(expected, answered.issued) : answered);
+          end("issued" in answered ? this.publish(expected, answered.issued, options.admit) : answered);
           return;
         }
         const code = codeOf(answer);
@@ -966,10 +977,14 @@ export class GitHostClient {
   }
 
   /** Store an issued token in place of the pair its sign-in began over;
-   * the caller ends the sign-in in the same turn. Another pair stored
-   * meanwhile ends it `stopped`, that pair kept (git-host-2). */
-  private publish(expected: StoredCredential | null, issued: Issued): { account: HostAccount } | { error: HostError } {
+   * the caller ends the sign-in in the same turn. A person `admit`
+   * refuses ends it with that refusal, and another pair stored meanwhile
+   * ends it `stopped`, that pair kept: either stores nothing
+   * (git-host-2). */
+  private publish(expected: StoredCredential | null, issued: Issued, admit?: AdmitAccount): { account: HostAccount } | { error: HostError } {
     try {
+      const refused = admit?.(issued.account);
+      if (refused) return { error: refused };
       return this.credentials.replace(expected, issued.credential) ? { account: issued.account } : { error: signInError("stopped") };
     } catch (error) {
       return { error: asSignInError(error) };

@@ -21,10 +21,10 @@ import { heldSessionLease, occupied, pruneEmptyFolders } from "./clone-moves.js"
 import { readJsonFile, StorageFormatError, UUID, writeApplicationFile } from "./files.js";
 import { withGitCredential, type GitCredentialHandle } from "./git-credential.js";
 import {
-  CredentialChanged, HostError, SignInBusyError, type BrowserSignIn, type DeviceSignIn, type GitHostClient, type HostAccount, type HostGroup,
+  anotherAccountError, CredentialChanged, HostError, SignInBusyError, type BrowserSignIn, type DeviceSignIn, type GitHostClient, type HostAccount, type HostGroup,
   type HostMember, type HostRepository, type MembersTarget,
 } from "./git-host.js";
-import { kebab, splitKey } from "./home.js";
+import { kebab, splitKey, type HomeAccount } from "./home.js";
 import { i18n } from "./i18n.js";
 import { instanceFolder, instanceSegmentOf, isInstanceFolder } from "./instance.js";
 import type {
@@ -2613,11 +2613,12 @@ export class SpaceManager {
   async signInStart(): Promise<{ flow: "browser"; url: string } | { flow: "device"; userCode: string; verificationUri: string; expiresAt: number }> {
     if (this.flow || this.signInState.phase === "running" || this.host.client.signingIn()) throw new CoreError("busy", signInRunning());
     const kind = this.host.signInFlow;
+    const admit = (account: HostAccount): HostError | null => this.admitAccount(account);
     let started: { kind: "browser"; flow: BrowserSignIn } | { kind: "device"; flow: DeviceSignIn };
     try {
       started = kind === "browser"
-        ? { kind, flow: await this.host.client.startBrowserSignIn({ pages: callbackPages() }) }
-        : { kind, flow: await this.host.client.startDeviceSignIn() };
+        ? { kind, flow: await this.host.client.startBrowserSignIn({ pages: callbackPages(), admit }) }
+        : { kind, flow: await this.host.client.startDeviceSignIn({ admit }) };
     } catch (error) {
       if (error instanceof SignInBusyError) throw new CoreError("busy", signInRunning());
       const failure = signInFailure(error, this.hostName());
@@ -2638,6 +2639,18 @@ export class SpaceManager {
     return started.kind === "browser"
       ? { flow: "browser", url: started.flow.url }
       : { flow: "device", userCode: started.flow.userCode, verificationUri: started.flow.verificationUri, expiresAt: started.flow.expiresAt };
+  }
+
+  /** Whether a sign-in's person may stand as the account of the
+   * instance it signs in to (git-host-2): at a listed instance, only
+   * its entry's account, read from `home.yaml` in the turn that would
+   * store the token; another is refused naming the entry's login, so
+   * nothing is stored and the home stays as it stood. */
+  private admitAccount(account: HostAccount): HostError | null {
+    let listed: HomeAccount | undefined;
+    try { listed = this.host.store.home.instance(this.host.client.url)?.account; }
+    catch { return null; }
+    return listed && listed.id !== account.id ? anotherAccountError(listed.login) : null;
   }
 
   /** Stop the running sign-in; false where none runs. */
