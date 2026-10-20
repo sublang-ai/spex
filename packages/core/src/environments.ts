@@ -136,9 +136,11 @@ interface CloneState {
   conflicts: { requests: FileVersion; conflicts: Conflict[] } | null;
   error: string | null;
   published?: { name: string; version: string; url: string };
-  /** What the last export left out (environments-14): it stands until
-   * the next export, whatever overtakes the operation after it. */
-  unexported: NonNullable<EnvironmentState["unexported"]> | null;
+  /** What the last export left out, with the working folder it exported
+   * into: listed only while that folder is the one paired
+   * (environments-14), and standing until the next export, whatever
+   * overtakes the operation after it. */
+  unexported: (NonNullable<EnvironmentState["unexported"]> & { folder: string | null }) | null;
 }
 
 /** What a strict settle wrote before it stopped, for the caller's report. */
@@ -636,9 +638,10 @@ export class EnvironmentManager {
       // mixes two locks (environments-8).
       if (fileVersion(lockPath) !== lockVersion) throw new VersionConflictError(lockPath);
       if (!this.installedWhole(dir, lock)) throw new VersionConflictError(join(dir, "packages"));
-      const exported = await this.exportNow(dir, key, lock);
+      const exportedTo = this.workingFolder(key);
+      const exported = await this.exportNow(dir, key, lock, exportedTo);
       state.unexported = exported.skipped.length > 0 || exported.missing.length > 0
-        ? { skipped: exported.skipped, missing: exported.missing }
+        ? { folder: exportedTo, skipped: exported.skipped, missing: exported.missing }
         : null;
       // A success clears a failure only while its files still stand as
       // it read and wrote them; its exports stand either way.
@@ -666,11 +669,11 @@ export class EnvironmentManager {
 
   /** Export the installed environment into its working folder and, for
    * your own group, your agents' home folders (environments-8). */
-  private exportNow(dir: string, key: string, lock: Lock): Promise<ExportReport> {
+  private exportNow(dir: string, key: string, lock: Lock, workingFolder: string | null): Promise<ExportReport> {
     return exportEnvironment({
       cloneDir: dir,
       lock,
-      workingFolder: this.workingFolder(key),
+      workingFolder,
       userHome: this.isOwn(key) ? this.options.userHome : null,
       agents: this.agents(),
       packagesDir: join(dir, "packages"),
@@ -1085,6 +1088,11 @@ export class EnvironmentManager {
     const requestMap: Record<string, EnvironmentRequestSummary> = {};
     for (const [name, request] of Object.entries(requests?.packages ?? {})) requestMap[name] = requestOf(request, this.options.gitLabel);
     const builtinUpdate = this.builtinUpdate(requests, lock);
+    // What an export left out describes the folder it exported into, so
+    // a folder paired since lists none of it (environments-14).
+    const unexported = clone.unexported !== null && clone.unexported.folder === workingFolder
+      ? { skipped: clone.unexported.skipped.map((entry) => ({ ...entry })), missing: [...clone.unexported.missing] }
+      : null;
     return {
       repository: key,
       language: requests?.language ?? null,
@@ -1096,7 +1104,7 @@ export class EnvironmentManager {
       error,
       published: clone.published ? { ...clone.published } : null,
       ...(builtinUpdate ? { builtinUpdate } : {}),
-      ...(clone.unexported ? { unexported: structuredClone(clone.unexported) } : {}),
+      ...(unexported ? { unexported } : {}),
     };
   }
 
