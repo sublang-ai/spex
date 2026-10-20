@@ -1132,6 +1132,17 @@ test("environments-22: skills and playbooks export to agent folders, the user's 
   assert.deepEqual(lacking.skipped, []);
   assert.ok(existsSync(join(bare, ".claude/skills/lint/SKILL.md")));
   assert.equal(existsSync(join(bare, ".claude/skills/walk")), false);
+  // A path source whose manifest still declares a playbook its folder
+  // lacks: no skill runs that playbook, its spec still stands, and the
+  // export names the spec package (environments-8).
+  const gutted = join(scratch, "gutted");
+  git(scratch, ["init", "--quiet", "-b", "main", gutted]);
+  await makeRelease(join(gutted, "tools", "walk"), manifestOf("acme/walker", "0.1.0", { walk: { kind: "playbook", language: "en" }, walker: { kind: "spec", language: "en" } }), { "specs/en/walker.md": specText("walker") });
+  const gap = await exportEnvironment({ cloneDir: home.clone, lock: widenedLock, workingFolder: gutted, userHome: null, agents: ["claude"], packagesDir: join(home.clone, "packages") });
+  assert.deepEqual(gap.missing, ["acme/walker"]);
+  assert.ok(!gap.skills.includes("walk"));
+  assert.equal(existsSync(join(gutted, ".claude/skills/walk")), false);
+  assert.ok(existsSync(join(gutted, ".claude/skills/acme-walker/walker.md")));
 });
 
 // ---------------------------------------------------------------------------

@@ -429,6 +429,8 @@ export async function exportEnvironment(options: ExportOptions): Promise<ExportR
           writeFileSync(skill, rewriteSkillName(readFileSync(skill, "utf8"), exported));
         }
       } else if (artifact.kind === "playbook") {
+        // No skill runs a playbook whose folder is not here.
+        if (!existsSync(join(root, "playbooks", language, id))) { if (!report.missing.includes(name)) report.missing.push(name); continue; }
         mkdirSync(target, { recursive: true });
         writeFileSync(join(target, "SKILL.md"), playbookSkill({ name: exported, id, packageName: name, version }));
         playbookSkills.add(exported);
