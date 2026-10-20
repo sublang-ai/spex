@@ -5,9 +5,9 @@
 
 ## Status
 
-Proposed (2026-10-20) on the owner's direction: a person may belong to groups at more than one spex.pub instance — the internal and the production instance today, an instance at JiHu GitLab [[1]] tomorrow — and must not need a home per instance.
+Accepted (2026-10-20) on the owner's direction: a person may belong to groups at more than one spex.pub instance — the internal and the production instance today, an instance at JiHu GitLab [[1]] tomorrow — and must not need a home per instance.
 Proposed to be extended by [DR-128](128-a-spex-repository-placed-at-several-instances.md), which places one spex repository at several of a home's instances, and to be amended by it in your own group's sign-in and in one remote per clone: your own group is placed at every instance the home signs in to, a clone holds a remote per placement, and a code clone uses the broker of any signed-in placement's instance at the code's origin.
-Proposes to amend, under [DR-046](046-decision-record-evolution.md):
+Amends, under [DR-046](046-decision-record-evolution.md):
 
 - [DR-103](103-the-home-and-its-groups.md) in its tree, its concepts and its sign-in: the tree under `workspace/` holds every spex repository at an instance in a folder of that instance's own, your own group's own repository and the local-only clones staying in your own group's folder; `home.yaml` records every instance the home has signed in to and its default instance, and Spex consults each; your own group's repository is created or joined at the first sign-in and named after your login there, while its folder is named once.
 - [DR-057](057-space-surface.md), as [DR-103](103-the-home-and-its-groups.md) amended it, in its remote's name: a clone's one remote is named by its instance's folder.
@@ -51,7 +51,7 @@ Proposes to amend, under [DR-046](046-decision-record-evolution.md):
 - A host repository is one by its Git origin and id, as each instance reports them to the core.
   Where two signed-in instances share a Git origin and both list one repository, it is one clone and one row, keyed under the instance through which it was first joined or created; while that instance is signed in, its answer alone governs the clone's path and moves, its read-only state, its unlisting, its members, its abilities and Share, and the other instance's listing only suppresses Join.
   Where no clone exists yet, the Join row stands under the earliest of those instances in the home's list, and Join keys it there.
-  While the clone's instance is signed out and another signed-in instance lists the same host repository, the clone follows that instance: a Sync, a Leave or a Forget re-keys it under that instance's folder with its remote renamed, as a host's rename moves a clone, and proceeds with that instance; your own group's own repository renames its remote and keeps its folder.
+  While the clone's instance is signed out and another signed-in instance lists the same host repository, the clone follows that instance: a Sync or a Forget re-keys it under that instance's folder with its remote renamed, as a host's rename moves a clone, and proceeds with that instance; your own group's own repository renames its remote and keeps its folder.
 - The Groups state keys a group's entry by instance and id, your own group by `own`, your namespace at an instance and another account's by instance and login; a colliding row's key names its instance and stays apart from every clone's key.
   A listed group collides where its path equals, ignoring case, your login at that instance or another login that instance lists, or lies beneath one; the collision with your own group's folder name goes.
 - A project's instance is its spex repository's; the Org default of New playbook matches the key without its instance segment against the orgs the registry lists for the project's instance; an intent's author is the account at its project's instance, and none for a project with no instance.
@@ -62,7 +62,7 @@ Proposes to amend, under [DR-046](046-decision-record-evolution.md):
 ### The surface
 
 - Your own group first; then each signed-in instance under its display name, its heading carrying "Signed in as @<login>" and Sign out, "New group" or "Groups are made by the people who run <display name>" as that instance's read says, the read's time and Refresh's outcome, and beneath it its groups, read as the list reads them today, and your namespace there headed by your login, holding its rows other than your own group's own repository.
-  An instance signed out keeps its heading with "Sign in again" and Forget, its rows unreachable unless another signed-in instance lists them; "Another instance…" at the list's foot opens the sign-in card.
+  An instance signed out keeps its heading with "Sign in again" and Forget, its rows unreachable unless another signed-in instance lists them; "Add instance…" at the list's foot, bearing "Another instance" as its title and accessible name, opens the sign-in card.
 - Pick a group offers every signed-in instance's groups and your namespace there, each under its instance; a repository created in one is created at that instance.
   Move offers only the groups at the row's instance and your namespace there.
 - A member is added, and a group made, renamed or deleted, at the instance that lists it; a root group is made at the instance whose heading carries "New group".

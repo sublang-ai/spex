@@ -7,7 +7,7 @@
 
 Accepted (2026-10-07).
 Amends [DR-103](103-the-home-and-its-groups.md) in when Spex reads the host: also once when it starts signed in.
-Proposed to be amended by [DR-127](127-a-home-signed-in-to-several-instances.md) in the read at a signed-in start: once per signed-in instance, each standing or failing on its own.
+Amended by [DR-127](127-a-home-signed-in-to-several-instances.md) in the read at a signed-in start: once per signed-in instance, each standing or failing on its own.
 
 ## Context
 
