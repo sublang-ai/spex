@@ -15,6 +15,7 @@ import { join, relative, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { RUNTIME_ABI } from "@sublang/playbook/xstate-runtime";
 import { build } from "esbuild";
+import { getNativeSkillSupport } from "@sublang/cligent";
 import { KNOWN_PLAYER_ADAPTERS } from "@sublang/cligent/tmux-play";
 import { parse as parseYaml } from "yaml";
 
@@ -997,6 +998,11 @@ test("environments-22: skills and playbooks export to agent folders, the user's 
   // working folder receives every project-level folder whatever agents
   // the device has: Claude Code's, and the one the other four share.
   assert.deepEqual(Object.keys(AGENT_FOLDERS).sort(), [...KNOWN_PLAYER_ADAPTERS].sort());
+  // Each agent's project- and user-level folders are the ones Cligent
+  // publishes for its runtime (DR-130).
+  for (const [agent, folders] of Object.entries(AGENT_FOLDERS)) {
+    assert.deepEqual({ project: folders.project, user: folders.user }, { ...getNativeSkillSupport(agent)?.folders }, agent);
+  }
   assert.deepEqual(report.folders, [
     { agents: ["claude"], level: "project", dir: join(workingFolder, ".claude/skills") },
     { agents: ["codex", "gemini", "kimi", "opencode"], level: "project", dir: join(workingFolder, ".agents/skills") },
