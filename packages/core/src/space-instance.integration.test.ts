@@ -470,3 +470,46 @@ test("storage-30, space-60: a clone made at a deferred clone's key since is not 
   } finally { await deferred.release(); }
 });
 
+test("space-60, storage-30: a host's rename onto the destination a deferred clone waits to move to stops the sync naming that clone; that clone removed, its entry settles and the sync follows the host there", async (t) => {
+  const host = await startHost();
+  const folder = hostFolder(host);
+  const home = await startHome("deferred-destination", { host, project: false, extra: { signIn: "browser" } });
+  let mark = home.client.mark();
+  await signIn(home, host);
+  await home.client.waitRepository(mark, HOST_OWN, (repository) => repository.sync.phase === "done", 30_000);
+  const { key: local } = await addFolder(home, gitFolder("plans"));
+  mark = home.client.mark();
+  await home.client.expectOk("space.pick", { repository: local, choice: { kind: "create", groupId: "2002", name: "plans" } });
+  const key = hostKey(host, "acme/plans-spex");
+  const picked = await home.client.waitRepository(mark, key, (repository) => repository.sync.phase === "done", 30_000);
+  assert.ok(picked.id);
+  await home.stop();
+
+  // The deferred clone waits to move where the stand-in will transfer
+  // plans-spex.
+  const waiting = "acme/held-spex";
+  const destination = hostKey(host, "acme/research/plans-spex");
+  const deferred = await deferredClone(home.dataDir, folder, waiting, destination);
+  try {
+    const again = await startHome("deferred-destination-again", { dataDir: home.dataDir, project: false, extra: { signIn: "browser" } });
+    t.after(() => again.stop());
+    host.script.rename(picked.id as string, { group: "acme/research" });
+    const stopped = await again.client.settle("space.sync", { repository: key });
+    assert.ok(stopped.sync.phase === "stopped" && stopped.sync.step === "check", JSON.stringify(stopped.sync));
+    assert.deepEqual([stopped.sync.message, stopped.sync.guidance, stopped.sync.retry],
+      [`workspace/${destination} waits for ${waiting}, so the clone cannot follow the host there`, `Sync ${waiting} first, then Retry.`, true]);
+    assert.ok(existsSync(join(clonePath(home.dataDir, key), ".git")) && !existsSync(clonePath(home.dataDir, destination)), "nothing moved");
+
+    // The deferred clone removed, its receipt entry settles and the
+    // destination is free.
+    await deferred.release();
+    await again.client.expectOk("project.remove", { projectId: waiting, confirm: true });
+    assert.ok(!existsSync(deferred.clone));
+    assert.deepEqual((JSON.parse(readFileSync(deferred.receipt, "utf8")) as { deferred: unknown[] }).deferred, []);
+    mark = again.client.mark();
+    await again.client.expectOk("space.sync", { repository: key });
+    const moved = await again.client.waitRepository(mark, destination, (repository) => repository.sync.phase !== "running" && repository.sync.phase !== "idle", 30_000);
+    assert.equal(moved.sync.phase, "done", JSON.stringify(moved.sync));
+    assert.ok(existsSync(join(clonePath(home.dataDir, destination), ".git")) && !existsSync(clonePath(home.dataDir, key)));
+  } finally { await deferred.release(); }
+});

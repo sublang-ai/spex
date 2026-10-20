@@ -477,6 +477,11 @@ msgstr "{path} must resolve an adapter"
 msgid "{path} names absent session player \"{playerId}\""
 msgstr "{path} names absent session player \"{playerId}\""
 
+#. A stopped sync: the folder a renamed spex repository moves to is where another clone, {other}, which the instances migration left at its former place, moves at its own next sync
+#: src/space.ts
+msgid "{path} waits for {other}, so the clone cannot follow the host there"
+msgstr "{path} waits for {other}, so the clone cannot follow the host there"
+
 #. Refusal: a nonignored subtree of your own group's path source cannot be read; {entry} is its path in the clone
 #: src/environments.ts
 msgid "{path}: {entry} cannot be inspected to confirm it syncs with the clone"
@@ -2242,6 +2247,11 @@ msgstr "state root {dir} lock at {lock} cannot be verified: {reason}; stop every
 msgid "Stopped while waiting for {host}"
 msgstr "Stopped while waiting for {host}"
 
+#. Guidance where a renamed spex repository's new folder is another clone's destination
+#: src/space.ts
+msgid "Sync {other} first, then Retry."
+msgstr "Sync {other} first, then Retry."
+
 #. Guidance where the remote rejected the push
 #: src/space-git.ts
 msgid "Sync again to merge what the host received meanwhile."
@@ -2251,6 +2261,11 @@ msgstr "Sync again to merge what the host received meanwhile."
 #: src/space.ts
 msgid "Sync rules updated"
 msgstr "Sync rules updated"
+
+#. Storage diagnostic on a folder under workspace/: the clone {key} waits to move to this path under its instance's folder, which something else holds; the clone stays where it is until the folder is moved aside
+#: src/store.ts
+msgid "taken, so {key} cannot move here under its instance's folder; move it aside"
+msgstr "taken, so {key} cannot move here under its instance's folder; move it aside"
 
 #. Attachment transfer or storage diagnostic
 #. Attachment transfer or storage diagnostic

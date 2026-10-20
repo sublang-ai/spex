@@ -3927,7 +3927,8 @@ export class SpaceManager {
     const target = store.home.clonePath(to);
     const held = heldSessionLease(source, identity);
     if (held !== undefined) throw inUseStop("check", `sessions/${held}`, store);
-    if (occupied(source, target, store.home.workspace)) {
+    const taken = this.destinationTaken(from, to);
+    if (taken === "disk") {
       throw new SpaceStopped("check", {
         cause: "git",
         message: i18n._({ id: "{path} already exists, so the clone cannot follow the host there", values: { path: `workspace/${to}` }, comment: "A stopped sync: the folder a renamed spex repository moves to is taken" }),
@@ -3935,10 +3936,29 @@ export class SpaceManager {
         retry: true,
       });
     }
+    if (taken !== undefined) {
+      throw new SpaceStopped("check", {
+        cause: "git",
+        message: i18n._({ id: "{path} waits for {other}, so the clone cannot follow the host there", values: { path: `workspace/${to}`, other: taken.waiting },
+          comment: "A stopped sync: the folder a renamed spex repository moves to is where another clone, {other}, which the instances migration left at its former place, moves at its own next sync" }),
+        guidance: i18n._({ id: "Sync {other} first, then Retry.", values: { other: taken.waiting }, comment: "Guidance where a renamed spex repository's new folder is another clone's destination" }),
+        retry: true,
+      });
+    }
     mkdirSync(dirname(target), { recursive: true, mode: 0o700 });
     renameSync(source, target);
     pruneEmptyFolders(dirname(source), store.home.workspace);
     this.relocate([{ from, to }]);
+  }
+
+  /** What takes a clone's destination `to`, if anything: something on
+   * disk but the clone itself (occupied), or another clone the instances
+   * migration deferred, waiting to move there, by its key (DR-127). */
+  private destinationTaken(from: string, to: string): "disk" | { waiting: string } | undefined {
+    const store = this.host.store;
+    if (occupied(store.home.clonePath(from), store.home.clonePath(to), store.home.workspace)) return "disk";
+    const waiting = store.deferredMoves().find((move) => move.to === to && move.from !== from);
+    return waiting ? { waiting: waiting.from } : undefined;
   }
 
   /** The store, the machines and the waiting steps follow moved clones. */

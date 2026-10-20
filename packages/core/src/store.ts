@@ -32,6 +32,7 @@ import {
   intentFileOf, intentInfoOf, parsePrefs, parseProjectFile, readIntentFiles, repairKey, writeIntentFile,
   type ProjectFile, type StorageDiagnostic,
 } from "./app-storage.js";
+import { occupied } from "./clone-moves.js";
 import { readJsonFile, StorageFormatError, VersionConflictError, writeApplicationFile } from "./files.js";
 import { Home, repositoryNameFor, splitKey, WORKSPACE_DEPTH } from "./home.js";
 import { folderRemote, needsGroupsMigration, migrateFormerHome } from "./migrate-home.js";
@@ -411,6 +412,9 @@ const unpairedReason = (name: string): string =>
 const missingCloneReason = (path: string): string =>
   i18n._({ id: "the spex repository of {path} is missing on this device",
     comment: "Repair row: a working folder is paired with a spex repository whose clone is gone", values: { path } });
+const deferredDestinationTaken = (key: string): string =>
+  i18n._({ id: "taken, so {key} cannot move here under its instance's folder; move it aside",
+    comment: "Storage diagnostic on a folder under workspace/: the clone {key} waits to move to this path under its instance's folder, which something else holds; the clone stays where it is until the folder is moved aside", values: { key } });
 
 export class Store {
   /** The home this store serves. */
@@ -1565,6 +1569,13 @@ export class Store {
       ...(this.prefsProblem ? [this.prefsProblem] : []),
       ...(this.cacheProblem ? [this.cacheProblem] : []),
     ];
+    // A deferred clone whose destination is taken waits there, named
+    // by that destination until it is moved aside (DR-127).
+    for (const move of this.deferredMoves()) {
+      const target = this.homeFile.clonePath(move.to);
+      if (!occupied(this.homeFile.clonePath(move.from), target, this.homeFile.workspace)) continue;
+      reports.push({ file: relative(this.dir, target), reason: deferredDestinationTaken(move.from), blocking: false });
+    }
     const paired = new Set(this.homeFile.folders().map((folder) => folder.repository));
     for (const repository of repositories) {
       if (paired.has(repository.key)) continue;

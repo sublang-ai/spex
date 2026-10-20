@@ -527,6 +527,35 @@ async function deferredWeb(): Promise<{ root: string; held: string; to: string; 
 const deferredIn = (root: string): unknown[] => receiptsOf(root).flatMap((id) =>
   (JSON.parse(readFileSync(join(root, "local", "migrations", id, "receipt.json"), "utf8")) as { deferred: unknown[] }).deferred);
 
+test("instances migration: a deferred clone whose destination is taken stays deferred at the next start, reported naming that destination, the store opening; once the destination is free the next start moves it", async () => {
+  const { root, held, to, release } = await deferredWeb();
+  await release();
+  const stray = workspace(root, to);
+  mkdirSync(stray, { recursive: true });
+  writeFileSync(join(stray, "notes.txt"), "someone's own");
+  const store = await Store.open({ machineIdentity, dir: root, env: gitEnv });
+  try {
+    assert.ok(existsSync(join(workspace(root, held), ".git")), "it keeps its key");
+    assert.equal(readFileSync(join(stray, "notes.txt"), "utf8"), "someone's own", "nothing found is overwritten");
+    assert.deepEqual(store.deferredMoves().map((move) => [move.from, move.to]), [[held, to]]);
+    // The stray folder itself reads as a clone no folder pairs, its repair apart.
+    assert.deepEqual(store.storageDiagnostics().filter((entry) => entry.file === join("workspace", ...to.split("/")) && !entry.repair), [
+      { file: join("workspace", ...to.split("/")), reason: `taken, so ${held} cannot move here under its instance's folder; move it aside`, blocking: false },
+    ]);
+  } finally { store.close(); }
+  assert.deepEqual(deferredIn(root), [{ from: held, to }]);
+
+  rmSync(stray, { recursive: true, force: true });
+  const moved = await Store.open({ machineIdentity, dir: root, env: gitEnv });
+  try {
+    assert.ok(existsSync(join(workspace(root, to), ".git")) && !existsSync(workspace(root, held)), "moved under the instance's folder");
+    assert.deepEqual(remotesOf(workspace(root, to)), [FOLDER]);
+    assert.deepEqual(moved.deferredMoves(), []);
+    assert.ok(!moved.storageDiagnostics().some((entry) => entry.reason.startsWith("taken, so")));
+  } finally { moved.close(); }
+  assert.deepEqual(deferredIn(root), []);
+});
+
 test("instances migration: a deferred clone the store removes settles its entry, and a clone made at a deferred key since is another, never moved by a start, the entry settled", async () => {
   // Removed: the receipt names the key no more, so a clone made there
   // later stays where it is made.

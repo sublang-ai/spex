@@ -476,7 +476,10 @@ export function migrateInstances(root: string, options: { machineIdentity?: stri
   const pending = plan.moves.filter((move) => !plan.done.includes(move.from) && (!receipt.complete || deferred(move)));
   const taken = (move: CloneMove): boolean => move.from !== move.to &&
     standsAsDirectory(home.clonePath(move.from)) && occupied(home.clonePath(move.from), home.clonePath(move.to), home.workspace);
-  const divergent = pending.find(taken);
+  // A destination taken stops the run before any move it has not
+  // deferred; a deferred clone's stays deferred, which the store reports
+  // naming that destination, so no start is refused for it.
+  const divergent = pending.find((move) => !deferred(move) && taken(move));
   if (divergent) throw new StorageFormatError(home.clonePath(divergent.to), divergedDestination());
   const finish = (move: CloneMove): void => {
     plan.done = [...plan.done.filter((key) => key !== move.from), move.from];
@@ -492,6 +495,7 @@ export function migrateInstances(root: string, options: { machineIdentity?: stri
           // Another clone made at its key since is not the one deferred:
           // it stays, and the receipt names that key no more.
           if (!isDeferredClone({ id: move.id ?? null, url: move.url ?? null }, cloneIdentity(source, env))) { finish(move); continue; }
+          if (taken(move)) continue;
         }
         if (taken(move)) throw new StorageFormatError(target, divergedDestination());
         // Read at the rename's instant: a lease that cannot be read as

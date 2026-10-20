@@ -477,6 +477,11 @@ msgstr "{path} 必须解析出一个适配器"
 msgid "{path} names absent session player \"{playerId}\""
 msgstr "{path} 指向不存在的会话 Player“{playerId}”"
 
+#. A stopped sync: the folder a renamed spex repository moves to is where another clone, {other}, which the instances migration left at its former place, moves at its own next sync
+#: src/space.ts
+msgid "{path} waits for {other}, so the clone cannot follow the host there"
+msgstr "{path} 留给了等待移入的 {other}，克隆无法随托管平台移到那里"
+
 #. Refusal: a nonignored subtree of your own group's path source cannot be read; {entry} is its path in the clone
 #: src/environments.ts
 msgid "{path}: {entry} cannot be inspected to confirm it syncs with the clone"
@@ -2242,6 +2247,11 @@ msgstr "状态根目录 {dir} 在 {lock} 处的锁无法核实：{reason}；请�
 msgid "Stopped while waiting for {host}"
 msgstr "在等待 {host} 时已停止"
 
+#. Guidance where a renamed spex repository's new folder is another clone's destination
+#: src/space.ts
+msgid "Sync {other} first, then Retry."
+msgstr "请先同步 {other}，然后重试。"
+
 #. Guidance where the remote rejected the push
 #: src/space-git.ts
 msgid "Sync again to merge what the host received meanwhile."
@@ -2251,6 +2261,11 @@ msgstr "请再次同步，以合并托管平台这期间收到的内容。"
 #: src/space.ts
 msgid "Sync rules updated"
 msgstr "同步规则已更新"
+
+#. Storage diagnostic on a folder under workspace/: the clone {key} waits to move to this path under its instance's folder, which something else holds; the clone stays where it is until the folder is moved aside
+#: src/store.ts
+msgid "taken, so {key} cannot move here under its instance's folder; move it aside"
+msgstr "已被占用，{key} 无法移到其实例文件夹下的这里；请将它移开"
 
 #. Attachment transfer or storage diagnostic
 #. Attachment transfer or storage diagnostic
