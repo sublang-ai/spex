@@ -2980,6 +2980,21 @@ export class SpaceManager {
     return complete ? "done" : "conflict";
   }
 
+  /** The listing that is your own group's own repository while its
+   * clone records no host id (space-4, git-host-5): `<name>-spex` in
+   * your namespace at the instance, `<name>` your own group's folder's
+   * name or the one your login there gives it, which a sign-in's rename
+   * of the folder may not have reached yet (space-59) — only your
+   * namespace holds it, a group of the instance named like your login
+   * never does. Its clone matches it by its id once it records one. */
+  private ownNamespaceListing(view: HostView): HostListing | undefined {
+    const store = this.host.store;
+    const namespace = userGroup(view)?.fullPath ?? store.home.ownName;
+    const names = new Set([splitKey(store.home.own()).name, `${ownNameFor(view.account.login)}-spex`]);
+    return view.listings.find((listing) => listing.repository.group.kind === "user"
+      && sameLogin(listing.repository.group.fullPath, namespace) && names.has(listing.repository.path));
+  }
+
   /** Your own group's spex repository on the host (space-4, space-65):
    * joined where the host lists one, else created and pushed. */
   private async ensureOwnOnHost(view: HostView): Promise<void> {
@@ -2993,10 +3008,7 @@ export class SpaceManager {
     // which names no group of the instance there (git-host-6).
     const group = { id: null, fullPath: userGroup(view)?.fullPath ?? store.home.ownName };
     const name = splitKey(key).name;
-    // Only your own namespace holds it: a group of the instance named
-    // like your login never does (space-4, git-host-5).
-    const listed = view.listings.find((listing) => listing.repository.group.kind === "user"
-      && sameLogin(listing.repository.group.fullPath, group.fullPath) && listing.repository.path === name);
+    const listed = this.ownNamespaceListing(view);
     if (listed) {
       await this.adopt(machine, listed, true, { setUp: true });
       return;
@@ -3225,10 +3237,15 @@ export class SpaceManager {
       throw new CoreError("invalid_request", i18n._({ id: "{path} cannot stand as a folder on this device", values: { path: `${listing.repository.group.fullPath}/${listing.repository.path}` }, comment: "Refusal of a join: the host's names hold characters a folder under the home cannot" }));
     }
     const store = this.host.store;
-    // Read from each clone now: its recorded id or its remote (git-host-5).
+    // Read from each clone now: its recorded id or its remote (git-host-5);
+    // your own group's own repository, recording no id yet, is the one
+    // your namespace lists under its name (space-4).
+    const own = store.home.own();
     const here = (await Promise.all(store.listRepositories().map(async (repository) => {
-      try { return await this.machine(repository.key).readFacts(); } catch { return { remote: null, id: null }; }
-    }))).some((facts) => facts.id === hostId || listingFor(view, facts.id, facts.remote)?.repository.id === hostId);
+      try { return { key: repository.key, facts: await this.machine(repository.key).readFacts() }; }
+      catch { return { key: repository.key, facts: { remote: null, id: null } }; }
+    }))).some(({ key: at, facts }) => facts.id === hostId || listingFor(view, facts.id, facts.remote)?.repository.id === hostId
+      || (at === own && facts.id === null && this.ownNamespaceListing(view)?.repository.id === hostId));
     if (here || store.repository(key) || existsSync(store.home.clonePath(key)) || store.deferredMoves().some((move) => move.to === key)) {
       throw new CoreError("invalid_request", i18n._({ id: "{name} is on this device already", values: { name: listing.repository.path }, comment: "Refusal of a join: the spex repository has a clone here" }));
     }
@@ -4134,7 +4151,10 @@ export class SpaceManager {
     const matched = new Set<string>();
     for (const repository of store.listRepositories()) {
       const facts = this.machines.get(repository.key)?.facts;
-      const listing = facts ? listingFor(view, facts.id, facts.remote) : undefined;
+      // Your own group's own repository, recording no id yet, is the one
+      // your namespace lists under its name (space-4): never absent.
+      const listing = facts ? listingFor(view, facts.id, facts.remote)
+        ?? (repository.key === store.home.own() && facts.id === null ? this.ownNamespaceListing(view) : undefined) : undefined;
       if (listing) matched.add(listing.repository.id);
     }
     const rows: Placed[] = [];

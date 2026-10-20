@@ -22,7 +22,7 @@ import { createSessionStore } from "@sublang/playbook/session-store";
 import { stringify as stringifyYaml } from "yaml";
 import { Home } from "./home.js";
 import { needsInstancesMigration } from "./migrate-instances.js";
-import { clonePath, createSpaceHarness, hostFolder, hostKey, repositoryOf, stringsOf } from "./testing/space-harness.js";
+import { clonePath, createSpaceHarness, hostFolder, hostKey, OWN_KEY, ownClone, repositoryOf, stringsOf } from "./testing/space-harness.js";
 import { STANDIN_STORAGE, type StandinHost } from "./testing/standin-host.js";
 import type { GroupsState, ServerMessage } from "./protocol.js";
 
@@ -375,3 +375,42 @@ test("space-60: a clone the instances migration deferred, a live session's lease
     assert.deepEqual(deferred, []);
   } finally { if (!released) await live.release(); }
 });
+
+test("space-4, git-host-5: your namespace's listing of your own group's own repository is your own clone's — never a row not on this device, never cloned again by Join — before and after that clone records the host's id", async (t) => {
+  const host = await startHost();
+  // Your own group's repository, made at the instance from another device.
+  const listedOwn = host.script.addRepository({ group: LOGIN, name: `${LOGIN}-spex` });
+  const home = await startHome("own-listed", { host, project: false, extra: { signIn: "browser" } });
+  t.after(() => home.stop());
+  const rowsOf = (state: GroupsState): string[] => state.groups.flatMap((group) => group.repositories).filter((repository) => repository.id === listedOwn.id || repository.key === hostKey(host, HOST_OWN)).map((repository) => repository.key);
+  // A session's lease in your own group's clone holds the sign-in's
+  // rename, and with it the set-up's join: your clone has no remote and
+  // no id while the instance lists the repository (space-4, space-59).
+  const sessions = createSessionStore({ sessionsDir: join(ownClone(home.dataDir), "sessions") });
+  await sessions.prepare();
+  const lease = await sessions.acquireManagement(randomUUID());
+  let released = false;
+  try {
+    const mark = home.client.mark();
+    await signIn(home, host);
+    const state = await home.client.waitSpace(mark, (candidate) => candidate.readAt !== null && candidate.read.phase === "idle", 30_000);
+    const own = repositoryOf(state, OWN_KEY);
+    assert.deepEqual([own.id, own.state], [null, "local-only"]);
+    assert.deepEqual(rowsOf(state), [], "no row not on this device");
+    await home.client.expectError("space.join", { hostId: listedOwn.id, folder: join(scratch, "own-elsewhere") }, "invalid_request", /on this device already/);
+    assert.ok(!existsSync(clonePath(home.dataDir, hostKey(host, HOST_OWN))), "no second clone");
+    await lease.release();
+    released = true;
+  } finally { if (!released) await lease.release(); }
+
+  // Released, a Refresh renames your own group and joins the two
+  // histories: the one row is your own clone, recording the host's id.
+  const mark = home.client.mark();
+  await home.client.expectOk("space.refresh", {});
+  const joined = await home.client.waitRepository(mark, HOST_OWN, (repository) => repository.sync.phase === "done", 30_000);
+  assert.equal(joined.id, listedOwn.id);
+  assert.deepEqual(rowsOf(await home.client.expectOk("space.get", {})), [HOST_OWN]);
+  await home.client.expectError("space.join", { hostId: listedOwn.id }, "invalid_request", /on this device already/);
+  assert.ok(!existsSync(clonePath(home.dataDir, hostKey(host, HOST_OWN))));
+});
+
