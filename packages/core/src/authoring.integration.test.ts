@@ -497,6 +497,24 @@ test("playbook-library-72: a draft is authored, compiled, proposed, and register
   // player to your own roster first, then the project's entry keyed by
   // the derived roles, no `from`; the session stays, enabled.
   const projectConfig = join(clone, "config", "playbook.config.yaml");
+  // Your own group's environment requests by path only from inside its
+  // clone, which does not hold this package: refused, with no config or
+  // environment write (playbook-library-7).
+  const ownClone = join(harness.dataDir, "workspace", "tester", "tester-spex");
+  const written = (): (string | null)[] => [configPath, projectConfig, join(clone, "spex.yaml"), join(ownClone, "spex.yaml"), join(ownClone, "spex.lock"), join(ownClone, "config", "playbook.config.yaml")]
+    .map((file) => (existsSync(file) ? readFileSync(file, "utf8") : null));
+  const before = written();
+  const refused = await client.expectError("draft.register", {
+    projectId,
+    draftId: "triage",
+    repository: "tester/tester-spex",
+    command: "triage",
+    intent: "Label new issues",
+    bindings: { Triager: "dev.triager", Verifier: "dev.coder" },
+    newPlayers: { "dev.triager": { adapter: "claude" } },
+  }, "invalid_request");
+  assert.match(refused.message, /your own group's environment can request this spec package by path only from inside its clone/, "[playbook-library-7] your own group only where its clone holds the package");
+  assert.deepEqual(written(), before, "[playbook-library-7] no config or environment write");
   const state = await client.expectOk("draft.register", {
     projectId,
     draftId: "triage",

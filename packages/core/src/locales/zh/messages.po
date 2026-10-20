@@ -359,6 +359,61 @@ msgstr "{path} 不是 git 工作树的根目录"
 msgid "{path} is outside the working folder"
 msgstr "{path} 不在工作文件夹内"
 
+#. Refusal: a request by path in your own group's environment names a folder holding a file the clone's sync rules drop; {file} is that file's path in the clone
+#: src/environments.ts
+msgid "{path} holds {file}, which the clone's Git rules ignore, so it would not sync"
+msgstr "{path} 含有 {file}，克隆的 Git 规则会忽略该文件，因此它不会被同步"
+
+#. Refusal: a request by path in your own group's environment names a folder under Spex's own paths, such as sessions/ or skills/
+#: src/environments.ts
+msgid "{path} is a path Spex keeps in your own group's clone"
+msgstr "{path} 是 Spex 在你自己的群组的克隆中保留的路径"
+
+#. Refusal: a request by path in your own group's environment names a folder the clone's sync rules drop, such as one named *.tmp
+#: src/environments.ts
+msgid "{path} is a path the clone's Git rules ignore, so it would not sync"
+msgstr "{path} 是克隆的 Git 规则忽略的路径，因此不会被同步"
+
+#. Refusal: a request by path in your own group's environment names its clone's root
+#: src/environments.ts
+msgid "{path} is not a folder below your own group's clone's root"
+msgstr "{path} 不是你自己的群组的克隆根目录下的文件夹"
+
+#. Refusal: a request by path in your own group's environment names a folder outside its spex repository's clone
+#: src/environments.ts
+msgid "{path} is outside your own group's clone"
+msgstr "{path} 不在你自己的群组的克隆内"
+
+#. Refusal: a request by path in your own group's environment names a folder that is, or lies under, a link
+#: src/environments.ts
+msgid "{path} is reached through a link, which the clone's sync does not carry"
+msgstr "{path} 需经由链接访问，而克隆的同步不会携带链接"
+
+#. Refusal: a request by path in your own group's environment names a folder that is, lies in or holds a folder holding .git; {entry} is that folder's path in the clone
+#: src/environments.ts
+msgid "{path}: {entry} is a Git repository of its own, which the clone's sync does not carry"
+msgstr "{path}：{entry} 是一个独立的 Git 仓库，而克隆的同步不会携带它"
+
+#. Refusal: a request by path in your own group's environment names a folder holding a tracked file of a family that stays on the device, such as a *.tmp file forced into Git; {file} is that file's path in the clone
+#: src/environments.ts
+msgid "{path} holds {file}, which the clone's sync refuses to share"
+msgstr "{path} 含有 {file}，克隆的同步拒绝共享该文件"
+
+#. Refusal: a request by path in your own group's environment names a folder holding a link the clone's Git rules do not ignore; {entry} is the link's path in the clone
+#: src/environments.ts
+msgid "{path}: {entry} is a link, which the clone's sync does not carry"
+msgstr "{path}：{entry} 是一个链接，而克隆的同步不会携带链接"
+
+#. Refusal: a request by path in your own group's environment names a folder holding a special file, such as a pipe or a socket; {entry} is its path in the clone
+#: src/environments.ts
+msgid "{path}: {entry} is no regular file or folder, so the clone's sync does not carry it"
+msgstr "{path}：{entry} 既不是普通文件也不是文件夹，因此克隆的同步不会携带它"
+
+#. Refusal: your own group's request by path names a folder inside its spex repository's clone (environments-2), and this spec package lies elsewhere
+#: src/service.ts
+msgid "your own group's environment can request this spec package by path only from inside its clone; enable it in the project, or publish it and add it from the registry"
+msgstr "你自己的群组的环境只能按路径请求其克隆内的规约包；请在项目中启用它，或发布后从注册中心添加"
+
 #. Spec notice; `intents/` is a directory name and stays as it is
 #: src/specs.ts
 msgid "{path} is shadowed by the same-named file under intents/"

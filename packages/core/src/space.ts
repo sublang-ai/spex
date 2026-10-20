@@ -56,12 +56,14 @@ import {
   APPLY_MARKER,
   applyStorageSelection,
   EMPTY_TREE,
+  NOT_PACKAGES,
   planStorageUnits,
   portable,
   prepareStorageGitFiles,
   readStorageTree,
   resolveStorageChoices,
   SPEX_BRANCH,
+  specPackageFolders,
   storageUnitName,
   StorageWriteRefused,
   UPLOAD_STAGING,
@@ -1664,7 +1666,8 @@ class RepositorySync {
     }
     await this.host.beforeStep?.({ op: "sync", step: "save", repository: this.key, at: "commit" });
     if (tree === await this.git.ok(["rev-parse", `${head}^{tree}`])) return null;
-    const units = [...new Set(staged.map(storageUnitName))].sort();
+    const packages = specPackageFolders(readStorageTree(this.dir, tree).keys());
+    const units = [...new Set(staged.map((file) => storageUnitName(file, packages)))].sort();
     const commit = await this.git.run([...(await this.git.committerArgs()), "commit-tree", tree, "-p", head, "-m", `Sync from ${hostname()}\n\n${units.join("\n")}`]);
     if (commit.code !== 0) {
       throw new SpaceStopped("save", {
@@ -2163,7 +2166,8 @@ class RepositorySync {
     if (rel === ".git") return { name: dirent.name, path: rel, kind: "git", family: "Git data", sync: "git", preview: "none" };
     if (dirent.isSymbolicLink()) return { name: dirent.name, path: rel, kind: "file", family: "Not a Spex file", sync: "local", preview: "none" };
     const directory = dirent.isDirectory();
-    const family = spaceFamily(rel, directory);
+    let family = spaceFamily(rel, directory);
+    if ((family === "Not a Spex folder" || family === "Not a Spex file") && this.inSpecPackage(rel, directory)) family = "spec package";
     const under = (set: Set<string>): boolean => { for (const item of set) if (item === rel || item.startsWith(`${rel}/`)) return true; return false; };
     let sync: SpaceEntry["sync"];
     if (LOCAL_FAMILIES.has(family)) sync = "local";
@@ -2185,6 +2189,19 @@ class RepositorySync {
     try { const stat = statSync(abs); size = stat.size; mtime = Math.round(stat.mtimeMs); } catch { /* vanished */ }
     const preview: SpaceEntry["preview"] = WITHHELD_FAMILIES.has(family) ? "withheld" : this.textual(abs, dirent.name) ? "text" : "binary";
     return { name: dirent.name, path: rel, kind: "file", family, sync, ...(size !== undefined ? { size } : {}), ...(mtime !== undefined ? { mtime } : {}), ...(owner ? { owner } : {}), preview };
+  }
+
+  /** Whether a path is, or lies in, a spec package's folder (space-35,
+   * storage-11): a folder below the root, outside Spex's record and
+   * ignored folders, holding `meta.yaml`, the outermost where two nest. */
+  private inSpecPackage(rel: string, isDirectory: boolean): boolean {
+    if (NOT_PACKAGES.test(`${rel}/`)) return false;
+    const parts = rel.split("/");
+    const root = realPath(this.dir);
+    for (let end = 1; end <= (isDirectory ? parts.length : parts.length - 1); end += 1) {
+      try { if (lstatSync(join(root, ...parts.slice(0, end), "meta.yaml")).isFile()) return true; } catch { /* none here */ }
+    }
+    return false;
   }
 
   private ownerOf(rel: string): SpaceEntry["owner"] | undefined {

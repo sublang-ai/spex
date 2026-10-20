@@ -52,8 +52,30 @@ export const portable = (file: string): boolean =>
   !/^(packages\/|skills\/|local\/|\.spex-uploads\/|\.spex-apply\.json$|\.lock)/.test(file) &&
   !/\.(hints|spex)\.json$|(?<!^spex)\.lock(?:\.|\/|$)|\.tmp$|\.bak(?:\.|$)|\.backup(?:\.|$)/.test(file);
 
-/** The unit a tracked path of a clone belongs to (storage-11, space-33). */
-export function storageUnitName(file: string): string {
+/** No spec package folder: what a caller naming none passes. */
+const NO_PACKAGES: ReadonlySet<string> = new Set();
+
+/** The record and settings paths, and the folders the catalog ignores,
+ * no spec package folder lies in (storage-11). */
+export const NOT_PACKAGES = /^(?:config|sessions|intents|authoring|packages|skills|local|\.spex-uploads)\//;
+
+/** The folders below a clone's root, outside its record and settings
+ * paths and the folders the catalog ignores, that hold a spec package's
+ * `meta.yaml` among `paths` — each one sync unit with every file under
+ * it (storage-11, DR-125). */
+export function specPackageFolders(paths: Iterable<string>): Set<string> {
+  const folders = new Set<string>();
+  for (const file of paths) {
+    if (!file.endsWith("/meta.yaml") || NOT_PACKAGES.test(file)) continue;
+    folders.add(file.slice(0, -"/meta.yaml".length));
+  }
+  return folders;
+}
+
+/** The unit a tracked path of a clone belongs to (storage-11, space-33):
+ * a file under one of `packages`, the spec package folders of the trees
+ * compared, is the outermost one's, named with a trailing `/`. */
+export function storageUnitName(file: string, packages: ReadonlySet<string> = NO_PACKAGES): string {
   const session = /^sessions\/([^/]+?)(?:\.records\.jsonl$|\.json$|\.assets\/)/.exec(file);
   if (session && UUID.test(session[1])) return `sessions/${session[1]}`;
   const intent = /^intents\/([^/]+?)(?:\.json$|\.assets\/)/.exec(file);
@@ -61,14 +83,25 @@ export function storageUnitName(file: string): string {
   const authoring = /^authoring\/([^/]+?)(?:\.records\.jsonl$|\.json$|\.assets\/)/.exec(file);
   if (authoring && AUTHORING_ID.test(authoring[1])) return `authoring/${authoring[1]}`;
   if (file === "spex.yaml" || file === "spex.lock") return "environment";
+  if (packages.size > 0) {
+    const parts = file.split("/");
+    for (let end = 1; end < parts.length; end += 1) {
+      const folder = parts.slice(0, end).join("/");
+      if (packages.has(folder)) return `${folder}/`;
+    }
+  }
   return file;
 }
+
+/** Whether a unit is a spec package folder with every file under it. */
+const isPackageUnit = (name: string): boolean => name.endsWith("/");
 
 /** The files a bundle unit always names, present or not. */
 function bundleFiles(name: string): string[] {
   if (/^sessions\//.test(name) || /^authoring\//.test(name)) return [`${name}.json`, `${name}.records.jsonl`];
   if (/^intents\//.test(name)) return [`${name}.json`];
   if (name === "environment") return ["spex.yaml", "spex.lock"];
+  if (isPackageUnit(name)) return [`${name}meta.yaml`];
   return [];
 }
 
@@ -92,8 +125,11 @@ function equal(a: StorageTree, b: StorageTree, paths: string[]): boolean { retur
  * by complete bytes and existence under the selection rule (storage-11). */
 export function planStorageUnits(trees: StorageTrees): StorageMergeUnit[] {
   const groups = new Map<string, Set<string>>();
-  for (const file of new Set([...trees.ours.keys(), ...trees.theirs.keys(), ...trees.base.keys()])) {
-    const name = storageUnitName(file);
+  const files = new Set([...trees.ours.keys(), ...trees.theirs.keys(), ...trees.base.keys()]);
+  // A folder holding `meta.yaml` on any side is one unit on every side.
+  const packages = specPackageFolders(files);
+  for (const file of files) {
+    const name = storageUnitName(file, packages);
     const files = groups.get(name) ?? new Set<string>(); files.add(file);
     for (const member of bundleFiles(name)) files.add(member);
     groups.set(name, files);
@@ -335,6 +371,13 @@ function unitOnDisk(dir: string, unit: StorageMergeUnit, members: boolean): Map<
     }
   };
   if (members && /^(sessions|intents|authoring)\//.test(unit.name)) walk(`${unit.name}.assets`);
+  // A spec package folder's members are every file under it Git would
+  // carry, one added since the plan's trees among them.
+  if (members && isPackageUnit(unit.name)) {
+    for (const file of git(dir, ["ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", unit.name]).toString().split("\0")) {
+      if (file && portable(file)) paths.add(file);
+    }
+  }
   const present = [...paths].filter((file) => {
     let stat;
     try { stat = lstatSync(join(dir, file)); } catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return false; throw error; }
@@ -356,7 +399,7 @@ export async function validateStorageSnapshot(dir: string, tree: string, options
     git(dir, ["read-tree", tree], env);
     git(dir, ["checkout-index", "-a", "-f", `--prefix=${join(stage, "tree")}/`], env);
     // Every session in the tree is tracked, so its version must be one Spex shares.
-    const sessions = new Set([...readStorageTree(dir, tree).keys()].map(storageUnitName).filter((unit) => SESSION_UNIT.test(unit)).map((unit) => unit.slice(9)));
+    const sessions = new Set([...readStorageTree(dir, tree).keys()].map((file) => storageUnitName(file)).filter((unit) => SESSION_UNIT.test(unit)).map((unit) => unit.slice(9)));
     return await validateStorageTree(join(stage, "tree"), { ...options, selectedSessionIds: sessions });
   } finally { rmSync(stage, { recursive: true, force: true }); }
 }

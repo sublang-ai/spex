@@ -10,7 +10,7 @@ import { randomUUID } from "node:crypto";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { appendFileSync, cpSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { createServer, request as httpRequest } from "node:http";
 import type { AddressInfo } from "node:net";
 import { dirname, isAbsolute, join } from "node:path";
@@ -22,7 +22,7 @@ import { CoreService, type CoreServiceOptions } from "./service.js";
 import type { EnvironmentManager } from "./environments.js";
 import { CoreError } from "./session.js";
 import type { Store } from "./store.js";
-import { defaultSpawner, type LineSpawner } from "./compile.js";
+import { defaultSpawner, ENGINE_LINKS_EXCLUDE, type LineSpawner } from "./compile.js";
 import { createModuleLoader, starterText, templatePath } from "./config.js";
 import { builtinPackage, INSTALL_RECORD, publishRelease, readRelease, RegistryClient, requestsDigest, type BuiltinPackage, type Lock } from "./environment/index.js";
 import type { Command, CommandResults, EnvironmentState, ServerMessage } from "./protocol.js";
@@ -30,7 +30,7 @@ import { authoringScript } from "./testing/authoring.js";
 import { fakeAdapterImports, type FakeScript } from "./testing/fake-adapter.js";
 import { createScriptedCaptain } from "./testing/scripted-captain.js";
 import { scratchDir } from "./testing/scratch.js";
-import { createSpaceHarness } from "./testing/space-harness.js";
+import { createSpaceHarness, ownClone } from "./testing/space-harness.js";
 import { STANDIN_STORAGE } from "./testing/standin-host.js";
 import { makeRelease, startStandinRegistry } from "./testing/standin-registry.js";
 import { stubSlcSource } from "./testing/stub-slc.js";
@@ -695,6 +695,277 @@ test("environments-22 through a real core: a project rebound to a second working
 });
 
 // ---------------------------------------------------------------------------
+// environments-33: a spec package kept in your own group's clone
+// ---------------------------------------------------------------------------
+
+test("environments-33 through real cores: a skill your own group requests by a path in its clone exports at once, refuses paths that would not sync, and reaches a second home through the sync", { timeout: 240_000 }, async (t) => {
+  const harness = createSpaceHarness();
+  t.after(() => harness.dispose());
+  const ownKey = `${OWN}/${OWN}-spex`;
+  // Each home's agents read their own user home, Claude Code's and,
+  // through Codex's home folder, the folder the other four share.
+  const agentsHome = (name: string): string => {
+    const dir = join(harness.scratch, `${name}-user`);
+    for (const folder of [".claude", ".codex"]) mkdirSync(join(dir, folder), { recursive: true });
+    return dir;
+  };
+  const userA = agentsHome("a");
+  const userB = agentsHome("b");
+  const a = await harness.startHome("own-path-a", { project: false, extra: { home: userA } });
+  t.after(() => a.stop());
+  const b = await harness.startHome("own-path-b", { project: false, env: harness.otherDevice("own-path-b"), extra: { home: userB } });
+  t.after(() => b.stop());
+  const cloneA = ownClone(a.dataDir);
+  const cloneB = ownClone(b.dataDir);
+
+  // Both homes' own groups share one spex repository before the request.
+  const bare = harness.bareRepo();
+  await a.client.expectOk("space.remote.set", { repository: ownKey, url: bare });
+  assert.equal((await a.client.settle("space.sync", { repository: ownKey })).sync.phase, "done");
+  await b.client.expectOk("space.remote.set", { repository: ownKey, url: bare });
+  await harness.joinRemote(b, ownKey);
+  assert.equal((await a.client.settle("space.sync", { repository: ownKey })).sync.phase, "done");
+
+  const skill = (text: string): string => `---\nname: notes\ndescription: Keeps my notes.\n---\n\n${text}\n`;
+  await makeRelease(join(cloneA, "mine", "notes"), {
+    format: 2, org: OWN, name: "notes", version: "0.1.0", description: "My notes", license: "Apache-2.0",
+    artifacts: { notes: { kind: "skill", language: "en" } },
+  }, { "skills/en/notes/SKILL.md": skill("Write it down.") });
+  const holds = (state: EnvironmentState): boolean => state.packages.some((pkg) => pkg.name === `${OWN}/notes` && pkg.installed);
+  const settled = async (client: typeof a.client, check: (state: EnvironmentState) => boolean): Promise<EnvironmentState> => {
+    const start = Date.now();
+    for (;;) {
+      const state = await client.expectOk("environment.get", { repository: ownKey });
+      if (state.busy === null && check(state)) return state;
+      if (Date.now() - start > 60_000) throw new Error(`the environment never settled: ${JSON.stringify(state)}`);
+      await sleep(50);
+    }
+  };
+
+  // Requested by its path in the clone: resolved in place, the lock
+  // holding the path and no files, and exported at once.
+  await a.client.expectOk("environment.request", { repository: ownKey, name: `${OWN}/notes`, request: { kind: "path", path: "mine/notes" } });
+  const state = await settled(a.client, holds);
+  assert.equal(state.pathRoot, cloneA, "your own group's paths are relative to its clone [environments-2]");
+  const lock = parseYaml(readFileSync(join(cloneA, "spex.lock"), "utf8")) as Lock;
+  assert.deepEqual(lock.packages[`${OWN}/notes`]?.source, { path: "mine/notes", version: "0.1.0", dependencies: {}, requires: {} });
+  assert.deepEqual(lock.packages[`${OWN}/notes`]?.files, []);
+  for (const folder of [".claude", ".agents"]) {
+    assert.equal(readFileSync(join(userA, folder, "skills", "notes", "SKILL.md"), "utf8"), skill("Write it down."), folder);
+  }
+  // Edited in place: the next export carries the edit.
+  writeFileSync(join(cloneA, "mine", "notes", "skills", "en", "notes", "SKILL.md"), skill("Write it down, then read it back."));
+  await a.client.expectOk("environment.install", { repository: ownKey });
+  await until(() => readFileSync(join(userA, ".agents", "skills", "notes", "SKILL.md"), "utf8") === skill("Write it down, then read it back."), 60_000, "the edit exported");
+  assert.equal(readFileSync(join(userA, ".claude", "skills", "notes", "SKILL.md"), "utf8"), skill("Write it down, then read it back."));
+  // Publishing reads the same folder by the same path.
+  const preview = await a.client.expectOk("environment.publish", { repository: ownKey, path: "mine/notes", dryRun: true });
+  assert.deepEqual(preview.preview, { name: `${OWN}/notes`, version: "0.1.0", files: ["meta.yaml", "skills/en/notes/SKILL.md"] });
+
+  // A file added later that the sync would drop fails the next install
+  // before anything is installed: the state names it, and the exports
+  // stay as the last install left them (environments-32).
+  const helper = join(cloneA, "mine", "notes", "skills", "en", "notes", "helper.bak");
+  writeFileSync(helper, "a backup the sync drops");
+  await a.client.expectOk("environment.install", { repository: ownKey });
+  const failed = await settled(a.client, (s) => s.error !== null);
+  assert.match(failed.error!, /mine\/notes holds mine\/notes\/skills\/en\/notes\/helper\.bak, which the clone's Git rules ignore, so it would not sync/, "[environments-32] the install refuses the folder [environments-14]");
+  for (const folder of [".claude", ".agents"]) assert.equal(existsSync(join(userA, folder, "skills", "notes", "helper.bak")), false, `[environments-32] ${folder}: nothing of it exported`);
+  rmSync(helper);
+  await a.client.expectOk("environment.install", { repository: ownKey });
+  await settled(a.client, (s) => s.error === null && holds(s));
+
+  // Paired with a Git working folder holding another release at the
+  // same path, your own group's paths stay relative to its clone.
+  const working = join(harness.scratch, "own-working");
+  gitFolder(working);
+  await makeRelease(join(working, "mine", "notes"), {
+    format: 2, org: OWN, name: "notes", version: "0.1.0", description: "My notes", license: "Apache-2.0",
+    artifacts: { notes: { kind: "skill", language: "en" } },
+  }, { "skills/en/notes/SKILL.md": skill("The working folder's copy.") });
+  await a.client.expectOk("project.rebind", { projectId: ownKey, path: working });
+  const pairedSkill = join(working, ".claude", "skills", "notes", "SKILL.md");
+  await until(() => existsSync(pairedSkill), 60_000, "the pairing's export");
+  assert.equal(readFileSync(pairedSkill, "utf8"), skill("Write it down, then read it back."), "[environments-8] the clone's bytes, not the working folder's");
+  assert.equal((await settled(a.client, holds)).pathRoot, cloneA, "[environments-2] still the clone while paired [environments-14]");
+
+  // A path that would not sync with the clone is refused before any write.
+  symlinkSync(join(cloneA, "mine", "notes"), join(cloneA, "linked"));
+  const skillRelease = async (path: string, id: string, extra: Record<string, string> = {}): Promise<void> => {
+    await makeRelease(join(cloneA, ...path.split("/")), {
+      format: 2, org: OWN, name: id, version: "0.1.0", artifacts: { [id]: { kind: "skill", language: "en" } },
+    }, { [`skills/en/${id}/SKILL.md`]: `---\nname: ${id}\ndescription: ${id}.\n---\n`, ...extra });
+  };
+  await skillRelease("mine/scratchy", "scratchy", { "skills/en/scratchy/draft.tmp": "scratch" });
+  // Forced into Git, a file of an ignored family is tracked, and still
+  // never shared.
+  await skillRelease("mine/forced", "forced", { "skills/en/forced/keep.tmp": "kept" });
+  harness.git(cloneA, "add", "-f", "mine/forced/skills/en/forced/keep.tmp");
+  // A Git repository of its own: the folder itself, or one inside it.
+  await skillRelease("mine/repo", "repo");
+  harness.git(join(cloneA, "mine", "repo"), "init", "-q");
+  await skillRelease("mine/vendored", "vendored");
+  gitFolder(join(cloneA, "mine", "vendored", "vendor"));
+  // A link a script left under `node_modules/`, which no release reads.
+  await skillRelease("mine/linky", "linky");
+  mkdirSync(join(cloneA, "mine", "linky", "skills", "en", "linky", "node_modules", ".bin"), { recursive: true });
+  symlinkSync("../../SKILL.md", join(cloneA, "mine", "linky", "skills", "en", "linky", "node_modules", ".bin", "tool"));
+  const requests = readFileSync(join(cloneA, "spex.yaml"));
+  const kept = /is a path Spex keeps in your own group's clone/;
+  const refusals: [string, RegExp][] = [
+    [".", /is not a folder below your own group's clone's root/],
+    ["../elsewhere", /is not a relative folder inside the working folder or your own group's clone/],
+    ...["config", "sessions", "intents", "authoring", "packages", "skills", "local", ".git", ".spex-uploads", "spex.yaml", "spex.lock", "project.json", ".gitignore", ".gitattributes", ".spex-apply.json", ".lockfoo"]
+      .map((first): [string, RegExp] => [`${first}/notes`, kept]),
+    // Compared without case after compatibility normalization.
+    ["Sessions/notes", kept],
+    ["\u017fkills/notes", kept],
+    ["drafts.tmp", /the clone's Git rules ignore/],
+    ["linked", /is reached through a link/],
+    ["mine/repo", /mine\/repo: mine\/repo is a Git repository of its own, which the clone's sync does not carry/],
+    ["mine/scratchy", /holds mine\/scratchy\/skills\/en\/scratchy\/draft\.tmp, which the clone's Git rules ignore/],
+    ["mine/forced", /holds mine\/forced\/skills\/en\/forced\/keep\.tmp, which the clone's sync refuses to share/],
+    ["mine/vendored", /mine\/vendored: mine\/vendored\/vendor is a Git repository of its own/],
+    ["mine/linky", /mine\/linky: mine\/linky\/skills\/en\/linky\/node_modules\/\.bin\/tool is a link, which the clone's sync does not carry/],
+  ];
+  for (const [path, why] of refusals) {
+    await a.client.expectError("environment.request", { repository: ownKey, name: `${OWN}/bad`, request: { kind: "path", path } }, "invalid_request", why);
+    assert.ok(readFileSync(join(cloneA, "spex.yaml")).equals(requests), `${path}: spex.yaml keeps its bytes`);
+  }
+  rmSync(join(cloneA, "linked"));
+  harness.git(cloneA, "rm", "-q", "--cached", "mine/forced/skills/en/forced/keep.tmp");
+  for (const folder of ["scratchy", "forced", "repo", "vendored", "linky"]) rmSync(join(cloneA, "mine", folder), { recursive: true });
+
+  // A tracked file only this device's excludes match still syncs, so its
+  // folder is accepted (environments-32).
+  await skillRelease("mine/logged", "logged", { "skills/en/logged/run.log": "a log kept on purpose" });
+  harness.git(cloneA, "add", "mine/logged");
+  mkdirSync(join(cloneA, ".git", "info"), { recursive: true });
+  appendFileSync(join(cloneA, ".git", "info", "exclude"), "*.log\n");
+  await a.client.expectOk("environment.request", { repository: ownKey, name: `${OWN}/logged`, request: { kind: "path", path: "mine/logged" } });
+  const logged = await settled(a.client, (s) => s.error !== null || s.packages.some((pkg) => pkg.name === `${OWN}/logged` && pkg.installed));
+  assert.equal(logged.error, null, "[environments-32] a tracked file is never ignored");
+  await a.client.expectOk("environment.remove", { repository: ownKey, name: `${OWN}/logged` });
+  await settled(a.client, (s) => s.error === null && !s.packages.some((pkg) => pkg.name === `${OWN}/logged`));
+  harness.git(cloneA, "rm", "-q", "-r", "--cached", "mine/logged");
+  rmSync(join(cloneA, "mine", "logged"), { recursive: true });
+
+  // A path requested before its folder exists is accepted; once the
+  // folder holds what the sync drops, a resolution refuses it, the lock
+  // keeping its bytes (environments-32).
+  await a.client.expectOk("environment.request", { repository: ownKey, name: `${OWN}/later`, request: { kind: "path", path: "mine/later" } });
+  await settled(a.client, (s) => s.error !== null && /mine\/later/.test(s.error));
+  const lockBytes = readFileSync(join(cloneA, "spex.lock"));
+  await skillRelease("mine/later", "later", { "skills/en/later/draft.tmp": "scratch" });
+  await a.client.expectOk("environment.resolve", { repository: ownKey });
+  const refused = await settled(a.client, (s) => s.error !== null && /draft\.tmp/.test(s.error));
+  assert.match(refused.error!, /mine\/later holds mine\/later\/skills\/en\/later\/draft\.tmp, which the clone's Git rules ignore, so it would not sync/, "[environments-32] the resolution refuses the folder [environments-5]");
+  assert.ok(readFileSync(join(cloneA, "spex.lock")).equals(lockBytes), "[environments-5] spex.lock keeps its bytes");
+  await a.client.expectOk("environment.remove", { repository: ownKey, name: `${OWN}/later` });
+  await settled(a.client, (s) => s.error === null && !(`${OWN}/later` in s.requests) && holds(s));
+  rmSync(join(cloneA, "mine", "later"), { recursive: true });
+
+  // The sync carries the folder with the environment; the second home
+  // installs and exports it as its own.
+  assert.equal((await a.client.settle("space.sync", { repository: ownKey })).sync.phase, "done");
+  const received = await b.client.settle("space.sync", { repository: ownKey });
+  assert.equal(received.sync.phase, "done", JSON.stringify(received.sync));
+  assert.ok(readFileSync(join(cloneB, "spex.lock")).equals(readFileSync(join(cloneA, "spex.lock"))), "the lock arrived");
+  assert.ok(readFileSync(join(cloneB, "spex.yaml")).equals(readFileSync(join(cloneA, "spex.yaml"))), "the requests arrived");
+  assert.equal(readFileSync(join(cloneB, "mine", "notes", "meta.yaml"), "utf8"), readFileSync(join(cloneA, "mine", "notes", "meta.yaml"), "utf8"));
+  const there = await settled(b.client, holds);
+  assert.equal(there.pathRoot, cloneB);
+  for (const folder of [".claude", ".agents"]) {
+    const exported = join(userB, folder, "skills", "notes", "SKILL.md");
+    await until(() => existsSync(exported), 60_000, `${folder} on the second home`);
+    assert.equal(readFileSync(exported, "utf8"), skill("Write it down, then read it back."), folder);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// playbook-library-109: engine links in your own group's clone stay out of its sync
+// ---------------------------------------------------------------------------
+
+test("playbook-library-109 through real cores: a playbook your own group keeps in its clone takes no engine link while the clone's exclude cannot list them, then takes engine links its clone's Git ignores, and both homes sync", { timeout: 240_000 }, async (t) => {
+  const harness = createSpaceHarness();
+  t.after(() => harness.dispose());
+  const ownKey = `${OWN}/${OWN}-spex`;
+  const a = await harness.startHome("own-links-a", { project: false });
+  t.after(() => a.stop());
+  const b = await harness.startHome("own-links-b", { project: false, env: harness.otherDevice("own-links-b") });
+  t.after(() => b.stop());
+  const cloneA = ownClone(a.dataDir);
+  const cloneB = ownClone(b.dataDir);
+  const bare = harness.bareRepo();
+  await a.client.expectOk("space.remote.set", { repository: ownKey, url: bare });
+  assert.equal((await a.client.settle("space.sync", { repository: ownKey })).sync.phase, "done");
+  await b.client.expectOk("space.remote.set", { repository: ownKey, url: bare });
+  await harness.joinRemote(b, ownKey);
+  assert.equal((await a.client.settle("space.sync", { repository: ownKey })).sync.phase, "done");
+
+  await makeRelease(join(cloneA, "mine", "walker"), {
+    format: 2, org: OWN, name: "walker", version: "0.1.0", artifacts: { walk: { kind: "playbook", language: "en" } },
+  }, { "playbooks/en/walk/walk.md": "# Walk\n\nRoles:\n\n- Walker\n", "playbooks/en/walk/walk.registry.mjs": "export default {};\n" });
+  const linked = (clone: string): string[] => ["xstate", "@sublang/playbook"].map((name) => join(clone, "mine", "walker", "playbooks", "en", "walk", "node_modules", name));
+  const engineLinked = (clone: string): boolean => linked(clone).every((link) => { try { return lstatSync(link).isSymbolicLink(); } catch { return false; } });
+  const anyLink = (clone: string): boolean => linked(clone).some((link) => { try { lstatSync(link); return true; } catch { return false; } });
+
+  // While the clone's `.git/info` is a file, its exclude cannot list the
+  // engine links: the install fails with that cause and makes no link
+  // (playbook-library-46).
+  const info = join(cloneA, ".git", "info");
+  const excludeFile = join(info, "exclude");
+  const excludeBefore = existsSync(excludeFile) ? readFileSync(excludeFile) : null;
+  rmSync(info, { recursive: true, force: true });
+  writeFileSync(info, "not a folder\n");
+  await a.client.expectOk("environment.request", { repository: ownKey, name: `${OWN}/walker`, request: { kind: "path", path: "mine/walker" } });
+  const settledOwn = async (check: (state: EnvironmentState) => boolean): Promise<EnvironmentState> => {
+    const start = Date.now();
+    for (;;) {
+      const state = await a.client.expectOk("environment.get", { repository: ownKey });
+      if (state.busy === null && check(state)) return state;
+      if (Date.now() - start > 60_000) throw new Error(`the environment never settled: ${JSON.stringify(state)}`);
+      await sleep(50);
+    }
+  };
+  const failed = await settledOwn((state) => state.error !== null || state.packages.some((pkg) => pkg.name === `${OWN}/walker` && pkg.installed));
+  assert.match(failed.error ?? "", /\.git\/info\/exclude cannot list the engine links, so none is made/, "[playbook-library-46] the install fails with its cause");
+  assert.equal(anyLink(cloneA), false, "[playbook-library-46] no engine link is made");
+
+  // A folder again, the install links the folder.
+  rmSync(info);
+  mkdirSync(info);
+  if (excludeBefore !== null) writeFileSync(excludeFile, excludeBefore);
+  // A line the reader wrote in the clone's exclude stays beside Spex's block.
+  appendFileSync(excludeFile, "scratch/\n");
+  await a.client.expectOk("environment.install", { repository: ownKey });
+  await until(() => engineLinked(cloneA), 60_000, "the engine links in the first clone");
+  const exclude = readFileSync(join(cloneA, ".git", "info", "exclude"), "utf8").split("\n");
+  assert.ok(exclude.includes("scratch/"), "[playbook-library-46] the reader's line stays");
+  const begin = exclude.indexOf("# >>> spex engine links (managed by Spex; do not edit)");
+  assert.ok(begin >= 0 && exclude[begin + 1] === ENGINE_LINKS_EXCLUDE && exclude[begin + 2] === "# <<< spex engine links", "[playbook-library-46] the clone's exclude lists the engine links in its managed block");
+  const untracked = (clone: string): string[] => harness.git(clone, "status", "--porcelain", "--untracked-files=all", "--", "mine").split("\n").filter((line) => line.includes("node_modules"));
+  assert.deepEqual(untracked(cloneA), [], "[playbook-library-46] Git reports no engine link");
+
+  // The sync carries the folder and no link.
+  const sent = await a.client.settle("space.sync", { repository: ownKey });
+  assert.equal(sent.sync.phase, "done", JSON.stringify(sent.sync));
+  const pushed = harness.git(bare, "ls-tree", "-r", "spex").split("\n");
+  assert.ok(pushed.some((line) => line.endsWith("\tmine/walker/playbooks/en/walk/walk.md")), "the folder is pushed");
+  assert.deepEqual(pushed.filter((line) => line.startsWith("120000 ") || line.startsWith("160000 ")), [], "[playbook-library-46] no link reaches the host");
+
+  // The second home installs the lock its sync brings, links the folder
+  // there, and syncs again with nothing of the links.
+  const received = await b.client.settle("space.sync", { repository: ownKey });
+  assert.equal(received.sync.phase, "done", JSON.stringify(received.sync));
+  await until(() => engineLinked(cloneB), 60_000, "the engine links in the second clone");
+  assert.deepEqual(untracked(cloneB), [], "[playbook-library-46] the second clone's Git reports no engine link");
+  const again = await b.client.settle("space.sync", { repository: ownKey });
+  assert.equal(again.sync.phase, "done", JSON.stringify(again.sync));
+  assert.deepEqual(harness.git(bare, "ls-tree", "-r", "spex").split("\n").filter((line) => line.startsWith("120000 ") || line.startsWith("160000 ")), [], "[playbook-library-46] still no link on the host");
+});
+
+// ---------------------------------------------------------------------------
 // environments-25: the commands over the protocol
 // ---------------------------------------------------------------------------
 
@@ -721,7 +992,8 @@ test("environments-25: every environment command replies and refuses as its tabl
   // environment.get carries every field the surface lists (environments-14).
   await client.expectError("environment.get", { repository: "nobody/none-spex" }, "not_found");
   const initial = await client.expectOk("environment.get", { repository: key });
-  assert.deepEqual(Object.keys(initial).sort(), ["busy", "conflicts", "error", "language", "packages", "published", "repository", "requests", "stale"]);
+  assert.deepEqual(Object.keys(initial).sort(), ["busy", "conflicts", "error", "language", "packages", "pathRoot", "published", "repository", "requests", "stale"]);
+  assert.equal(initial.pathRoot, project.path, "a project's paths are relative to its working folder (environments-2)");
   assert.deepEqual(Object.keys(initial.packages[0]!).sort(), ["artifacts", "direct", "exports", "installed", "missingPath", "name", "requiredBy", "source", "version"]);
   assert.deepEqual(initial.requests["sublang/playbooks"], { kind: "registry", version: `^${builtinPackage().version}` });
 
@@ -802,7 +1074,7 @@ test("environments-25: every environment command replies and refuses as its tabl
   const peerHome = scratchDir("spex-env-peer-home-");
   const peerStore = new ContentStore(peerHome);
   const resolved = await resolve({
-    requests: parseRequests(peerRequests), requestsText: peerRequests, workingFolder: null, git: gitSource(join(peerHome, "cache")),
+    requests: parseRequests(peerRequests), requestsText: peerRequests, pathRoot: null, git: gitSource(join(peerHome, "cache")),
     registry: compositeRegistry(builtinRegistrySource({ store: peerStore, cacheDir: join(peerHome, "cache"), url: registry.url, shipped: builtinPackage() }), new RegistryClient({ url: registry.url })),
   });
   assert.ok(resolved.ok);
@@ -1517,6 +1789,41 @@ test("playbook-library-98: an enabling refused after some of its writes names th
   assert.equal(readFileSync(join(clone, "spex.yaml"), "utf8"), afterFailure!.requests, "the standing request is not written again");
   assert.match(readFileSync(join(clone, "config", "playbook.config.yaml"), "utf8"), /triage:\n\s+roles:/);
   await until(() => latest()?.state === "enabled", 10_000, "the enabled chip");
+});
+
+test("playbook-library-110: an authoring session whose spec package lies in your own group's clone enables in your own group's environment by its path there", { timeout: 180_000 }, async (t) => {
+  const dir = scratchDir("spex-env-enable-own-");
+  const core = await startCore(dir, { hostUrl: UNREACHABLE, script: authoringScript(), slc: stubSlcSource("['triager', 'verifier']") });
+  t.after(() => core.stop());
+  const { client } = core;
+  const ownKey = `${OWN}/${OWN}-spex`;
+  const clone = ownClone(core.dataDir);
+  await settledProject(client, ownKey);
+
+  // Your own group's spex repository paired with its own clone as its
+  // working folder: an authoring session there makes its spec package
+  // folder inside the clone.
+  await client.expectOk("project.rebind", { projectId: ownKey, path: clone });
+  const created = await client.expectOk("draft.create", { projectId: ownKey, draftId: "triage", org: OWN, license: "Apache-2.0" });
+  const { instance } = created;
+  assert.ok(instance, "the session's recorded instance");
+  assert.equal(created.packagePath, "spex-packages/triage");
+  assert.ok(existsSync(join(clone, "spex-packages", "triage", "meta.yaml")), "the spec package folder lies in the clone");
+  await client.expectOk("draft.send", { projectId: ownKey, draftId: "triage", instance, text: "I want a playbook that triages new issues." });
+  const latest = () => client.messages.filter((m) => m.type === "draft.state" && m.draft.id === "triage").map((m) => (m as { draft: CommandResults["draft.create"] }).draft).at(-1);
+  await until(() => latest()?.activity === "idle" && latest()?.proposal !== undefined, 120_000, "the compiled proposal");
+
+  // Enabled in your own group's environment by its path in the clone
+  // (playbook-library-7).
+  await client.expectOk("draft.register", { projectId: ownKey, draftId: "triage", instance, repository: ownKey,
+    command: "triage", intent: "Label new issues", bindings: { Triager: "dev.triager", Verifier: "dev.coder" }, newPlayers: { "dev.triager": { adapter: "claude" } } });
+  const requests = parseYaml(readFileSync(join(clone, "spex.yaml"), "utf8")) as { packages: Record<string, unknown> };
+  assert.deepEqual(requests.packages[`${OWN}/triage`], { path: "spex-packages/triage" }, "[playbook-library-7] requested by its path in your own group's clone");
+  const lock = parseYaml(readFileSync(join(clone, "spex.lock"), "utf8")) as Lock;
+  assert.equal((lock.packages[`${OWN}/triage`]?.source as { path?: string } | undefined)?.path, "spex-packages/triage", "[playbook-library-7] resolved there");
+  const own = parseYaml(readFileSync(core.configPath, "utf8")) as { playbooks: Record<string, unknown> };
+  // Keyed by the roles the stub compile derived.
+  assert.deepEqual(own.playbooks.triage, { roles: { triager: "dev.triager", verifier: "dev.coder" } }, "[playbook-library-7] enabled in your own group's config");
 });
 
 

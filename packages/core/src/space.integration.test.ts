@@ -473,11 +473,15 @@ test("space-39: local changes of every unit kind list in order, incoming units a
   writeFileSync(join(clone, "project.json"), JSON.stringify({ format: 1, name, remote: "git@example.com:acme/app.git" }));
   writeFileSync(join(clone, ".gitignore"), `${readFileSync(join(clone, ".gitignore"), "utf8")}# authored\n/scratch/\n`);
   writeFileSync(join(clone, "notes.txt"), "stray\n");
+  // A spec package's folder: one row with every file under it.
+  mkdirSync(join(clone, "mine", "notes", "skills", "en", "notes"), { recursive: true });
+  writeFileSync(join(clone, "mine", "notes", "meta.yaml"), "format: 2\norg: tester\nname: notes\nversion: 0.1.0\nartifacts:\n  notes: { kind: skill, language: en }\n");
+  writeFileSync(join(clone, "mine", "notes", "skills", "en", "notes", "SKILL.md"), "---\nname: notes\ndescription: Notes.\n---\n");
   const listed = await home.client.repository(key);
   assert.equal(listed.code, "Code on a remote", "the row withholds the remote until the instance reports its Git origin");
   const local = listed.local;
-  assert.deepEqual(local.map((u) => u.kind), ["session", "intent", "authoring", "environment", "settings", "code", "rules", "other"], JSON.stringify(local));
-  const [session, queued, authoring, environment, settings, code, rules, other] = local;
+  assert.deepEqual(local.map((u) => u.kind), ["session", "intent", "authoring", "environment", "settings", "code", "rules", "other", "other"], JSON.stringify(local));
+  const [session, queued, authoring, environment, settings, code, rules, folder, other] = local;
   assert.equal(session.label, "Fix the login redirect");
   assert.equal(session.change, "new");
   assert.equal(session.sessionId, sessionId);
@@ -501,6 +505,10 @@ test("space-39: local changes of every unit kind list in order, incoming units a
   assert.equal(code.change, "updated");
   assert.equal(rules.label, "Sync rules updated");
   assert.equal(rules.unit, ".gitignore");
+  assert.equal(folder.label, "mine/notes/");
+  assert.equal(folder.unit, "mine/notes/");
+  assert.equal(folder.change, "new");
+  assert.deepEqual(folder.paths, ["mine/notes/meta.yaml", "mine/notes/skills/en/notes/SKILL.md"]);
   assert.equal(other.label, "notes.txt");
   assert.equal(other.change, "new");
   // A peer pushes: a differing configuration, a new session and an intent.
@@ -527,7 +535,7 @@ test("space-39: local changes of every unit kind list in order, incoming units a
   assert.equal(checked.incoming[1].intentId, peerIntent);
   assert.deepEqual(checked.conflicts.map((c) => c.unit.unit), ["config/playbook.config.yaml"]);
   assert.ok(checked.conflicts[0].mine.diff && checked.conflicts[0].remote.diff);
-  assert.deepEqual(checked.local.map((u) => u.kind), ["session", "intent", "authoring", "environment", "code", "rules", "other"]);
+  assert.deepEqual(checked.local.map((u) => u.kind), ["session", "intent", "authoring", "environment", "code", "rules", "other", "other"]);
   const mine = await home.client.expectOk("space.diff", { repository: key, unit: "config/playbook.config.yaml", path: "config/playbook.config.yaml", side: "mine" });
   assert.match(mine.patch, /^\+.*coder: dev\.coder/m);
   assert.equal(mine.truncated, false);
@@ -581,6 +589,15 @@ test("space-39: local changes of every unit kind list in order, incoming units a
   assert.equal(entry(".gitattributes").sync, "shared");
   assert.equal(entry("notes.txt").family, "Not a Spex file");
   assert.equal(entry("notes.txt").sync, "pending");
+  // A spec package's folder, and every path under it, reads as one; the
+  // folder above it is none (space-35).
+  assert.equal(entry("mine").family, "Not a Spex folder");
+  const packageFolder = (await home.client.expectOk("space.tree", { repository: key, path: "mine" })).entries.find((e) => e.name === "notes");
+  assert.equal(packageFolder?.family, "spec package");
+  assert.equal(packageFolder?.sync, "pending");
+  const packageFiles = await home.client.expectOk("space.tree", { repository: key, path: "mine/notes" });
+  assert.equal(packageFiles.entries.find((e) => e.name === "meta.yaml")?.family, "spec package");
+  assert.equal(packageFiles.entries.find((e) => e.name === "skills")?.family, "spec package");
   assert.equal(entry("link").kind, "file");
   assert.equal(entry("link").preview, "none");
   assert.equal(entry("big.log").preview, "text");

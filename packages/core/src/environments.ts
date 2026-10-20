@@ -12,11 +12,14 @@
 // the paired working folder's agent folders and, for your own group,
 // into your agents' home folders, as is a folder once paired, and what
 // the last export left out is listed; a session's playbooks are found in
-// the project's environment before your own group's. The built-in spec
+// the project's environment before your own group's. A request by path
+// is relative to the paired working folder, or, in your own group's
+// environment, to its clone, confined to what that clone syncs
+// (environments-2, environments-32, DR-125). The built-in spec
 // package is seeded at start and requested where an environment lacks
 // it, so the built-in playbooks work offline from the first start.
 
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { isAbsolute, join, relative, resolve as resolvePath, sep } from "node:path";
 
 import { fileVersion, readVersioned, sha256, VersionConflictError, type FileVersion } from "./files.js";
@@ -41,9 +44,12 @@ import {
   isPathSource,
   isRegistryRequest,
   isRegistrySource,
+  listReleaseFiles,
   lockStaleness,
   lockStoreKeys,
   moduleLocations,
+  ownFolderIssue,
+  ownPathIssue,
   parseLock,
   parseManifestText,
   parseRequests,
@@ -73,6 +79,7 @@ import {
   type Lock,
   type Manifest,
   type ModuleLocation,
+  type OwnPathIssue,
   type RegistryOrg,
   type RegistrySource,
   type Request,
@@ -175,8 +182,9 @@ function failurePhrase(stage: "resolve" | "install" | "publish", error: unknown)
 }
 
 /** The one stale phrase of playbook-library-92, and one per path
- * source whose manifest moved. */
-function stalePhrases(lock: Lock, requestsText: string | null, workingFolder: string | null): string[] | null {
+ * source whose manifest moved where its path resolves under
+ * `pathRoot`. */
+function stalePhrases(lock: Lock, requestsText: string | null, pathRoot: string | null): string[] | null {
   const phrases: string[] = [];
   if (requestsText === null || requestsDigest(requestsText) !== lock.requests) {
     phrases.push(i18n._({ id: "Requests changed; resolve again to install", comment: "The lock no longer matches spex.yaml; the last installed files stay in use" }));
@@ -186,8 +194,8 @@ function stalePhrases(lock: Lock, requestsText: string | null, workingFolder: st
     if (!isPathSource(resolution.source)) continue;
     const single: Lock = { format: 1, requests: requestsText === null ? "" : requestsDigest(requestsText), packages: { [name]: resolution } };
     const verdict = lockStaleness(single, requestsText, (path) => {
-      if (workingFolder === null) return null;
-      const file = join(workingFolder, ...path.split("/"), "meta.yaml");
+      if (pathRoot === null) return null;
+      const file = join(pathRoot, ...path.split("/"), "meta.yaml");
       if (!existsSync(file)) return null;
       const parsed = parseManifestText(readFileSync(file, "utf8"));
       if (!parsed.manifest) throw new Error(parsed.issues.map((issue) => issue.message).join("; "));
@@ -202,6 +210,36 @@ function stalePhrases(lock: Lock, requestsText: string | null, workingFolder: st
     }
   }
   return phrases.length > 0 ? phrases : null;
+}
+
+/** Whether a folder stands at `path`, a link to one counted. */
+function isDirectory(path: string): boolean {
+  try { return statSync(path).isDirectory(); } catch { return false; }
+}
+
+/** The reader's words for a path your own group's clone refuses
+ * (environments-32). */
+function confinedPhrase(path: string, issue: OwnPathIssue): string {
+  switch (issue.reason) {
+    case "root":
+      return i18n._({ id: "{path} is not a folder below your own group's clone's root", comment: "Refusal: a request by path in your own group's environment names its clone's root", values: { path } });
+    case "spex":
+      return i18n._({ id: "{path} is a path Spex keeps in your own group's clone", comment: "Refusal: a request by path in your own group's environment names a folder under Spex's own paths, such as sessions/ or skills/", values: { path } });
+    case "ignored":
+      return i18n._({ id: "{path} is a path the clone's Git rules ignore, so it would not sync", comment: "Refusal: a request by path in your own group's environment names a folder the clone's sync rules drop, such as one named *.tmp", values: { path } });
+    case "link":
+      return i18n._({ id: "{path} is reached through a link, which the clone's sync does not carry", comment: "Refusal: a request by path in your own group's environment names a folder that is, or lies under, a link", values: { path } });
+    case "repository":
+      return i18n._({ id: "{path}: {entry} is a Git repository of its own, which the clone's sync does not carry", comment: "Refusal: a request by path in your own group's environment names a folder that is, lies in or holds a folder holding .git; {entry} is that folder's path in the clone", values: { path, entry: issue.entry } });
+    case "ignored_file":
+      return i18n._({ id: "{path} holds {file}, which the clone's Git rules ignore, so it would not sync", comment: "Refusal: a request by path in your own group's environment names a folder holding a file the clone's sync rules drop; {file} is that file's path in the clone", values: { path, file: issue.file } });
+    case "unshared_file":
+      return i18n._({ id: "{path} holds {file}, which the clone's sync refuses to share", comment: "Refusal: a request by path in your own group's environment names a folder holding a tracked file of a family that stays on the device, such as a *.tmp file forced into Git; {file} is that file's path in the clone", values: { path, file: issue.file } });
+    case "link_entry":
+      return i18n._({ id: "{path}: {entry} is a link, which the clone's sync does not carry", comment: "Refusal: a request by path in your own group's environment names a folder holding a link the clone's Git rules do not ignore; {entry} is the link's path in the clone", values: { path, entry: issue.entry } });
+    case "special":
+      return i18n._({ id: "{path}: {entry} is no regular file or folder, so the clone's sync does not carry it", comment: "Refusal: a request by path in your own group's environment names a folder holding a special file, such as a pipe or a socket; {entry} is its path in the clone", values: { path, entry: issue.entry } });
+  }
 }
 
 function requestOf(request: Request, label: (repo: string) => string): EnvironmentRequestSummary {
@@ -389,6 +427,15 @@ export class EnvironmentManager {
     return key === this.store.home.own();
   }
 
+  /** The folder a request's `path` is relative to on this device
+   * (environments-2): your own group's clone, where its `spex.yaml` is
+   * and which syncs to every device; else the paired working folder;
+   * null where none is paired. */
+  pathRoot(key: string): string | null {
+    if (this.isOwn(key)) return this.store.repository(key)?.dir ?? null;
+    return this.workingFolder(key);
+  }
+
   // -- the built-in spec package (environments-11) ---------------------------
 
   /** Request the built-in spec package where a clone lacks it, with the
@@ -536,7 +583,7 @@ export class EnvironmentManager {
       return;
     }
     const state = this.cloneState(key);
-    const workingFolder = this.workingFolder(key);
+    const pathRoot = this.pathRoot(key);
     const requestsPath = join(dir, "spex.yaml");
     const lockPath = join(dir, "spex.lock");
     let read: ReturnType<typeof readRequestsAt> = null;
@@ -564,7 +611,7 @@ export class EnvironmentManager {
       step("resolving");
       let result: Awaited<ReturnType<typeof resolve>>;
       try {
-        result = await resolve({ requests: read.requests, requestsText: read.text, registry, workingFolder, git: this.git, gitCredential: this.options.gitCredential });
+        result = await resolve({ requests: read.requests, requestsText: read.text, registry, pathRoot, confined: this.isOwn(key), git: this.git, gitCredential: this.options.gitCredential });
       } catch (error) {
         const changed = this.changedSince(requestsPath, read.version, lockPath, lockVersion);
         if (changed) return this.overtaken(changed, strict);
@@ -609,7 +656,8 @@ export class EnvironmentManager {
         registry,
         git: this.git,
         gitCredential: this.options.gitCredential,
-        workingFolder,
+        pathRoot,
+        confined: this.isOwn(key),
         requestsText: read?.text ?? null,
         ...(this.options.modulePaths ? { modulePaths: this.options.modulePaths } : {}),
       });
@@ -629,7 +677,7 @@ export class EnvironmentManager {
         if (strict) {
           let current: string | null = null;
           try { current = readRequestsAt(requestsPath)?.text ?? null; } catch { /* unreadable reads as changed */ }
-          throw new CoreError("invalid_request", failurePhrase("install", new Error(listed(stalePhrases(lock, current, workingFolder) ?? report.stale))));
+          throw new CoreError("invalid_request", failurePhrase("install", new Error(listed(stalePhrases(lock, current, pathRoot) ?? report.stale))));
         }
         return;
       }
@@ -674,6 +722,7 @@ export class EnvironmentManager {
       cloneDir: dir,
       lock,
       workingFolder,
+      pathRoot: this.pathRoot(key),
       userHome: this.isOwn(key) ? this.options.userHome : null,
       agents: this.agents(),
       packagesDir: join(dir, "packages"),
@@ -690,27 +739,49 @@ export class EnvironmentManager {
     });
   }
 
-  /** The refusal a request earns before any write (environments-15). */
-  private refuseRequest(name: string, request: Request, workingFolder: string | null): void {
+  /** The refusal a request earns before any write (environments-15),
+   * a request by path in your own group's environment checked against
+   * what stands at its path in the clone (environments-32). */
+  private async refuseRequest(key: string, name: string, request: Request): Promise<void> {
     const issues = requestIssues(name, request);
     if (issues.length > 0) throw new CoreError("invalid_request", listed(issues.map((issue) => issue.message)));
-    if (isPathRequest(request)) {
-      if (workingFolder === null) {
-        throw new CoreError("invalid_request", i18n._({
-          id: "{name} is requested by path, and this spex repository has no working folder on this device",
-          comment: "Refusal: a request by path needs the repository's working folder here",
-          values: { name },
-        }));
-      }
-      const inside = relative(resolvePath(workingFolder), resolvePath(workingFolder, request.path));
-      if (!isInsidePath(request.path) || inside.startsWith("..") || isAbsolute(inside)) {
-        throw new CoreError("invalid_request", i18n._({
-          id: "{path} is outside the working folder",
-          comment: "Refusal: a request by path names a folder outside the repository's working folder",
-          values: { path: request.path },
-        }));
-      }
+    if (!isPathRequest(request)) return;
+    const root = this.pathRoot(key);
+    if (root === null) {
+      throw new CoreError("invalid_request", i18n._({
+        id: "{name} is requested by path, and this spex repository has no working folder on this device",
+        comment: "Refusal: a request by path needs the repository's working folder here",
+        values: { name },
+      }));
     }
+    const own = this.isOwn(key);
+    const inside = relative(resolvePath(root), resolvePath(root, request.path));
+    if (!isInsidePath(request.path) || inside.startsWith("..") || isAbsolute(inside)) throw this.outside(request.path, own);
+    if (!own) return;
+    let issue = ownPathIssue(root, request.path);
+    // A folder standing there already is checked whole, its release's
+    // files where it holds one.
+    const folder = resolvePath(root, request.path);
+    if (!issue && isDirectory(folder)) {
+      const files = existsSync(join(folder, "meta.yaml")) ? (await listReleaseFiles(folder)).files.map((file) => file.path) : [];
+      issue = ownFolderIssue(root, request.path, files);
+    }
+    if (issue) throw new CoreError("invalid_request", confinedPhrase(request.path, issue));
+  }
+
+  /** A path that leads out of the folder requests by path are relative to. */
+  private outside(path: string, own: boolean): CoreError {
+    return new CoreError("invalid_request", own
+      ? i18n._({
+        id: "{path} is outside your own group's clone",
+        comment: "Refusal: a request by path in your own group's environment names a folder outside its spex repository's clone",
+        values: { path },
+      })
+      : i18n._({
+        id: "{path} is outside the working folder",
+        comment: "Refusal: a request by path names a folder outside the repository's working folder",
+        values: { path },
+      }));
   }
 
   /** Write `spex.yaml` under the version read, its refusals as replies:
@@ -730,7 +801,7 @@ export class EnvironmentManager {
    * returned promise settles once installed; the reply does not wait. */
   async request(key: string, name: string, request: Request): Promise<{ done: Promise<void> }> {
     const dir = this.cloneDir(key);
-    this.refuseRequest(name, request, this.workingFolder(key));
+    await this.refuseRequest(key, name, request);
     await this.writeRequest(dir, name, request);
     this.announce(key);
     return { done: this.settle(key, "resolve", false) };
@@ -758,7 +829,7 @@ export class EnvironmentManager {
   async ensureRequested(key: string, name: string, request: Request): Promise<boolean> {
     if (this.stopped) throw stoppingError();
     const dir = this.cloneDir(key);
-    this.refuseRequest(name, request, this.workingFolder(key));
+    await this.refuseRequest(key, name, request);
     let current: Request | undefined;
     try { current = readRequestsAt(join(dir, "spex.yaml"))?.requests.packages[name]; }
     catch (error) { throw new CoreError("invalid_request", failurePhrase("resolve", error)); }
@@ -777,7 +848,7 @@ export class EnvironmentManager {
     let stale: string[] | null = ["none"];
     try {
       const lock = readLockSync(join(dir, "spex.lock"));
-      if (lock) stale = stalePhrases(lock, readRequestsAt(join(dir, "spex.yaml"))?.text ?? null, this.workingFolder(key));
+      if (lock) stale = stalePhrases(lock, readRequestsAt(join(dir, "spex.yaml"))?.text ?? null, this.pathRoot(key));
     } catch { /* resolved below */ }
     await this.settle(key, requested || stale ? "resolve" : "install", true, progress);
   }
@@ -805,7 +876,7 @@ export class EnvironmentManager {
       if (read === null) return false;
       const lock = readLockSync(join(dir, "spex.lock"));
       if (lock === null) return true;
-      if (stalePhrases(lock, read.text, this.workingFolder(key))) return false;
+      if (stalePhrases(lock, read.text, this.pathRoot(key))) return false;
       return !this.installedWhole(dir, lock);
     } catch {
       return false;
@@ -876,27 +947,23 @@ export class EnvironmentManager {
 
   // -- publishing (environments-10) ------------------------------------------
 
-  /** `environment.publish`: the folder read and checked as a release and
-   * the sign-in confirmed before the reply; the upload runs after it. */
+  /** `environment.publish`: the folder, at a path relative to the
+   * environment's path root (environments-2), read and checked as a
+   * release and the sign-in confirmed before the reply; the upload runs
+   * after it. */
   async publish(key: string, path: string, dryRun = false): Promise<{ done: Promise<void>; preview: PublishPreview }> {
     this.cloneDir(key);
-    const workingFolder = this.workingFolder(key);
-    if (workingFolder === null) {
+    const root = this.pathRoot(key);
+    if (root === null) {
       throw new CoreError("invalid_request", i18n._({
         id: "{key} has no working folder on this device",
         comment: "Refusal: publishing reads a folder inside the repository's working folder",
         values: { key },
       }));
     }
-    const folder = resolvePath(workingFolder, path);
-    const inside = relative(resolvePath(workingFolder), folder);
-    if (inside === "" || inside.startsWith("..") || isAbsolute(inside) || inside.split(sep).includes("..")) {
-      throw new CoreError("invalid_request", i18n._({
-        id: "{path} is outside the working folder",
-        comment: "Refusal: a request by path names a folder outside the repository's working folder",
-        values: { path },
-      }));
-    }
+    const folder = resolvePath(root, path);
+    const inside = relative(resolvePath(root), folder);
+    if (inside === "" || inside.startsWith("..") || isAbsolute(inside) || inside.split(sep).includes("..")) throw this.outside(path, this.isOwn(key));
     // Signed in means holding a token the host has not refused; a host
     // that cannot be reached now fails the upload, reported with its
     // cause, rather than reading as signed out.
@@ -972,7 +1039,7 @@ export class EnvironmentManager {
     const dir = this.store.repository(key)?.dir;
     const lock = this.lockOf(key);
     if (!dir || !lock) return new Map();
-    const locations = moduleLocations(lock, dir, this.workingFolder(key));
+    const locations = moduleLocations(lock, dir, this.pathRoot(key));
     const installed = installedPackages(dir, lock);
     for (const location of locations.values()) {
       if (!isPathSource(lock.packages[location.package]!.source) && !installed.has(location.package)) location.present = false;
@@ -1003,7 +1070,8 @@ export class EnvironmentManager {
     };
   }
 
-  /** The requests by path, name to folder, of a clone. */
+  /** The requests by path, name to path, of a clone: each relative to
+   * its path root (environments-2). */
   pathRequests(key: string): Map<string, string> {
     const out = new Map<string, string>();
     const dir = this.store.repository(key)?.dir;
@@ -1021,7 +1089,7 @@ export class EnvironmentManager {
   state(key: string): EnvironmentState {
     const dir = this.cloneDir(key);
     const clone = this.cloneState(key);
-    const workingFolder = this.workingFolder(key);
+    const pathRoot = this.pathRoot(key);
     let requests: Requests | null = null;
     let requestsText: string | null = null;
     let requestsVersion: FileVersion | undefined;
@@ -1045,7 +1113,7 @@ export class EnvironmentManager {
       const source = resolution.source;
       const pathSource = isPathSource(source);
       const root = pathSource
-        ? (workingFolder === null ? null : join(workingFolder, ...source.path.split("/")))
+        ? (pathRoot === null ? null : join(pathRoot, ...source.path.split("/")))
         : join(dir, "packages", ...name.split("/"));
       let manifest: Manifest | null = null;
       if (root !== null && existsSync(join(root, "meta.yaml"))) {
@@ -1090,7 +1158,7 @@ export class EnvironmentManager {
     const builtinUpdate = this.builtinUpdate(requests, lock);
     // What an export left out describes the folder it exported into, so
     // a folder paired since lists none of it (environments-14).
-    const unexported = clone.unexported !== null && clone.unexported.folder === workingFolder
+    const unexported = clone.unexported !== null && clone.unexported.folder === this.workingFolder(key)
       ? { skipped: clone.unexported.skipped.map((entry) => ({ ...entry })), missing: [...clone.unexported.missing] }
       : null;
     return {
@@ -1098,11 +1166,12 @@ export class EnvironmentManager {
       language: requests?.language ?? null,
       requests: requestMap,
       packages,
-      stale: lock ? stalePhrases(lock, requestsText, workingFolder) : null,
+      stale: lock ? stalePhrases(lock, requestsText, pathRoot) : null,
       conflicts: conflicts ? this.shownConflicts(conflicts, requests) : null,
       busy: this.busyOf(key),
       error,
       published: clone.published ? { ...clone.published } : null,
+      pathRoot,
       ...(builtinUpdate ? { builtinUpdate } : {}),
       ...(unexported ? { unexported } : {}),
     };

@@ -272,6 +272,7 @@ export const FAMILY_LABELS: Record<string, () => string> = {
   "authoring attachments": () => i18n._({ id: "authoring attachments", comment: "catalog family: the files attached to one authoring session" }),
   "spec package requests": () => i18n._({ id: "spec package requests", comment: "catalog family: the spec packages the environment asks for" }),
   "spec package lock": () => i18n._({ id: "spec package lock", comment: "catalog family: the exact spec packages the environment resolved" }),
+  "spec package": () => i18n._({ id: "spec package", comment: "catalog family: a spec package's folder kept in the clone, synced whole, or a file in it" }),
   "upload staging": () => i18n._({ id: "upload staging", comment: "catalog family: files uploaded and not yet attached" }),
   Settings: () => i18n._({ id: "Settings", comment: "catalog family: the shared config the Settings surface edits" }),
   "code remote": () => i18n._({ id: "code remote", comment: "catalog family: the file naming where a project's code lives" }),

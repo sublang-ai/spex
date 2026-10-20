@@ -4798,8 +4798,8 @@ msgid "Request {requirement}"
 msgstr "Request {requirement}"
 
 #: src/components/EnvironmentSection.tsx
-msgid "Request a folder inside the working folder"
-msgstr "Request a folder inside the working folder"
+msgid "Request a spec package by its folder"
+msgstr "Request a spec package by its folder"
 
 #: src/components/EnvironmentSection.tsx
 msgid "Request a Git repository at a branch, tag or commit"
@@ -5490,6 +5490,11 @@ msgstr "spec"
 #: src/lib/compile-log.ts
 msgid "Spec items"
 msgstr "Spec items"
+
+#. catalog family: a spec package's folder kept in the clone, synced whole, or a file in it
+#: src/lib/space.ts
+msgid "spec package"
+msgstr "spec package"
 
 #: src/components/SpecGraph.tsx
 msgid "Spec package citation graph"

@@ -60,6 +60,9 @@ export interface ExportOptions {
   /** The working folder exported to; null exports nowhere but the
    * clone and the user's home. */
   workingFolder: string | null;
+  /** The folder a path source's path is relative to (environments-2):
+   * your own group's clone; the working folder where omitted. */
+  pathRoot?: string | null;
   /** The user's home, for your own group's environment; else null. */
   userHome: string | null;
   /** The agents this device has: only their user-level folders are
@@ -84,13 +87,15 @@ export interface ExportReport {
    * once under each name where a link makes two folders one. */
   skipped: { name: string; folder: string }[];
   /** Spec packages an exported artifact of which is not here: not
-   * installed, or a path source this working folder lacks. */
+   * installed, or a path source missing where its path resolves. */
   missing: string[];
 }
 
-function packageRoot(name: string, resolution: Resolution, packagesDir: string, workingFolder: string | null): string | null {
+/** Where a spec package's files stand: its installed folder, or a path
+ * source's folder where its path resolves (environments-8). */
+function packageRoot(name: string, resolution: Resolution, packagesDir: string, pathRoot: string | null): string | null {
   const source = resolution.source;
-  if (isPathSource(source)) return workingFolder === null ? null : join(workingFolder, ...source.path.split("/"));
+  if (isPathSource(source)) return pathRoot === null ? null : join(pathRoot, ...source.path.split("/"));
   return join(packagesDir, ...name.split("/"));
 }
 
@@ -399,6 +404,7 @@ function userFolder(userHome: string, folder: string): string {
 /** Export an installed environment (environments-8). */
 export async function exportEnvironment(options: ExportOptions): Promise<ExportReport> {
   const { cloneDir, lock, workingFolder, userHome, packagesDir } = options;
+  const pathRoot = options.pathRoot === undefined ? workingFolder : options.pathRoot;
   const report: ExportReport = { skills: [], folders: [], removed: [], skipped: [], missing: [] };
   const playbookSkills = new Set<string>();
   const skillsDir = join(cloneDir, "skills");
@@ -407,7 +413,7 @@ export async function exportEnvironment(options: ExportOptions): Promise<ExportR
 
   for (const name of Object.keys(lock.packages).sort()) {
     const resolution = lock.packages[name]!;
-    const root = packageRoot(name, resolution, packagesDir, workingFolder);
+    const root = packageRoot(name, resolution, packagesDir, pathRoot);
     const manifest = root === null ? null : readManifestAt(root);
     if (root === null || manifest === null) {
       if (Object.keys(resolution.exports).length > 0) report.missing.push(name);
@@ -523,14 +529,15 @@ export function playbookModuleCandidates(folder: string, id: string): string[] {
 }
 
 /** Each exported playbook's module location (environments-9): the
- * installed artifact under `packages/`, or a path source's in the
- * working folder. Keyed by the exported name. */
-export function moduleLocations(lock: Lock, cloneDir: string, workingFolder: string | null): Map<string, ModuleLocation> {
+ * installed artifact under `packages/`, or a path source's where its
+ * path resolves, `pathRoot` being the folder its path is relative to.
+ * Keyed by the exported name. */
+export function moduleLocations(lock: Lock, cloneDir: string, pathRoot: string | null): Map<string, ModuleLocation> {
   const out = new Map<string, ModuleLocation>();
   const packagesDir = join(cloneDir, "packages");
   for (const name of Object.keys(lock.packages).sort()) {
     const resolution = lock.packages[name]!;
-    const root = packageRoot(name, resolution, packagesDir, workingFolder);
+    const root = packageRoot(name, resolution, packagesDir, pathRoot);
     if (root === null) continue;
     const pathSource = isPathSource(resolution.source);
     const manifest = pathSource ? readManifestAt(root) : null;

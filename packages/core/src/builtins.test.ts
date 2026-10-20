@@ -38,11 +38,11 @@ async function installedBuiltins(): Promise<Map<string, ModuleLocation>> {
   mkdirSync(clone, { recursive: true });
   const text = stringify({ format: 1, packages: { "sublang/playbooks": { version: `^${shipped.version}` } } });
   writeFileSync(join(clone, "spex.yaml"), text);
-  const result = await resolve({ requests: parseRequests(text), requestsText: text, registry, workingFolder: null, git: gitSource(cache) });
+  const result = await resolve({ requests: parseRequests(text), requestsText: text, registry, pathRoot: null, git: gitSource(cache) });
   assert.ok(result.ok);
   if (!result.ok) throw new Error("unreachable");
   // No lock stands on disk: the install expects none (DR-111).
-  await install({ cloneDir: clone, lock: result.lock, lockVersion: null, store, cache, registry, git: gitSource(cache), workingFolder: null, requestsText: text });
+  await install({ cloneDir: clone, lock: result.lock, lockVersion: null, store, cache, registry, git: gitSource(cache), pathRoot: null, requestsText: text });
   return moduleLocations(result.lock, clone, null);
 }
 

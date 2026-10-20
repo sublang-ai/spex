@@ -28,6 +28,7 @@ Amended by [DR-120](120-the-instance-is-the-space.md) in "What Spex does on a Gi
 Proposed to be amended by [DR-113](113-a-projects-environment-lives-in-its-working-folder.md) in its principle and its tree: the environment is the code's configuration, not a record, so a project's `spex.yaml` and `spex.lock` live at its working folder's root, committed with the code by the reader, leaving its spex repository, while the unit `spex.yaml` with `spex.lock` stays for a group's own; Spex itself still commits nothing to the code.
 
 Amended by [DR-122](122-a-sync-reads-its-destination.md) in the pre-sync read: a fresh complete catalog and only the selected repository's detail establish its authority, separately from the full Groups view.
+Amended by [DR-125](125-your-own-groups-path-sources-live-in-its-clone.md) in its units: a folder holding a spec package's `meta.yaml`, outside Spex's own paths, is one unit with every file under it.
 
 ## Context
 

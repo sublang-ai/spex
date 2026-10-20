@@ -1633,7 +1633,7 @@ describe("playbook-library-93: Publish beneath the Enable form", () => {
     version: "0.1.0",
     files: ["meta.yaml", "playbooks/en/triage/triage.md", "playbooks/en/triage/triage.playbook/triage.fsm.ts"],
   };
-  const CURRENT = { repository: PROJECT_ID, language: null, requests: {}, packages: [], stale: null, conflicts: null, busy: null, error: null };
+  const CURRENT = { repository: PROJECT_ID, language: null, requests: {}, packages: [], stale: null, conflicts: null, busy: null, error: null, pathRoot: null };
 
   async function openEnable(draft: DraftInfo = COMPILED) {
     renderWorkspace(draft, { view: foldView(THREAD) });

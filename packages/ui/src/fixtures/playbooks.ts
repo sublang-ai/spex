@@ -180,6 +180,7 @@ export function environment(over: Partial<EnvironmentState> & { repository: stri
     conflicts: null,
     busy: null,
     error: null,
+    pathRoot: null,
     ...over,
   };
 }
@@ -189,6 +190,7 @@ export function environment(over: Partial<EnvironmentState> & { repository: stri
  * was wanted, a path source this device lacks, and the built-ins. */
 export const PROJECT_ENVIRONMENT = environment({
   repository: PROJECT_ID,
+  pathRoot: PROJECT.path,
   language: "zh-Hans",
   requests: {
     "acme/triage": { kind: "registry", version: "^1.2.0" },
@@ -232,6 +234,7 @@ export const PROJECT_ENVIRONMENT = environment({
 
 export const OWN_ENVIRONMENT = environment({
   repository: OWN_KEY,
+  pathRoot: `/home/me/.spex/workspace/${OWN_KEY}`,
   requests: { "sublang/playbooks": { kind: "registry", version: "^17.4.1" } },
   packages: [
     specPackage({

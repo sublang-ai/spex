@@ -799,7 +799,7 @@ export class CoreService {
     const packageDir = resolve(draftFolder, this.drafts.packagePath(id));
     for (const key of new Set([projectId, this.store.home.own()])) {
       const repository = this.store.repository(key);
-      const folder = this.environments.workingFolder(key);
+      const folder = this.environments.pathRoot(key);
       if (!repository || folder === null) continue;
       const requested = [...this.environments.pathRequests(key).values()].some((path) => resolve(folder, path) === packageDir);
       if (!requested) continue;
@@ -3449,14 +3449,21 @@ export class CoreService {
     if (targetKey !== own && targetKey !== input.projectId) throw noProject(targetKey);
     const target = this.store.repository(targetKey);
     if (!target) throw noProject(targetKey);
-    const targetFolder = this.environments.workingFolder(targetKey);
+    // A request by path is relative to the environment's path root:
+    // your own group's clone, or the working folder (environments-2).
+    const targetFolder = this.environments.pathRoot(targetKey);
     const relativePath = targetFolder === null ? undefined : relative(resolve(targetFolder), resolve(input.packageDir));
     if (targetFolder === null || relativePath === undefined || relativePath === "" || relativePath.startsWith("..") || isAbsolute(relativePath)) {
-      throw new CoreError("invalid_request", i18n._({
-        id: "the environment of {repository} can request this spec package by path only from inside its own working folder; enable it in the project, or publish it and add it from the registry",
-        comment: "Refusal: a request by path names a folder inside the repository's working folder (environments-2)",
-        values: { repository: targetKey },
-      }));
+      throw new CoreError("invalid_request", targetKey === own
+        ? i18n._({
+          id: "your own group's environment can request this spec package by path only from inside its clone; enable it in the project, or publish it and add it from the registry",
+          comment: "Refusal: your own group's request by path names a folder inside its spex repository's clone (environments-2), and this spec package lies elsewhere",
+        })
+        : i18n._({
+          id: "the environment of {repository} can request this spec package by path only from inside its own working folder; enable it in the project, or publish it and add it from the registry",
+          comment: "Refusal: a request by path names a folder inside the repository's working folder (environments-2)",
+          values: { repository: targetKey },
+        }));
     }
     const packagePath = relativePath.split(sep).join("/");
     let manifest;

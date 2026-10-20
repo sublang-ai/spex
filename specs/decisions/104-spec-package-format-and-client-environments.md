@@ -14,6 +14,7 @@ Proposed to be amended by [DR-113](113-a-projects-environment-lives-in-its-worki
 Amended by [DR-115](115-a-spec-reaches-the-agents.md) in its exports: a selected spec is exported as a generated skill holding the spec file, under `<org>-<pkg>` or its alias.
 Completed by [DR-124](124-skills-reach-every-agent.md) in its ask to Cligent: Cligent's DR-036 names the folders each agent reads, and Spex exports into them.
 Amended by [DR-124](124-skills-reach-every-agent.md) in its exports: every paired working folder receives each agent's project-level folder whatever agents the device has, a user-level folder is written only for an agent the device has, and the skill generated for a playbook goes only to Claude Code's folders.
+Amended by [DR-125](125-your-own-groups-path-sources-live-in-its-clone.md) in its path source: in your own group's environment a path is relative to the root of its spex repository's clone, where its `spex.yaml` is, confined to what that clone syncs, and used in place on every device it syncs to; a project's and another group's stay relative to the working folder.
 Amends, under [DR-046](046-decision-record-evolution.md):
 
 - [DR-005](005-compilation-integration.md) and [DR-058](058-chat-assisted-playbook-authoring.md): registering a compiled playbook becomes requesting its spec package and naming the player for each role; the launcher gets the module's location from Spex at launch instead of from the launcher config. The compile flow stands.
