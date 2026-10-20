@@ -67,12 +67,12 @@ The core shall read an environment's `spex.yaml` [[environments-26](#environment
 
 #### environments-32
 
-When the core reads a request by path in your own group's environment — before writing it [[environments-15](#environments-15)], at each resolution [[environments-5](#environments-5)] and at each install [[environments-7](#environments-7)] — it shall accept only a folder below its clone's root that lies outside Spex's own paths, is reached through no link, and holds nothing the clone's sync drops or refuses, refusing any other with the path and its reason, so the folder syncs with the clone ([DR-125](../decisions/125-your-own-groups-path-sources-live-in-its-clone.md)):
+When the core reads a request by path in your own group's environment — before writing it [[environments-15](#environments-15)], at each resolution [[environments-5](#environments-5)] and at each install [[environments-7](#environments-7)] — it shall accept only a folder below its clone's root that lies outside Spex's own paths, is reached through no link, lies in no Git repository of its own, and holds nothing the clone's sync drops or refuses, refusing any other with the path and its reason, so the folder syncs with the clone ([DR-125](../decisions/125-your-own-groups-path-sources-live-in-its-clone.md)):
 
 | Refused | Reason |
 | --- | --- |
 | the clone's root, or a path leading out of it | not below the clone's root |
-| a path whose first segment — compared without case after Unicode compatibility normalization (NFKC), and, where it stands and is no link, also as the file system names it — is `config`, `sessions`, `intents`, `authoring`, `packages`, `skills`, `local`, `.git`, `.spex-uploads`, `spex.yaml`, `spex.lock`, `project.json`, `.gitignore`, `.gitattributes`, `.spex-apply.json` or a name beginning `.lock` | a path Spex keeps [[storage-1](storage.md#storage-1)] |
+| a path whose first segment — compared without case after Unicode compatibility normalization (NFKC) — is `config`, `sessions`, `intents`, `authoring`, `packages`, `skills`, `local`, `.git`, `.spex-uploads`, `spex.yaml`, `spex.lock`, `project.json`, `.gitignore`, `.gitattributes`, `.spex-apply.json` or a name beginning `.lock` | a path Spex keeps [[storage-1](storage.md#storage-1)] |
 | a path the clone's Git rules ignore, such as one under a folder named `*.tmp` [[storage-17](storage.md#storage-17)] | not synced |
 | a folder that is a link, or lies under one | reached through a link |
 | a folder that is, or lies under, a Git repository of its own — a folder below the root holding `.git` | a repository the sync does not carry, named |
