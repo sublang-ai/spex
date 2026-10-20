@@ -549,8 +549,10 @@ Where the host shell names a legacy SQLite store that neither the state root's o
 When a host shell stops the core service, the core service shall persist every live session's Captain snapshot [[core-service-72](#core-service-72)] and attempt disposal of its runtime, close its endpoint and its store, and report the disposal failures to the host once every session has been attempted:
 
 - One session's disposal failure neither skips another session's disposal nor leaves the endpoint or the store open.
-- Successful cleanup reports the session as no longer live; failed cleanup retains its ownership evidence [[core-service-4](#core-service-4)].
+- Successful cleanup reports the session as no longer live; failed or unconfirmed cleanup retains its ownership evidence [[core-service-4](#core-service-4)].
 - Shutdown waits for settlement bookkeeping already in progress before closing the store.
+- Shutdown closes session and turn admission before waiting, drains session openings already admitted (including their pre-open waits), and attempts disposal of any runtime they create before closing the store; an opening or disposal failure does not skip the remaining cleanup.
+- An observed Captain cleanup-hook rejection or an ambiguous compound construction failure is reported as cleanup unconfirmed, including one whose opening settled before shutdown; a lease released during failed construction alone does not confirm runtime cleanup ([DR-048](../decisions/048-failed-session-cleanup.md)).
 
 ### Interface Language
 
@@ -771,6 +773,10 @@ Where two sessions are live and the first one's runtime fails its disposal, the 
 - the second session's runtime is disposed even though the first one's disposal failed;
 - the stop reports the first session's failure to the host after both sessions have been attempted;
 - the endpoint accepts no further connection once the stop has returned.
+
+Where session creation or continuation is held after acquiring its shared lease but before publishing its runtime, the integration suite shall stop the core, release that initialization, and assert that shutdown waits for the admitted opening and disposes its runtime before closing the store, later session or turn admission creates no work, and the shared session lease is idle after successful cleanup [[core-service-39](#core-service-39)].
+
+Where admitted initialization fails, the integration suite shall distinguish an ordinary initialization error with successful cleanup from a cleanup-hook rejection or ambiguous compound construction error: the ordinary error does not fail shutdown; the latter outcomes report cleanup unconfirmed and retain ownership even when no controller was returned or the opening settled before shutdown; every outcome still permits shutdown to attempt the other runtimes [[core-service-39](#core-service-39)].
 
 ### Record Visibility Coverage
 
