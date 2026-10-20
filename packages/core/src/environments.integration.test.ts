@@ -10,7 +10,7 @@ import { randomUUID } from "node:crypto";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { appendFileSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { appendFileSync, cpSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { createServer, request as httpRequest } from "node:http";
 import type { AddressInfo } from "node:net";
 import { dirname, isAbsolute, join } from "node:path";
@@ -22,7 +22,7 @@ import { CoreService, type CoreServiceOptions } from "./service.js";
 import type { EnvironmentManager } from "./environments.js";
 import { CoreError } from "./session.js";
 import type { Store } from "./store.js";
-import { defaultSpawner, type LineSpawner } from "./compile.js";
+import { defaultSpawner, ENGINE_LINKS_EXCLUDE, type LineSpawner } from "./compile.js";
 import { createModuleLoader, starterText, templatePath } from "./config.js";
 import { builtinPackage, INSTALL_RECORD, publishRelease, readRelease, RegistryClient, requestsDigest, type BuiltinPackage, type Lock } from "./environment/index.js";
 import type { Command, CommandResults, EnvironmentState, ServerMessage } from "./protocol.js";
@@ -880,6 +880,62 @@ test("environments-33 through real cores: a skill your own group requests by a p
     await until(() => existsSync(exported), 60_000, `${folder} on the second home`);
     assert.equal(readFileSync(exported, "utf8"), skill("Write it down, then read it back."), folder);
   }
+});
+
+// ---------------------------------------------------------------------------
+// playbook-library-109: engine links in your own group's clone stay out of its sync
+// ---------------------------------------------------------------------------
+
+test("playbook-library-109 through real cores: a playbook your own group keeps in its clone takes engine links its clone's Git ignores, and both homes sync", { timeout: 240_000 }, async (t) => {
+  const harness = createSpaceHarness();
+  t.after(() => harness.dispose());
+  const ownKey = `${OWN}/${OWN}-spex`;
+  const a = await harness.startHome("own-links-a", { project: false });
+  t.after(() => a.stop());
+  const b = await harness.startHome("own-links-b", { project: false, env: harness.otherDevice("own-links-b") });
+  t.after(() => b.stop());
+  const cloneA = ownClone(a.dataDir);
+  const cloneB = ownClone(b.dataDir);
+  const bare = harness.bareRepo();
+  await a.client.expectOk("space.remote.set", { repository: ownKey, url: bare });
+  assert.equal((await a.client.settle("space.sync", { repository: ownKey })).sync.phase, "done");
+  await b.client.expectOk("space.remote.set", { repository: ownKey, url: bare });
+  await harness.joinRemote(b, ownKey);
+  assert.equal((await a.client.settle("space.sync", { repository: ownKey })).sync.phase, "done");
+
+  await makeRelease(join(cloneA, "mine", "walker"), {
+    format: 2, org: OWN, name: "walker", version: "0.1.0", artifacts: { walk: { kind: "playbook", language: "en" } },
+  }, { "playbooks/en/walk/walk.md": "# Walk\n\nRoles:\n\n- Walker\n", "playbooks/en/walk/walk.registry.mjs": "export default {};\n" });
+  // A line the reader wrote in the clone's exclude stays beside Spex's block.
+  mkdirSync(join(cloneA, ".git", "info"), { recursive: true });
+  appendFileSync(join(cloneA, ".git", "info", "exclude"), "scratch/\n");
+  await a.client.expectOk("environment.request", { repository: ownKey, name: `${OWN}/walker`, request: { kind: "path", path: "mine/walker" } });
+  const linked = (clone: string): string[] => ["xstate", "@sublang/playbook"].map((name) => join(clone, "mine", "walker", "playbooks", "en", "walk", "node_modules", name));
+  const engineLinked = (clone: string): boolean => linked(clone).every((link) => { try { return lstatSync(link).isSymbolicLink(); } catch { return false; } });
+  await until(() => engineLinked(cloneA), 60_000, "the engine links in the first clone");
+  const exclude = readFileSync(join(cloneA, ".git", "info", "exclude"), "utf8").split("\n");
+  assert.ok(exclude.includes("scratch/"), "[playbook-library-46] the reader's line stays");
+  const begin = exclude.indexOf("# >>> spex engine links (managed by Spex; do not edit)");
+  assert.ok(begin >= 0 && exclude[begin + 1] === ENGINE_LINKS_EXCLUDE && exclude[begin + 2] === "# <<< spex engine links", "[playbook-library-46] the clone's exclude lists the engine links in its managed block");
+  const untracked = (clone: string): string[] => harness.git(clone, "status", "--porcelain", "--untracked-files=all", "--", "mine").split("\n").filter((line) => line.includes("node_modules"));
+  assert.deepEqual(untracked(cloneA), [], "[playbook-library-46] Git reports no engine link");
+
+  // The sync carries the folder and no link.
+  const sent = await a.client.settle("space.sync", { repository: ownKey });
+  assert.equal(sent.sync.phase, "done", JSON.stringify(sent.sync));
+  const pushed = harness.git(bare, "ls-tree", "-r", "spex").split("\n");
+  assert.ok(pushed.some((line) => line.endsWith("\tmine/walker/playbooks/en/walk/walk.md")), "the folder is pushed");
+  assert.deepEqual(pushed.filter((line) => line.startsWith("120000 ") || line.startsWith("160000 ")), [], "[playbook-library-46] no link reaches the host");
+
+  // The second home installs the lock its sync brings, links the folder
+  // there, and syncs again with nothing of the links.
+  const received = await b.client.settle("space.sync", { repository: ownKey });
+  assert.equal(received.sync.phase, "done", JSON.stringify(received.sync));
+  await until(() => engineLinked(cloneB), 60_000, "the engine links in the second clone");
+  assert.deepEqual(untracked(cloneB), [], "[playbook-library-46] the second clone's Git reports no engine link");
+  const again = await b.client.settle("space.sync", { repository: ownKey });
+  assert.equal(again.sync.phase, "done", JSON.stringify(again.sync));
+  assert.deepEqual(harness.git(bare, "ls-tree", "-r", "spex").split("\n").filter((line) => line.startsWith("120000 ") || line.startsWith("160000 ")), [], "[playbook-library-46] still no link on the host");
 });
 
 // ---------------------------------------------------------------------------
