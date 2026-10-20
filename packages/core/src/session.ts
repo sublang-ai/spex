@@ -380,6 +380,11 @@ export class SessionManager {
   // released checkpoint's refreshed metadata and publication.
   private readonly settling = new Map<string, {projectId: string; done: Promise<void>}>();
   private readonly opening = new Set<string>();
+  // Shutdown drains openings; callers retain their original result/error.
+  private readonly openingOperations = new Set<Promise<void>>();
+  private readonly failedOpenings = new Map<string, unknown>();
+  private stopping = false;
+  private shutdownOpenings?: Promise<void[]>;
   private readonly recovering = new Map<string, string>();
   /** Sessions whose active turn is being stopped intentionally. */
   private readonly intentionalStops = new Set<string>();
@@ -425,6 +430,14 @@ export class SessionManager {
     return lanes;
   }
   getLive(sessionId: string): LiveSession | undefined { return this.live.get(sessionId); }
+  /** Fence synchronously, before Core.stop awaits any other subsystem. */
+  beginShutdown(): void {
+    this.stopping = true;
+    this.shutdownOpenings ??= Promise.all([...this.openingOperations]);
+  }
+  private assertAdmission(): void {
+    if (this.stopping) throw new CoreError("busy", i18n._({id: "The core is stopping.", comment: "Refusal during core shutdown"}));
+  }
   /** Wait out a settling turn's release, so a caller sees the session
    * either held or released — never in between (core-service-91). */
   async settled(sessionId: string): Promise<void> {
@@ -508,12 +521,27 @@ export class SessionManager {
     if (info) await this.onSessionState(info);
   }
 
-  private async open(project: ProjectInfo, composed: ComposedConfig | undefined, sessionId: string, mode: "new" | "continue" | "recover", assertCurrent?: () => void): Promise<SessionInfo> {
+  private open(project: ProjectInfo, composed: ComposedConfig | undefined, sessionId: string, mode: "new" | "continue" | "recover", assertCurrent?: () => void): Promise<SessionInfo> {
+    this.assertAdmission();
+    // Own the complete opening, including its first settlement wait.
+    const operation = this.openAdmitted(project, composed, sessionId, mode, assertCurrent, (error) => {
+      this.failedOpenings.set(sessionId, error);
+    });
+    // The request keeps its own admission/config error. Shutdown reports
+    // unconfirmed cleanup, not that an otherwise clean opening refused.
+    const finished = operation.then(() => {}, () => {});
+    this.openingOperations.add(finished);
+    void finished.then(() => { this.openingOperations.delete(finished); });
+    return operation;
+  }
+
+  private async openAdmitted(project: ProjectInfo, composed: ComposedConfig | undefined, sessionId: string, mode: "new" | "continue" | "recover", assertCurrent: (() => void) | undefined, cleanupFailed: (error: unknown) => void): Promise<SessionInfo> {
     // One working turn per project (core-service-4, DR-051): only a
     // session whose runtime is held — a turn in flight or settling — or
     // one another host holds stands in the way, and it is named. A
     // sibling mid-release is waited out first.
     await this.projectSettled(project.id);
+    this.assertAdmission();
     if (this.opening.has(project.id)) throw new CoreError("busy", i18n._({
       id: "a session is starting in {project} — wait a moment",
       comment: "Refusal: another session of this project is opening",
@@ -527,6 +555,8 @@ export class SessionManager {
     let ownsLocalReservation = false;
     let entry: LiveSession | undefined;
     let controller: SessionHostController | undefined;
+    let constructingHost = false;
+    let cleanupUnconfirmed = false;
     try {
       for (const session of this.store.listSessions()) {
         if (session.projectId === project.id && session.externalWriter) await this.refreshOwnership(session.id);
@@ -577,6 +607,7 @@ export class SessionManager {
         comment: "Refusal: no project of this id is registered",
         values: { projectId: project.id },
       }));
+      constructingHost = true;
       controller = await openSessionHost({
         store: this.store.sessionStore(project.id), sessionId, mode, cwd: project.path,
         ...(this.options.approvalHandler ? {approvalHandler: this.options.approvalHandler(sessionId)} : {}),
@@ -584,18 +615,25 @@ export class SessionManager {
         ...(graphs ? {graphs} : {}),
         ...(initialVisible ? {initialVisible} : {}),
         ...(this.options.adapterImports ? {adapterImports: this.options.adapterImports} : {}),
-        // Tests may narrate records before the real shell turn. Only the
-        // shell supplies the reply, journal and durable settlement.
-        ...(fixture ? {createHostRuntime: async (input: Parameters<typeof createTmuxPlayRuntime>[0]) => {
+        // Observe the public cleanup hooks even if construction returns no
+        // controller. Fixtures may narrate records before the real shell
+        // turn; only the shell supplies its reply and durable settlement.
+        createHostRuntime: async (input: Parameters<typeof createTmuxPlayRuntime>[0]) => {
           const shell = input.captain;
           return createTmuxPlayRuntime({...input, captain: {
-            async init(session) { await shell.init?.(session); await fixture.init?.(session); },
+            async init(session) { await shell.init?.(session); await fixture?.init?.(session); },
             async handleBossTurn(turn,context) {
-              await fixture.handleBossTurn(turn,{...context, emitReply: async () => {}});
+              await fixture?.handleBossTurn(turn,{...context, emitReply: async () => {}});
               await shell.handleBossTurn(turn,context);
             },
-            async prepareDispose() { await fixture.prepareDispose?.(); await shell.prepareDispose?.(); },
-            async dispose() { await fixture.dispose?.(); await shell.dispose?.(); },
+            async prepareDispose() {
+              try { await fixture?.prepareDispose?.(); await shell.prepareDispose?.(); }
+              catch (error) { cleanupUnconfirmed = true; cleanupFailed(error); throw error; }
+            },
+            async dispose() {
+              try { await fixture?.dispose?.(); await shell.dispose?.(); }
+              catch (error) { cleanupUnconfirmed = true; cleanupFailed(error); throw error; }
+            },
             // core-service-98: the control surfaces are the real shell's,
             // and a wrapper that forwarded only the turn members hid them
             // — the notice then drew controls every activation refused.
@@ -603,7 +641,7 @@ export class SessionManager {
             // publishes none still advertises none.
             ...controlSurfaces(shell),
           }});
-        }} : {}),
+        },
         onStoredRecord: async (record) => {
           this.record(sessionId, record, entry);
           const result = record.record.type === "captain_finished" ? record.record.result as {status?: string; error?: string; finalText?: string} : undefined;
@@ -617,6 +655,8 @@ export class SessionManager {
           if (entry) await this.publish(sessionId);
         },
       });
+      constructingHost = false;
+      this.assertAdmission();
       await this.store.refreshSession(sessionId, true);
       const info = this.store.describeSession(sessionId);
       // English, deliberately (core-service-111): the shared store just
@@ -631,14 +671,32 @@ export class SessionManager {
         try { await this.completeRestore(entry); }
         catch (error) { console.error(`spex: restored position not recorded: ${String(error)}`); }
       }
+      this.assertAdmission();
       await this.publish(sessionId);
+      this.assertAdmission();
       return {...info, live:true, turnActive:false};
     } catch (error) {
-      if (controller) await controller.dispose();
-      if (ownsLocalReservation) this.store.setLocalSession(sessionId, false);
+      // A compound construction error cannot prove runtime cleanup, even
+      // when the outer shared lifecycle released its lease. Do not infer
+      // a particular cleanup defect or depend on factory error identity.
+      const hostCleanupFailed = cleanupUnconfirmed || (constructingHost && error instanceof AggregateError);
+      if (hostCleanupFailed) { cleanupUnconfirmed = true; cleanupFailed(error); }
+      try {
+        if (controller) await controller.dispose();
+        if (entry) this.live.delete(sessionId);
+        if (ownsLocalReservation && !hostCleanupFailed) this.store.setLocalSession(sessionId, false);
+        if (entry) {
+          await this.store.refreshSession(sessionId, false);
+          await this.publish(sessionId);
+        }
+      } catch (cleanupError) {
+        cleanupUnconfirmed = true;
+        cleanupFailed(cleanupError);
+        throw cleanupError;
+      }
       if (error instanceof SettingsDriftError) throw new CoreError("invalid_config", error.message);
       throw this.failure(error, mode === "new" ? "invalid_config" : "invalid_request");
-    } finally { this.opening.delete(project.id); }
+    } finally { if (!cleanupUnconfirmed) this.opening.delete(project.id); }
   }
 
   /** The stored structural projection of a schema-7 checkpoint, when it has one. */
@@ -931,6 +989,7 @@ export class SessionManager {
   }
 
   submitTurn(sessionId: string, text: string, intentId?: string, attachments?: readonly MediaAsset[]): void {
+    this.assertAdmission();
     const entry = this.requireLive(sessionId);
     if (entry.turnActive) throw new CoreError("busy", i18n._({
       id: "a turn is already running in this session",
@@ -945,6 +1004,7 @@ export class SessionManager {
   }
 
   private startTurn(entry: LiveSession, text: string | SessionTurnInput | undefined, restore: { input: string } | false, control?: { kind: "recovery" | "ending"; controlId: string }): void {
+    this.assertAdmission();
     entry.turnIntentId = undefined;
     entry.turnActive = true;
     // A turn accepted while a run waits on the Boss's question answers
@@ -1064,6 +1124,8 @@ export class SessionManager {
     // The turn's own settlement may have released the runtime already.
     if (!this.live.has(sessionId)) return;
     await entry.controller.dispose();
+    this.failedOpenings.delete(sessionId);
+    this.opening.delete(entry.info.projectId);
     this.live.delete(sessionId);
     this.store.setLocalSession(sessionId, false);
     await this.store.refreshSession(sessionId, false);
@@ -1071,10 +1133,12 @@ export class SessionManager {
     this.onLedgerChange(entry.info.projectId);
   }
   async disposeAll(): Promise<void> {
+    await (this.shutdownOpenings ?? Promise.all([...this.openingOperations]));
     const ids = new Set([...this.live.keys(), ...this.settling.keys()]);
     const results = await Promise.allSettled([...ids].map((id) => this.disposeSession(id)));
-    const failures = results.flatMap((result) => result.status === "rejected" ? [result.reason] : []);
-    if (failures.length) throw new AggregateError(failures, "session cleanup failed");
+    const failures = [...this.failedOpenings.values()];
+    failures.push(...results.flatMap((result) => result.status === "rejected" ? [result.reason] : []));
+    if (failures.length) throw new AggregateError([...new Set(failures)], "session cleanup was not confirmed");
   }
   private async publish(sessionId: string): Promise<void> {
     const session = this.store.describeSession(sessionId);
