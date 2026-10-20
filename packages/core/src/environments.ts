@@ -1158,7 +1158,7 @@ export class EnvironmentManager {
     const builtinUpdate = this.builtinUpdate(requests, lock);
     // What an export left out describes the folder it exported into, so
     // a folder paired since lists none of it (environments-14).
-    const unexported = clone.unexported !== null && clone.unexported.folder === workingFolder
+    const unexported = clone.unexported !== null && clone.unexported.folder === this.workingFolder(key)
       ? { skipped: clone.unexported.skipped.map((entry) => ({ ...entry })), missing: [...clone.unexported.missing] }
       : null;
     return {
