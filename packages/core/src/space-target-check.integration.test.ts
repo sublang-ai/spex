@@ -191,7 +191,9 @@ test("git-host-23: exact remote discovery records the id; every catalog page par
   const restored = await home.client.settle("space.sync", { repository: OWN });
   assert.equal(restored.sync.phase, "done");
   assert.equal(git(clone, "config", "--get", "spex.repositoryId"), id);
-  const origin = git(clone, "remote", "get-url", "origin");
+  // Your own group's remote is named by the instance's folder (DR-127).
+  const folder = `@127.0.0.1_${new URL(host.url).port}`;
+  const origin = git(clone, "remote", "get-url", folder);
   const collision = { id: "2300", fullPath: "bob", name: "Bob's team", kind: "group" as const };
   host.script.addRepository({ group: "acme", name: "page-two-spex" });
   host.script.addRepository({ group: "bob", name: "personal-spex" });
@@ -204,7 +206,7 @@ test("git-host-23: exact remote discovery records the id; every catalog page par
   assert.equal(refused.sync.phase, "stopped");
   assert.match(refused.reason ?? "", /named like your login/);
   assert.ok(calls.some((url) => url.includes("?cursor=")), "later pages carry the newly listed user namespace");
-  assert.equal(git(clone, "remote", "get-url", "origin"), origin);
+  assert.equal(git(clone, "remote", "get-url", folder), origin);
   assert.ok(existsSync(clone) && !existsSync(clonePath(home.dataDir, "bob/ada-spex")));
 });
 

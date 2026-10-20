@@ -140,7 +140,8 @@ test("space-74: a group named like your login stands apart, its repositories unr
   // taken from the group named like you (space-4).
   assert.notEqual(own.id, clash.id);
   const ownClone = clonePath(home.dataDir, HOST_OWN);
-  assert.ok(git(ownClone, "remote", "get-url", "origin").startsWith(`${host.gitOrigin}/${LOGIN}/`));
+  // Its remote is named by the instance's folder (DR-127).
+  assert.ok(git(ownClone, "remote", "get-url", `@127.0.0.1_${new URL(host.url).port}`).startsWith(`${host.gitOrigin}/${LOGIN}/`));
 
   // The group stands as an entry of its own after yours; your own
   // group's rows stay yours (space-1, space-61).

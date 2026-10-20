@@ -46,6 +46,18 @@ function bareOf(host: StandinHost, key: string): string {
   return host.bareOf(key);
 }
 
+/** The stand-in's folder, `@127.0.0.1_<port>`: the name its remote takes
+ * in your own group's own clone (DR-127). */
+function folderOf(host: StandinHost): string {
+  return `@127.0.0.1_${new URL(host.url).port}`;
+}
+
+/** The remotes a clone holds, by name. */
+function remotesOf(clone: string): string[] {
+  const listed = spawnSync("git", ["-C", clone, "remote"], { encoding: "utf8" });
+  return listed.stdout.split("\n").filter((name) => name !== "");
+}
+
 /** The host's id of the repository whose creation by the core a clone's
  * own Git configuration records (git-host-7), if any. */
 function createdOn(clone: string): string | null {
@@ -140,9 +152,15 @@ test("space-37: the browser sign-in renames your own group after the login, push
   assert.equal(git(bareOf(host, HOST_OWN), "symbolic-ref", "HEAD"), "refs/heads/main");
   assert.equal(git(clone, "config", "--get", "spex.repositoryId"), own.id);
   // The clone's remote is the Git URL the stand-in handed over; the
-  // state reads it as its path in the instance (space-30, DR-120).
+  // state reads it as its path in the instance (space-30, DR-120). It is
+  // the clone's one remote, named by the instance's folder, and `spex`'s
+  // upstream (DR-127).
   assert.equal(own.remote, HOST_OWN);
-  const origin = git(clone, "remote", "get-url", "origin");
+  const folder = folderOf(host);
+  assert.deepEqual(remotesOf(clone), [folder]);
+  assert.equal(git(clone, "config", "--get", "branch.spex.remote"), folder);
+  assert.equal(git(clone, "rev-parse", `refs/remotes/${folder}/spex`), git(clone, "rev-parse", "spex"));
+  const origin = git(clone, "remote", "get-url", folder);
   assert.ok(origin.startsWith(`${host.gitOrigin}/${LOGIN}/`) && !origin.includes("@"), origin);
   assert.equal((await home.client.expectOk("config.get", {})).status, "valid", "your own group's config moved with it");
   // A core restarted on the home reads the same account and last sync,
@@ -187,7 +205,7 @@ test("space-37: a fresh core with no sync of a clone recorded reads the last syn
   assert.ok(synced.lastSync, "the sign-in's sync is recorded");
   const clone = clonePath(home.dataDir, HOST_OWN);
   const pushed = git(clone, "rev-parse", "spex");
-  assert.equal(git(clone, "rev-parse", "refs/remotes/origin/spex"), pushed);
+  assert.equal(git(clone, "rev-parse", `refs/remotes/${folderOf(host)}/spex`), pushed);
   const at = Number(git(clone, "log", "-1", "--format=%ct", pushed)) * 1000;
   assert.deepEqual(synced.branch?.agreed, { at, current: true });
   await home.stop();
@@ -213,6 +231,68 @@ test("space-37: a fresh core with no sync of a clone recorded reads the last syn
   git(clone, "-c", "commit.gpgsign=false", "commit", "-q", "--allow-empty", "-m", "Only here");
   const ahead = await again.client.repository(HOST_OWN);
   assert.deepEqual(ahead.branch?.agreed, { at, current: false });
+});
+
+test("space-5, space-12: your own group's clone syncs through a remote still named origin and through one a terminal adds as @127.0.0.1_4100; a remote the reader sets is origin", async (t) => {
+  const host = await startHost();
+  const home = await startHome("remote-names", { host, project: false });
+  t.after(() => home.stop());
+  const from = home.client.mark();
+  await signIn(home, host);
+  const synced = await home.client.waitRepository(from, HOST_OWN, (repository) => repository.sync.phase === "done", 30_000);
+  const clone = clonePath(home.dataDir, HOST_OWN);
+  const bare = bareOf(host, HOST_OWN);
+  const folder = folderOf(host);
+  assert.deepEqual(remotesOf(clone), [folder]);
+  const url = git(clone, "remote", "get-url", folder);
+  const commit = (message: string): void => { git(clone, "-c", "commit.gpgsign=false", "commit", "-q", "--allow-empty", "-m", message); };
+
+  // A remote still named `origin`, as a clone made before its remote took
+  // its instance's name holds it, is the one the clone syncs through, its
+  // upstream following it.
+  git(clone, "remote", "rename", folder, "origin");
+  const renamed = await home.client.repository(HOST_OWN);
+  assert.equal(renamed.state, "reachable");
+  assert.equal(renamed.remote, HOST_OWN);
+  commit("Through origin");
+  const throughOrigin = await home.client.settle("space.sync", { repository: HOST_OWN }, 30_000);
+  assert.equal(throughOrigin.sync.phase, "done", JSON.stringify(throughOrigin.sync));
+  assert.equal(git(bare, "rev-parse", "spex"), git(clone, "rev-parse", "spex"));
+  assert.deepEqual(remotesOf(clone), ["origin"]);
+  assert.equal(git(clone, "config", "--get", "branch.spex.remote"), "origin");
+  assert.equal(git(clone, "rev-parse", "refs/remotes/origin/spex"), git(clone, "rev-parse", "spex"));
+
+  // Removed from a terminal, the clone stands on this device only, still
+  // recording the host's id.
+  git(clone, "remote", "remove", "origin");
+  const away = await home.client.repository(HOST_OWN);
+  assert.equal(away.state, "local-only");
+  assert.equal(away.id, synced.id);
+
+  // Added again under an instance's folder — a name Git admits for a
+  // remote and its refs — it is the clone's one remote named so, which a
+  // Sync fetches and pushes through and makes the upstream.
+  git(clone, "remote", "add", "@127.0.0.1_4100", url);
+  const added = await home.client.repository(HOST_OWN);
+  assert.equal(added.state, "reachable");
+  assert.equal(added.remote, HOST_OWN);
+  commit("Through @127.0.0.1_4100");
+  const throughFolder = await home.client.settle("space.sync", { repository: HOST_OWN }, 30_000);
+  assert.equal(throughFolder.sync.phase, "done", JSON.stringify(throughFolder.sync));
+  assert.equal(git(bare, "rev-parse", "spex"), git(clone, "rev-parse", "spex"));
+  assert.deepEqual(remotesOf(clone), ["@127.0.0.1_4100"]);
+  assert.equal(git(clone, "config", "--get", "branch.spex.remote"), "@127.0.0.1_4100");
+  assert.equal(git(clone, "rev-parse", "@127.0.0.1_4100/spex"), git(clone, "rev-parse", "spex"));
+
+  // A remote the reader sets is `origin`, replacing the one named by an
+  // instance's folder with what the clone held of it (space-5).
+  const other = bareRepo();
+  const set = repositoryOf(await home.client.expectOk("space.remote.set", { repository: HOST_OWN, url: other }), HOST_OWN);
+  assert.equal(set.id, null);
+  assert.deepEqual(remotesOf(clone), ["origin"]);
+  assert.equal(git(clone, "remote", "get-url", "origin"), other);
+  assert.equal(spawnSync("git", ["-C", clone, "rev-parse", "-q", "--verify", "refs/remotes/@127.0.0.1_4100/spex"]).status, 1);
+  assert.equal(spawnSync("git", ["-C", clone, "config", "--get", "branch.spex.remote"]).status, 1);
 });
 
 test("space-37: the device sign-in links the stand-in's code, names the host, and completes on approval; a denied code ends failed", async (t) => {
