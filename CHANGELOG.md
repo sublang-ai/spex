@@ -285,6 +285,10 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Changed
 
+- Record the accepted multi-instance home design ([DR-127](specs/decisions/127-a-home-signed-in-to-several-instances.md))
+  and proposed repository-placement design ([DR-128](specs/decisions/128-a-spex-repository-placed-at-several-instances.md)).
+  These specification changes introduce no multi-instance runtime behavior in this beta.
+
 - The app requires Cligent 0.34.1 and slc 0.18.1, keeping Playbook 17.10.1 and the locked agent SDKs ([DR-126](specs/decisions/126-cligent-0-34-1-slc-0-18-1-adoption.md)). On POSIX, Codex retains Unicode line and paragraph separators in valid JSON output; the compiler verifies JSON renderings of typed arrays and records without changing their input shapes.
 
 - The app requires Playbook 17.8.0 and slc 0.16.1 ([DR-116](specs/decisions/116-playbook-17-8-0-slc-0-16-1-adoption.md)).
@@ -646,6 +650,16 @@ and `npm start` (desktop) or `npm run start:server` (server).
 - Your own group's environment requests a spec package by a path in its clone ([DR-125](specs/decisions/125-your-own-groups-path-sources-live-in-its-clone.md)): keep an unpublished skill, spec or playbook of your own in a folder of your own group's spex repository, request it by that path, and edit it in place; the sync carries the folder, as one unit, to every device, where it exports to your agents. A path under Spex's own folders, however it is cased, one the sync rules drop, one reached through a link, and a folder in or holding a Git repository of its own, or holding a link or a file the sync would drop or refuse to share, are refused before anything is written, and again at each resolution and install, so a file added later fails the next install on the device holding it, the last exports standing; a release holding a `uv.lock`, `Cargo.lock` or `*.tmp`, which the sync rules drop anywhere, cannot live there. Explore reads such a folder as a spec package. "Add from folder" on your own group's side asks for a folder inside its clone, and `environment.get` names that folder as `pathRoot`. A request your own group made by a path in a paired working folder reads as missing until its folder moves into the clone. A project's and another group's paths stay relative to the working folder.
 
 ### Fixed
+
+- Stopping the core closes session admission immediately and waits for
+  already-admitted opens before disposing runtimes and storage. New and
+  resumed turns cannot cross the shutdown fence; unconfirmed cleanup
+  retains ownership and remains reported.
+
+- A push rejected specifically for content size keeps saved commits and
+  existing access, and reports instance-only guidance with the reported
+  limit when unambiguous. Explicit access denials retain priority. This
+  correction does not raise the storage limit.
 
 - A path source in your own group's clone reports the unreadable path
   and stops when a nonignored subtree cannot be inspected. Git-ignored
