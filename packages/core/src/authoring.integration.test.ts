@@ -29,6 +29,7 @@ import { AUTHORING_SOURCE, authoringScript } from "./testing/authoring.js";
 import { STUB_SLC_RELEASE_FILE, stubSlcBlockingSource, stubSlcScriptedSource, stubSlcSource } from "./testing/stub-slc.js";
 import { DraftChangedError, DraftStore, legacyInstance } from "./drafts.js";
 import { Home } from "./home.js";
+import { instanceFolder } from "./instance.js";
 import type { ApplicationMedia } from "./media.js";
 import type {
   Command,
@@ -1225,11 +1226,13 @@ test("playbook-library-102: a session takes its folder's, its project's, else th
 
 test("playbook-library-104: New playbook's defaults come from the registry's orgs, else the project's key, and from its LICENSE, and the manifests name the org and license", { timeout: 120_000 }, async (t) => {
   // A home signed in to the stand-in registry, which is its host, with
-  // a second project paired two groups deeper than the home's own.
+  // a second project paired at that instance two groups deeper than the
+  // home's own, its key led by the instance's folder, which names no
+  // org (DR-127).
   const registry = await startStandinRegistry({ dir: scratchDir("spex-defaults-registry-") });
   t.after(() => registry.close());
   const dir = scratchDir("spex-authoring-it-");
-  const nested = "acme/workshop/team/graph-spex";
+  const nested = `${instanceFolder(registry.url)}/acme/workshop/team/graph-spex`;
   const state = join(dir, "state");
   mkdirSync(join(state, "workspace", ...nested.split("/")), { recursive: true });
   mkdirSync(join(state, "local"), { recursive: true, mode: 0o700 });

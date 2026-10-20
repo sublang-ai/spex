@@ -38,6 +38,7 @@ import { isLanguageTag } from "./environment/format.js";
 import type { RegistryOrg } from "./environment/registry.js";
 import { mediaAttachmentsSchema, UUID_PATTERN, type MessageContent } from "./protocol.js";
 import { i18n } from "./i18n.js";
+import { instanceSegmentOf } from "./instance.js";
 import { sanitizeRecord } from "./stream-fold.js";
 import type {
   ClarificationQuestion,
@@ -419,16 +420,20 @@ const LICENSE_OPENINGS: readonly (readonly [string, string])[] = [
 /** The org and license a new playbook of a project starts from
  * (playbook-library-103): of the orgs the registry lists the person may
  * publish to (environments-27), the one whose path is the project's
- * group — its key without the last segment — or an ancestor of it, else
- * the first listed, so one listed alone is it; where none is listed or
- * no list came, the first segment of its spex repository's key. The
- * license is the one its working folder's `LICENSE` opens with, read
- * now; none where the file is absent or opens otherwise. */
+ * group — its key without any instance folder leading it and without
+ * the last segment — or an ancestor of it, else the first listed, so
+ * one listed alone is it; where none is listed or no list came, the
+ * first segment of that key past any instance folder. The license is
+ * the one its working folder's `LICENSE` opens with, read now; none
+ * where the file is absent or opens otherwise. */
 export function newPackageDefaults(key: string, workingFolder: string, orgs: readonly RegistryOrg[] | null = null): { org: string; license: string | null } {
-  const group = key.split("/").slice(0, -1).join("/");
+  // A path in the instance: the instance's folder names no org (DR-127).
+  const instance = instanceSegmentOf(key);
+  const path = instance === null ? key : key.slice(instance.length + 1);
+  const group = path.split("/").slice(0, -1).join("/");
   const org = orgs && orgs.length > 0
     ? (orgs.find((listed) => group === listed.path || group.startsWith(`${listed.path}/`)) ?? orgs[0]!).name
-    : key.split("/")[0] ?? key;
+    : path.split("/")[0] ?? path;
   let text: string;
   try {
     text = readFileSync(join(workingFolder, "LICENSE"), "utf8");
