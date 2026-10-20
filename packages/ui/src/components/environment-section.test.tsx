@@ -8,10 +8,10 @@
 // languages and fallback marks, and installed state; the playbooks of
 // both environments once per origin with where each is enabled; Add
 // from registry, from a folder and from Git; Resolve again while the
-// lock is stale; the newer built-in release's line with Update; Remove
-// behind Remove or Keep; and every control waiting while that spex
-// repository syncs, naming the sync (playbook-library-1,
-// playbook-library-92).
+// lock is stale; the newer built-in release's line with Update; what
+// the last export left out with Export again; Remove behind Remove or
+// Keep; and every control waiting while that spex repository syncs,
+// naming the sync (playbook-library-1, playbook-library-92).
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
@@ -408,6 +408,40 @@ describe("playbook-library-94: the environment's controls", () => {
     expect(screen.queryByTestId("environment-builtin-update")).toBeNull();
   });
 
+  test("what the last export left out reads under Not exported with Export again, which installs; a state naming nothing reads no list", async () => {
+    environments[PROJECT_ID] = {
+      ...PROJECT_ENVIRONMENT,
+      unexported: { skipped: [{ name: "lint", folder: ".agents/skills" }], missing: ["acme/local-tools"] },
+    };
+    await renderSurface();
+    // [playbook-library-92] each skill a folder of the reader's kept out
+    // names that folder; each spec package says its files are not here.
+    expect(screen.getByTestId("environment-unexported").firstElementChild?.textContent).toBe("Not exported");
+    expect(screen.getByTestId("environment-unexported-.agents/skills-lint").textContent).toBe(
+      "lint — .agents/skills holds a folder of yours by that name",
+    );
+    expect(screen.getByTestId("environment-unexported-package-acme/local-tools").textContent).toBe(
+      "acme/local-tools — Its files are not on this device",
+    );
+    // [playbook-library-92] Export again sends environment.install for
+    // this spex repository, and nothing else.
+    const again = screen.getByTestId("environment-export-again") as HTMLButtonElement;
+    expect(again.textContent).toBe("Export again");
+    fireEvent.click(again);
+    await vi.waitFor(() =>
+      expect(commandMock).toHaveBeenCalledWith("environment.install", { repository: PROJECT_ID }),
+    );
+    expect(commandMock).not.toHaveBeenCalledWith("environment.resolve", expect.anything());
+
+    // The state the core broadcasts once the export left nothing out
+    // names nothing, and the list goes.
+    act(() => {
+      deliverServerMessageForTests({ type: "environment.state", repository: PROJECT_ID, state: PROJECT_ENVIRONMENT });
+    });
+    expect(screen.queryByTestId("environment-unexported")).toBeNull();
+    expect(screen.queryByTestId("environment-export-again")).toBeNull();
+  });
+
   test("Remove asks Remove or Keep; Keep writes nothing", async () => {
     await renderSurface();
     fireEvent.click(screen.getByTestId("env-remove-acme/triage"));
@@ -425,12 +459,17 @@ describe("playbook-library-94: the environment's controls", () => {
   });
 
   test("every control stays available while that spex repository syncs: the sync refuses nothing", async () => {
+    environments[PROJECT_ID] = {
+      ...PROJECT_ENVIRONMENT,
+      unexported: { skipped: [{ name: "lint", folder: ".agents/skills" }], missing: [] },
+    };
     await renderSurface({ space: home({ syncing: PROJECT_ID }) });
     expect(screen.queryByTestId("environment-progress")).toBeNull();
     const controls = [
       "env-remove-acme/triage",
       "env-remove-acme/local-tools",
       "environment-install",
+      "environment-export-again",
       "add-from-registry",
       "add-from-folder",
       "add-from-git",
@@ -445,10 +484,15 @@ describe("playbook-library-94: the environment's controls", () => {
   });
 
   test("the core's work on an environment reads in place as progress, holding no control; a failure shows its cause", async () => {
-    environments[PROJECT_ID] = { ...PROJECT_ENVIRONMENT, busy: "installing" };
+    environments[PROJECT_ID] = {
+      ...PROJECT_ENVIRONMENT,
+      busy: "installing",
+      unexported: { skipped: [{ name: "lint", folder: ".agents/skills" }], missing: [] },
+    };
     await renderSurface();
     expect(screen.getByTestId("environment-progress").textContent).toBe("Installing…");
     expect((screen.getByTestId("add-from-registry") as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByTestId("environment-export-again") as HTMLButtonElement).disabled).toBe(false);
     expect((screen.getByTestId("env-remove-acme/triage") as HTMLButtonElement).disabled).toBe(false);
     act(() => {
       deliverServerMessageForTests({

@@ -10,7 +10,8 @@
 // so one overtaken meanwhile publishes nothing (DR-111); they report
 // through `environment.state`. Every install is exported into
 // the paired working folder's agent folders and, for your own group,
-// into your agents' home folders; a session's playbooks are found in
+// into your agents' home folders, as is a folder once paired, and what
+// the last export left out is listed; a session's playbooks are found in
 // the project's environment before your own group's. The built-in spec
 // package is seeded at start and requested where an environment lacks
 // it, so the built-in playbooks work offline from the first start.
@@ -66,6 +67,7 @@ import {
   type BuiltinPackage,
   type Conflict,
   type CredentialArgs,
+  type ExportReport,
   type GitCredential,
   type GitSource,
   type Lock,
@@ -134,6 +136,11 @@ interface CloneState {
   conflicts: { requests: FileVersion; conflicts: Conflict[] } | null;
   error: string | null;
   published?: { name: string; version: string; url: string };
+  /** What the last export left out, with the working folder it exported
+   * into: listed only while that folder is the one paired
+   * (environments-14), and standing until the next export, whatever
+   * overtakes the operation after it. */
+  unexported: (NonNullable<EnvironmentState["unexported"]> & { folder: string | null }) | null;
 }
 
 /** What a strict settle wrote before it stopped, for the caller's report. */
@@ -353,7 +360,7 @@ export class EnvironmentManager {
   private cloneState(key: string): CloneState {
     let state = this.clones.get(key);
     if (!state) {
-      state = { key, running: new Set(), conflicts: null, error: null };
+      state = { key, running: new Set(), conflicts: null, error: null, unexported: null };
       this.clones.set(key, state);
     }
     return state;
@@ -631,7 +638,11 @@ export class EnvironmentManager {
       // mixes two locks (environments-8).
       if (fileVersion(lockPath) !== lockVersion) throw new VersionConflictError(lockPath);
       if (!this.installedWhole(dir, lock)) throw new VersionConflictError(join(dir, "packages"));
-      await this.exportNow(dir, key, lock);
+      const exportedTo = this.workingFolder(key);
+      const exported = await this.exportNow(dir, key, lock, exportedTo);
+      state.unexported = exported.skipped.length > 0 || exported.missing.length > 0
+        ? { folder: exportedTo, skipped: exported.skipped, missing: exported.missing }
+        : null;
       // A success clears a failure only while its files still stand as
       // it read and wrote them; its exports stand either way.
       obsolete = this.changedSince(requestsPath, read?.version ?? null, lockPath, lockVersion);
@@ -658,11 +669,11 @@ export class EnvironmentManager {
 
   /** Export the installed environment into its working folder and, for
    * your own group, your agents' home folders (environments-8). */
-  private async exportNow(dir: string, key: string, lock: Lock): Promise<void> {
-    await exportEnvironment({
+  private exportNow(dir: string, key: string, lock: Lock, workingFolder: string | null): Promise<ExportReport> {
+    return exportEnvironment({
       cloneDir: dir,
       lock,
-      workingFolder: this.workingFolder(key),
+      workingFolder,
       userHome: this.isOwn(key) ? this.options.userHome : null,
       agents: this.agents(),
       packagesDir: join(dir, "packages"),
@@ -832,6 +843,15 @@ export class EnvironmentManager {
   /** A sync applied a lock (environments-8, environments-17): install
    * from it and export, broadcasting the state. */
   applied(key: string): Promise<void> {
+    if (!this.store.repository(key)) return Promise.resolve();
+    return this.settle(key, "auto", false);
+  }
+
+  /** A working folder was paired with a clone this device holds
+   * (environments-31): its environment is exported into the folder as
+   * an install does, after any install the pairing's read starts
+   * (environments-7), its state broadcast. */
+  paired(key: string): Promise<void> {
     if (!this.store.repository(key)) return Promise.resolve();
     return this.settle(key, "auto", false);
   }
@@ -1068,6 +1088,11 @@ export class EnvironmentManager {
     const requestMap: Record<string, EnvironmentRequestSummary> = {};
     for (const [name, request] of Object.entries(requests?.packages ?? {})) requestMap[name] = requestOf(request, this.options.gitLabel);
     const builtinUpdate = this.builtinUpdate(requests, lock);
+    // What an export left out describes the folder it exported into, so
+    // a folder paired since lists none of it (environments-14).
+    const unexported = clone.unexported !== null && clone.unexported.folder === workingFolder
+      ? { skipped: clone.unexported.skipped.map((entry) => ({ ...entry })), missing: [...clone.unexported.missing] }
+      : null;
     return {
       repository: key,
       language: requests?.language ?? null,
@@ -1079,6 +1104,7 @@ export class EnvironmentManager {
       error,
       published: clone.published ? { ...clone.published } : null,
       ...(builtinUpdate ? { builtinUpdate } : {}),
+      ...(unexported ? { unexported } : {}),
     };
   }
 

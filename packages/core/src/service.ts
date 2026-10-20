@@ -2197,6 +2197,10 @@ export class CoreService {
         }
         const project = this.store.rebindProject({ id: command.projectId, path,
           ...(command.aliases ? { aliases: command.aliases } : {}) });
+        // The folder now paired is exported into, its state broadcast
+        // (environments-31); a session started meanwhile does not wait
+        // for it.
+        void this.environments.paired(project.id).catch(() => {});
         await this.syncForeignSessions();
         for (const session of this.sessions.listSessions()) {
           if (session.projectId !== project.id) continue;
