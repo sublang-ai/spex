@@ -886,7 +886,7 @@ test("environments-33 through real cores: a skill your own group requests by a p
 // playbook-library-109: engine links in your own group's clone stay out of its sync
 // ---------------------------------------------------------------------------
 
-test("playbook-library-109 through real cores: a playbook your own group keeps in its clone takes engine links its clone's Git ignores, and both homes sync", { timeout: 240_000 }, async (t) => {
+test("playbook-library-109 through real cores: a playbook your own group keeps in its clone takes no engine link while the clone's exclude cannot list them, then takes engine links its clone's Git ignores, and both homes sync", { timeout: 240_000 }, async (t) => {
   const harness = createSpaceHarness();
   t.after(() => harness.dispose());
   const ownKey = `${OWN}/${OWN}-spex`;
@@ -906,12 +906,39 @@ test("playbook-library-109 through real cores: a playbook your own group keeps i
   await makeRelease(join(cloneA, "mine", "walker"), {
     format: 2, org: OWN, name: "walker", version: "0.1.0", artifacts: { walk: { kind: "playbook", language: "en" } },
   }, { "playbooks/en/walk/walk.md": "# Walk\n\nRoles:\n\n- Walker\n", "playbooks/en/walk/walk.registry.mjs": "export default {};\n" });
-  // A line the reader wrote in the clone's exclude stays beside Spex's block.
-  mkdirSync(join(cloneA, ".git", "info"), { recursive: true });
-  appendFileSync(join(cloneA, ".git", "info", "exclude"), "scratch/\n");
-  await a.client.expectOk("environment.request", { repository: ownKey, name: `${OWN}/walker`, request: { kind: "path", path: "mine/walker" } });
   const linked = (clone: string): string[] => ["xstate", "@sublang/playbook"].map((name) => join(clone, "mine", "walker", "playbooks", "en", "walk", "node_modules", name));
   const engineLinked = (clone: string): boolean => linked(clone).every((link) => { try { return lstatSync(link).isSymbolicLink(); } catch { return false; } });
+  const anyLink = (clone: string): boolean => linked(clone).some((link) => { try { lstatSync(link); return true; } catch { return false; } });
+
+  // While the clone's `.git/info` is a file, its exclude cannot list the
+  // engine links: the install fails with that cause and makes no link
+  // (playbook-library-46).
+  const info = join(cloneA, ".git", "info");
+  const excludeFile = join(info, "exclude");
+  const excludeBefore = existsSync(excludeFile) ? readFileSync(excludeFile) : null;
+  rmSync(info, { recursive: true, force: true });
+  writeFileSync(info, "not a folder\n");
+  await a.client.expectOk("environment.request", { repository: ownKey, name: `${OWN}/walker`, request: { kind: "path", path: "mine/walker" } });
+  const settledOwn = async (check: (state: EnvironmentState) => boolean): Promise<EnvironmentState> => {
+    const start = Date.now();
+    for (;;) {
+      const state = await a.client.expectOk("environment.get", { repository: ownKey });
+      if (state.busy === null && check(state)) return state;
+      if (Date.now() - start > 60_000) throw new Error(`the environment never settled: ${JSON.stringify(state)}`);
+      await sleep(50);
+    }
+  };
+  const failed = await settledOwn((state) => state.error !== null || state.packages.some((pkg) => pkg.name === `${OWN}/walker` && pkg.installed));
+  assert.match(failed.error ?? "", /\.git\/info\/exclude cannot list the engine links, so none is made/, "[playbook-library-46] the install fails with its cause");
+  assert.equal(anyLink(cloneA), false, "[playbook-library-46] no engine link is made");
+
+  // A folder again, the install links the folder.
+  rmSync(info);
+  mkdirSync(info);
+  if (excludeBefore !== null) writeFileSync(excludeFile, excludeBefore);
+  // A line the reader wrote in the clone's exclude stays beside Spex's block.
+  appendFileSync(excludeFile, "scratch/\n");
+  await a.client.expectOk("environment.install", { repository: ownKey });
   await until(() => engineLinked(cloneA), 60_000, "the engine links in the first clone");
   const exclude = readFileSync(join(cloneA, ".git", "info", "exclude"), "utf8").split("\n");
   assert.ok(exclude.includes("scratch/"), "[playbook-library-46] the reader's line stays");
@@ -1762,6 +1789,41 @@ test("playbook-library-98: an enabling refused after some of its writes names th
   assert.equal(readFileSync(join(clone, "spex.yaml"), "utf8"), afterFailure!.requests, "the standing request is not written again");
   assert.match(readFileSync(join(clone, "config", "playbook.config.yaml"), "utf8"), /triage:\n\s+roles:/);
   await until(() => latest()?.state === "enabled", 10_000, "the enabled chip");
+});
+
+test("playbook-library-110: an authoring session whose spec package lies in your own group's clone enables in your own group's environment by its path there", { timeout: 180_000 }, async (t) => {
+  const dir = scratchDir("spex-env-enable-own-");
+  const core = await startCore(dir, { hostUrl: UNREACHABLE, script: authoringScript(), slc: stubSlcSource("['triager', 'verifier']") });
+  t.after(() => core.stop());
+  const { client } = core;
+  const ownKey = `${OWN}/${OWN}-spex`;
+  const clone = ownClone(core.dataDir);
+  await settledProject(client, ownKey);
+
+  // Your own group's spex repository paired with its own clone as its
+  // working folder: an authoring session there makes its spec package
+  // folder inside the clone.
+  await client.expectOk("project.rebind", { projectId: ownKey, path: clone });
+  const created = await client.expectOk("draft.create", { projectId: ownKey, draftId: "triage", org: OWN, license: "Apache-2.0" });
+  const { instance } = created;
+  assert.ok(instance, "the session's recorded instance");
+  assert.equal(created.packagePath, "spex-packages/triage");
+  assert.ok(existsSync(join(clone, "spex-packages", "triage", "meta.yaml")), "the spec package folder lies in the clone");
+  await client.expectOk("draft.send", { projectId: ownKey, draftId: "triage", instance, text: "I want a playbook that triages new issues." });
+  const latest = () => client.messages.filter((m) => m.type === "draft.state" && m.draft.id === "triage").map((m) => (m as { draft: CommandResults["draft.create"] }).draft).at(-1);
+  await until(() => latest()?.activity === "idle" && latest()?.proposal !== undefined, 120_000, "the compiled proposal");
+
+  // Enabled in your own group's environment by its path in the clone
+  // (playbook-library-7).
+  await client.expectOk("draft.register", { projectId: ownKey, draftId: "triage", instance, repository: ownKey,
+    command: "triage", intent: "Label new issues", bindings: { Triager: "dev.triager", Verifier: "dev.coder" }, newPlayers: { "dev.triager": { adapter: "claude" } } });
+  const requests = parseYaml(readFileSync(join(clone, "spex.yaml"), "utf8")) as { packages: Record<string, unknown> };
+  assert.deepEqual(requests.packages[`${OWN}/triage`], { path: "spex-packages/triage" }, "[playbook-library-7] requested by its path in your own group's clone");
+  const lock = parseYaml(readFileSync(join(clone, "spex.lock"), "utf8")) as Lock;
+  assert.equal((lock.packages[`${OWN}/triage`]?.source as { path?: string } | undefined)?.path, "spex-packages/triage", "[playbook-library-7] resolved there");
+  const own = parseYaml(readFileSync(core.configPath, "utf8")) as { playbooks: Record<string, unknown> };
+  // Keyed by the roles the stub compile derived.
+  assert.deepEqual(own.playbooks.triage, { roles: { triager: "dev.triager", verifier: "dev.coder" } }, "[playbook-library-7] enabled in your own group's config");
 });
 
 
