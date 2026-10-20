@@ -148,7 +148,7 @@ The Groups surface shall show each spex repository in exactly one of these state
 | --- | --- | --- | --- |
 | local only | the clone has no remote at an instance | "On this device only", your own group's own repository reading "On this device only — shared once you sign in" [[space-4](#space-4)] | Pick a group [[space-58](#space-58)] while an instance it would offer is signed in, none on your own group's own repository |
 | reachable | the latest full or selected-target read of the instance governing it lists it [[git-host-5](git-host.md#git-host-5)] [[git-host-22](git-host.md#git-host-22)] and the clone is here, no join of it running [[space-63](#space-63)] | its last sync | Sync |
-| read-only | the host listed it archived, or with the account below the role that may push, or refused the push | "Read-only: <the host's reason>"; new sessions stay on this device, said so | Sync, bringing only |
+| read-only | the host listed it archived, or with the account below the role that may push, or refused the push other than for an explicit content-size limit [[space-15](#space-15)] | "Read-only: <the host's reason>"; new sessions stay on this device, said so | Sync, bringing only |
 | unreachable | the host stopped listing it, refused the read, the device is offline, or its instance is signed out while the clone has a remote there and no signed-in instance lists it | "Unreachable: <cause>" | Retry, none while its instance is signed out |
 | not on this device | an instance listed it and no clone is here, or its join still runs [[space-63](#space-63)] | "Not on this device" | Join [[space-63](#space-63)] |
 
@@ -419,7 +419,8 @@ When a sync or check step fails, the core shall stop leaving the clone in the st
 | Check, Push | the host asking to wait — its rate limit [[git-host-11](git-host.md#git-host-11)] | commits stand | "<host> asks to wait N seconds" (or "a moment"); "Retry waits, then runs the step."; Retry, which waits the time out before the step [[git-host-21](git-host.md#git-host-21)] |
 | Check, Push | Stop while a call of the step waits out the host's rate limit [[git-host-21](git-host.md#git-host-21)] | commits stand | "Stopped while waiting for <host>"; "Retry waits, then runs the step."; Retry |
 | Check, Push | the host answering that this device must sign in again [[git-host-4](git-host.md#git-host-4)] | commits stand | "Sign in again"; that instance's heading's "Sign in again" [[space-3](#space-3)]; Retry after |
-| Check, Push | the host refusing with its words — the repository read-only, the push rejected by a rule, the account's role too low | commits stand | "<host> refused: <the host's words>" [[space-50](#space-50)]; the repository turns read-only |
+| Push | the host explicitly rejecting content above a size limit | commits and the existing access state stand | cause `size_limit`; "<host> refused content above its size limit", carrying the reported limit where unambiguously readable; saved commits remain on this device; address the content limit, then Retry, with no automatic retry ([DR-129](../decisions/129-content-size-is-not-permission.md)) |
+| Check, Push | the host refusing with its words — the repository read-only, the push rejected by a rule other than explicit content-size rejection, the account's role too low | commits stand | "<host> refused: <the host's words>" [[space-50](#space-50)]; the repository turns read-only |
 | Check, Push | the host no longer listing the repository | commits stand | "No longer shared with you"; the repository turns unreachable; nothing deleted |
 | Check, Push | no answer within the transport limit, or Stop | commits stand | "No answer from <host>"; Retry |
 | Check, Push | the host answering its transport with an HTTP status no row above reads | commits stand | "<host> answered with an error (HTTP <status>)"; Retry |
@@ -434,6 +435,7 @@ When a sync or check step fails, the core shall stop leaving the clone in the st
 
 - a report naming the host prints the display name of the instance the sync syncs with [[space-12](#space-12)], and a remote URL never with a credential ([DR-127](../decisions/127-a-home-signed-in-to-several-instances.md));
 - no line a report carries — Git's last lines and the host's `remote:` words alike — holds a URL under any listed instance's reported Git origin: the clone's own remote, with or without `.git` and a trailing `/`, reads as the repository's path in the instance, and any other URL under such an origin as the display name of the instance reporting that origin, the one the sync syncs with where several do, a code clone's lines naming the code's remote as the reader set it only outside all of them [[space-63](#space-63)] ([DR-120](../decisions/120-the-instance-is-the-space.md), [DR-127](../decisions/127-a-home-signed-in-to-several-instances.md));
+- an explicit content-size rejection carries only the instance, the size cause and a reported limit where readable, never its raw transport words, backing-system names or links ([DR-129](../decisions/129-content-size-is-not-permission.md));
 - the report stands until the next operation or Dismiss.
 
 #### space-16
@@ -445,6 +447,7 @@ While a sync or check runs a transport step — Check or Push — the surface sh
 Where a failure could turn on what the host let this account do — the host refusing a push or a read [[space-15](#space-15)] — the core shall name in that failure's guidance only what the host said, with the host's own words, and, where membership decides, Share or a member who may share it, in Spex ([DR-064](../decisions/064-honest-remote-failure.md)) ([DR-103](../decisions/103-the-home-and-its-groups.md)) ([DR-120](../decisions/120-the-instance-is-the-space.md)):
 
 - no role name or cached list is read for the guidance: the refusal is the answer;
+- an explicit content-size rejection [[space-15](#space-15)] gives no membership or sign-in guidance and keeps its raw transport text private ([DR-129](../decisions/129-content-size-is-not-permission.md));
 - a spex repository whose remote is a local path, used without the host, names the folder's permissions rather than an account.
 
 ### Choices
@@ -745,7 +748,8 @@ The core shall invoke Git as a child process per step, never through a shell, fr
 - labels and diffs: `cat-file blob <oid>` per described file, `log -1 --format=%ct <rev> -- <paths>` for a side's change time, `diff --no-color <ancestor> <side> -- <path>` for `space.diff`;
 - apply: under a temporary `GIT_INDEX_FILE`, `read-tree HEAD`, `update-index -z --index-info` setting or removing each path of a unit taken from the host and `write-tree`, then that tree checked out into a private copy as at Save; `cat-file blob <oid>` per file of a unit written; `read-tree <tree>` and `update-index -q --refresh` on the clone's index; `merge-base --is-ancestor HEAD <remote>/spex` with `rev-parse <remote>/spex^{tree}`, `commit-tree <tree> -p HEAD -p <remote>/spex -m <message>` or none on a fast-forward, `update-ref refs/heads/spex <commit> <old HEAD>`;
 - push: `push -q <remote> spex`, `push -q -u <remote> spex` where no upstream is set;
-- stderr classification under `LC_ALL=C`: "Could not resolve host", "Connection refused", "Network is unreachable" → unreachable; "Authentication failed", "could not read Username", "terminal prompts disabled", "Host key verification failed" → reauth; "Permission denied", "protected branch", "pre-receive hook declined", "You are not allowed" → refused; "Repository not found", "does not appear to be a git repository" → gone; "[rejected]" with "fetch first" or "non-fast-forward" → rejected; a killed child → timeout or stopped; anything else → `git` with the last lines, or, where Git printed an HTTP status on a transport to its instance's Git origin, the host's error with that status [[space-15](#space-15)]; the last lines and the host's `remote:` words read per space-15's rule for URLs under any listed instance's Git origin before any report carries them.
+- stderr classification under `LC_ALL=C`: explicit content-size rejection wording from the instance → `size_limit` before a generic hook decline, a hook decline alone establishing no size cause ([DR-129](../decisions/129-content-size-is-not-permission.md)); "Could not resolve host", "Connection refused", "Network is unreachable" → unreachable; "Authentication failed", "could not read Username", "terminal prompts disabled", "Host key verification failed" → reauth; "Permission denied", "protected branch", "pre-receive hook declined", "You are not allowed" → refused; "Repository not found", "does not appear to be a git repository" → gone; "[rejected]" with "fetch first" or "non-fast-forward" → rejected; a killed child → timeout or stopped; anything else → `git` with the last lines, or, where Git printed an HTTP status on a transport to its instance's Git origin, the host's error with that status [[space-15](#space-15)]; public lines follow space-15's instance-only and URL rules.
+- the instance's size rule follows transport, authentication, missing-repository and explicit access refusals (`403`, "Permission denied", "protected branch", "You are not allowed"), but precedes a bare hook decline; it recognizes a whole `remote:` sentence, case-insensitively: "You are attempting to check in one or more blobs which exceed the <limit> limit", with an optional single ASCII identifier and colon before it, and an optional final period or colon; `<limit>` is either a nonnegative quantity of at most twelve digits with an optional decimal of at most six digits followed by `byte`, `bytes`, `KB`, `KiB`, `MB`, `MiB`, `GB`, `GiB`, `TB` or `TiB`, allowing whitespace before the unit, or the words "size" or "file size"; a numeric limit is public only when every recognized sentence carries the same captured quantity and unit, absent or conflicting limits retaining the size cause without a numeric claim; quoted sentences, filenames and URLs alone establish no size rejection.
 
 #### space-33
 
@@ -902,6 +906,16 @@ When an integration suite signs a real core in at the stand-in Git host, whose r
 - a repository the stand-in transfers into `acme/research` lists, at a Refresh before any sync, under `acme/research` with its key unchanged, and its next sync moves the clone under that group's folder [[space-1](#space-1)] [[space-60](#space-60)];
 - a check, a push and a join against a stand-in transport answering 500 each stop "<display name> answered with an error" with the status and Retry, no part of the Git origin in message or guidance [[space-15](#space-15)] [[space-32](#space-32)];
 - a push the stand-in refuses with a `remote:` line carrying the clone's own URL, without `.git` and with a trailing `/`, and another URL under its Git origin reports the first as the repository's path in the instance and the second as the stand-in's display name, and turns the repository read-only with the same words [[space-15](#space-15)] [[space-32](#space-32)] [[space-61](#space-61)].
+
+#### space-86
+
+Where a real core is signed in at the stand-in instance with a writable spex repository, when ordinary Sync reaches a receive hook, the integration suite shall assert the rejection distinction ([DR-129](../decisions/129-content-size-is-not-permission.md)):
+
+- explicit content-size rejection, alongside a generic hook-decline marker, stops Push as `size_limit`, keeps the Save and existing access state, and reports the instance and reported limit without raw branding, quoted transport links, Share or sign-in guidance [[space-15](#space-15)] [[space-32](#space-32)] [[space-50](#space-50)] [[space-61](#space-61)];
+- an explicit size rejection carrying no parseable numeric limit states the size cause without inventing a limit [[space-15](#space-15)];
+- two recognized size sentences reporting incompatible numeric limits retain the size cause without selecting one limit [[space-15](#space-15)] [[space-32](#space-32)];
+- a permission refusal retains its read-only state and membership guidance even beside size wording, while a hook decline without explicit size wording retains its existing refusal classification [[space-15](#space-15)] [[space-32](#space-32)] [[space-50](#space-50)] [[space-61](#space-61)];
+- no automatic retry runs, and once the stand-in lifts the content condition an explicit Sync sends the retained Save [[space-15](#space-15)].
 
 #### space-79
 

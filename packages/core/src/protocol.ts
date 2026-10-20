@@ -1807,6 +1807,7 @@ export type SyncCause =
   | "throttled"
   | "reauth"
   | "refused"
+  | "size_limit"
   | "gone"
   | "timeout"
   | "stopped"

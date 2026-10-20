@@ -235,3 +235,97 @@ test("space-74: a 500 stops a check, a push and a join as the host's error; a re
 
   assert.deepEqual(leaks(host, [...broadcasts(home.client.messages), await home.client.expectOk("space.get", {})]), []);
 });
+
+test("space-86: an explicit content-size rejection keeps access and Save, names only the instance and limit, and retries only on an explicit Sync", async (t) => {
+  const host = await startHost();
+  const home = await startHome("size-limit", { host, project: false, extra: { signIn: "browser" } });
+  t.after(() => home.stop());
+  let mark = home.client.mark();
+  await signIn(home, host);
+  await home.client.waitRepository(mark, HOST_OWN, (row) => row.sync.phase === "done", 30_000);
+  const { key: local } = await addFolder(home, gitFolder("size-limit"));
+  mark = home.client.mark();
+  await home.client.expectOk("space.pick", { repository: local, choice: { kind: "create", groupId: "2002", name: "size-limit" } });
+  const key = "acme/size-limit-spex";
+  await home.client.waitRepository(mark, key, (row) => row.sync.phase === "done", 30_000);
+  const clone = clonePath(home.dataDir, key);
+  const repo = host.script.repositories.find((row) => row.group.fullPath === "acme" && row.path === "size-limit-spex");
+  assert.ok(repo);
+  const hostHead = git(repo.bare, "rev-parse", "spex");
+  const pushes = (): number => host.script.requests.filter((row) => row.method === "POST" && row.path.endsWith("/git-receive-pack")).length;
+  const beforePushes = pushes();
+  const rawWords = [
+    "GitLab: You are attempting to check in one or more blobs which exceed the 100.0MiB limit:",
+    `${"a".repeat(40)} (159MiB)`,
+    `See "${host.gitOrigin}/${STANDIN_STORAGE}/help/size" and '${host.gitOrigin}/${STANDIN_STORAGE}/acme/size-limit-spex.git'.`,
+  ].join("\n");
+  host.script.refusePush(rawWords);
+  writeFileSync(join(clone, "notes.txt"), "saved but rejected by the content rule\n");
+  const sized = await home.client.settle("space.sync", { repository: key });
+  assert.ok(sized.sync.phase === "stopped", JSON.stringify(sized.sync));
+  assert.deepEqual([sized.sync.step, sized.sync.cause, sized.sync.message, sized.sync.retry], ["push", "size_limit", `${HOST_NAME} refused content above its size limit (100.0MiB)`, true]);
+  assert.equal(sized.sync.guidance, "Your saved commits remain on this device. Address the content limit, then Retry.");
+  assert.equal(sized.state, "reachable", "a content rejection is not loss of access");
+  assert.doesNotMatch(`${sized.sync.message} ${sized.sync.guidance}`, /159MiB|GitLab|https?:|Share|membership|sign in|reauth/i);
+  const saved = git(clone, "rev-parse", "HEAD");
+  assert.notEqual(saved, hostHead, "the actual Save stands");
+  assert.equal(git(repo.bare, "rev-parse", "spex"), hostHead, "the rejected push changed no remote ref");
+  assert.equal(pushes(), beforePushes + 1);
+  assert.equal((await home.client.repository(key)).sync.phase, "stopped");
+  assert.equal(pushes(), beforePushes + 1, "a settled rejection starts no automatic push retry");
+
+  host.script.refusePush("You are attempting to check in one or more blobs which exceed the size limit:");
+  const unknownLimit = await home.client.settle("space.sync", { repository: key });
+  assert.ok(unknownLimit.sync.phase === "stopped");
+  assert.deepEqual([unknownLimit.sync.cause, unknownLimit.sync.message, unknownLimit.state], ["size_limit", `${HOST_NAME} refused content above its size limit`, "reachable"]);
+  assert.equal(git(clone, "rev-parse", "HEAD"), saved, "retry did not replace the saved content");
+  host.script.refusePush([
+    "You are attempting to check in one or more blobs which exceed the 100MiB limit:",
+    "You are attempting to check in one or more blobs which exceed the 200MiB limit:",
+  ].join("\n"));
+  const mixedLimits = await home.client.settle("space.sync", { repository: key });
+  assert.ok(mixedLimits.sync.phase === "stopped");
+  assert.deepEqual([mixedLimits.sync.cause, mixedLimits.sync.message, mixedLimits.state], ["size_limit", `${HOST_NAME} refused content above its size limit`, "reachable"]);
+  host.script.refusePush(null);
+  const sent = await home.client.settle("space.sync", { repository: key });
+  assert.ok(sent.sync.phase === "done" && sent.sync.pushed, JSON.stringify(sent.sync));
+  assert.equal(git(repo.bare, "rev-parse", "spex"), saved, "an explicit Sync sends the retained Save after the condition changes");
+  assert.equal(pushes(), beforePushes + 4, "only the four explicit Sync commands reached Push");
+
+  host.script.refuseTransport("Your account may not push here.");
+  const denied = await home.client.settle("space.sync", { repository: key });
+  assert.ok(denied.sync.phase === "stopped");
+  assert.deepEqual([denied.sync.cause, denied.state], ["refused", "read-only"]);
+  assert.match(denied.sync.guidance, /Membership.*Share/);
+  host.script.refuseTransport(null);
+  mark = home.client.mark();
+  await home.client.expectOk("space.refresh", {});
+  await home.client.waitRepository(mark, key, (row) => row.state === "reachable");
+
+  host.script.refusePush([
+    "Permission denied: your account may not push here.",
+    "You are attempting to check in one or more blobs which exceed the 100MiB limit:",
+  ].join("\n"));
+  writeFileSync(join(clone, "notes.txt"), "mixed permission and size evidence\n");
+  const mixedDenial = await home.client.settle("space.sync", { repository: key });
+  assert.ok(mixedDenial.sync.phase === "stopped");
+  assert.deepEqual([mixedDenial.sync.cause, mixedDenial.state], ["refused", "read-only"], "specific permission evidence keeps priority over size wording");
+  assert.match(mixedDenial.sync.guidance, /Membership.*Share/);
+  host.script.refusePush(null);
+  mark = home.client.mark();
+  await home.client.expectOk("space.refresh", {});
+  await home.client.waitRepository(mark, key, (row) => row.state === "reachable");
+
+  // Quoted payload words and a size-looking documentation URL establish no size rejection.
+  host.script.refusePush([
+    `Rule declined commit subject "too large"; see '${host.gitOrigin}/blobs/exceed/100MiB-size-limit'.`,
+    'Quoted commit message: "You are attempting to check in one or more blobs which exceed the 100.0MiB limit:"',
+  ].join("\n"));
+  writeFileSync(join(clone, "notes.txt"), "a separate ordinary rule rejection\n");
+  const otherRule = await home.client.settle("space.sync", { repository: key });
+  assert.ok(otherRule.sync.phase === "stopped");
+  assert.deepEqual([otherRule.sync.cause, otherRule.state], ["refused", "read-only"]);
+  assert.match(otherRule.sync.guidance, /Membership.*Share/);
+  host.script.refusePush(null);
+  assert.deepEqual(leaks(host, [...broadcasts(home.client.messages), await home.client.expectOk("space.get", {})]), []);
+});
