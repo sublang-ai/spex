@@ -9,8 +9,8 @@
 // sync takes it whole (storage-11).
 
 import { spawnSync } from "node:child_process";
-import { existsSync, lstatSync, readdirSync, realpathSync } from "node:fs";
-import { basename, join, posix } from "node:path";
+import { existsSync, lstatSync, readdirSync } from "node:fs";
+import { join, posix } from "node:path";
 
 import { portable } from "../storage-git.js";
 import { isInsidePath } from "./requests.js";
@@ -83,12 +83,6 @@ export function ownPathIssue(clone: string, path: string): OwnPathIssue | null {
   const segments = folder.split("/");
   const first = segments[0]!;
   if (keptBySpex(first)) return { reason: "spex" };
-  // Where it stands, and is no link, also as the file system names it:
-  // a folding file system places `ſessions` in `sessions`.
-  try {
-    const at = join(clone, first);
-    if (!lstatSync(at).isSymbolicLink() && keptBySpex(basename(realpathSync.native(at)))) return { reason: "spex" };
-  } catch { /* not made yet */ }
   // A link first: Git reads no rule for a path beyond one.
   let current = clone;
   let repository: string | null = null;
