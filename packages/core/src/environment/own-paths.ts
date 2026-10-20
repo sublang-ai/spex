@@ -26,7 +26,8 @@ export type OwnPathIssue =
   | { reason: "ignored_file"; file: string }
   | { reason: "unshared_file"; file: string }
   | { reason: "link_entry"; entry: string }
-  | { reason: "special"; entry: string };
+  | { reason: "special"; entry: string }
+  | { reason: "unreadable"; entry: string };
 
 /** The first segments of the paths Spex keeps in a clone (storage-1):
  * its records, its settings, its installed and exported files, its
@@ -119,7 +120,14 @@ export function ownFolderIssue(clone: string, path: string, files: readonly stri
   const found: { probe: string; issue: OwnPathIssue }[] = [];
   const walk = (rel: string): void => {
     let entries;
-    try { entries = readdirSync(join(clone, ...rel.split("/")), { withFileTypes: true }); } catch { return; }
+    try { entries = readdirSync(join(clone, ...rel.split("/")), { withFileTypes: true }); }
+    catch (error) {
+      // Missing folders remain missing; every other failed inspection
+      // proves nothing about a standing subtree. Like a forbidden entry,
+      // it is harmless only where the clone's Git rules ignore it.
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") found.push({ probe: `${rel}/`, issue: { reason: "unreadable", entry: rel } });
+      return;
+    }
     for (const entry of entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))) {
       const child = `${rel}/${entry.name}`;
       if (entry.isSymbolicLink()) found.push({ probe: child, issue: { reason: "link_entry", entry: child } });
@@ -148,5 +156,6 @@ export function ownPathMessage(name: string, path: string, issue: OwnPathIssue):
     case "unshared_file": return `${name}: ${path} holds ${issue.file}, which the clone's sync refuses to share`;
     case "link_entry": return `${name}: ${path}: ${issue.entry} is a link, which the clone's sync does not carry`;
     case "special": return `${name}: ${path}: ${issue.entry} is no regular file or folder, so the clone's sync does not carry it`;
+    case "unreadable": return `${name}: ${path}: ${issue.entry} cannot be inspected to confirm it syncs with the clone`;
   }
 }

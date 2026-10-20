@@ -10,7 +10,7 @@ import { randomUUID } from "node:crypto";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { appendFileSync, cpSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { appendFileSync, chmodSync, cpSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { createServer, request as httpRequest } from "node:http";
 import type { AddressInfo } from "node:net";
 import { dirname, isAbsolute, join } from "node:path";
@@ -880,6 +880,79 @@ test("environments-33 through real cores: a skill your own group requests by a p
     await until(() => existsSync(exported), 60_000, `${folder} on the second home`);
     assert.equal(readFileSync(exported, "utf8"), skill("Write it down, then read it back."), folder);
   }
+});
+
+// ---------------------------------------------------------------------------
+// environments-33: unreadable entries cannot establish confinement
+// ---------------------------------------------------------------------------
+
+test("environments-33: a nonignored unreadable subtree refuses request, resolution and install, while ignored and missing folders retain their behavior", {
+  timeout: 120_000,
+  skip: process.platform === "win32" || process.getuid?.() === 0,
+}, async (t) => {
+  const dir = scratchDir("spex-own-path-unreadable-");
+  const core = await startCore(dir, { hostUrl: UNREACHABLE });
+  t.after(() => core.stop());
+  const { client } = core;
+  const key = `${OWN}/${OWN}-spex`;
+  const clone = clonePath(core.dataDir, key);
+  const packageDir = join(clone, "mine", "notes");
+  await makeRelease(packageDir, {
+    format: 2, org: OWN, name: "notes", version: "0.1.0",
+    artifacts: { notes: { kind: "skill", language: "en" } },
+  }, { "skills/en/notes/SKILL.md": "---\nname: notes\ndescription: My notes.\n---\n\nRead the notes.\n" });
+  const hidden = join(packageDir, "node_modules");
+  gitFolder(hidden);
+  t.after(() => { if (existsSync(hidden)) chmodSync(hidden, 0o700); });
+  const name = `${OWN}/notes`;
+  const request = { kind: "path" as const, path: "mine/notes" };
+  const requestsFile = join(clone, "spex.yaml");
+  const lockFile = join(clone, "spex.lock");
+  const before = [requestsFile, lockFile].map((file) => readFileSync(file));
+  await client.expectError("environment.request", { repository: key, name, request }, "invalid_request", /mine\/notes\/node_modules is a Git repository of its own/);
+  chmodSync(hidden, 0);
+  assert.throws(() => readdirSync(hidden), (error: NodeJS.ErrnoException) => error.code === "EACCES", "the fixture is genuinely unreadable");
+  const unreadable = /mine\/notes\/node_modules cannot be inspected to confirm it syncs with the clone/;
+  await client.expectError("environment.request", { repository: key, name, request }, "invalid_request", unreadable);
+  assert.deepEqual([requestsFile, lockFile].map((file) => readFileSync(file)), before, "[environments-32] refused requests write neither file");
+
+  // The same unreadable subtree is harmless only once Git ignores it.
+  const exclude = join(clone, ".git", "info", "exclude");
+  const excludedBefore = readFileSync(exclude);
+  appendFileSync(exclude, "\n/mine/notes/node_modules/\n");
+  let from = client.mark();
+  await client.expectOk("environment.request", { repository: key, name, request });
+  await client.environment(key, from, (state) => state.busy === null && state.error === null && state.packages.some((pkg) => pkg.name === name && pkg.installed));
+  const requested = readFileSync(requestsFile);
+  const locked = readFileSync(lockFile);
+  const exported = join(clone, "skills", "notes", "SKILL.md");
+  const exportedBefore = readFileSync(exported);
+
+  // A request already locked must be checked again by both operations,
+  // without changing that lock or the last successful export.
+  writeFileSync(exclude, excludedBefore);
+  for (const type of ["environment.resolve", "environment.install"] as const) {
+    from = client.mark();
+    await client.expectOk(type, { repository: key });
+    const failed = await client.environment(key, from, (state) => state.busy === null && state.error !== null);
+    assert.match(failed.error!, unreadable, `[environments-32] ${type} names the unreadable subtree`);
+    assert.deepEqual(readFileSync(requestsFile), requested);
+    assert.deepEqual(readFileSync(lockFile), locked);
+    assert.deepEqual(readFileSync(exported), exportedBefore, "[environments-7] the last export stays");
+  }
+  appendFileSync(exclude, "\n/mine/notes/node_modules/\n");
+  from = client.mark();
+  await client.expectOk("environment.install", { repository: key });
+  await client.environment(key, from, (state) => state.busy === null && state.error === null);
+  assert.deepEqual(readFileSync(exported), exportedBefore, "[environments-32] an ignored unreadable subtree is permitted");
+
+  // A genuinely missing path is still admitted and reported missing by
+  // resolution, rather than mistaken for an unreadable standing folder.
+  from = client.mark();
+  await client.expectOk("environment.request", { repository: key, name: `${OWN}/later`, request: { kind: "path", path: "mine/later" } });
+  const missing = await client.environment(key, from, (state) => state.busy === null && state.error !== null);
+  assert.match(missing.error!, /mine\/later is missing/);
+  assert.doesNotMatch(missing.error!, /cannot be inspected/);
 });
 
 // ---------------------------------------------------------------------------
