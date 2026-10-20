@@ -57,7 +57,7 @@ When a UI flow asks to reveal a path lying inside the state root, the app shall 
 
 #### app-shell-37
 
-When a UI flow asks to open the Git host's sign-in URL, the app shall open that URL in the operating system's default browser and change no state ([DR-103](../decisions/103-the-home-and-its-groups.md)): a URL not at the home's recorded Git host — `https`, or `http` on a loopback host where a stand-in serves the journeys — or one carrying a credential is refused with no browser opened, and a deployment without the bridge shows the URL as a link to open instead.
+When a UI flow asks to open an instance's sign-in URL, the app shall open that URL in the operating system's default browser and change no state ([DR-103](../decisions/103-the-home-and-its-groups.md), [DR-127](../decisions/127-a-home-signed-in-to-several-instances.md)): a URL not at the origin of an instance the home lists [[storage-2](storage.md#storage-2)] or is signing in to [[git-host-2](git-host.md#git-host-2)], or one carrying a credential, is refused with no browser opened, and a deployment without the bridge shows the URL as a link to open instead.
 
 ### Quit
 
@@ -184,7 +184,7 @@ The shell shall start the core against the shared state root of [DR-036](../deci
 
 The desktop package shall expose the native bridge of [DR-008](../decisions/008-native-shell-bridge.md) as a `contextBridge` API from a sandboxed preload, limited to OS affordances impossible from a sandboxed web page (directory picking, path reveal, and opening the Git host's sign-in URL in the system browser [[git-host-2](git-host.md#git-host-2)], one invoke channel each), carrying no application feature, and absent by design in non-Electron deployments so the UI's feature detection selects the manual fallback:
 
-- the open-URL channel accepts only an `https` URL at the home's recorded Git host, refusing any other ([DR-103](../decisions/103-the-home-and-its-groups.md)).
+- the open-URL channel accepts only a URL at the origin of an instance the home lists or is signing in to [[app-shell-37](#app-shell-37)], refusing any other ([DR-127](../decisions/127-a-home-signed-in-to-several-instances.md)).
 
 #### app-shell-22
 
@@ -267,7 +267,7 @@ Where the fresh-install smoke ([DR-086](../decisions/086-tests-in-tiers.md)) has
 
 #### app-shell-38
 
-When the desktop's test suite starts a real core through the shell's own option builder against a stand-in Git host and drives the open-URL channel, the test suite shall assert that the core was started with the browser sign-in flow and the Electron binary as the helper's runtime [[app-shell-15](#app-shell-15)], that the channel opens the core's own browser sign-in URL and an `https` URL at the recorded host, refuses one at another origin, one carrying a credential and one outside the host's path, returning false and opening nothing [[app-shell-37](#app-shell-37)].
+When the desktop's test suite starts a real core through the shell's own option builder with a home listing the first of two stand-in instances and drives the open-URL channel while a sign-in to the second runs, the test suite shall assert that the core was started with the browser sign-in flow and the Electron binary as the helper's runtime [[app-shell-15](#app-shell-15)], that the channel opens the core's own browser sign-in URL at the second instance and a URL at the first [[app-shell-37](#app-shell-37)], and that it refuses one at an origin the home neither lists nor is signing in to — the first's host at another port among them — one carrying a credential, and, once that sign-in is cancelled, one at the second, returning false and opening nothing [[app-shell-37](#app-shell-37)] [[app-shell-20](#app-shell-20)].
 
 ### Release Coverage
 
