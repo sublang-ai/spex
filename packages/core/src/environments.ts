@@ -239,6 +239,8 @@ function confinedPhrase(path: string, issue: OwnPathIssue): string {
       return i18n._({ id: "{path}: {entry} is a link, which the clone's sync does not carry", comment: "Refusal: a request by path in your own group's environment names a folder holding a link the clone's Git rules do not ignore; {entry} is the link's path in the clone", values: { path, entry: issue.entry } });
     case "special":
       return i18n._({ id: "{path}: {entry} is no regular file or folder, so the clone's sync does not carry it", comment: "Refusal: a request by path in your own group's environment names a folder holding a special file, such as a pipe or a socket; {entry} is its path in the clone", values: { path, entry: issue.entry } });
+    case "unreadable":
+      return i18n._({ id: "{path}: {entry} cannot be inspected to confirm it syncs with the clone", comment: "Refusal: a nonignored subtree of your own group's path source cannot be read; {entry} is its path in the clone", values: { path, entry: issue.entry } });
   }
 }
 

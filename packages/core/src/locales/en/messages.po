@@ -2778,3 +2778,8 @@ msgstr "Your merge is saved locally; Retry to send it once the host settles."
 #. A package Git source failed without a recognized status; raw backing-host or unclassified stderr stays inside the core
 msgid "{host} answered with an error"
 msgstr "{host} answered with an error"
+
+#. Refusal: a nonignored subtree of your own group's path source cannot be read; {entry} is its path in the clone
+#: src/environments.ts
+msgid "{path}: {entry} cannot be inspected to confirm it syncs with the clone"
+msgstr "{path}: {entry} cannot be inspected to confirm it syncs with the clone"

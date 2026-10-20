@@ -647,6 +647,10 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Fixed
 
+- A path source in your own group's clone reports the unreadable path
+  and stops when a nonignored subtree cannot be inspected. Git-ignored
+  subtrees and genuinely missing folders retain their existing behavior.
+
 - Groups keeps Refresh busy through account setup and the complete read,
   then shows its outcome with a sanitized failure and Retry where needed.
   After signing out and back in, a new refresh waits for the older work

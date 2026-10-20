@@ -2778,3 +2778,8 @@ msgstr "合并已保存在本地；待托管平台稳定后重试即可发送。
 #. A package Git source failed without a recognized status; raw backing-host or unclassified stderr stays inside the core
 msgid "{host} answered with an error"
 msgstr "{host} 返回了错误"
+
+#. Refusal: a nonignored subtree of your own group's path source cannot be read; {entry} is its path in the clone
+#: src/environments.ts
+msgid "{path}: {entry} cannot be inspected to confirm it syncs with the clone"
+msgstr "{path}：无法检查 {entry}，因而不能确认它会随克隆同步"
