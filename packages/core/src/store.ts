@@ -33,7 +33,7 @@ import {
   type ProjectFile, type StorageDiagnostic,
 } from "./app-storage.js";
 import { readJsonFile, StorageFormatError, VersionConflictError, writeApplicationFile } from "./files.js";
-import { Home, repositoryNameFor, splitKey } from "./home.js";
+import { Home, repositoryNameFor, splitKey, WORKSPACE_DEPTH } from "./home.js";
 import { folderRemote, needsGroupsMigration, migrateFormerHome } from "./migrate-home.js";
 import { deferredMoves, migrateInstances, needsInstancesMigration, settleDeferred, type DeferredMove } from "./migrate-instances.js";
 import { initializeClone } from "./storage-git.js";
@@ -630,12 +630,13 @@ export class Store {
 
   /** Every clone under `workspace/` as the folders stand now: a folder
    * named `<name>-spex` inside plain group folders mirroring the Git host
-   * (storage-1). The walk only reads: a clone found again keeps its
-   * descriptor, and one gone leaves the map. */
+   * (storage-1), under an instance's folder or your own group's, its key
+   * up to WORKSPACE_DEPTH segments. The walk only reads: a clone found
+   * again keeps its descriptor, and one gone leaves the map. */
   private currentRepositories(): Map<string, SpexRepository> {
     const found = new Map<string, string>();
     const walk = (dir: string, depth: number): void => {
-      if (depth > 8) return;
+      if (depth >= WORKSPACE_DEPTH) return;
       let entries: Dirent[];
       try { entries = readdirSync(dir, { withFileTypes: true }); }
       catch (error) {

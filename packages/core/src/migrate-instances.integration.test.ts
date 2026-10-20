@@ -375,6 +375,26 @@ test("instances migration: every clone at the instance moves under its folder, i
   assert.equal(git(workspace(root, `${FOLDER}/acme/draft-spex`), "rev-parse", "HEAD"), heads["acme/draft-spex"]);
 });
 
+test("instances migration: a clone nine segments deep, as deep as a key stood before, moves under the instance's folder, where the store finds and pairs it", async () => {
+  const root = formerHome({ url: "https://spex.pub" });
+  const deep = "acme/b/c/d/e/f/g/h/deep-spex";
+  const to = `${FOLDER}/${deep}`;
+  assert.equal(to.split("/").length, 10);
+  writeFileSync(join(root, "home.yaml"), stringifyYaml({
+    format: 1, device: DEVICE, host: { url: "https://spex.pub", clientId: "spex", account: ADA }, own: "ada",
+    folders: [{ path: join(root, "work", "deep"), repository: deep }],
+  }));
+  formerClone(root, deep, { remote: `${GIT_ORIGIN}/${deep}.git`, id: "105" });
+  const store = await Store.open({ machineIdentity, dir: root, env: gitEnv });
+  try {
+    assert.ok(!existsSync(workspace(root, deep)) && existsSync(join(workspace(root, to), ".git")), "moved under the instance's folder");
+    assert.deepEqual(remotesOf(workspace(root, to)), [FOLDER]);
+    assert.ok(store.listRepositories().some((repository) => repository.key === to), "the store's walk finds it");
+    assert.equal(store.home.keyForFolder(join(root, "work", "deep")), to);
+    assert.deepEqual(store.listProjects().map((project) => project.id), [to]);
+  } finally { store.close(); }
+});
+
 test("instances migration: a destination taken stops the clones step before any clone moves, nothing found overwritten; a retry once it is moved aside finishes the work in the same receipt", async () => {
   const root = formerHomeWithClones();
   const stray = workspace(root, `${FOLDER}/acme/draft-spex`);

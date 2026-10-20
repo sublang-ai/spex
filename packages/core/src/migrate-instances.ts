@@ -22,7 +22,7 @@ import {
   closed, isObject, isText, need, readJsonFile, sha256, StorageFormatError, writeApplicationBytes, writeApplicationFile,
 } from "./files.js";
 import {
-  CLIENT_ID, Home, HOME_FILE, invalidHome, isRepositoryKey, notAnOrigin, parseHomeFile, WORKSPACE, type HomeAccount, type HomeFile,
+  CLIENT_ID, Home, HOME_FILE, invalidHome, isRepositoryKey, notAnOrigin, parseHomeFile, WORKSPACE, WORKSPACE_DEPTH, type HomeAccount, type HomeFile,
 } from "./home.js";
 import { i18n } from "./i18n.js";
 import { canonicalOrigin, instanceFolder, instanceSegmentOf, isInstanceFolder, OriginRefused } from "./instance.js";
@@ -221,12 +221,12 @@ function rekeyedCredentials(bytes: Buffer, from: string, to: string): Buffer | n
 }
 
 /** Every clone under `workspace/` outside the instances' folders, as
- * the store's walk finds one: a folder whose path is a key, inside plain
- * folders, never through a link. */
+ * the store's walk finds one: a folder whose path is a key of up to
+ * WORKSPACE_DEPTH segments, inside plain folders, never through a link. */
 function cloneKeys(home: Home): string[] {
   const keys: string[] = [];
   const walk = (dir: string, depth: number): void => {
-    if (depth > 8) return;
+    if (depth >= WORKSPACE_DEPTH) return;
     let entries: Dirent[];
     try { entries = readdirSync(dir, { withFileTypes: true }); }
     catch (error) {

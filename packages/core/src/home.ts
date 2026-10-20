@@ -23,6 +23,9 @@ export { hostUrlFor };
 
 export const HOME_FILE = "home.yaml";
 export const WORKSPACE = "workspace";
+/** The most segments a key the walks of `workspace/` find may hold: the
+ * nine a key held before DR-127, and the instance's folder before them. */
+export const WORKSPACE_DEPTH = 10;
 /** The public OAuth client id every Spex uses at the Git host (storage-2). */
 export const CLIENT_ID = "spex";
 const GROUP_NAME = /^[a-z0-9][a-z0-9-]*$/;

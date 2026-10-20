@@ -894,6 +894,25 @@ test("storage-1: a clone whose group and name the host spells with capitals, dot
   reopened.close();
 });
 
+test("storage-1: a clone under an instance's folder with nine segments below it, as deep as a key stood before the instance's folder led it, pairs and lists under that key", () => {
+  const dir = tempRoot();
+  const store = new Store({ machineIdentity, dir, own: "tester" });
+  const project = store.registerProject(join(tmpdir(), "spex-deep"), "deep", 1);
+  store.close();
+  const key = "@spex.pub/acme/b/c/d/e/f/g/h/deep-spex";
+  assert.equal(key.split("/").length, 10);
+  mkdirSync(join(dir, "workspace", ...key.split("/").slice(0, -1)), { recursive: true });
+  renameSync(join(dir, "workspace", ...project.id.split("/")), join(dir, "workspace", ...key.split("/")));
+  const home = parseYaml(readFileSync(join(dir, "home.yaml"), "utf8")) as { folders: { repository: string }[] };
+  for (const folder of home.folders) if (folder.repository === project.id) folder.repository = key;
+  writeFileSync(join(dir, "home.yaml"), stringifyYaml(home));
+  const reopened = new Store({ machineIdentity, dir, own: "tester" });
+  assert.deepEqual(reopened.listProjects().map((entry) => entry.id), [key]);
+  assert.ok(reopened.listRepositories().some((repository) => repository.key === key));
+  assert.deepEqual(reopened.storageDiagnostics(), [], "neither an unpaired clone nor a missing one");
+  reopened.close();
+});
+
 test("storage-12: an unpaired clone and a pair whose clone is missing are repairs, nothing paired automatically", () => {
   const dir = tempRoot();
   const store = new Store({ machineIdentity, dir, own: "tester" });
