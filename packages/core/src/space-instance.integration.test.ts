@@ -22,12 +22,12 @@ import { createSessionStore } from "@sublang/playbook/session-store";
 import { stringify as stringifyYaml } from "yaml";
 import { Home } from "./home.js";
 import { needsInstancesMigration } from "./migrate-instances.js";
-import { clonePath, createSpaceHarness, hostFolder, hostKey, OWN_KEY, ownClone, repositoryOf, stringsOf } from "./testing/space-harness.js";
+import { clonePath, createSpaceHarness, hostFolder, hostKey, OWN_KEY, ownClone, prefsOf, repositoryOf, stringsOf } from "./testing/space-harness.js";
 import { STANDIN_STORAGE, type StandinHost } from "./testing/standin-host.js";
 import type { GroupsState, ServerMessage } from "./protocol.js";
 
 const fixture = createSpaceHarness();
-const { scratch, git, gitFolder, bareRepo, addFolder, startHome, startHost, signIn } = fixture;
+const { scratch, git, gitFolder, bareRepo, addFolder, startHome, startHost, signIn, runTurn } = fixture;
 test.after(() => fixture.dispose());
 
 /** The stand-in's person, and your own group's repository once signed in. */
@@ -104,8 +104,8 @@ test("space-74: nothing behind the instance is named; another login's repository
   assert.deepEqual(readdirSync(notesClone).sort(), files, "nothing on this device is deleted");
   assert.ok(entry(await home.client.expectOk("space.get", {}), "bob").repositories.some((repository) => repository.key === hostKey(host, "bob/notes-spex")));
 
-  // A project picked into acme, its first sync moving the clone under
-  // the instance's folder with its remote renamed by it (DR-127), and
+  // A project picked into acme, the pick moving the clone under the
+  // instance's folder with its remote named by it (storage-35), and
   // transferred by the stand-in into acme/research: a Refresh lists it
   // there with its key unchanged, and its next sync moves the clone
   // (space-1, space-60).
@@ -373,6 +373,95 @@ test("space-60: a clone the instances migration deferred, a live session's lease
       return receipt.kind === "instances" ? receipt.deferred ?? [] : [];
     });
     assert.deepEqual(deferred, []);
+  } finally { if (!released) await live.release(); }
+});
+
+test("storage-35: a pick of a clone in your own group's folder moves it under the instance's folder as the creation or the join lands, its pair, sessions and preferences following; a session's lease beneath leaves it there, read as the instance's by its remote, until its next sync moves it", async (t) => {
+  const host = await startHost();
+  const folder = hostFolder(host);
+  const listed = host.script.addRepository({ group: "acme", name: "joined-spex" });
+  const home = await startHome("pick-move", { host, project: false, extra: { signIn: "browser" } });
+  t.after(() => home.stop());
+  let mark = home.client.mark();
+  await signIn(home, host);
+  await home.client.waitRepository(mark, HOST_OWN, (repository) => repository.sync.phase === "done", 30_000);
+  // Each pick's first sync is held before its first step, so only the
+  // pick itself may have moved its clone.
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  const held = new Set<string>();
+  home.hooks.beforeStep = async ({ op, step, repository }) => { if (op === "sync" && step === "save" && held.has(repository)) await gate; };
+
+  // A creation: the pick's reply finds the clone moved, its remote named
+  // by the instance's folder beside the host's id, its pair and its
+  // session following it.
+  const created = gitFolder("created");
+  const { key: createdLocal } = await addFolder(home, created);
+  const sessionId = await runTurn(home, createdLocal, "Before the pick");
+  const createdKey = hostKey(host, "acme/created-spex");
+  held.add(createdLocal).add(createdKey);
+  mark = home.client.mark();
+  await home.client.expectOk("space.pick", { repository: createdLocal, choice: { kind: "create", groupId: "2002", name: "created" } });
+  const createdClone = clonePath(home.dataDir, createdKey);
+  assert.ok(existsSync(join(createdClone, ".git")) && !existsSync(clonePath(home.dataDir, createdLocal)), "moved as the creation landed");
+  assert.deepEqual(git(createdClone, "remote").split("\n"), [folder]);
+  assert.ok(git(createdClone, "config", "--get", "spex.repositoryId").length > 0);
+  assert.equal(Home.load(home.dataDir).keyForFolder(created), createdKey, "its pair follows it");
+  assert.ok((await home.client.expectOk("session.list", {})).some((session) => session.id === sessionId && session.projectId === createdKey), "its session follows it");
+  assert.ok(existsSync(join(createdClone, "sessions", `${sessionId}.json`)));
+
+  // A join, the notice it was picked with following it.
+  const joinedCode = gitFolder("joined");
+  const { key: joinedLocal } = await addFolder(home, joinedCode);
+  const joinedKey = hostKey(host, "acme/joined-spex");
+  held.add(joinedLocal).add(joinedKey);
+  await home.client.expectOk("space.pick", { repository: joinedLocal, choice: { kind: "join", hostId: listed.id }, noticed: true });
+  const joinedClone = clonePath(home.dataDir, joinedKey);
+  assert.ok(existsSync(join(joinedClone, ".git")) && !existsSync(clonePath(home.dataDir, joinedLocal)), "moved as the join landed");
+  assert.deepEqual(git(joinedClone, "remote").split("\n"), [folder]);
+  assert.equal(git(joinedClone, "config", "--get", "spex.repositoryId"), listed.id);
+  assert.equal(Home.load(home.dataDir).keyForFolder(joinedCode), joinedKey);
+  assert.equal(prefsOf(home.dataDir)[`sync:${joinedKey}:noticed`], true, "its sync preferences follow it");
+  assert.equal(prefsOf(home.dataDir)[`sync:${joinedLocal}:noticed`], undefined);
+
+  // Released, each first sync runs where its clone now lies.
+  release();
+  for (const key of [createdKey, joinedKey]) {
+    const synced = await home.client.waitRepository(mark, key, (repository) => repository.sync.phase !== "running" && repository.sync.phase !== "idle", 30_000);
+    assert.deepEqual([synced.sync.phase, synced.state], ["done", "reachable"], `${key}: ${JSON.stringify(synced.sync)}`);
+  }
+  home.hooks.beforeStep = undefined;
+
+  // A session's lease beneath: the pick stands, the clone stays in your
+  // own group's folder with its remote named by the instance's folder,
+  // and its first sync stops at the move the lease refuses.
+  const leased = gitFolder("leased");
+  const { key: leasedLocal } = await addFolder(home, leased);
+  const leasedClone = clonePath(home.dataDir, leasedLocal);
+  const leasedKey = hostKey(host, "acme/leased-spex");
+  const sessions = createSessionStore({ sessionsDir: join(leasedClone, "sessions") });
+  await sessions.prepare();
+  const live = await sessions.acquireManagement(randomUUID());
+  let released = false;
+  try {
+    mark = home.client.mark();
+    await home.client.expectOk("space.pick", { repository: leasedLocal, choice: { kind: "create", groupId: "2002", name: "leased" } });
+    const stopped = await home.client.waitRepository(mark, leasedLocal, (repository) => repository.sync.phase === "stopped", 30_000);
+    assert.ok(stopped.sync.phase === "stopped" && stopped.sync.cause === "lease" && stopped.sync.step === "check", JSON.stringify(stopped.sync));
+    assert.ok(existsSync(join(leasedClone, ".git")) && !existsSync(clonePath(home.dataDir, leasedKey)), "it stays where it lies");
+    assert.deepEqual(git(leasedClone, "remote").split("\n"), [folder], "its remote names its instance");
+    assert.ok(stopped.id, "it records the host's id");
+    assert.equal(Home.load(home.dataDir).keyForFolder(leased), leasedLocal);
+    assert.ok(entry(await home.client.expectOk("space.get", {}), "acme").repositories.some((repository) => repository.key === leasedLocal), "listed under its group at the instance");
+
+    await live.release();
+    released = true;
+    mark = home.client.mark();
+    await home.client.expectOk("space.sync", { repository: leasedLocal });
+    const moved = await home.client.waitRepository(mark, leasedKey, (repository) => repository.sync.phase !== "running" && repository.sync.phase !== "idle", 30_000);
+    assert.deepEqual([moved.sync.phase, moved.state, moved.id], ["done", "reachable", stopped.id], JSON.stringify(moved.sync));
+    assert.ok(existsSync(join(clonePath(home.dataDir, leasedKey), ".git")) && !existsSync(leasedClone), "its next sync moved it");
+    assert.equal(Home.load(home.dataDir).keyForFolder(leased), leasedKey);
   } finally { if (!released) await live.release(); }
 });
 

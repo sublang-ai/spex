@@ -8,7 +8,7 @@ It defaults to `~/.spex`; `SPEX_HOME` selects another directory.
 All paths below are relative to Spex home.
 A **spex repository** holds the records of one project or one group on its `spex` branch; its clone lives under `workspace/`, and its **key** is the clone's path relative to `workspace/`.
 A spex repository at an instance lies under that instance's folder, `@<host>` with `_<port>` after it where the instance's origin names a port or is `http`, at its path there: `workspace/@spex.pub/acme/a-spex/`, key `@spex.pub/acme/a-spex`.
-Your own group's folder, `workspace/<own>/`, holds your own group's spex repository and the projects never shared, such as `alice/a-spex`; a project shared from it moves under its instance's folder at its next sync.
+Your own group's folder, `workspace/<own>/`, holds your own group's spex repository and the projects never shared, such as `alice/a-spex`; a project shared from it moves under its instance's folder as Pick a group creates or joins its spex repository there, or, while a session's lease holds it, at its next sync.
 A **project** is a working folder on this device paired with a spex repository; your own group's spex repository, `workspace/<own>/<own>-spex/`, holds your settings and the sessions that belong to no project.
 The home itself is not a Git repository; only clones are.
 

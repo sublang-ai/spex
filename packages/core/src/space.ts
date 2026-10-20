@@ -161,27 +161,29 @@ function remoteNames(run: GitRun): string[] {
 /** The remote a clone syncs with, among the names its remotes bear
  * (DR-127): its key's instance folder where a remote of that name
  * stands; else `origin` — a remote the reader named, or one a clone
- * made before its remote took its instance's name; else, for your own
- * group's own repository, whose folder names no instance, the one
- * remote named by an instance's folder; none otherwise. */
-function cloneRemoteName(key: string, own: boolean, names: readonly string[]): string | null {
+ * made before its remote took its instance's name; else, for a clone
+ * keyed in your own group's folder, which names no instance — your own
+ * group's own repository, or a clone a pick left there (storage-35) —
+ * the one remote named by an instance's folder (storage-31); none
+ * otherwise. */
+function cloneRemoteName(key: string, names: readonly string[]): string | null {
   const instance = splitKey(key).instance;
   if (instance !== null && names.includes(instance)) return instance;
   if (names.includes("origin")) return "origin";
-  if (own) {
+  if (instance === null) {
     const folders = names.filter(isInstanceFolder);
     if (folders.length === 1) return folders[0];
   }
   return null;
 }
 
-/** The name the host's remote takes in a clone (DR-127): its key's
- * instance folder; for your own group's own repository, the folder of
- * the instance the home signs in to, `folder`; `origin` for a clone
- * keyed outside every instance's folder, and where the home's instance
- * stands as no instance's origin. */
-function hostRemoteName(key: string, own: boolean, folder: string | null): string {
-  return splitKey(key).instance ?? (own && folder !== null ? folder : "origin");
+/** The name the host's remote takes in a clone (DR-127, storage-34):
+ * its key's instance folder; for a clone keyed outside every instance's
+ * folder, the folder of the instance the home signs in to, `folder`;
+ * `origin` only where the home's instance stands as no instance's
+ * origin. */
+function hostRemoteName(key: string, folder: string | null): string {
+  return splitKey(key).instance ?? folder ?? "origin";
 }
 
 /** One destination read, ordered independently of full-view completion. */
@@ -823,21 +825,16 @@ class RepositorySync {
     return true;
   }
 
-  /** Whether this clone is your own group's own repository. */
-  private isOwn(): boolean {
-    return this.key === this.host.store.home.own();
-  }
-
   /** The name the host's remote takes in this clone (DR-127). */
   private hostRemoteName(): string {
-    return hostRemoteName(this.key, this.isOwn(), this.owner.instanceFolder());
+    return hostRemoteName(this.key, this.owner.instanceFolder());
   }
 
   /** The clone's remote — its name and URL — as its `.git/config`
    * holds it now (DR-127), read synchronously so a check and its write
    * share one core turn. */
   private remoteNow(): { name: string | null; url: string | null } {
-    const name = cloneRemoteName(this.key, this.isOwn(), remoteNames(this.git.runSync(["config", "-z", "--get-regexp", REMOTE_URL_KEYS])));
+    const name = cloneRemoteName(this.key, remoteNames(this.git.runSync(["config", "-z", "--get-regexp", REMOTE_URL_KEYS])));
     return { name, url: name === null ? null : this.configNow(`remote.${name}.url`) };
   }
 
@@ -979,7 +976,7 @@ class RepositorySync {
     const head = await this.git.run(["rev-parse", "-q", "--verify", "HEAD^{commit}"]);
     // The remote by its name in the clone (DR-127), its URL as Git
     // reads it.
-    const remoteName = cloneRemoteName(this.key, this.isOwn(), remoteNames(await this.git.run(["config", "-z", "--get-regexp", REMOTE_URL_KEYS])));
+    const remoteName = cloneRemoteName(this.key, remoteNames(await this.git.run(["config", "-z", "--get-regexp", REMOTE_URL_KEYS])));
     const remote = remoteName === null ? null : await this.git.run(["remote", "get-url", remoteName]);
     const remoteUrl = remote?.code === 0 ? remote.stdout.toString("utf8").trim() : null;
     const id = await this.git.run(["config", "--get", "spex.repositoryId"]);
@@ -3077,8 +3074,44 @@ export class SpaceManager {
       throw error;
     }
     this.waiting.delete(machine.key);
+    await this.moveAtPick(machine, repository);
     await this.publish();
     this.startSync(machine.key, { join, ...(setUp ? { setUp } : {}) });
+  }
+
+  /**
+   * A pick of a clone in your own group's folder — a creation or a join
+   * the host accepted — moves it under its instance's folder at the
+   * repository's path there as it lands (storage-35): one rename at its
+   * instant, as a host's rename moves a clone, its pairs, session
+   * locations, sync preferences and exports following (space-60). A
+   * session's lease beneath, a destination taken or a rename that fails
+   * leaves it where it lies, its remote naming its instance (storage-31),
+   * until its next sync moves it; the pick stands either way.
+   */
+  private async moveAtPick(machine: RepositorySync, repository: HostRepository): Promise<void> {
+    const store = this.host.store;
+    const from = machine.key;
+    if (from === store.home.own() || splitKey(from).instance !== null || !from.startsWith(`${store.home.ownName}/`)) return;
+    const to = this.keyAtHost(repository);
+    if (!to || to === from) return;
+    const source = machine.repository.dir;
+    const identity = await this.machineIdentity();
+    // Nothing is awaited from here to the rename: the clone still lies
+    // where the home says, with the remote and id the pick wrote.
+    if (store.repository(from)?.dir !== source || machine.key !== from || !machine.recordsNow(repository.remoteUrl, repository.id)) return;
+    try {
+      if (heldSessionLease(source, identity) !== undefined || this.destinationTaken(from, to) !== undefined) return;
+      const target = store.home.clonePath(to);
+      mkdirSync(dirname(target), { recursive: true, mode: 0o700 });
+      renameSync(source, target);
+    } catch (error) {
+      console.error(`spex: ${from} stays where it lies until its next sync: ${error instanceof Error ? error.message : String(error)}`);
+      return;
+    }
+    pruneEmptyFolders(dirname(source), store.home.workspace);
+    this.relocate([{ from, to }]);
+    await this.afterMove([{ from, to }]);
   }
 
   /** Ask the host to create `name` in a group for a clone (git-host-6). */
@@ -3307,7 +3340,7 @@ export class SpaceManager {
       };
       // The remote takes the name the host's remote takes in a clone at
       // that key (DR-127).
-      const name = hostRemoteName(key, key === store.home.own(), this.instanceFolder());
+      const name = hostRemoteName(key, this.instanceFolder());
       let run: GitRun;
       try {
         const options = { transport: true, ...(credential ? { credential } : {}) };
@@ -3879,8 +3912,7 @@ export class SpaceManager {
     if (!machine.recordsNow(remote, id)) throw movedMeanwhile(from);
     if (store.repository(from)?.dir !== source || machine.key !== from) throw movedMeanwhile(from);
     this.renameClone(machine, to, identity);
-    // The rename follows the move: under its old key, a clone keyed
-    // outside every instance's folder resolves no remote by that name.
+    // The remote's rename follows the move, made where the clone now lies.
     const folder = instanceSegmentOf(to);
     if (folder !== null) machine.nameRemoteBy(folder);
     await this.afterMove([{ from, to }]);
