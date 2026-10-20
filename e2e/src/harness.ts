@@ -37,6 +37,7 @@ import type {
 } from "@sublang/spex-core";
 import { ARTIFACT_SCHEMAS, suppliedCompiler, templatePath } from "@sublang/spex-core";
 import { defaultRunCommand } from "../../packages/core/dist/forge.js";
+import { instanceFolder, instanceSegmentOf } from "../../packages/core/dist/instance.js";
 import {
   DEMO_CONFIG,
   authoringScript,
@@ -1043,11 +1044,27 @@ export async function settled(app: App): Promise<void> {
 // The stand-in host: sign-in, picks and a peer (git-host-12, DR-103)
 // ---------------------------------------------------------------------------
 
+/** The stand-in's folder under `workspace/` (DR-127):
+ * `@127.0.0.1_<port>`. */
+export function hostFolder(host: StandinHost): string {
+  return instanceFolder(host.url);
+}
+
+/** The key of a spex repository the stand-in holds at `path`, its path
+ * in the instance (`acme/<name>-spex`): under the stand-in's folder, as
+ * its clone lies (DR-127). */
+export function hostKey(host: StandinHost, path: string): string {
+  return `${hostFolder(host)}/${path}`;
+}
+
 /** The stand-in's bare repository of a spex repository, by its key
- * (`<group>/<name>-spex`), as a peer reaches it on disk. */
+ * (`<folder>/<group>/<name>-spex`) or its path in the instance, as a
+ * peer reaches it on disk. */
 export function bareOf(host: StandinHost, key: string): string {
-  const found = host.script.repositories.find((repo) => `${repo.group.fullPath}/${repo.path}` === key);
-  if (!found) throw new Error(`the stand-in holds no ${key}`);
+  const folder = instanceSegmentOf(key);
+  const path = folder === null ? key : key.slice(folder.length + 1);
+  const found = host.script.repositories.find((repo) => `${repo.group.fullPath}/${repo.path}` === path);
+  if (!found) throw new Error(`the stand-in holds no ${path}`);
   return found.bare;
 }
 
@@ -1095,7 +1112,8 @@ export function ownSetUp(state: GroupsState): boolean {
 
 /** Pick a group for the demo project's local-only spex repository over
  * the protocol (arrange only): `<name>-spex` created in that group and
- * pushed (space-58); the project's key and remote follow it. */
+ * pushed, its clone moving under the stand-in's folder (space-58,
+ * DR-127); the project's key and remote follow it. */
 export async function pickGroup(
   app: App,
   options: { name?: string; groupId?: string; groupPath?: string } = {},
@@ -1103,7 +1121,7 @@ export async function pickGroup(
   const host = app.host;
   if (!host || !app.projectId) throw new Error("a pick needs a host and the project");
   const name = options.name ?? "demo-project";
-  const key = `${options.groupPath ?? HOST_GROUP}/${name}-spex`;
+  const key = hostKey(host, `${options.groupPath ?? HOST_GROUP}/${name}-spex`);
   const from = app.core.mark();
   await app.core.command("space.pick", {
     repository: app.projectId,
@@ -1175,7 +1193,7 @@ export async function seedHostProject(app: App): Promise<{ key: string; code: st
     project: { format: 1, name: "demo-project", remote: code },
     members: [PEER_MEMBER],
   });
-  const key = `${HOST_GROUP}/demo-project-spex`;
+  const key = hostKey(host, `${HOST_GROUP}/demo-project-spex`);
   const dir = join(dirname(app.dataDir), "peer");
   git(dirname(app.dataDir), "clone", "-q", "--branch", "spex", repo.bare, dir);
   // The team's settings name players alone (core-service-2): the ones

@@ -1897,7 +1897,7 @@ export interface RepositoryState {
   /** The clone's path under `workspace/`, beginning with its instance's
    * folder where it lies at an instance (`@spex.pub/acme/a-spex`,
    * DR-127); for a row the host lists in a group held as colliding,
-   * `<path>@<id>`, naming no clone (space-61). */
+   * `<folder>/<path>@<id>`, naming no clone (space-61). */
   key: string;
   /** `<name>-spex`, the clone's folder name. */
   name: string;

@@ -7,7 +7,7 @@ Every project and group keeps its records in its own spex repository, cloned und
 The desktop and server app sync each one from the Space surface without stopping the core.
 The commands below are the command-line path for one spex repository and require the core stopped.
 
-Each command names the home with `--home` (else `SPEX_HOME`, else `~/.spex`) and the spex repository with `--repository <key>`, the clone's path under `workspace/`, such as `alice/a-spex`.
+Each command names the home with `--home` (else `SPEX_HOME`, else `~/.spex`) and the spex repository with `--repository <key>`, the clone's path under `workspace/`, such as `alice/a-spex` or `@spex.pub/acme/a-spex`.
 Spex writes `.gitignore` and `.gitattributes` in every clone for the portable format.
 
 Stop the desktop/server core and all CLI sessions of that spex repository before committing, checking out or merging its records. Run each session on only one device at a time. The commands below operate locally; use ordinary Git fetch/push for transport.

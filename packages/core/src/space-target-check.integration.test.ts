@@ -10,7 +10,7 @@ import { join } from "node:path";
 import type { Store } from "./store.js";
 import { STANDIN_STORAGE } from "./testing/standin-host.js";
 import { holdingFetch, settled } from "./testing/holding-fetch.js";
-import { clonePath, createSpaceHarness, repositoryOf } from "./testing/space-harness.js";
+import { clonePath, createSpaceHarness, hostFolder, hostKey, repositoryOf } from "./testing/space-harness.js";
 
 const fixture = createSpaceHarness();
 const { git, gitFolder, addFolder, startHost, startHome, signIn } = fixture;
@@ -46,7 +46,7 @@ async function preparedProject(name: string) {
   const { key: local } = await addFolder(home, gitFolder(name));
   const mark = home.client.mark();
   await home.client.expectOk("space.pick", { repository: local, choice: { kind: "create", groupId: "2002", name } });
-  const key = `acme/${name}-spex`;
+  const key = hostKey(ready.host, `acme/${name}-spex`);
   const row = await home.client.waitRepository(mark, key, (candidate) => candidate.sync.phase === "done", 30_000);
   assert.ok(row.id);
   return { ...ready, key, id: row.id };
@@ -162,16 +162,17 @@ for (const outcome of ["success", "failure"] as const) {
     host.script.archive(id);
     const mark = home.client.mark();
     await home.client.expectOk("space.sync", { repository: key });
-    const moved = "acme/research/renamed-spex";
+    const movedPath = "acme/research/renamed-spex";
+    const moved = hostKey(host, movedPath);
     const row = await home.client.waitRepository(mark, moved, (candidate) => candidate.sync.phase !== "running", 30_000);
-    assert.deepEqual([row.sync.phase, row.state, row.remote], ["done", "read-only", moved], JSON.stringify(row));
+    assert.deepEqual([row.sync.phase, row.state, row.remote], ["done", "read-only", movedPath], JSON.stringify(row));
     assert.equal((await home.client.expectOk("space.get", {})).read.phase, "running", "target Check does not settle the full read");
     failOld = outcome === "failure";
     gate.release();
     if (outcome === "failure") await assert.rejects(full); else await full;
     await settled();
     const after = await home.client.repository(moved);
-    assert.deepEqual([after.state, after.remote], ["read-only", moved]);
+    assert.deepEqual([after.state, after.remote], ["read-only", movedPath]);
     const state = await home.client.expectOk("space.get", {});
     assert.equal(state.groups.flatMap((group) => group.repositories).filter((candidate) => candidate.id === id).length, 1);
     assert.ok(existsSync(clonePath(home.dataDir, moved)) && !existsSync(clonePath(home.dataDir, key)));
@@ -192,7 +193,7 @@ test("git-host-23: exact remote discovery records the id; every catalog page par
   assert.equal(restored.sync.phase, "done");
   assert.equal(git(clone, "config", "--get", "spex.repositoryId"), id);
   // Your own group's remote is named by the instance's folder (DR-127).
-  const folder = `@127.0.0.1_${new URL(host.url).port}`;
+  const folder = hostFolder(host);
   const origin = git(clone, "remote", "get-url", folder);
   const collision = { id: "2300", fullPath: "bob", name: "Bob's team", kind: "group" as const };
   host.script.addRepository({ group: "acme", name: "page-two-spex" });
@@ -207,7 +208,7 @@ test("git-host-23: exact remote discovery records the id; every catalog page par
   assert.match(refused.reason ?? "", /named like your login/);
   assert.ok(calls.some((url) => url.includes("?cursor=")), "later pages carry the newly listed user namespace");
   assert.equal(git(clone, "remote", "get-url", folder), origin);
-  assert.ok(existsSync(clone) && !existsSync(clonePath(home.dataDir, "bob/ada-spex")));
+  assert.ok(existsSync(clone) && !existsSync(clonePath(home.dataDir, "bob/ada-spex")) && !existsSync(clonePath(home.dataDir, hostKey(host, "bob/ada-spex"))));
 });
 
 test("git-host-23: a core move during catalog reading is reconciled before the selected answer is used", async (t) => {
@@ -227,11 +228,12 @@ test("git-host-23: a core move during catalog reading is reconciled before the s
   await home.client.expectOk("space.repository.move", { repository: key, groupId: "2003" });
   core.hostClient.fetchImpl = inner;
   gate.release();
-  const moved = "acme/research/catalog-move-spex";
+  const movedPath = "acme/research/catalog-move-spex";
+  const moved = hostKey(host, movedPath);
   const row = await home.client.waitRepository(from, moved, (candidate) => candidate.sync.phase === "done", 30_000);
-  assert.deepEqual([row.id, row.remote, row.state], [id, moved, "reachable"]);
+  assert.deepEqual([row.id, row.remote, row.state], [id, movedPath, "reachable"]);
   assert.ok(host.script.requests.slice(calls).filter((request) => request.path === "/api/v1/host/me").length >= 2, "catalog is reread after the host change");
-  assert.equal(git(clonePath(home.dataDir, moved), "remote", "get-url", "origin"), `${host.gitOrigin}/${STANDIN_STORAGE}/acme/research/catalog-move-spex.git`);
+  assert.equal(git(clonePath(home.dataDir, moved), "remote", "get-url", hostFolder(host)), `${host.gitOrigin}/${STANDIN_STORAGE}/acme/research/catalog-move-spex.git`);
 });
 
 test("git-host-23: a newer completed full read fences an older target before it can use stale path or access", async (t) => {
@@ -250,9 +252,10 @@ test("git-host-23: a newer completed full read fences an older target before it 
   core.hostClient.fetchImpl = inner;
   await core.space.readHost();
   gate.release();
-  const moved = "acme/research/new-authority-spex";
+  const movedPath = "acme/research/new-authority-spex";
+  const moved = hostKey(host, movedPath);
   const row = await home.client.waitRepository(from, moved, (candidate) => candidate.sync.phase === "done", 30_000);
-  assert.deepEqual([row.state, row.remote], ["read-only", moved]);
+  assert.deepEqual([row.state, row.remote], ["read-only", movedPath]);
   assert.ok(!existsSync(clonePath(home.dataDir, key)) && existsSync(clonePath(home.dataDir, moved)));
 });
 
@@ -290,7 +293,7 @@ for (const next of ["signed-out", "another-account"] as const) {
     const { host, home, core, id, key } = await preparedProject(`account-fence-${next}`);
     t.after(() => home.stop());
     const clone = clonePath(home.dataDir, key);
-    const origin = git(clone, "remote", "get-url", "origin");
+    const origin = git(clone, "remote", "get-url", hostFolder(host));
     const config = readFileSync(join(clone, ".git", "config"));
     const head = git(clone, "rev-parse", "HEAD");
     host.script.rename(id, { name: "stale-answer-spex", group: "acme/research" });
@@ -323,9 +326,9 @@ for (const next of ["signed-out", "another-account"] as const) {
     assert.equal(row.sync.phase, "stopped");
     if (row.sync.phase === "stopped") assert.match(row.sync.message, /sign-in changed meanwhile/i);
     assert.ok(![...core.space.targets.values()].some((target) => target.facts.id === id || target.listing?.repository.id === id), "no stale target cache entry");
-    assert.ok(existsSync(clone) && !existsSync(clonePath(home.dataDir, "acme/research/stale-answer-spex")));
+    assert.ok(existsSync(clone) && !existsSync(clonePath(home.dataDir, hostKey(host, "acme/research/stale-answer-spex"))));
     assert.deepEqual(readFileSync(join(clone, ".git", "config")), config);
-    assert.equal(git(clone, "remote", "get-url", "origin"), origin);
+    assert.equal(git(clone, "remote", "get-url", hostFolder(host)), origin);
     assert.equal(git(clone, "rev-parse", "HEAD"), head);
     assert.equal((await home.client.expectOk("space.get", {})).account?.login ?? null, next === "signed-out" ? null : "bob");
   });

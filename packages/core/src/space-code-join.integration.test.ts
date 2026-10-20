@@ -12,7 +12,7 @@ import { GIT_CREDENTIAL_FILE_ENV } from "./git-credential.js";
 import { SpaceGit, type GitRunOptions } from "./space-git.js";
 import { startGitHttpHost } from "./testing/git-http-host.js";
 import { holdingFetch } from "./testing/holding-fetch.js";
-import { clonePath, createSpaceHarness, repositoryOf } from "./testing/space-harness.js";
+import { clonePath, createSpaceHarness, hostKey, repositoryOf } from "./testing/space-harness.js";
 import { STANDIN_STORAGE, type StandinHost } from "./testing/standin-host.js";
 import type { Store } from "./store.js";
 
@@ -42,6 +42,7 @@ function inspectCredential(options: GitRunOptions): { file: string; mode: number
 
 test("space-37, projects-20, git-host-14: joining private code uses the brokered helper, disposes it and keeps the remote unchanged", async (t) => {
   const host = await startHost();
+  const privateKey = hostKey(host, "acme/private-spex");
   const code = privateCode(host, "private-code");
   const records = host.script.addRepository({ group: "acme", name: "private-spex", project: { format: 1, name: "private", remote: code.remote } });
   const home = await startHome("join-private-code", { host, project: false, extra: { signIn: "browser" } });
@@ -51,7 +52,7 @@ test("space-37, projects-20, git-host-14: joining private code uses the brokered
   await home.client.waitRepository(fromSignIn, HOST_OWN, (repository) => repository.sync.phase === "done");
   for (const [language, label] of [["en", "Code on this instance"], ["zh", "此实例上的代码"]] as const) {
     await home.client.expectOk("language.set", { language });
-    assert.equal(repositoryOf(await home.client.expectOk("space.get", {}), "acme/private-spex").code, label, "the listed row hides the transport URL in both languages");
+    assert.equal(repositoryOf(await home.client.expectOk("space.get", {}), privateKey).code, label, "the listed row hides the transport URL in both languages");
   }
   await home.client.expectOk("language.set", { language: "en" });
 
@@ -65,13 +66,13 @@ test("space-37, projects-20, git-host-14: joining private code uses the brokered
   const folder = join(mkdtempSync(join(scratch, "private-code-")), "code");
   const from = home.client.mark();
   await home.client.expectOk("space.join", { hostId: records.id, folder });
-  const joined = await home.client.waitRepository(from, "acme/private-spex", (repository) => repository.folder !== null || repository.sync.phase === "stopped");
+  const joined = await home.client.waitRepository(from, privateKey, (repository) => repository.folder !== null || repository.sync.phase === "stopped");
   assert.deepEqual([joined.state, joined.folder, joined.sync.phase], ["reachable", folder, "idle"], JSON.stringify(joined.sync));
   assert.equal(git(folder, "rev-parse", "HEAD"), git(code.bare, "rev-parse", "main"));
   assert.equal(git(folder, "remote", "get-url", "origin"), code.remote);
   for (const [language, label] of [["en", "Code on this instance"], ["zh", "此实例上的代码"]] as const) {
     await home.client.expectOk("language.set", { language });
-    assert.equal(repositoryOf(await home.client.expectOk("space.get", {}), "acme/private-spex").code, label, "the joined row hides the transport URL in both languages");
+    assert.equal(repositoryOf(await home.client.expectOk("space.get", {}), privateKey).code, label, "the joined row hides the transport URL in both languages");
   }
   await home.client.expectOk("language.set", { language: "en" });
   assert.equal(credentialRequests(host) - before, 2, "records and code each ask the broker");
@@ -80,17 +81,17 @@ test("space-37, projects-20, git-host-14: joining private code uses the brokered
   assert.deepEqual(observed.args.slice(0, 3), ["-c", "credential.helper=", "-c"]);
   assert.ok(!existsSync(observed.file), "the code child's credential file is disposed");
   assert.ok(!readFileSync(join(folder, ".git", "config"), "utf8").includes("credential.helper"), "the helper is not persisted");
-  const status = await home.client.expectOk("project.status", { projectId: "acme/private-spex" });
+  const status = await home.client.expectOk("project.status", { projectId: privateKey });
   assert.equal(status.branch, "main");
   assert.equal(status.originUrl, undefined, "local status does not expose the instance's Git URL");
-  const forge = await home.client.expectOk("forge.items", { projectId: "acme/private-spex", refresh: true });
+  const forge = await home.client.expectOk("forge.items", { projectId: privateKey, refresh: true });
   const instanceGuidance = "Issues and PRs come from GitHub; this project's code is on this instance.";
   assert.equal(forge.guidance, instanceGuidance);
   // A cache written by an earlier app may hold its old raw guidance.
   const core = home.service as unknown as { store: Store };
   const cachedAt = Date.now();
-  core.store.setForgeCache("acme/private-spex", { at: cachedAt, state: { ...forge, guidance: `Code at ${code.remote}` } });
-  const cached = await home.client.expectOk("forge.items", { projectId: "acme/private-spex" });
+  core.store.setForgeCache(privateKey, { at: cachedAt, state: { ...forge, guidance: `Code at ${code.remote}` } });
+  const cached = await home.client.expectOk("forge.items", { projectId: privateKey });
   assert.deepEqual([cached.guidance, cached.at], [instanceGuidance, cachedAt], "cached guidance obeys the current origin rule");
   await home.stop();
   const again = await startHome("join-private-code-again", { dataDir: home.dataDir, project: false });
@@ -101,18 +102,18 @@ test("space-37, projects-20, git-host-14: joining private code uses the brokered
   const description = holds.hold((path) => path === "/api/v1/host");
   t.after(() => description.release());
   const beforeLocal = host.script.requests.length;
-  const initialStatus = await again.client.expectOk("project.status", { projectId: "acme/private-spex" });
-  const initialForge = await again.client.expectOk("forge.items", { projectId: "acme/private-spex" });
+  const initialStatus = await again.client.expectOk("project.status", { projectId: privateKey });
+  const initialForge = await again.client.expectOk("forge.items", { projectId: privateKey });
   assert.equal(initialStatus.originUrl, undefined);
   assert.deepEqual([initialForge.guidance, initialForge.at], ["Issues and PRs come from GitHub; this project's code is on a remote.", cachedAt]);
   assert.equal(host.script.requests.length, beforeLocal, "local status and cached forge guidance trigger no host read");
   const reread = again.client.mark();
   const initial = again.client.expectOk("space.get", {});
   await description.reached;
-  assert.equal(repositoryOf(await initial, "acme/private-spex").code, "Code on a remote", "the initial reply withholds the remote before the description arrives");
+  assert.equal(repositoryOf(await initial, privateKey).code, "Code on a remote", "the initial reply withholds the remote before the description arrives");
   description.release();
-  await again.client.waitRepository(reread, "acme/private-spex", (repository) => repository.code === "Code on this instance");
-  const afterRead = await again.client.expectOk("forge.items", { projectId: "acme/private-spex" });
+  await again.client.waitRepository(reread, privateKey, (repository) => repository.code === "Code on this instance");
+  const afterRead = await again.client.expectOk("forge.items", { projectId: privateKey });
   assert.deepEqual([afterRead.guidance, afterRead.at], [instanceGuidance, cachedAt], "the same cache follows the newly reported origin");
 });
 
@@ -125,6 +126,7 @@ test("space-37: joining code at another origin keeps that device's credentials a
   t.after(() => other.close());
   const remote = `${other.url}/code.git`;
   const records = host.script.addRepository({ group: "acme", name: "other-spex", project: { format: 1, name: "other", remote } });
+  const otherKey = hostKey(host, "acme/other-spex");
   const home = await startHome("join-other-code", {
     host, project: false, extra: { signIn: "browser" },
     env: {
@@ -146,11 +148,11 @@ test("space-37: joining code at another origin keeps that device's credentials a
   const folder = join(mkdtempSync(join(scratch, "other-code-")), "code");
   const from = home.client.mark();
   await home.client.expectOk("space.join", { hostId: records.id, folder });
-  const joined = await home.client.waitRepository(from, "acme/other-spex", (repository) => repository.folder !== null || repository.sync.phase === "stopped");
+  const joined = await home.client.waitRepository(from, otherKey, (repository) => repository.folder !== null || repository.sync.phase === "stopped");
   assert.deepEqual([joined.state, joined.folder, joined.sync.phase], ["reachable", folder, "idle"], JSON.stringify(joined.sync));
   assert.equal(git(folder, "remote", "get-url", "origin"), remote);
-  assert.equal((await home.client.expectOk("project.status", { projectId: "acme/other-spex" })).originUrl, remote);
-  assert.equal((await home.client.expectOk("forge.items", { projectId: "acme/other-spex" })).guidance, "Issues and PRs come from GitHub; this project's origin is at 127.0.0.1.");
+  assert.equal((await home.client.expectOk("project.status", { projectId: otherKey })).originUrl, remote);
+  assert.equal((await home.client.expectOk("forge.items", { projectId: otherKey })).guidance, "Issues and PRs come from GitHub; this project's origin is at 127.0.0.1.");
   assert.equal(credentialRequests(host) - before, 1, "only the records clone asks the broker");
   assert.ok(observed && observed.credential === undefined, "the code child's device helper is preserved");
 });
@@ -159,7 +161,7 @@ for (const failure of ["unauthorized", "server", "credential", "occupied"] as co
   test(`space-37: a private code join stopped by ${failure} keeps its records and existing files, with no Git origin in the failure`, async (t) => {
     const host = await startHost();
     const code = privateCode(host, `code-${failure}`);
-    const key = `acme/${failure}-spex`;
+    const key = hostKey(host, `acme/${failure}-spex`);
     const records = host.script.addRepository({ group: "acme", name: `${failure}-spex`, project: { format: 1, name: failure, remote: code.remote } });
     const home = await startHome(`join-code-${failure}`, { host, project: false, extra: { signIn: "browser" } });
     t.after(() => home.stop());

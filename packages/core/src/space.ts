@@ -25,7 +25,7 @@ import {
 } from "./git-host.js";
 import { kebab, splitKey } from "./home.js";
 import { i18n } from "./i18n.js";
-import { instanceFolder, isInstanceFolder } from "./instance.js";
+import { instanceFolder, instanceSegmentOf, isInstanceFolder } from "./instance.js";
 import { classifyOwnerMachine, probeProcess } from "./root-lease.js";
 import type {
   GroupsState,
@@ -1019,6 +1019,24 @@ class RepositorySync {
     if (!this.publishRemote(expected, { url })) {
       throw new SpaceStopped("check", { cause: "git", message: changedMeanwhile(splitKey(this.key).name), guidance: retryGuidance(), retry: true });
     }
+  }
+
+  /** The clone, moved under its instance's folder while it records the
+   * host's id, names its remote by that folder (DR-127): a remote still
+   * named `origin` is renamed, its fetched `spex` and its upstream with
+   * it, where no remote bears the folder's name already. Read and
+   * written in one synchronous step; a rename Git refuses leaves
+   * `origin`, through which the clone still syncs. */
+  nameRemoteBy(folder: string): void {
+    const names = remoteNames(this.git.runSync(["config", "-z", "--get-regexp", REMOTE_URL_KEYS]));
+    if (!names.includes("origin") || names.includes(folder)) return;
+    const run = this.git.runSync(["remote", "rename", "origin", folder]);
+    if (run.code !== 0) {
+      console.error(`spex: the remote of ${this.key} keeps its name: ${lastLines(run.stderr)}`);
+      return;
+    }
+    if (this.facts.remoteName === "origin") this.facts = { ...this.facts, remoteName: folder };
+    if (this.upstreamName === "origin") this.upstreamName = folder;
   }
 
   /** This clone's own diagnostics: a pending merge, a refresh's finding,
@@ -2480,11 +2498,21 @@ export class SpaceManager {
     try { return new URL(this.host.store.home.host.url).hostname; } catch { return this.host.store.home.host.url; }
   }
 
-  /** The folder of the instance the home signs in to (DR-127), the name
+  /** The folder of the home's default instance (DR-127), the one the
+   * core signs in to: the folder its host clones lie under and the name
    * its host's remote takes in a clone; null where the home's recorded
    * URL stands as no instance's origin. */
   instanceFolder(): string | null {
-    try { return instanceFolder(this.host.store.home.host.url); } catch { return null; }
+    try { return instanceFolder(this.host.store.home.defaultInstance().url); } catch { return null; }
+  }
+
+  /** The key a host repository's clone takes (DR-127): its path in the
+   * instance, under the instance's folder; null where that path cannot
+   * stand as folders on this device, or the home's instance has no
+   * folder. */
+  private keyAtHost(repository: HostRepository): string | null {
+    const folder = this.instanceFolder();
+    return folder === null ? null : hostKey(repository, folder);
   }
 
   /** The commit identity of a signed-in home (space-32): the account's
@@ -2591,11 +2619,13 @@ export class SpaceManager {
   }
 
   /** The rule of space-15 for one clone: its own remote reads as its
-   * path in the instance — as its listing names it, else its key — and
-   * any other URL under the host's Git origin as the host's name. */
+   * path in the instance — as its listing names it, else its key without
+   * its instance's folder (DR-127) — and any other URL under the host's
+   * Git origin as the host's name. */
   private urlRule(facts: RemoteFacts, key: string): Parameters<typeof withoutHostUrls>[1] {
     const listing = facts.remote === null ? undefined : this.listingOf(facts);
-    const path = listing ? `${listing.repository.group.fullPath}/${listing.repository.path}` : key;
+    const instance = instanceSegmentOf(key);
+    const path = listing ? `${listing.repository.group.fullPath}/${listing.repository.path}` : instance === null ? key : key.slice(instance.length + 1);
     return {
       origin: this.knownOrigin() ?? null,
       host: this.hostName(),
@@ -3264,7 +3294,7 @@ export class SpaceManager {
     if (!listing) throw new CoreError("not_found", noLongerShared());
     // A group named like a login holds no folder of its own (space-61).
     if (this.collides(listing.repository.group, view)) throw new CoreError("invalid_request", groupNamedLikeYourLogin(listing.repository.group.fullPath));
-    const key = hostKey(listing.repository);
+    const key = this.keyAtHost(listing.repository);
     if (!key) {
       throw new CoreError("invalid_request", i18n._({ id: "{path} cannot stand as a folder on this device", values: { path: `${listing.repository.group.fullPath}/${listing.repository.path}` }, comment: "Refusal of a join: the host's names hold characters a folder under the home cannot" }));
     }
@@ -3717,7 +3747,7 @@ export class SpaceManager {
       if (id === null) throw new CoreError("not_found", noLongerShared());
       return { kind: "repository", id };
     }
-    const id = view?.listings.find((listing) => !this.collides(listing.repository.group, view) && hostKey(listing.repository) === key)?.repository.id;
+    const id = view?.listings.find((listing) => !this.collides(listing.repository.group, view) && this.keyAtHost(listing.repository) === key)?.repository.id;
     if (id === undefined) {
       throw new CoreError("not_found", i18n._({ id: "no spex repository {key} on this device", comment: "Refusal: the key names no clone under workspace/", values: { key } }));
     }
@@ -3799,8 +3829,13 @@ export class SpaceManager {
       machine.hostOverride = { state: "unreachable", reason: namedLikeYourLogin() };
       throw new SpaceStopped("check", { cause: "gone", message: groupNamedLikeYourLogin(repository.group.fullPath), guidance: nothingDeleted(), retry: true });
     }
-    const key = hostKey(repository);
-    if (op === "sync" && key && key !== machine.key) await this.moveInSync(machine, key, repository.id, facts.remote, target.accountGeneration);
+    // The clone follows the host under its instance's folder (DR-127);
+    // your own group's own repository keeps its folder, which lies
+    // outside every instance's.
+    const key = this.keyAtHost(repository);
+    if (op === "sync" && key && key !== machine.key && machine.key !== this.host.store.home.own()) {
+      await this.moveInSync(machine, key, repository.id, facts.remote, target.accountGeneration);
+    }
     try { this.assertTargetAccount(target.accountGeneration); }
     catch (error) { throw hostStop("check", error, this.hostName()); }
     if (facts.remote !== null && facts.remote !== repository.remoteUrl) machine.setOrigin(repository.remoteUrl, facts.remote);
@@ -3875,13 +3910,16 @@ export class SpaceManager {
   }
 
   /** Follow the host's rename or transfer of one clone within its sync
-   * (space-60): one rename at its instant, once the clone still reads the
-   * remote the check read before asking the host — `remote` — and records
-   * the host's id, the check's own recording of it included, and still
-   * lies where the home says. A destination taken by anything but the
-   * clone itself — a case-only rename's is the same folder — stops the
-   * sync; writers beneath resolve their paths at their own instants, and
-   * a process holding the old path keeps it. */
+   * (space-60), or bring a clone keyed outside its instance's folder
+   * under it (DR-127): one rename at its instant, once the clone still
+   * reads the remote the check read before asking the host — `remote` —
+   * and records the host's id, the check's own recording of it included,
+   * and still lies where the home says. A destination taken by anything
+   * but the clone itself — a case-only rename's is the same folder —
+   * stops the sync; writers beneath resolve their paths at their own
+   * instants, and a process holding the old path keeps it. In the same
+   * step, a remote still named `origin` takes the instance's folder's
+   * name. */
   private async moveInSync(machine: RepositorySync, to: string, id: string, remote: string | null, accountGeneration: number): Promise<void> {
     const store = this.host.store;
     const from = machine.key;
@@ -3910,6 +3948,10 @@ export class SpaceManager {
     renameSync(source, target);
     pruneEmptyFolders(dirname(source), store.home.workspace);
     this.relocate([{ from, to }]);
+    // The rename follows the move: under its old key, a clone keyed
+    // outside every instance's folder resolves no remote by that name.
+    const folder = instanceSegmentOf(to);
+    if (folder !== null) machine.nameRemoteBy(folder);
     await this.afterMove([{ from, to }]);
   }
 
@@ -4120,12 +4162,14 @@ export class SpaceManager {
   }
 
   /** A row for every spex repository the host lists and this device
-   * lacks (space-61: "Not on this device"); one in a group held as
-   * colliding reads unreachable, keyed `<path>@<id>` so it names no
-   * clone (space-30). */
+   * lacks (space-61: "Not on this device"), keyed under its instance's
+   * folder as its clone would be (DR-127); one in a group held as
+   * colliding reads unreachable, keyed `<folder>/<path>@<id>` so it
+   * names no clone (space-30). */
   private absentRows(): Placed[] {
     const view = this.view;
-    if (!view || !this.signedIn()) return [];
+    const folder = this.instanceFolder();
+    if (!view || !this.signedIn() || folder === null) return [];
     const store = this.host.store;
     const matched = new Set<string>();
     for (const repository of store.listRepositories()) {
@@ -4139,7 +4183,7 @@ export class SpaceManager {
       if (matched.has(repository.id)) continue;
       const colliding = this.collides(repository.group);
       const path = `${repository.group.fullPath}/${repository.path}`;
-      const key = colliding ? `${path}@${repository.id}` : hostKey(repository);
+      const key = colliding ? `${folder}/${path}@${repository.id}` : hostKey(repository, folder);
       if (!key || (!colliding && store.repository(key))) continue;
       const code = repository.project && typeof repository.project.remote === "string" ? this.codeRemoteAsShown(repository.project.remote) : null;
       rows.push({
