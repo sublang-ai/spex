@@ -459,12 +459,17 @@ describe("playbook-library-94: the environment's controls", () => {
   });
 
   test("every control stays available while that spex repository syncs: the sync refuses nothing", async () => {
+    environments[PROJECT_ID] = {
+      ...PROJECT_ENVIRONMENT,
+      unexported: { skipped: [{ name: "lint", folder: ".agents/skills" }], missing: [] },
+    };
     await renderSurface({ space: home({ syncing: PROJECT_ID }) });
     expect(screen.queryByTestId("environment-progress")).toBeNull();
     const controls = [
       "env-remove-acme/triage",
       "env-remove-acme/local-tools",
       "environment-install",
+      "environment-export-again",
       "add-from-registry",
       "add-from-folder",
       "add-from-git",
@@ -479,10 +484,15 @@ describe("playbook-library-94: the environment's controls", () => {
   });
 
   test("the core's work on an environment reads in place as progress, holding no control; a failure shows its cause", async () => {
-    environments[PROJECT_ID] = { ...PROJECT_ENVIRONMENT, busy: "installing" };
+    environments[PROJECT_ID] = {
+      ...PROJECT_ENVIRONMENT,
+      busy: "installing",
+      unexported: { skipped: [{ name: "lint", folder: ".agents/skills" }], missing: [] },
+    };
     await renderSurface();
     expect(screen.getByTestId("environment-progress").textContent).toBe("Installing…");
     expect((screen.getByTestId("add-from-registry") as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByTestId("environment-export-again") as HTMLButtonElement).disabled).toBe(false);
     expect((screen.getByTestId("env-remove-acme/triage") as HTMLButtonElement).disabled).toBe(false);
     act(() => {
       deliverServerMessageForTests({
