@@ -589,6 +589,15 @@ test("space-39: local changes of every unit kind list in order, incoming units a
   assert.equal(entry(".gitattributes").sync, "shared");
   assert.equal(entry("notes.txt").family, "Not a Spex file");
   assert.equal(entry("notes.txt").sync, "pending");
+  // A spec package's folder, and every path under it, reads as one; the
+  // folder above it is none (space-35).
+  assert.equal(entry("mine").family, "Not a Spex folder");
+  const packageFolder = (await home.client.expectOk("space.tree", { repository: key, path: "mine" })).entries.find((e) => e.name === "notes");
+  assert.equal(packageFolder?.family, "spec package");
+  assert.equal(packageFolder?.sync, "pending");
+  const packageFiles = await home.client.expectOk("space.tree", { repository: key, path: "mine/notes" });
+  assert.equal(packageFiles.entries.find((e) => e.name === "meta.yaml")?.family, "spec package");
+  assert.equal(packageFiles.entries.find((e) => e.name === "skills")?.family, "spec package");
   assert.equal(entry("link").kind, "file");
   assert.equal(entry("link").preview, "none");
   assert.equal(entry("big.log").preview, "text");

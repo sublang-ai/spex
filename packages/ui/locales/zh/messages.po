@@ -5491,6 +5491,11 @@ msgstr "规约"
 msgid "Spec items"
 msgstr "规约条目"
 
+#. catalog family: a spec package's folder kept in the clone, synced whole, or a file in it
+#: src/lib/space.ts
+msgid "spec package"
+msgstr "规约包"
+
 #: src/components/SpecGraph.tsx
 msgid "Spec package citation graph"
 msgstr "规约包引用图谱"
