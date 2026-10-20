@@ -140,6 +140,8 @@ msgstr "{file} 在读取之后已在磁盘上更改"
 
 #. A storage fault as one line: the file, then the reason — itself a message
 #. A storage fault as one line: the file, then the reason — itself a message
+#. A storage fault as one line: the file, then the reason — itself a message
+#: src/config.ts
 #: src/files.ts
 #: src/service.ts
 msgid "{file}: {reason}"
@@ -165,8 +167,14 @@ msgstr "{group} 是一个与你的用户名同名的群组"
 msgid "{group} is not empty"
 msgstr "{group} 不为空"
 
+#. A package Git source failed without a recognized status; raw backing-host or unclassified stderr stays inside the core
+#: src/space.ts
+msgid "{host} answered with an error"
+msgstr "{host} 返回了错误"
+
 #. A stopped transfer: the Git host answered with an HTTP error no other message reads; {host} is its display name, {status} the HTTP status Git printed
 #: src/space-git.ts
+#: src/space.ts
 msgid "{host} answered with an error (HTTP {status})"
 msgstr "{host} 返回了错误（HTTP {status}）"
 
@@ -194,6 +202,16 @@ msgstr "{host} 未列出群组 {group}"
 #: src/space-git.ts
 msgid "{host} refused"
 msgstr "{host} 拒绝了"
+
+#. An explicit content-size rejection whose numeric limit is absent or ambiguous; host is the instance display name
+#: src/space-git.ts
+msgid "{host} refused content above its size limit"
+msgstr "{host} 拒绝了超出其大小限制的内容"
+
+#. A content-size rejection, naming only the instance and its reported limit, not the storage system or raw transport words
+#: src/space-git.ts
+msgid "{host} refused content above its size limit ({limit})"
+msgstr "{host} 拒绝了超出其大小限制（{limit}）的内容"
 
 #. A stopped transfer's message; {host} is the remote's host
 #: src/space-git.ts
@@ -301,6 +319,26 @@ msgstr "{path} 无法发布：{issues}"
 msgid "{path} cannot stand as a folder on this device"
 msgstr "{path} 无法作为本设备上的文件夹"
 
+#. Refusal: a request by path in your own group's environment names a folder holding a file the clone's sync rules drop; {file} is that file's path in the clone
+#: src/environments.ts
+msgid "{path} holds {file}, which the clone's Git rules ignore, so it would not sync"
+msgstr "{path} 含有 {file}，克隆的 Git 规则会忽略该文件，因此它不会被同步"
+
+#. Refusal: a request by path in your own group's environment names a folder holding a tracked file of a family that stays on the device, such as a *.tmp file forced into Git; {file} is that file's path in the clone
+#: src/environments.ts
+msgid "{path} holds {file}, which the clone's sync refuses to share"
+msgstr "{path} 含有 {file}，克隆的同步拒绝共享该文件"
+
+#. Refusal: a request by path in your own group's environment names a folder under Spex's own paths, such as sessions/ or skills/
+#: src/environments.ts
+msgid "{path} is a path Spex keeps in your own group's clone"
+msgstr "{path} 是 Spex 在你自己的群组的克隆中保留的路径"
+
+#. Refusal: a request by path in your own group's environment names a folder the clone's sync rules drop, such as one named *.tmp
+#: src/environments.ts
+msgid "{path} is a path the clone's Git rules ignore, so it would not sync"
+msgstr "{path} 是克隆的 Git 规则忽略的路径，因此不会被同步"
+
 #. Refusal: a project already holds this folder
 #: src/service.ts
 msgid "{path} is already registered"
@@ -338,6 +376,11 @@ msgstr "{path} 不是文件"
 msgid "{path} is not a folder"
 msgstr "{path} 不是文件夹"
 
+#. Refusal: a request by path in your own group's environment names its clone's root
+#: src/environments.ts
+msgid "{path} is not a folder below your own group's clone's root"
+msgstr "{path} 不是你自己的群组的克隆根目录下的文件夹"
+
 #. Refusal: the folder fails the core's release checks; {issues} are the checks' own words
 #: src/environments.ts
 msgid "{path} is not a spec package release: {issues}"
@@ -354,30 +397,9 @@ msgid "{path} is not the root of a git work tree"
 msgstr "{path} 不是 git 工作树的根目录"
 
 #. Refusal: a request by path names a folder outside the repository's working folder
-#. Refusal: a request by path names a folder outside the repository's working folder
 #: src/environments.ts
 msgid "{path} is outside the working folder"
 msgstr "{path} 不在工作文件夹内"
-
-#. Refusal: a request by path in your own group's environment names a folder holding a file the clone's sync rules drop; {file} is that file's path in the clone
-#: src/environments.ts
-msgid "{path} holds {file}, which the clone's Git rules ignore, so it would not sync"
-msgstr "{path} 含有 {file}，克隆的 Git 规则会忽略该文件，因此它不会被同步"
-
-#. Refusal: a request by path in your own group's environment names a folder under Spex's own paths, such as sessions/ or skills/
-#: src/environments.ts
-msgid "{path} is a path Spex keeps in your own group's clone"
-msgstr "{path} 是 Spex 在你自己的群组的克隆中保留的路径"
-
-#. Refusal: a request by path in your own group's environment names a folder the clone's sync rules drop, such as one named *.tmp
-#: src/environments.ts
-msgid "{path} is a path the clone's Git rules ignore, so it would not sync"
-msgstr "{path} 是克隆的 Git 规则忽略的路径，因此不会被同步"
-
-#. Refusal: a request by path in your own group's environment names its clone's root
-#: src/environments.ts
-msgid "{path} is not a folder below your own group's clone's root"
-msgstr "{path} 不是你自己的群组的克隆根目录下的文件夹"
 
 #. Refusal: a request by path in your own group's environment names a folder outside its spex repository's clone
 #: src/environments.ts
@@ -388,31 +410,6 @@ msgstr "{path} 不在你自己的群组的克隆内"
 #: src/environments.ts
 msgid "{path} is reached through a link, which the clone's sync does not carry"
 msgstr "{path} 需经由链接访问，而克隆的同步不会携带链接"
-
-#. Refusal: a request by path in your own group's environment names a folder that is, lies in or holds a folder holding .git; {entry} is that folder's path in the clone
-#: src/environments.ts
-msgid "{path}: {entry} is a Git repository of its own, which the clone's sync does not carry"
-msgstr "{path}：{entry} 是一个独立的 Git 仓库，而克隆的同步不会携带它"
-
-#. Refusal: a request by path in your own group's environment names a folder holding a tracked file of a family that stays on the device, such as a *.tmp file forced into Git; {file} is that file's path in the clone
-#: src/environments.ts
-msgid "{path} holds {file}, which the clone's sync refuses to share"
-msgstr "{path} 含有 {file}，克隆的同步拒绝共享该文件"
-
-#. Refusal: a request by path in your own group's environment names a folder holding a link the clone's Git rules do not ignore; {entry} is the link's path in the clone
-#: src/environments.ts
-msgid "{path}: {entry} is a link, which the clone's sync does not carry"
-msgstr "{path}：{entry} 是一个链接，而克隆的同步不会携带链接"
-
-#. Refusal: a request by path in your own group's environment names a folder holding a special file, such as a pipe or a socket; {entry} is its path in the clone
-#: src/environments.ts
-msgid "{path}: {entry} is no regular file or folder, so the clone's sync does not carry it"
-msgstr "{path}：{entry} 既不是普通文件也不是文件夹，因此克隆的同步不会携带它"
-
-#. Refusal: your own group's request by path names a folder inside its spex repository's clone (environments-2), and this spec package lies elsewhere
-#: src/service.ts
-msgid "your own group's environment can request this spec package by path only from inside its clone; enable it in the project, or publish it and add it from the registry"
-msgstr "你自己的群组的环境只能按路径请求其克隆内的规约包；请在项目中启用它，或发布后从注册中心添加"
 
 #. Spec notice; `intents/` is a directory name and stays as it is
 #: src/specs.ts
@@ -484,6 +481,26 @@ msgstr "{path} 必须解析出一个适配器"
 #: src/config.ts
 msgid "{path} names absent session player \"{playerId}\""
 msgstr "{path} 指向不存在的会话 Player“{playerId}”"
+
+#. Refusal: a nonignored subtree of your own group's path source cannot be read; {entry} is its path in the clone
+#: src/environments.ts
+msgid "{path}: {entry} cannot be inspected to confirm it syncs with the clone"
+msgstr "{path}：无法检查 {entry}，因而不能确认它会随克隆同步"
+
+#. Refusal: a request by path in your own group's environment names a folder that is, lies in or holds a folder holding .git; {entry} is that folder's path in the clone
+#: src/environments.ts
+msgid "{path}: {entry} is a Git repository of its own, which the clone's sync does not carry"
+msgstr "{path}：{entry} 是一个独立的 Git 仓库，而克隆的同步不会携带它"
+
+#. Refusal: a request by path in your own group's environment names a folder holding a link the clone's Git rules do not ignore; {entry} is the link's path in the clone
+#: src/environments.ts
+msgid "{path}: {entry} is a link, which the clone's sync does not carry"
+msgstr "{path}：{entry} 是一个链接，而克隆的同步不会携带链接"
+
+#. Refusal: a request by path in your own group's environment names a folder holding a special file, such as a pipe or a socket; {entry} is its path in the clone
+#: src/environments.ts
+msgid "{path}: {entry} is no regular file or folder, so the clone's sync does not carry it"
+msgstr "{path}：{entry} 既不是普通文件也不是文件夹，因此克隆的同步不会携带它"
 
 #. Config error; the key and `adapter`/`permissions`/`instruction`/`workspace` are the config file's own field names
 #: src/config.ts
@@ -845,6 +862,7 @@ msgstr "captain 必须解析出一个适配器"
 
 #. Guidance after a transfer to the Git host ran past its time limit
 #: src/space-git.ts
+#: src/space.ts
 msgid "Check the connection, then Retry."
 msgstr "请检查网络连接，然后重试。"
 
@@ -2297,9 +2315,12 @@ msgid "the config is not valid; fix it in Settings before the agent can answer"
 msgstr "配置无效；请先在设置中修复，智能体才能作答"
 
 #. Refusal during attachment admission
+#. Refusal during core shutdown
+#. Refusal during core shutdown
 #. Refusal: environment work asked once the core stops
 #: src/environments.ts
 #: src/service.ts
+#: src/session.ts
 msgid "The core is stopping."
 msgstr "核心服务正在停止。"
 
@@ -2584,6 +2605,7 @@ msgid "This session offers no way to end its run."
 msgstr "此会话没有可用来结束其运行的方式。"
 
 #. Refusal: the session's recorded working directory is not the project's working folder on this device
+#. Refusal: the session's recorded working directory is not the project's working folder on this device
 #: src/service.ts
 msgid "this session ran in {cwd}; continue it on the device whose folder it ran in"
 msgstr "该会话运行于 {cwd}；请在其运行文件夹所在的设备上继续"
@@ -2775,11 +2797,12 @@ msgstr "你已停止传输；你的提交仍然有效。Git 以无交互方式�
 msgid "Your merge is saved locally; Retry to send it once the host settles."
 msgstr "合并已保存在本地；待托管平台稳定后重试即可发送。"
 
-#. A package Git source failed without a recognized status; raw backing-host or unclassified stderr stays inside the core
-msgid "{host} answered with an error"
-msgstr "{host} 返回了错误"
+#. Refusal: your own group's request by path names a folder inside its spex repository's clone (environments-2), and this spec package lies elsewhere
+#: src/service.ts
+msgid "your own group's environment can request this spec package by path only from inside its clone; enable it in the project, or publish it and add it from the registry"
+msgstr "你自己的群组的环境只能按路径请求其克隆内的规约包；请在项目中启用它，或发布后从注册中心添加"
 
-#. Refusal: a nonignored subtree of your own group's path source cannot be read; {entry} is its path in the clone
-#: src/environments.ts
-msgid "{path}: {entry} cannot be inspected to confirm it syncs with the clone"
-msgstr "{path}：无法检查 {entry}，因而不能确认它会随克隆同步"
+#. A content-size rejection keeps access unchanged; no membership, sign-in, deletion or history-rewrite advice is implied
+#: src/space-git.ts
+msgid "Your saved commits remain on this device. Address the content limit, then Retry."
+msgstr "已保存的提交仍保留在此设备上。请先解决内容大小限制问题，然后重试。"

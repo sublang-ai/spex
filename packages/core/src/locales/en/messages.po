@@ -140,6 +140,8 @@ msgstr "{file} changed on disk since it was read"
 
 #. A storage fault as one line: the file, then the reason — itself a message
 #. A storage fault as one line: the file, then the reason — itself a message
+#. A storage fault as one line: the file, then the reason — itself a message
+#: src/config.ts
 #: src/files.ts
 #: src/service.ts
 msgid "{file}: {reason}"
@@ -165,8 +167,14 @@ msgstr "{group} is a group named like your login"
 msgid "{group} is not empty"
 msgstr "{group} is not empty"
 
+#. A package Git source failed without a recognized status; raw backing-host or unclassified stderr stays inside the core
+#: src/space.ts
+msgid "{host} answered with an error"
+msgstr "{host} answered with an error"
+
 #. A stopped transfer: the Git host answered with an HTTP error no other message reads; {host} is its display name, {status} the HTTP status Git printed
 #: src/space-git.ts
+#: src/space.ts
 msgid "{host} answered with an error (HTTP {status})"
 msgstr "{host} answered with an error (HTTP {status})"
 
@@ -194,6 +202,16 @@ msgstr "{host} listed no group {group}"
 #: src/space-git.ts
 msgid "{host} refused"
 msgstr "{host} refused"
+
+#. An explicit content-size rejection whose numeric limit is absent or ambiguous; host is the instance display name
+#: src/space-git.ts
+msgid "{host} refused content above its size limit"
+msgstr "{host} refused content above its size limit"
+
+#. A content-size rejection, naming only the instance and its reported limit, not the storage system or raw transport words
+#: src/space-git.ts
+msgid "{host} refused content above its size limit ({limit})"
+msgstr "{host} refused content above its size limit ({limit})"
 
 #. A stopped transfer's message; {host} is the remote's host
 #: src/space-git.ts
@@ -301,6 +319,26 @@ msgstr "{path} cannot be published: {issues}"
 msgid "{path} cannot stand as a folder on this device"
 msgstr "{path} cannot stand as a folder on this device"
 
+#. Refusal: a request by path in your own group's environment names a folder holding a file the clone's sync rules drop; {file} is that file's path in the clone
+#: src/environments.ts
+msgid "{path} holds {file}, which the clone's Git rules ignore, so it would not sync"
+msgstr "{path} holds {file}, which the clone's Git rules ignore, so it would not sync"
+
+#. Refusal: a request by path in your own group's environment names a folder holding a tracked file of a family that stays on the device, such as a *.tmp file forced into Git; {file} is that file's path in the clone
+#: src/environments.ts
+msgid "{path} holds {file}, which the clone's sync refuses to share"
+msgstr "{path} holds {file}, which the clone's sync refuses to share"
+
+#. Refusal: a request by path in your own group's environment names a folder under Spex's own paths, such as sessions/ or skills/
+#: src/environments.ts
+msgid "{path} is a path Spex keeps in your own group's clone"
+msgstr "{path} is a path Spex keeps in your own group's clone"
+
+#. Refusal: a request by path in your own group's environment names a folder the clone's sync rules drop, such as one named *.tmp
+#: src/environments.ts
+msgid "{path} is a path the clone's Git rules ignore, so it would not sync"
+msgstr "{path} is a path the clone's Git rules ignore, so it would not sync"
+
 #. Refusal: a project already holds this folder
 #: src/service.ts
 msgid "{path} is already registered"
@@ -338,6 +376,11 @@ msgstr "{path} is not a file"
 msgid "{path} is not a folder"
 msgstr "{path} is not a folder"
 
+#. Refusal: a request by path in your own group's environment names its clone's root
+#: src/environments.ts
+msgid "{path} is not a folder below your own group's clone's root"
+msgstr "{path} is not a folder below your own group's clone's root"
+
 #. Refusal: the folder fails the core's release checks; {issues} are the checks' own words
 #: src/environments.ts
 msgid "{path} is not a spec package release: {issues}"
@@ -354,30 +397,9 @@ msgid "{path} is not the root of a git work tree"
 msgstr "{path} is not the root of a git work tree"
 
 #. Refusal: a request by path names a folder outside the repository's working folder
-#. Refusal: a request by path names a folder outside the repository's working folder
 #: src/environments.ts
 msgid "{path} is outside the working folder"
 msgstr "{path} is outside the working folder"
-
-#. Refusal: a request by path in your own group's environment names a folder holding a file the clone's sync rules drop; {file} is that file's path in the clone
-#: src/environments.ts
-msgid "{path} holds {file}, which the clone's Git rules ignore, so it would not sync"
-msgstr "{path} holds {file}, which the clone's Git rules ignore, so it would not sync"
-
-#. Refusal: a request by path in your own group's environment names a folder under Spex's own paths, such as sessions/ or skills/
-#: src/environments.ts
-msgid "{path} is a path Spex keeps in your own group's clone"
-msgstr "{path} is a path Spex keeps in your own group's clone"
-
-#. Refusal: a request by path in your own group's environment names a folder the clone's sync rules drop, such as one named *.tmp
-#: src/environments.ts
-msgid "{path} is a path the clone's Git rules ignore, so it would not sync"
-msgstr "{path} is a path the clone's Git rules ignore, so it would not sync"
-
-#. Refusal: a request by path in your own group's environment names its clone's root
-#: src/environments.ts
-msgid "{path} is not a folder below your own group's clone's root"
-msgstr "{path} is not a folder below your own group's clone's root"
 
 #. Refusal: a request by path in your own group's environment names a folder outside its spex repository's clone
 #: src/environments.ts
@@ -388,31 +410,6 @@ msgstr "{path} is outside your own group's clone"
 #: src/environments.ts
 msgid "{path} is reached through a link, which the clone's sync does not carry"
 msgstr "{path} is reached through a link, which the clone's sync does not carry"
-
-#. Refusal: a request by path in your own group's environment names a folder that is, lies in or holds a folder holding .git; {entry} is that folder's path in the clone
-#: src/environments.ts
-msgid "{path}: {entry} is a Git repository of its own, which the clone's sync does not carry"
-msgstr "{path}: {entry} is a Git repository of its own, which the clone's sync does not carry"
-
-#. Refusal: a request by path in your own group's environment names a folder holding a tracked file of a family that stays on the device, such as a *.tmp file forced into Git; {file} is that file's path in the clone
-#: src/environments.ts
-msgid "{path} holds {file}, which the clone's sync refuses to share"
-msgstr "{path} holds {file}, which the clone's sync refuses to share"
-
-#. Refusal: a request by path in your own group's environment names a folder holding a link the clone's Git rules do not ignore; {entry} is the link's path in the clone
-#: src/environments.ts
-msgid "{path}: {entry} is a link, which the clone's sync does not carry"
-msgstr "{path}: {entry} is a link, which the clone's sync does not carry"
-
-#. Refusal: a request by path in your own group's environment names a folder holding a special file, such as a pipe or a socket; {entry} is its path in the clone
-#: src/environments.ts
-msgid "{path}: {entry} is no regular file or folder, so the clone's sync does not carry it"
-msgstr "{path}: {entry} is no regular file or folder, so the clone's sync does not carry it"
-
-#. Refusal: your own group's request by path names a folder inside its spex repository's clone (environments-2), and this spec package lies elsewhere
-#: src/service.ts
-msgid "your own group's environment can request this spec package by path only from inside its clone; enable it in the project, or publish it and add it from the registry"
-msgstr "your own group's environment can request this spec package by path only from inside its clone; enable it in the project, or publish it and add it from the registry"
 
 #. Spec notice; `intents/` is a directory name and stays as it is
 #: src/specs.ts
@@ -484,6 +481,26 @@ msgstr "{path} must resolve an adapter"
 #: src/config.ts
 msgid "{path} names absent session player \"{playerId}\""
 msgstr "{path} names absent session player \"{playerId}\""
+
+#. Refusal: a nonignored subtree of your own group's path source cannot be read; {entry} is its path in the clone
+#: src/environments.ts
+msgid "{path}: {entry} cannot be inspected to confirm it syncs with the clone"
+msgstr "{path}: {entry} cannot be inspected to confirm it syncs with the clone"
+
+#. Refusal: a request by path in your own group's environment names a folder that is, lies in or holds a folder holding .git; {entry} is that folder's path in the clone
+#: src/environments.ts
+msgid "{path}: {entry} is a Git repository of its own, which the clone's sync does not carry"
+msgstr "{path}: {entry} is a Git repository of its own, which the clone's sync does not carry"
+
+#. Refusal: a request by path in your own group's environment names a folder holding a link the clone's Git rules do not ignore; {entry} is the link's path in the clone
+#: src/environments.ts
+msgid "{path}: {entry} is a link, which the clone's sync does not carry"
+msgstr "{path}: {entry} is a link, which the clone's sync does not carry"
+
+#. Refusal: a request by path in your own group's environment names a folder holding a special file, such as a pipe or a socket; {entry} is its path in the clone
+#: src/environments.ts
+msgid "{path}: {entry} is no regular file or folder, so the clone's sync does not carry it"
+msgstr "{path}: {entry} is no regular file or folder, so the clone's sync does not carry it"
 
 #. Config error; the key and `adapter`/`permissions`/`instruction`/`workspace` are the config file's own field names
 #: src/config.ts
@@ -845,6 +862,7 @@ msgstr "captain must resolve an adapter"
 
 #. Guidance after a transfer to the Git host ran past its time limit
 #: src/space-git.ts
+#: src/space.ts
 msgid "Check the connection, then Retry."
 msgstr "Check the connection, then Retry."
 
@@ -2297,9 +2315,12 @@ msgid "the config is not valid; fix it in Settings before the agent can answer"
 msgstr "the config is not valid; fix it in Settings before the agent can answer"
 
 #. Refusal during attachment admission
+#. Refusal during core shutdown
+#. Refusal during core shutdown
 #. Refusal: environment work asked once the core stops
 #: src/environments.ts
 #: src/service.ts
+#: src/session.ts
 msgid "The core is stopping."
 msgstr "The core is stopping."
 
@@ -2584,6 +2605,7 @@ msgid "This session offers no way to end its run."
 msgstr "This session offers no way to end its run."
 
 #. Refusal: the session's recorded working directory is not the project's working folder on this device
+#. Refusal: the session's recorded working directory is not the project's working folder on this device
 #: src/service.ts
 msgid "this session ran in {cwd}; continue it on the device whose folder it ran in"
 msgstr "this session ran in {cwd}; continue it on the device whose folder it ran in"
@@ -2775,11 +2797,12 @@ msgstr "You stopped the transfer; your commits stand. Git runs without prompts, 
 msgid "Your merge is saved locally; Retry to send it once the host settles."
 msgstr "Your merge is saved locally; Retry to send it once the host settles."
 
-#. A package Git source failed without a recognized status; raw backing-host or unclassified stderr stays inside the core
-msgid "{host} answered with an error"
-msgstr "{host} answered with an error"
+#. Refusal: your own group's request by path names a folder inside its spex repository's clone (environments-2), and this spec package lies elsewhere
+#: src/service.ts
+msgid "your own group's environment can request this spec package by path only from inside its clone; enable it in the project, or publish it and add it from the registry"
+msgstr "your own group's environment can request this spec package by path only from inside its clone; enable it in the project, or publish it and add it from the registry"
 
-#. Refusal: a nonignored subtree of your own group's path source cannot be read; {entry} is its path in the clone
-#: src/environments.ts
-msgid "{path}: {entry} cannot be inspected to confirm it syncs with the clone"
-msgstr "{path}: {entry} cannot be inspected to confirm it syncs with the clone"
+#. A content-size rejection keeps access unchanged; no membership, sign-in, deletion or history-rewrite advice is implied
+#: src/space-git.ts
+msgid "Your saved commits remain on this device. Address the content limit, then Retry."
+msgstr "Your saved commits remain on this device. Address the content limit, then Retry."

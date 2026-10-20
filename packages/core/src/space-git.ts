@@ -385,6 +385,42 @@ export function membersDecide(): string {
   });
 }
 
+/** Read the instance's complete size-rejection sentence, not a size-
+ * looking filename, URL or quoted commit subject (space-15, DR-129).
+ * The numeric capture belongs to "the ... limit", never a blob's size.
+ * Raw transport words remain in GitRun, not in the public failure. */
+function contentSizeFailure(stderr: string, host: string): GitFailure | null {
+  const limits: Array<string | null> = [];
+  for (const line of stderr.split("\n")) {
+    const words = /^remote:\s?(.*)$/.exec(line.trimEnd())?.[1]?.trim();
+    if (!words) continue;
+    const match = /^(?:[a-z][a-z0-9._-]*:\s*)?You are attempting to check in one or more blobs which exceed the (?:(\d{1,12}(?:\.\d{1,6})?\s*(?:[kmgt]i?b|bytes?))\s+|(?:file\s+)?size\s+)limit[.:]?$/i.exec(words);
+    if (match) limits.push(match[1] ?? null);
+  }
+  if (limits.length === 0) return null;
+  const known = new Set(limits.filter((value): value is string => value !== null));
+  const limit = known.size === 1 && limits.every((value) => value !== null) ? [...known][0] : null;
+  return {
+    cause: "size_limit",
+    message: limit
+      ? i18n._({
+          id: "{host} refused content above its size limit ({limit})",
+          values: { host, limit },
+          comment: "A content-size rejection, naming only the instance and its reported limit, not the storage system or raw transport words",
+        })
+      : i18n._({
+          id: "{host} refused content above its size limit",
+          values: { host },
+          comment: "An explicit content-size rejection whose numeric limit is absent or ambiguous; host is the instance display name",
+        }),
+    guidance: i18n._({
+      id: "Your saved commits remain on this device. Address the content limit, then Retry.",
+      comment: "A content-size rejection keeps access unchanged; no membership, sign-in, deletion or history-rewrite advice is implied",
+    }),
+    retry: true,
+  };
+}
+
 /** The host asks this device to sign in again (space-15, git-host-11). */
 export function signInAgain(): string {
   return i18n._({
@@ -437,7 +473,12 @@ export function classifyHostTransportFailure(run: GitRun, host: string): GitFail
       retry: true,
     };
   }
-  if (/returned error: 403|HTTP 403|Permission denied|protected branch|pre-receive hook declined|You are not allowed/i.test(text)) {
+  if (/returned error: 403|HTTP 403|Permission denied|protected branch|You are not allowed/i.test(text)) {
+    return { cause: "refused", message: hostRefused(host, hostWords(text)), guidance: membersDecide(), retry: true };
+  }
+  const size = contentSizeFailure(text, host);
+  if (size) return size;
+  if (/pre-receive hook declined/i.test(text)) {
     return { cause: "refused", message: hostRefused(host, hostWords(text)), guidance: membersDecide(), retry: true };
   }
   // An HTTP status no rule above reads is the host's own error, never
