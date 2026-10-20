@@ -55,13 +55,14 @@ export const portable = (file: string): boolean =>
 /** No spec package folder: what a caller naming none passes. */
 const NO_PACKAGES: ReadonlySet<string> = new Set();
 
-/** The record and settings paths no spec package folder lies in
- * (storage-11). */
-const NOT_PACKAGES = /^(?:config|sessions|intents|authoring)\//;
+/** The record and settings paths, and the folders the catalog ignores,
+ * no spec package folder lies in (storage-11). */
+export const NOT_PACKAGES = /^(?:config|sessions|intents|authoring|packages|skills|local|\.spex-uploads)\//;
 
 /** The folders below a clone's root, outside its record and settings
- * paths, that hold a spec package's `meta.yaml` among `paths` — each one
- * sync unit with every file under it (storage-11, DR-125). */
+ * paths and the folders the catalog ignores, that hold a spec package's
+ * `meta.yaml` among `paths` — each one sync unit with every file under
+ * it (storage-11, DR-125). */
 export function specPackageFolders(paths: Iterable<string>): Set<string> {
   const folders = new Set<string>();
   for (const file of paths) {

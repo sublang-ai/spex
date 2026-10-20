@@ -22,7 +22,7 @@ import { Home } from "./home.js";
 import { starterText, templatePath, type PlaybookModules } from "./config.js";
 import { speak } from "./i18n.js";
 import type { ProjectInfo } from "./protocol.js";
-import { applyStorageSelection, EMPTY_TREE, planStorageMerge, prepareStorageGitFiles, reserveStorageHome, selectStorageMerge as selectStorageMergeWith, StorageWriteRefused, validateStorageTree, type StorageChoice } from "./storage-git.js";
+import { applyStorageSelection, EMPTY_TREE, planStorageMerge, planStorageUnits, prepareStorageGitFiles, reserveStorageHome, selectStorageMerge as selectStorageMergeWith, StorageWriteRefused, validateStorageTree, type StorageChoice } from "./storage-git.js";
 import { scratchDir } from "./testing/scratch.js";
 
 /** One fixed machine identity for the in-process writers and the
@@ -381,16 +381,18 @@ test("storage-16: an authoring session and the environment are each one unit cho
   } finally { dispose(); }
 });
 
-test("storage-16: a spec package folder is one unit chosen whole, a folder nested in it and a file added on one side within it, and a file beside it its own", async () => {
+test("storage-16: a spec package folder is one unit chosen whole, a folder nested in it and a file added on one side within it, a folder made one on one side, and a file beside it its own", async () => {
   const { home, key, clone, commit, dispose } = setup();
   const write = (path: string, text: string): void => { mkdirSync(dirname(join(clone, path)), { recursive: true }); writeFileSync(join(clone, path), text); };
   try {
-    for (const path of ["mine/notes/meta.yaml", "mine/notes/skills/en/notes/SKILL.md", "mine/notes/inner/meta.yaml", "mine/README.md"]) write(path, "base");
+    for (const path of ["mine/notes/meta.yaml", "mine/notes/skills/en/notes/SKILL.md", "mine/notes/inner/meta.yaml", "mine/README.md", "mine/drafts/b.md"]) write(path, "base");
     commit("base");
     git(clone, "branch", "other");
-    write("mine/notes/meta.yaml", "ours"); write("mine/README.md", "ours"); commit("ours");
+    // One side makes `mine/drafts/` a spec package folder while the other
+    // edits a file under it: one unit on every side, in conflict.
+    write("mine/notes/meta.yaml", "ours"); write("mine/README.md", "ours"); write("mine/drafts/meta.yaml", "ours"); commit("ours");
     git(clone, "checkout", "-q", "other");
-    write("mine/notes/skills/en/notes/SKILL.md", "theirs"); write("mine/notes/skills/en/notes/extra.md", "theirs"); commit("theirs");
+    write("mine/notes/skills/en/notes/SKILL.md", "theirs"); write("mine/notes/skills/en/notes/extra.md", "theirs"); write("mine/drafts/b.md", "theirs"); commit("theirs");
     git(clone, "checkout", "-q", "spex");
     const plan = planStorageMerge(clone, "HEAD", "other");
     const folder = plan.units.find((u) => u.name === "mine/notes/");
@@ -399,9 +401,22 @@ test("storage-16: a spec package folder is one unit chosen whole, a folder neste
     assert.deepEqual(folder?.changed, { ours: true, theirs: true });
     assert.ok(!plan.units.some((u) => u.name !== "mine/notes/" && u.name.startsWith("mine/notes/")), "no file or nested folder under it is a unit of its own");
     assert.equal(plan.units.find((u) => u.name === "mine/README.md")?.choice, "ours", "a file beside it is its own unit");
+    const drafts = plan.units.find((u) => u.name === "mine/drafts/");
+    assert.equal(drafts?.choice, "conflict", "a meta.yaml on one side makes the folder one unit on both");
+    assert.deepEqual(drafts?.paths, ["mine/drafts/b.md", "mine/drafts/meta.yaml"]);
+    assert.ok(!plan.units.some((u) => u.name === "mine/drafts/b.md"), "the edited file is no unit of its own");
+    // A `meta.yaml` under a folder the catalog ignores forms no unit.
+    const ignored = planStorageUnits({
+      ours: new Map([["packages/acme/kit/meta.yaml", "a"], ["packages/acme/kit/x.md", "a"]]),
+      theirs: new Map([["packages/acme/kit/meta.yaml", "a"], ["packages/acme/kit/x.md", "b"]]),
+      base: new Map([["packages/acme/kit/meta.yaml", "a"], ["packages/acme/kit/x.md", "a"]]),
+    });
+    assert.deepEqual(ignored.map((u) => u.name), ["packages/acme/kit/meta.yaml", "packages/acme/kit/x.md"]);
     merge(clone);
     await assert.rejects(() => selectStorageMerge(home, key, { "mine/notes/meta.yaml": "ours" }), /unknown storage unit/);
-    await selectStorageMerge(home, key, { "mine/notes/": "theirs" });
+    await selectStorageMerge(home, key, { "mine/notes/": "theirs", "mine/drafts/": "ours" });
+    assert.equal(readFileSync(join(clone, "mine", "drafts", "b.md"), "utf8"), "base", "this device's folder whole: its b.md unchanged here");
+    assert.equal(readFileSync(join(clone, "mine", "drafts", "meta.yaml"), "utf8"), "ours");
     assert.equal(readFileSync(join(clone, "mine", "notes", "meta.yaml"), "utf8"), "base", "the host's folder whole: its meta.yaml unchanged there");
     assert.equal(readFileSync(join(clone, "mine", "notes", "skills", "en", "notes", "SKILL.md"), "utf8"), "theirs");
     assert.equal(readFileSync(join(clone, "mine", "notes", "skills", "en", "notes", "extra.md"), "utf8"), "theirs");
