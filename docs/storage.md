@@ -161,6 +161,8 @@ your own group's spex repository receives the settings, with every `playbooks.<i
 preferences move to `local/prefs.json`, and the former home's `.git` moves to `local/former-home.git`, keeping the old remote aside.
 Original bytes stay under `local/migrations/<id>/inputs/` with a receipt; an interrupted migration resumes on the next start.
 A home whose `home.yaml` names one instance in format 1 takes format 2 once at startup under the home lease, its instance written as its origin and its app token re-keyed to that origin in the same step, with a receipt beside the groups migration's; an older Spex refuses the migrated home.
+In the same migration every clone at that instance moves under its folder, each by one rename with its pair, sync preferences and forge cache entry following: one recording the host's id at its path there with its remote renamed to the folder, any other outside your own group's folder at its key keeping its remote; your own group's spex repository renames its remote and keeps its folder, and the projects never shared stay.
+A clone a live session's lease holds keeps its key and remote, named in the receipt, until its next sync or the next start moves it.
 Default-home startup also imports the former CLI session directory into your own group's spex repository.
 Skipped files remain in place with their reasons reported.
 Use `playbook migrate-session <id>` to migrate a session in an explicitly configured store; `--with <path>` selects configuration files.

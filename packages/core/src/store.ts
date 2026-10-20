@@ -35,7 +35,7 @@ import {
 import { readJsonFile, StorageFormatError, VersionConflictError, writeApplicationFile } from "./files.js";
 import { Home, repositoryNameFor, splitKey } from "./home.js";
 import { folderRemote, needsGroupsMigration, migrateFormerHome } from "./migrate-home.js";
-import { migrateInstances, needsInstancesMigration } from "./migrate-instances.js";
+import { deferredMoves, migrateInstances, needsInstancesMigration, settleDeferred } from "./migrate-instances.js";
 import { initializeClone } from "./storage-git.js";
 import { seedConfig } from "./config.js";
 import { createRequire } from "node:module";
@@ -434,6 +434,9 @@ export class Store {
   private readonly repositories = new Map<string, SpexRepository>();
   private readonly prefs = new Map<string, unknown>();
   private readonly forgeCache = new Map<string, { at: number; state: ForgeState }>();
+  /** The clones the instances migration deferred (DR-127), as its
+   * receipt named them at this open, less those moved since. */
+  private deferred: { from: string; to: string }[] = [];
   private readonly sessionProblems = new Map<string, StorageDiagnostic>();
   /** Current execution refusals are a read model, never session files. */
   private readonly continuationRefusals = new Map<string, string>();
@@ -495,7 +498,12 @@ export class Store {
         // migration, which merges a late legacy import into the home as
         // it reads it; the home that migration writes for a former
         // layout is already in format 2.
-        if (needsInstancesMigration(store.dir)) migrateInstances(store.dir);
+        if (needsInstancesMigration(store.dir)) {
+          migrateInstances(store.dir, {
+            env: store.env,
+            ...(store.options.machineIdentity !== undefined ? { machineIdentity: store.options.machineIdentity } : {}),
+          });
+        }
         if (store.legacyImported || needsGroupsMigration(store.dir)) await migrateFormerHome(store.dir, {
           env: store.env,
           ...(options.own ? { own: options.own } : {}),
@@ -569,6 +577,17 @@ export class Store {
     this.ensureOwnRepository();
     this.prepareSessionDirs();
     this.loadApplication();
+    this.deferred = deferredMoves(this.dir);
+  }
+
+  /** The clones the instances migration left where they stood, a
+   * session's lease holding them (DR-127): each by the key it keeps,
+   * under which it is listed, and the key under its instance's folder
+   * its next sync moves it to, while it still stands at the key it kept. */
+  deferredMoves(): { from: string; to: string }[] {
+    return this.deferred.filter((move) => {
+      try { return lstatSync(this.homeFile.clonePath(move.from)).isDirectory(); } catch { return false; }
+    }).map((move) => ({ ...move }));
   }
 
   /** Your own group's clone always stands, its config seeded from the
@@ -1485,6 +1504,13 @@ export class Store {
     for (const { from, to: next } of moves) {
       const cached = this.forgeCache.get(from);
       if (cached) { this.forgeCache.delete(from); this.forgeCache.set(next, cached); }
+    }
+    // A deferred clone moved is the migration's no longer (DR-127).
+    const settled = moves.map((move) => move.from).filter((key) => this.deferred.some((move) => move.from === key));
+    if (settled.length > 0) {
+      this.deferred = this.deferred.filter((move) => !settled.includes(move.from));
+      try { settleDeferred(this.dir, settled); }
+      catch (error) { console.error(`spex: the instances migration's receipt still names ${settled.join(", ")}: ${error instanceof Error ? error.message : String(error)}`); }
     }
   }
 

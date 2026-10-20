@@ -8,14 +8,20 @@
 // behind the instance; another account's spex repository stands under
 // that login; a group named like your login stands apart and takes no
 // folder; a transfer is listed under its new group before its sync moves
-// the clone; and Git's lines carry no URL under the Git origin, a status
-// no rule reads standing as the host's error.
+// the clone; a clone keyed outside the instance's folder, or one the
+// instances migration deferred, moves under it at its next sync; and
+// Git's lines carry no URL under the Git origin, a status no rule reads
+// standing as the host's error.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, renameSync, writeFileSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { createSessionStore } from "@sublang/playbook/session-store";
+import { stringify as stringifyYaml } from "yaml";
 import { Home } from "./home.js";
+import { needsInstancesMigration } from "./migrate-instances.js";
 import { clonePath, createSpaceHarness, hostFolder, hostKey, repositoryOf, stringsOf } from "./testing/space-harness.js";
 import { STANDIN_STORAGE, type StandinHost } from "./testing/standin-host.js";
 import type { GroupsState, ServerMessage } from "./protocol.js";
@@ -292,4 +298,80 @@ test("space-60: a clone an earlier Spex keyed outside the instance's folder, its
   assert.equal(own.sync.phase, "done", JSON.stringify(own.sync));
   assert.ok(existsSync(join(clonePath(home.dataDir, HOST_OWN), ".git")));
   assert.ok(!existsSync(clonePath(home.dataDir, hostKey(host, HOST_OWN))));
+});
+
+test("space-60: a clone the instances migration deferred, a live session's lease beneath it, is listed by the key it kept and syncs only once its next sync has moved it under the instance's folder, its remote renamed", async (t) => {
+  const host = await startHost();
+  const folder = hostFolder(host);
+  const home = await startHome("deferred", { host, project: false, extra: { signIn: "browser" } });
+  let mark = home.client.mark();
+  await signIn(home, host);
+  await home.client.waitRepository(mark, HOST_OWN, (repository) => repository.sync.phase === "done", 30_000);
+  const code = gitFolder("deferred");
+  const { key: local } = await addFolder(home, code);
+  mark = home.client.mark();
+  await home.client.expectOk("space.pick", { repository: local, choice: { kind: "create", groupId: "2002", name: "deferred" } });
+  const key = hostKey(host, "acme/deferred-spex");
+  const picked = await home.client.waitRepository(mark, key, (repository) => repository.sync.phase === "done", 30_000);
+  assert.ok(picked.id);
+  await home.stop();
+
+  // The home as a Spex before DR-127 left it: `home.yaml` in format 1,
+  // the clone keyed by its path in the instance with its remote
+  // `origin`, your own group's remote `origin` too.
+  const legacy = "acme/deferred-spex";
+  const legacyClone = clonePath(home.dataDir, legacy);
+  mkdirSync(dirname(legacyClone), { recursive: true });
+  renameSync(clonePath(home.dataDir, key), legacyClone);
+  git(legacyClone, "remote", "rename", folder, "origin");
+  git(clonePath(home.dataDir, HOST_OWN), "remote", "rename", folder, "origin");
+  const current = Home.load(home.dataDir).file;
+  writeFileSync(join(home.dataDir, "home.yaml"), stringifyYaml({
+    format: 1, device: current.device,
+    host: { url: current.origin, clientId: "spex", account: current.instances[0].account },
+    own: current.own, folders: current.folders.map((pair) => pair.repository === key ? { ...pair, repository: legacy } : pair),
+  }));
+  // A writer of another process holds the clone where it is.
+  const sessions = createSessionStore({ sessionsDir: join(legacyClone, "sessions") });
+  await sessions.prepare();
+  const live = await sessions.acquireManagement(randomUUID());
+  let released = false;
+  try {
+    const again = await startHome("deferred-again", { dataDir: home.dataDir, project: false, extra: { signIn: "browser" } });
+    t.after(() => again.stop());
+    assert.ok(existsSync(join(legacyClone, ".git")) && !existsSync(clonePath(home.dataDir, key)), "deferred, it keeps its key");
+    assert.deepEqual(git(clonePath(home.dataDir, HOST_OWN), "remote").split("\n"), [folder], "your own group's remote is renamed in place");
+    mark = again.client.mark();
+    await again.client.expectOk("space.refresh", {});
+    const state = await again.client.waitSpace(mark, (candidate) => candidate.read.phase === "idle" && candidate.readAt !== null, 30_000);
+    const rows = state.groups.flatMap((group) => group.repositories).filter((repository) => repository.id === picked.id);
+    assert.deepEqual(rows.map((repository) => repository.key), [legacy], "listed once, by the key it kept");
+    assert.ok(entry(state, "acme").repositories.some((repository) => repository.key === legacy), "under its group at the instance");
+
+    // Its sync moves it first, which the lease refuses: nothing syncs.
+    const stopped = await again.client.settle("space.sync", { repository: legacy });
+    assert.ok(stopped.sync.phase === "stopped" && stopped.sync.cause === "lease" && stopped.sync.step === "check", JSON.stringify(stopped.sync));
+    assert.ok(existsSync(join(legacyClone, ".git")) && !existsSync(clonePath(home.dataDir, key)));
+
+    await live.release();
+    released = true;
+    mark = again.client.mark();
+    await again.client.expectOk("space.sync", { repository: legacy });
+    const moved = await again.client.waitRepository(mark, key, (repository) => repository.sync.phase !== "running" && repository.sync.phase !== "idle", 30_000);
+    assert.deepEqual([moved.sync.phase, moved.state, moved.id], ["done", "reachable", picked.id], JSON.stringify(moved.sync));
+    const clone = clonePath(home.dataDir, key);
+    assert.ok(existsSync(join(clone, ".git")) && !existsSync(legacyClone), "moved under the instance's folder");
+    assert.deepEqual(git(clone, "remote").split("\n"), [folder], "its remote named by the folder");
+    assert.equal(git(clone, "config", "--get", "branch.spex.remote"), folder);
+    assert.equal(Home.load(home.dataDir).keyForFolder(code), key, "its pair follows it");
+    // The migration's receipt names it no longer, so no start moves
+    // anything at the key it kept.
+    assert.equal(needsInstancesMigration(home.dataDir), false);
+    const receipts = readdirSync(join(home.dataDir, "local", "migrations"));
+    const deferred = receipts.flatMap((id) => {
+      const receipt = JSON.parse(readFileSync(join(home.dataDir, "local", "migrations", id, "receipt.json"), "utf8")) as { kind: string; deferred?: unknown[] };
+      return receipt.kind === "instances" ? receipt.deferred ?? [] : [];
+    });
+    assert.deepEqual(deferred, []);
+  } finally { if (!released) await live.release(); }
 });

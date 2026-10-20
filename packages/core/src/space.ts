@@ -13,10 +13,11 @@
 
 import { randomUUID } from "node:crypto";
 import { resolveMachineIdentity } from "@sublang/playbook/machine-identity";
-import { closeSync, existsSync, lstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, readSync, readdirSync, realpathSync, renameSync, rmdirSync, rmSync, statSync, type Dirent } from "node:fs";
+import { closeSync, existsSync, lstatSync, mkdirSync, mkdtempSync, openSync, readSync, readdirSync, realpathSync, renameSync, rmSync, statSync, type Dirent } from "node:fs";
 import { homedir, hostname, tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { type StorageDiagnostic } from "./app-storage.js";
+import { heldSessionLease, occupied, pruneEmptyFolders } from "./clone-moves.js";
 import { readJsonFile, StorageFormatError, UUID, writeApplicationFile } from "./files.js";
 import { withGitCredential, type GitCredentialHandle } from "./git-credential.js";
 import {
@@ -26,7 +27,6 @@ import {
 import { kebab, splitKey } from "./home.js";
 import { i18n } from "./i18n.js";
 import { instanceFolder, instanceSegmentOf, isInstanceFolder } from "./instance.js";
-import { classifyOwnerMachine, probeProcess } from "./root-lease.js";
 import type {
   GroupsState,
   RepositoryState,
@@ -338,102 +338,10 @@ function hostStop(step: SyncStep, error: unknown, host: string): SpaceStopped {
   }
 }
 
-/** Remove the folders a move left empty, up to the workspace itself. */
-function pruneEmptyFolders(dir: string, stopAt: string): void {
-  let current = resolve(dir);
-  const root = resolve(stopAt);
-  while (current !== root && current.startsWith(`${root}/`)) {
-    try {
-      if (readdirSync(current).length > 0) return;
-      rmdirSync(current);
-    } catch { return; }
-    current = dirname(current);
-  }
-}
-
-/** Whether two paths name one file — a case-only rename's source and
- * destination on a filesystem that folds case (space-60). */
-function sameFile(a: string, b: string): boolean {
-  try {
-    const one = statSync(a);
-    const two = statSync(b);
-    return one.dev === two.dev && one.ino === two.ino;
-  } catch { return false; }
-}
-
-/** Whether a move's destination is taken by anything but its source: a
- * case-folding rename re-cases the final component alone, so the clone
- * itself is its destination only under the same parent (space-60); under
- * another spelling of its group it counts as taken (space-59). A folder
- * on the destination's path below `workspace` that resolves under
- * another spelling on disk takes it too, its leaf absent or not: the
- * rename would land under the disk's spelling while the home records the
- * new key. A missing folder takes nothing. */
-function occupied(from: string, to: string, workspace: string): boolean {
-  if (existsSync(to) && !(sameFile(from, to) && dirname(from) === dirname(to))) return true;
-  const rel = relative(workspace, dirname(to));
-  if (rel === "" || rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel)) return false;
-  let parent = workspace;
-  for (const part of rel.split(sep)) {
-    const next = join(parent, part);
-    if (!existsSync(next)) return false;
-    let names: string[];
-    try { names = readdirSync(parent); } catch { return true; }
-    if (!names.includes(part)) return true;
-    parent = next;
-  }
-  return false;
-}
-
-/** Playbook's session lease owner as it writes one (`owner.json`, schema
- * 1): mirrored here to read a canonical lease, never to write one. */
-const LEASE_OWNER_KEYS = ["acquiredAt", "hostname", "kind", "ownerToken", "pid", "schemaVersion", "sessionId"];
-const PLAYBOOK_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
-const LEASE_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
-
-/** Whether a canonical lease `<sessions>/.<id>.lock` is harmless to a
- * move: a private real directory holding only a private regular
- * `owner.json` of the supported shape for that session, whose `hostname`
- * the root lease's rule reads as this machine — its identity, or the
- * legacy host name — for a process proven dead (storage-26). Anything
- * else — a symlink, a malformed or unsupported record, another machine's,
- * a live process, a probe answering neither way — holds the clone. */
-function deadOwnLease(dir: string, id: string, identity: string | undefined): boolean {
-  try {
-    const lease = lstatSync(dir);
-    if (!lease.isDirectory() || (lease.mode & 0o7777) !== 0o700) return false;
-    const names = readdirSync(dir);
-    if (names.length !== 1 || names[0] !== "owner.json") return false;
-    const file = lstatSync(join(dir, "owner.json"));
-    if (!file.isFile() || (file.mode & 0o7777) !== 0o600) return false;
-    const owner = JSON.parse(readFileSync(join(dir, "owner.json"), "utf8")) as Record<string, unknown> | null;
-    if (!owner || typeof owner !== "object" || Array.isArray(owner)) return false;
-    if (Object.keys(owner).sort().join(",") !== LEASE_OWNER_KEYS.join(",")) return false;
-    if (owner.schemaVersion !== 1 || owner.kind !== "captain-session-lease" || owner.sessionId !== id) return false;
-    if (typeof owner.ownerToken !== "string" || !PLAYBOOK_UUID.test(owner.ownerToken)) return false;
-    if (!Number.isSafeInteger(owner.pid) || (owner.pid as number) <= 0) return false;
-    if (typeof owner.acquiredAt !== "string" || !LEASE_TIMESTAMP.test(owner.acquiredAt) || new Date(Date.parse(owner.acquiredAt)).toISOString() !== owner.acquiredAt) return false;
-    if (identity === undefined || typeof owner.hostname !== "string" || owner.hostname.trim().length === 0) return false;
-    if (classifyOwnerMachine(owner.hostname, identity, hostname()) !== "local") return false;
-    return probeProcess(owner.pid as number).state === "dead";
-  } catch { return false; }
-}
-
-/** The first session of a clone whose canonical Playbook lease
- * `sessions/.<id>.lock` holds the clone where it is (deadOwnLease).
- * Read synchronously, so a move reads it at its rename's instant; it
- * takes and waits for no lease. */
-function heldSessionLease(clone: string, identity: string | undefined): string | undefined {
-  const dir = join(clone, "sessions");
-  let names: string[];
-  try { names = readdirSync(dir); }
-  catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined; throw error; }
-  for (const name of names.sort()) {
-    const id = /^\.(.+)\.lock$/.exec(name)?.[1];
-    if (!id || !UUID.test(id)) continue;
-    if (!deadOwnLease(join(dir, name), id, identity)) return id;
-  }
-  return undefined;
+/** A move stopped: the clone changed between the sync's read and its
+ * rename. */
+function movedMeanwhile(key: string): SpaceStopped {
+  return new SpaceStopped("check", { cause: "git", message: changedMeanwhile(`workspace/${key}`), guidance: retryGuidance(), retry: true });
 }
 
 /** A unit's write refused, or a move stopped, for a session's lease or an
@@ -960,6 +868,11 @@ class RepositorySync {
    * `id` at this instant (DR-111): a move checks them at its rename. */
   recordsNow(remote: string | null, id: string): boolean {
     return this.remoteNow().url === remote && this.configNow("spex.repositoryId") === id;
+  }
+
+  /** The host's id the clone records at this instant, if any. */
+  recordedIdNow(): string | null {
+    return this.configNow("spex.repositoryId");
   }
 
   /** The host's id of the repository whose creation by the core the
@@ -3303,7 +3216,7 @@ export class SpaceManager {
     const here = (await Promise.all(store.listRepositories().map(async (repository) => {
       try { return await this.machine(repository.key).readFacts(); } catch { return { remote: null, id: null }; }
     }))).some((facts) => facts.id === hostId || listingFor(view, facts.id, facts.remote)?.repository.id === hostId);
-    if (here || store.repository(key) || existsSync(store.home.clonePath(key))) {
+    if (here || store.repository(key) || existsSync(store.home.clonePath(key)) || store.deferredMoves().some((move) => move.to === key)) {
       throw new CoreError("invalid_request", i18n._({ id: "{name} is on this device already", values: { name: listing.repository.path }, comment: "Refusal of a join: the spex repository has a clone here" }));
     }
     const path = folder === undefined ? undefined : resolve(folder);
@@ -3799,8 +3712,11 @@ export class SpaceManager {
   /** The Check step's read of the host for one clone (space-12): follow
    * a rename or a transfer on a sync (space-60), take the URL the host
    * hands over, and prepare the branch before a first push (git-host-7).
+   * A clone the instances migration deferred moves under its instance's
+   * folder first, on a sync, wherever its remote lies (DR-127).
    * Undefined for a clone whose remote is not on the host. */
   async hostCheck(machine: RepositorySync, op: SpaceOp, internal = false): Promise<{ remote: string; readOnly: boolean } | undefined> {
+    if (op === "sync") await this.moveDeferred(machine);
     const facts = await machine.readFacts();
     if (!this.atHost(facts)) return undefined;
     if (!this.signedIn()) throw new SpaceStopped("check", { cause: "reauth", message: signInAgain(), guidance: signInThenRetry(), retry: true });
@@ -3914,26 +3830,59 @@ export class SpaceManager {
    * under it (DR-127): one rename at its instant, once the clone still
    * reads the remote the check read before asking the host — `remote` —
    * and records the host's id, the check's own recording of it included,
-   * and still lies where the home says. A destination taken by anything
-   * but the clone itself — a case-only rename's is the same folder —
-   * stops the sync; writers beneath resolve their paths at their own
-   * instants, and a process holding the old path keeps it. In the same
-   * step, a remote still named `origin` takes the instance's folder's
-   * name. */
+   * and still lies where the home says (renameClone). In the same step,
+   * a remote still named `origin` takes the instance's folder's name. */
   private async moveInSync(machine: RepositorySync, to: string, id: string, remote: string | null, accountGeneration: number): Promise<void> {
     const store = this.host.store;
     const from = machine.key;
     const source = machine.repository.dir;
-    const target = store.home.clonePath(to);
-    const moved = (): SpaceStopped => new SpaceStopped("check", { cause: "git", message: changedMeanwhile(`workspace/${from}`), guidance: retryGuidance(), retry: true });
     const identity = await this.machineIdentity();
     // Nothing is awaited from here to the rename.
     try { this.assertTargetAccount(accountGeneration); }
     catch (error) { throw hostStop("check", error, this.hostName()); }
-    if (!machine.recordsNow(remote, id)) throw moved();
-    if (store.repository(from)?.dir !== source || machine.key !== from) throw moved();
-    // A session's lease beneath the clone holds it where it is: its writer
-    // resolved that path (space-60).
+    if (!machine.recordsNow(remote, id)) throw movedMeanwhile(from);
+    if (store.repository(from)?.dir !== source || machine.key !== from) throw movedMeanwhile(from);
+    this.renameClone(machine, to, identity);
+    // The rename follows the move: under its old key, a clone keyed
+    // outside every instance's folder resolves no remote by that name.
+    const folder = instanceSegmentOf(to);
+    if (folder !== null) machine.nameRemoteBy(folder);
+    await this.afterMove([{ from, to }]);
+  }
+
+  /** A clone the instances migration left where it stood, a session's
+   * lease holding it (DR-127), moves under its instance's folder at its
+   * next sync, before anything is synced: one rename at its instant
+   * (renameClone), once it still lies where the home says; its remote,
+   * where it records the host's id, takes that folder's name, and a
+   * remote the reader named keeps its own. */
+  private async moveDeferred(machine: RepositorySync): Promise<void> {
+    const store = this.host.store;
+    const from = machine.key;
+    const move = store.deferredMoves().find((entry) => entry.from === from);
+    if (!move) return;
+    const source = machine.repository.dir;
+    const identity = await this.machineIdentity();
+    // Nothing is awaited from here to the rename.
+    if (store.repository(from)?.dir !== source || machine.key !== from) throw movedMeanwhile(from);
+    this.renameClone(machine, move.to, identity);
+    const folder = instanceSegmentOf(move.to);
+    if (folder !== null && machine.recordedIdNow() !== null) machine.nameRemoteBy(folder);
+    await this.afterMove([{ from, to: move.to }]);
+  }
+
+  /** One clone moved to `to` by one rename at its instant (space-60,
+   * DR-127), synchronously within its caller's step: a session's lease
+   * beneath holds it where it is — its writer resolved that path — and a
+   * destination taken by anything but the clone itself — a case-only
+   * rename's is the same folder — stops the sync; writers beneath resolve
+   * their paths at their own instants, and a process holding the old
+   * path keeps it. The store, the machine and the waiting steps follow. */
+  private renameClone(machine: RepositorySync, to: string, identity: string | undefined): void {
+    const store = this.host.store;
+    const from = machine.key;
+    const source = machine.repository.dir;
+    const target = store.home.clonePath(to);
     const held = heldSessionLease(source, identity);
     if (held !== undefined) throw inUseStop("check", `sessions/${held}`, store);
     if (occupied(source, target, store.home.workspace)) {
@@ -3948,11 +3897,6 @@ export class SpaceManager {
     renameSync(source, target);
     pruneEmptyFolders(dirname(source), store.home.workspace);
     this.relocate([{ from, to }]);
-    // The rename follows the move: under its old key, a clone keyed
-    // outside every instance's folder resolves no remote by that name.
-    const folder = instanceSegmentOf(to);
-    if (folder !== null) machine.nameRemoteBy(folder);
-    await this.afterMove([{ from, to }]);
   }
 
   /** The store, the machines and the waiting steps follow moved clones. */
@@ -4171,6 +4115,9 @@ export class SpaceManager {
     const folder = this.instanceFolder();
     if (!view || !this.signedIn() || folder === null) return [];
     const store = this.host.store;
+    // A clone the instances migration deferred, listed by the key it
+    // keeps, holds the key it moves to (DR-127).
+    const deferred = new Set(store.deferredMoves().map((move) => move.to));
     const matched = new Set<string>();
     for (const repository of store.listRepositories()) {
       const facts = this.machines.get(repository.key)?.facts;
@@ -4184,7 +4131,7 @@ export class SpaceManager {
       const colliding = this.collides(repository.group);
       const path = `${repository.group.fullPath}/${repository.path}`;
       const key = colliding ? `${folder}/${path}@${repository.id}` : hostKey(repository, folder);
-      if (!key || (!colliding && store.repository(key))) continue;
+      if (!key || (!colliding && (store.repository(key) || deferred.has(key)))) continue;
       const code = repository.project && typeof repository.project.remote === "string" ? this.codeRemoteAsShown(repository.project.remote) : null;
       rows.push({
         row: {

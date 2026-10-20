@@ -3,22 +3,30 @@
 
 // The instances migration (DR-127): a home whose `home.yaml` names one
 // Git host, in format 1, becomes a home recording every instance by its
-// origin, in format 2. It runs once under the root lease before any
-// writer is admitted, as the groups migration does, leaving a receipt
-// under `local/migrations/`; each step is verified, and a restart
-// finishes what remains without overwriting a destination that diverged.
-// Nothing at any instance changes, so each device migrates on its own.
+// origin, in format 2, every clone at that instance moved under its
+// folder. It runs once under the root lease before any writer is
+// admitted, as the groups migration does, leaving a receipt under
+// `local/migrations/`; each step is verified, and a restart finishes
+// what remains without overwriting a destination that diverged. A clone
+// a session's lease holds where it stands is deferred: it keeps its key
+// until the next sync or the next start moves it. Nothing at any
+// instance changes, so each device migrates on its own.
 
+import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, type Dirent } from "node:fs";
+import { dirname, join } from "node:path";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
+import { heldSessionLease, occupied, pruneEmptyFolders } from "./clone-moves.js";
 import {
   closed, isObject, isText, need, readJsonFile, sha256, StorageFormatError, writeApplicationBytes, writeApplicationFile,
 } from "./files.js";
-import { CLIENT_ID, Home, HOME_FILE, invalidHome, notAnOrigin, parseHomeFile, type HomeAccount, type HomeFile } from "./home.js";
+import {
+  CLIENT_ID, Home, HOME_FILE, invalidHome, isRepositoryKey, notAnOrigin, parseHomeFile, WORKSPACE, type HomeAccount, type HomeFile,
+} from "./home.js";
 import { i18n } from "./i18n.js";
-import { canonicalOrigin, OriginRefused } from "./instance.js";
+import { canonicalOrigin, instanceFolder, instanceSegmentOf, isInstanceFolder, OriginRefused } from "./instance.js";
+import { gitEnvironment } from "./storage-git.js";
 
 export interface InstancesReceipt {
   format: 1;
@@ -35,35 +43,95 @@ export interface InstancesReceipt {
   complete: boolean;
 }
 
+/** A clone the migration moves under its instance's folder, or whose
+ * remote alone it renames: by the key it has and the key it takes —
+ * one key for your own group's own repository, which keeps its folder —
+ * and whether its remote, the host's, takes the instance's folder's
+ * name. */
+interface CloneMove { from: string; to: string; remote: boolean }
+
+/** The clones step as the receipt records it: the instance's folder,
+ * every move planned before the first is made, and the moves done. */
+interface ClonesStep { step: "clones"; folder: string; moves: CloneMove[]; done: string[] }
+
+/** The preferences and the forge cache, re-keyed for each moved clone. */
+const PREFS = "local/prefs.json";
+const FORGE_CACHE = "local/forge-cache.json";
 /** The files the migration rewrites, their original bytes kept. */
-const KEPT = [HOME_FILE, "local/prefs.json", "local/forge-cache.json"];
+const KEPT = [HOME_FILE, PREFS, FORGE_CACHE];
 /** The app tokens, re-keyed with `home.yaml`, recorded by digest alone. */
 const CREDENTIALS = "local/credentials.yaml";
 
 function migrationsDir(root: string): string { return join(root, "local", "migrations"); }
 
-function findIncompleteReceipt(root: string): { receipt: InstancesReceipt; dir: string } | undefined {
+/** Every instances receipt under `local/migrations/`, in order. */
+function instancesReceipts(root: string): { receipt: InstancesReceipt; dir: string }[] {
   const migrations = migrationsDir(root);
-  if (!existsSync(migrations)) return undefined;
+  if (!existsSync(migrations)) return [];
+  const found: { receipt: InstancesReceipt; dir: string }[] = [];
   for (const id of readdirSync(migrations).sort()) {
     const file = join(migrations, id, "receipt.json");
     if (!existsSync(file)) continue;
     let value: unknown;
     try { value = readJsonFile(file); } catch { continue; }
-    if (isObject(value) && value.kind === "instances" && value.complete === false) {
-      return { receipt: value as unknown as InstancesReceipt, dir: join(migrations, id) };
+    if (isObject(value) && value.kind === "instances" && typeof value.complete === "boolean" && Array.isArray(value.deferred)) {
+      found.push({ receipt: value as unknown as InstancesReceipt, dir: join(migrations, id) });
     }
   }
-  return undefined;
+  return found;
+}
+
+/** The clone directory a key names under the home's `workspace/`. */
+function clonePathOf(root: string, key: string): string {
+  return join(root, WORKSPACE, ...key.split("/"));
+}
+
+/** Whether a directory stands at a path, never through a link, as the
+ * store's walk finds a clone. */
+function standsAsDirectory(path: string): boolean {
+  try { return lstatSync(path).isDirectory(); } catch { return false; }
+}
+
+/** The receipt a run resumes: one interrupted, else a complete one
+ * whose deferred clone still stands at the key it kept. */
+function findPendingReceipt(root: string): { receipt: InstancesReceipt; dir: string } | undefined {
+  const receipts = instancesReceipts(root);
+  return receipts.find((found) => !found.receipt.complete)
+    ?? receipts.find((found) => found.receipt.deferred.some((move) => standsAsDirectory(clonePathOf(root, move.from))));
 }
 
 /** Whether the home must take the instances migration before writers
- * are admitted: `home.yaml` in format 1, or a migration interrupted. */
+ * are admitted: `home.yaml` in format 1, a migration interrupted, or a
+ * clone it deferred still standing at the key it kept. */
 export function needsInstancesMigration(root: string): boolean {
-  if (findIncompleteReceipt(root)) return true;
+  if (findPendingReceipt(root)) return true;
   let value: unknown;
   try { value = parseYaml(readFileSync(Home.file(root), "utf8")); } catch { return false; }
   return isObject(value) && value.format === 1;
+}
+
+/** The clones the migration deferred, each by the key it keeps and the
+ * key it moves to, while it still stands at the key it kept (DR-127). */
+export function deferredMoves(root: string): { from: string; to: string }[] {
+  const moves = new Map<string, { from: string; to: string }>();
+  for (const { receipt } of instancesReceipts(root)) {
+    for (const move of receipt.deferred) {
+      if (isRepositoryKey(move.from) && isRepositoryKey(move.to) && standsAsDirectory(clonePathOf(root, move.from))) {
+        moves.set(move.from, { from: move.from, to: move.to });
+      }
+    }
+  }
+  return [...moves.values()];
+}
+
+/** Deferred clones moved since by the store's own move: the receipt no
+ * longer names them, so no later start moves what stands at the key
+ * they kept. */
+export function settleDeferred(root: string, keys: readonly string[]): void {
+  for (const { receipt, dir } of instancesReceipts(root)) {
+    const deferred = receipt.deferred.filter((move) => !keys.includes(move.from));
+    if (deferred.length !== receipt.deferred.length) writeApplicationFile(join(dir, "receipt.json"), { ...receipt, deferred });
+  }
 }
 
 const divergedDestination = (): string =>
@@ -127,18 +195,141 @@ function rekeyedCredentials(bytes: Buffer, from: string, to: string): Buffer | n
   return Buffer.from(stringifyYaml({ format: 1, hosts }));
 }
 
+/** Every clone under `workspace/` outside the instances' folders, as
+ * the store's walk finds one: a folder whose path is a key, inside plain
+ * folders, never through a link. */
+function cloneKeys(home: Home): string[] {
+  const keys: string[] = [];
+  const walk = (dir: string, depth: number): void => {
+    if (depth > 8) return;
+    let entries: Dirent[];
+    try { entries = readdirSync(dir, { withFileTypes: true }); }
+    catch (error) {
+      if (["ENOENT", "ENOTDIR"].includes((error as NodeJS.ErrnoException).code ?? "")) return;
+      throw error;
+    }
+    for (const entry of entries) {
+      if (!entry.isDirectory() || entry.name.startsWith(".") || (depth === 0 && isInstanceFolder(entry.name))) continue;
+      const path = join(dir, entry.name);
+      const key = home.keyOf(path);
+      if (key) keys.push(key);
+      else walk(path, depth + 1);
+    }
+  };
+  walk(home.workspace, 0);
+  return keys.sort();
+}
+
+/** One Git command in a clone, read whole; a Git that cannot run reads
+ * as a failed command. */
+function gitIn(dir: string, args: string[], env: NodeJS.ProcessEnv): { ok: boolean; stdout: string; stderr: string } {
+  const run = spawnSync("git", ["-C", dir, ...args], { env: gitEnvironment(env), encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 30_000 });
+  return { ok: !run.error && run.status === 0, stdout: run.stdout ?? "", stderr: run.stderr ?? (run.error?.message ?? "") };
+}
+
+/** Whether a clone records the host's id beside its remote — which a
+ * join, a creation or a check by a Spex wrote, the host's remote with it. */
+function recordsHostId(dir: string, env: NodeJS.ProcessEnv): boolean {
+  const read = gitIn(dir, ["config", "--get", "spex.repositoryId"], env);
+  return read.ok && read.stdout.trim().length > 0;
+}
+
+/** The host's remote takes the instance's folder's name: one still
+ * named `origin` is renamed, its fetched `spex` and its upstream with it,
+ * where no remote bears that name already. A rename Git refuses leaves
+ * `origin`, through which the clone still syncs, and is reported. */
+function nameRemoteBy(dir: string, folder: string, env: NodeJS.ProcessEnv): void {
+  const read = gitIn(dir, ["config", "-z", "--get-regexp", "^remote\\..+\\.url$"], env);
+  const names = read.ok ? read.stdout.split("\0").map((entry) => entry.split("\n", 1)[0]).filter((key) => key.startsWith("remote.") && key.endsWith(".url"))
+    .map((key) => key.slice("remote.".length, -".url".length)) : [];
+  if (!names.includes("origin") || names.includes(folder)) return;
+  const renamed = gitIn(dir, ["remote", "rename", "origin", folder], env);
+  if (!renamed.ok) console.error(`spex: the remote of ${dir} keeps its name: ${renamed.stderr.trim()}`);
+}
+
+/** What the migration does with each clone (DR-127): your own group's
+ * own repository, recording the host's id, renames its remote and keeps
+ * its folder; any other clone recording it moves under the instance's
+ * folder at its key — its path there, which a Spex before DR-127 kept
+ * it at — its remote renamed; a clone recording none moves at its key
+ * keeping its remote, unless it lies in your own group's folder, which
+ * holds the clones never at an instance; a clone already under an
+ * instance's folder is not touched. */
+function planClones(home: Home, folder: string, env: NodeJS.ProcessEnv): CloneMove[] {
+  const own = home.own();
+  const moves: CloneMove[] = [];
+  for (const key of cloneKeys(home)) {
+    if (instanceSegmentOf(key) !== null) continue;
+    const id = recordsHostId(home.clonePath(key), env);
+    if (key === own) {
+      if (id) moves.push({ from: key, to: key, remote: true });
+      continue;
+    }
+    if (!id && key.startsWith(`${home.ownName}/`)) continue;
+    const to = `${folder}/${key}`;
+    if (isRepositoryKey(to)) moves.push({ from: key, to, remote: id });
+  }
+  return moves;
+}
+
+/** A JSON file of the home as it reads now; undefined where none stands
+ * or it does not read, which the store reports at its open. */
+function readOwnJson(file: string): Record<string, unknown> | undefined {
+  if (!existsSync(file)) return undefined;
+  try {
+    const value = readJsonFile(file);
+    return isObject(value) ? value : undefined;
+  } catch { return undefined; }
+}
+
+/** A moved clone's records outside it follow it, as a host's rename
+ * moves them (space-60): every pair naming its key names the new one,
+ * its sync preferences `sync:<key>:*` and its forge cache entry are
+ * re-keyed. Each is read as it stands and written only where it
+ * changes, so a restart repeats nothing. */
+function rekeyClone(root: string, move: CloneMove): void {
+  const home = Home.load(root);
+  if (home.folders().some((folder) => folder.repository === move.from)) {
+    home.move([{ from: move.from, to: move.to }]);
+    home.save();
+  }
+  const prefsFile = join(root, PREFS);
+  const prefs = readOwnJson(prefsFile);
+  if (prefs && prefs.format === 1 && isObject(prefs.prefs)) {
+    const prefix = `sync:${move.from}:`;
+    const next: Record<string, unknown> = {};
+    let changed = false;
+    for (const [key, value] of Object.entries(prefs.prefs)) {
+      if (key.startsWith(prefix)) { next[`sync:${move.to}:${key.slice(prefix.length)}`] = value; changed = true; }
+      else next[key] = value;
+    }
+    if (changed) writeApplicationFile(prefsFile, { ...prefs, prefs: next });
+  }
+  const cacheFile = join(root, FORGE_CACHE);
+  const cache = readOwnJson(cacheFile);
+  if (cache && isObject(cache.entries) && Object.hasOwn(cache.entries, move.from)) {
+    const entries: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(cache.entries)) entries[key === move.from ? move.to : key] = value;
+    writeApplicationFile(cacheFile, { ...cache, entries });
+  }
+}
+
 /**
  * Migrate a home to format 2 in place (DR-127). Restart-safe: an
  * interrupted run resumes from its receipt, verifying what it already
- * wrote and never overwriting a destination that diverged.
+ * wrote and never overwriting a destination that diverged. A clone a
+ * session's lease names a live writer beneath is deferred, and moved by
+ * a later run once it is released. `machineIdentity` reads a lease's
+ * owner as this machine's, `env` runs Git.
  */
-export function migrateInstances(root: string): InstancesReceipt {
+export function migrateInstances(root: string, options: { machineIdentity?: string; env?: NodeJS.ProcessEnv } = {}): InstancesReceipt {
+  const env = options.env ?? process.env;
   const migrations = migrationsDir(root);
   mkdirSync(migrations, { recursive: true, mode: 0o700 });
 
   // 1 — the receipt: every input's digest, the original bytes of all
   // but the credentials kept.
-  let found = findIncompleteReceipt(root);
+  let found = findPendingReceipt(root);
   if (!found) {
     const id = randomUUID(); const dir = join(migrations, id);
     mkdirSync(join(dir, "inputs"), { recursive: true, mode: 0o700 });
@@ -235,7 +426,61 @@ export function migrateInstances(root: string): InstancesReceipt {
     record({ ...entry, written: true });
   }
 
-  // 3 — verified: the home reads in format 2.
+  // 3 — every clone at the instance under its folder (DR-127), each
+  // move planned before the first is made: one rename, then the records
+  // outside the clone re-keyed and its remote named by the folder. A
+  // destination taken stops the run before any rename; a session's lease
+  // beneath a clone defers it, keeping its key and remote.
+  const home = Home.load(root);
+  let clones = step("clones") as ClonesStep | undefined;
+  if (!clones) {
+    const folder = instanceFolder(home.defaultInstance().url);
+    clones = { step: "clones", folder, moves: planClones(home, folder, env), done: [] };
+    record(clones as unknown as Record<string, unknown>);
+  }
+  const plan = clones;
+  // A complete run comes back for its deferred clones alone.
+  const pending = plan.moves.filter((move) => !plan.done.includes(move.from) &&
+    (!receipt.complete || receipt.deferred.some((entry) => entry.from === move.from)));
+  const taken = (move: CloneMove): boolean => move.from !== move.to &&
+    standsAsDirectory(home.clonePath(move.from)) && occupied(home.clonePath(move.from), home.clonePath(move.to), home.workspace);
+  const divergent = pending.find(taken);
+  if (divergent) throw new StorageFormatError(home.clonePath(divergent.to), divergedDestination());
+  const finish = (move: CloneMove): void => {
+    plan.done = [...plan.done.filter((key) => key !== move.from), move.from];
+    receipt.deferred = receipt.deferred.filter((entry) => entry.from !== move.from);
+    record(plan as unknown as Record<string, unknown>);
+  };
+  for (const move of pending) {
+    const source = home.clonePath(move.from);
+    const target = home.clonePath(move.to);
+    if (move.from !== move.to) {
+      if (standsAsDirectory(source)) {
+        if (taken(move)) throw new StorageFormatError(target, divergedDestination());
+        // Read at the rename's instant: a lease that cannot be read as
+        // harmless holds the clone where it is.
+        let held: boolean;
+        try { held = heldSessionLease(source, options.machineIdentity) !== undefined; } catch { held = true; }
+        if (held) {
+          receipt.deferred = [...receipt.deferred.filter((entry) => entry.from !== move.from), { from: move.from, to: move.to }];
+          save();
+          continue;
+        }
+        mkdirSync(dirname(target), { recursive: true, mode: 0o700 });
+        renameSync(source, target);
+        pruneEmptyFolders(dirname(source), home.workspace);
+      } else if (!standsAsDirectory(target)) {
+        // Gone meanwhile: nothing stands to move or to follow.
+        finish(move);
+        continue;
+      }
+      rekeyClone(root, move);
+    }
+    if (move.remote) nameRemoteBy(target, plan.folder, env);
+    finish(move);
+  }
+
+  // 4 — verified: the home reads in format 2.
   Home.load(root);
   receipt.complete = true;
   save();
