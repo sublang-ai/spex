@@ -13,7 +13,8 @@ Spex writes `.gitignore` and `.gitattributes` in every clone for the portable fo
 Stop the desktop/server core and all CLI sessions of that spex repository before committing, checking out or merging its records. Run each session on only one device at a time. The commands below operate locally; use ordinary Git fetch/push for transport.
 
 A clone's remote is named by its instance's folder, such as `@spex.pub` for spex.pub.
-A remote you named yourself is `origin`, as is one in a clone made by an earlier Spex; `git remote` in the clone shows which.
+A remote you named yourself is `origin`.
+Once the instances migration has moved them, the clones an earlier Spex made that record the host's id have their remote named by the folder too, while a remote you named stays `origin`; `git remote` in the clone shows which.
 The example below syncs your own group's spex repository, `alice/alice-spex`, at spex.pub.
 
 ```sh
