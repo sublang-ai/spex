@@ -647,6 +647,11 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Fixed
 
+- Groups keeps Refresh busy through account setup and the complete read,
+  then shows its outcome with a sanitized failure and Retry where needed.
+  After signing out and back in, a new refresh waits for the older work
+  and reads the current account; an older completion cannot clear it.
+
 - Package-source labels, tooltips and generated environment reports use
   the instance's name for its repositories, keeping internal storage
   addresses out of the interface while preserving installation inputs.
