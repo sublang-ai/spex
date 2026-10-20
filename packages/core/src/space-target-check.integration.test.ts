@@ -305,6 +305,11 @@ for (const next of ["signed-out", "another-account"] as const) {
     core.hostClient.fetchImpl = inner;
     await home.client.expectOk("space.signout", {});
     if (next === "another-account") {
+      // A sign-in as another account at a listed instance is refused, so
+      // the instance is forgotten first, as Forget does (DR-127).
+      const instances = core.store.home;
+      assert.equal(instances.forget(host.url), true);
+      instances.save();
       host.script.person = { id: "1002", login: "bob", displayName: "Bob" };
       // The stand-in's current user's namespace follows the scripted
       // person; existing repositories retain their original group object.

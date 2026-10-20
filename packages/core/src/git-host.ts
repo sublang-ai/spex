@@ -24,6 +24,7 @@ import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import { writeApplicationBytes } from "./files.js";
+import { canonicalOrigin } from "./instance.js";
 
 export { DEFAULT_HOST_URL, hostUrlFor } from "./instance.js";
 
@@ -273,18 +274,19 @@ export function credentialsPath(homeDir: string): string {
 }
 
 /**
- * The app token of one Git host in `local/credentials.yaml`, exactly
- * `{format: 1, hosts: {<url>: {access, accessExpiresAt, refresh}}}`,
+ * The app token of one instance in `local/credentials.yaml`, exactly
+ * `{format: 1, hosts: {<origin>: {access, accessExpiresAt, refresh}}}`
+ * keyed by the instance's canonical origin (DR-127),
  * written atomically with owner-only permissions under a `local/` made
  * owner-only (storage-19). A file of another format is refused, never
- * guessed at or overwritten. Other hosts' entries are kept; removing the
- * last one removes the file. Every access is synchronous, so a
+ * guessed at or overwritten. Other instances' entries are kept; removing
+ * the last one removes the file. Every access is synchronous, so a
  * replacement's read, comparison and rename leave no await between them.
  */
 export function fileCredentialStore(homeDir: string, hostUrl: string): CredentialStore {
   const dir = join(homeDir, "local");
   const file = credentialsPath(homeDir);
-  const key = trimUrl(hostUrl);
+  const key = canonicalOrigin(hostUrl);
 
   function load(): CredentialsFile | null {
     let text: string;

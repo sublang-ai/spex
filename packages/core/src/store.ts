@@ -35,6 +35,7 @@ import {
 import { readJsonFile, StorageFormatError, VersionConflictError, writeApplicationFile } from "./files.js";
 import { Home, repositoryNameFor, splitKey } from "./home.js";
 import { folderRemote, needsGroupsMigration, migrateFormerHome } from "./migrate-home.js";
+import { migrateInstances, needsInstancesMigration } from "./migrate-instances.js";
 import { initializeClone } from "./storage-git.js";
 import { seedConfig } from "./config.js";
 import { createRequire } from "node:module";
@@ -419,6 +420,9 @@ export class Store {
   private readonly options: StoreOptions;
   private lease?: RootLease;
   private migrationPending = false;
+  /** Whether a legacy store was imported into the former layout this
+   * open, which the groups migration carries into the home. */
+  private legacyImported = false;
   /** Whether this open seeded the starter into your own group's clone. */
   seededConfig = false;
 
@@ -463,9 +467,10 @@ export class Store {
       // A legacy store imports into the former layout, which the groups
       // migration then carries into spex repositories (storage-9).
       const imported = this.importLegacy(options.legacyDbPath);
+      this.legacyImported = imported;
       this.meta.version = META_VERSION;
       writeAtomic(this.metaFile(), JSON.stringify(this.meta));
-      if (imported || needsGroupsMigration(this.dir)) {
+      if (imported || needsGroupsMigration(this.dir) || needsInstancesMigration(this.dir)) {
         // English, deliberately: a caller's programming failure.
         if (!options.deferMigration) throw new Error(`${this.dir} holds the former layout; open it with Store.open to migrate`);
         this.migrationPending = true;
@@ -479,13 +484,19 @@ export class Store {
     }
   }
 
-  /** Open a home, migrating the former layout once under the home lease
-   * before any writer is admitted (storage-9, core-service-15). */
+  /** Open a home, migrating a one-instance home and the former layout
+   * once under the home lease before any writer is admitted (storage-9,
+   * core-service-15, DR-127). */
   static async open(options: StoreOptions = {}): Promise<Store> {
     const store = new Store({ ...options, deferMigration: true });
     if (store.migrationPending) {
       try {
-        await migrateFormerHome(store.dir, {
+        // A `home.yaml` in format 1 takes format 2 before the groups
+        // migration, which merges a late legacy import into the home as
+        // it reads it; the home that migration writes for a former
+        // layout is already in format 2.
+        if (needsInstancesMigration(store.dir)) migrateInstances(store.dir);
+        if (store.legacyImported || needsGroupsMigration(store.dir)) await migrateFormerHome(store.dir, {
           env: store.env,
           ...(options.own ? { own: options.own } : {}),
           libraryDir: options.libraryDir ?? join(store.dir, "playbooks"),

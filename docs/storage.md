@@ -20,7 +20,7 @@ Ignored files can contain durable local state.
 
 | Path | Contents | Git |
 | --- | --- | --- |
-| `home.yaml` | This device's id, the Git host, your own group's folder name, and each working folder with its spex repository and recorded `cwd` aliases. | Outside any clone |
+| `home.yaml` | This device's id, the instance it was created with, every instance it has signed in to with its account (the first is the default), your own group's folder name, and each working folder with its spex repository and recorded `cwd` aliases. | Outside any clone |
 | `<clone>/project.json` | The project's name and its code's remote URL. | Tracked |
 | `<clone>/config/playbook.config.yaml` | Your own group's Captain, player and playbook settings; in a project's clone, only the playbooks it enables and the player each role uses. | Tracked |
 | `<clone>/spex.yaml`, `<clone>/spex.lock` | The environment's requests and lock. | Tracked, one unit |
@@ -36,7 +36,7 @@ Ignored files can contain durable local state.
 | `store/`, `cache/` | Spec package files by content digest, shared by every environment on the device, and rebuildable caches such as fetched Git sources. | Outside any clone |
 | `playbooks/<id>/` | A former home's library, kept until spec packages replace it. | Outside any clone |
 | `local/prefs.json` | Core preferences, including the last viewed turn per session. | Never leaves the device |
-| `local/credentials.yaml` | The app token the Git host issued to this device, owner-only; removed at sign-out. | Never leaves the device |
+| `local/credentials.yaml` | The app token each instance issued to this device, by the instance's origin, owner-only; removed at sign-out. | Never leaves the device |
 | `local/forge-cache.json` | Rebuildable issue and pull-request cache. | Never leaves the device |
 | `local/migrations/<id>/` | Migration receipts and original inputs. | Never leaves the device |
 | `local/former-home.git` | The former home's Git history, kept aside unchanged. | Never leaves the device |
@@ -158,6 +158,7 @@ each project becomes `workspace/<own>/<name>-spex/` with one file per open or fi
 your own group's spex repository receives the settings, with every `playbooks.<id>.from` dropped, and the remaining sessions;
 preferences move to `local/prefs.json`, and the former home's `.git` moves to `local/former-home.git`, keeping the old remote aside.
 Original bytes stay under `local/migrations/<id>/inputs/` with a receipt; an interrupted migration resumes on the next start.
+A home whose `home.yaml` names one instance in format 1 takes format 2 once at startup under the home lease, its instance written as its origin and its app token re-keyed to that origin in the same step, with a receipt beside the groups migration's; an older Spex refuses the migrated home.
 Default-home startup also imports the former CLI session directory into your own group's spex repository.
 Skipped files remain in place with their reasons reported.
 Use `playbook migrate-session <id>` to migrate a session in an explicitly configured store; `--with <path>` selects configuration files.

@@ -130,9 +130,10 @@ test("space-37: the browser sign-in renames your own group after the login, push
   assert.equal(repositoryOf(signed, moved).state, "local-only");
   assert.equal(repositoryOf(signed, moved).folder, home.projectDir);
   assert.ok(!existsSync(join(home.dataDir, "workspace", OWN)), "the former folder left with its clones");
+  // The instance signed in to, by its origin: the home's one entry (DR-127).
   const file = Home.load(home.dataDir).file;
-  assert.deepEqual(file.host.account, { id: "1001", login: LOGIN, displayName: "Ada Lovelace" });
-  assert.equal(file.host.signedOut, undefined);
+  assert.equal(file.origin, host.url);
+  assert.deepEqual(file.instances, [{ url: host.url, clientId: "spex", account: { id: "1001", login: LOGIN, displayName: "Ada Lovelace" } }]);
   assert.equal(file.own, LOGIN);
   assert.deepEqual(file.folders.map((folder) => [folder.path, folder.repository]), [[home.projectDir, moved]]);
   // The app token, owner-only (storage-19).
@@ -910,8 +911,9 @@ test("space-37: Sign out revokes this device and keeps every clone, its reposito
   assert.equal(host.script.liveDevices(), 0, "revoked at the stand-in");
   assert.ok(!existsSync(join(home.dataDir, "local", "credentials.yaml")), "the credential is gone");
   const file = Home.load(home.dataDir).file;
-  assert.equal(file.host.signedOut, true);
-  assert.equal(file.host.account?.login, LOGIN, "the account is kept");
+  assert.equal(file.instances.length, 1, "the instance's entry is kept");
+  assert.equal(file.instances[0].signedOut, true);
+  assert.equal(file.instances[0].account?.login, LOGIN, "the account is kept");
   const own = repositoryOf(out, HOST_OWN);
   assert.deepEqual([own.state, own.reason], ["unreachable", "Sign in again"]);
   assert.ok(existsSync(join(clonePath(home.dataDir, HOST_OWN), ".git")), "nothing is deleted");
@@ -921,7 +923,8 @@ test("space-37: Sign out revokes this device and keeps every clone, its reposito
   await signIn(home, host);
   const back = await home.client.waitRepository(fromAgain, HOST_OWN, (repository) => repository.state === "reachable");
   assert.equal(back.reason, null);
-  assert.equal(Home.load(home.dataDir).file.host.signedOut, undefined);
+  // Signed in again as the same account: its one entry, no longer signed out.
+  assert.deepEqual(Home.load(home.dataDir).file.instances.map((entry) => [entry.url, entry.account?.login, entry.signedOut]), [[host.url, LOGIN, undefined]]);
 });
 
 test("git-host-4: a refresh the stand-in refuses, or a device it revoked, signs this device out, the state saying the host did it as whom until the next sign-in", async (t) => {
@@ -944,8 +947,8 @@ test("git-host-4: a refresh the stand-in refuses, or a device it revoked, signs 
     assert.deepEqual(state.signIn, { phase: "idle", signedOut: { by: "host", login: LOGIN } });
     assert.ok(!existsSync(join(home.dataDir, "local", "credentials.yaml")), "the credential is gone");
     const file = Home.load(home.dataDir).file;
-    assert.equal(file.host.signedOut, true);
-    assert.equal(file.host.account?.login, LOGIN, "the account is kept");
+    assert.equal(file.instances[0].signedOut, true);
+    assert.equal(file.instances[0].account?.login, LOGIN, "the account is kept");
     const own = repositoryOf(state, HOST_OWN);
     assert.deepEqual([own.state, own.reason], ["unreachable", "Sign in again"]);
   };
@@ -1003,7 +1006,7 @@ test("git-host-4, git-host-10: a refusal or a sign-out overtaken by a newer sign
     const state = await home.client.expectOk("space.get", {});
     assert.equal(state.account?.login, LOGIN);
     assert.deepEqual(state.signIn, { phase: "idle" });
-    assert.equal(Home.load(home.dataDir).file.host.signedOut, undefined);
+    assert.equal(Home.load(home.dataDir).file.instances[0].signedOut, undefined);
     assert.ok(samePair(await store.read(), pair), "the newer pair stays");
   };
 

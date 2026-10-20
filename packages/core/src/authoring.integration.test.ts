@@ -1234,8 +1234,9 @@ test("playbook-library-104: New playbook's defaults come from the registry's org
   mkdirSync(join(state, "workspace", ...nested.split("/")), { recursive: true });
   mkdirSync(join(state, "local"), { recursive: true, mode: 0o700 });
   writeFileSync(join(state, "home.yaml"), stringifyYaml({
-    format: 1, device: randomUUID(), own: "tester", folders: [{ path: realpathSync(workingFolder(join(dir, "graph"))), repository: nested }],
-    host: { url: registry.url, clientId: "spex", account: { id: "1", login: "tester", displayName: "Tester" } },
+    format: 2, device: randomUUID(), origin: registry.url,
+    instances: [{ url: registry.url, clientId: "spex", account: { id: "1", login: "tester", displayName: "Tester" } }],
+    own: "tester", folders: [{ path: realpathSync(workingFolder(join(dir, "graph"))), repository: nested }],
   }));
   writeFileSync(join(state, "local", "credentials.yaml"), stringifyYaml({
     format: 1, hosts: { [registry.url]: { access: "tester-token", accessExpiresAt: Date.now() + 3_600_000, refresh: "refresh" } },
