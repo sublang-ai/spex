@@ -641,11 +641,12 @@ test("environments-22 through a real core: a project rebound to a second working
   const exclude = (): string[] => readFileSync(join(second, ".git", "info", "exclude"), "utf8").split("\n");
   for (const line of ["/.claude/skills/fmt/", "/.claude/skills/lint/", "/.agents/skills/fmt/"]) assert.ok(exclude().includes(line), line);
   // The reader's folder stays byte for byte, out of Spex's exclude lines,
-  // and the state names it, with the path source this folder lacks
-  // (environments-14).
+  // the path source this folder lacks is exported nowhere
+  // (environments-8), and the state names both (environments-14).
   assert.equal(readFileSync(join(theirs, "SKILL.md"), "utf8"), "the reader's own lint\n");
   assert.ok(!exclude().includes("/.agents/skills/lint/"));
   assert.equal(existsSync(join(second, ".claude", "skills", "tidy")), false);
+  assert.equal(existsSync(join(second, ".agents", "skills", "tidy")), false);
   assert.deepEqual(paired.unexported, { skipped: [{ name: "lint", folder: ".agents/skills" }], missing: ["acme/tidy"] });
   assert.equal(paired.packages.find((pkg) => pkg.name === "acme/tidy")?.missingPath, "tools/tidy");
 
@@ -660,6 +661,37 @@ test("environments-22 through a real core: a project rebound to a second working
   assert.match(readFileSync(join(second, ".agents", "skills", "lint", "SKILL.md"), "utf8"), /Lint the code\./);
   for (const folder of [".claude/skills", ".agents/skills"]) assert.ok(existsSync(join(second, folder, "tidy", "SKILL.md")), `${folder}/tidy`);
   assert.ok(exclude().includes("/.agents/skills/lint/"));
+
+  // Rebound to a third working folder while the registry spec package's
+  // installed files are gone: the pairing's read installs them
+  // (environments-7) and the export follows into the folder with no
+  // environment command sent (environments-31); the state names the
+  // path source this folder lacks (environments-14).
+  const clone = clonePath(core.dataDir, key);
+  rmSync(join(clone, "packages", "acme", "kit"), { recursive: true, force: true });
+  const third = gitFolder(join(dir, "third"));
+  mark = client.mark();
+  await client.expectOk("project.rebind", { projectId: key, path: third });
+  const reinstalled = await client.environment(key, mark, (state) => state.busy === null && holds(state, "acme/kit") && state.unexported !== undefined);
+  assert.ok(existsSync(join(clone, "packages", "acme", "kit", "skills", "en", "lint", "SKILL.md")), "the pairing installed the files again");
+  for (const name of ["fmt", "lint"]) {
+    for (const folder of [".claude/skills", ".agents/skills"]) assert.ok(existsSync(join(third, folder, name, "SKILL.md")), `third ${folder}/${name}`);
+  }
+  assert.deepEqual(reinstalled.unexported, { skipped: [], missing: ["acme/tidy"] });
+
+  // Rebound to a fourth whose path source states another version, the
+  // lock is stale there and nothing is exported: the state names
+  // nothing the third folder's export left out (environments-14).
+  const fourth = gitFolder(join(dir, "fourth"));
+  await makeRelease(join(fourth, "tools", "tidy"), {
+    format: 2, org: "acme", name: "tidy", version: "0.2.0",
+    artifacts: { tidy: { kind: "skill", language: "en" } },
+  }, { "skills/en/tidy/SKILL.md": skill("tidy", "Tidy up.") });
+  mark = client.mark();
+  await client.expectOk("project.rebind", { projectId: key, path: fourth });
+  const elsewhere = await client.environment(key, mark, (state) => state.busy === null && state.stale !== null);
+  assert.equal(elsewhere.unexported, undefined);
+  assert.equal(existsSync(join(fourth, ".claude", "skills", "fmt")), false);
 });
 
 // ---------------------------------------------------------------------------
