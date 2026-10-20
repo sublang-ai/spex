@@ -7,6 +7,7 @@
 
 Accepted (2026-10-17).
 Amends [DR-103](103-the-home-and-its-groups.md)'s read before sync: selected destination authority no longer requires every repository's detail.
+Proposed to be amended by [DR-128](128-a-spex-repository-placed-at-several-instances.md) in the read before a sync and at admission: each placement's destination is read at that placement's turn, and admission reads only the placements owing the notice, a failed read stopping that placement alone.
 
 ## Context
 
