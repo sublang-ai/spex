@@ -2411,7 +2411,7 @@ export class SpaceManager {
   hostName(): string {
     const name = this.view?.displayName ?? this.described?.displayName;
     if (name) return name;
-    try { return new URL(this.host.store.home.host.url).hostname; } catch { return this.host.store.home.host.url; }
+    try { return new URL(this.host.store.home.host.origin).hostname; } catch { return this.host.store.home.host.origin; }
   }
 
   /** The folder of the home's default instance (DR-127), the one the
@@ -2419,7 +2419,7 @@ export class SpaceManager {
    * its host's remote takes in a clone; null where the home's recorded
    * URL stands as no instance's origin. */
   instanceFolder(): string | null {
-    try { return instanceFolder(this.host.store.home.defaultInstance().url); } catch { return null; }
+    try { return instanceFolder(this.host.store.home.defaultInstance().origin); } catch { return null; }
   }
 
   /** The key a host repository's clone takes (DR-127): its path in the
@@ -2437,7 +2437,7 @@ export class SpaceManager {
     const account = this.host.store.home.account();
     if (!account) return null;
     let domain: string;
-    try { domain = new URL(this.host.store.home.host.url).hostname; } catch { domain = "localhost"; }
+    try { domain = new URL(this.host.store.home.host.origin).hostname; } catch { domain = "localhost"; }
     return { name: account.displayName || account.login, email: `${account.login}@users.noreply.${domain}` };
   }
 
@@ -2513,7 +2513,7 @@ export class SpaceManager {
       ? classifyHostTransportFailure({ ...run, stderr: run.stderr.replace(/^\s*remote:.*$/gm, "") }, shown)
       : classifyTransportFailure(run, this.packageExternalRemote(remote));
     const message = atInstance && failure.cause === "git" ? generic : failure.message;
-    const text = withoutHostUrls(`${message} ${failure.guidance}`.split(remote).join(this.packageExternalRemote(remote)), { origin: this.knownOrigin(), host: this.hostName(), instance: this.host.store.home.host.url });
+    const text = withoutHostUrls(`${message} ${failure.guidance}`.split(remote).join(this.packageExternalRemote(remote)), { origin: this.knownOrigin(), host: this.hostName(), instance: this.host.store.home.host.origin });
     return text.replace(/https?:\/\/[^\s'"<>]+/gi, (url) => this.packageExternalRemote(url));
   }
 
@@ -2545,7 +2545,7 @@ export class SpaceManager {
     return {
       origin: this.knownOrigin() ?? null,
       host: this.hostName(),
-      instance: this.host.store.home.host.url,
+      instance: this.host.store.home.host.origin,
       own: facts.remote === null ? null : { remote: facts.remote, path },
     };
   }
@@ -2562,7 +2562,7 @@ export class SpaceManager {
    * reader set it, with no user in an http(s) URL. */
   private remoteAsShown(facts: RemoteFacts, key: string): string | null {
     if (facts.remote === null) return null;
-    if (!this.atHost(facts) && !underOrigin(facts.remote, this.host.store.home.host.url)) return displayRemote(facts.remote);
+    if (!this.atHost(facts) && !underOrigin(facts.remote, this.host.store.home.host.origin)) return displayRemote(facts.remote);
     return this.urlRule(facts, key).own?.path ?? key;
   }
 
@@ -2608,7 +2608,7 @@ export class SpaceManager {
   /** Whether a URL the reader names lies at the Git host's own origin
    * (space-5): those are the host's to hand over. */
   async atHostOrigin(url: string): Promise<boolean> {
-    return underOrigin(url, this.knownOrigin()) || underOrigin(url, this.host.store.home.host.url);
+    return underOrigin(url, this.knownOrigin()) || underOrigin(url, this.host.store.home.host.origin);
   }
 
   /** Start the configured sign-in flow (git-host-2, git-host-3): its
@@ -4136,7 +4136,7 @@ export class SpaceManager {
     return {
       home: resolve(this.host.home),
       git: await this.probe.version(),
-      host: { url: host.url, displayName: this.view?.displayName ?? this.described?.displayName ?? null },
+      host: { url: host.origin, displayName: this.view?.displayName ?? this.described?.displayName ?? null },
       // What the host's last read said the person may do, and the roles
       // it grants: nothing until a read is held (DR-114).
       account: ((a) => (a ? { ...a, canCreateGroup: this.view?.account.canCreateGroup ?? false } : null))(store.home.account()),

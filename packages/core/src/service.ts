@@ -530,9 +530,9 @@ export class CoreService {
     // the steps that wait (git-host-21).
     const host = store.home.host;
     this.hostClient = new GitHostClient({
-      url: host.url,
+      url: host.origin,
       label: `Spex on ${hostname()}`,
-      credentials: fileCredentialStore(store.dir, host.url),
+      credentials: fileCredentialStore(store.dir, host.origin),
       onSignedOut: () => this.space.signedOutByHost(),
       onHold: () => this.space.holdBegan(),
       ...(options.hostHoldMaxMs !== undefined ? { holdMaxMs: options.hostHoldMaxMs } : {}),
@@ -1923,7 +1923,7 @@ export class CoreService {
   /** The Git host this home records (git-host-1): the one URL whose
    * pages a shell opens in the system browser (app-shell-20). */
   hostUrl(): string {
-    return this.store.home.host.url;
+    return this.store.home.host.origin;
   }
 
   private async listen(port: number): Promise<void> {

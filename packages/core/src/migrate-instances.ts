@@ -414,7 +414,7 @@ export function migrateInstances(root: string, options: { machineIdentity?: stri
       format: 2,
       device: former.device as string,
       origin,
-      instances: account ? [{ url: origin, clientId: CLIENT_ID, account, ...(signedOut === true ? { signedOut: true } : {}) }] : [],
+      instances: account ? [{ origin, clientId: CLIENT_ID, account, ...(signedOut === true ? { signedOut: true } : {}) }] : [],
       own: former.own as string,
       folders: former.folders as HomeFile["folders"],
     };
@@ -466,7 +466,7 @@ export function migrateInstances(root: string, options: { machineIdentity?: stri
   const home = Home.load(root);
   let clones = step("clones") as ClonesStep | undefined;
   if (!clones) {
-    const folder = instanceFolder(home.defaultInstance().url);
+    const folder = instanceFolder(home.defaultInstance().origin);
     clones = { step: "clones", folder, moves: planClones(home, folder, env), done: [] };
     record(clones as unknown as Record<string, unknown>);
   }

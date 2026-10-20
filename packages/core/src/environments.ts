@@ -367,9 +367,9 @@ export class EnvironmentManager {
     const host = this.store.home.host;
     // One source per host: the built-in source reads and packs the
     // shipped release once, not on every resolve.
-    if (this.registryCache?.url === host.url) return this.registryCache;
+    if (this.registryCache?.url === host.origin) return this.registryCache;
     const remote = new RegistryClient({
-      url: host.url,
+      url: host.origin,
       token: () => this.token(),
       ...(this.options.fetch ? { fetch: this.options.fetch } : {}),
     });
@@ -377,7 +377,7 @@ export class EnvironmentManager {
       builtinRegistrySource({ store: this.contentStore, cacheDir: this.cacheDir, url: remote.url, shipped: this.options.builtin }),
       remote,
     );
-    this.registryCache = { url: host.url, source, remote };
+    this.registryCache = { url: host.origin, source, remote };
     return this.registryCache;
   }
 
@@ -444,7 +444,7 @@ export class EnvironmentManager {
    * lock where that is all it requests (environments-11). */
   prepare(dir: string): boolean {
     if (!this.options.builtin) return false;
-    return prepareBuiltinEnvironment(dir, this.options.builtin, this.store.home.host.url);
+    return prepareBuiltinEnvironment(dir, this.options.builtin, this.store.home.host.origin);
   }
 
   /** The release this app ships beside the one a lock selects, where the
@@ -1008,7 +1008,7 @@ export class EnvironmentManager {
       step("publishing");
       try {
         const published = await publishRelease(this.registry(), folder);
-        state.published = { name: published.name, version: published.version, url: `${this.store.home.host.url.replace(/\/+$/, "")}/${manifest.org}/${manifest.name}` };
+        state.published = { name: published.name, version: published.version, url: `${this.store.home.host.origin.replace(/\/+$/, "")}/${manifest.org}/${manifest.name}` };
         state.error = null;
       } catch (error) {
         state.error = failurePhrase("publish", error);

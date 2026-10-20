@@ -69,7 +69,7 @@ test("instances migration: home.yaml takes format 2 with its host as the recorde
   const file = parseYaml(readFileSync(join(root, "home.yaml"), "utf8")) as Record<string, unknown>;
   assert.deepEqual(file, {
     format: 2, device: DEVICE, origin: "https://spex.pub",
-    instances: [{ url: "https://spex.pub", clientId: "spex", account: ADA }],
+    instances: [{ origin: "https://spex.pub", clientId: "spex", account: ADA }],
     own: "ada", folders: [{ path: join(root, "work"), repository: "ada/work-spex" }],
   });
   // The token under the origin, every other instance's kept, owner-only.
@@ -98,7 +98,7 @@ test("instances migration: home.yaml takes format 2 with its host as the recorde
   // The store opens the migrated home signed in at its one instance.
   const store = await Store.open({ machineIdentity, dir: root });
   try {
-    assert.equal(store.home.host.url, "https://spex.pub");
+    assert.equal(store.home.host.origin, "https://spex.pub");
     assert.deepEqual(store.home.account(), ADA);
     assert.deepEqual(store.storageDiagnostics().filter((entry) => entry.blocking), []);
   } finally { store.close(); }
@@ -116,7 +116,7 @@ test("instances migration: Store.open migrates a home in format 1; one never sig
 
   const out = formerHome({ url: "https://spex.pub", signedOut: true, token: false });
   migrateInstances(out);
-  assert.deepEqual(Home.load(out).instances(), [{ url: "https://spex.pub", clientId: "spex", account: ADA, signedOut: true }]);
+  assert.deepEqual(Home.load(out).instances(), [{ origin: "https://spex.pub", clientId: "spex", account: ADA, signedOut: true }]);
   assert.equal(Home.load(out).account(), null);
 });
 
@@ -305,7 +305,7 @@ test("instances migration: every clone at the instance moves under its folder, i
 
     // home.yaml: format 2, the one instance, every pair following its clone.
     const home = Home.load(root);
-    assert.deepEqual(home.instances(), [{ url: "https://spex.pub", clientId: "spex", account: ADA }]);
+    assert.deepEqual(home.instances(), [{ origin: "https://spex.pub", clientId: "spex", account: ADA }]);
     assert.equal(home.ownName, "ada");
     assert.deepEqual(home.folders().map((folder) => [folder.path, folder.repository]), [
       [join(root, "work", "notes"), `${FOLDER}/ada/notes-spex`],

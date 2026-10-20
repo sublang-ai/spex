@@ -122,7 +122,7 @@ test("space-37: the browser sign-in renames your own group after the login, push
   // The instance signed in to, by its origin: the home's one entry (DR-127).
   const file = Home.load(home.dataDir).file;
   assert.equal(file.origin, host.url);
-  assert.deepEqual(file.instances, [{ url: host.url, clientId: "spex", account: { id: "1001", login: LOGIN, displayName: "Ada Lovelace" } }]);
+  assert.deepEqual(file.instances, [{ origin: host.url, clientId: "spex", account: { id: "1001", login: LOGIN, displayName: "Ada Lovelace" } }]);
   assert.equal(file.own, LOGIN);
   assert.deepEqual(file.folders.map((folder) => [folder.path, folder.repository]), [[home.projectDir, moved]]);
   // The app token, owner-only (storage-19).
@@ -913,7 +913,7 @@ test("space-37: Sign out revokes this device and keeps every clone, its reposito
   const back = await home.client.waitRepository(fromAgain, HOST_OWN, (repository) => repository.state === "reachable");
   assert.equal(back.reason, null);
   // Signed in again as the same account: its one entry, no longer signed out.
-  assert.deepEqual(Home.load(home.dataDir).file.instances.map((entry) => [entry.url, entry.account?.login, entry.signedOut]), [[host.url, LOGIN, undefined]]);
+  assert.deepEqual(Home.load(home.dataDir).file.instances.map((entry) => [entry.origin, entry.account?.login, entry.signedOut]), [[host.url, LOGIN, undefined]]);
 });
 
 test("git-host-2: a sign-in at a listed instance as another account ends failed naming the entry's login, storing nothing and signing nothing out", async (t) => {
@@ -947,7 +947,7 @@ test("git-host-2: a sign-in at a listed instance as another account ends failed 
     assert.equal(state.signIn.cause, "refused");
     assert.match(state.signIn.message, /signed you in as another account; this device uses @ada there/, "naming the entry's login");
   };
-  const entries = (): unknown[] => Home.load(home.dataDir).file.instances.map((entry) => [entry.url, entry.account?.id, entry.account?.login, entry.signedOut]);
+  const entries = (): unknown[] => Home.load(home.dataDir).file.instances.map((entry) => [entry.origin, entry.account?.id, entry.account?.login, entry.signedOut]);
 
   // Signed in as ada, a sign-in as bob: ada's pair and entry stay, and
   // the home still reads signed in as her.

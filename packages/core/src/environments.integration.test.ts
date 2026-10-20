@@ -174,7 +174,7 @@ function signedInHome(dataDir: string, hostUrl: string, token: string): void {
   mkdirSync(join(dataDir, "local"), { recursive: true, mode: 0o700 });
   writeFileSync(join(dataDir, "home.yaml"), stringifyYaml({
     format: 2, device: randomUUID(), origin: hostUrl,
-    instances: [{ url: hostUrl, clientId: "spex", account: { id: "1", login: OWN, displayName: "Tester" } }],
+    instances: [{ origin: hostUrl, clientId: "spex", account: { id: "1", login: OWN, displayName: "Tester" } }],
     own: OWN, folders: [],
   }));
   writeFileSync(join(dataDir, "local", "credentials.yaml"), stringifyYaml({

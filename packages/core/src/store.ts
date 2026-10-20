@@ -617,7 +617,7 @@ export class Store {
   /** The caller's filling of a clone; its failure leaves the clone as
    * it is, reported, never failing the open. */
   private prepareRepository(dir: string, key: string): boolean {
-    try { this.options.prepareRepository?.(dir, key, this.homeFile.host.url); return true; }
+    try { this.options.prepareRepository?.(dir, key, this.homeFile.host.origin); return true; }
     catch (error) { console.error(`spex: ${key} was not prepared: ${error instanceof Error ? error.message : String(error)}`); return false; }
   }
 

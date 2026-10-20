@@ -34,7 +34,7 @@ export interface HomeAccount { id: string; login: string; displayName: string | 
 /** An instance the home has signed in to (DR-127), by its canonical
  * origin: its client, the account it signed in as, whether it was
  * signed out since, and its display name as last read. */
-export interface HomeInstance { url: string; clientId: typeof CLIENT_ID; account?: HomeAccount; signedOut?: boolean; displayName?: string }
+export interface HomeInstance { origin: string; clientId: typeof CLIENT_ID; account?: HomeAccount; signedOut?: boolean; displayName?: string }
 export interface HomeFolder { path: string; repository: string; aliases?: string[] }
 export interface HomeFile {
   format: 2;
@@ -143,19 +143,19 @@ export function parseHomeFile(value: unknown, file: string): HomeFile {
   need(isOrigin(value.origin), file, notAnOrigin(value.origin));
   const folders = new Map<string, string>();
   for (const instance of value.instances) {
-    closed(instance, ["url", "clientId"], ["account", "signedOut", "displayName"], file);
-    need(isText(instance.url) && instance.clientId === CLIENT_ID &&
+    closed(instance, ["origin", "clientId"], ["account", "signedOut", "displayName"], file);
+    need(isText(instance.origin) && instance.clientId === CLIENT_ID &&
       (instance.signedOut === undefined || typeof instance.signedOut === "boolean") &&
       (instance.displayName === undefined || typeof instance.displayName === "string"), file, invalidHome());
-    need(isOrigin(instance.url), file, notAnOrigin(instance.url));
+    need(isOrigin(instance.origin), file, notAnOrigin(instance.origin));
     if (instance.account !== undefined) parseAccount(instance.account, file);
     // One entry per origin, and no two origins at one folder (DR-127).
-    const folder = instanceFolder(instance.url);
+    const folder = instanceFolder(instance.origin);
     const first = folders.get(folder);
     need(first === undefined, file, i18n._({ id: "instances {first} and {second} share the folder {folder}",
       comment: "Storage diagnostic: two instances home.yaml lists, or one listed twice, would hold their spex repositories in one folder under workspace/",
-      values: { first: first ?? "", second: instance.url, folder } }));
-    folders.set(folder, instance.url);
+      values: { first: first ?? "", second: instance.origin, folder } }));
+    folders.set(folder, instance.origin);
   }
   const paths = new Set<string>(); const keys = new Set<string>();
   for (const folder of value.folders) {
@@ -339,7 +339,7 @@ export class Home {
    * was created with. */
   defaultInstance(): HomeInstance {
     const first = this.data.instances[0];
-    return first ? structuredClone(first) : { url: this.data.origin, clientId: CLIENT_ID };
+    return first ? structuredClone(first) : { origin: this.data.origin, clientId: CLIENT_ID };
   }
 
   /** The listed instance at an origin, in any spelling of it. */
@@ -351,9 +351,9 @@ export class Home {
   /** The instance whose folder under `workspace/` is `folder`: a listed
    * one, else the origin the home was created with. */
   instanceByFolder(folder: string): HomeInstance | undefined {
-    const listed = this.data.instances.find((entry) => instanceFolder(entry.url) === folder);
+    const listed = this.data.instances.find((entry) => instanceFolder(entry.origin) === folder);
     if (listed) return structuredClone(listed);
-    return instanceFolder(this.data.origin) === folder ? { url: this.data.origin, clientId: CLIENT_ID } : undefined;
+    return instanceFolder(this.data.origin) === folder ? { origin: this.data.origin, clientId: CLIENT_ID } : undefined;
   }
 
   /** The instance whose folder a key lies in; none for a key outside
@@ -367,10 +367,10 @@ export class Home {
    * an origin that is none, or whose folder a listed one's equals, is
    * refused. */
   addInstance(origin: string): HomeInstance {
-    const url = this.originOf(origin);
-    const index = this.indexOf(url);
+    const canonical = this.originOf(origin);
+    const index = this.indexOf(canonical);
     if (index >= 0) return structuredClone(this.data.instances[index]);
-    const instance: HomeInstance = { url, clientId: CLIENT_ID };
+    const instance: HomeInstance = { origin: canonical, clientId: CLIENT_ID };
     this.take({ ...this.data, instances: [...this.data.instances, instance] });
     return structuredClone(instance);
   }
@@ -382,14 +382,14 @@ export class Home {
   signIn(account: HomeAccount): void;
   signIn(origin: string, account: HomeAccount): void;
   signIn(first: string | HomeAccount, second?: HomeAccount): void {
-    const origin = typeof first === "string" ? first : this.defaultInstance().url;
+    const named = typeof first === "string" ? first : this.defaultInstance().origin;
     const account = typeof first === "string" ? second as HomeAccount : first;
-    const url = this.originOf(origin);
-    const index = this.indexOf(url);
+    const origin = this.originOf(named);
+    const index = this.indexOf(origin);
     const prior = index < 0 ? undefined : this.data.instances[index];
-    if (prior?.account && prior.account.id !== account.id) throw new InstanceRefused("another-account", url);
+    if (prior?.account && prior.account.id !== account.id) throw new InstanceRefused("another-account", origin);
     const entry: HomeInstance = {
-      url, clientId: CLIENT_ID,
+      origin, clientId: CLIENT_ID,
       account: { id: account.id, login: account.login, displayName: account.displayName },
       ...(prior?.displayName !== undefined ? { displayName: prior.displayName } : {}),
     };
@@ -401,7 +401,7 @@ export class Home {
    * git-host-10): the instance reads signed out until its next sign-in.
    * The default instance's where no origin is named. */
   signOut(origin?: string): void {
-    const index = this.indexOf(origin ?? this.defaultInstance().url);
+    const index = this.indexOf(origin ?? this.defaultInstance().origin);
     if (index < 0 || !this.data.instances[index].account) return;
     this.data = { ...this.data, instances: this.data.instances.map((item, at) => at === index ? { ...item, signedOut: true } : item) };
   }
@@ -412,7 +412,7 @@ export class Home {
     const index = this.indexOf(origin);
     if (index < 0) return false;
     const entry = this.data.instances[index];
-    if (entry.account && entry.signedOut !== true) throw new InstanceRefused("signed-in", entry.url);
+    if (entry.account && entry.signedOut !== true) throw new InstanceRefused("signed-in", entry.origin);
     this.data = { ...this.data, instances: this.data.instances.filter((_, at) => at !== index) };
     return true;
   }
@@ -431,7 +431,7 @@ export class Home {
   /** The account at an instance while it is signed in there; the
    * default instance where no origin is named. */
   account(origin?: string): HomeAccount | null {
-    const index = this.indexOf(origin ?? this.defaultInstance().url);
+    const index = this.indexOf(origin ?? this.defaultInstance().origin);
     const entry = index < 0 ? undefined : this.data.instances[index];
     return entry?.account && entry.signedOut !== true ? structuredClone(entry.account) : null;
   }
@@ -449,9 +449,9 @@ export class Home {
   /** The listed entry at an origin in any spelling; -1 where none, or
    * where the value is no origin. */
   private indexOf(origin: string): number {
-    let url: string;
-    try { url = canonicalOrigin(origin); } catch { return -1; }
-    return this.data.instances.findIndex((entry) => entry.url === url);
+    let canonical: string;
+    try { canonical = canonicalOrigin(origin); } catch { return -1; }
+    return this.data.instances.findIndex((entry) => entry.origin === canonical);
   }
 
   /** Validate a whole next file, then take it. */
