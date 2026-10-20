@@ -3050,33 +3050,35 @@ export class CoreService {
         return this.requireSpace().signInStart();
       case "space.signin.cancel":
         return { stopped: this.requireSpace().signInCancel() };
+      // Each command names the instance it acts at by its origin, the
+      // default instance where it names none (space-29, DR-127).
       case "space.signout":
-        return this.requireSpace().signOut();
+        return this.requireSpace().signOut(command.instance);
       case "space.pick":
         return this.requireSpace().pick(command.repository, command.choice, command.noticed === true);
       case "space.join":
-        return this.requireSpace().join(command.hostId, command.folder === undefined ? undefined : expandPath(command.folder, this.home));
+        return this.requireSpace().join(command.instance, command.hostId, command.folder === undefined ? undefined : expandPath(command.folder, this.home));
       case "space.members":
-        return this.requireSpace().members({ repository: command.repository, group: command.group });
+        return this.requireSpace().members({ instance: command.instance, repository: command.repository, group: command.group });
       // Groups and sharing (git-host-15..17, DR-114): the host is asked,
       // and its answer is the reply.
       case "space.group.create":
-        return this.requireSpace().createGroup(command.name, command.path, command.parent);
+        return this.requireSpace().createGroup(command.instance, command.name, command.path, command.parent);
       // Undo in Spex (git-host-18..20, DR-120): the host is asked, and its
       // answer is the reply.
       case "space.group.rename":
-        return this.requireSpace().renameGroup(command.group, {
+        return this.requireSpace().renameGroup(command.instance, command.group, {
           ...(command.name !== undefined ? { name: command.name } : {}),
           ...(command.path !== undefined ? { path: command.path } : {}),
         });
       case "space.group.delete":
-        return this.requireSpace().deleteGroup(command.group);
+        return this.requireSpace().deleteGroup(command.instance, command.group);
       case "space.repository.move":
         return this.requireSpace().moveRepository(command.repository, command.groupId);
       case "space.share":
-        return this.requireSpace().share({ repository: command.repository, group: command.group, login: command.login, role: command.role });
+        return this.requireSpace().share({ instance: command.instance, repository: command.repository, group: command.group, login: command.login, role: command.role });
       case "space.unshare":
-        return this.requireSpace().unshare({ repository: command.repository, group: command.group, login: command.login });
+        return this.requireSpace().unshare({ instance: command.instance, repository: command.repository, group: command.group, login: command.login });
       case "space.remote.set":
         return this.requireSpace().setRemote(command.repository, command.url);
       case "space.fetch":

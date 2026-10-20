@@ -30,6 +30,8 @@ import { instanceFolder, instanceSegmentOf, isInstanceFolder } from "./instance.
 import { isDeferredClone } from "./migrate-instances.js";
 import type {
   GroupsState,
+  InstanceGroupState,
+  InstanceState,
   RepositoryState,
   SpaceChange,
   SpaceChoice,
@@ -250,6 +252,15 @@ const initializeFirst = (): string => i18n._({
 const signInFirst = (): string => i18n._({
   id: "Sign in first",
   comment: "Refusal: the act needs the Git host, and the home is not signed in",
+});
+
+/** The refusal of a command naming an instance the home does not list
+ * (space-29); a URL's user info, which may hold a secret, is never
+ * repeated. */
+const noSuchInstance = (instance: string): string => i18n._({
+  id: "This device has not signed in to {instance}",
+  values: { instance: instance.replace(/^([a-z][a-z0-9+.-]*:\/\/)[^/?#]*@/i, "$1…@") },
+  comment: "Refusal: a command names an instance, by its address, that this device lists no entry for — never signed in to there, or forgotten since",
 });
 
 /** Guidance under a stop the host's sign-in answers (space-15). */
@@ -1043,6 +1054,7 @@ class RepositorySync {
     const remote = repo.root ? repo.remote : null;
     const state: RepositoryState = {
       key: this.key,
+      instance: this.owner.cloneInstance(this.key, this.facts.remoteName),
       name: splitKey(this.key).name,
       can: { manageMembers: false, transfer: false },
       id: repo.root ? repo.id : null,
@@ -2422,6 +2434,43 @@ export class SpaceManager {
     try { return instanceFolder(this.host.store.home.defaultInstance().origin); } catch { return null; }
   }
 
+  /** A clone's instance by its origin (storage-31, DR-127): the one
+   * whose folder its key begins with — an instance the home lists, or
+   * the origin it records; else the one an instances migration's
+   * deferred entry naming the clone moves it under; else the listed
+   * instance whose folder names its remote; null where none does, the
+   * clone being local only. */
+  cloneInstance(key: string, remoteName: string | null): string | null {
+    const store = this.host.store;
+    const home = store.home;
+    const byKey = home.instanceOfKey(key);
+    if (byKey) return byKey.origin;
+    const deferred = store.deferredMoves().find((move) => move.from === key);
+    const byMove = deferred ? home.instanceOfKey(deferred.to) : undefined;
+    if (byMove) return byMove.origin;
+    if (remoteName === null || !isInstanceFolder(remoteName)) return null;
+    return home.instances().find((entry) => instanceFolder(entry.origin) === remoteName)?.origin ?? null;
+  }
+
+  /** The instance a command names by its origin (space-29), in any
+   * spelling of it: the default instance where it names none, and one
+   * the home does not list refused `not_found`. */
+  namedInstance(origin: string | undefined): string {
+    const home = this.host.store.home;
+    if (origin === undefined) return home.defaultInstance().origin;
+    const listed = home.instance(origin);
+    if (!listed) throw new CoreError("not_found", noSuchInstance(origin));
+    return listed.origin;
+  }
+
+  /** Transitional, until the core keeps a client per instance: it acts
+   * at the default instance alone, so a command naming another instance
+   * the home lists finds it not signed in here, and one naming an
+   * instance the home does not list is refused as any is (space-29). */
+  private served(origin: string | undefined): void {
+    if (this.namedInstance(origin) !== this.host.store.home.defaultInstance().origin) throw new CoreError("invalid_request", signInFirst());
+  }
+
   /** The key a host repository's clone takes (DR-127): its path in the
    * instance, under the instance's folder; null where that path cannot
    * stand as folders on this device, or the home's instance has no
@@ -2625,15 +2674,17 @@ export class SpaceManager {
     } catch (error) {
       if (error instanceof SignInBusyError) throw new CoreError("busy", signInRunning());
       const failure = signInFailure(error, this.hostName());
-      this.signInState = failure ? { phase: "failed", ...failure } : { phase: "idle" };
+      this.signInState = failure ? { phase: "failed", instance: this.host.client.url, ...failure } : { phase: "idle" };
       void this.publish();
       throw new CoreError("invalid_request", failure?.message ?? relayHostError(error, this.hostName()));
     }
     const flow = started.flow;
     this.flow = flow;
+    // The flow names the origin it signs in to (space-30).
+    const instance = this.host.client.url;
     this.signInState = started.kind === "browser"
-      ? { phase: "running", flow: "browser", since: Date.now() }
-      : { phase: "running", flow: "device", userCode: started.flow.userCode, verificationUri: started.flow.verificationUri, since: Date.now() };
+      ? { phase: "running", instance, flow: "browser", since: Date.now() }
+      : { phase: "running", instance, flow: "device", userCode: started.flow.userCode, verificationUri: started.flow.verificationUri, since: Date.now() };
     void this.publish();
     void flow.done.then(
       (account) => this.signedInAs(account),
@@ -2688,7 +2739,7 @@ export class SpaceManager {
   private signInEnded(error: unknown): void {
     this.flow = undefined;
     const failure = signInFailure(error, this.hostName());
-    this.signInState = failure ? { phase: "failed", ...failure } : { phase: "idle" };
+    this.signInState = failure ? { phase: "failed", instance: this.host.client.url, ...failure } : { phase: "idle" };
     void this.publish();
   }
 
@@ -2711,7 +2762,8 @@ export class SpaceManager {
    * credential, keep every clone and record. The home is marked signed
    * out in the same turn as the removal; a pair stored in its place
    * meanwhile stays, and the account with it. */
-  async signOut(): Promise<GroupsState> {
+  async signOut(instance?: string): Promise<GroupsState> {
+    this.served(instance);
     this.flow?.cancel();
     try {
       await this.host.client.signOut(() => {
@@ -3202,7 +3254,8 @@ export class SpaceManager {
 
   /** Pick a group for a local-only spex repository (space-58): join a
    * listed one, or create `<name>-spex` in a group. */
-  async pick(key: string, choice: { kind: "join"; hostId: string } | { kind: "create"; groupId: string | null; name: string }, noticed = false): Promise<{ accepted: true }> {
+  async pick(key: string, choice: { kind: "join"; instance?: string; hostId: string } | { kind: "create"; instance?: string; groupId: string | null; name: string }, noticed = false): Promise<{ accepted: true }> {
+    this.served(choice.instance);
     const machine = this.machine(key);
     {
       // The remote is written only where none stands at the write
@@ -3264,7 +3317,8 @@ export class SpaceManager {
   /** Join a spex repository the host lists and this device lacks
    * (space-63): clone it under `workspace/<group>/`, then the code into
    * `folder`, and pair the two. */
-  async join(hostId: string, folder?: string): Promise<{ accepted: true }> {
+  async join(instance: string | undefined, hostId: string, folder?: string): Promise<{ accepted: true }> {
+    this.served(instance);
     if (!this.signedIn()) throw new CoreError("invalid_request", signInFirst());
     const view = this.view ?? await this.readHost().catch((error: unknown) => { throw new CoreError("invalid_request", relayHostError(error, this.hostName())); });
     const listing = view.listings.find((entry) => entry.repository.id === hostId);
@@ -3458,7 +3512,8 @@ export class SpaceManager {
   /** The members of a spex repository by its key, or of a group by its
    * host id, as the host reports them (space-62, git-host-8), read on
    * each ask and held nowhere. */
-  async members(input: { repository?: string; group?: string }): Promise<{ members: HostMember[] }> {
+  async members(input: { instance?: string; repository?: string; group?: string }): Promise<{ members: HostMember[] }> {
+    this.served(input.instance);
     const target = await this.membersTarget(input, "invalid_request");
     return this.listMembers(target);
   }
@@ -3468,7 +3523,8 @@ export class SpaceManager {
    * (git-host-15); the group then counts as listed until a read begun
    * after its creation is held (git-host-5), announced before the
    * reply. */
-  async createGroup(name: string, path: string, parent: string | null): Promise<{ group: { id: string; fullPath: string; name: string } }> {
+  async createGroup(instance: string | undefined, name: string, path: string, parent: string | null): Promise<{ group: { id: string; fullPath: string; name: string } }> {
+    this.served(instance);
     if (!this.signedIn()) throw new CoreError("invalid_request", signInFirst());
     const typed = name.trim();
     if (typed.length === 0) throw new CoreError("invalid_request", nameTheGroup());
@@ -3511,7 +3567,8 @@ export class SpaceManager {
    * every group and spex repository inside it under its new path, until
    * a read begun after the rename is held (git-host-5), announced before
    * the reply. */
-  async renameGroup(id: string, input: { name?: string; path?: string }): Promise<{ group: { id: string; fullPath: string; name: string } }> {
+  async renameGroup(instance: string | undefined, id: string, input: { name?: string; path?: string }): Promise<{ group: { id: string; fullPath: string; name: string } }> {
+    this.served(instance);
     if (!this.signedIn()) throw new CoreError("invalid_request", signInFirst());
     if (input.name === undefined && input.path === undefined) throw new CoreError("invalid_request", renameNothing());
     const name = input.name?.trim();
@@ -3551,7 +3608,8 @@ export class SpaceManager {
    * whatever a group holds with it; the group is held as gone until a
    * read begun after the deletion is held (git-host-5), announced before
    * the reply. */
-  async deleteGroup(id: string): Promise<{ deleted: true }> {
+  async deleteGroup(instance: string | undefined, id: string): Promise<{ deleted: true }> {
+    this.served(instance);
     if (!this.signedIn()) throw new CoreError("invalid_request", signInFirst());
     const listed = this.instanceGroup(id);
     if (this.holdsAnything(listed)) throw new CoreError("invalid_request", groupNotEmpty(listed.fullPath));
@@ -3651,7 +3709,8 @@ export class SpaceManager {
   /** Add the account of a login to a group or spex repository at one of
    * the host's roles, and list the members the host holds afterwards
    * (git-host-16). `role` is a role's id from the view. */
-  async share(input: { repository?: string; group?: string; login: string; role: string }): Promise<{ members: HostMember[] }> {
+  async share(input: { instance?: string; repository?: string; group?: string; login: string; role: string }): Promise<{ members: HostMember[] }> {
+    this.served(input.instance);
     this.requireOneTarget(input);
     const login = input.login.trim();
     if (login.length === 0) throw new CoreError("invalid_request", nameTheLogin(this.hostName()));
@@ -3669,7 +3728,8 @@ export class SpaceManager {
   /** Remove the account of a login from a group's or spex repository's
    * own members, and list the members the host holds afterwards
    * (git-host-17). */
-  async unshare(input: { repository?: string; group?: string; login: string }): Promise<{ members: HostMember[] }> {
+  async unshare(input: { instance?: string; repository?: string; group?: string; login: string }): Promise<{ members: HostMember[] }> {
+    this.served(input.instance);
     this.requireOneTarget(input);
     const login = input.login.trim();
     if (login.length === 0) throw new CoreError("invalid_request", nameTheLogin(this.hostName()));
@@ -4133,14 +4193,20 @@ export class SpaceManager {
     repositories.push(...this.absentRows());
     const diagnostics = await this.host.checkRepairs(this.diagnostics());
     const host = store.home.host;
+    const placed = this.byInstance(repositories);
     return {
       home: resolve(this.host.home),
       git: await this.probe.version(),
+      defaultInstance: host.origin,
+      signIn: this.signInView(),
+      own: { name: store.home.ownName, repositories: placed.own },
+      instances: this.instancesOf(placed.groups),
+      // Transitional mirrors of the default instance (space-30), until
+      // the interface reads `instances`.
       host: { url: host.origin, displayName: this.view?.displayName ?? this.described?.displayName ?? null },
       // What the host's last read said the person may do, and the roles
       // it grants: nothing until a read is held (DR-114).
       account: ((a) => (a ? { ...a, canCreateGroup: this.view?.account.canCreateGroup ?? false } : null))(store.home.account()),
-      signIn: this.signInView(),
       read: this.signedIn() ? this.readState : { phase: "idle" },
       readAt: this.signedIn() ? this.view?.readAt ?? null : null,
       groups: this.groupsOf(repositories),
@@ -4150,6 +4216,125 @@ export class SpaceManager {
       // what the reader has not answered, and everything unfolded.
       issues: countIssues(diagnostics),
     };
+  }
+
+  /** Every instance the home lists, in its order, as its heading reads
+   * it (space-1, space-30), with the groups `byInstance` placed under it.
+   * Until the core reads each instance on its own, the default
+   * instance's read is the one this core holds: another listed instance
+   * reads no view. */
+  private instancesOf(groups: Map<string, InstanceGroupState[]>): InstanceState[] {
+    const home = this.host.store.home;
+    const served = home.defaultInstance().origin;
+    return home.instances().flatMap((entry): InstanceState[] => {
+      if (!entry.account) return [];
+      const ours = entry.origin === served;
+      const signedIn = home.account(entry.origin) !== null;
+      const view = ours && signedIn ? this.view : undefined;
+      let host: string;
+      try { host = new URL(entry.origin).hostname; } catch { host = entry.origin; }
+      return [{
+        origin: entry.origin,
+        host,
+        displayName: (ours ? this.view?.displayName ?? this.described?.displayName : undefined) ?? entry.displayName ?? null,
+        // What its last read said the person may do there: nothing until
+        // a read is held (DR-114).
+        account: { id: entry.account.id, login: entry.account.login, displayName: entry.account.displayName, canCreateGroup: view?.account.canCreateGroup ?? false },
+        signedIn,
+        // Said for the core's run, until the next sign-in (space-3).
+        hostSignedOut: ours && !signedIn && this.hostSignedOut !== undefined,
+        read: ours && signedIn ? this.readState : { phase: "idle" },
+        readAt: view?.readAt ?? null,
+        roles: (view?.roles ?? []).map((role) => ({ id: role.id, name: role.name, mayPush: role.mayPush })),
+        groups: groups.get(entry.origin) ?? [],
+      }];
+    });
+  }
+
+  /** Your own group's rows, and under each instance the home lists its
+   * groups, your namespace there, and each other account's login there
+   * with theirs (space-1, space-30, DR-127). A signed-in instance holds
+   * your namespace, and every group its read lists; a row stands under
+   * the group the host's last read names for it, and under its key's
+   * group at its instance only where the read lists nothing for it; your
+   * own group's own repository, a row keyed in your own group's folder
+   * that no read lists, and a row of an instance the home does not list
+   * stand under your own group alone. Entries are known by the group's
+   * id, a namespace by its login, so no group displaces your own group
+   * or takes its rows. Until the core reads each instance on its own,
+   * the default instance's read is the only one held. */
+  private byInstance(placed: Placed[]): { own: RepositoryState[]; groups: Map<string, InstanceGroupState[]> } {
+    const home = this.host.store.home;
+    const ownName = home.ownName;
+    const served = home.defaultInstance().origin;
+    const view = this.signedIn() ? this.view : undefined;
+    const noCan = (): InstanceGroupState["can"] => ({ createSubgroup: false, manageMembers: false, rename: false, delete: false });
+    interface Heading { login: string; entries: InstanceGroupState[]; byId: Map<string, InstanceGroupState>; byPath: Map<string, InstanceGroupState>; logins: Map<string, InstanceGroupState> }
+    const headings = new Map<string, Heading>();
+    const namespace = (heading: Heading, login: string): InstanceGroupState => {
+      let entry = heading.logins.get(login.toLowerCase());
+      if (!entry) {
+        entry = { id: null, login, mine: sameLogin(login, heading.login), fullPath: login, name: login, can: noCan(), repositories: [] };
+        heading.entries.push(entry);
+        heading.logins.set(login.toLowerCase(), entry);
+      }
+      return entry;
+    };
+    const unlisted = (heading: Heading, path: string): InstanceGroupState => {
+      let entry = heading.byPath.get(path);
+      if (!entry) {
+        entry = { id: null, login: null, mine: false, fullPath: path, name: path.split("/").pop() ?? path, can: noCan(), repositories: [] };
+        heading.entries.push(entry);
+        heading.byPath.set(path, entry);
+      }
+      return entry;
+    };
+    for (const instance of home.instances()) {
+      if (!instance.account) continue;
+      const heading: Heading = { login: instance.account.login, entries: [], byId: new Map(), byPath: new Map(), logins: new Map() };
+      headings.set(instance.origin, heading);
+      // Your namespace at every instance signed in to (space-1).
+      if (home.account(instance.origin) !== null) namespace(heading, heading.login);
+      if (instance.origin !== served || !view) continue;
+      for (const group of this.listedGroups(view)) {
+        if (group.kind === "user") continue;
+        const can = group.can;
+        const entry: InstanceGroupState = { id: group.id, login: null, mine: false, fullPath: group.fullPath, name: group.name, can: { createSubgroup: can.createSubgroup, manageMembers: can.manageMembers, rename: can.rename, delete: can.delete }, repositories: [] };
+        heading.entries.push(entry);
+        if (group.id !== null) heading.byId.set(group.id, entry);
+        if (!heading.byPath.has(group.fullPath)) heading.byPath.set(group.fullPath, entry);
+      }
+    }
+    const own: RepositoryState[] = [];
+    // The rows a read lists first, so every login's entry stands before
+    // a row no read lists falls back to its key.
+    for (const { row, group } of placed) {
+      if (!group) continue;
+      const heading = headings.get(served);
+      if (row.own || !heading) { own.push(row); continue; }
+      const entry = group.kind === "user"
+        ? namespace(heading, group.fullPath)
+        : (group.id !== null && heading.byId.get(group.id)?.fullPath === group.fullPath ? heading.byId.get(group.id)! : unlisted(heading, group.fullPath));
+      entry.repositories.push(row);
+    }
+    for (const { row, group } of placed) {
+      if (group) continue;
+      const heading = row.instance === null ? undefined : headings.get(row.instance);
+      const { instance: folder, group: path } = splitKey(row.key);
+      if (row.own || !heading || (folder === null && path === ownName)) { own.push(row); continue; }
+      const entry = heading.logins.get(path.toLowerCase()) ?? (sameLogin(path, heading.login) ? namespace(heading, path) : unlisted(heading, path));
+      entry.repositories.push(row);
+    }
+    const groupsOwn = (entry: InstanceGroupState, row: RepositoryState): boolean => row.name === `${entry.fullPath.split("/").pop()}-spex`;
+    own.sort((a, b) => Number(b.own) - Number(a.own) || a.key.localeCompare(b.key));
+    const groups = new Map<string, InstanceGroupState[]>();
+    for (const [origin, heading] of headings) {
+      for (const entry of heading.entries) {
+        entry.repositories.sort((a, b) => Number(groupsOwn(entry, b)) - Number(groupsOwn(entry, a)) || a.key.localeCompare(b.key));
+      }
+      groups.set(origin, heading.entries.sort((a, b) => a.fullPath.localeCompare(b.fullPath)));
+    }
+    return { own, groups };
   }
 
   /** A clone's state as the host's last answer and this device's files
@@ -4163,6 +4348,7 @@ export class SpaceManager {
     // A remote at the host reads as its path in the instance (space-15).
     const row: RepositoryState = {
       ...base,
+      instance: this.cloneInstance(base.key, facts.remoteName),
       id: facts.id,
       remote: this.remoteAsShown(facts, base.key),
       folder: this.host.store.home.folderOf(base.key)?.path ?? null,
@@ -4233,6 +4419,8 @@ export class SpaceManager {
       rows.push({
         row: {
           key,
+          // The instance whose read lists it (DR-127).
+          instance: store.home.defaultInstance().origin,
           name: repository.path,
           can: colliding ? { manageMembers: false, transfer: false } : { manageMembers: repository.can.manageMembers, transfer: repository.can.transfer },
           id: repository.id,
@@ -4259,15 +4447,16 @@ export class SpaceManager {
     return rows;
   }
 
-  /** Your own group first, then, by path, every group the host lists
-   * and every other account's login under which it lists a spex
-   * repository, each with its spex repositories, the group's own first
-   * (space-1, DR-120). Entries are known by the group's id, your own
-   * once, another account's by its login: a row stands under the group
-   * the host's last read names for it, and under its key's group only
-   * where the host lists nothing for it, so no group the host lists
-   * displaces your own or takes its rows. Before sign-in, your own group
-   * with what this device holds. */
+  /** Transitional, the mirror the interface reads until it reads
+   * `instances` (space-30): your own group first, then, by path, every
+   * group the host lists and every other account's login under which it
+   * lists a spex repository, each with its spex repositories, the
+   * group's own first (space-1, DR-120). Entries are known by the
+   * group's id, your own once, another account's by its login: a row
+   * stands under the group the host's last read names for it, and under
+   * its key's group only where the host lists nothing for it, so no
+   * group the host lists displaces your own or takes its rows. Before
+   * sign-in, your own group with what this device holds. */
   private groupsOf(placed: Placed[]): GroupsState["groups"] {
     const store = this.host.store;
     const ownName = store.home.ownName;

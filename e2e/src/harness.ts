@@ -250,12 +250,14 @@ export function clonePath(dataDir: string, key: string): string {
   return join(dataDir, "workspace", ...key.split("/"));
 }
 
-/** One repository's state out of the Groups state (space-30). */
+/** One repository's state out of the Groups state (space-30): under
+ * your own group or an instance's heading, else in the transitional
+ * mirror of the default instance's groups. */
 export function repositoryOf(state: GroupsState, key: string): RepositoryState {
-  for (const group of state.groups) {
-    const found = group.repositories.find((repository) => repository.key === key);
-    if (found) return found;
-  }
+  const rows = [...state.own.repositories, ...state.instances.flatMap((instance) => instance.groups.flatMap((group) => group.repositories))];
+  const found = rows.find((repository) => repository.key === key)
+    ?? state.groups.flatMap((group) => group.repositories).find((repository) => repository.key === key);
+  if (found) return found;
   throw new Error(`no repository ${key}`);
 }
 
@@ -1100,14 +1102,11 @@ export async function signInCore(app: App): Promise<GroupsState> {
 /** Whether a sign-in's set-up has ended: signed in, nothing in flight,
  * and your own group's spex repository on the host (space-4). */
 export function ownSetUp(state: GroupsState): boolean {
-  if (state.account === null || state.signIn.phase !== "idle") return false;
-  const login = state.account.login;
-  try {
-    const own = repositoryOf(state, `${login}/${login}-spex`);
-    return own.state !== "local-only" && own.sync.phase !== "running";
-  } catch {
-    return false;
-  }
+  const instance = state.instances.find((entry) => entry.origin === state.defaultInstance);
+  if (!instance?.signedIn || state.signIn.phase !== "idle") return false;
+  const login = instance.account.login;
+  const own = state.own.repositories.find((repository) => repository.key === `${login}/${login}-spex`);
+  return own !== undefined && own.state !== "local-only" && own.sync.phase !== "running";
 }
 
 /** Pick a group for the demo project's local-only spex repository over

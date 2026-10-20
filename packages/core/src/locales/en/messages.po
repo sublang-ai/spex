@@ -2590,6 +2590,11 @@ msgstr "this conversation is waiting for your reply; answer it first"
 msgid "This decision was not offered by the agent."
 msgstr "This decision was not offered by the agent."
 
+#. Refusal: a command names an instance, by its address, that this device lists no entry for — never signed in to there, or forgotten since
+#: src/space.ts
+msgid "This device has not signed in to {instance}"
+msgstr "This device has not signed in to {instance}"
+
 #. Create recovery for an existing unborn repository; Add is the palette action
 #: src/forge.ts
 msgid "This folder already contains a Git repository without an initial commit. Finish the initial commit in your terminal, then use Add."

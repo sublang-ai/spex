@@ -70,6 +70,10 @@ export const INSTANCE_FOLDER_PATTERN = new RegExp(`^${INSTANCE_SEGMENT}$`);
  * key. */
 export const REPOSITORY_KEY_PATTERN = new RegExp(`^(?:${INSTANCE_SEGMENT}/${KEY_SEGMENT}/)?(?:${KEY_SEGMENT}/)*${KEY_SEGMENT}-spex$`);
 export const repositoryKeySchema = z.string().regex(REPOSITORY_KEY_PATTERN);
+/** An instance a command names, by its origin as the Groups state
+ * carries it (space-29, DR-127): the core reads it in any spelling and
+ * refuses one the home does not list. */
+const instanceOriginSchema = z.string().min(1);
 
 /** A request in `spex.yaml` (environments-2): exactly one source. */
 export const environmentRequestSchema = z.union([
@@ -1227,31 +1231,37 @@ export const commandSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("environment.publish"), id, repository: repositoryKeySchema, path: z.string().min(1), dryRun: z.boolean().optional() }).strict(),
   z.object({ type: z.literal("environment.playbooks"), id, projectId: repositoryKeySchema.optional() }).strict(),
   // Groups (space-29, DR-103): the core performs every Git operation,
-  // one spex repository at a time, `repository` naming it by its key;
-  // long commands reply `accepted` at once and report their outcome as
-  // `space.state`.
+  // one spex repository at a time, `repository` naming it by its key
+  // and `instance` an instance by its origin (DR-127); long commands
+  // reply `accepted` at once and report their outcome as `space.state`.
+  // Transitional: `url` and every `instance` stay optional until the
+  // interface sends them, one left out naming the default instance — for
+  // a pick or a join, the clone's or the row's instance.
   z.object({ type: z.literal("space.get"), id }).strict(),
   z.object({ type: z.literal("space.refresh"), id }).strict(),
-  z.object({ type: z.literal("space.signin.start"), id }).strict(),
+  /** `url`: the instance's URL as the reader gave it, held by its origin. */
+  z.object({ type: z.literal("space.signin.start"), id, url: z.string().optional() }).strict(),
   z.object({ type: z.literal("space.signin.cancel"), id }).strict(),
-  z.object({ type: z.literal("space.signout"), id }).strict(),
+  z.object({ type: z.literal("space.signout"), id, instance: instanceOriginSchema.optional() }).strict(),
   z.object({
     type: z.literal("space.pick"),
     id,
     repository: repositoryKeySchema,
+    /** `instance`: the one the choice is at. */
     choice: z.union([
-      z.object({ kind: z.literal("join"), hostId: z.string().min(1) }).strict(),
-      z.object({ kind: z.literal("create"), groupId: z.string().min(1).nullable(), name: z.string().min(1) }).strict(),
+      z.object({ kind: z.literal("join"), instance: instanceOriginSchema.optional(), hostId: z.string().min(1) }).strict(),
+      z.object({ kind: z.literal("create"), instance: instanceOriginSchema.optional(), groupId: z.string().min(1).nullable(), name: z.string().min(1) }).strict(),
     ]),
     /** The privacy notice was shown for a join into a repository with other members (space-57). */
     noticed: z.boolean().optional(),
   }).strict(),
-  z.object({ type: z.literal("space.join"), id, hostId: z.string().min(1), folder: z.string().min(1).optional() }).strict(),
-  // Members of a spex repository by key, or of a group by its host id;
-  // exactly one (space-29).
-  z.object({ type: z.literal("space.members"), id, repository: repositoryKeySchema.optional(), group: z.string().min(1).optional() }).strict(),
-  // Groups and sharing (DR-114, space-29).
-  z.object({ type: z.literal("space.group.create"), id, name: z.string().min(1), path: z.string().min(1), parent: z.string().min(1).nullable() }).strict(),
+  /** `instance`: the one the row stands under (space-1). */
+  z.object({ type: z.literal("space.join"), id, instance: instanceOriginSchema.optional(), hostId: z.string().min(1), folder: z.string().min(1).optional() }).strict(),
+  // Members of a spex repository by key, or of a group by its host id
+  // at its instance; exactly one (space-29).
+  z.object({ type: z.literal("space.members"), id, instance: instanceOriginSchema.optional(), repository: repositoryKeySchema.optional(), group: z.string().min(1).optional() }).strict(),
+  // Groups and sharing (DR-114, space-29), a group at the instance named.
+  z.object({ type: z.literal("space.group.create"), id, instance: instanceOriginSchema.optional(), name: z.string().min(1), path: z.string().min(1), parent: z.string().min(1).nullable() }).strict(),
   // Undo in Spex (DR-120, space-29): a group of the instance renamed or
   // deleted by its host id, a spex repository moved by its key into a
   // group by its host id, or into your own group where none is named.
@@ -1259,17 +1269,19 @@ export const commandSchema = z.discriminatedUnion("type", [
     .object({
       type: z.literal("space.group.rename"),
       id,
+      instance: instanceOriginSchema.optional(),
       group: z.string().min(1),
       name: z.string().min(1).optional(),
       path: z.string().min(1).optional(),
     })
     .strict(),
-  z.object({ type: z.literal("space.group.delete"), id, group: z.string().min(1) }).strict(),
+  z.object({ type: z.literal("space.group.delete"), id, instance: instanceOriginSchema.optional(), group: z.string().min(1) }).strict(),
   z.object({ type: z.literal("space.repository.move"), id, repository: repositoryKeySchema, groupId: z.string().min(1).nullable() }).strict(),
   z
     .object({
       type: z.literal("space.share"),
       id,
+      instance: instanceOriginSchema.optional(),
       group: z.string().min(1).optional(),
       repository: repositoryKeySchema.optional(),
       login: z.string().min(1),
@@ -1280,6 +1292,7 @@ export const commandSchema = z.discriminatedUnion("type", [
     .object({
       type: z.literal("space.unshare"),
       id,
+      instance: instanceOriginSchema.optional(),
       group: z.string().min(1).optional(),
       repository: repositoryKeySchema.optional(),
       login: z.string().min(1),
@@ -1907,6 +1920,11 @@ export interface RepositoryState {
    * DR-127); for a row the host lists in a group held as colliding,
    * `<folder>/<path>@<id>`, naming no clone (space-61). */
   key: string;
+  /** Its instance's origin (storage-31, DR-127): the one its key's
+   * folder names, the one a migration deferred it to, else the one its
+   * remote's name names; for a row an instance lists and this device
+   * lacks, that instance's; null for a clone with none. */
+  instance: string | null;
   /** `<name>-spex`, the clone's folder name. */
   name: string;
   /** The Git host's permanent id for it, where known. */
@@ -1967,26 +1985,43 @@ export interface HostMemberInfo {
   via: string | null;
 }
 
-/** The home, its groups and their spex repositories (space-30). */
-
+/** The home, its groups and their spex repositories (space-30,
+ * DR-127): your own group, then every instance the home lists with its
+ * groups. */
 export interface GroupsState {
   home: string;
   git: { ok: true; version: string } | { ok: false; guidance: string };
-  host: { url: string; displayName: string | null };
-  /** `canCreateGroup`: as the host's last read said (DR-114); false until one is held. */
-  account: { id: string; login: string; displayName: string | null; canCreateGroup: boolean } | null;
+  /** The default instance's origin, which the sign-in card holds (space-3). */
+  defaultInstance: string;
   signIn:
-    /** `signedOut`: the host signed this device out (git-host-4), with
-     * the login the account bore; held for the core's run, until the
-     * next sign-in (space-3). */
+    /** `signedOut`, transitional: the default instance signed this
+     * device out (git-host-4), with the login the account bore; held for
+     * the core's run, until the next sign-in (space-3). The interface
+     * reads `instances[].hostSignedOut` once it reads `instances`. */
     | { phase: "idle"; signedOut?: { by: "host"; login: string } }
-    | { phase: "running"; flow: "browser" | "device"; userCode?: string; verificationUri?: string; since: number }
-    | { phase: "failed"; cause: "denied" | "expired" | "refused" | "unreachable"; message: string };
-  /** The full host read and accepted Refresh setup, independent of sign-in and the last complete view. */
+    /** `instance`: the origin being signed in to. */
+    | { phase: "running"; instance: string; flow: "browser" | "device"; userCode?: string; verificationUri?: string; since: number }
+    | { phase: "failed"; instance: string; cause: "denied" | "expired" | "refused" | "unreachable"; message: string };
+  /** Your own group, keyed `own`: its folder name and its rows — its own
+   * spex repository and the clones no instance's heading holds (space-1). */
+  own: { name: string; repositories: RepositoryState[] };
+  /** Every instance the home lists, in its order (space-1). */
+  instances: InstanceState[];
+  /** Transitional, until the interface reads `defaultInstance` and
+   * `instances`: the default instance's origin and display name. */
+  host: { url: string; displayName: string | null };
+  /** Transitional: the default instance's account while signed in there;
+   * `canCreateGroup` as its last read said (DR-114), false until one is
+   * held. */
+  account: { id: string; login: string; displayName: string | null; canCreateGroup: boolean } | null;
+  /** Transitional: the default instance's full read and accepted Refresh
+   * setup, independent of sign-in and the last complete view. */
   read: { phase: "idle" } | { phase: "running" } | { phase: "failed"; message: string };
+  /** Transitional: the default instance's last complete view. */
   readAt: number | null;
-  /** One entry per group the host lists, by its id; your own once; one
-   * per other account's login under which the host lists a spex
+  /** Transitional: your own group, holding your namespace at the default
+   * instance, then one entry per group that instance lists, by its id,
+   * and one per other account's login under which it lists a spex
    * repository (space-1, DR-120). */
   groups: {
     /** The host's id; null for another account's login, and for a key's
@@ -2002,13 +2037,60 @@ export interface GroupsState {
     can: { createSubgroup: boolean; manageMembers: boolean; rename: boolean; delete: boolean };
     repositories: RepositoryState[];
   }[];
-  /** The host's own roles in its order, empty until a read is held (DR-114). */
+  /** Transitional: the default instance's own roles in its order, empty
+   * until a read is held (DR-114). */
   roles: { id: string; name: string; mayPush: boolean }[];
   diagnostics: { file: string; reason: string; blocking: boolean; repair?: DiagnosticRepair }[];
   /** What the header counts (space-1): the repairs this device's
    * reader has not answered, plus every diagnostic no repair folds.
    * Carried as one number so header and list cannot disagree. */
   issues: number;
+}
+
+/** An instance the home lists, as the Groups surface heads it (space-30,
+ * DR-127). */
+export interface InstanceState {
+  /** The instance's origin, naming it in every command. */
+  origin: string;
+  /** Its host name. */
+  host: string;
+  /** As last read, null until one is. */
+  displayName: string | null;
+  /** The account there; `canCreateGroup` as its last read said (DR-114),
+   * false until one is held. */
+  account: { id: string; login: string; displayName: string | null; canCreateGroup: boolean };
+  signedIn: boolean;
+  /** It signed this device out (git-host-4), held for the core's run
+   * (space-3). */
+  hostSignedOut: boolean;
+  /** Its full read and accepted Refresh setup; idle while signed out. */
+  read: { phase: "idle" } | { phase: "running" } | { phase: "failed"; message: string };
+  /** Its last complete view, retained while reading or after failure. */
+  readAt: number | null;
+  /** Its own roles in its order, empty until a read is held. */
+  roles: { id: string; name: string; mayPush: boolean }[];
+  /** Its groups, your namespace there, and each other account's login
+   * under which it lists a spex repository (space-1). */
+  groups: InstanceGroupState[];
+}
+
+/** A group an instance lists, or a namespace there (space-30): keyed with
+ * its instance by id, a namespace by login. */
+export interface InstanceGroupState {
+  /** The host's id; null for a namespace and for a key's group no read
+   * lists. */
+  id: string | null;
+  /** A namespace's login — your login there, `mine`, or another
+   * account's; null for a group. */
+  login: string | null;
+  mine: boolean;
+  /** The path in the instance. */
+  fullPath: string;
+  name: string;
+  /** What its last read said the person may do there; all false until
+   * one is held, and in a namespace. */
+  can: { createSubgroup: boolean; manageMembers: boolean; rename: boolean; delete: boolean };
+  repositories: RepositoryState[];
 }
 
 /** One entry of a `space.tree` level of a clone, annotated from the

@@ -29,6 +29,7 @@ import {
   NOW,
   NO_CAN,
   OWN,
+  ORIGIN,
   OWN_REPO,
   SESSION_UNIT,
   answer,
@@ -257,7 +258,7 @@ describe("GROUPS: signing in (space-3, space-6)", () => {
     expect(openExternal).toHaveBeenCalledTimes(2);
     expect(screen.getByRole("button", { name: "Cancel" })).toBeTruthy();
     // The core reports the flow running, then its end with the account.
-    deliver(signedOut({ signIn: { phase: "running", flow: "browser", since: NOW } }));
+    deliver(signedOut({ signIn: { phase: "running", instance: ORIGIN, flow: "browser", since: NOW } }));
     expect(control.textContent).toBe("Signing in…");
     deliver(base());
     expect(screen.getByTestId("space-account-wide").textContent).toBe("Signed in as @jane at Spex Example");
@@ -319,7 +320,7 @@ describe("GROUPS: signing in (space-3, space-6)", () => {
     // A page that opens mid-flow reads the link from the state alone.
     cleanup();
     await renderGroups(
-      signedOut({ signIn: { phase: "running", flow: "device", userCode: "ABCD-EFGH", verificationUri: complete, since: NOW } }),
+      signedOut({ signIn: { phase: "running", instance: ORIGIN, flow: "device", userCode: "ABCD-EFGH", verificationUri: complete, since: NOW } }),
       { open: false },
     );
     expect(screen.getByTestId("space-signin-link").textContent).toBe("Open spex.example to sign in");
@@ -330,8 +331,8 @@ describe("GROUPS: signing in (space-3, space-6)", () => {
   });
 
   test("a denial, an expiry or a refusal ends the flow with its cause beside the control, which reads Sign in again", async () => {
-    await renderGroups(signedOut({ signIn: { phase: "running", flow: "device", userCode: "ABCD-EFGH", verificationUri: "https://spex.example/oauth/device", since: NOW } }), { open: false });
-    deliver(signedOut({ signIn: { phase: "failed", cause: "denied", message: "The sign-in was denied at Spex Example" } }));
+    await renderGroups(signedOut({ signIn: { phase: "running", instance: ORIGIN, flow: "device", userCode: "ABCD-EFGH", verificationUri: "https://spex.example/oauth/device", since: NOW } }), { open: false });
+    deliver(signedOut({ signIn: { phase: "failed", instance: ORIGIN, cause: "denied", message: "The sign-in was denied at Spex Example" } }));
     expect(screen.getByTestId("space-signin-error").textContent).toBe("The sign-in was denied at Spex Example.");
     expect(screen.getByTestId("space-signin").textContent).toBe("Sign in again");
     expect(screen.queryByTestId("space-signin-link")).toBeNull();
@@ -965,8 +966,8 @@ describe("GROUPS: Members (space-62)", () => {
 describe("GROUPS: copy and fit (space-27, space-28)", () => {
   const states = (): GroupsState[] => [
     signedOut(),
-    signedOut({ signIn: { phase: "running", flow: "device", userCode: "ABCD-EFGH", verificationUri: "https://spex.example/oauth/device", since: NOW } }),
-    signedOut({ signIn: { phase: "failed", cause: "expired", message: "The code expired" } }),
+    signedOut({ signIn: { phase: "running", instance: ORIGIN, flow: "device", userCode: "ABCD-EFGH", verificationUri: "https://spex.example/oauth/device", since: NOW } }),
+    signedOut({ signIn: { phase: "failed", instance: ORIGIN, cause: "expired", message: "The code expired" } }),
     localProject(),
     base({}, [
       repo({ state: "read-only", reason: "archived" }),

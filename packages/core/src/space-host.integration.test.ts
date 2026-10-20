@@ -169,12 +169,14 @@ test("space-37: the browser sign-in renames your own group after the login, push
   assert.deepEqual(reread.roles, []);
   assert.equal(reread.readAt, null);
   assert.equal(reread.host.url, host.url);
+  assert.deepEqual(reread.instances.map((instance) => [instance.origin, instance.account.login, instance.signedIn, instance.readAt, instance.roles]), [[host.url, LOGIN, true, null, []]]);
   assert.deepEqual(repositoryOf(reread, HOST_OWN).lastSync, own.lastSync);
   // That first ask began the read a signed-in start owes, once for both
   // asks, its state landing with a read time and the host's groups for
   // the picker (space-1, git-host-5); a later ask begins none.
   const read = await again.client.waitSpace(fromStart, (state) => state.readAt !== null);
   assert.equal(typeof read.readAt, "number");
+  assert.equal(read.instances[0].readAt, read.readAt);
   assert.deepEqual(read.groups.map((group) => group.fullPath), [LOGIN, "acme", "acme/research"]);
   assert.equal(repositoryOf(read, HOST_OWN).state, "reachable");
   assert.deepEqual(read.account, signed.account);
@@ -309,7 +311,7 @@ test("space-37: the device sign-in links the stand-in's code, names the host, an
   assert.equal(running.signIn.verificationUri, denied.verificationUri);
   host.script.denyDevice(denied.userCode);
   const failed = await home.client.waitSpace(from, (state) => state.signIn.phase === "failed");
-  assert.ok(failed.signIn.phase === "failed" && failed.signIn.cause === "denied", JSON.stringify(failed.signIn));
+  assert.ok(failed.signIn.phase === "failed" && failed.signIn.cause === "denied" && failed.signIn.instance === host.url, JSON.stringify(failed.signIn));
   assert.equal(failed.account, null);
   assert.ok(!existsSync(join(home.dataDir, "local", "credentials.yaml")), "nothing is stored");
   const signed = await signIn(home, host);
@@ -916,6 +918,69 @@ test("space-37: Sign out revokes this device and keeps every clone, its reposito
   assert.deepEqual(Home.load(home.dataDir).file.instances.map((entry) => [entry.origin, entry.account?.login, entry.signedOut]), [[host.url, LOGIN, undefined]]);
 });
 
+test("space-30, space-29: the state names the default instance, your own group and each instance the home lists with its account, read and groups, every row its instance; a command naming an instance the home does not list is refused", async (t) => {
+  const host = await startHost();
+  const home = await startHome("instances-state", { host, extra: { signIn: "browser" } });
+  t.after(() => home.stop());
+  const { key } = await addFolder(home, home.projectDir);
+  // Before any sign-in: no instance, the default instance the stand-in's
+  // origin, and your own group alone with its rows, none at an instance.
+  const before = await home.client.expectOk("space.get", {});
+  assert.equal(before.defaultInstance, host.url);
+  assert.deepEqual(before.instances, []);
+  assert.equal(before.own.name, OWN);
+  assert.deepEqual(before.own.repositories.map((repository) => [repository.key, repository.own, repository.instance]), [[OWN_KEY, true, null], [key, false, null]]);
+  // A sign-in names the origin it signs in to while it runs.
+  const from = home.client.mark();
+  const started = await home.client.expectOk("space.signin.start", {});
+  assert.ok(started.flow === "browser", JSON.stringify(started));
+  const running = await home.client.waitSpace(from, (state) => state.signIn.phase === "running");
+  assert.ok(running.signIn.phase === "running" && running.signIn.instance === host.url, JSON.stringify(running.signIn));
+  await (await fetch((await fetch(started.url, { redirect: "manual" })).headers.get("location") ?? "")).text();
+  await home.client.waitRepository(from, HOST_OWN, (repository) => repository.sync.phase === "done", 30_000);
+  const state = await home.client.expectOk("space.get", {});
+  // The one instance, by its origin, with the account there, what its
+  // read said, its roles, and its groups and your namespace there.
+  assert.equal(state.instances.length, 1);
+  const [instance] = state.instances;
+  assert.deepEqual(
+    { ...instance, readAt: typeof instance.readAt, roles: instance.roles.length > 0, groups: undefined },
+    { origin: host.url, host: "127.0.0.1", displayName: HOST_NAME, account: { id: "1001", login: LOGIN, displayName: "Ada Lovelace", canCreateGroup: true }, signedIn: true, hostSignedOut: false, read: { phase: "idle" }, readAt: "number", roles: true, groups: undefined },
+  );
+  assert.deepEqual(instance.roles, state.roles);
+  assert.deepEqual(instance.groups.map((group) => [group.fullPath, group.id, group.login, group.mine]), [["acme", "2002", null, false], ["acme/research", "2003", null, false], [LOGIN, null, LOGIN, true]]);
+  assert.deepEqual(instance.groups.find((group) => group.id === "2002")?.can, state.groups.find((group) => group.id === "2002")?.can, "what the read lets the person do in a group");
+  // Your own group by its folder name, holding its own repository at the
+  // instance and the project's clone, local only; your namespace there
+  // holds no row of your own group's.
+  assert.equal(state.own.name, LOGIN);
+  const moved = `${LOGIN}/${basename(home.projectDir)}-spex`;
+  assert.deepEqual(state.own.repositories.map((repository) => [repository.key, repository.instance, repository.state]), [[HOST_OWN, host.url, "reachable"], [moved, null, "local-only"]]);
+  assert.deepEqual(instance.groups.find((group) => group.mine)?.repositories, []);
+  // A command names the instance by its origin in any spelling; one the
+  // home does not list is refused before anything is asked of a host,
+  // its address repeated without any user info.
+  const acme = await home.client.expectOk("space.members", { instance: `${host.url}/`, group: "2002" });
+  assert.ok(acme.members.some((member) => member.login === LOGIN), JSON.stringify(acme));
+  const asked = host.script.requests.length;
+  const elsewhere = "https://elsewhere.test";
+  await home.client.expectError("space.members", { instance: elsewhere, group: "2002" }, "not_found", /This device has not signed in to https:\/\/elsewhere\.test/);
+  await home.client.expectError("space.group.create", { instance: elsewhere, name: "Elsewhere", path: "elsewhere", parent: null }, "not_found");
+  await home.client.expectError("space.pick", { repository: moved, choice: { kind: "create", instance: elsewhere, groupId: "2002", name: "x" } }, "not_found");
+  const hidden = await home.client.expectError("space.join", { instance: "https://ada:secret@elsewhere.test", hostId: "1" }, "not_found");
+  assert.ok(!hidden.includes("secret") && !hidden.includes("ada:"), hidden);
+  await home.client.expectError("space.signout", { instance: elsewhere }, "not_found");
+  assert.equal(host.script.requests.length, asked, "nothing is asked of the stand-in");
+  // Signed out by the reader, the instance keeps its entry and account,
+  // its read idle and no view, and your own group's own repository
+  // stands unreachable under your own group.
+  const out = await home.client.expectOk("space.signout", { instance: host.url });
+  assert.deepEqual(out.instances.map((entry) => [entry.origin, entry.account.login, entry.account.canCreateGroup, entry.signedIn, entry.hostSignedOut, entry.read, entry.readAt, entry.roles, entry.groups]),
+    [[host.url, LOGIN, false, false, false, { phase: "idle" }, null, [], []]]);
+  const own = out.own.repositories.find((repository) => repository.own);
+  assert.deepEqual([own?.key, own?.instance, own?.state, own?.reason], [HOST_OWN, host.url, "unreachable", "Sign in again"]);
+});
+
 test("git-host-2: a sign-in at a listed instance as another account ends failed naming the entry's login, storing nothing and signing nothing out", async (t) => {
   const host = await startHost();
   const home = await startHome("another-account", { host, project: false, extra: { signIn: "browser" } });
@@ -999,6 +1064,7 @@ test("git-host-4: a refresh the stand-in refuses, or a device it revoked, signs 
    * marked signed out, the remote repository waiting for a sign-in. */
   const assertHostSignedOut = (state: GroupsState): void => {
     assert.deepEqual(state.signIn, { phase: "idle", signedOut: { by: "host", login: LOGIN } });
+    assert.deepEqual(state.instances.map((instance) => [instance.origin, instance.signedIn, instance.hostSignedOut, instance.account.login]), [[host.url, false, true, LOGIN]]);
     assert.ok(!existsSync(join(home.dataDir, "local", "credentials.yaml")), "the credential is gone");
     const file = Home.load(home.dataDir).file;
     assert.equal(file.instances[0].signedOut, true);
@@ -1031,7 +1097,9 @@ test("git-host-4: a refresh the stand-in refuses, or a device it revoked, signs 
   assertHostSignedOut(await signedOutBy());
   // A sign-out of the reader's own says nothing of the host.
   await signInRead();
-  assert.deepEqual((await home.client.expectOk("space.signout", {})).signIn, { phase: "idle" });
+  const own = await home.client.expectOk("space.signout", {});
+  assert.deepEqual(own.signIn, { phase: "idle" });
+  assert.deepEqual(own.instances.map((instance) => [instance.signedIn, instance.hostSignedOut]), [[false, false]]);
 });
 
 test("git-host-4, git-host-10: a refusal or a sign-out overtaken by a newer sign-in leaves that sign-in's account signed in", async (t) => {

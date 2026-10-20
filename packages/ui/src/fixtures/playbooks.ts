@@ -81,6 +81,7 @@ export const READINESS: ReadinessEntry[] = [
 export function repository(over: Partial<RepositoryState> = {}): RepositoryState {
   return {
     key: PROJECT_ID,
+    instance: "https://spex.example",
     name: "demo-spex",
     id: "42",
     own: false,
@@ -113,12 +114,32 @@ export function home(
     options.syncing === key
       ? { phase: "running", op: "sync", step: "check", since: NOW, cancelable: true }
       : { phase: "idle" };
+  const account = options.account === undefined ? { id: "7", login: "me", displayName: "Me", canCreateGroup: false } : options.account;
+  const own = repository({ key: OWN_KEY, name: "me-spex", own: true, folder: null, sync: sync(OWN_KEY) });
+  const project = repository({ sync: sync(PROJECT_ID) });
+  const noCan = { createSubgroup: false, manageMembers: false, rename: false, delete: false };
   return {
     home: "/home/me/.spex",
     git: { ok: true, version: "2.45.0" },
-    host: { url: "https://spex.example", displayName: "Spex Example" },
-    account: options.account === undefined ? { id: "7", login: "me", displayName: "Me", canCreateGroup: false } : options.account,
+    defaultInstance: "https://spex.example",
     signIn: { phase: "idle" },
+    own: { name: "me", repositories: [own] },
+    instances: account === null ? [] : [{
+      origin: "https://spex.example",
+      host: "spex.example",
+      displayName: "Spex Example",
+      account,
+      signedIn: true,
+      hostSignedOut: false,
+      read: { phase: "idle" },
+      readAt: NOW,
+      roles: [],
+      groups: [{ id: null, login: "me", mine: true, fullPath: "me", name: "me", can: noCan, repositories: [project] }],
+    }],
+    // The transitional mirrors the surface reads until it reads
+    // `instances` (space-30).
+    host: { url: "https://spex.example", displayName: "Spex Example" },
+    account,
     read: { phase: "idle" },
     readAt: NOW,
     groups: [
@@ -127,11 +148,8 @@ export function home(
         fullPath: "me",
         name: "me",
         own: true,
-        can: { createSubgroup: false, manageMembers: false, rename: false, delete: false },
-        repositories: [
-          repository({ key: OWN_KEY, name: "me-spex", own: true, folder: null, sync: sync(OWN_KEY) }),
-          repository({ sync: sync(PROJECT_ID) }),
-        ],
+        can: noCan,
+        repositories: [own, project],
       },
     ],
     roles: [],
