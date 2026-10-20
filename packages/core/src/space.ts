@@ -27,6 +27,7 @@ import {
 import { kebab, splitKey, type HomeAccount } from "./home.js";
 import { i18n } from "./i18n.js";
 import { instanceFolder, instanceSegmentOf, isInstanceFolder } from "./instance.js";
+import { isDeferredClone } from "./migrate-instances.js";
 import type {
   GroupsState,
   RepositoryState,
@@ -873,6 +874,11 @@ class RepositorySync {
   /** The host's id the clone records at this instant, if any. */
   recordedIdNow(): string | null {
     return this.configNow("spex.repositoryId");
+  }
+
+  /** The URL of the remote the clone syncs with at this instant, if any. */
+  remoteUrlNow(): string | null {
+    return this.remoteNow().url;
   }
 
   /** The host's id of the repository whose creation by the core the
@@ -3883,9 +3889,11 @@ export class SpaceManager {
   /** A clone the instances migration left where it stood, a session's
    * lease holding it (DR-127), moves under its instance's folder at its
    * next sync, before anything is synced: one rename at its instant
-   * (renameClone), once it still lies where the home says; its remote,
-   * where it records the host's id, takes that folder's name, and a
-   * remote the reader named keeps its own. */
+   * (renameClone), once it still lies where the home says and is the
+   * clone the migration deferred — another made at that key since stays,
+   * and the receipt names the key no more; its remote, where it records
+   * the host's id, takes that folder's name, and a remote the reader
+   * named keeps its own. */
   private async moveDeferred(machine: RepositorySync): Promise<void> {
     const store = this.host.store;
     const from = machine.key;
@@ -3895,6 +3903,10 @@ export class SpaceManager {
     const identity = await this.machineIdentity();
     // Nothing is awaited from here to the rename.
     if (store.repository(from)?.dir !== source || machine.key !== from) throw movedMeanwhile(from);
+    if (!isDeferredClone(move, { id: machine.recordedIdNow(), url: machine.remoteUrlNow() })) {
+      store.settleDeferred([from]);
+      return;
+    }
     this.renameClone(machine, move.to, identity);
     const folder = instanceSegmentOf(move.to);
     if (folder !== null && machine.recordedIdNow() !== null) machine.nameRemoteBy(folder);

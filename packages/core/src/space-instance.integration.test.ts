@@ -27,7 +27,7 @@ import { STANDIN_STORAGE, type StandinHost } from "./testing/standin-host.js";
 import type { GroupsState, ServerMessage } from "./protocol.js";
 
 const fixture = createSpaceHarness();
-const { scratch, git, gitFolder, addFolder, startHome, startHost, signIn } = fixture;
+const { scratch, git, gitFolder, bareRepo, addFolder, startHome, startHost, signIn } = fixture;
 test.after(() => fixture.dispose());
 
 /** The stand-in's person, and your own group's repository once signed in. */
@@ -412,5 +412,61 @@ test("space-4, git-host-5: your namespace's listing of your own group's own repo
   assert.deepEqual(rowsOf(await home.client.expectOk("space.get", {})), [HOST_OWN]);
   await home.client.expectError("space.join", { hostId: listedOwn.id }, "invalid_request", /on this device already/);
   assert.ok(!existsSync(clonePath(home.dataDir, hostKey(host, HOST_OWN))));
+});
+
+/** A clone the instances migration deferred at `waiting` — a group's
+ * repository the host had not created, recording no id and no remote —
+ * its move to `destination` waiting on a live session's lease beneath
+ * it, as a receipt the core reads at its next start names it. */
+async function deferredClone(dataDir: string, folder: string, waiting: string, destination: string): Promise<{ clone: string; receipt: string; release: () => Promise<void> }> {
+  const clone = clonePath(dataDir, waiting);
+  mkdirSync(clone, { recursive: true });
+  git(clone, "init", "-q", "-b", "spex");
+  git(clone, "commit", "-q", "--allow-empty", "-m", "held");
+  const receiptId = randomUUID();
+  const receiptDir = join(dataDir, "local", "migrations", receiptId);
+  mkdirSync(receiptDir, { recursive: true, mode: 0o700 });
+  const receipt = join(receiptDir, "receipt.json");
+  writeFileSync(receipt, JSON.stringify({
+    format: 1, id: receiptId, kind: "instances", inputs: [],
+    steps: [
+      { step: "home", origin: "", credentials: null, written: true },
+      { step: "clones", folder, moves: [{ from: waiting, to: destination, remote: false, id: null, url: null }], done: [] },
+    ],
+    deferred: [{ from: waiting, to: destination }], complete: true,
+  }));
+  const sessions = createSessionStore({ sessionsDir: join(clone, "sessions") });
+  await sessions.prepare();
+  const live = await sessions.acquireManagement(randomUUID());
+  return { clone, receipt, release: () => live.release().catch(() => undefined) };
+}
+
+test("storage-30, space-60: a clone made at a deferred clone's key since is not the one deferred: its sync never moves it, and the receipt names that key no more", async (t) => {
+  const host = await startHost();
+  const folder = hostFolder(host);
+  const home = await startHome("deferred-other", { host, project: false, extra: { signIn: "browser" } });
+  const mark = home.client.mark();
+  await signIn(home, host);
+  await home.client.waitRepository(mark, HOST_OWN, (repository) => repository.sync.phase === "done", 30_000);
+  await home.stop();
+
+  const waiting = "acme/held-spex";
+  const destination = hostKey(host, waiting);
+  const deferred = await deferredClone(home.dataDir, folder, waiting, destination);
+  try {
+    const again = await startHome("deferred-other-again", { dataDir: home.dataDir, project: false, extra: { signIn: "browser" } });
+    t.after(() => again.stop());
+    assert.ok(existsSync(join(deferred.clone, ".git")) && !existsSync(clonePath(home.dataDir, destination)), "deferred at the start");
+    // Another clone at the deferred key — here, given a remote the reader
+    // named — is not the one the migration deferred: released, its sync
+    // leaves it where it lies and the receipt names its key no more.
+    git(deferred.clone, "remote", "add", "origin", bareRepo());
+    await deferred.release();
+    const synced = await again.client.settle("space.sync", { repository: waiting });
+    assert.equal(synced.sync.phase, "done", JSON.stringify(synced.sync));
+    assert.ok(existsSync(join(deferred.clone, ".git")) && !existsSync(clonePath(home.dataDir, destination)), "the other clone is never moved");
+    assert.deepEqual((JSON.parse(readFileSync(deferred.receipt, "utf8")) as { deferred: unknown[] }).deferred, []);
+    assert.equal(needsInstancesMigration(home.dataDir), false);
+  } finally { await deferred.release(); }
 });
 

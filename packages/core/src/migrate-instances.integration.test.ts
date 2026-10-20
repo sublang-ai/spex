@@ -353,15 +353,16 @@ test("instances migration: every clone at the instance moves under its folder, i
   assert.deepEqual(readFileSync(join(root, "local", "migrations", id, "inputs", "1")), prefsBefore);
   assert.deepEqual(readFileSync(join(root, "local", "migrations", id, "inputs", "2")), cacheBefore);
   assert.equal(receipt.inputs[3].sha256, sha256(credentialsBefore));
-  const clones = receipt.steps.find((entry) => entry.step === "clones") as { folder: string; moves: { from: string; to: string; remote: boolean }[]; done: string[] };
+  const clones = receipt.steps.find((entry) => entry.step === "clones") as { folder: string; moves: { from: string; to: string; remote: boolean; id: string | null; url: string | null }[]; done: string[] };
   assert.equal(clones.folder, FOLDER);
+  // Each planned with the clone it was: its host id and its remote's URL.
   assert.deepEqual(clones.moves, [
-    { from: "acme/draft-spex", to: `${FOLDER}/acme/draft-spex`, remote: false },
-    { from: "acme/planned-spex", to: `${FOLDER}/acme/planned-spex`, remote: false },
-    { from: "acme/platform/web-spex", to: `${FOLDER}/acme/platform/web-spex`, remote: true },
-    { from: "ada/ada-spex", to: "ada/ada-spex", remote: true },
-    { from: "ada/notes-spex", to: `${FOLDER}/ada/notes-spex`, remote: true },
-    { from: "bob/shared-spex", to: `${FOLDER}/bob/shared-spex`, remote: true },
+    { from: "acme/draft-spex", to: `${FOLDER}/acme/draft-spex`, remote: false, id: null, url: join(root, "elsewhere", "draft.git") },
+    { from: "acme/planned-spex", to: `${FOLDER}/acme/planned-spex`, remote: false, id: null, url: null },
+    { from: "acme/platform/web-spex", to: `${FOLDER}/acme/platform/web-spex`, remote: true, id: "102", url: `${GIT_ORIGIN}/acme/platform/web-spex.git` },
+    { from: "ada/ada-spex", to: "ada/ada-spex", remote: true, id: "100", url: `${GIT_ORIGIN}/ada/ada-spex.git` },
+    { from: "ada/notes-spex", to: `${FOLDER}/ada/notes-spex`, remote: true, id: "101", url: `${GIT_ORIGIN}/ada/notes-spex.git` },
+    { from: "bob/shared-spex", to: `${FOLDER}/bob/shared-spex`, remote: true, id: "103", url: `${GIT_ORIGIN}/bob/shared-spex.git` },
   ]);
   assert.deepEqual([...clones.done].sort(), clones.moves.map((move) => move.from).sort());
 
@@ -456,7 +457,7 @@ test("instances migration: a clone a live session's lease holds is deferred, kee
       assert.deepEqual(remotesOf(workspace(root, held)), ["origin"], "and its remote");
       assert.equal(store.home.keyForFolder(join(root, "work", "web")), held, "its pair stays");
       assert.equal(prefsIn(root)[`sync:${held}:noticed`], true, "its preferences stay");
-      assert.deepEqual(store.deferredMoves(), [{ from: held, to }]);
+      assert.deepEqual(store.deferredMoves(), [{ from: held, to, id: "102", url: `${GIT_ORIGIN}/${held}.git` }]);
       assert.ok(store.listRepositories().some((repository) => repository.key === held));
       // Every other clone moved.
       assert.ok(existsSync(join(workspace(root, `${FOLDER}/acme/draft-spex`), ".git")));
@@ -488,4 +489,51 @@ test("instances migration: a clone a live session's lease holds is deferred, kee
     assert.deepEqual(JSON.parse(readFileSync(join(root, "local", "migrations", id, "receipt.json"), "utf8")).deferred, []);
     assert.equal(needsInstancesMigration(root), false);
   } finally { if (!released) await live.release(); }
+});
+
+/** A one-instance home migrated with `acme/platform/web-spex` deferred,
+ * a live session's lease beneath it, which the caller releases. */
+async function deferredWeb(): Promise<{ root: string; held: string; to: string; release: () => Promise<void> }> {
+  const root = formerHomeWithClones();
+  const held = "acme/platform/web-spex";
+  const sessions = createSessionStore({ sessionsDir: join(workspace(root, held), "sessions") });
+  await sessions.prepare();
+  const live = await sessions.acquireManagement(randomUUID());
+  (await Store.open({ machineIdentity, dir: root, env: gitEnv })).close();
+  assert.ok(existsSync(join(workspace(root, held), ".git")), "deferred");
+  return { root, held, to: `${FOLDER}/${held}`, release: () => live.release().catch(() => undefined) };
+}
+
+const deferredIn = (root: string): unknown[] => receiptsOf(root).flatMap((id) =>
+  (JSON.parse(readFileSync(join(root, "local", "migrations", id, "receipt.json"), "utf8")) as { deferred: unknown[] }).deferred);
+
+test("instances migration: a deferred clone the store removes settles its entry, and a clone made at a deferred key since is another, never moved by a start, the entry settled", async () => {
+  // Removed: the receipt names the key no more, so a clone made there
+  // later stays where it is made.
+  const removed = await deferredWeb();
+  const store = await Store.open({ machineIdentity, dir: removed.root, env: gitEnv });
+  try {
+    assert.equal(store.removeProject(removed.held), true);
+    assert.deepEqual(store.deferredMoves(), []);
+  } finally { store.close(); await removed.release(); }
+  assert.deepEqual(deferredIn(removed.root), []);
+  assert.equal(needsInstancesMigration(removed.root), false);
+  formerClone(removed.root, removed.held, { remote: `${GIT_ORIGIN}/acme/platform/web-spex.git`, id: "102" });
+  (await Store.open({ machineIdentity, dir: removed.root, env: gitEnv })).close();
+  assert.ok(existsSync(join(workspace(removed.root, removed.held), ".git")) && !existsSync(workspace(removed.root, removed.to)), "a clone made at that key since is not moved");
+
+  // Replaced at its key while the core was away: the clone there records
+  // no host id, so it is not the one deferred, and stays.
+  const replaced = await deferredWeb();
+  await replaced.release();
+  rmSync(workspace(replaced.root, replaced.held), { recursive: true, force: true });
+  formerClone(replaced.root, replaced.held);
+  const reopened = await Store.open({ machineIdentity, dir: replaced.root, env: gitEnv });
+  try {
+    assert.ok(existsSync(join(workspace(replaced.root, replaced.held), ".git")) && !existsSync(workspace(replaced.root, replaced.to)), "another clone at its key is never moved");
+    assert.deepEqual(remotesOf(workspace(replaced.root, replaced.held)), []);
+    assert.deepEqual(reopened.deferredMoves(), []);
+  } finally { reopened.close(); }
+  assert.deepEqual(deferredIn(replaced.root), []);
+  assert.equal(needsInstancesMigration(replaced.root), false);
 });

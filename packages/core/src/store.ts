@@ -35,7 +35,7 @@ import {
 import { readJsonFile, StorageFormatError, VersionConflictError, writeApplicationFile } from "./files.js";
 import { Home, repositoryNameFor, splitKey } from "./home.js";
 import { folderRemote, needsGroupsMigration, migrateFormerHome } from "./migrate-home.js";
-import { deferredMoves, migrateInstances, needsInstancesMigration, settleDeferred } from "./migrate-instances.js";
+import { deferredMoves, migrateInstances, needsInstancesMigration, settleDeferred, type DeferredMove } from "./migrate-instances.js";
 import { initializeClone } from "./storage-git.js";
 import { seedConfig } from "./config.js";
 import { createRequire } from "node:module";
@@ -436,7 +436,7 @@ export class Store {
   private readonly forgeCache = new Map<string, { at: number; state: ForgeState }>();
   /** The clones the instances migration deferred (DR-127), as its
    * receipt named them at this open, less those moved since. */
-  private deferred: { from: string; to: string }[] = [];
+  private deferred: DeferredMove[] = [];
   private readonly sessionProblems = new Map<string, StorageDiagnostic>();
   /** Current execution refusals are a read model, never session files. */
   private readonly continuationRefusals = new Map<string, string>();
@@ -582,9 +582,10 @@ export class Store {
 
   /** The clones the instances migration left where they stood, a
    * session's lease holding them (DR-127): each by the key it keeps,
-   * under which it is listed, and the key under its instance's folder
-   * its next sync moves it to, while it still stands at the key it kept. */
-  deferredMoves(): { from: string; to: string }[] {
+   * under which it is listed, the key under its instance's folder its
+   * next sync moves it to, and the clone it was, while it still stands
+   * at the key it kept. */
+  deferredMoves(): DeferredMove[] {
     return this.deferred.filter((move) => {
       try { return lstatSync(this.homeFile.clonePath(move.from)).isDirectory(); } catch { return false; }
     }).map((move) => ({ ...move }));
@@ -1506,12 +1507,19 @@ export class Store {
       if (cached) { this.forgeCache.delete(from); this.forgeCache.set(next, cached); }
     }
     // A deferred clone moved is the migration's no longer (DR-127).
-    const settled = moves.map((move) => move.from).filter((key) => this.deferred.some((move) => move.from === key));
-    if (settled.length > 0) {
-      this.deferred = this.deferred.filter((move) => !settled.includes(move.from));
-      try { settleDeferred(this.dir, settled); }
-      catch (error) { console.error(`spex: the instances migration's receipt still names ${settled.join(", ")}: ${error instanceof Error ? error.message : String(error)}`); }
-    }
+    this.settleDeferred(moves.map((move) => move.from));
+  }
+
+  /** Deferred clones moved, removed or found to be another clone at
+   * their key: the instances migration's receipt names them no more, so
+   * no later start or sync moves a clone made at that key since
+   * (DR-127). */
+  settleDeferred(keys: readonly string[]): void {
+    const settled = keys.filter((key) => this.deferred.some((move) => move.from === key));
+    if (settled.length === 0) return;
+    this.deferred = this.deferred.filter((move) => !settled.includes(move.from));
+    try { settleDeferred(this.dir, settled); }
+    catch (error) { console.error(`spex: the instances migration's receipt still names ${settled.join(", ")}: ${error instanceof Error ? error.message : String(error)}`); }
   }
 
   /** A clone that came under `workspace/` from outside the store — a
@@ -1535,6 +1543,8 @@ export class Store {
       for (const [id, location] of [...this.sessionLocations]) if (location === key) { this.dropSession(id); this.sessionLocations.delete(id); }
       rmSync(repository.dir, { recursive: true, force: true });
       this.repositories.delete(key);
+      // A deferred clone removed waits for no move (DR-127).
+      this.settleDeferred([key]);
     }
     return true;
   }

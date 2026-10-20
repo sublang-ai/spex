@@ -46,9 +46,15 @@ export interface InstancesReceipt {
 /** A clone the migration moves under its instance's folder, or whose
  * remote alone it renames: by the key it has and the key it takes —
  * one key for your own group's own repository, which keeps its folder —
- * and whether its remote, the host's, takes the instance's folder's
- * name. */
-interface CloneMove { from: string; to: string; remote: boolean }
+ * whether its remote, the host's, takes the instance's folder's name,
+ * and the clone it was when planned: the host's id it records, and its
+ * remote's URL, each null where it had none. */
+interface CloneMove { from: string; to: string; remote: boolean; id: string | null; url: string | null }
+
+/** A clone the migration deferred (DR-127): the key it keeps, the key
+ * it moves to, and the clone it was when planned, so a move made later
+ * moves that clone alone, never another made at its key since. */
+export interface DeferredMove { from: string; to: string; id: string | null; url: string | null }
 
 /** The clones step as the receipt records it: the instance's folder,
  * every move planned before the first is made, and the moves done. */
@@ -110,23 +116,42 @@ export function needsInstancesMigration(root: string): boolean {
   return isObject(value) && value.format === 1;
 }
 
-/** The clones the migration deferred, each by the key it keeps and the
- * key it moves to, while it still stands at the key it kept (DR-127). */
-export function deferredMoves(root: string): { from: string; to: string }[] {
-  const moves = new Map<string, { from: string; to: string }>();
+/** The planned move of a clone in a receipt's clones step, where it
+ * records one. */
+function plannedMove(receipt: InstancesReceipt, from: string): CloneMove | undefined {
+  const clones = receipt.steps.find((entry) => entry.step === "clones");
+  const moves = clones && Array.isArray(clones.moves) ? clones.moves as unknown[] : [];
+  return moves.find((move): move is CloneMove => isObject(move) && move.from === from);
+}
+
+/** The clones the migration deferred, each by the key it keeps, the key
+ * it moves to and the clone it was, while it still stands at the key it
+ * kept (DR-127). */
+export function deferredMoves(root: string): DeferredMove[] {
+  const moves = new Map<string, DeferredMove>();
   for (const { receipt } of instancesReceipts(root)) {
     for (const move of receipt.deferred) {
       if (isRepositoryKey(move.from) && isRepositoryKey(move.to) && standsAsDirectory(clonePathOf(root, move.from))) {
-        moves.set(move.from, { from: move.from, to: move.to });
+        const planned = plannedMove(receipt, move.from);
+        const text = (value: unknown): string | null => typeof value === "string" ? value : null;
+        moves.set(move.from, { from: move.from, to: move.to, id: text(planned?.id), url: text(planned?.url) });
       }
     }
   }
   return [...moves.values()];
 }
 
-/** Deferred clones moved since by the store's own move: the receipt no
- * longer names them, so no later start moves what stands at the key
- * they kept. */
+/** Whether the clone standing at a deferred move's key is the one the
+ * migration deferred (DR-127): the host's id it recorded, else — it
+ * recorded none — its remote's URL, none where it had no remote. A
+ * clone made at that key since is another, and never moved. */
+export function isDeferredClone(move: Pick<DeferredMove, "id" | "url">, recorded: { id: string | null; url: string | null }): boolean {
+  return move.id !== null ? recorded.id === move.id : recorded.id === null && recorded.url === move.url;
+}
+
+/** Deferred clones moved or removed since by the store, or found to be
+ * another clone at their key: the receipt no longer names them, so no
+ * later start moves what stands at the key they kept. */
 export function settleDeferred(root: string, keys: readonly string[]): void {
   for (const { receipt, dir } of instancesReceipts(root)) {
     const deferred = receipt.deferred.filter((move) => !keys.includes(move.from));
@@ -227,11 +252,17 @@ function gitIn(dir: string, args: string[], env: NodeJS.ProcessEnv): { ok: boole
   return { ok: !run.error && run.status === 0, stdout: run.stdout ?? "", stderr: run.stderr ?? (run.error?.message ?? "") };
 }
 
-/** Whether a clone records the host's id beside its remote — which a
- * join, a creation or a check by a Spex wrote, the host's remote with it. */
-function recordsHostId(dir: string, env: NodeJS.ProcessEnv): boolean {
-  const read = gitIn(dir, ["config", "--get", "spex.repositoryId"], env);
-  return read.ok && read.stdout.trim().length > 0;
+/** The host's id a clone records beside its remote — which a join, a
+ * creation or a check by a Spex wrote, the host's remote with it — and
+ * the URL of the remote a clone before DR-127 synced through, `origin`;
+ * each null where it has none. */
+function cloneIdentity(dir: string, env: NodeJS.ProcessEnv): { id: string | null; url: string | null } {
+  const value = (key: string): string | null => {
+    const read = gitIn(dir, ["config", "--get", key], env);
+    const text = read.ok ? read.stdout.trim() : "";
+    return text.length > 0 ? text : null;
+  };
+  return { id: value("spex.repositoryId"), url: value("remote.origin.url") };
 }
 
 /** The host's remote takes the instance's folder's name: one still
@@ -260,14 +291,15 @@ function planClones(home: Home, folder: string, env: NodeJS.ProcessEnv): CloneMo
   const moves: CloneMove[] = [];
   for (const key of cloneKeys(home)) {
     if (instanceSegmentOf(key) !== null) continue;
-    const id = recordsHostId(home.clonePath(key), env);
+    const identity = cloneIdentity(home.clonePath(key), env);
+    const id = identity.id !== null;
     if (key === own) {
-      if (id) moves.push({ from: key, to: key, remote: true });
+      if (id) moves.push({ from: key, to: key, remote: true, ...identity });
       continue;
     }
     if (!id && key.startsWith(`${home.ownName}/`)) continue;
     const to = `${folder}/${key}`;
-    if (isRepositoryKey(to)) moves.push({ from: key, to, remote: id });
+    if (isRepositoryKey(to)) moves.push({ from: key, to, remote: id, ...identity });
   }
   return moves;
 }
@@ -440,8 +472,8 @@ export function migrateInstances(root: string, options: { machineIdentity?: stri
   }
   const plan = clones;
   // A complete run comes back for its deferred clones alone.
-  const pending = plan.moves.filter((move) => !plan.done.includes(move.from) &&
-    (!receipt.complete || receipt.deferred.some((entry) => entry.from === move.from)));
+  const deferred = (move: CloneMove): boolean => receipt.deferred.some((entry) => entry.from === move.from);
+  const pending = plan.moves.filter((move) => !plan.done.includes(move.from) && (!receipt.complete || deferred(move)));
   const taken = (move: CloneMove): boolean => move.from !== move.to &&
     standsAsDirectory(home.clonePath(move.from)) && occupied(home.clonePath(move.from), home.clonePath(move.to), home.workspace);
   const divergent = pending.find(taken);
@@ -456,6 +488,11 @@ export function migrateInstances(root: string, options: { machineIdentity?: stri
     const target = home.clonePath(move.to);
     if (move.from !== move.to) {
       if (standsAsDirectory(source)) {
+        if (deferred(move)) {
+          // Another clone made at its key since is not the one deferred:
+          // it stays, and the receipt names that key no more.
+          if (!isDeferredClone({ id: move.id ?? null, url: move.url ?? null }, cloneIdentity(source, env))) { finish(move); continue; }
+        }
         if (taken(move)) throw new StorageFormatError(target, divergedDestination());
         // Read at the rename's instant: a lease that cannot be read as
         // harmless holds the clone where it is.
