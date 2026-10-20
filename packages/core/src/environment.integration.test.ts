@@ -1115,7 +1115,7 @@ test("environments-22: skills and playbooks export to agent folders, the user's 
   mkdirSync(join(workingFolder, ".agents/skills/lint"), { recursive: true });
   writeFileSync(join(workingFolder, ".agents/skills/lint/SKILL.md"), "the reader's own lint\n");
   const widenedLock = locked(await resolveText(home.clone, projectText, { workingFolder }));
-  await installAsOnDisk({ ...base, cloneDir: home.clone, lock: widenedLock, workingFolder });
+  await installAsOnDisk({ ...base, cloneDir: home.clone, lock: widenedLock, pathRoot: workingFolder });
   const widened = await exportEnvironment({ cloneDir: home.clone, lock: widenedLock, workingFolder, userHome: null, agents: ["claude"], packagesDir: join(home.clone, "packages") });
   assert.deepEqual(widened.skipped, [{ name: "lint", folder: ".agents/skills" }]);
   assert.deepEqual(widened.missing, []);
