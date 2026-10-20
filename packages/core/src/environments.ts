@@ -19,7 +19,7 @@
 // package is seeded at start and requested where an environment lacks
 // it, so the built-in playbooks work offline from the first start.
 
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { isAbsolute, join, relative, resolve as resolvePath, sep } from "node:path";
 
 import { fileVersion, readVersioned, sha256, VersionConflictError, type FileVersion } from "./files.js";
@@ -48,6 +48,7 @@ import {
   lockStaleness,
   lockStoreKeys,
   moduleLocations,
+  ownFolderIssue,
   ownPathIssue,
   parseLock,
   parseManifestText,
@@ -211,6 +212,11 @@ function stalePhrases(lock: Lock, requestsText: string | null, pathRoot: string 
   return phrases.length > 0 ? phrases : null;
 }
 
+/** Whether a folder stands at `path`, a link to one counted. */
+function isDirectory(path: string): boolean {
+  try { return statSync(path).isDirectory(); } catch { return false; }
+}
+
 /** The reader's words for a path your own group's clone refuses
  * (environments-32). */
 function confinedPhrase(path: string, issue: OwnPathIssue): string {
@@ -223,8 +229,16 @@ function confinedPhrase(path: string, issue: OwnPathIssue): string {
       return i18n._({ id: "{path} is a path the clone's Git rules ignore, so it would not sync", comment: "Refusal: a request by path in your own group's environment names a folder the clone's sync rules drop, such as one named *.tmp", values: { path } });
     case "link":
       return i18n._({ id: "{path} is reached through a link, which the clone's sync does not carry", comment: "Refusal: a request by path in your own group's environment names a folder that is, or lies under, a link", values: { path } });
+    case "repository":
+      return i18n._({ id: "{path}: {entry} is a Git repository of its own, which the clone's sync does not carry", comment: "Refusal: a request by path in your own group's environment names a folder that is, lies in or holds a folder holding .git; {entry} is that folder's path in the clone", values: { path, entry: issue.entry } });
     case "ignored_file":
       return i18n._({ id: "{path} holds {file}, which the clone's Git rules ignore, so it would not sync", comment: "Refusal: a request by path in your own group's environment names a folder holding a file the clone's sync rules drop; {file} is that file's path in the clone", values: { path, file: issue.file } });
+    case "unshared_file":
+      return i18n._({ id: "{path} holds {file}, which the clone's sync refuses to share", comment: "Refusal: a request by path in your own group's environment names a folder holding a tracked file of a family that stays on the device, such as a *.tmp file forced into Git; {file} is that file's path in the clone", values: { path, file: issue.file } });
+    case "link_entry":
+      return i18n._({ id: "{path}: {entry} is a link, which the clone's sync does not carry", comment: "Refusal: a request by path in your own group's environment names a folder holding a link the clone's Git rules do not ignore; {entry} is the link's path in the clone", values: { path, entry: issue.entry } });
+    case "special":
+      return i18n._({ id: "{path}: {entry} is no regular file or folder, so the clone's sync does not carry it", comment: "Refusal: a request by path in your own group's environment names a folder holding a special file, such as a pipe or a socket; {entry} is its path in the clone", values: { path, entry: issue.entry } });
   }
 }
 
@@ -643,6 +657,7 @@ export class EnvironmentManager {
         git: this.git,
         gitCredential: this.options.gitCredential,
         pathRoot,
+        confined: this.isOwn(key),
         requestsText: read?.text ?? null,
         ...(this.options.modulePaths ? { modulePaths: this.options.modulePaths } : {}),
       });
@@ -744,11 +759,12 @@ export class EnvironmentManager {
     if (!isInsidePath(request.path) || inside.startsWith("..") || isAbsolute(inside)) throw this.outside(request.path, own);
     if (!own) return;
     let issue = ownPathIssue(root, request.path);
-    // A release standing there already is checked whole.
+    // A folder standing there already is checked whole, its release's
+    // files where it holds one.
     const folder = resolvePath(root, request.path);
-    if (!issue && existsSync(join(folder, "meta.yaml"))) {
-      const { files } = await listReleaseFiles(folder);
-      issue = ownPathIssue(root, request.path, files.map((file) => file.path));
+    if (!issue && isDirectory(folder)) {
+      const files = existsSync(join(folder, "meta.yaml")) ? (await listReleaseFiles(folder)).files.map((file) => file.path) : [];
+      issue = ownFolderIssue(root, request.path, files);
     }
     if (issue) throw new CoreError("invalid_request", confinedPhrase(request.path, issue));
   }

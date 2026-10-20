@@ -28,7 +28,7 @@ import {
 import { specExportName } from "./exports.js";
 import type { GitCredential, GitSource } from "./git-source.js";
 import { manifestRequires, type Lock, type LockedArtifact, type LockedFile, type Resolution, type SourceLock } from "./lock.js";
-import { ownPathIssue, type OwnPathIssue } from "./own-paths.js";
+import { ownFolderIssue, ownPathIssue, ownPathMessage, type OwnPathIssue } from "./own-paths.js";
 import { RegistryError, type RegistrySource, type VersionIndexEntry, KNOWN_FORMAT } from "./registry.js";
 import { isGitRequest, isInsidePath, isPathRequest, isRegistryRequest, requestsDigest, type Request, type Requests, type Selection } from "./requests.js";
 import { compareVersions, isVersion, parseRequirement, satisfies, type Requirement } from "./semver.js";
@@ -121,15 +121,7 @@ function selectionHolds(selection: readonly Selection[], artifacts: Candidate["a
 /** A path your own group's clone refuses, in the library's words
  * (environments-32). */
 function confinedError(name: string, path: string, issue: OwnPathIssue): ResolveError {
-  const why = issue.reason === "ignored_file"
-    ? `holds ${issue.file}, which the clone's Git rules ignore, so it would not sync`
-    : {
-      root: "is not a folder below your own group's clone's root",
-      spex: "is a path Spex keeps in your own group's clone",
-      ignored: "is a path the clone's Git rules ignore, so it would not sync",
-      link: "is reached through a link, which the clone's sync does not carry",
-    }[issue.reason];
-  return new ResolveError("path_confined", name, `${name}: ${path} ${why}`);
+  return new ResolveError("path_confined", name, ownPathMessage(name, path, issue));
 }
 
 async function loadFixed(name: string, request: Request, input: ResolveInput): Promise<Fixed | undefined> {
@@ -150,9 +142,9 @@ async function loadFixed(name: string, request: Request, input: ResolveInput): P
     const real = relative(realpathSync(root), realpathSync(dir));
     if (real.startsWith("..") || isAbsolute(real)) throw new ResolveError("path_outside", name, `${name}: ${request.path} leads outside ${place}`);
     const release = await readRelease(dir);
-    // Every file of your own group's folder syncs with its clone.
+    // Everything your own group's folder holds syncs with its clone.
     if (input.confined) {
-      const issue = ownPathIssue(root, request.path, release.files.map((file) => file.path));
+      const issue = ownFolderIssue(root, request.path, release.files.map((file) => file.path));
       if (issue) throw confinedError(name, request.path, issue);
     }
     const found = `${release.manifest.org}/${release.manifest.name}`;

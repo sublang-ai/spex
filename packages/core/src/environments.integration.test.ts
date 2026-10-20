@@ -10,7 +10,7 @@ import { randomUUID } from "node:crypto";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { appendFileSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { createServer, request as httpRequest } from "node:http";
 import type { AddressInfo } from "node:net";
 import { dirname, isAbsolute, join } from "node:path";
@@ -762,26 +762,108 @@ test("environments-33 through real cores: a skill your own group requests by a p
   const preview = await a.client.expectOk("environment.publish", { repository: ownKey, path: "mine/notes", dryRun: true });
   assert.deepEqual(preview.preview, { name: `${OWN}/notes`, version: "0.1.0", files: ["meta.yaml", "skills/en/notes/SKILL.md"] });
 
+  // A file added later that the sync would drop fails the next install
+  // before anything is installed: the state names it, and the exports
+  // stay as the last install left them (environments-32).
+  const helper = join(cloneA, "mine", "notes", "skills", "en", "notes", "helper.bak");
+  writeFileSync(helper, "a backup the sync drops");
+  await a.client.expectOk("environment.install", { repository: ownKey });
+  const failed = await settled(a.client, (s) => s.error !== null);
+  assert.match(failed.error!, /mine\/notes holds mine\/notes\/skills\/en\/notes\/helper\.bak, which the clone's Git rules ignore, so it would not sync/, "[environments-32] the install refuses the folder [environments-14]");
+  for (const folder of [".claude", ".agents"]) assert.equal(existsSync(join(userA, folder, "skills", "notes", "helper.bak")), false, `[environments-32] ${folder}: nothing of it exported`);
+  rmSync(helper);
+  await a.client.expectOk("environment.install", { repository: ownKey });
+  await settled(a.client, (s) => s.error === null && holds(s));
+
+  // Paired with a Git working folder holding another release at the
+  // same path, your own group's paths stay relative to its clone.
+  const working = join(harness.scratch, "own-working");
+  gitFolder(working);
+  await makeRelease(join(working, "mine", "notes"), {
+    format: 2, org: OWN, name: "notes", version: "0.1.0", description: "My notes", license: "Apache-2.0",
+    artifacts: { notes: { kind: "skill", language: "en" } },
+  }, { "skills/en/notes/SKILL.md": skill("The working folder's copy.") });
+  await a.client.expectOk("project.rebind", { projectId: ownKey, path: working });
+  const pairedSkill = join(working, ".claude", "skills", "notes", "SKILL.md");
+  await until(() => existsSync(pairedSkill), 60_000, "the pairing's export");
+  assert.equal(readFileSync(pairedSkill, "utf8"), skill("Write it down, then read it back."), "[environments-8] the clone's bytes, not the working folder's");
+  assert.equal((await settled(a.client, holds)).pathRoot, cloneA, "[environments-2] still the clone while paired [environments-14]");
+
   // A path that would not sync with the clone is refused before any write.
   symlinkSync(join(cloneA, "mine", "notes"), join(cloneA, "linked"));
-  await makeRelease(join(cloneA, "mine", "scratchy"), {
-    format: 2, org: OWN, name: "scratchy", version: "0.1.0", artifacts: { scratchy: { kind: "skill", language: "en" } },
-  }, { "skills/en/scratchy/SKILL.md": "---\nname: scratchy\ndescription: Scratch.\n---\n", "skills/en/scratchy/draft.tmp": "scratch" });
+  const skillRelease = async (path: string, id: string, extra: Record<string, string> = {}): Promise<void> => {
+    await makeRelease(join(cloneA, ...path.split("/")), {
+      format: 2, org: OWN, name: id, version: "0.1.0", artifacts: { [id]: { kind: "skill", language: "en" } },
+    }, { [`skills/en/${id}/SKILL.md`]: `---\nname: ${id}\ndescription: ${id}.\n---\n`, ...extra });
+  };
+  await skillRelease("mine/scratchy", "scratchy", { "skills/en/scratchy/draft.tmp": "scratch" });
+  // Forced into Git, a file of an ignored family is tracked, and still
+  // never shared.
+  await skillRelease("mine/forced", "forced", { "skills/en/forced/keep.tmp": "kept" });
+  harness.git(cloneA, "add", "-f", "mine/forced/skills/en/forced/keep.tmp");
+  // A Git repository of its own: the folder itself, or one inside it.
+  await skillRelease("mine/repo", "repo");
+  harness.git(join(cloneA, "mine", "repo"), "init", "-q");
+  await skillRelease("mine/vendored", "vendored");
+  gitFolder(join(cloneA, "mine", "vendored", "vendor"));
+  // A link a script left under `node_modules/`, which no release reads.
+  await skillRelease("mine/linky", "linky");
+  mkdirSync(join(cloneA, "mine", "linky", "skills", "en", "linky", "node_modules", ".bin"), { recursive: true });
+  symlinkSync("../../SKILL.md", join(cloneA, "mine", "linky", "skills", "en", "linky", "node_modules", ".bin", "tool"));
   const requests = readFileSync(join(cloneA, "spex.yaml"));
+  const kept = /is a path Spex keeps in your own group's clone/;
   const refusals: [string, RegExp][] = [
     [".", /is not a folder below your own group's clone's root/],
     ["../elsewhere", /is not a relative folder inside the working folder or your own group's clone/],
-    ...["config", "sessions", "intents", "authoring", "packages", "skills", "local"].map((first): [string, RegExp] => [`${first}/notes`, /is a path Spex keeps in your own group's clone/]),
+    ...["config", "sessions", "intents", "authoring", "packages", "skills", "local", ".git", ".spex-uploads", "spex.yaml", "spex.lock", "project.json", ".gitignore", ".gitattributes", ".spex-apply.json", ".lockfoo"]
+      .map((first): [string, RegExp] => [`${first}/notes`, kept]),
+    // Compared without case after compatibility normalization.
+    ["Sessions/notes", kept],
+    ["\u017fkills/notes", kept],
     ["drafts.tmp", /the clone's Git rules ignore/],
     ["linked", /is reached through a link/],
+    ["mine/repo", /mine\/repo: mine\/repo is a Git repository of its own, which the clone's sync does not carry/],
     ["mine/scratchy", /holds mine\/scratchy\/skills\/en\/scratchy\/draft\.tmp, which the clone's Git rules ignore/],
+    ["mine/forced", /holds mine\/forced\/skills\/en\/forced\/keep\.tmp, which the clone's sync refuses to share/],
+    ["mine/vendored", /mine\/vendored: mine\/vendored\/vendor is a Git repository of its own/],
+    ["mine/linky", /mine\/linky: mine\/linky\/skills\/en\/linky\/node_modules\/\.bin\/tool is a link, which the clone's sync does not carry/],
   ];
   for (const [path, why] of refusals) {
     await a.client.expectError("environment.request", { repository: ownKey, name: `${OWN}/bad`, request: { kind: "path", path } }, "invalid_request", why);
     assert.ok(readFileSync(join(cloneA, "spex.yaml")).equals(requests), `${path}: spex.yaml keeps its bytes`);
   }
   rmSync(join(cloneA, "linked"));
-  rmSync(join(cloneA, "mine", "scratchy"), { recursive: true });
+  harness.git(cloneA, "rm", "-q", "--cached", "mine/forced/skills/en/forced/keep.tmp");
+  for (const folder of ["scratchy", "forced", "repo", "vendored", "linky"]) rmSync(join(cloneA, "mine", folder), { recursive: true });
+
+  // A tracked file only this device's excludes match still syncs, so its
+  // folder is accepted (environments-32).
+  await skillRelease("mine/logged", "logged", { "skills/en/logged/run.log": "a log kept on purpose" });
+  harness.git(cloneA, "add", "mine/logged");
+  mkdirSync(join(cloneA, ".git", "info"), { recursive: true });
+  appendFileSync(join(cloneA, ".git", "info", "exclude"), "*.log\n");
+  await a.client.expectOk("environment.request", { repository: ownKey, name: `${OWN}/logged`, request: { kind: "path", path: "mine/logged" } });
+  const logged = await settled(a.client, (s) => s.error !== null || s.packages.some((pkg) => pkg.name === `${OWN}/logged` && pkg.installed));
+  assert.equal(logged.error, null, "[environments-32] a tracked file is never ignored");
+  await a.client.expectOk("environment.remove", { repository: ownKey, name: `${OWN}/logged` });
+  await settled(a.client, (s) => s.error === null && !s.packages.some((pkg) => pkg.name === `${OWN}/logged`));
+  harness.git(cloneA, "rm", "-q", "-r", "--cached", "mine/logged");
+  rmSync(join(cloneA, "mine", "logged"), { recursive: true });
+
+  // A path requested before its folder exists is accepted; once the
+  // folder holds what the sync drops, a resolution refuses it, the lock
+  // keeping its bytes (environments-32).
+  await a.client.expectOk("environment.request", { repository: ownKey, name: `${OWN}/later`, request: { kind: "path", path: "mine/later" } });
+  await settled(a.client, (s) => s.error !== null && /mine\/later/.test(s.error));
+  const lockBytes = readFileSync(join(cloneA, "spex.lock"));
+  await skillRelease("mine/later", "later", { "skills/en/later/draft.tmp": "scratch" });
+  await a.client.expectOk("environment.resolve", { repository: ownKey });
+  const refused = await settled(a.client, (s) => s.error !== null && /draft\.tmp/.test(s.error));
+  assert.match(refused.error!, /mine\/later holds mine\/later\/skills\/en\/later\/draft\.tmp, which the clone's Git rules ignore, so it would not sync/, "[environments-32] the resolution refuses the folder [environments-5]");
+  assert.ok(readFileSync(join(cloneA, "spex.lock")).equals(lockBytes), "[environments-5] spex.lock keeps its bytes");
+  await a.client.expectOk("environment.remove", { repository: ownKey, name: `${OWN}/later` });
+  await settled(a.client, (s) => s.error === null && !(`${OWN}/later` in s.requests) && holds(s));
+  rmSync(join(cloneA, "mine", "later"), { recursive: true });
 
   // The sync carries the folder with the environment; the second home
   // installs and exports it as its own.
