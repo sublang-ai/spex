@@ -503,7 +503,7 @@ While a spex repository's Explore tab is shown, the Groups surface shall present
 
 | Annotation | Content |
 | --- | --- |
-| what it is | the catalog family's description — session manifest, session records, provider hints, intent, intent attachments, authoring session, spec package requests, spec package lock, settings, code remote, installed spec packages, exported skills, sync rules, lease, Git data — or "Not a Spex file" |
+| what it is | the catalog family's description — session manifest, session records, provider hints, intent, intent attachments, authoring session, spec package requests, spec package lock, spec package, settings, code remote, installed spec packages, exported skills, sync rules, lease, Git data — or "Not a Spex file" |
 | sharing | "Shared" (tracked and committed), "Not yet shared" (a tracked kind, uncommitted), "Stays here" (ignored), "Git data" |
 | size | the file size, or a directory's entry count |
 | owner | the session's title, or the intent's title, where the family belongs to one |
@@ -722,7 +722,7 @@ The core shall compute one three-way plan per read or sync of a clone — this d
 | remote | `origin/spex`; `HEAD` itself before any check, and the empty tree where the host holds no `spex` |
 | ancestor | `merge-base(HEAD, origin/spex)`; `HEAD` before any check; the empty tree for a join; the plan withheld for unrelated histories without one |
 
-- units: `sessions/<uuid>.json` with `sessions/<uuid>.records.jsonl` and `sessions/<uuid>.assets/`, `intents/<uuid>.json` with `intents/<uuid>.assets/`, `authoring/<uuid>.json` with its records and assets, `spex.yaml` with `spex.lock` wherever a clone holds them [[storage-1](storage.md#storage-1)], a folder holding `meta.yaml` with every file under it [[storage-11](storage.md#storage-11)], and each other tracked path alone; a bundle unit taken from a side needs every file of it on that side or none;
+- units: `sessions/<uuid>.json` with `sessions/<uuid>.records.jsonl` and `sessions/<uuid>.assets/`, `intents/<uuid>.json` with `intents/<uuid>.assets/`, `authoring/<uuid>.json` with its records and assets, `spex.yaml` with `spex.lock` wherever a clone holds them [[storage-1](storage.md#storage-1)], a folder holding `meta.yaml` on any side with every file under it [[storage-11](storage.md#storage-11)], and each other tracked path alone; a bundle unit taken from a side needs every file of it on that side or none;
 - a unit is local where mine differs from the ancestor and remote does not, incoming where remote differs and mine does not, a conflict where both differ from the ancestor and from each other, and agreed otherwise;
 - unknown units, duplicate choices, and choices contrary to a decided unit are refused before any write; the command-line tool keeps its contract [[storage-10](storage.md#storage-10)], sharing this plan, the validator and the application code behind a seam that takes a caller-supplied ancestor and whether the working tree holds the Save commit or Git's merge output.
 
@@ -752,6 +752,7 @@ The core shall build each `space.tree` level by reading one directory of the clo
 | `project.json` | code remote |
 | `.gitignore`, `.gitattributes` | sync rules |
 | `*.tmp` | temporary write |
+| a folder outside `config/`, `sessions/`, `intents/`, `authoring/`, `packages/`, `skills/`, `local/` and `.spex-uploads/` holding `meta.yaml`, the outermost where two nest, and every path under it no row above names | spec package |
 | other | Not a Spex file |
 
 - a path in an ignored family of the catalog is marked ignored whatever Git reports [[storage-1](storage.md#storage-1)];
@@ -825,7 +826,7 @@ When an integration suite writes local changes of every unit kind into a clone, 
 
 - the local list carries a titled session as new, an intent by its title, an authoring session, "Settings changed" with a diff, "Code remote changed" and "Sync rules updated", in the kinds' order, and in a clone holding `spex.yaml` with `spex.lock` "Spec packages changed" with a diff in its place [[space-7](#space-7)] [[space-34](#space-34)]; a spec package's folder reads as one row of its own, labelled with the folder ending `/`, its every file among its paths [[space-7](#space-7)] [[space-33](#space-33)];
 - after a peer pushes, `space.fetch` lists the incoming units the same way with conflicts marked and ahead and behind counted, a host without `spex` reads empty, and `space.diff` returns a patch for Settings on each side and refuses a session and an intent unit [[space-8](#space-8)] [[space-10](#space-10)];
-- `space.tree` maps every catalog path to its family and sharing mark with session and intent owners, reads an empty directory of a tracked kind as not yet shared, reports `.git` closed, `packages/` as staying here and a stray file as not a Spex file, and neither follows nor lists through a planted symlink; `space.read` pretty-prints JSON, returns YAML, Markdown and JSONL text, cuts a long log on a line, withholds a hints file, and refuses `../` [[space-23](#space-23)] [[space-24](#space-24)] [[space-35](#space-35)].
+- `space.tree` maps every catalog path to its family and sharing mark with session and intent owners, reads an empty directory of a tracked kind as not yet shared, reports `.git` closed, `packages/` as staying here, a spec package's folder and a file under it as spec package and a stray file as not a Spex file, and neither follows nor lists through a planted symlink; `space.read` pretty-prints JSON, returns YAML, Markdown and JSONL text, cuts a long log on a line, withholds a hints file, and refuses `../` [[space-23](#space-23)] [[space-24](#space-24)] [[space-35](#space-35)].
 
 #### space-51
 

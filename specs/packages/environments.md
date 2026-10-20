@@ -67,17 +67,21 @@ The core shall read an environment's `spex.yaml` [[environments-26](#environment
 
 #### environments-32
 
-When the core reads a request by path in your own group's environment — before writing it [[environments-15](#environments-15)] and at each resolution [[environments-5](#environments-5)] — it shall accept only a folder below its clone's root that lies outside Spex's own paths, is reached through no link, and holds no file the clone's Git rules ignore, refusing any other with the path and its reason, so the folder syncs with the clone ([DR-125](../decisions/125-your-own-groups-path-sources-live-in-its-clone.md)):
+When the core reads a request by path in your own group's environment — before writing it [[environments-15](#environments-15)], at each resolution [[environments-5](#environments-5)] and at each install [[environments-7](#environments-7)] — it shall accept only a folder below its clone's root that lies outside Spex's own paths, is reached through no link, and holds nothing the clone's sync drops or refuses, refusing any other with the path and its reason, so the folder syncs with the clone ([DR-125](../decisions/125-your-own-groups-path-sources-live-in-its-clone.md)):
 
 | Refused | Reason |
 | --- | --- |
 | the clone's root, or a path leading out of it | not below the clone's root |
-| a path whose first segment is `config`, `sessions`, `intents`, `authoring`, `packages`, `skills`, `local`, `.git`, `.spex-uploads`, `spex.yaml`, `spex.lock`, `project.json`, `.gitignore`, `.gitattributes`, `.spex-apply.json` or a name beginning `.lock` | a path Spex keeps [[storage-1](storage.md#storage-1)] |
+| a path whose first segment — compared without case after Unicode compatibility normalization (NFKC), and, where it stands and is no link, also as the file system names it — is `config`, `sessions`, `intents`, `authoring`, `packages`, `skills`, `local`, `.git`, `.spex-uploads`, `spex.yaml`, `spex.lock`, `project.json`, `.gitignore`, `.gitattributes`, `.spex-apply.json` or a name beginning `.lock` | a path Spex keeps [[storage-1](storage.md#storage-1)] |
 | a path the clone's Git rules ignore, such as one under a folder named `*.tmp` [[storage-17](storage.md#storage-17)] | not synced |
 | a folder that is a link, or lies under one | reached through a link |
-| a folder holding a file of its release [[environments-1](#environments-1)] the clone's Git rules ignore | a file not synced, named |
+| a folder that is, or lies under, a Git repository of its own — a folder below the root holding `.git` | a repository the sync does not carry, named |
+| a folder holding a file of its release [[environments-1](#environments-1)] the clone's Git rules ignore, or one of an ignored family of the catalog [[storage-1](storage.md#storage-1)], which a sync refuses to share [[space-15](space.md#space-15)] | a file not synced, named |
+| a folder holding at any depth, where the clone's Git rules do not ignore it, a Git repository of its own, a link, or an entry that is no regular file or folder | an entry the sync does not carry, named |
 
-- a request is checked against what stands at its path when it arrives, so a folder not made yet passes the last two rows until a resolution reads it.
+- the clone's Git rules are Git's own reading of its `.gitignore` files and this device's excludes, under which a file Git tracks is never ignored, so a rule of one device's excludes refuses no file another device committed;
+- a request is checked against what stands at its path when it arrives, so a folder not made yet is refused only by the first five rows, and the last two read it at the first resolution or install finding it;
+- an install finding a folder refused fails before anything is installed or linked, its cause naming the path and the reason, the last files and exports staying [[environments-7](#environments-7)].
 
 #### environments-3
 
@@ -336,7 +340,10 @@ When an integration suite, through real cores on two scratch homes whose own gro
 
 - `environment.request` with a path below the clone's root resolves the folder's manifest, the lock holding the path and no files, and `environment.get` names the clone as the path root and the package installed [[environments-2](#environments-2)] [[environments-5](#environments-5)] [[environments-14](#environments-14)];
 - the package's skill stands in the first home's user `.claude/skills/` and `.agents/skills/`, and an edit to its `SKILL.md` in the clone stands there after `environment.install` [[environments-7](#environments-7)] [[environments-8](#environments-8)]; a dry run of `environment.publish` with the same path previews that folder's release [[environments-17](#environments-17)];
-- the clone's root, a path leading out of it, a path under each of Spex's own paths, a folder named `*.tmp`, a folder reached through a link and a folder holding a file named `*.tmp` are each refused naming its reason, `spex.yaml` keeping its bytes [[environments-32](#environments-32)] [[environments-15](#environments-15)];
+- a file named `*.bak` then added to the folder fails the next `environment.install`, the state naming the path, the file and its reason and neither user folder's skill holding the file, and once it is removed an install clears the failure [[environments-32](#environments-32)] [[environments-14](#environments-14)];
+- with your own group's spex repository paired with a Git working folder holding another release at the same path, `environment.get` still names the clone as the path root and the folder's `.claude/skills/` holds the skill with the clone's bytes [[environments-2](#environments-2)] [[environments-8](#environments-8)] [[environments-14](#environments-14)];
+- the clone's root, a path leading out of it, a path under each first segment Spex keeps, a first segment `Sessions`, a folder named `*.tmp`, a folder reached through a link, a folder that is a Git repository of its own, a folder holding a file named `*.tmp`, one holding a `*.tmp` file Git was forced to track, one holding a Git repository of its own and one holding a link under `node_modules/` are each refused naming its reason, `spex.yaml` keeping its bytes [[environments-32](#environments-32)] [[environments-15](#environments-15)]; a folder holding a file Git tracks that this device's excludes match is accepted [[environments-32](#environments-32)];
+- a path requested before its folder exists is accepted, and once the folder stands holding a file named `*.tmp`, `environment.resolve` fails, the state naming the path, the file and its reason, `spex.lock` keeping its bytes [[environments-32](#environments-32)] [[environments-5](#environments-5)];
 - once the second home's own group's clone syncs from the host, the folder, `spex.yaml` and `spex.lock` stand there, `environment.get` there names the package installed, and the skill stands in that home's user `.claude/skills/` and `.agents/skills/` with the bytes of the first home's edit [[environments-7](#environments-7)] [[environments-8](#environments-8)].
 
 #### environments-23
