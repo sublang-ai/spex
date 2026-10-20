@@ -11,8 +11,9 @@
 // for your own group, into the user-level folders of the agents this
 // device has. A playbook's skill goes only where the table lets it. A
 // manifest beside them records what Spex wrote, so a re-export removes
-// only its own and a skill the reader put there stays; an unchanged
-// skill is left as it is, and a changed one is swapped in whole.
+// only its own and a skill the reader put there stays, the export
+// reporting each name such a skill kept out; an unchanged skill is left
+// as it is, and a changed one is swapped in whole.
 // Playbooks go to the launcher as module locations at launch, bound to
 // the environment whose lock exported them.
 
@@ -78,10 +79,12 @@ export interface ExportReport {
   folders: { agents: string[]; level: "project" | "user"; dir: string }[];
   /** Skill folders an earlier export wrote and this one removed. */
   removed: string[];
-  /** Exports not written because a folder the reader placed has the name. */
-  skipped: { name: string; dir: string; reason: string }[];
-  /** Spec packages whose files are not here: not installed, or a path
-   * source this working folder lacks. */
+  /** Exports left out of an agent folder because a folder the reader
+   * placed there has the name: the folder as the agent table names it,
+   * once under each name where a link makes two folders one. */
+  skipped: { name: string; folder: string }[];
+  /** Spec packages an exported artifact of which is not here: not
+   * installed, or a path source this working folder lacks. */
   missing: string[];
 }
 
@@ -271,7 +274,7 @@ function realLocation(path: string, depth = 0): string {
   }
 }
 
-function mirror(skillsDir: string, names: string[], folder: string, report: ExportReport, rename: (from: string, to: string) => void): string[] {
+function mirror(skillsDir: string, names: string[], folder: string, named: string[], report: ExportReport, rename: (from: string, to: string) => void): string[] {
   // The folder as it is on disk, made there where a link points at it
   // before it exists, so the staging copy beside it shares its
   // filesystem even where a link puts it elsewhere.
@@ -293,7 +296,7 @@ function mirror(skillsDir: string, names: string[], folder: string, report: Expo
     for (const name of names) {
       const target = join(dir, name);
       if (standing(target) && !previous.includes(name)) {
-        report.skipped.push({ name, dir: folder, reason: "a folder the reader placed has this name" });
+        for (const as of named) report.skipped.push({ name, folder: as });
         continue;
       }
       written.push(name);
@@ -426,6 +429,8 @@ export async function exportEnvironment(options: ExportOptions): Promise<ExportR
           writeFileSync(skill, rewriteSkillName(readFileSync(skill, "utf8"), exported));
         }
       } else if (artifact.kind === "playbook") {
+        // No skill runs a playbook whose folder is not here.
+        if (!existsSync(join(root, "playbooks", language, id))) { if (!report.missing.includes(name)) report.missing.push(name); continue; }
         mkdirSync(target, { recursive: true });
         writeFileSync(join(target, "SKILL.md"), playbookSkill({ name: exported, id, packageName: name, version }));
         playbookSkills.add(exported);
@@ -470,7 +475,7 @@ export async function exportEnvironment(options: ExportOptions): Promise<ExportR
   const excluded: string[] = [];
   if (workingFolder !== null) {
     for (const { folders, dir, agents, playbooks } of readers("project", workingFolder, () => true)) {
-      const written = mirror(skillsDir, exported(playbooks), dir, report, rename);
+      const written = mirror(skillsDir, exported(playbooks), dir, folders, report, rename);
       report.folders.push({ agents, level: "project", dir });
       for (const folder of folders) excluded.push(`/${folder}/${EXPORTS_MANIFEST}`, ...written.map((name) => `/${folder}/${name}/`), `/${dirname(folder)}/${STAGING_PREFIX}*/`);
       // The staging copy sits beside the folder as it is on disk, which a
@@ -485,8 +490,8 @@ export async function exportEnvironment(options: ExportOptions): Promise<ExportR
   }
   if (userHome !== null) {
     const present = new Set(options.agents);
-    for (const { dir, agents, playbooks } of readers("user", userHome, (agent) => present.has(agent))) {
-      mirror(skillsDir, exported(playbooks), dir, report, rename);
+    for (const { folders, dir, agents, playbooks } of readers("user", userHome, (agent) => present.has(agent))) {
+      mirror(skillsDir, exported(playbooks), dir, folders, report, rename);
       report.folders.push({ agents, level: "user", dir });
     }
   }
