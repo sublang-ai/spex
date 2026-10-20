@@ -21,7 +21,6 @@ export const DEFAULT_HOST_URL = "https://spex.pub";
  * first segment it may be. */
 export { INSTANCE_FOLDER_PATTERN };
 
-const HOST = /^[a-z0-9.-]+$/;
 const LOOPBACK_V4 = /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/;
 
 /** Why a URL stands as no instance's origin:
@@ -31,11 +30,13 @@ const LOOPBACK_V4 = /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/;
  * - `path`: it names a path other than `/`;
  * - `query`: it carries a query, even an empty one;
  * - `fragment`: it carries a fragment, even an empty one;
- * - `host`: its host holds `_` or a character outside `[a-z0-9.-]`, as
- *   an IPv6 literal does;
+ * - `host`: its host is not DNS labels of `[a-z0-9-]`, none starting
+ *   or ending with `-`, joined by single dots with none leading or
+ *   trailing — a host holding `_` or an IPv6 literal among them;
+ * - `port`: it names port 0;
  * - `insecure`: it is `http` on a host that is not loopback —
  *   `localhost` or an address in 127.0.0.0/8. */
-export type OriginRefusal = "invalid" | "scheme" | "user" | "path" | "query" | "fragment" | "host" | "insecure";
+export type OriginRefusal = "invalid" | "scheme" | "user" | "path" | "query" | "fragment" | "host" | "port" | "insecure";
 
 const REFUSALS: Record<OriginRefusal, string> = {
   invalid: "not a URL",
@@ -44,7 +45,8 @@ const REFUSALS: Record<OriginRefusal, string> = {
   path: "the URL names a path",
   query: "the URL carries a query",
   fragment: "the URL carries a fragment",
-  host: "the host holds a character outside [a-z0-9.-]",
+  host: "the host is not DNS labels of [a-z0-9-] joined by single dots",
+  port: "the port is not from 1 to 65535",
   insecure: "http on a host that is not loopback",
 };
 
@@ -69,8 +71,8 @@ export interface InstanceOrigin {
 }
 
 /** The origin a URL names, canonical, or `OriginRefused` with the first
- * reason found among its scheme, user info, path, query, fragment and
- * host, in that order. */
+ * reason found among its scheme, user info, path, query, fragment, host
+ * and port, in that order. */
 export function parseOrigin(value: string): InstanceOrigin {
   let url: URL;
   try { url = new URL(value.trim()); } catch { throw new OriginRefused("invalid"); }
@@ -82,13 +84,15 @@ export function parseOrigin(value: string): InstanceOrigin {
   const rest = url.href.slice(`${url.protocol}//${url.host}/`.length);
   if (rest.startsWith("?")) throw new OriginRefused("query");
   if (rest.startsWith("#")) throw new OriginRefused("fragment");
-  // The parser has lowercased the host, mapped it to ASCII and dropped
-  // a default port.
+  // The parser has lowercased the host, mapped it to ASCII, and read the
+  // port as a number up to 65535, dropping a default one and any leading
+  // zero; the host's folder is then the instance's folder's own spelling.
   const host = url.hostname;
-  if (!HOST.test(host)) throw new OriginRefused("host");
+  if (!INSTANCE_FOLDER_PATTERN.test(`@${host}`)) throw new OriginRefused("host");
+  const port = url.port === "" ? null : Number(url.port);
+  if (port === 0) throw new OriginRefused("port");
   const scheme = url.protocol === "http:" ? "http" : "https";
   if (scheme === "http" && !isLoopback(host)) throw new OriginRefused("insecure");
-  const port = url.port === "" ? null : Number(url.port);
   return { origin: `${scheme}://${host}${port === null ? "" : `:${port}`}`, scheme, host, port };
 }
 

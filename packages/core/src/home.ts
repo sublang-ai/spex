@@ -111,7 +111,7 @@ function shownUrl(url: string): string {
 /** The reason a URL stands as no instance's canonical origin (DR-127). */
 export function notAnOrigin(url: string): string {
   return i18n._({ id: "{url} is not an instance's origin",
-    comment: "Storage diagnostic: a host URL is not an instance's origin written canonically — http or https (http on localhost or 127.x alone), a lowercase host of letters, digits, dots and hyphens, and a port other than the scheme's default, nothing else; the URL is shown with any user info as …",
+    comment: "Storage diagnostic: a host URL is not an instance's origin written canonically — http or https (http on localhost or 127.x alone), a lowercase host of DNS labels (letters, digits and inner hyphens) joined by single dots, and a port from 1 to 65535 other than the scheme's default, nothing else; the URL is shown with any user info as …",
     values: { url: shownUrl(url) } });
 }
 

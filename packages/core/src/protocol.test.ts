@@ -103,13 +103,22 @@ test("storage: a key's segments are spelled as the host spells its paths", () =>
 test("storage: a key may begin with its instance's folder, and only there may a segment begin with @", () => {
   // DR-127: `@<host>` in lowercase with `_<port>` where the origin
   // names one, as the key's first segment alone.
-  for (const key of ["@spex.pub/acme/a-spex", "@127.0.0.1_4100/ada/x-spex", "@internal.spex.pub/acme/platform/web-spex", "@spex.pub/a-spex"]) {
+  for (const key of ["@spex.pub/acme/a-spex", "@127.0.0.1_4100/ada/x-spex", "@internal.spex.pub/acme/platform/web-spex", "@a-b.example_65535/ada/x-spex", "@h_1/acme/a-spex"]) {
     assert.ok(REPOSITORY_KEY_PATTERN.test(key), key);
     assert.ok(parseCommand({ type: "space.fetch", id: "k1", repository: key }).ok, key);
   }
   // Never a host with capitals, `@` past the first segment, an empty
-  // host or port, `_` in the host, two ports, or the folder alone.
-  for (const key of ["@Spex.pub/a-spex", "acme/@h/a-spex", "@/a-spex", "@h_/a-spex", "@spex_pub/a-spex", "@h_80_1/a-spex", "@h/@g/a-spex", "@spex.pub-spex", "@spex.pub/", "@spex.pub//a-spex"]) {
+  // host or port, `_` in the host, two ports, or the folder alone; never
+  // a host with an empty, leading or trailing label or one starting or
+  // ending with `-`, a port of 0, above 65535 or with a leading zero;
+  // never a name directly under the instance's folder, with no group or
+  // login before it.
+  for (const key of [
+    "@Spex.pub/a-spex", "acme/@h/a-spex", "@/a-spex", "@h_/a-spex", "@spex_pub/a-spex", "@h_80_1/a-spex", "@h/@g/a-spex", "@spex.pub-spex", "@spex.pub/", "@spex.pub//a-spex",
+    "@spex..pub/acme/a-spex", "@.spex.pub/acme/a-spex", "@spex.pub./acme/a-spex", "@-spex.pub/acme/a-spex", "@spex-.pub/acme/a-spex",
+    "@h_0/acme/a-spex", "@h_080/acme/a-spex", "@h_65536/acme/a-spex", "@h_99999/acme/a-spex",
+    "@spex.pub/a-spex", "@127.0.0.1_4100/x-spex",
+  ]) {
     assert.ok(!REPOSITORY_KEY_PATTERN.test(key), key);
     assert.ok(!parseCommand({ type: "space.fetch", id: "k1", repository: key }).ok, key);
   }

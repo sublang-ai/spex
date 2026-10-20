@@ -46,21 +46,29 @@ export const mediaAssetSchema = z.object({
 /** Wire-validated form of Playbook's SessionAssetRef. */
 export type MediaAsset = z.infer<typeof mediaAssetSchema>;
 const KEY_SEGMENT = "[A-Za-z0-9_][A-Za-z0-9._-]*";
-const INSTANCE_SEGMENT = "@[a-z0-9.-]+(?:_[0-9]+)?";
+/** A DNS label in lowercase: letters, digits and `-`, neither first nor
+ * last a hyphen. */
+const HOST_LABEL = "[a-z0-9](?:[a-z0-9-]*[a-z0-9])?";
+/** A host name: labels joined by single dots, none leading or trailing. */
+const HOST_NAME = `${HOST_LABEL}(?:\\.${HOST_LABEL})*`;
+/** A port from 1 to 65535, written without a leading zero. */
+const PORT = "(?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])";
+const INSTANCE_SEGMENT = `@${HOST_NAME}(?:_${PORT})?`;
 /** An instance's folder under `workspace/` (DR-127): `@`, its host in
- * lowercase as a key segment spells it, and `_<port>` where its origin
- * names a port or its scheme is `http` — `@spex.pub`, `@127.0.0.1_4100`. */
+ * lowercase, and `_<port>` where its origin names a port or its scheme
+ * is `http` — `@spex.pub`, `@127.0.0.1_4100`. */
 export const INSTANCE_FOLDER_PATTERN = new RegExp(`^${INSTANCE_SEGMENT}$`);
 /** A spex repository's key: its clone's path under `workspace/`, the
  * name ending in `-spex` (storage-1, projects-10). A clone at an
- * instance lies under that instance's folder, its key's first segment
+ * instance lies under that instance's folder, its key's first segment,
+ * with at least its group's or its namespace's segment before its name
  * (`@spex.pub/acme/a-spex`, DR-127); every other segment is spelled as
  * the Git host spells its paths — letters, digits, `.`, `_` and `-`,
  * never starting with a dot or a hyphen — so a host's group or
  * repository name stands as a segment unchanged, and only an instance's
  * folder begins with `@`. A project is named by its spex repository's
  * key. */
-export const REPOSITORY_KEY_PATTERN = new RegExp(`^(?:${INSTANCE_SEGMENT}/)?${KEY_SEGMENT}(?:/${KEY_SEGMENT})*-spex$`);
+export const REPOSITORY_KEY_PATTERN = new RegExp(`^(?:${INSTANCE_SEGMENT}/${KEY_SEGMENT}/)?(?:${KEY_SEGMENT}/)*${KEY_SEGMENT}-spex$`);
 export const repositoryKeySchema = z.string().regex(REPOSITORY_KEY_PATTERN);
 
 /** A request in `spex.yaml` (environments-2): exactly one source. */

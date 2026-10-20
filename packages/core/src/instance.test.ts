@@ -29,6 +29,10 @@ const CANONICAL: Array<[string, string, string]> = [
   ["  https://spex.pub  ", "https://spex.pub", "@spex.pub"],
   ["HTTPS://Spex.Pub", "https://spex.pub", "@spex.pub"],
   ["https://spex.pub:443/", "https://spex.pub", "@spex.pub"],
+  ["https://spex.pub:0443", "https://spex.pub", "@spex.pub"],
+  ["https://spex.pub:08443", "https://spex.pub:8443", "@spex.pub_8443"],
+  ["https://spex.pub:65535", "https://spex.pub:65535", "@spex.pub_65535"],
+  ["https://a-b.c-d.example:1", "https://a-b.c-d.example:1", "@a-b.c-d.example_1"],
   ["https://internal.spex.pub", "https://internal.spex.pub", "@internal.spex.pub"],
   ["https://spex.pub:8443", "https://spex.pub:8443", "@spex.pub_8443"],
   ["https://bücher.example", "https://xn--bcher-kva.example", "@xn--bcher-kva.example"],
@@ -81,6 +85,14 @@ const REFUSED: Array<[string, OriginRefusal]> = [
   ["https://spex.pub#", "fragment"],
   ["https://my_host.example", "host"],
   ["https://spex*pub", "host"],
+  ["https://spex..pub", "host"],
+  ["https://.spex.pub", "host"],
+  ["https://spex.pub.", "host"],
+  ["https://-spex.pub", "host"],
+  ["https://spex-.pub", "host"],
+  ["https://spex.-pub", "host"],
+  ["https://spex.pub:0", "port"],
+  ["http://127.0.0.1:0", "port"],
   ["http://[::1]:4100", "host"],
   ["https://[::1]", "host"],
   ["http://spex.pub", "insecure"],
@@ -106,11 +118,17 @@ test("instance origins: every URL outside the origin rule is refused with its re
     error instanceof Error && !error.message.includes("secret") && !error.message.includes("spex.pub"));
 });
 
-test("instance folders: only `@<host>` with an optional `_<port>` stands as one", () => {
-  for (const folder of ["@spex.pub", "@internal.spex.pub", "@127.0.0.1_4100", "@localhost_80", "@xn--bcher-kva.example"]) {
+test("instance folders: only `@<host>` with an optional `_<port>` stands as one, the host DNS labels and the port 1 to 65535 with no leading zero", () => {
+  for (const folder of ["@spex.pub", "@internal.spex.pub", "@127.0.0.1_4100", "@localhost_80", "@xn--bcher-kva.example", "@a", "@a-b.c-d", "@spex.pub_1", "@spex.pub_65535"]) {
     assert.ok(isInstanceFolder(folder), folder);
   }
-  for (const folder of ["spex.pub", "@", "@Spex.pub", "@spex_pub", "@spex.pub_", "@spex.pub_80_1", "@spex.pub_x", "acme", "@spex.pub/acme", "@[::1]_4100"]) {
+  for (const folder of [
+    "spex.pub", "@", "@Spex.pub", "@spex_pub", "@spex.pub_", "@spex.pub_80_1", "@spex.pub_x", "acme", "@spex.pub/acme", "@[::1]_4100",
+    // Labels: no empty, leading or trailing one, none starting or ending with `-`.
+    "@spex..pub", "@.spex.pub", "@spex.pub.", "@.", "@-spex.pub", "@spex-.pub", "@spex.-pub", "@spex.pub-",
+    // Ports: none, none above 65535, none with a leading zero.
+    "@spex.pub_0", "@spex.pub_00", "@spex.pub_080", "@spex.pub_65536", "@spex.pub_99999", "@spex.pub_100000",
+  ]) {
     assert.ok(!isInstanceFolder(folder), folder);
   }
 });
