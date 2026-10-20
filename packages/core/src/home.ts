@@ -16,7 +16,10 @@ import {
   StorageFormatError, writeApplicationBytes,
 } from "./files.js";
 import { i18n } from "./i18n.js";
+import { hostUrlFor } from "./instance.js";
 import { REPOSITORY_KEY_PATTERN } from "./protocol.js";
+
+export { hostUrlFor };
 
 export const HOME_FILE = "home.yaml";
 export const WORKSPACE = "workspace";
@@ -33,12 +36,6 @@ export interface HomeFile {
   host: HomeHost;
   own: string;
   folders: HomeFolder[];
-}
-
-/** The Git host a new home names: `SPEX_HOST_URL` when set, else spex.pub. */
-export function hostUrlFor(env: NodeJS.ProcessEnv = process.env): string {
-  const url = env.SPEX_HOST_URL?.trim();
-  return url ? url : "https://spex.pub";
 }
 
 /** Lowercase kebab-case: runs of anything else become one hyphen. */

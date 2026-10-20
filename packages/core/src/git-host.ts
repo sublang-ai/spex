@@ -25,9 +25,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import { writeApplicationBytes } from "./files.js";
 
-/** The Git host a new home records unless `SPEX_HOST_URL` names another
- * (git-host-1). */
-export const DEFAULT_HOST_URL = "https://spex.pub";
+export { DEFAULT_HOST_URL, hostUrlFor } from "./instance.js";
 
 /** The public OAuth client id Spex signs in as. */
 export const CLIENT_ID = "spex";
@@ -88,19 +86,6 @@ export function retryAfterSeconds(value: string | null | undefined, now: number 
   }
   const at = httpDate(text, now);
   return at === null ? null : Math.max(0, Math.ceil((at - now) / 1000));
-}
-
-/**
- * The host URL a home uses (git-host-1): a home that already records one
- * keeps it whatever the environment says; a new home takes a nonempty
- * `SPEX_HOST_URL`, else spex.pub. Trailing slashes are dropped so routes
- * join cleanly.
- */
-export function hostUrlFor(env: NodeJS.ProcessEnv, existing: string | null | undefined): string {
-  if (typeof existing === "string" && existing.trim().length > 0) return trimUrl(existing.trim());
-  const fromEnv = env.SPEX_HOST_URL;
-  if (typeof fromEnv === "string" && fromEnv.trim().length > 0) return trimUrl(fromEnv.trim());
-  return DEFAULT_HOST_URL;
 }
 
 function trimUrl(url: string): string {
