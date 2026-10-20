@@ -17,7 +17,7 @@ Integration coverage exercises registration and card state against fixture repos
 
 When the user confirms a directory in the project palette, the palette shall resolve the confirmed directory by the cases below:
 
-- The top level of a git work tree: the palette pairs the directory with a spex repository [[storage-6](storage.md#storage-6)] — while signed in, through the picker of matching spex repositories and groups [[space-58](space.md#space-58)], else locally — the environment the directory holds at its root installed, or one written there [[storage-6](storage.md#storage-6)], and makes it the workspace's current project.
+- The top level of a git work tree: the palette pairs the directory with a spex repository [[storage-6](storage.md#storage-6)] — while signed in to any instance, through the picker of each signed-in instance's matching spex repositories, your namespace there and its groups [[space-58](space.md#space-58)], else locally — the environment the directory holds at its root installed, or one written there [[storage-6](storage.md#storage-6)], and makes it the workspace's current project.
 - Inside a work tree below its top level: the palette registers nothing and shows a message naming the work tree's top-level path.
 - No git work tree at all: the palette registers nothing and shows a message naming the condition and pointing at the Create action [[projects-22](#projects-22)], which initializes the repository on the same path — an existing-repo action never initializes a repository on its own.
 
@@ -65,6 +65,12 @@ When the user picks the palette's Academy-example action ([DR-015](../decisions/
 - Target directory not empty: the palette reports the refusal and registers nothing.
 - Target already registered: the core's `conflict` names the registered path as a detail of the refusal, apart from its words, and the palette makes that project current.
 
+### The Code's Clone
+
+#### projects-37
+
+When the core clones a project's code from the remote its `project.json` names [[storage-3](storage.md#storage-3)], it shall hand Git the credential that the project's instance — its spex repository's [[storage-31](storage.md#storage-31)] — brokers [[git-host-9](git-host.md#git-host-9)] only where that remote lies under that instance's reported Git origin [[git-host-5](git-host.md#git-host-5)], and name no helper of the app's for any other remote, one under another instance's Git origin included, so this device's own credentials serve it ([DR-127](../decisions/127-a-home-signed-in-to-several-instances.md)).
+
 ### The Overview Tab
 
 #### projects-4
@@ -82,7 +88,7 @@ While a project is the workspace's current project, the Overview tab shall show 
 
 #### projects-36
 
-When a client sends `project.status`, the core shall reply with the project's locally collected repository state [[projects-11](#projects-11)], carrying `originUrl` only once the instance has reported its Git origin [[git-host-5](git-host.md#git-host-5)] and the code's remote lies outside it, with any HTTP(S) user removed ([DR-120](../decisions/120-the-instance-is-the-space.md)).
+When a client sends `project.status`, the core shall reply with the project's locally collected repository state [[projects-11](#projects-11)], carrying `originUrl` only once the home's default instance [[storage-2](storage.md#storage-2)] and each instance it lists have reported their Git origins [[git-host-5](git-host.md#git-host-5)] and the code's remote lies outside every one of them, with any HTTP(S) user removed ([DR-120](../decisions/120-the-instance-is-the-space.md), [DR-127](../decisions/127-a-home-signed-in-to-several-instances.md)).
 
 ### Forge Binding
 
@@ -104,15 +110,15 @@ Where a project has no GitHub binding, or the gh CLI is not installed or not aut
 | Unmet condition | Guidance |
 | --- | --- |
 | no `origin` remote | "No GitHub origin remote. Add one (git remote add origin …) to see issues and PRs." |
-| an unbound `origin` remote, before the instance reports its Git origin [[git-host-5](git-host.md#git-host-5)] | "Issues and PRs come from GitHub; this project's code is on a remote." |
-| an unbound `origin` remote under the instance's reported Git origin [[git-host-5](git-host.md#git-host-5)] | "Issues and PRs come from GitHub; this project's code is on this instance." |
+| an unbound `origin` remote under the reported Git origin [[git-host-5](git-host.md#git-host-5)] of the project's instance — its spex repository's [[storage-31](storage.md#storage-31)], or the home's default instance [[storage-2](storage.md#storage-2)] where it has none | "Issues and PRs come from GitHub; this project's code is on this instance." |
+| any other unbound `origin` remote while the home's default instance or an instance it lists has not reported its Git origin [[git-host-5](git-host.md#git-host-5)], or under another instance's reported Git origin | "Issues and PRs come from GitHub; this project's code is on a remote." |
 | any other `origin` remote not on GitHub | "Issues and PRs come from GitHub; this project's origin is at ⟨host⟩.", ⟨host⟩ being the remote's host name in its URL or scp-like form, or a local remote as written, and never a credential its URL carries |
 | gh not installed | names that gh is not installed |
 | gh not authenticated | names that gh is not authenticated |
 
 - While the panel shows setup guidance, the Overview tab keeps showing repository state [[projects-4](#projects-4)] and its remove control remains functional.
 - While the Sources band is folded, the Overview's header names the guidance beside the repository state, so the reason GitHub is empty is read without opening the band; an open band carries the guidance itself and the header repeats nothing ([DR-069](../decisions/069-key-phrases-not-sentences.md)).
-- The guidance follows the current origin classification on every reply, a cached reply included, and names nothing behind the instance ([DR-120](../decisions/120-the-instance-is-the-space.md)).
+- The guidance follows the current origin classification on every reply, a cached reply included, and names nothing behind any instance ([DR-120](../decisions/120-the-instance-is-the-space.md), [DR-127](../decisions/127-a-home-signed-in-to-several-instances.md)).
 
 ### Session and Removal
 
@@ -207,7 +213,7 @@ Where the GitHub forge adapter performs an operation — auth status, issue list
 
 When a forge adapter operation fails — executable missing, not authenticated, network failure, non-zero exit, or unparsable output — the forge adapter shall return a typed failure carrying a condition category and human-readable guidance:
 
-- The core service forwards that guidance as the forge panel state for the affected project, applying the instance's origin presentation [[projects-7](#projects-7)], and neither crashes nor stops serving the project's other state.
+- The core service forwards that guidance as the forge panel state for the affected project, applying the origin presentation [[projects-7](#projects-7)], and neither crashes nor stops serving the project's other state.
 
 ## Verification
 
@@ -221,6 +227,7 @@ Where a fixture git repository exists with a named branch checked out, an uncomm
 - Pairing a repair's spex repository with a folder keeps its key; a clone no pair names prompts the repair without silently pairing anything [[projects-10](#projects-10)].
 - Confirming a directory inside a work tree below its top level is rejected with a message and creates no project entry [[projects-1](#projects-1)].
 - Confirming a directory that is no Git work tree registers nothing and points to the Create action [[projects-1](#projects-1)].
+- Signed in to two stand-in instances each holding a group `acme`: the picker offers the `acme` of each, and picking the second's pairs the folder with a spex repository the second stand-in lists and the first does not [[projects-1](#projects-1)].
 
 #### projects-18
 
@@ -257,9 +264,26 @@ Where the stub `gh` reports a not-authenticated state, or `gh` is absent from `P
 - Code cloned from the instance's reported Git origin: fresh and cached guidance are the instance sentence [[projects-7](#projects-7)], `project.status` omits `originUrl` while retaining its local branch state [[projects-36](#projects-36)], and a restarted core awaiting its first host description serves the generic sentence from the same cache [[projects-7](#projects-7)], exposes no origin in initial metadata [[projects-36](#projects-36)], and triggers no host read for either local command [[projects-11](#projects-11)].
 - Code outside the instance's reported Git origin: the guidance names that remote's host [[projects-7](#projects-7)] and `project.status` carries its credential-free URL [[projects-36](#projects-36)].
 
+#### projects-38
+
+Where a real core on a scratch home is signed in to two stand-in instances over distinct Git backends, the first being the home's default instance, with three projects at the first whose code is at the first's Git origin, at the second's, and at another origin, and a local-only project whose code is at the first's Git origin, when each project's forge panel and `project.status` are read once both instances have reported their Git origins, and again after a restart with the second signed out and the first read anew, the test suite shall assert the cases below:
+
+| The project's code | Both reported | After the restart |
+| --- | --- | --- |
+| at the first's Git origin | the instance sentence [[projects-7](#projects-7)], no `originUrl` [[projects-36](#projects-36)] | the same |
+| at the second's Git origin | the generic remote sentence [[projects-7](#projects-7)], no `originUrl` [[projects-36](#projects-36)] | the same |
+| at another origin | that origin's host named [[projects-7](#projects-7)], its credential-free URL as `originUrl` [[projects-36](#projects-36)] | the generic remote sentence [[projects-7](#projects-7)], no `originUrl` [[projects-36](#projects-36)] |
+| the local-only project's, at the first's Git origin | the instance sentence [[projects-7](#projects-7)], no `originUrl` [[projects-36](#projects-36)] | the same |
+
 #### projects-29
 
 Where the Overview tab renders a project whose GitHub binding names an unmet condition, when the reader folds its Sources band and opens it again, the test suite shall assert that the header names the guidance beside the repository state only while the band is folded, and that the open band carries the guidance while the header repeats nothing [[projects-7](#projects-7)].
+
+### Code Clone Coverage
+
+#### projects-39
+
+Where a real core on a scratch home is signed in to two stand-in instances over distinct Git backends, each serving private code through its real HTTP Git transport and recording each credential it brokers, and the first lists two projects' spex repositories whose `project.json` names code at the first's Git origin and at the second's respectively, when the test suite joins each over the protocol with this device's Git holding no credential of its own, the test suite shall assert that the first's code clones with a credential the first instance brokered [[projects-37](#projects-37)], and that the second's is brokered by neither instance and fails, leaving no code cloned [[projects-37](#projects-37)].
 
 ### Removal Coverage
 

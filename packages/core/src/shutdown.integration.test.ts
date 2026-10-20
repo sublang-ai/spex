@@ -38,6 +38,7 @@ playbooks:
 `;
 
 const DISPOSE_FAILURE = "captain teardown exploded";
+const PREPARE_FAILURE = "captain pre-close exploded";
 
 /** A captain whose disposal fails the way a dead SDK child would. */
 function brokenCaptain(): Captain {
@@ -91,6 +92,12 @@ class Client {
     this.socket.close();
   }
 
+  send<T extends Command["type"]>(type: T, fields: Omit<Extract<Command, { type: T }>, "type" | "id">): string {
+    const id = `c${(this.nextId += 1)}`;
+    this.socket.send(JSON.stringify({ type, id, ...fields }));
+    return id;
+  }
+
   async command<T extends Command["type"]>(
     type: T,
     fields: Omit<Extract<Command, { type: T }>, "type" | "id">,
@@ -98,8 +105,7 @@ class Client {
     | { ok: true; result: CommandResults[T] }
     | { ok: false; error: { code: string; message: string } }
   > {
-    const id = `c${(this.nextId += 1)}`;
-    this.socket.send(JSON.stringify({ type, id, ...fields }));
+    const id = this.send(type, fields);
     const reply = await this.waitFor(
       (message) => message.type === "reply" && message.id === id,
     );
@@ -254,6 +260,235 @@ test("CORE-41: a failed disposal neither skips another nor holds the endpoint op
       socket.once("error", reject);
     }),
   );
+});
+
+test("CORE-41: shutdown drains an opening that already owns a session lease", async () => {
+  let entered!: () => void;
+  const initializing = new Promise<void>((resolve) => { entered = resolve; });
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  const events: string[] = [];
+  const captain = createScriptedCaptain(async () => { events.push("turn"); });
+  const harness = await startHarness([{
+    ...captain,
+    async init(session) {
+      await captain.init?.(session);
+      entered();
+      await gate;
+    },
+    async dispose() {
+      events.push("disposed");
+      await captain.dispose?.();
+    },
+  }]);
+  const client = new Client(harness.service.port());
+  await client.open();
+  const project = await client.expectOk("project.register", { path: harness.projectDirs[0] as string });
+  const other = await client.expectOk("project.register", { path: harness.projectDirs[1] as string });
+  const manager = harness.service["sessions"];
+  // Retain the real opening promise solely to finish the failed-before
+  // reproduction's cleanup; the request still enters through WebSocket.
+  const create = manager.createSession.bind(manager);
+  let opening: ReturnType<typeof create> | undefined;
+  let sessionId: string | undefined;
+  manager.createSession = (...args) => {
+    opening = create(...args);
+    return opening;
+  };
+  const store = harness.service["store"];
+  const sessionStore = store.sessionStore(project.id);
+  const acquire = sessionStore.acquire.bind(sessionStore);
+  const getSessionStore = store.sessionStore.bind(store);
+  store.sessionStore = (projectId) => projectId === project.id ? { ...sessionStore, acquire: async (id) => {
+    sessionId = id;
+    return acquire(id);
+  } } : getSessionStore(projectId);
+  const close = store.close.bind(store);
+  store.close = () => { events.push("store-closed"); close(); };
+  let composed!: () => void;
+  const composing = new Promise<void>((resolve) => { composed = resolve; });
+  let releaseConfig!: () => void;
+  const configGate = new Promise<void>((resolve) => { releaseConfig = resolve; });
+  const compose = harness.service["composedFor"].bind(harness.service);
+  harness.service["composedFor"] = async (id) => {
+    const result = await compose(id);
+    if (id === other.id) { composed(); await configGate; }
+    return result;
+  };
+  let stopped: Promise<void> | undefined;
+  let waitingForConfig: ReturnType<Client["command"]> | undefined;
+  let stoppedWhileHeld = false;
+  try {
+    client.send("session.create", { projectId: project.id });
+    await initializing;
+    assert.ok(sessionId);
+    assert.equal(await sessionStore.readLeaseState(sessionId), "active", "the real shared lease is held before initialization completes");
+    waitingForConfig = client.command("session.create", { projectId: other.id });
+    await composing;
+    stopped = harness.service.stop();
+    releaseConfig();
+    const overtaken = await waitingForConfig;
+    assert.equal(overtaken.ok, false);
+    assert.equal(overtaken.ok ? undefined : overtaken.error.code, "busy", "a request still composing cannot acquire a host after shutdown");
+    const late = await client.command("session.create", { projectId: other.id });
+    assert.equal(late.ok, false);
+    assert.equal(late.ok ? undefined : late.error.code, "busy", "shutdown refuses new session admission");
+    stoppedWhileHeld = await Promise.race([
+      stopped.then(() => true),
+      new Promise<false>((resolve) => setTimeout(() => resolve(false), 100)),
+    ]);
+  } finally {
+    releaseConfig();
+    release();
+    await waitingForConfig;
+    await opening?.catch(() => {});
+    await stopped;
+    client.close();
+    // The uncorrected core may publish the runtime after stop returned.
+    // Dispose that owned fixture too; never leave the reproduction's lease.
+    await manager.disposeAll();
+  }
+  assert.equal(stoppedWhileHeld, false, "shutdown returned while an acquired session was still opening");
+  assert.ok(events.indexOf("disposed") >= 0 && events.indexOf("disposed") < events.indexOf("store-closed"), "runtime disposal precedes store closure");
+  assert.equal(events.includes("turn"), false, "creation and shutdown start no Boss turn");
+  assert.equal(await sessionStore.readLeaseState(sessionId!), "idle");
+});
+
+test("CORE-41: a continuation opening during shutdown cannot start its requested turn", async () => {
+  let entered!: () => void;
+  const initializing = new Promise<void>((resolve) => { entered = resolve; });
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  let turns = 0;
+  let disposed = false;
+  const captain = createScriptedCaptain(async () => { turns += 1; });
+  const harness = await startHarness([healthyCaptain().captain, {
+    ...captain,
+    async init(session) { await captain.init?.(session); entered(); await gate; },
+    async dispose() { disposed = true; await captain.dispose?.(); },
+  }]);
+  const client = new Client(harness.service.port());
+  await client.open();
+  const project = await client.expectOk("project.register", { path: harness.projectDirs[0] as string });
+  const session = await client.expectOk("session.create", { projectId: project.id });
+  await client.expectOk("session.dispose", { sessionId: session.id });
+  const manager = harness.service["sessions"];
+  const proceed = manager.continueSession.bind(manager);
+  let opening: ReturnType<typeof proceed> | undefined;
+  manager.continueSession = (...args) => { opening = proceed(...args); return opening; };
+  const shared = harness.service["store"].sessionStore(project.id);
+  let stopped: Promise<void> | undefined;
+  try {
+    client.send("turn.submit", { sessionId: session.id, text: "must not run during shutdown" });
+    await initializing;
+    assert.equal(await shared.readLeaseState(session.id), "active");
+    stopped = harness.service.stop();
+    const late = await client.command("turn.submit", { sessionId: session.id, text: "nor this turn" });
+    assert.equal(late.ok, false);
+    assert.equal(late.ok ? undefined : late.error.code, "busy");
+  } finally {
+    release();
+    await opening?.catch(() => {});
+    await stopped;
+    client.close();
+    await manager.disposeAll();
+  }
+  assert.equal(disposed, true);
+  assert.equal(turns, 0);
+  assert.equal(await shared.readLeaseState(session.id), "idle");
+  assert.ok((await shared.readStream(session.id)).entries.every(({record}) => record.type !== "turn_started"));
+});
+
+for (const failure of ["initialization", "aggregate initialization", "prepare", "disposal", "both", "both before shutdown"] as const) test(failure === "initialization"
+  ? "CORE-41: an opening initialization error with clean disposal does not fail shutdown"
+  : failure === "aggregate initialization"
+    ? "CORE-41: an ambiguous aggregate construction error leaves cleanup unconfirmed"
+  : failure === "prepare"
+    ? "CORE-41: a pre-close hook failure is observed while remaining cleanup is attempted"
+  : failure === "disposal"
+    ? "CORE-41: an opening cleanup failure is reported without skipping an existing runtime"
+    : failure === "both"
+      ? "CORE-41: failed initialization and disposal retain the unpublished session reservation"
+      : "CORE-41: shutdown retains cleanup failure that settled before shutdown began", async () => {
+  const cleanupFails = failure === "disposal" || failure === "both" || failure === "both before shutdown";
+  const cleanupUnconfirmed = failure !== "initialization";
+  const expectedFailure = cleanupFails ? DISPOSE_FAILURE : failure === "prepare" ? PREPARE_FAILURE : "fixture initialization failed";
+  let entered!: () => void;
+  const initializing = new Promise<void>((resolve) => { entered = resolve; });
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  const healthy = healthyCaptain();
+  const initializingCaptain = cleanupFails ? brokenCaptain() : healthyCaptain().captain;
+  let prepareCalled = false;
+  let disposeCalled = false;
+  const harness = await startHarness([healthy.captain, {
+    ...initializingCaptain,
+    async init(session) {
+      await initializingCaptain.init?.(session);
+      entered();
+      await gate;
+      if (failure === "aggregate initialization") throw new AggregateError([new Error("fixture initialization failed")], "fixture initialization failed");
+      if (failure !== "disposal" && failure !== "prepare") throw new Error("fixture initialization failed");
+    },
+    async prepareDispose() {
+      prepareCalled = true;
+      if (failure === "prepare") throw new Error(PREPARE_FAILURE);
+      await initializingCaptain.prepareDispose?.();
+    },
+    async dispose() { disposeCalled = true; await initializingCaptain.dispose?.(); },
+  }]);
+  const client = new Client(harness.service.port());
+  await client.open();
+  const first = await client.expectOk("project.register", { path: harness.projectDirs[0] as string });
+  const second = await client.expectOk("project.register", { path: harness.projectDirs[1] as string });
+  await client.expectOk("session.create", { projectId: first.id });
+  const store = harness.service["store"];
+  const shared = store.sessionStore(second.id);
+  const acquire = shared.acquire.bind(shared);
+  const original = store.sessionStore.bind(store);
+  let lease: Awaited<ReturnType<typeof acquire>> | undefined;
+  store.sessionStore = (id) => id === second.id ? { ...shared, acquire: async (sessionId) => {
+    lease = await acquire(sessionId);
+    return lease;
+  } } : original(id);
+  const manager = harness.service["sessions"];
+  const create = manager.createSession.bind(manager);
+  let opening: ReturnType<typeof create> | undefined;
+  manager.createSession = (...args) => { opening = create(...args); return opening; };
+  let stopped: Promise<void> | undefined;
+  try {
+    client.send("session.create", { projectId: second.id });
+    await initializing;
+    assert.ok(lease);
+    if (failure !== "both before shutdown") stopped = harness.service.stop();
+    release();
+    await assert.rejects(opening!, new RegExp(expectedFailure));
+    stopped ??= harness.service.stop();
+    if (cleanupUnconfirmed) {
+      await assert.rejects(stopped, (error: unknown) => {
+        assert.ok(error instanceof AggregateError);
+        assert.equal(error.message, "session cleanup was not confirmed");
+        assert.match(String(error.errors[0]), new RegExp(expectedFailure));
+        return true;
+      });
+    } else await stopped;
+    assert.equal(healthy.disposed(), true);
+    assert.equal(prepareCalled, true);
+    assert.equal(disposeCalled, true, "a pre-close failure does not skip the final disposal hook");
+    assert.equal(store["localSessions"].has(lease.sessionId), cleanupUnconfirmed, "unconfirmed cleanup retains the local reservation even if no controller was returned");
+    assert.equal(manager["opening"].has(second.id), cleanupUnconfirmed, "an unpublished host with unconfirmed cleanup still reserves its project");
+    // The shared constructor releases its lease when its inner host fails
+    // before returning. That does not establish that failed disposal stopped
+    // the host, and must not make Spex release its own reservation.
+    assert.equal(await shared.readLeaseState(lease.sessionId), failure === "disposal" || failure === "prepare" ? "active" : "idle");
+  } finally {
+    release();
+    await opening?.catch(() => {});
+    await stopped?.catch(() => {});
+    client.close();
+    // Only this still-held broken fixture lease is released after assertion.
+    if (failure === "disposal" || failure === "prepare") await lease?.release();
+  }
 });
 
 

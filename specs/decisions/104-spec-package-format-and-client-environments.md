@@ -21,7 +21,7 @@ Amends, under [DR-046](046-decision-record-evolution.md):
 - [DR-036](036-file-state-store.md) and [DR-045](045-unified-session-storage.md): the playbook library folder `playbooks/<id>/` gives way to installed spec packages.
 - [DR-015](015-reference-content.md), [DR-037](037-playbook-12-adoption.md) and [DR-059](059-issue-delivery-through-dev.md): the built-in playbooks come from a spec package the app ships, not from Playbook's registry modules and starter.
 
-Proposed to be amended by [DR-127](127-a-home-signed-in-to-several-instances.md) in requests from the registry, in Git sources and in publishing: a resolution asks the registry of the environment's instance, the home's default instance where the environment has none; an install fetches from the environment's instance or from the registry its lock records, whichever serves the locked checksum; a Git source at a signed-in instance's Git origin uses that instance's broker; a publish goes to the project's instance, or the default instance, as that instance's account.
+Amended by [DR-127](127-a-home-signed-in-to-several-instances.md) in requests from the registry, in Git sources and in publishing: a resolution asks the registry of the environment's instance, the home's default instance where the environment has none; an install fetches from the environment's instance or from the registry its lock records, whichever serves the locked checksum; a Git source at a signed-in instance's Git origin uses that instance's broker; a publish goes to the project's instance, or the default instance, as that instance's account.
 
 ## Context
 

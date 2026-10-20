@@ -5,9 +5,10 @@
 
 ## Intent
 
-This package defines Spex's data files under [DR-103](../decisions/103-the-home-and-its-groups.md): the home, the spex repositories cloned under it, the files each holds, the device-local files, the one-time migrations from the former layout and of a project's environment into its working folder, and the whole-unit rules by which a spex repository's `spex` branch merges.
+This package defines Spex's data files under [DR-103](../decisions/103-the-home-and-its-groups.md) and [DR-127](../decisions/127-a-home-signed-in-to-several-instances.md): the home and the instances it signs in to, the spex repositories cloned under it, the files each holds, the device-local files, the one-time migrations from the former layout, of a project's environment into its working folder and of a one-instance home into a folder per instance, and the whole-unit rules by which a spex repository's `spex` branch merges.
 **Spex home** is the application data directory; paths below are relative to it.
-A **spex repository** is a Git repository named `<name>-spex` holding the records of one project or one group on its `spex` branch; its **clone** lives under `workspace/`, and its **key** is the clone's path relative to `workspace/`, such as `acme/a-spex`, each segment spelled as the host spells its path — letters, digits, `.`, `_` and `-`, never starting with a dot — so a host's group or repository name is a key segment as it is.
+An **instance** is a Git host the home signs in to — a spex.pub instance, whose groups and spex repositories a person sees there — known by its origin.
+A **spex repository** is a Git repository named `<name>-spex` holding the records of one project or one group on its `spex` branch; its **clone** lives under `workspace/`, and its **key** is the clone's path relative to `workspace/`, such as `@spex.pub/acme/a-spex` under an instance's folder or `alice/alice-spex` under your own group's folder, each segment past an instance's folder spelled as the host spells its path — letters, digits, `.`, `_` and `-`, never starting with a dot — so a host's group or repository name is a key segment as it is, and none begins with the `@` that begins an instance's folder.
 A **working folder** is a folder on this device where a project's or a group's sessions run; a **project** is a working folder paired with a spex repository.
 Playbook owns session files and recovery [[1]]; a **session bundle** consists of a manifest, its matching replay stream, and its owned asset directory, selected from one revision or deleted as a unit during Git synchronization.
 **Closed** JSON objects permit only the declared fields; every file whose layout this package defines carries a `format` field naming its layout's version, and a reader refuses a `format` it does not know.
@@ -22,8 +23,11 @@ The store shall persist core-owned data in Spex home using these locations:
 
 | Path | Contents | Git |
 | --- | --- | --- |
-| `workspace/<group>/` | a plain folder per group of the Git host, a subgroup's inside its parent's, named by the group's path in the instance ([DR-120](../decisions/120-the-instance-is-the-space.md)) | — |
-| `workspace/<group>/<name>-spex/` | the clone of one spex repository, on its `spex` branch | the clone |
+| `workspace/@<host>/` | an instance's folder, holding the spex repositories keyed under that instance [[storage-31](#storage-31)] | — |
+| `workspace/@<host>/<group>/`, `workspace/@<host>/<login>/` | a plain folder per group at that instance, a subgroup's inside its parent's, named by the group's path in the instance ([DR-120](../decisions/120-the-instance-is-the-space.md)), and per account whose namespace there holds a spex repository — yours or another's — named by its login there | — |
+| `workspace/@<host>/<path>/<name>-spex/` | the clone of one spex repository keyed under that instance, `<path>` being its group's path or its namespace's login, on its `spex` branch | the clone |
+| `workspace/<own>/` | your own group's folder, the home's own and outside every instance's folder [[storage-2](#storage-2)] | — |
+| `workspace/<own>/<own>-spex/`, `workspace/<own>/<name>-spex/` | the clone of your own group's own repository, and of each local-only spex repository [[storage-6](#storage-6)], on its `spex` branch | the clone |
 | `<clone>/project.json` | the code's remote [[storage-3](#storage-3)], present when the spex repository is a project's | Tracked |
 | `<clone>/config/playbook.config.yaml` | the spex repository's launcher configuration [[core-service-2](core-service.md#core-service-2)] | Tracked |
 | `<clone>/spex.yaml`, `<clone>/spex.lock` | the requests and lock of a group's own environment [[environments-2](environments.md#environments-2)] [[environments-3](environments.md#environments-3)]; a project's are at its working folder's root [[environments-26](environments.md#environments-26)], a clone of the former placement holding them until the migration moves them [[storage-24](#storage-24)] | Tracked, one unit |
@@ -34,28 +38,32 @@ The store shall persist core-owned data in Spex home using these locations:
 | `<clone>/packages/`, `<clone>/skills/` | installed spec packages and exported skills [[environments-8](environments.md#environments-8)] | Ignored |
 | `<clone>/sessions/<id>.hints.json`, session leases, staging and atomic-write temporary files | provider hints and writer coordination [[1]] | Ignored |
 | `<clone>/local/`, `<clone>/.spex-uploads/`, `<clone>/.spex-apply.json` | Playbook's own migration receipts, which may hold provider tokens; upload staging; the sync repair marker | Ignored |
-| `home.yaml` | this device, the Git host, the account, and each working folder with its spex repository [[storage-2](#storage-2)] | — |
+| `home.yaml` | this device, the origin the home was created with, each instance it has signed in to with its account, your own group's folder name, and each working folder with its spex repository [[storage-2](#storage-2)] | — |
 | `store/`, `cache/` | spec package bytes and caches [[environments-7](environments.md#environments-7)] | — |
 | `local/prefs.json` | core preferences and viewed markers [[storage-5](#storage-5)] | — |
-| `local/credentials.yaml` | the Git host's app token [[storage-19](#storage-19)] | — |
-| `local/migrations/` | migration receipts and retained inputs [[storage-9](#storage-9)] | — |
+| `local/credentials.yaml` | each instance's app token [[storage-19](#storage-19)] | — |
+| `local/migrations/` | migration receipts and retained inputs [[storage-9](#storage-9)] [[storage-30](#storage-30)] | — |
 | `local/former-home.git`, `local/forge-cache.json` | the former home's Git history kept aside [[storage-9](#storage-9)]; the rebuildable forge cache | — |
 | `.lease/`, `.lease.stage.<token>/`, `.lease.retired/<token>/` | the root lease held by the one process serving this home [[storage-14](#storage-14)], its staging and its permanent retirement records [[storage-26](#storage-26)] | — |
 
 - Only a clone is a Git work tree; the home itself is none, and nothing outside `workspace/` is ever committed.
 - `local/` never leaves the device, and its credentials file has owner-only permissions.
+- An instance's folder is `@<host>`, `<host>` being its origin's host [[storage-2](#storage-2)] followed, where its origin names a port or its scheme is `http`, by `_<port>` with the port the origin names, else `80`.
 
 ### storage-2
 
-The home file shall encode `home.yaml` as exactly `{format: 1, device, host, own, folders}`:
+The home file shall encode `home.yaml` as exactly `{format: 2, device, origin, instances, own, folders}`:
 
 | Field | Content |
 | --- | --- |
 | `device` | a canonical lowercase UUID minted once for this device, keying what is acknowledged per device [[storage-5](#storage-5)] |
-| `host` | `{url, clientId, account?, signedOut?}`: the Git host's URL, the public client id `spex`, once signed in `{id, login, displayName}` as the host reported them, and `signedOut` true once the credential was removed while the account is kept [[git-host-4](git-host.md#git-host-4)] |
-| `own` | the folder name of your own group under `workspace/`: this device's user name before sign-in, the account's login after [[storage-6](#storage-6)] |
+| `origin` | the origin of the instance the home was created with [[git-host-1](git-host.md#git-host-1)], kept as it is thereafter |
+| `instances` | an array of `{origin, clientId, account, displayName?, signedOut?}`, one per instance the home has signed in to and not forgotten [[space-82](space.md#space-82)], in the order they were added: its origin, the public client id `spex`, `{id, login, displayName}` of the account as that instance reported them, the instance's display name as its last read named it, and `signedOut` true once its credential was removed while its entry is kept [[git-host-4](git-host.md#git-host-4)] [[git-host-10](git-host.md#git-host-10)] |
+| `own` | the folder name of your own group under `workspace/`: this device's user name before the home's first sign-in and that sign-in's login after, no later sign-in renaming it [[space-59](space.md#space-59)] |
 | `folders` | an array of `{path, repository, aliases?}`: a normalized absolute working folder, the key of its spex repository, and optional former working directories recorded in its sessions |
 
+- an instance is recorded by its URL's origin — the scheme, the host in lowercase, and the port where it is not the scheme's default — and a URL with a path beyond `/`, a query or a user, a scheme other than `https` or `http`, `http` on a host that is not loopback, or a host holding `_` or a character outside a key segment's is refused, as is a new origin whose folder [[storage-1](#storage-1)] equals a listed instance's, no two entries sharing an origin;
+- the home's **default instance** is the first entry of `instances`, or `origin` while `instances` is empty;
 - each path and each repository key appears at most once; a key names a clone under `workspace/`, so a group's own spex repository is paired like a project's;
 - a folder whose clone is missing, and a clone no folder pairs, are reported as diagnostics [[storage-12](#storage-12)] without deleting either;
 - the store reads `home.yaml` and the clones under `workspace/` as they stand when a command needs them, with no reload; a read creates no folder, a session's open making its clone's `sessions/` where missing, never the clone, `session.create` refused `not_found` where that clone is gone before or during its open, and a clone gone since it was read is absent and refused where a command names it, your own group's clone being made only when the store opens ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md));
@@ -77,7 +85,7 @@ The intent store shall encode each `<clone>/intents/<id>.json` as a closed JSON 
 | `id`, `text`, `createdAt` | the identity, the exact staged text, and the capture time in Unix milliseconds |
 | `attachments` | optional ordered references into `intents/<id>.assets/` [[media-5](media.md#media-5)] |
 | `source` | optional `{kind, ref, url, labels?}` provenance — issue, PR, record, or chat |
-| `author` | optional `{login, displayName}` of the signed-in account that captured it |
+| `author` | optional `{login, displayName}` of the account at the project's instance that captured it [[core-service-42](core-service.md#core-service-42)] |
 | `dispatched` | optional `{sessionId, turnId, at}`, re-written by a later dispatch |
 | `closed` | optional `{as: 'done' \| 'dropped', at}` |
 
@@ -104,28 +112,45 @@ The preference store shall encode `local/prefs.json` as exactly `{format: 1, pre
 
 ### storage-19
 
-The credential store shall encode `local/credentials.yaml` as exactly `{format: 1, hosts: {<url>: {access, accessExpiresAt, refresh}}}` with owner-only permissions: the app token the Git host issued to this device, its access secret with its expiry in Unix milliseconds, and its refresh secret, written at sign-in and at every refresh and removed at sign-out or on the host's refusal, each as a versioned write of that host's pair ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md)):
+The credential store shall encode `local/credentials.yaml` as exactly `{format: 1, hosts: {<origin>: {access, accessExpiresAt, refresh}}}` with owner-only permissions: keyed by an instance's origin [[storage-2](#storage-2)], the app token that instance issued to this device, its access secret with its expiry in Unix milliseconds, and its refresh secret, written at its sign-in and at every refresh and removed at its sign-out or on its refusal, each as a versioned write of that instance's pair ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md), [DR-127](../decisions/127-a-home-signed-in-to-several-instances.md)):
 
-- a write names the pair its writer read, or none; in one step, the file is read, that host's pair compared with the named one in every field, and the file replaced only where they are equal, every other host's pair kept and the file removed with the last pair;
+- a write names the pair its writer read, or none; in one step, the file is read, that instance's pair compared with the named one in every field, and the file replaced only where they are equal, every other instance's pair kept and the file removed with the last pair;
 - where the pairs differ, nothing is written and the writer is told the pair changed meanwhile;
-- a malformed entry for that host is refused by every read and write, except that a sign-out which could not read it removes it in one step, every other host's pair kept, unless a well-formed pair stands there by then, which stays;
+- a malformed entry for that instance is refused by every read and write, except that a sign-out which could not read it removes it in one step, every other instance's pair kept, unless a well-formed pair stands there by then, which stays;
 - a file of another format, or with no hosts map, is refused and left as it is;
 - no credential is written anywhere else, and no credential enters a tracked file or a remote URL [[space-5](space.md#space-5)].
 
 ### storage-6
 
-When a working folder is added, the core shall pair it with a spex repository and record the pair in `home.yaml` [[storage-2](#storage-2)] ([DR-103](../decisions/103-the-home-and-its-groups.md)):
+When a working folder is added, the core shall pair it with a spex repository and record the pair in `home.yaml` [[storage-2](#storage-2)] ([DR-103](../decisions/103-the-home-and-its-groups.md), [DR-127](../decisions/127-a-home-signed-in-to-several-instances.md)):
 
 | Case | The spex repository |
 | --- | --- |
-| the reader picks one of the spex repositories the Git host lists whose `project.json` names the folder's remote [[space-58](space.md#space-58)] | cloned under `workspace/<group>/` from the host |
-| the reader picks a group to create one in | created on the host, then cloned |
+| the reader picks one of the spex repositories a signed-in instance lists whose `project.json` names the folder's remote [[space-58](space.md#space-58)] | cloned from that instance under its folder at its path there [[storage-1](#storage-1)] |
+| the reader picks a group, or your namespace, at a signed-in instance to create one in | created at that instance, then cloned the same way |
 | no sign-in, or no pick | created locally under `workspace/<own>/<name>-spex/` with no remote, `<name>` being the folder's name, until the reader picks a group |
 
 - a folder already paired selects its existing pair; a folder inside another working folder below its top level is refused;
 - the clone's `project.json` is written with the folder's remote [[storage-3](#storage-3)], its `spex` branch created with the first commit on this device where the repository is new, and, where the working folder holds no `spex.yaml`, its environment is written at the folder's root requesting the built-in spec package [[environments-11](environments.md#environments-11)] [[environments-26](environments.md#environments-26)], a folder holding one being installed from it [[environments-7](environments.md#environments-7)];
 - a session is a project's by the clone that holds it, never by matching its working directory; its recorded working directory decides only where it may continue [[core-service-73](core-service.md#core-service-73)];
 - the rename of your own group's folder at sign-in [[space-59](space.md#space-59)] and a rename or transfer the host reports [[space-60](space.md#space-60)] move the clone and rewrite every pair naming it in one step.
+
+### storage-35
+
+When the host accepts a pick that creates or joins a spex repository at an instance for a local-only clone under your own group's folder [[space-58](space.md#space-58)], the core shall move the clone under that instance's folder at the repository's path there [[storage-1](#storage-1)] in one rename, as a host's rename moves a clone [[space-60](space.md#space-60)] ([DR-127](../decisions/127-a-home-signed-in-to-several-instances.md)):
+
+- where a session lease beneath refuses the rename as it refuses a sign-in's [[space-59](space.md#space-59)], the pick stands and the clone stays, read as that instance's by its remote [[storage-31](#storage-31)], until its next sync moves it [[space-60](space.md#space-60)].
+
+### storage-31
+
+The store shall read a clone's instance from its key where the key begins with the folder [[storage-1](#storage-1)] of an instance `home.yaml` lists or of the origin it records [[storage-2](#storage-2)], otherwise from the entry naming the clone in the `deferred` list of an instances migration's receipt [[storage-30](#storage-30)], and otherwise from the listed instance whose folder names its remote [[storage-34](#storage-34)], so that your own group's own repository is at the instance its remote names and a migrated home with no account keeps its clones at its recorded origin's instance ([DR-127](../decisions/127-a-home-signed-in-to-several-instances.md)):
+
+- a clone keyed under an instance keeps its key, and that instance, while it has no remote there — a group's repository before the host creates it, or one whose remote the reader removed or replaced;
+- a clone these rules give no instance is local only.
+
+### storage-34
+
+When the core writes a clone's remote at an instance — its spex repository created, joined or cloned there, the clone following that instance, or the instances migration renaming its remote [[storage-30](#storage-30)] — it shall name that remote by the instance's folder [[storage-1](#storage-1)], `@<host>`, and record the host's id for the repository beside it in the clone's Git configuration ([DR-127](../decisions/127-a-home-signed-in-to-several-instances.md)).
 
 ### storage-7
 
@@ -146,7 +171,7 @@ The authoring store shall encode `<clone>/authoring/<id>.json` as exactly `{form
 Before admitting writers to the groups layout, when the core finds the former layout — `projects.json` at the home's root and no `home.yaml` — migration shall complete once under the home lease [[storage-14](#storage-14)] with old writers stopped, and leave a receipt ([DR-103](../decisions/103-the-home-and-its-groups.md)):
 
 1. Preserve the original bytes of every file it rewrites or moves under `local/migrations/<migrationId>/inputs/<n>`, with `receipt.json` encoded as `{format: 1, id, kind: 'groups', inputs: [{path, sha256}], steps: [], complete}`; a restart verifies completed outputs or retries incomplete work without overwriting divergent destinations.
-2. Write `home.yaml` [[storage-2](#storage-2)] with `own` as this device's user name and one folder per entry of `projects.json` whose path `local/project-paths.json` records, keeping its aliases; an entry with no path becomes a repair the Groups surface lists [[space-46](space.md#space-46)].
+2. Write `home.yaml` [[storage-2](#storage-2)] with `own` as this device's user name, no instance, and one folder per entry of `projects.json` whose path `local/project-paths.json` records, keeping its aliases; an entry with no path becomes a repair the Groups surface lists [[space-46](space.md#space-46)].
 3. For each project, make `workspace/<own>/<name>-spex/` a repository on a new `spex` branch with no history from the former home, replay its act log once into one file per intent [[storage-4](#storage-4)] — ranks and links dropped, a removed or never-worked dropped intent written nowhere — move its asset directory beside the intents, move the sessions whose working directory resolves to the project into its `sessions/`, write `project.json` [[storage-3](#storage-3)], write the working folder's environment requesting the built-in spec package where the folder holds none [[environments-11](environments.md#environments-11)] [[environments-26](environments.md#environments-26)], and commit.
 4. Make `workspace/<own>/<own>-spex/` your own group's repository the same way, moving `config/playbook.config.yaml` into it with every `playbooks.<id>.from` dropped and recorded in the receipt, and the sessions that resolve to no project into its `sessions/`.
 5. Move `prefs.json` to `local/prefs.json` [[storage-5](#storage-5)], converting `space:lastSync` to no entry and `draft:<id>:player` to `authoring:<id>:player`; move the home's `.git`, where the home was a repository, to `local/former-home.git` unchanged, so the old remote is kept aside; leave `playbooks/<id>/` and `local/drafts/` in place, listed as retired.
@@ -169,6 +194,25 @@ When the core, serving a home under the root lease [[storage-26](#storage-26)], 
 - the deletion from the clone is a local change the next sync of that spex repository carries [[space-7](space.md#space-7)];
 - a group's own spex repository, holding no `project.json`, keeps its files [[storage-1](#storage-1)];
 - the installed files under `packages/` and `skills/` are not touched, and the moved files are installed and exported from where they now stand [[environments-7](environments.md#environments-7)].
+
+### storage-30
+
+When the core, serving a home under the root lease [[storage-26](#storage-26)], finds at its start `home.yaml` in format 1, or a receipt of this migration not complete, the instances migration shall, before admitting any other write, bring the home to format 2 [[storage-2](#storage-2)] and its clones under their instance's folder [[storage-1](#storage-1)] once, and leave a receipt under `local/migrations/` with `kind: 'instances'`, as the groups migration does [[storage-9](#storage-9)] ([DR-127](../decisions/127-a-home-signed-in-to-several-instances.md)):
+
+1. Preserve the original bytes of every file it rewrites but the credentials file, which no copy may hold [[storage-19](#storage-19)], under `local/migrations/<migrationId>/inputs/<n>`, with `receipt.json` encoded as `{format: 1, id, kind: 'instances', inputs: [{path, sha256}], steps: [], deferred: [{key, instance, destination}], complete}`, `deferred` naming each clone whose move waits by its key, its instance's origin and the key it moves to; a restart verifies each completed step and finishes what remains without overwriting a divergent destination.
+2. Canonicalize the host URL `home.yaml` records to its origin [[storage-2](#storage-2)], then, in one step, write `home.yaml` in format 2 with that origin as `origin` and, where the host held an account, as the one entry of `instances` carrying the host's client, account and sign-out mark, its other fields kept, and re-key the host's credential to that origin [[storage-19](#storage-19)]; a host URL the origin rule refuses stops the migration naming it, every file left as it was.
+3. Move each clone as the table below says, `@<host>` being that origin's folder [[storage-1](#storage-1)], each move one rename that rewrites in the same step every pair, session location, sync preference [[storage-5](#storage-5)] and export naming the clone, as a host's rename moves them [[space-60](space.md#space-60)].
+4. Validate every output [[storage-12](#storage-12)], and set the receipt's `complete` to true once no move remains deferred.
+
+| The clone | Outcome |
+| --- | --- |
+| your own group's own repository | keeps its folder, its remote, where it records the host's id, renamed to `@<host>` with that id beside it [[storage-34](#storage-34)] |
+| another under your own group's folder recording the host's id — a spex repository in your namespace | moved to `workspace/@<host>/<login>/<name>-spex/`, `<login>` being the account's, its remote renamed likewise |
+| another under your own group's folder | stays, local only |
+| one outside your own group's folder | moved to `workspace/@<host>/<key>/`, its remote renamed likewise where it records the host's id and kept as it is otherwise |
+
+- a move is deferred where a session lease beneath does not read as a dead owner of this machine by steps 3 and 4 of the root lease's rule [[storage-26](#storage-26)]: the clone keeps its key and remote and the receipt's `deferred` names it, whether or not it records the host's id, and its move is made at the next start or at its next sync's Check step, before any fetch or push [[space-60](space.md#space-60)], whichever comes first, a move made at a sync removing its entry from `deferred`;
+- the migration contacts no instance and changes nothing there, so each device migrates on its own at its next start.
 
 ### storage-17
 
@@ -280,7 +324,7 @@ When a home writer — the core or a mutating storage Git command — takes the 
 When an integration suite migrates a former-layout home of two projects and one unmatched session with writers stopped and opens it through desktop and CLI, it shall verify:
 
 - default and explicitly selected locations, and that nothing outside `workspace/` is a Git work tree afterwards [[storage-1](#storage-1)];
-- `home.yaml` carrying this device's user name as `own` and both folders with their aliases [[storage-2](#storage-2)] [[storage-9](#storage-9)];
+- `home.yaml` in format 2 carrying the origin it was created with as its default instance, no instance listed, this device's user name as `own` and both folders with their aliases [[storage-2](#storage-2)] [[storage-9](#storage-9)];
 - each project's clone on a `spex` branch with one commit, its `project.json` naming the folder's remote, one file per open or worked intent with ranks and links dropped, its asset directory beside them, its sessions inside, and its working folder's root holding `spex.yaml` requesting the built-in spec package [[storage-3](#storage-3)] [[storage-4](#storage-4)] [[storage-9](#storage-9)];
 - your own group's clone holding the configuration with every `from` dropped and the unmatched session, the receipt naming the dropped entries [[storage-9](#storage-9)];
 - preferences moved with their viewed markers and session tuning, the former home's `.git` kept aside, the retired library folder in place [[storage-5](#storage-5)] [[storage-9](#storage-9)];
@@ -289,13 +333,41 @@ When an integration suite migrates a former-layout home of two projects and one 
 - restart-safe migration and token-free Git ancestry [[storage-9](#storage-9)];
 - refreshed Git rules after a migration retry [[storage-17](#storage-17)];
 - ordinary-default discovery into your own group's sessions, retained inputs and explicit-location isolation [[storage-18](#storage-18)];
-- exact authoring session and credential encodings written and read back, a session file without `instance` reading as the same derived UUID in two homes and recording it at its next write, the credentials file owner-only [[storage-23](#storage-23)] [[storage-19](#storage-19)];
-- a credential write naming a pair the file no longer holds writing nothing, and one naming the held pair replacing or removing it with another host's pair kept [[storage-19](#storage-19)];
-- a malformed entry for a host refused by a read and a versioned write, a sign-out's removal of it keeping another host's pair, a well-formed pair stored after the failed read kept by that removal, and a file of another format left byte for byte as it was [[storage-19](#storage-19)].
+- exact authoring session and credential encodings written and read back, the credential keyed by its instance's origin, a session file without `instance` reading as the same derived UUID in two homes and recording it at its next write, the credentials file owner-only [[storage-23](#storage-23)] [[storage-19](#storage-19)];
+- a credential write naming a pair the file no longer holds writing nothing, and one naming the held pair replacing or removing it with another instance's pair kept [[storage-19](#storage-19)];
+- a malformed entry for an instance refused by a read and a versioned write, a sign-out's removal of it keeping another instance's pair, a well-formed pair stored after the failed read kept by that removal, and a file of another format left byte for byte as it was [[storage-19](#storage-19)].
 
 ### storage-25
 
 When an integration suite starts the core on a home whose project clones hold `spex.yaml` and `spex.lock` — one project's working folder holding none, one holding its own `spex.yaml`, and one missing on this device — then pairs the third folder and syncs the first project with the stand-in host, it shall verify that the first folder's root holds the clone's two files and its clone none, that the second folder's files are unchanged and its clone's deleted, that the third clone keeps its files until its folder is paired and moves them then, that a receipt of kind `environment` stands and a restart repeats nothing, that the installed files are untouched, and that the sync pushes the deletion [[storage-24](#storage-24)].
+
+### storage-32
+
+When an integration suite starts a real core on a signed-in format-1 home whose host URL names the stand-in instance with capitals and a trailing `/` — holding your own group's own repository with its remote, a project in your namespace and a group's project each recording the host's id, a group's repository the host has not created, a clone outside your own group's folder with a remote the reader named, a local-only project, and two clones whose session leases name live writers, one recording the host's id and one with a remote the reader named — then ends the second's writer and syncs it by its old key, and ends the first's and restarts the core, it shall verify:
+
+- `home.yaml` in format 2 with the canonical origin as its recorded origin and its one instance entry, which carries the account and the client, the credential re-keyed to that origin with its secrets unchanged, and a receipt of kind `instances` in the encoding of its first step, whose inputs hold no credential [[storage-30](#storage-30)] [[storage-2](#storage-2)] [[storage-19](#storage-19)];
+- your own group's own repository keeping its folder, its remote renamed to the instance's folder with the host's id beside it [[storage-34](#storage-34)], and read as that instance's [[storage-30](#storage-30)] [[storage-31](#storage-31)];
+- the namespace project moved under `@<host>/<login>/` and the group's under `@<host>/<group>/`, their remotes renamed likewise; the uncreated repository and the reader-named clone moved under `@<host>/` at their keys, keeping their remotes and read as that instance's; the local-only project left where it was [[storage-30](#storage-30)] [[storage-31](#storage-31)];
+- each moved clone's pairs, session locations, sync preferences and exports following it [[storage-30](#storage-30)];
+- each held clone keeping its key and remote, named in the receipt's `deferred` with its instance and destination, and read as that instance's; the second moved by its sync's Check before any fetch or push, with no host read naming it, and its entry leaving `deferred`, the first at the restart, and the receipt complete only after both [[storage-30](#storage-30)] [[storage-31](#storage-31)];
+- a migration interrupted after its first move finished at the next start, a destination another process filled meanwhile left as it was, and a restart after completion repeating nothing [[storage-30](#storage-30)];
+- no request reaching the stand-in instance during the migration [[storage-30](#storage-30)];
+- a format-1 home holding no account, whose host URL is `http://LocalHost/` naming no port, migrated with `http://localhost` as its recorded origin and its clones outside your own group's folder moved under `workspace/@localhost_80/`, read as that origin's instance with no instance listed [[storage-30](#storage-30)] [[storage-1](#storage-1)] [[storage-31](#storage-31)];
+- a format-1 home whose host URL carries a path stopping the migration naming that URL, `home.yaml` and the credentials file left byte for byte [[storage-30](#storage-30)] [[storage-2](#storage-2)].
+
+### storage-33
+
+When an integration suite runs a real core against two stand-in instances, at `http://localhost:<a>` and `http://127.0.0.1:<b>`, each holding a group `acme` with a spex repository — creating the home for the first, signing in to both, joining both `acme` repositories, creating a project in your namespace at the second, and picking two local-only projects into `acme` at the second, one while a live writer holds a session lease beneath it — it shall verify:
+
+- before any sign-in, `home.yaml` in format 2 listing no instance with the first's origin recorded, that origin the default instance [[storage-2](#storage-2)];
+- a URL recorded by its canonical origin, `HTTP://LocalHost:<a>/` as `http://localhost:<a>`, and a URL with a path, a query or a user, a scheme other than `http` or `https` such as `ssh://localhost:<a>`, `http` on a host that is not loopback, a host holding `_`, and `https://localhost:<a>`, whose folder equals the first's, each refused with nothing recorded [[storage-2](#storage-2)];
+- `home.yaml` listing both instances in sign-in order, each with its client, account and display name, the first the default instance, and a sign-out of it marking its entry signed out and keeping it [[storage-2](#storage-2)];
+- the credentials file holding one pair per origin, that sign-out removing the first's alone [[storage-19](#storage-19)];
+- the two `acme` clones under `@localhost_<a>/acme/` and `@127.0.0.1_<b>/acme/` with distinct keys, each remote named by its instance's folder with the host's id beside it [[storage-34](#storage-34)], and each clone read as its instance's [[storage-1](#storage-1)] [[storage-31](#storage-31)];
+- the namespace project under `@127.0.0.1_<b>/<login there>/` [[storage-1](#storage-1)] [[storage-6](#storage-6)];
+- your own group's folder named the first instance's login and kept at the second sign-in, holding your own group's own repository and the local-only clones [[storage-1](#storage-1)] [[storage-2](#storage-2)];
+- the first picked project moved under `@127.0.0.1_<b>/acme/` at its pick with its pair rewritten, and the held one left under your own group's folder, read as the second instance's by its remote, until its next sync after the writer ends moves it [[storage-35](#storage-35)] [[storage-31](#storage-31)];
+- a clone whose remote the reader removed keeping its key and read as its instance's [[storage-31](#storage-31)].
 
 ### storage-16
 

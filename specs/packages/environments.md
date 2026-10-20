@@ -7,7 +7,8 @@
 
 This package defines spec packages and the environments that install them under [DR-104](../decisions/104-spec-package-format-and-client-environments.md): the release layout and manifest the core reads and checks, the requests and lock of each project and group, resolution, installing through the content-addressed store, the exports that put skills and specs where agents read them and playbooks where the launcher loads them, spec packages under development, the built-in spec package the app ships, and the registry and Git sources.
 A **spec package** is one GEARS contract with the sources, spec, skills, playbooks and applets made from it, named `<org>/<pkg>`; a **release** is its immutable files at one version; an **artifact** is one `source`, `spec`, `skill`, `playbook` or `applet` of a release.
-An **environment** is what a project or a group installs: `spex.yaml` says which spec packages it wants and `spex.lock` records exactly what it got, at the root of a project's working folder or of a group's own spex repository's clone [[environments-26](#environments-26)] [[storage-1](storage.md#storage-1)]; **the registry** is spex.pub.
+An **environment** is what a project or a group installs: `spex.yaml` says which spec packages it wants and `spex.lock` records exactly what it got, at the root of a project's working folder or of a group's own spex repository's clone [[environments-26](#environments-26)] [[storage-1](storage.md#storage-1)].
+An **instance** is a deployment of spex.pub known by its origin, whose registry answers under that origin's `/api/v1`; an environment's instance is its spex repository's [[storage-31](storage.md#storage-31)], none for a local-only one, and **the registry** of an environment is its instance's, or the home's default instance's where it has none [[storage-2](storage.md#storage-2)] ([DR-127](../decisions/127-a-home-signed-in-to-several-instances.md)).
 A **working folder** is where a project's or a group's sessions run, paired with the spex repository whose environment it uses [[storage-6](storage.md#storage-6)].
 
 ## External Behavior
@@ -59,7 +60,7 @@ The core shall read an environment's `spex.yaml` [[environments-26](#environment
 | --- | --- | --- |
 | registry | `version` | a version requirement [[environments-4](#environments-4)], met from the registry |
 | path | `path` | a folder inside the environment's path root, by a path relative to it, used in place |
-| Git | `git`, `rev`, optional `path` | a repository the Git host or this device's Git can read, at a branch, tag or commit, with an optional folder inside |
+| Git | `git`, `rev`, optional `path` | a repository an instance or this device's Git can read, at a branch, tag or commit, with an optional folder inside |
 
 - a request names exactly one source and may add `select`, a list of `{artifact, language}`, and `alias`, the id of a skill, playbook or spec to the Agent Skills name its skill is exported under;
 - an environment's path root is the root of the working folder paired with its spex repository on this device, which holds a project's `spex.yaml` [[environments-26](#environments-26)], for a project's or another group's environment, none while this device pairs no working folder, and the root of its clone, which holds its `spex.yaml`, for your own group's, confined as [[environments-32](#environments-32)] states ([DR-125](../decisions/125-your-own-groups-path-sources-live-in-its-clone.md));
@@ -90,7 +91,7 @@ The core shall write and read an environment's `spex.lock` [[environments-26](#e
 
 | Resolution field | Content |
 | --- | --- |
-| `source` | the exact source: `{registry, version, checksum}`; `{path, version, dependencies, requires}` as the path's manifest states them; or `{git, commit, path?}` |
+| `source` | the exact source: `{registry, version, checksum}`, `registry` naming an instance by its origin [[environments-5](#environments-5)]; `{path, version, dependencies, requires}` as the path's manifest states them; or `{git, commit, path?}` |
 | `required-by` | the spec packages that required it, `[]` for a direct request alone |
 | `artifacts` | each selected artifact id to `{language, fallback}`: its chosen language and whether that was a fallback |
 | `files` | every selected file as `{path, sha256, executable}`; empty for a path source |
@@ -117,6 +118,7 @@ When a client sends `environment.resolve` for a spex repository, or its `spex.ya
 - a cycle in the dependency graph is allowed and adds nothing;
 - caret and tilde never pick a version its publisher yanked; an exact requirement, or installing from the lock, may; nothing picks a version the registry's operator suppressed;
 - among solutions the core takes the highest, comparing the requested spec packages' versions first, then the rest, each in name order; a newer release lacking a selected artifact never blocks an older solution;
+- the environment's registry is asked as [[environments-12](#environments-12)] states, and each spec package resolved from it records it in its resolution, keeping instead the registry the lock records where it resolves to the version and checksum recorded there ([DR-127](../decisions/127-a-home-signed-in-to-several-instances.md));
 - a path source resolves to the manifest in its folder [[environments-2](#environments-2)], your own group's once the folder passes [[environments-32](#environments-32)], a Git source to the named commit's manifest, with their dependencies from the registry;
 - when no solution exists, the core replies `invalid_request` naming the version requirements in conflict, before anything is installed or run;
 - the lock is written only while `spex.yaml` still holds the bytes resolved and `spex.lock` the bytes read before resolving, each checked at the instant of the write; a resolution overtaken meanwhile writes nothing, a caller awaiting it is refused `conflict` naming the file that changed meanwhile, to retry, and it records no failure in the environment's state ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md));
@@ -140,7 +142,8 @@ When a solution stands, the core shall select, within it, in this order ([DR-104
 When a client sends `environment.install` for a spex repository, or a resolve or a sync of a group's own spex repository changed its lock, or a use's read [[environments-26](#environments-26)] finds a lock other than the one installed, the core shall install the lock's selected files under `<clone>/packages/<org>/<pkg>/` at their release paths through the store under the home, atomically ([DR-104](../decisions/104-spec-package-format-and-client-environments.md)):
 
 - the store keeps each distinct file once under `store/<sha256>`, written once after its digest is verified, with an executable copy apart under `store/x/<sha256>`, and keeps a file while a lock of an environment on this device [[environments-26](#environments-26)] selects it; `cache/` holds fetched archives and metadata and may be deleted at any time;
-- a file is fetched by any transport the registry offers — the release archive, or raw files — or from the Git source at the locked commit, and stored only when its SHA-256 matches the lock's `files`; the portable-path rules [[environments-1](#environments-1)] are re-checked; no code runs;
+- a spec package from a registry is fetched from the registry of the environment's instance where it has one, else from the registry its lock records, else from that of any other instance the home is signed in to, whichever first serves its release at the locked version and checksum, each asked as [[environments-12](#environments-12)] states; where none does, the install fails naming the spec package ([DR-127](../decisions/127-a-home-signed-in-to-several-instances.md));
+- a file is fetched by any transport the registry serving it offers — the release archive, or raw files — or from the Git source at the locked commit, and stored only when its SHA-256 matches the lock's `files`; the portable-path rules [[environments-1](#environments-1)] are re-checked; no code runs;
 - a path source copies nothing: its files are used where its path resolves [[environments-2](#environments-2)] — in a working folder, each running its own, or in your own group's clone, each device running the copy its clone syncs —; a device lacking the folder reports it missing, and the environment stays otherwise installed;
 - every playbook artifact folder of the lock, a path source's where its path resolves included, is prepared to run on the app's engine [[playbook-library-46](playbook-library.md#playbook-library-46)], also where the installed files already match the lock;
 - the new installed files are complete, prepared privately, before they replace the old ones; an install that fails leaves the last files in place and reports its cause;
@@ -186,14 +189,14 @@ When a session starts in a working folder, the core shall hand the launcher the 
 
 When an authoring session [[storage-23](storage.md#storage-23)] writes a spec package under development, the core shall keep it as a folder in the release layout inside the working folder, compile its playbooks there with the compiler in the playbook's artifact folder [[playbook-library-57](playbook-library.md#playbook-library-57)], and offer to request it from the project's environment by `path` and to publish it ([DR-104](../decisions/104-spec-package-format-and-client-environments.md)):
 
-- publishing uploads the declared release files only, after the same checks the core makes on a release [[environments-1](#environments-1)], to the registry as the signed-in account [[environments-12](#environments-12)];
+- publishing uploads the declared release files only, after the same checks the core makes on a release [[environments-1](#environments-1)], to the registry of the environment the publish names [[environments-17](#environments-17)] as the account signed in at that registry's instance [[environments-12](#environments-12)] ([DR-127](../decisions/127-a-home-signed-in-to-several-instances.md));
 - a manifest without a `description` or a `license`, which the registry requires, is refused naming each missing field before any upload, its preview included [[environments-17](#environments-17)];
 - to share before publishing, the folder is requested by `git` at a commit, or published as a prerelease to a private namespace at the registry; to use it yourself on every device, it is kept in your own group's clone and requested by path there [[environments-2](#environments-2)];
 - a working folder may hold any number of spec packages under development.
 
 #### environments-27
 
-While the home is signed in, when the core asks the registry for the orgs the signed-in person may publish to, it shall send one `GET /api/v1/account/orgs` presenting the device's app token as resolving and installing do [[environments-12](#environments-12)], and take a `200` whose `orgs` lists each org's `name`, its group's `path` in the instance and the person's `role`, sorted by name, as the answer ([DR-120](../decisions/120-the-instance-is-the-space.md)):
+While the home is signed in to an instance, when the core asks that instance's registry for the orgs its account there may publish to, it shall send one `GET /api/v1/account/orgs` to that registry presenting that instance's app token as resolving and installing do [[environments-12](#environments-12)], and take a `200` whose `orgs` lists each org's `name`, its group's `path` in that instance and the account's `role`, sorted by name, as the answer ([DR-120](../decisions/120-the-instance-is-the-space.md), [DR-127](../decisions/127-a-home-signed-in-to-several-instances.md)):
 
 - any status but `200`, a body not in that shape, a network failure, or no answer within two seconds is no answer.
 
@@ -204,6 +207,7 @@ While the home is signed in, when the core asks the registry for the orgs the si
 When the core starts, it shall seed the app's built-in spec package — the playbooks Playbook ships, as one spec package named `sublang/playbooks` at Playbook's version, each playbook an artifact in `en` with `code` and `decide` requiring `review` — into the store, and shall request it with a caret requirement in your own group's environment where that environment lacks it, and in a new project's environment, written at pairing [[storage-6](storage.md#storage-6)], so the built-in playbooks work offline from the first start ([DR-104](../decisions/104-spec-package-format-and-client-environments.md)):
 
 - the lock pins its version like any other, so an app update never changes an environment by itself: the newer release is seeded beside the older, which the store keeps while a lock selects it;
+- the built-in release's resolution, made from the seed offline, records the environment's registry as the one it was resolved at [[environments-5](#environments-5)] ([DR-127](../decisions/127-a-home-signed-in-to-several-instances.md));
 - while an environment's lock selects an older release than the one this app ships and the version requirement its `spex.yaml` requests the built-in spec package at admits the shipped one [[environments-4](#environments-4)], its state [[environments-14](#environments-14)] names both releases, the lock unchanged until the reader resolves again [[environments-5](#environments-5)];
 - the seeded artifacts carry the playbook text and the module as the app's Playbook ships them, the module's engine resolved through the engine links provisioned in each installed playbook artifact's folder as a compile provisions them [[playbook-library-46](playbook-library.md#playbook-library-46)].
 
@@ -211,17 +215,18 @@ When the core starts, it shall seed the app's built-in spec package — the play
 
 #### environments-12
 
-When the core resolves or installs from the registry, it shall read the registry's version index for every spec package of the graph, read a version resource only for each version it picks, fetch files by the raw-file URLs or the release archive, and present the device's app token where the home is signed in — the access secret kept current before each call [[git-host-4](git-host.md#git-host-4)], an answer that it expired reported as a failure of that operation — so a private namespace the account may read installs and a public one needs no credential ([DR-104](../decisions/104-spec-package-format-and-client-environments.md)):
+When the core resolves or installs from a registry, it shall read the registry's version index for every spec package of the graph, read a version resource only for each version it picks, fetch files by the raw-file URLs or the release archive, and present the app token of the instance the registry answers for where the home is signed in to it and none otherwise — the access secret kept current before each call [[git-host-4](git-host.md#git-host-4)], an answer that it expired reported as a failure of that operation — so a private namespace the account there may read installs and a public one needs no credential ([DR-104](../decisions/104-spec-package-format-and-client-environments.md), [DR-127](../decisions/127-a-home-signed-in-to-several-instances.md)):
 
+- the registry answering `invalid_token`, `token_revoked` or `reauth_required` to an instance's token signs that instance alone out [[git-host-4](git-host.md#git-host-4)] and fails that call;
 - a release whose `format` the core does not know is refused naming it; a registry answer the core cannot read, or a digest that does not match, installs nothing and is reported;
 - the Git host controls who reads a spex repository and the registry who downloads; neither grants the other, so a member lacking the registry's permission is told which spec package they cannot fetch.
 
 #### environments-13
 
-When the core resolves or installs a Git source, it shall fetch the repository at the named `rev` with the Git host's credential where the repository is at the Git host's origin [[git-host-9](git-host.md#git-host-9)] and this device's Git otherwise, record the commit, read the manifest at the optional `path`, digest every file at resolution and install from those bytes ([DR-104](../decisions/104-spec-package-format-and-client-environments.md)):
+When the core resolves or installs a Git source, it shall fetch the repository at the named `rev` with the credential brokered by an instance the home is signed in to at whose Git origin the repository lies [[git-host-9](git-host.md#git-host-9)], the environment's own instance preferred where it is one, and with this device's Git where none is, record the commit, read the manifest at the optional `path`, digest every file at resolution and install from those bytes ([DR-104](../decisions/104-spec-package-format-and-client-environments.md), [DR-127](../decisions/127-a-home-signed-in-to-several-instances.md)):
 
 - a `rev` naming a branch or tag resolves to its commit at resolution and the lock holds the commit alone;
-- while the home is signed out, a repository at the Git host's origin is fetched with this device's own Git, so a public one still installs and a private one reports Git's refusal.
+- a repository at the Git origin of no instance the home is signed in to, a signed-out instance's included, is fetched with this device's own Git, so a public one still installs and a private one reports Git's refusal.
 
 ### Listing
 
@@ -233,7 +238,7 @@ When a client sends `environment.get` for a spex repository, the core shall repl
 
 The core shall present generated environment source labels, conflict requirements and operation failures using the instance's naming boundary ([DR-120](../decisions/120-the-instance-is-the-space.md)):
 
-- a Git request is a display summary, distinct from the command that authors its transport locator; a local path or file URL stays as given, while a network repository reads as the instance name when its remote is under the instance's reported Git origin, as the external remote with any embedded HTTP(S) user removed when outside it, and as an unnamed remote until the origin has been reported [[git-host-5](git-host.md#git-host-5)]; the same rule governs a locked package's source detail;
+- a Git request is a display summary, distinct from the command that authors its transport locator; a local path or file URL stays as given, while a network repository reads as the display name of an instance under whose reported Git origin its remote lies — the environment's own where it is one, else the earliest in the home's list —, as the external remote with any embedded HTTP(S) user removed when under none, and as an unnamed remote while the home's default instance or an instance it lists has not reported its origin [[git-host-5](git-host.md#git-host-5)] ([DR-127](../decisions/127-a-home-signed-in-to-several-instances.md)); the same rule governs a locked package's source detail;
 - generated failures and conflict requirements follow that source rule, including failures returned by an awaited operation and those reported through state; a transport failure for an instance source, or one whose origin is not known, carries no raw transport output;
 - source labels and conflict requirements use the latest known origin without requesting another host read; a recorded failure keeps the safe explanation generated from its operation's source and the origin known when it failed, independent of later request edits;
 - presentation changes no request, lock or installed file, and never substitutes a displayed label for the locator Git fetches [[environments-13](#environments-13)].
@@ -281,14 +286,14 @@ The core shall expose environments through these commands and one message, each 
 | `environment.remove` | `{ repository, name }` | `{ accepted: true }` | `invalid_request`, `not_found`, `conflict` |
 | `environment.resolve` | `{ repository }` | `{ accepted: true }` | `not_found` |
 | `environment.install` | `{ repository }` | `{ accepted: true }` | `not_found` |
-| `environment.search` | `{ query }` | `{ packages: [{ name, description, versions }] }` | `invalid_request` (signed out and the registry refusing) |
-| `environment.publish` | `{ repository, path, dryRun? }`, `path` naming a folder inside the environment's path root [[environments-2](#environments-2)] | `{ accepted: true }`, a dry run uploading nothing and adding `preview: { name, version, files }` | `invalid_request` (no path root on this device; outside it; not a release; no `description` or `license`; not signed in) |
+| `environment.search` | `{ repository, query }`, searching the registry of `repository`'s environment ([DR-127](../decisions/127-a-home-signed-in-to-several-instances.md)) | `{ packages: [{ name, description, versions }] }` | `invalid_request` (signed out of that registry's instance and the registry refusing), `not_found` |
+| `environment.publish` | `{ repository, path, dryRun? }`, `path` naming a folder inside the environment's path root [[environments-2](#environments-2)] | `{ accepted: true }`, a dry run uploading nothing and adding `preview: { name, version, files }` | `invalid_request` (no path root on this device; outside it; not a release; no `description` or `license`; not signed in at the instance it publishes to [[environments-10](#environments-10)]) |
 
 - `environment.state { repository, state: EnvironmentState }` is broadcast after every resolve, install, publish, sync-applied lock and pairing's export [[environments-31](#environments-31)]; a long command replies `accepted` at once and reports through state, never a hung reply ([DR-010](../decisions/010-interface-craft.md) §5).
 
 #### environments-18
 
-The core package shall ship a stand-in registry for its own tests and the browser journeys: an in-process HTTP server serving the registry's version index, version resources, raw files and release archives from a directory of releases, with scripted yank, suppression, private namespaces honouring the stand-in host's app tokens, the orgs listed for an app token — any other token, or none, refused `401` — answered after a scripted delay, and a publish endpoint that validates as the core does and stores the archive.
+The core package shall ship a stand-in registry for its own tests and the browser journeys: an in-process HTTP server serving the registry's version index, version resources, raw files and release archives from a directory of releases, answering at each stand-in instance set to relay to it, so one registry may stand behind several instances, with scripted yank, suppression, private namespaces honouring the app tokens of each instance it answers at, a scripted `token_revoked` answer to one instance's tokens, the orgs listed for an app token — any other token, or none, refused `401` — answered after a scripted delay, and a publish endpoint that validates as the core does and stores the archive.
 
 ## Verification
 
@@ -317,7 +322,7 @@ When an integration suite installs locked environments on a scratch home, it sha
 - a path source is used in place, a second working folder of the same project runs its own copy, and a device whose working folder lacks it reports it missing [[environments-7](#environments-7)];
 - a Git source at a branch resolves to its commit, installs from that commit through the stand-in host's credential, and the lock holds the commit alone [[environments-13](#environments-13)];
 - a project's `spex.yaml` and `spex.lock` stand at its working folder's root and nowhere in its clone, the core having staged, committed and ignored nothing [[environments-26](#environments-26)]; a working folder paired while holding a committed environment installs from it with nothing written [[environments-26](#environments-26)] [[environments-7](#environments-7)]; a lock changed by a Git checkout in the folder is installed at the next use [[environments-7](#environments-7)]; and the environment is listed as this device's while the files are untracked, still after `git add` alone, and as committed once a commit holds both [[environments-14](#environments-14)];
-- a private namespace at the stand-in registry installs with the device's app token and refuses without, naming the spec package [[environments-12](#environments-12)].
+- a private namespace at the stand-in registry installs with the app token of the instance it answers at and refuses without, naming the spec package [[environments-12](#environments-12)].
 
 #### environments-22
 
@@ -372,6 +377,21 @@ When an integration suite drives the environment commands over the protocol, it 
 #### environments-28
 
 When an integration suite asks the stand-in registry [[environments-18](#environments-18)] for the orgs a person may publish to, it shall assert that one request presenting the app token the orgs are scripted for reads them sorted by name, and that another token, no token, an outage, and an answer delayed a second past the timeout each read as no answer, the last once two seconds have passed [[environments-27](#environments-27)].
+
+#### environments-34
+
+When an integration suite, through a real core on a scratch home signed in to two stand-in instances over one stand-in Git backend, each answered by a stand-in registry of its own [[environments-18](#environments-18)], the first the home's default instance, and on a second scratch home signed in only to a third stand-in instance that the first's registry also answers, drives the environments of a project at the second instance and of a local-only project, it shall assert:
+
+- the second's project resolves at the second's registry with the second's token, its lock recording the second's origin, and installs from it, and the local-only project resolves at the first's [[environments-5](#environments-5)] [[environments-12](#environments-12)] [[environments-3](#environments-3)] [[environments-7](#environments-7)];
+- a lock recording the first's origin for a release the second's registry also holds at that version and checksum, resolved again in the second's project, keeps the first's origin [[environments-5](#environments-5)];
+- a new project paired at the second instance has the built-in spec package locked at the second's origin [[environments-11](#environments-11)];
+- the second's project installs a public release its lock records at the first's origin, which the second's registry lacks, from the first's [[environments-7](#environments-7)]; and on the second home, a local-only project whose lock records a private release at the first's origin installs it through the third instance with its token, the first's registry refusing it without one, and with the third signed out fails naming the spec package [[environments-7](#environments-7)] [[environments-12](#environments-12)];
+- `environment.search` for the second's project lists the second's registry's spec packages and not the first's [[environments-17](#environments-17)];
+- a Git source at the shared Git backend's origin, requested in the second's project, is fetched with the credential the second instance brokers, and its source reads as the second's display name [[environments-13](#environments-13)] [[environments-29](#environments-29)];
+- the orgs asked of the second's registry are read with the second's token [[environments-27](#environments-27)];
+- a publish from the second's project lands at the second's registry and one from the local-only project at the first's, and once the second is signed out, a publish from its project is refused as not signed in there [[environments-10](#environments-10)] [[environments-17](#environments-17)];
+- with the first's registry answering `token_revoked` to the first's tokens, a resolution in the local-only project signs the first instance alone out, the second staying signed in and its project's resolution and install succeeding [[environments-12](#environments-12)];
+- the first then forgotten, your own group's environment, whose own repository was created at the first and now syncs with the second, resolves at the second's registry, its lock recording the second's origin, and a publish from it lands there [[environments-5](#environments-5)] [[environments-10](#environments-10)].
 
 ## References
 

@@ -1409,6 +1409,7 @@ export class CoreService {
 
   async stop(): Promise<void> {
     this.stopping = true;
+    this.sessions.beginShutdown();
     this.approvals.stop();
     for (const entry of this.browserPreparations.values()) entry.controller.abort();
     await Promise.allSettled([...this.browserPreparations.values()].map(({done}) => done));
@@ -2072,6 +2073,9 @@ export class CoreService {
     client: ClientState,
     command: Command,
   ): Promise<unknown> {
+    if (this.stopping && ["session.create", "turn.submit", "session.restore", "session.control"].includes(command.type)) {
+      throw new CoreError("busy", i18n._({id: "The core is stopping.", comment: "Refusal during core shutdown"}));
+    }
     // No operation refuses a command (space-21): each write is checked
     // at its own instant, against its file's version or its session's
     // lease.

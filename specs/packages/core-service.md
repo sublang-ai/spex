@@ -322,8 +322,9 @@ When the core follows a spex repository's clone to a new address, the core shall
 
 #### core-service-42
 
-When a client sends `intent.queue` for a registered project ([DR-006](../decisions/006-projects-and-forge.md)), the core service shall store a new open intent as one file of its project's spex repository [[storage-4](storage.md#storage-4)] — the request's exact text and optional ordered attachment references [[media-5](media.md#media-5)], its optional source (kind, reference, URL, and labels), the signed-in account as its author where one is, and its capture time — reply with the stored intent, and announce the write [[core-service-51](#core-service-51)] ([DR-035](../decisions/035-intent-ledger.md), [DR-103](../decisions/103-the-home-and-its-groups.md)):
+When a client sends `intent.queue` for a registered project ([DR-006](../decisions/006-projects-and-forge.md)), the core service shall store a new open intent as one file of its project's spex repository [[storage-4](storage.md#storage-4)] — the request's exact text and optional ordered attachment references [[media-5](media.md#media-5)], its optional source (kind, reference, URL, and labels), its optional author, and its capture time — reply with the stored intent, and announce the write [[core-service-51](#core-service-51)] ([DR-035](../decisions/035-intent-ledger.md), [DR-103](../decisions/103-the-home-and-its-groups.md)):
 
+- its author is the account the home is signed in as [[storage-2](storage.md#storage-2)] at the instance of its project's spex repository [[storage-31](storage.md#storage-31)], and none where that repository has no instance or the home is not signed in there ([DR-127](../decisions/127-a-home-signed-in-to-several-instances.md));
 - an intent holds no place of its own: the project's queue is its queued intents oldest first, and the next to run is the oldest;
 - where the source kind is issue, PR, or record and the project already holds an open intent with the same source kind and reference, the request is rejected with a `conflict` error naming that intent and stores nothing — at most one open intent per source artifact per project;
 - a chat-sourced or unsourced intent is never deduplicated.
@@ -439,7 +440,7 @@ The core package shall hold each intent as one file of its project's spex reposi
 | `text` | the exact staged Boss turn text; the display title uses its trimmed first line when nonblank, otherwise the trimmed text, falling back to attachment names when the text is blank [[media-5](media.md#media-5)] |
 | `attachments` | optional ordered project-owned immutable file references [[media-4](media.md#media-4)] |
 | `source` (`kind`, `ref`, `url`) | provenance — issue, PR, record, or chat, with reference and URL — absent when unsourced |
-| `author` | optional: the signed-in account that captured it |
+| `author` | optional: the account that captured it at its project's instance [[core-service-42](#core-service-42)] |
 | `createdAt` | the capture time, which orders the queue |
 | `dispatched` (`sessionId`, `turnId`, `at`) | the dispatch stamp, re-written by a later dispatch |
 | `closedAt`, `closedAs` | the close time and verdict — `done` or `dropped` |
@@ -549,8 +550,10 @@ Where the host shell names a legacy SQLite store that neither the state root's o
 When a host shell stops the core service, the core service shall persist every live session's Captain snapshot [[core-service-72](#core-service-72)] and attempt disposal of its runtime, close its endpoint and its store, and report the disposal failures to the host once every session has been attempted:
 
 - One session's disposal failure neither skips another session's disposal nor leaves the endpoint or the store open.
-- Successful cleanup reports the session as no longer live; failed cleanup retains its ownership evidence [[core-service-4](#core-service-4)].
+- Successful cleanup reports the session as no longer live; failed or unconfirmed cleanup retains its ownership evidence [[core-service-4](#core-service-4)].
 - Shutdown waits for settlement bookkeeping already in progress before closing the store.
+- Shutdown closes session and turn admission before waiting, drains session openings already admitted (including their pre-open waits), and attempts disposal of any runtime they create before closing the store; an opening or disposal failure does not skip the remaining cleanup.
+- An observed Captain cleanup-hook rejection or an ambiguous compound construction failure is reported as cleanup unconfirmed, including one whose opening settled before shutdown; a lease released during failed construction alone does not confirm runtime cleanup ([DR-048](../decisions/048-failed-session-cleanup.md)).
 
 ### Interface Language
 
@@ -772,6 +775,10 @@ Where two sessions are live and the first one's runtime fails its disposal, the 
 - the stop reports the first session's failure to the host after both sessions have been attempted;
 - the endpoint accepts no further connection once the stop has returned.
 
+Where session creation or continuation is held after acquiring its shared lease but before publishing its runtime, the integration suite shall stop the core, release that initialization, and assert that shutdown waits for the admitted opening and disposes its runtime before closing the store, later session or turn admission creates no work, and the shared session lease is idle after successful cleanup [[core-service-39](#core-service-39)].
+
+Where admitted initialization fails, the integration suite shall distinguish an ordinary initialization error with successful cleanup from a cleanup-hook rejection or ambiguous compound construction error: the ordinary error does not fail shutdown; the latter outcomes report cleanup unconfirmed and retain ownership even when no controller was returned or the opening settled before shutdown; every outcome still permits shutdown to attempt the other runtimes [[core-service-39](#core-service-39)].
+
 ### Record Visibility Coverage
 
 #### core-service-20
@@ -913,6 +920,10 @@ Where a project holds an open issue-sourced intent, the test suite shall send a 
 #### core-service-56
 
 Where two intents are captured a moment apart and a third arrives through a sync with an older capture time, the test suite shall assert the order of [[core-service-42](#core-service-42)]: the queue reads the synced one first, then the two by capture time, and `ledger.get` names the oldest as next [[core-service-49](#core-service-49)] [[core-service-107](#core-service-107)].
+
+#### core-service-123
+
+Where a real core on a scratch home is signed in to two stand-in instances as two accounts and pairs a project at each and a local-only project, the test suite shall queue an intent in each project over the protocol and assert that each stored intent file carries as its author [[core-service-52](#core-service-52)] the account signed in at its project's instance, the local-only project's carrying none, and that once one instance signs out a further intent of its project carries none while the other's still carries its account [[core-service-42](#core-service-42)].
 
 #### core-service-57
 
