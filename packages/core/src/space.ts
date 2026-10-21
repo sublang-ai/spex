@@ -2703,6 +2703,12 @@ export class SpaceManager {
     return `${instance.origin} ${id}`;
   }
 
+  /** Whether a join's progress, by its key (joinKey), is of a join at
+   * that instance. */
+  private joinedAt(key: string, instance: HostInstance): boolean {
+    return key.startsWith(`${instance.origin} `);
+  }
+
   /** The name of the instance a clone syncs with, as a report prints it
    * (space-15). */
   hostNameOf(machine: RepositorySync): string {
@@ -3205,9 +3211,12 @@ export class SpaceManager {
    * there, tried once, forget its credential, keep every clone and
    * record and every other instance's sign-in. Its entry is marked
    * signed out in the same turn as the removal; a pair stored in its
-   * place meanwhile stays, and the account with it. */
+   * place meanwhile stays, and the account with it. One signed out
+   * already is refused, its sign-out mark and its waiting steps kept
+   * (space-29). */
   async signOut(named?: string): Promise<GroupsState> {
     const instance = this.instanceAt(this.namedInstance(named));
+    if (!this.signedInAt(instance)) throw new CoreError("invalid_request", signInFirst());
     if (this.signInState.phase === "running" && this.signInState.instance === instance.origin) this.flow?.cancel();
     try {
       await instance.client.signOut(() => {
@@ -3221,9 +3230,10 @@ export class SpaceManager {
         instance.readFailure = undefined;
         instance.readState = { phase: "idle" };
         for (const [key, waiting] of [...this.waiting]) if (waiting.instance === instance.origin) this.waiting.delete(key);
-        // A join still running keeps its progress; its transport holds its
-        // own brokered credential or stops asking to sign in (space-15).
-        for (const [id, phase] of [...this.joining]) if (phase.phase !== "running") this.joining.delete(id);
+        // Its own stopped joins go, every other instance's stand; a join
+        // still running keeps its progress, its transport holding its own
+        // brokered credential or stopping asking to sign in (space-15).
+        for (const [key, phase] of [...this.joining]) if (this.joinedAt(key, instance) && phase.phase !== "running") this.joining.delete(key);
         for (const machine of answered) machine.hostOverride = undefined;
       });
     } catch (error) {
@@ -3298,6 +3308,7 @@ export class SpaceManager {
     instance.readFailure = undefined;
     instance.readState = { phase: "idle" };
     for (const [key, waiting] of [...this.waiting]) if (waiting.instance === instance.origin) this.waiting.delete(key);
+    for (const key of [...this.joining.keys()]) if (this.joinedAt(key, instance)) this.joining.delete(key);
     const state = await this.state();
     this.host.broadcast(state);
     return state;

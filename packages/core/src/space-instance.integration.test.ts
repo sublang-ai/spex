@@ -1065,6 +1065,60 @@ test("git-host-24, git-host-4, git-host-10, space-6: a refresh the first refuses
   assert.equal(second.script.liveDevices(), live - 1, "the second revoked this device");
 });
 
+test("space-29, git-host-4, git-host-10, space-6, space-64, space-63: space.signout naming an instance the first signed out is refused, nothing asked of it, its sign-out mark and its step waiting there kept; signed in again, a sign-out of the first ends its own waiting step while a join stopped at the second stands", async (t) => {
+  const { first, second, beta, home, betaKey } = await twoInstances("signout-scoped");
+  t.after(() => home.stop());
+  // A creation at the first left waiting for a member with the rights
+  // (space-64), and a join at the second whose clone the second's
+  // transport refuses, stopped (space-63).
+  const words = "You need the Maintainer role in Acme to create projects.";
+  first.script.refuseCreate(words);
+  const { key: local } = await addFolder(home, gitFolder("waits"));
+  let mark = home.client.mark();
+  await home.client.expectOk("space.pick", { repository: local, choice: { kind: "create", instance: first.url, groupId: "2002", name: "waits" } });
+  const waiting = await home.client.waitRepository(mark, local, (repository) => repository.waiting !== null, 30_000);
+  assert.deepEqual(waiting.waiting, { step: "create", group: "acme", message: words });
+  second.script.refuseTransport("Access denied");
+  mark = home.client.mark();
+  await home.client.expectOk("space.join", { instance: second.url, hostId: beta.id });
+  const stopped = await home.client.waitRepository(mark, betaKey, (repository) => repository.sync.phase === "stopped", 30_000);
+  assert.ok(stopped.sync.phase === "stopped" && stopped.sync.op === "join", JSON.stringify(stopped.sync));
+  second.script.refuseTransport(null);
+
+  // The first signs this device out (git-host-4): its heading says so,
+  // and the step waiting there stands.
+  first.script.revokeDevices();
+  mark = home.client.mark();
+  await home.client.expectOk("space.refresh", {});
+  const out = await home.client.waitSpace(mark, (state) => instanceOf(state, first.url)?.hostSignedOut === true, 30_000);
+  assert.deepEqual(repositoryOf(out, local).waiting, waiting.waiting);
+
+  // space.signout naming the first, signed out, is refused (space-29):
+  // nothing is asked of it, its entry stays marked signed out, its
+  // heading still says it signed this device out, the step waiting there
+  // stands, and so does the second's stopped join.
+  const asked = first.script.requests.length;
+  await home.client.expectError("space.signout", { instance: first.url }, "invalid_request", /^Sign in first$/);
+  assert.equal(first.script.requests.length, asked, "nothing is asked of the first");
+  assert.deepEqual(Home.load(home.dataDir).instances().map((entry) => [entry.origin, entry.signedOut === true]), [[first.url, true], [second.url, false]]);
+  const kept = await home.client.expectOk("space.get", {});
+  assert.deepEqual([instanceOf(kept, first.url)?.signedIn, instanceOf(kept, first.url)?.hostSignedOut], [false, true]);
+  assert.deepEqual(repositoryOf(kept, local).waiting, waiting.waiting);
+  assert.deepEqual(repositoryOf(kept, betaKey).sync, stopped.sync);
+
+  // Signed in again at the first, its creation still waiting; then the
+  // reader's sign-out of the first ends the step waiting there, while the
+  // join stopped at the second stands as it stood (git-host-10, space-6).
+  mark = home.client.mark();
+  await signIn(home, first);
+  await home.client.waitSpace(mark, (state) => instanceOf(state, first.url)?.read.phase === "idle" && (instanceOf(state, first.url)?.readAt ?? null) !== null, 30_000);
+  assert.deepEqual((await home.client.repository(local)).waiting, waiting.waiting);
+  const signedOut = await signOut(home, first);
+  assert.deepEqual([instanceOf(signedOut, first.url)?.hostSignedOut, instanceOf(signedOut, second.url)?.signedIn], [false, true]);
+  assert.equal(repositoryOf(signedOut, local).waiting, null, "the first's own step ends");
+  assert.deepEqual(repositoryOf(signedOut, betaKey).sync, stopped.sync, "the second's stopped join stands");
+});
+
 /** Every Groups state and command result or refusal a client was sent
  * from `from` on (space-30, space-83). */
 function sentSince(messages: ServerMessage[], from: number): unknown[] {
