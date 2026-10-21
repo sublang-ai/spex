@@ -78,6 +78,56 @@ test("parseCommand accepts the space commands and their optional fields", () => 
   assert.ok(!parseCommand({ type: "space.init", id: "s2" }).ok);
 });
 
+test("space-29, space-82: a space command names the instance it acts at by its origin, Forget always, and a sign-in the URL as the reader gave it", () => {
+  const instance = "https://spex.pub";
+  const repository = "@spex.pub/acme/a-spex";
+  const named = [
+    { type: "space.signin.start", id: "i1", url: "HTTPS://Spex.pub/" },
+    { type: "space.signout", id: "i2", instance },
+    { type: "space.pick", id: "i3", repository: "ada/a-spex", choice: { kind: "join", instance, hostId: "42" } },
+    { type: "space.pick", id: "i4", repository: "ada/a-spex", choice: { kind: "create", instance, groupId: null, name: "a" } },
+    { type: "space.join", id: "i5", instance, hostId: "42", folder: "~/code/a" },
+    { type: "space.members", id: "i6", instance, group: "7" },
+    { type: "space.group.create", id: "i7", instance, name: "Acme", path: "acme", parent: null },
+    { type: "space.group.rename", id: "i8", instance, group: "7", name: "Acme Corp" },
+    { type: "space.group.delete", id: "i9", instance, group: "7" },
+    { type: "space.share", id: "i10", instance, group: "7", login: "bob", role: "30" },
+    { type: "space.unshare", id: "i11", instance, group: "7", login: "bob" },
+    { type: "space.members", id: "i12", repository },
+    { type: "space.forget", id: "i13", instance },
+  ];
+  for (const command of named) {
+    const parsed = parseCommand(command);
+    assert.ok(parsed.ok, `${command.type}: ${parsed.ok ? "" : parsed.error}`);
+  }
+  // Until the interface sends them, a command naming none acts at the
+  // default instance — a pick and a join at the clone's or the row's.
+  for (const command of [
+    { type: "space.signin.start", id: "d1" },
+    { type: "space.signout", id: "d2" },
+    { type: "space.pick", id: "d3", repository: "ada/a-spex", choice: { kind: "join", hostId: "42" } },
+    { type: "space.join", id: "d4", hostId: "42" },
+    { type: "space.group.create", id: "d5", name: "Acme", path: "acme", parent: null },
+  ]) {
+    const parsed = parseCommand(command);
+    assert.ok(parsed.ok, `${command.type}: ${parsed.ok ? "" : parsed.error}`);
+  }
+  // An instance is named by a string, never blank; nothing else names it.
+  for (const command of [
+    { type: "space.signout", id: "r1", instance: "" },
+    { type: "space.join", id: "r2", instance: 7, hostId: "42" },
+    { type: "space.signin.start", id: "r3", url: null },
+    { type: "space.refresh", id: "r4", instance },
+    { type: "space.repository.move", id: "r5", repository, groupId: null, instance },
+    // Forget names the instance it removes, always (space-82).
+    { type: "space.forget", id: "r6" },
+    { type: "space.forget", id: "r7", instance: "" },
+    { type: "space.forget", id: "r8", instance, repository },
+  ]) {
+    assert.ok(!parseCommand(command).ok, JSON.stringify(command));
+  }
+});
+
 test("space-29: a space command names its repository by key", () => {
   for (const repository of [undefined, "a-spex/", "alice/a", "../a-spex", ""]) {
     const parsed = parseCommand({ type: "space.fetch", id: "k1", ...(repository !== undefined ? { repository } : {}) });
@@ -155,6 +205,14 @@ test("media-4: media owners name a repository by key and an intent by its UUID",
   assert.ok(!read({ kind: "project", id: "72000000-0000-4000-8000-000000000001" }).ok);
   assert.ok(!read({ kind: "intent", projectId: "alice/a-spex", intentId: "A" }).ok);
   assert.ok(!read({ kind: "draft", id: "triage" }).ok);
+});
+
+test("environments-17: a search names the spex repository whose environment's registry it asks", () => {
+  assert.ok(parseCommand({ type: "environment.search", id: "e1", repository: "alice/a-spex", query: "lint" }).ok);
+  assert.ok(parseCommand({ type: "environment.search", id: "e2", repository: "@spex.pub/acme/a-spex", query: "" }).ok);
+  for (const fields of [{ query: "lint" }, { repository: "alice/a", query: "lint" }, { repository: "alice/a-spex" }, { repository: "alice/a-spex", query: "x".repeat(201) }]) {
+    assert.ok(!parseCommand({ type: "environment.search", id: "e3", ...fields }).ok, JSON.stringify(fields));
+  }
 });
 
 test("projects-9: removal takes an optional confirmation; rebind names a key and no revision", () => {

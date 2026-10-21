@@ -69,7 +69,7 @@ When the user picks the palette's Academy-example action ([DR-015](../decisions/
 
 #### projects-37
 
-When the core clones a project's code from the remote its `project.json` names [[storage-3](storage.md#storage-3)], it shall hand Git the credential that the project's instance — its spex repository's [[storage-31](storage.md#storage-31)] — brokers [[git-host-9](git-host.md#git-host-9)] only where that remote lies under that instance's reported Git origin [[git-host-5](git-host.md#git-host-5)], and name no helper of the app's for any other remote, one under another instance's Git origin included, so this device's own credentials serve it ([DR-127](../decisions/127-a-home-signed-in-to-several-instances.md)).
+When the core clones a project's code from the remote its `project.json` names [[storage-3](storage.md#storage-3)], it shall hand Git the credential that a signed-in instance of one of its spex repository's placements — one its clone holds [[storage-34](storage.md#storage-34)] or its placement files name [[storage-36](storage.md#storage-36)] — brokers [[git-host-9](git-host.md#git-host-9)] only where that remote lies under that instance's reported Git origin [[git-host-5](git-host.md#git-host-5)], the project's own instance [[storage-31](storage.md#storage-31)] first where several do, and name no helper of the app's for any other remote, one under the Git origin of an instance no placement is at included, so this device's own credentials serve it ([DR-127](../decisions/127-a-home-signed-in-to-several-instances.md), [DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md)).
 
 ### The Overview Tab
 
@@ -128,9 +128,9 @@ When the user picks a project from the palette or opens one of its sessions from
 
 #### projects-9
 
-When the user confirms removal in the Overview tab, the workspace shall forget the working folder, delete its spex repository's clone and clear it from the sidebar, leaving the working folder, its files — its `spex.yaml` and `spex.lock` among them, the code's own [[environments-26](environments.md#environments-26)] — and its git state on disk unmodified apart from the exported skills Spex removes with their exclude entries [[environments-8](environments.md#environments-8)], and nothing on the host changed ([DR-103](../decisions/103-the-home-and-its-groups.md)):
+When the user confirms removal in the Overview tab, the workspace shall forget the working folder, delete its spex repository's clone and clear it from the sidebar, leaving the working folder, its files — its `spex.yaml` and `spex.lock` among them, the code's own [[environments-26](environments.md#environments-26)] — and its git state on disk unmodified apart from the exported skills Spex removes with their exclude entries [[environments-8](environments.md#environments-8)], and nothing at any instance changed ([DR-103](../decisions/103-the-home-and-its-groups.md), [DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md)):
 
-- While anything in the clone has not reached the host — a local-only spex repository, or one with local units [[space-7](space.md#space-7)] — the confirm says what would be lost and asks a second confirmation naming the count.
+- While anything in the clone has reached no placement — a local-only spex repository, or a unit no placement's `spex` holds as the clone last fetched or pushed it [[space-12](space.md#space-12)] — the confirm says what would be lost and asks a second confirmation naming the count.
 
 - While a session of the project has a turn in flight, the Overview tab disables removal, stating that the running turn must finish or be aborted first ([DR-051](../decisions/051-runtime-held-for-a-turn.md)).
 - Removal confirms inline with Remove and Keep ([DR-010](../decisions/010-interface-craft.md) §4); Keep returns focus to the Remove control, and a completed removal moves focus to the sidebar's Dashboard entry — never to the page body.
@@ -285,11 +285,19 @@ Where the Overview tab renders a project whose GitHub binding names an unmet con
 
 Where a real core on a scratch home is signed in to two stand-in instances over distinct Git backends, each serving private code through its real HTTP Git transport and recording each credential it brokers, and the first lists two projects' spex repositories whose `project.json` names code at the first's Git origin and at the second's respectively, when the test suite joins each over the protocol with this device's Git holding no credential of its own, the test suite shall assert that the first's code clones with a credential the first instance brokered [[projects-37](#projects-37)], and that the second's is brokered by neither instance and fails, leaving no code cloned [[projects-37](#projects-37)].
 
+#### projects-41
+
+Where a real core on a scratch home is signed in to two stand-in instances over distinct Git backends, each serving private code and recording each credential it brokers, and the first lists a project's spex repository whose placement file names a placement at the second and whose `project.json` names code at the second's Git origin, when the test suite joins it at the first with this device's Git holding no credential of its own, the test suite shall assert that the code clones with a credential the second brokered [[projects-37](#projects-37)].
+
 ### Removal Coverage
 
 #### projects-21
 
 Where a fixture repository is registered with a local-only spex repository holding one session, when the project is removed — the first confirm answered, the second naming the units that never reached a host, the session among them — and the core service is restarted, the test suite shall assert that no project card or pair for it remains, the clone is gone [[projects-10](#projects-10)], and the repository directory's files, its `spex.yaml` and `spex.lock` at its root among them, and git state are identical to their state before removal [[projects-9](#projects-9)]; and that a project whose clone has reached the stand-in host is removed on the first confirm alone.
+
+#### projects-40
+
+Where a fixture repository is registered with a spex repository placed at two stand-in instances, when the project is removed once with every unit held by one placement or the other and once with a unit neither holds, the test suite shall assert that the first is removed on the first confirm alone and that the second asks the second confirmation naming that one unit [[projects-9](#projects-9)].
 
 #### projects-33
 

@@ -268,6 +268,11 @@ msgstr "{name} has no folder on this device"
 msgid "{name} is in use elsewhere in {project}"
 msgstr "{name} is in use elsewhere in {project}"
 
+#. Refusal of a pick: the spex repository's folder lies under one instance, and the pick named a group at another; {name} is the repository's name, {host} its instance's display name
+#: src/space.ts
+msgid "{name} is kept under {host}; pick a group there"
+msgstr "{name} is kept under {host}; pick a group there"
+
 #. Refusal: removing a spec package this environment does not request
 #: src/environments.ts
 msgid "{name} is not requested here"
@@ -819,6 +824,46 @@ msgstr "Add this machine's SSH key to an account that can see it"
 msgid "an attachment the intent names is missing"
 msgstr "an attachment the intent names is missing"
 
+#. Refusal of a sign-in: the URL's host holds a character outside DNS labels, such as an underscore, or is an IPv6 literal
+#: src/space.ts
+msgid "An instance's host holds only letters, digits, inner hyphens and single dots"
+msgstr "An instance's host holds only letters, digits, inner hyphens and single dots"
+
+#. Refusal of a sign-in: the URL names port 0
+#: src/space.ts
+msgid "An instance's port is from 1 to 65535"
+msgstr "An instance's port is from 1 to 65535"
+
+#. Refusal of a sign-in: the URL's scheme is neither https nor http; http is allowed for an instance on this device alone (localhost or 127.x)
+#: src/space.ts
+msgid "An instance's URL begins with https://, or http:// on this device"
+msgstr "An instance's URL begins with https://, or http:// on this device"
+
+#. Refusal of a sign-in: the URL carries a fragment; an instance is known by its origin alone
+#: src/space.ts
+msgid "An instance's URL carries no fragment, only its scheme, host and port"
+msgstr "An instance's URL carries no fragment, only its scheme, host and port"
+
+#. Refusal of a sign-in: the URL carries a query; an instance is known by its origin alone
+#: src/space.ts
+msgid "An instance's URL carries no query, only its scheme, host and port"
+msgstr "An instance's URL carries no query, only its scheme, host and port"
+
+#. Refusal of a sign-in: the URL carries user info before its host
+#: src/space.ts
+msgid "An instance's URL carries no user or password"
+msgstr "An instance's URL carries no user or password"
+
+#. Refusal of a sign-in: the URL names a path after its host; an instance is known by its origin alone
+#: src/space.ts
+msgid "An instance's URL names no path, only its scheme, host and port"
+msgstr "An instance's URL names no path, only its scheme, host and port"
+
+#. Refusal of a sign-in: the URL is http on a host that is not this device (localhost or 127.x)
+#: src/space.ts
+msgid "An instance's URL uses https://; http:// only on this device"
+msgstr "An instance's URL uses https://; http:// only on this device"
+
 #. A diagnostic's reason, read after the file it names; {cause} is the failure's own text, relayed
 #: src/space.ts
 msgid "an interrupted sync could not be repaired: {cause}"
@@ -917,7 +962,7 @@ msgstr "Check the URL, create the repository if it is not there yet, or {act}. T
 msgid "Choose the other side for this unit or fix the file, then Retry."
 msgstr "Choose the other side for this unit or fix the file, then Retry."
 
-#. Where a project's code lives before the instance has reported its Git origin; the actual remote is withheld until it can be classified
+#. Where a project's code lives before every instance has reported its Git origin, or when its remote lies under another instance's; the actual remote is withheld
 #: src/space.ts
 msgid "Code on a remote"
 msgstr "Code on a remote"
@@ -1446,12 +1491,12 @@ msgstr "invalid viewed marker {key}"
 msgid "invalid working folder pair"
 msgstr "invalid working folder pair"
 
-#. Forge setup guidance before the instance has reported its Git origin; the actual remote and hostname stay internal
+#. Forge setup guidance before every instance has reported its Git origin, or for code under another instance's; the actual remote and hostname stay internal
 #: src/service.ts
 msgid "Issues and PRs come from GitHub; this project's code is on a remote."
 msgstr "Issues and PRs come from GitHub; this project's code is on a remote."
 
-#. Forge setup guidance for code on the instance's reported Git origin, whose underlying Git system is never named
+#. Forge setup guidance for code on the reported Git origin of the project's instance, whose underlying Git system is never named
 #: src/service.ts
 msgid "Issues and PRs come from GitHub; this project's code is on this instance."
 msgstr "Issues and PRs come from GitHub; this project's code is on this instance."
@@ -1576,6 +1621,11 @@ msgstr "Name the account's login at {host}"
 #: src/space-groups.ts
 msgid "Name the group"
 msgstr "Name the group"
+
+#. Refusal of a sign-in: what the reader gave does not read as a URL at all
+#: src/space.ts
+msgid "Name the instance by its URL, such as https://spex.pub"
+msgstr "Name the instance by its URL, such as https://spex.pub"
 
 #. A stopped transfer's message; {host} is the remote's host
 #. A stopped transfer's message; {host} is the remote's host
@@ -2135,10 +2185,20 @@ msgstr "Sign in first"
 msgid "Sign in from the header, then Retry."
 msgstr "Sign in from the header, then Retry."
 
-#. Refusal: publishing to the registry needs the home signed in
+#. Refusal of a sync: the spex repository's instance is signed out; {host} is that instance's display name, or its host name before any read
+#: src/space.ts
+msgid "Sign in to {host} first"
+msgstr "Sign in to {host} first"
+
+#. Refusal: publishing needs the home signed in at the instance the publish goes to; {name} is that instance's display name as last read, else its host name
 #: src/environments.ts
-msgid "Sign in to publish"
-msgstr "Sign in to publish"
+msgid "Sign in to publish at {name}"
+msgstr "Sign in to publish at {name}"
+
+#. Refusal of Forget: the instance is still signed in; {host} is its display name, or its host name before any read
+#: src/space.ts
+msgid "Sign out of {host} first"
+msgstr "Sign out of {host} first"
 
 #. The act that gives access to an http(s) remote, inside a sentence
 #: src/space-git.ts
@@ -2260,6 +2320,11 @@ msgstr "state root {dir} is held by pid {pid} on this machine at {lock}; one cor
 #: src/root-lease.ts
 msgid "state root {dir} lock at {lock} cannot be verified: {reason}; stop every Spex writer before removing it (DR-108)"
 msgstr "state root {dir} lock at {lock} cannot be verified: {reason}; stop every Spex writer before removing it (DR-108)"
+
+#. Refusal of Forget: spex repositories whose clones are still kept under the instance, no signed-in instance listing them; {host} is the instance's display name, {names} the repositories' names as a list
+#: src/space.ts
+msgid "Still kept under {host}: {names}"
+msgstr "Still kept under {host}: {names}"
 
 #. A stopped step's message: the reader stopped it while the Git host's rate limit held its call; {host} is the host's display name
 #: src/space.ts
@@ -2613,6 +2678,16 @@ msgstr "this conversation is waiting for your reply; answer it first"
 #: src/approvals.ts
 msgid "This decision was not offered by the agent."
 msgstr "This decision was not offered by the agent."
+
+#. Refusal of a sign-in: the URL names the host and port of an instance this device already lists, under another scheme; {listed} is that instance's origin
+#: src/space.ts
+msgid "This device already signs in to {listed}, at the same host and port"
+msgstr "This device already signs in to {listed}, at the same host and port"
+
+#. Refusal: a command names an instance, by its address, that this device lists no entry for — never signed in to there, or forgotten since
+#: src/space.ts
+msgid "This device has not signed in to {instance}"
+msgstr "This device has not signed in to {instance}"
 
 #. Create recovery for an existing unborn repository; Add is the palette action
 #: src/forge.ts

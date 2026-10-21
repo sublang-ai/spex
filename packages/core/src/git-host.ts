@@ -942,6 +942,22 @@ export class GitHostClient {
     }
   }
 
+  /**
+   * A client of the same host outside this one — the registry
+   * (environments-12) — was refused `access` with a code that signs the
+   * device out: as a refusal of this client's own call does (git-host-4),
+   * the pair that presented it is removed and the device signed out of
+   * this host alone in one step, `onSignedOut` called; true then. Where
+   * it is no longer the stored pair's — a sign-in, a refresh or a
+   * sign-out meanwhile — nothing is removed or said, and false comes
+   * back: the call stands refused as changed meanwhile.
+   */
+  async signOutRefused(access: string): Promise<boolean> {
+    const stored = await this.credentials.read();
+    if (stored === null || stored.access !== access) return false;
+    return !(this.signOutLocally(stored, new HostError("reauth")) instanceof CredentialChanged);
+  }
+
   // -------------------------------------------------------------------------
 
   private claimSignIn(): object {

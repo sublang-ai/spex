@@ -24,7 +24,7 @@ import {
   credentialsPath,
   fileCredentialStore,
   hostUrlFor,
-  type HostAccount,
+  type HostRepository,
   type HostErrorKind,
   type SignInCause,
   type StoredCredential,
@@ -32,6 +32,7 @@ import {
 import { GIT_CREDENTIAL_FILE_ENV, currentRuntime, withGitCredential } from "./git-credential.js";
 import { OriginRefused } from "./instance.js";
 import { holdingFetch, samePair, settled } from "./testing/holding-fetch.js";
+import { browserSignIn, instanceClient } from "./testing/host-sign-in.js";
 import { readHostView, relayHostError } from "./space-groups.js";
 import { STANDIN_STORAGE, startStandinHost, type StandinHost } from "./testing/standin-host.js";
 
@@ -69,20 +70,6 @@ async function setup(options: { skew?: { ms: number }; holdMaxMs?: number } = {}
       rmSync(scratch, { recursive: true, force: true });
     },
   };
-}
-
-/** Complete a browser sign-in as the system browser would: open the URL,
- * follow the host's redirect to the loopback. */
-async function browserSignIn(client: GitHostClient): Promise<{ account: HostAccount; page: string }> {
-  const flow = await client.startBrowserSignIn();
-  const first = await fetch(flow.url, { redirect: "manual" });
-  assert.equal(first.status, 302);
-  const location = first.headers.get("location") ?? "";
-  assert.ok(location.startsWith(flow.redirectUri));
-  const back = await fetch(location);
-  const page = await back.text();
-  assert.equal(back.status, 200);
-  return { account: await flow.done, page };
 }
 
 function hostError(kind: HostErrorKind, extra: { cause?: SignInCause; words?: string | RegExp; retryAfter?: string } = {}) {
@@ -570,6 +557,50 @@ test("git-host-4: a held refresh, granted or refused, or a held refusal of a pai
     await browserSignIn(t.client);
     t.host.script.revokeDevices();
     await overtaken((path, status) => path === "/api/v1/host/groups" && status === 401, newer(3));
+  } finally {
+    await t.dispose();
+  }
+});
+
+test("git-host-4: a refusal reported from outside the client signs the device out only while the pair that presented it stands", async () => {
+  const skew = { ms: 0 };
+  const t = await setup({ skew });
+  try {
+    const store = fileCredentialStore(t.home, t.host.url);
+    const other = fileCredentialStore(t.home, "https://elsewhere.example");
+    const kept: StoredCredential = { access: "spexa_other", accessExpiresAt: 1, refresh: "spexr_other" };
+    assert.equal(other.replace(null, kept), true);
+    await browserSignIn(t.client);
+    const presented = await store.read();
+    assert.ok(presented);
+
+    // A refresh meanwhile: the refusal of the pair it replaced removes
+    // and signs out nothing, and reads as changed meanwhile.
+    skew.ms = 3_600_000 - 30_000;
+    await t.client.me();
+    skew.ms = 0;
+    const refreshed = await store.read();
+    assert.ok(refreshed && refreshed.access !== presented.access, "the pair was refreshed");
+    assert.equal(await t.client.signOutRefused(presented.access), false);
+    assert.ok(samePair(await store.read(), refreshed), "the refreshed pair stays");
+    assert.deepEqual(t.signedOut, [], "nothing is signed out");
+
+    // The stored pair refused: removed and signed out in one step, said
+    // once, another host's pair kept.
+    assert.equal(await t.client.signOutRefused(refreshed.access), true);
+    assert.equal(await store.read(), null);
+    assert.equal(await t.client.signedIn(), false);
+    assert.deepEqual(t.signedOut, ["reauth"]);
+    assert.ok(samePair(await other.read(), kept), "another host's pair stays");
+
+    // A sign-out meanwhile, then a sign-in meanwhile: the refusal of the
+    // pair gone removes and signs out nothing, the new pair staying.
+    assert.equal(await t.client.signOutRefused(refreshed.access), false);
+    await browserSignIn(t.client);
+    const signedIn = await store.read();
+    assert.equal(await t.client.signOutRefused(refreshed.access), false);
+    assert.ok(samePair(await store.read(), signedIn), "the newer sign-in's pair stays");
+    assert.deepEqual(t.signedOut, ["reauth"], "said once");
   } finally {
     await t.dispose();
   }
@@ -1268,6 +1299,220 @@ test("git-host-12: the stand-in serves its pages and refuses malformed sign-in r
     assert.match(transport.headers.get("www-authenticate") ?? "", /^Basic/);
   } finally {
     await host.close();
+    rmSync(scratch, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// git-host-12: the stand-in run as several instances (DR-127)
+
+/** The status a Git transport answers a ref advertisement of the
+ * repository at `path` under its Git origin, with `secret` presented as
+ * the core presents a brokered credential. */
+async function advertised(gitOrigin: string, path: string, secret: string): Promise<number> {
+  const answer = await fetch(`${gitOrigin}/${path}.git/info/refs?service=git-upload-pack`, {
+    headers: { authorization: `Basic ${Buffer.from(`oauth2:${secret}`).toString("base64")}` },
+  });
+  await answer.arrayBuffer();
+  return answer.status;
+}
+
+async function described(host: StandinHost): Promise<{ display_name: string; git_origin: string }> {
+  const answer = await fetch(`${host.url}/api/v1/host`);
+  const body = (await answer.json()) as { display_name: string; git_origin: string };
+  return { display_name: body.display_name, git_origin: body.git_origin };
+}
+
+test("git-host-12: two stand-in instances run at once, each at its own origin with its own display name, accounts, tokens, groups and description", async () => {
+  const scratch = mkdtempSync(join(tmpdir(), "spex-standin-"));
+  const bob = { id: "1002", login: "bob", displayName: "Bob" };
+  const first = await startStandinHost({ dir: join(scratch, "first"), displayName: "First" });
+  const second = await startStandinHost({ dir: join(scratch, "second"), displayName: "Second", person: bob });
+  try {
+    assert.notEqual(first.url, second.url);
+    assert.notEqual(first.dir, second.dir);
+    assert.deepEqual([first.gitOrigin, second.gitOrigin], [`${first.url}/git`, `${second.url}/git`]);
+    assert.deepEqual([first.storage, second.storage], [STANDIN_STORAGE, STANDIN_STORAGE]);
+    assert.deepEqual(await described(first), { display_name: "First", git_origin: first.gitOrigin });
+    assert.deepEqual(await described(second), { display_name: "Second", git_origin: second.gitOrigin });
+    // Each its own person, the others known as its accounts.
+    assert.deepEqual(first.script.accounts.map((account) => account.login), ["bob", "grace", "alan"]);
+    assert.deepEqual(second.script.accounts.map((account) => account.login), ["ada", "grace", "alan"]);
+
+    const homeOne = join(scratch, "home-one");
+    const homeTwo = join(scratch, "home-two");
+    const one = instanceClient(homeOne, first);
+    const two = instanceClient(homeTwo, second);
+    assert.equal((await browserSignIn(one)).account.login, "ada");
+    assert.equal((await browserSignIn(two)).account.login, "bob");
+    assert.deepEqual((await one.groups()).map((group) => [group.id, group.fullPath, group.kind]), [["2001", "ada", "user"], ["2002", "acme", "group"], ["2003", "acme/research", "group"]]);
+    assert.deepEqual((await two.groups()).map((group) => [group.id, group.fullPath, group.kind]), [["u1002", "bob", "user"], ["2002", "acme", "group"], ["2003", "acme/research", "group"]]);
+
+    // A group `acme` at each, each listing its own repository: two Git
+    // systems mint ids that collide.
+    const a = first.script.addRepository({ group: "acme", name: "a-spex" });
+    const b = second.script.addRepository({ group: "acme", name: "b-spex" });
+    assert.equal(a.id, b.id);
+    assert.deepEqual((await one.repositories()).map((repository) => repository.remoteUrl), [`${first.gitOrigin}/${STANDIN_STORAGE}/acme/a-spex.git`]);
+    assert.deepEqual((await two.repositories()).map((repository) => repository.remoteUrl), [`${second.gitOrigin}/${STANDIN_STORAGE}/acme/b-spex.git`]);
+    assert.notEqual(first.bareOf("acme/a-spex"), second.bareOf("acme/b-spex"));
+
+    // One instance's token is refused at the other's routes and transport.
+    const tokenOne = (await fileCredentialStore(homeOne, first.url).read())?.access ?? "";
+    const tokenTwo = (await fileCredentialStore(homeTwo, second.url).read())?.access ?? "";
+    const me = await fetch(`${second.url}/api/v1/host/me`, { headers: { authorization: `Bearer ${tokenOne}` } });
+    assert.equal(me.status, 401);
+    await me.arrayBuffer();
+    assert.equal(await advertised(first.gitOrigin, `${STANDIN_STORAGE}/acme/a-spex`, tokenTwo), 401);
+    assert.equal(await advertised(first.gitOrigin, `${STANDIN_STORAGE}/acme/a-spex`, tokenOne), 200);
+    assert.equal(await advertised(second.gitOrigin, `${STANDIN_STORAGE}/acme/b-spex`, tokenTwo), 200);
+    assert.deepEqual(first.script.transportCredentials.map((use) => use.instance), [first.url]);
+    assert.deepEqual(second.script.transportCredentials.map((use) => use.instance), [second.url]);
+  } finally {
+    await first.close();
+    await second.close();
+    rmSync(scratch, { recursive: true, force: true });
+  }
+});
+
+test("git-host-12: two instances over one Git backend share one transport at one Git origin and the namespaces' repositories under the same ids, keep their groups in containers of their own, and answer archive and role each its own way", async () => {
+  const scratch = mkdtempSync(join(tmpdir(), "spex-standin-"));
+  const first = await startStandinHost({ dir: join(scratch, "git"), displayName: "First" });
+  const second = await startStandinHost({ gitBackend: first, displayName: "Second" });
+  const env = testGitEnv(scratch);
+  try {
+    // One directory and one transport, at the Git origin both describe.
+    assert.notEqual(second.url, first.url);
+    assert.equal(second.dir, first.dir);
+    assert.equal(second.gitOrigin, `${first.url}/git`);
+    assert.deepEqual([first.storage, second.storage], [STANDIN_STORAGE, `${STANDIN_STORAGE}-2`]);
+    assert.deepEqual(await described(first), { display_name: "First", git_origin: first.gitOrigin });
+    assert.deepEqual(await described(second), { display_name: "Second", git_origin: first.gitOrigin });
+    const stray = await fetch(`${second.url}/git/ada/none-spex.git/info/refs?service=git-upload-pack`);
+    assert.equal(stray.status, 404, "the transport is served at one origin");
+    await stray.arrayBuffer();
+
+    const one = instanceClient(join(scratch, "home-one"), first);
+    const two = instanceClient(join(scratch, "home-two"), second);
+    await browserSignIn(one);
+    await browserSignIn(two);
+
+    // The person's namespace and its repositories, listed by both under
+    // the same ids, one added at the first and one created at the second.
+    const ns = first.script.addRepository({ group: "ada", name: "ns-spex" });
+    const made = await two.create({ groupId: null, name: "made-spex", description: "made at the second" });
+    assert.equal(made.status, "created");
+    if (made.status !== "created") return;
+    assert.notEqual(made.repository.id, ns.id, "one Git system's ids");
+    const namespaceRows = [[ns.id, "2001", `${first.gitOrigin}/ada/ns-spex.git`], [made.repository.id, "2001", `${first.gitOrigin}/ada/made-spex.git`]];
+    const rows = (listed: HostRepository[]) => listed.map((repository) => [repository.id, repository.group.id, repository.remoteUrl]);
+    assert.deepEqual(rows(await one.repositories()), namespaceRows);
+    assert.deepEqual(rows(await two.repositories()), namespaceRows);
+    assert.ok(second.script.repositories.includes(ns));
+
+    // Each instance's groups in a container of its own on the Git system,
+    // under that system's ids; neither lists the other's.
+    const a = first.script.addRepository({ group: "acme", name: "a-spex" });
+    const b = second.script.addRepository({ group: "acme", name: "b-spex" });
+    const acmeOf = async (client: GitHostClient) => (await client.groups()).find((group) => group.fullPath === "acme")?.id;
+    assert.notEqual(await acmeOf(two), await acmeOf(one));
+    assert.deepEqual(rows(await one.repositories()).slice(2), [[a.id, a.group.id, `${first.gitOrigin}/${STANDIN_STORAGE}/acme/a-spex.git`]]);
+    assert.deepEqual(rows(await two.repositories()).slice(2), [[b.id, b.group.id, `${first.gitOrigin}/${STANDIN_STORAGE}-2/acme/b-spex.git`]]);
+    assert.equal(first.bareOf("acme/a-spex"), join(first.dir, STANDIN_STORAGE, "acme", "a-spex.git"));
+    assert.equal(second.bareOf("acme/b-spex"), join(first.dir, `${STANDIN_STORAGE}-2`, "acme", "b-spex.git"));
+    assert.ok(existsSync(b.bare));
+    assert.ok(!second.script.repositories.includes(a) && !first.script.repositories.includes(b));
+    await assert.rejects(two.repository(a.id), hostError("not_found"));
+
+    // Each issues credentials for the one Git origin, which its transport
+    // accepts, recording the issuer.
+    await assert.rejects(two.credential(`${second.url}/git`), hostError("bad_request"));
+    const credentialOne = await one.credential(first.gitOrigin);
+    const credentialTwo = await two.credential(first.gitOrigin);
+    assert.equal(second.script.transportCredentials, first.script.transportCredentials);
+    const uses = first.script.transportCredentials;
+    const withCredential = async (credential: { username: string; secret: string; expiresAt: number }, args: string[]) => {
+      const handle = await withGitCredential(credential, currentRuntime());
+      try {
+        return await runGit([...handle.configArgs, ...args], { ...env, ...handle.env });
+      } finally {
+        await handle.dispose();
+      }
+    };
+    const clone = join(scratch, "clone");
+    const cloned = await withCredential(credentialTwo, ["clone", "-q", `${first.gitOrigin}/ada/ns-spex.git`, clone]);
+    assert.equal(cloned.code, 0, cloned.stderr);
+    execFileSync("git", ["-C", clone, "checkout", "-q", "--orphan", "spex"], { env });
+    writeFileSync(join(clone, "project.json"), `${JSON.stringify({ format: 1, name: "ns", remote: null })}\n`);
+    execFileSync("git", ["-C", clone, "add", "project.json"], { env });
+    execFileSync("git", ["-C", clone, "-c", "commit.gpgsign=false", "commit", "-qm", "records"], { env });
+    const pushedTwo = await withCredential(credentialTwo, ["-C", clone, "push", "-q", "origin", "spex"]);
+    assert.equal(pushedTwo.code, 0, pushedTwo.stderr);
+    assert.ok(uses.length > 0 && uses.every((use) => use.instance === second.url), JSON.stringify(uses));
+    assert.ok(uses.some((use) => use.push && use.path === "/git/ada/ns-spex.git/git-receive-pack"));
+    const commit = (message: string) => {
+      writeFileSync(join(clone, "note.txt"), `${message}\n`);
+      execFileSync("git", ["-C", clone, "add", "note.txt"], { env });
+      execFileSync("git", ["-C", clone, "-c", "commit.gpgsign=false", "commit", "-qm", message], { env });
+    };
+    commit("from the first");
+    let mark = uses.length;
+    const pushedOne = await withCredential(credentialOne, ["-C", clone, "push", "-q", "origin", "spex"]);
+    assert.equal(pushedOne.code, 0, pushedOne.stderr);
+    assert.ok(uses.length > mark && uses.slice(mark).every((use) => use.instance === first.url));
+    const tip = execFileSync("git", ["-C", clone, "rev-parse", "spex"], { encoding: "utf8" }).trim();
+    assert.equal(execFileSync("git", ["-C", ns.bare, "rev-parse", "spex"], { encoding: "utf8" }).trim(), tip);
+
+    // The second scripted to answer it archived: the first answers as the
+    // Git system, whose transport still takes the second's push.
+    second.script.archive(ns.id);
+    const archivedTwo = await two.repository(ns.id);
+    assert.equal(archivedTwo.archived, true);
+    assert.equal(archivedTwo.readOnly?.reason, "archived");
+    assert.equal(archivedTwo.branch.canPush, false);
+    const unarchivedOne = await one.repository(ns.id);
+    assert.equal(unarchivedOne.archived, false);
+    assert.equal(unarchivedOne.readOnly, null);
+    assert.equal(unarchivedOne.branch.canPush, true);
+    commit("while the second answers archived");
+    assert.equal((await withCredential(credentialTwo, ["-C", clone, "push", "-q", "origin", "spex"])).code, 0);
+    // The first archiving it, the second scripted not to: the transport
+    // follows the Git system.
+    second.script.archive(ns.id, false);
+    first.script.archive(ns.id);
+    assert.equal((await one.repository(ns.id)).archived, true);
+    assert.equal((await two.repository(ns.id)).archived, false);
+    commit("while the Git system holds it archived");
+    const refused = await withCredential(credentialTwo, ["-C", clone, "push", "-q", "origin", "spex"]);
+    assert.notEqual(refused.code, 0);
+    assert.match(refused.stderr, /403|archived/);
+    first.script.archive(ns.id, false);
+
+    // The person's role there, the second scripted below the role that
+    // pushes, the first answering the Git system's.
+    second.script.accessLevel(ns.id, "Reporter");
+    const reporter = await two.repository(ns.id);
+    assert.equal(reporter.readOnly?.reason, "access");
+    assert.equal(reporter.branch.canPush, false);
+    assert.deepEqual(reporter.can, { manageMembers: false, transfer: false });
+    const owner = await one.repository(ns.id);
+    assert.equal(owner.readOnly, null);
+    assert.deepEqual(owner.can, { manageMembers: true, transfer: true });
+    assert.deepEqual((await two.members({ kind: "repository", id: ns.id })).members.map((member) => [member.login, member.role]), [["ada", "Reporter"]]);
+    assert.deepEqual((await one.members({ kind: "repository", id: ns.id })).members.map((member) => [member.login, member.role]), [["ada", "Owner"]]);
+    commit("while the second answers Reporter");
+    assert.equal((await withCredential(credentialTwo, ["-C", clone, "push", "-q", "origin", "spex"])).code, 0);
+
+    // A credential the second issued and revoked is refused, the first's
+    // still taken.
+    second.script.revokeDevices();
+    mark = uses.length;
+    assert.equal(await advertised(first.gitOrigin, "ada/ns-spex", credentialTwo.secret), 401);
+    assert.equal(await advertised(first.gitOrigin, "ada/ns-spex", credentialOne.secret), 200);
+    assert.deepEqual(uses.slice(mark).map((use) => use.instance), [first.url]);
+  } finally {
+    await second.close();
+    await first.close();
     rmSync(scratch, { recursive: true, force: true });
   }
 });

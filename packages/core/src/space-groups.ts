@@ -6,8 +6,10 @@
 // repository the host lists, each with what decides its state — its
 // archived flag and the account's role as the host reports them, its
 // `spex` branch, and its members' count — held as the home's current
-// view until the next read. Clones are matched to listings by the id in
-// their Git configuration, else by their remote URL, never by name.
+// view until the next read. A host repository is one by its instance's
+// Git origin and its id (DR-127): clones are matched to listings by the id
+// in their Git configuration beside a remote under that Git origin, else
+// by their remote URL, never by name.
 // The phrases the core composes for the host's answers live here too
 // (git-host-11), each keeping the host's own words whole.
 
@@ -138,11 +140,12 @@ export function hostKey(repository: HostRepository, instance?: string): string |
   return INSTANCE_FOLDER_PATTERN.test(instance) ? `${instance}/${path}` : null;
 }
 
-/** The logins a view names besides groups (git-host-5, DR-120): your
- * own group's folder name, the account's login, and every other
- * account's under which the host lists a spex repository. */
-export function namedLogins(view: Pick<HostCatalog, "account"> & (Pick<HostView, "listings"> | Pick<HostCatalog, "repositories">), ownName: string): string[] {
-  const logins = new Set<string>([ownName, view.account.login]);
+/** The logins a view of one instance names besides groups (git-host-5,
+ * DR-127): the account's login there, and every other account's under
+ * which that instance lists a spex repository — never your own group's
+ * folder name, which lies outside every instance's folder. */
+export function namedLogins(view: Pick<HostCatalog, "account"> & (Pick<HostView, "listings"> | Pick<HostCatalog, "repositories">)): string[] {
+  const logins = new Set<string>([view.account.login]);
   const repositories = "repositories" in view ? view.repositories : view.listings.map((listing) => listing.repository);
   for (const repository of repositories) if (repository.group.kind === "user") logins.add(repository.group.fullPath);
   return [...logins];
@@ -183,15 +186,32 @@ export function underOrigin(remote: string | null, origin: string | null | undef
   return remote === base || remote.startsWith(`${base}/`);
 }
 
-/** The listing a clone stands for: by its recorded id, else by its
- * remote URL, never by name (git-host-5). */
-export function listingFor(view: Pick<HostView, "listings"> | undefined, id: string | null, remote: string | null): HostListing | undefined {
-  if (!view) return undefined;
-  if (id !== null) {
-    const byId = view.listings.find((listing) => listing.repository.id === id);
+/** Whether two Git origins are one: equal but for a trailing slash. */
+export function sameOrigin(a: string | null | undefined, b: string | null | undefined): boolean {
+  if (!a || !b) return false;
+  return a.replace(/\/+$/, "") === b.replace(/\/+$/, "");
+}
+
+/** The host repository a clone stands for among those one instance
+ * answered (git-host-5, DR-127): one by that instance's Git origin and
+ * its id — the id the clone records beside a remote under that Git
+ * origin — else the one whose remote URL is the clone's, never by name;
+ * so ids two Git systems both mint stay two repositories, and instances
+ * sharing one Git origin list one. */
+export function repositoryFor<T>(entries: readonly T[], repository: (entry: T) => HostRepository, gitOrigin: string | null | undefined, id: string | null, remote: string | null): T | undefined {
+  if (id !== null && underOrigin(remote, gitOrigin)) {
+    const byId = entries.find((entry) => repository(entry).id === id);
     if (byId) return byId;
   }
-  return view.listings.find((listing) => sameRemote(listing.repository.remoteUrl, remote));
+  return entries.find((entry) => sameRemote(repository(entry).remoteUrl, remote));
+}
+
+/** The listing a clone stands for in a view of one instance, by that
+ * instance's Git origin and the clone's recorded id, else by its remote
+ * URL (repositoryFor). */
+export function listingFor(view: Pick<HostView, "listings" | "gitOrigin"> | undefined, id: string | null, remote: string | null): HostListing | undefined {
+  if (!view) return undefined;
+  return repositoryFor(view.listings, (listing) => listing.repository, view.gitOrigin, id, remote);
 }
 
 /** The person's own group as the host lists it. */

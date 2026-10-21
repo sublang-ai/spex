@@ -14,11 +14,11 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Document, isMap, parseDocument } from "yaml";
 
-import { readVersioned, writeApplicationBytes, writeVersionedBytes } from "../files.js";
+import { readVersioned, VersionConflictError, writeApplicationBytes, writeVersionedBytes } from "../files.js";
 import { packFiles } from "./archive.js";
 import { BUILTIN_PACKAGE_NAME, specExportName } from "./exports.js";
 import { artifactLanguages, inArtifact, parseManifestText, readRelease, ROOT_FILES, sha256Hex, type Manifest, type ReleaseFile } from "./format.js";
-import { serializeLock, type Lock } from "./lock.js";
+import { isRegistrySource, parseLock, serializeLock, type Lock, type LockedFile } from "./lock.js";
 import { RegistryError, type RegistrySource, type SearchResult, type VersionIndex, type VersionIndexEntry, type VersionResource } from "./registry.js";
 import { parseRequests, requestsDigest } from "./requests.js";
 import { compareVersions, isVersion } from "./semver.js";
@@ -246,6 +246,26 @@ export function builtinRegistrySource(options: BuiltinSourceOptions): RegistrySo
   };
 }
 
+/**
+ * Whether this device's seed serves a lock's release of the built-in spec
+ * package (environments-7, environments-11): it holds the locked version
+ * and each locked file at the digest the lock records for it. The
+ * archive's checksum is not compared: each device packs its own archive
+ * from its seed, so another device's lock of the same files may record
+ * another.
+ */
+export async function seedServes(seed: RegistrySource, version: string, files: readonly LockedFile[]): Promise<boolean> {
+  let resource: VersionResource;
+  try {
+    resource = await seed.version(BUILTIN_PACKAGE_NAME, version);
+  } catch (error) {
+    if (error instanceof RegistryError) return false;
+    throw error;
+  }
+  const digests = new Map((resource.files ?? []).map((file) => [file.path, file.sha256]));
+  return files.every((file) => digests.get(file.path) === file.sha256);
+}
+
 function safeBuiltinPackage(): BuiltinPackage | null {
   try { return builtinPackage(); } catch { return null; }
 }
@@ -349,6 +369,44 @@ export function prepareBuiltinEnvironment(cloneDir: string, pkg: BuiltinPackage,
     console.error(`spex: ${cloneDir} holds no lock yet: ${error instanceof Error ? error.message : String(error)}`);
   }
   return wrote;
+}
+
+/**
+ * Move a clone's built-in lock to `registryUrl` where its environment is
+ * still the one a pairing prepared (environments-11, DR-127): `spex.yaml`
+ * requesting the built-in spec package alone, and `spex.lock` exactly
+ * the built-in lock at the registry it records, another than
+ * `registryUrl`. A lock holding anything else — another release, another
+ * package, a resolution of the reader's — is left as it is. Written
+ * under the version read, a file changed meanwhile left standing
+ * (DR-111). Returns whether it wrote.
+ */
+export function rehomeBuiltinLock(cloneDir: string, pkg: BuiltinPackage, registryUrl: string): boolean {
+  const target = registryUrl.replace(/\/+$/, "");
+  const lockFile = join(cloneDir, "spex.lock");
+  const requests = readVersioned(join(cloneDir, "spex.yaml"));
+  const locked = readVersioned(lockFile);
+  if (requests.bytes === null || locked.bytes === null) return false;
+  const text = requests.bytes.toString("utf8");
+  const current = locked.bytes.toString("utf8");
+  let lock: Lock;
+  try {
+    const requested = Object.keys(parseRequests(text).packages);
+    if (requested.length !== 1 || requested[0] !== BUILTIN_PACKAGE_NAME) return false;
+    lock = parseLock(current);
+  } catch {
+    return false;
+  }
+  const source = lock.packages[BUILTIN_PACKAGE_NAME]?.source;
+  if (Object.keys(lock.packages).length !== 1 || !source || !isRegistrySource(source) || source.registry === target) return false;
+  if (current !== serializeLock(builtinLock(pkg, source.registry, text))) return false;
+  try {
+    writeVersionedBytes(lockFile, serializeLock(builtinLock(pkg, target, text)), locked.version);
+  } catch (error) {
+    if (error instanceof VersionConflictError) return false;
+    throw error;
+  }
+  return true;
 }
 
 /**

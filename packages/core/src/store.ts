@@ -23,6 +23,7 @@ import {
   writeFileSync,
   type Dirent,
 } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { createSessionStore, isUncertainTurnDiscardable, validateSessionContext, type SharedSessionStore, type SessionManifest, type SessionRecovery } from "@sublang/playbook/session-store";
 import { acquireRootLease, assertFormerLeaseReleased, type RootLease } from "./root-lease.js";
@@ -34,10 +35,11 @@ import {
 } from "./app-storage.js";
 import { occupied } from "./clone-moves.js";
 import { readJsonFile, StorageFormatError, VersionConflictError, writeApplicationFile } from "./files.js";
-import { Home, repositoryNameFor, splitKey, WORKSPACE_DEPTH } from "./home.js";
+import { cloneRemoteName, defaultOwnName, Home, REMOTE_URL_KEYS, remoteNamesIn, repositoryNameFor, splitKey, WORKSPACE_DEPTH } from "./home.js";
 import { folderRemote, needsGroupsMigration, migrateFormerHome } from "./migrate-home.js";
 import { deferredMoves, migrateInstances, needsInstancesMigration, settleDeferred, type DeferredMove } from "./migrate-instances.js";
-import { initializeClone } from "./storage-git.js";
+import { gitEnvironment, initializeClone } from "./storage-git.js";
+import { instanceFolder, isInstanceFolder } from "./instance.js";
 import { seedConfig } from "./config.js";
 import { createRequire } from "node:module";
 import { i18n } from "./i18n.js";
@@ -108,9 +110,11 @@ export interface StoreOptions {
   deferMigration?: boolean;
   /** Fill a clone the store makes, before its first commit: your own
    * group's at every open and a new project's at registration — where
-   * the environment requests the built-in spec package (storage-6,
-   * environments-11). The migration calls it for each clone it makes. */
-  prepareRepository?: (dir: string, key: string, hostUrl: string) => void;
+   * the environment requests the built-in spec package, locked at
+   * `registryOrigin`, the environment's registry (storage-6,
+   * environments-11, DR-127). The migration calls it for each clone it
+   * makes. */
+  prepareRepository?: (dir: string, key: string, registryOrigin: string) => void;
 }
 
 /** One spex repository's clone and the files it holds (storage-1). */
@@ -307,6 +311,22 @@ function writeAtomic(file: string, text: string): void {
 function readJson<T>(file: string): T | undefined {
   if (!existsSync(file)) return undefined;
   return JSON.parse(readFileSync(file, "utf8")) as T;
+}
+
+/** A clone's instance (storage-31): the origin of the instance whose
+ * folder its key lies in — one `home.yaml` lists, or the origin it
+ * records — else the one a deferred move of it names under its
+ * destination, else the listed instance whose folder names its remote,
+ * read only where neither names one; null for a clone local only. */
+function instanceOfClone(home: Home, deferred: readonly DeferredMove[], key: string, remoteName: () => string | null): string | null {
+  const byKey = home.instanceOfKey(key);
+  if (byKey) return byKey.origin;
+  const move = deferred.find((entry) => entry.from === key);
+  const byMove = move ? home.instanceOfKey(move.to) : undefined;
+  if (byMove) return byMove.origin;
+  const name = remoteName();
+  if (name === null || !isInstanceFolder(name)) return null;
+  return home.instances().find((entry) => instanceFolder(entry.origin) === name)?.origin ?? null;
 }
 
 /** The marker written beside a legacy store once a root imported it
@@ -614,11 +634,37 @@ export class Store {
     this.initializeRepository(dir, generatedBootstrap);
   }
 
-  /** The caller's filling of a clone; its failure leaves the clone as
-   * it is, reported, never failing the open. */
+  /** The caller's filling of a clone, at the registry of its instance —
+   * read from its key, a deferred move or the remote its Git names now,
+   * so your own group's is the one its remote names (storage-31) — else
+   * the default instance's (environments-5, environments-11); its
+   * failure leaves the clone as it is, reported, never failing the open. */
   private prepareRepository(dir: string, key: string): boolean {
-    try { this.options.prepareRepository?.(dir, key, this.homeFile.host.origin); return true; }
+    try {
+      const registryOrigin = instanceOfClone(this.homeFile, this.deferred, key, () => this.remoteNameOf(dir, key)) ?? this.homeFile.defaultInstance().origin;
+      this.options.prepareRepository?.(dir, key, registryOrigin);
+      return true;
+    }
     catch (error) { console.error(`spex: ${key} was not prepared: ${error instanceof Error ? error.message : String(error)}`); return false; }
+  }
+
+  /** The name of the remote a clone syncs with (DR-127), as its Git
+   * configuration holds it now; none for a folder that is no repository
+   * of its own yet, or whose configuration Git cannot read. */
+  private remoteNameOf(dir: string, key: string): string | null {
+    if (!existsSync(join(dir, ".git"))) return null;
+    const run = spawnSync("git", ["-C", dir, "config", "-z", "--get-regexp", REMOTE_URL_KEYS], { env: gitEnvironment(this.env), stdio: ["ignore", "pipe", "ignore"], timeout: 10_000 });
+    if (run.error || run.status !== 0) return null;
+    return cloneRemoteName(key, remoteNamesIn(run.stdout.toString("utf8")));
+  }
+
+  /** A clone's instance (storage-31), its remote's name as `remoteName`
+   * gives it: the origin of the instance whose folder its key lies in —
+   * one `home.yaml` lists, or the origin it records — else the one the
+   * instances migration's deferred move of it names, else the listed
+   * instance whose folder names its remote; null for a clone local only. */
+  cloneInstance(key: string, remoteName: string | null): string | null {
+    return instanceOfClone(this.home, this.deferredMoves(), key, () => remoteName);
   }
 
   /** Called before a project's pair is forgotten, with its working
@@ -681,7 +727,7 @@ export class Store {
   }
 
   private projectInfo(repository: SpexRepository, path: string): ProjectInfo {
-    const { group, name } = splitKey(repository.key);
+    const { instance, group, name } = splitKey(repository.key);
     let registeredAt = 0;
     try { const stat = statSync(repository.dir); registeredAt = Math.round(stat.birthtimeMs || stat.ctimeMs); } catch { registeredAt = 0; }
     return {
@@ -689,7 +735,9 @@ export class Store {
       path,
       name: this.readProjectFile(repository).file?.name ?? (repository.key === this.homeFile.own() ? this.homeFile.ownName : basename(path)),
       registeredAt,
-      repository: { key: repository.key, name, group, own: group === this.homeFile.ownName },
+      // Your own group's folder lies outside every instance's: a namespace
+      // at an instance bearing its name is not it (DR-127).
+      repository: { key: repository.key, name, group, own: instance === null && group === this.homeFile.ownName },
     };
   }
 
@@ -1449,20 +1497,52 @@ export class Store {
     return this.getProject(repository.key)!;
   }
 
-  /** The account a sign-in read, written into `home.yaml` (storage-2). */
-  signIn(account: { id: string; login: string; displayName: string | null }): void {
+  /** The account a sign-in at an instance read, written into that
+   * origin's entry in `home.yaml` — appended after the listed ones where
+   * none stands, signed in again where one does (storage-2). */
+  signIn(origin: string, account: { id: string; login: string; displayName: string | null }): void {
     this.assertProjectsWritable();
-    this.homeFile.signIn(account);
+    this.homeFile.signIn(origin, account);
     this.saveHome();
   }
 
-  /** The credential went; the account stays, marked signed out
-   * (git-host-4, git-host-10). */
-  signOut(): void {
+  /** A listed instance's display name as its last read named it
+   * (storage-2), written only where it changed; a home that does not
+   * read keeps it unwritten until a later read. */
+  setDisplayName(origin: string, displayName: string): void {
     this.refreshHome();
     if (this.homeProblem) return;
-    this.homeFile.signOut();
+    const entry = this.homeFile.instance(origin);
+    if (!entry || entry.displayName === displayName) return;
+    this.homeFile.setDisplayName(origin, displayName);
     this.saveHome();
+  }
+
+  /** This device's user name as your own group's folder name: the name a
+   * new home's folder takes, which a sign-in renames while the folder
+   * still bears it (storage-2, space-59). */
+  deviceOwnName(): string {
+    return this.options.own ?? defaultOwnName(this.env);
+  }
+
+  /** An instance's credential went — the default instance's where none
+   * is named; its account stays, marked signed out (git-host-4,
+   * git-host-10). */
+  signOut(origin?: string): void {
+    this.refreshHome();
+    if (this.homeProblem) return;
+    this.homeFile.signOut(origin);
+    this.saveHome();
+  }
+
+  /** A signed-out instance's entry removed from `home.yaml` (space-82,
+   * storage-2); one still signed in is refused, its entry kept, as
+   * InstanceRefused. False where the home listed none at that origin. */
+  forget(origin: string): boolean {
+    this.assertProjectsWritable();
+    const removed = this.homeFile.forget(origin);
+    if (removed) this.saveHome();
+    return removed;
   }
 
   /**

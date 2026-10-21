@@ -112,7 +112,9 @@ test("space-37: setting a remote turns a repository reachable, refuses malformed
   const home = await startHome("remote");
   t.after(() => home.stop());
   const { key, clone } = await addFolder(home, home.projectDir);
-  await home.client.expectError("space.fetch", { repository: key }, "invalid_request", /Sign in first/);
+  // A clone no instance holds reaches one by a group picked for it
+  // (space-11).
+  await home.client.expectError("space.fetch", { repository: key }, "invalid_request", /^Pick a group first$/);
   await home.client.expectError("space.sync", { repository: "tester/nowhere-spex" }, "not_found", /no spex repository/);
   const bare = bareRepo();
   const set = await home.client.expectOk("space.remote.set", { repository: key, url: bare });
@@ -134,7 +136,7 @@ test("space-37: setting a remote turns a repository reachable, refuses malformed
   assert.equal(git(clone, "remote", "get-url", "origin"), other);
   const cleared = repositoryOf(await home.client.expectOk("space.remote.set", { repository: key, url: null }), key);
   assert.equal(cleared.state, "local-only");
-  await home.client.expectError("space.sync", { repository: key }, "invalid_request", /Sign in first/);
+  await home.client.expectError("space.sync", { repository: key }, "invalid_request", /^Pick a group first$/);
 });
 
 test("space-37: the first sync pushes spex to the empty host, sets the upstream and records sync:<repository>:last", async (t) => {
