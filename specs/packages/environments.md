@@ -393,6 +393,7 @@ When an integration suite, through a real core on a scratch home signed in to tw
 - the orgs asked of the second's registry are read with the second's token [[environments-27](#environments-27)];
 - a publish from the second's project lands at the second's registry and one from the local-only project at the first's, and once the second is signed out, a publish from its project is refused as not signed in there [[environments-10](#environments-10)] [[environments-17](#environments-17)];
 - with the first's registry answering `token_revoked` to the first's tokens, a resolution in the local-only project signs the first instance alone out, the second staying signed in and its project's resolution and install succeeding [[environments-12](#environments-12)];
+- with the first signed out and your own group's own repository following the second by its remote, a start finding your own group's `spex.yaml` and `spex.lock` gone requests the built-in spec package there, its lock recording the second's origin [[environments-11](#environments-11)];
 - the first then forgotten, your own group's environment, whose own repository was created at the first and now syncs with the second, resolves at the second's registry, its lock recording the second's origin, and a publish from it lands there [[environments-5](#environments-5)] [[environments-10](#environments-10)].
 
 ## References

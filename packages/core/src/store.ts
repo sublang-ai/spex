@@ -23,6 +23,7 @@ import {
   writeFileSync,
   type Dirent,
 } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { createSessionStore, isUncertainTurnDiscardable, validateSessionContext, type SharedSessionStore, type SessionManifest, type SessionRecovery } from "@sublang/playbook/session-store";
 import { acquireRootLease, assertFormerLeaseReleased, type RootLease } from "./root-lease.js";
@@ -34,10 +35,11 @@ import {
 } from "./app-storage.js";
 import { occupied } from "./clone-moves.js";
 import { readJsonFile, StorageFormatError, VersionConflictError, writeApplicationFile } from "./files.js";
-import { defaultOwnName, Home, repositoryNameFor, splitKey, WORKSPACE_DEPTH } from "./home.js";
+import { cloneRemoteName, defaultOwnName, Home, REMOTE_URL_KEYS, remoteNamesIn, repositoryNameFor, splitKey, WORKSPACE_DEPTH } from "./home.js";
 import { folderRemote, needsGroupsMigration, migrateFormerHome } from "./migrate-home.js";
 import { deferredMoves, migrateInstances, needsInstancesMigration, settleDeferred, type DeferredMove } from "./migrate-instances.js";
-import { initializeClone } from "./storage-git.js";
+import { gitEnvironment, initializeClone } from "./storage-git.js";
+import { instanceFolder, isInstanceFolder } from "./instance.js";
 import { seedConfig } from "./config.js";
 import { createRequire } from "node:module";
 import { i18n } from "./i18n.js";
@@ -309,6 +311,22 @@ function writeAtomic(file: string, text: string): void {
 function readJson<T>(file: string): T | undefined {
   if (!existsSync(file)) return undefined;
   return JSON.parse(readFileSync(file, "utf8")) as T;
+}
+
+/** A clone's instance (storage-31): the origin of the instance whose
+ * folder its key lies in — one `home.yaml` lists, or the origin it
+ * records — else the one a deferred move of it names under its
+ * destination, else the listed instance whose folder names its remote,
+ * read only where neither names one; null for a clone local only. */
+function instanceOfClone(home: Home, deferred: readonly DeferredMove[], key: string, remoteName: () => string | null): string | null {
+  const byKey = home.instanceOfKey(key);
+  if (byKey) return byKey.origin;
+  const move = deferred.find((entry) => entry.from === key);
+  const byMove = move ? home.instanceOfKey(move.to) : undefined;
+  if (byMove) return byMove.origin;
+  const name = remoteName();
+  if (name === null || !isInstanceFolder(name)) return null;
+  return home.instances().find((entry) => instanceFolder(entry.origin) === name)?.origin ?? null;
 }
 
 /** The marker written beside a legacy store once a root imported it
@@ -616,17 +634,37 @@ export class Store {
     this.initializeRepository(dir, generatedBootstrap);
   }
 
-  /** The caller's filling of a clone, at the registry of the instance
-   * its key lies under, else the default instance's (environments-5);
-   * its failure leaves the clone as it is, reported, never failing the
-   * open. */
+  /** The caller's filling of a clone, at the registry of its instance —
+   * read from its key, a deferred move or the remote its Git names now,
+   * so your own group's is the one its remote names (storage-31) — else
+   * the default instance's (environments-5, environments-11); its
+   * failure leaves the clone as it is, reported, never failing the open. */
   private prepareRepository(dir: string, key: string): boolean {
     try {
-      const registryOrigin = this.homeFile.instanceOfKey(key)?.origin ?? this.homeFile.defaultInstance().origin;
+      const registryOrigin = instanceOfClone(this.homeFile, this.deferred, key, () => this.remoteNameOf(dir, key)) ?? this.homeFile.defaultInstance().origin;
       this.options.prepareRepository?.(dir, key, registryOrigin);
       return true;
     }
     catch (error) { console.error(`spex: ${key} was not prepared: ${error instanceof Error ? error.message : String(error)}`); return false; }
+  }
+
+  /** The name of the remote a clone syncs with (DR-127), as its Git
+   * configuration holds it now; none for a folder that is no repository
+   * of its own yet, or whose configuration Git cannot read. */
+  private remoteNameOf(dir: string, key: string): string | null {
+    if (!existsSync(join(dir, ".git"))) return null;
+    const run = spawnSync("git", ["-C", dir, "config", "-z", "--get-regexp", REMOTE_URL_KEYS], { env: gitEnvironment(this.env), stdio: ["ignore", "pipe", "ignore"], timeout: 10_000 });
+    if (run.error || run.status !== 0) return null;
+    return cloneRemoteName(key, remoteNamesIn(run.stdout.toString("utf8")));
+  }
+
+  /** A clone's instance (storage-31), its remote's name as `remoteName`
+   * gives it: the origin of the instance whose folder its key lies in —
+   * one `home.yaml` lists, or the origin it records — else the one the
+   * instances migration's deferred move of it names, else the listed
+   * instance whose folder names its remote; null for a clone local only. */
+  cloneInstance(key: string, remoteName: string | null): string | null {
+    return instanceOfClone(this.home, this.deferredMoves(), key, () => remoteName);
   }
 
   /** Called before a project's pair is forgotten, with its working

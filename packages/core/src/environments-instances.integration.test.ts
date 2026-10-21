@@ -42,7 +42,7 @@ import {
 import type { EnvironmentState } from "./protocol.js";
 import { credentialsPath, fileCredentialStore, GitHostClient, type StoredCredential } from "./git-host.js";
 import { holdingFetch } from "./testing/holding-fetch.js";
-import { clonePath, createSpaceHarness, hostKey, instanceOf, repositoryOf, rowsOf } from "./testing/space-harness.js";
+import { clonePath, createSpaceHarness, hostFolder, hostKey, instanceOf, ownClone, repositoryOf, rowsOf } from "./testing/space-harness.js";
 import type { StandinHost } from "./testing/standin-host.js";
 import { makeRelease, startStandinRegistry, type StandinRegistry, type StandinRegistryRequest } from "./testing/standin-registry.js";
 
@@ -751,4 +751,47 @@ test("environments-34, environments-27: the orgs asked for the second's project 
   assert.equal((await home.client.expectOk("draft.defaults", { projectId: local })).org, "first-org");
   assert.deepEqual(orgsAsked(R1, one), [["GET", first.url, LOGIN, true]]);
   assert.deepEqual(orgsAsked(R2, two), []);
+});
+
+test("environments-34, environments-11, storage-31: with the first, the default instance, signed out and your own group's own repository following the second by its remote, a start finding your own group's environment gone requests the built-in spec package there, its lock recording the second's origin", { timeout: 300_000 }, async (t) => {
+  const { first, second, home } = await twoInstances(t, "own-prepare");
+
+  // The first signed out, the second read again: your own group's own
+  // repository, created at the first, follows the second — the second
+  // lists it over the shared Git backend — its remote renamed to the
+  // second's folder by its next sync (space-60, storage-34).
+  await signOut(home, first);
+  const before = instanceOf(await home.client.expectOk("space.get", {}), second.url)?.readAt ?? 0;
+  const mark = home.client.mark();
+  await home.client.expectOk("space.refresh", {});
+  await home.client.waitSpace(mark, (space) => {
+    const at = instanceOf(space, second.url);
+    return at?.read.phase === "idle" && (at.readAt ?? 0) > before;
+  }, 30_000);
+  const synced = await home.client.settle("space.sync", { repository: HOST_OWN }, 30_000);
+  assert.deepEqual([synced.sync.phase, synced.instance, synced.key], ["done", second.url, HOST_OWN], JSON.stringify(synced.sync));
+  assert.deepEqual(git(ownClone(home.dataDir), "remote").split("\n"), [hostFolder(second)]);
+
+  // Stopped, its environment taken away, then started again: the first
+  // is still the home's default instance, signed out, and your own
+  // group's own repository reads as the second's by its remote
+  // (storage-31).
+  await home.stop();
+  for (const file of ["spex.yaml", "spex.lock"]) rmSync(join(ownClone(home.dataDir), file));
+  const again = await startHome("own-prepare", { dataDir: home.dataDir, host: first, project: false });
+  t.after(() => again.stop());
+  const state = await again.client.expectOk("space.get", {});
+  assert.equal(state.defaultInstance, first.url);
+  assert.deepEqual([instanceOf(state, first.url)?.signedIn, instanceOf(state, second.url)?.signedIn], [false, true]);
+  const own = rowsOf(state).find((row) => row.key === HOST_OWN);
+  assert.ok(own, `${HOST_OWN} is listed`);
+  assert.equal(own.instance, second.url);
+
+  // The start requests the built-in spec package in your own group's
+  // environment again, locked at the registry of the instance its
+  // remote names, the second's, not the default instance's
+  // (environments-11).
+  assert.ok(parseRequests(readFileSync(join(ownClone(again.dataDir), "spex.yaml"), "utf8")).packages[BUILTIN_PACKAGE_NAME], "the built-in is requested");
+  assert.equal(registryOf(lockOf(again, HOST_OWN), BUILTIN_PACKAGE_NAME), second.url);
+  await environmentOf(again, HOST_OWN, (candidate) => installedFrom(candidate, BUILTIN_PACKAGE_NAME, second.url));
 });

@@ -24,7 +24,7 @@ import {
   anotherAccountError, CredentialChanged, HostError, SignInBusyError, type BrowserSignIn, type DeviceSignIn, type GitHostClient, type HostAccount, type HostGroup,
   type HostMember, type HostRepository, type MembersTarget,
 } from "./git-host.js";
-import { InstanceRefused, kebab, splitKey, type HomeAccount } from "./home.js";
+import { cloneRemoteName, InstanceRefused, kebab, REMOTE_URL_KEYS, remoteNamesIn, splitKey, type HomeAccount } from "./home.js";
 import { i18n } from "./i18n.js";
 import { canonicalOrigin, instanceFolder, instanceSegmentOf, isInstanceFolder, OriginRefused, parseOrigin, type OriginRefusal } from "./instance.js";
 import { isDeferredClone } from "./migrate-instances.js";
@@ -155,41 +155,11 @@ interface CloneFacts { remote: string | null; id: string | null; remoteName: str
  * (storage-31): what the URL rules of space-15 read. */
 type RemoteFacts = Pick<CloneFacts, "remote" | "id"> & { remoteName?: string | null };
 
-/** The Git configuration keys naming each remote's URL. */
-const REMOTE_URL_KEYS = "^remote\\..+\\.url$";
-
 /** The names of the remotes a clone's configuration gives a URL, read
  * from `git config -z --get-regexp` over REMOTE_URL_KEYS: none where
- * Git found no key. A name may hold dots, as an instance's folder does,
- * so it is what lies between `remote.` and `.url`. */
+ * Git found no key. */
 function remoteNames(run: GitRun): string[] {
-  if (run.code !== 0) return [];
-  const names: string[] = [];
-  for (const entry of run.stdout.toString("utf8").split("\0")) {
-    const key = entry.split("\n", 1)[0];
-    if (!key.startsWith("remote.") || !key.endsWith(".url")) continue;
-    const name = key.slice("remote.".length, -".url".length);
-    if (name !== "" && !names.includes(name)) names.push(name);
-  }
-  return names;
-}
-
-/** The remote a clone syncs with, among the names its remotes bear
- * (DR-127): its key's instance folder where a remote of that name
- * stands; else `origin` — a remote the reader named, or one a clone
- * made before its remote took its instance's name; else the one remote
- * named by an instance's folder — for a clone keyed in your own group's
- * folder, which names no instance, your own group's own repository's or
- * that of a clone a pick left there (storage-35, storage-31); for one
- * keyed under an instance, the remote a follow half made left named by
- * another instance's folder, which its next sync renames (space-60);
- * none otherwise. */
-function cloneRemoteName(key: string, names: readonly string[]): string | null {
-  const instance = splitKey(key).instance;
-  if (instance !== null && names.includes(instance)) return instance;
-  if (names.includes("origin")) return "origin";
-  const folders = names.filter(isInstanceFolder);
-  return folders.length === 1 ? folders[0] : null;
+  return run.code === 0 ? remoteNamesIn(run.stdout.toString("utf8")) : [];
 }
 
 /** The name the host's remote takes in a clone (DR-127, storage-34):
@@ -2643,15 +2613,7 @@ export class SpaceManager {
    * instance whose folder names its remote; null where none does, the
    * clone being local only. */
   cloneInstance(key: string, remoteName: string | null): string | null {
-    const store = this.host.store;
-    const home = store.home;
-    const byKey = home.instanceOfKey(key);
-    if (byKey) return byKey.origin;
-    const deferred = store.deferredMoves().find((move) => move.from === key);
-    const byMove = deferred ? home.instanceOfKey(deferred.to) : undefined;
-    if (byMove) return byMove.origin;
-    if (remoteName === null || !isInstanceFolder(remoteName)) return null;
-    return home.instances().find((entry) => instanceFolder(entry.origin) === remoteName)?.origin ?? null;
+    return this.host.store.cloneInstance(key, remoteName);
   }
 
   /** The instance at an origin, in any spelling of it (DR-127): the one
