@@ -39,10 +39,10 @@ import {
   type RegistrySourceLock,
   type Resolution,
 } from "./environment/index.js";
-import type { EnvironmentState } from "./protocol.js";
+import type { EnvironmentState, GroupsState, RepositoryState } from "./protocol.js";
 import { credentialsPath, fileCredentialStore, GitHostClient, type StoredCredential } from "./git-host.js";
 import { holdingFetch } from "./testing/holding-fetch.js";
-import { clonePath, createSpaceHarness, hostFolder, hostKey, instanceOf, ownClone, repositoryOf, rowsOf } from "./testing/space-harness.js";
+import { clonePath, createSpaceHarness, hostFolder, hostKey, instanceOf, ownClone, rowsOf } from "./testing/space-harness.js";
 import type { StandinHost } from "./testing/standin-host.js";
 import { makeRelease, startStandinRegistry, type StandinRegistry, type StandinRegistryRequest } from "./testing/standin-registry.js";
 
@@ -92,6 +92,14 @@ async function environmentOf(home: Home, key: string, check: (state: Environment
  * its lock records it from. */
 const installedFrom = (state: EnvironmentState, name: string, registry: string): boolean =>
   state.packages.some((pkg) => pkg.name === name && pkg.installed && pkg.source.detail === registry);
+
+/** A repository's row in the Groups state, under your own group or an
+ * instance's heading (space-30), asserted to stand there. */
+function rowOf(state: GroupsState, key: string): RepositoryState {
+  const row = rowsOf(state).find((candidate) => candidate.key === key);
+  assert.ok(row, `${key} is listed under your own group or an instance's heading`);
+  return row;
+}
 
 /** A clone's `spex.lock` as written. */
 function lockOf(home: Home, key: string): Lock {
@@ -190,7 +198,7 @@ async function twoInstances(t: TestContext, name: string, registryFetch?: typeof
   await environmentOf(home, south, (state) => installedFrom(state, BUILTIN_PACKAGE_NAME, second.url));
   assert.equal(registryOf(lockOf(home, south), BUILTIN_PACKAGE_NAME), second.url);
   const { key: local } = await addFolder(home, gitFolder("local"));
-  assert.equal(repositoryOf(await home.client.expectOk("space.get", {}), local).instance, null, "a project with no instance");
+  assert.equal(rowOf(await home.client.expectOk("space.get", {}), local).instance, null, "a project with no instance");
   await environmentOf(home, local, (state) => installedFrom(state, BUILTIN_PACKAGE_NAME, first.url));
   return { R1, R2, first, second, home, south, local };
 }
@@ -400,7 +408,7 @@ test("environments-34, environments-12, git-host-4: with the first's registry an
   assert.deepEqual(receivedFor(R1, one, "acme/open"), [["/api/v1/packages/acme/open", first.url, LOGIN, true]]);
   assert.deepEqual(await signedIn(), [[false, true], [true, false]]);
   assert.deepEqual(Object.keys(pairs()), [second.url]);
-  assert.equal(repositoryOf(await home.client.expectOk("space.get", {}), south).state, "reachable");
+  assert.equal(rowOf(await home.client.expectOk("space.get", {}), south).state, "reachable");
 
   // The second's project resolves and installs at the second's registry
   // with the second's token, the private release reading there.
@@ -684,7 +692,7 @@ test("environments-34, environments-10, environments-17, environments-5: a publi
     return at?.read.phase === "idle" && (at.readAt ?? 0) > before;
   }, 30_000);
   const forgotten = await forget(home, first);
-  assert.equal(repositoryOf(forgotten, HOST_OWN).instance, second.url);
+  assert.equal(rowOf(forgotten, HOST_OWN).instance, second.url);
   const synced = await home.client.settle("space.sync", { repository: HOST_OWN }, 30_000);
   assert.deepEqual([synced.sync.phase, synced.instance, synced.key], ["done", second.url, HOST_OWN], JSON.stringify(synced.sync));
 
@@ -783,9 +791,7 @@ test("environments-34, environments-11, storage-31: with the first, the default 
   const state = await again.client.expectOk("space.get", {});
   assert.equal(state.defaultInstance, first.url);
   assert.deepEqual([instanceOf(state, first.url)?.signedIn, instanceOf(state, second.url)?.signedIn], [false, true]);
-  const own = rowsOf(state).find((row) => row.key === HOST_OWN);
-  assert.ok(own, `${HOST_OWN} is listed`);
-  assert.equal(own.instance, second.url);
+  assert.equal(rowOf(state, HOST_OWN).instance, second.url);
 
   // The start requests the built-in spec package in your own group's
   // environment again, locked at the registry of the instance its

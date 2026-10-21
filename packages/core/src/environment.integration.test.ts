@@ -194,6 +194,10 @@ function snapshot(dir: string): Record<string, string> {
   return out;
 }
 
+/** A registry's folder under `cache/registry/`: its scheme's, holding
+ * its instance's folder (environments-7). */
+const cacheFolderOf = (url: string): string => join(new URL(url).protocol.slice(0, -1), instanceFolder(url));
+
 const requestsYaml = (packages: Record<string, unknown>, language?: string): string =>
   `# The environment's requests.\nformat: 1\n${language ? `language: ${language}\n` : ""}packages:\n${Object.entries(packages)
     .map(([name, request]) => `  ${name}: ${JSON.stringify(request)}\n`).join("")}`;
@@ -599,7 +603,7 @@ test("environments-21: files land with bytes and flags through a store keeping e
   // Half the files or fewer missing: fetched as raw files.
   assert.ok(registry.script.requests.includes("GET /acme/kit/1.0.0/skills/en/tidy/other.txt"), JSON.stringify(registry.script.requests));
   assert.equal(rebuilt.unchanged, false);
-  assert.ok(existsSync(join(home.cache, "registry", instanceFolder(registry.url), "acme", "kit", "1.0.0.json")));
+  assert.ok(existsSync(join(home.cache, "registry", cacheFolderOf(registry.url), "acme", "kit", "1.0.0.json")));
   assert.deepEqual(snapshot(join(home.clone, "packages")), before);
 
   // A changed spex.yaml marks the lock stale: nothing new is installed.
@@ -1212,6 +1216,48 @@ test("environments-5: a resolution keeps the registry its lock records where it 
   }
 });
 
+test("environments-5, environments-3: a lock's registry is kept only as an instance's canonical origin — another spelling of an origin kept as that origin, a path, a file URL, a user or no URL at all giving way to the registry asked", async () => {
+  const scratch = scratchDir("spex-keep-origin-");
+  const [r1, r2] = await ownRegistries(scratch, 2);
+  try {
+    const one = new RegistryClient({ url: r1.url });
+    await publishRelease(one, await makeRelease(join(scratch, "same"), manifestOf("acme/same", "1.0.0", { same: { kind: "skill", language: "en" } }), skillFiles("same")));
+    const home = makeHome();
+    const text = requestsYaml({ "acme/same": { version: "^1.0.0" } });
+    const resolveAt = async (previous?: Lock): Promise<Lock> => locked(await resolve({
+      requests: parseRequests(text), requestsText: text, registry: one, pathRoot: null, git: gitSource(home.cache), ...(previous ? { previous } : {}),
+    }));
+    const first = await resolveAt();
+    assert.equal(registrySourceOf(first, "acme/same").registry, r1.url);
+    /** The same lock, its release recorded at `registry`. */
+    const recording = (registry: string): Lock => {
+      const copy = structuredClone(first);
+      (copy.packages["acme/same"]!.source as RegistrySourceLock).registry = registry;
+      return copy;
+    };
+    const port = new URL(r2.url).port;
+    r2.script.clearRequests();
+
+    // Another spelling of the second's origin, for the release the first
+    // reproduces at that version and checksum, is kept as the second's
+    // canonical origin (environments-5, environments-3).
+    for (const spelling of [`HTTP://127.0.0.1:${port}/`, `http://127.0.0.1:0${port}`]) {
+      const kept = await resolveAt(recording(spelling));
+      assert.deepEqual(registrySourceOf(kept, "acme/same"), { ...registrySourceOf(first, "acme/same"), registry: r2.url }, spelling);
+    }
+
+    // A recorded registry that names no origin is not kept: the
+    // resolution records the registry it asked (environments-3).
+    for (const recorded of [`${r2.url}/api/v1`, "file:///srv/registry", `http://reader@127.0.0.1:${port}`, "_"]) {
+      const asked = await resolveAt(recording(recorded));
+      assert.deepEqual(registrySourceOf(asked, "acme/same"), registrySourceOf(first, "acme/same"), recorded);
+    }
+    assert.deepEqual(r2.script.requests, [], "the recorded registry is asked nothing");
+  } finally {
+    await Promise.all([r1.close(), r2.close()]);
+  }
+});
+
 test("environments-7: an install takes each registry package from the first registry serving its locked checksum", async () => {
   const scratch = scratchDir("spex-candidates-");
   const [r1, r2, r3] = await ownRegistries(scratch, 3);
@@ -1276,11 +1322,11 @@ test("environments-7: an install takes each registry package from the first regi
 
     // The cache holds each registry's answer under that registry's folder,
     // and each archive under the checksum it was verified at.
-    const resourceAt = (registry: StandinRegistry, cache: string, name: string): string => join(cache, "registry", instanceFolder(registry.url), ...name.split("/"), "1.0.0.json");
+    const resourceAt = (registry: StandinRegistry, cache: string, name: string): string => join(cache, "registry", cacheFolderOf(registry.url), ...name.split("/"), "1.0.0.json");
     const archivesOf = (cache: string, name: string): string[] => readdirSync(join(cache, "archives", ...name.split("/"), "1.0.0")).sort();
     for (const [registry, name] of [[r1, "acme/kept"], [r3, "acme/kept"], [r3, "acme/both"]] as const) assert.ok(existsSync(resourceAt(registry, home.cache, name)), `${registry.url} ${name}`);
     assert.notEqual(JSON.parse(readFileSync(resourceAt(r3, home.cache, "acme/kept"), "utf8")).checksum, kept.checksum);
-    assert.ok(!existsSync(join(home.cache, "registry", instanceFolder(r2.url))), "a registry lacking the release leaves nothing cached");
+    assert.ok(!existsSync(join(home.cache, "registry", cacheFolderOf(r2.url))), "a registry lacking the release leaves nothing cached");
     assert.deepEqual(archivesOf(home.cache, "acme/kept"), [`${kept.checksum}.tgz`]);
     assert.deepEqual(archivesOf(home.cache, "acme/both"), [`${both.checksum}.tgz`]);
 
@@ -1326,6 +1372,68 @@ test("environments-7: an install takes each registry package from the first regi
     assert.deepEqual(archivesOf(home.cache, "acme/kept"), [`${kept.checksum}.tgz`]);
   } finally {
     await Promise.all([r1.close(), r2.close(), r3.close()]);
+  }
+});
+
+test("environments-7: two registries at one loopback host and port, apart by scheme alone, cache their answers apart, so one's answer never counts for the other", async () => {
+  const scratch = scratchDir("spex-scheme-cache-");
+  const [r1, r2] = await ownRegistries(scratch, 2);
+  try {
+    const one = new RegistryClient({ url: r1.url });
+    const two = new RegistryClient({ url: r2.url });
+    // The first holds the release the lock records; the second another
+    // release at that version, answering as `https` at the first's host
+    // and port, so the two registries' instances share one folder.
+    const manifest = manifestOf("acme/kept", "1.0.0", { kept: { kind: "skill", language: "en" } });
+    await publishRelease(one, await makeRelease(join(scratch, "kept"), manifest, skillFiles("kept")));
+    await publish(manifest, skillFiles("kept", "en", "another release"), two);
+    const secure = `https://127.0.0.1:${new URL(r1.url).port}`;
+    assert.equal(instanceFolder(secure), instanceFolder(r1.url));
+    const apart: RegistrySource = {
+      url: secure,
+      index: (name) => two.index(name),
+      version: (name, version) => two.version(name, version),
+      file: (name, version, path) => two.file(name, version, path),
+      archive: (name, version) => two.archive(name, version),
+      publish: (name, version, tgz) => two.publish(name, version, tgz),
+      search: (query) => two.search(query),
+    };
+
+    const text = requestsYaml({ "acme/kept": { version: "1.0.0" } });
+    const home = makeHome();
+    const lock = locked(await resolveText(home.clone, text, { through: one }));
+    await writeLock(join(home.clone, "spex.lock"), lock);
+    const kept = registrySourceOf(lock, "acme/kept");
+    const installAt = (at: Home) => installAsOnDisk({
+      cloneDir: at.clone, lock, store: at.store, cache: at.cache, registry: one, git: gitSource(at.cache), pathRoot: null,
+      registries: () => [apart, one],
+    });
+    const clear = (): void => { for (const registry of [r1, r2]) registry.script.clearRequests(); };
+    const version = "GET /api/v1/packages/acme/kept/1.0.0";
+
+    // Asked first, the `https` registry answers another checksum and the
+    // `http` one serves the release; each answer is cached apart, under
+    // its scheme's folder.
+    clear();
+    assert.deepEqual((await installAt(home)).installed, ["acme/kept"]);
+    const cachedAt = (url: string): string => (JSON.parse(readFileSync(join(home.cache, "registry", cacheFolderOf(url), "acme", "kept", "1.0.0.json"), "utf8")) as { checksum: string }).checksum;
+    assert.equal(cachedAt(r1.url), kept.checksum);
+    assert.notEqual(cachedAt(secure), kept.checksum);
+    assert.deepEqual(r2.script.requests, [version]);
+
+    // A home sharing that cache: the `https` registry's own answer, at
+    // another checksum, has it asked again, the `http` one's answer and
+    // archive serving with no request; the `http` answer never counts for
+    // the `https` registry.
+    clear();
+    const sharing = { ...makeHome(), cache: home.cache };
+    mkdirSync(sharing.clone, { recursive: true });
+    for (const file of ["spex.yaml", "spex.lock"]) cpSync(join(home.clone, file), join(sharing.clone, file));
+    assert.deepEqual((await installAt(sharing)).installed, ["acme/kept"]);
+    assert.deepEqual(r2.script.requests, [version]);
+    assert.deepEqual(r1.script.requests, []);
+  } finally {
+    await Promise.all([r1.close(), r2.close()]);
   }
 });
 

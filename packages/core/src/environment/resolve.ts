@@ -28,6 +28,7 @@ import {
   type Release,
   type ReleaseFile,
 } from "./format.js";
+import { canonicalOrigin } from "../instance.js";
 import { specExportName } from "./exports.js";
 import type { GitCredential, GitSource } from "./git-source.js";
 import { isRegistrySource, manifestRequires, type Lock, type LockedArtifact, type LockedFile, type Resolution, type SourceLock } from "./lock.js";
@@ -188,10 +189,13 @@ function usableEntry(entry: VersionIndexEntry): boolean {
 
 /** The registry a registry package keeps from the lock being replaced:
  * the one that lock records for it where it records the same version
- * and checksum (environments-5), else none. */
+ * and checksum (environments-5), as its instance's canonical origin
+ * (environments-3); none where it records another release, or a
+ * registry that names no origin. */
 function keptRegistry(previous: Lock | undefined, name: string, version: string, checksum: string): string | undefined {
   const source = previous?.packages[name]?.source;
-  return source !== undefined && isRegistrySource(source) && source.version === version && source.checksum === checksum ? source.registry : undefined;
+  if (source === undefined || !isRegistrySource(source) || source.version !== version || source.checksum !== checksum) return undefined;
+  try { return canonicalOrigin(source.registry); } catch { return undefined; }
 }
 
 /** Resolve requests into a lock (environments-5, environments-6). */

@@ -44,7 +44,7 @@ import { dirname, join, relative } from "node:path";
 import { ENGINE_LINKS_EXCLUDE, prepareArtifactEngine, provisionEngineLinks } from "../compile.js";
 import { seedServes } from "./builtins.js";
 import { fileVersion, VersionConflictError, type FileVersion } from "../files.js";
-import { instanceFolder } from "../instance.js";
+import { instanceFolder, parseOrigin } from "../instance.js";
 import { BUILTIN_PACKAGE_NAME, writeExcludeBlock } from "./exports.js";
 import { listReleaseFiles, parseManifestText, portablePathIssues, sha256Hex, type Manifest } from "./format.js";
 import type { GitCredential, GitSource } from "./git-source.js";
@@ -221,11 +221,13 @@ function assertCurrent(options: InstallOptions): void {
 
 const isChecksum = (value: string): boolean => /^[0-9a-f]{64}$/.test(value);
 
-/** A registry's folder under `cache/registry/`: its instance's folder
- * where its URL is an instance's origin, else one from its URL's digest,
- * which no instance's folder begins as. */
+/** A registry's folder under `cache/registry/`: its scheme's, holding
+ * its instance's folder, where its URL is an instance's origin — so two
+ * origins at one loopback host and port, apart by scheme alone, never
+ * share one — else one from its URL's digest, which no scheme's name
+ * begins as. */
 function registryFolder(url: string): string {
-  try { return instanceFolder(url); } catch { return `_${sha256Hex(url).slice(0, 32)}`; }
+  try { return join(parseOrigin(url).scheme, instanceFolder(url)); } catch { return `_${sha256Hex(url).slice(0, 32)}`; }
 }
 
 /** Where a registry's version resource is cached: per registry, since
