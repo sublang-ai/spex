@@ -567,7 +567,9 @@ test("environments-21: files land with bytes and flags through a store keeping e
 
   // Atomic: a failure between fetch and replace leaves the last files whole.
   const newer = locked(await resolveText(home.clone, requestsYaml({ "acme/kit": { version: "1.1.0" } })));
-  await assert.rejects(installAsOnDisk({ ...base, lock: newer, beforeReplace: () => { throw new Error("power cut"); } }), InstallError);
+  const primaryFailure = new Error("power cut");
+  await assert.rejects(installAsOnDisk({ ...base, lock: newer, beforeReplace: () => { throw primaryFailure; } }),
+    (error: unknown) => error instanceof InstallError && error.cause === primaryFailure);
   assert.deepEqual(snapshot(join(home.clone, "packages")), before);
   assert.deepEqual(existsSync(join(home.cache, "staging")) ? readdirSync(join(home.cache, "staging")) : [], []);
 
@@ -601,6 +603,66 @@ test("environments-21: files land with bytes and flags through a store keeping e
   assert.equal(stale.installed.length, 0);
   assert.ok(stale.stale?.some((reason) => /spex\.yaml changed/.test(reason)));
   assert.deepEqual(snapshot(join(home.clone, "packages")), before);
+});
+
+test("environments-21: obsolete-tree cleanup cannot fail a committed install or prevent its exports", {
+  skip: process.platform === "win32" || process.getuid?.() === 0,
+}, async (t) => {
+  await publish(manifestOf("acme/cleanup-kit", "1.0.0", { tidy: { kind: "skill", language: "en" } }), skillFiles("tidy", "en", "old release"));
+  await publish(manifestOf("acme/cleanup-kit", "1.1.0", { tidy: { kind: "skill", language: "en" } }), skillFiles("tidy", "en", "new release"));
+  const home = makeHome("me/cleanup-spex");
+  const scratch = scratchDir("spex-cleanup-export-");
+  const workingFolder = join(scratch, "project");
+  const { git } = hermeticGit(scratch);
+  git(scratch, ["init", "--quiet", "-b", "main", workingFolder]);
+  const base = { cloneDir: home.clone, store: home.store, cache: home.cache, registry: client, git: gitSource(home.cache), pathRoot: null };
+  const installAndExport = async (lock: Lock) => {
+    const report = await installAsOnDisk({ ...base, lock });
+    await exportEnvironment({ cloneDir: home.clone, lock, workingFolder, userHome: null, agents: ["claude", "codex"], packagesDir: join(home.clone, "packages") });
+    return report;
+  };
+  const first = locked(await resolveText(home.clone, requestsYaml({ "acme/cleanup-kit": { version: "1.0.0" } })));
+  await writeLock(join(home.clone, "spex.lock"), first);
+  await installAndExport(first);
+  const folder = join(home.clone, "packages/acme/cleanup-kit/skills/en/tidy");
+  const oldMode = statSync(folder).mode & 0o777;
+  // Restore only this test's directories, including the moved old tree,
+  // even if an assertion fails before ordinary scratch cleanup runs.
+  const restore = (dir: string): void => {
+    chmodSync(dir, 0o700);
+    for (const name of readdirSync(dir)) {
+      const child = join(dir, name);
+      if (lstatSync(child).isDirectory()) restore(child);
+    }
+  };
+  try {
+    chmodSync(folder, 0o555);
+    const diagnostics = t.mock.method(console, "error", () => {});
+    const next = locked(await resolveText(home.clone, requestsYaml({ "acme/cleanup-kit": { version: "1.1.0" } })));
+    await writeLock(join(home.clone, "spex.lock"), next);
+    const report = await installAndExport(next);
+    assert.deepEqual(report.installed, ["acme/cleanup-kit"]);
+    assert.equal(report.unchanged, false);
+    for (const file of next.packages["acme/cleanup-kit"]!.files) {
+      assert.equal(sha256Hex(readFileSync(join(home.clone, "packages/acme/cleanup-kit", file.path))), file.sha256);
+    }
+    for (const dir of [join(home.clone, "skills"), join(workingFolder, ".claude/skills"), join(workingFolder, ".agents/skills")]) {
+      assert.match(readFileSync(join(dir, "tidy/SKILL.md"), "utf8"), /new release/);
+    }
+    const obsolete = readdirSync(join(home.cache, "trash"));
+    assert.equal(obsolete.length, 1, "the failed garbage collection retains its obsolete tree");
+    const retained = join(home.cache, "trash", obsolete[0]!, "acme/cleanup-kit/skills/en/tidy");
+    assert.match(readFileSync(join(retained, "SKILL.md"), "utf8"), /old release/);
+    assert.equal(statSync(retained).mode & 0o777, 0o555);
+    const diagnostic = diagnostics.mock.calls.map((call) => String(call.arguments[0]))
+      .find((message) => message.includes(join(home.cache, "trash", obsolete[0]!)));
+    assert.ok(diagnostic, "the retained tree is named in the cleanup diagnostic");
+    assert.match(diagnostic, /could not be removed:.*(?:EACCES|EPERM|ENOTEMPTY)/);
+    // The current installation does not inherit the old tree's mode.
+    assert.equal(statSync(folder).mode & 0o777, oldMode);
+  } finally {
+    restore(home.root);
+  }
 });
 
 test("environments-21: a path source is used in place per working folder, missing reported, its manifest change stale", async () => {
