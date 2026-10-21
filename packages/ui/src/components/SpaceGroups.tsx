@@ -683,14 +683,16 @@ function RepositoryRow({
 
   /** Join a repository an instance lists into a folder (space-63), at
    * the instance whose heading the row stands under (space-29), else
-   * the one the row names. */
+   * the one the row names: a row not on this device stands under the
+   * instance whose read lists it. */
   const join = async (folder: string): Promise<void> => {
-    if (!repo.id) return;
+    const at = instance?.origin ?? repo.instance;
+    if (!repo.id || !at) return;
     const key = machineKey;
     setBusy("join");
     setError(undefined);
     try {
-      await spaceJoin(instance?.origin ?? repo.instance ?? groups.defaultInstance, repo.id, folder);
+      await spaceJoin(at, repo.id, folder);
       setAccepted({ op: "join", key });
       setOpened(undefined);
     } catch (cause) {

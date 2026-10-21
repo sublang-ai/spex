@@ -547,6 +547,21 @@ describe("GROUPS: Pick a group at each instance (space-58, space-29)", () => {
       `space-pick-instance-${ORIGIN}`,
     ]);
     expect(within(alone).queryByTestId(`space-pick-repo-${LISTED}`)).toBeNull();
+    cleanup();
+
+    // Signed out of the first while the second is signed in, a clone
+    // keyed under the first offers no pick — the one instance it would
+    // offer is signed out — and a clone in your own group's folder is
+    // offered the second alone (space-58, space-61).
+    commandMock.mockClear();
+    await renderGroups(signedOutAt(ORIGIN, {}, pickHome()), { open: false });
+    expect(screen.getByTestId(`space-repo-state-${KEY}`).textContent).toBe("On this device only");
+    expect(screen.queryByTestId(`space-row-pick-${KEY}`)).toBeNull();
+    const second = openPicker(GAMMA);
+    expect(within(second).getAllByTestId(/^space-pick-instance-/).map((each) => each.dataset.testid)).toEqual([
+      `space-pick-instance-${SECOND}`,
+    ]);
+    expect(within(section(SECOND)).getByTestId(`space-pick-repo-${LISTED}`)).toBeTruthy();
   });
 });
 
@@ -857,6 +872,36 @@ describe("GROUPS: Add instance… at the list's foot (space-1, space-3, space-28
     expect(screen.queryByTestId("space-add-card")).toBeNull();
     await waitFor(() => expect(add().disabled).toBe(false));
     expect(calls("space.signin.start")).toHaveLength(3);
+  });
+
+  test("space-3: Sign in at the default instance's origin, the field unedited, signs that instance in again, and its flow landing closes the card, focus on that heading's Sign out", async () => {
+    commandMock.mockImplementation(async (type: string, fields?: Record<string, unknown>) => {
+      if (type !== "space.signin.start") return answer(type, fields);
+      return { flow: "device", userCode: "QRST-UVWX", verificationUri: `${ORIGIN}/login/device?user_code=QRST-UVWX`, expiresAt: NOW + 15 * MIN };
+    });
+    await renderGroups(twoInstances(), { open: false });
+    fireEvent.click(add());
+    // The field holds the default instance's origin, signed in already;
+    // Sign in starts there as it stands (space-3, git-host-2).
+    expect(field().value).toBe(ORIGIN);
+    within(card()).getByTestId("space-signin").focus();
+    fireEvent.click(within(card()).getByTestId("space-signin"));
+    const link = (await within(card()).findByTestId("space-signin-link")) as HTMLAnchorElement;
+    expect(calls("space.signin.start")).toEqual([{ url: ORIGIN }]);
+    expect(link.textContent).toBe("Open spex.example to sign in");
+    deliver({
+      ...twoInstances(),
+      signIn: { phase: "running", instance: ORIGIN, flow: "device", userCode: "QRST-UVWX", verificationUri: `${ORIGIN}/login/device?user_code=QRST-UVWX`, since: NOW },
+    });
+    // While it runs, the card stays with its flow.
+    expect(within(card()).getByTestId("space-signin").textContent).toBe("Signing in…");
+    // Signed in there again, the card gives way to Add instance…, and
+    // focus lands on that instance heading's Sign out (DR-010 §6).
+    deliver(twoInstances());
+    await waitFor(() => expect(screen.queryByTestId("space-add-card")).toBeNull());
+    await waitFor(() => expect(document.activeElement).toBe(within(sectionOf(ORIGIN)).getByTestId("space-signout")));
+    expect(add().disabled).toBe(false);
+    expect(calls("space.signin.cancel")).toEqual([]);
   });
 
   test.each(["en", "zh"] as const)("space-28, space-1: Add instance… and its card read the catalog's words, every control at most 14 characters, busy forms included, the card stacking below 20rem (%s)", async (language) => {

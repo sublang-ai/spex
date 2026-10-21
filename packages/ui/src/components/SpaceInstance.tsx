@@ -421,8 +421,9 @@ const anotherInstance = (): string =>
  * ended without an account, with "Sign in again"; a flow another client
  * runs at an instance the home does not list opens it too. Escape or
  * Cancel stops the flow the card runs and closes it, focus back on "Add
- * instance…"; the flow ending signed in closes it, focus landing on that
- * instance heading's Sign out (DR-010 §6). */
+ * instance…"; the flow ending signed in closes it — at an instance
+ * signed in already too, which signs its entry in again (git-host-2) —
+ * focus landing on that instance heading's Sign out (DR-010 §6). */
 export function AddInstance({
   groups,
   connected,
@@ -439,6 +440,9 @@ export function AddInstance({
   // The instance the card's flow signs in to, and whether it was signed
   // in when the flow started: its sign-in landing closes the card.
   const [target, setTarget] = useState<{ origin: string; was: boolean }>();
+  // The card's own flow ended with no failure: at an instance signed in
+  // when it started, that is its landing.
+  const [ended, setEnded] = useState(false);
   // A failure that already stood when the card opened belongs to an
   // earlier card: a fresh card reads none.
   const [stale, setStale] = useState<string>();
@@ -456,14 +460,17 @@ export function AddInstance({
   const flowing = signIn.running !== null || signIn.starting;
   const here = signIn.at === "card";
   const runningHere = here && signIn.running !== null;
-  const landed = target !== undefined && !target.was && instanceOf(groups, target.origin)?.signedIn === true;
+  const landed = target !== undefined && (!target.was || ended) && instanceOf(groups, target.origin)?.signedIn === true;
   // A flow reading on the card opens it, whoever started it — but not
   // one whose instance is signed in already: that flow has landed, the
   // header's card giving way as it does.
   const placed = runningHere && !dismissed && instanceOf(groups, signIn.instance)?.signedIn !== true;
   const show = (open || placed) && !landed;
 
-  const remember = (origin: string) => setTarget({ origin, was: instanceOf(groups, origin)?.signedIn === true });
+  const remember = (origin: string) => {
+    setTarget({ origin, was: instanceOf(groups, origin)?.signedIn === true });
+    setEnded(false);
+  };
 
   // The card a flow opened stays open through its outcome (space-3).
   useEffect(() => {
@@ -475,13 +482,22 @@ export function AddInstance({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [placed, runningHere]);
 
-  // Signed in, the card's work is done: it closes, and the instance's
-  // heading takes focus as the sign-in lands (useSignIn).
+  // Signed in, the card's work is done: it closes, and focus, whose
+  // control is gone with the card, lands on that instance heading's Sign
+  // out (DR-010 §6) — useSignIn moves it there for an instance newly
+  // signed in, and here for one signed in again.
   useEffect(() => {
-    if (!landed) return;
+    if (!landed || !target) return;
+    const origin = target.origin;
     setOpen(false);
     setTarget(undefined);
     setTyped(undefined);
+    setEnded(false);
+    setTimeout(() => {
+      if (!stranded()) return;
+      document.querySelector<HTMLElement>(`[data-testid="space-instance-${origin}"] [data-testid="space-signout"]`)?.focus();
+    }, 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [landed]);
 
   // Focus follows what the reader did (DR-010 §6): opened, the field,
@@ -509,9 +525,13 @@ export function AddInstance({
   useEffect(() => {
     if (wasRunning.current === runningHere) return;
     wasRunning.current = runningHere;
+    // Its flow ended with no cause standing: a landing wherever its
+    // instance reads signed in (space-3).
+    if (!runningHere && signIn.failure === undefined) setEnded(true);
     if (!stranded(signInRef.current)) return;
     if (runningHere) cancelRef.current?.focus();
     else signInRef.current?.focus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runningHere]);
 
   // What the card's own flow reads (space-3): its lines while it runs, a
@@ -528,6 +548,7 @@ export function AddInstance({
     focusField.current = true;
     setTyped(undefined);
     setTarget(undefined);
+    setEnded(false);
     setStale(signIn.failure);
     setOpen(true);
   };
@@ -543,6 +564,7 @@ export function AddInstance({
     setOpen(false);
     setTarget(undefined);
     setTyped(undefined);
+    setEnded(false);
   };
 
   const begin = () => {
