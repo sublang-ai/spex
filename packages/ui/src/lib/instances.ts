@@ -32,3 +32,26 @@ export function anySignedIn(state: GroupsState | undefined): boolean {
 export function defaultSignedIn(state: GroupsState | undefined): boolean {
   return state ? instanceOf(state, state.defaultInstance)?.signedIn === true : false;
 }
+
+/** An origin's host name, as the sign-in names the page it opens
+ * (space-3): the URL's host name, or the text itself where it is no
+ * URL. */
+export function hostNameOf(origin: string): string {
+  try {
+    return new URL(origin).hostname || origin;
+  } catch {
+    return origin;
+  }
+}
+
+/** The origin a URL names, as the core records an instance (DR-127): the
+ * scheme, the host in lowercase and a port other than the scheme's; the
+ * text itself where it is no URL. */
+export function originOf(url: string): string {
+  try {
+    const origin = new URL(url).origin;
+    return origin === "null" ? url : origin;
+  } catch {
+    return url;
+  }
+}

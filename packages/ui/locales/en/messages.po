@@ -3074,6 +3074,11 @@ msgstr "Installing browser…"
 msgid "Installing…"
 msgstr "Installing…"
 
+#. the sign-in card's field caption: the URL of the instance to sign in to, held by its origin (https://spex.pub)
+#: src/components/SpaceSignIn.tsx
+msgid "Instance"
+msgstr "Instance"
+
 #. catalog family: one intent's file
 #. chip on a queued message: it carries a queued intent
 #: src/components/Composer.tsx

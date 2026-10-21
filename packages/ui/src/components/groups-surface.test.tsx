@@ -30,6 +30,7 @@ import {
   NO_CAN,
   OWN,
   ORIGIN,
+  SECOND,
   SESSION_UNIT,
   answer,
   base,
@@ -311,9 +312,11 @@ describe("GROUPS: signing in (space-3, space-6, space-29)", () => {
       "Continue in your browser:Open spex.example to sign in" +
         "Sign in there and approve; you return here signed in.",
     );
-    // The code is never shown, nor offered to copy.
+    // The code is never shown, nor offered to copy: the one field is
+    // the Instance field, holding the origin.
     expect(document.body.textContent).not.toContain("WDJB-MJHT");
-    expect(screen.queryByRole("textbox")).toBeNull();
+    expect(screen.getAllByRole("textbox")).toEqual([screen.getByTestId("space-signin-instance")]);
+    expect((screen.getByTestId("space-signin-instance") as HTMLInputElement).value).toBe(ORIGIN);
     const control = screen.getByTestId("space-signin") as HTMLButtonElement;
     expect(control.textContent).toBe("Signing in…");
     expect(control.disabled).toBe(true);
@@ -399,6 +402,171 @@ describe("GROUPS: signing in (space-3, space-6, space-29)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
     expect((await screen.findByRole("alert")).textContent).toBe("Wait for the sync of academy-spex");
     expect(screen.getByRole("button", { name: "Sign out" })).toBeTruthy();
+  });
+});
+
+describe("GROUPS: the sign-in card's Instance field (space-66, space-3, git-host-2, git-host-3)", () => {
+  /** The card's field, by its caption. */
+  const field = () => screen.getByRole("textbox", { name: "Instance" }) as HTMLInputElement;
+  /** The start answered by the device flow at the origin it names. */
+  const deviceAt = (origin: string) =>
+    commandMock.mockImplementation(async (type: string, fields?: Record<string, unknown>) =>
+      type === "space.signin.start"
+        ? { flow: "device", userCode: "WDJB-MJHT", verificationUri: `${origin}/login/device?user_code=WDJB-MJHT`, expiresAt: NOW + 15 * MIN }
+        : answer(type, fields),
+    );
+
+  test("space-66, space-3: signed out, the card holds its two sentences, the Instance field holding the default instance's origin, and Sign in, with no home path, Copy path, read time or Refresh", async () => {
+    await renderGroups(signedOut(), { open: false });
+    const card = screen.getByTestId("space-account");
+    expect(within(card).getByRole("heading", { level: 2 }).textContent).toBe("Not signed in");
+    expect(screen.getByTestId("space-signin-body").textContent).toBe(
+      "Sign in to see your groups and share each project's records with the people in them." +
+        "Until you do, everything stays on this device and nothing is contacted.",
+    );
+    // The field is captioned "Instance" and holds the default instance's
+    // origin until the reader edits it (space-3, storage-2).
+    expect(within(card).getByTestId("space-signin-instance")).toBe(field());
+    expect(field().value).toBe(ORIGIN);
+    expect(field().readOnly).toBe(false);
+    const signIn = within(card).getByRole("button", { name: "Sign in" }) as HTMLButtonElement;
+    expect(signIn.disabled).toBe(false);
+    expect(signIn.title).toBe("Signs in to spex.example");
+    // Sign in is the card's one primary control, after the field.
+    expect(card.querySelectorAll("button.bg-brand-600")).toHaveLength(1);
+    expect(field().compareDocumentPosition(signIn) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const header = screen.getByTestId("space-header");
+    expect(header.textContent).not.toContain("~/.spex");
+    expect(screen.queryByTestId("space-home")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Copy path" })).toBeNull();
+    expect(screen.queryByTestId("space-read-at")).toBeNull();
+    expect(screen.queryByTestId("space-refresh")).toBeNull();
+  });
+
+  test("space-3, git-host-3: an edited field starts the sign-in at the origin it holds, the flow's lines naming that origin's host name", async () => {
+    deviceAt(SECOND);
+    await renderGroups(signedOut(), { open: false });
+    fireEvent.change(field(), { target: { value: `  ${SECOND}  ` } });
+    expect(screen.getByTestId("space-signin").title).toBe("Signs in to second.example");
+    fireEvent.click(screen.getByTestId("space-signin"));
+    await waitFor(() => expect(calls("space.signin.start")).toEqual([{ url: SECOND }]));
+    // The page the person opens is named by the host name of the origin
+    // being signed in to, never the default instance's (space-3).
+    const link = (await screen.findByTestId("space-signin-link")) as HTMLAnchorElement;
+    expect(link.textContent).toBe("Open second.example to sign in");
+    expect(link.href).toBe(`${SECOND}/login/device?user_code=WDJB-MJHT`);
+    // The origin being signed in to stands in the field while it runs.
+    expect(field().value).toBe(SECOND);
+    expect(field().readOnly).toBe(true);
+    expect(screen.getByTestId("space-signin").textContent).toBe("Signing in…");
+    deliver(signedOut({ signIn: { phase: "running", instance: SECOND, flow: "device", userCode: "WDJB-MJHT", verificationUri: link.href, since: NOW } }));
+    expect(screen.getByTestId("space-signin-link").textContent).toBe("Open second.example to sign in");
+  });
+
+  test("space-3, git-host-2: the browser flow at an edited origin reads that the browser is open at its host name", async () => {
+    const openExternal = vi.fn<(url: string) => Promise<boolean>>().mockResolvedValue(true);
+    (window as { spexNative?: unknown }).spexNative = { pickDirectory: vi.fn(), openExternal };
+    commandMock.mockImplementation(async (type: string, fields?: Record<string, unknown>) =>
+      type === "space.signin.start" ? { flow: "browser", url: `${SECOND}/login/app?client_id=spex&state=s` } : answer(type, fields),
+    );
+    await renderGroups(signedOut(), { open: false });
+    fireEvent.change(field(), { target: { value: SECOND } });
+    fireEvent.click(screen.getByTestId("space-signin"));
+    await waitFor(() => expect(openExternal).toHaveBeenCalledWith(`${SECOND}/login/app?client_id=spex&state=s`));
+    expect(calls("space.signin.start")).toEqual([{ url: SECOND }]);
+    expect((await screen.findByTestId("space-signin-opened")).textContent).toBe(
+      "Your browser is open at second.example: sign in there and approve; you return here signed in. Open it again",
+    );
+  });
+
+  test("space-3, git-host-2: a URL the core refuses by the origin rule starts no flow, its cause read as one sentence, the field kept and focused", async () => {
+    commandMock.mockImplementation(async (type: string, fields?: Record<string, unknown>) => {
+      if (type === "space.signin.start") throw new Error("An instance is named by its origin alone, with no path, query or user");
+      return answer(type, fields);
+    });
+    await renderGroups(signedOut(), { open: false });
+    fireEvent.change(field(), { target: { value: `${SECOND}/x` } });
+    fireEvent.click(screen.getByTestId("space-signin"));
+    await waitFor(() =>
+      expect(screen.getByTestId("space-signin-error").textContent).toBe(
+        "An instance is named by its origin alone, with no path, query or user.",
+      ),
+    );
+    expect(calls("space.signin.start")).toEqual([{ url: `${SECOND}/x` }]);
+    expect(live()).toBe("An instance is named by its origin alone, with no path, query or user");
+    // No flow: no link, no Cancel, Sign in standing again with the field
+    // keeping the reader's text and taking focus.
+    expect(screen.queryByTestId("space-signin-link")).toBeNull();
+    expect(screen.queryByTestId("space-signin-cancel")).toBeNull();
+    expect(field().value).toBe(`${SECOND}/x`);
+    expect(field().readOnly).toBe(false);
+    await waitFor(() => expect(document.activeElement).toBe(field()));
+    const signIn = screen.getByTestId("space-signin") as HTMLButtonElement;
+    expect(signIn.textContent).toBe("Sign in");
+    expect(signIn.disabled).toBe(false);
+    // The corrected origin starts the sign-in, the cause gone.
+    commandMock.mockImplementation(answer);
+    fireEvent.change(field(), { target: { value: SECOND } });
+    fireEvent.keyDown(field(), { key: "Enter" });
+    await waitFor(() => expect(calls("space.signin.start")).toEqual([{ url: `${SECOND}/x` }, { url: SECOND }]));
+    await screen.findByTestId("space-signin-link");
+    expect(screen.queryByTestId("space-signin-error")).toBeNull();
+  });
+
+  test("space-3: a blank field disables Sign in and sends nothing; Enter in a filled one starts the sign-in", async () => {
+    await renderGroups(signedOut(), { open: false });
+    fireEvent.change(field(), { target: { value: "   " } });
+    const signIn = screen.getByTestId("space-signin") as HTMLButtonElement;
+    expect(signIn.disabled).toBe(true);
+    expect(signIn.getAttribute("title")).toBeNull();
+    fireEvent.click(signIn);
+    fireEvent.keyDown(field(), { key: "Enter" });
+    expect(calls("space.signin.start")).toEqual([]);
+    fireEvent.change(field(), { target: { value: ORIGIN } });
+    expect(signIn.disabled).toBe(false);
+    fireEvent.keyDown(field(), { key: "Enter" });
+    await waitFor(() => expect(calls("space.signin.start")).toEqual([{ url: ORIGIN }]));
+  });
+
+  test("space-3: Sign in hands focus to Cancel while the flow runs; Escape cancels it, focus back on Sign in", async () => {
+    await renderGroups(signedOut(), { open: false });
+    fireEvent.click(screen.getByTestId("space-signin"));
+    await screen.findByTestId("space-signin-link");
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId("space-signin-cancel")));
+    fireEvent.keyDown(field(), { key: "Escape" });
+    await waitFor(() => expect(calls("space.signin.cancel")).toEqual([{}]));
+    await waitFor(() => expect(screen.getByTestId("space-signin").textContent).toBe("Sign in"));
+    expect(screen.queryByTestId("space-signin-link")).toBeNull();
+    expect(screen.getByTestId("space-signin-caption")).toBeTruthy();
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId("space-signin")));
+    // With no flow running, Escape cancels nothing.
+    fireEvent.keyDown(field(), { key: "Escape" });
+    expect(calls("space.signin.cancel")).toHaveLength(1);
+  });
+
+  test("space-3: a page that opens on a flow another client runs names the host of the state's instance in its link", async () => {
+    const complete = `${SECOND}/login/device?user_code=ABCD-EFGH`;
+    await renderGroups(
+      signedOut({ signIn: { phase: "running", instance: SECOND, flow: "device", userCode: "ABCD-EFGH", verificationUri: complete, since: NOW } }),
+      { open: false },
+    );
+    const link = screen.getByTestId("space-signin-link") as HTMLAnchorElement;
+    expect(link.textContent).toBe("Open second.example to sign in");
+    expect(link.href).toBe(complete);
+    expect(document.body.textContent).not.toContain("ABCD-EFGH");
+    // The field still holds the default instance's origin, read only
+    // while the flow runs.
+    expect(field().value).toBe(ORIGIN);
+    expect(field().readOnly).toBe(true);
+  });
+
+  test.each(["en", "zh"] as const)("space-3: the field's caption reads in the interface's language (%s)", async (language) => {
+    activateLanguage(language);
+    await renderGroups(signedOut(), { open: false });
+    const caption = language === "zh" ? "实例" : "Instance";
+    const input = screen.getByRole("textbox", { name: caption }) as HTMLInputElement;
+    expect(input).toBe(screen.getByTestId("space-signin-instance"));
+    expect(input.value).toBe(ORIGIN);
   });
 });
 

@@ -188,14 +188,17 @@ test.describe("first start", () => {
     const header = page.getByTestId("space-header");
 
     // Not signed in: the header is one card saying what signing in
-    // brings, Sign in its one primary control, with no home path, read
-    // time or Refresh; your own group stands alone beneath, called so,
-    // its row with no control (space-1, space-3).
+    // brings, its "Instance" field holding the stand-in's origin, Sign in
+    // its one primary control, with no home path, read time or Refresh;
+    // your own group stands alone beneath, called so, its row with no
+    // control (space-1, space-3).
     await expect(header.getByTestId("space-account").getByRole("heading", { level: 2 })).toHaveText("Not signed in");
     await expect(header.getByTestId("space-signin-body")).toHaveText(
       "Sign in to see your groups and share each project's records with the people in them." +
         "Until you do, everything stays on this device and nothing is contacted.",
     );
+    await expect(header.getByRole("textbox", { name: "Instance" })).toHaveValue(host.url);
+    await expect(header.getByTestId("space-signin-instance")).toBeEditable();
     await expect(header.getByTestId("space-signin")).toHaveText("Sign in");
     await expect(header.locator("button.bg-brand-600")).toHaveCount(1);
     await expect(header.locator("button.bg-brand-600")).toHaveAttribute("data-testid", "space-signin");
