@@ -591,6 +591,26 @@ When the core service composes text for the reader — a refusal's message, a co
 - what a finished operation composed — a storage diagnostic its store raised at load, a Space stop's message and guidance — keeps its language until that operation runs again, and a start speaks the stored choice, read from the preference file, before the store loads, so nothing it composes begins in another language than the home's ([DR-083](../decisions/083-a-finished-operations-words-keep-their-language.md));
 - a fact a page acts on travels beside the words, never in them: a refusal carries it as a detail of its reply, a state as a field of its own.
 
+### Seat Mode
+
+#### core-service-125
+
+Where the core runs as a seat — started with a server's id and name, the admitted person's permanent account id at the instance and, optionally, a shared credential file ([DR-132](../decisions/132-team-servers.md)) — the core service shall run for that person alone:
+
+- its sign-in is the device flow with the request naming the server and the person [[git-host-27](git-host.md#git-host-27)], and a sign-in whose account bears another permanent id than the person's ends `failed`, storing nothing;
+- your own group is placed at no instance [[space-102](space.md#space-102)];
+- every command naming a working folder path — `project.register`, `project.rebind`, `project.create`, and a join naming a folder — is refused `invalid_request`, "Projects on a server are opened from their group"; a join names no folder, the core allocating it [[space-103](space.md#space-103)];
+- intents without a runtime are run nowhere here [[core-service-107](#core-service-107)];
+- the runtime's label is the server's name [[core-service-4](#core-service-4)].
+
+#### core-service-126
+
+Where the core runs as a seat with a shared credential file [[core-service-125](#core-service-125)], when it starts and before each agent run, the core service shall read the file — `NAME=value` lines, the names of each agent's shared forms among them [[settings-49](settings.md#settings-49)] — into the environment its adapters inherit, so that a replaced value reaches the next run without a restart while a running agent process keeps the environment it started with ([DR-132](../decisions/132-team-servers.md)):
+
+- for an agent the member set a credential of their own for [[settings-48](settings.md#settings-48)], the file's names for that agent are left out of the run's environment and the member's own put in, so the member's own wins whatever the agent's precedence;
+- an unreadable file leaves the environment as it was and is reported through readiness [[settings-49](settings.md#settings-49)], blocking nothing else;
+- no value of the file is written anywhere or logged.
+
 ## Internal Behavior
 
 ### Package Layout
@@ -1122,6 +1142,10 @@ Where two homes pair one project at the same working-folder path and sync its re
 - an open dispatch of the first's session is not derived as released on the second [[core-service-47](#core-service-47)];
 - a session and an intent carrying no runtime keep today's readings on both homes, and an intent without a runtime is next on either [[core-service-107](#core-service-107)];
 - deleting the first's session from the second succeeds as any deletion does.
+
+#### core-service-127
+
+Where the core runs as a seat against a stand-in instance with a fixture adapter recording its environment, the integration suite shall assert seat mode [[core-service-125](#core-service-125)]: the device request names the server and the person and a sign-in as another account stores nothing; your own group gains no placement; the path-naming commands are refused with the phrase; a join names no folder; and the shared credential file [[core-service-126](#core-service-126)]: its values reach a run's environment, a value replaced between runs reaches the next run while the running one keeps its own, a member's own credential displaces the shared names of its agent, and an unreadable file is reported without blocking.
 
 ## References
 

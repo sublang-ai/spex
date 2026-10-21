@@ -28,6 +28,7 @@ The store shall persist core-owned data in Spex home using these locations:
 | `workspace/@<host>/<group>/`, `workspace/@<host>/<login>/` | a plain folder per group at that instance, a subgroup's inside its parent's, named by the group's path in the instance ([DR-120](../decisions/120-the-instance-is-the-space.md)), and per account whose namespace there holds a spex repository — yours or another's — named by its login there | — |
 | `workspace/@<host>/<path>/<name>-spex/` | the clone of one spex repository keyed under that instance by its first placement [[storage-31](#storage-31)], `<path>` being that placement's group's path or its namespace's login there, on its `spex` branch | the clone |
 | `workspace/<own>/` | your own group's folder, the home's own and outside every instance's folder [[storage-2](#storage-2)] | — |
+| `projects/@<host>/<group path>/<name>/` | on a seat, the working folder the core allocates for a project [[space-103](space.md#space-103)], a clone of its code | the code's own work tree |
 | `workspace/<own>/<own>-spex/`, `workspace/<own>/<name>-spex/` | the clone of your own group's own repository, and of each local-only spex repository [[storage-6](#storage-6)], on its `spex` branch | the clone |
 | `<clone>/project.json` | the code's remote [[storage-3](#storage-3)], present when the spex repository is a project's | Tracked |
 | `<clone>/placements/<folder>.yaml` | the spex repository's placement at the instance whose folder `<folder>` is [[storage-36](#storage-36)] | Tracked, one unit each |
@@ -44,6 +45,7 @@ The store shall persist core-owned data in Spex home using these locations:
 | `store/`, `cache/` | spec package bytes and caches [[environments-7](environments.md#environments-7)] | — |
 | `local/prefs.json` | core preferences and viewed markers [[storage-5](#storage-5)] | — |
 | `local/credentials.yaml` | each instance's app token [[storage-19](#storage-19)] | — |
+| `local/code-credentials.yaml` | on a seat, the code-host tokens and agent credentials the member placed [[storage-44](#storage-44)] | — |
 | `local/migrations/` | migration receipts and retained inputs [[storage-9](#storage-9)] [[storage-30](#storage-30)] | — |
 | `local/former-home.git`, `local/forge-cache.json` | the former home's Git history kept aside [[storage-9](#storage-9)]; the rebuildable forge cache | — |
 | `.lease/`, `.lease.stage.<token>/`, `.lease.retired/<token>/` | the root lease held by the one process serving this home [[storage-14](#storage-14)], its staging and its permanent retirement records [[storage-26](#storage-26)] | — |
@@ -130,7 +132,14 @@ The credential store shall encode `local/credentials.yaml` as exactly `{format: 
 - where the pairs differ, nothing is written and the writer is told the pair changed meanwhile;
 - a malformed entry for that instance is refused by every read and write, except that a sign-out which could not read it removes it in one step, every other instance's pair kept, unless a well-formed pair stands there by then, which stays;
 - a file of another format, or with no hosts map, is refused and left as it is;
-- no credential is written anywhere else, and no credential enters a tracked file or a remote URL [[space-5](space.md#space-5)].
+- no credential is written anywhere else but the member's own on a seat [[storage-44](#storage-44)], and no credential enters a tracked file or a remote URL [[space-5](space.md#space-5)].
+
+### storage-44
+
+Where the core runs as a seat [[core-service-125](core-service.md#core-service-125)], the credential store shall encode `local/code-credentials.yaml` as exactly `{format: 1, hosts: {<host>: {token, username?}}, agents: {<adapter>: {<NAME>: value}}}` with owner-only permissions — a code host's token and each agent credential the member placed [[settings-48](settings.md#settings-48)] — written and removed as versioned writes as the app token's file is [[storage-19](#storage-19)], read before each transport and each agent run, and never entering a tracked file, a remote URL or a log ([DR-132](../decisions/132-team-servers.md)):
+
+- a file of another format is refused and left as it is; a malformed entry is refused by every read and write and reported;
+- the file is removed with its last entry.
 
 ### storage-6
 
@@ -478,7 +487,8 @@ When an integration suite changes the files of a running real store from outside
 - through a real core, a `home.yaml` damaged after a project was paired refusing `specs.write`, `draft.create` and `compile.run` naming that project as no project of this device, with nothing written in its working folder or its clone [[storage-2](#storage-2)];
 - through a real core, a compile admitted before `home.yaml` is damaged settling as this device's while the file does not read, its outcome recorded and never left running, and the file not written [[storage-2](#storage-2)];
 - through a real core, a session created in a paired clone with no `sessions/` — one another process added, one whose `sessions/` was removed, and one a rebind paired — making that folder and succeeding, while one whose clone was removed from outside is refused `not_found` alike before its open and while the open prepares, the clone not made again [[storage-2](#storage-2)];
-- a damaged session file and a damaged forge cache reported, each report gone once its file is removed, another damaged session's report standing, and the forge cache reported again once damaged again and gone once repaired [[storage-12](#storage-12)].
+- a damaged session file and a damaged forge cache reported, each report gone once its file is removed, another damaged session's report standing, and the forge cache reported again once damaged again and gone once repaired [[storage-12](#storage-12)];
+- on a seat, the member's credentials written owner-only, a replaced entry refused where the pair named differs, a malformed entry refused and reported, and the file removed with its last entry [[storage-44](#storage-44)].
 
 ### storage-27
 

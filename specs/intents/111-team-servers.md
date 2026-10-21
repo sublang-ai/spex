@@ -5,7 +5,7 @@
 
 ## Status
 
-Planned (2026-10-21), after execution ownership and beside spex.pub's servers.
+In progress (2026-10-21), after execution ownership and beside spex.pub's servers.
 
 ## Intent
 
@@ -13,7 +13,7 @@ Implement [DR-132](../decisions/132-team-servers.md): seat mode in the core and 
 
 ## Deliverables
 
-- [ ] The `server-shell`, `core-service`, `settings`, `git-host`, `space`, `storage` and `projects` packages and a new `hub` package state DR-132, and DR-132 reads Accepted.
+- [x] The `server-shell`, `core-service`, `settings`, `git-host`, `space`, `storage` and `projects` packages and a new `hub` package state DR-132, and DR-132 reads Accepted.
 - [ ] Seat mode in the core: the device request naming the server and the person, a device of another account refused, no own repository joined, path commands refused.
 - [ ] The shared credential file read into the environment at start and before each run, the member's own form winning, readiness recognizing the forms and reporting unreadable and expired.
 - [ ] Projects allocated under the seat's tree, code cloned and pushed with the member's own token for its host, the clone failure naming the credential, the Settings surface taking the token.
