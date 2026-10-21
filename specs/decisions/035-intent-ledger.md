@@ -20,6 +20,7 @@ Failure acknowledgment amended by [DR-062](062-ending-a-failed-workflow.md): a l
 Amended by [DR-077](077-up-next-is-a-committed-queue.md) in scope: every Up next row is visibly queued, only the first unblocked row is next, its derived standing governs whether Start is present, and capture offers Queue without a sibling Start; the stored acts, lifecycle states, verdicts, rank, and after-links stand.
 Amended by [DR-103](103-the-home-and-its-groups.md): an intent is one file in its project's records, with no rank and no link to another intent, and the next to run is the oldest one waiting; capture, delivery and verdicts stand.
 Amended by [DR-119](119-an-answer-continues-its-intent.md) in what a Boss turn sent while a question waits belongs to: it continues the work that asked, a session entry standing in where no intent is bound leads with the turn that opened that work rather than the latest, and a dispatch waits for the answer; the fields, turn ranges, derived states, bands and verdicts stand.
+Amended by [DR-131](131-execution-ownership.md) in its attention queue and verdicts: only the runtime's own records count.
 
 ## Context
 

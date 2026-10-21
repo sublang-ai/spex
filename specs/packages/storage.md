@@ -80,7 +80,7 @@ The project file shall encode `<clone>/project.json` as exactly `{format: 1, nam
 
 ### storage-4
 
-The intent store shall encode each `<clone>/intents/<id>.json` as a closed JSON object with `format: 1` and exactly these fields, the file's name being the intent's canonical lowercase UUID `id` ([DR-103](../decisions/103-the-home-and-its-groups.md)):
+The intent store shall encode each `<clone>/intents/<id>.json` as a closed JSON object with `format: 2` and exactly these fields — a file of `format: 1` reading the same without `runtime` — the file's name being the intent's canonical lowercase UUID `id` ([DR-103](../decisions/103-the-home-and-its-groups.md), [DR-131](../decisions/131-execution-ownership.md)):
 
 | Field | Content |
 | --- | --- |
@@ -88,15 +88,24 @@ The intent store shall encode each `<clone>/intents/<id>.json` as a closed JSON 
 | `attachments` | optional ordered references into `intents/<id>.assets/` [[media-5](media.md#media-5)] |
 | `source` | optional `{kind, ref, url, labels?}` provenance — issue, PR, record, or chat |
 | `author` | optional `{login, displayName}` of the account at the project's instance that captured it [[core-service-42](core-service.md#core-service-42)] |
+| `runtime` | `{device, label}` in a format 2 file, required there and forbidden in a format 1 file: the `device` of the home whose core captured it [[storage-2](#storage-2)] and a label for display, written once at capture and never rewritten [[core-service-42](core-service.md#core-service-42)] |
 | `dispatched` | optional `{sessionId, turnId, at}`, re-written by a later dispatch |
 | `closed` | optional `{as: 'done' \| 'dropped', at}` |
 
 - an intent holds no rank and no link to another intent: the next to run is the oldest queued one by `createdAt`, then by `id`;
 - the store reads every intent file as it stands when a command needs it, with no reload ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md));
-- an edit, a dispatch and a close rewrite the file whole as it reads at that instant, in one step with that read; an edit whose intent changed since its command read it, across the command's own wait, is refused as changed meanwhile; a remove deletes the file and its asset directory;
+- an edit, a dispatch and a close rewrite the file whole as it reads at that instant, in one step with that read, keeping its format and its `runtime` as they were; an edit whose intent changed since its command read it, across the command's own wait, is refused as changed meanwhile; a remove deletes the file and its asset directory;
+- a capture writes format 2 with the runtime of the home that captures it; a file of a format above 2 is malformed;
 - a capture writes a new file only where no clone holds an intent of its id and no file holds its name, never replacing one;
 - no write recreates the clone holding `intents/` where it moved or was removed;
 - a malformed file is reported without deletion, and its intent is listed nowhere; a linked or non-directory intent folder is reported without reading its contents.
+
+### storage-43
+
+When a session is created, the session store shall append to its replay stream, under the session's lease and before its first turn, one hidden `captain_telemetry` record with topic `spex.session.runtime`, no turn id, and payload `{device, label}` — the `device` of the home whose core created it [[storage-2](#storage-2)] and a label for display — never rewritten, so that the assignment rides the session bundle as one unit [[storage-11](#storage-11)] ([DR-131](../decisions/131-execution-ownership.md)):
+
+- the first such record in the stream names the session's runtime; a stream with none names no runtime, and one whose first such record cannot be read names an unknown runtime, never this home's;
+- the record is hidden, so no session channel carries it [[core-service-8](core-service.md#core-service-8)].
 
 ### storage-5
 
@@ -322,7 +331,7 @@ When selecting stored data during a Git merge of a spex repository's `spex` bran
 Before reopening selected state, the validator shall validate the complete selected tree of a clone without modifying file contents, after Playbook's preparation removes excess permissions from verified user-owned session entries and refuses unsafe paths [[1]]:
 
 - before each Spex-owned project, intent, authoring or configuration read, inspect the clone-relative parents and leaf without following links: existing parents must be directories and an existing leaf must have its expected regular-file or directory kind; missing optional paths remain absent, and unsafe paths refuse before reading their contents; repeat these checks at the actual read boundary after awaited work, including before handing session or attachment paths to Playbook, whose validation remains authoritative [[1]];
-- file formats and closed encodings are valid [[storage-2](#storage-2)] [[storage-3](#storage-3)] [[storage-4](#storage-4)] [[storage-5](#storage-5)] [[storage-23](#storage-23)] [[storage-36](#storage-36)] [[1]];
+- file formats and closed encodings are valid [[storage-2](#storage-2)] [[storage-3](#storage-3)] [[storage-4](#storage-4)] [[storage-5](#storage-5)] [[storage-23](#storage-23)] [[storage-36](#storage-36)] [[storage-43](#storage-43)] [[1]];
 - open artifact-source identities are unique within a spex repository [[core-service-42](core-service.md#core-service-42)], and dispatch targets still present belong to the same spex repository with valid turn boundaries;
 - deleted session targets retain the existing ledger re-derivation behavior [[core-service-70](core-service.md#core-service-70)]; a missing session alone is not permission to discard a verdict or repeat work;
 - a clone no folder pairs, and a folder whose clone is missing, are reported with their records unlisted, without blocking unrelated valid spex repositories or automatically pairing anything;
@@ -463,6 +472,8 @@ When an integration suite changes the files of a running real store from outside
 - a clone removed from outside absent from every read with its pair reported as a repair, its session store refused, your own group's clone refused once removed, and neither made again [[storage-2](#storage-2)];
 - intent files added, closed, dispatched, repaired and removed from outside read by the queue, History, source, dispatch and asset reads, and an edit applied to the file as it stands [[storage-4](#storage-4)];
 - a damaged intent file listed nowhere, reported without blocking, refused with its cause, and its bytes left by an edit and by a capture of its id, while a capture of an id another clone holds writes nothing [[storage-4](#storage-4)] [[storage-12](#storage-12)];
+- a capture written at format 2 with this home's runtime, a format 1 file read without one and kept at format 1 by its edit, dispatch and close, a format 2 file kept at format 2 with its runtime unchanged by them, and a format 3 file reported as malformed [[storage-4](#storage-4)];
+- a created session's stream holding one hidden runtime record naming this home before its first turn, read as the session's runtime, a stream without one reading as none, and one whose record is unreadable reading as unknown [[storage-43](#storage-43)];
 - a damaged `home.yaml` answering no pairs, by id or by path, its device unchanged, and refusing a registration with its bytes kept while preferences stay writable, its repair restoring its pairs and admitting the next registration, a deleted one answering no pairs, refused as changed meanwhile and not written again, and one damaged when the store opens recovering its pairs once repaired [[storage-2](#storage-2)];
 - through a real core, a `home.yaml` damaged after a project was paired refusing `specs.write`, `draft.create` and `compile.run` naming that project as no project of this device, with nothing written in its working folder or its clone [[storage-2](#storage-2)];
 - through a real core, a compile admitted before `home.yaml` is damaged settling as this device's while the file does not read, its outcome recorded and never left running, and the file not written [[storage-2](#storage-2)];

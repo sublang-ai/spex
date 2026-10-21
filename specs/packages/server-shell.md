@@ -101,7 +101,7 @@ When the served page resolves its core endpoint, the UI shall connect to the pag
 
 #### server-shell-6
 
-When the server shell receives SIGINT or SIGTERM, it shall stop the core service — disposing every live session runtime [[core-service-39](core-service.md#core-service-39)] — and exit only after the stop completes, leaving no orphan agent process.
+When the server shell receives SIGINT or SIGTERM, it shall stop the core service — disposing every live session runtime within the core's bounds [[core-service-39](core-service.md#core-service-39)] — and exit once the stop completes, within twenty seconds of the signal at the latest, leaving no agent process the core started ([DR-131](../decisions/131-execution-ownership.md)).
 
 ### Source Development
 
@@ -129,6 +129,7 @@ The server shell build shall stage the built UI bundle into the shell package, s
 
 Where the server shell is started from code with core service overrides — the agent seams of the core: adapter imports, the adapter runtime check, the Captain factory, environment, and home ([DR-039](../decisions/039-browser-acceptance-journeys.md)) — the server shell shall pass them to the core service it boots [[server-shell-1](#server-shell-1)] unchanged:
 
+- the stop's bounds and the agent-process walk are among the seams [[core-service-39](core-service.md#core-service-39)];
 - the overrides have no command-line form, so a served deployment never carries them;
 - absent overrides leave the boot exactly as the command line configures it.
 
@@ -171,7 +172,7 @@ Where a startup precondition is violated, the test suite shall assert each refus
 
 #### server-shell-12
 
-Where the server shell runs as a real child process, the test suite shall assert that the access URL it prints matches its bound endpoint [[server-shell-1](#server-shell-1)] and that on SIGTERM the process exits cleanly with its port closed [[server-shell-6](#server-shell-6)].
+Where the server shell runs as a real child process, the test suite shall assert that the access URL it prints matches its bound endpoint [[server-shell-1](#server-shell-1)] and that on SIGTERM the process exits cleanly with its port closed [[server-shell-6](#server-shell-6)]; where its fixture agent ignores SIGTERM mid-turn and the bounds are shortened through the seams [[server-shell-20](#server-shell-20)], that the process exits within the bound with the agent's processes gone and the session restorable on the same home afterwards [[server-shell-6](#server-shell-6)].
 
 ### Page Connection Coverage
 

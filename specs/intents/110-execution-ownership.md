@@ -5,7 +5,7 @@
 
 ## Status
 
-Planned (2026-10-21), before any shared execution ships.
+In progress (2026-10-21), before any shared execution ships.
 
 ## Intent
 
@@ -13,7 +13,7 @@ Implement [DR-131](../decisions/131-execution-ownership.md): every session and e
 
 ## Deliverables
 
-- [ ] The `storage`, `core-service` and `dashboard` packages state DR-131, and DR-131 reads Accepted.
+- [x] The `storage`, `core-service`, `dashboard` and `server-shell` packages state DR-131, and DR-131 reads Accepted.
 - [ ] The runtime named by the home's device with a stored label; the hidden session record before the first turn; intent files at format 2 with a runtime, format 1 files kept.
 - [ ] Another runtime's readings: not continuable with the phrase, no Restore, Discard or control, no lane or holder, no attention or badge, no released dispatch, no Start, advance or turn, and close, edit and drop refused.
 - [ ] The bounded stop in the core and the server shell, within fifteen seconds.
