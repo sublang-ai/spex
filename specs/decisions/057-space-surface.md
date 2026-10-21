@@ -18,7 +18,7 @@ Amends ([DR-046](046-decision-record-evolution.md)):
 Amended by [DR-103](103-the-home-and-its-groups.md): every project and group has a spex repository of its own, cloned under `workspace/` and synced on its own, instead of one repository with one remote, and Spex signs in to a Git host, consults it, and keeps its sign-in under `local/`; the surface, renamed Groups, keeps its duties and its sync, applied to the `spex` branch of each spex repository; the four duties and the sync machine stand, applied per mount.
 Amended by [DR-111](111-the-core-coordinates-as-git-does.md) in its admission: a sync is no longer admitted only between turns and while nothing runs, no gate is set before its checks, and its apply refuses a replacement its pre-write check finds changed since Save; the surface's duties and the sync's steps stand.
 Amended by [DR-127](127-a-home-signed-in-to-several-instances.md), as [DR-103](103-the-home-and-its-groups.md) amended it, in its remote's name: a clone's one remote is named by its instance's folder.
-Proposed to be amended by [DR-128](128-a-spex-repository-placed-at-several-instances.md), as [DR-103](103-the-home-and-its-groups.md) amended it, in one remote per clone and in "choices needed ends the sync": the merge-commit sync runs against each placement's remote in turn, and choices needed stops its placement alone, the merges already made standing.
+Amended by [DR-128](128-a-spex-repository-placed-at-several-instances.md), as [DR-103](103-the-home-and-its-groups.md) amended it, in one remote per clone and in "choices needed ends the sync": the merge-commit sync runs against each placement's remote in turn, and choices needed stops its placement alone, the merges already made standing.
 
 ## Context
 
