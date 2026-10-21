@@ -263,7 +263,11 @@ function InstanceHeading({
               className="hidden min-w-0 shrink-0 truncate text-xs text-neutral-500 @2xl:inline"
             >
               {readAt !== null
-                ? i18n._("Host read {age}", { age: relativeAge(readAt, now) })
+                ? i18n._({
+                    id: "Read {age}",
+                    values: { age: relativeAge(readAt, now) },
+                    comment: "on a signed-in instance's heading: when its last read was held; {age} is relative, such as '5m ago'",
+                  })
                 : i18n._("Not read yet")}
             </span>
             {instance.account.canCreateGroup ? (
@@ -607,7 +611,7 @@ export function AddInstance({
     ? signingInLabel()
     : failure !== undefined && !signIn.refused
       ? signInAgainLabel()
-      : i18n._({ id: "Sign in", comment: "sign in to the Git host" });
+      : i18n._({ id: "Sign in", comment: "sign in to an instance" });
 
   return (
     <div

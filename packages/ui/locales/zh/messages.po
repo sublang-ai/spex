@@ -2996,10 +2996,6 @@ msgstr "历史 — 此会话无法继续"
 msgid "history, can't be continued"
 msgstr "历史，无法继续"
 
-#: src/components/SpaceInstance.tsx
-msgid "Host read {age}"
-msgstr "{age}读取托管平台"
-
 #. a spex repository's status: nothing is running
 #. session row: no turn in flight
 #. session status: nothing is running
@@ -4014,10 +4010,6 @@ msgstr "开启（当前）"
 msgid "On (unsupported)"
 msgstr "开启（不支持）"
 
-#: src/components/SpaceGroups.tsx
-msgid "On the host for this code"
-msgstr "托管平台上对应此代码的仓库"
-
 #: src/lib/space.ts
 msgid "On this device only"
 msgstr "仅在此设备上"
@@ -4025,6 +4017,11 @@ msgstr "仅在此设备上"
 #: src/components/SpaceGroups.tsx
 msgid "On this device only — shared once you sign in"
 msgstr "仅在此设备上 — 登录后即可共享"
+
+#. the picker's heading, inside one instance's section, over the spex repositories that instance lists for the folder's code
+#: src/components/SpaceGroups.tsx
+msgid "On this instance for this code"
+msgstr "此实例上对应此代码的仓库"
 
 #: src/components/LibrarySurface.tsx
 #: src/components/PlaybookStages.tsx
@@ -4532,6 +4529,11 @@ msgstr "重新检查适配器就绪状态（例如登录之后）"
 msgid "read {age}"
 msgstr "{age}读取"
 
+#. on a signed-in instance's heading: when its last read was held; {age} is relative, such as '5m ago'
+#: src/components/SpaceInstance.tsx
+msgid "Read {age}"
+msgstr "{age}已读取"
+
 #. a spex repository's state: the host lets this account only read it
 #: src/lib/space.ts
 msgid "Read-only"
@@ -4575,13 +4577,10 @@ msgid "Reading…"
 msgstr "读取中…"
 
 #. Refresh's title: it reads every instance the home is signed in to
+#: src/components/SpaceGroups.tsx
 #: src/components/SpaceSurface.tsx
 msgid "Reads each signed-in instance again"
 msgstr "重新读取每个已登录的实例"
-
-#: src/components/SpaceGroups.tsx
-msgid "Reads the host again"
-msgstr "重新读取托管平台"
 
 #. session status: ready to be told what to do
 #. the adapter is signed in and usable
@@ -4828,12 +4827,12 @@ msgid "Request {requirement}"
 msgstr "请求 {requirement}"
 
 #: src/components/EnvironmentSection.tsx
-msgid "Request a spec package by its folder"
-msgstr "按文件夹请求一个规约包"
-
-#: src/components/EnvironmentSection.tsx
 msgid "Request a Git repository at a branch, tag or commit"
 msgstr "请求某个分支、标签或提交上的 Git 仓库"
+
+#: src/components/EnvironmentSection.tsx
+msgid "Request a spec package by its folder"
+msgstr "按文件夹请求一个规约包"
 
 #: src/components/EnvironmentSection.tsx
 msgid "Requested {name}"
@@ -5384,8 +5383,8 @@ msgstr "筛选外仍显示"
 msgid "shown despite search"
 msgstr "搜索外仍显示"
 
-#. sign in to the Git host
-#. sign in to the Git host
+#. sign in to an instance
+#. sign in to an instance
 #: src/components/SpaceInstance.tsx
 #: src/components/SpaceSignIn.tsx
 msgid "Sign in"
@@ -5433,7 +5432,7 @@ msgstr "已以 @{login} 登录"
 #. the live note once Sign out signed this device out of one instance; {host} is its display name, or its host name before any read
 #: src/components/SpaceInstance.tsx
 msgid "Signed out of {host}"
-msgstr "已退出 {host}"
+msgstr "已退出 {host} 的登录"
 
 #: src/components/CaptainHome.tsx
 msgid "Signing in from a terminal is picked up on re-check; a newly exported env var needs a Spex restart."
@@ -6124,8 +6123,8 @@ msgid "This device against the common ancestor"
 msgstr "本设备相对共同祖先的差异"
 
 #: src/lib/space.ts
-msgid "this device's sign-in to the Git host"
-msgstr "此设备在 Git 托管平台上的登录凭据"
+msgid "this device's sign-in to each instance"
+msgstr "此设备在每个实例上的登录凭据"
 
 #: src/state/store.ts
 msgid "This draft is no longer listed."

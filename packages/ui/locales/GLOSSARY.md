@@ -101,7 +101,7 @@ Product names and the role names Playbook defines stay as authored; everything e
 | Forget (an instance) | 忘记 | removes a signed-out instance from the home, every record kept; not 移除, which is Remove |
 | group | 群组 | a group on the Git host |
 | spex repository | spex 仓库 | one project's or group's records, `<name>-spex` |
-| Sign in / Signing in… / Sign in again / Sign out | 登录 / 登录中… / 重新登录 / 退出登录 | signing in to the Git host |
+| Sign in / Signing in… / Sign in again / Sign out | 登录 / 登录中… / 重新登录 / 退出登录 | signing in to an instance |
 | Pick a group / Members | 选择群组 / 成员 | a spex repository's row controls |
 | authoring (session) | 编写（会话） | a playbook being written in a draft |
 | Queue (the capture control) | 加入队列 | |

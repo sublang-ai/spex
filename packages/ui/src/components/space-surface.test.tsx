@@ -890,7 +890,7 @@ describe("GROUPS: the explorer (space-23, space-24, space-25)", () => {
     ]) {
       expect(text).toContain(family);
     }
-    expect(text).toContain("this device's sign-in to the Git host");
+    expect(text).toContain("this device's sign-in to each instance");
     expect(text).toContain("Stays on this device (8 kinds)");
   });
 

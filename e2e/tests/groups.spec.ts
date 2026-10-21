@@ -366,7 +366,7 @@ test.describe("first start", () => {
     await expect(intentRow).toContainText("Queued while Groups is shown");
     await expect(intentRow).toHaveAttribute("data-change", "new");
     await header.getByTestId("space-refresh").click();
-    await expect(instance.getByTestId("space-read-at")).toHaveText("Host read just now");
+    await expect(instance.getByTestId("space-read-at")).toHaveText("Read just now");
     await expect(instance.getByTestId("space-read-at")).toHaveAttribute("title", /\d/);
   });
 });
@@ -1089,7 +1089,7 @@ test.describe("a second instance", () => {
       await expect(section).toHaveAttribute("aria-label", name);
       await expect(heading.getByRole("heading", { level: 2 })).toHaveText(`${name} · Signed in as @${login}`);
       await expect(heading.getByTestId("space-signout")).toHaveText("Sign out");
-      await expect(heading.getByTestId("space-read-at")).toHaveText(/^Host read /);
+      await expect(heading.getByTestId("space-read-at")).toHaveText(/^Read /);
     }
     await expect(firstHeading.getByTestId("space-new-group")).toHaveText("New group");
     await expect(firstHeading.getByTestId("space-groups-made-by")).toHaveCount(0);
@@ -1526,7 +1526,7 @@ test.describe("exploring", () => {
       ["installed spec packages and exported skills", /copies installed from the lock/],
       ["where projects live", /where your working folders are on this machine/],
       ["preferences", /where you last stopped reading in each session/],
-      ["credentials", /this device's sign-in to the Git host/],
+      ["credentials", /this device's sign-in to each instance/],
       ["migration receipts and inputs", /original files kept from an upgrade/],
       ["temporary files", /copies made while writing/],
     ];

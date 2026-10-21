@@ -160,8 +160,8 @@ describe("GROUPS: each instance under its heading (space-1, git-host-5, space-3,
     expect(second.getByRole("button", { name: "Sign out" }).getAttribute("title")).toBe(
       "Signs this device out of Second Example; every record stays here",
     );
-    expect(first.getByTestId("space-read-at").textContent).toBe("Host read 1m ago");
-    expect(second.getByTestId("space-read-at").textContent).toBe("Host read 5m ago");
+    expect(first.getByTestId("space-read-at").textContent).toBe("Read 1m ago");
+    expect(second.getByTestId("space-read-at").textContent).toBe("Read 5m ago");
     expect(second.getByTestId("space-read-at").getAttribute("title")).toBe(absoluteTitle(NOW - 5 * MIN));
     // New group where the instance's read lets the person create one, the
     // phrase naming who makes groups there where it says not — no link,
@@ -213,11 +213,11 @@ describe("GROUPS: each instance under its heading (space-1, git-host-5, space-3,
     expect(first.getByTestId("space-read-error").textContent).toBe("Could not reach Spex Example");
     expect(first.getByRole("alert")).toBe(first.getByTestId("space-read-error"));
     expect(screen.getAllByRole("alert")).toHaveLength(1);
-    expect(first.getByTestId("space-read-at").textContent).toBe("Host read 1m ago");
+    expect(first.getByTestId("space-read-at").textContent).toBe("Read 1m ago");
     expect(first.getByTestId("space-row-@spex.example/acme/a-spex")).toBeTruthy();
     // The second's view, its time and its controls stand as they were.
     expect(second.queryByTestId("space-read-error")).toBeNull();
-    expect(second.getByTestId("space-read-at").textContent).toBe("Host read 5m ago");
+    expect(second.getByTestId("space-read-at").textContent).toBe("Read 5m ago");
     expect(second.getByTestId("space-row-@second.example/acme/a-spex")).toBeTruthy();
     // Refresh offers the ordinary retry; while any read runs it reads
     // "Reading…" until every read's outcome (space-1).
@@ -229,7 +229,7 @@ describe("GROUPS: each instance under its heading (space-1, git-host-5, space-3,
     deliver(changed(changed(home, SECOND, { readAt: NOW }), ORIGIN, { read: { phase: "idle" } }));
     expect(refresh.textContent).toBe("Refresh");
     expect(screen.queryByRole("alert")).toBeNull();
-    expect(second.getByTestId("space-read-at").textContent).toBe("Host read just now");
+    expect(second.getByTestId("space-read-at").textContent).toBe("Read just now");
   });
 
   test("space-3: Sign in again's flow reads on that heading; every other sign-in control is disabled while it runs", async () => {
@@ -328,8 +328,10 @@ describe("GROUPS: each instance under its heading (space-1, git-host-5, space-3,
     expect(screen.queryByTestId(`space-row-move-${stale}`)).toBeNull();
     // A path remote is reached without the instance, so it retries.
     expect(controls(pathRemote).map((button) => button.textContent)).toEqual(["Retry"]);
-    // The other instance, signed in, retries its own.
+    // The other instance, signed in, retries its own, which reads every
+    // signed-in instance again (space-2).
     expect(controls("@second.example/acme/c-spex").map((button) => button.textContent)).toEqual(["Retry"]);
+    expect(controls("@second.example/acme/c-spex")[0]!.title).toBe("Reads each signed-in instance again");
     // Your own group's own repository follows the signed-in instance
     // governing it: Sync and Members stand (space-60, space-1).
     expect((screen.getByTestId(`space-row-sync-${OWN_REPO.key}`) as HTMLButtonElement).disabled).toBe(false);
@@ -442,7 +444,7 @@ describe("GROUPS: each instance under its heading (space-1, git-host-5, space-3,
     fireEvent.click(second.getByTestId("space-signout"));
     const again = await second.findByTestId("space-signin-again");
     expect(again.textContent).toBe(zh ? "重新登录" : "Sign in again");
-    expect(live()).toBe(zh ? "已退出 Second Example" : "Signed out of Second Example");
+    expect(live()).toBe(zh ? "已退出 Second Example 的登录" : "Signed out of Second Example");
     expect((screen.getByTestId("space-refresh") as HTMLButtonElement).title).toBe(
       zh ? "重新读取每个已登录的实例" : "Reads each signed-in instance again",
     );
@@ -492,6 +494,9 @@ describe("GROUPS: Pick a group at each instance (space-58, space-29)", () => {
     // instance alone, with its group read as the list reads it.
     expect(within(sections[0]!).queryAllByTestId(/^space-pick-repo-/)).toEqual([]);
     expect(within(sections[1]!).getByTestId(`space-pick-listed-group-${LISTED}`).textContent).toBe("Acme Works · acme");
+    // It stands under the instance's own words for what it lists, never
+    // the host's (DR-120).
+    expect(within(sections[1]!).getAllByRole("heading", { level: 4 }).map((heading) => heading.textContent)[0]).toBe("On this instance for this code");
     // One name field serves every section; focus rests on the first
     // option.
     expect(within(picker).getAllByTestId(`space-pick-name-${GAMMA}`)).toHaveLength(1);

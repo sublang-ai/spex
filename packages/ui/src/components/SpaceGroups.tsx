@@ -850,7 +850,9 @@ function RepositoryRow({
           ? i18n._({ id: "Retrying…", comment: "the Retry control, while the retry is in flight" })
           : i18n._({ id: "Retry", comment: "run the stopped step again" }),
         {
-          title: i18n._("Reads the host again"),
+          // Retry reads every signed-in instance again, as Refresh does
+          // (space-2).
+          title: i18n._("Reads each signed-in instance again"),
           disabled: busy === "retry",
           describedBy: error ? captionId : undefined,
           onClick: () => void retry(),
@@ -1534,7 +1536,10 @@ export function GroupPicker({
             {listed.length > 0 ? (
               <section aria-labelledby={`${heading}-listed`} className="flex min-w-0 flex-col gap-1">
                 <h4 id={`${heading}-listed`} className="text-xs font-medium text-neutral-500">
-                  {i18n._("On the host for this code")}
+                  {i18n._({
+                    id: "On this instance for this code",
+                    comment: "the picker's heading, inside one instance's section, over the spex repositories that instance lists for the folder's code",
+                  })}
                 </h4>
                 <ul className="flex min-w-0 flex-col gap-1">
                   {listed.map(({ group, repo: other }) => (

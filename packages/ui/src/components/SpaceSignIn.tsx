@@ -395,7 +395,7 @@ export function SignInCard({
     ? signingInLabel()
     : signIn.failure !== undefined && !signIn.refused
       ? signInAgainLabel()
-      : i18n._({ id: "Sign in", comment: "sign in to the Git host" });
+      : i18n._({ id: "Sign in", comment: "sign in to an instance" });
 
   return (
     <div

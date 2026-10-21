@@ -119,7 +119,7 @@ describe("GROUPS: the header (space-1, space-2)", () => {
     // The read time is the instance's, from the core; it yields below
     // @2xl, its full moment in its title (space-28).
     const readAt = within(section).getByTestId("space-read-at");
-    expect(readAt.textContent).toBe("Host read 1m ago");
+    expect(readAt.textContent).toBe("Read 1m ago");
     expect(readAt.className).toContain("@2xl:inline");
     expect(readAt.getAttribute("title")).toBe(absoluteTitle(NOW - MIN));
     // The header holds Refresh, reading every signed-in instance, and
@@ -154,7 +154,7 @@ describe("GROUPS: the header (space-1, space-2)", () => {
     expect(calls("space.refresh")).toHaveLength(1);
     // The host's read lands as a broadcast, and its time with it.
     deliver(base({ instance: { readAt: NOW } }));
-    expect(screen.getByTestId("space-read-at").textContent).toBe("Host read just now");
+    expect(screen.getByTestId("space-read-at").textContent).toBe("Read just now");
     cleanup();
     commandMock.mockClear();
     await renderGroups(base({ instance: { readAt: null } }), { open: false });

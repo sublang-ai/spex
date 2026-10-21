@@ -2996,10 +2996,6 @@ msgstr "History — this session can't be continued"
 msgid "history, can't be continued"
 msgstr "history, can't be continued"
 
-#: src/components/SpaceInstance.tsx
-msgid "Host read {age}"
-msgstr "Host read {age}"
-
 #. a spex repository's status: nothing is running
 #. session row: no turn in flight
 #. session status: nothing is running
@@ -4014,10 +4010,6 @@ msgstr "On (current)"
 msgid "On (unsupported)"
 msgstr "On (unsupported)"
 
-#: src/components/SpaceGroups.tsx
-msgid "On the host for this code"
-msgstr "On the host for this code"
-
 #: src/lib/space.ts
 msgid "On this device only"
 msgstr "On this device only"
@@ -4025,6 +4017,11 @@ msgstr "On this device only"
 #: src/components/SpaceGroups.tsx
 msgid "On this device only — shared once you sign in"
 msgstr "On this device only — shared once you sign in"
+
+#. the picker's heading, inside one instance's section, over the spex repositories that instance lists for the folder's code
+#: src/components/SpaceGroups.tsx
+msgid "On this instance for this code"
+msgstr "On this instance for this code"
 
 #: src/components/LibrarySurface.tsx
 #: src/components/PlaybookStages.tsx
@@ -4532,6 +4529,11 @@ msgstr "Re-run adapter readiness checks (e.g. after signing in)"
 msgid "read {age}"
 msgstr "read {age}"
 
+#. on a signed-in instance's heading: when its last read was held; {age} is relative, such as '5m ago'
+#: src/components/SpaceInstance.tsx
+msgid "Read {age}"
+msgstr "Read {age}"
+
 #. a spex repository's state: the host lets this account only read it
 #: src/lib/space.ts
 msgid "Read-only"
@@ -4575,13 +4577,10 @@ msgid "Reading…"
 msgstr "Reading…"
 
 #. Refresh's title: it reads every instance the home is signed in to
+#: src/components/SpaceGroups.tsx
 #: src/components/SpaceSurface.tsx
 msgid "Reads each signed-in instance again"
 msgstr "Reads each signed-in instance again"
-
-#: src/components/SpaceGroups.tsx
-msgid "Reads the host again"
-msgstr "Reads the host again"
 
 #. session status: ready to be told what to do
 #. the adapter is signed in and usable
@@ -4828,12 +4827,12 @@ msgid "Request {requirement}"
 msgstr "Request {requirement}"
 
 #: src/components/EnvironmentSection.tsx
-msgid "Request a spec package by its folder"
-msgstr "Request a spec package by its folder"
-
-#: src/components/EnvironmentSection.tsx
 msgid "Request a Git repository at a branch, tag or commit"
 msgstr "Request a Git repository at a branch, tag or commit"
+
+#: src/components/EnvironmentSection.tsx
+msgid "Request a spec package by its folder"
+msgstr "Request a spec package by its folder"
 
 #: src/components/EnvironmentSection.tsx
 msgid "Requested {name}"
@@ -5384,8 +5383,8 @@ msgstr "shown despite filter"
 msgid "shown despite search"
 msgstr "shown despite search"
 
-#. sign in to the Git host
-#. sign in to the Git host
+#. sign in to an instance
+#. sign in to an instance
 #: src/components/SpaceInstance.tsx
 #: src/components/SpaceSignIn.tsx
 msgid "Sign in"
@@ -6124,8 +6123,8 @@ msgid "This device against the common ancestor"
 msgstr "This device against the common ancestor"
 
 #: src/lib/space.ts
-msgid "this device's sign-in to the Git host"
-msgstr "this device's sign-in to the Git host"
+msgid "this device's sign-in to each instance"
+msgstr "this device's sign-in to each instance"
 
 #: src/state/store.ts
 msgid "This draft is no longer listed."
