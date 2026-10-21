@@ -199,12 +199,13 @@ test("git-host-23: exact remote discovery records the id; every catalog page par
   const { host, home, core, id } = await prepared("target-collision");
   t.after(() => home.stop());
   const clone = clonePath(home.dataDir, OWN);
-  git(clone, "config", "--unset", "spex.repositoryId");
+  // Your own group's remote is named by the instance's folder (DR-127),
+  // the host's id in its section (storage-34).
+  const folder = hostFolder(host);
+  git(clone, "config", "--unset", `remote.${folder}.spexId`);
   const restored = await home.client.settle("space.sync", { repository: OWN });
   assert.equal(restored.sync.phase, "done");
-  assert.equal(git(clone, "config", "--get", "spex.repositoryId"), id);
-  // Your own group's remote is named by the instance's folder (DR-127).
-  const folder = hostFolder(host);
+  assert.equal(git(clone, "config", "--get", `remote.${folder}.spexId`), id);
   const origin = git(clone, "remote", "get-url", folder);
   const collision = { id: "2300", fullPath: "bob", name: "Bob's team", kind: "group" as const };
   host.script.addRepository({ group: "acme", name: "page-two-spex" });

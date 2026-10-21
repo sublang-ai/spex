@@ -189,13 +189,15 @@ const receiptsOf = (root: string): string[] => readdirSync(join(root, "local", "
 
 /** A clone as a Spex before DR-127 left it at `key`: a repository on
  * `spex` with one commit; `remote` its `origin`, `id` the host's id
- * beside it and, with both, the host's `spex` fetched under `origin`
- * as its upstream. */
-function formerClone(root: string, key: string, options: { remote?: string; id?: string } = {}): string {
+ * and `created` the core's creation mark at the top level of its Git
+ * configuration and, with both a remote and an id, the host's `spex`
+ * fetched under `origin` as its upstream. */
+function formerClone(root: string, key: string, options: { remote?: string; id?: string; created?: string } = {}): string {
   const dir = workspace(root, key);
   initializeClone(dir, { env: gitEnv });
   if (options.remote) git(dir, "remote", "add", "origin", options.remote);
   if (options.id) git(dir, "config", "spex.repositoryId", options.id);
+  if (options.created) git(dir, "config", "spex.created", options.created);
   if (options.remote && options.id) {
     git(dir, "update-ref", "refs/remotes/origin/spex", "HEAD");
     git(dir, "config", "branch.spex.remote", "origin");
@@ -224,7 +226,7 @@ function formerHomeWithClones(): string {
     ],
   }));
   formerClone(root, "ada/ada-spex", { remote: `${GIT_ORIGIN}/ada/ada-spex.git`, id: "100" });
-  formerClone(root, "ada/notes-spex", { remote: `${GIT_ORIGIN}/ada/notes-spex.git`, id: "101" });
+  formerClone(root, "ada/notes-spex", { remote: `${GIT_ORIGIN}/ada/notes-spex.git`, id: "101", created: "101" });
   formerClone(root, "ada/scratch-spex");
   formerClone(root, "ada/mirror-spex", { remote: join(root, "elsewhere", "mirror.git") });
   formerClone(root, "acme/platform/web-spex", { remote: `${GIT_ORIGIN}/acme/platform/web-spex.git`, id: "102" });
@@ -285,17 +287,23 @@ test("instances migration: every clone at the instance moves under its folder, i
     ].sort((a, b) => a.localeCompare(b)));
 
     // The host's remote takes the instance's folder's name, its fetched
-    // spex and its upstream with it; a remote the reader named keeps
-    // its own; your own group's own repository renames its remote in
-    // place; a clone already under the folder is not touched.
-    for (const key of ["ada/ada-spex", `${FOLDER}/ada/notes-spex`, `${FOLDER}/acme/platform/web-spex`, `${FOLDER}/bob/shared-spex`]) {
+    // spex and its upstream with it, and the host's id, and a creation
+    // mark, move from the top level into its section (storage-34); a
+    // remote the reader named keeps its own; your own group's own
+    // repository renames its remote in place; a clone already under the
+    // folder is not touched.
+    for (const [key, id] of [["ada/ada-spex", "100"], [`${FOLDER}/ada/notes-spex`, "101"], [`${FOLDER}/acme/platform/web-spex`, "102"], [`${FOLDER}/bob/shared-spex`, "103"]]) {
       const dir = workspace(root, key);
       assert.deepEqual(remotesOf(dir), [FOLDER], `${key}: its one remote is named by the folder`);
       assert.match(git(dir, "remote", "get-url", FOLDER), new RegExp(`^${GIT_ORIGIN}/`));
       assert.equal(git(dir, "config", "branch.spex.remote"), FOLDER, `${key}: its upstream follows`);
       assert.equal(git(dir, "rev-parse", `refs/remotes/${FOLDER}/spex`), git(dir, "rev-parse", "spex"), `${key}: its fetched spex follows`);
-      assert.ok(git(dir, "config", "spex.repositoryId").length > 0, `${key}: the host's id stays beside it`);
+      assert.equal(git(dir, "config", "--get", `remote.${FOLDER}.spexId`), id, `${key}: the host's id stands in its remote's section`);
+      assert.equal(spawnSync("git", ["-C", dir, "config", "--get", "spex.repositoryId"], { env: gitEnv }).status, 1, `${key}: no id at the top level`);
+      assert.equal(spawnSync("git", ["-C", dir, "config", "--get", "spex.created"], { env: gitEnv }).status, 1, `${key}: no creation mark at the top level`);
     }
+    assert.equal(git(workspace(root, `${FOLDER}/ada/notes-spex`), "config", "--get", `remote.${FOLDER}.spexCreated`), "101", "the creation mark moves with the id");
+    assert.equal(git(workspace(root, `${FOLDER}/acme/already-spex`), "config", "--get", "spex.repositoryId"), "104", "a clone already under the folder is not touched");
     for (const key of [`${FOLDER}/acme/draft-spex`, "ada/mirror-spex", `${FOLDER}/acme/already-spex`]) {
       assert.deepEqual(remotesOf(workspace(root, key)), ["origin"], `${key} keeps its remote`);
     }
@@ -436,6 +444,8 @@ test("instances migration: a restart after a clone's rename, before its records 
   home.save();
   const dir = workspace(root, to);
   git(dir, "remote", "rename", FOLDER, "origin");
+  git(dir, "config", "--unset", "remote.origin.spexId");
+  git(dir, "config", "spex.repositoryId", "102");
   const prefs = prefsIn(root);
   writeFileSync(join(root, "local", "prefs.json"), JSON.stringify({ format: 1, prefs: Object.fromEntries(Object.entries(prefs)
     .map(([key, value]) => [key.replace(`sync:${to}:`, "sync:acme/platform/web-spex:"), value])) }));
@@ -452,6 +462,10 @@ test("instances migration: a restart after a clone's rename, before its records 
   assert.ok(!existsSync(workspace(root, "acme/platform/web-spex")));
   assert.equal(Home.load(root).keyForFolder(join(root, "work", "web")), to);
   assert.deepEqual(remotesOf(dir), [FOLDER]);
+  // Its id moved into the renamed remote's section in the same step
+  // (storage-34).
+  assert.equal(git(dir, "config", "--get", `remote.${FOLDER}.spexId`), "102");
+  assert.equal(spawnSync("git", ["-C", dir, "config", "--get", "spex.repositoryId"], { env: gitEnv }).status, 1);
   assert.equal(prefsIn(root)[`sync:${to}:noticed`], true);
   assert.equal(prefsIn(root)["sync:acme/platform/web-spex:noticed"], undefined);
 });
@@ -475,6 +489,9 @@ test("instances migration: a clone a live session's lease holds is deferred, kee
     try {
       assert.ok(existsSync(join(workspace(root, held), ".git")) && !existsSync(workspace(root, to)), "it keeps its key");
       assert.deepEqual(remotesOf(workspace(root, held)), ["origin"], "and its remote");
+      // Its id stays at the top level until its move (storage-34).
+      assert.equal(git(workspace(root, held), "config", "--get", "spex.repositoryId"), "102");
+      assert.equal(spawnSync("git", ["-C", workspace(root, held), "config", "--get", "remote.origin.spexId"], { env: gitEnv }).status, 1);
       assert.equal(store.home.keyForFolder(join(root, "work", "web")), held, "its pair stays");
       assert.equal(prefsIn(root)[`sync:${held}:noticed`], true, "its preferences stay");
       assert.deepEqual(store.deferredMoves(), [{ from: held, to, id: "102", url: `${GIT_ORIGIN}/${held}.git` }]);
@@ -500,6 +517,10 @@ test("instances migration: a clone a live session's lease holds is deferred, kee
       assert.ok(!existsSync(workspace(root, held)) && existsSync(join(workspace(root, to), ".git")), "moved under the instance's folder");
       assert.ok(existsSync(join(workspace(root, to), "sessions", `.${deadId}.lock`, "owner.json")), "the dead owner's lease moved with it");
       assert.deepEqual(remotesOf(workspace(root, to)), [FOLDER]);
+      // The move renamed its remote, its id moved into that section
+      // (storage-34).
+      assert.equal(git(workspace(root, to), "config", "--get", `remote.${FOLDER}.spexId`), "102");
+      assert.equal(spawnSync("git", ["-C", workspace(root, to), "config", "--get", "spex.repositoryId"], { env: gitEnv }).status, 1);
       assert.equal(store2.home.keyForFolder(join(root, "work", "web")), to);
       assert.equal(prefsIn(root)[`sync:${to}:noticed`], true);
       assert.equal(store2.getForgeCache(to)?.state.repo, "acme/web");

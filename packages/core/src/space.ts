@@ -28,6 +28,7 @@ import { cloneRemoteName, InstanceRefused, kebab, REMOTE_URL_KEYS, remoteNamesIn
 import { i18n } from "./i18n.js";
 import { canonicalOrigin, instanceFolder, instanceSegmentOf, isInstanceFolder, OriginRefused, parseOrigin, type OriginRefusal } from "./instance.js";
 import { isDeferredClone } from "./migrate-instances.js";
+import { LEGACY_CREATED_KEY, LEGACY_ID_KEY, moveLegacyIds, placementCreatedKey, placementIdKey } from "./placements.js";
 import type {
   GroupsState,
   InstanceGroupState,
@@ -212,10 +213,6 @@ const AUTHORING_ID = /^[a-z0-9][a-z0-9_-]*$/;
  * default branch itself (git-host-7). */
 const CREATED_REREADS = 5;
 const CREATED_REREAD_MS = 2_000;
-/** The clone's Git configuration key recording, by the host's id, the
- * core's creation of its repository until a check is done with it
- * (git-host-7): on the clone, so a restart of the core keeps it. */
-const CREATED_KEY = "spex.created";
 
 // The reader's own words are composed where they are read, never held
 // in a constant a module's first evaluation would freeze in whichever
@@ -857,13 +854,16 @@ class RepositorySync {
    * them, and Git takes its own config lock for each write. An
    * independent process keeps ordinary filesystem behaviour. Returns
    * false, writing nothing, where the remote changed meanwhile.
-   * `created` records the core's creation of that repository
-   * (git-host-7), written first so the remote never stands without it.
+   * The id is written in the remote's own section (storage-34), so it is
+   * renamed and dropped with the remote. `created` records the core's
+   * creation of that repository (git-host-7) in that section too,
+   * written first, and the remote then written key by key rather than
+   * added, so it never stands without the mark (space-32).
    * A URL is written to the remote standing, which keeps its name; a
    * remote added takes the host's remote's name (DR-127) — named by
    * `folder`, the folder of the instance it is at, for a key outside
    * every instance's folder — or `name`, which replaces a remote of
-   * another name.
+   * another name, its id and mark leaving with its section.
    */
   private publishRemote(expected: string | null, next: { url?: string | null; id?: string | null; created?: string; name?: string; folder?: string | null }): boolean {
     const git = (args: string[]): GitRun => {
@@ -873,31 +873,63 @@ class RepositorySync {
     };
     const { name, url: current } = this.remoteNow();
     if (current !== expected) return false;
-    if (next.created !== undefined) git(["config", CREATED_KEY, next.created]);
     let written = name;
     if (next.url === null) {
-      // Taken away, the remote's own section goes alone: the host's `spex`
-      // the clone holds and its upstream stay with the repository it
-      // records (space-5), where `remote remove` would drop them.
+      // Taken away, the remote's own section goes alone, its id and mark
+      // with it (storage-34): the host's `spex` the clone holds and its
+      // upstream stay, where `remote remove` would drop them.
       if (name !== null) git(["config", "--remove-section", `remote.${name}`]);
+      // A deferred clone's id, at the top level until its move, is that
+      // remote's, and goes with it.
+      if (name !== null && this.deferred()) {
+        for (const key of [LEGACY_CREATED_KEY, LEGACY_ID_KEY]) this.git.runSync(["config", "--unset", key]);
+      }
       written = null;
     } else if (next.url !== undefined) {
       written = next.name ?? name ?? this.hostRemoteName(next.folder);
+      if (written !== name && name !== null) git(["config", "--remove-section", `remote.${name}`]);
+      if (next.created !== undefined) git(["config", this.createdKeyOf(written), next.created]);
       if (written === name) {
         if (next.url !== current) git(["remote", "set-url", written, next.url]);
+      } else if (next.created !== undefined) {
+        git(["config", `remote.${written}.url`, next.url]);
+        git(["config", `remote.${written}.fetch`, `+refs/heads/*:refs/remotes/${written}/*`]);
       } else {
-        if (name !== null) git(["config", "--remove-section", `remote.${name}`]);
         git(["remote", "add", written, next.url]);
       }
     }
-    if (next.id === null) this.git.runSync(["config", "--unset", "spex.repositoryId"]);
-    else if (next.id !== undefined) git(["config", "spex.repositoryId", next.id]);
+    if (written !== null) {
+      if (next.id === null) this.git.runSync(["config", "--unset", this.idKeyOf(written)]);
+      else if (next.id !== undefined) git(["config", this.idKeyOf(written), next.id]);
+    }
     this.facts = {
       remote: next.url === undefined ? current : next.url,
-      id: next.id === undefined ? this.facts.id : next.id,
+      id: next.id !== undefined ? next.id : written === name ? this.facts.id : null,
       remoteName: written,
     };
     return true;
+  }
+
+  /** Whether the instances migration's receipt names this clone deferred
+   * (storage-34): its remote, whatever its name, is its placement, with
+   * the id it records at the top level until its move renames that
+   * remote. */
+  private deferred(): boolean {
+    return this.host.store.deferredMoves().some((move) => move.from === this.key);
+  }
+
+  /** The key recording the host's id for the repository of the remote
+   * `name` (storage-34): in that remote's own section, or at the top
+   * level for a deferred clone. */
+  private idKeyOf(name: string): string {
+    return this.deferred() ? LEGACY_ID_KEY : placementIdKey(name);
+  }
+
+  /** The key recording the core's creation of the repository of the
+   * remote `name` (git-host-7): in that remote's own section, or at the
+   * top level for a deferred clone. */
+  private createdKeyOf(name: string): string {
+    return this.deferred() ? LEGACY_CREATED_KEY : placementCreatedKey(name);
   }
 
   /** The name the host's remote takes in this clone (DR-127): its key's
@@ -942,12 +974,22 @@ class RepositorySync {
   /** Whether the clone's remote and recorded host id read `remote` and
    * `id` at this instant (DR-111): a move checks them at its rename. */
   recordsNow(remote: string | null, id: string): boolean {
-    return this.remoteNow().url === remote && this.configNow("spex.repositoryId") === id;
+    const { name, url } = this.remoteNow();
+    return url === remote && this.idOf(name) === id;
   }
 
-  /** The host's id the clone records at this instant, if any. */
+  /** The host's id the clone records at this instant for its remote, if
+   * any (storage-34). */
   recordedIdNow(): string | null {
-    return this.configNow("spex.repositoryId");
+    return this.idOf(this.remoteNow().name);
+  }
+
+  /** The host's id recorded for the remote `name` at this instant: in its
+   * section, or a deferred clone's at the top level whatever its remote
+   * (storage-34); none for no remote. */
+  private idOf(name: string | null): string | null {
+    if (this.deferred()) return this.configNow(LEGACY_ID_KEY);
+    return name === null ? null : this.configNow(placementIdKey(name));
   }
 
   /** The URL of the remote the clone syncs with at this instant, if any. */
@@ -963,14 +1005,44 @@ class RepositorySync {
   }
 
   /** The host's id of the repository whose creation by the core the
-   * clone records (git-host-7), read at this instant. */
+   * clone records in its remote's section (git-host-7), read at this
+   * instant. */
   createdNow(): string | null {
-    return this.configNow(CREATED_KEY);
+    const { name } = this.remoteNow();
+    return name === null ? null : this.configNow(this.createdKeyOf(name));
   }
 
   /** The clone records no creation any more (git-host-7). */
   forgetCreated(): void {
-    this.git.runSync(["config", "--unset", CREATED_KEY]);
+    const { name } = this.remoteNow();
+    if (name !== null) this.git.runSync(["config", "--unset", this.createdKeyOf(name)]);
+  }
+
+  /** The host's id and the core's creation mark this clone records at
+   * the top level of its Git configuration, as an earlier Spex left
+   * them, move into its remote's section, first, in one synchronous
+   * step (storage-34): `named` is the remote as it was named before a
+   * move re-keyed the clone, which a rename then carries with them. A
+   * clone with no remote has none. */
+  adoptLegacyIds(named: string | null): void {
+    if (!moveLegacyIds((args) => { const run = this.git.runSync(args); return { ok: run.code === 0, stdout: run.stdout.toString("utf8") }; }, named)) {
+      console.error(`spex: the host's id of ${this.key} stays where it was recorded`);
+    }
+  }
+
+  /** An unreleased Spex's clone records the host's id, and the core's
+   * creation mark, at the top level beside its one remote: at the core's
+   * start they move into that remote's section (storage-34). A clone the
+   * instances migration deferred keeps them until its move. */
+  settleLegacyIds(): void {
+    try {
+      if (this.deferred() || !existsSync(join(this.dir, ".git"))) return;
+      // One read finds whether either stands; most clones hold neither.
+      if (this.git.runSync(["config", "--get-regexp", "^spex\\.(repositoryid|created)$"]).code !== 0) return;
+      this.adoptLegacyIds(this.remoteNow().name);
+    } catch (error) {
+      console.error(`spex: the host's id of ${this.key} stays where it was recorded: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
   /** Give the clone the host's own remote and id (space-58, space-63):
@@ -986,7 +1058,7 @@ class RepositorySync {
     if (!repo.root) throw new CoreError("invalid_request", initializeFirst());
     // The id the clone records, read in the step that writes the remote:
     // the host's id survives its renames and transfers (DR-103).
-    const same = this.configNow("spex.repositoryId") === id;
+    const same = this.recordedIdNow() === id;
     const held = this.remoteRef();
     // A remote already at the host's URL is the one this attaches; one
     // added takes the host's remote's name (DR-127).
@@ -1070,12 +1142,15 @@ class RepositorySync {
     const remoteName = cloneRemoteName(this.key, remoteNames(await this.git.run(["config", "-z", "--get-regexp", REMOTE_URL_KEYS])));
     const remote = remoteName === null ? null : await this.git.run(["remote", "get-url", remoteName]);
     const remoteUrl = remote?.code === 0 ? remote.stdout.toString("utf8").trim() : null;
-    const id = await this.git.run(["config", "--get", "spex.repositoryId"]);
+    // The host's id in that remote's own section, a deferred clone's at
+    // the top level (storage-34).
+    const idKey = this.deferred() ? LEGACY_ID_KEY : remoteUrl === null || remoteName === null ? null : placementIdKey(remoteName);
+    const id = idKey === null ? null : await this.git.run(["config", "--get", idKey]);
     const upstreamRead = await this.git.run(["config", "--get", `branch.${SPEX_BRANCH}.remote`]);
     const upstreamName = upstreamRead.code === 0 ? upstreamRead.stdout.toString("utf8").trim() || null : null;
     this.facts = {
       remote: remoteUrl,
-      id: id.code === 0 ? id.stdout.toString("utf8").trim() || null : null,
+      id: id?.code === 0 ? id.stdout.toString("utf8").trim() || null : null,
       remoteName: remoteUrl === null ? null : remoteName,
     };
     this.upstreamName = upstreamName;
@@ -4104,7 +4179,8 @@ export class SpaceManager {
         stop(credential ? classifyHostTransportFailure(run, this.nameOf(instance)) : classifyTransportFailure(run, url));
         return;
       }
-      await this.probe.run(["-C", dir, "config", "spex.repositoryId", id]);
+      // The host's id in that remote's own section (storage-34).
+      await this.probe.run(["-C", dir, "config", placementIdKey(name), id]);
       // Publication: the place checked absent and the stage renamed there
       // in one synchronous step; a place taken meanwhile — another join's
       // clone — is left as it stands, and a failed rename leaves no folder.
@@ -4778,9 +4854,16 @@ export class SpaceManager {
       return;
     }
     const named = machine.remoteNameNow();
+    // Its id, at the top level while it is deferred (storage-34).
+    const recorded = machine.recordedIdNow();
     this.renameClone(machine, move.to, identity);
     const folder = instanceSegmentOf(move.to);
-    if (folder !== null && machine.recordedIdNow() !== null) machine.renameRemote(named, folder);
+    if (recorded !== null) {
+      // The id moves into its remote's section, which the rename then
+      // carries (storage-34).
+      machine.adoptLegacyIds(named);
+      if (folder !== null) machine.renameRemote(named, folder);
+    }
     await this.afterMove([{ from, to: move.to }]);
   }
 
@@ -5422,9 +5505,15 @@ export class SpaceManager {
   }
 
   /** An interrupted apply in any clone is repaired from its marker before
-   * the core reopens it (space-31). */
+   * the core reopens it (space-31), once the host's id an unreleased
+   * Spex left at the top level of its Git configuration has moved into
+   * its remote's section (storage-34). */
   async repairAtStartup(): Promise<void> {
-    for (const repository of this.host.store.listRepositories()) await this.machine(repository.key).repairAtStartup();
+    for (const repository of this.host.store.listRepositories()) {
+      const machine = this.machine(repository.key);
+      machine.settleLegacyIds();
+      await machine.repairAtStartup();
+    }
   }
 
   /** Cancel every transport and wait for the operations (shutdown). */
