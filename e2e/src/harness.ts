@@ -1261,30 +1261,35 @@ export async function seedHostProject(app: App): Promise<{ key: string; code: st
 
 /**
  * Sign in through the page (space-3): while the home lists no instance,
- * the header card's Sign in at the instance its field holds — filled
- * with the stand-in's origin where it holds another — and where the home
- * lists the stand-in, signed out, its heading's "Sign in again"; the link
- * to the page that carries the code shown while the control reads
- * "Signing in…" and no code is, the code the link carries approved at
- * the stand-in — `app.host` unless another of `app.hosts` is named — as
- * its page would, and the stand-in's heading reading its person's
- * account. Groups must be shown.
+ * the header card's Sign in at the instance its field holds; where the
+ * home lists the stand-in, signed out, its heading's "Sign in again";
+ * where it lists others alone, the card "Add instance…" opens at the
+ * list's foot — each card's field filled with the stand-in's origin
+ * where it holds another; the link to the page that carries the code
+ * shown while the control reads "Signing in…" and no code is, the code
+ * the link carries approved at the stand-in — `app.host` unless another
+ * of `app.hosts` is named — as its page would, and the stand-in's
+ * heading reading its person's account. Groups must be shown.
  */
 export async function signInThroughPage(
   page: Page,
   app: App,
   host: StandinHost | undefined = app.host,
-  via?: "card" | "again",
+  via?: "card" | "again" | "add",
 ): Promise<void> {
   if (!host) throw new Error("signing in needs a host");
   const section = page.getByTestId(`space-instance-${host.url}`);
-  const how = via ?? ((await section.count()) > 0 ? "again" : "card");
+  const listed = page.locator('[data-testid^="space-instance-http"]');
+  const how = via ?? ((await section.count()) > 0 ? "again" : (await listed.count()) > 0 ? "add" : "card");
+  if (how === "add") await page.getByTestId("space-groups").getByTestId("space-add-instance").click();
   const where =
     how === "card"
       ? page.getByTestId("space-header").getByTestId("space-signin-card")
-      : section.getByTestId("space-instance-heading");
-  const control = where.getByTestId(how === "card" ? "space-signin" : "space-signin-again");
-  if (how === "card") {
+      : how === "add"
+        ? page.getByTestId("space-groups").getByTestId("space-add-card")
+        : section.getByTestId("space-instance-heading");
+  const control = where.getByTestId(how === "again" ? "space-signin-again" : "space-signin");
+  if (how !== "again") {
     const field = where.getByTestId("space-signin-instance");
     if ((await field.inputValue()) !== host.url) await field.fill(host.url);
   }

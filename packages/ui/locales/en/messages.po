@@ -902,6 +902,11 @@ msgstr "Add from Git"
 msgid "Add from registry"
 msgstr "Add from registry"
 
+#. at the groups list's foot: opens the sign-in card for another instance; its title and accessible name are "Another instance"
+#: src/components/SpaceInstance.tsx
+msgid "Add instance…"
+msgstr "Add instance…"
+
 #: src/components/ProjectGroup.tsx
 msgid "Add intent…"
 msgstr "Add intent…"
@@ -1058,6 +1063,11 @@ msgstr "always"
 #: src/lib/failure-catalogue.ts
 msgid "An agent failed"
 msgstr "An agent failed"
+
+#. the title and accessible name of "Add instance…" at the groups list's foot, and the name of the sign-in card it opens
+#: src/components/SpaceInstance.tsx
+msgid "Another instance"
+msgstr "Another instance"
 
 #: src/components/ParkedRun.tsx
 msgid "Answer below, or drop the run"
@@ -1367,6 +1377,7 @@ msgstr "Can't reach the Spex core at {endpoint} — retrying every second. On a 
 #. leave an editor without saving
 #. leave an editor without saving
 #. leave an editor without saving
+#. leave the editor without changing anything
 #. leave the editor without changing anything
 #. leave the editor without changing anything
 #. leave the editor without changing anything
@@ -5362,6 +5373,8 @@ msgid "shown despite search"
 msgstr "shown despite search"
 
 #. sign in to the Git host
+#. sign in to the Git host
+#: src/components/SpaceInstance.tsx
 #: src/components/SpaceSignIn.tsx
 msgid "Sign in"
 msgstr "Sign in"

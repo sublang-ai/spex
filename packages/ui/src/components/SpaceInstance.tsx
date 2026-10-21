@@ -14,19 +14,22 @@
 // last read with "Sign in again", whose flow reads on it, and, where the
 // instance signed this device out, says so with the login to continue
 // as (space-3). Below 20rem the heading stacks, its last control
-// full-width. Every act is a command whose outcome arrives as state
+// full-width. While the home lists any instance, "Add instance…" stands
+// at the list's foot, bearing "Another instance" as its title and
+// accessible name, and opens the sign-in card in its place (space-1,
+// space-3). Every act is a command whose outcome arrives as state
 // (space-29).
 
-import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
-import type { InstanceState } from "@sublang/spex-core/protocol";
+import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import type { GroupsState, InstanceState } from "@sublang/spex-core/protocol";
 
 import { useAppStore } from "../state/store.js";
 import { i18n } from "../i18n.js";
-import { hostNameOf, instanceName } from "../lib/instances.js";
+import { hostNameOf, instanceName, instanceOf, originOf } from "../lib/instances.js";
 import { absoluteTitle, relativeAge } from "../lib/time.js";
 import { GroupNameEditor } from "./SpaceMembers.js";
-import { signInAgainLabel, signInLines, signingInLabel, type SignInFlow } from "./SpaceSignIn.js";
-import { SECONDARY, type Note } from "./SpaceSurface.js";
+import { InstanceField, signInAgainLabel, signInLines, signingInLabel, type SignInFlow } from "./SpaceSignIn.js";
+import { PRIMARY, SECONDARY, type Note } from "./SpaceSurface.js";
 
 /** The heading's fields: stacked below 20rem, a wrapping row above it
  * (space-28). */
@@ -304,6 +307,248 @@ function InstanceHeading({
           onNote={onNote}
         />
       ) : null}
+    </div>
+  );
+}
+
+/** The name "Add instance…" bears as its title and accessible name, and
+ * the card it opens (space-1, space-28). */
+const anotherInstance = (): string =>
+  i18n._({
+    id: "Another instance",
+    comment: "the title and accessible name of \"Add instance…\" at the groups list's foot, and the name of the sign-in card it opens",
+  });
+
+/** The groups list's foot while the home lists any instance (space-1,
+ * space-3): "Add instance…", disabled while any sign-in starts or runs,
+ * which opens the sign-in card in its place — its field captioned
+ * "Instance" holding the default instance's origin, focused and
+ * selected, with Sign in and Cancel. The card's flow reads in it, as do
+ * a start the core refuses, the field keeping its text, and a flow that
+ * ended without an account, with "Sign in again"; a flow another client
+ * runs at an instance the home does not list opens it too. Escape or
+ * Cancel stops the flow the card runs and closes it, focus back on "Add
+ * instance…"; the flow ending signed in closes it, focus landing on that
+ * instance heading's Sign out (DR-010 §6). */
+export function AddInstance({
+  groups,
+  connected,
+  signIn,
+}: {
+  groups: GroupsState;
+  connected: boolean;
+  signIn: SignInFlow;
+}) {
+  const [open, setOpen] = useState(false);
+  // What the reader typed since the card opened; until then the field
+  // holds the default instance's origin (space-3, storage-2).
+  const [typed, setTyped] = useState<string>();
+  // The instance the card's flow signs in to, and whether it was signed
+  // in when the flow started: its sign-in landing closes the card.
+  const [target, setTarget] = useState<{ origin: string; was: boolean }>();
+  // A failure that already stood when the card opened belongs to an
+  // earlier card: a fresh card reads none.
+  const [stale, setStale] = useState<string>();
+  // Closed by the reader while its flow still stops: the card stays shut.
+  const [dismissed, setDismissed] = useState(false);
+  const addRef = useRef<HTMLButtonElement>(null);
+  const fieldRef = useRef<HTMLInputElement>(null);
+  const signInRef = useRef<HTMLButtonElement>(null);
+  const cancelRef = useRef<HTMLButtonElement>(null);
+  const focusField = useRef(false);
+  const focusAdd = useRef(false);
+  const titleId = useId();
+
+  // At most one sign-in runs, whichever instance it names (git-host-2).
+  const flowing = signIn.running !== null || signIn.starting;
+  const here = signIn.at === "card";
+  const runningHere = here && signIn.running !== null;
+  const landed = target !== undefined && !target.was && instanceOf(groups, target.origin)?.signedIn === true;
+  // A flow reading on the card opens it, whoever started it — but not
+  // one whose instance is signed in already: that flow has landed, the
+  // header's card giving way as it does.
+  const placed = runningHere && !dismissed && instanceOf(groups, signIn.instance)?.signedIn !== true;
+  const show = (open || placed) && !landed;
+
+  const remember = (origin: string) => setTarget({ origin, was: instanceOf(groups, origin)?.signedIn === true });
+
+  // The card a flow opened stays open through its outcome (space-3).
+  useEffect(() => {
+    if (!runningHere) setDismissed(false);
+    if (!placed || open) return;
+    setOpen(true);
+    setStale(undefined);
+    if (signIn.instance) remember(signIn.instance);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [placed, runningHere]);
+
+  // Signed in, the card's work is done: it closes, and the instance's
+  // heading takes focus as the sign-in lands (useSignIn).
+  useEffect(() => {
+    if (!landed) return;
+    setOpen(false);
+    setTarget(undefined);
+    setTyped(undefined);
+  }, [landed]);
+
+  // Focus follows what the reader did (DR-010 §6): opened, the field,
+  // its text selected; closed, "Add instance…" again, once the flow the
+  // card stopped has ended and it takes focus — unless the reader put
+  // focus elsewhere meanwhile.
+  const addDisabled = !connected || flowing;
+  useEffect(() => {
+    if (show && focusField.current) {
+      focusField.current = false;
+      fieldRef.current?.focus();
+      fieldRef.current?.select();
+    }
+    if (show) focusAdd.current = false;
+    if (!show && focusAdd.current && !addDisabled) {
+      focusAdd.current = false;
+      if (stranded()) addRef.current?.focus();
+    }
+  }, [show, addDisabled]);
+
+  // Sign in, disabled while the card's flow runs, hands focus to Cancel,
+  // which gives it back when the flow ends without an account; focus the
+  // reader put elsewhere stays.
+  const wasRunning = useRef(runningHere);
+  useEffect(() => {
+    if (wasRunning.current === runningHere) return;
+    wasRunning.current = runningHere;
+    if (!stranded(signInRef.current)) return;
+    if (runningHere) cancelRef.current?.focus();
+    else signInRef.current?.focus();
+  }, [runningHere]);
+
+  // What the card's own flow reads (space-3): its lines while it runs, a
+  // start refused or a flow ended without an account as its cause, none
+  // of a flow reading elsewhere. Until the reader types, the field holds
+  // the origin that flow names, else the default instance's.
+  const failure = here && signIn.failure !== stale ? signIn.failure : undefined;
+  const named = runningHere || failure !== undefined ? signIn.instance : undefined;
+  const field = typed ?? named ?? groups.defaultInstance;
+  const url = field.trim();
+
+  const openCard = () => {
+    if (!connected || flowing) return;
+    focusField.current = true;
+    setTyped(undefined);
+    setTarget(undefined);
+    setStale(signIn.failure);
+    setOpen(true);
+  };
+
+  /** Close the card (space-3): the flow it runs stopped, focus back on
+   * "Add instance…". */
+  const close = () => {
+    if (runningHere) {
+      signIn.cancel();
+      setDismissed(true);
+    }
+    focusAdd.current = true;
+    setOpen(false);
+    setTarget(undefined);
+    setTyped(undefined);
+  };
+
+  const begin = () => {
+    if (!connected || flowing || !url) return;
+    setStale(undefined);
+    remember(originOf(url));
+    void signIn.start(url, "card").then((started) => {
+      if (!started) fieldRef.current?.focus();
+    });
+  };
+
+  if (!show) {
+    return (
+      <button
+        ref={addRef}
+        type="button"
+        data-testid="space-add-instance"
+        // The long name is its title and its accessible name; the label
+        // keeps to the budget (space-28, DR-041).
+        aria-label={anotherInstance()}
+        title={anotherInstance()}
+        className={`${SECONDARY} self-start whitespace-nowrap`}
+        disabled={addDisabled}
+        onClick={openCard}
+      >
+        {i18n._({
+          id: "Add instance…",
+          comment: "at the groups list's foot: opens the sign-in card for another instance; its title and accessible name are \"Another instance\"",
+        })}
+      </button>
+    );
+  }
+
+  const lines = signInLines(
+    { ...signIn, running: here ? signIn.running : null, failure },
+    hostNameOf(signIn.instance ?? url),
+  );
+  const flowingHere = here && flowing;
+  const label = flowingHere
+    ? signingInLabel()
+    : failure !== undefined && !signIn.refused
+      ? signInAgainLabel()
+      : i18n._({ id: "Sign in", comment: "sign in to the Git host" });
+
+  return (
+    <div
+      role="group"
+      aria-labelledby={titleId}
+      data-testid="space-add-card"
+      className="flex min-w-0 flex-col gap-2"
+      onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
+        // Escape stops the card's flow and closes it (space-3).
+        if (event.key !== "Escape") return;
+        event.stopPropagation();
+        close();
+      }}
+    >
+      <h2 id={titleId} className="text-sm font-medium">
+        {anotherInstance()}
+      </h2>
+      {lines ? (
+        <div
+          data-testid="space-signin-body"
+          className="flex min-w-0 flex-col gap-1 break-words text-sm text-neutral-600 dark:text-neutral-300"
+        >
+          {lines}
+        </div>
+      ) : null}
+      <InstanceField
+        inputRef={fieldRef}
+        value={field}
+        onChange={setTyped}
+        onEnter={begin}
+        // The origin being signed in to stands while the card's flow
+        // runs.
+        readOnly={flowingHere}
+      />
+      <div className={ROW}>
+        <button
+          ref={cancelRef}
+          type="button"
+          data-testid="space-signin-cancel"
+          className={`${SECONDARY} self-start @xs:self-auto`}
+          onClick={close}
+        >
+          {i18n._({ id: "Cancel", comment: "leave the editor without changing anything" })}
+        </button>
+        <button
+          ref={signInRef}
+          type="button"
+          data-testid="space-signin"
+          className={`${PRIMARY} w-full @xs:w-auto`}
+          disabled={!connected || flowing || !url}
+          title={url ? i18n._("Signs in to {host}", { host: hostNameOf(url) }) : undefined}
+          onClick={begin}
+        >
+          {label}
+        </button>
+      </div>
     </div>
   );
 }

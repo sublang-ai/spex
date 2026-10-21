@@ -11,8 +11,10 @@
 // offers each signed-in instance's namespace and groups under its
 // display name, and a choice names its instance (space-58, space-29);
 // Move… offers the groups of the row's instance alone (space-78); Join
-// names the instance its row stands under (space-63, space-29). Each
-// act is checked by the command it sends.
+// names the instance its row stands under (space-63, space-29);
+// "Add instance…" at the list's foot opens the sign-in card in its place
+// (space-1, space-3, space-28). Each act is checked by the command it
+// sends.
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
@@ -31,12 +33,14 @@ import {
   OWN_REPO,
   SECOND,
   answer,
+  base,
   calls,
   commandMock,
   deliver,
   installClient,
   live,
   namespace,
+  noInstance,
   renderGroups,
   repo,
   signedOutAt,
@@ -580,5 +584,262 @@ describe("GROUPS: Join at the row's instance (space-63, space-29)", () => {
     await waitFor(() =>
       expect(calls("space.join")).toEqual([{ instance: SECOND, hostId: "62", folder: "/Users/jane/code/docs-second" }]),
     );
+  });
+});
+
+describe("GROUPS: Add instance… at the list's foot (space-1, space-3, space-28, space-66)", () => {
+  const REFUSED = "An instance is named by its origin alone, with no path, query or user";
+  const DEVICE = (code: string) => `${SECOND}/login/device?user_code=${code}`;
+
+  /** The start answered by the device flow at the second instance, and
+   * refused by the origin rule for any other URL than an origin. */
+  function startsAtSecond(): void {
+    commandMock.mockImplementation(async (type: string, fields?: Record<string, unknown>) => {
+      if (type !== "space.signin.start") return answer(type, fields);
+      if (!/^https:\/\/[^/]+$/.test(fields?.url as string)) throw new Error(REFUSED);
+      return { flow: "device", userCode: "WDJB-MJHT", verificationUri: `${fields?.url as string}/login/device?user_code=WDJB-MJHT`, expiresAt: NOW + 15 * MIN };
+    });
+  }
+
+  /** The sign-in the core reports running at the second instance. */
+  const runningAtSecond = (code = "WDJB-MJHT"): GroupsState => ({
+    ...base(),
+    signIn: { phase: "running", instance: SECOND, flow: "device", userCode: code, verificationUri: DEVICE(code), since: NOW },
+  });
+
+  const add = (): HTMLButtonElement => screen.getByTestId("space-add-instance") as HTMLButtonElement;
+  const card = (): HTMLElement => screen.getByTestId("space-add-card");
+  const field = (): HTMLInputElement => within(card()).getByRole("textbox", { name: "Instance" }) as HTMLInputElement;
+
+  test("space-66, space-1: Add instance… stands at the list's foot named Another instance, absent while the home lists none", async () => {
+    await renderGroups(headingsHome(), { open: false });
+    // Its label keeps to the budget; "Another instance" is its title and
+    // its accessible name (space-1, space-28).
+    expect(add().textContent).toBe("Add instance…");
+    expect(screen.getByRole("button", { name: "Another instance" })).toBe(add());
+    expect(add().title).toBe("Another instance");
+    expect(add().disabled).toBe(false);
+    // At the list's foot: inside the list, after every instance's section.
+    const list = screen.getByTestId("space-groups");
+    expect(list.lastElementChild!.contains(add())).toBe(true);
+    for (const section of sections()) {
+      expect(section.compareDocumentPosition(add()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(section.contains(add())).toBe(false);
+    }
+    // Nothing opens until the reader asks.
+    expect(screen.queryByTestId("space-add-card")).toBeNull();
+    expect(within(list).queryByRole("textbox")).toBeNull();
+    cleanup();
+
+    // Signed out of the one instance it lists, the home still lists it,
+    // and the foot stands beneath its heading.
+    await renderGroups(signedOutAt(ORIGIN), { open: false });
+    expect(screen.getByRole("button", { name: "Another instance" })).toBe(add());
+    expect(sectionOf(ORIGIN).compareDocumentPosition(add()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    cleanup();
+
+    // Listing none, the header is the card and the list holds your own
+    // group alone (space-1, space-3).
+    await renderGroups(noInstance(), { open: false });
+    expect(screen.getByTestId("space-signin-card")).toBeTruthy();
+    expect(screen.queryByTestId("space-add-instance")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Another instance" })).toBeNull();
+  });
+
+  test("space-3: it opens the card in its place with Instance holding the first's origin; Escape closes it, focus back; an origin the core refuses reads in the card with the field kept; a second origin starts the flow there; Add instance… is disabled while any flow runs", async () => {
+    startsAtSecond();
+    await renderGroups(base(), { open: false });
+    fireEvent.click(add());
+    // The card stands in its place, named "Another instance", its field
+    // holding the first instance's origin, focused and selected, with
+    // Sign in its one primary control and Cancel beside it (space-3).
+    expect(screen.queryByTestId("space-add-instance")).toBeNull();
+    expect(screen.getByRole("group", { name: "Another instance" })).toBe(card());
+    expect(screen.getByTestId("space-groups").lastElementChild!.contains(card())).toBe(true);
+    expect(screen.queryByTestId("space-signin-card")).toBeNull();
+    expect(field().value).toBe(ORIGIN);
+    await waitFor(() => expect(document.activeElement).toBe(field()));
+    expect([field().selectionStart, field().selectionEnd]).toEqual([0, ORIGIN.length]);
+    const signIn = () => within(card()).getByTestId("space-signin") as HTMLButtonElement;
+    expect(signIn().textContent).toBe("Sign in");
+    expect(signIn().title).toBe("Signs in to spex.example");
+    expect([...card().querySelectorAll("button.bg-brand-600")]).toEqual([signIn()]);
+    expect(within(card()).getByTestId("space-signin-cancel").textContent).toBe("Cancel");
+    expect(within(card()).queryByTestId("space-signin-body")).toBeNull();
+
+    // Escape closes it, starting and stopping nothing, and Add instance…
+    // stands again with focus (space-3).
+    fireEvent.keyDown(field(), { key: "Escape" });
+    expect(screen.queryByTestId("space-add-card")).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(add()));
+    expect(calls("space.signin.start")).toEqual([]);
+    expect(calls("space.signin.cancel")).toEqual([]);
+
+    // An origin with a path is refused: the card reads the core's cause
+    // as one sentence, the field keeping its text and focus, no flow
+    // started (space-3, git-host-2).
+    fireEvent.click(add());
+    fireEvent.change(field(), { target: { value: `${SECOND}/x` } });
+    fireEvent.click(signIn());
+    await waitFor(() => expect(within(card()).getByTestId("space-signin-error").textContent).toBe(`${REFUSED}.`));
+    expect(calls("space.signin.start")).toEqual([{ url: `${SECOND}/x` }]);
+    expect(field().value).toBe(`${SECOND}/x`);
+    expect(field().readOnly).toBe(false);
+    await waitFor(() => expect(document.activeElement).toBe(field()));
+    expect(within(card()).queryByTestId("space-signin-link")).toBeNull();
+    expect(signIn().textContent).toBe("Sign in");
+    expect(within(sectionOf(ORIGIN)).queryByTestId("space-signin-error")).toBeNull();
+
+    // The second's origin starts the sign-in there, its flow reading in
+    // the card, named by the second's host name (space-3, git-host-3).
+    fireEvent.change(field(), { target: { value: SECOND } });
+    fireEvent.keyDown(field(), { key: "Enter" });
+    const link = (await within(card()).findByTestId("space-signin-link")) as HTMLAnchorElement;
+    expect(calls("space.signin.start")).toEqual([{ url: `${SECOND}/x` }, { url: SECOND }]);
+    expect(link.textContent).toBe("Open second.example to sign in");
+    expect(link.href).toBe(DEVICE("WDJB-MJHT"));
+    expect(link.target).toBe("_blank");
+    expect(within(card()).getByTestId("space-signin-body").textContent).toContain("Sign in there and approve");
+    expect(within(card()).queryByTestId("space-signin-error")).toBeNull();
+    expect(signIn().textContent).toBe("Signing in…");
+    expect(signIn().disabled).toBe(true);
+    expect(field().readOnly).toBe(true);
+    // Focus the reader put in the field stays there.
+    expect(document.activeElement).toBe(field());
+    // No heading reads it, and no heading offers a sign-in.
+    expect(within(sectionOf(ORIGIN)).queryByTestId("space-signin-body")).toBeNull();
+    deliver(runningAtSecond());
+    expect(within(card()).getByTestId("space-signin-link").textContent).toBe("Open second.example to sign in");
+
+    // Signed in there, the card gives way to Add instance… and the new
+    // heading, focus landing on its Sign out (DR-010 §6).
+    deliver(twoInstances());
+    expect(screen.queryByTestId("space-add-card")).toBeNull();
+    expect(within(sectionOf(SECOND)).getByRole("heading", { level: 2 }).textContent).toBe("Second Example · Signed in as @jada");
+    await waitFor(() => expect(document.activeElement).toBe(within(sectionOf(SECOND)).getByTestId("space-signout")));
+    await waitFor(() => expect(add().disabled).toBe(false));
+    cleanup();
+
+    // While a heading's flow runs, Add instance… is disabled, and opens
+    // nothing; its end enables it again (space-3).
+    commandMock.mockClear();
+    await renderGroups(signedOutAt(SECOND, {}, twoInstances()), { open: false });
+    const again = within(sectionOf(SECOND)).getByTestId("space-signin-again");
+    fireEvent.click(again);
+    await within(sectionOf(SECOND)).findByTestId("space-signin-link");
+    expect(add().disabled).toBe(true);
+    fireEvent.click(add());
+    expect(screen.queryByTestId("space-add-card")).toBeNull();
+    fireEvent.click(within(sectionOf(SECOND)).getByTestId("space-signin-cancel"));
+    await waitFor(() => expect(calls("space.signin.cancel")).toEqual([{}]));
+    await waitFor(() => expect(add().disabled).toBe(false));
+  });
+
+  test("space-3: Cancel stops the flow the card runs and closes it; a flow ended without an account reads in the card with Sign in again, a card opened afresh reading none; a flow another client runs at an unlisted instance reads in the card at the foot", async () => {
+    startsAtSecond();
+    await renderGroups(base(), { open: false });
+    // A denial ends the card's flow: its cause as one sentence, with
+    // "Sign in again", the field keeping the origin (space-3).
+    fireEvent.click(add());
+    fireEvent.change(field(), { target: { value: SECOND } });
+    within(card()).getByTestId("space-signin").focus();
+    fireEvent.click(within(card()).getByTestId("space-signin"));
+    await within(card()).findByTestId("space-signin-link");
+    // Sign in, disabled while the flow runs, hands focus to Cancel.
+    await waitFor(() => expect(document.activeElement).toBe(within(card()).getByTestId("space-signin-cancel")));
+    deliver(runningAtSecond());
+    deliver({ ...base(), signIn: { phase: "failed", instance: SECOND, cause: "denied", message: "The sign-in was denied at second.example" } });
+    expect(within(card()).getByTestId("space-signin-error").textContent).toBe("The sign-in was denied at second.example.");
+    expect(within(card()).queryByTestId("space-signin-link")).toBeNull();
+    expect(within(card()).getByTestId("space-signin").textContent).toBe("Sign in again");
+    expect(field().value).toBe(SECOND);
+    expect(field().readOnly).toBe(false);
+    // Cancel closes it, with no flow to stop, focus back.
+    fireEvent.click(within(card()).getByTestId("space-signin-cancel"));
+    expect(screen.queryByTestId("space-add-card")).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(add()));
+    expect(calls("space.signin.cancel")).toEqual([]);
+    // Opened again, the card is afresh: the first's origin and no cause.
+    fireEvent.click(add());
+    expect(field().value).toBe(ORIGIN);
+    expect(within(card()).queryByTestId("space-signin-error")).toBeNull();
+    expect(within(card()).getByTestId("space-signin").textContent).toBe("Sign in");
+
+    // Cancel while the card's flow runs stops it and closes the card,
+    // focus back on Add instance… (space-3).
+    fireEvent.change(field(), { target: { value: SECOND } });
+    fireEvent.click(within(card()).getByTestId("space-signin"));
+    await within(card()).findByTestId("space-signin-link");
+    deliver(runningAtSecond());
+    fireEvent.click(within(card()).getByTestId("space-signin-cancel"));
+    expect(screen.queryByTestId("space-add-card")).toBeNull();
+    await waitFor(() => expect(calls("space.signin.cancel")).toEqual([{}]));
+    deliver(base());
+    await waitFor(() => expect(add().disabled).toBe(false));
+    expect(document.activeElement).toBe(add());
+
+    // Escape while it runs stops it too.
+    fireEvent.click(add());
+    fireEvent.change(field(), { target: { value: SECOND } });
+    fireEvent.click(within(card()).getByTestId("space-signin"));
+    await within(card()).findByTestId("space-signin-link");
+    fireEvent.keyDown(within(card()).getByTestId("space-signin-cancel"), { key: "Escape" });
+    expect(screen.queryByTestId("space-add-card")).toBeNull();
+    await waitFor(() => expect(calls("space.signin.cancel")).toEqual([{}, {}]));
+    await waitFor(() => expect(add().disabled).toBe(false));
+
+    // A flow another client runs at an instance the home does not list
+    // reads in the card, opened at the foot, the field holding its origin.
+    deliver(runningAtSecond("ABCD-EFGH"));
+    const link = (await within(card()).findByTestId("space-signin-link")) as HTMLAnchorElement;
+    expect(link.textContent).toBe("Open second.example to sign in");
+    expect(link.href).toBe(DEVICE("ABCD-EFGH"));
+    expect(field().value).toBe(SECOND);
+    expect(field().readOnly).toBe(true);
+    expect(within(card()).getByTestId("space-signin").textContent).toBe("Signing in…");
+    expect(within(sectionOf(ORIGIN)).queryByTestId("space-signin-link")).toBeNull();
+    // Its end with the account closes the card.
+    deliver(twoInstances());
+    expect(screen.queryByTestId("space-add-card")).toBeNull();
+    await waitFor(() => expect(add().disabled).toBe(false));
+    expect(calls("space.signin.start")).toHaveLength(3);
+  });
+
+  test.each(["en", "zh"] as const)("space-28, space-1: Add instance… and its card read the catalog's words, every control at most 14 characters, busy forms included, the card stacking below 20rem (%s)", async (language) => {
+    activateLanguage(language);
+    startsAtSecond();
+    const zh = language === "zh";
+    await renderGroups(base(), { open: false });
+    const name = zh ? "另一个实例" : "Another instance";
+    expect(add().textContent).toBe(zh ? "添加实例…" : "Add instance…");
+    expect(add().getAttribute("aria-label")).toBe(name);
+    expect(add().title).toBe(name);
+    const seen: string[] = [add().textContent ?? ""];
+    fireEvent.click(add());
+    const opened = screen.getByRole("group", { name });
+    expect(within(opened).getByRole("heading", { level: 2 }).textContent).toBe(name);
+    expect(within(opened).getByRole("textbox", { name: zh ? "实例" : "Instance" })).toBeTruthy();
+    const labels = () => within(card()).getAllByRole("button").map((button) => (button.textContent ?? "").trim());
+    seen.push(...labels());
+    fireEvent.change(within(opened).getByRole("textbox"), { target: { value: SECOND } });
+    fireEvent.click(within(card()).getByTestId("space-signin"));
+    await within(card()).findByTestId("space-signin-link");
+    seen.push(...labels());
+    expect(seen).toEqual(
+      zh
+        ? ["添加实例…", "取消", "登录", "取消", "登录中…"]
+        : ["Add instance…", "Cancel", "Sign in", "Cancel", "Signing in…"],
+    );
+    for (const label of seen) expect(label.length, `"${label}"`).toBeLessThanOrEqual(14);
+    // The foot is a container: below 20rem the card's controls stack,
+    // Sign in last and full-width (space-28).
+    expect(card().parentElement!.className.split(/\s+/)).toContain("@container");
+    const row = within(card()).getByTestId("space-signin").parentElement!;
+    expect(row.className).toContain("flex-col");
+    expect(row.className).toContain("@xs:flex-row");
+    const last = [...row.querySelectorAll("button")].at(-1)!;
+    expect(last).toBe(within(card()).getByTestId("space-signin"));
+    expect(last.className).toContain("w-full");
+    expect(last.className).toContain("@xs:w-auto");
   });
 });

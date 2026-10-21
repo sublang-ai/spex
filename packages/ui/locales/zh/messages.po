@@ -902,6 +902,11 @@ msgstr "从 Git 添加"
 msgid "Add from registry"
 msgstr "从注册表添加"
 
+#. at the groups list's foot: opens the sign-in card for another instance; its title and accessible name are "Another instance"
+#: src/components/SpaceInstance.tsx
+msgid "Add instance…"
+msgstr "添加实例…"
+
 #: src/components/ProjectGroup.tsx
 msgid "Add intent…"
 msgstr "添加意图…"
@@ -1058,6 +1063,11 @@ msgstr "无条件"
 #: src/lib/failure-catalogue.ts
 msgid "An agent failed"
 msgstr "有智能体失败"
+
+#. the title and accessible name of "Add instance…" at the groups list's foot, and the name of the sign-in card it opens
+#: src/components/SpaceInstance.tsx
+msgid "Another instance"
+msgstr "另一个实例"
 
 #: src/components/ParkedRun.tsx
 msgid "Answer below, or drop the run"
@@ -1367,6 +1377,7 @@ msgstr "无法连接 {endpoint} 上的 Spex 核心 — 每秒重试中。网页�
 #. leave an editor without saving
 #. leave an editor without saving
 #. leave an editor without saving
+#. leave the editor without changing anything
 #. leave the editor without changing anything
 #. leave the editor without changing anything
 #. leave the editor without changing anything
@@ -5362,6 +5373,8 @@ msgid "shown despite search"
 msgstr "搜索外仍显示"
 
 #. sign in to the Git host
+#. sign in to the Git host
+#: src/components/SpaceInstance.tsx
 #: src/components/SpaceSignIn.tsx
 msgid "Sign in"
 msgstr "登录"

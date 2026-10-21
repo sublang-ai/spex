@@ -5,18 +5,19 @@
 // DR-127): while the home lists no instance, the header is one card
 // with the field captioned "Instance", holding the default instance's
 // origin until the reader edits it, Sign in starting the sign-in at the
-// origin it holds; a signed-out instance's heading starts it again at
-// its own origin (SpaceInstance). Wherever it started, the flow in
-// flight reads there: on the desktop the browser flow opens the
-// instance's page through the native bridge (app-shell-37), offering it
-// again; where no bridge opened it, and on the served page's device
-// flow, it links the page to finish at — the device flow's link carries
-// the code, which is never shown — named by the host name of the origin
-// being signed in to. The outcome is state: the surface reads `signIn`
-// and the instances as the core sends them and keeps only the start's
-// reply, which state does not carry.
+// origin it holds; while it lists any, "Add instance…" at the list's
+// foot opens the same card in its place, and a signed-out instance's
+// heading starts it again at its own origin (SpaceInstance). Wherever
+// it started, the flow in flight reads there: on the desktop the
+// browser flow opens the instance's page through the native bridge
+// (app-shell-37), offering it again; where no bridge opened it, and on
+// the served page's device flow, it links the page to finish at — the
+// device flow's link carries the code, which is never shown — named by
+// the host name of the origin being signed in to. The outcome is state:
+// the surface reads `signIn` and the instances as the core sends them
+// and keeps only the start's reply, which state does not carry.
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import type { CommandResults, GroupsState } from "@sublang/spex-core/protocol";
 
 import { useAppStore } from "../state/store.js";
@@ -283,6 +284,50 @@ export function signInLines(signIn: SignInFlow, site: string): ReactNode {
   return null;
 }
 
+/** The sign-in card's field captioned "Instance" (space-3): the URL of
+ * the instance to sign in to, Enter starting the sign-in. Wherever the
+ * card stands — the header, or the list's foot in place of "Add
+ * instance…" — the field reads the same. */
+export function InstanceField({
+  inputRef,
+  value,
+  onChange,
+  onEnter,
+  readOnly,
+}: {
+  inputRef: RefObject<HTMLInputElement | null>;
+  value: string;
+  onChange(value: string): void;
+  onEnter(): void;
+  readOnly: boolean;
+}) {
+  return (
+    <label className="flex min-w-0 flex-col gap-1 text-sm @xs:flex-row @xs:items-center @xs:gap-x-2">
+      <span className="shrink-0 text-xs text-neutral-500">
+        {i18n._({
+          id: "Instance",
+          comment: "the sign-in card's field caption: the URL of the instance to sign in to, held by its origin (https://spex.pub)",
+        })}
+      </span>
+      <input
+        ref={inputRef}
+        data-testid="space-signin-instance"
+        type="url"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") onEnter();
+        }}
+        readOnly={readOnly}
+        spellCheck={false}
+        autoComplete="off"
+        autoCapitalize="off"
+        className={FIELD}
+      />
+    </label>
+  );
+}
+
 /** The header while the home lists no instance (space-3): one card
  * saying what signing in brings, or the flow in flight, or why it ended;
  * the field captioned "Instance", holding the default instance's origin
@@ -367,30 +412,14 @@ export function SignInCard({
       <div data-testid="space-signin-body" className="flex min-w-0 flex-col gap-1 break-words text-sm text-neutral-600 dark:text-neutral-300">
         {body}
       </div>
-      <label className="flex min-w-0 flex-col gap-1 text-sm @xs:flex-row @xs:items-center @xs:gap-x-2">
-        <span className="shrink-0 text-xs text-neutral-500">
-          {i18n._({
-            id: "Instance",
-            comment: "the sign-in card's field caption: the URL of the instance to sign in to, held by its origin (https://spex.pub)",
-          })}
-        </span>
-        <input
-          ref={fieldRef}
-          data-testid="space-signin-instance"
-          type="url"
-          value={field}
-          onChange={(event) => setTyped(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") begin();
-          }}
-          // The origin being signed in to stands while the flow runs.
-          readOnly={flowing}
-          spellCheck={false}
-          autoComplete="off"
-          autoCapitalize="off"
-          className={FIELD}
-        />
-      </label>
+      <InstanceField
+        inputRef={fieldRef}
+        value={field}
+        onChange={setTyped}
+        onEnter={begin}
+        // The origin being signed in to stands while the flow runs.
+        readOnly={flowing}
+      />
       <div className="flex min-w-0 flex-col gap-1 @xs:flex-row @xs:items-center @xs:gap-x-3">
         {running ? (
           <button

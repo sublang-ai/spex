@@ -23,7 +23,9 @@
 // space-76, space-77, DR-114); your own group's heading carries none of
 // these, nor does a namespace. A row the instance lets the person move
 // carries "Move to another group", offering the groups of the instance
-// the row stands under alone (space-78). No part of the list links a
+// the row stands under alone (space-78). While the home lists any
+// instance, "Add instance…" at the list's foot opens the sign-in card in
+// its place (space-1, space-3). No part of the list links a
 // page of the host, or names what stands behind the instance (space-1).
 // Every act is a command whose outcome arrives as state (space-29).
 
@@ -59,7 +61,7 @@ import {
 } from "../lib/space.js";
 import { Icon } from "./Icon.js";
 import { InlineConfirm } from "./InlineConfirm.js";
-import { InstanceSection } from "./SpaceInstance.js";
+import { AddInstance, InstanceSection } from "./SpaceInstance.js";
 import { GroupNameEditor, MembersPanel } from "./SpaceMembers.js";
 import type { SignInFlow } from "./SpaceSignIn.js";
 import { SECONDARY, syncRefusal, type Note } from "./SpaceSurface.js";
@@ -202,7 +204,8 @@ function rowControl(
 /** The groups list (space-1): your own group first, then each instance
  * the home lists under its heading in the home's order, its entries in
  * the order the heading lists them, under each one row per spex
- * repository in the core's order. */
+ * repository in the core's order; while it lists any instance, "Add
+ * instance…" at its foot. */
 export function GroupsList({
   groups,
   now,
@@ -256,6 +259,13 @@ export function GroupsList({
           {entriesOf(instance).map((group) => section(group, instance))}
         </InstanceSection>
       ))}
+      {groups.instances.length > 0 ? (
+        // The list's foot: another instance to sign in to (space-1,
+        // space-3), its card stacking within its own width (space-28).
+        <div className="@container flex min-w-0 flex-col border-t border-neutral-200 pt-3 dark:border-neutral-800">
+          <AddInstance groups={groups} connected={connected} signIn={signIn} />
+        </div>
+      ) : null}
     </section>
   );
 }
