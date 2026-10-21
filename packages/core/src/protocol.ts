@@ -727,7 +727,9 @@ export interface IntentInfo {
   text: string;
   attachments?: readonly MediaAsset[];
   source?: IntentSource;
-  /** Who captured it, where the home was signed in. */
+  /** The account that captured it at its project's instance; none where
+   * the project has no instance or the home is not signed in there
+   * (core-service-42, core-service-52). */
   author?: IntentAuthor;
   /** The capture time, which orders the queue (core-service-107). */
   createdAt: number;
