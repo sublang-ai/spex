@@ -15,7 +15,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, symlinkSync, w
 import { join } from "node:path";
 import { createSessionStore } from "@sublang/playbook/session-store";
 import { appendHistorySession, seedHistorySession } from "./testing/demo.js";
-import { clonePath, createSpaceHarness, OWN_KEY, ownClone, prefsOf } from "./testing/space-harness.js";
+import { clonePath, createSpaceHarness, OWN_KEY, ownClone, prefsOf, rowsOf } from "./testing/space-harness.js";
 
 const fixture = createSpaceHarness();
 const { scratch, git, bareRepo, otherDevice, sameNameFolder, addFolder, sleepingSsh, sleep, joinRemote, startHome, runTurn, peerClone, peerPush, turnRecords } = fixture;
@@ -614,7 +614,7 @@ test("space-38: two Syncs sent together over a marker a released lease left are 
   const [first, second] = await Promise.all([home.client.command("space.sync", { repository: key }), home.client.command("space.sync", { repository: key })]);
   assert.ok(first.ok && second.ok, JSON.stringify([first, second]));
   await home.client.waitRepository(from, key, (repository) => repository.sync.phase === "running");
-  const running = home.client.messages.findIndex((message, index) => index >= from && message.type === "space.state" && message.state.groups.some((group) => group.repositories.some((repository) => repository.key === key && repository.sync.phase === "running")));
+  const running = home.client.messages.findIndex((message, index) => index >= from && message.type === "space.state" && rowsOf(message.state).some((repository) => repository.key === key && repository.sync.phase === "running"));
   const done = await home.client.waitRepository(running, key, (repository) => repository.sync.phase !== "running");
   assert.equal(done.sync.phase, "done", JSON.stringify(done.sync));
   // No state from the first send to that sync's end names the marker as

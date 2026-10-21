@@ -30,7 +30,7 @@ import { authoringScript } from "./testing/authoring.js";
 import { fakeAdapterImports, type FakeScript } from "./testing/fake-adapter.js";
 import { createScriptedCaptain } from "./testing/scripted-captain.js";
 import { scratchDir } from "./testing/scratch.js";
-import { createSpaceHarness, ownClone } from "./testing/space-harness.js";
+import { createSpaceHarness, instanceOf, ownClone, rowsOf } from "./testing/space-harness.js";
 import { STANDIN_STORAGE } from "./testing/standin-host.js";
 import { makeRelease, startStandinRegistry } from "./testing/standin-registry.js";
 import { stubSlcSource } from "./testing/stub-slc.js";
@@ -1136,7 +1136,7 @@ test("environments-25: every environment command replies and refuses as its tabl
   await client.expectOk("space.remote.set", { repository: key, url: bare });
   const from = client.mark();
   await client.expectOk("space.sync", { repository: key });
-  await client.waitFor((m) => m.type === "space.state" && m.state.groups.some((group) => group.repositories.some((repository) => repository.key === key && repository.sync.phase === "done")), 30_000, from);
+  await client.waitFor((m) => m.type === "space.state" && rowsOf(m.state).some((repository) => repository.key === key && repository.sync.phase === "done"), 30_000, from);
 
   // Another member changes the environment on the host: the lock a sync
   // applies installs and exports, its state broadcast (environments-17).
@@ -1938,7 +1938,7 @@ test("instance package sources keep transport locators out of state and broadcas
     if (state.busy === null && state.error) assert.fail(state.error);
     await sleep(15);
   }
-  const instance = (await home.client.expectOk("space.get", {})).host.displayName;
+  const instance = instanceOf(await home.client.expectOk("space.get", {}), host.url)?.displayName;
   assert.ok(instance);
   const commitPrefix = harness.git(work, "rev-parse", "HEAD").slice(0, 12);
   const safe = (value: unknown): void => {
@@ -2070,7 +2070,7 @@ test("instance package sources keep transport locators out of state and broadcas
   assert.equal(host.script.requests.length, seen, "environment.get does not read the host");
   const reading = restarted.client.mark();
   await restarted.client.expectOk("space.get", {});
-  await restarted.client.waitSpace(reading, (view) => view.readAt !== null);
+  await restarted.client.waitSpace(reading, (view) => typeof instanceOf(view, host.url)?.readAt === "number");
   state = await restarted.client.expectOk("environment.get", { repository: own });
   assert.equal((state.requests["acme/toolbox"] as unknown as { repository: string }).repository, instance);
   assert.deepEqual(readFileSync(join(clone, "spex.yaml")), requests);

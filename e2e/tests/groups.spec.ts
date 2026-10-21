@@ -49,6 +49,7 @@ import {
   git,
   hostFolder,
   hostKey,
+  instanceOf,
   instanceSection,
   nav,
   open,
@@ -505,10 +506,10 @@ test.describe("a folder joining a team's project", () => {
       git(dirname(app.projectDir), "clone", "-q", code, app.projectDir);
       // With every members route failing, the host's read holds no count.
       if (unknown) host.script.failMembers(true);
-      const before = (await app.core.command("space.get", {})).readAt ?? 0;
+      const before = instanceOf(await app.core.command("space.get", {}), host.url)?.readAt ?? 0;
       const fromRead = app.core.mark();
       await app.core.command("space.refresh", {});
-      await app.core.waitSpace(fromRead, (state) => (state.readAt ?? 0) > before, 30_000);
+      await app.core.waitSpace(fromRead, (state) => (instanceOf(state, host.url)?.readAt ?? 0) > before, 30_000);
       const localKey = (await app.core.command("project.register", { path: app.projectDir })).id;
       expect(localKey).toBe(`${HOST_LOGIN}/demo-project-spex`);
       await open(page, app);

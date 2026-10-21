@@ -14,9 +14,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
-import { clonePath, createSpaceHarness, hostFolder, hostKey, repositoryOf, stringsOf } from "./testing/space-harness.js";
+import { clonePath, createSpaceHarness, hostFolder, hostKey, instanceOf, repositoryOf, stringsOf } from "./testing/space-harness.js";
 import { STANDIN_STORAGE, type StandinHost } from "./testing/standin-host.js";
-import type { Command, CommandResults, GroupsState, ServerMessage } from "./protocol.js";
+import type { Command, CommandResults, GroupsState, InstanceGroupState, ServerMessage } from "./protocol.js";
 
 const fixture = createSpaceHarness();
 const { git, gitFolder, addFolder, startHome, startHost, signIn } = fixture;
@@ -42,18 +42,29 @@ function broadcasts(messages: ServerMessage[]): GroupsState[] {
   return messages.flatMap((message) => message.type === "space.state" ? [{ ...message.state, signIn: { phase: "idle" as const } }] : []);
 }
 
-/** The group entry a state lists under a path, by kind of entry. */
-function entry(state: GroupsState, fullPath: string, own = false): GroupsState["groups"][number] {
-  const found = state.groups.find((group) => group.fullPath === fullPath && group.own === own);
-  assert.ok(found, `no ${own ? "own " : ""}entry ${fullPath} in ${JSON.stringify(state.groups.map((group) => [group.fullPath, group.own]))}`);
+/** The entries the stand-in's heading lists, in its order (space-30). */
+const entriesAt = (state: GroupsState, host: StandinHost): InstanceGroupState[] => instanceOf(state, host.url)?.groups ?? [];
+
+/** The entry the stand-in's heading lists under a path: your namespace
+ * there where `mine`, else a group or another account's login. */
+function entry(state: GroupsState, host: StandinHost, fullPath: string, mine = false): InstanceGroupState {
+  const found = entriesAt(state, host).find((group) => group.fullPath === fullPath && group.mine === mine);
+  assert.ok(found, `no ${mine ? "namespace " : ""}entry ${fullPath} in ${JSON.stringify(entriesAt(state, host).map((group) => [group.fullPath, group.mine]))}`);
   return found;
 }
 
 /** The keys of the rows an entry holds, sorted. */
-const keysUnder = (state: GroupsState, fullPath: string, own = false): string[] => entry(state, fullPath, own).repositories.map((repository) => repository.key).sort();
+const keysUnder = (state: GroupsState, host: StandinHost, fullPath: string, mine = false): string[] => entry(state, host, fullPath, mine).repositories.map((repository) => repository.key).sort();
 
-/** The full paths of a state's groups of the instance, in its order. */
-const groupPaths = (state: GroupsState): string[] => state.groups.filter((group) => !group.own && group.id !== null).map((group) => group.fullPath);
+/** The full paths of the stand-in's groups, in its order. */
+const groupPaths = (state: GroupsState, host: StandinHost): string[] => entriesAt(state, host).filter((group) => group.id !== null).map((group) => group.fullPath);
+
+/** Your own group's rows and every entry the stand-in's heading lists,
+ * with the keys of their rows. */
+const layout = (state: GroupsState, host: StandinHost): string => JSON.stringify([
+  state.own.repositories.map((repository) => repository.key),
+  entriesAt(state, host).map((group) => [group.id, group.login, group.fullPath, group.repositories.map((repository) => repository.key)]),
+]);
 
 /** The stand-in's API requests at or after `from`. */
 function apiRequests(host: StandinHost, from: number): string[] {
@@ -104,22 +115,22 @@ test("space-79: a group renamed, a non-empty one refused deletion and an empty o
   const replies: unknown[] = [];
 
   // What the stand-in lets the person do: rename and delete each group
-  // of the instance, neither on your own group; move the repository
+  // of the instance, neither in your namespace there; move the repository
   // they own, not the one they may only push to (space-30).
   const state = await home.client.expectOk("space.get", {});
-  assert.deepEqual(entry(state, LOGIN, true).can, { createSubgroup: false, manageMembers: false, rename: false, delete: false });
-  assert.deepEqual(entry(state, "acme").can, { createSubgroup: true, manageMembers: true, rename: true, delete: true });
-  assert.deepEqual(entry(state, "acme/research").can, { createSubgroup: true, manageMembers: true, rename: true, delete: true });
+  assert.deepEqual(entry(state, host, LOGIN, true).can, { createSubgroup: false, manageMembers: false, rename: false, delete: false });
+  assert.deepEqual(entry(state, host, "acme").can, { createSubgroup: true, manageMembers: true, rename: true, delete: true });
+  assert.deepEqual(entry(state, host, "acme/research").can, { createSubgroup: true, manageMembers: true, rename: true, delete: true });
   assert.deepEqual(repositoryOf(state, key).can, { manageMembers: true, transfer: true });
   assert.deepEqual(repositoryOf(state, hostKey(host, "acme/team-spex")).can, { manageMembers: false, transfer: false });
 
   // A rename of acme/research replies its new path, announced before the
   // reply; the stand-in holds it there (space-29, space-1).
   const renamed = await heldBefore(home, "space.group.rename", { group: "2003", name: "Studies", path: "studies" }, (candidate) =>
-    candidate.groups.some((group) => group.id === "2003" && group.fullPath === "acme/studies" && group.name === "Studies"));
+    entriesAt(candidate, host).some((group) => group.id === "2003" && group.fullPath === "acme/studies" && group.name === "Studies"));
   replies.push(renamed.reply);
   assert.deepEqual(renamed.reply, { group: { id: "2003", fullPath: "acme/studies", name: "Studies" } });
-  assert.deepEqual(groupPaths(renamed.announced), ["acme", "acme/studies"]);
+  assert.deepEqual(groupPaths(renamed.announced, host), ["acme", "acme/studies"]);
   assert.equal(host.script.groups.find((group) => group.id === "2003")?.fullPath, "acme/studies");
 
   // A path taken there is refused naming it (space-29).
@@ -132,20 +143,20 @@ test("space-79: a group renamed, a non-empty one refused deletion and an empty o
   const quiet = host.script.requests.length;
   await home.client.expectError("space.group.delete", { group: "2002" }, "invalid_request", /^acme is not empty$/);
   assert.deepEqual(apiRequests(host, quiet), []);
-  const deleted = await heldBefore(home, "space.group.delete", { group: lumen.group.id }, (candidate) => !candidate.groups.some((group) => group.id === lumen.group.id));
+  const deleted = await heldBefore(home, "space.group.delete", { group: lumen.group.id }, (candidate) => !entriesAt(candidate, host).some((group) => group.id === lumen.group.id));
   replies.push(deleted.reply);
   assert.deepEqual(deleted.reply, { deleted: true });
   assert.ok(!host.script.groups.some((group) => group.id === lumen.group.id), "the stand-in holds it no more");
-  assert.ok(!groupPaths(await home.client.expectOk("space.get", {})).includes("lumen-labs"));
+  assert.ok(!groupPaths(await home.client.expectOk("space.get", {}), host).includes("lumen-labs"));
 
   // The project moved into the renamed group replies its new path; the
   // row stands under that group at once, its key unchanged and its clone
   // where it was (space-1, space-29).
   const moved = await heldBefore(home, "space.repository.move", { repository: key, groupId: "2003" }, (candidate) =>
-    keysUnder(candidate, "acme/studies").includes(key));
+    keysUnder(candidate, host, "acme/studies").includes(key));
   replies.push(moved.reply);
   assert.deepEqual(moved.reply, { repository: { id, fullPath: "acme/studies/plans-spex" } });
-  assert.ok(!keysUnder(moved.announced, "acme").includes(key), "no longer under its former group");
+  assert.ok(!keysUnder(moved.announced, host, "acme").includes(key), "no longer under its former group");
   assert.equal(repositoryOf(moved.announced, key).remote, "acme/studies/plans-spex");
   assert.ok(existsSync(clonePath(home.dataDir, key)), "the move moves no clone");
 
@@ -160,7 +171,7 @@ test("space-79: a group renamed, a non-empty one refused deletion and an empty o
   // instance, and its next sync moves the clone under the instance's
   // folder there (space-1, space-60, DR-127).
   const toOwn = await heldBefore(home, "space.repository.move", { repository: hostKey(host, "acme/studies/plans-spex"), groupId: null }, (candidate) =>
-    keysUnder(candidate, LOGIN, true).includes(hostKey(host, "acme/studies/plans-spex")));
+    keysUnder(candidate, host, LOGIN, true).includes(hostKey(host, "acme/studies/plans-spex")));
   replies.push(toOwn.reply);
   assert.deepEqual(toOwn.reply, { repository: { id, fullPath: `${LOGIN}/plans-spex` } });
   mark = home.client.mark();
@@ -175,7 +186,7 @@ test("space-79: a group renamed, a non-empty one refused deletion and an empty o
   // its words, and one it answers provider_unavailable that it could
   // not be reached, the state unchanged (space-29).
   const scratchGroup = await home.client.expectOk("space.group.create", { name: "Scratch", path: "scratch", parent: null });
-  const before = JSON.stringify((await home.client.expectOk("space.get", {})).groups.map((group) => [group.id, group.fullPath, group.repositories.map((repository) => repository.key)]));
+  const before = layout(await home.client.expectOk("space.get", {}), host);
   host.script.refuseGroupRename("Renames are paused for this group.");
   await home.client.expectError("space.group.rename", { group: "2002", name: "Acme Labs" }, "invalid_request", new RegExp(`^${HOST_NAME} refused: Renames are paused for this group\\.$`));
   host.script.refuseGroupRename(null);
@@ -187,7 +198,7 @@ test("space-79: a group renamed, a non-empty one refused deletion and an empty o
   host.script.refuseTransfer(null);
   host.script.unavailable(1);
   await home.client.expectError("space.group.rename", { group: "2002", name: "Acme Labs" }, "invalid_request", new RegExp(`^Could not reach ${HOST_NAME}$`));
-  const after = JSON.stringify((await home.client.expectOk("space.get", {})).groups.map((group) => [group.id, group.fullPath, group.repositories.map((repository) => repository.key)]));
+  const after = layout(await home.client.expectOk("space.get", {}), host);
   assert.equal(after, before, "a refusal changes nothing");
 
   // Every reply and broadcast this client was sent names nothing behind
@@ -265,36 +276,36 @@ test("git-host-14: a rename carries the groups and repositories inside to the ne
   // read of the stand-in begun (git-host-18, git-host-5).
   asked = host.script.requests.length;
   const renamed = await heldBefore(home, "space.group.rename", { group: "2002", name: "Acme Labs", path: "acme-labs" }, (candidate) =>
-    candidate.groups.some((group) => group.id === "2002" && group.fullPath === "acme-labs"));
+    entriesAt(candidate, host).some((group) => group.id === "2002" && group.fullPath === "acme-labs"));
   assert.deepEqual(renamed.reply, { group: { id: "2002", fullPath: "acme-labs", name: "Acme Labs" } });
   assert.deepEqual(apiRequests(host, asked), ["PATCH /api/v1/host/groups/2002"]);
-  assert.deepEqual(groupPaths(renamed.announced), ["acme-labs", "acme-labs/research", LOGIN, "empty"]);
-  assert.deepEqual(entry(renamed.announced, "acme-labs").name, "Acme Labs");
-  assert.deepEqual(keysUnder(renamed.announced, "acme-labs"), [key, hostKey(host, "acme-labs/team-spex")].sort());
+  assert.deepEqual(groupPaths(renamed.announced, host), ["acme-labs", "acme-labs/research", LOGIN, "empty"]);
+  assert.deepEqual(entry(renamed.announced, host, "acme-labs").name, "Acme Labs");
+  assert.deepEqual(keysUnder(renamed.announced, host, "acme-labs"), [key, hostKey(host, "acme-labs/team-spex")].sort());
   assert.equal(repositoryOf(renamed.announced, key).remote, "acme-labs/plans-spex");
   // A read held after it lists the stand-in's answer, the same.
   const from = home.client.mark();
-  const readAt = (await home.client.expectOk("space.get", {})).readAt;
+  const readAt = instanceOf(await home.client.expectOk("space.get", {}), host.url)?.readAt;
   await home.client.expectOk("space.refresh", {});
-  const reread = await home.client.waitSpace(from, (state) => state.readAt !== readAt, 30_000);
-  assert.deepEqual(groupPaths(reread), ["acme-labs", "acme-labs/research", LOGIN, "empty"]);
-  assert.deepEqual(keysUnder(reread, "acme-labs"), [key, hostKey(host, "acme-labs/team-spex")].sort());
-  assert.deepEqual(keysUnder(reread, "acme-labs/research"), [hostKey(host, "acme-labs/research/plans-spex")]);
+  const reread = await home.client.waitSpace(from, (state) => instanceOf(state, host.url)?.readAt !== readAt, 30_000);
+  assert.deepEqual(groupPaths(reread, host), ["acme-labs", "acme-labs/research", LOGIN, "empty"]);
+  assert.deepEqual(keysUnder(reread, host, "acme-labs"), [key, hostKey(host, "acme-labs/team-spex")].sort());
+  assert.deepEqual(keysUnder(reread, host, "acme-labs/research"), [hostKey(host, "acme-labs/research/plans-spex")]);
 
   // An empty group deleted, gone before the reply, no read begun
   // (git-host-19).
   const scratch = await home.client.expectOk("space.group.create", { name: "Scratch", path: "scratch", parent: null });
   asked = host.script.requests.length;
-  const deleted = await heldBefore(home, "space.group.delete", { group: scratch.group.id }, (candidate) => !candidate.groups.some((group) => group.id === scratch.group.id));
+  const deleted = await heldBefore(home, "space.group.delete", { group: scratch.group.id }, (candidate) => !entriesAt(candidate, host).some((group) => group.id === scratch.group.id));
   assert.deepEqual(deleted.reply, { deleted: true });
   assert.deepEqual(apiRequests(host, asked), [`DELETE /api/v1/host/groups/${scratch.group.id}`]);
 
   // Moved into your own group and back into a group, each standing
   // before its reply with no read begun (git-host-20).
   asked = host.script.requests.length;
-  const toOwn = await heldBefore(home, "space.repository.move", { repository: key, groupId: null }, (candidate) => keysUnder(candidate, LOGIN, true).includes(key));
+  const toOwn = await heldBefore(home, "space.repository.move", { repository: key, groupId: null }, (candidate) => keysUnder(candidate, host, LOGIN, true).includes(key));
   assert.equal(toOwn.reply.repository.fullPath, `${LOGIN}/plans-spex`);
-  const toGroup = await heldBefore(home, "space.repository.move", { repository: key, groupId: "2002" }, (candidate) => keysUnder(candidate, "acme-labs").includes(key));
+  const toGroup = await heldBefore(home, "space.repository.move", { repository: key, groupId: "2002" }, (candidate) => keysUnder(candidate, host, "acme-labs").includes(key));
   assert.equal(toGroup.reply.repository.fullPath, "acme-labs/plans-spex");
   assert.equal(apiRequests(host, asked).filter((request) => request.startsWith("GET")).length, 0, "no read of the stand-in begun");
   assert.deepEqual(apiRequests(host, asked), [`POST /api/v1/host/repositories/${id}/transfer`, `POST /api/v1/host/repositories/${id}/transfer`]);

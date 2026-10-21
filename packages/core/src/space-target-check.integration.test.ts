@@ -10,7 +10,7 @@ import { join } from "node:path";
 import type { Store } from "./store.js";
 import { STANDIN_STORAGE } from "./testing/standin-host.js";
 import { holdingFetch, settled } from "./testing/holding-fetch.js";
-import { clonePath, createSpaceHarness, hostFolder, hostKey, repositoryOf } from "./testing/space-harness.js";
+import { clonePath, createSpaceHarness, hostFolder, hostKey, instanceOf, repositoryOf, rowsOf } from "./testing/space-harness.js";
 
 const fixture = createSpaceHarness();
 const { git, gitFolder, addFolder, startHost, startHome, signIn } = fixture;
@@ -84,8 +84,8 @@ test("git-host-23: an unrelated detail failure fails Refresh but not target sync
   };
   await assert.rejects(core.space.readHost());
   assert.equal((await home.client.repository(OWN)).state, "unreachable");
-  const fullReadFailure = (await home.client.expectOk("space.get", {})).read;
-  assert.equal(fullReadFailure.phase, "failed");
+  const fullReadFailure = instanceOf(await home.client.expectOk("space.get", {}), host.url)?.read;
+  assert.equal(fullReadFailure?.phase, "failed");
   calls.length = 0;
   const done = await home.client.settle("space.sync", { repository: OWN });
   assert.deepEqual([done.sync.phase, done.state], ["done", "reachable"], JSON.stringify(done.sync));
@@ -94,8 +94,8 @@ test("git-host-23: an unrelated detail failure fails Refresh but not target sync
     `/api/v1/host/repositories/${id}`, `/api/v1/host/repositories/${id}/members`,
   ].sort(), "no unrelated detail or members fanout");
   const afterTarget = await home.client.expectOk("space.get", {});
-  assert.equal(afterTarget.readAt, before.readAt);
-  assert.deepEqual(afterTarget.read, fullReadFailure, "target Check does not clear the full-read failure");
+  assert.equal(instanceOf(afterTarget, host.url)?.readAt, instanceOf(before, host.url)?.readAt);
+  assert.deepEqual(instanceOf(afterTarget, host.url)?.read, fullReadFailure, "target Check does not clear the full-read failure");
   assert.equal(git(host.bareOf(OWN), "rev-parse", "spex"), git(clonePath(home.dataDir, OWN), "rev-parse", "spex"));
 });
 
@@ -127,7 +127,7 @@ test("git-host-23: catalog, target and auth failures refuse Check without a push
   const denied = await home.client.settle("space.sync", { repository: OWN });
   assert.equal(denied.sync.phase, "stopped");
   assert.match(denied.reason ?? "", /Sign in again/);
-  assert.equal((await home.client.expectOk("space.get", {})).account, null);
+  assert.equal(instanceOf(await home.client.expectOk("space.get", {}), host.url)?.signedIn, false);
   assert.deepEqual(readFileSync(join(clone, "config/playbook.config.yaml")), original);
 });
 
@@ -166,7 +166,7 @@ for (const outcome of ["success", "failure"] as const) {
     }
     const full = core.space.readHost(); full.catch(() => undefined);
     await gate.reached;
-    assert.equal((await home.client.expectOk("space.get", {})).read.phase, "running");
+    assert.equal(instanceOf(await home.client.expectOk("space.get", {}), host.url)?.read.phase, "running");
     // Only hold the already-buffered answer, not the newer target read.
     core.hostClient.fetchImpl = fetch;
     host.script.rename(id, { name: "renamed-spex", group: "acme/research" });
@@ -177,7 +177,7 @@ for (const outcome of ["success", "failure"] as const) {
     const moved = hostKey(host, movedPath);
     const row = await home.client.waitRepository(mark, moved, (candidate) => candidate.sync.phase !== "running", 30_000);
     assert.deepEqual([row.sync.phase, row.state, row.remote], ["done", "read-only", movedPath], JSON.stringify(row));
-    assert.equal((await home.client.expectOk("space.get", {})).read.phase, "running", "target Check does not settle the full read");
+    assert.equal(instanceOf(await home.client.expectOk("space.get", {}), host.url)?.read.phase, "running", "target Check does not settle the full read");
     failOld = outcome === "failure";
     gate.release();
     if (outcome === "failure") await assert.rejects(full); else await full;
@@ -185,7 +185,7 @@ for (const outcome of ["success", "failure"] as const) {
     const after = await home.client.repository(moved);
     assert.deepEqual([after.state, after.remote], ["read-only", movedPath]);
     const state = await home.client.expectOk("space.get", {});
-    assert.equal(state.groups.flatMap((group) => group.repositories).filter((candidate) => candidate.id === id).length, 1);
+    assert.equal(rowsOf(state).filter((candidate) => candidate.id === id).length, 1);
     assert.ok(existsSync(clonePath(home.dataDir, moved)) && !existsSync(clonePath(home.dataDir, key)));
     // A full read begun AFTER the selected observation owns the row.
     host.script.archive(id, false);
@@ -292,10 +292,10 @@ test("git-host-23: a target-only read does not spend the first full Groups read 
   t.after(() => held.release());
   const from = home.client.mark();
   const initial = await home.client.expectOk("space.get", {});
-  assert.equal(initial.readAt, null);
+  assert.equal(instanceOf(initial, host.url)?.readAt, null);
   await held.reached;
   held.release();
-  const full = await home.client.waitSpace(from, (state) => state.readAt !== null, 30_000);
+  const full = await home.client.waitSpace(from, (state) => typeof instanceOf(state, host.url)?.readAt === "number", 30_000);
   assert.equal(repositoryOf(full, OWN).state, "reachable");
 });
 
@@ -343,7 +343,8 @@ for (const next of ["signed-out", "another-account"] as const) {
     assert.deepEqual(readFileSync(join(clone, ".git", "config")), config);
     assert.equal(git(clone, "remote", "get-url", hostFolder(host)), origin);
     assert.equal(git(clone, "rev-parse", "HEAD"), head);
-    assert.equal((await home.client.expectOk("space.get", {})).account?.login ?? null, next === "signed-out" ? null : "bob");
+    const after = instanceOf(await home.client.expectOk("space.get", {}), host.url);
+    assert.deepEqual([after?.signedIn, after?.account.login], next === "signed-out" ? [false, "ada"] : [true, "bob"]);
   });
 }
 

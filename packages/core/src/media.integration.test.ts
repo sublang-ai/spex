@@ -18,6 +18,7 @@ import { CoreService } from "./service.js";
 import { ApplicationMedia } from "./media.js";
 import { fakeAdapterImports } from "./testing/fake-adapter.js";
 import { createScriptedCaptain } from "./testing/scripted-captain.js";
+import { rowsOf } from "./testing/space-harness.js";
 import { MEDIA_CHUNK_BYTES, type Command, type CommandResults, type MediaAsset, type MediaOwner, type ReplyMessage, type ServerMessage } from "./protocol.js";
 
 /** A project's spex repository clone under a scratch home (storage-1). */
@@ -171,7 +172,7 @@ test("space-21: a sync is admitted while attachment validation for a queue or an
       const during = client.messages.length;
       assert.deepEqual(await client.command("space.sync", {repository: project.id}), {accepted: true});
       const phaseOf = (message: ServerMessage) => message.type === "space.state"
-        ? message.state.groups.flatMap((group) => group.repositories).find((repository) => repository.key === project.id)?.sync
+        ? rowsOf(message.state).find((repository) => repository.key === project.id)?.sync
         : undefined;
       const beside = await client.waitFor((message) => client.messages.indexOf(message) >= during
         && ["done", "stopped"].includes(phaseOf(message)?.phase ?? ""), 30_000);

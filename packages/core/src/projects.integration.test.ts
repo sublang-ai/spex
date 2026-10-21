@@ -18,6 +18,7 @@ import { CoreService } from "./service.js";
 import { fakeAdapterImports } from "./testing/fake-adapter.js";
 import { createScriptedCaptain } from "./testing/scripted-captain.js";
 import { scratchDir } from "./testing/scratch.js";
+import { rowsOf } from "./testing/space-harness.js";
 import type { Command, CommandResults, ServerMessage } from "./protocol.js";
 
 const CONFIG = `captain:
@@ -182,7 +183,7 @@ test("projects-21: removal deletes the clone behind a second confirm naming its 
     const from = client.messages.length;
     await client.ok("space.sync", { repository: again.id });
     await client.until((m) => client.messages.indexOf(m) >= from && m.type === "space.state" &&
-      m.state.groups.some((group) => group.repositories.some((repository) => repository.key === again.id && repository.sync.phase === "done")), 30_000);
+      rowsOf(m.state).some((repository) => repository.key === again.id && repository.sync.phase === "done"), 30_000);
     await client.ok("project.remove", { projectId: again.id });
     assert.ok(!existsSync(join(dataDir, "workspace", "tester", "fixture-spex")));
     assert.notEqual(git(bare, "rev-parse", "spex"), "", "nothing on the host changed");
