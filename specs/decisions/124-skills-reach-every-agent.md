@@ -8,6 +8,7 @@
 Accepted (2026-10-19) on the owner's direction that skills reach agents through the spec packages environments install.
 Completes [DR-104](104-spec-package-format-and-client-environments.md) in its ask to Cligent: Cligent's DR-036 names the folders each agent reads and leaves copying into them to the host.
 Amends [DR-104](104-spec-package-format-and-client-environments.md) in its exports: every paired working folder receives each agent's project-level folder whatever agents the device has, a user-level folder is written only for an agent the device has, and the skill generated for a playbook goes only to Claude Code's folders.
+Amended by [DR-130](130-playbook-17-11-0-cligent-0-36-0-slc-0-19-0-adoption.md) in where the table's project-level and user-level folders come from, Cligent's published native-skill support, and in which agents see the exports: Captain control and compiler calls no longer read them except where an agent offers no switch.
 
 ## Context
 

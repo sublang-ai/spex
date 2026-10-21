@@ -71,3 +71,7 @@ Where the file has comment syntax, is included by the licensing scope [[licensin
 ### licensing-8
 
 Where a file already contains upstream SPDX lines and the project license differs, when inclusion preparation runs, the verification shall assert byte-for-byte preservation of every upstream line and use of upstream rather than project license data for any missing required line [[licensing-5](#licensing-5)].
+
+### licensing-10
+
+Where project-authored files require both SPDX headers and carry no upstream SPDX lines, when repository inclusion preparation runs, integration verification shall assert that their first comment block after any shebang uses each file's native comment syntax, names the project's license and copyright holder, uses the year of first inclusion, and contains no unresolved license or holder placeholders [[licensing-9](#licensing-9)].

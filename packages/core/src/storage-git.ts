@@ -14,7 +14,7 @@ import { dirname, join, resolve } from "node:path";
 import { parseDocument } from "yaml";
 import { resolveMachineIdentity } from "@sublang/playbook/machine-identity";
 import { parseIntentFile, parsePrefs, parseProjectFile, type IntentFile, type StorageDiagnostic } from "./app-storage.js";
-import { readJsonFile, StorageFormatError, UUID, writeApplicationFile } from "./files.js";
+import { assertPlainDirectory, readJsonFile, StorageFormatError, UUID, writeApplicationFile } from "./files.js";
 import { Home } from "./home.js";
 import { i18n } from "./i18n.js";
 import { acquireRootLease } from "./root-lease.js";
@@ -196,23 +196,47 @@ export interface ValidateStorageOptions {
   selectedSessionIds?: ReadonlySet<string>;
 }
 
+/** Check the path at its read/delegation boundary, without following a
+ * parent or leaf link. Missing optional paths keep their existing meaning;
+ * Playbook still owns the validation of session and attachment contents.
+ * This is not a lock against replacements inside an awaited facade call. */
+function validationPath(dir: string, file: string, kind: "file" | "directory"): boolean {
+  const parts = file.split("/");
+  let path = dir;
+  for (let index = -1; index < parts.length; index += 1) {
+    if (index >= 0) path = join(path, parts[index]);
+    const info = lstatSync(path, { throwIfNoEntry: false });
+    if (!info) return false;
+    const reported = index < 0 ? "." : parts.slice(0, index + 1).join("/");
+    if (info.isSymbolicLink()) throw new StorageDestinationRefused(reported, i18n._({
+      id: "the path goes through a symbolic link", comment: "Refusal: a storage validation read would follow a link",
+    }));
+    const directory = index < parts.length - 1 || kind === "directory";
+    if (directory ? !info.isDirectory() : !info.isFile()) throw new StorageDestinationRefused(reported, directory
+      ? i18n._({ id: "{path} is not a directory", comment: "Refusal: a storage validation parent or family is no directory", values: { path: reported } })
+      : i18n._({ id: "{path} is not a file", comment: "Refusal: a storage validation leaf is no regular file", values: { path: reported } }));
+  }
+  return true;
+}
+
 /** Validate a clone's complete tree without changing it (storage-12).
  * Public Playbook validation is the only authority for session bytes. */
 export async function validateStorageTree(dir_: string, options: ValidateStorageOptions = {}): Promise<StorageDiagnostic[]> {
   const dir = resolve(dir_);
   const diagnostics: StorageDiagnostic[] = [];
   const projectFile = join(dir, "project.json");
-  if (existsSync(projectFile)) parseProjectFile(readJsonFile(projectFile), projectFile);
+  if (validationPath(dir, "project.json", "file")) parseProjectFile(readJsonFile(projectFile), projectFile);
 
   const { createAssetStore } = await import("@sublang/playbook/session-assets");
   const intentsDir = join(dir, "intents");
   const intents: IntentFile[] = [];
-  const names = existsSync(intentsDir) ? readdirSync(intentsDir) : [];
+  const names = validationPath(dir, "intents", "directory") ? readdirSync(intentsDir) : [];
   for (const name of names) {
     const file = join(intentsDir, name);
     if (name.endsWith(".json")) {
       if (!UUID.test(name.slice(0, -5))) throw new StorageFormatError(file, i18n._({ id: "filename must be an intent UUID",
         comment: "Storage diagnostic: an intent file's name is no intent id" }));
+      validationPath(dir, `intents/${name}`, "file");
       intents.push(parseIntentFile(readJsonFile(file), file, name.slice(0, -5)));
     } else if (name.endsWith(".assets") && !names.includes(`${name.slice(0, -7)}.json`)) {
       throw new StorageFormatError(file, i18n._({ id: "attachments without their intent",
@@ -223,11 +247,19 @@ export async function validateStorageTree(dir_: string, options: ValidateStorage
   for (const intent of intents) {
     const file = join(intentsDir, `${intent.id}.json`);
     if (intent.attachments?.length) {
-      const assets = createAssetStore({ directory: join(intentsDir, `${intent.id}.assets`) });
+      const assetPath = `intents/${intent.id}.assets`;
+      validationPath(dir, assetPath, "directory");
+      const assets = createAssetStore({ directory: join(dir, assetPath) });
       try {
         await assets.prepare();
-        for (const ref of intent.attachments) { const reader = await assets.openAsset(ref); await reader.close(); }
-      } catch (cause) { throw new StorageFormatError(file, cause instanceof Error ? cause.message : String(cause)); }
+        for (const ref of intent.attachments) {
+          validationPath(dir, `${assetPath}/${ref.assetId.slice(7)}`, "file");
+          const reader = await assets.openAsset(ref); await reader.close();
+        }
+      } catch (cause) {
+        if (cause instanceof StorageDestinationRefused) throw cause;
+        throw new StorageFormatError(file, cause instanceof Error ? cause.message : String(cause));
+      }
     }
     // At most one open intent per source artifact (core-service-42).
     if (!intent.closed && intent.source && intent.source.kind !== "chat") {
@@ -239,17 +271,19 @@ export async function validateStorageTree(dir_: string, options: ValidateStorage
   }
 
   const authoringDir = join(dir, "authoring");
-  if (existsSync(authoringDir)) {
+  if (validationPath(dir, "authoring", "directory")) {
     const { parseStoredDraft } = await import("./drafts.js");
+    validationPath(dir, "authoring", "directory");
     for (const name of readdirSync(authoringDir)) {
       if (!name.endsWith(".json")) continue;
       const file = join(authoringDir, name);
+      validationPath(dir, `authoring/${name}`, "file");
       parseStoredDraft(readJsonFile(file), file, name.slice(0, -5));
     }
   }
 
   const config = join(dir, "config", "playbook.config.yaml");
-  if (existsSync(config)) {
+  if (validationPath(dir, "config/playbook.config.yaml", "file")) {
     const document = parseDocument(readFileSync(config, "utf8"));
     if (document.errors.length) throw new StorageFormatError(config, document.errors[0].message);
     const { composeConfig, validateProjectConfig, RegistryError } = await import("./config.js");
@@ -269,11 +303,19 @@ export async function validateStorageTree(dir_: string, options: ValidateStorage
   const { createSessionStore, validateSessionManifest } = await import("@sublang/playbook/session-store");
   const sessionsDir = join(dir, "sessions");
   const sessions = new Map<string, Set<number>>();
-  if (existsSync(sessionsDir)) {
+  if (validationPath(dir, "sessions", "directory")) {
     const store = createSessionStore({ sessionsDir }); await store.prepare();
+    validationPath(dir, "sessions", "directory");
     for (const file of readdirSync(sessionsDir)) {
       if (!file.endsWith(".json") || !UUID.test(file.slice(0, -5))) continue;
-      const id = file.slice(0, -5); const result = await store.validate(id);
+      const id = file.slice(0, -5);
+      const checkBundle = () => {
+        validationPath(dir, `sessions/${id}.json`, "file");
+        validationPath(dir, `sessions/${id}.records.jsonl`, "file");
+        validationPath(dir, `sessions/${id}.assets`, "directory");
+      };
+      checkBundle();
+      const result = await store.validate(id);
       if (result.manifest.schemaVersion !== 7) {
         const tracked = options.selectedSessionIds?.has(id) ?? (existsSync(join(dir, ".git")) && git(dir, ["ls-files", "--", `sessions/${file}`]).length > 0);
         if (tracked) throw new StorageFormatError(file, "unsupported session version cannot be selected as portable data");
@@ -282,6 +324,7 @@ export async function validateStorageTree(dir_: string, options: ValidateStorage
       }
       validateSessionManifest(result.manifest);
       if (!result.integrityValid) throw new StorageFormatError(file, result.history.damage?.reason ?? "session replay is missing, damaged or disagrees with its checkpoint");
+      checkBundle();
       await store.exportBundle(id);
       const turns = new Set<number>();
       for (const entry of result.history.entries) if (entry.record.type === "turn_started" && Number.isSafeInteger(entry.record.turnId)) turns.add(entry.record.turnId as number);
@@ -310,6 +353,46 @@ export class StorageWriteRefused extends Error {
     super(`${unit}: ${detail}`);
     this.name = "StorageWriteRefused";
   }
+}
+
+/** An unsafe live destination, with the units already published before
+ * that boundary refused. The caller retains its repair selection. */
+export class StorageDestinationRefused extends StorageFormatError {
+  constructor(file: string, reason: string, readonly written: string[] = []) {
+    super(file, reason);
+    this.name = "StorageDestinationRefused";
+  }
+}
+
+/** Metadata-only admission to a partial refresh. Do not enter the live
+ * validator or reload readers while one of their families is unsafe.
+ * This is a boundary check, not a lock against independent writers. */
+export function assertStorageRefreshSafe(dir: string): void {
+  try { assertPlainDirectory(dir); }
+  catch (error) {
+    if (error instanceof StorageFormatError) throw new StorageDestinationRefused(".", error.reason);
+    throw error;
+  }
+  const walk = (rel: string): void => {
+    const file = join(dir, rel);
+    const info = lstatSync(file, { throwIfNoEntry: false });
+    if (!info) return;
+    if (info.isSymbolicLink() || (!info.isDirectory() && !info.isFile())) {
+      throw new StorageDestinationRefused(rel, "unsafe destination parent");
+    }
+    if (info.isDirectory()) for (const name of readdirSync(file)) {
+      if (!name.startsWith(".")) walk(`${rel}/${name}`);
+    }
+  };
+  for (const family of ["sessions", "intents", "authoring", "config"]) {
+    try { assertPlainDirectory(join(dir, family)); }
+    catch (error) {
+      if (error instanceof StorageFormatError) throw new StorageDestinationRefused(family, error.reason);
+      throw error;
+    }
+    walk(family);
+  }
+  walk("project.json");
 }
 
 /** Playbook's shared store over a clone's `sessions/`, as far as a
@@ -353,6 +436,25 @@ export interface AppliedStorageSelection {
 type TreeEntries = Map<string, { mode: string; oid: string }>;
 const publicationOrder = (path: string): number => path.includes(".assets/") ? 0 : path.endsWith(".records.jsonl") ? 1 : 2;
 
+/** Inspect each existing parent without following it, including when the
+ * leaf or a later directory is missing. These synchronous boundary checks
+ * do not lock out independent filesystem writers (storage-14, storage-21). */
+function assertDestinationParents(dir: string, file: string): void {
+  const parts = file.split("/");
+  if (parts.some((part) => part === "" || part === "." || part === "..")) throw new StorageDestinationRefused(file, "unsafe destination");
+  let parent = dir;
+  for (const part of ["", ...parts.slice(0, -1)]) {
+    if (part) parent = join(parent, part);
+    let info;
+    try { info = lstatSync(parent); }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT" && parent !== dir) return;
+      throw error;
+    }
+    if (info.isSymbolicLink() || !info.isDirectory()) throw new StorageDestinationRefused(file, "unsafe destination parent");
+  }
+}
+
 /** A unit's files on disk now, as path → the blob id Git would give
  * them, its filters applied as for that path: its planned paths, and with
  * `members` every portable file under its attachment folder, one added
@@ -360,10 +462,11 @@ const publicationOrder = (path: string): number => path.includes(".assets/") ? 0
 function unitOnDisk(dir: string, unit: StorageMergeUnit, members: boolean): Map<string, string> {
   const paths = new Set([...unit.paths, ...bundleFiles(unit.name)]);
   const walk = (rel: string): void => {
+    assertDestinationParents(dir, `${rel}/.member`);
     const full = join(dir, rel);
     let stat;
     try { stat = lstatSync(full); } catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return; throw error; }
-    if (stat.isSymbolicLink() || !stat.isDirectory()) throw new StorageFormatError(rel, "unsafe destination");
+    if (stat.isSymbolicLink() || !stat.isDirectory()) throw new StorageDestinationRefused(rel, "unsafe destination");
     for (const entry of readdirSync(full, { withFileTypes: true })) {
       const child = `${rel}/${entry.name}`;
       if (entry.isDirectory()) walk(child);
@@ -374,14 +477,16 @@ function unitOnDisk(dir: string, unit: StorageMergeUnit, members: boolean): Map<
   // A spec package folder's members are every file under it Git would
   // carry, one added since the plan's trees among them.
   if (members && isPackageUnit(unit.name)) {
+    assertDestinationParents(dir, `${unit.name}.member`);
     for (const file of git(dir, ["ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", unit.name]).toString().split("\0")) {
       if (file && portable(file)) paths.add(file);
     }
   }
   const present = [...paths].filter((file) => {
+    assertDestinationParents(dir, file);
     let stat;
     try { stat = lstatSync(join(dir, file)); } catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return false; throw error; }
-    if (stat.isSymbolicLink() || !stat.isFile() || stat.nlink !== 1) throw new StorageFormatError(file, "unsafe destination");
+    if (stat.isSymbolicLink() || !stat.isFile() || stat.nlink !== 1) throw new StorageDestinationRefused(file, "unsafe destination");
     return true;
   });
   if (!present.length) return new Map();
@@ -492,15 +597,24 @@ export async function applyStorageSelection(dir_: string, plan: StorageMergePlan
           // stands between that check and the acquisition, which never
           // makes the sessions folder or an ancestor: one missing is made
           // here alone, on its own, while the clone stands.
-          sessions ??= options.sessions ?? (await import("@sublang/playbook/session-store")).createSessionStore({ sessionsDir: join(dir, "sessions"), createSessionsDir: false });
           if (!stands()) throw moved();
+          assertDestinationParents(dir, "sessions/.lease");
+          sessions ??= options.sessions;
+          if (!sessions) {
+            const { createSessionStore } = await import("@sublang/playbook/session-store");
+            if (!stands()) throw moved();
+            assertDestinationParents(dir, "sessions/.lease");
+            sessions = createSessionStore({ sessionsDir: join(dir, "sessions"), createSessionsDir: false });
+          }
           try { mkdirSync(join(dir, "sessions"), { mode: 0o700 }); }
           catch (error) { if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error; }
+          assertDestinationParents(dir, "sessions/.lease");
           try { lease = await sessions.acquireManagement(unit.name.slice(9)); }
           catch (error) {
             // A clone gone during the acquisition is moved, never a lease
             // another writer holds.
             if (!stands()) throw moved();
+            assertDestinationParents(dir, "sessions/.lease");
             throw new StorageWriteRefused(unit.name, "lease", [...written], error instanceof Error ? error.message : String(error));
           }
         }
@@ -518,23 +632,31 @@ export async function applyStorageSelection(dir_: string, plan: StorageMergePlan
             catch (error) { throw new StorageWriteRefused(unit.name, "lease", [...written], error instanceof Error ? error.message : String(error)); }
           }
           for (const file of paths) {
+            assertDestinationParents(dir, file);
             const target = join(dir, file); const oid = wanted.get(file);
             if (oid) {
               if (disk.get(file) === oid) continue;
               mkdirSync(dirname(target), { recursive: true, mode: 0o700 });
+              assertDestinationParents(dir, file);
               const temporary = `${target}.${randomUUID()}.tmp`;
-              writeFileSync(temporary, bytes.get(file) as Buffer, { mode: modes.get(file) === "100755" ? 0o700 : 0o600 }); renameSync(temporary, target);
+              writeFileSync(temporary, bytes.get(file) as Buffer, { mode: modes.get(file) === "100755" ? 0o700 : 0o600 });
+              assertDestinationParents(dir, file);
+              renameSync(temporary, target);
             } else if (disk.has(file)) rmSync(target, { force: true });
           }
           // Attachments stay owner-only whoever made their folder — Git's
           // merge makes it under the process umask; only a differing mode
           // changes, since a mode change moves the ctime readers pin.
           for (const [file, mode] of [[`${unit.name}.assets`, 0o700], ...[...wanted.keys()].filter((path) => path.includes(".assets/")).map((path) => [path, 0o600] as const)] as const) {
+            assertDestinationParents(dir, file);
             const stat = lstatSync(join(dir, file), { throwIfNoEntry: false });
             if (stat && !stat.isSymbolicLink() && (stat.mode & 0o777) !== mode) chmodSync(join(dir, file), mode);
           }
           // A local hint belongs to the previous exact checkpoint, never the selected branch.
-          if (SESSION_UNIT.test(unit.name)) rmSync(join(dir, `${unit.name}.hints.json`), { force: true });
+          if (SESSION_UNIT.test(unit.name)) {
+            assertDestinationParents(dir, `${unit.name}.hints.json`);
+            rmSync(join(dir, `${unit.name}.hints.json`), { force: true });
+          }
           written.push(unit.name);
         } catch (error) {
           refused = true;
@@ -549,8 +671,14 @@ export async function applyStorageSelection(dir_: string, plan: StorageMergePlan
       // Complete, every changed session holds its selection — one an
       // interrupted apply wrote before a crash among them — and loses its
       // hint, with no write of its files.
-      if (stands()) for (const unit of changedSessions) rmSync(join(dir, `${unit}.hints.json`), { force: true });
+      if (stands()) for (const unit of changedSessions) {
+        assertDestinationParents(dir, `${unit}.hints.json`);
+        rmSync(join(dir, `${unit}.hints.json`), { force: true });
+      }
       complete = true;
+    } catch (error) {
+      if (error instanceof StorageDestinationRefused) throw new StorageDestinationRefused(error.file, error.reason, [...written]);
+      throw error;
     } finally {
       const viewed = complete ? changedSessions : written.filter((unit) => changedSessions.includes(unit));
       if (options.prefsFile && existsSync(options.prefsFile) && viewed.length > 0) {

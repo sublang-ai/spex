@@ -11,7 +11,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -22,8 +22,9 @@ import { Home } from "./home.js";
 import { starterText, templatePath, type PlaybookModules } from "./config.js";
 import { speak } from "./i18n.js";
 import type { ProjectInfo } from "./protocol.js";
-import { applyStorageSelection, EMPTY_TREE, planStorageMerge, prepareStorageGitFiles, reserveStorageHome, selectStorageMerge as selectStorageMergeWith, StorageWriteRefused, validateStorageTree, type StorageChoice } from "./storage-git.js";
+import { applyStorageSelection, EMPTY_TREE, planStorageMerge, prepareStorageGitFiles, reserveStorageHome, selectStorageMerge as selectStorageMergeWith, StorageDestinationRefused, StorageWriteRefused, validateStorageTree, type StorageChoice } from "./storage-git.js";
 import { scratchDir } from "./testing/scratch.js";
+import { StorageFormatError } from "./files.js";
 
 /** One fixed machine identity for the in-process writers and the
  * command alike (storage-26): the command reads it from its own state
@@ -461,6 +462,107 @@ test("storage-16: through the apply seam, a file added under a spec package fold
   } finally { dispose(); }
 });
 
+test("storage-16: Apply refuses unsafe destination parents before overwrites, creations and deletions", async (t) => {
+  for (const kind of ["overwrite", "create", "delete", "non-directory"] as const) await t.test(kind, async () => {
+    const { root, clone, commit, dispose } = setup();
+    try {
+      const file = kind === "create" ? "docs/missing/new.txt" : "docs/notes.txt";
+      mkdirSync(join(clone, "docs"));
+      writeFileSync(join(clone, "docs", "keep.txt"), "unchanged\n");
+      if (kind !== "create") writeFileSync(join(clone, file), "base\n");
+      commit("base destination");
+      git(clone, "checkout", "-q", "-b", "other");
+      if (kind === "delete") rmSync(join(clone, file));
+      else { mkdirSync(dirname(join(clone, file)), { recursive: true }); writeFileSync(join(clone, file), "incoming\n"); }
+      commit("incoming destination");
+      git(clone, "checkout", "-q", "spex");
+      const plan = planStorageMerge(clone, "HEAD", "other");
+      const head = git(clone, "rev-parse", "HEAD"); const index = git(clone, "ls-files", "-s");
+      const outside = join(root, "outside"); mkdirSync(outside);
+      writeFileSync(join(outside, "keep.txt"), "unchanged\n");
+      if (kind !== "create") writeFileSync(join(outside, "notes.txt"), "base\n");
+      const before = snapshot(outside);
+      // It was safe during Save and the initial pending-unit read. A
+      // different hand replaces only the parent at the Apply boundary.
+      await assert.rejects(() => applyStorageSelection(clone, plan, {}, { beforeWrite: () => {
+        renameSync(join(clone, "docs"), join(root, "preserved-docs"));
+        if (kind === "non-directory") writeFileSync(join(clone, "docs"), "not a directory\n");
+        else symlinkSync(outside, join(clone, "docs"), "dir");
+      } }), (error: unknown) => error instanceof StorageFormatError && /unsafe destination/.test(error.reason));
+      assert.deepEqual(snapshot(outside), before, "no external file changed or was created/deleted");
+      assert.equal(git(clone, "rev-parse", "HEAD"), head);
+      assert.equal(git(clone, "ls-files", "-s"), index);
+    } finally { dispose(); }
+  });
+});
+
+test("storage-16: a safe missing destination tail is created without following a parent", async () => {
+  const { clone, commit, dispose } = setup();
+  try {
+    git(clone, "checkout", "-q", "-b", "other");
+    mkdirSync(join(clone, "new", "nested"), { recursive: true });
+    writeFileSync(join(clone, "new", "nested", "note.txt"), "incoming\n"); commit("incoming new tail");
+    git(clone, "checkout", "-q", "spex");
+    await applyStorageSelection(clone, planStorageMerge(clone, "HEAD", "other"), {});
+    assert.equal(readFileSync(join(clone, "new", "nested", "note.txt"), "utf8"), "incoming\n");
+  } finally { dispose(); }
+});
+
+test("storage-16: a session parent is checked before lease acquisition and again after its await", async (t) => {
+  for (const at of ["before lease", "after lease"] as const) await t.test(at, async () => {
+    const { root, clone, sessionId, bundle, commit, dispose } = setup();
+    try {
+      const assets = createAssetStore({ directory: join(clone, "sessions", `${sessionId}.assets`) });
+      const media = async (label: string) => {
+        await assets.prepare();
+        const asset = await assets.importAsset({ bytes: Buffer.from(label), mimeType: "image/png", name: `${label}.png` });
+        const file = join(clone, "sessions", `${sessionId}.json`); const manifest = JSON.parse(readFileSync(file, "utf8"));
+        manifest.assets = { version: 1, entries: [asset] }; writeFileSync(file, JSON.stringify(manifest));
+      };
+      await media("base"); commit("base session media");
+      git(clone, "checkout", "-q", "-b", "other"); bundle("incoming"); await media("incoming"); commit("incoming session");
+      git(clone, "checkout", "-q", "spex");
+      const plan = planStorageMerge(clone, "HEAD", "other"); const index = git(clone, "ls-files", "-s");
+      const sessions = createSessionStore({ sessionsDir: join(clone, "sessions") }); await sessions.prepare();
+      const outside = join(root, "outside-sessions");
+      const swap = () => { renameSync(join(clone, "sessions"), outside); symlinkSync(outside, join(clone, "sessions"), "dir"); };
+      const before = snapshot(join(clone, "sessions")); let acquisitions = 0;
+      const wrapped = { acquireManagement: async (id: string) => {
+        acquisitions += 1;
+        const lease = await sessions.acquireManagement(id);
+        if (at === "after lease") swap();
+        return lease;
+      } };
+      await assert.rejects(() => applyStorageSelection(clone, plan, {}, {
+        sessions: wrapped, ...(at === "before lease" ? { beforeWrite: swap } : {}),
+      }), (error: unknown) => error instanceof StorageFormatError && /unsafe destination/.test(error.reason));
+      assert.equal(acquisitions, at === "before lease" ? 0 : 1);
+      assert.deepEqual(snapshot(outside), before, "session records stay unchanged outside the clone");
+      assert.equal(git(clone, "ls-files", "-s"), index);
+      assert.ok(existsSync(join(outside, `${sessionId}.json`)));
+    } finally { dispose(); }
+  });
+});
+
+test("storage-16: completed session selection cannot clear hints through a replaced parent", async () => {
+  const { root, clone, sessionId, bundle, commit, dispose } = setup();
+  try {
+    git(clone, "checkout", "-q", "-b", "other"); bundle("incoming"); commit("incoming session");
+    const incoming = git(clone, "rev-parse", "HEAD"); git(clone, "checkout", "-q", "spex");
+    const plan = planStorageMerge(clone, "HEAD", incoming); const index = git(clone, "ls-files", "-s");
+    // An interrupted selection already wrote all selected bytes. There
+    // is no pending unit/lease, but completion still clears its hint.
+    for (const ext of ["json", "records.jsonl"]) writeFileSync(join(clone, "sessions", `${sessionId}.${ext}`), execFileSync("git", ["-C", clone, "show", `${incoming}:sessions/${sessionId}.${ext}`], { env: gitEnv }));
+    writeFileSync(join(clone, "sessions", `${sessionId}.hints.json`), "synthetic local hint\n");
+    const outside = join(root, "outside-hints");
+    await assert.rejects(() => applyStorageSelection(clone, plan, {}, { beforeWrite: () => {
+      renameSync(join(clone, "sessions"), outside); symlinkSync(outside, join(clone, "sessions"), "dir");
+    } }), (error: unknown) => error instanceof StorageFormatError && /unsafe destination/.test(error.reason));
+    assert.equal(readFileSync(join(outside, `${sessionId}.hints.json`), "utf8"), "synthetic local hint\n");
+    assert.equal(git(clone, "ls-files", "-s"), index);
+  } finally { dispose(); }
+});
+
 test("storage-16: unrelated histories refuse selection until joined, whereupon the empty tree is the ancestor", async () => {
   const { root, home, key, clone, sessionId, dispose } = setup();
   try {
@@ -862,4 +964,105 @@ test("storage-16: Git selects intent and session media as complete independently
     rmSync(join(intentAssets.directory, ours.assetId.slice(7)));
     await assert.rejects(validateStorageTree(clone), /content|ENOENT|asset/i);
   } finally { dispose(); }
+});
+
+test("storage-16: validation refuses unsafe read boundaries without changing the Git clone", async (t) => {
+  const cases = [
+    ["project.json", "leaf-link"], ["project.json", "directory-leaf"],
+    ["intents", "parent-link"], ["intents", "file-parent"],
+    ["intents/ID.json", "leaf-link"], ["intents/ID.json", "directory-leaf"],
+    ["authoring", "parent-link"], ["authoring", "file-parent"],
+    ["authoring/demo.json", "leaf-link"],
+    ["config", "parent-link"], ["config", "file-parent"],
+    ["config/playbook.config.yaml", "leaf-link"],
+  ] as const;
+  for (const [pattern, kind] of cases) await t.test(`${pattern}: ${kind}`, async () => {
+    const s = setup();
+    try {
+      const path = pattern.replace("ID", randomUUID());
+      const target = join(s.clone, path);
+      const outside = join(s.root, "outside"); mkdirSync(outside);
+      // Invalid owned canaries would yield a parser error if followed.
+      const canary = join(outside, "canary");
+      writeFileSync(canary, "{SYNTHETIC_OUTSIDE_VALIDATOR_CANARY", { mode: 0o640 });
+      rmSync(target, { force: true, recursive: true });
+      mkdirSync(dirname(target), { recursive: true });
+      if (kind === "parent-link") {
+        const name = path === "config" ? "playbook.config.yaml" : path === "authoring" ? "demo.json" : `${randomUUID()}.json`;
+        writeFileSync(join(outside, name), readFileSync(canary), { mode: 0o640 });
+        symlinkSync(outside, target, "dir");
+      } else if (kind === "leaf-link") symlinkSync(canary, target, "file");
+      else if (kind === "file-parent") writeFileSync(target, "not a directory", { mode: 0o640 });
+      else mkdirSync(target);
+      const before = snapshot(s.clone); const outsideBefore = snapshot(outside);
+      const canaryMode = lstatSync(canary).mode;
+      const modes = new Map([...before.keys()].map((p) => [p, lstatSync(join(s.clone, p)).mode]));
+      const index = readFileSync(join(s.clone, ".git", "index"));
+      await assert.rejects(validateStorageTree(s.clone), (error: unknown) => {
+        if (!(error instanceof StorageDestinationRefused)) return false;
+        assert.equal(error.file, path, "the repair target is the offending parent or leaf");
+        if (path === "config" && kind === "file-parent") assert.equal(error.reason, "config is not a directory");
+        return true;
+      }, "an unsafe path must refuse before parsing an outside canary");
+      assert.deepEqual(snapshot(s.clone), before); assert.deepEqual(snapshot(outside), outsideBefore);
+      for (const [p, mode] of modes) assert.equal(lstatSync(join(s.clone, p)).mode, mode, p);
+      assert.equal(lstatSync(canary).mode, canaryMode);
+      assert.deepEqual(readFileSync(join(s.clone, ".git", "index")), index);
+    } finally { s.dispose(); }
+  });
+  if (process.platform !== "win32") await t.test("a special-file leaf refuses without opening it", () => {
+    const s = setup();
+    try {
+      rmSync(join(s.clone, "project.json"));
+      execFileSync("mkfifo", [join(s.clone, "project.json")]);
+      const result = spawnSync(process.execPath, [script, "--home", s.home, "--repository", s.key, "validate"],
+        { env: gitEnv, encoding: "utf8", timeout: 5000 });
+      assert.equal(result.error, undefined, "validation must not block opening a FIFO");
+      assert.notEqual(result.status, 0); assert.match(result.stderr, /not a file/);
+      assert.equal(lstatSync(join(s.clone, "project.json")).isFIFO(), true);
+    } finally { s.dispose(); }
+  });
+});
+
+test("storage-16: validation rechecks an intent parent after its awaited import", async () => {
+  const s = setup();
+  try {
+    const outside = join(s.root, "outside"); mkdirSync(outside);
+    const id = randomUUID();
+    writeFileSync(join(outside, `${id}.json`), "{SYNTHETIC_LATE_VALIDATOR_CANARY", { mode: 0o640 });
+    const index = readFileSync(join(s.clone, ".git", "index"));
+    const canaryMode = lstatSync(join(outside, `${id}.json`)).mode;
+    const running = validateStorageTree(s.clone);
+    // Even a cached dynamic import yields before the next family read.
+    renameSync(join(s.clone, "intents"), join(s.root, "saved-intents"));
+    symlinkSync(outside, join(s.clone, "intents"), "dir");
+    await assert.rejects(running, (error: unknown) => {
+      if (!(error instanceof StorageDestinationRefused)) return false;
+      assert.equal(error.file, "intents", "the late linked parent is the repair target");
+      assert.equal(error.reason, "the path goes through a symbolic link");
+      return true;
+    });
+    assert.equal(readFileSync(join(outside, `${id}.json`), "utf8"), "{SYNTHETIC_LATE_VALIDATOR_CANARY");
+    assert.equal(lstatSync(join(outside, `${id}.json`)).mode, canaryMode);
+    assert.deepEqual(readFileSync(join(s.clone, ".git", "index")), index);
+  } finally { s.dispose(); }
+});
+
+test("storage-16: validation keeps optional absence and malformed-file diagnostics", async () => {
+  const root = mkdtempSync(join(tmpdir(), "spex-validation-optional-"));
+  try {
+    git(root, "init", "-q");
+    assert.deepEqual(await validateStorageTree(root), []);
+    mkdirSync(join(root, "config"));
+    writeFileSync(join(root, "config", "playbook.config.yaml"), "playbooks: [", { mode: 0o600 });
+    await assert.rejects(validateStorageTree(root), (error: unknown) =>
+      error instanceof StorageFormatError && !(error instanceof StorageDestinationRefused) && error.file.endsWith("playbook.config.yaml"));
+    rmSync(join(root, "config"), { recursive: true });
+    writeFileSync(join(root, "project.json"), "{malformed", { mode: 0o640 });
+    const mode = lstatSync(join(root, "project.json")).mode;
+    await assert.rejects(validateStorageTree(root), (error: unknown) =>
+      error instanceof StorageFormatError && !(error instanceof StorageDestinationRefused) && error.file.endsWith("project.json"));
+    assert.equal(readFileSync(join(root, "project.json"), "utf8"), "{malformed");
+    assert.equal(lstatSync(join(root, "project.json")).mode, mode);
+  } finally { rmSync(root, { recursive: true, force: true }); }
 });
