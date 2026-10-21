@@ -1,6 +1,6 @@
 **/.DS_Store
 dist/
-node_modules/
+node_modules
 apps/desktop/ui-dist/
 apps/desktop/release/
 apps/server/ui-dist/
