@@ -464,7 +464,7 @@ test("space-38: unsafe partial Apply defers refresh and repairs after restoring 
     repository.store = sessions;
     assert.ok(replaced);
     assert.ok(result.sync.phase === "stopped" && result.sync.step === "apply" && result.sync.cause === "validation", JSON.stringify(result.sync));
-    assert.match(result.sync.guidance, /Restore the unsafe folder.*Refresh is deferred/);
+    assert.match(result.sync.guidance, /Restore the reported path to its expected file or folder.*Refresh is deferred/);
     assert.equal(existsSync(join(clone, ".spex-apply.json")), true, "the recorded selection survives the unsafe stop");
     assert.equal(git(clone, "rev-parse", "HEAD"), head, "no merge or second Save");
     assert.equal(git(clone, "ls-files", "-s"), index, "the candidate index was not published");

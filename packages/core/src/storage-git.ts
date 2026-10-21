@@ -196,23 +196,47 @@ export interface ValidateStorageOptions {
   selectedSessionIds?: ReadonlySet<string>;
 }
 
+/** Check the path at its read/delegation boundary, without following a
+ * parent or leaf link. Missing optional paths keep their existing meaning;
+ * Playbook still owns the validation of session and attachment contents.
+ * This is not a lock against replacements inside an awaited facade call. */
+function validationPath(dir: string, file: string, kind: "file" | "directory"): boolean {
+  const parts = file.split("/");
+  let path = dir;
+  for (let index = -1; index < parts.length; index += 1) {
+    if (index >= 0) path = join(path, parts[index]);
+    const info = lstatSync(path, { throwIfNoEntry: false });
+    if (!info) return false;
+    const reported = index < 0 ? "." : parts.slice(0, index + 1).join("/");
+    if (info.isSymbolicLink()) throw new StorageDestinationRefused(reported, i18n._({
+      id: "the path goes through a symbolic link", comment: "Refusal: a storage validation read would follow a link",
+    }));
+    const directory = index < parts.length - 1 || kind === "directory";
+    if (directory ? !info.isDirectory() : !info.isFile()) throw new StorageDestinationRefused(reported, directory
+      ? i18n._({ id: "{path} is not a directory", comment: "Refusal: a storage validation parent or family is no directory", values: { path: reported } })
+      : i18n._({ id: "{path} is not a file", comment: "Refusal: a storage validation leaf is no regular file", values: { path: reported } }));
+  }
+  return true;
+}
+
 /** Validate a clone's complete tree without changing it (storage-12).
  * Public Playbook validation is the only authority for session bytes. */
 export async function validateStorageTree(dir_: string, options: ValidateStorageOptions = {}): Promise<StorageDiagnostic[]> {
   const dir = resolve(dir_);
   const diagnostics: StorageDiagnostic[] = [];
   const projectFile = join(dir, "project.json");
-  if (existsSync(projectFile)) parseProjectFile(readJsonFile(projectFile), projectFile);
+  if (validationPath(dir, "project.json", "file")) parseProjectFile(readJsonFile(projectFile), projectFile);
 
   const { createAssetStore } = await import("@sublang/playbook/session-assets");
   const intentsDir = join(dir, "intents");
   const intents: IntentFile[] = [];
-  const names = existsSync(intentsDir) ? readdirSync(intentsDir) : [];
+  const names = validationPath(dir, "intents", "directory") ? readdirSync(intentsDir) : [];
   for (const name of names) {
     const file = join(intentsDir, name);
     if (name.endsWith(".json")) {
       if (!UUID.test(name.slice(0, -5))) throw new StorageFormatError(file, i18n._({ id: "filename must be an intent UUID",
         comment: "Storage diagnostic: an intent file's name is no intent id" }));
+      validationPath(dir, `intents/${name}`, "file");
       intents.push(parseIntentFile(readJsonFile(file), file, name.slice(0, -5)));
     } else if (name.endsWith(".assets") && !names.includes(`${name.slice(0, -7)}.json`)) {
       throw new StorageFormatError(file, i18n._({ id: "attachments without their intent",
@@ -223,11 +247,19 @@ export async function validateStorageTree(dir_: string, options: ValidateStorage
   for (const intent of intents) {
     const file = join(intentsDir, `${intent.id}.json`);
     if (intent.attachments?.length) {
-      const assets = createAssetStore({ directory: join(intentsDir, `${intent.id}.assets`) });
+      const assetPath = `intents/${intent.id}.assets`;
+      validationPath(dir, assetPath, "directory");
+      const assets = createAssetStore({ directory: join(dir, assetPath) });
       try {
         await assets.prepare();
-        for (const ref of intent.attachments) { const reader = await assets.openAsset(ref); await reader.close(); }
-      } catch (cause) { throw new StorageFormatError(file, cause instanceof Error ? cause.message : String(cause)); }
+        for (const ref of intent.attachments) {
+          validationPath(dir, `${assetPath}/${ref.assetId.slice(7)}`, "file");
+          const reader = await assets.openAsset(ref); await reader.close();
+        }
+      } catch (cause) {
+        if (cause instanceof StorageDestinationRefused) throw cause;
+        throw new StorageFormatError(file, cause instanceof Error ? cause.message : String(cause));
+      }
     }
     // At most one open intent per source artifact (core-service-42).
     if (!intent.closed && intent.source && intent.source.kind !== "chat") {
@@ -239,17 +271,19 @@ export async function validateStorageTree(dir_: string, options: ValidateStorage
   }
 
   const authoringDir = join(dir, "authoring");
-  if (existsSync(authoringDir)) {
+  if (validationPath(dir, "authoring", "directory")) {
     const { parseStoredDraft } = await import("./drafts.js");
+    validationPath(dir, "authoring", "directory");
     for (const name of readdirSync(authoringDir)) {
       if (!name.endsWith(".json")) continue;
       const file = join(authoringDir, name);
+      validationPath(dir, `authoring/${name}`, "file");
       parseStoredDraft(readJsonFile(file), file, name.slice(0, -5));
     }
   }
 
   const config = join(dir, "config", "playbook.config.yaml");
-  if (existsSync(config)) {
+  if (validationPath(dir, "config/playbook.config.yaml", "file")) {
     const document = parseDocument(readFileSync(config, "utf8"));
     if (document.errors.length) throw new StorageFormatError(config, document.errors[0].message);
     const { composeConfig, validateProjectConfig, RegistryError } = await import("./config.js");
@@ -269,11 +303,19 @@ export async function validateStorageTree(dir_: string, options: ValidateStorage
   const { createSessionStore, validateSessionManifest } = await import("@sublang/playbook/session-store");
   const sessionsDir = join(dir, "sessions");
   const sessions = new Map<string, Set<number>>();
-  if (existsSync(sessionsDir)) {
+  if (validationPath(dir, "sessions", "directory")) {
     const store = createSessionStore({ sessionsDir }); await store.prepare();
+    validationPath(dir, "sessions", "directory");
     for (const file of readdirSync(sessionsDir)) {
       if (!file.endsWith(".json") || !UUID.test(file.slice(0, -5))) continue;
-      const id = file.slice(0, -5); const result = await store.validate(id);
+      const id = file.slice(0, -5);
+      const checkBundle = () => {
+        validationPath(dir, `sessions/${id}.json`, "file");
+        validationPath(dir, `sessions/${id}.records.jsonl`, "file");
+        validationPath(dir, `sessions/${id}.assets`, "directory");
+      };
+      checkBundle();
+      const result = await store.validate(id);
       if (result.manifest.schemaVersion !== 7) {
         const tracked = options.selectedSessionIds?.has(id) ?? (existsSync(join(dir, ".git")) && git(dir, ["ls-files", "--", `sessions/${file}`]).length > 0);
         if (tracked) throw new StorageFormatError(file, "unsupported session version cannot be selected as portable data");
@@ -282,6 +324,7 @@ export async function validateStorageTree(dir_: string, options: ValidateStorage
       }
       validateSessionManifest(result.manifest);
       if (!result.integrityValid) throw new StorageFormatError(file, result.history.damage?.reason ?? "session replay is missing, damaged or disagrees with its checkpoint");
+      checkBundle();
       await store.exportBundle(id);
       const turns = new Set<number>();
       for (const entry of result.history.entries) if (entry.record.type === "turn_started" && Number.isSafeInteger(entry.record.turnId)) turns.add(entry.record.turnId as number);
