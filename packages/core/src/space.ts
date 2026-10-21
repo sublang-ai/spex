@@ -1143,15 +1143,18 @@ class RepositorySync {
     const lastSync = stored && typeof stored.at === "number" && typeof stored.sent === "number" && typeof stored.received === "number"
       ? { at: stored.at, sent: stored.sent, received: stored.received }
       : null;
+    // Its instance (storage-31), whose Git origin its code remote is
+    // read against first (space-1).
+    const instance = this.owner.cloneInstance(this.key, this.facts.remoteName);
     let code: string | null = null;
     try {
       const project = existsSync(this.repository.projectFile) ? readJsonFile(this.repository.projectFile) as { remote?: unknown } : undefined;
-      code = typeof project?.remote === "string" ? this.owner.codeRemoteAsShown(project.remote) : null;
+      code = typeof project?.remote === "string" ? this.owner.codeRemoteAsShown(project.remote, instance) : null;
     } catch { code = null; }
     const remote = repo.root ? repo.remote : null;
     const state: RepositoryState = {
       key: this.key,
-      instance: this.owner.cloneInstance(this.key, this.facts.remoteName),
+      instance,
       name: splitKey(this.key).name,
       can: { manageMembers: false, transfer: false },
       id: repo.root ? repo.id : null,
@@ -2787,28 +2790,26 @@ export class SpaceManager {
     return { name: account.displayName || account.login, email: `${account.login}@users.noreply.${domain}` };
   }
 
-  /** The default instance's Git origin, as its last read or description
-   * named it. */
-  private knownOrigin(): string | undefined {
-    return this.defaultInstance().knownOrigin();
+  /** The instances whose Git origins a remote is read against
+   * (git-host-5): the home's default instance, then every other it
+   * lists, in its order. */
+  private reportingInstances(): HostInstance[] {
+    const first = this.defaultInstance();
+    return [first, ...this.listedInstances().filter((instance) => instance !== first)];
   }
 
-  /** A code remote under the reported Git origin stays inside the core
-   * (space-1, DR-120); its transport URL and project file stay as given. */
-  codeRemoteAsShown(remote: string): string {
-    const kind = this.codeRemoteKind(remote);
-    if (kind === "unknown") return i18n._({ id: "Code on a remote", comment: "Where a project's code lives before the instance has reported its Git origin; the actual remote is withheld until it can be classified" });
-    return kind === "instance"
-      ? i18n._({ id: "Code on this instance", comment: "Where a project's code lives when its remote is under the instance's reported Git origin; the Git system behind the instance is never named" })
-      : displayRemote(remote);
+  /** Whether the home's default instance and every instance it lists
+   * have reported their Git origin (git-host-5), as a read or a
+   * description named it for the core's run. */
+  private originsReported(): boolean {
+    return this.reportingInstances().every((instance) => instance.knownOrigin() !== undefined);
   }
 
-  /** Presentation only, against the origin already reported: no read
-   * of the host and no inferred origin (space-1, projects-7, DR-120). */
-  codeRemoteKind(remote: string): "unknown" | "instance" | "external" {
-    const origin = this.knownOrigin();
-    // Presentation recognizes an HTTP URL independently of its spelling
-    // or embedded user. Credential matching keeps its exact-origin rule.
+  /** Whether a remote lies under an instance's reported Git origin
+   * (git-host-5) — presentation only: an HTTP URL is recognized whatever
+   * its spelling or embedded user, while credential matching keeps its
+   * exact-origin rule (credentialFor). */
+  private reportedUnder(remote: string, instance: HostInstance): boolean {
     const normalized = (value: string): string => {
       try {
         const url = new URL(value);
@@ -2819,7 +2820,55 @@ export class SpaceManager {
       } catch { /* local paths and SSH forms retain their spelling */ }
       return value;
     };
-    return origin ? (underOrigin(normalized(remote), normalized(origin)) ? "instance" : "external") : "unknown";
+    const origin = instance.knownOrigin();
+    return origin !== undefined && underOrigin(normalized(remote), normalized(origin));
+  }
+
+  /** The home's default instance and every other it lists, in its
+   * order, the instance at `preferred` moved first where it names one. */
+  private preferring(preferred: string | null): HostInstance[] {
+    const instances = this.reportingInstances();
+    if (preferred === null) return instances;
+    const first = this.instanceAt(preferred);
+    return [first, ...instances.filter((instance) => instance !== first)];
+  }
+
+  /** The first instance, as `preferring` orders them, under whose
+   * reported Git origin a remote lies (git-host-5); undefined where none
+   * reports one it lies under. */
+  private reportingUnder(remote: string, preferred: string | null): HostInstance | undefined {
+    return this.preferring(preferred).find((instance) => this.reportedUnder(remote, instance));
+  }
+
+  /** A project's code remote on its row (space-1): "Code on a remote"
+   * until the default instance and every instance the home lists have
+   * reported their Git origin, then "Code on this instance" under the
+   * Git origin of the row's instance — `origin`, the default instance
+   * where it is null — "Code on a remote" under another listed
+   * instance's, and the remote as the reader set it, with no user in an
+   * http(s) URL, under none of them (DR-120, DR-127). Its transport URL
+   * and project file stay as given. */
+  codeRemoteAsShown(remote: string, origin: string | null): string {
+    const kind = this.originsReported() ? this.codeRemoteKind(remote, origin) : "unknown";
+    if (kind === "unknown" || kind === "remote") return i18n._({ id: "Code on a remote", comment: "Where a project's code lives before every instance has reported its Git origin, or when its remote lies under another instance's; the actual remote is withheld" });
+    return kind === "instance"
+      ? i18n._({ id: "Code on this instance", comment: "Where a project's code lives when its remote is under the instance's reported Git origin; the Git system behind the instance is never named" })
+      : displayRemote(remote);
+  }
+
+  /** How a project's code remote reads against the Git origins already
+   * reported (projects-7, projects-36), with no read of any instance and
+   * no inferred origin (DR-120, DR-127): "instance" under the reported
+   * Git origin of the project's instance — `origin`, its spex
+   * repository's, the default instance where it is null; "unknown"
+   * otherwise while the default instance or an instance the home lists
+   * has not reported its Git origin; "remote" under another listed
+   * instance's; "external" under none. */
+  codeRemoteKind(remote: string, origin: string | null): "unknown" | "instance" | "remote" | "external" {
+    const own = origin === null ? this.defaultInstance() : this.instanceAt(origin);
+    if (this.reportedUnder(remote, own)) return "instance";
+    if (!this.originsReported()) return "unknown";
+    return this.reportingInstances().some((instance) => instance !== own && this.reportedUnder(remote, instance)) ? "remote" : "external";
   }
 
   private packageExternalRemote(remote: string): string {
@@ -2833,35 +2882,48 @@ export class SpaceManager {
     return /^https?:\/\//i.test(remote) ? remoteHost(null) : remote;
   }
 
-  /** Package-source presentation uses only facts already read. Local
-   * paths remain useful; a network locator waits for classification. */
-  packageSourceAsShown(remote: string): string {
-    const local = isAbsolute(remote) || /^file:/i.test(remote)
+  private packageSourceLocal(remote: string): boolean {
+    return isAbsolute(remote) || /^file:/i.test(remote)
       || (!/^[a-z][a-z0-9+.-]*:\/\//i.test(remote) && !/^[^/\\]+:/.test(remote));
-    if (local) return remote;
-    const kind = this.codeRemoteKind(remote);
-    return kind === "unknown" ? remoteHost(null) : kind === "instance" ? this.hostName() : this.packageExternalRemote(remote);
+  }
+
+  /** Package-source presentation uses only facts already read
+   * (environments-29): a local path stays as given; a network locator
+   * reads as the display name of an instance under whose reported Git
+   * origin it lies — `preferred` first, then the earliest in the home's
+   * list — as the external remote under none, and as an unnamed remote
+   * while the default instance or an instance the home lists has not
+   * reported its origin. */
+  packageSourceAsShown(remote: string, preferred: string | null = null): string {
+    if (this.packageSourceLocal(remote)) return remote;
+    const at = this.reportingUnder(remote, preferred);
+    if (at) return this.nameOf(at);
+    return this.originsReported() ? this.packageExternalRemote(remote) : remoteHost(null);
   }
 
   /** Generated Git failures never publish unknown or backing-host
-   * stderr. External failures keep useful, credential-free Git detail. */
-  packageSourceFailure(remote: string, run: GitRun): string {
-    const kind = this.codeRemoteKind(remote);
-    const shown = this.packageSourceAsShown(remote);
-    const local = shown === remote && (isAbsolute(remote) || /^file:/i.test(remote) || !/^[^/\\]+:/.test(remote));
-    const atInstance = !local && kind !== "external";
+   * stderr. External failures keep useful, credential-free Git detail;
+   * no URL under any instance's Git origin is said (environments-29). */
+  packageSourceFailure(remote: string, run: GitRun, preferred: string | null = null): string {
+    const shown = this.packageSourceAsShown(remote, preferred);
+    const local = this.packageSourceLocal(remote);
+    const at = local ? undefined : this.reportingUnder(remote, preferred);
+    const unknown = !local && at === undefined && !this.originsReported();
     const status = /returned error: (\d{3})|RPC failed; HTTP (\d{3})|HTTP (\d{3})/i.exec(run.stderr);
     const generic = status
       ? i18n._("{host} answered with an error (HTTP {status})", { host: shown, status: status[1] ?? status[2] ?? status[3] })
       : i18n._({ id: "{host} answered with an error", comment: "A package Git source failed without a recognized status; raw backing-host or unclassified stderr stays inside the core", values: { host: shown } });
-    if (atInstance && kind === "unknown") {
+    if (unknown) {
       return `${generic} ${i18n._("Check the connection, then Retry.")}`;
     }
-    const failure = atInstance
+    const failure = at
       ? classifyHostTransportFailure({ ...run, stderr: run.stderr.replace(/^\s*remote:.*$/gm, "") }, shown)
       : classifyTransportFailure(run, this.packageExternalRemote(remote));
-    const message = atInstance && failure.cause === "git" ? generic : failure.message;
-    const text = withoutHostUrls(`${message} ${failure.guidance}`.split(remote).join(this.packageExternalRemote(remote)), { origin: this.knownOrigin(), host: this.hostName(), instance: this.host.store.home.host.origin });
+    const message = at && failure.cause === "git" ? generic : failure.message;
+    const text = this.preferring(preferred).reduce(
+      (out, instance) => withoutHostUrls(out, { origin: instance.knownOrigin(), host: this.nameOf(instance), instance: instance.origin }),
+      `${message} ${failure.guidance}`.split(remote).join(this.packageExternalRemote(remote)),
+    );
     return text.replace(/https?:\/\/[^\s'"<>]+/gi, (url) => this.packageExternalRemote(url));
   }
 
@@ -2945,12 +3007,12 @@ export class SpaceManager {
     return this.urlRules(facts, key)[0].own?.path ?? key;
   }
 
-  /** The Git origin the host's credentials are valid for (git-host-9):
-   * as the last read named it, else asked of the host — a call needing
-   * no token — and kept as a read's is; undefined where the host cannot
-   * say. */
-  async gitOrigin(): Promise<string | undefined> {
-    const instance = this.defaultInstance();
+  /** The Git origin an instance's credentials are valid for
+   * (git-host-9): as its last read named it, else asked of it — a call
+   * needing no token — and kept as a read's is; undefined where it
+   * cannot say. */
+  async gitOriginOf(origin: string): Promise<string | undefined> {
+    const instance = this.instanceAt(origin);
     const known = instance.knownOrigin();
     if (known) return known;
     try {
@@ -2963,22 +3025,26 @@ export class SpaceManager {
     }
   }
 
-  /** The brokered credential for a Git source at the host's Git origin
-   * (environments-13, git-host-9), asked of the host each time; none for
-   * a source at any other origin, nor while signed out, where this
-   * device's own Git fetches it. A refusal reads as the host said. */
-  async sourceCredential(repo: string): Promise<{ username: string; secret: string } | undefined> {
-    if (!this.signedIn()) return undefined;
-    const origin = await this.gitOrigin();
-    if (!origin || !underOrigin(repo, origin)) return undefined;
-    try {
-      // Transitional: the default instance's broker, until the
-      // environment's own instance decides it (environments-13).
-      const credential = await this.defaultInstance().client.credential(origin);
-      return { username: credential.username, secret: credential.secret };
-    } catch (error) {
-      throw new Error(relayHostError(error, this.hostName()));
+  /** The brokered credential for a Git source (environments-13,
+   * git-host-9), asked each time of an instance the home is signed in to
+   * at whose Git origin the source lies — `preferred` first where it is
+   * one, then the default instance and every other the home lists in its
+   * order; none for a source at the Git origin of no signed-in instance,
+   * where this device's own Git fetches it. A refusal reads as that
+   * instance said. */
+  async sourceCredential(repo: string, preferred: string | null = null): Promise<{ username: string; secret: string } | undefined> {
+    for (const instance of this.preferring(preferred)) {
+      if (!this.signedInAt(instance)) continue;
+      const origin = await this.gitOriginOf(instance.origin);
+      if (!origin || !underOrigin(repo, origin)) continue;
+      try {
+        const credential = await instance.client.credential(origin);
+        return { username: credential.username, secret: credential.secret };
+      } catch (error) {
+        throw new Error(relayHostError(error, this.nameOf(instance)));
+      }
     }
+    return undefined;
   }
 
   /** Whether a clone lies at its instance (git-host-9): it records the
@@ -4020,12 +4086,16 @@ export class SpaceManager {
   }
 
   /** The joined clone's working folder (space-63): the code cloned from
-   * the remote its `project.json` names with this device's own Git,
-   * brokered credentials at the reported Git origin and this device's
-   * elsewhere, or a folder already holding it, paired with the clone;
-   * a group's own spex repository pairs the folder its sessions run in.
-   * The join's Code step runs while the code clones (space-63), shown
-   * through `step`; a failure comes back as the row's stopped state. */
+   * the remote its `project.json` names with this device's own Git — with
+   * the credential the project's instance brokers only where that remote
+   * lies under that instance's Git origin, and none of the app's at any
+   * other, another instance's included (projects-37) — or a folder
+   * already holding it, paired with the clone; a group's own spex
+   * repository pairs the folder its sessions run in. The join's Code step
+   * runs while the code clones (space-63), shown through `step`; a
+   * failure comes back as the row's stopped state, the host's failure
+   * classified at the project's instance's Git origin and Git's words at
+   * any other, with no URL under any instance's Git origin. */
   private async pairJoined(machine: RepositorySync, folder: string, step: (phase: SpaceSyncPhase) => void): Promise<SpaceSyncPhase | undefined> {
     const project = this.projectFile(machine.repository);
     const root = existsSync(folder) && await this.workTreeRoot(folder);
@@ -4033,8 +4103,9 @@ export class SpaceManager {
     const at: SyncStep = remote ? "code" : "check";
     step({ phase: "running", op: "join", step: at, since: Date.now(), cancelable: false });
     await this.publish();
-    // The project's instance is its spex repository's (projects-37).
-    const instance = this.servingOf(machine);
+    // The project's instance is its spex repository's (projects-37,
+    // storage-31): never one chosen by the code's Git origin alone.
+    const instance = this.instanceOfClone(machine);
     const stopped = (failure: GitFailure): SpaceSyncPhase => ({
       phase: "stopped", op: "join", step: at,
       ...this.withoutHostUrls(failure, { remote: null, id: null, remoteName: machine.facts.remoteName }, machine.key),
@@ -4043,7 +4114,7 @@ export class SpaceManager {
     try {
       if (remote) {
         mkdirSync(dirname(folder), { recursive: true });
-        const credential = await this.credentialFor(instance, remote, at);
+        const credential = instance ? await this.credentialFor(instance, remote, at) : null;
         let run: GitRun;
         try {
           run = await this.probe.run(["clone", "-q", remote, folder], { transport: true, ...(credential ? { credential } : {}) });
@@ -4052,7 +4123,7 @@ export class SpaceManager {
         }
         if (run.code !== 0) {
           return stopped({
-            ...(credential ? classifyHostTransportFailure(run, this.nameOf(instance)) : {
+            ...(credential && instance ? classifyHostTransportFailure(run, this.nameOf(instance)) : {
               cause: run.killed ?? "git",
               message: lastLines(run.stderr) || i18n._({ id: "Git could not clone the code", comment: "A join's stop where git failed to clone the code and printed nothing" }),
             }),
@@ -5107,7 +5178,7 @@ export class SpaceManager {
     const path = `${repository.group.fullPath}/${repository.path}`;
     const key = colliding ? `${folder}/${path}@${repository.id}` : hostKey(repository, folder);
     if (!key || (!colliding && (store.repository(key) || deferred.has(key)))) return undefined;
-    const code = repository.project && typeof repository.project.remote === "string" ? this.codeRemoteAsShown(repository.project.remote) : null;
+    const code = repository.project && typeof repository.project.remote === "string" ? this.codeRemoteAsShown(repository.project.remote, instance.origin) : null;
     return {
       row: {
         key,

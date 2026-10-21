@@ -948,7 +948,7 @@ msgstr "请检查 URL，若仓库尚不存在请先创建，或者{act}。然后
 msgid "Choose the other side for this unit or fix the file, then Retry."
 msgstr "请为该单元改选另一个版本，或修好该文件，然后重试。"
 
-#. Where a project's code lives before the instance has reported its Git origin; the actual remote is withheld until it can be classified
+#. Where a project's code lives before every instance has reported its Git origin, or when its remote lies under another instance's; the actual remote is withheld
 #: src/space.ts
 msgid "Code on a remote"
 msgstr "远程代码"
@@ -1477,12 +1477,12 @@ msgstr "已读标记 {key} 无效"
 msgid "invalid working folder pair"
 msgstr "工作文件夹配对无效"
 
-#. Forge setup guidance before the instance has reported its Git origin; the actual remote and hostname stay internal
+#. Forge setup guidance before every instance has reported its Git origin, or for code under another instance's; the actual remote and hostname stay internal
 #: src/service.ts
 msgid "Issues and PRs come from GitHub; this project's code is on a remote."
 msgstr "Issue 与 PR 来自 GitHub；本项目的代码位于远程仓库。"
 
-#. Forge setup guidance for code on the instance's reported Git origin, whose underlying Git system is never named
+#. Forge setup guidance for code on the reported Git origin of the project's instance, whose underlying Git system is never named
 #: src/service.ts
 msgid "Issues and PRs come from GitHub; this project's code is on this instance."
 msgstr "Issue 与 PR 来自 GitHub；本项目的代码位于此实例上。"

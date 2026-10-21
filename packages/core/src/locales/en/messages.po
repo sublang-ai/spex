@@ -948,7 +948,7 @@ msgstr "Check the URL, create the repository if it is not there yet, or {act}. T
 msgid "Choose the other side for this unit or fix the file, then Retry."
 msgstr "Choose the other side for this unit or fix the file, then Retry."
 
-#. Where a project's code lives before the instance has reported its Git origin; the actual remote is withheld until it can be classified
+#. Where a project's code lives before every instance has reported its Git origin, or when its remote lies under another instance's; the actual remote is withheld
 #: src/space.ts
 msgid "Code on a remote"
 msgstr "Code on a remote"
@@ -1477,12 +1477,12 @@ msgstr "invalid viewed marker {key}"
 msgid "invalid working folder pair"
 msgstr "invalid working folder pair"
 
-#. Forge setup guidance before the instance has reported its Git origin; the actual remote and hostname stay internal
+#. Forge setup guidance before every instance has reported its Git origin, or for code under another instance's; the actual remote and hostname stay internal
 #: src/service.ts
 msgid "Issues and PRs come from GitHub; this project's code is on a remote."
 msgstr "Issues and PRs come from GitHub; this project's code is on a remote."
 
-#. Forge setup guidance for code on the instance's reported Git origin, whose underlying Git system is never named
+#. Forge setup guidance for code on the reported Git origin of the project's instance, whose underlying Git system is never named
 #: src/service.ts
 msgid "Issues and PRs come from GitHub; this project's code is on this instance."
 msgstr "Issues and PRs come from GitHub; this project's code is on this instance."

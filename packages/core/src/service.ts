@@ -2284,9 +2284,12 @@ export class CoreService {
           throw noProject(command.projectId);
         }
         const { originUrl, ...status } = await repoStatus(project.path, this.runCommand);
+        // Only a remote outside the default instance's and every listed
+        // instance's reported Git origin is named, with no user in it
+        // (projects-36).
         return {
           ...status,
-          ...(originUrl && this.space.codeRemoteKind(originUrl) === "external" ? { originUrl: displayRemote(originUrl) } : {}),
+          ...(originUrl && this.space.codeRemoteKind(originUrl, this.space.instanceOriginOf(project.id)) === "external" ? { originUrl: displayRemote(originUrl) } : {}),
         };
       }
       case "forge.items": {
@@ -2295,16 +2298,18 @@ export class CoreService {
           throw noProject(command.projectId);
         }
         // The real origin stays internal for binding. A response's
-        // guidance follows the origin known now, even from an older
-        // cache; local status never asks the host (projects-7, -11).
+        // guidance follows the origins known now, even from an older
+        // cache, read against the project's instance first — its spex
+        // repository's, the default instance where it has none; local
+        // status never asks any instance (projects-7, -11).
         const status = await repoStatus(project.path, this.runCommand);
         const shown = (state: ForgeState): ForgeState => {
           if (!status.originUrl || state.repo) return state;
-          const kind = this.space.codeRemoteKind(status.originUrl);
+          const kind = this.space.codeRemoteKind(status.originUrl, this.space.instanceOriginOf(project.id));
           if (kind === "external") return state;
           return { ...state, guidance: kind === "instance"
-            ? i18n._({ id: "Issues and PRs come from GitHub; this project's code is on this instance.", comment: "Forge setup guidance for code on the instance's reported Git origin, whose underlying Git system is never named" })
-            : i18n._({ id: "Issues and PRs come from GitHub; this project's code is on a remote.", comment: "Forge setup guidance before the instance has reported its Git origin; the actual remote and hostname stay internal" }) };
+            ? i18n._({ id: "Issues and PRs come from GitHub; this project's code is on this instance.", comment: "Forge setup guidance for code on the reported Git origin of the project's instance, whose underlying Git system is never named" })
+            : i18n._({ id: "Issues and PRs come from GitHub; this project's code is on a remote.", comment: "Forge setup guidance before every instance has reported its Git origin, or for code under another instance's; the actual remote and hostname stay internal" }) };
         };
         // The cache is persisted in the app store (dashboard-14), so a
         // restart serves the last lists rather than a blank.
