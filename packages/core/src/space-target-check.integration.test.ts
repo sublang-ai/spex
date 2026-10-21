@@ -19,13 +19,24 @@ const OWN = "ada/ada-spex";
 type Home = Awaited<ReturnType<typeof startHome>>;
 
 function internals(home: Home) {
-  return home.service as unknown as {
-    hostClient: { fetchImpl: typeof fetch };
+  const service = home.service as unknown as {
     space: {
       readHost(): Promise<unknown>;
-      targets: Map<unknown, { facts: { id: string | null }; listing?: { repository: { id: string } } }>;
+      instanceAt(origin: string): {
+        client: { fetchImpl: typeof fetch };
+        targets: Map<unknown, { facts: { id: string | null }; listing?: { repository: { id: string } } }>;
+      };
     };
     store: Store;
+  };
+  return {
+    space: service.space,
+    store: service.store,
+    /** The client the core keeps for the home's one instance (DR-127). */
+    get hostClient() { return service.space.instanceAt(service.store.home.defaultInstance().origin).client; },
+    /** The selected reads the core holds of the home's one instance
+     * (git-host-22). */
+    get targets() { return service.space.instanceAt(service.store.home.defaultInstance().origin).targets; },
   };
 }
 
@@ -317,15 +328,17 @@ for (const next of ["signed-out", "another-account"] as const) {
       // The stand-in's current user's namespace follows the scripted
       // person; existing repositories retain their original group object.
       host.script.groups[0] = { id: "2004", fullPath: "bob", name: "bob", kind: "user" };
-      const signFrom = home.client.mark();
-      await signIn(home, host);
-      await home.client.waitRepository(signFrom, "bob/bob-spex", (row) => row.sync.phase === "done", 30_000);
+      // The sign-in ends once its set-up has run; your own group's folder
+      // keeps the first login's name, which no later sign-in renames
+      // (space-59).
+      const signed = await signIn(home, host);
+      assert.equal(signed.own.name, "ada");
     }
     gate.release();
     const row = await home.client.waitRepository(from, key, (candidate) => candidate.sync.phase === "stopped", 30_000);
     assert.equal(row.sync.phase, "stopped");
     if (row.sync.phase === "stopped") assert.match(row.sync.message, /sign-in changed meanwhile/i);
-    assert.ok(![...core.space.targets.values()].some((target) => target.facts.id === id || target.listing?.repository.id === id), "no stale target cache entry");
+    assert.ok(![...core.targets.values()].some((target) => target.facts.id === id || target.listing?.repository.id === id), "no stale target cache entry");
     assert.ok(existsSync(clone) && !existsSync(clonePath(home.dataDir, hostKey(host, "acme/research/stale-answer-spex"))));
     assert.deepEqual(readFileSync(join(clone, ".git", "config")), config);
     assert.equal(git(clone, "remote", "get-url", hostFolder(host)), origin);

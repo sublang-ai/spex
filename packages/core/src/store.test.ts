@@ -200,7 +200,7 @@ test("storage-2: a change to home.yaml applies to the file as it stands; a delet
   const edited = parseYaml(readFileSync(file, "utf8")) as { folders: { path: string; repository: string; aliases?: string[] }[] };
   edited.folders[0].aliases = ["/elsewhere/recorded"];
   writeFileSync(file, stringifyYaml(edited));
-  store.signIn({ id: "1", login: "ada", displayName: null });
+  store.signIn(store.home.defaultInstance().origin, { id: "1", login: "ada", displayName: null });
   const after = parseYaml(readFileSync(file, "utf8")) as { folders: { aliases?: string[] }[]; origin: string; instances: { origin: string; account?: { login: string } }[] };
   assert.deepEqual(after.folders[0].aliases, ["/elsewhere/recorded"], "the editor's change stands");
   assert.deepEqual(after.instances.map((entry) => [entry.origin, entry.account?.login]), [[after.origin, "ada"]]);

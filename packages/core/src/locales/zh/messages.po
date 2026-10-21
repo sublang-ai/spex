@@ -268,6 +268,11 @@ msgstr "{name} 在本设备上没有文件夹"
 msgid "{name} is in use elsewhere in {project}"
 msgstr "{project} 中的 {name} 正在别处使用"
 
+#. Refusal of a pick: the spex repository's folder lies under one instance, and the pick named a group at another; {name} is the repository's name, {host} its instance's display name
+#: src/space.ts
+msgid "{name} is kept under {host}; pick a group there"
+msgstr "{name} 位于 {host} 之下；请在那里选择一个群组"
+
 #. Refusal: removing a spec package this environment does not request
 #: src/environments.ts
 msgid "{name} is not requested here"
@@ -819,6 +824,46 @@ msgstr "把本机的 SSH 密钥添加到有权访问它的账户"
 msgid "an attachment the intent names is missing"
 msgstr "意图引用的附件缺失"
 
+#. Refusal of a sign-in: the URL's host holds a character outside DNS labels, such as an underscore, or is an IPv6 literal
+#: src/space.ts
+msgid "An instance's host holds only letters, digits, inner hyphens and single dots"
+msgstr "实例的主机名只能包含字母、数字、内部连字符和单个点"
+
+#. Refusal of a sign-in: the URL names port 0
+#: src/space.ts
+msgid "An instance's port is from 1 to 65535"
+msgstr "实例的端口应在 1 到 65535 之间"
+
+#. Refusal of a sign-in: the URL's scheme is neither https nor http; http is allowed for an instance on this device alone (localhost or 127.x)
+#: src/space.ts
+msgid "An instance's URL begins with https://, or http:// on this device"
+msgstr "实例的 URL 以 https:// 开头，本机上的实例也可用 http://"
+
+#. Refusal of a sign-in: the URL carries a fragment; an instance is known by its origin alone
+#: src/space.ts
+msgid "An instance's URL carries no fragment, only its scheme, host and port"
+msgstr "实例的 URL 不含片段，只含协议、主机和端口"
+
+#. Refusal of a sign-in: the URL carries a query; an instance is known by its origin alone
+#: src/space.ts
+msgid "An instance's URL carries no query, only its scheme, host and port"
+msgstr "实例的 URL 不含查询参数，只含协议、主机和端口"
+
+#. Refusal of a sign-in: the URL carries user info before its host
+#: src/space.ts
+msgid "An instance's URL carries no user or password"
+msgstr "实例的 URL 不含用户名或密码"
+
+#. Refusal of a sign-in: the URL names a path after its host; an instance is known by its origin alone
+#: src/space.ts
+msgid "An instance's URL names no path, only its scheme, host and port"
+msgstr "实例的 URL 不含路径，只含协议、主机和端口"
+
+#. Refusal of a sign-in: the URL is http on a host that is not this device (localhost or 127.x)
+#: src/space.ts
+msgid "An instance's URL uses https://; http:// only on this device"
+msgstr "实例的 URL 使用 https://；只有本机上的实例才可用 http://"
+
 #. A diagnostic's reason, read after the file it names; {cause} is the failure's own text, relayed
 #: src/space.ts
 msgid "an interrupted sync could not be repaired: {cause}"
@@ -917,7 +962,7 @@ msgstr "请检查 URL，若仓库尚不存在请先创建，或者{act}。然后
 msgid "Choose the other side for this unit or fix the file, then Retry."
 msgstr "请为该单元改选另一个版本，或修好该文件，然后重试。"
 
-#. Where a project's code lives before the instance has reported its Git origin; the actual remote is withheld until it can be classified
+#. Where a project's code lives before every instance has reported its Git origin, or when its remote lies under another instance's; the actual remote is withheld
 #: src/space.ts
 msgid "Code on a remote"
 msgstr "远程代码"
@@ -1446,12 +1491,12 @@ msgstr "已读标记 {key} 无效"
 msgid "invalid working folder pair"
 msgstr "工作文件夹配对无效"
 
-#. Forge setup guidance before the instance has reported its Git origin; the actual remote and hostname stay internal
+#. Forge setup guidance before every instance has reported its Git origin, or for code under another instance's; the actual remote and hostname stay internal
 #: src/service.ts
 msgid "Issues and PRs come from GitHub; this project's code is on a remote."
 msgstr "Issue 与 PR 来自 GitHub；本项目的代码位于远程仓库。"
 
-#. Forge setup guidance for code on the instance's reported Git origin, whose underlying Git system is never named
+#. Forge setup guidance for code on the reported Git origin of the project's instance, whose underlying Git system is never named
 #: src/service.ts
 msgid "Issues and PRs come from GitHub; this project's code is on this instance."
 msgstr "Issue 与 PR 来自 GitHub；本项目的代码位于此实例上。"
@@ -1576,6 +1621,11 @@ msgstr "请填写该账户在 {host} 上的登录名"
 #: src/space-groups.ts
 msgid "Name the group"
 msgstr "请为群组命名"
+
+#. Refusal of a sign-in: what the reader gave does not read as a URL at all
+#: src/space.ts
+msgid "Name the instance by its URL, such as https://spex.pub"
+msgstr "请用实例的 URL 指明它，例如 https://spex.pub"
 
 #. A stopped transfer's message; {host} is the remote's host
 #. A stopped transfer's message; {host} is the remote's host
@@ -2135,10 +2185,20 @@ msgstr "请先登录"
 msgid "Sign in from the header, then Retry."
 msgstr "请从页头登录，然后重试。"
 
+#. Refusal of a sync: the spex repository's instance is signed out; {host} is that instance's display name, or its host name before any read
+#: src/space.ts
+msgid "Sign in to {host} first"
+msgstr "请先登录 {host}"
+
 #. Refusal: publishing to the registry needs the home signed in
 #: src/environments.ts
 msgid "Sign in to publish"
 msgstr "登录后才能发布"
+
+#. Refusal of Forget: the instance is still signed in; {host} is its display name, or its host name before any read
+#: src/space.ts
+msgid "Sign out of {host} first"
+msgstr "请先退出登录 {host}"
 
 #. The act that gives access to an http(s) remote, inside a sentence
 #: src/space-git.ts
@@ -2260,6 +2320,11 @@ msgstr "状态根目录 {dir} 在 {lock} 处已被本机进程 {pid} 占用；�
 #: src/root-lease.ts
 msgid "state root {dir} lock at {lock} cannot be verified: {reason}; stop every Spex writer before removing it (DR-108)"
 msgstr "状态根目录 {dir} 在 {lock} 处的锁无法核实：{reason}；请先停止所有 Spex 写入者，再移除它（DR-108）"
+
+#. Refusal of Forget: spex repositories whose clones are still kept under the instance, no signed-in instance listing them; {host} is the instance's display name, {names} the repositories' names as a list
+#: src/space.ts
+msgid "Still kept under {host}: {names}"
+msgstr "仍位于 {host} 之下：{names}"
 
 #. A stopped step's message: the reader stopped it while the Git host's rate limit held its call; {host} is the host's display name
 #: src/space.ts
@@ -2613,6 +2678,16 @@ msgstr "该会话正在等待你的回复；请先回复"
 #: src/approvals.ts
 msgid "This decision was not offered by the agent."
 msgstr "智能体未提供此答复选项。"
+
+#. Refusal of a sign-in: the URL names the host and port of an instance this device already lists, under another scheme; {listed} is that instance's origin
+#: src/space.ts
+msgid "This device already signs in to {listed}, at the same host and port"
+msgstr "此设备已登录同一主机和端口上的 {listed}"
+
+#. Refusal: a command names an instance, by its address, that this device lists no entry for — never signed in to there, or forgotten since
+#: src/space.ts
+msgid "This device has not signed in to {instance}"
+msgstr "此设备尚未登录 {instance}"
 
 #. Create recovery for an existing unborn repository; Add is the palette action
 #: src/forge.ts

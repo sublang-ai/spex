@@ -42,6 +42,12 @@ const HOST_OWN = `${LOGIN}/${LOGIN}-spex`;
 const HOST_NAME = "Stand-in Git host";
 
 /** The remotes a clone holds, by name. */
+/** The client a core keeps for an instance (DR-127), reached for what
+ * no command shows: its answers held, its credential store read. */
+function clientAt(home: { service: unknown }, host: Pick<StandinHost, "url">): { fetchImpl: typeof fetch; credentials: CredentialStore } {
+  return (home.service as { space: { instanceAt(origin: string): { client: { fetchImpl: typeof fetch; credentials: CredentialStore } } } }).space.instanceAt(host.url).client;
+}
+
 function remotesOf(clone: string): string[] {
   const listed = spawnSync("git", ["-C", clone, "remote"], { encoding: "utf8" });
   return listed.stdout.split("\n").filter((name) => name !== "");
@@ -119,10 +125,11 @@ test("space-37: the browser sign-in renames your own group after the login, push
   assert.equal(repositoryOf(signed, moved).state, "local-only");
   assert.equal(repositoryOf(signed, moved).folder, home.projectDir);
   assert.ok(!existsSync(join(home.dataDir, "workspace", OWN)), "the former folder left with its clones");
-  // The instance signed in to, by its origin: the home's one entry (DR-127).
+  // The instance signed in to, by its origin: the home's one entry, with
+  // its display name as its read named it (DR-127, storage-2).
   const file = Home.load(home.dataDir).file;
   assert.equal(file.origin, host.url);
-  assert.deepEqual(file.instances, [{ origin: host.url, clientId: "spex", account: { id: "1001", login: LOGIN, displayName: "Ada Lovelace" } }]);
+  assert.deepEqual(file.instances, [{ origin: host.url, clientId: "spex", account: { id: "1001", login: LOGIN, displayName: "Ada Lovelace" }, displayName: HOST_NAME }]);
   assert.equal(file.own, LOGIN);
   assert.deepEqual(file.folders.map((folder) => [folder.path, folder.repository]), [[home.projectDir, moved]]);
   // The app token, owner-only (storage-19).
@@ -169,12 +176,14 @@ test("space-37: the browser sign-in renames your own group after the login, push
   assert.deepEqual(reread.roles, []);
   assert.equal(reread.readAt, null);
   assert.equal(reread.host.url, host.url);
+  assert.deepEqual(reread.instances.map((instance) => [instance.origin, instance.account.login, instance.signedIn, instance.readAt, instance.roles]), [[host.url, LOGIN, true, null, []]]);
   assert.deepEqual(repositoryOf(reread, HOST_OWN).lastSync, own.lastSync);
   // That first ask began the read a signed-in start owes, once for both
   // asks, its state landing with a read time and the host's groups for
   // the picker (space-1, git-host-5); a later ask begins none.
   const read = await again.client.waitSpace(fromStart, (state) => state.readAt !== null);
   assert.equal(typeof read.readAt, "number");
+  assert.equal(read.instances[0].readAt, read.readAt);
   assert.deepEqual(read.groups.map((group) => group.fullPath), [LOGIN, "acme", "acme/research"]);
   assert.equal(repositoryOf(read, HOST_OWN).state, "reachable");
   assert.deepEqual(read.account, signed.account);
@@ -309,7 +318,7 @@ test("space-37: the device sign-in links the stand-in's code, names the host, an
   assert.equal(running.signIn.verificationUri, denied.verificationUri);
   host.script.denyDevice(denied.userCode);
   const failed = await home.client.waitSpace(from, (state) => state.signIn.phase === "failed");
-  assert.ok(failed.signIn.phase === "failed" && failed.signIn.cause === "denied", JSON.stringify(failed.signIn));
+  assert.ok(failed.signIn.phase === "failed" && failed.signIn.cause === "denied" && failed.signIn.instance === host.url, JSON.stringify(failed.signIn));
   assert.equal(failed.account, null);
   assert.ok(!existsSync(join(home.dataDir, "local", "credentials.yaml")), "nothing is stored");
   const signed = await signIn(home, host);
@@ -906,7 +915,9 @@ test("space-37: Sign out revokes this device and keeps every clone, its reposito
   const own = repositoryOf(out, HOST_OWN);
   assert.deepEqual([own.state, own.reason], ["unreachable", "Sign in again"]);
   assert.ok(existsSync(join(clonePath(home.dataDir, HOST_OWN), ".git")), "nothing is deleted");
-  await home.client.expectError("space.sync", { repository: HOST_OWN }, "invalid_request", /Sign in first/);
+  // A Sync names the instance to sign in to, by its display name as last
+  // read (space-11).
+  await home.client.expectError("space.sync", { repository: HOST_OWN }, "invalid_request", new RegExp(`^Sign in to ${HOST_NAME} first$`));
   await home.client.expectError("space.refresh", {}, "invalid_request", /Sign in first/);
   const fromAgain = home.client.mark();
   await signIn(home, host);
@@ -914,6 +925,69 @@ test("space-37: Sign out revokes this device and keeps every clone, its reposito
   assert.equal(back.reason, null);
   // Signed in again as the same account: its one entry, no longer signed out.
   assert.deepEqual(Home.load(home.dataDir).file.instances.map((entry) => [entry.origin, entry.account?.login, entry.signedOut]), [[host.url, LOGIN, undefined]]);
+});
+
+test("space-30, space-29: the state names the default instance, your own group and each instance the home lists with its account, read and groups, every row its instance; a command naming an instance the home does not list is refused", async (t) => {
+  const host = await startHost();
+  const home = await startHome("instances-state", { host, extra: { signIn: "browser" } });
+  t.after(() => home.stop());
+  const { key } = await addFolder(home, home.projectDir);
+  // Before any sign-in: no instance, the default instance the stand-in's
+  // origin, and your own group alone with its rows, none at an instance.
+  const before = await home.client.expectOk("space.get", {});
+  assert.equal(before.defaultInstance, host.url);
+  assert.deepEqual(before.instances, []);
+  assert.equal(before.own.name, OWN);
+  assert.deepEqual(before.own.repositories.map((repository) => [repository.key, repository.own, repository.instance]), [[OWN_KEY, true, null], [key, false, null]]);
+  // A sign-in names the origin it signs in to while it runs.
+  const from = home.client.mark();
+  const started = await home.client.expectOk("space.signin.start", {});
+  assert.ok(started.flow === "browser", JSON.stringify(started));
+  const running = await home.client.waitSpace(from, (state) => state.signIn.phase === "running");
+  assert.ok(running.signIn.phase === "running" && running.signIn.instance === host.url, JSON.stringify(running.signIn));
+  await (await fetch((await fetch(started.url, { redirect: "manual" })).headers.get("location") ?? "")).text();
+  await home.client.waitRepository(from, HOST_OWN, (repository) => repository.sync.phase === "done", 30_000);
+  const state = await home.client.expectOk("space.get", {});
+  // The one instance, by its origin, with the account there, what its
+  // read said, its roles, and its groups and your namespace there.
+  assert.equal(state.instances.length, 1);
+  const [instance] = state.instances;
+  assert.deepEqual(
+    { ...instance, readAt: typeof instance.readAt, roles: instance.roles.length > 0, groups: undefined },
+    { origin: host.url, host: "127.0.0.1", displayName: HOST_NAME, account: { id: "1001", login: LOGIN, displayName: "Ada Lovelace", canCreateGroup: true }, signedIn: true, hostSignedOut: false, read: { phase: "idle" }, readAt: "number", roles: true, groups: undefined },
+  );
+  assert.deepEqual(instance.roles, state.roles);
+  assert.deepEqual(instance.groups.map((group) => [group.fullPath, group.id, group.login, group.mine]), [["acme", "2002", null, false], ["acme/research", "2003", null, false], [LOGIN, null, LOGIN, true]]);
+  assert.deepEqual(instance.groups.find((group) => group.id === "2002")?.can, state.groups.find((group) => group.id === "2002")?.can, "what the read lets the person do in a group");
+  // Your own group by its folder name, holding its own repository at the
+  // instance and the project's clone, local only; your namespace there
+  // holds no row of your own group's.
+  assert.equal(state.own.name, LOGIN);
+  const moved = `${LOGIN}/${basename(home.projectDir)}-spex`;
+  assert.deepEqual(state.own.repositories.map((repository) => [repository.key, repository.instance, repository.state]), [[HOST_OWN, host.url, "reachable"], [moved, null, "local-only"]]);
+  assert.deepEqual(instance.groups.find((group) => group.mine)?.repositories, []);
+  // A command names the instance by its origin in any spelling; one the
+  // home does not list is refused before anything is asked of a host,
+  // its address repeated without any user info.
+  const acme = await home.client.expectOk("space.members", { instance: `${host.url}/`, group: "2002" });
+  assert.ok(acme.members.some((member) => member.login === LOGIN), JSON.stringify(acme));
+  const asked = host.script.requests.length;
+  const elsewhere = "https://elsewhere.test";
+  await home.client.expectError("space.members", { instance: elsewhere, group: "2002" }, "not_found", /This device has not signed in to https:\/\/elsewhere\.test/);
+  await home.client.expectError("space.group.create", { instance: elsewhere, name: "Elsewhere", path: "elsewhere", parent: null }, "not_found");
+  await home.client.expectError("space.pick", { repository: moved, choice: { kind: "create", instance: elsewhere, groupId: "2002", name: "x" } }, "not_found");
+  const hidden = await home.client.expectError("space.join", { instance: "https://ada:secret@elsewhere.test", hostId: "1" }, "not_found");
+  assert.ok(!hidden.includes("secret") && !hidden.includes("ada:"), hidden);
+  await home.client.expectError("space.signout", { instance: elsewhere }, "not_found");
+  assert.equal(host.script.requests.length, asked, "nothing is asked of the stand-in");
+  // Signed out by the reader, the instance keeps its entry and account,
+  // its read idle and no view, and your own group's own repository
+  // stands unreachable under your own group.
+  const out = await home.client.expectOk("space.signout", { instance: host.url });
+  assert.deepEqual(out.instances.map((entry) => [entry.origin, entry.account.login, entry.account.canCreateGroup, entry.signedIn, entry.hostSignedOut, entry.read, entry.readAt, entry.roles, entry.groups]),
+    [[host.url, LOGIN, false, false, false, { phase: "idle" }, null, [], []]]);
+  const own = out.own.repositories.find((repository) => repository.own);
+  assert.deepEqual([own?.key, own?.instance, own?.state, own?.reason], [HOST_OWN, host.url, "unreachable", "Sign in again"]);
 });
 
 test("git-host-2: a sign-in at a listed instance as another account ends failed naming the entry's login, storing nothing and signing nothing out", async (t) => {
@@ -981,6 +1055,57 @@ test("git-host-2: a sign-in at a listed instance as another account ends failed 
   assert.deepEqual(entries(), [[host.url, ada.id, LOGIN, undefined]]);
 });
 
+test("git-host-13, git-host-2, git-host-3: space.signin.start naming a URL the origin rule refuses — a path, a query, a user, http off this device, a host holding `_`, or, once the stand-in is listed, https at its host and port — is refused naming the rule, nothing listening and no request reaching any host; the stand-in's origin in another spelling signs its entry in again", async (t) => {
+  const host = await startHost();
+  const port = new URL(host.url).port;
+  for (const flow of ["browser", "device"] as const) {
+    const home = await startHome(`origin-rule-${flow}`, { host, project: false, extra: { signIn: flow } });
+    t.after(() => home.stop());
+    /** A start refused `invalid_request` with `rule`, before any flow:
+     * the URL's secret not repeated, no sign-in reading as running and
+     * nothing reaching the stand-in, whose own port several URLs name. */
+    const refused = async (url: string, rule: RegExp): Promise<void> => {
+      const asked = host.script.requests.length;
+      const from = home.client.mark();
+      const message = await home.client.expectError("space.signin.start", { url }, "invalid_request", rule);
+      assert.ok(!message.includes("secret") && !message.includes(url), message);
+      assert.equal(host.script.requests.length, asked, `nothing reached the stand-in for ${url}`);
+      const ran = home.client.messages.slice(from).filter((message) => message.type === "space.state" && message.state.signIn.phase !== "idle");
+      assert.deepEqual(ran, [], `no sign-in ran for ${url}`);
+      assert.deepEqual((await home.client.expectOk("space.get", {})).signIn, { phase: "idle" });
+    };
+    await refused(`${host.url}/login`, /An instance's URL names no path, only its scheme, host and port/);
+    await refused(`${host.url}/?next=1`, /An instance's URL carries no query/);
+    await refused(`http://ada:secret@127.0.0.1:${port}`, /An instance's URL carries no user or password/);
+    await refused("http://spex.test", /An instance's URL uses https:\/\/; http:\/\/ only on this device/);
+    await refused("https://spex_pub.test", /An instance's host holds only letters, digits, inner hyphens and single dots/);
+    assert.equal(existsSync(join(home.dataDir, "local", "credentials.yaml")), false, "nothing is stored");
+    assert.deepEqual(Home.load(home.dataDir).instances(), [], "no instance is listed");
+    // Nothing holds the one sign-in: the stand-in's origin signs in.
+    const from = home.client.mark();
+    await signIn(home, host);
+    await home.client.waitRepository(from, HOST_OWN, (repository) => repository.sync.phase === "done", 30_000);
+    // Listed, its host and port under another scheme is refused naming
+    // the instance this device signs in to there.
+    await refused(`https://127.0.0.1:${port}`, new RegExp(`This device already signs in to ${host.url.replace(/[.:/]/g, "\\$&")}, at the same host and port`));
+    // Its origin in another spelling is the same entry, signed in again:
+    // a new pair stored in place of the one that stood, no second entry.
+    const credentials = fileCredentialStore(home.dataDir, host.url);
+    const pair = await credentials.read();
+    const mark = home.client.mark();
+    const started = await home.client.expectOk("space.signin.start", { url: `HTTP://127.0.0.1:${port}/` });
+    const running = await home.client.waitSpace(mark, (state) => state.signIn.phase === "running");
+    assert.ok(running.signIn.phase === "running" && running.signIn.instance === host.url, JSON.stringify(running.signIn));
+    const ran = home.client.mark();
+    if (started.flow === "browser") await (await fetch((await fetch(started.url, { redirect: "manual" })).headers.get("location") ?? "")).text();
+    else host.script.approveDevice(started.userCode);
+    const ended = await home.client.waitSpace(ran, (state) => state.signIn.phase !== "running", 30_000);
+    assert.deepEqual(ended.signIn, { phase: "idle" });
+    assert.ok(pair && !samePair(await credentials.read(), pair), "a new pair stands in place of the former");
+    assert.deepEqual(Home.load(home.dataDir).instances().map((entry) => [entry.origin, entry.account?.login, entry.signedOut === true]), [[host.url, LOGIN, false]]);
+  }
+});
+
 test("git-host-4: a refresh the stand-in refuses, or a device it revoked, signs this device out, the state saying the host did it as whom until the next sign-in", async (t) => {
   const host = await startHost();
   const home = await startHome("host-signout", { host, project: false, extra: { signIn: "browser" } });
@@ -999,6 +1124,7 @@ test("git-host-4: a refresh the stand-in refuses, or a device it revoked, signs 
    * marked signed out, the remote repository waiting for a sign-in. */
   const assertHostSignedOut = (state: GroupsState): void => {
     assert.deepEqual(state.signIn, { phase: "idle", signedOut: { by: "host", login: LOGIN } });
+    assert.deepEqual(state.instances.map((instance) => [instance.origin, instance.signedIn, instance.hostSignedOut, instance.account.login]), [[host.url, false, true, LOGIN]]);
     assert.ok(!existsSync(join(home.dataDir, "local", "credentials.yaml")), "the credential is gone");
     const file = Home.load(home.dataDir).file;
     assert.equal(file.instances[0].signedOut, true);
@@ -1031,7 +1157,9 @@ test("git-host-4: a refresh the stand-in refuses, or a device it revoked, signs 
   assertHostSignedOut(await signedOutBy());
   // A sign-out of the reader's own says nothing of the host.
   await signInRead();
-  assert.deepEqual((await home.client.expectOk("space.signout", {})).signIn, { phase: "idle" });
+  const own = await home.client.expectOk("space.signout", {});
+  assert.deepEqual(own.signIn, { phase: "idle" });
+  assert.deepEqual(own.instances.map((instance) => [instance.signedIn, instance.hostSignedOut]), [[false, false]]);
 });
 
 test("git-host-4, git-host-10: a refusal or a sign-out overtaken by a newer sign-in leaves that sign-in's account signed in", async (t) => {
@@ -1043,8 +1171,8 @@ test("git-host-4, git-host-10: a refusal or a sign-out overtaken by a newer sign
   await home.client.waitRepository(from, HOST_OWN, (repository) => repository.sync.phase === "done");
   // The core's own client and Groups, reached for what no command shows:
   // its answers held, and the instant its pair is removed.
-  const core = home.service as unknown as { hostClient: GitHostClient; space: { readHost(): Promise<unknown>; signedInAs(account: HostAccount): Promise<void> } };
-  const client = core.hostClient as unknown as { fetchImpl: typeof fetch; credentials: CredentialStore };
+  const core = home.service as unknown as { space: { readHost(): Promise<unknown>; signedInAs(origin: string, account: HostAccount): Promise<void> } };
+  const client = clientAt(home, host);
   const holds = holdingFetch(client.fetchImpl);
   client.fetchImpl = holds.fetch;
   const store = fileCredentialStore(home.dataDir, host.url);
@@ -1112,7 +1240,7 @@ test("git-host-4, git-host-10: a refusal or a sign-out overtaken by a newer sign
       if (replaced && next === null) {
         queueMicrotask(() => {
           published = store.replace(null, latest);
-          void core.space.signedInAs(account);
+          void core.space.signedInAs(host.url, account);
         });
       }
       return replaced;
@@ -1976,7 +2104,7 @@ test("git-host-5: full reads expose running and failure with only local rows, pr
   await home.client.expectOk("space.remote.set", { repository: HOST_OWN, url: null });
   const before = await home.client.expectOk("space.get", {});
   assert.deepEqual(before.read, { phase: "idle" });
-  const client = (home.service as unknown as { hostClient: { fetchImpl: typeof fetch } }).hostClient;
+  const client = clientAt(home, host);
   const holds = holdingFetch(client.fetchImpl);
   client.fetchImpl = holds.fetch;
   host.script.unavailable(1);
@@ -2013,7 +2141,7 @@ test("git-host-5: signed-in startup publishes a failed first read even with only
   await first.stop();
   const home = await startHome("startup-read-outcome", { host, dataDir: first.dataDir, project: false });
   t.after(() => home.stop());
-  const client = (home.service as unknown as { hostClient: { fetchImpl: typeof fetch } }).hostClient;
+  const client = clientAt(home, host);
   const holds = holdingFetch(client.fetchImpl); client.fetchImpl = holds.fetch;
   host.script.unavailable(1);
   const held = holds.hold((_path, status) => status === 503); t.after(() => held.release());
@@ -2026,7 +2154,9 @@ test("git-host-5: signed-in startup publishes a failed first read even with only
   const failed = await home.client.waitSpace(from, (state) => state.read.phase === "failed");
   assert.equal(failed.readAt, null);
   assert.ok(failed.groups.flatMap((group) => group.repositories).every((row) => row.state === "local-only" && row.reason === null));
-  assert.deepEqual(failed.read, { phase: "failed", message: "Could not reach 127.0.0.1" });
+  // The instance is named by the display name its entry kept from the
+  // read before the restart (space-15, storage-2).
+  assert.deepEqual(failed.read, { phase: "failed", message: "Could not reach Stand-in Git host" });
   assert.deepEqual((await home.client.expectOk("space.signout", {})).read, { phase: "idle" });
 });
 
@@ -2039,8 +2169,9 @@ for (const source of ["refresh", "direct-read"] as const) {
     t.after(async () => { release(); await home.stop(); });
     await signIn(home, host);
     await home.client.waitRepository(signed, HOST_OWN, (row) => row.sync.phase === "done");
-    const core = home.service as unknown as { hostClient: { fetchImpl: typeof fetch }; space: { readHost(): Promise<unknown> } };
-    const holds = holdingFetch(core.hostClient.fetchImpl); core.hostClient.fetchImpl = holds.fetch;
+    const core = home.service as unknown as { space: { readHost(): Promise<unknown> } };
+    const client = clientAt(home, host);
+    const holds = holdingFetch(client.fetchImpl); client.fetchImpl = holds.fetch;
     host.script.unavailable(1);
     const held = holds.hold((_path, status) => status === 503); release = held.release;
     const mark = home.client.mark(), requests = host.script.requests.length;

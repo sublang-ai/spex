@@ -29,6 +29,8 @@ export const HOUR = 60 * MIN;
 export const HOME = "/Users/jane/.spex";
 /** The project's spex repository the tests open, by its key. */
 export const KEY = "jane/academy-spex";
+/** The one instance the fixtures' home lists. */
+export const ORIGIN = "https://spex.example";
 /** Your own group's spex repository. */
 export const OWN = "jane/jane-spex";
 export const CLONE = `${HOME}/workspace/${KEY}`;
@@ -161,6 +163,7 @@ export const BRANCH: NonNullable<RepositoryState["branch"]> = {
 export function repo(over: Partial<RepositoryState> = {}): RepositoryState {
   return {
     key: KEY,
+    instance: ORIGIN,
     name: "academy-spex",
     id: "42",
     own: false,
@@ -213,12 +216,27 @@ export const ROLES: GroupsState["roles"] = [
 export const NO_CAN: GroupsState["groups"][number]["can"] = { createSubgroup: false, manageMembers: false, rename: false, delete: false };
 
 /** A signed-in home: your own group with its own spex repository
- * first, then the given ones. */
+ * first, then the given ones. The surface reads the default instance's
+ * transitional mirrors until it reads `instances` (space-30). */
 export function base(over: Partial<GroupsState> = {}, repos: RepositoryState[] = [repo()]): GroupsState {
   return {
     home: HOME,
     git: { ok: true, version: "2.45.0" },
-    host: { url: "https://spex.example", displayName: "Spex Example" },
+    defaultInstance: ORIGIN,
+    own: { name: "jane", repositories: [OWN_REPO] },
+    instances: [{
+      origin: ORIGIN,
+      host: "spex.example",
+      displayName: "Spex Example",
+      account: { id: "7", login: "jane", displayName: "Jane", canCreateGroup: false },
+      signedIn: true,
+      hostSignedOut: false,
+      read: { phase: "idle" },
+      readAt: NOW - MIN,
+      roles: ROLES,
+      groups: [{ id: null, login: "jane", mine: true, fullPath: "jane", name: "jane", can: NO_CAN, repositories: repos }],
+    }],
+    host: { url: ORIGIN, displayName: "Spex Example" },
     account: { id: "7", login: "jane", displayName: "Jane", canCreateGroup: false },
     signIn: { phase: "idle" },
     read: { phase: "idle" },

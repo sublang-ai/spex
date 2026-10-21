@@ -655,7 +655,7 @@ test.describe("the instance alone", () => {
         }
         return out;
       });
-      return said.filter((text) => text.includes(`${host.url}/`) || text.includes(STANDIN_STORAGE) || /gitlab/i.test(text));
+      return said.filter((text) => app.hosts.some((each) => text.includes(`${each.url}/`) || text.includes(each.storage)) || /gitlab/i.test(text));
     };
     const scan = async (where: string): Promise<void> => {
       const surface = page.getByTestId("space-surface");
@@ -695,9 +695,10 @@ test.describe("the instance alone", () => {
 // ---------------------------------------------------------------------------
 
 /** Every text, title, accessible name and link target on the Groups
- * surface that names something behind the instance (space-1): a URL
- * under the stand-in's own, its storage group, or the Git system. */
-async function surfaceLeaks(page: Page, host: NonNullable<App["host"]>): Promise<string[]> {
+ * surface that names something behind an instance (space-1): a URL
+ * under any stand-in instance's own, its storage group, or the Git
+ * system. */
+async function surfaceLeaks(page: Page, hosts: App["hosts"]): Promise<string[]> {
   const said = await page.getByTestId("space-surface").evaluate((root) => {
     const out = [(root as HTMLElement).innerText];
     for (const element of Array.from(root.querySelectorAll("*"))) {
@@ -708,7 +709,7 @@ async function surfaceLeaks(page: Page, host: NonNullable<App["host"]>): Promise
     }
     return out;
   });
-  return said.filter((text) => text.includes(`${host.url}/`) || text.includes(STANDIN_STORAGE) || /gitlab/i.test(text));
+  return said.filter((text) => hosts.some((host) => text.includes(`${host.url}/`) || text.includes(host.storage)) || /gitlab/i.test(text));
 }
 
 test.describe("undo", () => {
@@ -727,7 +728,7 @@ test.describe("undo", () => {
     /** No link, and nothing behind the instance, on the surface now. */
     const clean = async (where: string): Promise<void> => {
       await expect(page.getByTestId("space-surface").locator("a")).toHaveCount(0);
-      expect(await surfaceLeaks(page, host), where).toEqual([]);
+      expect(await surfaceLeaks(page, app.hosts), where).toEqual([]);
     };
 
     await open(page, app);

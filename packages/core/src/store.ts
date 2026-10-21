@@ -34,7 +34,7 @@ import {
 } from "./app-storage.js";
 import { occupied } from "./clone-moves.js";
 import { readJsonFile, StorageFormatError, VersionConflictError, writeApplicationFile } from "./files.js";
-import { Home, repositoryNameFor, splitKey, WORKSPACE_DEPTH } from "./home.js";
+import { defaultOwnName, Home, repositoryNameFor, splitKey, WORKSPACE_DEPTH } from "./home.js";
 import { folderRemote, needsGroupsMigration, migrateFormerHome } from "./migrate-home.js";
 import { deferredMoves, migrateInstances, needsInstancesMigration, settleDeferred, type DeferredMove } from "./migrate-instances.js";
 import { initializeClone } from "./storage-git.js";
@@ -681,7 +681,7 @@ export class Store {
   }
 
   private projectInfo(repository: SpexRepository, path: string): ProjectInfo {
-    const { group, name } = splitKey(repository.key);
+    const { instance, group, name } = splitKey(repository.key);
     let registeredAt = 0;
     try { const stat = statSync(repository.dir); registeredAt = Math.round(stat.birthtimeMs || stat.ctimeMs); } catch { registeredAt = 0; }
     return {
@@ -689,7 +689,9 @@ export class Store {
       path,
       name: this.readProjectFile(repository).file?.name ?? (repository.key === this.homeFile.own() ? this.homeFile.ownName : basename(path)),
       registeredAt,
-      repository: { key: repository.key, name, group, own: group === this.homeFile.ownName },
+      // Your own group's folder lies outside every instance's: a namespace
+      // at an instance bearing its name is not it (DR-127).
+      repository: { key: repository.key, name, group, own: instance === null && group === this.homeFile.ownName },
     };
   }
 
@@ -1449,20 +1451,52 @@ export class Store {
     return this.getProject(repository.key)!;
   }
 
-  /** The account a sign-in read, written into `home.yaml` (storage-2). */
-  signIn(account: { id: string; login: string; displayName: string | null }): void {
+  /** The account a sign-in at an instance read, written into that
+   * origin's entry in `home.yaml` — appended after the listed ones where
+   * none stands, signed in again where one does (storage-2). */
+  signIn(origin: string, account: { id: string; login: string; displayName: string | null }): void {
     this.assertProjectsWritable();
-    this.homeFile.signIn(account);
+    this.homeFile.signIn(origin, account);
     this.saveHome();
   }
 
-  /** The credential went; the account stays, marked signed out
-   * (git-host-4, git-host-10). */
-  signOut(): void {
+  /** A listed instance's display name as its last read named it
+   * (storage-2), written only where it changed; a home that does not
+   * read keeps it unwritten until a later read. */
+  setDisplayName(origin: string, displayName: string): void {
     this.refreshHome();
     if (this.homeProblem) return;
-    this.homeFile.signOut();
+    const entry = this.homeFile.instance(origin);
+    if (!entry || entry.displayName === displayName) return;
+    this.homeFile.setDisplayName(origin, displayName);
     this.saveHome();
+  }
+
+  /** This device's user name as your own group's folder name: the name a
+   * new home's folder takes, which a sign-in renames while the folder
+   * still bears it (storage-2, space-59). */
+  deviceOwnName(): string {
+    return this.options.own ?? defaultOwnName(this.env);
+  }
+
+  /** An instance's credential went — the default instance's where none
+   * is named; its account stays, marked signed out (git-host-4,
+   * git-host-10). */
+  signOut(origin?: string): void {
+    this.refreshHome();
+    if (this.homeProblem) return;
+    this.homeFile.signOut(origin);
+    this.saveHome();
+  }
+
+  /** A signed-out instance's entry removed from `home.yaml` (space-82,
+   * storage-2); one still signed in is refused, its entry kept, as
+   * InstanceRefused. False where the home listed none at that origin. */
+  forget(origin: string): boolean {
+    this.assertProjectsWritable();
+    const removed = this.homeFile.forget(origin);
+    if (removed) this.saveHome();
+    return removed;
   }
 
   /**
