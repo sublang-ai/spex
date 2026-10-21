@@ -8,7 +8,8 @@
 // and its last sync, and carries the one control its state offers —
 // Sync, Join, Pick a group, Retry — with Members on a
 // reachable row. What a control opens stands in place beneath its row:
-// the group picker (space-58), the folder a Join clones into
+// the group picker, one section per instance it offers (space-58), the
+// folder a Join clones into
 // (space-63), the members the host reports (space-62), the first-push
 // notice (space-57) and the joining of unrelated histories (space-13);
 // a pick joining a repository others may share says the same notice in
@@ -20,16 +21,18 @@
 // "Rename" and — while the list holds nothing under it — "Delete" on its
 // heading (space-68, space-76, space-77, DR-114); your own group's
 // heading carries none of these, nor does another account's login. A
-// row the host lets the person move carries "Move to another group"
+// row the host lets the person move carries "Move to another group",
+// offering the groups of the instance the row stands under alone
 // (space-78). No part of the list links a page of the host, or names
 // what stands behind the instance (space-1). Every act is a command
 // whose outcome arrives as state (space-29).
 
-import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
-import type { GroupsState, RepositoryState } from "@sublang/spex-core/protocol";
+import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import type { GroupsState, InstanceGroupState, InstanceState, RepositoryState } from "@sublang/spex-core/protocol";
 
 import { useAppStore } from "../state/store.js";
 import { i18n } from "../i18n.js";
+import { groupTestKey, instanceName, instanceOf, namespaceOf, pickInstances, placementOf } from "../lib/instances.js";
 import { absoluteTitle, relativeAge } from "../lib/time.js";
 import {
   STEP_LINES,
@@ -249,11 +252,10 @@ function GroupsMadeBy({ groups }: { groups: GroupsState }) {
   );
 }
 
-/** How a group reads (space-1), on its heading and in the picker
- * (space-58) alike. Your own group is called so, never by a folder's or
- * this device's user name; its path shows once the host names it, and
- * until then the key phrase says it will. A group's path stands beside
- * its name only where the two differ. */
+/** How a group reads on its heading (space-1). Your own group is called
+ * so, never by a folder's or this device's user name; its path shows
+ * once the host names it, and until then the key phrase says it will. A
+ * group's path stands beside its name only where the two differ. */
 function groupReading(groups: GroupsState, group: Group): { name: string; beside: string | null } {
   const name = group.own ? i18n._("Your own group") : group.name;
   const beside =
@@ -268,15 +270,24 @@ function groupReading(groups: GroupsState, group: Group): { name: string; beside
   return { name, beside };
 }
 
-/** A group as a picker names it (space-58, space-78): read as its
- * heading reads (space-1), its name, then its path after the separator
- * where the two differ — the separator the eye's, so the option's name
- * says the group's name first. */
-function GroupOptionLabel({ groups, group }: { groups: GroupsState; group: Group }) {
-  const { name, beside } = groupReading(groups, group);
+/** How an instance's entry reads in a picker (space-58, space-78), as
+ * the list reads it (space-1): a namespace by its login alone, a group
+ * by its name with its path in the instance beside it where the two
+ * differ. */
+function entryReading(entry: InstanceGroupState): { name: string; beside: string | null } {
+  const name = entry.login ?? entry.name;
+  return { name, beside: entry.login === null && entry.fullPath !== name ? entry.fullPath : null };
+}
+
+/** An instance's entry as a picker names it (space-58, space-78): its
+ * name, then its path after the separator where the two differ — the
+ * separator the eye's, so the option's name says the group's name
+ * first. */
+function GroupOptionLabel({ entry }: { entry: InstanceGroupState }) {
+  const { name, beside } = entryReading(entry);
   return (
     <>
-      <span className="min-w-0 truncate" title={group.fullPath}>
+      <span className="min-w-0 truncate" title={entry.fullPath}>
         {name}
       </span>
       {beside !== null ? " " : null}
@@ -627,14 +638,17 @@ function RepositoryRow({
   };
 
   /** Join a repository an instance lists into a folder (space-63), at
-   * the instance its row stands under (space-29). */
+   * the instance whose heading the row stands under (space-29), else
+   * the one the row names. */
   const join = async (folder: string): Promise<void> => {
     if (!repo.id) return;
     const key = machineKey;
     setBusy("join");
     setError(undefined);
+    const placement = placementOf(groups, repo.key);
+    const instance = placement && !placement.own ? placement.instance.origin : (repo.instance ?? groups.defaultInstance);
     try {
-      await spaceJoin(repo.instance ?? groups.defaultInstance, repo.id, folder);
+      await spaceJoin(instance, repo.id, folder);
       setAccepted({ op: "join", key });
       setOpened(undefined);
     } catch (cause) {
@@ -1027,7 +1041,6 @@ function RepositoryRow({
       {opened === "move" ? (
         <MovePicker
           groups={groups}
-          group={group}
           repo={repo}
           busy={moving}
           connected={connected}
@@ -1105,13 +1118,13 @@ function RepositoryRow({
 }
 
 /** Where a spex repository moves (space-78): a picker as space-58's,
- * your own group first, then each group of the instance, each read as
- * its heading reads — never another account's login, never the group
- * the row stands under — with Cancel, Escape cancelling. A pick asks the host; a
- * refusal stands in the picker, the row kept where it stood. */
+ * of the instance the row stands under alone — your namespace there
+ * first, read by your login, then each group it lists, each read as the
+ * list reads it, never another account's login, never the entry the row
+ * stands under — with Cancel, Escape cancelling. A pick asks the host;
+ * a refusal stands in the picker, the row kept where it stood. */
 function MovePicker({
   groups,
-  group,
   repo,
   busy,
   connected,
@@ -1119,8 +1132,6 @@ function MovePicker({
   onClose,
 }: {
   groups: GroupsState;
-  /** The group the row stands under. */
-  group: Group;
   repo: RepositoryState;
   busy: boolean;
   connected: boolean;
@@ -1132,13 +1143,22 @@ function MovePicker({
   useEffect(() => {
     firstRef.current?.focus();
   }, []);
-  const own = groups.groups.find((entry) => entry.own);
-  const targets: { key: string; group: Group; groupId: string | null }[] = [
-    ...(own && !group.own ? [{ key: "own", group: own, groupId: null }] : []),
-    ...groups.groups
-      .filter((entry) => !entry.own && entry.id !== null && groupKey(entry) !== groupKey(group))
-      .map((entry) => ({ key: entry.fullPath, group: entry, groupId: entry.id })),
-  ];
+  // The instance whose heading the row stands under, and the entry it
+  // stands in there; a row under your own group moves at its own
+  // instance, leaving no entry out.
+  const placement = placementOf(groups, repo.key);
+  const instance = placement && !placement.own ? placement.instance : instanceOf(groups, repo.instance);
+  const standing = placement && !placement.own ? placement.group : undefined;
+  const mine = instance ? namespaceOf(instance) : undefined;
+  // Your namespace is named by none, a group by its host id (space-29).
+  const targets: { entry: InstanceGroupState; groupId: string | null }[] = instance
+    ? [
+        ...(mine && mine !== standing ? [{ entry: mine, groupId: null }] : []),
+        ...instance.groups
+          .filter((entry) => entry.id !== null && entry !== standing)
+          .map((entry) => ({ entry, groupId: entry.id })),
+      ]
+    : [];
   const pick = async (groupId: string | null) => {
     if (busy) return;
     setRefusal(undefined);
@@ -1166,16 +1186,16 @@ function MovePicker({
     >
       <ul className="flex min-w-0 flex-col gap-1">
         {targets.map((target, index) => (
-          <li key={target.key} className="min-w-0">
+          <li key={groupTestKey(target.entry)} className="min-w-0">
             <button
               ref={index === 0 ? firstRef : undefined}
               type="button"
-              data-testid={`space-move-group-${target.key}`}
+              data-testid={`space-move-group-${groupTestKey(target.entry)}`}
               className={option}
               disabled={!connected || busy}
               onClick={() => void pick(target.groupId)}
             >
-              <GroupOptionLabel groups={groups} group={target.group} />
+              <GroupOptionLabel entry={target.entry} />
             </button>
           </li>
         ))}
@@ -1284,14 +1304,27 @@ function FolderEditor({
   );
 }
 
-/** Where a local-only project's records go on the host (space-58): in
- * one picker, the spex repositories the host lists for the same code —
- * each with its group, read as its heading reads, and members' count —
- * and, below them, every group read so, the new repository's name in
- * an editable field. Picking a
- * listed one that may have other members says the sharing notice
- * beneath it first, and joins with `noticed` only on Continue
- * (space-57). */
+/** One instance a pick offers (space-58): the spex repositories it
+ * lists for the same code, each with the entry it stands in, and where
+ * a new one may go — your namespace there first, then each group it
+ * lists, never another account's login. */
+interface PickSection {
+  instance: InstanceState;
+  listed: { group: InstanceGroupState; repo: RepositoryState }[];
+  creatable: InstanceGroupState[];
+}
+
+/** Where a local-only project's records go (space-58): in one picker,
+ * one section per signed-in instance under its display name — the
+ * clone's instance alone where its key lies under one — each holding
+ * the spex repositories that instance lists for the same code, each with
+ * its group, read as the list reads it, and members' count, and, below
+ * them, your namespace there read by your login and every group it
+ * lists; the new repository's name in one editable field every section
+ * shares. Picking a listed one that may have other members says the
+ * sharing notice beneath it first, and joins with `noticed` only on
+ * Continue (space-57). A choice names the instance of its section
+ * (space-29). */
 export function GroupPicker({
   groups,
   repo,
@@ -1306,35 +1339,38 @@ export function GroupPicker({
   onNote: Note;
 }) {
   const spacePick = useAppStore((state) => state.spacePick);
-  // Every choice is at the clone's instance where its key lies under
-  // one, else at the default instance, whose groups the picker offers
-  // (space-58, space-29).
-  const instance = repo.instance ?? groups.defaultInstance;
   const code = repo.code;
-  // The listed ones are the host's: a host id, a state the host read.
-  const listed = groups.groups.flatMap((group) =>
-    group.repositories
-      .filter(
-        (other) =>
-          other.key !== repo.key &&
-          other.id !== null &&
-          other.state !== "local-only" &&
-          code !== null &&
-          other.code !== null &&
-          sameRemote(other.code, code),
-      )
-      .map((other) => ({ group, repo: other })),
-  );
-  // Your own group and the host's own groups, never another account's
-  // login (space-58); GroupsState names no right to create a repository,
-  // so every group is offered and a refusal waits on the row (space-64).
-  const creatable = groups.groups.filter((group) => group.id !== null || group.own);
+  const sections: PickSection[] = pickInstances(groups, repo).map((instance) => {
+    const mine = namespaceOf(instance);
+    return {
+      instance,
+      // The listed ones are the host's: a host id, a state the host read.
+      listed: instance.groups.flatMap((group) =>
+        group.repositories
+          .filter(
+            (other) =>
+              other.key !== repo.key &&
+              other.id !== null &&
+              other.state !== "local-only" &&
+              code !== null &&
+              other.code !== null &&
+              sameRemote(other.code, code),
+          )
+          .map((other) => ({ group, repo: other })),
+      ),
+      // GroupsState names no right to create a repository, so every
+      // group is offered and a refusal waits on the row (space-64).
+      creatable: [...(mine ? [mine] : []), ...instance.groups.filter((group) => group.id !== null)],
+    };
+  });
   const defaultName = repo.folder ? lastSegment(repo.folder) : repo.name.replace(/-spex$/, "");
   const [name, setName] = useState(defaultName);
   const [busy, setBusy] = useState<string>();
   const [refusal, setRefusal] = useState<string>();
   // The listed spex repository whose sharing notice stands (space-57).
   const [notice, setNotice] = useState<string>();
+  // Each section's headings are named by ids no other picker shares.
+  const ids = useId();
   const pickerRef = useRef<HTMLDivElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
   const firstRef = useRef<HTMLButtonElement>(null);
@@ -1376,20 +1412,23 @@ export function GroupPicker({
     }
   };
 
-  /** Join a listed spex repository (space-58): one whose only member
-   * is the account joins at once; one with others, or whose count the
-   * host's last read lacks, says the notice first unless this device's
-   * reader has seen it for this repository (space-57). */
-  const join = (other: RepositoryState) => {
+  /** Join a listed spex repository at its instance (space-58): one
+   * whose only member is the account joins at once; one with others, or
+   * whose count the host's last read lacks, says the notice first
+   * unless this device's reader has seen it for this repository
+   * (space-57). */
+  const join = (instance: InstanceState, other: RepositoryState) => {
     if (!repo.noticed && (other.members === null || other.members > 1)) {
       setRefusal(undefined);
       setNotice(other.key);
       return;
     }
-    void pick(other.key, { kind: "join", instance, hostId: other.id! });
+    void pick(other.key, { kind: "join", instance: instance.origin, hostId: other.id! });
   };
 
-  const create = (group: GroupsState["groups"][number]) => {
+  /** Create `<name>-spex` in an entry at its instance (space-58): your
+   * namespace named by none, a group by its host id. */
+  const create = (instance: InstanceState, group: InstanceGroupState) => {
     setNotice(undefined);
     const chosen = name.trim();
     if (!chosen) {
@@ -1397,8 +1436,12 @@ export function GroupPicker({
       nameRef.current?.focus();
       return;
     }
-    // Your own group is named by none, never by its id (space-58).
-    void pick(`group:${group.fullPath}`, { kind: "create", instance, groupId: group.own ? null : group.id, name: chosen });
+    void pick(`${instance.origin} ${groupTestKey(group)}`, {
+      kind: "create",
+      instance: instance.origin,
+      groupId: group.mine ? null : group.id,
+      name: chosen,
+    });
   };
 
   const option =
@@ -1425,57 +1468,99 @@ export function GroupPicker({
         }
       }}
     >
-      {listed.length > 0 ? (
-        <section aria-labelledby={`space-pick-listed-${repo.key}`} className="flex min-w-0 flex-col gap-1">
-          <h3 id={`space-pick-listed-${repo.key}`} className="text-xs font-medium text-neutral-500">
-            {i18n._("On the host for this code")}
-          </h3>
-          <ul className="flex min-w-0 flex-col gap-1">
-            {listed.map(({ group, repo: other }) => (
-              <li key={other.key} className="min-w-0">
-                <button
-                  ref={takeFirst()}
-                  type="button"
-                  data-testid={`space-pick-repo-${other.key}`}
-                  className={option}
-                  disabled={disabled}
-                  onClick={() => join(other)}
-                >
-                  <span className="min-w-0 flex-1 truncate font-medium" title={other.name}>
-                    {other.name}
-                  </span>
-                  <span
-                    data-testid={`space-pick-listed-group-${other.key}`}
-                    className="flex min-w-0 max-w-[40%] items-baseline gap-1 text-xs text-neutral-500"
-                  >
-                    <GroupOptionLabel groups={groups} group={group} />
-                  </span>
-                  {other.members !== null ? (
-                    <span className="shrink-0 text-xs text-neutral-500">
-                      {i18n._("{count, plural, one {# member} other {# members}}", { count: other.members })}
-                    </span>
-                  ) : null}
-                </button>
-                {notice === other.key ? (
-                  <div data-testid={`space-pick-notice-${repo.key}`} className="mt-1 pl-2">
-                    <InlineConfirm
-                      question={sharingNotice(other.visibility)}
-                      confirmLabel={continueLabel()}
+      {sections.map(({ instance, listed, creatable }, index) => {
+        const heading = `${ids}-${index}`;
+        return (
+          <div
+            key={instance.origin}
+            role="group"
+            aria-labelledby={heading}
+            data-testid={`space-pick-instance-${instance.origin}`}
+            className="flex min-w-0 flex-col gap-2"
+          >
+            <h3
+              id={heading}
+              className="min-w-0 truncate text-xs font-semibold text-neutral-700 dark:text-neutral-300"
+              title={instanceName(instance)}
+            >
+              {instanceName(instance)}
+            </h3>
+            {listed.length > 0 ? (
+              <section aria-labelledby={`${heading}-listed`} className="flex min-w-0 flex-col gap-1">
+                <h4 id={`${heading}-listed`} className="text-xs font-medium text-neutral-500">
+                  {i18n._("On the host for this code")}
+                </h4>
+                <ul className="flex min-w-0 flex-col gap-1">
+                  {listed.map(({ group, repo: other }) => (
+                    <li key={other.key} className="min-w-0">
+                      <button
+                        ref={takeFirst()}
+                        type="button"
+                        data-testid={`space-pick-repo-${other.key}`}
+                        className={option}
+                        disabled={disabled}
+                        onClick={() => join(instance, other)}
+                      >
+                        <span className="min-w-0 flex-1 truncate font-medium" title={other.name}>
+                          {other.name}
+                        </span>
+                        <span
+                          data-testid={`space-pick-listed-group-${other.key}`}
+                          className="flex min-w-0 max-w-[40%] items-baseline gap-1 text-xs text-neutral-500"
+                        >
+                          <GroupOptionLabel entry={group} />
+                        </span>
+                        {other.members !== null ? (
+                          <span className="shrink-0 text-xs text-neutral-500">
+                            {i18n._("{count, plural, one {# member} other {# members}}", { count: other.members })}
+                          </span>
+                        ) : null}
+                      </button>
+                      {notice === other.key ? (
+                        <div data-testid={`space-pick-notice-${repo.key}`} className="mt-1 pl-2">
+                          <InlineConfirm
+                            question={sharingNotice(other.visibility)}
+                            confirmLabel={continueLabel()}
+                            disabled={disabled}
+                            onConfirm={() =>
+                              void pick(other.key, { kind: "join", instance: instance.origin, hostId: other.id! }, true)
+                            }
+                            onCancel={() => closeNotice(other.key)}
+                          />
+                        </div>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
+            <section aria-labelledby={`${heading}-create`} className="flex min-w-0 flex-col gap-1">
+              <h4 id={`${heading}-create`} className="text-xs font-medium text-neutral-500">
+                {i18n._("New in a group")}
+              </h4>
+              <ul className="flex min-w-0 flex-col gap-1">
+                {creatable.map((group) => (
+                  <li key={groupTestKey(group)} className="min-w-0">
+                    <button
+                      ref={takeFirst()}
+                      type="button"
+                      data-testid={`space-pick-group-${groupTestKey(group)}`}
+                      className={option}
                       disabled={disabled}
-                      onConfirm={() => void pick(other.key, { kind: "join", instance, hostId: other.id! }, true)}
-                      onCancel={() => closeNotice(other.key)}
-                    />
-                  </div>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
-      <section aria-labelledby={`space-pick-create-${repo.key}`} className="flex min-w-0 flex-col gap-1">
-        <h3 id={`space-pick-create-${repo.key}`} className="text-xs font-medium text-neutral-500">
-          {i18n._("New in a group")}
-        </h3>
+                      onClick={() => create(instance, group)}
+                    >
+                      <GroupOptionLabel entry={group} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          </div>
+        );
+      })}
+      {sections.length > 0 ? (
+        // One name for the new repository, whichever entry it goes to
+        // (space-58).
         <label className="flex min-w-0 items-center gap-1 text-xs">
           <span className="shrink-0 text-neutral-500">{i18n._({ id: "Name", comment: "the new spex repository's name" })}</span>
           <input
@@ -1489,23 +1574,7 @@ export function GroupPicker({
           />
           <span className="shrink-0 font-mono text-neutral-500">-spex</span>
         </label>
-        <ul className="flex min-w-0 flex-col gap-1">
-          {creatable.map((group) => (
-            <li key={groupKey(group)} className="min-w-0">
-              <button
-                ref={takeFirst()}
-                type="button"
-                data-testid={`space-pick-group-${group.fullPath}`}
-                className={option}
-                disabled={disabled}
-                onClick={() => create(group)}
-              >
-                <GroupOptionLabel groups={groups} group={group} />
-              </button>
-            </li>
-          ))}
-        </ul>
-      </section>
+      ) : null}
       <div className="flex flex-wrap items-center gap-2">
         <button type="button" data-testid={`space-pick-cancel-${repo.key}`} className={SECONDARY} onClick={onClose}>
           {i18n._({ id: "Cancel", comment: "leave the editor without changing anything" })}

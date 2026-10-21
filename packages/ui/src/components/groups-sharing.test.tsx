@@ -677,7 +677,7 @@ describe("GROUPS: Rename, Delete and Move (space-1, space-76, space-77, space-78
     await waitFor(() => expect(screen.queryByTestId("space-group-empty")).toBeNull());
   });
 
-  test("Move… opens the picker, your own group first and every other group by its path; a pick sends the move, Moving… until the reply, a refusal in the picker, a success closing it", async () => {
+  test("space-78: Move… opens the picker, your login first and every other group of its instance by its path; a pick sends the move, Moving… until the reply, a refusal in the picker, a success closing it", async () => {
     const replies: ReturnType<typeof deferred<unknown>>[] = [];
     commandMock.mockImplementation(async (type: string, fields?: Record<string, unknown>) => {
       if (type !== "space.repository.move") return core(type, fields);
@@ -691,11 +691,13 @@ describe("GROUPS: Rename, Delete and Move (space-1, space-76, space-77, space-78
     expect(control().getAttribute("aria-expanded")).toBe("true");
     const picker = screen.getByRole("group", { name: "Move a-spex to another group" });
     expect(picker).toBe(screen.getByTestId(`space-move-${A_SPEX}`));
-    // Your own group first, then every group but the one it stands in,
-    // each read as its heading reads: its name, then its path where the
-    // two differ (space-78); no link anywhere (DR-120).
+    // Your namespace first, read by your login, then every group but
+    // the one it stands in, each read as the list reads it: its name,
+    // then its path where the two differ (space-78); no link anywhere
+    // (DR-120).
     const options = within(picker).getAllByTestId(/^space-move-group-/);
-    expect(options.map((option) => option.textContent)).toEqual(["Your own group · jane", "Other team · other", "empty"]);
+    expect(options.map((option) => option.textContent)).toEqual(["jane", "Other team · other", "empty"]);
+    expect(options[0]!.dataset.testid).toBe("space-move-group-@jane");
     // The separator is the eye's: an option's name says the group's
     // name first (space-78).
     expect(within(picker).getByRole("button", { name: "Other team other" })).toBe(options[1]);
@@ -721,8 +723,8 @@ describe("GROUPS: Rename, Delete and Move (space-1, space-76, space-77, space-78
     expect(live()).toBe("other already holds a-spex");
     expect(within(region("acme")).getByTestId(`space-row-${A_SPEX}`)).toBeTruthy();
 
-    // Your own group is named by none.
-    fireEvent.click(within(again).getByTestId("space-move-group-own"));
+    // Your namespace is named by none.
+    fireEvent.click(within(again).getByTestId("space-move-group-@jane"));
     await waitFor(() => expect(calls("space.repository.move")).toHaveLength(2));
     expect(calls("space.repository.move")[1]).toEqual({ repository: A_SPEX, groupId: null });
     // The core holds the row under your own group and announces it first.
@@ -821,7 +823,12 @@ describe("GROUPS: the new controls fit (space-28)", () => {
     fireEvent.click(screen.getByTestId("space-group-delete-empty"));
     expect(screen.getByTestId("space-group-confirm-empty").textContent).toContain("要删除 empty 吗？");
     fireEvent.click(screen.getByTestId(`space-row-move-${A_SPEX}`));
-    expect(within(screen.getByTestId(`space-move-${A_SPEX}`)).getByTestId("space-move-group-own").textContent).toBe("你自己的群组 · jane");
+    // The picker is named in the catalog's words; your namespace reads
+    // your login, which no language changes (space-78).
+    const zhPicker = screen.getByTestId(`space-move-${A_SPEX}`);
+    expect(zhPicker.getAttribute("aria-label")).toBe("将 a-spex 移到另一个群组");
+    expect(within(zhPicker).getByTestId("space-move-group-@jane").textContent).toBe("jane");
+    expect(within(zhPicker).getByTestId(`space-move-cancel-${A_SPEX}`).textContent).toBe("取消");
     const list = await openGroupMembers("acme");
     const share = within(list).getByTestId("space-share-group:acme");
     expect(share.textContent).toBe("共享");

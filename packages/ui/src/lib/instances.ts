@@ -5,7 +5,7 @@
 // rows and every instance's, each instance by its origin. Pure
 // functions over the state the core sends; the surfaces render them.
 
-import type { GroupsState, InstanceState, RepositoryState } from "@sublang/spex-core/protocol";
+import type { GroupsState, InstanceGroupState, InstanceState, RepositoryState } from "@sublang/spex-core/protocol";
 
 /** Every spex repository of the home: your own group's rows, then each
  * instance's in the home's order, as the groups list stands them
@@ -20,6 +20,12 @@ export function allRepositories(state: GroupsState): RepositoryState[] {
 /** The instance the home lists at an origin. */
 export function instanceOf(state: GroupsState, origin: string | null | undefined): InstanceState | undefined {
   return origin ? state.instances.find((instance) => instance.origin === origin) : undefined;
+}
+
+/** Every instance the home is signed in to, in the home's order
+ * (space-1, space-58). */
+export function signedInInstances(state: GroupsState): InstanceState[] {
+  return state.instances.filter((instance) => instance.signedIn);
 }
 
 /** Whether the home is signed in to any instance (space-1, space-58). */
@@ -54,4 +60,48 @@ export function originOf(url: string): string {
   } catch {
     return url;
   }
+}
+
+/** How the surface names an instance (space-1, space-58): its display
+ * name, its host name until a read names one. */
+export function instanceName(instance: InstanceState): string {
+  return instance.displayName ?? instance.host;
+}
+
+/** Your namespace at an instance: the entry keyed by your login there
+ * (space-1). */
+export function namespaceOf(instance: InstanceState): InstanceGroupState | undefined {
+  return instance.groups.find((group) => group.mine);
+}
+
+/** An entry's key within its instance, as test ids name it: a group by
+ * its path, a namespace by `@` and its login — `@` begins no path the
+ * host answers (DR-127), so a namespace never shares a group's key. */
+export function groupTestKey(group: InstanceGroupState): string {
+  return group.login !== null ? `@${group.login}` : group.fullPath;
+}
+
+/** Where a row stands (space-1): under an entry of an instance's
+ * heading, or under your own group. */
+export type Placement =
+  | { own: true }
+  | { own: false; instance: InstanceState; group: InstanceGroupState };
+
+/** The place the core stood a row at, by its key; none for a key the
+ * state does not hold. */
+export function placementOf(state: GroupsState, key: string): Placement | undefined {
+  if (state.own.repositories.some((repository) => repository.key === key)) return { own: true };
+  for (const instance of state.instances) {
+    for (const group of instance.groups) {
+      if (group.repositories.some((repository) => repository.key === key)) return { own: false, instance, group };
+    }
+  }
+  return undefined;
+}
+
+/** The instances "Pick a group" offers a local-only row (space-58):
+ * every signed-in one, in the home's order, and its clone's instance
+ * alone where its key lies under one. */
+export function pickInstances(state: GroupsState, repo: RepositoryState): InstanceState[] {
+  return signedInInstances(state).filter((instance) => repo.instance === null || instance.origin === repo.instance);
 }

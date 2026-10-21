@@ -10,6 +10,7 @@ import {
   fireEvent,
   render,
   screen,
+  within,
 } from "@testing-library/react";
 
 afterEach(cleanup);
@@ -371,6 +372,33 @@ describe("projects-1, space-58: a folder added while signed in asks for its grou
     await vi.waitFor(() => expect(again.onClose).toHaveBeenCalled());
     expect(again.onPick).toHaveBeenCalledWith(PROJECTS[0].id);
     expect(screen.queryByTestId(`space-picker-${PROJECTS[0].id}`)).toBeNull();
+  });
+
+  test("projects-17, projects-1, space-58: signed in to two instances each holding acme, the picker offers the acme of each and picking the second's creates there", async () => {
+    const spacePick = vi.fn(async () => {});
+    useAppStore.setState({
+      connection: "open",
+      space: groupsState({ defaultInstance: HOST, own: { name: "ada", repositories: [row(ADDED.id)] }, instances: [at(HOST, true, "20"), at(SECOND, true, "30")] }),
+      spacePick,
+    });
+    const { onClose } = renderPalette({ onAddPath: vi.fn(async () => ADDED) });
+    add();
+    const picker = await screen.findByTestId(`space-picker-${ADDED.id}`);
+    // Each instance under its display name, in the home's order, each
+    // with its own acme (projects-1, space-58).
+    const sections = within(picker).getAllByTestId(/^space-pick-instance-/);
+    expect(sections.map((section) => section.dataset.testid)).toEqual([`space-pick-instance-${HOST}`, `space-pick-instance-${SECOND}`]);
+    expect(sections.map((section) => within(section).getByRole("heading", { level: 3 }).textContent)).toEqual(["Host", "Second"]);
+    for (const section of sections) {
+      expect(within(section).getAllByTestId(/^space-pick-group-/).map((option) => option.textContent)).toEqual(["ada", "acme"]);
+    }
+    // Picking the second's acme creates there, by its id at the second.
+    fireEvent.click(within(sections[1]!).getByTestId("space-pick-group-acme"));
+    await vi.waitFor(() =>
+      expect(spacePick).toHaveBeenCalledWith(ADDED.id, { kind: "create", instance: SECOND, groupId: "30", name: "gamma" }),
+    );
+    expect(spacePick).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(onClose).toHaveBeenCalled());
   });
 
   test("projects-1, space-58: signed in at any instance the picker stands in place; signed in nowhere the palette just closes", async () => {

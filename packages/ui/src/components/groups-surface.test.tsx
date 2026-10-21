@@ -767,8 +767,8 @@ describe("GROUPS: the groups list and its rows (space-1, space-61, space-64)", (
 });
 
 describe("GROUPS: Pick a group (space-58, space-29)", () => {
-  test("one picker offers the spex repositories listed for the same code, each with its group and members, then every group", async () => {
-    // Beside your own group and the team, a group named apart from its
+  test("space-66, space-58: one picker offers, under the instance's display name, the spex repositories listed for the same code, each with its group and members, then your namespace by your login and every group", async () => {
+    // Beside your namespace and the team, a group named apart from its
     // path, as a team named in Chinese is, and one whose name is its path.
     const home = localProject();
     const huaxin = { ...teamGroup([]), id: "5", fullPath: "acme/huaxin-mfg", name: "华芯智造" };
@@ -780,8 +780,13 @@ describe("GROUPS: Pick a group (space-58, space-29)", () => {
     fireEvent.click(control);
     expect(control.getAttribute("aria-expanded")).toBe("true");
     const picker = screen.getByRole("group", { name: "Pick a group for academy-spex" });
+    // Everything stands under the instance's display name, its heading
+    // naming its section (space-58).
+    const section = within(picker).getByRole("group", { name: "Spex Example" });
+    expect(section).toBe(within(picker).getByTestId(`space-pick-instance-${ORIGIN}`));
+    expect(within(section).getByRole("heading", { level: 3 }).textContent).toBe("Spex Example");
     // Only the one whose project.json names the folder's remote.
-    const listed = within(picker).getAllByTestId(/^space-pick-repo-/);
+    const listed = within(section).getAllByTestId(/^space-pick-repo-/);
     expect(listed.map((option) => option.dataset.testid)).toEqual(["space-pick-repo-@spex.example/acme/team/academy-spex"]);
     expect(listed[0]!.textContent).toContain("academy-spex");
     // Its group reads as the group's heading reads: its name, then its
@@ -789,17 +794,19 @@ describe("GROUPS: Pick a group (space-58, space-29)", () => {
     expect(screen.getByTestId("space-pick-listed-group-@spex.example/acme/team/academy-spex").textContent).toBe("team · acme/team");
     expect(listed[0]!.textContent).toContain("3 members");
     expect(document.activeElement).toBe(listed[0]);
-    // Below them, every group, with the folder's name to create, each
-    // read as its heading reads: your own group so called, a group by
-    // its name with its path after the separator where the two differ,
-    // and by its name alone where they are equal (space-58).
-    const offered = within(picker).getAllByTestId(/^space-pick-group-/);
+    // Below them, your namespace and every group, with the folder's
+    // name to create, each read as the list reads it: your namespace by
+    // your login alone, a group by its name with its path after the
+    // separator where the two differ, and by its name alone where they
+    // are equal (space-58).
+    const offered = within(section).getAllByTestId(/^space-pick-group-/);
     expect(offered.map((option) => option.textContent)).toEqual([
-      "Your own group · jane",
+      "jane",
       "华芯智造 · acme/huaxin-mfg",
       "team · acme/team",
       "lab",
     ]);
+    expect(offered[0]!.dataset.testid).toBe("space-pick-group-@jane");
     // The separator is the eye's: the button's name says the group's
     // name first, then its path (space-58).
     expect(within(picker).getByRole("button", { name: "华芯智造 acme/huaxin-mfg" })).toBe(offered[1]);
@@ -822,10 +829,10 @@ describe("GROUPS: Pick a group (space-58, space-29)", () => {
     await waitFor(() =>
       expect(calls("space.pick")[1]).toEqual({ repository: KEY, choice: { kind: "create", instance: ORIGIN, groupId: "2", name: "academy-notes" } }),
     );
-    // Your own group is named by none, never by its id.
+    // Your namespace is named by none, never by an id.
     await waitFor(() => expect(screen.queryByTestId(`space-picker-${KEY}`)).toBeNull());
     fireEvent.click(screen.getByTestId(`space-row-pick-${KEY}`));
-    fireEvent.click(screen.getByTestId("space-pick-group-jane"));
+    fireEvent.click(screen.getByTestId("space-pick-group-@jane"));
     await waitFor(() =>
       expect(calls("space.pick")[2]).toEqual({ repository: KEY, choice: { kind: "create", instance: ORIGIN, groupId: null, name: "academy" } }),
     );
@@ -927,7 +934,7 @@ describe("GROUPS: Pick a group (space-58, space-29)", () => {
     fireEvent.click(screen.getByTestId(`space-row-pick-${KEY}`));
     const name = screen.getByTestId(`space-pick-name-${KEY}`);
     fireEvent.change(name, { target: { value: "  " } });
-    fireEvent.click(screen.getByTestId("space-pick-group-jane"));
+    fireEvent.click(screen.getByTestId("space-pick-group-@jane"));
     expect(within(screen.getByTestId(`space-picker-${KEY}`)).getByRole("alert").textContent).toBe("Name the new spex repository.");
     expect(document.activeElement).toBe(name);
     expect(calls("space.pick")).toHaveLength(0);
@@ -936,7 +943,7 @@ describe("GROUPS: Pick a group (space-58, space-29)", () => {
       return answer(type, fields);
     });
     fireEvent.change(name, { target: { value: "academy" } });
-    fireEvent.click(screen.getByTestId("space-pick-group-jane"));
+    fireEvent.click(screen.getByTestId("space-pick-group-@jane"));
     await waitFor(() =>
       expect(within(screen.getByTestId(`space-picker-${KEY}`)).getByRole("alert").textContent).toBe("academy-spex is taken in jane; name another"),
     );
@@ -952,7 +959,7 @@ describe("GROUPS: Pick a group (space-58, space-29)", () => {
     expect(screen.queryByTestId(`space-picker-${KEY}`)).toBeNull();
     await waitFor(() => expect(document.activeElement).toBe(control));
     fireEvent.click(control);
-    fireEvent.keyDown(screen.getByTestId("space-pick-group-jane"), { key: "Escape" });
+    fireEvent.keyDown(screen.getByTestId("space-pick-group-@jane"), { key: "Escape" });
     expect(screen.queryByTestId(`space-picker-${KEY}`)).toBeNull();
     expect(calls("space.pick")).toHaveLength(0);
     expect(screen.getByTestId(`space-repo-state-${KEY}`).textContent).toBe("On this device only");
@@ -1083,13 +1090,17 @@ describe("GROUPS: the instance's entries (space-1, space-58, space-61, DR-120)",
     const panel = await screen.findByTestId("space-repository");
     expect(within(panel).queryByTestId("space-clone-path")).toBeNull();
     expect(within(screen.getByTestId("space-sync-tab")).getByText("Not on this device")).toBeTruthy();
-    // The pick offers your own group and the host's groups, each read as
-    // its heading reads, never another account's login (space-58).
+    // The pick offers your namespace by your login and the host's
+    // groups, each read as the list reads it, the group named like your
+    // login apart from your namespace, never another account's login
+    // (space-58).
     fireEvent.click(screen.getByTestId(`space-row-pick-${KEY}`));
     const picker = await screen.findByTestId(`space-picker-${KEY}`);
-    const offered = within(picker).getAllByTestId(/^space-pick-group-/).map((button) => button.textContent);
-    expect(offered).toEqual(["Your own group · jane", "Acme · acme", "Jane's team · jane"]);
+    const options = within(picker).getAllByTestId(/^space-pick-group-/);
+    expect(options.map((button) => button.textContent)).toEqual(["jane", "Acme · acme", "Jane's team · jane"]);
+    expect(options.map((button) => button.dataset.testid)).toEqual(["space-pick-group-@jane", "space-pick-group-acme", "space-pick-group-jane"]);
     expect(within(picker).queryByTestId("space-pick-group-bob")).toBeNull();
+    expect(within(picker).queryByTestId("space-pick-group-@bob")).toBeNull();
   });
 });
 
