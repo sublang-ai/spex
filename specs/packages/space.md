@@ -769,7 +769,8 @@ interface RepositoryState {
   reason: string | null;                 // the host's words for read-only or unreachable
   mergePending: boolean;                 // a Git merge pending from a terminal in the clone (space-11); false where no clone is here
   placements: PlacementState[];          // in the order added, the path placement last, then each a placement file names that a signed-in instance lists and no remote here holds, then each instance a creation waits at (space-87); empty while local only but for a creation waiting; for a row with no clone, its one listed placement with `attached` false and `state` "absent"
-  local: SpaceUnit[]; conflicts: SpaceConflict[];
+  placedAt: string[];                   // the origin of each instance a placement file of the clone names, held here or not (space-62)
+  local: SpaceUnit[]; conflicts: SpaceConflict[];   // conflicts: every placement's, in the placements' order
   sync:
     | { phase: "idle" }
     | { phase: "running"; op: "sync" | "check" | "join" | "move" | "place" | "leave" | "attach"; placement?: string | null; step: SyncStep; since: number; cancelable: boolean }   // placement: the one in flight, its instance's origin or null for the path placement
@@ -790,7 +791,7 @@ interface PlacementState {
   can: { manageMembers: boolean; transfer: boolean };   // what its instance's last read said the person may do on it — manage its members, move it to another group; both false until one is held
   branch: { ahead: number | null; behind: number | null; checkedAt: number | null; hostEmpty: boolean; unrelated: boolean;
             agreed: { at: number; current: boolean } | null } | null;   // against this placement's `spex`; agreed: the commit `spex` last shared with it as the clone last fetched or pushed it — its commit time, and whether `spex` is that commit; null where the clone holds none (space-61)
-  incoming: SpaceUnit[];
+  incoming: SpaceUnit[]; conflicts: SpaceConflict[];   // conflicts: its incoming units this device changed too, each a choice to make (space-8)
   lastSync: { at: number; sent: number; received: number } | null;
   noticed: boolean;
   outcome: null
