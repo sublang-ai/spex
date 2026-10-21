@@ -67,8 +67,8 @@ export function closed(value: unknown, required: string[], optional: string[], f
 }
 
 /** A reader refuses a layout version it does not know (storage-1). */
-export function knownFormat(value: Record<string, unknown>, file: string): void {
-  need(value.format === 1, file, i18n._({ id: "unsupported format {format}; preserved unchanged",
+export function knownFormat(value: Record<string, unknown>, file: string, format = 1): void {
+  need(value.format === format, file, i18n._({ id: "unsupported format {format}; preserved unchanged",
     comment: "Storage diagnostic: the file names a layout version this Spex does not read; the file is left as it is",
     values: { format: String(value.format) } }));
 }

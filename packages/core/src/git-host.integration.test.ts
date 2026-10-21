@@ -30,6 +30,7 @@ import {
   type StoredCredential,
 } from "./git-host.js";
 import { GIT_CREDENTIAL_FILE_ENV, currentRuntime, withGitCredential } from "./git-credential.js";
+import { OriginRefused } from "./instance.js";
 import { holdingFetch, samePair, settled } from "./testing/holding-fetch.js";
 import { readHostView, relayHostError } from "./space-groups.js";
 import { STANDIN_STORAGE, startStandinHost, type StandinHost } from "./testing/standin-host.js";
@@ -123,9 +124,21 @@ function refreshGrants(host: StandinHost): number {
 test("git-host-1: a new home takes SPEX_HOST_URL; a recorded host keeps itself", () => {
   assert.equal(hostUrlFor({}, null), DEFAULT_HOST_URL);
   assert.equal(hostUrlFor({ SPEX_HOST_URL: "" }, undefined), "https://spex.pub");
+  assert.equal(hostUrlFor({ SPEX_HOST_URL: "  " }), "https://spex.pub");
   assert.equal(hostUrlFor({ SPEX_HOST_URL: "http://127.0.0.1:4100/" }, null), "http://127.0.0.1:4100");
   assert.equal(hostUrlFor({ SPEX_HOST_URL: "http://127.0.0.1:4200" }, "http://127.0.0.1:4100"), "http://127.0.0.1:4100");
   assert.equal(hostUrlFor({}, "https://spex.pub"), "https://spex.pub");
+  // Either way the result is the instance's canonical origin (DR-127).
+  assert.equal(hostUrlFor({ SPEX_HOST_URL: " HTTPS://Spex.Pub:443/ " }, null), "https://spex.pub");
+  assert.equal(hostUrlFor({}, "HTTP://LocalHost:4100/"), "http://localhost:4100");
+  assert.equal(hostUrlFor({ SPEX_HOST_URL: "http://127.0.0.1:80" }), "http://127.0.0.1");
+  // A URL the origin rule refuses names no instance, trailing slashes
+  // past the root included.
+  const refused = (reason: string) => (error: unknown) => error instanceof OriginRefused && error.reason === reason;
+  assert.throws(() => hostUrlFor({ SPEX_HOST_URL: "http://127.0.0.1:4100//" }, null), refused("path"));
+  assert.throws(() => hostUrlFor({ SPEX_HOST_URL: "https://spex.pub/api" }), refused("path"));
+  assert.throws(() => hostUrlFor({ SPEX_HOST_URL: "http://spex.pub" }), refused("insecure"));
+  assert.throws(() => hostUrlFor({}, "https://me:secret@spex.pub"), refused("user"));
 });
 
 // ---------------------------------------------------------------------------

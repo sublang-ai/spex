@@ -223,6 +223,11 @@ msgstr "{host} 拒绝了本机的访问"
 msgid "{host} refused: {words}"
 msgstr "{host} 拒绝了：{words}"
 
+#. A sign-in refused, nothing stored: the person signed in at an instance the home lists as another account than the one it lists there; {host} is the instance's display name, {login} the listed account's login
+#: src/space-groups.ts
+msgid "{host} signed you in as another account; this device uses @{login} there"
+msgstr "{host} 登录的是另一个账户；本设备在那里使用 @{login}"
+
 #. Refusal: the authoring session's file changed, or another session took its id, since the page read it
 #: src/authoring.ts
 msgid "{id} changed meanwhile; retry"
@@ -359,15 +364,19 @@ msgstr "{path} 不是规范的 Player id"
 msgid "{path} is not a canonical player id (lowercase segments, dots optional)"
 msgstr "{path} 不是规范的 Player id（小写片段，点号可选）"
 
+#. Refusal: a storage validation parent or family is no directory
 #. Refusal: the path offered as a project is no directory on this device
 #: src/service.ts
+#: src/storage-git.ts
 msgid "{path} is not a directory"
 msgstr "{path} 不是目录"
 
+#. Refusal: a storage validation leaf is no regular file
 #. Refusal: the explorer was asked to read something that is no file
 #. Refusal: the path offered as a draft's source is no file on this device
 #: src/authoring.ts
 #: src/space.ts
+#: src/storage-git.ts
 msgid "{path} is not a file"
 msgstr "{path} 不是文件"
 
@@ -481,6 +490,11 @@ msgstr "{path} 必须解析出一个适配器"
 #: src/config.ts
 msgid "{path} names absent session player \"{playerId}\""
 msgstr "{path} 指向不存在的会话 Player“{playerId}”"
+
+#. A stopped sync: the folder a renamed spex repository moves to is where another clone, {other}, which the instances migration left at its former place, moves at its own next sync
+#: src/space.ts
+msgid "{path} waits for {other}, so the clone cannot follow the host there"
+msgstr "{path} 留给了等待移入的 {other}，克隆无法随托管平台移到那里"
 
 #. Refusal: a nonignored subtree of your own group's path source cannot be read; {entry} is its path in the clone
 #: src/environments.ts
@@ -605,6 +619,11 @@ msgstr "{role} 不是 {host} 授予的角色之一"
 #: src/forge.ts
 msgid "{target} is not empty; the example seeds only a new or empty directory"
 msgstr "{target} 不是空目录；示例只能填充新建或空的目录"
+
+#. Storage diagnostic: a host URL is not an instance's origin written canonically — http or https (http on localhost or 127.x alone), a lowercase host of DNS labels (letters, digits and inner hyphens) joined by single dots, and a port from 1 to 65535 other than the scheme's default, nothing else; the URL is shown with any user info as …
+#: src/home.ts
+msgid "{url} is not an instance's origin"
+msgstr "{url} 不是实例的源地址"
 
 #. Refusal of a write: the file it would replace changed since it was read; {what} names the file or folder
 #. Refusal of a write: the file it would replace changed since it was read; {what} names the file or folder
@@ -1114,6 +1133,11 @@ msgstr "请在终端完成或中止合并"
 msgid "folder {path} is paired twice"
 msgstr "文件夹 {path} 被配对了两次"
 
+#. Storage diagnostic: home.yaml is still in the layout before a home recorded several instances, which the one-time instances migration rewrites; the file is left as it is
+#: src/home.ts
+msgid "format 1: the instances migration has not run; preserved unchanged"
+msgstr "格式 1：实例迁移尚未运行；已原样保留"
+
 #. A join's stop where git failed to clone the code and printed nothing
 #: src/space.ts
 msgid "Git could not clone the code"
@@ -1239,6 +1263,11 @@ msgstr "请先安装 Node >= 23.6；slc 依赖它运行。"
 msgid "Installing stopped; the last files stay: {cause}"
 msgstr "安装已停止，上次安装的文件保持不变：{cause}"
 
+#. Storage diagnostic: two instances home.yaml lists, or one listed twice, would hold their spex repositories in one folder under workspace/
+#: src/home.ts
+msgid "instances {first} and {second} share the folder {folder}"
+msgstr "实例 {first} 与 {second} 共用文件夹 {folder}"
+
 #. Attachment transfer or storage diagnostic
 #: src/app-storage.ts
 msgid "invalid attachment references"
@@ -1340,7 +1369,9 @@ msgid "invalid migration receipt or input"
 msgstr "迁移回执或输入无效"
 
 #. Migration diagnostic: the kept original no longer matches its receipt
+#. Migration diagnostic: the kept original no longer matches its receipt
 #: src/migrate-home.ts
+#: src/migrate-instances.ts
 msgid "invalid migration receipt or retained input"
 msgstr "迁移回执或保留的原始输入无效"
 
@@ -1509,8 +1540,10 @@ msgstr "谁可以向这里发送由成员身份决定：使用“共享”，或
 
 #. Migration diagnostic: the file changed under the migration, which wrote nothing
 #. Migration diagnostic: the file changed under the migration, which wrote nothing
+#. Migration diagnostic: the file changed under the migration, which wrote nothing
 #: src/app-storage.ts
 #: src/migrate-home.ts
+#: src/migrate-instances.ts
 msgid "migration destination diverged; preserved unchanged"
 msgstr "迁移目标已变动；已原样保留"
 
@@ -2233,6 +2266,11 @@ msgstr "状态根目录 {dir} 在 {lock} 处的锁无法核实：{reason}；请�
 msgid "Stopped while waiting for {host}"
 msgstr "在等待 {host} 时已停止"
 
+#. Guidance where a renamed spex repository's new folder is another clone's destination
+#: src/space.ts
+msgid "Sync {other} first, then Retry."
+msgstr "请先同步 {other}，然后重试。"
+
 #. Guidance where the remote rejected the push
 #: src/space-git.ts
 msgid "Sync again to merge what the host received meanwhile."
@@ -2242,6 +2280,11 @@ msgstr "请再次同步，以合并托管平台这期间收到的内容。"
 #: src/space.ts
 msgid "Sync rules updated"
 msgstr "同步规则已更新"
+
+#. Storage diagnostic on a folder under workspace/: the clone {key} waits to move to this path under its instance's folder, which something else holds; the clone stays where it is until the folder is moved aside
+#: src/store.ts
+msgid "taken, so {key} cannot move here under its instance's folder; move it aside"
+msgstr "已被占用，{key} 无法移到其实例文件夹下的这里；请将它移开"
 
 #. Attachment transfer or storage diagnostic
 #. Attachment transfer or storage diagnostic
@@ -2421,8 +2464,10 @@ msgstr "所有者的机器身份 {value} 无法核实"
 msgid "the path escapes the home"
 msgstr "路径越出了空间目录"
 
+#. Refusal: a storage validation read would follow a link
 #. Refusal: the explorer follows no symbolic link
 #: src/space.ts
+#: src/storage-git.ts
 msgid "the path goes through a symbolic link"
 msgstr "路径中包含符号链接"
 

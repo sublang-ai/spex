@@ -32,9 +32,11 @@ import {
   intentFileOf, intentInfoOf, parsePrefs, parseProjectFile, readIntentFiles, repairKey, writeIntentFile,
   type ProjectFile, type StorageDiagnostic,
 } from "./app-storage.js";
+import { occupied } from "./clone-moves.js";
 import { readJsonFile, StorageFormatError, VersionConflictError, writeApplicationFile } from "./files.js";
-import { Home, repositoryNameFor, splitKey } from "./home.js";
+import { Home, repositoryNameFor, splitKey, WORKSPACE_DEPTH } from "./home.js";
 import { folderRemote, needsGroupsMigration, migrateFormerHome } from "./migrate-home.js";
+import { deferredMoves, migrateInstances, needsInstancesMigration, settleDeferred, type DeferredMove } from "./migrate-instances.js";
 import { initializeClone } from "./storage-git.js";
 import { seedConfig } from "./config.js";
 import { createRequire } from "node:module";
@@ -410,6 +412,9 @@ const unpairedReason = (name: string): string =>
 const missingCloneReason = (path: string): string =>
   i18n._({ id: "the spex repository of {path} is missing on this device",
     comment: "Repair row: a working folder is paired with a spex repository whose clone is gone", values: { path } });
+const deferredDestinationTaken = (key: string): string =>
+  i18n._({ id: "taken, so {key} cannot move here under its instance's folder; move it aside",
+    comment: "Storage diagnostic on a folder under workspace/: the clone {key} waits to move to this path under its instance's folder, which something else holds; the clone stays where it is until the folder is moved aside", values: { key } });
 
 export class Store {
   /** The home this store serves. */
@@ -419,6 +424,9 @@ export class Store {
   private readonly options: StoreOptions;
   private lease?: RootLease;
   private migrationPending = false;
+  /** Whether a legacy store was imported into the former layout this
+   * open, which the groups migration carries into the home. */
+  private legacyImported = false;
   /** Whether this open seeded the starter into your own group's clone. */
   seededConfig = false;
 
@@ -430,6 +438,9 @@ export class Store {
   private readonly repositories = new Map<string, SpexRepository>();
   private readonly prefs = new Map<string, unknown>();
   private readonly forgeCache = new Map<string, { at: number; state: ForgeState }>();
+  /** The clones the instances migration deferred (DR-127), as its
+   * receipt named them at this open, less those moved since. */
+  private deferred: DeferredMove[] = [];
   private readonly sessionProblems = new Map<string, StorageDiagnostic>();
   /** Current execution refusals are a read model, never session files. */
   private readonly continuationRefusals = new Map<string, string>();
@@ -463,9 +474,10 @@ export class Store {
       // A legacy store imports into the former layout, which the groups
       // migration then carries into spex repositories (storage-9).
       const imported = this.importLegacy(options.legacyDbPath);
+      this.legacyImported = imported;
       this.meta.version = META_VERSION;
       writeAtomic(this.metaFile(), JSON.stringify(this.meta));
-      if (imported || needsGroupsMigration(this.dir)) {
+      if (imported || needsGroupsMigration(this.dir) || needsInstancesMigration(this.dir)) {
         // English, deliberately: a caller's programming failure.
         if (!options.deferMigration) throw new Error(`${this.dir} holds the former layout; open it with Store.open to migrate`);
         this.migrationPending = true;
@@ -479,13 +491,24 @@ export class Store {
     }
   }
 
-  /** Open a home, migrating the former layout once under the home lease
-   * before any writer is admitted (storage-9, core-service-15). */
+  /** Open a home, migrating a one-instance home and the former layout
+   * once under the home lease before any writer is admitted (storage-9,
+   * core-service-15, DR-127). */
   static async open(options: StoreOptions = {}): Promise<Store> {
     const store = new Store({ ...options, deferMigration: true });
     if (store.migrationPending) {
       try {
-        await migrateFormerHome(store.dir, {
+        // A `home.yaml` in format 1 takes format 2 before the groups
+        // migration, which merges a late legacy import into the home as
+        // it reads it; the home that migration writes for a former
+        // layout is already in format 2.
+        if (needsInstancesMigration(store.dir)) {
+          migrateInstances(store.dir, {
+            env: store.env,
+            ...(store.options.machineIdentity !== undefined ? { machineIdentity: store.options.machineIdentity } : {}),
+          });
+        }
+        if (store.legacyImported || needsGroupsMigration(store.dir)) await migrateFormerHome(store.dir, {
           env: store.env,
           ...(options.own ? { own: options.own } : {}),
           libraryDir: options.libraryDir ?? join(store.dir, "playbooks"),
@@ -558,6 +581,18 @@ export class Store {
     this.ensureOwnRepository();
     this.prepareSessionDirs();
     this.loadApplication();
+    this.deferred = deferredMoves(this.dir);
+  }
+
+  /** The clones the instances migration left where they stood, a
+   * session's lease holding them (DR-127): each by the key it keeps,
+   * under which it is listed, the key under its instance's folder its
+   * next sync moves it to, and the clone it was, while it still stands
+   * at the key it kept. */
+  deferredMoves(): DeferredMove[] {
+    return this.deferred.filter((move) => {
+      try { return lstatSync(this.homeFile.clonePath(move.from)).isDirectory(); } catch { return false; }
+    }).map((move) => ({ ...move }));
   }
 
   /** Your own group's clone always stands, its config seeded from the
@@ -582,7 +617,7 @@ export class Store {
   /** The caller's filling of a clone; its failure leaves the clone as
    * it is, reported, never failing the open. */
   private prepareRepository(dir: string, key: string): boolean {
-    try { this.options.prepareRepository?.(dir, key, this.homeFile.host.url); return true; }
+    try { this.options.prepareRepository?.(dir, key, this.homeFile.host.origin); return true; }
     catch (error) { console.error(`spex: ${key} was not prepared: ${error instanceof Error ? error.message : String(error)}`); return false; }
   }
 
@@ -599,12 +634,13 @@ export class Store {
 
   /** Every clone under `workspace/` as the folders stand now: a folder
    * named `<name>-spex` inside plain group folders mirroring the Git host
-   * (storage-1). The walk only reads: a clone found again keeps its
-   * descriptor, and one gone leaves the map. */
+   * (storage-1), under an instance's folder or your own group's, its key
+   * up to WORKSPACE_DEPTH segments. The walk only reads: a clone found
+   * again keeps its descriptor, and one gone leaves the map. */
   private currentRepositories(): Map<string, SpexRepository> {
     const found = new Map<string, string>();
     const walk = (dir: string, depth: number): void => {
-      if (depth > 8) return;
+      if (depth >= WORKSPACE_DEPTH) return;
       let entries: Dirent[];
       try { entries = readdirSync(dir, { withFileTypes: true }); }
       catch (error) {
@@ -1475,6 +1511,20 @@ export class Store {
       const cached = this.forgeCache.get(from);
       if (cached) { this.forgeCache.delete(from); this.forgeCache.set(next, cached); }
     }
+    // A deferred clone moved is the migration's no longer (DR-127).
+    this.settleDeferred(moves.map((move) => move.from));
+  }
+
+  /** Deferred clones moved, removed or found to be another clone at
+   * their key: the instances migration's receipt names them no more, so
+   * no later start or sync moves a clone made at that key since
+   * (DR-127). */
+  settleDeferred(keys: readonly string[]): void {
+    const settled = keys.filter((key) => this.deferred.some((move) => move.from === key));
+    if (settled.length === 0) return;
+    this.deferred = this.deferred.filter((move) => !settled.includes(move.from));
+    try { settleDeferred(this.dir, settled); }
+    catch (error) { console.error(`spex: the instances migration's receipt still names ${settled.join(", ")}: ${error instanceof Error ? error.message : String(error)}`); }
   }
 
   /** A clone that came under `workspace/` from outside the store — a
@@ -1498,6 +1548,8 @@ export class Store {
       for (const [id, location] of [...this.sessionLocations]) if (location === key) { this.dropSession(id); this.sessionLocations.delete(id); }
       rmSync(repository.dir, { recursive: true, force: true });
       this.repositories.delete(key);
+      // A deferred clone removed waits for no move (DR-127).
+      this.settleDeferred([key]);
     }
     return true;
   }
@@ -1517,6 +1569,13 @@ export class Store {
       ...(this.prefsProblem ? [this.prefsProblem] : []),
       ...(this.cacheProblem ? [this.cacheProblem] : []),
     ];
+    // A deferred clone whose destination is taken waits there, named
+    // by that destination until it is moved aside (DR-127).
+    for (const move of this.deferredMoves()) {
+      const target = this.homeFile.clonePath(move.to);
+      if (!occupied(this.homeFile.clonePath(move.from), target, this.homeFile.workspace)) continue;
+      reports.push({ file: relative(this.dir, target), reason: deferredDestinationTaken(move.from), blocking: false });
+    }
     const paired = new Set(this.homeFile.folders().map((folder) => folder.repository));
     for (const repository of repositories) {
       if (paired.has(repository.key)) continue;

@@ -14,7 +14,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
-import { clonePath, createSpaceHarness, repositoryOf, stringsOf } from "./testing/space-harness.js";
+import { clonePath, createSpaceHarness, hostFolder, hostKey, repositoryOf, stringsOf } from "./testing/space-harness.js";
 import { STANDIN_STORAGE, type StandinHost } from "./testing/standin-host.js";
 import type { Command, CommandResults, GroupsState, ServerMessage } from "./protocol.js";
 
@@ -80,7 +80,7 @@ async function heldBefore<T extends "space.group.rename" | "space.group.delete" 
 }
 
 /** Sign a home in and pick a project's folder into `acme`, its first
- * sync done: `acme/<name>-spex`. */
+ * sync done: `acme/<name>-spex` under the stand-in's folder (DR-127). */
 async function signedWithProject(home: Home, host: StandinHost, name: string): Promise<{ key: string; id: string }> {
   let mark = home.client.mark();
   await signIn(home, host);
@@ -88,7 +88,7 @@ async function signedWithProject(home: Home, host: StandinHost, name: string): P
   const { key: local } = await addFolder(home, gitFolder(name));
   mark = home.client.mark();
   await home.client.expectOk("space.pick", { repository: local, choice: { kind: "create", groupId: "2002", name } });
-  const key = `acme/${name}-spex`;
+  const key = hostKey(host, `acme/${name}-spex`);
   const picked = await home.client.waitRepository(mark, key, (repository) => repository.sync.phase === "done", 30_000);
   assert.ok(picked.id);
   return { key, id: picked.id };
@@ -111,7 +111,7 @@ test("space-79: a group renamed, a non-empty one refused deletion and an empty o
   assert.deepEqual(entry(state, "acme").can, { createSubgroup: true, manageMembers: true, rename: true, delete: true });
   assert.deepEqual(entry(state, "acme/research").can, { createSubgroup: true, manageMembers: true, rename: true, delete: true });
   assert.deepEqual(repositoryOf(state, key).can, { manageMembers: true, transfer: true });
-  assert.deepEqual(repositoryOf(state, "acme/team-spex").can, { manageMembers: false, transfer: false });
+  assert.deepEqual(repositoryOf(state, hostKey(host, "acme/team-spex")).can, { manageMembers: false, transfer: false });
 
   // A rename of acme/research replies its new path, announced before the
   // reply; the stand-in holds it there (space-29, space-1).
@@ -152,22 +152,24 @@ test("space-79: a group renamed, a non-empty one refused deletion and an empty o
   // Its next sync moves the clone under that group's folder (space-60).
   let mark = home.client.mark();
   await home.client.expectOk("space.sync", { repository: key });
-  const synced = await home.client.waitRepository(mark, "acme/studies/plans-spex", (repository) => repository.sync.phase !== "running", 30_000);
+  const synced = await home.client.waitRepository(mark, hostKey(host, "acme/studies/plans-spex"), (repository) => repository.sync.phase !== "running", 30_000);
   assert.deepEqual([synced.sync.phase, synced.state], ["done", "reachable"], JSON.stringify(synced.sync));
-  assert.ok(existsSync(clonePath(home.dataDir, "acme/studies/plans-spex")) && !existsSync(clonePath(home.dataDir, key)));
+  assert.ok(existsSync(clonePath(home.dataDir, hostKey(host, "acme/studies/plans-spex"))) && !existsSync(clonePath(home.dataDir, key)));
 
-  // With no group named, it moves into your own group, and its next sync
-  // moves the clone under your own group's folder (space-1, space-60).
-  const toOwn = await heldBefore(home, "space.repository.move", { repository: "acme/studies/plans-spex", groupId: null }, (candidate) =>
-    keysUnder(candidate, LOGIN, true).includes("acme/studies/plans-spex"));
+  // With no group named, it moves into your own namespace at the
+  // instance, and its next sync moves the clone under the instance's
+  // folder there (space-1, space-60, DR-127).
+  const toOwn = await heldBefore(home, "space.repository.move", { repository: hostKey(host, "acme/studies/plans-spex"), groupId: null }, (candidate) =>
+    keysUnder(candidate, LOGIN, true).includes(hostKey(host, "acme/studies/plans-spex")));
   replies.push(toOwn.reply);
   assert.deepEqual(toOwn.reply, { repository: { id, fullPath: `${LOGIN}/plans-spex` } });
   mark = home.client.mark();
-  await home.client.expectOk("space.sync", { repository: "acme/studies/plans-spex" });
-  const own = await home.client.waitRepository(mark, `${LOGIN}/plans-spex`, (repository) => repository.sync.phase !== "running", 30_000);
+  await home.client.expectOk("space.sync", { repository: hostKey(host, "acme/studies/plans-spex") });
+  const namespaced = hostKey(host, `${LOGIN}/plans-spex`);
+  const own = await home.client.waitRepository(mark, namespaced, (repository) => repository.sync.phase !== "running", 30_000);
   assert.deepEqual([own.sync.phase, own.state], ["done", "reachable"], JSON.stringify(own.sync));
-  assert.ok(existsSync(clonePath(home.dataDir, `${LOGIN}/plans-spex`)));
-  assert.ok(git(clonePath(home.dataDir, `${LOGIN}/plans-spex`), "remote", "get-url", "origin").startsWith(`${host.gitOrigin}/${LOGIN}/`));
+  assert.ok(existsSync(clonePath(home.dataDir, namespaced)) && !existsSync(clonePath(home.dataDir, `${LOGIN}/plans-spex`)));
+  assert.ok(git(clonePath(home.dataDir, namespaced), "remote", "get-url", hostFolder(host)).startsWith(`${host.gitOrigin}/${LOGIN}/`));
 
   // A rename, a deletion and a move the stand-in refuses each reply in
   // its words, and one it answers provider_unavailable that it could
@@ -181,7 +183,7 @@ test("space-79: a group renamed, a non-empty one refused deletion and an empty o
   await home.client.expectError("space.group.delete", { group: scratchGroup.group.id }, "invalid_request", new RegExp(`^${HOST_NAME} refused: Deletions are paused for this group\\.$`));
   host.script.refuseGroupDelete(null);
   host.script.refuseTransfer("Moves are paused for this project.");
-  await home.client.expectError("space.repository.move", { repository: `${LOGIN}/plans-spex`, groupId: "2002" }, "invalid_request", new RegExp(`^${HOST_NAME} refused: Moves are paused for this project\\.$`));
+  await home.client.expectError("space.repository.move", { repository: namespaced, groupId: "2002" }, "invalid_request", new RegExp(`^${HOST_NAME} refused: Moves are paused for this project\\.$`));
   host.script.refuseTransfer(null);
   host.script.unavailable(1);
   await home.client.expectError("space.group.rename", { group: "2002", name: "Acme Labs" }, "invalid_request", new RegExp(`^Could not reach ${HOST_NAME}$`));
@@ -222,7 +224,7 @@ test("git-host-14: a rename carries the groups and repositories inside to the ne
   await home.client.expectError("space.group.delete", { group: "2001" }, "not_found");
   await home.client.expectError("space.group.delete", { group: "9999" }, "not_found");
   await home.client.expectError("space.repository.move", { repository: local, groupId: "2002" }, "invalid_request", /^On this device only$/);
-  await home.client.expectError("space.repository.move", { repository: "acme/nowhere-spex", groupId: "2002" }, "not_found");
+  await home.client.expectError("space.repository.move", { repository: hostKey(host, "acme/nowhere-spex"), groupId: "2002" }, "not_found");
   await home.client.expectError("space.repository.move", { repository: key, groupId: "9999" }, "not_found", new RegExp(`^${HOST_NAME} listed no group 9999$`));
   await home.client.expectError("space.repository.move", { repository: key, groupId: "2100" }, "invalid_request", /named like your login/);
   assert.deepEqual(apiRequests(host, quiet), []);
@@ -234,7 +236,7 @@ test("git-host-14: a rename carries the groups and repositories inside to the ne
   assert.equal(notRename, `${HOST_NAME} refused: You are not allowed to rename acme/research.`);
   const notDelete = await home.client.expectError("space.group.delete", { group: "2003" }, "invalid_request");
   assert.equal(notDelete, `${HOST_NAME} refused: You are not allowed to delete acme/research.`);
-  const notMove = await home.client.expectError("space.repository.move", { repository: "acme/team-spex", groupId: "2003" }, "invalid_request");
+  const notMove = await home.client.expectError("space.repository.move", { repository: hostKey(host, "acme/team-spex"), groupId: "2003" }, "invalid_request");
   assert.equal(notMove, `${HOST_NAME} refused: You are not allowed to transfer acme/team-spex.`);
   assert.deepEqual(apiRequests(host, asked), ["PATCH /api/v1/host/groups/2003", "DELETE /api/v1/host/groups/2003", `POST /api/v1/host/repositories/${team.id}/transfer`]);
   host.script.refuseGroupRename("Renames wait for the owner's review.");
@@ -268,7 +270,7 @@ test("git-host-14: a rename carries the groups and repositories inside to the ne
   assert.deepEqual(apiRequests(host, asked), ["PATCH /api/v1/host/groups/2002"]);
   assert.deepEqual(groupPaths(renamed.announced), ["acme-labs", "acme-labs/research", LOGIN, "empty"]);
   assert.deepEqual(entry(renamed.announced, "acme-labs").name, "Acme Labs");
-  assert.deepEqual(keysUnder(renamed.announced, "acme-labs"), [key, "acme-labs/team-spex"].sort());
+  assert.deepEqual(keysUnder(renamed.announced, "acme-labs"), [key, hostKey(host, "acme-labs/team-spex")].sort());
   assert.equal(repositoryOf(renamed.announced, key).remote, "acme-labs/plans-spex");
   // A read held after it lists the stand-in's answer, the same.
   const from = home.client.mark();
@@ -276,8 +278,8 @@ test("git-host-14: a rename carries the groups and repositories inside to the ne
   await home.client.expectOk("space.refresh", {});
   const reread = await home.client.waitSpace(from, (state) => state.readAt !== readAt, 30_000);
   assert.deepEqual(groupPaths(reread), ["acme-labs", "acme-labs/research", LOGIN, "empty"]);
-  assert.deepEqual(keysUnder(reread, "acme-labs"), [key, "acme-labs/team-spex"].sort());
-  assert.deepEqual(keysUnder(reread, "acme-labs/research"), ["acme-labs/research/plans-spex"]);
+  assert.deepEqual(keysUnder(reread, "acme-labs"), [key, hostKey(host, "acme-labs/team-spex")].sort());
+  assert.deepEqual(keysUnder(reread, "acme-labs/research"), [hostKey(host, "acme-labs/research/plans-spex")]);
 
   // An empty group deleted, gone before the reply, no read begun
   // (git-host-19).

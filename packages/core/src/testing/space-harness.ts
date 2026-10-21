@@ -14,12 +14,34 @@ import { CoreService, type CoreServiceOptions } from "../service.js";
 import { fakeAdapterImports } from "./fake-adapter.js";
 import { createScriptedCaptain } from "./scripted-captain.js";
 import { startStandinHost, type StandinHost } from "./standin-host.js";
+import { instanceFolder, instanceSegmentOf } from "../instance.js";
 import type { LineSpawner } from "../compile.js";
 import type { Command, CommandResults, GroupsState, RepositoryState, ServerMessage, SpaceStateMessage, SyncStep, SpaceOp } from "../protocol.js";
 
 /** Every scratch home's own group: a name no device user collides with. */
 export const OWN = "tester";
 export const OWN_KEY = `${OWN}/${OWN}-spex`;
+
+/** The stand-in's folder under `workspace/` (DR-127):
+ * `@127.0.0.1_<port>`. */
+export function hostFolder(host: Pick<StandinHost, "url">): string {
+  return instanceFolder(host.url);
+}
+
+/** The key of a spex repository the stand-in holds at `path`, its path
+ * in the instance (`acme/a-spex`): under the stand-in's folder, as its
+ * clone lies (DR-127). */
+export function hostKey(host: Pick<StandinHost, "url">, path: string): string {
+  return `${hostFolder(host)}/${path}`;
+}
+
+/** The stand-in's bare repository of a spex repository, by its key or
+ * its path in the instance: the key's instance folder is not the
+ * stand-in's to read. */
+export function bareOf(host: StandinHost, key: string): string {
+  const folder = instanceSegmentOf(key);
+  return host.bareOf(folder === null ? key : key.slice(folder.length + 1));
+}
 
 /** One repository's state out of the Groups state. */
 export function repositoryOf(state: GroupsState, key: string): RepositoryState {

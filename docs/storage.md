@@ -6,7 +6,9 @@
 **Spex home** is the desktop and CLI data directory.
 It defaults to `~/.spex`; `SPEX_HOME` selects another directory.
 All paths below are relative to Spex home.
-A **spex repository** holds the records of one project or one group on its `spex` branch; its clone lives under `workspace/<group>/<name>-spex/`, and its **key** is that path relative to `workspace/`, such as `alice/a-spex`.
+A **spex repository** holds the records of one project or one group on its `spex` branch; its clone lives under `workspace/`, and its **key** is the clone's path relative to `workspace/`.
+A spex repository at an instance lies under that instance's folder, `@<host>` with `_<port>` after it where the instance's origin names a port or is `http`, at its path there: `workspace/@spex.pub/acme/a-spex/`, key `@spex.pub/acme/a-spex`.
+Your own group's folder, `workspace/<own>/`, holds your own group's spex repository and the projects never shared, such as `alice/a-spex`; a project shared from it moves under its instance's folder as Pick a group creates or joins its spex repository there, or, while a session's lease holds it, at its next sync.
 A **project** is a working folder on this device paired with a spex repository; your own group's spex repository, `workspace/<own>/<own>-spex/`, holds your settings and the sessions that belong to no project.
 The home itself is not a Git repository; only clones are.
 
@@ -20,7 +22,7 @@ Ignored files can contain durable local state.
 
 | Path | Contents | Git |
 | --- | --- | --- |
-| `home.yaml` | This device's id, the Git host, your own group's folder name, and each working folder with its spex repository and recorded `cwd` aliases. | Outside any clone |
+| `home.yaml` | This device's id, the instance it was created with, every instance it has signed in to with its account (the first is the default), your own group's folder name, and each working folder with its spex repository and recorded `cwd` aliases. | Outside any clone |
 | `<clone>/project.json` | The project's name and its code's remote URL. | Tracked |
 | `<clone>/config/playbook.config.yaml` | Your own group's Captain, player and playbook settings; in a project's clone, only the playbooks it enables and the player each role uses. | Tracked |
 | `<clone>/spex.yaml`, `<clone>/spex.lock` | The environment's requests and lock. | Tracked, one unit |
@@ -36,7 +38,7 @@ Ignored files can contain durable local state.
 | `store/`, `cache/` | Spec package files by content digest, shared by every environment on the device, and rebuildable caches such as fetched Git sources. | Outside any clone |
 | `playbooks/<id>/` | A former home's library, kept until spec packages replace it. | Outside any clone |
 | `local/prefs.json` | Core preferences, including the last viewed turn per session. | Never leaves the device |
-| `local/credentials.yaml` | The app token the Git host issued to this device, owner-only; removed at sign-out. | Never leaves the device |
+| `local/credentials.yaml` | The app token each instance issued to this device, by the instance's origin, owner-only; removed at sign-out. | Never leaves the device |
 | `local/forge-cache.json` | Rebuildable issue and pull-request cache. | Never leaves the device |
 | `local/migrations/<id>/` | Migration receipts and original inputs. | Never leaves the device |
 | `local/former-home.git` | The former home's Git history, kept aside unchanged. | Never leaves the device |
@@ -158,6 +160,9 @@ each project becomes `workspace/<own>/<name>-spex/` with one file per open or fi
 your own group's spex repository receives the settings, with every `playbooks.<id>.from` dropped, and the remaining sessions;
 preferences move to `local/prefs.json`, and the former home's `.git` moves to `local/former-home.git`, keeping the old remote aside.
 Original bytes stay under `local/migrations/<id>/inputs/` with a receipt; an interrupted migration resumes on the next start.
+A home whose `home.yaml` names one instance in format 1 takes format 2 once at startup under the home lease, its instance written as its origin and its app token re-keyed to that origin in the same step, with a receipt beside the groups migration's; an older Spex refuses the migrated home.
+In the same migration every clone at that instance moves under its folder, each by one rename with its pair, sync preferences and forge cache entry following: one recording the host's id at its path there with its remote renamed to the folder, any other outside your own group's folder at its key keeping its remote; your own group's spex repository renames its remote and keeps its folder, and the projects never shared stay.
+A clone a live session's lease holds keeps its key and remote, named in the receipt, until its next sync or the next start moves it.
 Default-home startup also imports the former CLI session directory into your own group's spex repository.
 Skipped files remain in place with their reasons reported.
 Use `playbook migrate-session <id>` to migrate a session in an explicitly configured store; `--with <path>` selects configuration files.

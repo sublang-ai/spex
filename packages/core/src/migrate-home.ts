@@ -403,7 +403,7 @@ export async function migrateFormerHome(root: string, options: { env?: NodeJS.Pr
   const keys = [...new Set([...Object.values(plan!), home.own()])];
   // Each clone's environment requests the built-in spec package before
   // its first history is written (storage-9, environments-11).
-  for (const key of keys) options.prepareRepository?.(home.clonePath(key), key, home.host.url);
+  for (const key of keys) options.prepareRepository?.(home.clonePath(key), key, home.host.origin);
   for (const key of keys) {
     await validateStorageTree(home.clonePath(key), { own: key === home.own(), ...(options.libraryDir ? { libraryDir: options.libraryDir } : {}) });
   }

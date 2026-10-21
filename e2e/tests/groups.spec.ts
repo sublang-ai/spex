@@ -42,6 +42,8 @@ import {
   clonePath,
   expect,
   git,
+  hostFolder,
+  hostKey,
   nav,
   open,
   pickGroup,
@@ -160,8 +162,10 @@ function headOf(dir: string, branch: string): string {
   }
 }
 
-/** The demo project's spex repository once picked into the team group. */
-const TEAM_KEY = `${HOST_GROUP}/demo-project-spex`;
+/** The demo project's spex repository once picked into the team group:
+ * its path in the instance, its key under the stand-in's folder
+ * (DR-127). */
+const TEAM_PATH = `${HOST_GROUP}/demo-project-spex`;
 /** Your own group's spex repository once signed in (space-59). */
 const OWN_KEY = `${HOST_LOGIN}/${HOST_LOGIN}-spex`;
 
@@ -178,6 +182,7 @@ test.describe("first start", () => {
   }) => {
     test.setTimeout(150_000);
     const host = app.host!;
+    const TEAM_KEY = hostKey(host, TEAM_PATH);
     await open(page, app);
     await showGroups(page);
     const header = page.getByTestId("space-header");
@@ -341,6 +346,7 @@ test.describe("a folder added while signed in", () => {
   }) => {
     test.setTimeout(120_000);
     const host = app.host!;
+    const TEAM_KEY = hostKey(host, TEAM_PATH);
     seedDemoProject(app.projectDir);
     await open(page, app);
 
@@ -535,7 +541,7 @@ test.describe("organizing", () => {
     await picker.getByTestId(`space-pick-group-${SUBGROUP}`).click();
     await expect(palette).toBeHidden();
     await showGroups(page);
-    const picked = `${SUBGROUP}/demo-project-spex`;
+    const picked = hostKey(host, `${SUBGROUP}/demo-project-spex`);
     await expect(design.getByTestId(`space-repo-state-${picked}`)).toHaveText("Synced just now", { timeout: 30_000 });
     expect(headOf(bareOf(host, picked), "spex")).toMatch(/^[0-9a-f]{40}$/);
 
@@ -627,12 +633,13 @@ test.describe("the instance alone", () => {
   }) => {
     test.setTimeout(150_000);
     const host = app.host!;
+    const TEAM_KEY = hostKey(host, TEAM_PATH);
     // The project's records pushed into acme over the protocol, and a
     // spex repository another account shares from its own group: every
     // remote URL lies under the stand-in's Git origin (git-host-12).
     await pickGroup(app);
     host.script.addRepository({ group: "bob", name: "notes-spex", role: "Developer" });
-    expect(git(clonePath(app.dataDir, TEAM_KEY), "remote", "get-url", "origin").startsWith(`${host.gitOrigin}/${STANDIN_STORAGE}/`)).toBe(true);
+    expect(git(clonePath(app.dataDir, TEAM_KEY), "remote", "get-url", hostFolder(host)).startsWith(`${host.gitOrigin}/${STANDIN_STORAGE}/`)).toBe(true);
 
     /** Every text, title, accessible name and link target on the surface
      * that names something behind the instance (space-1, space-62). */
@@ -655,7 +662,7 @@ test.describe("the instance alone", () => {
       // bob's own group stands under his login, its heading carrying no
       // control (space-1).
       const bob = surface.getByTestId("space-group-bob");
-      await expect(bob.getByTestId("space-row-bob/notes-spex")).toBeVisible();
+      await expect(bob.getByTestId(`space-row-${hostKey(host, "bob/notes-spex")}`)).toBeVisible();
       await expect(bob.getByTestId("space-group-members-bob")).toHaveCount(0);
       await expect(bob.getByTestId("space-group-subgroup-bob")).toHaveCount(0);
       // The project's members panel, open, links no page (space-62).
@@ -713,6 +720,7 @@ test.describe("undo", () => {
   }) => {
     test.setTimeout(180_000);
     const host = app.host!;
+    const TEAM_KEY = hostKey(host, TEAM_PATH);
     // The project's records pushed into acme over the protocol.
     await pickGroup(app);
     const standinGroup = (fullPath: string) => host.script.groups.find((group) => group.fullPath === fullPath);
@@ -807,7 +815,7 @@ test.describe("undo", () => {
     // The row's Sync then moves the clone under acme/research's folder
     // (space-78).
     await research.getByTestId(`space-row-sync-${TEAM_KEY}`).click();
-    const MOVED = `${RESEARCH}/demo-project-spex`;
+    const MOVED = hostKey(host, `${RESEARCH}/demo-project-spex`);
     await expect(research.getByTestId(`space-repo-state-${MOVED}`)).toHaveText("Synced just now", { timeout: 30_000 });
     expect(existsSync(clonePath(app.dataDir, MOVED))).toBe(true);
     expect(existsSync(clonePath(app.dataDir, TEAM_KEY))).toBe(false);
@@ -856,6 +864,7 @@ test.describe("daily sync", () => {
     test.setTimeout(180_000);
     await arrangeHostPeer(app);
     const host = app.host!;
+    const TEAM_KEY = hostKey(host, TEAM_PATH);
     const clone = clonePath(app.dataDir, TEAM_KEY);
     const sessionUnit = `sessions/${app.sessionId}`;
     const settingsUnit = "config/playbook.config.yaml";
@@ -1022,7 +1031,7 @@ test.describe("daily sync", () => {
 
     // Members lists the stand-in's members with the host's role names
     // and links no page of the host (space-62).
-    const listed = host.script.repositories.find((repo) => `${repo.group.fullPath}/${repo.path}` === TEAM_KEY)!;
+    const listed = host.script.repositories.find((repo) => `${repo.group.fullPath}/${repo.path}` === TEAM_PATH)!;
     listed.members.push(PEER_MEMBER);
     await page.getByTestId(`space-row-members-${TEAM_KEY}`).click();
     const members = page.getByTestId(`space-members-${TEAM_KEY}`);
@@ -1216,6 +1225,7 @@ test.describe("fit", () => {
     app,
   }) => {
     test.setTimeout(300_000);
+    const TEAM_KEY = hostKey(app.host!, TEAM_PATH);
     await arrangeChoices(app);
     page.on("pageerror", (error) => console.log(`[groups fit] page error: ${error.message}`));
     await page.setViewportSize({ width: 1280, height: TALL });
@@ -1303,6 +1313,7 @@ test.describe("accessibility", () => {
       app,
     }) => {
       test.setTimeout(120_000);
+      const TEAM_KEY = hostKey(app.host!, TEAM_PATH);
       await arrangeChoices(app);
       await page.emulateMedia({ colorScheme: theme });
       await open(page, app);
