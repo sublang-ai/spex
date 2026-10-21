@@ -2176,6 +2176,11 @@ msgstr "请先登录 {host}"
 msgid "Sign in to publish"
 msgstr "登录后才能发布"
 
+#. Refusal of Forget: the instance is still signed in; {host} is its display name, or its host name before any read
+#: src/space.ts
+msgid "Sign out of {host} first"
+msgstr "请先退出登录 {host}"
+
 #. The act that gives access to an http(s) remote, inside a sentence
 #: src/space-git.ts
 msgid "sign this machine in at that host as an account that can see it"
@@ -2296,6 +2301,11 @@ msgstr "状态根目录 {dir} 在 {lock} 处已被本机进程 {pid} 占用；�
 #: src/root-lease.ts
 msgid "state root {dir} lock at {lock} cannot be verified: {reason}; stop every Spex writer before removing it (DR-108)"
 msgstr "状态根目录 {dir} 在 {lock} 处的锁无法核实：{reason}；请先停止所有 Spex 写入者，再移除它（DR-108）"
+
+#. Refusal of Forget: spex repositories whose clones are still kept under the instance, no signed-in instance listing them; {host} is the instance's display name, {names} the repositories' names as a list
+#: src/space.ts
+msgid "Still kept under {host}: {names}"
+msgstr "仍位于 {host} 之下：{names}"
 
 #. A stopped step's message: the reader stopped it while the Git host's rate limit held its call; {host} is the host's display name
 #: src/space.ts

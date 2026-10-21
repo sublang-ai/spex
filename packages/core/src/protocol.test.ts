@@ -78,7 +78,7 @@ test("parseCommand accepts the space commands and their optional fields", () => 
   assert.ok(!parseCommand({ type: "space.init", id: "s2" }).ok);
 });
 
-test("space-29: a space command names the instance it acts at by its origin, and a sign-in the URL as the reader gave it", () => {
+test("space-29, space-82: a space command names the instance it acts at by its origin, Forget always, and a sign-in the URL as the reader gave it", () => {
   const instance = "https://spex.pub";
   const repository = "@spex.pub/acme/a-spex";
   const named = [
@@ -94,6 +94,7 @@ test("space-29: a space command names the instance it acts at by its origin, and
     { type: "space.share", id: "i10", instance, group: "7", login: "bob", role: "30" },
     { type: "space.unshare", id: "i11", instance, group: "7", login: "bob" },
     { type: "space.members", id: "i12", repository },
+    { type: "space.forget", id: "i13", instance },
   ];
   for (const command of named) {
     const parsed = parseCommand(command);
@@ -118,6 +119,10 @@ test("space-29: a space command names the instance it acts at by its origin, and
     { type: "space.signin.start", id: "r3", url: null },
     { type: "space.refresh", id: "r4", instance },
     { type: "space.repository.move", id: "r5", repository, groupId: null, instance },
+    // Forget names the instance it removes, always (space-82).
+    { type: "space.forget", id: "r6" },
+    { type: "space.forget", id: "r7", instance: "" },
+    { type: "space.forget", id: "r8", instance, repository },
   ]) {
     assert.ok(!parseCommand(command).ok, JSON.stringify(command));
   }

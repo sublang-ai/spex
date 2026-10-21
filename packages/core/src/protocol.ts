@@ -1234,15 +1234,17 @@ export const commandSchema = z.discriminatedUnion("type", [
   // one spex repository at a time, `repository` naming it by its key
   // and `instance` an instance by its origin (DR-127); long commands
   // reply `accepted` at once and report their outcome as `space.state`.
-  // Transitional: `url` and every `instance` stay optional until the
-  // interface sends them, one left out naming the default instance — for
-  // a pick or a join, the clone's or the row's instance.
+  // Transitional: `url` and every `instance` but Forget's stay optional
+  // until the interface sends them, one left out naming the default
+  // instance — for a pick or a join, the clone's or the row's instance.
   z.object({ type: z.literal("space.get"), id }).strict(),
   z.object({ type: z.literal("space.refresh"), id }).strict(),
   /** `url`: the instance's URL as the reader gave it, held by its origin. */
   z.object({ type: z.literal("space.signin.start"), id, url: z.string().optional() }).strict(),
   z.object({ type: z.literal("space.signin.cancel"), id }).strict(),
   z.object({ type: z.literal("space.signout"), id, instance: instanceOriginSchema.optional() }).strict(),
+  /** `instance`: the signed-out instance to remove from the home (space-82). */
+  z.object({ type: z.literal("space.forget"), id, instance: instanceOriginSchema }).strict(),
   z.object({
     type: z.literal("space.pick"),
     id,
@@ -1501,6 +1503,7 @@ export interface CommandResults {
     | { flow: "device"; userCode: string; verificationUri: string; expiresAt: number };
   "space.signin.cancel": { stopped: boolean };
   "space.signout": GroupsState;
+  "space.forget": GroupsState;
   "space.pick": { accepted: true };
   "space.join": { accepted: true };
   "space.members": { members: HostMemberInfo[] };

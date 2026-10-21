@@ -24,7 +24,7 @@ import {
   anotherAccountError, CredentialChanged, HostError, SignInBusyError, type BrowserSignIn, type DeviceSignIn, type GitHostClient, type HostAccount, type HostGroup,
   type HostMember, type HostRepository, type MembersTarget,
 } from "./git-host.js";
-import { kebab, splitKey, type HomeAccount } from "./home.js";
+import { InstanceRefused, kebab, splitKey, type HomeAccount } from "./home.js";
 import { i18n } from "./i18n.js";
 import { canonicalOrigin, instanceFolder, instanceSegmentOf, isInstanceFolder, OriginRefused, parseOrigin, type OriginRefusal } from "./instance.js";
 import { isDeferredClone } from "./migrate-instances.js";
@@ -264,6 +264,22 @@ const signInTo = (host: string): string => i18n._({
   id: "Sign in to {host} first",
   values: { host },
   comment: "Refusal of a sync: the spex repository's instance is signed out; {host} is that instance's display name, or its host name before any read",
+});
+
+/** The refusal of Forget of an instance still signed in (space-29),
+ * naming it by its display name. */
+const signOutFirst = (host: string): string => i18n._({
+  id: "Sign out of {host} first",
+  values: { host },
+  comment: "Refusal of Forget: the instance is still signed in; {host} is its display name, or its host name before any read",
+});
+
+/** The refusal of Forget while spex repositories are still kept under
+ * the instance (space-82): each named, beneath its heading. */
+const stillKeptUnder = (host: string, names: readonly string[]): string => i18n._({
+  id: "Still kept under {host}: {names}",
+  values: { host, names: new Intl.ListFormat(i18n.locale || "en", { type: "conjunction", style: "narrow" }).format(names) },
+  comment: "Refusal of Forget: spex repositories whose clones are still kept under the instance, no signed-in instance listing them; {host} is the instance's display name, {names} the repositories' names as a list",
 });
 
 /** The refusal of a sync of a clone no instance holds (space-11). */
@@ -2508,6 +2524,10 @@ export class SpaceManager {
    * systems mint one id: each join's own entry, which only it replaces
    * or removes; no join is refused because another runs. */
   private readonly joining = new Map<string, SpaceSyncPhase>();
+  /** The set-up step bringing your own group's own repository to an
+   * instance (space-4), one at a time across instances: the last begun,
+   * which the next waits for. */
+  private owning?: Promise<void>;
   /** Set once the core stops: nothing is read or announced after. */
   private stopping = false;
   /** This machine's identity for reading session leases, once read. */
@@ -3149,6 +3169,118 @@ export class SpaceManager {
     return state;
   }
 
+  /**
+   * Forget a signed-out instance the command names (space-82), in order:
+   * each clone whose instance it is, other than your own group's own
+   * repository, follows the signed-in instance governing it — the
+   * earliest in the home's list whose view lists the host repository it
+   * records (git-host-5) — re-keyed under that instance's folder with
+   * its remote renamed, as a sync's move makes it follow (space-60);
+   * where any such clone is left — listed by no signed-in instance, or
+   * its follow refused by a session's lease beneath — Forget is refused
+   * naming each, the instance kept with every follow already made; then
+   * your own group's own repository, where that instance is its own,
+   * renames its remote to the folder of the signed-in instance governing
+   * it, else its remote is taken away, its id and what it fetched kept
+   * (space-5); last, the instance's entry leaves `home.yaml`
+   * (storage-2), and with it what this run held of its account. One
+   * still signed in is refused, and one the home does not list
+   * `not_found` (space-29).
+   */
+  async forget(named: string): Promise<GroupsState> {
+    const store = this.host.store;
+    const instance = this.instanceAt(this.namedInstance(named));
+    if (this.signedInAt(instance)) throw new CoreError("invalid_request", signOutFirst(this.nameOf(instance)));
+    const identity = await this.machineIdentity();
+    const own = store.home.own();
+    const kept: string[] = [];
+    const inUse: string[] = [];
+    for (const repository of store.listRepositories()) {
+      if (repository.key === own) continue;
+      const outcome = await this.followAtForget(instance, repository.key, identity);
+      if (outcome === "kept") kept.push(splitKey(repository.key).name);
+      else if (outcome !== "followed" && outcome !== "other") inUse.push(outcome.inUse);
+    }
+    if (kept.length > 0 || inUse.length > 0) {
+      await this.publish();
+      const reasons = [...(kept.length > 0 ? [stillKeptUnder(this.nameOf(instance), kept)] : []), ...inUse];
+      throw new CoreError("invalid_request", reasons.join(" · "));
+    }
+    if (store.repository(own)) {
+      const machine = this.machine(own);
+      await machine.readFacts();
+      if (this.instanceOfClone(machine) === instance) {
+        // Nothing is awaited from the governing instance's choice to the
+        // remote's rename.
+        const governing = this.governingOf(machine);
+        const folder = governing && governing !== instance ? governing.folder() : null;
+        if (folder !== null) machine.renameRemote(machine.remoteNameNow(), folder);
+        else await machine.setRemote(null);
+      }
+    }
+    try { store.forget(instance.origin); }
+    catch (error) {
+      // Signed in again meanwhile, it stays.
+      if (error instanceof InstanceRefused) throw new CoreError("invalid_request", signOutFirst(this.nameOf(instance)));
+      throw error;
+    }
+    instance.accountGeneration += 1;
+    instance.hostSignedOut = undefined;
+    instance.view = undefined;
+    instance.targets.clear();
+    this.releaseHeld(instance);
+    instance.readFailure = undefined;
+    instance.readState = { phase: "idle" };
+    for (const [key, waiting] of [...this.waiting]) if (waiting.instance === instance.origin) this.waiting.delete(key);
+    const state = await this.state();
+    this.host.broadcast(state);
+    return state;
+  }
+
+  /**
+   * One clone's follow at a Forget of its instance (space-82): to the
+   * signed-in instance governing it (git-host-5), at the path that
+   * instance's view lists the host repository it records, by one rename
+   * at its instant (renameClone), its remote renamed to that instance's
+   * folder and the host's id recorded beside it, as a sync's move makes
+   * it follow (space-60, storage-34). "other" for a clone of another
+   * instance or none; "kept" where it stays of this one — no signed-in
+   * instance listing it, its path standing as no key there or in a group
+   * held as colliding, a destination taken, or its remote changed
+   * meanwhile; the session's words where a lease beneath holds it.
+   */
+  private async followAtForget(instance: HostInstance, key: string, identity: string | undefined): Promise<"other" | "followed" | "kept" | { inUse: string }> {
+    const store = this.host.store;
+    if (!store.repository(key)) return "other";
+    const machine = this.machine(key);
+    try { await machine.readFacts(); } catch { return this.instanceOfClone(machine) === instance ? "kept" : "other"; }
+    // Nothing is awaited from here to the rename: the clone lies where
+    // the home says, with the remote and id just read.
+    const from = machine.key;
+    const source = machine.repository.dir;
+    if (store.repository(from)?.dir !== source) return "other";
+    if (this.instanceOfClone(machine) !== instance) return "other";
+    const facts = machine.facts;
+    const governing = this.governingOf(machine);
+    if (!governing || governing === instance || facts.remote === null) return "kept";
+    const listing = this.listingOf(governing, facts);
+    const to = listing ? this.keyAtHost(listing.repository, governing) : null;
+    const folder = governing.folder();
+    if (!listing || !to || to === from || folder === null || this.collides(listing.repository.group, this.viewOf(governing))) return "kept";
+    if (facts.id === null) machine.recordId(listing.repository.id, facts.remote);
+    if (!machine.recordsNow(facts.remote, listing.repository.id)) return "kept";
+    const named = machine.remoteNameNow();
+    try { this.renameClone(machine, to, identity); }
+    catch (error) {
+      if (error instanceof SpaceStopped && error.failure.cause === "lease") return { inUse: error.failure.message };
+      if (error instanceof SpaceStopped) return "kept";
+      throw error;
+    }
+    machine.renameRemote(named, folder);
+    await this.afterMove([{ from, to }]);
+    return "followed";
+  }
+
   /** Refresh (space-2): read every signed-in instance, each on its own,
    * and finish what a sign-in there left for its next read (space-4,
    * space-64); refused where none is signed in (space-29). */
@@ -3211,10 +3343,7 @@ export class SpaceManager {
     let view: HostView;
     try { view = await this.readHost(instance); } catch { return; }
     if (generation !== instance.accountGeneration) return;
-    // Transitional: your own group's spex repository is created or joined
-    // at the default instance alone, until a clone's instance governs its
-    // sync (DR-127).
-    if (renamed !== "conflict" && instance === this.defaultInstance()) await this.ensureOwnOnHost(instance, view);
+    if (renamed !== "conflict") await this.ensureOwn(instance, view, generation);
     if (generation !== instance.accountGeneration) return;
     await this.retryWaiting(instance, view);
     await this.publish();
@@ -3436,9 +3565,26 @@ export class SpaceManager {
       && sameLogin(listing.repository.group.fullPath, namespace) && names.has(listing.repository.path));
   }
 
+  /** Step 3 of the set-up at an instance (space-4), after any other
+   * instance's set-up begun before it has taken it: the first to find
+   * your own group's own repository with no remote brings it to its
+   * instance, and every later one finds that remote and leaves it. */
+  private ensureOwn(instance: HostInstance, view: HostView, generation: number): Promise<void> {
+    const previous = this.owning;
+    const work = (async () => {
+      await previous?.catch(() => undefined);
+      if (generation !== instance.accountGeneration || !this.signedInAt(instance)) return;
+      await this.ensureOwnOnHost(instance, view);
+    })();
+    this.owning = work;
+    return work;
+  }
+
   /** Your own group's spex repository at an instance while it has no
    * remote (space-4, space-65): joined where that instance lists one,
-   * else created there and pushed. */
+   * else created there as `<login there>-spex` in your namespace and
+   * pushed — at the home's first sign-in, or once its remote was dropped
+   * (space-82), its folder keeping its name. */
   private async ensureOwnOnHost(instance: HostInstance, view: HostView): Promise<void> {
     const store = this.host.store;
     const key = store.home.own();
@@ -3449,7 +3595,7 @@ export class SpaceManager {
     // Your own group is named to the host by none, never by its id,
     // which names no group of the instance there (git-host-6).
     const group = { id: null, fullPath: userGroup(view)?.fullPath ?? store.home.ownName };
-    const name = splitKey(key).name;
+    const name = `${ownNameFor(view.account.login)}-spex`;
     const listed = this.ownNamespaceListing(view);
     if (listed) {
       await this.adopt(instance, machine, listed, true, { setUp: true });

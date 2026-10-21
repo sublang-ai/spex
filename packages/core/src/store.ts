@@ -1489,6 +1489,16 @@ export class Store {
     this.saveHome();
   }
 
+  /** A signed-out instance's entry removed from `home.yaml` (space-82,
+   * storage-2); one still signed in is refused, its entry kept, as
+   * InstanceRefused. False where the home listed none at that origin. */
+  forget(origin: string): boolean {
+    this.assertProjectsWritable();
+    const removed = this.homeFile.forget(origin);
+    if (removed) this.saveHome();
+    return removed;
+  }
+
   /**
    * Clones the caller already moved on disk (space-59, space-60): every
    * pair naming a moved key names its new one in `home.yaml`, your own

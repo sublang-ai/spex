@@ -3063,6 +3063,8 @@ export class CoreService {
       // default instance where it names none (space-29, DR-127).
       case "space.signout":
         return this.requireSpace().signOut(command.instance);
+      case "space.forget":
+        return this.requireSpace().forget(command.instance);
       case "space.pick":
         return this.requireSpace().pick(command.repository, command.choice, command.noticed === true);
       case "space.join":

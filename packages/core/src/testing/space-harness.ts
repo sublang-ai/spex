@@ -567,6 +567,14 @@ playbooks:
     return state;
   }
 
+  /** Forget one signed-out instance by its origin (space-82): its entry
+   * gone from the state the reply carries. */
+  async function forget(home: Home, host: Pick<StandinHost, "url">): Promise<GroupsState> {
+    const state = await home.client.expectOk("space.forget", { instance: host.url });
+    assert.equal(instanceOf(state, host.url), undefined, "the instance is listed no more");
+    return state;
+  }
+
   /** A real core on a scratch home whose configuration lies in your own
    * group's spex repository; `host` names the stand-in the new home
    * records from `SPEX_HOST_URL` (git-host-1), and any other instance is
@@ -671,7 +679,7 @@ playbooks:
   ];
 
   return {
-    scratch, config, git, bareRepo, otherDevice, gitFolder, sameNameFolder, addFolder, sleepingSsh, holdingGit, sleep, sleeperPid, joinRemote, hangingCompileSpawner, COMPILE_INPUT, startHome, startHost, signIn, signOut, runTurn, snapshot, peerClone, peerPush, turnRecords,
+    scratch, config, git, bareRepo, otherDevice, gitFolder, sameNameFolder, addFolder, sleepingSsh, holdingGit, sleep, sleeperPid, joinRemote, hangingCompileSpawner, COMPILE_INPUT, startHome, startHost, signIn, signOut, forget, runTurn, snapshot, peerClone, peerPush, turnRecords,
     dispose: async () => {
       await Promise.all(hosts.map((host) => host.close()));
       rmSync(scratch, { recursive: true, force: true });
