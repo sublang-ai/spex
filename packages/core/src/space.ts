@@ -4959,16 +4959,21 @@ export class SpaceManager {
     for (const key of [...this.machines.keys()]) if (!store.repository(key)) this.machines.delete(key);
     repositories.push(...this.absentRows());
     const diagnostics = await this.host.checkRepairs(this.diagnostics());
+    const git = await this.probe.version();
+    // The headings and their groups are read from the home at one
+    // instant, with no await between, so a sign-out landing meanwhile
+    // never leaves a signed-in heading without its namespace (space-30).
     const placed = this.byInstance(repositories);
+    const instances = this.instancesOf(placed.groups);
     return {
       home: resolve(this.host.home),
-      git: await this.probe.version(),
+      git,
       defaultInstance: this.defaultInstance().origin,
       signIn: this.signInState,
       // Its folder bears this device's user name until a sign-in names
       // it after a login (space-1, space-59).
       own: { name: store.home.ownName, named: store.home.ownName === store.deviceOwnName(), repositories: placed.own },
-      instances: this.instancesOf(placed.groups),
+      instances,
       diagnostics,
       // One number, so the header and the list cannot drift (space-1):
       // what the reader has not answered, and everything unfolded.
