@@ -6,8 +6,10 @@
 // version with its dependencies and artifacts, so a dependency graph
 // resolves from indexes alone; a version resource is read only for a
 // version picked; files come by raw URL or the release archive, each
-// verified by its digest elsewhere. The device's app token is presented
-// as a bearer where the home is signed in.
+// verified by its digest elsewhere. The app token of the instance the
+// registry answers for is presented as a bearer where the home is signed
+// in there; an answer refusing it as the instance's sign-out is reported
+// with the token it refused (environments-12, DR-127).
 
 import { isPackageName } from "./format.js";
 
@@ -211,10 +213,21 @@ export function readVersionResource(name: string, version: string, raw: unknown)
   } as VersionResource;
 }
 
+/** The codes a registry refuses an instance's token with that sign that
+ * instance out (environments-12, git-host-4); `token_expired` is not one
+ * of them, an expired access secret being a failure of its call. */
+export const SIGN_OUT_CODES: readonly string[] = ["invalid_token", "token_revoked", "reauth_required"];
+
 export interface RegistryClientOptions {
   url: string;
-  /** The device's app token, where the home is signed in. */
+  /** The app token of the instance the registry answers for, where the
+   * home is signed in there; a getter that throws fails the call as
+   * `unavailable`. */
   token?: () => Promise<string | null>;
+  /** Told the token a call presented when the registry refused it with
+   * one of `SIGN_OUT_CODES`, before that call fails (environments-12):
+   * awaited, whatever it throws ignored. */
+  refused?: (token: string, code: string) => void | Promise<void>;
   fetch?: typeof fetch;
 }
 
@@ -222,18 +235,28 @@ export interface RegistryClientOptions {
 export class RegistryClient implements RegistrySource {
   readonly url: string;
   private readonly token?: () => Promise<string | null>;
+  private readonly refused?: (token: string, code: string) => void | Promise<void>;
   private readonly fetcher: typeof fetch;
 
   constructor(options: RegistryClientOptions) {
     this.url = options.url.replace(/\/+$/, "");
     this.token = options.token;
+    this.refused = options.refused;
     this.fetcher = options.fetch ?? fetch;
   }
 
   private async request(path: string, name: string | undefined, init: RequestInit = {}): Promise<Response> {
     const headers = new Headers(init.headers);
     if (!headers.has("accept")) headers.set("accept", "application/json");
-    const token = this.token ? await this.token() : null;
+    const about = name ? `${name}: ` : "";
+    let token: string | null = null;
+    try {
+      token = this.token ? await this.token() : null;
+    } catch (error) {
+      // No token to be had: the call fails as one the registry could
+      // not be asked, so a caller with another registry moves on.
+      throw new RegistryError("unavailable", name, `${about}${error instanceof Error ? error.message : String(error)}`);
+    }
     if (token) headers.set("authorization", `Bearer ${token}`);
     let response: Response;
     try {
@@ -251,11 +274,16 @@ export class RegistryClient implements RegistrySource {
       message = body.error?.message;
       details = body.error?.details;
     } catch { /* not the envelope */ }
-    const about = name ? `${name}: ` : "";
     const said = message ? ` (${message})` : "";
     if (response.status === 404) throw new RegistryError("not_found", name, `${about}not found at the registry, or not readable by this account${said}`, code);
     if (response.status === 410) throw new RegistryError("not_found", name, `${about}suppressed by the registry's operator${said}`, code);
-    if (response.status === 401) throw new RegistryError("unauthenticated", name, `${about}the registry did not accept this device's sign-in${said}`, code);
+    if (response.status === 401) {
+      // A refusal answers the token this call presented (git-host-4).
+      if (token && code !== undefined && SIGN_OUT_CODES.includes(code) && this.refused) {
+        try { await this.refused(token, code); } catch { /* the call fails all the same */ }
+      }
+      throw new RegistryError("unauthenticated", name, `${about}the registry did not accept this device's sign-in${said}`, code);
+    }
     if (response.status === 403) throw new RegistryError("forbidden", name, `${about}this account may not fetch it from the registry${said}`, code);
     if (response.status === 409 || response.status === 422 || response.status === 413) {
       throw new RegistryError("rejected", name, `${about}the registry refused it${said}`, code, details);

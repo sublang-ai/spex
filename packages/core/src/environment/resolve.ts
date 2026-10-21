@@ -9,8 +9,11 @@
 // candidates newest first — so the first solution found is the highest
 // by the record's comparison. Registry versions are picked from the
 // version index alone; a version resource is read only for each version
-// picked. Within the solution, artifacts, languages, files and exports
-// are selected in the record's four steps.
+// picked. Each registry package records the registry asked, or keeps
+// the one the lock being replaced records where it resolves to the
+// version and checksum recorded there (environments-5, DR-127): only the
+// label is kept, never the solution. Within the solution, artifacts,
+// languages, files and exports are selected in the record's four steps.
 
 import { existsSync, realpathSync } from "node:fs";
 import { isAbsolute, join, relative, resolve as resolvePath, sep } from "node:path";
@@ -27,7 +30,7 @@ import {
 } from "./format.js";
 import { specExportName } from "./exports.js";
 import type { GitCredential, GitSource } from "./git-source.js";
-import { manifestRequires, type Lock, type LockedArtifact, type LockedFile, type Resolution, type SourceLock } from "./lock.js";
+import { isRegistrySource, manifestRequires, type Lock, type LockedArtifact, type LockedFile, type Resolution, type SourceLock } from "./lock.js";
 import { ownFolderIssue, ownPathIssue, ownPathMessage, type OwnPathIssue } from "./own-paths.js";
 import { RegistryError, type RegistrySource, type VersionIndexEntry, KNOWN_FORMAT } from "./registry.js";
 import { isGitRequest, isInsidePath, isPathRequest, isRegistryRequest, requestsDigest, type Request, type Requests, type Selection } from "./requests.js";
@@ -62,8 +65,10 @@ export interface ResolveInput {
   git: GitSource;
   /** The credential for a Git repository, where one applies. */
   gitCredential?: (repo: string) => Promise<GitCredential | undefined>;
-  /** The lock being replaced. A resolve takes the highest solution and
-   * reads nothing from it (DR-104). */
+  /** The lock being replaced. A resolve takes the highest solution
+   * whatever it holds (DR-104); a registry package resolving to the
+   * version and checksum it records keeps the registry it records
+   * (environments-5). */
   previous?: Lock;
   /** A bound on candidate trials before the search gives up. */
   maxSteps?: number;
@@ -179,6 +184,14 @@ function usableEntry(entry: VersionIndexEntry): boolean {
   return Object.values(entry.dependencies).every((requirement) => {
     try { parseRequirement(requirement); return true; } catch { return false; }
   });
+}
+
+/** The registry a registry package keeps from the lock being replaced:
+ * the one that lock records for it where it records the same version
+ * and checksum (environments-5), else none. */
+function keptRegistry(previous: Lock | undefined, name: string, version: string, checksum: string): string | undefined {
+  const source = previous?.packages[name]?.source;
+  return source !== undefined && isRegistrySource(source) && source.version === version && source.checksum === checksum ? source.registry : undefined;
 }
 
 /** Resolve requests into a lock (environments-5, environments-6). */
@@ -348,7 +361,7 @@ export async function resolve(input: ResolveInput): Promise<ResolveResult> {
       version: candidate.version,
       artifacts,
       files: resource.files,
-      source: { registry: registry.url, version: candidate.version, checksum: resource.checksum },
+      source: { registry: keptRegistry(input.previous, name, candidate.version, resource.checksum) ?? registry.url, version: candidate.version, checksum: resource.checksum },
       lockFiles: true,
     });
   }
