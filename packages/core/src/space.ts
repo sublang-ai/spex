@@ -128,6 +128,16 @@ export interface SpaceHost {
   /** The environment's exports beneath a moved clone are rewritten
    * (space-60): the `.git/info/exclude` blocks naming its paths. */
   environmentMoved?: (oldKey: string, newKey: string) => void | Promise<void>;
+  /** A join paired its clone with a working folder (space-63): a clone
+   * holding no environment requests the built-in spec package at its
+   * instance's registry (environments-11, DR-127), written before this
+   * returns. */
+  environmentPaired?: (key: string) => void;
+  /** A pick placed a local-only project's clone at an instance
+   * (storage-35), moved or not: the built-in spec package its pairing
+   * locked at the default instance's registry is locked at that
+   * instance's (environments-11, DR-127), written before this returns. */
+  environmentPlaced?: (key: string) => void;
   /** Throws where an Apply or a repair may not replace authoring session
    * `id` of clone `key` now — its turn runs in this core (space-19):
    * called synchronously at that unit's write, after its version check
@@ -2592,10 +2602,11 @@ export class SpaceManager {
     return this.host.store.home.account(instance.origin) !== null;
   }
 
-  /** The default instance's display name, or its URL's host name before
-   * any read (space-15: a report names the host by its display name). */
-  hostName(): string {
-    return this.nameOf(this.defaultInstance());
+  /** The name of the instance at an origin, as what the core says of it
+   * names it (space-15): a failure relayed from it outside the Groups
+   * engine — the registry's token (environments-12). */
+  instanceName(origin: string): string {
+    return this.nameOf(this.instanceAt(origin));
   }
 
   /** An instance's name in what the core says of it (space-15): its
@@ -2757,6 +2768,10 @@ export class SpaceManager {
    * records — its intents' author's (core-service-42); null where it has
    * none. */
   instanceOriginOf(key: string): string | null {
+    // A key under an instance's folder names it with no read of the
+    // clone: asked at every settle of an environment (environments-5).
+    const byKey = this.host.store.home.instanceOfKey(key);
+    if (byKey) return byKey.origin;
     if (!this.host.store.repository(key)) return this.cloneInstance(key, null);
     let remoteName: string | null;
     try { remoteName = this.machine(key).remoteNameNow(); } catch { remoteName = null; }
@@ -3771,7 +3786,12 @@ export class SpaceManager {
       throw error;
     }
     this.waiting.delete(machine.key);
+    const picked = this.localOnly(machine.key);
     await this.moveAtPick(instance, machine, repository);
+    // The pick places the project at its instance, moved or not: the
+    // built-in its pairing locked at the default instance is locked at
+    // this one before its records first sync (environments-11, DR-127).
+    if (picked) this.host.environmentPlaced?.(machine.key);
     await this.publish();
     this.startSync(machine.key, { join, ...(setUp ? { setUp } : {}) });
   }
@@ -3789,7 +3809,7 @@ export class SpaceManager {
   private async moveAtPick(instance: HostInstance, machine: RepositorySync, repository: HostRepository): Promise<void> {
     const store = this.host.store;
     const from = machine.key;
-    if (from === store.home.own() || splitKey(from).instance !== null || !from.startsWith(`${store.home.ownName}/`)) return;
+    if (!this.localOnly(from)) return;
     const to = this.keyAtHost(repository, instance);
     if (!to || to === from) return;
     const source = machine.repository.dir;
@@ -3809,6 +3829,13 @@ export class SpaceManager {
     pruneEmptyFolders(dirname(source), store.home.workspace);
     this.relocate([{ from, to }]);
     await this.afterMove([{ from, to }]);
+  }
+
+  /** Whether a key names a local-only clone under your own group's
+   * folder, its own repository aside (storage-35). */
+  private localOnly(key: string): boolean {
+    const home = this.host.store.home;
+    return key !== home.own() && splitKey(key).instance === null && key.startsWith(`${home.ownName}/`);
   }
 
   /** Ask an instance to create `name` in a group there for a clone
@@ -4176,6 +4203,7 @@ export class SpaceManager {
       }
       mkdirSync(folder, { recursive: true });
       this.host.store.rebindProject({ id: machine.key, path: folder });
+      this.host.environmentPaired?.(machine.key);
       this.host.repositoriesChanged();
       await this.host.rescanSessions(machine.key);
       this.host.ledgerChanged([machine.key]);

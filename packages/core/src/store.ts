@@ -108,9 +108,11 @@ export interface StoreOptions {
   deferMigration?: boolean;
   /** Fill a clone the store makes, before its first commit: your own
    * group's at every open and a new project's at registration — where
-   * the environment requests the built-in spec package (storage-6,
-   * environments-11). The migration calls it for each clone it makes. */
-  prepareRepository?: (dir: string, key: string, hostUrl: string) => void;
+   * the environment requests the built-in spec package, locked at
+   * `registryOrigin`, the environment's registry (storage-6,
+   * environments-11, DR-127). The migration calls it for each clone it
+   * makes. */
+  prepareRepository?: (dir: string, key: string, registryOrigin: string) => void;
 }
 
 /** One spex repository's clone and the files it holds (storage-1). */
@@ -614,10 +616,16 @@ export class Store {
     this.initializeRepository(dir, generatedBootstrap);
   }
 
-  /** The caller's filling of a clone; its failure leaves the clone as
-   * it is, reported, never failing the open. */
+  /** The caller's filling of a clone, at the registry of the instance
+   * its key lies under, else the default instance's (environments-5);
+   * its failure leaves the clone as it is, reported, never failing the
+   * open. */
   private prepareRepository(dir: string, key: string): boolean {
-    try { this.options.prepareRepository?.(dir, key, this.homeFile.host.origin); return true; }
+    try {
+      const registryOrigin = this.homeFile.instanceOfKey(key)?.origin ?? this.homeFile.defaultInstance().origin;
+      this.options.prepareRepository?.(dir, key, registryOrigin);
+      return true;
+    }
     catch (error) { console.error(`spex: ${key} was not prepared: ${error instanceof Error ? error.message : String(error)}`); return false; }
   }
 
