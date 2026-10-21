@@ -12,9 +12,10 @@
 // an instance locks the built-in spec package there; and an install
 // takes each locked release from the environment's instance, else the
 // registry its lock records, else any instance the home is signed in
-// to. A search asks the registry of the environment it names. A
-// registry refusing an instance's token signs that instance alone out,
-// where that token is still the stored pair's.
+// to. A search asks the registry of the environment it names, and a
+// publish goes to it as its instance's account. A registry refusing an
+// instance's token signs that instance alone out, where that token is
+// still the stored pair's.
 
 import { test, type TestContext } from "node:test";
 import assert from "node:assert/strict";
@@ -45,7 +46,7 @@ import type { StandinHost } from "./testing/standin-host.js";
 import { makeRelease, startStandinRegistry, type StandinRegistry, type StandinRegistryRequest } from "./testing/standin-registry.js";
 
 const fixture = createSpaceHarness();
-const { scratch, git, gitFolder, addFolder, sleep, startHome, startHost, signIn, signOut } = fixture;
+const { scratch, git, gitFolder, addFolder, sleep, startHome, startHost, signIn, signOut, forget } = fixture;
 test.after(() => fixture.dispose());
 
 type Home = Awaited<ReturnType<typeof startHome>>;
@@ -57,12 +58,13 @@ const HOST_OWN = `${LOGIN}/${LOGIN}-spex`;
 const GRACE = { id: "1003", login: "grace", displayName: "Grace Hopper" };
 
 /** A release folder holding one skill named after its spec package,
- * under the scratch folder: one folder packs to one archive, so every
- * registry it is published to holds it at one checksum. */
-async function release(name: string, version = "1.0.0"): Promise<string> {
+ * under the scratch folder or at `dir`: one folder packs to one
+ * archive, so every registry it is published to holds it at one
+ * checksum. */
+async function release(name: string, version = "1.0.0", dir?: string): Promise<string> {
   const [org, pkg] = name.split("/") as [string, string];
   const skill = `${pkg}-skill`;
-  return makeRelease(join(scratch, "releases", org, pkg, version), {
+  return makeRelease(dir ?? join(scratch, "releases", org, pkg, version), {
     format: 2, org, name: pkg, version, description: `The ${name} spec package`, license: "Apache-2.0",
     artifacts: { [skill]: { kind: "skill", language: "en" } },
   }, { [`skills/en/${skill}/SKILL.md`]: `---\nname: ${skill}\ndescription: The ${pkg} skill\n---\n\nUse ${pkg}.\n` });
@@ -603,4 +605,118 @@ test("environments-34, environments-17, environments-12: environment.search for 
     ["/api/v1/packages/team/search-second", second.url, null, false],
   ]);
   assert.deepEqual(searched(R1, one), []);
+});
+
+test("environments-34, environments-10, environments-17, environments-5: a publish from the second's project lands at the second's registry as the second's account and one from the local-only project at the first's; once the second is signed out, a publish from its project is refused as not signed in there, naming it, and nothing is uploaded; the first then forgotten, your own group's environment, whose own repository was created at the first and now syncs with the second, resolves at the second's registry, its lock recording the second's origin, and a publish from it lands there", { timeout: 300_000 }, async (t) => {
+  const { R1, R2, first, second, home, south, local } = await twoInstances(t, "publish");
+  const SECOND = "Second stand-in";
+  // Each upload a registry received after a mark: its path, the instance
+  // that relayed it, that instance's account and whether a bearer came
+  // (environments-18).
+  const uploads = (registry: StandinRegistry, from: number): [string, string | null, string | null, boolean][] =>
+    registry.script.received.slice(from).filter((request) => request.method === "PUT").map((request) => [request.path, request.instance, request.account, request.bearer]);
+  // Whether a registry holds a release, asked of it directly.
+  const holds = async (registry: StandinRegistry, name: string): Promise<boolean> => (await fetch(`${registry.url}/api/v1/packages/${name}/1.0.0`)).ok;
+  // A spec package under development in an environment's path root, as
+  // an authoring session keeps it (environments-10): its path there.
+  const underDevelopment = async (key: string, name: string, folder: string): Promise<string> => {
+    const root = (await home.client.expectOk("environment.get", { repository: key })).pathRoot;
+    assert.ok(root, `${key} has a path root on this device`);
+    const path = `${folder}/${name.split("/")[1]}`;
+    await release(name, "1.0.0", join(root, ...path.split("/")));
+    return path;
+  };
+  // Publish it and wait for the publish to end: the environment's state.
+  const publish = async (key: string, path: string, name: string): Promise<EnvironmentState> => {
+    assert.deepEqual(await home.client.expectOk("environment.publish", { repository: key, path }), { accepted: true });
+    return environmentOf(home, key, (state) => state.published?.name === name || state.error !== null);
+  };
+
+  // A publish from the second's project goes to the second's registry,
+  // through the second as its account, and reads its page there; the
+  // first's registry, the default instance's, receives nothing
+  // (environments-10, environments-17).
+  let one = R1.script.received.length;
+  let two = R2.script.received.length;
+  let state = await publish(south, await underDevelopment(south, "acme/south-pub", "spex-packages"), "acme/south-pub");
+  assert.equal(state.error, null);
+  assert.deepEqual(state.published, { name: "acme/south-pub", version: "1.0.0", url: `${second.url}/acme/south-pub` });
+  assert.deepEqual(uploads(R2, two), [["/api/v1/packages/acme/south-pub/1.0.0", second.url, LOGIN, true]]);
+  assert.deepEqual(uploads(R1, one), []);
+  assert.deepEqual([await holds(R2, "acme/south-pub"), await holds(R1, "acme/south-pub")], [true, false]);
+
+  // A publish from the local-only project, which has no instance, goes
+  // to the first's registry, the default instance's, as the first's
+  // account (environments-10).
+  one = R1.script.received.length;
+  two = R2.script.received.length;
+  state = await publish(local, await underDevelopment(local, "acme/local-pub", "spex-packages"), "acme/local-pub");
+  assert.equal(state.error, null);
+  assert.deepEqual(state.published, { name: "acme/local-pub", version: "1.0.0", url: `${first.url}/acme/local-pub` });
+  assert.deepEqual(uploads(R1, one), [["/api/v1/packages/acme/local-pub/1.0.0", first.url, LOGIN, true]]);
+  assert.deepEqual(uploads(R2, two), []);
+  assert.deepEqual([await holds(R1, "acme/local-pub"), await holds(R2, "acme/local-pub")], [true, false]);
+
+  // Signed out of the second alone, a publish from its project is
+  // refused as not signed in there, naming the second by its display
+  // name, though the default instance stays signed in; nothing reaches
+  // either registry (environments-10, environments-17).
+  await signOut(home, second);
+  const later = await underDevelopment(south, "acme/south-later", "spex-packages");
+  one = R1.script.received.length;
+  two = R2.script.received.length;
+  await home.client.expectError("environment.publish", { repository: south, path: later }, "invalid_request", new RegExp(`^Sign in to publish at ${SECOND}$`));
+  assert.deepEqual([R1.script.received.length, R2.script.received.length], [one, two], "no registry is asked");
+  assert.deepEqual([await holds(R2, "acme/south-later"), await holds(R1, "acme/south-later")], [false, false]);
+
+  // Signed in to the second again, the first signed out and forgotten:
+  // your own group's own repository, created at the first, follows the
+  // second — the second lists it over the shared Git backend — and syncs
+  // with it.
+  await signIn(home, second);
+  await signOut(home, first);
+  const before = instanceOf(await home.client.expectOk("space.get", {}), second.url)?.readAt ?? 0;
+  const mark = home.client.mark();
+  await home.client.expectOk("space.refresh", {});
+  await home.client.waitSpace(mark, (space) => {
+    const at = instanceOf(space, second.url);
+    return at?.read.phase === "idle" && (at.readAt ?? 0) > before;
+  }, 30_000);
+  const forgotten = await forget(home, first);
+  assert.equal(repositoryOf(forgotten, HOST_OWN).instance, second.url);
+  const synced = await home.client.settle("space.sync", { repository: HOST_OWN }, 30_000);
+  assert.deepEqual([synced.sync.phase, synced.instance, synced.key], ["done", second.url, HOST_OWN], JSON.stringify(synced.sync));
+
+  // Your own group's environment resolves a spec package newly requested
+  // there at the second's registry, with the second's token — the
+  // release private there to it — its lock recording the second's
+  // origin; the built-in keeps the origin its lock records, as it
+  // resolves to the same version and checksum (environments-5). The
+  // first's registry is asked nothing.
+  await publishTo(R2, await release("team/own-kit"));
+  R2.script.setPrivate("team", [second.url]);
+  one = R1.script.received.length;
+  two = R2.script.received.length;
+  await home.client.expectOk("environment.request", { repository: HOST_OWN, name: "team/own-kit", request: { kind: "registry", version: "^1.0.0" } });
+  state = await environmentOf(home, HOST_OWN, (candidate) => installedFrom(candidate, "team/own-kit", second.url) || candidate.error !== null);
+  assert.equal(state.error, null);
+  const ownLock = lockOf(home, HOST_OWN);
+  assert.equal(registryOf(ownLock, "team/own-kit"), second.url);
+  assert.equal(registryOf(ownLock, BUILTIN_PACKAGE_NAME), first.url);
+  const asked = receivedFor(R2, two, "team/own-kit");
+  assert.deepEqual(asked[0], ["/api/v1/packages/team/own-kit", second.url, LOGIN, true]);
+  assert.ok(asked.every(([, instance, account, bearer]) => instance === second.url && account === LOGIN && bearer), JSON.stringify(asked));
+  assert.equal(R1.script.received.length, one, "the first's registry is asked nothing");
+
+  // A publish from your own group lands at the second's registry, as the
+  // second's account; the first's registry is asked nothing
+  // (environments-10).
+  one = R1.script.received.length;
+  two = R2.script.received.length;
+  state = await publish(HOST_OWN, await underDevelopment(HOST_OWN, "acme/own-pub", "mine"), "acme/own-pub");
+  assert.equal(state.error, null);
+  assert.deepEqual(state.published, { name: "acme/own-pub", version: "1.0.0", url: `${second.url}/acme/own-pub` });
+  assert.deepEqual(uploads(R2, two), [["/api/v1/packages/acme/own-pub/1.0.0", second.url, LOGIN, true]]);
+  assert.equal(R1.script.received.length, one, "the first's registry is asked nothing");
+  assert.deepEqual([await holds(R2, "acme/own-pub"), await holds(R1, "acme/own-pub")], [true, false]);
 });

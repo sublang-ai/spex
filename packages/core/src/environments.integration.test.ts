@@ -1120,8 +1120,11 @@ test("environments-25: every environment command replies and refuses as its tabl
   assert.equal(removed.conflicts, null);
   assert.ok(!existsSync(join(working, ".claude", "skills", "tidy")), "a skill the lock no longer selects leaves the folder");
 
-  // environment.publish: signed out, and not a release.
-  await client.expectError("environment.publish", { repository: key, path: "spex-packages/none" }, "invalid_request", /Sign in to publish/);
+  // environment.publish: not signed in at the instance it publishes to
+  // — the home's recorded origin, no instance listed yet, named by its
+  // host name — and not a release (environments-17).
+  await client.expectError("environment.publish", { repository: key, path: "spex-packages/none" }, "invalid_request",
+    new RegExp(`^Sign in to publish at ${new URL(registry.url).hostname.replace(/\./g, "\\.")}$`));
   await client.expectError("environment.publish", { repository: key, path: "spex-packages/none", dryRun: true }, "invalid_request", /not a spec package release/);
 
   // The playbooks both environments export, with where each is enabled.

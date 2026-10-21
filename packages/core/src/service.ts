@@ -594,6 +594,9 @@ export class CoreService {
           throw new Error(relayHostError(error, this.space.instanceName(origin)));
         }
       },
+      // The instance a publish goes to, named by its display name as last
+      // read, else its host name (environments-10, playbook-library-93).
+      instanceName: (origin) => this.space.instanceName(origin),
       // A registry refusing an instance's token signs that instance alone
       // out, where that token is still its stored pair's; a pair replaced
       // meanwhile fails the call as changed meanwhile (environments-12,

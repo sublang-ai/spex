@@ -124,6 +124,11 @@ export interface EnvironmentManagerOptions {
    * none. Asked only of an instance the home is signed in to
    * (environments-12). */
   tokenFor: (origin: string) => Promise<string | null>;
+  /** An instance's name in what the core says of it: its display name
+   * as the home last read it, else its host name — the instance a
+   * publish needs the home signed in at, named as the Enable tab names
+   * it (environments-10, playbook-library-93, DR-127). */
+  instanceName: (origin: string) => string;
   /** Told the token an instance's registry refused with a code that
    * signs that instance out (environments-12, git-host-4); where it
    * throws, the refused call fails with what it threw. */
@@ -1075,8 +1080,11 @@ export class EnvironmentManager {
 
   /** `environment.publish`: the folder, at a path relative to the
    * environment's path root (environments-2), read and checked as a
-   * release and the sign-in confirmed before the reply; the upload runs
-   * after it. */
+   * release and the sign-in at its target confirmed before the reply;
+   * the upload runs after it. The target is the registry of the
+   * environment's instance, else the default instance's, uploaded to as
+   * that instance's account (environments-10, environments-17,
+   * DR-127). */
   async publish(key: string, path: string, dryRun = false): Promise<{ done: Promise<void>; preview: PublishPreview }> {
     this.cloneDir(key);
     const root = this.pathRoot(key);
@@ -1090,12 +1098,16 @@ export class EnvironmentManager {
     const folder = resolvePath(root, path);
     const inside = relative(resolvePath(root), folder);
     if (inside === "" || inside.startsWith("..") || isAbsolute(inside) || inside.split(sep).includes("..")) throw this.outside(path, this.isOwn(key));
-    // Signed in means holding a token the host has not refused; a host
-    // that cannot be reached now fails the upload, reported with its
-    // cause, rather than reading as signed out.
-    const origin = this.defaultOrigin();
-    if (!dryRun && (await this.tokenAt(origin).catch(() => "")) === null) {
-      throw new CoreError("invalid_request", i18n._({ id: "Sign in to publish", comment: "Refusal: publishing to the registry needs the home signed in" }));
+    // Signed in at the target means holding a token its host has not
+    // refused; a host that cannot be reached now fails the upload,
+    // reported with its cause, rather than reading as signed out.
+    const target = this.registryAt(this.registryOriginOf(key));
+    if (!dryRun && (await this.tokenAt(target.origin).catch(() => "")) === null) {
+      throw new CoreError("invalid_request", i18n._({
+        id: "Sign in to publish at {name}",
+        comment: "Refusal: publishing needs the home signed in at the instance the publish goes to; {name} is that instance's display name as last read, else its host name",
+        values: { name: this.options.instanceName(target.origin) },
+      }));
     }
     let manifest: Manifest;
     let files: string[];
@@ -1132,8 +1144,8 @@ export class EnvironmentManager {
       const state = this.cloneState(key);
       step("publishing");
       try {
-        const published = await publishRelease(this.registryAt(origin).source, folder);
-        state.published = { name: published.name, version: published.version, url: `${origin}/${manifest.org}/${manifest.name}` };
+        const published = await publishRelease(target.source, folder);
+        state.published = { name: published.name, version: published.version, url: `${target.origin}/${manifest.org}/${manifest.name}` };
         state.error = null;
       } catch (error) {
         state.error = failurePhrase("publish", error);
