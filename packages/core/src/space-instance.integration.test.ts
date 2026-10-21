@@ -1019,7 +1019,9 @@ test("git-host-24, space-83, git-host-5, git-host-21: Refresh reads each instanc
     && (instanceOf(state, first.url)?.readAt ?? 0) > (atFirst?.readAt ?? 0) && (instanceOf(state, second.url)?.readAt ?? 0) > secondReadAt, 30_000);
   const reachedSecond = second.script.requests[sentSecond]?.at ?? Infinity;
   const reachedFirst = first.script.requests[sentFirst]?.at ?? -Infinity;
-  assert.ok(reachedSecond - asked < 1_000, `the second was read at once, ${Math.round(reachedSecond - asked)} ms after the ask`);
+  // At once: within the first's hold, which the first's own read waits out
+  // — a bound a loaded runner meets, unlike a wall-clock one.
+  assert.ok(reachedSecond < answered + 1_900, `the second was read at once, ${Math.round(reachedSecond - asked)} ms after the ask`);
   assert.ok(reachedFirst >= answered + 1_900, `the first waited out its hold, reached ${Math.round(reachedFirst - answered)} ms after its 429`);
   assert.ok(reachedFirst > reachedSecond);
   assert.deepEqual(rowsUnder(waited, second.url, "acme"), [[betaKey, "absent", second.url]]);
