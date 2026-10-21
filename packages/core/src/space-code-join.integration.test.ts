@@ -68,7 +68,7 @@ test("space-37, projects-20, git-host-14: joining private code uses the brokered
   const before = credentialRequests(host);
   const folder = join(mkdtempSync(join(scratch, "private-code-")), "code");
   const from = home.client.mark();
-  await home.client.expectOk("space.join", { hostId: records.id, folder });
+  await home.client.expectOk("space.join", { instance: host.url, hostId: records.id, folder });
   const joined = await home.client.waitRepository(from, privateKey, (repository) => repository.folder !== null || repository.sync.phase === "stopped");
   assert.deepEqual([joined.state, joined.folder, joined.sync.phase], ["reachable", folder, "idle"], JSON.stringify(joined.sync));
   assert.equal(git(folder, "rev-parse", "HEAD"), git(code.bare, "rev-parse", "main"));
@@ -152,7 +152,7 @@ test("space-37: joining code at another origin keeps that device's credentials a
   const before = credentialRequests(host);
   const folder = join(mkdtempSync(join(scratch, "other-code-")), "code");
   const from = home.client.mark();
-  await home.client.expectOk("space.join", { hostId: records.id, folder });
+  await home.client.expectOk("space.join", { instance: host.url, hostId: records.id, folder });
   const joined = await home.client.waitRepository(from, otherKey, (repository) => repository.folder !== null || repository.sync.phase === "stopped");
   assert.deepEqual([joined.state, joined.folder, joined.sync.phase], ["reachable", folder, "idle"], JSON.stringify(joined.sync));
   assert.equal(git(folder, "remote", "get-url", "origin"), remote);
@@ -192,7 +192,7 @@ for (const failure of ["unauthorized", "server", "credential", "occupied"] as co
       return result;
     });
     const from = home.client.mark();
-    await home.client.expectOk("space.join", { hostId: records.id, folder });
+    await home.client.expectOk("space.join", { instance: host.url, hostId: records.id, folder });
     const stopped = await home.client.waitRepository(from, key, (repository) => repository.sync.phase === "stopped");
     assert.ok(stopped.sync.phase === "stopped");
     assert.deepEqual([stopped.sync.op, stopped.sync.step, stopped.folder, stopped.sync.retry], ["join", "code", null, false]);
@@ -292,7 +292,7 @@ test("projects-39, projects-37, space-83, space-1, space-63, space-15: signed in
   let before = [credentialRequests(first), credentialRequests(second)];
   const alphaFolder = join(mkdtempSync(join(scratch, "alpha-code-")), "code");
   let mark = home.client.mark();
-  await home.client.expectOk("space.join", { hostId: alpha.id, folder: alphaFolder });
+  await home.client.expectOk("space.join", { instance: first.url, hostId: alpha.id, folder: alphaFolder });
   const joined = await home.client.waitRepository(mark, alphaKey, (repository) => repository.folder !== null || repository.sync.phase === "stopped", 30_000);
   assert.deepEqual([joined.state, joined.folder, joined.sync.phase], ["reachable", alphaFolder, "idle"], JSON.stringify(joined.sync));
   assert.equal(git(alphaFolder, "rev-parse", "HEAD"), git(firstCode.bare, "rev-parse", "main"));
@@ -310,7 +310,7 @@ test("projects-39, projects-37, space-83, space-1, space-63, space-15: signed in
   const sentSecond = second.script.requests.length;
   const cFolder = join(mkdtempSync(join(scratch, "c-code-")), "code");
   mark = home.client.mark();
-  await home.client.expectOk("space.join", { hostId: c.id, folder: cFolder });
+  await home.client.expectOk("space.join", { instance: first.url, hostId: c.id, folder: cFolder });
   const stopped = await home.client.waitRepository(mark, cKey, (repository) => repository.sync.phase === "stopped", 30_000);
   assert.ok(stopped.sync.phase === "stopped");
   assert.deepEqual([stopped.sync.op, stopped.sync.step, stopped.sync.cause, stopped.sync.guidance, stopped.sync.retry, stopped.folder], ["join", "code", "git", PAIR_GUIDANCE, false, null], JSON.stringify(stopped.sync));
@@ -353,7 +353,7 @@ test("projects-38, projects-7, projects-36: signed in to two instances on Git ba
     git(folder, "remote", "add", "origin", remote);
     const key = hostKey(first, `acme/${name}-spex`);
     const mark = home.client.mark();
-    await home.client.expectOk("space.join", { hostId: records[name].id, folder });
+    await home.client.expectOk("space.join", { instance: first.url, hostId: records[name].id, folder });
     const joined = await home.client.waitRepository(mark, key, (repository) => repository.folder !== null || repository.sync.phase === "stopped", 30_000);
     assert.deepEqual([joined.folder, joined.instance], [folder, first.url], JSON.stringify(joined.sync));
     keys[name] = key;

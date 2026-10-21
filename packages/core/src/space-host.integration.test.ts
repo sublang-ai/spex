@@ -55,6 +55,13 @@ function listed(state: GroupsState, host: Pick<StandinHost, "url">): unknown {
   return [state.own, instanceOf(state, host.url)?.groups];
 }
 
+/** The refusal of a command naming an instance the home does not list
+ * yet — before its first sign-in there (space-29). */
+function unlisted(host: Pick<StandinHost, "url">): RegExp {
+  const origin = host.url.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`^This device has not signed in to ${origin}$`);
+}
+
 /** The remotes a clone holds, by name. */
 /** The client a core keeps for an instance (DR-127), reached for what
  * no command shows: its answers held, its credential store read. */
@@ -113,7 +120,7 @@ test("space-37: the browser sign-in renames your own group after the login, push
   // The browser flow's URL names the loopback, an S256 challenge and the
   // public client (git-host-2).
   const from = home.client.mark();
-  const started = await home.client.expectOk("space.signin.start", {});
+  const started = await home.client.expectOk("space.signin.start", { url: host.url });
   assert.equal(started.flow, "browser");
   const url = new URL(started.flow === "browser" ? started.url : "");
   assert.equal(`${url.origin}${url.pathname}`, `${host.url}/login/app`);
@@ -122,7 +129,7 @@ test("space-37: the browser sign-in renames your own group after the login, push
   assert.match(url.searchParams.get("redirect_uri") ?? "", /^http:\/\/127\.0\.0\.1:\d+\/callback$/);
   const running = await home.client.waitSpace(from, (state) => state.signIn.phase === "running");
   assert.ok(running.signIn.phase === "running" && running.signIn.flow === "browser");
-  await home.client.expectError("space.signin.start", {}, "busy");
+  await home.client.expectError("space.signin.start", { url: host.url }, "busy");
   const redirect = await fetch(url, { redirect: "manual" });
   const page = await (await fetch(redirect.headers.get("location") ?? "")).text();
   assert.match(page, /You may close this browser window/);
@@ -311,13 +318,13 @@ test("space-37: the device sign-in links the stand-in's code, names the host, an
   t.after(() => home.stop());
   // A cancel stops the polling and ends the flow with nothing stored.
   const fromCancel = home.client.mark();
-  const canceled = await home.client.expectOk("space.signin.start", {});
+  const canceled = await home.client.expectOk("space.signin.start", { url: host.url });
   assert.equal(canceled.flow, "device");
   assert.deepEqual(await home.client.expectOk("space.signin.cancel", {}), { stopped: true });
   await home.client.waitSpace(fromCancel, (state) => state.signIn.phase === "idle" && state.instances.length === 0);
   assert.deepEqual(await home.client.expectOk("space.signin.cancel", {}), { stopped: false });
   const from = home.client.mark();
-  const denied = await home.client.expectOk("space.signin.start", {});
+  const denied = await home.client.expectOk("space.signin.start", { url: host.url });
   assert.ok(denied.flow === "device", JSON.stringify(denied));
   assert.ok(host.script.pendingDevices().includes(denied.userCode));
   // The verification URL carries the code, so nobody types it
@@ -359,7 +366,7 @@ test("space-59: a sign-in moves your own group's folder at its instant while a r
   // The account arrives meanwhile; the set-up's rename waits for no read
   // (space-59, space-21): the folder moves with the read still in flight.
   const from = home.client.mark();
-  const started = await home.client.expectOk("space.signin.start", {});
+  const started = await home.client.expectOk("space.signin.start", { url: host.url });
   assert.ok(started.flow === "device", JSON.stringify(started));
   host.script.approveDevice(started.userCode);
   for (let i = 0; i < 400 && existsSync(join(dataDir, "workspace", OWN)); i += 1) await sleep(25);
@@ -444,7 +451,7 @@ test("space-37: Pick a group creates <name>-spex there and pushes; a taken name 
   t.after(() => home.stop());
   const alpha = gitFolder("alpha");
   const first = await addFolder(home, alpha);
-  await home.client.expectError("space.pick", { repository: first.key, choice: { kind: "create", groupId: "2002", name: "alpha" } }, "invalid_request", /Sign in first/);
+  await home.client.expectError("space.pick", { repository: first.key, choice: { kind: "create", instance: host.url, groupId: "2002", name: "alpha" } }, "not_found", unlisted(host));
   const signed = await signIn(home, host);
   const local = `${LOGIN}/alpha-spex`;
   const row = repositoryOf(signed, local);
@@ -453,12 +460,12 @@ test("space-37: Pick a group creates <name>-spex there and pushes; a taken name 
   // Your own group's id names no group of the instance: refused before
   // the stand-in is asked to create anything (git-host-6).
   const asked = creationsAsked(host).length;
-  await home.client.expectError("space.pick", { repository: local, choice: { kind: "create", groupId: "2001", name: "alpha" } }, "not_found", /The host lists no such group/);
+  await home.client.expectError("space.pick", { repository: local, choice: { kind: "create", instance: host.url, groupId: "2001", name: "alpha" } }, "not_found", /The host lists no such group/);
   assert.equal(creationsAsked(host).length, asked);
   // A group picked: `<name>-spex` created there, the clone following it
   // under `workspace/acme/`, its `spex` pushed (space-58, space-60).
   const from = home.client.mark();
-  assert.deepEqual(await home.client.expectOk("space.pick", { repository: local, choice: { kind: "create", groupId: "2002", name: "alpha" } }), { accepted: true });
+  assert.deepEqual(await home.client.expectOk("space.pick", { repository: local, choice: { kind: "create", instance: host.url, groupId: "2002", name: "alpha" } }), { accepted: true });
   const created = await home.client.waitRepository(from, hostKey(host, "acme/alpha-spex"), (repository) => repository.sync.phase === "done");
   assert.equal(created.state, "reachable");
   assertNeverUnreachable(home.client.readings(from, [local, hostKey(host, "acme/alpha-spex")]));
@@ -479,8 +486,8 @@ test("space-37: Pick a group creates <name>-spex there and pushes; a taken name 
   const beta = await addFolder(home, gitFolder("beta"));
   // A project added is announced, so the surface re-reads (space-2).
   await home.client.waitRepository(fromBeta, beta.key, (repository) => repository.state === "local-only");
-  await home.client.expectError("space.pick", { repository: beta.key, choice: { kind: "create", groupId: "2002", name: "beta" } }, "invalid_request", /beta-spex is taken in acme/);
-  await home.client.expectError("space.pick", { repository: beta.key, choice: { kind: "create", groupId: "2002", name: "--" } }, "invalid_request", /letter or a digit/);
+  await home.client.expectError("space.pick", { repository: beta.key, choice: { kind: "create", instance: host.url, groupId: "2002", name: "beta" } }, "invalid_request", /beta-spex is taken in acme/);
+  await home.client.expectError("space.pick", { repository: beta.key, choice: { kind: "create", instance: host.url, groupId: "2002", name: "--" } }, "invalid_request", /letter or a digit/);
   assert.equal((await home.client.repository(beta.key)).state, "local-only");
   // A creation the host leaves waiting stands on the row with its words,
   // and the next read after it grants finds it done (space-64).
@@ -488,7 +495,7 @@ test("space-37: Pick a group creates <name>-spex there and pushes; a taken name 
   host.script.refuseCreate(words);
   const gamma = await addFolder(home, gitFolder("gamma"));
   const fromGamma = home.client.mark();
-  await home.client.expectOk("space.pick", { repository: gamma.key, choice: { kind: "create", groupId: "2003", name: "gamma" } });
+  await home.client.expectOk("space.pick", { repository: gamma.key, choice: { kind: "create", instance: host.url, groupId: "2003", name: "gamma" } });
   const waiting = await home.client.waitRepository(fromGamma, gamma.key, (repository) => repository.waiting !== null);
   assert.deepEqual(waiting.waiting, { step: "create", group: "acme/research", message: words });
   assert.equal(waiting.state, "local-only");
@@ -520,7 +527,7 @@ test("git-host-14: a repository created while a read begun before it is in fligh
   for (let i = 0; i < 400 && !listingSince(); i += 1) await sleep(10);
   const listing = listingSince();
   assert.ok(listing, "the read reached the listing");
-  assert.deepEqual(await home.client.expectOk("space.pick", { repository: key, choice: { kind: "create", groupId: "2002", name: "delta" } }), { accepted: true });
+  assert.deepEqual(await home.client.expectOk("space.pick", { repository: key, choice: { kind: "create", instance: host.url, groupId: "2002", name: "delta" } }), { accepted: true });
   const creation = host.script.requests.slice(asked).find((request) => request.method === "POST" && request.path === "/api/v1/host/repositories");
   assert.ok(creation && creation.at < listing.at + 1_500, "the creation came while the listing slept");
   // The created repository goes straight to its sync, which pushes with
@@ -557,7 +564,7 @@ test("git-host-14: a creation's first sync reads the stand-in again until the RE
   const soon = await addFolder(home, gitFolder("soon"));
   let asked = host.script.requests.length;
   let from = home.client.mark();
-  await home.client.expectOk("space.pick", { repository: soon.key, choice: { kind: "create", groupId: "2002", name: "soon" } });
+  await home.client.expectOk("space.pick", { repository: soon.key, choice: { kind: "create", instance: host.url, groupId: "2002", name: "soon" } });
   const pushed = await home.client.waitRepository(from, hostKey(host, "acme/soon-spex"), (repository) => repository.sync.phase === "done", 30_000);
   assert.deepEqual(home.client.readings(from, [soon.key, hostKey(host, "acme/soon-spex")]).filter((repository) => repository.sync.phase === "stopped").map((repository) => repository.sync), []);
   assert.ok(pushed.lastSync && pushed.lastSync.sent > 0, JSON.stringify(pushed.lastSync));
@@ -577,7 +584,7 @@ test("git-host-14: a creation's first sync reads the stand-in again until the RE
   const neverKey = hostKey(host, "acme/never-spex");
   asked = host.script.requests.length;
   from = home.client.mark();
-  await home.client.expectOk("space.pick", { repository: never.key, choice: { kind: "create", groupId: "2002", name: "never" } });
+  await home.client.expectOk("space.pick", { repository: never.key, choice: { kind: "create", instance: host.url, groupId: "2002", name: "never" } });
   const made = await home.client.waitRepository(from, neverKey, (repository) => repository.sync.phase !== "idle" && repository.sync.phase !== "running", 30_000);
   assert.ok(made.sync.phase === "done" && made.sync.pushed, JSON.stringify(made.sync));
   assert.deepEqual(home.client.readings(from, [never.key, neverKey]).filter((repository) => repository.sync.phase === "stopped").map((repository) => repository.sync), []);
@@ -603,7 +610,7 @@ test("git-host-14: a creation's first sync reads the stand-in again until the RE
   const key = hostKey(host, "acme/refused-spex");
   asked = host.script.requests.length;
   from = home.client.mark();
-  await home.client.expectOk("space.pick", { repository: refused.key, choice: { kind: "create", groupId: "2002", name: "refused" } });
+  await home.client.expectOk("space.pick", { repository: refused.key, choice: { kind: "create", instance: host.url, groupId: "2002", name: "refused" } });
   const stopped = await home.client.waitRepository(from, key, (repository) => repository.sync.phase !== "idle" && repository.sync.phase !== "running", 30_000);
   assert.ok(stopped.sync.phase === "stopped" && stopped.sync.step === "check" && stopped.sync.cause === "refused" && stopped.sync.retry, JSON.stringify(stopped.sync));
   assert.equal(stopped.sync.message, `${HOST_NAME} refused: ${protectedWords}`);
@@ -647,7 +654,7 @@ test("git-host-14: a creation's first sync reads the stand-in again until the RE
   const restarted = await addFolder(home, gitFolder("restarted"));
   const restartedKey = hostKey(host, "acme/restarted-spex");
   asked = host.script.requests.length;
-  await home.client.expectOk("space.pick", { repository: restarted.key, choice: { kind: "create", groupId: "2002", name: "restarted" } });
+  await home.client.expectOk("space.pick", { repository: restarted.key, choice: { kind: "create", instance: host.url, groupId: "2002", name: "restarted" } });
   const createdId = (): string => host.script.repositories.find((repository) => repository.path === "restarted-spex")?.id ?? "";
   for (let i = 0; i < 400 && rereads(asked, createdId()) < 1; i += 1) await sleep(25);
   const id = createdId();
@@ -719,14 +726,14 @@ test("space-37: a join pick and the first sync into a repository with other memb
   // folder named, the two paired (space-63).
   const folder = join(mkdtempSync(join(scratch, "team-")), "team");
   const from = home.client.mark();
-  assert.deepEqual(await home.client.expectOk("space.join", { hostId: team.id, folder }), { accepted: true });
+  assert.deepEqual(await home.client.expectOk("space.join", { instance: host.url, hostId: team.id, folder }), { accepted: true });
   const joined = await home.client.waitRepository(from, hostKey(host, "acme/team-spex"), (repository) => repository.state !== "absent" && repository.folder !== null && repository.sync.phase === "idle");
   assert.equal(joined.state, "reachable");
   assert.equal(joined.id, team.id);
   assert.ok(existsSync(join(folder, "README.md")), "the code is cloned");
   assert.equal(git(folder, "remote", "get-url", "origin"), code);
   assert.equal(git(clonePath(home.dataDir, hostKey(host, "acme/team-spex")), "symbolic-ref", "--short", "HEAD"), "spex");
-  await home.client.expectError("space.join", { hostId: team.id }, "invalid_request", /on this device already/);
+  await home.client.expectError("space.join", { instance: host.url, hostId: team.id }, "invalid_request", /on this device already/);
   // Its first sync waits for the notice, then pushes and records both
   // (space-57, space-12, space-22).
   await runTurn(home, hostKey(host, "acme/team-spex"), "For the team");
@@ -740,9 +747,9 @@ test("space-37: a join pick and the first sync into a repository with other memb
   assert.equal(git(bareOf(host, hostKey(host, "acme/team-spex")), "rev-parse", "spex"), git(clonePath(home.dataDir, hostKey(host, "acme/team-spex")), "rev-parse", "spex"));
   // A pick joining a repository with other members waits for it too.
   const mine = await addFolder(home, gitFolder("pal"));
-  await home.client.expectError("space.pick", { repository: mine.key, choice: { kind: "join", hostId: pal.id } }, "invalid_request", /sharing notice/);
+  await home.client.expectError("space.pick", { repository: mine.key, choice: { kind: "join", instance: host.url, hostId: pal.id } }, "invalid_request", /sharing notice/);
   const fromPal = home.client.mark();
-  await home.client.expectOk("space.pick", { repository: mine.key, choice: { kind: "join", hostId: pal.id }, noticed: true });
+  await home.client.expectOk("space.pick", { repository: mine.key, choice: { kind: "join", instance: host.url, hostId: pal.id }, noticed: true });
   const palJoined = await home.client.waitRepository(fromPal, hostKey(host, "acme/pal-spex"), (repository) => repository.sync.phase === "done");
   assert.equal(palJoined.state, "reachable");
   // Joined from the listing, it goes straight to its sync (git-host-5).
@@ -793,7 +800,7 @@ test("git-host-14, space-37: with every members route failing at the stand-in, a
   // sync of a repository joined here waits for the notice, then goes on.
   const folder = join(mkdtempSync(join(scratch, "solo-")), "solo");
   const fromJoin = home.client.mark();
-  await home.client.expectOk("space.join", { hostId: solo.id, folder });
+  await home.client.expectOk("space.join", { instance: host.url, hostId: solo.id, folder });
   const joined = await home.client.waitRepository(fromJoin, hostKey(host, "acme/solo-spex"), (repository) => repository.state !== "absent" && repository.folder !== null && repository.sync.phase === "idle", 30_000);
   assert.equal(joined.state, "reachable");
   assert.equal(joined.members, null);
@@ -802,7 +809,7 @@ test("git-host-14, space-37: with every members route failing at the stand-in, a
   assert.equal(noticed.sync.phase, "done", JSON.stringify(noticed.sync));
   // And a pick joining one waits for it too.
   const mine = await addFolder(home, gitFolder("pal"));
-  await home.client.expectError("space.pick", { repository: mine.key, choice: { kind: "join", hostId: pal.id } }, "invalid_request", /sharing notice/);
+  await home.client.expectError("space.pick", { repository: mine.key, choice: { kind: "join", instance: host.url, hostId: pal.id } }, "invalid_request", /sharing notice/);
 });
 
 test("space-37: a join reads not on this device, running at its Code step, until its code is cloned into the folder", async (t) => {
@@ -817,7 +824,7 @@ test("space-37: a join reads not on this device, running at its Code step, until
   await signIn(home, host);
   shim.hold();
   const from = home.client.mark();
-  assert.deepEqual(await home.client.expectOk("space.join", { hostId: listed.id, folder }), { accepted: true });
+  assert.deepEqual(await home.client.expectOk("space.join", { instance: host.url, hostId: listed.id, folder }), { accepted: true });
   await shim.held();
   // The spex repository is cloned; its code clone stands held: the join
   // runs at Code with no Stop, and the row is not on this device yet
@@ -853,10 +860,10 @@ test("space-63: two joins of one repository publish one clone; the later finds i
   await signIn(home, host);
   // The first join's clone stands held; the second is refused nothing.
   shim.hold();
-  assert.deepEqual(await home.client.expectOk("space.join", { hostId: listed.id }), { accepted: true });
+  assert.deepEqual(await home.client.expectOk("space.join", { instance: host.url, hostId: listed.id }), { accepted: true });
   await shim.held();
   const from = home.client.mark();
-  assert.deepEqual(await home.client.expectOk("space.join", { hostId: listed.id }), { accepted: true });
+  assert.deepEqual(await home.client.expectOk("space.join", { instance: host.url, hostId: listed.id }), { accepted: true });
   await home.client.waitRepository(from, key, (repository) => repository.state === "reachable");
   const clone = clonePath(home.dataDir, key);
   writeFileSync(join(clone, "mine.txt"), "written after the publication\n");
@@ -885,7 +892,7 @@ test("space-37: a join's clone child runs owner-only while the core's own umask 
   await signIn(home, host);
   shim.hold();
   const from = home.client.mark();
-  assert.deepEqual(await home.client.expectOk("space.join", { hostId: listed.id }), { accepted: true });
+  assert.deepEqual(await home.client.expectOk("space.join", { instance: host.url, hostId: listed.id }), { accepted: true });
   // The child was spawned owner-only; while it stands held the core has
   // awaited it and its own umask is the one it had (space-32).
   assert.equal(await shim.held(), "0077", "the clone child runs under 0077");
@@ -913,7 +920,7 @@ test("space-37: Sign out revokes this device and keeps every clone, its reposito
   await signIn(home, host);
   await home.client.waitRepository(from, HOST_OWN, (repository) => repository.sync.phase === "done");
   assert.equal(host.script.liveDevices(), 1);
-  const out = await home.client.expectOk("space.signout", {});
+  const out = await home.client.expectOk("space.signout", { instance: host.url });
   assert.equal(loginAt(out, host), null);
   assert.equal(instanceOf(out, host.url)?.readAt, null);
   assert.deepEqual([out.own.name, instanceOf(out, host.url)?.groups], [LOGIN, []]);
@@ -952,7 +959,7 @@ test("space-30, space-29: the state names the default instance, your own group a
   assert.deepEqual(before.own.repositories.map((repository) => [repository.key, repository.own, repository.instance]), [[OWN_KEY, true, null], [key, false, null]]);
   // A sign-in names the origin it signs in to while it runs.
   const from = home.client.mark();
-  const started = await home.client.expectOk("space.signin.start", {});
+  const started = await home.client.expectOk("space.signin.start", { url: host.url });
   assert.ok(started.flow === "browser", JSON.stringify(started));
   const running = await home.client.waitSpace(from, (state) => state.signIn.phase === "running");
   assert.ok(running.signIn.phase === "running" && running.signIn.instance === host.url, JSON.stringify(running.signIn));
@@ -1014,7 +1021,7 @@ test("git-host-2: a sign-in at a listed instance as another account ends failed 
   /** A sign-in followed through the browser's redirect as the stand-in's
    * current person, and the first state after it failed. */
   const refusedSignIn = async (): Promise<GroupsState> => {
-    const started = await home.client.expectOk("space.signin.start", {});
+    const started = await home.client.expectOk("space.signin.start", { url: host.url });
     // Marked once this flow runs, so an earlier failure is not read.
     const mark = home.client.mark();
     assert.equal(started.flow, "browser");
@@ -1049,7 +1056,7 @@ test("git-host-2: a sign-in at a listed instance as another account ends failed 
   // ada, and the state saying the sign-in failed — never that the host
   // signed this device out.
   host.script.person = ada;
-  await home.client.expectOk("space.signout", {});
+  await home.client.expectOk("space.signout", { instance: host.url });
   host.script.person = bob;
   const whileOut = await refusedSignIn();
   assertRefused(whileOut);
@@ -1149,7 +1156,7 @@ test("git-host-4: a refresh the stand-in refuses, or a device it revoked, signs 
   assertHostSignedOut(await signedOutBy());
   // A sign-in that ends without an account leaves it said.
   const fromCancel = home.client.mark();
-  await home.client.expectOk("space.signin.start", {});
+  await home.client.expectOk("space.signin.start", { url: host.url });
   await home.client.waitSpace(fromCancel, (state) => state.signIn.phase === "running");
   assert.deepEqual(await home.client.expectOk("space.signin.cancel", {}), { stopped: true });
   assertHostSignedOut(await home.client.expectOk("space.get", {}));
@@ -1168,7 +1175,7 @@ test("git-host-4: a refresh the stand-in refuses, or a device it revoked, signs 
   assertHostSignedOut(await signedOutBy());
   // A sign-out of the reader's own says nothing of the host.
   await signInRead();
-  const own = await home.client.expectOk("space.signout", {});
+  const own = await home.client.expectOk("space.signout", { instance: host.url });
   assert.deepEqual(own.signIn, { phase: "idle" });
   assert.deepEqual(own.instances.map((instance) => [instance.signedIn, instance.hostSignedOut]), [[false, false]]);
 });
@@ -1224,7 +1231,7 @@ test("git-host-4, git-host-10: a refusal or a sign-out overtaken by a newer sign
 
   // A sign-out whose revocation is held while a newer pair is stored.
   gate = holds.hold((path) => path === "/api/v1/auth/revoke");
-  const refused = home.client.expectError("space.signout", {}, "conflict", /The sign-in changed meanwhile; try again/);
+  const refused = home.client.expectError("space.signout", { instance: host.url }, "conflict", /The sign-in changed meanwhile; try again/);
   const read = newer;
   try {
     await gate.reached;
@@ -1258,7 +1265,7 @@ test("git-host-4, git-host-10: a refusal or a sign-out overtaken by a newer sign
     },
   };
   const mark = home.client.mark();
-  const out = await home.client.expectOk("space.signout", {});
+  const out = await home.client.expectOk("space.signout", { instance: host.url });
   assert.ok(published, "the newer pair was published after the removal");
   assert.equal(loginAt(out, host), LOGIN, "the newer sign-in's account is signed in");
   await home.client.waitRepository(mark, HOST_OWN, (repository) => repository.state === "reachable");
@@ -1275,7 +1282,7 @@ test("space-37: while a check sleeps on the stand-in's transport, writes beneath
   await addFolder(home, gated);
   await signIn(home, host);
   const from = home.client.mark();
-  await home.client.expectOk("space.pick", { repository: `${LOGIN}/gated-spex`, choice: { kind: "create", groupId: "2002", name: "gated" } });
+  await home.client.expectOk("space.pick", { repository: `${LOGIN}/gated-spex`, choice: { kind: "create", instance: host.url, groupId: "2002", name: "gated" } });
   const key = hostKey(host, "acme/gated-spex");
   await home.client.waitRepository(from, key, (repository) => repository.sync.phase === "done");
   const clone = clonePath(home.dataDir, key);
@@ -1312,7 +1319,7 @@ test("space-60: a remote changed while the Check step reads the host stands; the
   await addFolder(home, gitFolder("guarded"));
   await signIn(home, host);
   const from = home.client.mark();
-  await home.client.expectOk("space.pick", { repository: `${LOGIN}/guarded-spex`, choice: { kind: "create", groupId: "2002", name: "guarded" } });
+  await home.client.expectOk("space.pick", { repository: `${LOGIN}/guarded-spex`, choice: { kind: "create", instance: host.url, groupId: "2002", name: "guarded" } });
   const key = hostKey(host, "acme/guarded-spex");
   const created = await home.client.waitRepository(from, key, (repository) => repository.sync.phase === "done");
   const clone = clonePath(home.dataDir, key);
@@ -1340,7 +1347,7 @@ test("space-60: a remote set while a sync's Check step reads a renamed repositor
   await addFolder(home, gitFolder("moving"));
   await signIn(home, host);
   const from = home.client.mark();
-  await home.client.expectOk("space.pick", { repository: `${LOGIN}/moving-spex`, choice: { kind: "create", groupId: "2002", name: "moving" } });
+  await home.client.expectOk("space.pick", { repository: `${LOGIN}/moving-spex`, choice: { kind: "create", instance: host.url, groupId: "2002", name: "moving" } });
   const key = hostKey(host, "acme/moving-spex");
   const created = await home.client.waitRepository(from, key, (repository) => repository.sync.phase === "done");
   const clone = clonePath(home.dataDir, key);
@@ -1414,7 +1421,7 @@ test("space-58: a remote set while a pick asked the host is refused, never repla
   // after the reply; the hold waits for it, or that read takes the hold.
   await home.client.waitRepository(added, key, () => true);
   shim.hold();
-  const reply = home.client.command("space.pick", { repository: key, choice: { kind: "create", groupId: "2002", name: "raced" } });
+  const reply = home.client.command("space.pick", { repository: key, choice: { kind: "create", instance: host.url, groupId: "2002", name: "raced" } });
   await shim.held();
   // The pick read the clone local only; a terminal sets a remote before
   // the pick writes the host's.
@@ -1441,7 +1448,7 @@ test("space-73: a repository the host moved keeps the clone's sync and this devi
   const key = hostKey(host, local);
   const folder = hostFolder(host);
   const fromCreate = home.client.mark();
-  await home.client.expectOk("space.pick", { repository: local, choice: { kind: "create", groupId: null, name: "invites" } });
+  await home.client.expectOk("space.pick", { repository: local, choice: { kind: "create", instance: host.url, groupId: null, name: "invites" } });
   // Your own group named to the stand-in by none (git-host-6).
   assert.deepEqual(creationsAsked(host).at(-1), ["invites-spex", null]);
   const synced = await home.client.waitRepository(fromCreate, key, (repository) => repository.sync.phase === "done", 30_000);
@@ -1472,7 +1479,7 @@ test("space-73: a repository the host moved keeps the clone's sync and this devi
   // waits on its host read (space-5).
   host.script.sleepListing(2_000);
   const fromJoin = home.client.mark();
-  assert.deepEqual(await home.client.expectOk("space.pick", { repository: key, choice: { kind: "join", hostId: id }, noticed: true }), { accepted: true });
+  assert.deepEqual(await home.client.expectOk("space.pick", { repository: key, choice: { kind: "join", instance: host.url, hostId: id }, noticed: true }), { accepted: true });
   const joined = await home.client.repository(key);
   assert.equal(joined.state, "reachable");
   assert.equal(joined.remote, "acme/invites-spex");
@@ -1492,7 +1499,7 @@ test("space-73: a repository the host moved keeps the clone's sync and this devi
   await home.client.expectOk("space.remote.set", { repository: moved, url: null });
   host.script.sleepListing(2_000);
   const fromOther = home.client.mark();
-  await home.client.expectOk("space.pick", { repository: moved, choice: { kind: "create", groupId: "2003", name: "invites" } });
+  await home.client.expectOk("space.pick", { repository: moved, choice: { kind: "create", instance: host.url, groupId: "2003", name: "invites" } });
   assert.deepEqual(creationsAsked(host).at(-1), ["invites-spex", "2003"]);
   const other = await home.client.repository(moved);
   assert.equal(other.remote, "acme/research/invites-spex");
@@ -1552,8 +1559,9 @@ async function acmeProject(home: Awaited<ReturnType<typeof startHome>>, name: st
   const folder = gitFolder(name);
   await addFolder(home, folder);
   const from = home.client.mark();
-  await home.client.expectOk("space.pick", { repository: `${LOGIN}/${name}-spex`, choice: { kind: "create", groupId: "2002", name } });
-  const key = hostKey({ url: Home.load(home.dataDir).origin }, `acme/${name}-spex`);
+  const origin = Home.load(home.dataDir).origin;
+  await home.client.expectOk("space.pick", { repository: `${LOGIN}/${name}-spex`, choice: { kind: "create", instance: origin, groupId: "2002", name } });
+  const key = hostKey({ url: origin }, `acme/${name}-spex`);
   const created = await home.client.waitRepository(from, key, (repository) => repository.sync.phase === "done");
   const sessionId = await runTurn(home, key, `Work in ${name}`);
   return { key, id: created.id ?? "", clone: clonePath(home.dataDir, key), folder, sessionId };
@@ -1863,7 +1871,7 @@ test("space-60: where the filesystem folds case, a move whose path below workspa
   const folder = gitFolder("nested");
   await addFolder(home, folder);
   const fromNested = home.client.mark();
-  await home.client.expectOk("space.pick", { repository: `${LOGIN}/nested-spex`, choice: { kind: "create", groupId: "2003", name: "nested" } });
+  await home.client.expectOk("space.pick", { repository: `${LOGIN}/nested-spex`, choice: { kind: "create", instance: host.url, groupId: "2003", name: "nested" } });
   await home.client.waitRepository(fromNested, hostKey(host, "acme/research/nested-spex"), (repository) => repository.sync.phase === "done");
   const moving = await acmeProject(home, "transferred");
   host.script.groups.push({ id: "2010", fullPath: "acme/Research", name: "Research", kind: "group" });
@@ -1905,7 +1913,7 @@ test("space-38: a second home joins a project from the stand-in with its code; a
   assert.equal(JSON.parse(readFileSync(join(local.clone, "project.json"), "utf8")).remote, code);
   const sessionA = await runTurn(a, local.key, "From home A");
   const fromA = a.client.mark();
-  await a.client.expectOk("space.pick", { repository: local.key, choice: { kind: "create", groupId: "2002", name: "shared" } });
+  await a.client.expectOk("space.pick", { repository: local.key, choice: { kind: "create", instance: host.url, groupId: "2002", name: "shared" } });
   const key = hostKey(host, "acme/shared-spex");
   const pushed = await a.client.waitRepository(fromA, key, (repository) => repository.sync.phase === "done");
   const id = pushed.id ?? "";
@@ -1922,7 +1930,7 @@ test("space-38: a second home joins a project from the stand-in with its code; a
   // Join: the spex repository and the code, paired, the first home's
   // session served with its history (space-63, space-20).
   const folderB = join(mkdtempSync(join(scratch, "b-code-")), "shared");
-  await b.client.expectOk("space.join", { hostId: id, folder: folderB });
+  await b.client.expectOk("space.join", { instance: host.url, hostId: id, folder: folderB });
   const joined = await b.client.waitRepository(fromB, key, (repository) => repository.state === "reachable" && repository.folder === folderB && repository.sync.phase === "idle");
   assert.equal(joined.code, code);
   assert.ok(existsSync(join(folderB, "README.md")));
@@ -2139,7 +2147,7 @@ test("git-host-5: full reads expose running and failure with only local rows, pr
   await home.client.expectOk("space.refresh", {});
   const recovered = await home.client.waitSpace(retry, (state) => instanceOf(state, host.url)?.read.phase === "idle" && (instanceOf(state, host.url)?.readAt ?? 0) > (beforeAt?.readAt ?? 0));
   assert.deepEqual(instanceOf(recovered, host.url)?.read, { phase: "idle" });
-  assert.deepEqual(instanceOf(await home.client.expectOk("space.signout", {}), host.url)?.read, { phase: "idle" });
+  assert.deepEqual(instanceOf(await home.client.expectOk("space.signout", { instance: host.url }), host.url)?.read, { phase: "idle" });
 });
 
 test("git-host-5: signed-in startup publishes a failed first read even with only local rows", async (t) => {
@@ -2169,7 +2177,7 @@ test("git-host-5: signed-in startup publishes a failed first read even with only
   // The instance is named by the display name its entry kept from the
   // read before the restart (space-15, storage-2).
   assert.deepEqual(instanceOf(failed, host.url)?.read, { phase: "failed", message: "Could not reach Stand-in Git host" });
-  assert.deepEqual(instanceOf(await home.client.expectOk("space.signout", {}), host.url)?.read, { phase: "idle" });
+  assert.deepEqual(instanceOf(await home.client.expectOk("space.signout", { instance: host.url }), host.url)?.read, { phase: "idle" });
 });
 
 for (const source of ["refresh", "direct-read"] as const) {
@@ -2190,8 +2198,8 @@ for (const source of ["refresh", "direct-read"] as const) {
     const older = source === "refresh" ? home.client.expectOk("space.refresh", {}) : core.space.readHost();
     older.catch(() => undefined);
     await held.reached;
-    await home.client.expectOk("space.signout", {});
-    const started = await home.client.expectOk("space.signin.start", {});
+    await home.client.expectOk("space.signout", { instance: host.url });
+    const started = await home.client.expectOk("space.signin.start", { url: host.url });
     assert.equal(started.flow, "browser");
     const redirect = await fetch(started.flow === "browser" ? started.url : "", { redirect: "manual" });
     await (await fetch(redirect.headers.get("location") ?? "")).text();
@@ -2332,7 +2340,7 @@ const listsGroup = (state: GroupsState, host: StandinHost, id: string): boolean 
  * it, which lists the group as the core holds it (git-host-15). */
 async function createGroupHeld(home: Awaited<ReturnType<typeof startHome>>, host: StandinHost, fields: { name: string; path: string; parent: string | null }): Promise<{ group: { id: string; fullPath: string; name: string }; announced: GroupsState }> {
   const from = home.client.mark();
-  const reply = await home.client.expectOk("space.group.create", fields);
+  const reply = await home.client.expectOk("space.group.create", { instance: host.url, ...fields });
   const since = home.client.messages.slice(from);
   const at = since.findIndex((message) => message.type === "reply" && message.ok && (message.result as { group?: { id?: string } }).group?.id === reply.group.id);
   assert.ok(at >= 0, "the reply arrived");
@@ -2353,7 +2361,7 @@ test("git-host-5, git-host-15: the read holds the stand-in's roles and what it l
   // Signed out: nothing is held of the host, and nothing is asked of it.
   const before = await home.client.expectOk("space.get", {});
   assert.deepEqual(before.instances, []);
-  await home.client.expectError("space.group.create", { name: "Lumen Labs", path: "lumen-labs", parent: null }, "invalid_request", /^Sign in first$/);
+  await home.client.expectError("space.group.create", { instance: host.url, name: "Lumen Labs", path: "lumen-labs", parent: null }, "not_found", unlisted(host));
   const from = home.client.mark();
   const signed = await signIn(home, host);
   await home.client.waitRepository(from, HOST_OWN, (repository) => repository.sync.phase === "done");
@@ -2399,32 +2407,32 @@ test("git-host-5, git-host-15: the read holds the stand-in's roles and what it l
   const nested = await createGroupHeld(home, host, { name: "Studio", path: "studio", parent: top.group.id });
   assert.equal(nested.group.fullPath, "lumen-labs/studio");
   assert.deepEqual(groupPaths(nested.announced, host).slice(-2), ["lumen-labs", "lumen-labs/studio"]);
-  const topMembers = await home.client.expectOk("space.members", { group: top.group.id });
+  const topMembers = await home.client.expectOk("space.members", { instance: host.url, group: top.group.id });
   assert.deepEqual(topMembers.members.map((member) => [member.login, member.role, member.direct]), [[LOGIN, "Owner", true]]);
   assert.equal(groupsReads(host, unread), 0, "no read of the stand-in begun");
 
   // A taken name is refused saying so there, the stand-in's refusal in
   // its words; the host is asked whatever the view said, research's
   // refusal its own (git-host-15, git-host-11).
-  const taken = await home.client.expectError("space.group.create", { name: "Lumen Labs", path: "lumen-labs", parent: null }, "invalid_request");
+  const taken = await home.client.expectError("space.group.create", { instance: host.url, name: "Lumen Labs", path: "lumen-labs", parent: null }, "invalid_request");
   assert.equal(taken, `Lumen Labs is taken at ${HOST_NAME}; choose another name`);
-  const takenSub = await home.client.expectError("space.group.create", { name: "team one", path: "team-one", parent: "2002" }, "invalid_request");
+  const takenSub = await home.client.expectError("space.group.create", { instance: host.url, name: "team one", path: "team-one", parent: "2002" }, "invalid_request");
   assert.equal(takenSub, "team one is taken in acme; choose another name");
   host.script.refuseGroupCreate("You need the Owner role in acme to create subgroups.");
-  const refused = await home.client.expectError("space.group.create", { name: "Other", path: "other", parent: "2002" }, "invalid_request");
+  const refused = await home.client.expectError("space.group.create", { instance: host.url, name: "Other", path: "other", parent: "2002" }, "invalid_request");
   assert.equal(refused, `${HOST_NAME} refused: You need the Owner role in acme to create subgroups.`);
   host.script.refuseGroupCreate(null);
   const asked = host.script.requests.length;
-  const notAllowed = await home.client.expectError("space.group.create", { name: "Lab", path: "lab", parent: "2003" }, "invalid_request");
+  const notAllowed = await home.client.expectError("space.group.create", { instance: host.url, name: "Lab", path: "lab", parent: "2003" }, "invalid_request");
   assert.equal(notAllowed, `${HOST_NAME} refused: You are not allowed to create subgroups in acme/research.`);
   assert.deepEqual(apiRequests(host, asked), ["POST /api/v1/host/groups"]);
 
   // A blank name, a blank path and a parent the view does not list are
   // refused before any request reaches the stand-in.
   const quiet = host.script.requests.length;
-  await home.client.expectError("space.group.create", { name: "   ", path: "lab", parent: null }, "invalid_request", /^Name the group$/);
-  await home.client.expectError("space.group.create", { name: "华芯智造", path: "   ", parent: null }, "invalid_request", /^Give the group a path$/);
-  await home.client.expectError("space.group.create", { name: "Lab", path: "lab", parent: "9999" }, "not_found", new RegExp(`^${HOST_NAME} listed no group 9999$`));
+  await home.client.expectError("space.group.create", { instance: host.url, name: "   ", path: "lab", parent: null }, "invalid_request", /^Name the group$/);
+  await home.client.expectError("space.group.create", { instance: host.url, name: "华芯智造", path: "   ", parent: null }, "invalid_request", /^Give the group a path$/);
+  await home.client.expectError("space.group.create", { instance: host.url, name: "Lab", path: "lab", parent: "9999" }, "not_found", new RegExp(`^${HOST_NAME} listed no group 9999$`));
   assert.deepEqual(apiRequests(host, quiet), []);
 
   // What the person may do is the host's last read's; that read, begun
@@ -2502,19 +2510,19 @@ test("git-host-8, git-host-16, git-host-17: a group's members with their source;
   host.script.addRepository({ group: "acme", name: "b-spex", role: "Developer" });
   const home = await startHome("sharing", { host, project: false, extra: { signIn: "browser" } });
   t.after(() => home.stop());
-  await home.client.expectError("space.share", { group: "2002", login: "grace", role: "developer" }, "invalid_request", /^Sign in first$/);
+  await home.client.expectError("space.share", { instance: host.url, group: "2002", login: "grace", role: "developer" }, "not_found", unlisted(host));
   const from = home.client.mark();
   const signed = await signIn(home, host);
   await home.client.waitRepository(from, HOST_OWN, (repository) => repository.sync.phase === "done");
 
   // A group's members, each with its source (git-host-8).
-  const group = await home.client.expectOk("space.members", { group: "2003" });
+  const group = await home.client.expectOk("space.members", { instance: host.url, group: "2003" });
   assert.deepEqual(group.members.map((m) => [m.login, m.role, m.direct, m.via]), [["grace", "Developer", true, null], [LOGIN, "Owner", false, "acme"]]);
 
   // Added by login at a role's id: to a group, to a spex repository this
   // device lacks, and to your own group's clone, each reply the
   // stand-in's members afterwards (git-host-16).
-  const toGroup = await home.client.expectOk("space.share", { group: "2002", login: "alan", role: "maintainer" });
+  const toGroup = await home.client.expectOk("space.share", { instance: host.url, group: "2002", login: "alan", role: "maintainer" });
   assert.deepEqual(toGroup.members.map((m) => [m.login, m.role, m.direct]), [[LOGIN, "Owner", true], ["alan", "Maintainer", true]]);
   const toRepository = await home.client.expectOk("space.share", { repository: hostKey(host, "acme/team-spex"), login: "grace", role: "developer" });
   assert.deepEqual(toRepository.members.map((m) => [m.login, m.role, m.direct, m.via]), [
@@ -2526,12 +2534,12 @@ test("git-host-8, git-host-16, git-host-17: a group's members with their source;
   // An unknown login is not_found in the stand-in's words naming it; an
   // existing member and a refusal are refused in its words; the host is
   // asked whatever the view said, b-spex's refusal its own.
-  const unknown = await home.client.expectError("space.share", { group: "2002", login: "zed", role: "developer" }, "not_found");
+  const unknown = await home.client.expectError("space.share", { instance: host.url, group: "2002", login: "zed", role: "developer" }, "not_found");
   assert.equal(unknown, `Not found at ${HOST_NAME}: No account is named zed.`);
   const existing = await home.client.expectError("space.share", { repository: hostKey(host, "acme/team-spex"), login: "bob", role: "maintainer" }, "invalid_request");
   assert.equal(existing, `${HOST_NAME} refused: Member already exists`);
   host.script.refuseMembers("You need the Owner role to add members.");
-  const refusedAdd = await home.client.expectError("space.share", { group: "2003", login: "bob", role: "developer" }, "invalid_request");
+  const refusedAdd = await home.client.expectError("space.share", { instance: host.url, group: "2003", login: "bob", role: "developer" }, "invalid_request");
   assert.equal(refusedAdd, `${HOST_NAME} refused: You need the Owner role to add members.`);
   host.script.refuseMembers(null);
   assert.deepEqual(repositoryOf(signed, hostKey(host, "acme/b-spex")).can, { manageMembers: false, transfer: false });
@@ -2542,14 +2550,14 @@ test("git-host-8, git-host-16, git-host-17: a group's members with their source;
   // reply the stand-in's members afterwards; a membership through
   // another group is not found there, a refusal in its words
   // (git-host-17).
-  const fromGroup = await home.client.expectOk("space.unshare", { group: "2003", login: "grace" });
+  const fromGroup = await home.client.expectOk("space.unshare", { instance: host.url, group: "2003", login: "grace" });
   assert.deepEqual(fromGroup.members.map((m) => [m.login, m.direct, m.via]), [[LOGIN, false, "acme"], ["alan", false, "acme"]]);
   const fromRepository = await home.client.expectOk("space.unshare", { repository: hostKey(host, "acme/team-spex"), login: "bob" });
   assert.deepEqual(fromRepository.members.map((m) => m.login), [LOGIN, "grace", "alan"]);
-  const inherited = await home.client.expectError("space.unshare", { group: "2003", login: "alan" }, "not_found");
+  const inherited = await home.client.expectError("space.unshare", { instance: host.url, group: "2003", login: "alan" }, "not_found");
   assert.equal(inherited, `Not found at ${HOST_NAME}: alan is not a direct member of acme/research.`);
   host.script.refuseMembers("The group keeps its last owner.");
-  const refusedRemove = await home.client.expectError("space.unshare", { group: "2002", login: LOGIN }, "invalid_request");
+  const refusedRemove = await home.client.expectError("space.unshare", { instance: host.url, group: "2002", login: LOGIN }, "invalid_request");
   assert.equal(refusedRemove, `${HOST_NAME} refused: The group keeps its last owner.`);
   host.script.refuseMembers(null);
 
@@ -2557,25 +2565,25 @@ test("git-host-8, git-host-16, git-host-17: a group's members with their source;
   // targets, and a group or repository the view does not list are
   // refused before any request reaches the stand-in.
   const quiet = host.script.requests.length;
-  await home.client.expectError("space.share", { group: "2002", login: "bob", role: "admin" }, "invalid_request", new RegExp(`^admin is not one of the roles ${HOST_NAME} grants$`));
-  await home.client.expectError("space.share", { group: "2002", login: "  ", role: "developer" }, "invalid_request", new RegExp(`^Name the account's login at ${HOST_NAME}$`));
+  await home.client.expectError("space.share", { instance: host.url, group: "2002", login: "bob", role: "admin" }, "invalid_request", new RegExp(`^admin is not one of the roles ${HOST_NAME} grants$`));
+  await home.client.expectError("space.share", { instance: host.url, group: "2002", login: "  ", role: "developer" }, "invalid_request", new RegExp(`^Name the account's login at ${HOST_NAME}$`));
   await home.client.expectError("space.share", { login: "bob", role: "developer" }, "invalid_request", /^Name one group or one spex repository$/);
-  await home.client.expectError("space.share", { group: "2002", repository: hostKey(host, "acme/team-spex"), login: "bob", role: "developer" }, "invalid_request", /^Name one group or one spex repository$/);
-  await home.client.expectError("space.share", { group: "9999", login: "bob", role: "developer" }, "not_found", new RegExp(`^${HOST_NAME} listed no group 9999$`));
+  await home.client.expectError("space.share", { instance: host.url, group: "2002", repository: hostKey(host, "acme/team-spex"), login: "bob", role: "developer" }, "invalid_request", /^Name one group or one spex repository$/);
+  await home.client.expectError("space.share", { instance: host.url, group: "9999", login: "bob", role: "developer" }, "not_found", new RegExp(`^${HOST_NAME} listed no group 9999$`));
   await home.client.expectError("space.share", { repository: hostKey(host, "acme/nowhere-spex"), login: "bob", role: "developer" }, "not_found");
-  await home.client.expectError("space.unshare", { group: "2002", login: " " }, "invalid_request", /^Name the account's login/);
-  await home.client.expectError("space.unshare", { group: "9999", login: "bob" }, "not_found");
+  await home.client.expectError("space.unshare", { instance: host.url, group: "2002", login: " " }, "invalid_request", /^Name the account's login/);
+  await home.client.expectError("space.unshare", { instance: host.url, group: "9999", login: "bob" }, "not_found");
   await home.client.expectError("space.unshare", { login: "bob" }, "invalid_request", /^Name one group or one spex repository$/);
-  await home.client.expectError("space.members", { group: "9999" }, "not_found");
+  await home.client.expectError("space.members", { instance: host.url, group: "9999" }, "not_found");
   await home.client.expectError("space.members", {}, "invalid_request", /^Name one group or one spex repository$/);
   assert.deepEqual(apiRequests(host, quiet), []);
 
   // In Chinese, the stand-in's words kept whole (git-host-11).
   await home.client.expectOk("language.set", { language: "zh" });
-  const zhUnknown = await home.client.expectError("space.share", { group: "2002", login: "zed", role: "developer" }, "not_found");
+  const zhUnknown = await home.client.expectError("space.share", { instance: host.url, group: "2002", login: "zed", role: "developer" }, "not_found");
   assert.equal(zhUnknown, `在 ${HOST_NAME} 上未找到：No account is named zed.`);
-  const zhExisting = await home.client.expectError("space.share", { group: "2002", login: "alan", role: "developer" }, "invalid_request");
+  const zhExisting = await home.client.expectError("space.share", { instance: host.url, group: "2002", login: "alan", role: "developer" }, "invalid_request");
   assert.equal(zhExisting, `${HOST_NAME} 拒绝了：Member already exists`);
-  const zhTaken = await home.client.expectError("space.group.create", { name: "Acme", path: "acme", parent: null }, "invalid_request");
+  const zhTaken = await home.client.expectError("space.group.create", { instance: host.url, name: "Acme", path: "acme", parent: null }, "invalid_request");
   assert.equal(zhTaken, `Acme 在 ${HOST_NAME} 上已被占用；请另选一个名称`);
 });

@@ -1312,7 +1312,7 @@ test("environments-21 through a real core: the registry presents the access secr
   from = home.client.mark();
   await home.client.expectOk("environment.remove", { repository: own, name: "acme/toolbox" });
   assert.equal((await ran(from)).error, null);
-  await home.client.expectOk("space.signout", {});
+  await home.client.expectOk("space.signout", { instance: front.url });
   front.log.length = 0;
   from = home.client.mark();
   await home.client.expectOk("environment.resolve", { repository: own });

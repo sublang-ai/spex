@@ -1169,7 +1169,7 @@ export async function pickGroup(
   const from = app.core.mark();
   await app.core.command("space.pick", {
     repository: app.projectId,
-    choice: { kind: "create", groupId: options.groupId ?? HOST_GROUP_ID, name },
+    choice: { kind: "create", instance: host.url, groupId: options.groupId ?? HOST_GROUP_ID, name },
   });
   const state = await app.core.waitSpace(from, (candidate) => {
     try { return repositoryOf(candidate, key).sync.phase === "done"; } catch { return false; }

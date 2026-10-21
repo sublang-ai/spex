@@ -56,7 +56,7 @@ async function preparedProject(name: string) {
   const { home } = ready;
   const { key: local } = await addFolder(home, gitFolder(name));
   const mark = home.client.mark();
-  await home.client.expectOk("space.pick", { repository: local, choice: { kind: "create", groupId: "2002", name } });
+  await home.client.expectOk("space.pick", { repository: local, choice: { kind: "create", instance: ready.host.url, groupId: "2002", name } });
   const key = hostKey(ready.host, `acme/${name}-spex`);
   const row = await home.client.waitRepository(mark, key, (candidate) => candidate.sync.phase === "done", 30_000);
   assert.ok(row.id);
@@ -317,7 +317,7 @@ for (const next of ["signed-out", "another-account"] as const) {
     await home.client.expectOk("space.sync", { repository: key });
     await gate.reached;
     core.hostClient.fetchImpl = inner;
-    await home.client.expectOk("space.signout", {});
+    await home.client.expectOk("space.signout", { instance: host.url });
     if (next === "another-account") {
       // A sign-in as another account at a listed instance is refused, so
       // the instance is forgotten first, as Forget does (DR-127).

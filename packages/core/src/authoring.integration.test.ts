@@ -1315,7 +1315,7 @@ test("playbook-library-104: New playbook's defaults come from the registry's org
 
   // Signed out, the registry is not asked and the key's first segment
   // stands.
-  await client.expectOk("space.signout", {});
+  await client.expectOk("space.signout", { instance: registry.url });
   assert.deepEqual(await orgsOf(0), ["tester", "acme"], "signed out");
   writeFileSync(license, cases[0]![0]!);
   await oneShot("licensed");

@@ -92,7 +92,7 @@ test("space-74: nothing behind the instance is named; another login's repository
   // (space-63, space-62).
   const notesFolder = join(mkdtempSync(join(scratch, "notes-")), "notes");
   let mark = home.client.mark();
-  await home.client.expectOk("space.join", { hostId: notes.id, folder: notesFolder });
+  await home.client.expectOk("space.join", { instance: host.url, hostId: notes.id, folder: notesFolder });
   const joined = await home.client.waitRepository(mark, hostKey(host, "bob/notes-spex"), (repository) => repository.state === "reachable" && repository.folder !== null);
   assert.equal(joined.remote, "bob/notes-spex");
   const notesClone = clonePath(home.dataDir, hostKey(host, "bob/notes-spex"));
@@ -121,7 +121,7 @@ test("space-74: nothing behind the instance is named; another login's repository
   const code = gitFolder("plans");
   const { key: local } = await addFolder(home, code);
   mark = home.client.mark();
-  await home.client.expectOk("space.pick", { repository: local, choice: { kind: "create", groupId: "2002", name: "plans" } });
+  await home.client.expectOk("space.pick", { repository: local, choice: { kind: "create", instance: host.url, groupId: "2002", name: "plans" } });
   const picked = await home.client.waitRepository(mark, hostKey(host, "acme/plans-spex"), (repository) => repository.sync.phase === "done", 30_000);
   assert.ok(picked.id);
   assert.ok(git(clonePath(home.dataDir, hostKey(host, "acme/plans-spex")), "remote", "get-url", hostFolder(host)).startsWith(`${host.gitOrigin}/${STANDIN_STORAGE}/acme/`));
@@ -178,14 +178,14 @@ test("space-74: a group named like your login stands apart, its repositories unr
 
   // Join, a pick joining it and a pick creating in that group are each
   // refused with the cause; no folder is made for it (space-29).
-  await home.client.expectError("space.join", { hostId: clash.id, folder: join(scratch, "nowhere") }, "invalid_request", /named like your login/);
+  await home.client.expectError("space.join", { instance: host.url, hostId: clash.id, folder: join(scratch, "nowhere") }, "invalid_request", /named like your login/);
   const { key: local } = await addFolder(home, gitFolder("drafts"));
-  await home.client.expectError("space.pick", { repository: local, choice: { kind: "join", hostId: clash.id } }, "invalid_request", /named like your login/);
-  await home.client.expectError("space.pick", { repository: local, choice: { kind: "create", groupId: named.id, name: "drafts" } }, "invalid_request", /named like your login/);
+  await home.client.expectError("space.pick", { repository: local, choice: { kind: "join", instance: host.url, hostId: clash.id } }, "invalid_request", /named like your login/);
+  await home.client.expectError("space.pick", { repository: local, choice: { kind: "create", instance: host.url, groupId: named.id, name: "drafts" } }, "invalid_request", /named like your login/);
   assert.deepEqual(readdirSync(join(home.dataDir, "workspace", LOGIN)).sort(), [`${LOGIN}-spex`, "drafts-spex"]);
 
   // A root path the stand-in holds an account under is taken (space-68).
-  await home.client.expectError("space.group.create", { name: "Bob", path: "bob", parent: null }, "invalid_request", /taken/);
+  await home.client.expectError("space.group.create", { instance: host.url, name: "Bob", path: "bob", parent: null }, "invalid_request", /taken/);
   assert.ok(!host.script.groups.some((group) => group.fullPath === "bob"));
 
   assert.deepEqual(leaks(host, [...broadcasts(home.client.messages), await home.client.expectOk("space.get", {})]), []);
@@ -201,7 +201,7 @@ test("space-74: a 500 stops a check, a push and a join as the host's error; a re
   await home.client.waitRepository(mark, HOST_OWN, (repository) => repository.sync.phase === "done", 30_000);
   const { key: local } = await addFolder(home, gitFolder("lines"));
   mark = home.client.mark();
-  await home.client.expectOk("space.pick", { repository: local, choice: { kind: "create", groupId: "2002", name: "lines" } });
+  await home.client.expectOk("space.pick", { repository: local, choice: { kind: "create", instance: host.url, groupId: "2002", name: "lines" } });
   const key = hostKey(host, "acme/lines-spex");
   await home.client.waitRepository(mark, key, (repository) => repository.sync.phase === "done", 30_000);
   const clone = clonePath(home.dataDir, key);
@@ -230,7 +230,7 @@ test("space-74: a 500 stops a check, a push and a join as the host's error; a re
 
   host.script.failTransport(500);
   mark = home.client.mark();
-  await home.client.expectOk("space.join", { hostId: team.id, folder: join(mkdtempSync(join(scratch, "team-")), "team") });
+  await home.client.expectOk("space.join", { instance: host.url, hostId: team.id, folder: join(mkdtempSync(join(scratch, "team-")), "team") });
   const joining = await home.client.waitRepository(mark, hostKey(host, "acme/team-spex"), (repository) => repository.sync.phase === "stopped");
   assert.ok(joining.sync.phase === "stopped", JSON.stringify(joining.sync));
   assert.deepEqual([joining.sync.op, joining.sync.message, joining.sync.retry], ["join", `${HOST_NAME} answered with an error (HTTP 500)`, true]);
@@ -268,7 +268,7 @@ test("space-60: a clone an earlier Spex keyed outside the instance's folder, its
   const code = gitFolder("earlier");
   const { key: local } = await addFolder(home, code);
   mark = home.client.mark();
-  await home.client.expectOk("space.pick", { repository: local, choice: { kind: "create", groupId: "2002", name: "earlier" } });
+  await home.client.expectOk("space.pick", { repository: local, choice: { kind: "create", instance: host.url, groupId: "2002", name: "earlier" } });
   const key = hostKey(host, "acme/earlier-spex");
   const picked = await home.client.waitRepository(mark, key, (repository) => repository.sync.phase === "done", 30_000);
   assert.ok(picked.id);
@@ -320,7 +320,7 @@ test("space-60: a clone the instances migration deferred, a live session's lease
   const code = gitFolder("deferred");
   const { key: local } = await addFolder(home, code);
   mark = home.client.mark();
-  await home.client.expectOk("space.pick", { repository: local, choice: { kind: "create", groupId: "2002", name: "deferred" } });
+  await home.client.expectOk("space.pick", { repository: local, choice: { kind: "create", instance: host.url, groupId: "2002", name: "deferred" } });
   const key = hostKey(host, "acme/deferred-spex");
   const picked = await home.client.waitRepository(mark, key, (repository) => repository.sync.phase === "done", 30_000);
   assert.ok(picked.id);
@@ -411,7 +411,7 @@ test("storage-35: a pick of a clone in your own group's folder moves it under th
   const createdKey = hostKey(host, "acme/created-spex");
   held.add(createdLocal).add(createdKey);
   mark = home.client.mark();
-  await home.client.expectOk("space.pick", { repository: createdLocal, choice: { kind: "create", groupId: "2002", name: "created" } });
+  await home.client.expectOk("space.pick", { repository: createdLocal, choice: { kind: "create", instance: host.url, groupId: "2002", name: "created" } });
   const createdClone = clonePath(home.dataDir, createdKey);
   assert.ok(existsSync(join(createdClone, ".git")) && !existsSync(clonePath(home.dataDir, createdLocal)), "moved as the creation landed");
   assert.deepEqual(git(createdClone, "remote").split("\n"), [folder]);
@@ -425,7 +425,7 @@ test("storage-35: a pick of a clone in your own group's folder moves it under th
   const { key: joinedLocal } = await addFolder(home, joinedCode);
   const joinedKey = hostKey(host, "acme/joined-spex");
   held.add(joinedLocal).add(joinedKey);
-  await home.client.expectOk("space.pick", { repository: joinedLocal, choice: { kind: "join", hostId: listed.id }, noticed: true });
+  await home.client.expectOk("space.pick", { repository: joinedLocal, choice: { kind: "join", instance: host.url, hostId: listed.id }, noticed: true });
   const joinedClone = clonePath(home.dataDir, joinedKey);
   assert.ok(existsSync(join(joinedClone, ".git")) && !existsSync(clonePath(home.dataDir, joinedLocal)), "moved as the join landed");
   assert.deepEqual(git(joinedClone, "remote").split("\n"), [folder]);
@@ -455,7 +455,7 @@ test("storage-35: a pick of a clone in your own group's folder moves it under th
   let released = false;
   try {
     mark = home.client.mark();
-    await home.client.expectOk("space.pick", { repository: leasedLocal, choice: { kind: "create", groupId: "2002", name: "leased" } });
+    await home.client.expectOk("space.pick", { repository: leasedLocal, choice: { kind: "create", instance: host.url, groupId: "2002", name: "leased" } });
     const stopped = await home.client.waitRepository(mark, leasedLocal, (repository) => repository.sync.phase === "stopped", 30_000);
     assert.ok(stopped.sync.phase === "stopped" && stopped.sync.cause === "lease" && stopped.sync.step === "check", JSON.stringify(stopped.sync));
     assert.ok(existsSync(join(leasedClone, ".git")) && !existsSync(clonePath(home.dataDir, leasedKey)), "it stays where it lies");
@@ -496,7 +496,7 @@ test("space-4, git-host-5: your namespace's listing of your own group's own repo
     const own = repositoryOf(state, OWN_KEY);
     assert.deepEqual([own.id, own.state], [null, "local-only"]);
     assert.deepEqual(listedOwnKeys(state), [], "no row not on this device");
-    await home.client.expectError("space.join", { hostId: listedOwn.id, folder: join(scratch, "own-elsewhere") }, "invalid_request", /on this device already/);
+    await home.client.expectError("space.join", { instance: host.url, hostId: listedOwn.id, folder: join(scratch, "own-elsewhere") }, "invalid_request", /on this device already/);
     assert.ok(!existsSync(clonePath(home.dataDir, hostKey(host, HOST_OWN))), "no second clone");
     await lease.release();
     released = true;
@@ -509,7 +509,7 @@ test("space-4, git-host-5: your namespace's listing of your own group's own repo
   const joined = await home.client.waitRepository(mark, HOST_OWN, (repository) => repository.sync.phase === "done", 30_000);
   assert.equal(joined.id, listedOwn.id);
   assert.deepEqual(listedOwnKeys(await home.client.expectOk("space.get", {})), [HOST_OWN]);
-  await home.client.expectError("space.join", { hostId: listedOwn.id }, "invalid_request", /on this device already/);
+  await home.client.expectError("space.join", { instance: host.url, hostId: listedOwn.id }, "invalid_request", /on this device already/);
   assert.ok(!existsSync(clonePath(home.dataDir, hostKey(host, HOST_OWN))));
 });
 
@@ -578,7 +578,7 @@ test("space-60, storage-30: a host's rename onto the destination a deferred clon
   await home.client.waitRepository(mark, HOST_OWN, (repository) => repository.sync.phase === "done", 30_000);
   const { key: local } = await addFolder(home, gitFolder("plans"));
   mark = home.client.mark();
-  await home.client.expectOk("space.pick", { repository: local, choice: { kind: "create", groupId: "2002", name: "plans" } });
+  await home.client.expectOk("space.pick", { repository: local, choice: { kind: "create", instance: host.url, groupId: "2002", name: "plans" } });
   const key = hostKey(host, "acme/plans-spex");
   const picked = await home.client.waitRepository(mark, key, (repository) => repository.sync.phase === "done", 30_000);
   assert.ok(picked.id);
@@ -812,7 +812,6 @@ test("git-host-24, git-host-2, git-host-3: a sign-in at the second instance, the
   assert.ok(running.signIn.phase === "running" && running.signIn.instance === second.url, JSON.stringify(running.signIn));
   await home.client.expectError("space.signin.start", { url: first.url }, "busy");
   await home.client.expectError("space.signin.start", { url: second.url }, "busy");
-  await home.client.expectError("space.signin.start", {}, "busy");
   second.script.approveDevice(started.userCode);
   await home.client.waitSpace(from, (state) => instanceOf(state, second.url)?.signedIn === true && state.signIn.phase === "idle", 30_000);
   await home.client.waitRepository(from, "bob/bob-spex", (repository) => repository.sync.phase === "done", 30_000);
@@ -1030,7 +1029,7 @@ test("git-host-24, git-host-4, git-host-10, space-6: a refresh the first refuses
   const { bob, first, second, alpha, home, alphaKey, betaKey } = await twoInstances("signed-out-alone");
   t.after(() => home.stop());
   let mark = home.client.mark();
-  await home.client.expectOk("space.join", { hostId: alpha.id });
+  await home.client.expectOk("space.join", { instance: first.url, hostId: alpha.id });
   await home.client.waitRepository(mark, alphaKey, (repository) => repository.state === "reachable", 30_000);
   const pairs = (): Record<string, StoredCredential> => (parseYaml(readFileSync(credentialsPath(home.dataDir), "utf8")) as { hosts: Record<string, StoredCredential> }).hosts;
   const entries = (): unknown[] => Home.load(home.dataDir).instances().map((entry) => [entry.origin, entry.account?.login, entry.signedOut === true]);
@@ -1201,7 +1200,7 @@ test("git-host-24, space-83, git-host-6, git-host-9, git-host-15, git-host-16, g
   // own instance's `acme` (space-63, space-1, git-host-9).
   assert.equal(alpha.id, beta.id, "two Git systems mint one id");
   let mark = home.client.mark();
-  await home.client.expectOk("space.join", { hostId: alpha.id });
+  await home.client.expectOk("space.join", { instance: first.url, hostId: alpha.id });
   await home.client.waitRepository(mark, alphaKey, (repository) => repository.state === "reachable" && repository.sync.phase === "idle", 30_000);
   mark = home.client.mark();
   await home.client.expectOk("space.join", { instance: second.url, hostId: beta.id });
@@ -1342,7 +1341,7 @@ test("space-83, git-host-24, git-host-9, git-host-4, space-11, space-6: a creden
   const { first, second, alpha, beta, home, alphaKey, betaKey } = await twoInstances("signed-out-transport");
   t.after(() => home.stop());
   let mark = home.client.mark();
-  await home.client.expectOk("space.join", { hostId: alpha.id });
+  await home.client.expectOk("space.join", { instance: first.url, hostId: alpha.id });
   await home.client.waitRepository(mark, alphaKey, (repository) => repository.state === "reachable" && repository.sync.phase === "idle", 30_000);
   mark = home.client.mark();
   await home.client.expectOk("space.join", { instance: second.url, hostId: beta.id });
@@ -1464,7 +1463,7 @@ test("git-host-25, space-84, git-host-5, git-host-8, git-host-16, git-host-9, sp
   await home.client.expectOk("space.join", { instance: second.url, hostId: a.id });
   await home.client.waitRepository(mark, aKey, (repository) => repository.state === "reachable" && repository.sync.phase === "idle", 30_000);
   mark = home.client.mark();
-  await home.client.expectOk("space.join", { hostId: b.id });
+  await home.client.expectOk("space.join", { instance: first.url, hostId: b.id });
   await home.client.waitRepository(mark, bKey, (repository) => repository.state === "reachable" && repository.sync.phase === "idle", 30_000);
   for (const key of [aKey, bKey]) {
     assert.deepEqual(git(clonePath(home.dataDir, key), "remote").split("\n"), [hostFolder(first)], key);
@@ -1479,7 +1478,7 @@ test("git-host-25, space-84, git-host-5, git-host-8, git-host-16, git-host-9, sp
   assert.deepEqual(rowsWith(joined, a.id), [[aKey, "reachable", first.url]]);
   assert.deepEqual(rowsWith(joined, b.id), [[bKey, "reachable", first.url]]);
   assert.deepEqual(rowsUnder(joined, second.url, LOGIN), []);
-  for (const fields of [{ instance: second.url, hostId: a.id }, { hostId: a.id }, { instance: second.url, hostId: b.id }]) {
+  for (const fields of [{ instance: second.url, hostId: a.id }, { instance: first.url, hostId: a.id }, { instance: second.url, hostId: b.id }]) {
     await home.client.expectError("space.join", fields, "invalid_request", /on this device already/);
   }
 
@@ -1565,7 +1564,7 @@ test("git-host-24, space-83, git-host-5, space-61, space-30, space-63, space-1: 
   // Join of the first's is refused with that cause; Join of the second's
   // clones it under the second's folder at its path there, your own
   // group's folder holding only what it held (space-61, space-63).
-  await home.client.expectError("space.join", { hostId: team.id }, "invalid_request", /named like your login/);
+  await home.client.expectError("space.join", { instance: first.url, hostId: team.id }, "invalid_request", /named like your login/);
   const mark = home.client.mark();
   await home.client.expectOk("space.join", { instance: second.url, hostId: lab.id });
   const joined = await home.client.waitRepository(mark, labKey, (repository) => repository.state === "reachable" && repository.sync.phase === "idle", 30_000);
@@ -1601,10 +1600,10 @@ test("git-host-25, space-84, space-60, git-host-22, git-host-9, space-5, space-1
   // first's own group's repository beside it.
   const code = gitFolder("a");
   mark = home.client.mark();
-  await home.client.expectOk("space.join", { hostId: a.id, folder: code });
+  await home.client.expectOk("space.join", { instance: first.url, hostId: a.id, folder: code });
   await home.client.waitRepository(mark, aKey, (repository) => repository.state === "reachable" && repository.sync.phase === "idle" && repository.folder !== null, 30_000);
   mark = home.client.mark();
-  await home.client.expectOk("space.join", { hostId: solo.id });
+  await home.client.expectOk("space.join", { instance: first.url, hostId: solo.id });
   await home.client.waitRepository(mark, soloKey, (repository) => repository.state === "reachable" && repository.sync.phase === "idle", 30_000);
   const once = await home.client.settle("space.sync", { repository: aKey, noticed: true }, 30_000);
   assert.deepEqual([once.sync.phase, once.state], ["done", "reachable"], JSON.stringify(once.sync));
@@ -1718,7 +1717,7 @@ test("space-60, space-5, storage-34, storage-31: a follow half made — a clone 
   const aKey = hostKey(first, `${LOGIN}/a-spex`);
   const followedKey = hostKey(second, `${LOGIN}/a-spex`);
   mark = home.client.mark();
-  await home.client.expectOk("space.join", { hostId: a.id });
+  await home.client.expectOk("space.join", { instance: first.url, hostId: a.id });
   await home.client.waitRepository(mark, aKey, (repository) => repository.state === "reachable" && repository.sync.phase === "idle", 30_000);
   await signOut(home, first);
   await home.stop();
@@ -1864,10 +1863,10 @@ test("space-84, space-82, space-60, space-29, space-5, storage-34: two instances
   const bFollowed = hostKey(second, `${LOGIN}/b-spex`);
   const code = gitFolder("b");
   mark = home.client.mark();
-  await home.client.expectOk("space.join", { hostId: a.id });
+  await home.client.expectOk("space.join", { instance: first.url, hostId: a.id });
   await home.client.waitRepository(mark, aKey, (repository) => repository.state === "reachable" && repository.sync.phase === "idle", 30_000);
   mark = home.client.mark();
-  await home.client.expectOk("space.join", { hostId: b.id, folder: code });
+  await home.client.expectOk("space.join", { instance: first.url, hostId: b.id, folder: code });
   await home.client.waitRepository(mark, bKey, (repository) => repository.state === "reachable" && repository.sync.phase === "idle" && repository.folder !== null, 30_000);
   await signOut(home, first);
   const said = home.client.mark();
@@ -1950,7 +1949,7 @@ test("space-86: an explicit content-size rejection keeps access and Save, names 
   await home.client.waitRepository(mark, HOST_OWN, (row) => row.sync.phase === "done", 30_000);
   const { key: local } = await addFolder(home, gitFolder("size-limit"));
   mark = home.client.mark();
-  await home.client.expectOk("space.pick", { repository: local, choice: { kind: "create", groupId: "2002", name: "size-limit" } });
+  await home.client.expectOk("space.pick", { repository: local, choice: { kind: "create", instance: host.url, groupId: "2002", name: "size-limit" } });
   const key = hostKey(host, "acme/size-limit-spex");
   await home.client.waitRepository(mark, key, (row) => row.sync.phase === "done", 30_000);
   const clone = clonePath(home.dataDir, key);
