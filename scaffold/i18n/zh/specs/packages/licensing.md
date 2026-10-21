@@ -1,6 +1,6 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
-<!-- spex-i18n-source: specs/packages/licensing.md sha256-0fdea7c594fe52e33c78f30afd2edc3e53414a8ee666a1a4acdaf64ee05487b0 -->
+<!-- spex-i18n-source: specs/packages/licensing.md sha256-b059af6fb2ddc8ec81628bab0b14d0deb1974b6ec840d5b9cabdfeebcab0f077 -->
 
 # licensing: 许可证头
 
@@ -72,3 +72,7 @@
 ### licensing-8
 
 给定文件已包含上游 SPDX 行且项目许可证不同，当运行纳入准备流程，验证应断言每条上游行均逐字节保留，且任何缺失的必需行均采用上游数据而非项目许可证数据 [[licensing-5](#licensing-5)]。
+
+### licensing-10
+
+给定项目自编文件需要两种 SPDX 头且不含上游 SPDX 行，当运行仓库纳入准备流程，集成验证应断言这些文件在任何 shebang 之后的第一个注释块使用各文件原生的注释语法，注明项目自己的许可证和版权持有人，采用文件首次纳入项目的年份，且不含未解析的许可证或持有人占位符 [[licensing-9](#licensing-9)]。
