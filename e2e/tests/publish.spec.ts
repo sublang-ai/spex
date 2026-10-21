@@ -7,7 +7,8 @@
 // authoring session enabled in its project; Publish uploads its spec
 // package under development, and a second scratch home on the same
 // host finds it by search, requests it, and enables its playbook; the
-// first home, signed out, offers "Sign in to publish" instead.
+// first home, signed out, offers "Sign in to publish at <name>"
+// instead, naming the instance it would publish to.
 
 import type { Page } from "@playwright/test";
 import { AUTHORING_SOURCE } from "@sublang/spex-core/testing";
@@ -138,14 +139,15 @@ test("playbook-library-95: Publish reads the version with its link, a second hom
     await second.close();
   }
 
-  // Signed out, the first home shows "Sign in to publish" in the
-  // control's place (playbook-library-93).
+  // Signed out, the first home shows "Sign in to publish at <name>",
+  // the instance's display name, in the control's place
+  // (playbook-library-93).
   await open(page, app);
   await nav(page, "Groups").click();
   const instance = page.getByTestId(`space-instance-${host.url}`);
   await instance.getByTestId("space-signout").click();
   await expect(instance.getByTestId("space-signin-again")).toHaveText("Sign in again");
   await openEnableTab(page);
-  await expect(page.getByTestId("publish").getByTestId("publish-signin")).toHaveText("Sign in to publish");
+  await expect(page.getByTestId("publish").getByTestId("publish-signin")).toHaveText("Sign in to publish at Stand-in Git host");
   await expect(page.getByTestId("publish-button")).toHaveCount(0);
 });
