@@ -27,7 +27,7 @@ import { captureLoginShellEnv, mergeEnv } from "./shell-env.js";
 import { desktopCoreOptions } from "./core-options.js";
 import { speak } from "./i18n.js";
 import { notificationFor } from "./notifications.js";
-import { resolveHostUrl } from "./open-external.js";
+import { openInstanceUrl } from "./open-external.js";
 import { resolveRevealTarget } from "./reveal-path.js";
 
 let service: CoreService | undefined;
@@ -249,20 +249,14 @@ async function main(): Promise<void> {
     shell.showItemInFolder(target);
     return true;
   });
-  // An open hands the system browser a URL at the home's recorded Git
-  // host and changes no state (app-shell-37, app-shell-20); any other
-  // URL, or one the OS fails to open, is false, and the page shows it
-  // as a link instead.
-  ipcMain.handle("spex:open-external", async (_event, requested: unknown) => {
-    const target = resolveHostUrl(service?.hostUrl(), requested);
-    if (!target) return false;
-    try {
-      await shell.openExternal(target);
-      return true;
-    } catch {
-      return false;
-    }
-  });
+  // An open hands the system browser a URL at the origin of an instance
+  // the home lists or is signing in to, read at the moment of the ask,
+  // and changes no state (app-shell-37, app-shell-20); any other URL, or
+  // one the OS fails to open, is false, and the page shows it as a link
+  // instead.
+  ipcMain.handle("spex:open-external", (_event, requested: unknown) =>
+    openInstanceUrl(service?.instanceOrigins() ?? [], requested, (url) => shell.openExternal(url)),
+  );
 
   window = new BrowserWindow({
     width: 1440,
