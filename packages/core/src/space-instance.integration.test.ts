@@ -24,12 +24,12 @@ import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import { GitHostClient, HostError, credentialsPath, fileCredentialStore, type StoredCredential } from "./git-host.js";
 import { Home } from "./home.js";
 import { needsInstancesMigration } from "./migrate-instances.js";
-import { clonePath, createSpaceHarness, hostFolder, hostKey, instanceOf, OWN_KEY, ownClone, prefsOf, repositoryOf, stringsOf } from "./testing/space-harness.js";
+import { clonePath, createSpaceHarness, hostFolder, hostKey, instanceOf, OWN_KEY, ownClone, prefsOf, repositoryOf, rowsOf, stringsOf } from "./testing/space-harness.js";
 import { STANDIN_STORAGE, type StandinHost } from "./testing/standin-host.js";
 import type { GroupsState, ServerMessage } from "./protocol.js";
 
 const fixture = createSpaceHarness();
-const { scratch, git, gitFolder, bareRepo, addFolder, startHome, startHost, signIn, signOut, runTurn } = fixture;
+const { scratch, git, gitFolder, bareRepo, addFolder, sleep, startHome, startHost, signIn, signOut, runTurn } = fixture;
 test.after(() => fixture.dispose());
 
 /** The stand-in's person, and your own group's repository once signed in. */
@@ -862,7 +862,15 @@ test("space-83, space-4, space-59, storage-2: a sign-in at the first, then one n
   const state = await home.client.expectOk("space.get", {});
   assert.equal(state.defaultInstance, first.url);
   assert.deepEqual(state.instances.map((instance) => instance.origin), [first.url, second.url]);
-  assert.deepEqual([instanceOf(state, first.url)?.displayName, instanceOf(state, first.url)?.read, typeof instanceOf(state, first.url)?.readAt], [HOST_NAME, { phase: "idle" }, "number"]);
+  // Each with its own account, display name, read state and groups, the
+  // second's set-up having read the second (space-30, space-4,
+  // git-host-5).
+  const headings = state.instances.map((instance) => [instance.displayName, instance.read, typeof instance.readAt, instance.account.canCreateGroup]);
+  assert.deepEqual(headings, [[HOST_NAME, { phase: "idle" }, "number", true], ["Second stand-in", { phase: "idle" }, "number", true]]);
+  const entries = (origin: string) => instanceOf(state, origin)?.groups.map((group) => [group.fullPath, group.login, group.mine]);
+  assert.deepEqual(entries(first.url), [["acme", null, false], ["acme/research", null, false], [LOGIN, LOGIN, true]]);
+  assert.deepEqual(entries(second.url), [["acme", null, false], ["acme/research", null, false], [bob.login, bob.login, true]]);
+  assert.equal(Home.load(home.dataDir).instance(second.url)?.displayName, "Second stand-in");
   // Your own group's folder bears the first's login, no later sign-in
   // renaming it; its own repository is the first's, in your namespace
   // there, its one remote named by the first's folder (space-4, space-59,
@@ -876,4 +884,179 @@ test("space-83, space-4, space-59, storage-2: a sign-in at the first, then one n
   assert.deepEqual(second.script.creations, [], "nothing is created at the second");
   assert.equal(existsSync(join(home.dataDir, "workspace", bob.login)), false, "no folder bears the second's login");
   assert.deepEqual(readdirSync(join(home.dataDir, "workspace")).sort(), [LOGIN], "nothing moved under an instance's folder");
+});
+
+/** Two stand-in instances on Git backends of their own, each holding a
+ * group `acme` with a spex repository, and a home signed in at the
+ * first as `ada`, then at the second as `bob` (git-host-24, space-83). */
+async function twoInstances(name: string) {
+  const bob = { id: "1002", login: "bob", displayName: "Bob" };
+  const first = await startHost();
+  const second = await startHost({ displayName: "Second stand-in", person: bob });
+  const alpha = first.script.addRepository({ group: "acme", name: "alpha-spex" });
+  const beta = second.script.addRepository({ group: "acme", name: "beta-spex" });
+  const home = await startHome(name, { host: first, project: false });
+  const from = home.client.mark();
+  await signIn(home, first);
+  await home.client.waitRepository(from, HOST_OWN, (repository) => repository.sync.phase === "done", 30_000);
+  await signIn(home, second);
+  return { bob, first, second, alpha, beta, home, alphaKey: hostKey(first, "acme/alpha-spex"), betaKey: hostKey(second, "acme/beta-spex") };
+}
+
+/** The rows an instance's heading holds under one of its entries. */
+function rowsUnder(state: GroupsState, origin: string, fullPath: string): [string, string, string | null][] {
+  const group = instanceOf(state, origin)?.groups.find((entry) => entry.fullPath === fullPath);
+  return (group?.repositories ?? []).map((repository) => [repository.key, repository.state, repository.instance]);
+}
+
+/** Who each instance's `/api/v1/host/me` was asked by, counted: one per
+ * read of it (git-host-5). */
+function meReads(host: StandinHost): number {
+  return host.script.requests.filter((request) => request.path === "/api/v1/host/me").length;
+}
+
+test("git-host-24, space-83, git-host-5, git-host-21: Refresh reads each instance on its own, its acme repository under a key in its own folder; a core restarted signed in to both begins one read of each at its first space.get, the second answering 503 leaving the first's view and read time while the second reports its failure; after a 429 from the first, a read of the second reaches it at once while the first's waits out its hold", async (t) => {
+  const { first, second, home, alphaKey, betaKey } = await twoInstances("each-read-on-its-own");
+  t.after(() => home.stop());
+  // A Refresh reads both, each listing its `acme` repository, not on
+  // this device, under a key in its own instance's folder and that
+  // instance's heading (git-host-5, space-1).
+  const before = await home.client.expectOk("space.get", {});
+  const refreshed = home.client.mark();
+  await home.client.expectOk("space.refresh", {});
+  const read = await home.client.waitSpace(refreshed, (state) => state.instances.every((instance) => instance.read.phase === "idle" && (instance.readAt ?? 0) > (instanceOf(before, instance.origin)?.readAt ?? 0)), 30_000);
+  assert.deepEqual(rowsUnder(read, first.url, "acme"), [[alphaKey, "absent", first.url]]);
+  assert.deepEqual(rowsUnder(read, second.url, "acme"), [[betaKey, "absent", second.url]]);
+  assert.notEqual(hostFolder(first), hostFolder(second));
+  await home.stop();
+
+  // Restarted signed in to both, the first `space.get` begins one read
+  // of each, however many follow, and answers with neither read held
+  // (git-host-5).
+  const again = await startHome("each-read-on-its-own-again", { dataDir: home.dataDir, project: false });
+  t.after(() => again.stop());
+  const readsBefore = [meReads(first), meReads(second)];
+  second.script.unavailable(1);
+  const fromStart = again.client.mark();
+  const [initial] = await Promise.all([again.client.expectOk("space.get", {}), again.client.expectOk("space.get", {})]);
+  assert.deepEqual(initial.instances.map((instance) => [instance.origin, instance.signedIn, instance.readAt]), [[first.url, true, null], [second.url, true, null]]);
+  // The second answering 503, the first's view is held with its read
+  // time and its rows, while the second reports its failure in its own
+  // name, its heading kept with the display name its entry holds
+  // (git-host-5, space-1).
+  const settled = await again.client.waitSpace(fromStart, (state) =>
+    (instanceOf(state, first.url)?.readAt ?? null) !== null && instanceOf(state, first.url)?.read.phase === "idle" && instanceOf(state, second.url)?.read.phase === "failed", 30_000);
+  const atFirst = instanceOf(settled, first.url);
+  const atSecond = instanceOf(settled, second.url);
+  assert.equal(typeof atFirst?.readAt, "number");
+  assert.deepEqual(rowsUnder(settled, first.url, "acme"), [[alphaKey, "absent", first.url]]);
+  assert.equal(repositoryOf(settled, HOST_OWN).state, "reachable");
+  assert.deepEqual(atSecond?.read, { phase: "failed", message: "Could not reach Second stand-in" });
+  assert.deepEqual([atSecond?.signedIn, atSecond?.readAt, atSecond?.displayName], [true, null, "Second stand-in"]);
+  assert.deepEqual(rowsUnder(settled, second.url, "acme"), [], "no read of the second is held since the start");
+  await again.client.expectOk("space.get", {});
+  await sleep(300);
+  assert.deepEqual([meReads(first) - readsBefore[0], meReads(second) - readsBefore[1]], [1, 1], "one read of each instance since the start");
+
+  // A 429 from the first holds the first's read alone (git-host-21): a
+  // Refresh's read of the second reaches it at once, while the first's
+  // waits out the 2 seconds the first asked for, then is held.
+  first.script.rateLimit(1, "2");
+  let mark = again.client.mark();
+  await again.client.expectOk("space.refresh", {});
+  const limited = await again.client.waitSpace(mark, (state) => instanceOf(state, first.url)?.read.phase === "failed" && instanceOf(state, second.url)?.read.phase === "idle" && (instanceOf(state, second.url)?.readAt ?? null) !== null, 30_000);
+  assert.deepEqual(instanceOf(limited, first.url)?.read, { phase: "failed", message: `${HOST_NAME} asks to wait 2 seconds` });
+  assert.equal(instanceOf(limited, first.url)?.readAt, atFirst?.readAt, "the first's view keeps its time");
+  const answered = Math.max(...first.script.requests.map((request) => request.at));
+  const secondReadAt = instanceOf(limited, second.url)?.readAt ?? 0;
+  mark = again.client.mark();
+  const asked = performance.now();
+  const sentFirst = first.script.requests.length;
+  const sentSecond = second.script.requests.length;
+  await again.client.expectOk("space.refresh", {});
+  const waited = await again.client.waitSpace(mark, (state) => state.instances.every((instance) => instance.read.phase === "idle")
+    && (instanceOf(state, first.url)?.readAt ?? 0) > (atFirst?.readAt ?? 0) && (instanceOf(state, second.url)?.readAt ?? 0) > secondReadAt, 30_000);
+  const reachedSecond = second.script.requests[sentSecond]?.at ?? Infinity;
+  const reachedFirst = first.script.requests[sentFirst]?.at ?? -Infinity;
+  assert.ok(reachedSecond - asked < 1_000, `the second was read at once, ${Math.round(reachedSecond - asked)} ms after the ask`);
+  assert.ok(reachedFirst >= answered + 1_900, `the first waited out its hold, reached ${Math.round(reachedFirst - answered)} ms after its 429`);
+  assert.ok(reachedFirst > reachedSecond);
+  assert.deepEqual(rowsUnder(waited, second.url, "acme"), [[betaKey, "absent", second.url]]);
+});
+
+test("git-host-24, git-host-4, git-host-10, space-6: a refresh the first refuses signs that instance out alone, its entry kept marked signed out and its rows unreachable with Sign in again, the second's token, view and rows kept, and Refresh then reading the second alone; a sign-out of one keeps the other signed in", async (t) => {
+  const { bob, first, second, alpha, home, alphaKey, betaKey } = await twoInstances("signed-out-alone");
+  t.after(() => home.stop());
+  let mark = home.client.mark();
+  await home.client.expectOk("space.join", { hostId: alpha.id });
+  await home.client.waitRepository(mark, alphaKey, (repository) => repository.state === "reachable", 30_000);
+  const pairs = (): Record<string, StoredCredential> => (parseYaml(readFileSync(credentialsPath(home.dataDir), "utf8")) as { hosts: Record<string, StoredCredential> }).hosts;
+  const entries = (): unknown[] => Home.load(home.dataDir).instances().map((entry) => [entry.origin, entry.account?.login, entry.signedOut === true]);
+  const before = await home.client.expectOk("space.get", {});
+  const pairsBefore = pairs();
+  assert.deepEqual(Object.keys(pairsBefore).sort(), [first.url, second.url].sort());
+
+  // The first refuses the refresh of its expired access secret: this
+  // device is signed out of the first alone, its pair removed and its
+  // entry kept marked signed out, its heading saying the first did it
+  // with the account's login (git-host-4, space-3).
+  first.script.refuseRefresh = true;
+  first.script.expireAccess();
+  const readsOfSecond = meReads(second);
+  mark = home.client.mark();
+  await home.client.expectError("space.members", { repository: alphaKey }, "invalid_request", /Sign in again/);
+  const out = await home.client.waitSpace(mark, (state) => instanceOf(state, first.url)?.signedIn === false);
+  assert.deepEqual(entries(), [[first.url, LOGIN, true], [second.url, bob.login, false]]);
+  assert.deepEqual(Object.keys(pairs()), [second.url]);
+  assert.deepEqual(pairs()[second.url], pairsBefore[second.url], "the second's token stands");
+  const atFirst = instanceOf(out, first.url);
+  assert.deepEqual([atFirst?.signedIn, atFirst?.hostSignedOut, atFirst?.read, atFirst?.readAt], [false, true, { phase: "idle" }, null]);
+  // Its rows turn unreachable with "Sign in again", their clones kept,
+  // each under its key's group at its heading, your own group's own
+  // repository under your own group (git-host-4, space-6, space-1).
+  assert.deepEqual(atFirst?.groups.map((group) => [group.fullPath, group.repositories.map((repository) => repository.key)]), [["acme", [alphaKey]]]);
+  assert.ok(out.own.repositories.some((repository) => repository.key === HOST_OWN));
+  for (const key of [HOST_OWN, alphaKey]) {
+    const row = repositoryOf(out, key);
+    assert.deepEqual([row.state, row.reason, row.instance], ["unreachable", "Sign in again", first.url], key);
+    assert.ok(existsSync(join(clonePath(home.dataDir, key), ".git")), key);
+  }
+  // The second stands as it stood: signed in, its view and read time
+  // kept, nothing read of it, its rows listed (git-host-4).
+  const atSecond = instanceOf(out, second.url);
+  assert.deepEqual([atSecond?.signedIn, atSecond?.hostSignedOut, atSecond?.readAt], [true, false, instanceOf(before, second.url)?.readAt]);
+  assert.deepEqual(rowsUnder(out, second.url, "acme"), [[betaKey, "absent", second.url]]);
+  assert.equal(meReads(second), readsOfSecond);
+  // The mirror the interface reads until it reads each heading: the
+  // default instance's sign-out of this device (space-3, space-30).
+  assert.deepEqual(out.signIn, { phase: "idle", signedOut: { by: "host", login: LOGIN } });
+
+  // Refresh reads every signed-in instance: the second alone, nothing
+  // reaching the first (space-2, space-3).
+  const sentFirst = first.script.requests.length;
+  mark = home.client.mark();
+  await home.client.expectOk("space.refresh", {});
+  const reread = await home.client.waitSpace(mark, (state) => (instanceOf(state, second.url)?.readAt ?? 0) > (atSecond?.readAt ?? 0) && instanceOf(state, second.url)?.read.phase === "idle", 30_000);
+  assert.equal(first.script.requests.length, sentFirst, "the signed-out instance is never contacted");
+  assert.equal(instanceOf(reread, first.url)?.signedIn, false);
+
+  // Signed in again at the first, its rows are reachable again; then a
+  // sign-out of the second keeps the first signed in, its view and rows
+  // as they stood, the second's entry kept, signed out by the reader,
+  // its pair revoked and removed (git-host-10, space-6).
+  first.script.refuseRefresh = false;
+  mark = home.client.mark();
+  await signIn(home, first);
+  const back = await home.client.waitSpace(mark, (state) => state.signIn.phase === "idle" && repositoryOf(state, alphaKey).state === "reachable" && instanceOf(state, first.url)?.read.phase === "idle" && (instanceOf(state, first.url)?.readAt ?? null) !== null, 30_000);
+  assert.equal(instanceOf(back, first.url)?.hostSignedOut, false);
+  assert.deepEqual(back.signIn, { phase: "idle" });
+  const live = second.script.liveDevices();
+  const signedOut = await signOut(home, second);
+  assert.deepEqual(signedOut.instances.map((instance) => [instance.origin, instance.signedIn, instance.hostSignedOut]), [[first.url, true, false], [second.url, false, false]]);
+  assert.equal(instanceOf(signedOut, first.url)?.readAt, instanceOf(back, first.url)?.readAt, "the first's view stands");
+  assert.equal(repositoryOf(signedOut, alphaKey).state, "reachable");
+  assert.deepEqual(rowsOf(signedOut).filter((repository) => repository.instance === second.url), [], "a signed-out instance lists nothing");
+  assert.deepEqual(entries(), [[first.url, LOGIN, false], [second.url, bob.login, true]]);
+  assert.deepEqual(Object.keys(pairs()), [first.url]);
+  assert.equal(second.script.liveDevices(), live - 1, "the second revoked this device");
 });

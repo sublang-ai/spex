@@ -2152,7 +2152,9 @@ test("git-host-5: signed-in startup publishes a failed first read even with only
   const failed = await home.client.waitSpace(from, (state) => state.read.phase === "failed");
   assert.equal(failed.readAt, null);
   assert.ok(failed.groups.flatMap((group) => group.repositories).every((row) => row.state === "local-only" && row.reason === null));
-  assert.deepEqual(failed.read, { phase: "failed", message: "Could not reach 127.0.0.1" });
+  // The instance is named by the display name its entry kept from the
+  // read before the restart (space-15, storage-2).
+  assert.deepEqual(failed.read, { phase: "failed", message: "Could not reach Stand-in Git host" });
   assert.deepEqual((await home.client.expectOk("space.signout", {})).read, { phase: "idle" });
 });
 

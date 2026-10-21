@@ -199,19 +199,21 @@ interface TargetReading {
   failure?: string;
 }
 
-/** A row with the group the host's last read names for it, where it
- * lists it (space-1). */
-interface Placed { row: RepositoryState; group?: HostGroup }
+/** A row with the group the last read of its instance names for it,
+ * where it lists it (space-1), and that instance's origin. */
+interface Placed { row: RepositoryState; group?: HostGroup; instance?: string }
 
 /** The last sync a clone holds (space-61). */
 type Agreed = NonNullable<NonNullable<RepositoryState["branch"]>["agreed"]>;
 
 /** A step at the host waiting for a member with the rights (space-64). */
 interface Waiting {
+  /** The origin of the instance the step waits at (DR-127). */
+  instance: string;
   step: "create" | "branch";
   group: string;
   message: string;
-  /** What a creation asks again at the next read. */
+  /** What a creation asks again at that instance's next read. */
   create?: { groupId: string | null; name: string; description: string };
 }
 
@@ -835,10 +837,12 @@ class RepositorySync {
    * `created` records the core's creation of that repository
    * (git-host-7), written first so the remote never stands without it.
    * A URL is written to the remote standing, which keeps its name; a
-   * remote added takes the host's remote's name (DR-127), or `name`,
-   * which replaces a remote of another name.
+   * remote added takes the host's remote's name (DR-127) — named by
+   * `folder`, the folder of the instance it is at, for a key outside
+   * every instance's folder — or `name`, which replaces a remote of
+   * another name.
    */
-  private publishRemote(expected: string | null, next: { url?: string | null; id?: string | null; created?: string; name?: string }): boolean {
+  private publishRemote(expected: string | null, next: { url?: string | null; id?: string | null; created?: string; name?: string; folder?: string | null }): boolean {
     const git = (args: string[]): GitRun => {
       const run = this.git.runSync(args);
       if (run.code !== 0) throw new Error(`git ${args.join(" ")} failed: ${lastLines(run.stderr)}`);
@@ -855,7 +859,7 @@ class RepositorySync {
       if (name !== null) git(["config", "--remove-section", `remote.${name}`]);
       written = null;
     } else if (next.url !== undefined) {
-      written = next.name ?? name ?? this.hostRemoteName();
+      written = next.name ?? name ?? this.hostRemoteName(next.folder);
       if (written === name) {
         if (next.url !== current) git(["remote", "set-url", written, next.url]);
       } else {
@@ -873,9 +877,11 @@ class RepositorySync {
     return true;
   }
 
-  /** The name the host's remote takes in this clone (DR-127). */
-  private hostRemoteName(): string {
-    return hostRemoteName(this.key, this.owner.instanceFolder());
+  /** The name the host's remote takes in this clone (DR-127): its key's
+   * instance's folder, else `folder` — the default instance's where none
+   * is given. */
+  private hostRemoteName(folder: string | null = this.owner.instanceFolder()): string {
+    return hostRemoteName(this.key, folder);
   }
 
   /** The clone's remote — its name and URL — as its `.git/config`
@@ -941,8 +947,10 @@ class RepositorySync {
    * the URL the host handed over, used as given (space-5), written only
    * over the remote the caller read before asking the host — `expected`
    * — so a remote set meanwhile is refused, never replaced. `created`
-   * marks a repository the core just created (git-host-7). */
-  async attachHost(url: string, id: string, expected: string | null, created = false): Promise<void> {
+   * marks a repository the core just created (git-host-7); `folder` is
+   * the folder of the instance the repository is at, which names a
+   * remote added to a clone keyed outside every instance's folder. */
+  async attachHost(url: string, id: string, expected: string | null, created = false, folder?: string | null): Promise<void> {
     const repo = await this.readRepository();
     this.requireGit(repo);
     if (!repo.root) throw new CoreError("invalid_request", initializeFirst());
@@ -952,7 +960,7 @@ class RepositorySync {
     const held = this.remoteRef();
     // A remote already at the host's URL is the one this attaches; one
     // added takes the host's remote's name (DR-127).
-    if (!this.publishRemote(repo.remote === url ? url : expected, { url, id, ...(created ? { created: id } : {}) })) {
+    if (!this.publishRemote(repo.remote === url ? url : expected, { url, id, ...(created ? { created: id } : {}), ...(folder !== undefined ? { folder } : {}) })) {
       throw new CoreError("conflict", changedMeanwhile(splitKey(this.key).name));
     }
     // The same repository keeps what the clone holds of it and this
@@ -2374,66 +2382,84 @@ class RepositorySync {
 /** One instance the core talks to, known by its canonical origin
  * (git-host intent, DR-127): its own client, which keeps that
  * instance's app token current, refreshes it one at a time and holds
- * that instance's calls through its rate limit — for the core's run. */
+ * that instance's calls through its rate limit, and its own reads —
+ * each standing or failing on its own (git-host-5) — for the core's
+ * run. */
 class HostInstance {
+  /** Its last answer (git-host-5), held until its next read. */
+  view?: HostView;
+  /** Its name and Git origin as last read, kept past a sign-out so a
+   * clone there is still known for one. */
+  described?: { displayName: string; gitOrigin: string };
+  /** Its last read's failure, in the reader's words, until a read of it
+   * succeeds (git-host-5). */
+  readFailure?: string;
+  readState: InstanceState["read"] = { phase: "idle" };
+  reading?: Promise<HostView>;
+  readingGeneration?: number;
+  fullReadBegun = false;
+  viewRead = 0;
+  failureRead = 0;
+  readonly targets = new Map<RepositorySync, TargetReading>();
+  /** Bumped at each sign-in, sign-out and host sign-out there: work
+   * begun for an earlier account settles without effect. */
+  accountGeneration = 0;
+  /** Reads of it begun so far, each numbered by this count. */
+  readsBegun = 0;
+  /** The count of reads begun when this core last changed what it lists
+   * — a clone attached to a repository there (git-host-5), or a group
+   * created (git-host-15): a read numbered no higher began before, and
+   * is made again before it is held. */
+  changedAfter = 0;
+  /** The repositories clones were attached to since its view's read
+   * began, as it answered them, by id: listed until its next read is
+   * held (git-host-5). */
+  readonly attached = new Map<string, HostListing>();
+  /** The groups this core created there since its view's read began, as
+   * it answered them, by full path: listed, like `attached`, until its
+   * next read is held (git-host-5, git-host-15). */
+  readonly created = new Map<string, HostGroup>();
+  /** The login of the account it signed this device out of
+   * (git-host-4): said on its heading while no flow runs or stands
+   * failed (space-3), for the core's run, until its next sign-in. */
+  hostSignedOut?: string;
+  settingUp?: Promise<void>;
+  settingUpGeneration?: number;
+
   constructor(readonly origin: string, readonly client: GitHostClient) {}
+
+  /** Its folder under `workspace/` (DR-127); null where its origin
+   * stands as no folder. */
+  folder(): string | null {
+    try { return instanceFolder(this.origin); } catch { return null; }
+  }
+
+  /** Its Git origin, as its last read or description named it. */
+  knownOrigin(): string | undefined {
+    return this.view?.gitOrigin ?? this.described?.gitOrigin;
+  }
 }
 
 /** Every spex repository's machine and the Groups state they make. */
 export class SpaceManager {
   private readonly machines = new Map<string, RepositorySync>();
   /** Every instance the core has talked to this run, by canonical
-   * origin: one client each (DR-127). */
+   * origin: one client and one read each (DR-127). */
   private readonly instances = new Map<string, HostInstance>();
   /** Runs Git for the questions no one clone answers. */
   private readonly probe: SpaceGit;
   private publishing?: Promise<void>;
   private republish = false;
-  /** The host's last answer (git-host-5), held until the next read. */
-  private view?: HostView;
-  /** The host's name and Git origin as last read, kept past a sign-out
-   * so a clone on the host is still known for one. */
-  private described?: { displayName: string; gitOrigin: string };
-  /** The last read's failure, in the reader's words, until a read
-   * succeeds (git-host-5). */
-  private readFailure?: string;
-  private readState: GroupsState["read"] = { phase: "idle" };
-  private reading?: Promise<HostView>;
-  private readingGeneration?: number;
-  private fullReadBegun = false;
-  private viewRead = 0;
-  private failureRead = 0;
-  private readonly targets = new Map<RepositorySync, TargetReading>();
-  private accountGeneration = 0;
-  /** Reads of the host begun so far, each numbered by this count. */
-  private readsBegun = 0;
-  /** The count of reads begun when this core last changed what the host
-   * lists — a clone attached to a repository there (git-host-5), or a
-   * group created (git-host-15): a read numbered no higher began before,
-   * and is made again before it is held. */
-  private changedAfter = 0;
-  /** The repositories clones were attached to since the view's read
-   * began, as the host answered them, by id: listed until the next read
-   * is held (git-host-5). */
-  private readonly attached = new Map<string, HostListing>();
-  /** The groups this core created since the view's read began, as the
-   * host answered them, by full path: listed, like `attached`, until the
-   * next read is held (git-host-5, git-host-15). */
-  private readonly created = new Map<string, HostGroup>();
   /** The sign-in shown on the header (space-30). */
   private signInState: GroupsState["signIn"] = { phase: "idle" };
-  /** The login of the account the host signed this device out of
-   * (git-host-4): said on the header while no flow runs or stands
-   * failed (space-3), for the core's run, until the next sign-in. */
-  private hostSignedOut?: string;
-  /** Whether the read a signed-in start owes is still to be begun at a
-   * client's first ask for the state (git-host-5): spent on that ask. */
+  /** Whether the read a signed-in start owes each signed-in instance is
+   * still to be begun at a client's first ask for the state
+   * (git-host-5): spent on that ask. */
   private startRead = true;
   private flow?: { cancel(): void };
-  private settingUp?: Promise<void>;
-  private settingUpGeneration?: number;
-  /** Steps at the host waiting for a member with the rights (space-64),
-   * by the clone's key; asked again at the next read. */
+  /** Steps at an instance waiting for a member with the rights
+   * (space-64), by the clone's key; asked again at that instance's next
+   * read. */
   private readonly waiting = new Map<string, Waiting>();
   /** The progress of joins in flight or stopped, by the host's id
    * (space-63): each join's own entry, which only it replaces or
@@ -2461,23 +2487,45 @@ export class SpaceManager {
 
   // -- the account (git-host-2..4, git-host-10) ------------------------------
 
-  /** Whether the home is signed in to the Git host. */
+  /** Whether the home is signed in to its default instance. */
   signedIn(): boolean {
-    return this.host.store.home.account() !== null;
+    return this.signedInAt(this.defaultInstance());
   }
 
-  /** The host's display name, or its URL's host name before any read
-   * (space-15: a report names the host by its display name). */
+  /** Whether the home is signed in to an instance (storage-2). */
+  private signedInAt(instance: HostInstance): boolean {
+    return this.host.store.home.account(instance.origin) !== null;
+  }
+
+  /** The default instance's display name, or its URL's host name before
+   * any read (space-15: a report names the host by its display name). */
   hostName(): string {
-    const name = this.view?.displayName ?? this.described?.displayName;
+    return this.nameOf(this.defaultInstance());
+  }
+
+  /** An instance's name in what the core says of it (space-15): its
+   * display name as its last read named it — this run's, else its
+   * entry's — else its host name. */
+  private nameOf(instance: HostInstance): string {
+    const name = instance.view?.displayName ?? instance.described?.displayName ?? this.host.store.home.instance(instance.origin)?.displayName;
     if (name) return name;
-    try { return new URL(this.host.store.home.host.origin).hostname; } catch { return this.host.store.home.host.origin; }
+    try { return new URL(instance.origin).hostname; } catch { return instance.origin; }
+  }
+
+  /** The home's default instance (DR-127). */
+  private defaultInstance(): HostInstance {
+    return this.instanceAt(this.host.store.home.defaultInstance().origin);
+  }
+
+  /** Every instance the home lists, in its order (storage-2). */
+  private listedInstances(): HostInstance[] {
+    return this.host.store.home.instances().map((entry) => this.instanceAt(entry.origin));
   }
 
   /** The folder of the home's default instance (DR-127), the one the
-   * core signs in to: the folder its host clones lie under and the name
-   * its host's remote takes in a clone; null where the home's recorded
-   * URL stands as no instance's origin. */
+   * core still joins, picks and syncs at: the folder its clones lie
+   * under and the name its remote takes in a clone; null where the
+   * home's recorded URL stands as no instance's origin. */
   instanceFolder(): string | null {
     try { return instanceFolder(this.host.store.home.defaultInstance().origin); } catch { return null; }
   }
@@ -2513,11 +2561,11 @@ export class SpaceManager {
     return instance;
   }
 
-  /** Transitional, until each call goes to the instance it concerns: the
-   * default instance's client, through which the core still signs in,
-   * reads and acts (DR-127). */
+  /** Transitional, until each command goes to the instance it
+   * concerns: the default instance's client, through which the core
+   * still acts on a clone and a command (DR-127). */
   private defaultClient(): GitHostClient {
-    return this.instanceAt(this.host.store.home.defaultInstance().origin).client;
+    return this.defaultInstance().client;
   }
 
   /** A clone's instance (storage-31), as `cloneInstance` reads it from
@@ -2525,6 +2573,14 @@ export class SpaceManager {
   instanceOfClone(machine: RepositorySync): HostInstance | undefined {
     const origin = this.cloneInstance(machine.key, machine.facts.remoteName);
     return origin === null ? undefined : this.instanceAt(origin);
+  }
+
+  /** The instance whose answers a clone's row reads (space-61): its own
+   * (storage-31), else, for a clone at the host its key and remote name
+   * no instance for, the default instance — transitional, until the
+   * governing instance decides it (git-host-5). */
+  private servingOf(machine: RepositorySync): HostInstance {
+    return this.instanceOfClone(machine) ?? this.defaultInstance();
   }
 
   /** The access secret a client of an instance outside the core presents
@@ -2564,11 +2620,11 @@ export class SpaceManager {
   }
 
   /** The key a host repository's clone takes (DR-127): its path in the
-   * instance, under the instance's folder; null where that path cannot
-   * stand as folders on this device, or the home's instance has no
-   * folder. */
-  private keyAtHost(repository: HostRepository): string | null {
-    const folder = this.instanceFolder();
+   * instance, under the instance's folder — the default instance's
+   * where none is named; null where that path cannot stand as folders
+   * on this device, or the instance has no folder. */
+  private keyAtHost(repository: HostRepository, instance: HostInstance = this.defaultInstance()): string | null {
+    const folder = instance.folder();
     return folder === null ? null : hostKey(repository, folder);
   }
 
@@ -2582,8 +2638,10 @@ export class SpaceManager {
     return { name: account.displayName || account.login, email: `${account.login}@users.noreply.${domain}` };
   }
 
+  /** The default instance's Git origin, as its last read or description
+   * named it. */
   private knownOrigin(): string | undefined {
-    return this.view?.gitOrigin ?? this.described?.gitOrigin;
+    return this.defaultInstance().knownOrigin();
   }
 
   /** A code remote under the reported Git origin stays inside the core
@@ -2660,17 +2718,23 @@ export class SpaceManager {
 
   // -- the instance's names (space-1, space-15, git-host-5, DR-120) ---------
 
-  /** The listing a clone stands for in the current view, or among what
-   * this core attached since its read began (git-host-5). */
-  private listingOf(facts: RemoteFacts): HostListing | undefined {
-    const target = this.targetOf(facts);
+  /** The listing a clone stands for in an instance's current view, or
+   * among what this core attached there since its read began
+   * (git-host-5). */
+  private listingOf(instance: HostInstance, facts: RemoteFacts): HostListing | undefined {
+    const target = this.targetOf(instance, facts);
     if (target && !target.failure) return target.listing;
-    return listingFor(this.view, facts.id, facts.remote) ?? listingFor({ listings: [...this.attached.values()] }, facts.id, facts.remote);
+    return listingFor(instance.view, facts.id, facts.remote) ?? listingFor({ listings: [...instance.attached.values()] }, facts.id, facts.remote);
   }
 
-  /** Whether a listed group is held as colliding in the current view
-   * (git-host-5): its path is a login's, or lies beneath one. */
-  private collides(group: Pick<HostGroup, "kind" | "fullPath"> | undefined, view: HostView | HostCatalog | undefined = this.signedIn() ? this.view : undefined): boolean {
+  /** An instance's current view while it is signed in (git-host-5). */
+  private viewOf(instance: HostInstance): HostView | undefined {
+    return this.signedInAt(instance) ? instance.view : undefined;
+  }
+
+  /** Whether a listed group is held as colliding in a view of its
+   * instance (git-host-5): its path is a login's, or lies beneath one. */
+  private collides(group: Pick<HostGroup, "kind" | "fullPath"> | undefined, view: HostView | HostCatalog | undefined): boolean {
     if (!group || !view) return false;
     return collidingGroup(group, namedLogins(view, this.host.store.home.ownName));
   }
@@ -2680,7 +2744,7 @@ export class SpaceManager {
    * its instance's folder (DR-127) — and any other URL under the host's
    * Git origin as the host's name. */
   private urlRule(facts: RemoteFacts, key: string): Parameters<typeof withoutHostUrls>[1] {
-    const listing = facts.remote === null ? undefined : this.listingOf(facts);
+    const listing = facts.remote === null ? undefined : this.listingOf(this.defaultInstance(), facts);
     const instance = instanceSegmentOf(key);
     const path = listing ? `${listing.repository.group.fullPath}/${listing.repository.path}` : instance === null ? key : key.slice(instance.length + 1);
     return {
@@ -2712,12 +2776,13 @@ export class SpaceManager {
    * no token — and kept as a read's is; undefined where the host cannot
    * say. */
   async gitOrigin(): Promise<string | undefined> {
-    const known = this.knownOrigin();
+    const instance = this.defaultInstance();
+    const known = instance.knownOrigin();
     if (known) return known;
     try {
-      const described = await this.defaultClient().describe();
+      const described = await instance.client.describe();
       if (!described.gitOrigin) return undefined;
-      this.described = { displayName: described.displayName, gitOrigin: described.gitOrigin };
+      instance.described = { displayName: described.displayName, gitOrigin: described.gitOrigin };
       return described.gitOrigin;
     } catch {
       return undefined;
@@ -2774,17 +2839,6 @@ export class SpaceManager {
     return origin;
   }
 
-  /** An instance's name in what the core says of it (space-15): the
-   * default instance's as `hostName` reads it; another's display name as
-   * its last read named it, else its host name. */
-  private instanceName(origin: string): string {
-    const home = this.host.store.home;
-    if (origin === home.defaultInstance().origin) return this.hostName();
-    const named = home.instance(origin)?.displayName;
-    if (named) return named;
-    try { return new URL(origin).hostname; } catch { return origin; }
-  }
-
   /** Start the configured sign-in flow at the instance `url` names, by
    * its origin, the default instance where it names none (git-host-2,
    * git-host-3): its shape goes back at once, and its end sets the home
@@ -2795,7 +2849,8 @@ export class SpaceManager {
     if (this.flow || this.signInState.phase === "running" || [...this.instances.values()].some((entry) => entry.client.signingIn())) {
       throw new CoreError("busy", signInRunning());
     }
-    const client = this.instanceAt(origin).client;
+    const instance = this.instanceAt(origin);
+    const client = instance.client;
     const kind = this.host.signInFlow;
     const admit = (account: HostAccount): HostError | null => this.admitAccount(origin, account);
     let started: { kind: "browser"; flow: BrowserSignIn } | { kind: "device"; flow: DeviceSignIn };
@@ -2805,10 +2860,10 @@ export class SpaceManager {
         : { kind, flow: await client.startDeviceSignIn({ admit }) };
     } catch (error) {
       if (error instanceof SignInBusyError) throw new CoreError("busy", signInRunning());
-      const failure = signInFailure(error, this.instanceName(origin));
+      const failure = signInFailure(error, this.nameOf(instance));
       this.signInState = failure ? { phase: "failed", instance: origin, ...failure } : { phase: "idle" };
       void this.publish();
-      throw new CoreError("invalid_request", failure?.message ?? relayHostError(error, this.instanceName(origin)));
+      throw new CoreError("invalid_request", failure?.message ?? relayHostError(error, this.nameOf(instance)));
     }
     const flow = started.flow;
     this.flow = flow;
@@ -2849,35 +2904,22 @@ export class SpaceManager {
   /** A sign-in's token is stored (git-host-2): its account is written
    * into that origin's entry — appended after the listed ones where none
    * stands, signed in again where one does — and the home is set up for
-   * it there (space-4). */
+   * it there (space-4), that instance's earlier work and view ended and
+   * every other instance's left as they stand (git-host-5). */
   private async signedInAs(origin: string, account: HostAccount): Promise<void> {
     this.flow = undefined;
     try {
-      const store = this.host.store;
-      const formerDefault = store.home.defaultInstance().origin;
-      store.signIn(origin, account);
-      if (origin !== store.home.defaultInstance().origin) {
-        // Transitional, until each instance is read on its own: the core
-        // reads the default instance alone, so the set-up at another
-        // instance renames your own group's folder where it still bears
-        // this device's user name (space-59), and reads nothing there yet.
-        await this.publish();
-        await this.renameOwn(account, this.accountGeneration);
-        return;
-      }
-      // A first sign-in at another origin than the one the home was
-      // created with makes that origin the default instance: what was
-      // described before was the other instance's.
-      if (formerDefault !== origin) this.described = undefined;
-      this.accountGeneration += 1;
-      this.hostSignedOut = undefined;
-      this.view = undefined;
-      this.targets.clear();
-      this.releaseHeld();
-      this.readFailure = undefined;
-      this.readState = { phase: "idle" };
+      this.host.store.signIn(origin, account);
+      const instance = this.instanceAt(origin);
+      instance.accountGeneration += 1;
+      instance.hostSignedOut = undefined;
+      instance.view = undefined;
+      instance.targets.clear();
+      this.releaseHeld(instance);
+      instance.readFailure = undefined;
+      instance.readState = { phase: "idle" };
       await this.publish();
-      await this.setUp();
+      await this.setUp(instance);
     } catch (error) {
       console.error(`spex: setting the home up for the account failed: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
@@ -2888,59 +2930,55 @@ export class SpaceManager {
 
   private signInEnded(origin: string, error: unknown): void {
     this.flow = undefined;
-    const failure = signInFailure(error, this.instanceName(origin));
+    const failure = signInFailure(error, this.nameOf(this.instanceAt(origin)));
     this.signInState = failure ? { phase: "failed", instance: origin, ...failure } : { phase: "idle" };
     void this.publish();
   }
 
   /** An instance signed this device out (git-host-4): its credential is
-   * gone, its account kept and marked signed out, every other instance's
-   * entry and token untouched. The default instance's, the one the core
-   * still reads alone, also drops its view, and the header says the host
-   * did it, naming the account's login (space-3). */
+   * gone, its account kept and marked signed out, its view dropped, and
+   * its heading says it did it, naming the account's login (space-3);
+   * every other instance's entry, token and view untouched. */
   signedOutByHost(origin: string): void {
     const store = this.host.store;
-    if (canonicalOrigin(origin) !== store.home.defaultInstance().origin) {
-      store.signOut(origin);
-      void this.publish();
-      return;
-    }
-    const account = store.home.account(origin);
-    if (account) this.hostSignedOut = account.login;
-    store.signOut(origin);
-    this.readState = { phase: "idle" };
-    this.accountGeneration += 1;
-    this.view = undefined;
-    this.targets.clear();
-    this.releaseHeld();
+    const instance = this.instanceAt(origin);
+    const account = store.home.account(instance.origin);
+    if (account) instance.hostSignedOut = account.login;
+    store.signOut(instance.origin);
+    instance.readState = { phase: "idle" };
+    instance.accountGeneration += 1;
+    instance.view = undefined;
+    instance.targets.clear();
+    this.releaseHeld(instance);
     void this.publish();
   }
 
-  /** Sign out (git-host-10): revoke at the host, tried once, forget the
-   * credential, keep every clone and record. The home is marked signed
-   * out in the same turn as the removal; a pair stored in its place
-   * meanwhile stays, and the account with it. */
-  async signOut(instance?: string): Promise<GroupsState> {
-    this.served(instance);
-    this.flow?.cancel();
+  /** Sign out of the instance a command names (git-host-10): revoke
+   * there, tried once, forget its credential, keep every clone and
+   * record and every other instance's sign-in. Its entry is marked
+   * signed out in the same turn as the removal; a pair stored in its
+   * place meanwhile stays, and the account with it. */
+  async signOut(named?: string): Promise<GroupsState> {
+    const instance = this.instanceAt(this.namedInstance(named));
+    if (this.signInState.phase === "running" && this.signInState.instance === instance.origin) this.flow?.cancel();
     try {
-      await this.defaultClient().signOut(() => {
-        this.host.store.signOut();
-        this.accountGeneration += 1;
-        this.hostSignedOut = undefined;
-        this.view = undefined;
-        this.targets.clear();
-        this.releaseHeld();
-        this.readFailure = undefined;
-        this.readState = { phase: "idle" };
-        this.waiting.clear();
+      await instance.client.signOut(() => {
+        this.host.store.signOut(instance.origin);
+        instance.accountGeneration += 1;
+        instance.hostSignedOut = undefined;
+        instance.view = undefined;
+        instance.targets.clear();
+        this.releaseHeld(instance);
+        instance.readFailure = undefined;
+        instance.readState = { phase: "idle" };
+        for (const [key, waiting] of [...this.waiting]) if (waiting.instance === instance.origin) this.waiting.delete(key);
         // A join still running keeps its progress; its transport holds its
         // own brokered credential or stops asking to sign in (space-15).
         for (const [id, phase] of [...this.joining]) if (phase.phase !== "running") this.joining.delete(id);
-        for (const machine of this.machines.values()) machine.hostOverride = undefined;
+        for (const machine of this.machines.values()) if (this.servingOf(machine) === instance) machine.hostOverride = undefined;
       });
     } catch (error) {
-      if (error instanceof CredentialChanged) throw new CoreError("conflict", relayHostError(error, this.hostName()));
+      if (error instanceof CredentialChanged) throw new CoreError("conflict", relayHostError(error, this.nameOf(instance)));
       throw error;
     }
     const state = await this.state();
@@ -2948,130 +2986,141 @@ export class SpaceManager {
     return state;
   }
 
-  /** Refresh (space-2): read the host, and finish what a sign-in left
-   * for the next read (space-4, space-64). */
+  /** Refresh (space-2): read every signed-in instance, each on its own,
+   * and finish what a sign-in there left for its next read (space-4,
+   * space-64); refused where none is signed in (space-29). */
   refresh(): { accepted: true } {
-    if (!this.signedIn()) throw new CoreError("invalid_request", signInFirst());
-    void this.setUp().catch((error: unknown) => {
-      console.error(`spex: refresh failed: ${error instanceof Error ? error.message : String(error)}`);
-    });
+    const signedIn = this.listedInstances().filter((instance) => this.signedInAt(instance));
+    if (signedIn.length === 0) throw new CoreError("invalid_request", signInFirst());
+    for (const instance of signedIn) {
+      void this.setUp(instance).catch((error: unknown) => {
+        console.error(`spex: refresh failed: ${error instanceof Error ? error.message : String(error)}`);
+      });
+    }
     return { accepted: true };
   }
 
-  private failRead(error: unknown, generation: number): void {
-    if (generation !== this.accountGeneration || !this.signedIn()) return;
-    this.readState = {
+  private failRead(instance: HostInstance, error: unknown, generation: number): void {
+    if (generation !== instance.accountGeneration || !this.signedInAt(instance)) return;
+    instance.readState = {
       phase: "failed",
-      message: error instanceof HostError || error instanceof CredentialChanged ? relayHostError(error, this.hostName()) : i18n._({
+      message: error instanceof HostError || error instanceof CredentialChanged ? relayHostError(error, this.nameOf(instance)) : i18n._({
         id: "Could not refresh groups; try again",
         comment: "An unexpected local failure stopped Refresh; technical details stay in diagnostics",
       }),
     };
   }
 
-  /** The account's set-up, in order (space-4): your own group renamed
-   * after the login, the host read, your own group's spex repository on
-   * the host, and every step left waiting asked again. */
-  private setUp(): Promise<void> {
-    const generation = this.accountGeneration;
-    if (this.settingUp && this.settingUpGeneration === generation) return this.settingUp;
-    const previous = this.settingUp;
-    this.readState = { phase: "running" };
+  /** The account's set-up at an instance, in order (space-4): your own
+   * group renamed after the login, that instance read, your own group's
+   * spex repository there where it has no remote, and every step left
+   * waiting there asked again. */
+  private setUp(instance: HostInstance): Promise<void> {
+    const generation = instance.accountGeneration;
+    if (instance.settingUp && instance.settingUpGeneration === generation) return instance.settingUp;
+    const previous = instance.settingUp;
+    instance.readState = { phase: "running" };
     const work = (async () => {
       // Accepted Refresh work is visible before the existing rename/read awaits.
       await this.publish();
       await previous?.catch(() => undefined);
-      if (generation !== this.accountGeneration || !this.signedIn()) return;
-      await this.runSetUp(generation);
+      if (generation !== instance.accountGeneration || !this.signedInAt(instance)) return;
+      await this.runSetUp(instance, generation);
     })().catch((error: unknown) => {
-      this.failRead(error, generation);
+      this.failRead(instance, error, generation);
       throw error;
     }).finally(async () => {
-      if (this.settingUp === work) { this.settingUp = undefined; this.settingUpGeneration = undefined; }
-      if (generation === this.accountGeneration && this.readState.phase === "running") this.readState = { phase: "idle" };
+      if (instance.settingUp === work) { instance.settingUp = undefined; instance.settingUpGeneration = undefined; }
+      if (generation === instance.accountGeneration && instance.readState.phase === "running") instance.readState = { phase: "idle" };
       try { await this.publish(); }
-      catch (error) { this.failRead(error, generation); throw error; }
+      catch (error) { this.failRead(instance, error, generation); throw error; }
     });
-    this.settingUp = work;
-    this.settingUpGeneration = generation;
+    instance.settingUp = work;
+    instance.settingUpGeneration = generation;
     return work;
   }
 
-  private async runSetUp(generation: number): Promise<void> {
-    const account = this.host.store.home.account();
+  private async runSetUp(instance: HostInstance, generation: number): Promise<void> {
+    const account = this.host.store.home.account(instance.origin);
     if (!account) return;
-    const renamed = await this.renameOwn(account, generation);
-    if (generation !== this.accountGeneration) return;
+    const renamed = await this.renameOwn(account, instance, generation);
+    if (generation !== instance.accountGeneration) return;
     let view: HostView;
-    try { view = await this.readHost(); } catch { return; }
-    if (generation !== this.accountGeneration) return;
-    if (renamed !== "conflict") await this.ensureOwnOnHost(view);
-    if (generation !== this.accountGeneration) return;
-    await this.retryWaiting(view);
+    try { view = await this.readHost(instance); } catch { return; }
+    if (generation !== instance.accountGeneration) return;
+    // Transitional: your own group's spex repository is created or joined
+    // at the default instance alone, until a clone's instance governs its
+    // sync (DR-127).
+    if (renamed !== "conflict" && instance === this.defaultInstance()) await this.ensureOwnOnHost(instance, view);
+    if (generation !== instance.accountGeneration) return;
+    await this.retryWaiting(instance, view);
     await this.publish();
   }
 
-  /** What this core attached or created since the view's read began
-   * stops counting as listed: the view held now, or none, says
-   * (git-host-5). */
-  private releaseHeld(): void {
-    this.attached.clear();
-    this.created.clear();
+  /** What this core attached or created at an instance since its view's
+   * read began stops counting as listed: the view held now, or none,
+   * says (git-host-5). */
+  private releaseHeld(instance: HostInstance): void {
+    instance.attached.clear();
+    instance.created.clear();
   }
 
-  /** The groups a view lists, with those this core created since its
-   * read began, which count as listed until the next read is held
-   * (git-host-5, git-host-15). */
-  private listedGroups(view: Pick<HostView, "groups"> | undefined): HostGroup[] {
+  /** The groups a view of an instance lists, with those this core
+   * created there since its read began, which count as listed until its
+   * next read is held (git-host-5, git-host-15). */
+  private listedGroups(instance: HostInstance, view: Pick<HostView, "groups"> | undefined): HostGroup[] {
     const groups = view?.groups ?? [];
-    const held = [...this.created.values()].filter((group) => !groups.some((entry) => entry.fullPath === group.fullPath || (group.id !== null && entry.id === group.id)));
+    const held = [...instance.created.values()].filter((group) => !groups.some((entry) => entry.fullPath === group.fullPath || (group.id !== null && entry.id === group.id)));
     return [...groups, ...held];
   }
 
-  /** Read the host (git-host-5): one read at a time, the answer held as
-   * the current view, a failure keeping the previous view and its time.
-   * A read begun before a clone was attached to a repository, or a
-   * group was created, cannot list it: it is made again before it is
-   * held. */
-  readHost(): Promise<HostView> {
-    const generation = this.accountGeneration;
-    if (this.reading && this.readingGeneration === generation) return this.reading;
-    const previous = this.reading;
-    this.fullReadBegun = true;
-    this.readState = { phase: "running" };
-    const client = this.defaultClient();
+  /** Read an instance — the default instance where none is named
+   * (git-host-5): one read of it at a time, the answer held as its
+   * current view, a failure keeping its previous view and its time, and
+   * every other instance's read and view its own. A read begun before a
+   * clone was attached to a repository there, or a group was created
+   * there, cannot list it: it is made again before it is held. */
+  readHost(instance: HostInstance = this.defaultInstance()): Promise<HostView> {
+    const generation = instance.accountGeneration;
+    if (instance.reading && instance.readingGeneration === generation) return instance.reading;
+    const previous = instance.reading;
+    instance.fullReadBegun = true;
+    instance.readState = { phase: "running" };
+    const client = instance.client;
     let work!: Promise<HostView>;
     work = (async (): Promise<HostView> => {
       let begun = 0;
       try {
         await this.publish();
         await previous?.catch(() => undefined);
-        if (generation !== this.accountGeneration) throw new CredentialChanged();
+        if (generation !== instance.accountGeneration) throw new CredentialChanged();
         let view: HostView;
         do {
-          begun = (this.readsBegun += 1);
+          begun = (instance.readsBegun += 1);
           view = await readHostView(client);
-        } while (begun <= this.changedAfter);
-        if (generation !== this.accountGeneration) throw new CredentialChanged();
-        this.view = view;
-        this.viewRead = begun;
-        for (const [machine, target] of this.targets) if (target.begun <= begun) this.targets.delete(machine);
-        this.releaseHeld();
-        this.described = { displayName: view.displayName, gitOrigin: view.gitOrigin };
+        } while (begun <= instance.changedAfter);
+        if (generation !== instance.accountGeneration) throw new CredentialChanged();
+        instance.view = view;
+        instance.viewRead = begun;
+        for (const [machine, target] of instance.targets) if (target.begun <= begun) instance.targets.delete(machine);
+        this.releaseHeld(instance);
+        instance.described = { displayName: view.displayName, gitOrigin: view.gitOrigin };
         // The instance's entry keeps its display name as this read named
         // it, for its heading once it is signed out (storage-2, space-1).
         if (view.displayName) {
-          try { this.host.store.setDisplayName(client.url, view.displayName); }
+          try { this.host.store.setDisplayName(instance.origin, view.displayName); }
           catch (error) { console.error(`spex: the instance's display name was not recorded: ${error instanceof Error ? error.message : String(error)}`); }
         }
-        this.readFailure = undefined;
-        // A clone matched by its remote records the host's id (git-host-5).
+        instance.readFailure = undefined;
+        // A clone this instance serves, matched by its remote, records the
+        // host's id (git-host-5).
         for (const repository of this.host.store.listRepositories()) {
           if (!this.host.store.repository(repository.key)) continue;
           const machine = this.machine(repository.key);
-          if ((this.targets.get(machine)?.begun ?? 0) <= begun) machine.hostOverride = undefined;
+          if (this.servingOf(machine) !== instance) continue;
+          if ((instance.targets.get(machine)?.begun ?? 0) <= begun) machine.hostOverride = undefined;
           const facts = await machine.readFacts().catch(() => ({ remote: null, id: null }));
-          if (generation !== this.accountGeneration) throw new CredentialChanged();
+          if (generation !== instance.accountGeneration) throw new CredentialChanged();
           if (facts.id === null && facts.remote !== null) {
             const listing = listingFor(view, null, facts.remote);
             if (listing) { try { machine.recordId(listing.repository.id, facts.remote); } catch { /* recorded at the next read */ } }
@@ -3080,68 +3129,69 @@ export class SpaceManager {
         return view;
       } catch (error) {
         // A refusal signed out where its pair was removed (git-host-4);
-        // here, only a home whose app token is gone is, checked now.
-        if (generation === this.accountGeneration) {
-          if (error instanceof HostError && error.code === "signed_out" && this.signedIn() && client.holdsNone()) this.signedOutByHost(client.url);
-          if (generation === this.accountGeneration) {
-            this.readFailure = relayHostError(error, this.hostName());
-            this.failRead(error, generation);
-            this.failureRead = begun;
+        // here, only an instance whose app token is gone is, checked now.
+        if (generation === instance.accountGeneration) {
+          if (error instanceof HostError && error.code === "signed_out" && this.signedInAt(instance) && client.holdsNone()) this.signedOutByHost(instance.origin);
+          if (generation === instance.accountGeneration) {
+            instance.readFailure = relayHostError(error, this.nameOf(instance));
+            this.failRead(instance, error, generation);
+            instance.failureRead = begun;
           }
         }
         throw error;
       } finally {
-        if (this.reading === work) { this.reading = undefined; this.readingGeneration = undefined; }
-        if (!this.settingUp && generation === this.accountGeneration && this.readState.phase === "running") this.readState = { phase: "idle" };
+        if (instance.reading === work) { instance.reading = undefined; instance.readingGeneration = undefined; }
+        if (!instance.settingUp && generation === instance.accountGeneration && instance.readState.phase === "running") instance.readState = { phase: "idle" };
         void this.publish();
       }
     })();
-    this.reading = work;
-    this.readingGeneration = generation;
+    instance.reading = work;
+    instance.readingGeneration = generation;
     work.catch(() => undefined);
     return work;
   }
 
-  /** The newest selected observation not superseded by a full read.
-   * Facts changed to another remote cannot inherit it. */
-  private targetOf(facts: RemoteFacts): TargetReading | undefined {
-    return [...this.targets.values()].filter((target) => target.accountGeneration === this.accountGeneration && target.begun > this.viewRead && (
+  /** An instance's newest selected observation not superseded by its
+   * full read. Facts changed to another remote cannot inherit it. */
+  private targetOf(instance: HostInstance, facts: RemoteFacts): TargetReading | undefined {
+    return [...instance.targets.values()].filter((target) => target.accountGeneration === instance.accountGeneration && target.begun > instance.viewRead && (
       (target.facts.id === facts.id && target.facts.remote === facts.remote)
       || (target.listing !== undefined && listingFor({ listings: [target.listing] }, facts.id, facts.remote) !== undefined)
     )).sort((a, b) => b.begun - a.begun)[0];
   }
 
   /** A target answer cannot outlive the account it was requested for. */
-  private assertTargetAccount(generation: number): void {
-    if (generation !== this.accountGeneration || !this.signedIn()) throw new CredentialChanged();
+  private assertTargetAccount(instance: HostInstance, generation: number): void {
+    if (generation !== instance.accountGeneration || !this.signedInAt(instance)) throw new CredentialChanged();
   }
 
-  /** Fresh complete namespace facts plus only this destination's
-   * detail (git-host-22). Never joins an unrelated full-view fanout. */
-  private async readTarget(machine: RepositorySync, facts: CloneFacts): Promise<TargetReading> {
-    const accountGeneration = this.accountGeneration;
-    const client = this.defaultClient();
+  /** Fresh complete namespace facts of an instance plus only this
+   * destination's detail (git-host-22). Never joins an unrelated
+   * full-view fanout. */
+  private async readTarget(instance: HostInstance, machine: RepositorySync, facts: CloneFacts): Promise<TargetReading> {
+    const accountGeneration = instance.accountGeneration;
+    const client = instance.client;
     let begun = 0;
     try {
       let catalog: HostCatalog;
       let listing: HostListing | undefined;
       do {
-        begun = (this.readsBegun += 1);
+        begun = (instance.readsBegun += 1);
         catalog = await readHostCatalog(client);
-        this.assertTargetAccount(accountGeneration);
+        this.assertTargetAccount(instance, accountGeneration);
         const repository = catalog.repositories.find((entry) => entry.id === facts.id)
           ?? catalog.repositories.find((entry) => sameRemote(entry.remoteUrl, facts.remote));
         listing = repository ? await readHostListing(client, repository, true) : undefined;
-        this.assertTargetAccount(accountGeneration);
-      } while (begun <= this.changedAfter || begun < Math.max(this.viewRead, this.failureRead));
+        this.assertTargetAccount(instance, accountGeneration);
+      } while (begun <= instance.changedAfter || begun < Math.max(instance.viewRead, instance.failureRead));
       const target = { begun, accountGeneration, facts, catalog, listing };
-      if ((this.targets.get(machine)?.begun ?? 0) < begun) this.targets.set(machine, target);
-      this.described = { displayName: catalog.displayName, gitOrigin: catalog.gitOrigin };
+      if ((instance.targets.get(machine)?.begun ?? 0) < begun) instance.targets.set(machine, target);
+      instance.described = { displayName: catalog.displayName, gitOrigin: catalog.gitOrigin };
       return target;
     } catch (error) {
-      if (error instanceof HostError && error.code === "signed_out" && this.signedIn() && client.holdsNone()) this.signedOutByHost(client.url);
-      if (accountGeneration === this.accountGeneration && this.signedIn() && (this.targets.get(machine)?.begun ?? 0) < begun) {
-        this.targets.set(machine, { begun, accountGeneration, facts, failure: relayHostError(error, this.hostName()) });
+      if (error instanceof HostError && error.code === "signed_out" && this.signedInAt(instance) && client.holdsNone()) this.signedOutByHost(instance.origin);
+      if (accountGeneration === instance.accountGeneration && this.signedInAt(instance) && (instance.targets.get(machine)?.begun ?? 0) < begun) {
+        instance.targets.set(machine, { begun, accountGeneration, facts, failure: relayHostError(error, this.nameOf(instance)) });
       }
       throw error;
     } finally { void this.publish(); }
@@ -3157,13 +3207,13 @@ export class SpaceManager {
    * naming one rewritten. A destination already taken is a conflict:
    * nothing moves, and the next set-up asks again. Writers beneath the
    * clones resolve their paths at their own instants. */
-  private async renameOwn(account: Pick<HostAccount, "login">, generation: number): Promise<"none" | "done" | "conflict"> {
+  private async renameOwn(account: Pick<HostAccount, "login">, instance: HostInstance, generation: number): Promise<"none" | "done" | "conflict"> {
     const store = this.host.store;
     const target = ownNameFor(account.login);
     const device = store.deviceOwnName();
     if (!target || target === store.home.ownName || store.home.ownName !== device) return "none";
     const identity = await this.machineIdentity();
-    if (generation !== this.accountGeneration) return "none";
+    if (generation !== instance.accountGeneration) return "none";
     // Nothing is awaited from here to the last rename.
     const current = store.home.ownName;
     if (target === current || current !== device) return "none";
@@ -3219,9 +3269,10 @@ export class SpaceManager {
       && sameLogin(listing.repository.group.fullPath, namespace) && names.has(listing.repository.path));
   }
 
-  /** Your own group's spex repository on the host (space-4, space-65):
-   * joined where the host lists one, else created and pushed. */
-  private async ensureOwnOnHost(view: HostView): Promise<void> {
+  /** Your own group's spex repository at an instance while it has no
+   * remote (space-4, space-65): joined where that instance lists one,
+   * else created there and pushed. */
+  private async ensureOwnOnHost(instance: HostInstance, view: HostView): Promise<void> {
     const store = this.host.store;
     const key = store.home.own();
     if (!store.repository(key) || this.waiting.has(key)) return;
@@ -3234,10 +3285,10 @@ export class SpaceManager {
     const name = splitKey(key).name;
     const listed = this.ownNamespaceListing(view);
     if (listed) {
-      await this.adopt(machine, listed, true, { setUp: true });
+      await this.adopt(instance, machine, listed, true, { setUp: true });
       return;
     }
-    await this.create(machine, group, name, repositoryDescription({ kind: "group", group: group.fullPath }), "quiet");
+    await this.create(instance, machine, group, name, repositoryDescription({ kind: "group", group: group.fullPath }), "quiet");
   }
 
   /**
@@ -3255,17 +3306,20 @@ export class SpaceManager {
       const machine = this.machine(key);
       const facts = await machine.readFacts();
       if (facts.remote !== null) return "unchanged";
-      if (!this.signedIn()) return "local";
-      const view = this.view ?? await this.readHost();
+      // Transitional: at the default instance, until the key's instance
+      // decides it (DR-127).
+      const instance = this.defaultInstance();
+      if (!this.signedInAt(instance)) return "local";
+      const view = instance.view ?? await this.readHost(instance);
       const listed = view.listings.find((listing) => listing.repository.group.kind === "group" && !this.collides(listing.repository.group, view)
         && listing.repository.group.fullPath === group && listing.repository.path === name);
       if (listed) {
-        await this.adopt(machine, listed, true);
+        await this.adopt(instance, machine, listed, true);
         return "joined";
       }
-      const hostGroup = this.listedGroups(view).find((entry) => entry.kind === "group" && entry.fullPath === group);
+      const hostGroup = this.listedGroups(instance, view).find((entry) => entry.kind === "group" && entry.fullPath === group);
       if (!hostGroup || this.collides(hostGroup, view)) return "local";
-      return await this.create(machine, { id: hostGroup.id, fullPath: hostGroup.fullPath }, name, repositoryDescription({ kind: "group", group }), "quiet");
+      return await this.create(instance, machine, { id: hostGroup.id, fullPath: hostGroup.fullPath }, name, repositoryDescription({ kind: "group", group }), "quiet");
     } catch (error) {
       console.error(`spex: ${key} stays on this device: ${error instanceof Error ? error.message : String(error)}`);
       return "local";
@@ -3283,19 +3337,20 @@ export class SpaceManager {
    * `setUp` marks the account's set-up joining your own group's spex
    * repository (space-4, space-59), and `created` a repository the core
    * just created, which the clone records with its remote (git-host-7). */
-  private async adopt(machine: RepositorySync, listing: HostListing, join: boolean, options: { expected?: string | null; setUp?: boolean; created?: boolean } = {}): Promise<void> {
+  private async adopt(instance: HostInstance, machine: RepositorySync, listing: HostListing, join: boolean, options: { expected?: string | null; setUp?: boolean; created?: boolean } = {}): Promise<void> {
     const { repository } = listing;
     const { expected = null, setUp = false, created = false } = options;
-    this.changedAfter = this.readsBegun;
-    this.targets.delete(machine);
-    this.attached.set(repository.id, listing);
-    try { await machine.attachHost(repository.remoteUrl, repository.id, expected, created); }
+    instance.changedAfter = instance.readsBegun;
+    instance.targets.delete(machine);
+    instance.attached.set(repository.id, listing);
+    // A remote added is named by that instance's folder (DR-127).
+    try { await machine.attachHost(repository.remoteUrl, repository.id, expected, created, instance.folder()); }
     catch (error) {
-      this.attached.delete(repository.id);
+      instance.attached.delete(repository.id);
       throw error;
     }
     this.waiting.delete(machine.key);
-    await this.moveAtPick(machine, repository);
+    await this.moveAtPick(instance, machine, repository);
     await this.publish();
     this.startSync(machine.key, { join, ...(setUp ? { setUp } : {}) });
   }
@@ -3310,11 +3365,11 @@ export class SpaceManager {
    * leaves it where it lies, its remote naming its instance (storage-31),
    * until its next sync moves it; the pick stands either way.
    */
-  private async moveAtPick(machine: RepositorySync, repository: HostRepository): Promise<void> {
+  private async moveAtPick(instance: HostInstance, machine: RepositorySync, repository: HostRepository): Promise<void> {
     const store = this.host.store;
     const from = machine.key;
     if (from === store.home.own() || splitKey(from).instance !== null || !from.startsWith(`${store.home.ownName}/`)) return;
-    const to = this.keyAtHost(repository);
+    const to = this.keyAtHost(repository, instance);
     if (!to || to === from) return;
     const source = machine.repository.dir;
     const identity = await this.machineIdentity();
@@ -3335,8 +3390,10 @@ export class SpaceManager {
     await this.afterMove([{ from, to }]);
   }
 
-  /** Ask the host to create `name` in a group for a clone (git-host-6). */
+  /** Ask an instance to create `name` in a group there for a clone
+   * (git-host-6). */
   private async create(
+    instance: HostInstance,
     machine: RepositorySync,
     group: { id: string | null; fullPath: string },
     name: string,
@@ -3346,36 +3403,38 @@ export class SpaceManager {
     const ask = { groupId: group.id, name, description };
     let answer: Awaited<ReturnType<GitHostClient["create"]>>;
     try {
-      answer = await this.defaultClient().create(ask);
+      answer = await instance.client.create(ask);
     } catch (error) {
       if (mode === "refuse") {
         throw new CoreError("invalid_request", error instanceof HostError && error.kind === "name_taken"
           ? nameTaken(name, group.fullPath)
-          : relayHostError(error, this.hostName()));
+          : relayHostError(error, this.nameOf(instance)));
       }
       // The refusal stands on the row with the host's words, and the
-      // creation is asked again at the next read (space-4, space-64),
-      // under the key the clone bears now, wherever it moved meanwhile.
-      this.waiting.set(machine.key, { step: "create", group: group.fullPath, message: relayHostError(error, this.hostName()), create: ask });
+      // creation is asked again at that instance's next read (space-4,
+      // space-64), under the key the clone bears now, wherever it moved
+      // meanwhile.
+      this.waiting.set(machine.key, { instance: instance.origin, step: "create", group: group.fullPath, message: relayHostError(error, this.nameOf(instance)), create: ask });
       await this.publish();
       return "waiting";
     }
     if (answer.status === "pending") {
-      this.waiting.set(machine.key, { step: "create", group: group.fullPath, message: answer.message, create: ask });
+      this.waiting.set(machine.key, { instance: instance.origin, step: "create", group: group.fullPath, message: answer.message, create: ask });
       await this.publish();
       return "waiting";
     }
     // As the host answered: no `spex` branch yet, nor a members' count.
-    await this.adopt(machine, { repository: answer.repository, readOnly: null, branchPresent: false, members: null }, false, { created: true });
+    await this.adopt(instance, machine, { repository: answer.repository, readOnly: null, branchPresent: false, members: null }, false, { created: true });
     return "created";
   }
 
-  /** Every step left waiting, asked again at a read (space-64): a
-   * creation a member with the rights did is found and joined. An entry
-   * stands until its step is done or no longer asked for — never lost to
-   * an act that failed meanwhile. */
-  private async retryWaiting(view: HostView): Promise<void> {
+  /** Every step left waiting at an instance, asked again at its read
+   * (space-64): a creation a member with the rights did is found and
+   * joined. An entry stands until its step is done or no longer asked
+   * for — never lost to an act that failed meanwhile. */
+  private async retryWaiting(instance: HostInstance, view: HostView): Promise<void> {
     for (const [key, waiting] of [...this.waiting]) {
+      if (waiting.instance !== instance.origin) continue;
       if (!this.host.store.repository(key)) { this.waiting.delete(key); continue; }
       const machine = this.machine(key);
       const facts = await machine.readFacts();
@@ -3391,8 +3450,8 @@ export class SpaceManager {
           return group.kind === "group" && (group.id === ask.groupId || (group.id === null && group.fullPath === waiting.group));
         });
         try {
-          if (found) await this.adopt(machine, found, true, { setUp: machine.key === this.host.store.home.own() });
-          else if (await this.create(machine, { id: ask.groupId, fullPath: waiting.group }, ask.name, ask.description, "quiet") === "created" && this.waiting.get(machine.key) === waiting) this.waiting.delete(machine.key);
+          if (found) await this.adopt(instance, machine, found, true, { setUp: machine.key === this.host.store.home.own() });
+          else if (await this.create(instance, machine, { id: ask.groupId, fullPath: waiting.group }, ask.name, ask.description, "quiet") === "created" && this.waiting.get(machine.key) === waiting) this.waiting.delete(machine.key);
         } catch (error) {
           console.error(`spex: ${machine.key} still waits: ${error instanceof Error ? error.message : String(error)}`);
         }
@@ -3402,13 +3461,13 @@ export class SpaceManager {
       if (!listing) continue;
       if (listing.branchPresent) { this.waiting.delete(key); continue; }
       try {
-        const answer = await this.defaultClient().prepareBranch(listing.repository.id);
+        const answer = await instance.client.prepareBranch(listing.repository.id);
         if (answer.status === "ready") {
           this.waiting.delete(key);
           this.startSync(key, {});
         } else this.waiting.set(key, { ...waiting, message: answer.message });
       } catch (error) {
-        this.waiting.set(key, { ...waiting, message: relayHostError(error, this.hostName()) });
+        this.waiting.set(key, { ...waiting, message: relayHostError(error, this.nameOf(instance)) });
       }
     }
   }
@@ -3425,6 +3484,7 @@ export class SpaceManager {
    * listed one, or create `<name>-spex` in a group. */
   async pick(key: string, choice: { kind: "join"; instance?: string; hostId: string } | { kind: "create"; instance?: string; groupId: string | null; name: string }, noticed = false): Promise<{ accepted: true }> {
     this.served(choice.instance);
+    const instance = this.defaultInstance();
     const machine = this.machine(key);
     {
       // The remote is written only where none stands at the write
@@ -3434,8 +3494,8 @@ export class SpaceManager {
       if (facts.remote !== null) {
         throw new CoreError("invalid_request", i18n._({ id: "{name} is on the host already", values: { name: splitKey(key).name }, comment: "Refusal of a pick: the spex repository is not local only" }));
       }
-      if (!this.signedIn()) throw new CoreError("invalid_request", signInFirst());
-      const view = this.view ?? await this.readHost().catch((error: unknown) => { throw new CoreError("invalid_request", relayHostError(error, this.hostName())); });
+      if (!this.signedInAt(instance)) throw new CoreError("invalid_request", signInFirst());
+      const view = instance.view ?? await this.readHost(instance).catch((error: unknown) => { throw new CoreError("invalid_request", relayHostError(error, this.nameOf(instance))); });
       if (choice.kind === "join") {
         const listing = view.listings.find((entry) => entry.repository.id === choice.hostId);
         if (!listing) throw new CoreError("not_found", noLongerShared());
@@ -3452,7 +3512,7 @@ export class SpaceManager {
             comment: "Refusal of a pick joining a spex repository with other members until the reader has seen the privacy notice",
           }), { notice: true, members: listing.members, visibility: listing.repository.visibility });
         }
-        await this.adopt(machine, listing, true);
+        await this.adopt(instance, machine, listing, true);
         return { accepted: true };
       }
       const base = kebab(choice.name.trim().replace(/-spex$/i, ""));
@@ -3463,13 +3523,13 @@ export class SpaceManager {
       // instance, your own group's id naming none of them (git-host-6).
       const group = choice.groupId === null
         ? { id: null, fullPath: userGroup(view)?.fullPath ?? this.host.store.home.ownName }
-        : this.listedGroups(view).find((entry) => entry.kind === "group" && entry.id === choice.groupId);
+        : this.listedGroups(instance, view).find((entry) => entry.kind === "group" && entry.id === choice.groupId);
       if (!group) throw new CoreError("not_found", i18n._({ id: "The host lists no such group", comment: "Refusal of a pick naming a group the Git host does not list" }));
       if ("kind" in group && this.collides(group, view)) {
         throw new CoreError("invalid_request", groupNamedLikeYourLogin(group.fullPath));
       }
       const project = this.projectFile(machine.repository);
-      await this.create(machine, { id: group.id, fullPath: group.fullPath }, `${base}-spex`,
+      await this.create(instance, machine, { id: group.id, fullPath: group.fullPath }, `${base}-spex`,
         repositoryDescription({ kind: "project", name: project?.name ?? base, code: project?.remote ?? null }), "refuse");
       return { accepted: true };
     }
@@ -3486,15 +3546,16 @@ export class SpaceManager {
   /** Join a spex repository the host lists and this device lacks
    * (space-63): clone it under `workspace/<group>/`, then the code into
    * `folder`, and pair the two. */
-  async join(instance: string | undefined, hostId: string, folder?: string): Promise<{ accepted: true }> {
-    this.served(instance);
-    if (!this.signedIn()) throw new CoreError("invalid_request", signInFirst());
-    const view = this.view ?? await this.readHost().catch((error: unknown) => { throw new CoreError("invalid_request", relayHostError(error, this.hostName())); });
+  async join(named: string | undefined, hostId: string, folder?: string): Promise<{ accepted: true }> {
+    this.served(named);
+    const instance = this.defaultInstance();
+    if (!this.signedInAt(instance)) throw new CoreError("invalid_request", signInFirst());
+    const view = instance.view ?? await this.readHost(instance).catch((error: unknown) => { throw new CoreError("invalid_request", relayHostError(error, this.nameOf(instance))); });
     const listing = view.listings.find((entry) => entry.repository.id === hostId);
     if (!listing) throw new CoreError("not_found", noLongerShared());
     // A group named like a login holds no folder of its own (space-61).
     if (this.collides(listing.repository.group, view)) throw new CoreError("invalid_request", groupNamedLikeYourLogin(listing.repository.group.fullPath));
-    const key = this.keyAtHost(listing.repository);
+    const key = this.keyAtHost(listing.repository, instance);
     if (!key) {
       throw new CoreError("invalid_request", i18n._({ id: "{path} cannot stand as a folder on this device", values: { path: `${listing.repository.group.fullPath}/${listing.repository.path}` }, comment: "Refusal of a join: the host's names hold characters a folder under the home cannot" }));
     }
@@ -3692,24 +3753,25 @@ export class SpaceManager {
    * (git-host-15); the group then counts as listed until a read begun
    * after its creation is held (git-host-5), announced before the
    * reply. */
-  async createGroup(instance: string | undefined, name: string, path: string, parent: string | null): Promise<{ group: { id: string; fullPath: string; name: string } }> {
-    this.served(instance);
-    if (!this.signedIn()) throw new CoreError("invalid_request", signInFirst());
+  async createGroup(named: string | undefined, name: string, path: string, parent: string | null): Promise<{ group: { id: string; fullPath: string; name: string } }> {
+    this.served(named);
+    const instance = this.defaultInstance();
+    if (!this.signedInAt(instance)) throw new CoreError("invalid_request", signInFirst());
     const typed = name.trim();
     if (typed.length === 0) throw new CoreError("invalid_request", nameTheGroup());
     const given = path.trim();
     if (given.length === 0) throw new CoreError("invalid_request", pathTheGroup());
     let parentPath: string | null = null;
     if (parent !== null) {
-      const listed = this.listedGroups(this.view).find((group) => group.id === parent);
-      if (!listed) throw new CoreError("not_found", groupNotListed(parent, this.hostName()));
+      const listed = this.listedGroups(instance, instance.view).find((group) => group.id === parent);
+      if (!listed) throw new CoreError("not_found", groupNotListed(parent, this.nameOf(instance)));
       parentPath = listed.fullPath;
     }
     let created: Awaited<ReturnType<GitHostClient["createGroup"]>>;
     try {
-      created = await this.defaultClient().createGroup({ name: typed, path: given, parentId: parent });
+      created = await instance.client.createGroup({ name: typed, path: given, parentId: parent });
     } catch (error) {
-      if (error instanceof HostError && error.kind === "name_taken") throw new CoreError("invalid_request", groupNameTaken(typed, parentPath, this.hostName()));
+      if (error instanceof HostError && error.kind === "name_taken") throw new CoreError("invalid_request", groupNameTaken(typed, parentPath, this.nameOf(instance)));
       throw this.hostWriteRefusal(error);
     }
     // The group counts as listed, as the host answered it, until a read
@@ -3717,8 +3779,8 @@ export class SpaceManager {
     // begun before cannot, and is made again before it is held. No read
     // is begun here: the host's listing may lag behind its creation
     // (git-host-5).
-    this.changedAfter = this.readsBegun;
-    if (this.signedIn()) this.created.set(created.fullPath, created);
+    instance.changedAfter = instance.readsBegun;
+    if (this.signedInAt(instance)) instance.created.set(created.fullPath, created);
     await this.publish();
     return { group: { id: created.id ?? "", fullPath: created.fullPath, name: created.name } };
   }
@@ -3736,30 +3798,31 @@ export class SpaceManager {
    * every group and spex repository inside it under its new path, until
    * a read begun after the rename is held (git-host-5), announced before
    * the reply. */
-  async renameGroup(instance: string | undefined, id: string, input: { name?: string; path?: string }): Promise<{ group: { id: string; fullPath: string; name: string } }> {
-    this.served(instance);
-    if (!this.signedIn()) throw new CoreError("invalid_request", signInFirst());
+  async renameGroup(named: string | undefined, id: string, input: { name?: string; path?: string }): Promise<{ group: { id: string; fullPath: string; name: string } }> {
+    this.served(named);
+    const instance = this.defaultInstance();
+    if (!this.signedInAt(instance)) throw new CoreError("invalid_request", signInFirst());
     if (input.name === undefined && input.path === undefined) throw new CoreError("invalid_request", renameNothing());
     const name = input.name?.trim();
     if (name !== undefined && name.length === 0) throw new CoreError("invalid_request", nameTheGroup());
     const path = input.path?.trim();
     if (path !== undefined && path.length === 0) throw new CoreError("invalid_request", pathTheGroup());
-    const listed = this.instanceGroup(id);
+    const listed = this.instanceGroup(instance, id);
     const from = listed.fullPath;
     let renamed: HostGroup;
     try {
-      renamed = await this.defaultClient().renameGroup(id, { ...(name !== undefined ? { name } : {}), ...(path !== undefined ? { path } : {}) });
+      renamed = await instance.client.renameGroup(id, { ...(name !== undefined ? { name } : {}), ...(path !== undefined ? { path } : {}) });
     } catch (error) {
       if (error instanceof HostError && error.kind === "name_taken") {
         const parent = from.includes("/") ? from.slice(0, from.lastIndexOf("/")) : null;
-        throw new CoreError("invalid_request", groupNameTaken(path ?? name ?? listed.name, parent, this.hostName()));
+        throw new CoreError("invalid_request", groupNameTaken(path ?? name ?? listed.name, parent, this.nameOf(instance)));
       }
       throw this.hostWriteRefusal(error);
     }
     const to = renamed.fullPath;
     const here = (group: Pick<HostGroup, "id" | "fullPath">): boolean => group.id === id || group.fullPath === from;
     const inside = (fullPath: string): string => fullPath.startsWith(`${from}/`) ? `${to}${fullPath.slice(from.length)}` : fullPath;
-    this.holdChange({
+    this.holdChange(instance, {
       group: (group) => group.kind !== "group" ? group : here(group) ? { ...renamed, id, kind: "group" } : { ...group, fullPath: inside(group.fullPath) },
       listing: (listing) => {
         const group = listing.repository.group;
@@ -3777,17 +3840,18 @@ export class SpaceManager {
    * whatever a group holds with it; the group is held as gone until a
    * read begun after the deletion is held (git-host-5), announced before
    * the reply. */
-  async deleteGroup(instance: string | undefined, id: string): Promise<{ deleted: true }> {
-    this.served(instance);
-    if (!this.signedIn()) throw new CoreError("invalid_request", signInFirst());
-    const listed = this.instanceGroup(id);
-    if (this.holdsAnything(listed)) throw new CoreError("invalid_request", groupNotEmpty(listed.fullPath));
+  async deleteGroup(named: string | undefined, id: string): Promise<{ deleted: true }> {
+    this.served(named);
+    const instance = this.defaultInstance();
+    if (!this.signedInAt(instance)) throw new CoreError("invalid_request", signInFirst());
+    const listed = this.instanceGroup(instance, id);
+    if (this.holdsAnything(instance, listed)) throw new CoreError("invalid_request", groupNotEmpty(listed.fullPath));
     try {
-      await this.defaultClient().deleteGroup(id);
+      await instance.client.deleteGroup(id);
     } catch (error) {
       throw this.hostWriteRefusal(error);
     }
-    this.holdChange({ group: (group) => group.kind === "group" && (group.id === id || group.fullPath === listed.fullPath) ? null : group });
+    this.holdChange(instance, { group: (group) => group.kind === "group" && (group.id === id || group.fullPath === listed.fullPath) ? null : group });
     await this.publish();
     return { deleted: true };
   }
@@ -3799,21 +3863,22 @@ export class SpaceManager {
    * (space-60). */
   async moveRepository(key: string, groupId: string | null): Promise<{ repository: { id: string; fullPath: string } }> {
     const target = await this.membersTarget({ repository: key }, "invalid_request");
+    const instance = this.defaultInstance();
     let into: HostGroup | null = null;
     if (groupId !== null) {
-      into = this.instanceGroup(groupId);
-      if (this.collides(into)) throw new CoreError("invalid_request", groupNamedLikeYourLogin(into.fullPath));
+      into = this.instanceGroup(instance, groupId);
+      if (this.collides(into, this.viewOf(instance))) throw new CoreError("invalid_request", groupNamedLikeYourLogin(into.fullPath));
     }
     let moved: HostRepository;
     try {
-      moved = await this.defaultClient().transferRepository(target.id, groupId);
+      moved = await instance.client.transferRepository(target.id, groupId);
     } catch (error) {
       if (error instanceof HostError && error.kind === "name_taken") {
-        throw new CoreError("invalid_request", takenIn(splitKey(key).name, into?.fullPath ?? userGroup(this.view)?.fullPath ?? this.host.store.home.ownName));
+        throw new CoreError("invalid_request", takenIn(splitKey(key).name, into?.fullPath ?? userGroup(instance.view)?.fullPath ?? this.host.store.home.ownName));
       }
       throw this.hostWriteRefusal(error);
     }
-    this.holdChange({ listing: (listing) => listing.repository.id === moved.id ? { ...listing, repository: moved } : listing });
+    this.holdChange(instance, { listing: (listing) => listing.repository.id === moved.id ? { ...listing, repository: moved } : listing });
     await this.publish();
     return { repository: { id: moved.id, fullPath: `${moved.group.fullPath}/${moved.path}` } };
   }
@@ -3822,20 +3887,20 @@ export class SpaceManager {
    * core created since its read began, by its host id; your own group
    * and another account's are none (git-host-18..20): `not_found`, the
    * host not asked, where none is. */
-  private instanceGroup(id: string): HostGroup {
-    const group = this.listedGroups(this.view).find((entry) => entry.kind === "group" && entry.id === id);
-    if (!group) throw new CoreError("not_found", groupNotListed(id, this.hostName()));
+  private instanceGroup(instance: HostInstance, id: string): HostGroup {
+    const group = this.listedGroups(instance, instance.view).find((entry) => entry.kind === "group" && entry.id === id);
+    if (!group) throw new CoreError("not_found", groupNotListed(id, this.nameOf(instance)));
     return group;
   }
 
   /** Whether the view lists a spex repository or a group under a group
    * of the instance (git-host-19), its paths compared ignoring case as
    * the host's are. */
-  private holdsAnything(group: HostGroup): boolean {
+  private holdsAnything(instance: HostInstance, group: HostGroup): boolean {
     const path = group.fullPath.toLowerCase();
     const under = (fullPath: string, self: boolean): boolean => (self && fullPath.toLowerCase() === path) || fullPath.toLowerCase().startsWith(`${path}/`);
-    if (this.listedGroups(this.view).some((entry) => entry.kind === "group" && entry.id !== group.id && under(entry.fullPath, false))) return true;
-    return [...(this.view?.listings ?? []), ...this.attached.values()].some(({ repository }) =>
+    if (this.listedGroups(instance, instance.view).some((entry) => entry.kind === "group" && entry.id !== group.id && under(entry.fullPath, false))) return true;
+    return [...(instance.view?.listings ?? []), ...instance.attached.values()].some(({ repository }) =>
       repository.group.kind === "group" && (repository.group.id === group.id || under(repository.group.fullPath, true)));
   }
 
@@ -3847,8 +3912,8 @@ export class SpaceManager {
    * each group to what the answer left of it, null where it is gone, and
    * `listing` each listed spex repository.
    */
-  private holdChange(change: { group?: (group: HostGroup) => HostGroup | null; listing?: (listing: HostListing) => HostListing }): void {
-    this.changedAfter = this.readsBegun;
+  private holdChange(instance: HostInstance, change: { group?: (group: HostGroup) => HostGroup | null; listing?: (listing: HostListing) => HostListing }): void {
+    instance.changedAfter = instance.readsBegun;
     const groups = (list: HostGroup[]): HostGroup[] => {
       if (!change.group) return list;
       const map = change.group;
@@ -3858,14 +3923,14 @@ export class SpaceManager {
       });
     };
     const listings = (list: HostListing[]): HostListing[] => (change.listing ? list.map(change.listing) : list);
-    if (this.view) this.view = { ...this.view, groups: groups(this.view.groups), listings: listings(this.view.listings) };
+    if (instance.view) instance.view = { ...instance.view, groups: groups(instance.view.groups), listings: listings(instance.view.listings) };
     if (change.group) {
-      const held = groups([...this.created.values()]);
-      this.created.clear();
-      for (const group of held) this.created.set(group.fullPath, group);
+      const held = groups([...instance.created.values()]);
+      instance.created.clear();
+      for (const group of held) instance.created.set(group.fullPath, group);
     }
-    if (change.listing) for (const [id, listing] of [...this.attached]) this.attached.set(id, change.listing(listing));
-    for (const target of this.targets.values()) {
+    if (change.listing) for (const [id, listing] of [...instance.attached]) instance.attached.set(id, change.listing(listing));
+    for (const target of instance.targets.values()) {
       if (target.listing && change.listing) target.listing = change.listing(target.listing);
       if (target.catalog) target.catalog = {
         ...target.catalog,
@@ -3883,7 +3948,7 @@ export class SpaceManager {
     this.requireOneTarget(input);
     const login = input.login.trim();
     if (login.length === 0) throw new CoreError("invalid_request", nameTheLogin(this.hostName()));
-    const roles = (this.signedIn() ? this.view?.roles : undefined) ?? [];
+    const roles = this.viewOf(this.defaultInstance())?.roles ?? [];
     if (!roles.some((role) => role.id === input.role)) throw new CoreError("invalid_request", notARole(input.role, this.hostName()));
     const target = await this.membersTarget(input, "not_found");
     try {
@@ -3940,10 +4005,11 @@ export class SpaceManager {
    */
   private async membersTarget(input: { repository?: string; group?: string }, localOnly: "invalid_request" | "not_found"): Promise<MembersTarget> {
     this.requireOneTarget(input);
-    const view = this.view;
+    const instance = this.defaultInstance();
+    const view = instance.view;
     if (input.group !== undefined) {
       const group = input.group;
-      if (!this.listedGroups(view).some((entry) => entry.id === group)) throw new CoreError("not_found", groupNotListed(group, this.hostName()));
+      if (!this.listedGroups(instance, view).some((entry) => entry.id === group)) throw new CoreError("not_found", groupNotListed(group, this.nameOf(instance)));
       return { kind: "group", id: group };
     }
     const key = input.repository as string;
@@ -3953,12 +4019,12 @@ export class SpaceManager {
         throw new CoreError(localOnly, i18n._({ id: "On this device only", comment: "A spex repository's state: it has no remote on the Git host" }));
       }
       // Attached since the view's read began, it counts as listed (git-host-5).
-      const listing = listingFor(view, facts.id, facts.remote) ?? listingFor({ listings: [...this.attached.values()] }, facts.id, facts.remote);
+      const listing = listingFor(view, facts.id, facts.remote) ?? listingFor({ listings: [...instance.attached.values()] }, facts.id, facts.remote);
       const id = listing?.repository.id ?? (view ? null : facts.id);
       if (id === null) throw new CoreError("not_found", noLongerShared());
       return { kind: "repository", id };
     }
-    const id = view?.listings.find((listing) => !this.collides(listing.repository.group, view) && this.keyAtHost(listing.repository) === key)?.repository.id;
+    const id = view?.listings.find((listing) => !this.collides(listing.repository.group, view) && this.keyAtHost(listing.repository, instance) === key)?.repository.id;
     if (id === undefined) {
       throw new CoreError("not_found", i18n._({ id: "no spex repository {key} on this device", comment: "Refusal: the key names no clone under workspace/", values: { key } }));
     }
@@ -3987,7 +4053,9 @@ export class SpaceManager {
     const store = this.host.store;
     if (store.getPref<unknown>(noticedPref(machine.key)) === true || store.getPref<unknown>(lastSyncPref(machine.key)) !== undefined) return;
     let listing: HostListing | undefined;
-    try { listing = (await this.readTarget(machine, facts)).listing; }
+    // Transitional: the default instance's, until the clone's instance
+    // governs its sync (DR-127).
+    try { listing = (await this.readTarget(this.defaultInstance(), machine, facts)).listing; }
     catch (error) {
       throw new CoreError(error instanceof CredentialChanged ? "conflict" : "invalid_request", relayHostError(error, this.hostName()));
     }
@@ -4017,13 +4085,16 @@ export class SpaceManager {
     if (op === "sync") await this.moveDeferred(machine);
     const facts = await machine.readFacts();
     if (!this.atHost(facts)) return undefined;
-    if (!this.signedIn()) throw new SpaceStopped("check", { cause: "reauth", message: signInAgain(), guidance: signInThenRetry(), retry: true });
+    // Transitional: the default instance's, until the clone's instance
+    // governs its sync (DR-127).
+    const instance = this.defaultInstance();
+    if (!this.signedInAt(instance)) throw new SpaceStopped("check", { cause: "reauth", message: signInAgain(), guidance: signInThenRetry(), retry: true });
     let target: TargetReading;
     // A selected read waits out the host's rate limit independently of
     // a full read; Stop leaves its answer to settle (git-host-21).
     try {
-      target = await machine.hostCall("check", () => this.readTarget(machine, facts));
-      this.assertTargetAccount(target.accountGeneration);
+      target = await machine.hostCall("check", () => this.readTarget(instance, machine, facts));
+      this.assertTargetAccount(instance, target.accountGeneration);
     }
     catch (error) { throw hostStop("check", error, this.hostName()); }
     const { listing, catalog } = target;
@@ -4048,9 +4119,9 @@ export class SpaceManager {
     // outside every instance's.
     const key = this.keyAtHost(repository);
     if (op === "sync" && key && key !== machine.key && machine.key !== this.host.store.home.own()) {
-      await this.moveInSync(machine, key, repository.id, facts.remote, target.accountGeneration);
+      await this.moveInSync(instance, machine, key, repository.id, facts.remote, target.accountGeneration);
     }
-    try { this.assertTargetAccount(target.accountGeneration); }
+    try { this.assertTargetAccount(instance, target.accountGeneration); }
     catch (error) { throw hostStop("check", error, this.hostName()); }
     if (facts.remote !== null && facts.remote !== repository.remoteUrl) machine.setOrigin(repository.remoteUrl, facts.remote);
     const readOnly = listing.readOnly !== null;
@@ -4069,7 +4140,7 @@ export class SpaceManager {
       const group = repository.group.fullPath;
       if (repository.empty && !(created && await this.defaultBranchArrives(machine, repository.id))) {
         if (!created || this.stopping) {
-          this.waiting.set(machine.key, { step: "branch", group, message: "" });
+          this.waiting.set(machine.key, { instance: instance.origin, step: "branch", group, message: "" });
           throw new SpaceStopped("check", { cause: "refused", message: i18n._({ id: "{host} holds no default branch for it yet", values: { host: this.hostName() }, comment: "A stopped sync: the host's repository is empty, so spex waits for its default branch; {host} is its display name" }), guidance: syncLater(), retry: true });
         }
         // Still empty: the host never committed its README — a protected
@@ -4083,7 +4154,7 @@ export class SpaceManager {
       try { answer = await machine.hostCall("check", (signal) => this.defaultClient().prepareBranch(repository.id, { signal })); }
       catch (error) { throw hostStop("check", error, this.hostName()); }
       if (answer.status === "pending") {
-        this.waiting.set(machine.key, { step: "branch", group, message: answer.message });
+        this.waiting.set(machine.key, { instance: instance.origin, step: "branch", group, message: answer.message });
         throw new SpaceStopped("check", { cause: "refused", message: waitingPhrase("branch", group, answer.message), guidance: syncLater(), retry: true });
       }
       if (this.waiting.get(machine.key)?.step === "branch") this.waiting.delete(machine.key);
@@ -4130,13 +4201,13 @@ export class SpaceManager {
    * and records the host's id, the check's own recording of it included,
    * and still lies where the home says (renameClone). In the same step,
    * a remote still named `origin` takes the instance's folder's name. */
-  private async moveInSync(machine: RepositorySync, to: string, id: string, remote: string | null, accountGeneration: number): Promise<void> {
+  private async moveInSync(instance: HostInstance, machine: RepositorySync, to: string, id: string, remote: string | null, accountGeneration: number): Promise<void> {
     const store = this.host.store;
     const from = machine.key;
     const source = machine.repository.dir;
     const identity = await this.machineIdentity();
     // Nothing is awaited from here to the rename.
-    try { this.assertTargetAccount(accountGeneration); }
+    try { this.assertTargetAccount(instance, accountGeneration); }
     catch (error) { throw hostStop("check", error, this.hostName()); }
     if (!machine.recordsNow(remote, id)) throw movedMeanwhile(from);
     if (store.repository(from)?.dir !== source || machine.key !== from) throw movedMeanwhile(from);
@@ -4321,28 +4392,34 @@ export class SpaceManager {
   }
 
   /** The Groups state a client asks for (`space.get`, space-29). The
-   * first ask after a start signed in, with no full read begun since, begins
-   * the host read that start owes, as Refresh does: once, however many
-   * clients ask, and not awaited — the reply is the state as it stood at
-   * the ask, and the read's outcome is announced as any read's
-   * (git-host-5). */
+   * first ask after a start begins the read that start owes each
+   * instance signed in with no full read of it begun since, as Refresh
+   * does: once per instance, however many clients ask, and not awaited —
+   * the reply is the state as it stood at the ask, and each read's
+   * outcome is announced as any read's (git-host-5). */
   async get(): Promise<GroupsState> {
-    const owed = this.startRead && this.signedIn() && !this.fullReadBegun && !this.reading && !this.settingUp;
+    const owed = this.startRead
+      ? this.listedInstances().filter((instance) => this.signedInAt(instance) && !instance.fullReadBegun && !instance.reading && !instance.settingUp)
+      : [];
     this.startRead = false;
     const state = await this.state();
-    if (owed && this.signedIn() && !this.stopping) {
-      void this.setUp().catch((error: unknown) => {
-        console.error(`spex: reading the host at start failed: ${error instanceof Error ? error.message : String(error)}`);
+    for (const instance of owed) {
+      if (!this.signedInAt(instance) || this.stopping) continue;
+      void this.setUp(instance).catch((error: unknown) => {
+        console.error(`spex: reading ${instance.origin} at start failed: ${error instanceof Error ? error.message : String(error)}`);
       });
     }
     return state;
   }
 
-  /** The sign-in the header shows (space-3, space-30): idle carries the
-   * host's sign-out, with the account's login, while signed out. */
+  /** Transitional, the mirror the interface reads until it reads each
+   * instance's `hostSignedOut` (space-3, space-30): idle carries the
+   * default instance's sign-out of this device, with the account's
+   * login, while it is signed out. */
   private signInView(): GroupsState["signIn"] {
-    if (this.signInState.phase !== "idle" || this.hostSignedOut === undefined || this.signedIn()) return this.signInState;
-    return { phase: "idle", signedOut: { by: "host", login: this.hostSignedOut } };
+    const instance = this.defaultInstance();
+    if (this.signInState.phase !== "idle" || instance.hostSignedOut === undefined || this.signedInAt(instance)) return this.signInState;
+    return { phase: "idle", signedOut: { by: "host", login: instance.hostSignedOut } };
   }
 
   private async assemble(recompute: boolean): Promise<GroupsState> {
@@ -4362,6 +4439,8 @@ export class SpaceManager {
     repositories.push(...this.absentRows());
     const diagnostics = await this.host.checkRepairs(this.diagnostics());
     const host = store.home.host;
+    const served = this.defaultInstance();
+    const view = this.viewOf(served);
     const placed = this.byInstance(repositories);
     return {
       home: resolve(this.host.home),
@@ -4372,14 +4451,14 @@ export class SpaceManager {
       instances: this.instancesOf(placed.groups),
       // Transitional mirrors of the default instance (space-30), until
       // the interface reads `instances`.
-      host: { url: host.origin, displayName: this.view?.displayName ?? this.described?.displayName ?? null },
+      host: { url: host.origin, displayName: served.view?.displayName ?? served.described?.displayName ?? null },
       // What the host's last read said the person may do, and the roles
       // it grants: nothing until a read is held (DR-114).
-      account: ((a) => (a ? { ...a, canCreateGroup: this.view?.account.canCreateGroup ?? false } : null))(store.home.account()),
-      read: this.signedIn() ? this.readState : { phase: "idle" },
-      readAt: this.signedIn() ? this.view?.readAt ?? null : null,
+      account: ((a) => (a ? { ...a, canCreateGroup: served.view?.account.canCreateGroup ?? false } : null))(store.home.account()),
+      read: this.signedInAt(served) ? served.readState : { phase: "idle" },
+      readAt: view?.readAt ?? null,
       groups: this.groupsOf(repositories),
-      roles: this.signedIn() ? (this.view?.roles ?? []).map((role) => ({ id: role.id, name: role.name, mayPush: role.mayPush })) : [],
+      roles: (view?.roles ?? []).map((role) => ({ id: role.id, name: role.name, mayPush: role.mayPush })),
       diagnostics,
       // One number, so the header and the list cannot drift (space-1):
       // what the reader has not answered, and everything unfolded.
@@ -4388,31 +4467,27 @@ export class SpaceManager {
   }
 
   /** Every instance the home lists, in its order, as its heading reads
-   * it (space-1, space-30), with the groups `byInstance` placed under it.
-   * Until the core reads each instance on its own, the default
-   * instance's read is the one this core holds: another listed instance
-   * reads no view. */
+   * it (space-1, space-30), each from its own read (git-host-5), with
+   * the groups `byInstance` placed under it. */
   private instancesOf(groups: Map<string, InstanceGroupState[]>): InstanceState[] {
-    const home = this.host.store.home;
-    const served = home.defaultInstance().origin;
-    return home.instances().flatMap((entry): InstanceState[] => {
+    return this.host.store.home.instances().flatMap((entry): InstanceState[] => {
       if (!entry.account) return [];
-      const ours = entry.origin === served;
-      const signedIn = home.account(entry.origin) !== null;
-      const view = ours && signedIn ? this.view : undefined;
+      const instance = this.instanceAt(entry.origin);
+      const signedIn = this.signedInAt(instance);
+      const view = signedIn ? instance.view : undefined;
       let host: string;
       try { host = new URL(entry.origin).hostname; } catch { host = entry.origin; }
       return [{
         origin: entry.origin,
         host,
-        displayName: (ours ? this.view?.displayName ?? this.described?.displayName : undefined) ?? entry.displayName ?? null,
+        displayName: instance.view?.displayName ?? instance.described?.displayName ?? entry.displayName ?? null,
         // What its last read said the person may do there: nothing until
         // a read is held (DR-114).
         account: { id: entry.account.id, login: entry.account.login, displayName: entry.account.displayName, canCreateGroup: view?.account.canCreateGroup ?? false },
         signedIn,
-        // Said for the core's run, until the next sign-in (space-3).
-        hostSignedOut: ours && !signedIn && this.hostSignedOut !== undefined,
-        read: ours && signedIn ? this.readState : { phase: "idle" },
+        // Said for the core's run, until its next sign-in (space-3).
+        hostSignedOut: !signedIn && instance.hostSignedOut !== undefined,
+        read: signedIn ? instance.readState : { phase: "idle" },
         readAt: view?.readAt ?? null,
         roles: (view?.roles ?? []).map((role) => ({ id: role.id, name: role.name, mayPush: role.mayPush })),
         groups: groups.get(entry.origin) ?? [],
@@ -4423,20 +4498,17 @@ export class SpaceManager {
   /** Your own group's rows, and under each instance the home lists its
    * groups, your namespace there, and each other account's login there
    * with theirs (space-1, space-30, DR-127). A signed-in instance holds
-   * your namespace, and every group its read lists; a row stands under
-   * the group the host's last read names for it, and under its key's
-   * group at its instance only where the read lists nothing for it; your
-   * own group's own repository, a row keyed in your own group's folder
-   * that no read lists, and a row of an instance the home does not list
-   * stand under your own group alone. Entries are known by the group's
-   * id, a namespace by its login, so no group displaces your own group
-   * or takes its rows. Until the core reads each instance on its own,
-   * the default instance's read is the only one held. */
+   * your namespace, and every group its own read lists; a row stands
+   * under the group its instance's last read names for it, and under its
+   * key's group at its instance only where that read lists nothing for
+   * it; your own group's own repository, a row keyed in your own group's
+   * folder that no read lists, and a row of an instance the home does
+   * not list stand under your own group alone. Entries are known by the
+   * group's id, a namespace by its login, so no group displaces your own
+   * group or takes its rows. */
   private byInstance(placed: Placed[]): { own: RepositoryState[]; groups: Map<string, InstanceGroupState[]> } {
     const home = this.host.store.home;
     const ownName = home.ownName;
-    const served = home.defaultInstance().origin;
-    const view = this.signedIn() ? this.view : undefined;
     const noCan = (): InstanceGroupState["can"] => ({ createSubgroup: false, manageMembers: false, rename: false, delete: false });
     interface Heading { login: string; entries: InstanceGroupState[]; byId: Map<string, InstanceGroupState>; byPath: Map<string, InstanceGroupState>; logins: Map<string, InstanceGroupState> }
     const headings = new Map<string, Heading>();
@@ -4462,10 +4534,13 @@ export class SpaceManager {
       if (!instance.account) continue;
       const heading: Heading = { login: instance.account.login, entries: [], byId: new Map(), byPath: new Map(), logins: new Map() };
       headings.set(instance.origin, heading);
+      const at = this.instanceAt(instance.origin);
       // Your namespace at every instance signed in to (space-1).
-      if (home.account(instance.origin) !== null) namespace(heading, heading.login);
-      if (instance.origin !== served || !view) continue;
-      for (const group of this.listedGroups(view)) {
+      if (this.signedInAt(at)) namespace(heading, heading.login);
+      // Every group its own read lists (git-host-5).
+      const view = this.viewOf(at);
+      if (!view) continue;
+      for (const group of this.listedGroups(at, view)) {
         if (group.kind === "user") continue;
         const can = group.can;
         const entry: InstanceGroupState = { id: group.id, login: null, mine: false, fullPath: group.fullPath, name: group.name, can: { createSubgroup: can.createSubgroup, manageMembers: can.manageMembers, rename: can.rename, delete: can.delete }, repositories: [] };
@@ -4477,9 +4552,9 @@ export class SpaceManager {
     const own: RepositoryState[] = [];
     // The rows a read lists first, so every login's entry stands before
     // a row no read lists falls back to its key.
-    for (const { row, group } of placed) {
+    for (const { row, group, instance } of placed) {
       if (!group) continue;
-      const heading = headings.get(served);
+      const heading = instance === undefined ? undefined : headings.get(instance);
       if (row.own || !heading) { own.push(row); continue; }
       const entry = group.kind === "user"
         ? namespace(heading, group.fullPath)
@@ -4506,9 +4581,9 @@ export class SpaceManager {
     return { own, groups };
   }
 
-  /** A clone's state as the host's last answer and this device's files
-   * make it (space-61), with the group the host's last read names for
-   * it, where it lists it (space-1). */
+  /** A clone's state as the last answer of the instance serving it and
+   * this device's files make it (space-61), with the group that
+   * instance's last read names for it, where it lists it (space-1). */
   private overlay(machine: RepositorySync, base: RepositoryState): Placed {
     const facts = machine.facts;
     const waiting = this.waiting.get(base.key);
@@ -4526,11 +4601,15 @@ export class SpaceManager {
     if (facts.remote === null) return { row: { ...row, state: "local-only", reason: null } };
     // A remote the reader named, a path this device reaches: no host.
     if (!this.atHost(facts)) return { row };
-    if (!this.signedIn()) return { row: { ...row, state: "unreachable", reason: signInAgain() } };
+    const instance = this.servingOf(machine);
+    // An instance signed out leaves its rows unreachable until its next
+    // sign-in (space-6, git-host-4).
+    if (!this.signedInAt(instance)) return { row: { ...row, state: "unreachable", reason: signInAgain() } };
     // Attached since the view's read began, it counts as listed (git-host-5).
-    const target = this.targetOf(facts);
-    const listing = this.listingOf(facts);
+    const target = this.targetOf(instance, facts);
+    const listing = this.listingOf(instance, facts);
     const group = listing?.repository.group;
+    const at = instance.origin;
     // What the host's listing says, the person's rights on it among it
     // (git-host-5, DR-114).
     const listed: RepositoryState = listing
@@ -4539,37 +4618,45 @@ export class SpaceManager {
     // A clone whose join still runs is not on this device yet: its code
     // may still be cloning (space-61, space-63).
     const joining = facts.id === null ? undefined : this.joining.get(facts.id);
-    if (joining?.phase === "running") return { row: { ...listed, state: "absent", reason: null, sync: joining }, group };
+    if (joining?.phase === "running") return { row: { ...listed, state: "absent", reason: null, sync: joining }, group, instance: at };
     // A group named like a login holds no folder of its own (space-61).
-    if (this.collides(group, target?.catalog ?? this.view)) return { row: { ...listed, state: "unreachable", reason: namedLikeYourLogin() }, group };
-    if (machine.hostOverride) return { row: { ...listed, state: machine.hostOverride.state, reason: machine.hostOverride.reason }, group };
-    if (target?.failure && target.begun > this.failureRead) return { row: { ...listed, state: "unreachable", reason: target.failure }, group };
-    if (this.readFailure !== undefined && (!target || this.failureRead > target.begun)) return { row: { ...listed, state: "unreachable", reason: this.readFailure }, group };
-    // No full or selected reading since this core started.
-    if (!this.view && !target) return { row };
+    if (this.collides(group, target?.catalog ?? instance.view)) return { row: { ...listed, state: "unreachable", reason: namedLikeYourLogin() }, group, instance: at };
+    if (machine.hostOverride) return { row: { ...listed, state: machine.hostOverride.state, reason: machine.hostOverride.reason }, group, instance: at };
+    if (target?.failure && target.begun > instance.failureRead) return { row: { ...listed, state: "unreachable", reason: target.failure }, group, instance: at };
+    if (instance.readFailure !== undefined && (!target || instance.failureRead > target.begun)) return { row: { ...listed, state: "unreachable", reason: instance.readFailure }, group, instance: at };
+    // No full or selected reading of its instance since this core started.
+    if (!instance.view && !target) return { row };
     if (!listing) return { row: { ...row, state: "unreachable", reason: noLongerShared() } };
     if (listing.readOnly) {
-      return { row: { ...listed, state: "read-only", reason: listing.readOnly.message || i18n._({ id: "Archived", comment: "A spex repository's read-only reason where the host gave no words for its archive" }) }, group };
+      return { row: { ...listed, state: "read-only", reason: listing.readOnly.message || i18n._({ id: "Archived", comment: "A spex repository's read-only reason where the host gave no words for its archive" }) }, group, instance: at };
     }
-    return { row: { ...listed, state: "reachable", reason: null }, group };
+    return { row: { ...listed, state: "reachable", reason: null }, group, instance: at };
   }
 
-  /** A row for every spex repository the host lists and this device
-   * lacks (space-61: "Not on this device"), keyed under its instance's
-   * folder as its clone would be (DR-127); one in a group held as
-   * colliding reads unreachable, keyed `<folder>/<path>@<id>` so it
-   * names no clone (space-30). */
+  /** A row for every spex repository a signed-in instance lists and this
+   * device lacks (space-61: "Not on this device"), each from that
+   * instance's own read (git-host-5). */
   private absentRows(): Placed[] {
-    const view = this.view;
-    const folder = this.instanceFolder();
-    if (!view || !this.signedIn() || folder === null) return [];
-    const store = this.host.store;
     // A clone the instances migration deferred, listed by the key it
     // keeps, holds the key it moves to (DR-127).
-    const deferred = new Set(store.deferredMoves().map((move) => move.to));
+    const deferred = new Set(this.host.store.deferredMoves().map((move) => move.to));
+    return this.listedInstances().flatMap((instance) => this.absentRowsAt(instance, deferred));
+  }
+
+  /** The rows of an instance's read for the spex repositories it lists
+   * and no clone it serves stands for, keyed under its folder as its
+   * clone would be (DR-127); one in a group held as colliding reads
+   * unreachable, keyed `<folder>/<path>@<id>` so it names no clone
+   * (space-30). */
+  private absentRowsAt(instance: HostInstance, deferred: Set<string>): Placed[] {
+    const view = this.viewOf(instance);
+    const folder = instance.folder();
+    if (!view || folder === null) return [];
+    const store = this.host.store;
     const matched = new Set<string>();
     for (const repository of store.listRepositories()) {
-      const facts = this.machines.get(repository.key)?.facts;
+      const machine = this.machines.get(repository.key);
+      const facts = machine && this.servingOf(machine) === instance ? machine.facts : undefined;
       // Your own group's own repository, recording no id yet, is the one
       // your namespace lists under its name (space-4): never absent.
       const listing = facts ? listingFor(view, facts.id, facts.remote)
@@ -4580,7 +4667,7 @@ export class SpaceManager {
     for (const listing of view.listings) {
       const repository = listing.repository;
       if (matched.has(repository.id)) continue;
-      const colliding = this.collides(repository.group);
+      const colliding = this.collides(repository.group, view);
       const path = `${repository.group.fullPath}/${repository.path}`;
       const key = colliding ? `${folder}/${path}@${repository.id}` : hostKey(repository, folder);
       if (!key || (!colliding && (store.repository(key) || deferred.has(key)))) continue;
@@ -4589,7 +4676,7 @@ export class SpaceManager {
         row: {
           key,
           // The instance whose read lists it (DR-127).
-          instance: store.home.defaultInstance().origin,
+          instance: instance.origin,
           name: repository.path,
           can: colliding ? { manageMembers: false, transfer: false } : { manageMembers: repository.can.manageMembers, transfer: repository.can.transfer },
           id: repository.id,
@@ -4611,6 +4698,7 @@ export class SpaceManager {
           sync: colliding ? { phase: "idle" } : this.joining.get(repository.id) ?? { phase: "idle" },
         },
         group: repository.group,
+        instance: instance.origin,
       });
     }
     return rows;
@@ -4629,7 +4717,8 @@ export class SpaceManager {
   private groupsOf(placed: Placed[]): GroupsState["groups"] {
     const store = this.host.store;
     const ownName = store.home.ownName;
-    const view = this.signedIn() ? this.view : undefined;
+    const served = this.defaultInstance();
+    const view = this.viewOf(served);
     const user = userGroup(view);
     const login = store.home.account()?.login ?? null;
     type Entry = GroupsState["groups"][number];
@@ -4642,7 +4731,7 @@ export class SpaceManager {
     const byId = new Map<string, Entry>();
     const byPath = new Map<string, Entry>();
     const logins = new Map<string, Entry>();
-    for (const group of view ? this.listedGroups(view) : []) {
+    for (const group of view ? this.listedGroups(served, view) : []) {
       if (group.kind === "user") continue;
       const can = group.can;
       const entry: Entry = { id: group.id, fullPath: group.fullPath, name: group.name, own: false, can: { createSubgroup: can.createSubgroup, manageMembers: can.manageMembers, rename: can.rename, delete: can.delete }, repositories: [] };
@@ -4672,11 +4761,12 @@ export class SpaceManager {
     };
     // The rows the host lists first, so every login's entry stands
     // before a row the host lists nothing for falls back to its key.
-    for (const { row, group } of placed) {
+    for (const { row, group, instance } of placed) {
       if (!group) continue;
+      // Ids are the default instance's alone.
       const entry = group.kind === "user"
         ? (ownLogin(group.fullPath) ? own : loginEntry(group.fullPath))
-        : ((group.id !== null && byId.get(group.id)?.fullPath === group.fullPath) ? byId.get(group.id)! : unlisted(group.fullPath));
+        : ((instance === served.origin && group.id !== null && byId.get(group.id)?.fullPath === group.fullPath) ? byId.get(group.id)! : unlisted(group.fullPath));
       entry.repositories.push(row);
     }
     for (const { row, group } of placed) {

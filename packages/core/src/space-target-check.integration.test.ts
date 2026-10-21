@@ -22,8 +22,10 @@ function internals(home: Home) {
   const service = home.service as unknown as {
     space: {
       readHost(): Promise<unknown>;
-      targets: Map<unknown, { facts: { id: string | null }; listing?: { repository: { id: string } } }>;
-      instanceAt(origin: string): { client: { fetchImpl: typeof fetch } };
+      instanceAt(origin: string): {
+        client: { fetchImpl: typeof fetch };
+        targets: Map<unknown, { facts: { id: string | null }; listing?: { repository: { id: string } } }>;
+      };
     };
     store: Store;
   };
@@ -32,6 +34,9 @@ function internals(home: Home) {
     store: service.store,
     /** The client the core keeps for the home's one instance (DR-127). */
     get hostClient() { return service.space.instanceAt(service.store.home.defaultInstance().origin).client; },
+    /** The selected reads the core holds of the home's one instance
+     * (git-host-22). */
+    get targets() { return service.space.instanceAt(service.store.home.defaultInstance().origin).targets; },
   };
 }
 
@@ -333,7 +338,7 @@ for (const next of ["signed-out", "another-account"] as const) {
     const row = await home.client.waitRepository(from, key, (candidate) => candidate.sync.phase === "stopped", 30_000);
     assert.equal(row.sync.phase, "stopped");
     if (row.sync.phase === "stopped") assert.match(row.sync.message, /sign-in changed meanwhile/i);
-    assert.ok(![...core.space.targets.values()].some((target) => target.facts.id === id || target.listing?.repository.id === id), "no stale target cache entry");
+    assert.ok(![...core.targets.values()].some((target) => target.facts.id === id || target.listing?.repository.id === id), "no stale target cache entry");
     assert.ok(existsSync(clone) && !existsSync(clonePath(home.dataDir, hostKey(host, "acme/research/stale-answer-spex"))));
     assert.deepEqual(readFileSync(join(clone, ".git", "config")), config);
     assert.equal(git(clone, "remote", "get-url", hostFolder(host)), origin);
