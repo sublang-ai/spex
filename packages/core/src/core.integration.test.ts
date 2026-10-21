@@ -3944,6 +3944,164 @@ test("core-service-77: continuation observations guard project inputs and preser
   assert.ok(!(await client.expectOk("session.list", {})).some((entry) => entry.id === session.id));
 });
 
+// The registry fixture imports the installed engine; only the external
+// providers are scripted. Public environment/config/session commands own
+// its loading, checkpoint release and continuation.
+test("core-service-77: a finished classified playbook reopens with exact new text and no prior-run exchanges", { timeout: 180_000 }, async (t) => {
+  const firstTask = "first classified task";
+  // A model-decided start may faithfully synthesize its standalone request.
+  // Assert raw Boss delivery and the selected child request separately.
+  const nextBoss = "  Start another classified fixture task.\n";
+  const nextTask = "  Perform another classified fixture task.\n";
+  const oldQuestion = "Which OLD_DATABASE should this run use?";
+  const oldAnswer = "Use OLD_SQLITE for this run.";
+  const playerPrompts: string[] = [];
+  const classificationPrompts: string[] = [];
+  const decisionPrompts: string[] = [];
+  const harness = await startHarness(VALID_CONFIG, {
+    realShell: true,
+    seedCommit: true,
+    script: {
+      rules: [
+        { match: "Task from classified fixture:", response: { result: "", resultFor: (prompt) => {
+          playerPrompts.push(prompt);
+          return playerPrompts.length === 1 ? oldQuestion : "Completed this run.";
+        } } },
+        { match: "Classify the following Boss message", response: { result: "", resultFor: (prompt) => {
+          classificationPrompts.push(prompt);
+          return JSON.stringify(playerPrompts.length === 1
+            ? { type: "BOSS_REPLY", questionId: "old-question" }
+            : { type: "START", mode: "build" });
+        } } },
+        { match: "Pick exactly one declared", response: { result: "", resultFor: () => JSON.stringify(
+          playerPrompts.length === 1 ? { guard: "needsBossReply" } : { guard: "completed" },
+        ) } },
+        { match: "Select exactly one action from the closed set", response: { result: "", resultFor: (prompt) => {
+          decisionPrompts.push(prompt);
+          return JSON.stringify(playerPrompts.length === 1 ? { action: "deliver" }
+            : { action: "start", playbookId: "probe", input: playerPrompts.length === 0 ? firstTask : nextTask });
+        } } },
+      ],
+      fallback: { result: "Finished the fixture turn." },
+    },
+  });
+  const client = new Client(harness.service.port());
+  t.after(async () => { client.close(); await harness.service.stop(); rmSync(harness.dir, { recursive: true, force: true }); });
+  await client.open();
+  const folder = join(harness.projectDir, "tools", "classified");
+  const artifact = join(folder, "playbooks", "en", "probe");
+  mkdirSync(artifact, { recursive: true });
+  writeFileSync(join(folder, "meta.yaml"), stringifyYaml({
+    format: 2, org: "fixture", name: "classified", version: "1.0.0",
+    description: "Classified-entry continuation integration fixture", license: "Apache-2.0",
+    artifacts: { probe: { kind: "playbook", language: "en" } },
+  }));
+  writeFileSync(join(artifact, "probe.md"), "# Probe\n\nA classified-entry integration fixture.\n");
+  writeFileSync(join(artifact, "probe.registry.mjs"), String.raw`
+import { assign, createMachine } from 'xstate';
+import { createXStatePlaybookRuntime, RUNTIME_ABI } from '@sublang/playbook/xstate-runtime';
+const meta = (stateId, role) => ({ playbook: { stateId, description: stateId, ...(role ? {role} : {}) } });
+const accepted = (target, outcome) => ({ type: 'playbook.acceptedOutcome', params: { source: 'work', target, acceptedOutcome: outcome } });
+const machine = createMachine({
+  id: 'classified-consumer', initial: 'ready',
+  context: () => ({ phase: 'ready', task: '', pendingBossQuestion: undefined, bossReply: undefined }),
+  states: {
+    ready: { meta: meta('ready'), tags: ['playbook.parked'], on: { START: {
+      guard: ({context,event}) => context.phase === 'ready' && event.mode === 'build',
+      target: 'work', actions: assign({ task: ({event}) => event.task }),
+    } } },
+    work: { meta: meta('work','coder'), tags: ['playbook.busy'], invoke: {
+      src: 'player',
+      input: ({context}) => ({ stateId: 'work', role: 'coder', sourceItem: 'PROBE-1',
+        prompt: 'Task from classified fixture: <task>', task: context.task,
+        ...(context.pendingBossQuestion && context.bossReply !== undefined
+          ? { pendingBossQuestion: context.pendingBossQuestion, bossReply: context.bossReply } : {}),
+        result: { needsBossReply: 'The player asks Boss a question. Output shall include \`question: <verbatim question>\`.', completed: 'The task is complete.' },
+      }),
+      onDone: [
+        { guard: ({event}) => event.output.guard === 'needsBossReply', target: 'awaitBossReply', actions: [
+          accepted('awaitBossReply','needsBossReply'),
+          assign({ pendingBossQuestion: ({event}) => ({ questionId: 'old-question', resumeStateId: 'work', sourceItem: 'PROBE-1', asker: {kind:'role',roleId:'coder'}, question: event.output.question }) }),
+        ] },
+        { target: 'done', actions: [accepted('done','completed'), assign({ phase: () => 'finished', pendingBossQuestion: () => undefined, bossReply: () => undefined })] },
+      ],
+    } },
+    awaitBossReply: { meta: meta('awaitBossReply'), tags: ['playbook.parked'], on: { BOSS_REPLY: {
+      target: 'work', actions: assign({ bossReply: ({event}) => event.answer }),
+    } } },
+    done: { type: 'final', meta: meta('done') },
+  },
+}, { actions: { 'playbook.acceptedOutcome': () => undefined } });
+const factory = createXStatePlaybookRuntime(machine, {
+  label: 'classified-consumer', compat: {artifactSchema:3,runtimeAbi:RUNTIME_ABI}, snapshotOptions: value => value ?? {},
+  bossEvents: [{ type: 'START', fields: {
+    mode: {source:'judge',required:true,values:['build']}, task: {source:'text',required:true},
+  } }],
+  roleStates: { work: {role:'coder',label:'work'} }, verbatimPayloadFields: new Set(['question']),
+  outcomeAuthority: { governedPlayerStates: { work: {
+    needsBossReply: {fields:{question:'presentation'},repositoryDisposition:'unchanged'},
+    completed: {fields:{},repositoryDisposition:'unchanged'},
+  } } },
+});
+export const spexRegistryContract = 3;
+export default { id:'probe',command:'probe',intent:'exercise classified continuation',artifactSchema:3,
+  runtimeProfile:{kind:'shared-factory',compat:factory.compat},requiredRoleIds:['coder'],concurrentRoleSets:[],
+  validateOptions: value => value ?? {},
+  createRuntime: (configuredOptions,hostCapabilities) => factory({configuredOptions,hostCapabilities}),
+};
+`);
+  const project = await client.expectOk("project.register", { path: harness.projectDir });
+  await client.expectOk("environment.request", { repository: project.id, name: "fixture/classified", request: { kind: "path", path: "tools/classified" } });
+  // The request is asynchronous; config composition reads only an installed lock.
+  await client.waitFor((m) => m.type === "environment.state" && m.repository === project.id
+    && m.state.busy === null && m.state.packages.some((pkg) => pkg.name === "fixture/classified" && pkg.installed), 60_000);
+  const configured = await client.expectOk("config.edit", { repository: project.id,
+    op: { kind: "playbook.add", playbookId: "probe", roles: { coder: "dev.coder" } },
+  });
+  assert.equal(configured.status, "valid");
+  const session = await client.expectOk("session.create", { projectId: project.id });
+  await client.expectOk("subscribe", { channel: { kind: "session", sessionId: session.id } });
+  await client.expectOk("turn.submit", { sessionId: session.id, text: firstTask });
+  const asked = await settledSession(client, session.id, 1);
+  assert.equal(asked.live, false, "the pending-question turn releases its runtime");
+  assert.equal(asked.failed, false, JSON.stringify({ recovery: asked.recovery, parked: asked.parked }));
+  assert.equal(asked.recovery, undefined);
+  assert.equal(asked.parked?.reason, "question", "the real question stands without interrupted-turn recovery");
+  assert.equal(playerPrompts.length, 1);
+  await client.expectOk("turn.submit", { sessionId: session.id, text: oldAnswer });
+  const completed = await settledSession(client, session.id, 2);
+  assert.equal(completed.failed, false);
+  assert.equal(completed.parked, undefined, "the first run finished");
+  assert.equal(completed.recovery, undefined);
+  assert.equal(playerPrompts.length, 2);
+  // A selected provider conversation already contains its own question;
+  // Playbook supplies the answer without repeating it (runtime-92).
+  assert.ok(classificationPrompts[1]!.includes(`Pending Boss question: ${oldQuestion}`), "the real pending question reaches classification");
+  assert.ok(classificationPrompts[1]!.includes("Boss message:\n```\n" + oldAnswer + "\n```"), "the Boss answer reaches classification verbatim");
+  assert.ok(playerPrompts[1]!.includes(`Boss ⟶\n${oldAnswer}`), "the resumed worker receives the actual Boss reply");
+  assert.ok(harness.stats.runs.some((run) => run.prompt === playerPrompts[1] && run.resume), "the asking worker resumes its existing provider conversation");
+  const stream = join(projectSessions(harness.dataDir, project.id), `${session.id}.records.jsonl`);
+  const before = readFileSync(stream);
+  await client.expectOk("turn.submit", { sessionId: session.id, text: nextBoss });
+  const restarted = await settledSession(client, session.id, 3);
+  assert.equal(restarted.live, false);
+  assert.equal(restarted.failed, false);
+  assert.equal(restarted.parked, undefined);
+  assert.equal(restarted.recovery, undefined);
+  assert.equal(restarted.continuable, true, restarted.continuationReason ?? "continuable");
+  assert.equal(playerPrompts.length, 3, "the continued session starts exactly one new worker call");
+  assert.ok(classificationPrompts.at(-1)!.includes("Current state: ready"), "classification sees the guarded initial state");
+  assert.ok(decisionPrompts.at(-1)!.includes(`[Boss message]\n${nextBoss}`), "the Captain sees the raw Boss text without trimming");
+  assert.ok(classificationPrompts.at(-1)!.includes("Boss message:\n```\n" + nextTask + "\n```"), "the classifier sees the selected standalone request without trimming");
+  assert.ok(playerPrompts[2]!.includes(`Task from classified fixture: ${nextTask}`), "current-run text keeps its whitespace and newline");
+  assert.ok(!playerPrompts[2]!.includes(oldQuestion) && !playerPrompts[2]!.includes(oldAnswer), "no prior-run exchange leaks into the second run");
+  const after = readFileSync(stream);
+  assert.deepEqual(after.subarray(0, before.length), before, "the recorded first run is retained byte for byte");
+  const records = after.toString("utf8").trim().split("\n").map((line) => JSON.parse(line));
+  assert.deepEqual(records.filter(({record}) => record.type === "turn_started").map(({record}) => record.turn.prompt), [firstTask, oldAnswer, nextBoss]);
+  assert.equal((await client.expectOk("session.list", {})).find((item) => item.id === session.id)?.turns, 3);
+});
+
 test("core-service-77: the real shell continues from its token-free snapshot, ledger intact, and refuses config drift", async (t) => {
   const dir = scratchDir("spex-shell-continue-");
   const configPath = join(dir, "playbook.config.yaml");

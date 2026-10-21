@@ -287,9 +287,16 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 - The app requires Playbook 17.11.0, Cligent 0.36.0 and slc 0.19.0, keeping the locked agent SDKs ([DR-130](specs/decisions/130-playbook-17-11-0-cligent-0-36-0-slc-0-19-0-adoption.md)). Captain decision, Judge and reporting calls, and every compiler call, turn off, as far as each agent allows, the skills the agent finds by itself in its project and user skill folders, so the skills and specs Spex exports reach working players and authoring sessions but no longer steer routing, adjudication or compilation; a Kimi Code Captain still reads them, and a session whose Captain conversation began earlier keeps the listings already in it. A Captain or compile whose agent offers the switch but cannot apply it where it runs, such as Gemini CLI under its native sandbox, now fails with an error. The folders Spex exports into now come from Cligent's published table.
 
-- Record the accepted multi-instance home design ([DR-127](specs/decisions/127-a-home-signed-in-to-several-instances.md))
-  and proposed repository-placement design ([DR-128](specs/decisions/128-a-spex-repository-placed-at-several-instances.md)).
-  These specification changes introduce no multi-instance runtime behavior in this beta.
+- A home can sign in to several instances, with each instance's account,
+  Groups listing and repository operations kept separate ([DR-127](specs/decisions/127-a-home-signed-in-to-several-instances.md)).
+  Existing homes and clones migrate to the instance-aware layout; a
+  refused credential signs out only its instance. The accepted repository-placement
+  design remains recorded separately ([DR-128](specs/decisions/128-a-spex-repository-placed-at-several-instances.md)).
+- Each environment searches, resolves and publishes at its own instance's
+  registry; Git sources use that instance's broker. Installation can
+  retrieve the locked version and checksum across the available registries,
+  and built-ins use the local seed when its files match the lock.
+  Protocol 27 requires `repository` on `environment.search`.
 
 - The app requires Cligent 0.34.1 and slc 0.18.1, keeping Playbook 17.10.1 and the locked agent SDKs ([DR-126](specs/decisions/126-cligent-0-34-1-slc-0-18-1-adoption.md)). On POSIX, Codex retains Unicode line and paragraph separators in valid JSON output; the compiler verifies JSON renderings of typed arrays and records without changing their input shapes.
 
@@ -642,7 +649,7 @@ and `npm start` (desktop) or `npm run start:server` (server).
   `space.group.create` join, with `draft.defaults` and the
   `environment.*` family; `intent.move`, `intent.link` and `space.init`
   leave; and a draft's `malformedDirectives` entries carry `text` and
-  `reason`. The protocol is 26.
+  `reason`. The protocol is 27.
 
 - The dependency lock takes Playbook 17.8.1 — the Captain ends a relayed question with the question's own words and reports a step's ending with the facts the step gave — and cligent 0.33.4 — the Claude Code adapter withholds the structured-question tool it cannot serve, so no refused call shows in the Captain's pane. The floors of DR-116 are unchanged.
 - The app requires Playbook 17.9.0 and Cligent 0.33.5 ([DR-121](specs/decisions/121-playbook-17-9-0-cligent-0-33-5-adoption.md)). Claude Code runs with its own commit and pull-request attribution off, so a player's commits carry only the trailers the project asks for, and every player prompt opens with `Role: <role> · Model: <model>`, so such a trailer can name both. Every role after a Boss answer hears the run's questions and answers, whatever the playbook retains; a question and a reply reach a player behind `? ⟶` and `Boss ⟶` lines, and the lines the Captain appends to a reply read as marks — `✓`, `✕ <code>`, `▸ <label>` — not English sentences. The closing reply names each commit's hash and branch, and a judge's reply the machine admits is no longer forced into a string where the runtime could not read the field's shape. **Upgrade together:** stop every Playbook CLI and Spex shell sharing the home before the first new writer runs; an earlier Playbook rejects the run snapshots and ledgers this one writes.
@@ -652,6 +659,10 @@ and `npm start` (desktop) or `npm run start:server` (server).
 - Your own group's environment requests a spec package by a path in its clone ([DR-125](specs/decisions/125-your-own-groups-path-sources-live-in-its-clone.md)): keep an unpublished skill, spec or playbook of your own in a folder of your own group's spex repository, request it by that path, and edit it in place; the sync carries the folder, as one unit, to every device, where it exports to your agents. A path under Spex's own folders, however it is cased, one the sync rules drop, one reached through a link, and a folder in or holding a Git repository of its own, or holding a link or a file the sync would drop or refuse to share, are refused before anything is written, and again at each resolution and install, so a file added later fails the next install on the device holding it, the last exports standing; a release holding a `uv.lock`, `Cargo.lock` or `*.tmp`, which the sync rules drop anywhere, cannot live there. Explore reads such a folder as a spec package. "Add from folder" on your own group's side asks for a folder inside its clone, and `environment.get` names that folder as `pathRoot`. A request your own group made by a path in a paired working folder reads as missing until its folder moves into the clone. A project's and another group's paths stay relative to the working folder.
 
 ### Fixed
+
+- Require Playbook 17.11.1 for classified entry when a finished workflow
+  starts again, preserving the Boss text and clearing prior run exchanges
+  only after a valid new entry ([DR-131](specs/decisions/131-playbook-17-11-1-adoption.md)).
 
 - Compiling or repackaging a playbook now accepts required runtime
   options without defaults. Packaging preserves the entry's validator;
