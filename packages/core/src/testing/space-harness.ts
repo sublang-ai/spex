@@ -17,7 +17,7 @@ import { startStandinHost, type StandinHost, type StandinPerson } from "./standi
 import type { StandinRegistry } from "./standin-registry.js";
 import { canonicalOrigin, instanceFolder, instanceSegmentOf } from "../instance.js";
 import type { LineSpawner } from "../compile.js";
-import type { Command, CommandResults, GroupsState, RepositoryState, ServerMessage, SpaceStateMessage, SyncStep, SpaceOp } from "../protocol.js";
+import type { Command, CommandResults, GroupsState, PlacementState, RepositoryState, ServerMessage, SpaceStateMessage, SyncStep, SpaceOp } from "../protocol.js";
 
 /** Every scratch home's own group: a name no device user collides with. */
 export const OWN = "tester";
@@ -48,6 +48,15 @@ export function bareOf(host: StandinHost, key: string): string {
  * headings hold them (space-30). */
 export function rowsOf(state: GroupsState): RepositoryState[] {
   return [...state.own.repositories, ...state.instances.flatMap((instance) => instance.groups.flatMap((group) => group.repositories))];
+}
+
+/** A row's line for the placement at an instance by its origin, or the
+ * path placement's for null (space-30, space-87). */
+export function placementOf(row: RepositoryState, origin: string | null): PlacementState {
+  const wanted = origin === null ? null : canonicalOrigin(origin);
+  const found = row.placements.find((line) => (line.instance === null ? null : canonicalOrigin(line.instance)) === wanted);
+  if (found) return found;
+  throw new Error(`no placement ${origin} on ${row.key}: ${JSON.stringify(row.placements.map((line) => line.instance))}`);
 }
 
 /** One repository's state out of the Groups state: under your own group
@@ -210,13 +219,43 @@ const SIGN_IN_FAILED_KEYS = ["cause", "instance", "message", "phase"];
 
 const INSTANCE_KEYS = ["account", "displayName", "groups", "host", "hostSignedOut", "origin", "read", "readAt", "roles", "signedIn"];
 
-const GROUP_ENTRY_KEYS = ["can", "fullPath", "id", "login", "mine", "name", "repositories"];
+const GROUP_ENTRY_KEYS = ["can", "fullPath", "id", "login", "mine", "name", "placed", "repositories"];
 
-const REPOSITORY_KEYS = ["branch", "can", "code", "conflicts", "folder", "governing", "id", "incoming", "instance", "key", "lastSync", "local", "members", "name", "noticed", "own", "reason", "remote", "state", "sync", "visibility", "waiting"];
+/** A row's fields (space-30), with the transitional mirrors of its key
+ * placement's line — `branch`, `can`, `incoming`, `lastSync`, `members`,
+ * `noticed`, `remote`, `visibility` and `waiting` — until the interface
+ * reads placements. */
+const REPOSITORY_KEYS = ["branch", "can", "code", "conflicts", "folder", "governing", "id", "incoming", "instance", "key", "lastSync", "local", "members", "mergePending", "name", "noticed", "own", "placedAt", "placements", "reason", "remote", "state", "sync", "visibility", "waiting"];
+
+const PLACEMENT_KEYS = ["attached", "branch", "can", "conflicts", "id", "incoming", "instance", "lastSync", "members", "noticed", "outcome", "path", "reason", "state", "visibility", "waiting"];
 
 const BRANCH_KEYS = ["agreed", "ahead", "behind", "checkedAt", "hostEmpty", "mergePending", "unrelated"];
 
+const PLACEMENT_BRANCH_KEYS = ["agreed", "ahead", "behind", "checkedAt", "hostEmpty", "unrelated"];
+
 const PHASES = new Set(["idle", "running", "choices", "unrelated", "stopped", "done"]);
+
+/** Each phase's fields (space-30): those it always carries, and those
+ * it may. */
+const PHASE_KEYS: Record<string, { required: string[]; optional: string[] }> = {
+  idle: { required: ["phase"], optional: [] },
+  running: { required: ["cancelable", "op", "phase", "since", "step"], optional: ["placement"] },
+  choices: { required: ["phase", "placement", "savedCommit"], optional: [] },
+  unrelated: { required: ["phase", "placement"], optional: [] },
+  stopped: { required: ["cause", "guidance", "message", "op", "phase", "retry", "step"], optional: ["count"] },
+  done: { required: ["at", "phase", "pushed", "received", "sent"], optional: [] },
+};
+
+const PLACEMENT_STATES = new Set(["reachable", "read-only", "unreachable", "absent"]);
+
+/** A phase carries its own fields alone (space-30). */
+function assertPhase(sync: RepositoryState["sync"]): void {
+  assert.ok(PHASES.has(sync.phase), `phase ${JSON.stringify(sync)}`);
+  const keys = PHASE_KEYS[sync.phase];
+  const fields = Object.keys(sync);
+  assert.ok(keys.required.every((field) => fields.includes(field)) && fields.every((field) => keys.required.includes(field) || keys.optional.includes(field)), `phase fields ${JSON.stringify(sync)}`);
+  if ("placement" in sync && sync.placement !== undefined) assert.ok(sync.placement === null || typeof sync.placement === "string", JSON.stringify(sync));
+}
 
 const CHANGES = new Set(["new", "updated", "deleted"]);
 
@@ -279,6 +318,9 @@ export function assertGroupsState(state: GroupsState): void {
     }
     for (const group of instance.groups) {
       assert.deepEqual(Object.keys(group).sort(), GROUP_ENTRY_KEYS);
+      // The rows standing elsewhere this entry holds a placement of,
+      // each by its key and name (space-1, space-30).
+      assert.ok(Array.isArray(group.placed) && group.placed.every((line) => Object.keys(line).sort().join() === "key,name" && typeof line.key === "string" && typeof line.name === "string"), JSON.stringify(group.placed));
       assert.deepEqual(Object.keys(group.can).sort(), ["createSubgroup", "delete", "manageMembers", "rename"]);
       assert.ok(Object.values(group.can).every((value) => typeof value === "boolean"), JSON.stringify(group.can));
       // A namespace by its login, with no id and nothing to do there; a
@@ -318,9 +360,10 @@ export function assertGroupsState(state: GroupsState): void {
     if (repository.state === "local-only") assert.equal(repository.governing, null, `${repository.key} is local only`);
     assert.deepEqual(Object.keys(repository.can), ["manageMembers", "transfer"]);
     assert.ok(typeof repository.can.manageMembers === "boolean" && typeof repository.can.transfer === "boolean", JSON.stringify(repository.can));
-    assert.ok(PHASES.has(repository.sync.phase), `phase ${JSON.stringify(repository.sync)}`);
+    assertPhase(repository.sync);
     assert.ok(["local-only", "reachable", "read-only", "unreachable", "absent"].includes(repository.state));
     if (repository.branch !== null) assert.deepEqual(Object.keys(repository.branch).sort(), BRANCH_KEYS);
+    assertPlacements(repository);
     const agreed = repository.branch?.agreed;
     if (agreed) assert.ok(Object.keys(agreed).sort().join() === "at,current" && typeof agreed.at === "number" && typeof agreed.current === "boolean", JSON.stringify(agreed));
     for (const unit of [...repository.local, ...repository.incoming, ...repository.conflicts.map((c) => c.unit)]) {
@@ -331,6 +374,46 @@ export function assertGroupsState(state: GroupsState): void {
     }
     if (repository.lastSync !== null) assert.deepEqual(Object.keys(repository.lastSync).sort(), ["at", "received", "sent"]);
   }
+}
+
+/** A row's lines in their shape (space-30), and, while the interface
+ * reads the row's transitional mirrors, those mirrors equal to its key
+ * placement's line — its first — wherever a remote here holds it or no
+ * clone is here; a local-only clone holds no line but a creation's
+ * waiting at an instance (space-87). */
+function assertPlacements(row: RepositoryState): void {
+  assert.equal(typeof row.mergePending, "boolean", JSON.stringify(row.mergePending));
+  assert.equal(row.mergePending, row.branch?.mergePending ?? false, `${row.key}: the row's pending merge is its branch's`);
+  assert.ok(Array.isArray(row.placedAt) && row.placedAt.every((origin) => typeof origin === "string"), JSON.stringify(row.placedAt));
+  assert.ok(Array.isArray(row.placements), JSON.stringify(row.placements));
+  for (const line of row.placements) {
+    assert.deepEqual(Object.keys(line).sort(), PLACEMENT_KEYS);
+    assert.ok((line.instance === null || typeof line.instance === "string") && typeof line.path === "string" && (line.id === null || typeof line.id === "string") && typeof line.attached === "boolean", JSON.stringify(line));
+    assert.ok(PLACEMENT_STATES.has(line.state), JSON.stringify(line));
+    assert.deepEqual(Object.keys(line.can), ["manageMembers", "transfer"]);
+    if (line.branch !== null) assert.deepEqual(Object.keys(line.branch).sort(), PLACEMENT_BRANCH_KEYS);
+    if (line.lastSync !== null) assert.deepEqual(Object.keys(line.lastSync).sort(), ["at", "received", "sent"]);
+    assert.ok(Array.isArray(line.incoming) && Array.isArray(line.conflicts) && typeof line.noticed === "boolean", JSON.stringify(line));
+    if (!line.attached) assert.equal(line.branch, null, `${row.key}: a line no remote here holds has no branch`);
+  }
+  if (row.state === "local-only") assert.ok(row.placements.every((line) => !line.attached && line.waiting !== null), `${row.key}: local only holds no line but a creation's wait`);
+  // A phase in choices or with an unrelated history names a placement
+  // the clone holds (space-30).
+  const sync = row.sync;
+  if (sync.phase === "choices" || sync.phase === "unrelated") {
+    assert.ok(row.placements.some((line) => line.attached && line.instance === sync.placement), `${row.key}: ${JSON.stringify(sync)} names a placement it holds`);
+  }
+  const key = row.placements[0];
+  if (!key) return;
+  // Transitional: the row's mirrors are its key placement's line's.
+  assert.deepEqual(row.waiting, key.waiting, `${row.key}: waiting mirrors its key placement`);
+  if (!key.attached && row.branch !== null) return;
+  const { mergePending: _, ...branch } = row.branch ?? { mergePending: false };
+  assert.deepEqual(
+    { remote: row.remote, id: row.id, members: row.members, visibility: row.visibility, can: row.can, branch: row.branch === null ? null : branch, incoming: row.incoming, lastSync: row.lastSync, noticed: row.noticed },
+    { remote: key.path, id: key.id, members: key.members, visibility: key.visibility, can: key.can, branch: key.branch, incoming: key.incoming, lastSync: key.lastSync, noticed: key.noticed },
+    `${row.key}: the row's mirrors are its key placement's line's`,
+  );
 }
 
 interface Home {

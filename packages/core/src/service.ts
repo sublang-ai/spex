@@ -3103,7 +3103,7 @@ export class CoreService {
       case "space.group.delete":
         return this.requireSpace().deleteGroup(command.instance, command.group);
       case "space.repository.move":
-        return this.requireSpace().moveRepository(command.repository, command.groupId);
+        return this.requireSpace().moveRepository(command.repository, command.groupId, command.instance);
       case "space.share":
         return this.requireSpace().share({ instance: command.instance, repository: command.repository, group: command.group, login: command.login, role: command.role });
       case "space.unshare":
@@ -3114,6 +3114,7 @@ export class CoreService {
         return this.requireSpace().fetch(command.repository);
       case "space.sync":
         return this.requireSpace().sync(command.repository, {
+          ...(command.placement !== undefined ? { placement: command.placement } : {}),
           ...(command.choices ? { choices: command.choices } : {}),
           ...(command.join !== undefined ? { join: command.join } : {}),
           ...(command.noticed !== undefined ? { noticed: command.noticed } : {}),
@@ -3121,7 +3122,7 @@ export class CoreService {
       case "space.cancel":
         return { stopped: this.requireSpace().cancel(command.repository) };
       case "space.diff":
-        return this.requireSpace().diff(command.repository, command.unit, command.path, command.side);
+        return this.requireSpace().diff(command.repository, command.unit, command.path, command.side, command.placement);
       case "space.tree":
         return this.requireSpace().tree(command.repository, command.path);
       case "space.read":

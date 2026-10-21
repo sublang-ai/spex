@@ -31,6 +31,7 @@ import {
   KEY,
   MERGE_DIAGNOSTIC,
   NOW,
+  ORIGIN,
   SESSION_UNIT,
   SETTINGS_UNIT,
   base,
@@ -466,7 +467,7 @@ describe("GROUPS: changes (space-7, space-8, space-10)", () => {
     await renderGroups(repoState({ branch: { ...BRANCH, hostEmpty: true, behind: 0 }, incoming: [] }));
     expect(screen.getByText("The host holds no records yet; Sync will send these")).toBeTruthy();
     cleanup();
-    await renderGroups(repoState({ branch: { ...BRANCH, unrelated: true }, incoming: [], sync: { phase: "unrelated" } }));
+    await renderGroups(repoState({ branch: { ...BRANCH, unrelated: true }, incoming: [], sync: { phase: "unrelated", placement: ORIGIN } }));
     expect(screen.getByTestId("space-unrelated").textContent).toContain("Join both histories into one");
     expect(screen.queryByTestId(`space-repo-counts-${KEY}`)).toBeNull();
     expect(syncControl().textContent).toBe("Join");
@@ -607,7 +608,7 @@ describe("GROUPS: syncing from the row (space-11, space-12, space-15, space-16, 
   });
 
   test("unrelated histories offer Join, confirmed inline with Cancel focused (space-13)", async () => {
-    await renderGroups(repoState({ branch: { ...BRANCH, unrelated: true }, sync: { phase: "unrelated" } }));
+    await renderGroups(repoState({ branch: { ...BRANCH, unrelated: true }, sync: { phase: "unrelated", placement: ORIGIN } }));
     // Join in place of Sync says what it does in its title.
     expect(syncControl().title).toBe("Brings both histories into one and asks about anything that differs");
     fireEvent.click(syncControl());
@@ -682,7 +683,7 @@ describe("GROUPS: choices (space-9, space-17, space-18)", () => {
     repoState({
       incoming: [SESSION_UNIT, SETTINGS_UNIT, INCOMING_INTENT],
       conflicts: CONFLICTS,
-      sync: { phase: "choices", savedCommit: "abc123" },
+      sync: { phase: "choices", placement: ORIGIN, savedCommit: "abc123" },
       ...over,
     });
 
@@ -1035,9 +1036,9 @@ describe("GROUPS: copy and roles (space-27, space-28, space-44)", () => {
     const states: GroupsState[] = [
       base({}, [repo({ state: "local-only", remote: null, branch: null })]),
       repoState(),
-      repoState({ incoming: [SESSION_UNIT, SETTINGS_UNIT], conflicts: CONFLICTS, sync: { phase: "choices", savedCommit: null } }),
+      repoState({ incoming: [SESSION_UNIT, SETTINGS_UNIT], conflicts: CONFLICTS, sync: { phase: "choices", placement: ORIGIN, savedCommit: null } }),
       repoState({ sync: { phase: "running", op: "sync", step: "apply", since: NOW, cancelable: false } }),
-      repoState({ branch: { ...BRANCH, unrelated: true, mergePending: true }, sync: { phase: "unrelated" } }, { diagnostics: [MERGE_DIAGNOSTIC] }),
+      repoState({ branch: { ...BRANCH, unrelated: true, mergePending: true }, sync: { phase: "unrelated", placement: ORIGIN } }, { diagnostics: [MERGE_DIAGNOSTIC] }),
       repoState({ sync: { phase: "stopped", op: "sync", step: "push", cause: "rejected", message: "The host changed again", guidance: "Sync again.", retry: true } }),
       repoState({ sync: { phase: "done", at: NOW, sent: 1, received: 2, pushed: true } }),
     ];
@@ -1064,7 +1065,7 @@ describe("GROUPS: copy and roles (space-27, space-28, space-44)", () => {
   test("every control in a repository's tabs reads at most 14 characters, its busy form included", async () => {
     const states: GroupsState[] = [
       base({}, [repo({ state: "local-only", remote: null, branch: null })]),
-      repoState({ incoming: [SESSION_UNIT, SETTINGS_UNIT], conflicts: CONFLICTS, sync: { phase: "choices", savedCommit: null } }),
+      repoState({ incoming: [SESSION_UNIT, SETTINGS_UNIT], conflicts: CONFLICTS, sync: { phase: "choices", placement: ORIGIN, savedCommit: null } }),
       repoState({ sync: { phase: "running", op: "sync", step: "push", since: NOW, cancelable: true } }),
       repoState({ sync: { phase: "stopped", op: "sync", step: "push", cause: "git", message: "x", guidance: "y", retry: true } }),
     ];
@@ -1081,7 +1082,7 @@ describe("GROUPS: copy and roles (space-27, space-28, space-44)", () => {
   });
 
   test("the surface, the groups, the tabs, the tree, the picker's groups and the live region are named for assistive technology", async () => {
-    await renderGroups(repoState({ incoming: [SESSION_UNIT], conflicts: [CONFLICTS[0]], sync: { phase: "choices", savedCommit: null } }));
+    await renderGroups(repoState({ incoming: [SESSION_UNIT], conflicts: [CONFLICTS[0]], sync: { phase: "choices", placement: ORIGIN, savedCommit: null } }));
     expect(screen.getByRole("region", { name: "Groups" })).toBeTruthy();
     expect(screen.getByRole("region", { name: "Your groups" })).toBeTruthy();
     expect(screen.getByRole("group", { name: "Your own group" })).toBeTruthy();

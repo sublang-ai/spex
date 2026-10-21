@@ -32,6 +32,7 @@ import type {
   GroupsState,
   InstanceGroupState,
   InstanceState,
+  PlacementState,
   RepositoryState,
   SpaceChange,
   SpaceChoice,
@@ -1152,6 +1153,11 @@ class RepositorySync {
       remote: remote === null ? null : displayRemote(remote),
       state: remote === null ? "local-only" : "reachable",
       reason: null,
+      mergePending: repo.root ? repo.mergePending : false,
+      // Its lines are the owner's to read (overlay); no placement file
+      // is read yet.
+      placements: [],
+      placedAt: [],
       waiting: null,
       members: null,
       visibility: null,
@@ -1689,8 +1695,8 @@ class RepositorySync {
         case "compare": {
           await this.enter(op, "compare", false);
           const result = await this.compare(choices, join, setUp ? saves : undefined);
-          if (result.outcome === "unrelated") { this.ended = { phase: "unrelated" }; return; }
-          if (result.outcome === "choices") { this.ended = { phase: "choices", savedCommit }; return; }
+          if (result.outcome === "unrelated") { this.ended = { phase: "unrelated", placement: this.owner.placementOf(this) }; return; }
+          if (result.outcome === "choices") { this.ended = { phase: "choices", placement: this.owner.placementOf(this), savedCommit }; return; }
           if (result.outcome === "nothing") { counts = result.counts; next = "push"; break; }
           pending = result.pending;
           counts = pending.counts;
@@ -4323,8 +4329,10 @@ export class SpaceManager {
    * before the host is asked — holding it as the host answered until a
    * read begun after the move is held (git-host-5), announced before the
    * reply; its clone moves on its next sync (space-60). */
-  async moveRepository(key: string, groupId: string | null): Promise<{ repository: { id: string; fullPath: string } }> {
-    const instance = await this.targetInstance({ repository: key });
+  async moveRepository(key: string, groupId: string | null, named?: string): Promise<{ repository: { id: string; fullPath: string } }> {
+    // The placement's instance, as Members names it (space-29): a clone
+    // holds one remote yet, so its row's instance acts.
+    const instance = await this.targetInstance({ repository: key, ...(named === undefined ? {} : { instance: named }) });
     const target = await this.membersTarget(instance, { repository: key }, "invalid_request");
     let into: HostGroup | null = null;
     if (groupId !== null) {
@@ -5032,7 +5040,7 @@ export class SpaceManager {
     const namespace = (heading: Heading, login: string): InstanceGroupState => {
       let entry = heading.logins.get(login.toLowerCase());
       if (!entry) {
-        entry = { id: null, login, mine: sameLogin(login, heading.login), fullPath: login, name: login, can: noCan(), repositories: [] };
+        entry = { id: null, login, mine: sameLogin(login, heading.login), fullPath: login, name: login, can: noCan(), placed: [], repositories: [] };
         heading.entries.push(entry);
         heading.logins.set(login.toLowerCase(), entry);
       }
@@ -5041,7 +5049,7 @@ export class SpaceManager {
     const unlisted = (heading: Heading, path: string): InstanceGroupState => {
       let entry = heading.byPath.get(path);
       if (!entry) {
-        entry = { id: null, login: null, mine: false, fullPath: path, name: path.split("/").pop() ?? path, can: noCan(), repositories: [] };
+        entry = { id: null, login: null, mine: false, fullPath: path, name: path.split("/").pop() ?? path, can: noCan(), placed: [], repositories: [] };
         heading.entries.push(entry);
         heading.byPath.set(path, entry);
       }
@@ -5060,7 +5068,7 @@ export class SpaceManager {
       for (const group of this.listedGroups(at, view)) {
         if (group.kind === "user") continue;
         const can = group.can;
-        const entry: InstanceGroupState = { id: group.id, login: null, mine: false, fullPath: group.fullPath, name: group.name, can: { createSubgroup: can.createSubgroup, manageMembers: can.manageMembers, rename: can.rename, delete: can.delete }, repositories: [] };
+        const entry: InstanceGroupState = { id: group.id, login: null, mine: false, fullPath: group.fullPath, name: group.name, can: { createSubgroup: can.createSubgroup, manageMembers: can.manageMembers, rename: can.rename, delete: can.delete }, placed: [], repositories: [] };
         heading.entries.push(entry);
         if (group.id !== null) heading.byId.set(group.id, entry);
         if (!heading.byPath.has(group.fullPath)) heading.byPath.set(group.fullPath, entry);
@@ -5104,6 +5112,76 @@ export class SpaceManager {
    * that instance, whose heading it stands under (space-1); every other
    * instance listing it changes nothing of it. */
   private overlay(machine: RepositorySync, base: RepositoryState): Placed {
+    const placed = this.overlaid(machine, base);
+    return { ...placed, row: { ...placed.row, placements: this.linesOf(machine, placed.row) } };
+  }
+
+  /** The instance of the placement a clone's remote holds (space-30,
+   * DR-128): its instance's origin where the remote lies at one, as its
+   * row reads it (overlay), null for a remote the reader named — the
+   * path placement — or for no remote. */
+  placementOf(machine: RepositorySync): string | null {
+    const facts = machine.facts;
+    if (facts.remote === null) return null;
+    const serving = this.servingOf(machine);
+    return this.atHost(facts, serving) ? serving.origin : null;
+  }
+
+  /** A clone's placement lines (space-87, space-30): the one its remote
+   * holds, read as its row is — its state, its listing's members and
+   * rights, its branch against that remote's `spex`, its last sync and
+   * notice — else the one a creation for it waits at, attached to no
+   * remote here; none while local only. */
+  private linesOf(machine: RepositorySync, row: RepositoryState): PlacementState[] {
+    if (machine.facts.remote !== null && row.state !== "local-only") {
+      let branch: PlacementState["branch"] = null;
+      if (row.branch !== null) {
+        const { mergePending: _, ...against } = row.branch;
+        branch = against;
+      }
+      return [{
+        instance: this.placementOf(machine),
+        path: row.remote ?? displayRemote(machine.facts.remote),
+        id: row.id,
+        attached: true,
+        state: row.state,
+        reason: row.reason,
+        waiting: row.waiting,
+        members: row.members,
+        visibility: row.visibility,
+        can: { ...row.can },
+        branch,
+        incoming: row.incoming,
+        conflicts: row.conflicts,
+        lastSync: row.lastSync,
+        noticed: row.noticed,
+        outcome: null,
+      }];
+    }
+    const waiting = this.waiting.get(row.key);
+    if (!waiting) return [];
+    return [{
+      instance: waiting.instance,
+      path: `${waiting.group}/${waiting.create?.name ?? row.name}`,
+      id: null,
+      attached: false,
+      state: "absent",
+      reason: null,
+      waiting: { step: waiting.step, group: waiting.group, message: waiting.message },
+      members: null,
+      visibility: null,
+      can: { manageMembers: false, transfer: false },
+      branch: null,
+      incoming: [],
+      conflicts: [],
+      lastSync: null,
+      noticed: false,
+      outcome: null,
+    }];
+  }
+
+  /** The row `overlay` reads, before its lines. */
+  private overlaid(machine: RepositorySync, base: RepositoryState): Placed {
     const facts = machine.facts;
     const waiting = this.waiting.get(base.key);
     // What a pick, a join or a pairing changed since the machine's last
@@ -5235,6 +5313,27 @@ export class SpaceManager {
         remote: path,
         state: colliding ? "unreachable" : "absent",
         reason: colliding ? namedLikeYourLogin() : null,
+        mergePending: false,
+        // Its one listed placement, on no clone here (space-30).
+        placements: [{
+          instance: instance.origin,
+          path,
+          id: repository.id,
+          attached: false,
+          state: colliding ? "unreachable" : "absent",
+          reason: colliding ? namedLikeYourLogin() : null,
+          waiting: null,
+          members: listing.members,
+          visibility: repository.visibility,
+          can: colliding ? { manageMembers: false, transfer: false } : { manageMembers: repository.can.manageMembers, transfer: repository.can.transfer },
+          branch: null,
+          incoming: [],
+          conflicts: [],
+          lastSync: null,
+          noticed: false,
+          outcome: null,
+        }],
+        placedAt: [],
         waiting: null,
         members: listing.members,
         visibility: repository.visibility,
@@ -5276,8 +5375,11 @@ export class SpaceManager {
 
   fetch(key: string): Promise<{ accepted: true }> { return this.machine(key).fetch(); }
 
-  sync(key: string, input: { choices?: Record<string, SpaceChoice>; join?: boolean; noticed?: boolean }): Promise<{ accepted: true }> {
-    return this.machine(key).sync(input);
+  /** `placement` names the placement `choices`, `join` and `noticed`
+   * are for (space-29): a clone holds one remote yet, whose they are. */
+  sync(key: string, input: { placement?: string | null; choices?: Record<string, SpaceChoice>; join?: boolean; noticed?: boolean }): Promise<{ accepted: true }> {
+    const { placement: _, ...rest } = input;
+    return this.machine(key).sync(rest);
   }
 
   cancel(key: string): boolean { return this.machine(key).cancel(); }
@@ -5299,7 +5401,9 @@ export class SpaceManager {
   // A read resolves the clone's path at its instant; one that meets a
   // clone moved meanwhile fails, and the interface reads again on the
   // move's broadcast (space-29).
-  diff(key: string, unit: string, path: string, side: SpaceChoice): Promise<{ patch: string; truncated: boolean }> {
+  diff(key: string, unit: string, path: string, side: SpaceChoice, _placement?: string | null): Promise<{ patch: string; truncated: boolean }> {
+    // `placement` names the placement the `remote` side is of (space-29):
+    // a clone holds one remote yet, whose side it is.
     return this.machine(key).diff(unit, path, side);
   }
 

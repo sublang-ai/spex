@@ -1280,7 +1280,8 @@ export const commandSchema = z.discriminatedUnion("type", [
     })
     .strict(),
   z.object({ type: z.literal("space.group.delete"), id, instance: instanceOriginSchema, group: z.string().min(1) }).strict(),
-  z.object({ type: z.literal("space.repository.move"), id, repository: repositoryKeySchema, groupId: z.string().min(1).nullable() }).strict(),
+  /** `instance`: the placement's, its first where omitted (space-29, DR-128). */
+  z.object({ type: z.literal("space.repository.move"), id, repository: repositoryKeySchema, instance: instanceOriginSchema.optional(), groupId: z.string().min(1).nullable() }).strict(),
   z
     .object({
       type: z.literal("space.share"),
@@ -1311,6 +1312,11 @@ export const commandSchema = z.discriminatedUnion("type", [
       type: z.literal("space.sync"),
       id,
       repository: repositoryKeySchema,
+      /** The placement `choices`, `join` and `noticed` are for — its
+       * instance's origin, or null for the path placement (space-29,
+       * DR-128). Transitional: optional until the interface reads
+       * placements, the row's own placement where omitted. */
+      placement: instanceOriginSchema.nullable().optional(),
       choices: z.record(z.string().min(1), spaceChoiceSchema).optional(),
       join: z.boolean().optional(),
       noticed: z.boolean().optional(),
@@ -1325,6 +1331,9 @@ export const commandSchema = z.discriminatedUnion("type", [
       unit: z.string().min(1),
       path: z.string().min(1),
       side: spaceChoiceSchema,
+      /** The placement the `remote` side is of, its first where omitted
+       * (space-29, DR-128). */
+      placement: instanceOriginSchema.nullable().optional(),
     })
     .strict(),
   z.object({ type: z.literal("space.tree"), id, repository: repositoryKeySchema, path: z.string().optional() }).strict(),
@@ -1851,9 +1860,11 @@ export type SyncCause =
   | "lease"
   | "writer"
   | "unrelated"
-  | "git";
+  | "git"
+  /** A leave's units no remaining placement received (space-98). */
+  | "unreceived";
 
-export type SpaceOp = "sync" | "check" | "join" | "move";
+export type SpaceOp = "sync" | "check" | "join" | "move" | "place" | "leave" | "attach";
 
 export type SpaceChange = "new" | "updated" | "deleted";
 
@@ -1902,12 +1913,17 @@ export type SpaceSyncPhase =
   | {
       phase: "running";
       op: SpaceOp;
+      /** The placement in flight: its instance's origin, or null for the
+       * path placement (space-30, DR-128). */
+      placement?: string | null;
       step: SyncStep;
       since: number;
       cancelable: boolean;
     }
-  | { phase: "choices"; savedCommit: string | null }
-  | { phase: "unrelated" }
+  /** `placement`: the one in choices or with an unrelated history, its
+   * instance's origin or null for the path placement (space-30). */
+  | { phase: "choices"; placement: string | null; savedCommit: string | null }
+  | { phase: "unrelated"; placement: string | null }
   | {
       phase: "stopped";
       op: SpaceOp;
@@ -1916,10 +1932,13 @@ export type SpaceSyncPhase =
       message: string;
       guidance: string;
       retry: boolean;
+      /** A leave's units no remaining placement received (space-98). */
+      count?: number;
     }
   | { phase: "done"; at: number; sent: number; received: number; pushed: boolean };
 
-/** One spex repository as the Groups surface reads it (space-30, space-61). */
+/** One spex repository as the Groups surface reads it (space-30,
+ * space-61, DR-128): one row per clone, with a line per placement. */
 export interface RepositoryState {
   /** The clone's path under `workspace/`, beginning with its instance's
    * folder where it lies at an instance (`@spex.pub/acme/a-spex`,
@@ -1943,7 +1962,8 @@ export interface RepositoryState {
   governing: string | null;
   /** `<name>-spex`, the clone's folder name. */
   name: string;
-  /** The Git host's permanent id for it, where known. */
+  /** Its first placement's host id, or the listed repository's with no
+   * clone here; null where none is known. */
   id: string | null;
   /** Your own group's spex repository. */
   own: boolean;
@@ -1951,40 +1971,104 @@ export interface RepositoryState {
   code: string | null;
   /** The working folder paired with it on this device, or null. */
   folder: string | null;
-  /** The clone's origin URL, one under the host's Git origin read as the
-   * repository's path in the instance (space-15, DR-120); null while
-   * local only. */
-  remote: string | null;
+  /** The row's state (space-61). */
   state: "local-only" | "reachable" | "read-only" | "unreachable" | "absent";
   /** The host's words for read-only or unreachable. */
   reason: string | null;
+  /** A Git merge pending from a terminal in the clone (space-11); false
+   * where no clone is here. */
+  mergePending: boolean;
+  /** In the order added, the path placement last, then each a placement
+   * file names that a signed-in instance lists and no remote here holds,
+   * then each instance a creation waits at (space-87); empty while local
+   * only but for a creation waiting; for a row with no clone, its one
+   * listed placement, `attached` false. */
+  placements: PlacementState[];
+  /** The origin of each instance a placement file of the clone names,
+   * held here or not (space-62). */
+  placedAt: string[];
+  local: SpaceUnit[];
+  /** Every placement's, in the placements' order. */
+  conflicts: SpaceConflict[];
+  sync: SpaceSyncPhase;
+  /** Transitional: the key placement's, until the interface reads
+   * placements — its remote, one under the host's Git origin read as the
+   * repository's path in the instance (space-15, DR-120); null while
+   * local only. */
+  remote: string | null;
+  /** Transitional: the key placement's, until the interface reads placements. */
+  waiting: { step: "create" | "branch"; group: string; message: string } | null;
+  /** Transitional: the key placement's, until the interface reads placements. */
+  members: number | null;
+  /** Transitional: the key placement's, until the interface reads placements. */
+  visibility: string | null;
+  /** Transitional: the key placement's, until the interface reads
+   * placements — what the host's last read said the person may do on it
+   * (space-30, DR-114, DR-120): manage its members, move it to another
+   * group; false until a read is held. */
+  can: { manageMembers: boolean; transfer: boolean };
+  /** Transitional: the key placement's, with the row's `mergePending`,
+   * until the interface reads placements; null where no clone is here. */
+  branch: (PlacementBranch & { mergePending: boolean }) | null;
+  /** Transitional: the key placement's, until the interface reads placements. */
+  incoming: SpaceUnit[];
+  /** Transitional: the key placement's, until the interface reads placements. */
+  lastSync: { at: number; sent: number; received: number } | null;
+  /** Transitional: the key placement's, until the interface reads placements. */
+  noticed: boolean;
+}
+
+/** A clone's `spex` against one placement's (space-30, space-61). */
+export interface PlacementBranch {
+  ahead: number | null;
+  behind: number | null;
+  checkedAt: number | null;
+  hostEmpty: boolean;
+  unrelated: boolean;
+  /** The last sync the clone holds with this placement (space-61): the
+   * commit `spex` last shared with its `spex` as the clone last fetched
+   * or pushed it — its commit time, and whether `spex` is that commit;
+   * null where the clone holds none. */
+  agreed: { at: number; current: boolean } | null;
+}
+
+/** One placement of a spex repository, as its row's line reads it
+ * (space-30, space-87, DR-128). */
+export interface PlacementState {
+  /** Its instance's origin; null for the path placement. */
+  instance: string | null;
+  /** Its path in the instance, or the path placement's remote as a
+   * report reads it (space-15). */
+  path: string;
+  /** The host's id there. */
+  id: string | null;
+  /** False for one a placement file names, or a creation waits at, and
+   * no remote here holds (space-87). */
+  attached: boolean;
+  state: "reachable" | "read-only" | "unreachable" | "absent";
+  /** The host's words for read-only or unreachable. */
+  reason: string | null;
+  /** A creation or branch preparation waiting at the host (space-64). */
   waiting: { step: "create" | "branch"; group: string; message: string } | null;
   members: number | null;
   visibility: string | null;
-  /** What the host's last read said the person may do on it (space-30,
-   * DR-114, DR-120): manage its members, move it to another group; false
-   * until a read is held. */
+  /** What its instance's last read said the person may do on it —
+   * manage its members, move it to another group; both false until one
+   * is held. */
   can: { manageMembers: boolean; transfer: boolean };
-  /** Null where no clone is here. */
-  branch: {
-    ahead: number | null;
-    behind: number | null;
-    checkedAt: number | null;
-    hostEmpty: boolean;
-    unrelated: boolean;
-    mergePending: boolean;
-    /** The last sync the clone holds (space-61): the commit `spex` last
-     * shared with the host's `spex` as the clone last fetched or pushed
-     * it — its commit time, and whether `spex` is that commit; null
-     * where the clone holds none. */
-    agreed: { at: number; current: boolean } | null;
-  } | null;
-  local: SpaceUnit[];
+  /** Against this placement's `spex`; null where no clone holds it. */
+  branch: PlacementBranch | null;
   incoming: SpaceUnit[];
+  /** Its incoming units this device changed too, each a choice to make
+   * (space-8). */
   conflicts: SpaceConflict[];
   lastSync: { at: number; sent: number; received: number } | null;
   noticed: boolean;
-  sync: SpaceSyncPhase;
+  /** What the last sync left on its line (space-87). */
+  outcome:
+    | null
+    | { kind: "synced" | "behind" | "choices" | "unrelated" | "waiting"; sent: number; received: number }
+    | { kind: "stopped"; step: SyncStep; cause: SyncCause; message: string; guidance: string; retry: boolean };
 }
 
 /** A spex repository's or a group's member as the host reports them
@@ -2072,6 +2156,9 @@ export interface InstanceGroupState {
   /** What its last read said the person may do there; all false until
    * one is held, and in a namespace. */
   can: { createSubgroup: boolean; manageMembers: boolean; rename: boolean; delete: boolean };
+  /** The rows standing elsewhere one of whose placements this group or
+   * namespace holds, each shown as one line (space-1, DR-128). */
+  placed: { key: string; name: string }[];
   repositories: RepositoryState[];
 }
 

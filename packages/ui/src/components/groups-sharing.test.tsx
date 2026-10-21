@@ -91,6 +91,7 @@ function sharingHome(over: { canCreateGroup?: boolean } = {}): GroupsState {
         fullPath: "acme",
         name: "acme",
         can: { createSubgroup: true, manageMembers: true, rename: true, delete: true },
+        placed: [],
         repositories: [repository(A_SPEX, "60", true)],
       },
       {
@@ -100,6 +101,7 @@ function sharingHome(over: { canCreateGroup?: boolean } = {}): GroupsState {
         fullPath: "other",
         name: "Other team",
         can: { createSubgroup: false, manageMembers: false, rename: false, delete: false },
+        placed: [],
         repositories: [repository(B_SPEX, "61", false)],
       },
       {
@@ -109,6 +111,7 @@ function sharingHome(over: { canCreateGroup?: boolean } = {}): GroupsState {
         fullPath: "empty",
         name: "empty",
         can: { createSubgroup: true, manageMembers: true, rename: true, delete: true },
+        placed: [],
         repositories: [],
       },
     ],
@@ -389,7 +392,7 @@ describe("GROUPS: New group and New subgroup (space-68, space-29)", () => {
         groups: [
           mine!,
           acme!,
-          { id: "70", login: null, mine: false, fullPath: "acme/huaxin-lab", name: "华芯智造 Lab", can: { createSubgroup: true, manageMembers: true, rename: false, delete: false }, repositories: [] },
+          { id: "70", login: null, mine: false, fullPath: "acme/huaxin-lab", name: "华芯智造 Lab", can: { createSubgroup: true, manageMembers: true, rename: false, delete: false }, placed: [], repositories: [] },
           other!,
         ],
       }),
@@ -602,7 +605,7 @@ describe("GROUPS: Rename, Delete and Move (space-1, space-76, space-77, space-78
     expect(screen.queryByTestId(`space-row-move-${OWN}`)).toBeNull();
     // A group holding a group offers no Delete either.
     cleanup();
-    const nested = withGroups(sharingHome(), { id: "6", login: null, mine: false, fullPath: "empty/team", name: "team", can: { createSubgroup: true, manageMembers: true, rename: true, delete: true }, repositories: [] });
+    const nested = withGroups(sharingHome(), { id: "6", login: null, mine: false, fullPath: "empty/team", name: "team", can: { createSubgroup: true, manageMembers: true, rename: true, delete: true }, placed: [], repositories: [] });
     await renderGroups(nested, { open: false });
     expect(within(region("empty")).queryByTestId("space-group-delete-empty")).toBeNull();
     expect(within(region("empty/team")).getByTestId("space-group-delete-empty/team")).toBeTruthy();

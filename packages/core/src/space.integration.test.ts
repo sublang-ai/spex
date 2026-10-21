@@ -19,7 +19,7 @@ import { createSessionStore } from "@sublang/playbook/session-store";
 import { seedHistorySession } from "./testing/demo.js";
 import { Home } from "./home.js";
 import type { Command } from "./protocol.js";
-import { clonePath, createSpaceHarness, OWN, OWN_KEY, ownClone, prefsOf, repositoryOf, rowsOf } from "./testing/space-harness.js";
+import { clonePath, createSpaceHarness, OWN, OWN_KEY, ownClone, placementOf, prefsOf, repositoryOf, rowsOf } from "./testing/space-harness.js";
 
 const fixture = createSpaceHarness();
 const { scratch, git, bareRepo, gitFolder, addFolder, sleepingSsh, holdingGit, sleep, sleeperPid, hangingCompileSpawner, COMPILE_INPUT, startHome, runTurn, peerClone, peerPush, turnRecords } = fixture;
@@ -116,6 +116,10 @@ test("space-37: setting a remote turns a repository reachable, refuses malformed
   const bare = bareRepo();
   const set = await home.client.expectOk("space.remote.set", { repository: key, url: bare });
   assert.equal(repositoryOf(set, key).state, "reachable");
+  // A remote the reader named is the path placement: no instance, read
+  // as a report reads it (space-30, space-15).
+  const line = placementOf(repositoryOf(set, key), null);
+  assert.deepEqual([repositoryOf(set, key).placements.length, line.path, line.id, line.attached, line.state], [1, bare, null, true, "reachable"]);
   assert.equal(repositoryOf(set, OWN_KEY).state, "local-only", "only that repository");
   assert.equal(git(clone, "remote", "get-url", "origin"), bare);
   for (const [url, pattern] of [["", /malformed/], ["  ", /malformed/], ["git@example.com:a b.git", /malformed/], ["https://user:secret@example.com/x.git", /credential/]] as const) {
@@ -133,6 +137,7 @@ test("space-37: setting a remote turns a repository reachable, refuses malformed
   assert.equal(git(clone, "remote", "get-url", "origin"), other);
   const cleared = repositoryOf(await home.client.expectOk("space.remote.set", { repository: key, url: null }), key);
   assert.equal(cleared.state, "local-only");
+  assert.deepEqual(cleared.placements, []);
   await home.client.expectError("space.sync", { repository: key }, "invalid_request", /^Pick a group first$/);
 });
 

@@ -15,7 +15,7 @@ export const NO_CAN: InstanceGroupState["can"] = { createSubgroup: false, manage
 /** A namespace at an instance (space-1): your login's where `mine`,
  * another account's otherwise, holding its rows. */
 export function namespace(login: string, repositories: RepositoryState[] = [], mine = true): InstanceGroupState {
-  return { id: null, login, mine, fullPath: login, name: login, can: NO_CAN, repositories };
+  return { id: null, login, mine, fullPath: login, name: login, can: NO_CAN, placed: [], repositories };
 }
 
 /** An instance the home lists, signed in as `me` with a read held,
@@ -68,6 +68,9 @@ export function repositoryRow(key: string, over: Partial<RepositoryState> = {}):
     remote: null,
     state: "local-only",
     reason: null,
+    mergePending: false,
+    placements: [],
+    placedAt: [],
     waiting: null,
     members: null,
     visibility: null,

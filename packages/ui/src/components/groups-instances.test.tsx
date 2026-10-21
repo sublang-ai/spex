@@ -67,7 +67,7 @@ const LISTED = "@second.example/acme/gamma-spex";
 
 /** A group an instance lists, by its host id. */
 function group(id: string, fullPath: string, name: string, repositories: RepositoryState[] = []): InstanceGroupState {
-  return { id, login: null, mine: false, fullPath, name, can: NO_CAN, repositories };
+  return { id, login: null, mine: false, fullPath, name, can: NO_CAN, placed: [], repositories };
 }
 
 /** A home signed in to the fixtures' instance, as jane, and to the
