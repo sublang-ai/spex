@@ -17,7 +17,13 @@
 // environment, to its clone, confined to what that clone syncs
 // (environments-2, environments-32, DR-125). The built-in spec
 // package is seeded at start and requested where an environment lacks
-// it, so the built-in playbooks work offline from the first start.
+// it, so the built-in playbooks work offline from the first start. An
+// environment resolves at its instance's registry, or the default
+// instance's where it has none, and installs from the first of its
+// instance's, its lock's and every signed-in instance's registries
+// serving each locked release, a token presented only to an instance the
+// home is signed in to (environments-5, environments-7, environments-12,
+// DR-127).
 
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { isAbsolute, join, relative, resolve as resolvePath, sep } from "node:path";
@@ -60,6 +66,7 @@ import {
   readRelease,
   RegistryClient,
   RegistryError,
+  rehomeBuiltinLock,
   removeExports,
   requestIssues,
   requestsDigest,
@@ -75,6 +82,7 @@ import {
   type CredentialArgs,
   type ExportReport,
   type GitCredential,
+  type GitRun,
   type GitSource,
   type Lock,
   type Manifest,
@@ -82,10 +90,12 @@ import {
   type OwnPathIssue,
   type RegistryOrg,
   type RegistrySource,
+  type RegistrySourceLock,
   type Request,
   type Requests,
 } from "./environment/index.js";
 import { i18n } from "./i18n.js";
+import { canonicalOrigin } from "./instance.js";
 import type { PlaybookModules } from "./config.js";
 import type { EnvironmentPackage, EnvironmentRequest, EnvironmentRequestSummary, EnvironmentState, PublishPreview } from "./protocol.js";
 import { CoreError } from "./session.js";
@@ -105,18 +115,39 @@ export interface EnvironmentManagerOptions {
   builtin: BuiltinPackage | null;
   /** The registry's fetch, for tests. */
   fetch?: typeof fetch;
-  /** The device's current access secret at the home's host, kept
-   * current by the host client (git-host-4); null while signed out. */
-  token: () => Promise<string | null>;
-  /** The brokered credential for a Git source at the host's Git origin,
-   * undefined for any other (environments-13). */
-  gitCredential: (repo: string) => Promise<GitCredential | undefined>;
+  /** The origin of a spex repository's instance (storage-31): its
+   * environment's instance, your own group's the one its own
+   * repository's remote names; null for one local only (DR-127). */
+  instanceOf: (key: string) => string | null;
+  /** The device's current access secret at a listed instance, kept
+   * current by that instance's client (git-host-4); null where it holds
+   * none. Asked only of an instance the home is signed in to
+   * (environments-12). */
+  tokenFor: (origin: string) => Promise<string | null>;
+  /** An instance's name in what the core says of it: its display name
+   * as the home last read it, else its host name — the instance a
+   * publish needs the home signed in at, named as the Enable tab names
+   * it (environments-10, playbook-library-93, DR-127). */
+  instanceName: (origin: string) => string;
+  /** Told the token an instance's registry refused with a code that
+   * signs that instance out (environments-12, git-host-4); where it
+   * throws, the refused call fails with what it threw. */
+  refused?: (origin: string, token: string) => void | Promise<void>;
+  /** The brokered credential for a Git source (environments-13): the
+   * one an instance the home is signed in to brokers at whose Git origin
+   * the source lies, the environment's own instance — `preferred` —
+   * asked first where it is one; undefined at the Git origin of none,
+   * where this device's own Git fetches it. */
+  gitCredential: (repo: string, preferred: string | null) => Promise<GitCredential | undefined>;
   /** How that credential reaches Git: the app's own credential helper
    * (git-host-9). */
   credentialArgs: CredentialArgs;
-  /** Read-only labels and reports from the instance facts already read. */
-  gitLabel: (repo: string) => string;
-  gitFailure: (repo: string, run: import("./environment/git-source.js").GitRun) => string;
+  /** Read-only labels and reports from the instance facts already read
+   * (environments-29): a source under an instance's reported Git origin
+   * reads as that instance's name, the environment's own — `preferred` —
+   * where it is one. */
+  gitLabel: (repo: string, preferred: string | null) => string;
+  gitFailure: (repo: string, run: GitRun, preferred: string | null) => string;
   broadcast: (repository: string, state: EnvironmentState) => void;
   /** An environment's installed files or exports changed. */
   changed?: (repository: string) => void;
@@ -159,6 +190,16 @@ export interface SettleProgress {
 /** What one settle does: resolve where needed, or always, then install
  * and export. */
 type SettleMode = "auto" | "resolve" | "install";
+
+/** An environment's Git sources as the core fetches and shows them
+ * (environments-13, environments-29), by the environment's instance. */
+interface EnvironmentGit {
+  /** The environment's instance (storage-31), read at its first use. */
+  instance: () => string | null;
+  credential: (repo: string) => Promise<GitCredential | undefined>;
+  label: (repo: string) => string;
+  failure: (repo: string, run: GitRun) => string;
+}
 
 const listed = (items: readonly string[]): string =>
   items.join(i18n._({ id: "; ", comment: "Separates reasons listed in one message" }));
@@ -302,34 +343,50 @@ export class EnvironmentManager {
   constructor(private readonly options: EnvironmentManagerOptions) {
     this.contentStore = new ContentStore(options.store.dir);
     this.cacheDir = join(options.store.dir, "cache");
-    // A source at the host's Git origin is fetched with the brokered
-    // credential through the app's helper; any other with this device's
-    // own Git (environments-13).
+    // A source at a signed-in instance's Git origin is fetched with the
+    // credential that instance brokers through the app's helper; any
+    // other with this device's own Git (environments-13).
     this.git = gitSource(this.cacheDir, { credentialArgs: options.credentialArgs });
+  }
+
+  /** An environment's Git sources (environments-13, environments-29):
+   * each fetched with the credential an instance the home is signed in
+   * to brokers at its Git origin, and read as an instance's name, the
+   * environment's own instance preferred — read at the first source
+   * asking for it, so an environment with none reads no instance. */
+  private gitOf(key: string): EnvironmentGit {
+    let own: string | null | undefined;
+    const instance = (): string | null => (own === undefined ? (own = this.options.instanceOf(key)) : own);
+    return {
+      instance,
+      credential: (repo) => this.options.gitCredential(repo, instance()),
+      label: (repo) => this.options.gitLabel(repo, instance()),
+      failure: (repo, run) => this.options.gitFailure(repo, run, instance()),
+    };
   }
 
   /** Only generated source fields are projected; authored documents and
    * request/lock bytes never pass through this presentation boundary. */
-  private sourceText(text: string, repo: string): string {
-    return text.split(repo).join(this.options.gitLabel(repo));
+  private sourceText(text: string, repo: string, git: EnvironmentGit): string {
+    return text.split(repo).join(git.label(repo));
   }
 
-  private failure(stage: "resolve" | "install" | "publish", error: unknown, requests?: Requests): string {
+  private failure(stage: "resolve" | "install" | "publish", error: unknown, git: EnvironmentGit, requests?: Requests): string {
     if (error instanceof GitSourceError) {
-      error = new Error(error.run ? this.options.gitFailure(error.repo, error.run) : this.sourceText(error.message, error.repo));
+      error = new Error(error.run ? git.failure(error.repo, error.run) : this.sourceText(error.message, error.repo, git));
     } else if (error instanceof ResolveError && error.packageName) {
       const request = requests?.packages[error.packageName];
-      if (request && isGitRequest(request)) error = new Error(this.sourceText(error.message, request.git));
+      if (request && isGitRequest(request)) error = new Error(this.sourceText(error.message, request.git, git));
     }
     return failurePhrase(stage, error);
   }
 
-  private shownConflicts(conflicts: readonly Conflict[], requests: Requests | null): Conflict[] {
+  private shownConflicts(conflicts: readonly Conflict[], requests: Requests | null, git: EnvironmentGit): Conflict[] {
     return conflicts.map((conflict) => {
       const request = requests?.packages[conflict.name];
       return { ...conflict, requirements: conflict.requirements.map((entry) => ({ ...entry,
         requirement: request && isGitRequest(request) && entry.by === "spex.yaml" && entry.requirement.startsWith(`git ${request.git} at `)
-          ? this.sourceText(entry.requirement, request.git) : entry.requirement,
+          ? this.sourceText(entry.requirement, request.git, git) : entry.requirement,
       })) };
     });
   }
@@ -349,52 +406,91 @@ export class EnvironmentManager {
       .map(([agent]) => agent);
   }
 
-  /** The registry: the built-in spec package from this device first,
-   * offline, and everything else from the home's host (environments-12). */
-  registry(): RegistrySource {
-    return this.registries().source;
+  /** The orgs the account at a project's instance may publish to, as
+   * that instance's registry lists them — the default instance's where
+   * the project has none — asked once (environments-27,
+   * playbook-library-103, DR-127); null while the home is not signed in
+   * there, the registry not asked, and where it gives no answer. */
+  async publishableOrgs(key: string): Promise<RegistryOrg[] | null> {
+    const { origin, remote } = this.registryAt(this.registryOriginOf(key));
+    if (this.store.home.account(origin) === null) return null;
+    return remote.orgs();
   }
 
-  /** The orgs the registry lists the signed-in person may publish to,
-   * asked once (environments-27); null while signed out, the registry
-   * not asked, and where it gives no answer. */
-  async publishableOrgs(): Promise<RegistryOrg[] | null> {
-    if (!this.signedIn()) return null;
-    return this.registries().remote.orgs();
+  /** The home's default instance's origin (storage-2): the registry of
+   * an environment with no instance (DR-127). */
+  private defaultOrigin(): string {
+    return canonicalOrigin(this.store.home.defaultInstance().origin);
   }
 
-  private registries(): { url: string; source: RegistrySource; remote: RegistryClient } {
-    const host = this.store.home.host;
-    // One source per host: the built-in source reads and packs the
-    // shipped release once, not on every resolve.
-    if (this.registryCache?.url === host.origin) return this.registryCache;
-    const remote = new RegistryClient({
-      url: host.origin,
-      token: () => this.token(),
-      ...(this.options.fetch ? { fetch: this.options.fetch } : {}),
-    });
-    const source = compositeRegistry(
-      builtinRegistrySource({ store: this.contentStore, cacheDir: this.cacheDir, url: remote.url, shipped: this.options.builtin }),
-      remote,
-    );
-    this.registryCache = { url: host.origin, source, remote };
-    return this.registryCache;
+  /** The registry of a spex repository's environment (environments-5):
+   * its instance's, else the default instance's. */
+  private registryOriginOf(key: string): string {
+    return this.options.instanceOf(key) ?? this.defaultOrigin();
   }
 
-  private registryCache?: { url: string; source: RegistrySource; remote: RegistryClient };
-
-  /** Whether the home is signed in to its host. */
-  signedIn(): boolean {
-    const host = this.store.home.host;
-    return host.account !== undefined && host.signedOut !== true;
+  /** The registry answering under an instance's origin: one client per
+   * origin for the run, each composed with the built-in spec package
+   * this device serves offline (environments-11, environments-12). */
+  private registryAt(origin: string): { origin: string; remote: RegistryClient; source: RegistrySource } {
+    const at = canonicalOrigin(origin);
+    let registry = this.registries.get(at);
+    if (!registry) {
+      const refused = this.options.refused;
+      const remote = new RegistryClient({
+        url: at,
+        token: () => this.tokenAt(at),
+        ...(refused ? { refused: (token: string) => refused(at, token) } : {}),
+        ...(this.options.fetch ? { fetch: this.options.fetch } : {}),
+      });
+      registry = { origin: at, remote, source: compositeRegistry(this.builtinSource(), remote) };
+      this.registries.set(at, registry);
+    }
+    return registry;
   }
 
-  /** The device's access secret where the home is signed in
-   * (environments-12): current, as the host client keeps it
-   * (git-host-4); null while signed out. */
-  async token(): Promise<string | null> {
-    if (!this.signedIn()) return null;
-    return this.options.token();
+  private readonly registries = new Map<string, { origin: string; remote: RegistryClient; source: RegistrySource }>();
+
+  /** The built-in spec package as a registry source, made once: it reads
+   * and packs the shipped release once, not on every resolve. */
+  private builtinSource(): RegistrySource {
+    this.builtinRegistry ??= builtinRegistrySource({ store: this.contentStore, cacheDir: this.cacheDir, shipped: this.options.builtin });
+    return this.builtinRegistry;
+  }
+
+  private builtinRegistry?: RegistrySource;
+
+  /** The token a registry call presents at an instance (environments-12):
+   * that instance's access secret where the home is signed in to it, as
+   * its client keeps it current (git-host-4); none to any other origin. */
+  private tokenAt(origin: string): Promise<string | null> {
+    return this.store.home.account(origin) !== null ? this.options.tokenFor(origin) : Promise.resolve(null);
+  }
+
+  /** The registries an install asks for a registry package's files, in
+   * order (environments-7): the environment's instance's, then the one
+   * its lock records, then every other instance's the home is signed in
+   * to, in the home's order, each asked once. A recorded registry that
+   * names no instance's origin is never asked; it stands in the list to
+   * be named where no other serves. */
+  private installRegistries(instance: string | null, source: RegistrySourceLock): RegistrySource[] {
+    const home = this.store.home;
+    const out: RegistrySource[] = [];
+    const asked = new Set<string>();
+    const add = (origin: string): void => {
+      if (asked.has(origin)) return;
+      asked.add(origin);
+      out.push(this.registryAt(origin).source);
+    };
+    if (instance !== null) add(canonicalOrigin(instance));
+    let recorded: string | null;
+    try { recorded = canonicalOrigin(source.registry); } catch { recorded = null; }
+    if (recorded !== null) add(recorded);
+    else out.push(compositeRegistry(this.builtinSource(), unaskedRegistry(source.registry)));
+    for (const entry of home.instances()) {
+      if (home.account(entry.origin) !== null) add(canonicalOrigin(entry.origin));
+    }
+    return out;
   }
 
   private cloneState(key: string): CloneState {
@@ -441,10 +537,11 @@ export class EnvironmentManager {
   // -- the built-in spec package (environments-11) ---------------------------
 
   /** Request the built-in spec package where a clone lacks it, with the
-   * lock where that is all it requests (environments-11). */
-  prepare(dir: string): boolean {
+   * lock where that is all it requests, locked at the environment's
+   * registry (environments-11). */
+  prepare(dir: string, key: string): boolean {
     if (!this.options.builtin) return false;
-    return prepareBuiltinEnvironment(dir, this.options.builtin, this.store.home.host.origin);
+    return prepareBuiltinEnvironment(dir, this.options.builtin, this.registryOriginOf(key));
   }
 
   /** The release this app ships beside the one a lock selects, where the
@@ -477,7 +574,7 @@ export class EnvironmentManager {
       const requested = existsSync(join(repository.dir, "spex.yaml"));
       let wrote = false;
       if (this.isOwn(repository.key) || !requested) {
-        try { wrote = this.prepare(repository.dir); }
+        try { wrote = this.prepare(repository.dir, repository.key); }
         catch (error) { console.error(`spex: ${repository.key} does not request the built-in spec package: ${String(error)}`); }
       }
       const lock = existsSync(join(repository.dir, "spex.lock"));
@@ -585,6 +682,7 @@ export class EnvironmentManager {
       return;
     }
     const state = this.cloneState(key);
+    const envGit = this.gitOf(key);
     const pathRoot = this.pathRoot(key);
     const requestsPath = join(dir, "spex.yaml");
     const lockPath = join(dir, "spex.lock");
@@ -594,7 +692,7 @@ export class EnvironmentManager {
       read = readRequestsAt(requestsPath);
       locked = readLockAt(lockPath);
     } catch (error) {
-      state.error = this.failure("resolve", error, read?.requests);
+      state.error = this.failure("resolve", error, envGit, read?.requests);
       this.announce(state.key);
       if (strict) throw new CoreError("invalid_request", state.error);
       return;
@@ -607,17 +705,25 @@ export class EnvironmentManager {
     }
     let lock = locked?.lock ?? null;
     let lockVersion: FileVersion = locked?.version ?? null;
-    const registry = this.registry();
+    // The environment's registry, at its instance or the default
+    // instance's (environments-5, DR-127).
+    const instance = envGit.instance();
+    const registry = this.registryAt(instance ?? this.defaultOrigin()).source;
     const needsResolve = mode === "resolve" || (mode === "auto" && lock === null && read !== null);
     if (needsResolve && read !== null) {
       step("resolving");
       let result: Awaited<ReturnType<typeof resolve>>;
       try {
-        result = await resolve({ requests: read.requests, requestsText: read.text, registry, pathRoot, confined: this.isOwn(key), git: this.git, gitCredential: this.options.gitCredential });
+        result = await resolve({
+          requests: read.requests, requestsText: read.text, registry, pathRoot, confined: this.isOwn(key), git: this.git, gitCredential: envGit.credential,
+          // A package resolving to the release its lock records keeps the
+          // registry recorded there (environments-5).
+          ...(locked ? { previous: locked.lock } : {}),
+        });
       } catch (error) {
         const changed = this.changedSince(requestsPath, read.version, lockPath, lockVersion);
         if (changed) return this.overtaken(changed, strict);
-        state.error = this.failure("resolve", error, read?.requests);
+        state.error = this.failure("resolve", error, envGit, read?.requests);
         if (strict) throw new CoreError("invalid_request", state.error);
         return;
       }
@@ -627,7 +733,7 @@ export class EnvironmentManager {
         if (changed) return this.overtaken(changed, strict);
         state.conflicts = { requests: read.version, conflicts: result.conflicts };
         state.error = null;
-        if (strict) throw new CoreError("invalid_request", this.conflictPhrase(this.shownConflicts(result.conflicts, read.requests)));
+        if (strict) throw new CoreError("invalid_request", this.conflictPhrase(this.shownConflicts(result.conflicts, read.requests, envGit)));
         return;
       }
       // The lock is written only while `spex.yaml` stands as resolved and
@@ -637,7 +743,7 @@ export class EnvironmentManager {
         lockVersion = sha256(await writeLock(lockPath, result.lock, lockVersion));
       } catch (error) {
         if (error instanceof VersionConflictError) return this.overtaken(error, strict);
-        state.error = this.failure("resolve", error, read?.requests);
+        state.error = this.failure("resolve", error, envGit, read?.requests);
         if (strict) throw new CoreError("invalid_request", state.error);
         return;
       }
@@ -656,8 +762,10 @@ export class EnvironmentManager {
         store: this.contentStore,
         cache: this.cacheDir,
         registry,
+        registries: (source) => this.installRegistries(instance, source),
+        seed: this.builtinSource(),
         git: this.git,
-        gitCredential: this.options.gitCredential,
+        gitCredential: envGit.credential,
         pathRoot,
         confined: this.isOwn(key),
         requestsText: read?.text ?? null,
@@ -703,7 +811,7 @@ export class EnvironmentManager {
       if (error instanceof VersionConflictError) return this.overtaken(error, strict);
       const changed = this.changedSince(requestsPath, read?.version ?? null, lockPath, lockVersion);
       if (changed) return this.overtaken(changed, strict);
-      state.error = this.failure("install", error, read?.requests);
+      state.error = this.failure("install", error, envGit, read?.requests);
       if (strict) throw new CoreError("invalid_request", state.error);
       return;
     }
@@ -921,12 +1029,35 @@ export class EnvironmentManager {
   }
 
   /** A working folder was paired with a clone this device holds
-   * (environments-31): its environment is exported into the folder as
-   * an install does, after any install the pairing's read starts
-   * (environments-7), its state broadcast. */
+   * (environments-31): a clone holding no `spex.yaml` requests the
+   * built-in spec package, locked at its environment's registry
+   * (environments-11, storage-6); its environment is then exported into
+   * the folder as an install does, after any install the pairing's read
+   * starts (environments-7), its state broadcast. */
   paired(key: string): Promise<void> {
-    if (!this.store.repository(key)) return Promise.resolve();
-    return this.settle(key, "auto", false);
+    const dir = this.store.repository(key)?.dir;
+    if (!dir) return Promise.resolve();
+    let wrote = false;
+    if (!existsSync(join(dir, "spex.yaml"))) {
+      try { wrote = this.prepare(dir, key); }
+      catch (error) { console.error(`spex: ${key} does not request the built-in spec package: ${error instanceof Error ? error.message : String(error)}`); }
+    }
+    return this.settle(key, wrote && !existsSync(join(dir, "spex.lock")) ? "resolve" : "auto", false);
+  }
+
+  /** A pick placed a local-only project's clone at an instance
+   * (storage-35): where its environment is still the one its pairing
+   * prepared at the default instance's registry, the built-in spec
+   * package is locked at that instance's instead, then installed as the
+   * lock now records it (environments-11, DR-127); a lock resolved to
+   * anything else stays as it is (environments-5). */
+  placed(key: string): Promise<void> {
+    const dir = this.store.repository(key)?.dir;
+    if (!dir || !this.options.builtin) return Promise.resolve();
+    let wrote = false;
+    try { wrote = rehomeBuiltinLock(dir, this.options.builtin, this.registryOriginOf(key)); }
+    catch (error) { console.error(`spex: ${key} keeps its built-in spec package's lock: ${error instanceof Error ? error.message : String(error)}`); }
+    return wrote ? this.settle(key, "auto", false) : Promise.resolve();
   }
 
   /** A clone moved: its report follows, and it is exported again. An
@@ -951,8 +1082,11 @@ export class EnvironmentManager {
 
   /** `environment.publish`: the folder, at a path relative to the
    * environment's path root (environments-2), read and checked as a
-   * release and the sign-in confirmed before the reply; the upload runs
-   * after it. */
+   * release and the sign-in at its target confirmed before the reply;
+   * the upload runs after it. The target is the registry of the
+   * environment's instance, else the default instance's, uploaded to as
+   * that instance's account (environments-10, environments-17,
+   * DR-127). */
   async publish(key: string, path: string, dryRun = false): Promise<{ done: Promise<void>; preview: PublishPreview }> {
     this.cloneDir(key);
     const root = this.pathRoot(key);
@@ -966,11 +1100,16 @@ export class EnvironmentManager {
     const folder = resolvePath(root, path);
     const inside = relative(resolvePath(root), folder);
     if (inside === "" || inside.startsWith("..") || isAbsolute(inside) || inside.split(sep).includes("..")) throw this.outside(path, this.isOwn(key));
-    // Signed in means holding a token the host has not refused; a host
-    // that cannot be reached now fails the upload, reported with its
-    // cause, rather than reading as signed out.
-    if (!dryRun && (await this.token().catch(() => "")) === null) {
-      throw new CoreError("invalid_request", i18n._({ id: "Sign in to publish", comment: "Refusal: publishing to the registry needs the home signed in" }));
+    // Signed in at the target means holding a token its host has not
+    // refused; a host that cannot be reached now fails the upload,
+    // reported with its cause, rather than reading as signed out.
+    const target = this.registryAt(this.registryOriginOf(key));
+    if (!dryRun && (await this.tokenAt(target.origin).catch(() => "")) === null) {
+      throw new CoreError("invalid_request", i18n._({
+        id: "Sign in to publish at {name}",
+        comment: "Refusal: publishing needs the home signed in at the instance the publish goes to; {name} is that instance's display name as last read, else its host name",
+        values: { name: this.options.instanceName(target.origin) },
+      }));
     }
     let manifest: Manifest;
     let files: string[];
@@ -1007,8 +1146,8 @@ export class EnvironmentManager {
       const state = this.cloneState(key);
       step("publishing");
       try {
-        const published = await publishRelease(this.registry(), folder);
-        state.published = { name: published.name, version: published.version, url: `${this.store.home.host.origin.replace(/\/+$/, "")}/${manifest.org}/${manifest.name}` };
+        const published = await publishRelease(target.source, folder);
+        state.published = { name: published.name, version: published.version, url: `${target.origin}/${manifest.org}/${manifest.name}` };
         state.error = null;
       } catch (error) {
         state.error = failurePhrase("publish", error);
@@ -1017,10 +1156,15 @@ export class EnvironmentManager {
     return { done, preview };
   }
 
-  /** `environment.search` through the registry (environments-17). */
-  async search(query: string): Promise<{ name: string; description: string | null; versions: string[] }[]> {
+  /** `environment.search` through the registry of the named spex
+   * repository's environment: its instance's, else the default
+   * instance's, with that instance's token where the home is signed in
+   * there (environments-17, environments-5, environments-12); a key
+   * naming no clone on this device is refused first. */
+  async search(key: string, query: string): Promise<{ name: string; description: string | null; versions: string[] }[]> {
+    this.cloneDir(key);
     try {
-      const results = await this.registry().search(query);
+      const results = await this.registryAt(this.registryOriginOf(key)).source.search(query);
       return results.map((result) => ({ name: result.name, description: result.description || null, versions: result.versions }));
     } catch (error) {
       throw new CoreError("invalid_request", error instanceof Error ? error.message : String(error));
@@ -1091,6 +1235,9 @@ export class EnvironmentManager {
   state(key: string): EnvironmentState {
     const dir = this.cloneDir(key);
     const clone = this.cloneState(key);
+    // A Git source's labels name an instance, the environment's own
+    // preferred, read only where one is shown (environments-29).
+    const envGit = this.gitOf(key);
     const pathRoot = this.pathRoot(key);
     let requests: Requests | null = null;
     let requestsText: string | null = null;
@@ -1140,7 +1287,7 @@ export class EnvironmentManager {
         source: isRegistrySource(source)
           ? { kind: builtin ? "builtin" : "registry", detail: source.registry }
           : isGitSource(source)
-            ? { kind: "git", detail: `${this.options.gitLabel(source.git)} ${source.commit.slice(0, 12)}${source.path ? ` ${source.path}` : ""}` }
+            ? { kind: "git", detail: `${envGit.label(source.git)} ${source.commit.slice(0, 12)}${source.path ? ` ${source.path}` : ""}` }
             : { kind: "path", detail: source.path },
         direct: requests?.packages[name] !== undefined,
         requiredBy: [...resolution.requiredBy],
@@ -1156,7 +1303,7 @@ export class EnvironmentManager {
       });
     }
     const requestMap: Record<string, EnvironmentRequestSummary> = {};
-    for (const [name, request] of Object.entries(requests?.packages ?? {})) requestMap[name] = requestOf(request, this.options.gitLabel);
+    for (const [name, request] of Object.entries(requests?.packages ?? {})) requestMap[name] = requestOf(request, envGit.label);
     const builtinUpdate = this.builtinUpdate(requests, lock);
     // What an export left out describes the folder it exported into, so
     // a folder paired since lists none of it (environments-14).
@@ -1169,7 +1316,7 @@ export class EnvironmentManager {
       requests: requestMap,
       packages,
       stale: lock ? stalePhrases(lock, requestsText, pathRoot) : null,
-      conflicts: conflicts ? this.shownConflicts(conflicts, requests) : null,
+      conflicts: conflicts ? this.shownConflicts(conflicts, requests, envGit) : null,
       busy: this.busyOf(key),
       error,
       published: clone.published ? { ...clone.published } : null,
@@ -1184,6 +1331,23 @@ export class EnvironmentManager {
     this.stopped = true;
     await Promise.allSettled([...this.operations]);
   }
+}
+
+/** A registry a lock records under no instance's origin (environments-7):
+ * never asked, every call failing naming it, so an install where no other
+ * registry serves the release says why this one was not asked. */
+function unaskedRegistry(url: string): RegistrySource {
+  const unasked = (name: string): Promise<never> =>
+    Promise.reject(new RegistryError("unavailable", name, `${name}: not asked, as it names no instance's origin`));
+  return {
+    url,
+    index: (name) => unasked(name),
+    version: (name) => unasked(name),
+    file: (name) => unasked(name),
+    archive: (name) => unasked(name),
+    publish: (name) => unasked(name),
+    search: () => Promise.resolve([]),
+  };
 }
 
 /** A request's value for comparison: keys sorted at every level. */

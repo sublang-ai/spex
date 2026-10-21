@@ -24,6 +24,7 @@ export {
   builtinPackage,
   builtinsRoot,
   prepareBuiltinEnvironment,
+  rehomeBuiltinLock,
   builtinRegistrySource,
   compositeRegistry,
   ensureBuiltinRequest,

@@ -207,6 +207,14 @@ test("media-4: media owners name a repository by key and an intent by its UUID",
   assert.ok(!read({ kind: "draft", id: "triage" }).ok);
 });
 
+test("environments-17: a search names the spex repository whose environment's registry it asks", () => {
+  assert.ok(parseCommand({ type: "environment.search", id: "e1", repository: "alice/a-spex", query: "lint" }).ok);
+  assert.ok(parseCommand({ type: "environment.search", id: "e2", repository: "@spex.pub/acme/a-spex", query: "" }).ok);
+  for (const fields of [{ query: "lint" }, { repository: "alice/a", query: "lint" }, { repository: "alice/a-spex" }, { repository: "alice/a-spex", query: "x".repeat(201) }]) {
+    assert.ok(!parseCommand({ type: "environment.search", id: "e3", ...fields }).ok, JSON.stringify(fields));
+  }
+});
+
 test("projects-9: removal takes an optional confirmation; rebind names a key and no revision", () => {
   assert.ok(parseCommand({ type: "project.remove", id: "p1", projectId: "alice/a-spex", confirm: true }).ok);
   assert.ok(parseCommand({ type: "project.rebind", id: "p2", projectId: "alice/a-spex", path: "/w/a", aliases: ["/old/a"] }).ok);

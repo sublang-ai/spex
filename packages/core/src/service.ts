@@ -581,14 +581,40 @@ export class CoreService {
       ...(options.compileRuntime?.modulePaths ? { modulePaths: options.compileRuntime.modulePaths } : {}),
       builtin: CoreService.shippedBuiltin(options),
       ...(options.registryFetch ? { fetch: options.registryFetch } : {}),
-      // The registry presents the access secret the host client keeps
-      // current (environments-12, git-host-4); a Git source at the
-      // host's origin takes its brokered credential through the app's
-      // helper (environments-13, git-host-9).
-      token: () => this.registryToken(),
-      gitCredential: (repo) => this.space.sourceCredential(repo),
-      gitLabel: (repo) => this.space.packageSourceAsShown(repo),
-      gitFailure: (repo, run) => this.space.packageSourceFailure(repo, run),
+      // An environment's instance is its spex repository's (storage-31);
+      // its registry presents the access secret that instance's client
+      // keeps current, asked only where the home is signed in there
+      // (environments-12, git-host-4, DR-127), an instance that cannot
+      // be reached, or asks to wait, read as it answered (git-host-11).
+      instanceOf: (key) => this.space.instanceOriginOf(key),
+      tokenFor: async (origin) => {
+        try {
+          return await this.space.accessSecretFor(origin);
+        } catch (error) {
+          throw new Error(relayHostError(error, this.space.instanceName(origin)));
+        }
+      },
+      // The instance a publish goes to, named by its display name as last
+      // read, else its host name (environments-10, playbook-library-93).
+      instanceName: (origin) => this.space.instanceName(origin),
+      // A registry refusing an instance's token signs that instance alone
+      // out, where that token is still its stored pair's; a pair replaced
+      // meanwhile fails the call as changed meanwhile (environments-12,
+      // git-host-4, DR-127).
+      refused: async (origin, token) => {
+        try {
+          await this.space.registryRefused(origin, token);
+        } catch (error) {
+          throw new Error(relayHostError(error, this.space.instanceName(origin)));
+        }
+      },
+      // A Git source at a signed-in instance's Git origin takes the
+      // credential that instance brokers, through the app's helper, and
+      // reads as an instance's name, the environment's own instance
+      // preferred (environments-13, environments-29, git-host-9, DR-127).
+      gitCredential: (repo, preferred) => this.space.sourceCredential(repo, preferred),
+      gitLabel: (repo, preferred) => this.space.packageSourceAsShown(repo, preferred),
+      gitFailure: (repo, run, preferred) => this.space.packageSourceFailure(repo, run, preferred),
       credentialArgs: async (credential) => {
         const handle = await withGitCredential(credential, this.hostRuntime);
         const env: Record<string, string> = {};
@@ -606,6 +632,11 @@ export class CoreService {
     const spaceHost: SpaceHost & SpaceEnvironmentHooks = {
       environmentChanged: (key: string) => this.environments.applied(key),
       environmentMoved: (oldKey: string, newKey: string) => this.environments.moved(oldKey, newKey),
+      // A clone a join paired requests the built-in spec package at its
+      // instance's registry, then installs and exports; one a pick placed
+      // at an instance locks it there (environments-11, environments-31).
+      environmentPaired: (key: string) => { void this.environments.paired(key).catch(() => {}); },
+      environmentPlaced: (key: string) => { void this.environments.placed(key).catch(() => {}); },
       home: this.store.dir,
       env: this.env,
       store: this.store,
@@ -757,18 +788,6 @@ export class CoreService {
       onHold: () => this.space.holdBegan(origin),
       ...(this.options.hostHoldMaxMs !== undefined ? { holdMaxMs: this.options.hostHoldMaxMs } : {}),
     });
-  }
-
-  /** The access secret the registry presents (environments-12): the
-   * default instance's, kept current by its client (git-host-4); null
-   * while signed out there. An instance that cannot be reached, or asks
-   * to wait, reads as it answered (git-host-11). */
-  private async registryToken(): Promise<string | null> {
-    try {
-      return await this.space.accessSecretFor(this.store.home.defaultInstance().origin);
-    } catch (error) {
-      throw new Error(relayHostError(error, this.space.hostName()));
-    }
   }
 
   /** Playbook ids a new authoring session of a project may not take:
@@ -1094,7 +1113,7 @@ export class CoreService {
       env,
       ...(options.dataDir ? { libraryDir: options.libraryDir ?? join(options.dataDir, "playbooks") } : {}),
       ...(relocateConfig ? { relocateConfig } : {}),
-      ...(builtin ? { prepareRepository: (dir: string, _key: string, hostUrl: string) => { prepareBuiltinEnvironment(dir, builtin, hostUrl); } } : {}),
+      ...(builtin ? { prepareRepository: (dir: string, _key: string, registryOrigin: string) => { prepareBuiltinEnvironment(dir, builtin, registryOrigin); } } : {}),
     });
     let service: CoreService;
     try { service = new CoreService(options, store); }
@@ -2669,7 +2688,7 @@ export class CoreService {
           if (!existsSync(join(packageDir, "meta.yaml"))) {
             // No one is asked here: the project's defaults stand, with
             // no license where none is derived (playbook-library-69).
-            const defaults = newPackageDefaults(project.id, project.path, await this.environments.publishableOrgs());
+            const defaults = newPackageDefaults(project.id, project.path, await this.environments.publishableOrgs(project.id));
             const fields = { org: defaults.org, ...(defaults.license !== null ? { license: defaults.license } : {}) };
             // A manifest made while the registry was asked stands.
             try {
@@ -3122,9 +3141,9 @@ export class CoreService {
         return this.authors.list();
       case "draft.defaults": {
         // What New playbook fills in, read from the project and the
-        // registry now, the registry asked once (playbook-library-103).
+        // registry of its instance now, asked once (playbook-library-103).
         const { project, repository } = this.draftHome(command.projectId);
-        return newPackageDefaults(repository.key, project.path, await this.environments.publishableOrgs());
+        return newPackageDefaults(repository.key, project.path, await this.environments.publishableOrgs(repository.key));
       }
       case "draft.create": {
         // The ids the config enables are taken (playbook-library-51), as
@@ -3272,7 +3291,7 @@ export class CoreService {
         void this.environments.installLater(command.repository).catch(() => {});
         return { accepted: true };
       case "environment.search":
-        return { packages: await this.environments.search(command.query) };
+        return { packages: await this.environments.search(command.repository, command.query) };
       case "environment.publish": {
         // A dry run replies the inline summary and uploads nothing
         // (playbook-library-93); the upload reports through state.

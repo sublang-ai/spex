@@ -24,7 +24,7 @@ import {
   anotherAccountError, CredentialChanged, HostError, SignInBusyError, type BrowserSignIn, type DeviceSignIn, type GitHostClient, type HostAccount, type HostGroup,
   type HostMember, type HostRepository, type MembersTarget,
 } from "./git-host.js";
-import { InstanceRefused, kebab, splitKey, type HomeAccount } from "./home.js";
+import { cloneRemoteName, InstanceRefused, kebab, REMOTE_URL_KEYS, remoteNamesIn, splitKey, type HomeAccount } from "./home.js";
 import { i18n } from "./i18n.js";
 import { canonicalOrigin, instanceFolder, instanceSegmentOf, isInstanceFolder, OriginRefused, parseOrigin, type OriginRefusal } from "./instance.js";
 import { isDeferredClone } from "./migrate-instances.js";
@@ -128,6 +128,16 @@ export interface SpaceHost {
   /** The environment's exports beneath a moved clone are rewritten
    * (space-60): the `.git/info/exclude` blocks naming its paths. */
   environmentMoved?: (oldKey: string, newKey: string) => void | Promise<void>;
+  /** A join paired its clone with a working folder (space-63): a clone
+   * holding no environment requests the built-in spec package at its
+   * instance's registry (environments-11, DR-127), written before this
+   * returns. */
+  environmentPaired?: (key: string) => void;
+  /** A pick placed a local-only project's clone at an instance
+   * (storage-35), moved or not: the built-in spec package its pairing
+   * locked at the default instance's registry is locked at that
+   * instance's (environments-11, DR-127), written before this returns. */
+  environmentPlaced?: (key: string) => void;
   /** Throws where an Apply or a repair may not replace authoring session
    * `id` of clone `key` now — its turn runs in this core (space-19):
    * called synchronously at that unit's write, after its version check
@@ -145,41 +155,11 @@ interface CloneFacts { remote: string | null; id: string | null; remoteName: str
  * (storage-31): what the URL rules of space-15 read. */
 type RemoteFacts = Pick<CloneFacts, "remote" | "id"> & { remoteName?: string | null };
 
-/** The Git configuration keys naming each remote's URL. */
-const REMOTE_URL_KEYS = "^remote\\..+\\.url$";
-
 /** The names of the remotes a clone's configuration gives a URL, read
  * from `git config -z --get-regexp` over REMOTE_URL_KEYS: none where
- * Git found no key. A name may hold dots, as an instance's folder does,
- * so it is what lies between `remote.` and `.url`. */
+ * Git found no key. */
 function remoteNames(run: GitRun): string[] {
-  if (run.code !== 0) return [];
-  const names: string[] = [];
-  for (const entry of run.stdout.toString("utf8").split("\0")) {
-    const key = entry.split("\n", 1)[0];
-    if (!key.startsWith("remote.") || !key.endsWith(".url")) continue;
-    const name = key.slice("remote.".length, -".url".length);
-    if (name !== "" && !names.includes(name)) names.push(name);
-  }
-  return names;
-}
-
-/** The remote a clone syncs with, among the names its remotes bear
- * (DR-127): its key's instance folder where a remote of that name
- * stands; else `origin` — a remote the reader named, or one a clone
- * made before its remote took its instance's name; else the one remote
- * named by an instance's folder — for a clone keyed in your own group's
- * folder, which names no instance, your own group's own repository's or
- * that of a clone a pick left there (storage-35, storage-31); for one
- * keyed under an instance, the remote a follow half made left named by
- * another instance's folder, which its next sync renames (space-60);
- * none otherwise. */
-function cloneRemoteName(key: string, names: readonly string[]): string | null {
-  const instance = splitKey(key).instance;
-  if (instance !== null && names.includes(instance)) return instance;
-  if (names.includes("origin")) return "origin";
-  const folders = names.filter(isInstanceFolder);
-  return folders.length === 1 ? folders[0] : null;
+  return run.code === 0 ? remoteNamesIn(run.stdout.toString("utf8")) : [];
 }
 
 /** The name the host's remote takes in a clone (DR-127, storage-34):
@@ -2592,10 +2572,11 @@ export class SpaceManager {
     return this.host.store.home.account(instance.origin) !== null;
   }
 
-  /** The default instance's display name, or its URL's host name before
-   * any read (space-15: a report names the host by its display name). */
-  hostName(): string {
-    return this.nameOf(this.defaultInstance());
+  /** The name of the instance at an origin, as what the core says of it
+   * names it (space-15): a failure relayed from it outside the Groups
+   * engine — the registry's token (environments-12). */
+  instanceName(origin: string): string {
+    return this.nameOf(this.instanceAt(origin));
   }
 
   /** An instance's name in what the core says of it (space-15): its
@@ -2632,15 +2613,7 @@ export class SpaceManager {
    * instance whose folder names its remote; null where none does, the
    * clone being local only. */
   cloneInstance(key: string, remoteName: string | null): string | null {
-    const store = this.host.store;
-    const home = store.home;
-    const byKey = home.instanceOfKey(key);
-    if (byKey) return byKey.origin;
-    const deferred = store.deferredMoves().find((move) => move.from === key);
-    const byMove = deferred ? home.instanceOfKey(deferred.to) : undefined;
-    if (byMove) return byMove.origin;
-    if (remoteName === null || !isInstanceFolder(remoteName)) return null;
-    return home.instances().find((entry) => instanceFolder(entry.origin) === remoteName)?.origin ?? null;
+    return this.host.store.cloneInstance(key, remoteName);
   }
 
   /** The instance at an origin, in any spelling of it (DR-127): the one
@@ -2757,6 +2730,10 @@ export class SpaceManager {
    * records — its intents' author's (core-service-42); null where it has
    * none. */
   instanceOriginOf(key: string): string | null {
+    // A key under an instance's folder names it with no read of the
+    // clone: asked at every settle of an environment (environments-5).
+    const byKey = this.host.store.home.instanceOfKey(key);
+    if (byKey) return byKey.origin;
     if (!this.host.store.repository(key)) return this.cloneInstance(key, null);
     let remoteName: string | null;
     try { remoteName = this.machine(key).remoteNameNow(); } catch { remoteName = null; }
@@ -2778,6 +2755,19 @@ export class SpaceManager {
    * app token for it, or it refused the refresh. */
   accessSecretFor(origin: string): Promise<string | null> {
     return this.instanceAt(origin).client.accessSecret();
+  }
+
+  /** The registry of a listed instance refused the access secret a call
+   * presented there with a code that signs the device out
+   * (environments-12): that instance alone is signed out where the pair
+   * that presented it is still the stored one, its client saying so as
+   * a refusal of a host call does (git-host-4); where another pair
+   * replaced it meanwhile, nothing is signed out and `CredentialChanged`
+   * is thrown, the call refused as changed meanwhile. An origin the home
+   * does not list holds no pair, and nothing is done. */
+  async registryRefused(origin: string, access: string): Promise<void> {
+    if (this.host.store.home.instance(origin) === undefined) return;
+    if (!(await this.instanceAt(origin).client.signOutRefused(access))) throw new CredentialChanged();
   }
 
   /** The origins of every instance the home lists, in its order, then of
@@ -3771,7 +3761,12 @@ export class SpaceManager {
       throw error;
     }
     this.waiting.delete(machine.key);
+    const picked = this.localOnly(machine.key);
     await this.moveAtPick(instance, machine, repository);
+    // The pick places the project at its instance, moved or not: the
+    // built-in its pairing locked at the default instance is locked at
+    // this one before its records first sync (environments-11, DR-127).
+    if (picked) this.host.environmentPlaced?.(machine.key);
     await this.publish();
     this.startSync(machine.key, { join, ...(setUp ? { setUp } : {}) });
   }
@@ -3789,7 +3784,7 @@ export class SpaceManager {
   private async moveAtPick(instance: HostInstance, machine: RepositorySync, repository: HostRepository): Promise<void> {
     const store = this.host.store;
     const from = machine.key;
-    if (from === store.home.own() || splitKey(from).instance !== null || !from.startsWith(`${store.home.ownName}/`)) return;
+    if (!this.localOnly(from)) return;
     const to = this.keyAtHost(repository, instance);
     if (!to || to === from) return;
     const source = machine.repository.dir;
@@ -3809,6 +3804,13 @@ export class SpaceManager {
     pruneEmptyFolders(dirname(source), store.home.workspace);
     this.relocate([{ from, to }]);
     await this.afterMove([{ from, to }]);
+  }
+
+  /** Whether a key names a local-only clone under your own group's
+   * folder, its own repository aside (storage-35). */
+  private localOnly(key: string): boolean {
+    const home = this.host.store.home;
+    return key !== home.own() && splitKey(key).instance === null && key.startsWith(`${home.ownName}/`);
   }
 
   /** Ask an instance to create `name` in a group there for a clone
@@ -4176,6 +4178,7 @@ export class SpaceManager {
       }
       mkdirSync(folder, { recursive: true });
       this.host.store.rebindProject({ id: machine.key, path: folder });
+      this.host.environmentPaired?.(machine.key);
       this.host.repositoriesChanged();
       await this.host.rescanSessions(machine.key);
       this.host.ledgerChanged([machine.key]);

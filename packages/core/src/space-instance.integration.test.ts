@@ -1344,6 +1344,54 @@ test("git-host-24, space-83, git-host-6, git-host-9, git-host-15, git-host-16, g
   assert.equal((await home.client.expectOk("intent.queue", { projectId: gammaKey, text: "Signed out there" })).author, undefined);
 });
 
+test("core-service-123, core-service-42: signed in at the first as ada and at the second as bob, an intent queued in a project picked into each namespace stores the account at its own project's instance, a local-only project's storing none; signed out of the second, a further intent of its project stores none while the first's still stores ada", async (t) => {
+  const { bob, first, second, home } = await twoInstances("author-by-instance");
+  t.after(() => home.stop());
+  const ada = first.script.person;
+
+  // A project picked into your namespace at each instance, its clone
+  // keyed under that instance's folder (storage-35, space-58), and a
+  // project with no instance.
+  const picked = async (host: StandinHost, login: string, name: string): Promise<string> => {
+    const { key: local } = await addFolder(home, gitFolder(name));
+    const key = hostKey(host, `${login}/${name}-spex`);
+    const mark = home.client.mark();
+    await home.client.expectOk("space.pick", { repository: local, choice: { kind: "create", instance: host.url, groupId: null, name } });
+    const row = await home.client.waitRepository(mark, key, (repository) => repository.sync.phase !== "idle" && repository.sync.phase !== "running", 30_000);
+    assert.deepEqual([row.sync.phase, row.instance], ["done", host.url], JSON.stringify(row.sync));
+    return key;
+  };
+  const north = await picked(first, LOGIN, "north");
+  const south = await picked(second, bob.login, "south");
+  const { key: local } = await addFolder(home, gitFolder("local"));
+  const rows = rowsOf(await home.client.expectOk("space.get", {}));
+  assert.deepEqual([north, south, local].map((key) => rows.find((row) => row.key === key)?.instance), [first.url, second.url, null]);
+
+  /** Queue an intent over the protocol and read the author its stored
+   * file holds (storage-4, core-service-52), the reply carrying the
+   * same. */
+  const authorOf = async (projectId: string, text: string): Promise<unknown> => {
+    const queued = await home.client.expectOk("intent.queue", { projectId, text });
+    const stored = JSON.parse(readFileSync(join(clonePath(home.dataDir, projectId), "intents", `${queued.id}.json`), "utf8")) as { text?: unknown; author?: unknown };
+    assert.equal(stored.text, text);
+    assert.deepEqual(queued.author, stored.author, "the reply carries the stored author");
+    return stored.author;
+  };
+
+  // Each records the account signed in at its project's instance; the
+  // local-only project's records none (core-service-42).
+  assert.deepEqual(await authorOf(north, "At the first"), { login: ada.login, displayName: ada.displayName });
+  assert.deepEqual(await authorOf(south, "At the second"), { login: bob.login, displayName: bob.displayName });
+  assert.equal(await authorOf(local, "Here alone"), undefined);
+
+  // Signed out of the second, a further intent of its project records
+  // none, while the first's still records ada (core-service-42).
+  await signOut(home, second);
+  assert.equal(await authorOf(south, "Signed out there"), undefined);
+  assert.deepEqual(await authorOf(north, "Still at the first"), { login: ada.login, displayName: ada.displayName });
+  assert.equal(await authorOf(local, "Still here alone"), undefined);
+});
+
 test("space-83, git-host-24, git-host-9, git-host-4, space-11, space-6: a credential the second refuses to a transport signs the second out alone before Git runs; space.signout of the first lists it signed out, its rows unreachable and their Sync refused naming the first's display name, while the second's stay reachable and sync with the second's credential", async (t) => {
   const { first, second, alpha, beta, home, alphaKey, betaKey } = await twoInstances("signed-out-transport");
   t.after(() => home.stop());
