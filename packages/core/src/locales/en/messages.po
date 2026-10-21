@@ -1991,6 +1991,11 @@ msgstr "Resolving stopped: {cause}"
 msgid "Restore the interrupted turn first"
 msgstr "Restore the interrupted turn first"
 
+#. Sync guidance after a linked or non-directory destination refuses Apply or partial refresh
+#: src/space.ts
+msgid "Restore the unsafe folder to a regular folder, then Retry. Refresh is deferred; written records and existing repair evidence are kept."
+msgstr "Restore the unsafe folder to a regular folder, then Retry. Refresh is deferred; written records and existing repair evidence are kept."
+
 #. Guidance where the Git host asked to wait: Retry waits out the time it asked for before running the step
 #: src/space.ts
 msgid "Retry waits, then runs the step."

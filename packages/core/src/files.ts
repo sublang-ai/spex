@@ -7,7 +7,7 @@
 // storage fault a reader reports.
 
 import { createHash, randomUUID } from "node:crypto";
-import { closeSync, fchmodSync, fsyncSync, openSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { closeSync, fchmodSync, fsyncSync, lstatSync, openSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, posix, resolve, win32 } from "node:path";
 import { i18n } from "./i18n.js";
 import { UUID_PATTERN } from "./protocol.js";
@@ -24,6 +24,15 @@ export class StorageFormatError extends Error {
     super(i18n._({ id: "{file}: {reason}", comment: "A storage fault as one line: the file, then the reason — itself a message",
       values: { file, reason } }));
     this.name = "StorageFormatError";
+  }
+}
+
+/** A directory reader never follows a linked root. Missing roots are
+ * empty; a present non-directory is a storage diagnostic. */
+export function assertPlainDirectory(file: string): void {
+  const info = lstatSync(file, { throwIfNoEntry: false });
+  if (info && (info.isSymbolicLink() || !info.isDirectory())) {
+    throw new StorageFormatError(file, "unsafe destination parent");
   }
 }
 

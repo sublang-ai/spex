@@ -12,7 +12,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import {
   closed, isLocalPath, isObject, isRecordedPath, isText, isTimestamp, isUuid, knownFormat, need,
-  readJsonFile, sha256, StorageFormatError, writeApplicationBytes, writeApplicationFile, writeVersionedBytes, UUID,
+  assertPlainDirectory, readJsonFile, sha256, StorageFormatError, writeApplicationBytes, writeApplicationFile, writeVersionedBytes, UUID,
 } from "./files.js";
 import { i18n } from "./i18n.js";
 import { mediaAttachmentsSchema, type DiagnosticRepair, type IntentAuthor, type IntentInfo, type IntentSource, type MediaAsset, type RepairChecked } from "./protocol.js";
@@ -137,6 +137,11 @@ export function intentFileOf(intent: IntentInfo): IntentFile {
  * diagnostic per file that will not read — listed nowhere (storage-4). */
 export function readIntentFiles(intentsDir: string): { intents: IntentFile[]; problems: StorageDiagnostic[] } {
   const intents: IntentFile[] = []; const problems: StorageDiagnostic[] = [];
+  try { assertPlainDirectory(intentsDir); }
+  catch (error) {
+    if (!(error instanceof StorageFormatError)) throw error;
+    return { intents, problems: [{ file: error.file, reason: error.reason, blocking: true }] };
+  }
   if (!existsSync(intentsDir)) return { intents, problems };
   for (const name of readdirSync(intentsDir).sort()) {
     if (!name.endsWith(".json")) continue;

@@ -94,7 +94,7 @@ The intent store shall encode each `<clone>/intents/<id>.json` as a closed JSON 
 - an edit, a dispatch and a close rewrite the file whole as it reads at that instant, in one step with that read; an edit whose intent changed since its command read it, across the command's own wait, is refused as changed meanwhile; a remove deletes the file and its asset directory;
 - a capture writes a new file only where no clone holds an intent of its id and no file holds its name, never replacing one;
 - no write recreates the clone holding `intents/` where it moved or was removed;
-- a malformed file is reported without deletion, and its intent is listed nowhere.
+- a malformed file is reported without deletion, and its intent is listed nowhere; a linked or non-directory intent folder is reported without reading its contents.
 
 ### storage-5
 
@@ -249,6 +249,7 @@ When invoked as `select [unit=ours|theirs ...]` during a Git merge, the storage 
 - reject unknown or duplicate choices, unresolved conflicts and choices contrary to an unambiguous comparison [[storage-11](#storage-11)];
 - validate the complete candidate — `HEAD`'s tree with each unit taken whole from its selected side — in a private copy before applying files [[storage-12](#storage-12)]; validation failure leaves working files and index unchanged;
 - write or delete each unit whose working-tree files differ from its selection by a versioned replacement [[storage-14](#storage-14)] naming the unit's tracked paths as Git's merge left them when the selection began, each read as Git reads its path, a file in neither side's tree left untouched as Git leaves an untracked file, a session's replay before its manifest and under that session's lease, its files and attachment folder owner-only, clear hints and viewed markers when its selected bundle differs from `HEAD`, and set the index to the candidate's tree;
+- before reading a live unit or writing, deleting or clearing one of its files or hints, inspect every existing parent below the clone without following links, refusing a symbolic link or non-directory even where the leaf or a later parent is absent; check the session parent before taking its lease and check the destinations again after each awaited preparation or lease acquisition, never reading or changing a path outside the clone through a parent;
 - a unit changed since the selection began, or a session whose lease is held, refuses selection naming it, leaving its files and the index unchanged and the units written before it in place;
 - report filesystem failures without claiming success; retrying selection completes an interrupted or refused application before reopening.
 
@@ -381,6 +382,7 @@ When an integration suite merges two real Git branches of a group's own spex rep
 - no repetition of actions omitted from selected history [[storage-13](#storage-13)];
 - through the apply seam, a versioned replacement refused where a file changed while its session's lease was awaited — against the Save commit, and under `select` against Git's merge output as it stood when the selection began — the change kept and the index unchanged, a session's lease free once its write lands, and the index holding the validated tree [[storage-14](#storage-14)] [[storage-21](#storage-21)];
 - through the apply seam, a clone moved or removed while a lease is awaited refusing the write with no folder made at its former path, a held session lease refusing before any other unit is written, and a Git-checked-out CRLF file under `core.autocrlf` read as unchanged [[storage-14](#storage-14)];
+- through the apply seam over real Git branches, an incoming overwrite, creation or deletion beneath a linked or non-directory parent refusing with external canaries and the index unchanged, including an absent leaf or tail, a parent replaced at the before-write boundary or while a session lease is awaited, nested assets and hint cleanup; safe missing directories still permit the selection [[storage-21](#storage-21)];
 - an untracked attachment in a unit neither side changed surviving selection [[storage-21](#storage-21)];
 - the home lease refusing every mutating command, a held session lease refusing selection of that session's unit with the index unchanged and a retry after its release completing it, and a lease in another spex repository's store refusing nothing [[storage-14](#storage-14)] [[storage-21](#storage-21)].
 
