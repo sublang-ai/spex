@@ -82,6 +82,7 @@ import {
   type CredentialArgs,
   type ExportReport,
   type GitCredential,
+  type GitRun,
   type GitSource,
   type Lock,
   type Manifest,
@@ -127,15 +128,21 @@ export interface EnvironmentManagerOptions {
    * signs that instance out (environments-12, git-host-4); where it
    * throws, the refused call fails with what it threw. */
   refused?: (origin: string, token: string) => void | Promise<void>;
-  /** The brokered credential for a Git source at the host's Git origin,
-   * undefined for any other (environments-13). */
-  gitCredential: (repo: string) => Promise<GitCredential | undefined>;
+  /** The brokered credential for a Git source (environments-13): the
+   * one an instance the home is signed in to brokers at whose Git origin
+   * the source lies, the environment's own instance — `preferred` —
+   * asked first where it is one; undefined at the Git origin of none,
+   * where this device's own Git fetches it. */
+  gitCredential: (repo: string, preferred: string | null) => Promise<GitCredential | undefined>;
   /** How that credential reaches Git: the app's own credential helper
    * (git-host-9). */
   credentialArgs: CredentialArgs;
-  /** Read-only labels and reports from the instance facts already read. */
-  gitLabel: (repo: string) => string;
-  gitFailure: (repo: string, run: import("./environment/git-source.js").GitRun) => string;
+  /** Read-only labels and reports from the instance facts already read
+   * (environments-29): a source under an instance's reported Git origin
+   * reads as that instance's name, the environment's own — `preferred` —
+   * where it is one. */
+  gitLabel: (repo: string, preferred: string | null) => string;
+  gitFailure: (repo: string, run: GitRun, preferred: string | null) => string;
   broadcast: (repository: string, state: EnvironmentState) => void;
   /** An environment's installed files or exports changed. */
   changed?: (repository: string) => void;
@@ -178,6 +185,16 @@ export interface SettleProgress {
 /** What one settle does: resolve where needed, or always, then install
  * and export. */
 type SettleMode = "auto" | "resolve" | "install";
+
+/** An environment's Git sources as the core fetches and shows them
+ * (environments-13, environments-29), by the environment's instance. */
+interface EnvironmentGit {
+  /** The environment's instance (storage-31), read at its first use. */
+  instance: () => string | null;
+  credential: (repo: string) => Promise<GitCredential | undefined>;
+  label: (repo: string) => string;
+  failure: (repo: string, run: GitRun) => string;
+}
 
 const listed = (items: readonly string[]): string =>
   items.join(i18n._({ id: "; ", comment: "Separates reasons listed in one message" }));
@@ -321,34 +338,50 @@ export class EnvironmentManager {
   constructor(private readonly options: EnvironmentManagerOptions) {
     this.contentStore = new ContentStore(options.store.dir);
     this.cacheDir = join(options.store.dir, "cache");
-    // A source at the host's Git origin is fetched with the brokered
-    // credential through the app's helper; any other with this device's
-    // own Git (environments-13).
+    // A source at a signed-in instance's Git origin is fetched with the
+    // credential that instance brokers through the app's helper; any
+    // other with this device's own Git (environments-13).
     this.git = gitSource(this.cacheDir, { credentialArgs: options.credentialArgs });
+  }
+
+  /** An environment's Git sources (environments-13, environments-29):
+   * each fetched with the credential an instance the home is signed in
+   * to brokers at its Git origin, and read as an instance's name, the
+   * environment's own instance preferred — read at the first source
+   * asking for it, so an environment with none reads no instance. */
+  private gitOf(key: string): EnvironmentGit {
+    let own: string | null | undefined;
+    const instance = (): string | null => (own === undefined ? (own = this.options.instanceOf(key)) : own);
+    return {
+      instance,
+      credential: (repo) => this.options.gitCredential(repo, instance()),
+      label: (repo) => this.options.gitLabel(repo, instance()),
+      failure: (repo, run) => this.options.gitFailure(repo, run, instance()),
+    };
   }
 
   /** Only generated source fields are projected; authored documents and
    * request/lock bytes never pass through this presentation boundary. */
-  private sourceText(text: string, repo: string): string {
-    return text.split(repo).join(this.options.gitLabel(repo));
+  private sourceText(text: string, repo: string, git: EnvironmentGit): string {
+    return text.split(repo).join(git.label(repo));
   }
 
-  private failure(stage: "resolve" | "install" | "publish", error: unknown, requests?: Requests): string {
+  private failure(stage: "resolve" | "install" | "publish", error: unknown, git: EnvironmentGit, requests?: Requests): string {
     if (error instanceof GitSourceError) {
-      error = new Error(error.run ? this.options.gitFailure(error.repo, error.run) : this.sourceText(error.message, error.repo));
+      error = new Error(error.run ? git.failure(error.repo, error.run) : this.sourceText(error.message, error.repo, git));
     } else if (error instanceof ResolveError && error.packageName) {
       const request = requests?.packages[error.packageName];
-      if (request && isGitRequest(request)) error = new Error(this.sourceText(error.message, request.git));
+      if (request && isGitRequest(request)) error = new Error(this.sourceText(error.message, request.git, git));
     }
     return failurePhrase(stage, error);
   }
 
-  private shownConflicts(conflicts: readonly Conflict[], requests: Requests | null): Conflict[] {
+  private shownConflicts(conflicts: readonly Conflict[], requests: Requests | null, git: EnvironmentGit): Conflict[] {
     return conflicts.map((conflict) => {
       const request = requests?.packages[conflict.name];
       return { ...conflict, requirements: conflict.requirements.map((entry) => ({ ...entry,
         requirement: request && isGitRequest(request) && entry.by === "spex.yaml" && entry.requirement.startsWith(`git ${request.git} at `)
-          ? this.sourceText(entry.requirement, request.git) : entry.requirement,
+          ? this.sourceText(entry.requirement, request.git, git) : entry.requirement,
       })) };
     });
   }
@@ -643,6 +676,7 @@ export class EnvironmentManager {
       return;
     }
     const state = this.cloneState(key);
+    const envGit = this.gitOf(key);
     const pathRoot = this.pathRoot(key);
     const requestsPath = join(dir, "spex.yaml");
     const lockPath = join(dir, "spex.lock");
@@ -652,7 +686,7 @@ export class EnvironmentManager {
       read = readRequestsAt(requestsPath);
       locked = readLockAt(lockPath);
     } catch (error) {
-      state.error = this.failure("resolve", error, read?.requests);
+      state.error = this.failure("resolve", error, envGit, read?.requests);
       this.announce(state.key);
       if (strict) throw new CoreError("invalid_request", state.error);
       return;
@@ -667,7 +701,7 @@ export class EnvironmentManager {
     let lockVersion: FileVersion = locked?.version ?? null;
     // The environment's registry, at its instance or the default
     // instance's (environments-5, DR-127).
-    const instance = this.options.instanceOf(key);
+    const instance = envGit.instance();
     const registry = this.registryAt(instance ?? this.defaultOrigin()).source;
     const needsResolve = mode === "resolve" || (mode === "auto" && lock === null && read !== null);
     if (needsResolve && read !== null) {
@@ -675,7 +709,7 @@ export class EnvironmentManager {
       let result: Awaited<ReturnType<typeof resolve>>;
       try {
         result = await resolve({
-          requests: read.requests, requestsText: read.text, registry, pathRoot, confined: this.isOwn(key), git: this.git, gitCredential: this.options.gitCredential,
+          requests: read.requests, requestsText: read.text, registry, pathRoot, confined: this.isOwn(key), git: this.git, gitCredential: envGit.credential,
           // A package resolving to the release its lock records keeps the
           // registry recorded there (environments-5).
           ...(locked ? { previous: locked.lock } : {}),
@@ -683,7 +717,7 @@ export class EnvironmentManager {
       } catch (error) {
         const changed = this.changedSince(requestsPath, read.version, lockPath, lockVersion);
         if (changed) return this.overtaken(changed, strict);
-        state.error = this.failure("resolve", error, read?.requests);
+        state.error = this.failure("resolve", error, envGit, read?.requests);
         if (strict) throw new CoreError("invalid_request", state.error);
         return;
       }
@@ -693,7 +727,7 @@ export class EnvironmentManager {
         if (changed) return this.overtaken(changed, strict);
         state.conflicts = { requests: read.version, conflicts: result.conflicts };
         state.error = null;
-        if (strict) throw new CoreError("invalid_request", this.conflictPhrase(this.shownConflicts(result.conflicts, read.requests)));
+        if (strict) throw new CoreError("invalid_request", this.conflictPhrase(this.shownConflicts(result.conflicts, read.requests, envGit)));
         return;
       }
       // The lock is written only while `spex.yaml` stands as resolved and
@@ -703,7 +737,7 @@ export class EnvironmentManager {
         lockVersion = sha256(await writeLock(lockPath, result.lock, lockVersion));
       } catch (error) {
         if (error instanceof VersionConflictError) return this.overtaken(error, strict);
-        state.error = this.failure("resolve", error, read?.requests);
+        state.error = this.failure("resolve", error, envGit, read?.requests);
         if (strict) throw new CoreError("invalid_request", state.error);
         return;
       }
@@ -724,7 +758,7 @@ export class EnvironmentManager {
         registry,
         registries: (source) => this.installRegistries(instance, source),
         git: this.git,
-        gitCredential: this.options.gitCredential,
+        gitCredential: envGit.credential,
         pathRoot,
         confined: this.isOwn(key),
         requestsText: read?.text ?? null,
@@ -770,7 +804,7 @@ export class EnvironmentManager {
       if (error instanceof VersionConflictError) return this.overtaken(error, strict);
       const changed = this.changedSince(requestsPath, read?.version ?? null, lockPath, lockVersion);
       if (changed) return this.overtaken(changed, strict);
-      state.error = this.failure("install", error, read?.requests);
+      state.error = this.failure("install", error, envGit, read?.requests);
       if (strict) throw new CoreError("invalid_request", state.error);
       return;
     }
@@ -1183,6 +1217,9 @@ export class EnvironmentManager {
   state(key: string): EnvironmentState {
     const dir = this.cloneDir(key);
     const clone = this.cloneState(key);
+    // A Git source's labels name an instance, the environment's own
+    // preferred, read only where one is shown (environments-29).
+    const envGit = this.gitOf(key);
     const pathRoot = this.pathRoot(key);
     let requests: Requests | null = null;
     let requestsText: string | null = null;
@@ -1232,7 +1269,7 @@ export class EnvironmentManager {
         source: isRegistrySource(source)
           ? { kind: builtin ? "builtin" : "registry", detail: source.registry }
           : isGitSource(source)
-            ? { kind: "git", detail: `${this.options.gitLabel(source.git)} ${source.commit.slice(0, 12)}${source.path ? ` ${source.path}` : ""}` }
+            ? { kind: "git", detail: `${envGit.label(source.git)} ${source.commit.slice(0, 12)}${source.path ? ` ${source.path}` : ""}` }
             : { kind: "path", detail: source.path },
         direct: requests?.packages[name] !== undefined,
         requiredBy: [...resolution.requiredBy],
@@ -1248,7 +1285,7 @@ export class EnvironmentManager {
       });
     }
     const requestMap: Record<string, EnvironmentRequestSummary> = {};
-    for (const [name, request] of Object.entries(requests?.packages ?? {})) requestMap[name] = requestOf(request, this.options.gitLabel);
+    for (const [name, request] of Object.entries(requests?.packages ?? {})) requestMap[name] = requestOf(request, envGit.label);
     const builtinUpdate = this.builtinUpdate(requests, lock);
     // What an export left out describes the folder it exported into, so
     // a folder paired since lists none of it (environments-14).
@@ -1261,7 +1298,7 @@ export class EnvironmentManager {
       requests: requestMap,
       packages,
       stale: lock ? stalePhrases(lock, requestsText, pathRoot) : null,
-      conflicts: conflicts ? this.shownConflicts(conflicts, requests) : null,
+      conflicts: conflicts ? this.shownConflicts(conflicts, requests, envGit) : null,
       busy: this.busyOf(key),
       error,
       published: clone.published ? { ...clone.published } : null,

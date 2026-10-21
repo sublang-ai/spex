@@ -586,8 +586,6 @@ export class CoreService {
       // keeps current, asked only where the home is signed in there
       // (environments-12, git-host-4, DR-127), an instance that cannot
       // be reached, or asks to wait, read as it answered (git-host-11).
-      // A Git source at the host's origin takes its brokered credential
-      // through the app's helper (environments-13, git-host-9).
       instanceOf: (key) => this.space.instanceOriginOf(key),
       tokenFor: async (origin) => {
         try {
@@ -607,9 +605,13 @@ export class CoreService {
           throw new Error(relayHostError(error, this.space.instanceName(origin)));
         }
       },
-      gitCredential: (repo) => this.space.sourceCredential(repo),
-      gitLabel: (repo) => this.space.packageSourceAsShown(repo),
-      gitFailure: (repo, run) => this.space.packageSourceFailure(repo, run),
+      // A Git source at a signed-in instance's Git origin takes the
+      // credential that instance brokers, through the app's helper, and
+      // reads as an instance's name, the environment's own instance
+      // preferred (environments-13, environments-29, git-host-9, DR-127).
+      gitCredential: (repo, preferred) => this.space.sourceCredential(repo, preferred),
+      gitLabel: (repo, preferred) => this.space.packageSourceAsShown(repo, preferred),
+      gitFailure: (repo, run, preferred) => this.space.packageSourceFailure(repo, run, preferred),
       credentialArgs: async (credential) => {
         const handle = await withGitCredential(credential, this.hostRuntime);
         const env: Record<string, string> = {};

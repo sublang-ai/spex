@@ -17,7 +17,7 @@
 
 import { test, type TestContext } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { parse as parseYaml, parseDocument } from "yaml";
 
@@ -44,7 +44,7 @@ import type { StandinHost } from "./testing/standin-host.js";
 import { makeRelease, startStandinRegistry, type StandinRegistry, type StandinRegistryRequest } from "./testing/standin-registry.js";
 
 const fixture = createSpaceHarness();
-const { scratch, gitFolder, addFolder, sleep, startHome, startHost, signIn, signOut } = fixture;
+const { scratch, git, gitFolder, addFolder, sleep, startHome, startHost, signIn, signOut } = fixture;
 test.after(() => fixture.dispose());
 
 type Home = Awaited<ReturnType<typeof startHome>>;
@@ -422,4 +422,110 @@ test("environments-34, environments-12, git-host-4: with the first's registry an
   const asked = receivedFor(R1, one, "acme/open");
   assert.ok(asked.length > 0 && asked.every(([, instance, account, bearer]) => instance === first.url && account === null && !bearer), JSON.stringify(asked));
   assert.deepEqual(await signedIn(), [[false, true], [true, false]]);
+});
+
+test("environments-34, environments-13, environments-29: a Git source at the shared Git backend's origin, requested in the second's project, is fetched at resolution and at install with the credential the second brokers, its request, its locked source and its failures reading as the second's display name; in the local-only project the first brokers it and names it; and with the second signed out, the first brokers it for the second's project", { timeout: 300_000 }, async (t) => {
+  const { first, second, home, south, local } = await twoInstances(t, "git-source");
+  assert.equal(second.gitOrigin, first.gitOrigin, "one Git backend, one Git origin");
+  const SECOND = "Second stand-in";
+  const FIRST = "Stand-in Git host";
+  const NAME = "acme/toolbox";
+
+  // A release in a repository of the person's namespace, which both
+  // instances list over their shared Git backend: any instance over it
+  // may broker its credential, and its transport records which did.
+  const toolbox = second.script.addRepository({ group: LOGIN, name: "toolbox" });
+  const work = join(scratch, "git-source-toolbox");
+  git(scratch, "clone", "-q", toolbox.bare, work);
+  cpSync(await release(NAME), join(work, "pkg"), { recursive: true });
+  git(work, "add", "-A");
+  git(work, "-c", "commit.gpgsign=false", "commit", "-q", "-m", "Release");
+  git(work, "push", "-q", "origin", "HEAD:main");
+  const commit = git(work, "rev-parse", "HEAD");
+  const repo = `${second.gitOrigin}/${LOGIN}/toolbox.git`;
+  const request = { kind: "git" as const, git: repo, rev: "main", path: "pkg" };
+  const transports = first.script.transportCredentials;
+  const brokers = (from: number): string[] => [...new Set(transports.slice(from).filter((entry) => entry.path.includes(`/${LOGIN}/toolbox.git/`)).map((entry) => entry.instance))];
+  const installed = (state: EnvironmentState): boolean => state.packages.some((pkg) => pkg.name === NAME && pkg.installed);
+  const detailOf = (state: EnvironmentState): string | undefined => state.packages.find((pkg) => pkg.name === NAME)?.source.detail;
+  const named = (text: string, name: string, other: string): void => {
+    assert.ok(text.includes(name), `${JSON.stringify(text)} names ${name}`);
+    assert.ok(!text.includes(other) && !text.includes(second.gitOrigin), `${JSON.stringify(text)} names neither ${other} nor the Git origin`);
+  };
+
+  // Requested in the second's project, the source resolves with the
+  // credential the second brokers, the environment's own instance,
+  // though the first, the default instance, lies at the same Git origin
+  // (environments-13); the lock holds the locator and the commit, while
+  // the request and the locked source read as the second's name
+  // (environments-29).
+  let from = transports.length;
+  await home.client.expectOk("environment.request", { repository: south, name: NAME, request });
+  let state = await environmentOf(home, south, (candidate) => installed(candidate) || candidate.error !== null);
+  assert.equal(state.error, null);
+  assert.deepEqual(lockOf(home, south).packages[NAME]!.source, { git: repo, commit, path: "pkg" });
+  assert.deepEqual(brokers(from), [second.url], "the second brokered the resolution's fetch");
+  assert.deepEqual(state.requests[NAME], { kind: "git", repository: SECOND, rev: "main", path: "pkg" });
+  assert.equal(detailOf(state), `${SECOND} ${commit.slice(0, 12)} pkg`);
+  assert.ok(!JSON.stringify(state).includes(second.gitOrigin), "no Git origin in the state");
+
+  // Its files gone from the clone and the store, and its fetched
+  // repository from the cache, an install fetches the locked commit with
+  // the credential the second brokers (environments-13).
+  const files = lockOf(home, south).packages[NAME]!.files;
+  const stored = files.map((file) => join(home.dataDir, "store", ...(file.executable ? ["x"] : []), file.sha256));
+  assert.ok(stored.length > 0 && stored.every((file) => existsSync(file)), "the store holds its files");
+  for (const file of stored) rmSync(file);
+  rmSync(join(clonePath(home.dataDir, south), "packages", ...NAME.split("/")), { recursive: true });
+  rmSync(join(home.dataDir, "cache", "git"), { recursive: true, force: true });
+  from = transports.length;
+  await home.client.expectOk("environment.install", { repository: south });
+  state = await environmentOf(home, south, (candidate) => installed(candidate) || candidate.error !== null);
+  assert.equal(state.error, null);
+  assert.deepEqual(brokers(from), [second.url], "the second brokered the install's fetch");
+  assert.ok(stored.every((file) => existsSync(file)), "the store holds its files again");
+
+  // A transport the Git backend refuses, at the second's credential,
+  // fails the resolution as the second's refusal; a revision the
+  // repository lacks fails naming the second; neither names the first
+  // or says the locator (environments-29).
+  second.script.refuseTransport("Members decide who may read");
+  try {
+    from = transports.length;
+    await home.client.expectOk("environment.resolve", { repository: south });
+    state = await environmentOf(home, south, (candidate) => candidate.error !== null);
+  } finally {
+    second.script.refuseTransport(null);
+  }
+  named(state.error!, SECOND, FIRST);
+  assert.deepEqual(brokers(from), [second.url]);
+  await home.client.expectOk("environment.request", { repository: south, name: NAME, request: { ...request, rev: "no-such-rev" } });
+  state = await environmentOf(home, south, (candidate) => candidate.error !== null && candidate.requests[NAME]?.kind === "git" && candidate.requests[NAME].rev === "no-such-rev");
+  named(state.error!, SECOND, FIRST);
+  assert.match(state.error!, /no-such-rev/);
+  assert.deepEqual(state.requests[NAME], { kind: "git", repository: SECOND, rev: "no-such-rev", path: "pkg" });
+  await home.client.expectOk("environment.request", { repository: south, name: NAME, request });
+  state = await environmentOf(home, south, (candidate) => (installed(candidate) && candidate.error === null) || (candidate.error !== null && !candidate.error.includes("no-such-rev")));
+  assert.equal(state.error, null);
+
+  // In the local-only project, which has no instance, the same source is
+  // brokered by the first, the earliest instance in the home's list, and
+  // reads as the first's name (environments-13, environments-29).
+  from = transports.length;
+  await home.client.expectOk("environment.request", { repository: local, name: NAME, request });
+  state = await environmentOf(home, local, (candidate) => installed(candidate) || candidate.error !== null);
+  assert.equal(state.error, null);
+  assert.deepEqual(brokers(from), [first.url], "the first brokered the local-only project's fetch");
+  assert.deepEqual(state.requests[NAME], { kind: "git", repository: FIRST, rev: "main", path: "pkg" });
+  assert.equal(detailOf(state), `${FIRST} ${commit.slice(0, 12)} pkg`);
+
+  // Signed out of the second, its project's source is brokered by the
+  // first, signed in at the same Git origin: a signed-out instance
+  // brokers nothing (environments-13).
+  await signOut(home, second);
+  from = transports.length;
+  await home.client.expectOk("environment.resolve", { repository: south });
+  state = await environmentOf(home, south, (candidate) => installed(candidate) || candidate.error !== null);
+  assert.equal(state.error, null);
+  assert.deepEqual(brokers(from), [first.url], "the first brokered the fetch once the second signed out");
 });
