@@ -681,7 +681,7 @@ export class Store {
   }
 
   private projectInfo(repository: SpexRepository, path: string): ProjectInfo {
-    const { group, name } = splitKey(repository.key);
+    const { instance, group, name } = splitKey(repository.key);
     let registeredAt = 0;
     try { const stat = statSync(repository.dir); registeredAt = Math.round(stat.birthtimeMs || stat.ctimeMs); } catch { registeredAt = 0; }
     return {
@@ -689,7 +689,9 @@ export class Store {
       path,
       name: this.readProjectFile(repository).file?.name ?? (repository.key === this.homeFile.own() ? this.homeFile.ownName : basename(path)),
       registeredAt,
-      repository: { key: repository.key, name, group, own: group === this.homeFile.ownName },
+      // Your own group's folder lies outside every instance's: a namespace
+      // at an instance bearing its name is not it (DR-127).
+      repository: { key: repository.key, name, group, own: instance === null && group === this.homeFile.ownName },
     };
   }
 

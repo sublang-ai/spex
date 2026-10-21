@@ -2834,10 +2834,11 @@ export class CoreService {
         // An intent holds no place of its own: the queue is its project's
         // queued intents oldest first (core-service-42, core-service-107).
         const id = randomUUID();
-        const account = this.store.home.host;
-        const author = account.account && !account.signedOut
-          ? { login: account.account.login, displayName: account.account.displayName }
-          : undefined;
+        // The account signed in at the instance of the project's spex
+        // repository, none where it has none (core-service-42).
+        const at = this.space.instanceOriginOf(project.id);
+        const account = at === null ? null : this.store.home.account(at);
+        const author = account ? { login: account.login, displayName: account.displayName } : undefined;
         const intent = {
           id,
           projectId: project.id,

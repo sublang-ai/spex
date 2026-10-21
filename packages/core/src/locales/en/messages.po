@@ -258,6 +258,11 @@ msgstr "{name} has no folder on this device"
 msgid "{name} is in use elsewhere in {project}"
 msgstr "{name} is in use elsewhere in {project}"
 
+#. Refusal of a pick: the spex repository's folder lies under one instance, and the pick named a group at another; {name} is the repository's name, {host} its instance's display name
+#: src/space.ts
+msgid "{name} is kept under {host}; pick a group there"
+msgstr "{name} is kept under {host}; pick a group there"
+
 #. Refusal: removing a spec package this environment does not request
 #: src/environments.ts
 msgid "{name} is not requested here"
@@ -2160,6 +2165,11 @@ msgstr "Sign in first"
 #: src/space.ts
 msgid "Sign in from the header, then Retry."
 msgstr "Sign in from the header, then Retry."
+
+#. Refusal of a sync: the spex repository's instance is signed out; {host} is that instance's display name, or its host name before any read
+#: src/space.ts
+msgid "Sign in to {host} first"
+msgstr "Sign in to {host} first"
 
 #. Refusal: publishing to the registry needs the home signed in
 #: src/environments.ts

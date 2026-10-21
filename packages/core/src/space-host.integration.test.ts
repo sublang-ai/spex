@@ -915,7 +915,9 @@ test("space-37: Sign out revokes this device and keeps every clone, its reposito
   const own = repositoryOf(out, HOST_OWN);
   assert.deepEqual([own.state, own.reason], ["unreachable", "Sign in again"]);
   assert.ok(existsSync(join(clonePath(home.dataDir, HOST_OWN), ".git")), "nothing is deleted");
-  await home.client.expectError("space.sync", { repository: HOST_OWN }, "invalid_request", /Sign in first/);
+  // A Sync names the instance to sign in to, by its display name as last
+  // read (space-11).
+  await home.client.expectError("space.sync", { repository: HOST_OWN }, "invalid_request", new RegExp(`^Sign in to ${HOST_NAME} first$`));
   await home.client.expectError("space.refresh", {}, "invalid_request", /Sign in first/);
   const fromAgain = home.client.mark();
   await signIn(home, host);
