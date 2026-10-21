@@ -4950,7 +4950,7 @@ export class SpaceManager {
       instances: this.instancesOf(placed.groups),
       // Transitional mirrors of the default instance (space-30), until
       // the interface reads `instances`.
-      host: { url: host.origin, displayName: served.view?.displayName ?? served.described?.displayName ?? null },
+      host: { url: host.origin, displayName: served.view?.displayName ?? served.described?.displayName ?? store.home.instance(served.origin)?.displayName ?? null },
       // What the host's last read said the person may do, and the roles
       // it grants: nothing until a read is held (DR-114).
       account: ((a) => (a ? { ...a, canCreateGroup: served.view?.account.canCreateGroup ?? false } : null))(store.home.account()),
@@ -5231,14 +5231,17 @@ export class SpaceManager {
 
   /** Transitional, the mirror the interface reads until it reads
    * `instances` (space-30): your own group first, then, by path, every
-   * group the host lists and every other account's login under which it
-   * lists a spex repository, each with its spex repositories, the
-   * group's own first (space-1, DR-120). Entries are known by the
-   * group's id, your own once, another account's by its login: a row
-   * stands under the group the host's last read names for it, and under
-   * its key's group only where the host lists nothing for it, so no
-   * group the host lists displaces your own or takes its rows. Before
-   * sign-in, your own group with what this device holds. */
+   * group the default instance lists and every other account's login
+   * under which it lists a spex repository, each with its spex
+   * repositories, the group's own first (space-1, DR-120). Entries are
+   * known by the group's id, your own once, another account's by its
+   * login: a row stands under the group the default instance's last read
+   * names for it, and under its key's group only where no read lists it,
+   * so no group it lists displaces your own or takes its rows. A row
+   * another instance the home lists governs or holds (DR-127) stands
+   * under that instance's heading alone, never here; your own group's own
+   * repository always stands here. Before sign-in, your own group with
+   * what this device holds. */
   private groupsOf(placed: Placed[]): GroupsState["groups"] {
     const store = this.host.store;
     const ownName = store.home.ownName;
@@ -5284,10 +5287,13 @@ export class SpaceManager {
       }
       return entry;
     };
+    // Another listed instance's rows stand under its heading alone.
+    const listed = new Set(store.home.instances().map((entry) => entry.origin));
+    const elsewhere = (origin: string | null): boolean => origin !== null && origin !== served.origin && listed.has(origin);
     // The rows the host lists first, so every login's entry stands
     // before a row the host lists nothing for falls back to its key.
     for (const { row, group, instance } of placed) {
-      if (!group) continue;
+      if (!group || (!row.own && instance !== served.origin)) continue;
       // Ids are the default instance's alone.
       const entry = group.kind === "user"
         ? (ownLogin(group.fullPath) ? own : loginEntry(group.fullPath))
@@ -5295,7 +5301,7 @@ export class SpaceManager {
       entry.repositories.push(row);
     }
     for (const { row, group } of placed) {
-      if (group) continue;
+      if (group || (!row.own && elsewhere(row.instance))) continue;
       const path = splitKey(row.key).group;
       const entry = path === ownName || (user !== undefined && path === user.fullPath)
         ? own

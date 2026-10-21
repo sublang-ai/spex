@@ -291,9 +291,15 @@ export function assertGroupsState(state: GroupsState): void {
     }
   }
   assert.equal(new Set(state.instances.map((instance) => instance.origin)).size, state.instances.length, "one entry per instance");
-  // Transitional: the mirror holds exactly the rows the headings hold.
+  // Transitional: the mirror holds exactly the rows your own group and
+  // the default instance's heading hold, never a row another listed
+  // instance governs or holds, your own group's own repository always.
   const keys = (rows: RepositoryState[]): string[] => rows.map((repository) => repository.key).sort();
-  assert.deepEqual(keys(rowsOf(state)), keys(state.groups.flatMap((group) => group.repositories)), "every row stands once under your own group or an instance");
+  const listed = new Set(state.instances.map((instance) => instance.origin));
+  const elsewhere = (repository: RepositoryState): boolean => !repository.own && repository.instance !== null && repository.instance !== state.defaultInstance && listed.has(repository.instance);
+  const served = state.instances.find((instance) => instance.origin === state.defaultInstance)?.groups.flatMap((group) => group.repositories) ?? [];
+  assert.deepEqual(keys(rowsOf(state)), [...new Set(keys(rowsOf(state)))], "every row stands once under your own group or an instance");
+  assert.deepEqual(keys([...state.own.repositories.filter((repository) => !elsewhere(repository)), ...served]), keys(state.groups.flatMap((group) => group.repositories)), "the mirror holds your own group's and the default instance's rows alone");
   for (const group of state.groups) {
     assert.deepEqual(Object.keys(group).sort(), ["can", "fullPath", "id", "name", "own", "repositories"]);
     assert.deepEqual(Object.keys(group.can).sort(), ["createSubgroup", "delete", "manageMembers", "rename"]);

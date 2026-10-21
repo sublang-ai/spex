@@ -913,6 +913,11 @@ function rowsUnder(state: GroupsState, origin: string, fullPath: string): [strin
   return (group?.repositories ?? []).map((repository) => [repository.key, repository.state, repository.instance]);
 }
 
+/** The keys of the rows the transitional mirror lists (space-30). */
+function mirrored(state: GroupsState): string[] {
+  return state.groups.flatMap((group) => group.repositories.map((repository) => repository.key));
+}
+
 /** Who each instance's `/api/v1/host/me` was asked by, counted: one per
  * read of it (git-host-5). */
 function meReads(host: StandinHost): number {
@@ -963,6 +968,10 @@ test("git-host-24, space-83, git-host-5, git-host-21: Refresh reads each instanc
   assert.deepEqual(rowsUnder(read, first.url, "acme"), [[alphaKey, "absent", first.url]]);
   assert.deepEqual(rowsUnder(read, second.url, "acme"), [[betaKey, "absent", second.url]]);
   assert.notEqual(hostFolder(first), hostFolder(second));
+  // The transitional mirror holds the default instance's rows alone: the
+  // second's, though its `acme` bears the first's id, stands under the
+  // second's heading and never there (space-30).
+  assert.ok(mirrored(read).includes(alphaKey) && !mirrored(read).includes(betaKey), JSON.stringify(mirrored(read)));
   await home.stop();
 
   // Restarted signed in to both, the first `space.get` begins one read
@@ -975,6 +984,9 @@ test("git-host-24, space-83, git-host-5, git-host-21: Refresh reads each instanc
   const fromStart = again.client.mark();
   const [initial] = await Promise.all([again.client.expectOk("space.get", {}), again.client.expectOk("space.get", {})]);
   assert.deepEqual(initial.instances.map((instance) => [instance.origin, instance.signedIn, instance.readAt]), [[first.url, true, null], [second.url, true, null]]);
+  // Before any read, the default instance and its transitional mirror
+  // both read the display name its entry recorded (storage-2, space-30).
+  assert.deepEqual([instanceOf(initial, first.url)?.displayName, initial.host.displayName], [HOST_NAME, HOST_NAME]);
   // The second answering 503, the first's view is held with its read
   // time and its rows, while the second reports its failure in its own
   // name, its heading kept with the display name its entry holds
@@ -1150,6 +1162,28 @@ test("space-29, git-host-4, git-host-10, space-6, space-64, space-63: space.sign
   assert.deepEqual(repositoryOf(signedOut, betaKey).sync, stopped.sync, "the second's stopped join stands");
 });
 
+test("storage-31, storage-30, space-1, space-30: in a home signed in to both instances, a clone the instances migration deferred, keeping its key outside every instance's folder and no remote, reads as the instance whose folder its destination names — the second's, not the default — under that instance's acme alone, and not in the transitional mirror", async (t) => {
+  const { first, second, home } = await twoInstances("deferred-of-two");
+  await home.stop();
+  // The receipt names the clone's destination under the second's folder.
+  const waiting = "acme/held-spex";
+  const deferred = await deferredClone(home.dataDir, hostFolder(second), waiting, hostKey(second, waiting));
+  try {
+    const again = await startHome("deferred-of-two-again", { dataDir: home.dataDir, project: false });
+    t.after(() => again.stop());
+    const from = again.client.mark();
+    await again.client.expectOk("space.get", {});
+    const state = await again.client.waitSpace(from, (candidate) => candidate.instances.every((instance) => instance.read.phase === "idle" && instance.readAt !== null), 30_000);
+    assert.ok(existsSync(join(deferred.clone, ".git")) && !existsSync(clonePath(home.dataDir, hostKey(second, waiting))), "deferred, it keeps its key");
+    const row = repositoryOf(state, waiting);
+    assert.deepEqual([row.instance, row.state, row.remote], [second.url, "local-only", null]);
+    assert.ok(rowsUnder(state, second.url, "acme").some(([key]) => key === waiting), "under the second's acme");
+    assert.ok(!rowsUnder(state, first.url, "acme").some(([key]) => key === waiting), "not under the first's");
+    assert.ok(!state.own.repositories.some((repository) => repository.key === waiting), "not under your own group");
+    assert.ok(!mirrored(state).includes(waiting), JSON.stringify(mirrored(state)));
+  } finally { await deferred.release(); }
+});
+
 /** Every Groups state and command result or refusal a client was sent
  * from `from` on (space-30, space-83). */
 function sentSince(messages: ServerMessage[], from: number): unknown[] {
@@ -1162,7 +1196,7 @@ function transportsOf(host: StandinHost, path: string, push?: boolean): { instan
   return host.script.transportCredentials.filter((entry) => entry.path.includes(`/${path}.git/`) && (push === undefined || entry.push === push)).map((entry) => ({ instance: entry.instance, push: entry.push }));
 }
 
-test("git-host-24, space-83, git-host-6, git-host-9, git-host-15, git-host-16, git-host-20, space-63, space-58, space-32, space-60, space-29, core-service-42: Join keys each instance's acme repository under its own folder; a project picked into the second's acme is created and pushed at the second alone, its Save commit bearing the second's login; a pick naming another instance than its key's is refused; a lease-held pick leaves the clone with its remote at the second until its next sync moves it; a group created and a member added reach the instance named alone, and a move into the other instance's group is refused before any request; nothing under either instance's URL is said", async (t) => {
+test("git-host-24, space-83, git-host-6, git-host-9, git-host-15, git-host-16, git-host-20, space-63, space-58, space-32, space-60, space-29, core-service-42: Join keys each instance's acme repository under its own folder; a project picked into the second's acme is created and pushed at the second alone, its Save commit bearing the second's login; a pick naming another instance than its key's is refused; a lease-held pick leaves the clone with its remote at the second until its next sync moves it; a group created and a member added reach the instance named alone, and a move into the other instance's group is refused before any request; nothing under either instance's URL is said; signed out of the second, its project's intent records no author", async (t) => {
   const { bob, first, second, alpha, beta, home, alphaKey, betaKey } = await twoInstances("each-at-its-instance");
   t.after(() => home.stop());
   const said = home.client.mark();
@@ -1303,6 +1337,11 @@ test("git-host-24, space-83, git-host-6, git-host-9, git-host-15, git-host-16, g
   const values = [...sentSince(home.client.messages, said), await home.client.expectOk("space.get", {})];
   assert.deepEqual(leaks(first, values), []);
   assert.deepEqual(leaks(second, values), []);
+
+  // Signed out of the second, an intent of its project records no
+  // author, though the first stays signed in (core-service-42).
+  await signOut(home, second);
+  assert.equal((await home.client.expectOk("intent.queue", { projectId: gammaKey, text: "Signed out there" })).author, undefined);
 });
 
 test("space-83, git-host-24, git-host-9, git-host-4, space-11, space-6: a credential the second refuses to a transport signs the second out alone before Git runs; space.signout of the first lists it signed out, its rows unreachable and their Sync refused naming the first's display name, while the second's stay reachable and sync with the second's credential", async (t) => {
@@ -1336,6 +1375,10 @@ test("space-83, git-host-24, git-host-9, git-host-4, space-11, space-6: a creden
   assert.deepEqual(pairs(), [first.url]);
   assert.equal(repositoryOf(out, alphaKey).state, "reachable");
   assert.deepEqual([repositoryOf(out, betaKey).state, repositoryOf(out, betaKey).reason], ["unreachable", "Sign in again"]);
+  // Its clone, which no read lists now, stands under the second's
+  // heading alone, never in the transitional mirror (space-30).
+  assert.deepEqual(rowsUnder(out, second.url, "acme"), [[betaKey, "unreachable", second.url]]);
+  assert.ok(mirrored(out).includes(alphaKey) && !mirrored(out).includes(betaKey), JSON.stringify(mirrored(out)));
   assert.equal(existsSync(clonePath(home.dataDir, hostKey(second, "acme/delta-spex"))), false, "nothing is cloned");
   assert.equal(second.script.transportCredentials.length, reachedSecond, "its transport is never reached");
   assert.equal(second.script.requests.filter((request) => request.path.includes("/delta-spex.git/")).length, 0);
