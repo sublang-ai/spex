@@ -5,7 +5,7 @@
 
 ## Status
 
-Planned (2026-10-20), after the home signs in to several instances.
+In progress (2026-10-21).
 
 ## Intent
 
@@ -13,7 +13,7 @@ Implement [DR-128](../decisions/128-a-spex-repository-placed-at-several-instance
 
 ## Deliverables
 
-- [ ] The `storage`, `space`, `git-host`, `environments` and `projects` packages state DR-128, and DR-128 reads Accepted.
+- [x] The `storage`, `space`, `git-host`, `environments` and `projects` packages state DR-128, and DR-128 reads Accepted.
 - [ ] Placements in the clone's configuration and the placement files as units, `placements/` among Spex's own paths, the first sync after the migration writing them.
 - [ ] The sync over placements with its catch-up, choices and notice per placement, Stop, the apply's version per placement, and the storage Git tool with the remote named.
 - [ ] Members, Share, removing a member and Move per placement; Place, Leave and Attach as operations; your own group placed at every instance; Forget and Leave on shared placements.

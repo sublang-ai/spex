@@ -14,7 +14,7 @@ Amends [DR-010](010-interface-craft.md) §5 in its duplicates for Space operatio
 Keeps [DR-036](036-file-state-store.md) whole, and [DR-108](108-the-root-lease-names-the-machine.md) whole in its leases: one process serves a home under the root lease, and Playbook's per-session lease names the one writer of a session's records, refusing a removal or a move of its clone while it names a live or unverifiable writer, the move's check adding no mechanism beyond that lease.
 Amended by [DR-116](116-playbook-17-8-0-slc-0-16-1-adoption.md) in its Playbook floor alone, now `^17.8.0`.
 Amends [DR-108](108-the-root-lease-names-the-machine.md) in its Playbook floor alone, now `^17.7.0`: the core requires Playbook 17.7.0 [[3]], whose session store, opened with `createSessionsDir: false`, makes neither a missing sessions folder nor an ancestor, which a removal, a moved clone and the apply's session writes rely on.
-Proposed to be amended by [DR-128](128-a-spex-repository-placed-at-several-instances.md) in "the version its Save step committed": each placement's apply writes against the clone's `spex` as the previous placement's merge left it.
+Amended by [DR-128](128-a-spex-repository-placed-at-several-instances.md) in "the version its Save step committed": each placement's apply writes against the clone's `spex` as the previous placement's merge left it.
 
 ## Context
 
