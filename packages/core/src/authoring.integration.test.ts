@@ -42,6 +42,7 @@ import type {
   ServerMessage,
 } from "./protocol.js";
 import { scratchDir } from "./testing/scratch.js";
+import { rowsOf } from "./testing/space-harness.js";
 import { startStandinRegistry, type StandinRegistry } from "./testing/standin-registry.js";
 
 // ---------------------------------------------------------------------------
@@ -2306,7 +2307,7 @@ test("core-service-97: a sync receiving a session's replaced transcript announce
     const after = client.messages.length;
     assert.deepEqual(await client.expectOk("space.sync", { repository: projectId }), { accepted: true });
     const phaseOf = (message: ServerMessage) => message.type === "space.state"
-      ? message.state.groups.flatMap((group) => group.repositories).find((repository) => repository.key === projectId)?.sync
+      ? rowsOf(message.state).find((repository) => repository.key === projectId)?.sync
       : undefined;
     const settled = await client.waitFor((message) => client.messages.indexOf(message) >= after && ["done", "stopped"].includes(phaseOf(message)?.phase ?? ""), 60_000);
     assert.equal(phaseOf(settled)?.phase, "done", JSON.stringify(phaseOf(settled)));
@@ -2357,7 +2358,7 @@ test("space-37: a sync taking the host's side of a transcript stops while this c
     const after = client.messages.length;
     assert.deepEqual(await client.expectOk("space.sync", { repository: projectId, ...(choices ? { choices } : {}) }), { accepted: true });
     const phaseOf = (message: ServerMessage) => message.type === "space.state"
-      ? message.state.groups.flatMap((group) => group.repositories).find((repository) => repository.key === projectId)?.sync
+      ? rowsOf(message.state).find((repository) => repository.key === projectId)?.sync
       : undefined;
     const settled = await client.waitFor((message) => client.messages.indexOf(message) >= after && ["done", "stopped", "choices"].includes(phaseOf(message)?.phase ?? ""), 60_000);
     return phaseOf(settled)!;

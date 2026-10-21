@@ -142,8 +142,9 @@ test("playbook-library-95: Publish reads the version with its link, a second hom
   // control's place (playbook-library-93).
   await open(page, app);
   await nav(page, "Groups").click();
-  await page.getByTestId("space-header").getByTestId("space-signout").click();
-  await expect(page.getByTestId("space-header").getByTestId("space-account")).toContainText("Not signed in");
+  const instance = page.getByTestId(`space-instance-${host.url}`);
+  await instance.getByTestId("space-signout").click();
+  await expect(instance.getByTestId("space-signin-again")).toHaveText("Sign in again");
   await openEnableTab(page);
   await expect(page.getByTestId("publish").getByTestId("publish-signin")).toHaveText("Sign in to publish");
   await expect(page.getByTestId("publish-button")).toHaveCount(0);

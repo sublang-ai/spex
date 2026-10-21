@@ -19,7 +19,7 @@ import { createSessionStore } from "@sublang/playbook/session-store";
 import { seedHistorySession } from "./testing/demo.js";
 import { Home } from "./home.js";
 import type { Command } from "./protocol.js";
-import { clonePath, createSpaceHarness, OWN, OWN_KEY, ownClone, prefsOf, repositoryOf } from "./testing/space-harness.js";
+import { clonePath, createSpaceHarness, OWN, OWN_KEY, ownClone, prefsOf, repositoryOf, rowsOf } from "./testing/space-harness.js";
 
 const fixture = createSpaceHarness();
 const { scratch, git, bareRepo, gitFolder, addFolder, sleepingSsh, holdingGit, sleep, sleeperPid, hangingCompileSpawner, COMPILE_INPUT, startHome, runTurn, peerClone, peerPush, turnRecords } = fixture;
@@ -35,14 +35,11 @@ test("space-37: a fresh home lists your own group alone with its own repository,
   const state = await home.client.expectOk("space.get", {});
   assert.ok(state.git.ok);
   assert.equal(state.home, home.dataDir);
-  assert.equal(state.account, null);
+  assert.deepEqual(state.instances, [], "no instance listed");
   assert.deepEqual(state.signIn, { phase: "idle" });
-  assert.equal(state.readAt, null);
-  assert.equal(state.groups.length, 1, "your own group alone");
-  const [group] = state.groups;
-  assert.deepEqual({ id: group.id, fullPath: group.fullPath, name: group.name, own: group.own }, { id: null, fullPath: OWN, name: OWN, own: true });
-  assert.deepEqual(group.repositories.map((repository) => repository.key), [OWN_KEY]);
-  const own = group.repositories[0];
+  assert.equal(state.own.name, OWN, "your own group alone");
+  assert.deepEqual(state.own.repositories.map((repository) => repository.key), [OWN_KEY]);
+  const own = state.own.repositories[0];
   assert.equal(own.name, `${OWN}-spex`);
   assert.equal(own.own, true);
   assert.equal(own.state, "local-only");
@@ -72,8 +69,8 @@ test("space-37: a working folder added pairs with a local-only spex repository w
   assert.equal(key, `${OWN}/${basename(home.projectDir)}-spex`);
   assert.deepEqual(project.repository, { key, name: `${basename(home.projectDir)}-spex`, group: OWN, own: true });
   const state = await home.client.expectOk("space.get", {});
-  assert.deepEqual(state.groups.map((group) => group.fullPath), [OWN]);
-  assert.deepEqual(state.groups[0].repositories.map((repository) => repository.key), [OWN_KEY, key], "your own group's repository first");
+  assert.deepEqual([state.own.name, state.instances], [OWN, []]);
+  assert.deepEqual(state.own.repositories.map((repository) => repository.key), [OWN_KEY, key], "your own group's repository first");
   const row = repositoryOf(state, key);
   assert.equal(row.state, "local-only");
   assert.equal(row.own, false);
@@ -392,7 +389,7 @@ test("space-37: a Sync asked while a check stands held makes no Save commit unti
   const accepted = Date.now();
   while (Date.now() - accepted < 3_000) {
     assert.equal(git(clone, "rev-parse", "HEAD"), before, "no Save commit while the check stands");
-    const syncing = home.client.messages.slice(from).some((message) => message.type === "space.state" && message.state.groups.some((group) => group.repositories.some((repository) => repository.key === key && repository.sync.phase === "running" && repository.sync.op === "sync")));
+    const syncing = home.client.messages.slice(from).some((message) => message.type === "space.state" && rowsOf(message.state).some((repository) => repository.key === key && repository.sync.phase === "running" && repository.sync.op === "sync"));
     assert.equal(syncing, false, "the sync has not begun while the check runs");
     await sleep(100);
   }

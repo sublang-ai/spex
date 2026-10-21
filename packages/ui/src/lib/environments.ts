@@ -19,6 +19,7 @@ import type {
 } from "@sublang/spex-core/protocol";
 
 import { i18n } from "../i18n.js";
+import { allRepositories } from "./instances.js";
 
 /** A spec package's name, `<org>/<pkg>` in lowercase kebab-case
  * (DR-104), as `environment.request` takes it. */
@@ -38,17 +39,13 @@ export function chosenProject(
   return projects.find((project) => project.id === currentProjectId) ?? projects[0];
 }
 
-/** Your own group's spex repository: as Space reads it, else as the
- * playbook list names it. */
+/** Your own group's spex repository: as Space reads it under your own
+ * group (space-1), else as the playbook list names it. */
 export function ownRepositoryKey(
   space: GroupsState | undefined,
   own: readonly PlaybookAvailability[] | undefined,
 ): string | undefined {
-  for (const group of space?.groups ?? []) {
-    const repository = group.repositories.find((entry) => entry.own);
-    if (repository) return repository.key;
-  }
-  return own?.[0]?.repository;
+  return space?.own.repositories.find((entry) => entry.own)?.key ?? own?.[0]?.repository;
 }
 
 /** One spex repository as Space last read it. */
@@ -56,12 +53,8 @@ export function repositoryOf(
   space: GroupsState | undefined,
   key: string | undefined,
 ): RepositoryState | undefined {
-  if (!key) return undefined;
-  for (const group of space?.groups ?? []) {
-    const repository = group.repositories.find((entry) => entry.key === key);
-    if (repository) return repository;
-  }
-  return undefined;
+  if (!key || !space) return undefined;
+  return allRepositories(space).find((entry) => entry.key === key);
 }
 
 /** What the core is doing to an environment, as its line reads. */

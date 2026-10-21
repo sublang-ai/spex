@@ -21,6 +21,7 @@ import {
 } from "../state/dashboard.js";
 import { useAppStore } from "../state/store.js";
 import { i18n } from "../i18n.js";
+import { allRepositories, anySignedIn, pickInstances } from "../lib/instances.js";
 import { Icon } from "./Icon.js";
 import { GroupPicker } from "./SpaceGroups.js";
 
@@ -86,8 +87,8 @@ export function ProjectPalette(props: ProjectPaletteProps) {
   const space = useAppStore((state) => state.space);
   const loadSpace = useAppStore((state) => state.loadSpace);
   const connected = useAppStore((state) => state.connection === "open");
-  const pickingRepo = picking
-    ? space?.groups.flatMap((group) => group.repositories).find((repository) => repository.key === picking)
+  const pickingRepo = picking && space
+    ? allRepositories(space).find((repository) => repository.key === picking)
     : undefined;
   // A repository that left the Groups state while asked — moved after
   // its pick — has nothing left to ask.
@@ -153,21 +154,23 @@ export function ProjectPalette(props: ProjectPaletteProps) {
   }
 
   /** A folder added (projects-1): it becomes the current project, and
-   * where the home is signed in and the folder newly paired, its
-   * local-only spex repository asks for its group in place (space-58);
-   * otherwise the palette closes. */
+   * where the home is signed in to any instance and the folder newly
+   * paired, its local-only spex repository asks for its group in place,
+   * offering each signed-in instance it may go to (space-58); otherwise
+   * the palette closes. */
   async function added(project: ProjectInfo, known: boolean): Promise<void> {
     props.onPick(project.id);
     const key = project.repository.key;
     const row = (): RepositoryState | undefined => {
       const groups = useAppStore.getState().space;
-      return groups?.account
-        ? groups.groups.flatMap((group) => group.repositories).find((repository) => repository.key === key)
+      return groups && anySignedIn(groups)
+        ? allRepositories(groups).find((repository) => repository.key === key)
         : undefined;
     };
     if (!known && !row()) await loadSpace().catch(() => {});
     const repo = known ? undefined : row();
-    if (repo && repo.state === "local-only" && !repo.waiting) {
+    const current = useAppStore.getState().space;
+    if (repo && repo.state === "local-only" && !repo.waiting && current && pickInstances(current, repo).length > 0) {
       setPicking(key);
       return;
     }

@@ -203,12 +203,12 @@ test("the core signs in by the device flow and runs Git's helper on the shell's 
       });
     });
     await opened;
-    const command = (type: string, id: string) =>
+    const command = (type: string, id: string, fields: Record<string, unknown> = {}) =>
       new Promise<{ ok: boolean; result?: unknown }>((resolveReply) => {
         replies.set(id, resolveReply);
-        socket.send(JSON.stringify({ type, id }));
+        socket.send(JSON.stringify({ type, id, ...fields }));
       });
-    const started = await command("space.signin.start", "s1");
+    const started = await command("space.signin.start", "s1", { url: host.url });
     assert.ok(started.ok, JSON.stringify(started));
     const flow = started.result as { flow: string; userCode?: string; verificationUri?: string };
     assert.equal(flow.flow, "device");

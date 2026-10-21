@@ -1,36 +1,52 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The groups list of the Groups surface (space-1, space-61, DR-103):
-// your own group first, then every group the host lists, each with its
-// spex repositories as rows. A row reads the repository's name, where
-// its code lives, its reachability, its local changes, ahead and behind
-// and its last sync, and carries the one control its state offers —
-// Sync, Join, Pick a group, Retry — with Members on a
-// reachable row. What a control opens stands in place beneath its row:
-// the group picker (space-58), the folder a Join clones into
-// (space-63), the members the host reports (space-62), the first-push
-// notice (space-57) and the joining of unrelated histories (space-13);
-// a pick joining a repository others may share says the same notice in
-// the picker first.
-// Signed in, "New group" heads the list where the host lets the person
-// create one, and where it says not, the one phrase naming who makes
-// groups, with no link and no control (DR-120); a group of the host
-// carries Members and, where the host lets them, "New subgroup",
-// "Rename" and — while the list holds nothing under it — "Delete" on its
-// heading (space-68, space-76, space-77, DR-114); your own group's
-// heading carries none of these, nor does another account's login. A
-// row the host lets the person move carries "Move to another group"
-// (space-78). No part of the list links a page of the host, or names
-// what stands behind the instance (space-1). Every act is a command
-// whose outcome arrives as state (space-29).
+// The groups list of the Groups surface (space-1, space-61, DR-103,
+// DR-127): your own group first, then each instance the home lists
+// under its heading (SpaceInstance) — every group it lists in the order
+// of their paths, your namespace there headed by your login, and every
+// other account's login under which it lists a spex repository — each
+// with its spex repositories as rows. A row reads the repository's
+// name, where its code lives, its reachability, its local changes,
+// ahead and behind and its last sync, and carries the one control its
+// state offers — Sync, Join, Pick a group, Retry — with Members on a
+// reachable row whose instance is signed in, each read from the
+// instance governing it. What a control opens stands in place beneath
+// its row: the group picker, one section per instance it offers
+// (space-58), the folder a Join clones into (space-63), the members the
+// host reports (space-62), the first-push notice (space-57) and the
+// joining of unrelated histories (space-13); a pick joining a
+// repository others may share says the same notice in the picker first.
+// A group an instance lists carries, while signed in there, Members and,
+// where its read lets the person, "New subgroup", "Rename" and — while
+// the list holds nothing under it — "Delete" on its heading (space-68,
+// space-76, space-77, DR-114); your own group's heading carries none of
+// these, nor does a namespace. A row the instance lets the person move
+// carries "Move to another group", offering the groups of the instance
+// the row stands under alone (space-78). While the home lists any
+// instance, "Add instance…" at the list's foot opens the sign-in card in
+// its place (space-1, space-3). No part of the list links a
+// page of the host, or names what stands behind the instance (space-1).
+// Every act is a command whose outcome arrives as state (space-29).
 
-import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
-import type { GroupsState, RepositoryState } from "@sublang/spex-core/protocol";
+import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import type { GroupsState, InstanceGroupState, InstanceState, RepositoryState } from "@sublang/spex-core/protocol";
 
 import { useAppStore } from "../state/store.js";
 import { i18n } from "../i18n.js";
-import { absoluteTitle, relativeAge } from "../lib/time.js";
+import {
+  anySignedIn,
+  entriesOf,
+  governingOf,
+  groupTestKey,
+  instanceName,
+  instanceOf,
+  namespaceOf,
+  ownBeside,
+  pickInstances,
+  placementOf,
+} from "../lib/instances.js";
+import { absoluteTitle } from "../lib/time.js";
 import {
   STEP_LINES,
   STEP_NAMES,
@@ -45,18 +61,30 @@ import {
 } from "../lib/space.js";
 import { Icon } from "./Icon.js";
 import { InlineConfirm } from "./InlineConfirm.js";
+import { AddInstance, InstanceSection } from "./SpaceInstance.js";
 import { GroupNameEditor, MembersPanel } from "./SpaceMembers.js";
-import { siteName } from "./SpaceSignIn.js";
+import type { SignInFlow } from "./SpaceSignIn.js";
 import { SECONDARY, syncRefusal, type Note } from "./SpaceSurface.js";
 
-type Group = GroupsState["groups"][number];
+/** An entry's identity under its instance's heading (space-1, DR-127):
+ * a group by its id, a namespace by its login, a group no read lists by
+ * its path. */
+function entryKey(group: InstanceGroupState): string {
+  return group.id !== null ? `id:${group.id}` : group.login !== null ? `@${group.login}` : `path:${group.fullPath}`;
+}
 
-/** A group entry's identity in the list (space-1, DR-120): your own
- * once, a group of the host by its id, another account's login or a
- * group no read lists by its path — never the path alone, which your
- * own group and a group named like your login share. */
-export function groupKey(group: Group): string {
-  return group.own ? "own" : group.id !== null ? `id:${group.id}` : `path:${group.fullPath}`;
+/** Your own group as an entry of the list (space-1): its folder's name
+ * and its rows, with nothing a read lets the person do there. */
+function ownEntry(groups: GroupsState): InstanceGroupState {
+  return {
+    id: null,
+    login: null,
+    mine: false,
+    fullPath: groups.own.name,
+    name: groups.own.name,
+    can: { createSubgroup: false, manageMembers: false, rename: false, delete: false },
+    repositories: groups.own.repositories,
+  };
 }
 
 /** A repository's dot carries the status palette (DR-010 §8): neutral
@@ -99,10 +127,29 @@ export function statusDot(repo: RepositoryState): { className: string; tone: str
  * (space-11). */
 const isPathRemote = (url: string | null): boolean => url !== null && url.startsWith("/");
 
+/** Whether the instance governing a row is signed out (space-61): a
+ * path remote is reached without one, and a row no instance governs
+ * waits while the home is signed in nowhere. */
+function signedOutFor(groups: GroupsState, repo: RepositoryState, governing: InstanceState | undefined): boolean {
+  if (isPathRemote(repo.remote)) return false;
+  return governing ? !governing.signedIn : !anySignedIn(groups);
+}
+
 /** Why Sync is refused before its first step on this row (space-11):
- * the surface's own reasons, the account's first. */
-export function rowSyncRefusal(groups: GroupsState, repo: RepositoryState): string | undefined {
-  if (!groups.account && !isPathRemote(repo.remote)) return i18n._("Sign in first");
+ * the surface's own reasons, its instance's sign-in first, named by its
+ * display name as last read, else its host name. */
+export function rowSyncRefusal(
+  groups: GroupsState,
+  repo: RepositoryState,
+  governing: InstanceState | undefined,
+): string | undefined {
+  if (governing && signedOutFor(groups, repo, governing)) {
+    return i18n._({
+      id: "Sign in to {host} first",
+      values: { host: instanceName(governing) },
+      comment: "beside a disabled Sync: the row's instance is signed out; {host} its display name, or its host name before any read",
+    });
+  }
   return syncRefusal(groups, repo);
 }
 
@@ -125,20 +172,27 @@ const continueLabel = (): string =>
 /** The control a row's state offers (space-61). */
 type RowControl = "sync" | "unrelated" | "pick" | "retry" | "join" | "none";
 
-function rowControl(groups: GroupsState, group: Group, repo: RepositoryState): RowControl {
+function rowControl(
+  groups: GroupsState,
+  group: InstanceGroupState,
+  repo: RepositoryState,
+  governing: InstanceState | undefined,
+): RowControl {
   switch (repo.state) {
     case "absent":
       return "join";
     case "local-only":
-      // Signing in is the header's alone (space-3).
-      if (!groups.account) return "none";
       // A group's own spex repository is made by sign-in or its first
-      // session (space-4, space-65); only a project's is picked for.
-      return isGroupRepository(group, repo) ? "none" : "pick";
+      // session (space-4, space-65); only a project's is picked for, and
+      // only while an instance the pick would offer is signed in
+      // (space-58).
+      if (isGroupRepository(group, repo)) return "none";
+      return pickInstances(groups, repo).length > 0 ? "pick" : "none";
     case "unreachable":
-      // Signed out, a repository the host holds waits for the header's
-      // Sign in; a path or a refused read is read once more.
-      return !groups.account && !isPathRemote(repo.remote) ? "none" : "retry";
+      // While its instance is signed out, a repository there waits for
+      // that heading's "Sign in again" (space-3); a path or a refused
+      // read is read once more.
+      return signedOutFor(groups, repo, governing) ? "none" : "retry";
     case "reachable":
     case "read-only":
       return repo.sync.phase === "unrelated" || repo.branch?.unrelated === true ? "unrelated" : "sync";
@@ -147,16 +201,18 @@ function rowControl(groups: GroupsState, group: Group, repo: RepositoryState): R
   }
 }
 
-/** The groups list (space-1): "New group" at its head where the host
- * lets the person create one, the phrase naming who makes groups where
- * it says not, then each group with its path and, under it, one row per
- * spex repository in the core's order. */
+/** The groups list (space-1): your own group first, then each instance
+ * the home lists under its heading in the home's order, its entries in
+ * the order the heading lists them, under each one row per spex
+ * repository in the core's order; while it lists any instance, "Add
+ * instance…" at its foot. */
 export function GroupsList({
   groups,
   now,
   selected,
   connected,
   refreshes,
+  signIn,
   onSelect,
   onNote,
 }: {
@@ -166,116 +222,97 @@ export function GroupsList({
   connected: boolean;
   /** How many times the reader's own Refresh has re-read the state. */
   refreshes: number;
+  signIn: SignInFlow;
   onSelect(key: string): void;
   onNote: Note;
 }) {
+  const section = (group: InstanceGroupState, instance?: InstanceState) => (
+    <GroupSection
+      key={instance ? entryKey(group) : "own"}
+      groups={groups}
+      instance={instance}
+      group={group}
+      now={now}
+      selected={selected}
+      connected={connected}
+      refreshes={refreshes}
+      onSelect={onSelect}
+      onNote={onNote}
+    />
+  );
   return (
     <section
       data-testid="space-groups"
       aria-label={i18n._({ id: "Your groups", comment: "the list of the home's groups and their spex repositories" })}
       className="flex flex-col gap-3"
     >
-      {groups.account?.canCreateGroup ? (
-        <NewGroup connected={connected} onNote={onNote} />
-      ) : groups.account && groups.readAt !== null ? (
-        <GroupsMadeBy groups={groups} />
-      ) : null}
-      {groups.groups.map((group) => (
-        <GroupSection
-          key={groupKey(group)}
-          groups={groups}
-          group={group}
+      {section(ownEntry(groups))}
+      {groups.instances.map((instance) => (
+        <InstanceSection
+          key={instance.origin}
+          instance={instance}
           now={now}
-          selected={selected}
           connected={connected}
-          refreshes={refreshes}
-          onSelect={onSelect}
+          signIn={signIn}
           onNote={onNote}
-        />
+        >
+          {entriesOf(instance).map((group) => section(group, instance))}
+        </InstanceSection>
       ))}
+      {groups.instances.length > 0 ? (
+        // The list's foot: another instance to sign in to (space-1,
+        // space-3), its card stacking within its own width (space-28).
+        <div className="@container flex min-w-0 flex-col border-t border-neutral-200 pt-3 dark:border-neutral-800">
+          <AddInstance groups={groups} connected={connected} signIn={signIn} />
+        </div>
+      ) : null}
     </section>
   );
 }
 
-/** "New group" at the list's head (space-1, space-68): a group at the
- * top of the host, named in place. */
-function NewGroup({ connected, onNote }: { connected: boolean; onNote: Note }) {
-  const [open, setOpen] = useState(false);
-  const controlRef = useRef<HTMLButtonElement>(null);
-  return (
-    <div className="flex min-w-0 flex-col gap-1">
-      <button
-        ref={controlRef}
-        type="button"
-        data-testid="space-new-group"
-        aria-expanded={open}
-        className={`${SECONDARY} self-start whitespace-nowrap`}
-        disabled={!connected}
-        onClick={() => setOpen((was) => !was)}
-      >
-        {i18n._({ id: "New group", comment: "create a group on the Git host" })}
-      </button>
-      {open ? (
-        <GroupNameEditor
-          testId="space-new-group-editor"
-          parent={null}
-          connected={connected}
-          onClose={() => {
-            setOpen(false);
-            // Closing never strands focus (DR-010 §6).
-            setTimeout(() => controlRef.current?.focus(), 0);
-          }}
-          onNote={onNote}
-        />
-      ) : null}
-    </div>
-  );
+/** How an entry reads on its heading (space-1). Your own group is called
+ * so, never by a folder's or this device's user name; its path shows
+ * once the home has been at an instance, and until then the key phrase
+ * says it will. A namespace reads its login; a group's path stands
+ * beside its name only where the two differ. */
+function groupReading(
+  groups: GroupsState,
+  group: InstanceGroupState,
+  instance: InstanceState | undefined,
+): { name: string; beside: string | null } {
+  if (!instance) {
+    return {
+      name: i18n._("Your own group"),
+      beside: ownBeside(groups)
+        ? i18n._({
+            id: "named after your login at sign-in",
+            comment: "beside the heading 'Your own group' before sign-in: its name and path come from the login",
+          })
+        : group.fullPath,
+    };
+  }
+  if (group.login !== null) return { name: group.login, beside: null };
+  return { name: group.name, beside: group.fullPath !== group.name ? group.fullPath : null };
 }
 
-/** Where the host's read says the person may not create a group, the
- * one phrase naming who makes groups in this instance, with no link and
- * no control (space-1, DR-120); the caller shows it only once a read is
- * held. */
-function GroupsMadeBy({ groups }: { groups: GroupsState }) {
-  return (
-    <p data-testid="space-groups-made-by" className="min-w-0 text-xs text-neutral-500">
-      {i18n._({
-        id: "Groups are made by the people who run {name}",
-        comment: "the groups list's head where the person may not create a group; {name} is the instance's display name; no link, no control",
-        values: { name: groups.host.displayName ?? siteName(groups) },
-      })}
-    </p>
-  );
+/** How an instance's entry reads in a picker (space-58, space-78), as
+ * the list reads it (space-1): a namespace by its login alone, a group
+ * by its name with its path in the instance beside it where the two
+ * differ. */
+function entryReading(entry: InstanceGroupState): { name: string; beside: string | null } {
+  const name = entry.login ?? entry.name;
+  return { name, beside: entry.login === null && entry.fullPath !== name ? entry.fullPath : null };
 }
 
-/** How a group reads (space-1), on its heading and in the picker
- * (space-58) alike. Your own group is called so, never by a folder's or
- * this device's user name; its path shows once the host names it, and
- * until then the key phrase says it will. A group's path stands beside
- * its name only where the two differ. */
-function groupReading(groups: GroupsState, group: Group): { name: string; beside: string | null } {
-  const name = group.own ? i18n._("Your own group") : group.name;
-  const beside =
-    group.own && !groups.account
-      ? i18n._({
-          id: "named after your login at sign-in",
-          comment: "beside the heading 'Your own group' before sign-in: its name and path come from the login",
-        })
-      : group.fullPath !== name
-        ? group.fullPath
-        : null;
-  return { name, beside };
-}
-
-/** A group as a picker names it (space-58, space-78): read as its
- * heading reads (space-1), its name, then its path after the separator
- * where the two differ — the separator the eye's, so the option's name
- * says the group's name first. */
-function GroupOptionLabel({ groups, group }: { groups: GroupsState; group: Group }) {
-  const { name, beside } = groupReading(groups, group);
+/** An instance's entry as a picker names it (space-58, space-78): its
+ * name, then its path after the separator where the two differ — the
+ * separator the eye's, so the option's name says the group's name
+ * first. */
+function GroupOptionLabel({ entry }: { entry: InstanceGroupState }) {
+  const { name, beside } = entryReading(entry);
   return (
     <>
-      <span className="min-w-0 truncate" title={group.fullPath}>
+      <span className="min-w-0 truncate" title={entry.fullPath}>
         {name}
       </span>
       {beside !== null ? " " : null}
@@ -290,21 +327,25 @@ function GroupOptionLabel({ groups, group }: { groups: GroupsState; group: Group
 }
 
 /** Whether the list holds a spex repository under a group or a group
- * inside it (space-1): only an empty group offers Delete. */
-function holdsAnything(groups: GroupsState, group: Group): boolean {
+ * inside it at its instance (space-1): only an empty group offers
+ * Delete. */
+function holdsAnything(instance: InstanceState, group: InstanceGroupState): boolean {
   if (group.repositories.length > 0) return true;
   const inside = `${group.fullPath}/`.toLowerCase();
-  return groups.groups.some((other) => other !== group && other.fullPath.toLowerCase().startsWith(inside));
+  return instance.groups.some((other) => other !== group && other.fullPath.toLowerCase().startsWith(inside));
 }
 
-/** One group (space-1): its heading — with Members and, where the
- * host lets the person, "New subgroup", "Rename" and, on an empty
- * group, "Delete" on a group of the host, your own group's and another
- * account's login's carrying none (DR-114, DR-120) — and its
- * repositories' rows. What a heading's control opens stands beneath
- * the heading. */
+/** One entry of the list (space-1): your own group, where `instance`
+ * is none, or a group, your namespace or another account's login under
+ * an instance's heading. Its heading — with Members and, where the
+ * instance lets the person, "New subgroup", "Rename" and, on an empty
+ * group, "Delete" on a group of a signed-in instance, your own group's
+ * and a namespace's carrying none (DR-114, DR-120) — and its
+ * repositories' rows. What a heading's control opens stands beneath the
+ * heading; a group's command names its instance (space-29). */
 function GroupSection({
   groups,
+  instance,
   group,
   now,
   selected,
@@ -314,7 +355,10 @@ function GroupSection({
   onNote,
 }: {
   groups: GroupsState;
-  group: Group;
+  /** The instance whose heading the entry stands under; none for your
+   * own group. */
+  instance?: InstanceState;
+  group: InstanceGroupState;
   now: number;
   selected?: string;
   connected: boolean;
@@ -326,15 +370,22 @@ function GroupSection({
   const [opened, setOpened] = useState<"members" | "subgroup" | "rename" | "delete">();
   const [deleting, setDeleting] = useState(false);
   const [refusal, setRefusal] = useState<string>();
+  const refusalId = useId();
   const membersRef = useRef<HTMLButtonElement>(null);
   const subgroupRef = useRef<HTMLButtonElement>(null);
   const renameRef = useRef<HTMLButtonElement>(null);
   const deleteRef = useRef<HTMLButtonElement>(null);
-  const { name, beside } = groupReading(groups, group);
+  const { name, beside } = groupReading(groups, group, instance);
   // Your own group takes no subgroup and no member: what is there is
-  // shared on its spex repositories (DR-114); another account's login,
-  // listed by no id, takes nothing either (DR-120).
-  const hostGroup = groups.account !== null && !group.own && group.id !== null ? group.id : null;
+  // shared on its spex repositories (DR-114); a namespace, listed by no
+  // id, takes nothing either (DR-120); nothing is offered at an instance
+  // signed out.
+  const hostGroup = instance?.signedIn && group.id !== null ? group.id : null;
+  const own = instance === undefined;
+  const testKey = own ? "own" : groupTestKey(group);
+  // Your own group heads the list; an instance's entries stand under its
+  // heading (space-1).
+  const Heading = own ? "h2" : "h3";
   const close = (ref: { current: HTMLButtonElement | null }) => {
     setOpened(undefined);
     // Closing never strands focus (DR-010 §6).
@@ -345,21 +396,21 @@ function GroupSection({
     setOpened((was) => (was === which ? undefined : which));
   };
   const membersLabel = i18n._({ id: "Members", comment: "list the people the host lets read a spex repository" });
-  // Delete stands only where the host lets the person and the list holds
-  // nothing under the group (space-1).
-  const deletable = hostGroup !== null && group.can.delete && !holdsAnything(groups, group);
+  // Delete stands only where the instance lets the person and the list
+  // holds nothing under the group there (space-1).
+  const deletable = hostGroup !== null && instance !== undefined && group.can.delete && !holdsAnything(instance, group);
 
   /** Delete the group (space-77): the heading's control reads
    * "Deleting…" until the reply; the group leaves the list as the core
    * holds it gone, and a refusal stands beneath the heading, the group
    * kept. */
   const remove = async () => {
-    if (hostGroup === null) return;
+    if (hostGroup === null || !instance) return;
     setOpened(undefined);
     setDeleting(true);
     setRefusal(undefined);
     try {
-      await spaceGroupDelete(hostGroup);
+      await spaceGroupDelete(instance.origin, hostGroup);
     } catch (cause) {
       const message = (cause as Error).message;
       setRefusal(message);
@@ -373,15 +424,15 @@ function GroupSection({
   return (
     <div
       role="group"
-      aria-label={group.own ? name : group.fullPath}
-      data-testid={`space-group-${group.fullPath}`}
+      aria-label={own ? name : group.login ?? group.fullPath}
+      data-testid={own ? "space-own" : `space-group-${testKey}`}
       className="@container flex min-w-0 flex-col gap-1"
     >
       {/* The name owns the slack; where the heading's controls leave it
           too little, they wrap beneath it (DR-041). */}
       <div className="flex min-w-0 flex-wrap items-center gap-1">
-        <h2 className="flex min-w-24 flex-1 basis-0 items-baseline gap-2 text-sm font-medium">
-          <span className="min-w-0 truncate" title={group.own && !groups.account ? undefined : group.fullPath}>
+        <Heading className="flex min-w-24 flex-1 basis-0 items-baseline gap-2 text-sm font-medium">
+          <span className="min-w-0 truncate" title={own && ownBeside(groups) ? undefined : group.fullPath}>
             {name}
           </span>
           {/* What stands beside the name follows a separator, so a
@@ -391,7 +442,7 @@ function GroupSection({
           {beside !== null ? " " : null}
           {beside !== null ? (
             <span
-              data-testid={`space-heading-beside-${group.fullPath}`}
+              data-testid={`space-heading-beside-${testKey}`}
               className="min-w-0 truncate text-xs font-normal text-neutral-500"
               title={beside}
             >
@@ -399,7 +450,7 @@ function GroupSection({
               {beside}
             </span>
           ) : null}
-        </h2>
+        </Heading>
         {hostGroup !== null ? (
           <button
             ref={membersRef}
@@ -450,7 +501,7 @@ function GroupSection({
             type="button"
             data-testid={`space-group-delete-${group.fullPath}`}
             aria-expanded={opened === "delete"}
-            aria-describedby={refusal ? `space-group-refusal-${group.fullPath}` : undefined}
+            aria-describedby={refusal ? refusalId : undefined}
             className={`${SECONDARY} shrink-0 whitespace-nowrap`}
             disabled={!connected || deleting}
             onClick={() => toggle("delete")}
@@ -474,7 +525,7 @@ function GroupSection({
       ) : null}
       {refusal ? (
         <p
-          id={`space-group-refusal-${group.fullPath}`}
+          id={refusalId}
           data-testid={`space-group-refusal-${group.fullPath}`}
           role="alert"
           className="ml-6 min-w-0 text-xs text-red-600 dark:text-red-400"
@@ -482,10 +533,11 @@ function GroupSection({
           {refusal}
         </p>
       ) : null}
-      {opened === "rename" && hostGroup !== null ? (
+      {opened === "rename" && hostGroup !== null && instance ? (
         <div className="ml-6 min-w-0">
           <GroupNameEditor
             testId={`space-rename-${group.fullPath}`}
+            instance={instance.origin}
             parent={null}
             rename={{ group: hostGroup, name: group.name, path: lastSegment(group.fullPath) }}
             connected={connected}
@@ -494,10 +546,11 @@ function GroupSection({
           />
         </div>
       ) : null}
-      {opened === "subgroup" && hostGroup !== null ? (
+      {opened === "subgroup" && hostGroup !== null && instance ? (
         <div className="ml-6 min-w-0">
           <GroupNameEditor
             testId={`space-subgroup-${group.fullPath}`}
+            instance={instance.origin}
             parent={hostGroup}
             connected={connected}
             onClose={() => close(subgroupRef)}
@@ -505,10 +558,10 @@ function GroupSection({
           />
         </div>
       ) : null}
-      {opened === "members" && hostGroup !== null ? (
+      {opened === "members" && hostGroup !== null && instance ? (
         <MembersPanel
-          groups={groups}
-          target={{ group: hostGroup }}
+          instance={instance}
+          target={{ instance: instance.origin, group: hostGroup }}
           id={`group:${group.fullPath}`}
           name={group.fullPath}
           canManage={group.can.manageMembers}
@@ -526,6 +579,7 @@ function GroupSection({
             <RepositoryRow
               key={repo.key}
               groups={groups}
+              instance={instance}
               group={group}
               repo={repo}
               now={now}
@@ -549,6 +603,7 @@ type Opened = "pick" | "join" | "folder" | "members" | "notice" | "unrelated" | 
  * row's control keeps its accessible name at every width. */
 function RepositoryRow({
   groups,
+  instance,
   group,
   repo,
   now,
@@ -559,7 +614,10 @@ function RepositoryRow({
   onNote,
 }: {
   groups: GroupsState;
-  group: Group;
+  /** The instance whose heading the row stands under; none under your
+   * own group. */
+  instance?: InstanceState;
+  group: InstanceGroupState;
   repo: RepositoryState;
   now: number;
   selected: boolean;
@@ -593,7 +651,10 @@ function RepositoryRow({
     if (accepted && accepted.key !== machineKey) setAccepted(undefined);
   }, [accepted, machineKey]);
 
-  const control = rowControl(groups, group, repo);
+  // The instance governing the row, as the core names it, else its own
+  // (space-1, space-61).
+  const governing = governingOf(groups, repo);
+  const control = rowControl(groups, group, repo, governing);
   const groupRepository = isGroupRepository(group, repo);
   const close = (focus: "control" | "members" | "folder" | "move" = "control") => {
     setOpened(undefined);
@@ -620,14 +681,18 @@ function RepositoryRow({
     }
   };
 
-  /** Join a repository the host lists into a folder (space-63). */
+  /** Join a repository an instance lists into a folder (space-63), at
+   * the instance whose heading the row stands under (space-29), else
+   * the one the row names: a row not on this device stands under the
+   * instance whose read lists it. */
   const join = async (folder: string): Promise<void> => {
-    if (!repo.id) return;
+    const at = instance?.origin ?? repo.instance;
+    if (!repo.id || !at) return;
     const key = machineKey;
     setBusy("join");
     setError(undefined);
     try {
-      await spaceJoin(repo.id, folder);
+      await spaceJoin(at, repo.id, folder);
       setAccepted({ op: "join", key });
       setOpened(undefined);
     } catch (cause) {
@@ -707,7 +772,7 @@ function RepositoryRow({
 
   const disabled = !connected;
   const pending = busy !== undefined || accepted !== undefined || running;
-  const refusal = control === "sync" || control === "unrelated" ? rowSyncRefusal(groups, repo) : undefined;
+  const refusal = control === "sync" || control === "unrelated" ? rowSyncRefusal(groups, repo, governing) : undefined;
   // The first push into a repository others share says once what goes
   // there (space-57); one whose only member is the account says nothing,
   // and one whose count the host's read lacks, never synced from here,
@@ -785,7 +850,9 @@ function RepositoryRow({
           ? i18n._({ id: "Retrying…", comment: "the Retry control, while the retry is in flight" })
           : i18n._({ id: "Retry", comment: "run the stopped step again" }),
         {
-          title: i18n._("Reads the host again"),
+          // Retry reads every signed-in instance again, as Refresh does
+          // (space-2).
+          title: i18n._("Reads each signed-in instance again"),
           disabled: busy === "retry",
           describedBy: error ? captionId : undefined,
           onClick: () => void retry(),
@@ -814,10 +881,12 @@ function RepositoryRow({
   // A clone whose code found no folder here is paired later (space-63);
   // a row with no clone here has nothing to pair (space-61).
   const needsFolder = cloneHere(repo) && !groupRepository && repo.folder === null && repo.state !== "local-only";
-  const showMembers = repo.state === "reachable" && groups.account !== null;
-  // On a project's, where the host's last read lets the person move it;
-  // a group's own records stay in their group (space-1, DR-103).
-  const showMove = groups.account !== null && repo.can.transfer && !groupRepository;
+  // Members while the instance governing it is signed in (space-62).
+  const showMembers = repo.state === "reachable" && governing?.signedIn === true;
+  // On a project's under a signed-in instance's heading, where its last
+  // read lets the person move it; a group's own records stay in their
+  // group, and your own group's in yours (space-1, DR-103).
+  const showMove = instance?.signedIn === true && repo.can.transfer && !groupRepository;
   const moveName = i18n._({ id: "Move to another group", comment: "move a spex repository into another group of the instance, or your own" });
 
   const code = repo.code
@@ -827,10 +896,10 @@ function RepositoryRow({
       : groupRepository
         ? i18n._({ id: "Group records", comment: "where a group's own spex repository's code lives: it has none, holding the group's records" })
         : i18n._({ id: "Code not on a remote", comment: "a project's spex repository whose records name no code remote" });
-  // Signed out, your own group's records wait for the sign-in that
-  // shares them (space-3).
+  // Signed in nowhere, your own group's records wait for the sign-in
+  // that shares them (space-3).
   const state =
-    repo.own && repo.state === "local-only" && !groups.account
+    repo.own && repo.state === "local-only" && !anySignedIn(groups)
       ? i18n._("On this device only — shared once you sign in")
       : repositoryStatePhrase(repo, now);
   const dot = statusDot(repo);
@@ -1020,7 +1089,6 @@ function RepositoryRow({
       {opened === "move" ? (
         <MovePicker
           groups={groups}
-          group={group}
           repo={repo}
           busy={moving}
           connected={connected}
@@ -1054,9 +1122,9 @@ function RepositoryRow({
           onCancel={() => close("folder")}
         />
       ) : null}
-      {opened === "members" ? (
+      {opened === "members" && governing ? (
         <MembersPanel
-          groups={groups}
+          instance={governing}
           target={{ repository: repo.key }}
           id={repo.key}
           name={repo.name}
@@ -1098,13 +1166,13 @@ function RepositoryRow({
 }
 
 /** Where a spex repository moves (space-78): a picker as space-58's,
- * your own group first, then each group of the instance, each read as
- * its heading reads — never another account's login, never the group
- * the row stands under — with Cancel, Escape cancelling. A pick asks the host; a
- * refusal stands in the picker, the row kept where it stood. */
+ * of the instance the row stands under alone — your namespace there
+ * first, read by your login, then each group it lists, each read as the
+ * list reads it, never another account's login, never the entry the row
+ * stands under — with Cancel, Escape cancelling. A pick asks the host;
+ * a refusal stands in the picker, the row kept where it stood. */
 function MovePicker({
   groups,
-  group,
   repo,
   busy,
   connected,
@@ -1112,8 +1180,6 @@ function MovePicker({
   onClose,
 }: {
   groups: GroupsState;
-  /** The group the row stands under. */
-  group: Group;
   repo: RepositoryState;
   busy: boolean;
   connected: boolean;
@@ -1125,13 +1191,22 @@ function MovePicker({
   useEffect(() => {
     firstRef.current?.focus();
   }, []);
-  const own = groups.groups.find((entry) => entry.own);
-  const targets: { key: string; group: Group; groupId: string | null }[] = [
-    ...(own && !group.own ? [{ key: "own", group: own, groupId: null }] : []),
-    ...groups.groups
-      .filter((entry) => !entry.own && entry.id !== null && groupKey(entry) !== groupKey(group))
-      .map((entry) => ({ key: entry.fullPath, group: entry, groupId: entry.id })),
-  ];
+  // The instance whose heading the row stands under, and the entry it
+  // stands in there; a row under your own group moves at its own
+  // instance, leaving no entry out.
+  const placement = placementOf(groups, repo.key);
+  const instance = placement && !placement.own ? placement.instance : instanceOf(groups, repo.instance);
+  const standing = placement && !placement.own ? placement.group : undefined;
+  const mine = instance ? namespaceOf(instance) : undefined;
+  // Your namespace is named by none, a group by its host id (space-29).
+  const targets: { entry: InstanceGroupState; groupId: string | null }[] = instance
+    ? [
+        ...(mine && mine !== standing ? [{ entry: mine, groupId: null }] : []),
+        ...instance.groups
+          .filter((entry) => entry.id !== null && entry !== standing)
+          .map((entry) => ({ entry, groupId: entry.id })),
+      ]
+    : [];
   const pick = async (groupId: string | null) => {
     if (busy) return;
     setRefusal(undefined);
@@ -1159,16 +1234,16 @@ function MovePicker({
     >
       <ul className="flex min-w-0 flex-col gap-1">
         {targets.map((target, index) => (
-          <li key={target.key} className="min-w-0">
+          <li key={groupTestKey(target.entry)} className="min-w-0">
             <button
               ref={index === 0 ? firstRef : undefined}
               type="button"
-              data-testid={`space-move-group-${target.key}`}
+              data-testid={`space-move-group-${groupTestKey(target.entry)}`}
               className={option}
               disabled={!connected || busy}
               onClick={() => void pick(target.groupId)}
             >
-              <GroupOptionLabel groups={groups} group={target.group} />
+              <GroupOptionLabel entry={target.entry} />
             </button>
           </li>
         ))}
@@ -1277,14 +1352,27 @@ function FolderEditor({
   );
 }
 
-/** Where a local-only project's records go on the host (space-58): in
- * one picker, the spex repositories the host lists for the same code —
- * each with its group, read as its heading reads, and members' count —
- * and, below them, every group read so, the new repository's name in
- * an editable field. Picking a
- * listed one that may have other members says the sharing notice
- * beneath it first, and joins with `noticed` only on Continue
- * (space-57). */
+/** One instance a pick offers (space-58): the spex repositories it
+ * lists for the same code, each with the entry it stands in, and where
+ * a new one may go — your namespace there first, then each group it
+ * lists, never another account's login. */
+interface PickSection {
+  instance: InstanceState;
+  listed: { group: InstanceGroupState; repo: RepositoryState }[];
+  creatable: InstanceGroupState[];
+}
+
+/** Where a local-only project's records go (space-58): in one picker,
+ * one section per signed-in instance under its display name — the
+ * clone's instance alone where its key lies under one — each holding
+ * the spex repositories that instance lists for the same code, each with
+ * its group, read as the list reads it, and members' count, and, below
+ * them, your namespace there read by your login and every group it
+ * lists; the new repository's name in one editable field every section
+ * shares. Picking a listed one that may have other members says the
+ * sharing notice beneath it first, and joins with `noticed` only on
+ * Continue (space-57). A choice names the instance of its section
+ * (space-29). */
 export function GroupPicker({
   groups,
   repo,
@@ -1300,30 +1388,37 @@ export function GroupPicker({
 }) {
   const spacePick = useAppStore((state) => state.spacePick);
   const code = repo.code;
-  // The listed ones are the host's: a host id, a state the host read.
-  const listed = groups.groups.flatMap((group) =>
-    group.repositories
-      .filter(
-        (other) =>
-          other.key !== repo.key &&
-          other.id !== null &&
-          other.state !== "local-only" &&
-          code !== null &&
-          other.code !== null &&
-          sameRemote(other.code, code),
-      )
-      .map((other) => ({ group, repo: other })),
-  );
-  // Your own group and the host's own groups, never another account's
-  // login (space-58); GroupsState names no right to create a repository,
-  // so every group is offered and a refusal waits on the row (space-64).
-  const creatable = groups.groups.filter((group) => group.id !== null || group.own);
+  const sections: PickSection[] = pickInstances(groups, repo).map((instance) => {
+    const mine = namespaceOf(instance);
+    return {
+      instance,
+      // The listed ones are the host's: a host id, a state the host read.
+      listed: instance.groups.flatMap((group) =>
+        group.repositories
+          .filter(
+            (other) =>
+              other.key !== repo.key &&
+              other.id !== null &&
+              other.state !== "local-only" &&
+              code !== null &&
+              other.code !== null &&
+              sameRemote(other.code, code),
+          )
+          .map((other) => ({ group, repo: other })),
+      ),
+      // GroupsState names no right to create a repository, so every
+      // group is offered and a refusal waits on the row (space-64).
+      creatable: [...(mine ? [mine] : []), ...instance.groups.filter((group) => group.id !== null)],
+    };
+  });
   const defaultName = repo.folder ? lastSegment(repo.folder) : repo.name.replace(/-spex$/, "");
   const [name, setName] = useState(defaultName);
   const [busy, setBusy] = useState<string>();
   const [refusal, setRefusal] = useState<string>();
   // The listed spex repository whose sharing notice stands (space-57).
   const [notice, setNotice] = useState<string>();
+  // Each section's headings are named by ids no other picker shares.
+  const ids = useId();
   const pickerRef = useRef<HTMLDivElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
   const firstRef = useRef<HTMLButtonElement>(null);
@@ -1342,7 +1437,9 @@ export function GroupPicker({
 
   const pick = async (
     id: string,
-    choice: { kind: "join"; hostId: string } | { kind: "create"; groupId: string | null; name: string },
+    choice:
+      | { kind: "join"; instance: string; hostId: string }
+      | { kind: "create"; instance: string; groupId: string | null; name: string },
     noticed = false,
   ) => {
     setBusy(id);
@@ -1363,20 +1460,23 @@ export function GroupPicker({
     }
   };
 
-  /** Join a listed spex repository (space-58): one whose only member
-   * is the account joins at once; one with others, or whose count the
-   * host's last read lacks, says the notice first unless this device's
-   * reader has seen it for this repository (space-57). */
-  const join = (other: RepositoryState) => {
+  /** Join a listed spex repository at its instance (space-58): one
+   * whose only member is the account joins at once; one with others, or
+   * whose count the host's last read lacks, says the notice first
+   * unless this device's reader has seen it for this repository
+   * (space-57). */
+  const join = (instance: InstanceState, other: RepositoryState) => {
     if (!repo.noticed && (other.members === null || other.members > 1)) {
       setRefusal(undefined);
       setNotice(other.key);
       return;
     }
-    void pick(other.key, { kind: "join", hostId: other.id! });
+    void pick(other.key, { kind: "join", instance: instance.origin, hostId: other.id! });
   };
 
-  const create = (group: GroupsState["groups"][number]) => {
+  /** Create `<name>-spex` in an entry at its instance (space-58): your
+   * namespace named by none, a group by its host id. */
+  const create = (instance: InstanceState, group: InstanceGroupState) => {
     setNotice(undefined);
     const chosen = name.trim();
     if (!chosen) {
@@ -1384,8 +1484,12 @@ export function GroupPicker({
       nameRef.current?.focus();
       return;
     }
-    // Your own group is named by none, never by its id (space-58).
-    void pick(`group:${group.fullPath}`, { kind: "create", groupId: group.own ? null : group.id, name: chosen });
+    void pick(`${instance.origin} ${groupTestKey(group)}`, {
+      kind: "create",
+      instance: instance.origin,
+      groupId: group.mine ? null : group.id,
+      name: chosen,
+    });
   };
 
   const option =
@@ -1412,57 +1516,102 @@ export function GroupPicker({
         }
       }}
     >
-      {listed.length > 0 ? (
-        <section aria-labelledby={`space-pick-listed-${repo.key}`} className="flex min-w-0 flex-col gap-1">
-          <h3 id={`space-pick-listed-${repo.key}`} className="text-xs font-medium text-neutral-500">
-            {i18n._("On the host for this code")}
-          </h3>
-          <ul className="flex min-w-0 flex-col gap-1">
-            {listed.map(({ group, repo: other }) => (
-              <li key={other.key} className="min-w-0">
-                <button
-                  ref={takeFirst()}
-                  type="button"
-                  data-testid={`space-pick-repo-${other.key}`}
-                  className={option}
-                  disabled={disabled}
-                  onClick={() => join(other)}
-                >
-                  <span className="min-w-0 flex-1 truncate font-medium" title={other.name}>
-                    {other.name}
-                  </span>
-                  <span
-                    data-testid={`space-pick-listed-group-${other.key}`}
-                    className="flex min-w-0 max-w-[40%] items-baseline gap-1 text-xs text-neutral-500"
-                  >
-                    <GroupOptionLabel groups={groups} group={group} />
-                  </span>
-                  {other.members !== null ? (
-                    <span className="shrink-0 text-xs text-neutral-500">
-                      {i18n._("{count, plural, one {# member} other {# members}}", { count: other.members })}
-                    </span>
-                  ) : null}
-                </button>
-                {notice === other.key ? (
-                  <div data-testid={`space-pick-notice-${repo.key}`} className="mt-1 pl-2">
-                    <InlineConfirm
-                      question={sharingNotice(other.visibility)}
-                      confirmLabel={continueLabel()}
+      {sections.map(({ instance, listed, creatable }, index) => {
+        const heading = `${ids}-${index}`;
+        return (
+          <div
+            key={instance.origin}
+            role="group"
+            aria-labelledby={heading}
+            data-testid={`space-pick-instance-${instance.origin}`}
+            className="flex min-w-0 flex-col gap-2"
+          >
+            <h3
+              id={heading}
+              className="min-w-0 truncate text-xs font-semibold text-neutral-700 dark:text-neutral-300"
+              title={instanceName(instance)}
+            >
+              {instanceName(instance)}
+            </h3>
+            {listed.length > 0 ? (
+              <section aria-labelledby={`${heading}-listed`} className="flex min-w-0 flex-col gap-1">
+                <h4 id={`${heading}-listed`} className="text-xs font-medium text-neutral-500">
+                  {i18n._({
+                    id: "On this instance for this code",
+                    comment: "the picker's heading, inside one instance's section, over the spex repositories that instance lists for the folder's code",
+                  })}
+                </h4>
+                <ul className="flex min-w-0 flex-col gap-1">
+                  {listed.map(({ group, repo: other }) => (
+                    <li key={other.key} className="min-w-0">
+                      <button
+                        ref={takeFirst()}
+                        type="button"
+                        data-testid={`space-pick-repo-${other.key}`}
+                        className={option}
+                        disabled={disabled}
+                        onClick={() => join(instance, other)}
+                      >
+                        <span className="min-w-0 flex-1 truncate font-medium" title={other.name}>
+                          {other.name}
+                        </span>
+                        <span
+                          data-testid={`space-pick-listed-group-${other.key}`}
+                          className="flex min-w-0 max-w-[40%] items-baseline gap-1 text-xs text-neutral-500"
+                        >
+                          <GroupOptionLabel entry={group} />
+                        </span>
+                        {other.members !== null ? (
+                          <span className="shrink-0 text-xs text-neutral-500">
+                            {i18n._("{count, plural, one {# member} other {# members}}", { count: other.members })}
+                          </span>
+                        ) : null}
+                      </button>
+                      {notice === other.key ? (
+                        <div data-testid={`space-pick-notice-${repo.key}`} className="mt-1 pl-2">
+                          <InlineConfirm
+                            question={sharingNotice(other.visibility)}
+                            confirmLabel={continueLabel()}
+                            disabled={disabled}
+                            onConfirm={() =>
+                              void pick(other.key, { kind: "join", instance: instance.origin, hostId: other.id! }, true)
+                            }
+                            onCancel={() => closeNotice(other.key)}
+                          />
+                        </div>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
+            <section aria-labelledby={`${heading}-create`} className="flex min-w-0 flex-col gap-1">
+              <h4 id={`${heading}-create`} className="text-xs font-medium text-neutral-500">
+                {i18n._("New in a group")}
+              </h4>
+              <ul className="flex min-w-0 flex-col gap-1">
+                {creatable.map((group) => (
+                  <li key={groupTestKey(group)} className="min-w-0">
+                    <button
+                      ref={takeFirst()}
+                      type="button"
+                      data-testid={`space-pick-group-${groupTestKey(group)}`}
+                      className={option}
                       disabled={disabled}
-                      onConfirm={() => void pick(other.key, { kind: "join", hostId: other.id! }, true)}
-                      onCancel={() => closeNotice(other.key)}
-                    />
-                  </div>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
-      <section aria-labelledby={`space-pick-create-${repo.key}`} className="flex min-w-0 flex-col gap-1">
-        <h3 id={`space-pick-create-${repo.key}`} className="text-xs font-medium text-neutral-500">
-          {i18n._("New in a group")}
-        </h3>
+                      onClick={() => create(instance, group)}
+                    >
+                      <GroupOptionLabel entry={group} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          </div>
+        );
+      })}
+      {sections.length > 0 ? (
+        // One name for the new repository, whichever entry it goes to
+        // (space-58).
         <label className="flex min-w-0 items-center gap-1 text-xs">
           <span className="shrink-0 text-neutral-500">{i18n._({ id: "Name", comment: "the new spex repository's name" })}</span>
           <input
@@ -1476,23 +1625,7 @@ export function GroupPicker({
           />
           <span className="shrink-0 font-mono text-neutral-500">-spex</span>
         </label>
-        <ul className="flex min-w-0 flex-col gap-1">
-          {creatable.map((group) => (
-            <li key={groupKey(group)} className="min-w-0">
-              <button
-                ref={takeFirst()}
-                type="button"
-                data-testid={`space-pick-group-${group.fullPath}`}
-                className={option}
-                disabled={disabled}
-                onClick={() => create(group)}
-              >
-                <GroupOptionLabel groups={groups} group={group} />
-              </button>
-            </li>
-          ))}
-        </ul>
-      </section>
+      ) : null}
       <div className="flex flex-wrap items-center gap-2">
         <button type="button" data-testid={`space-pick-cancel-${repo.key}`} className={SECONDARY} onClick={onClose}>
           {i18n._({ id: "Cancel", comment: "leave the editor without changing anything" })}
