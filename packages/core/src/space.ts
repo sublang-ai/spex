@@ -1079,7 +1079,11 @@ class RepositorySync {
     };
     this.upstreamName = upstreamName;
     const origin = await this.git.run(["rev-parse", "-q", "--verify", `${this.remoteRef()}^{commit}`]);
-    const gitDir = resolve(this.dir, await this.git.ok(["rev-parse", "--git-dir"]));
+    // A clone removed while this read runs — a test's teardown, a Remove —
+    // reads as no clone rather than throwing past the reader (space-61).
+    const gitDirRead = await this.git.run(["rev-parse", "--git-dir"]);
+    if (gitDirRead.code !== 0) return { git: version, root: false };
+    const gitDir = resolve(this.dir, gitDirRead.stdout.toString("utf8").trim());
     const mergePending = (await this.git.succeeds(["rev-parse", "-q", "--verify", "MERGE_HEAD"])) || existsSync(join(gitDir, "rebase-merge")) || existsSync(join(gitDir, "rebase-apply"));
     this.mergePending = mergePending;
     return {
