@@ -508,16 +508,20 @@ export function AddSpecPackages({ repository }: { repository: string }) {
           {i18n._("Requested {name}", { name: added })}
         </p>
       ) : null}
-      {mode === "registry" ? <RegistrySearch onAdd={add} /> : null}
+      {mode === "registry" ? <RegistrySearch repository={repository} onAdd={add} /> : null}
       {mode === "folder" && folder ? <FolderRequest folder={folder} onAdd={add} /> : null}
       {mode === "git" ? <GitRequest onAdd={add} /> : null}
     </section>
   );
 }
 
+/** A search over the registry of the environment a result is added to
+ * (playbook-library-92). */
 function RegistrySearch({
+  repository,
   onAdd,
 }: {
+  repository: string;
   onAdd: (name: string, request: EnvironmentRequest) => Promise<void>;
 }) {
   const search = useAppStore((store) => store.searchRegistry);
@@ -541,7 +545,7 @@ function RegistrySearch({
     const timer = setTimeout(() => {
       setSearching(true);
       setError(undefined);
-      search(text)
+      search(repository, text)
         .then((found) => {
           if (read === reads.current) setResults(found);
         })
@@ -553,7 +557,7 @@ function RegistrySearch({
         });
     }, 250);
     return () => clearTimeout(timer);
-  }, [query, search]);
+  }, [query, repository, search]);
 
   return (
     <div data-testid="registry-search" className="flex flex-col gap-2 rounded-lg border border-neutral-200 bg-white px-3 py-2 dark:border-neutral-800 dark:bg-neutral-900">

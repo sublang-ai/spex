@@ -3288,7 +3288,7 @@ export class CoreService {
         void this.environments.installLater(command.repository).catch(() => {});
         return { accepted: true };
       case "environment.search":
-        return { packages: await this.environments.search(command.query) };
+        return { packages: await this.environments.search(command.repository, command.query) };
       case "environment.publish": {
         // A dry run replies the inline summary and uploads nothing
         // (playbook-library-93); the upload reports through state.

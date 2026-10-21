@@ -12,8 +12,9 @@
 // an instance locks the built-in spec package there; and an install
 // takes each locked release from the environment's instance, else the
 // registry its lock records, else any instance the home is signed in
-// to. A registry refusing an instance's token signs that instance alone
-// out, where that token is still the stored pair's.
+// to. A search asks the registry of the environment it names. A
+// registry refusing an instance's token signs that instance alone out,
+// where that token is still the stored pair's.
 
 import { test, type TestContext } from "node:test";
 import assert from "node:assert/strict";
@@ -528,4 +529,78 @@ test("environments-34, environments-13, environments-29: a Git source at the sha
   state = await environmentOf(home, south, (candidate) => installed(candidate) || candidate.error !== null);
   assert.equal(state.error, null);
   assert.deepEqual(brokers(from), [first.url], "the first brokered the fetch once the second signed out");
+});
+
+test("environments-34, environments-17, environments-12: environment.search for the second's project lists the second's registry's spec packages and not the first's, asked through the second with its token, the local-only project and your own group listing the first's and a key naming no clone refused; with the second's registry refusing the second's token, the search is refused and signs the second alone out, a later search asking the second's registry with no token", { timeout: 300_000 }, async (t) => {
+  const { R1, R2, first, second, home, south, local } = await twoInstances(t, "search");
+  await publishTo(R1, await release("acme/search-first"));
+  await publishTo(R2, await release("team/search-second"));
+  const names = (packages: { name: string }[]): string[] => packages.map((entry) => entry.name).sort();
+  // What a registry received for the searches after a mark: the search
+  // and each listed spec package's versions, with the instance that
+  // relayed each, its account and whether a bearer came (environments-18).
+  const searched = (registry: StandinRegistry, from: number): [string, string | null, string | null, boolean][] =>
+    registry.script.received.slice(from)
+      .filter((request) => request.path === "/api/v1/search" || request.path.includes("/search-"))
+      .map((request) => [request.path, request.instance, request.account, request.bearer]);
+
+  // The second's project searches the second's registry, asked through
+  // the second with its token; the first's registry is asked nothing
+  // (environments-17, environments-12).
+  let one = R1.script.received.length;
+  let two = R2.script.received.length;
+  let found = await home.client.expectOk("environment.search", { repository: south, query: "search" });
+  assert.deepEqual(found.packages, [{ name: "team/search-second", description: "The team/search-second spec package", versions: ["1.0.0"] }]);
+  assert.deepEqual(searched(R2, two), [
+    ["/api/v1/search", second.url, LOGIN, true],
+    ["/api/v1/packages/team/search-second", second.url, LOGIN, true],
+  ]);
+  assert.deepEqual(searched(R1, one), []);
+
+  // The local-only project, which has no instance, searches the first's
+  // registry, the default instance's, with the first's token; so does
+  // your own group, whose own repository's remote names the first
+  // (environments-17, environments-12).
+  for (const key of [local, HOST_OWN]) {
+    one = R1.script.received.length;
+    two = R2.script.received.length;
+    found = await home.client.expectOk("environment.search", { repository: key, query: "search" });
+    assert.deepEqual(names(found.packages), ["acme/search-first"], key);
+    assert.deepEqual(searched(R1, one), [
+      ["/api/v1/search", first.url, LOGIN, true],
+      ["/api/v1/packages/acme/search-first", first.url, LOGIN, true],
+    ], key);
+    assert.deepEqual(searched(R2, two), [], key);
+  }
+
+  // A key naming no clone on this device is refused, no registry asked
+  // (environments-17).
+  one = R1.script.received.length;
+  two = R2.script.received.length;
+  await home.client.expectError("environment.search", { repository: hostKey(second, "acme/none-spex"), query: "search" }, "not_found");
+  assert.deepEqual([searched(R1, one), searched(R2, two)], [[], []]);
+
+  // The second's registry refusing the second's token refuses the
+  // search and signs the second alone out, the first staying signed in
+  // (environments-17, environments-12).
+  R2.script.refuseTokens(second.url);
+  two = R2.script.received.length;
+  const mark = home.client.mark();
+  await home.client.expectError("environment.search", { repository: south, query: "search" }, "invalid_request");
+  const out = await home.client.waitSpace(mark, (space) => instanceOf(space, second.url)?.signedIn === false, 30_000);
+  assert.deepEqual([instanceOf(out, first.url)?.signedIn, instanceOf(out, second.url)?.hostSignedOut], [true, true]);
+  assert.deepEqual(searched(R2, two), [["/api/v1/search", second.url, LOGIN, true]]);
+
+  // Signed out there, the second's project still searches the second's
+  // registry, its instance's, with no token (environments-17,
+  // environments-12).
+  one = R1.script.received.length;
+  two = R2.script.received.length;
+  found = await home.client.expectOk("environment.search", { repository: south, query: "search" });
+  assert.deepEqual(names(found.packages), ["team/search-second"]);
+  assert.deepEqual(searched(R2, two), [
+    ["/api/v1/search", second.url, null, false],
+    ["/api/v1/packages/team/search-second", second.url, null, false],
+  ]);
+  assert.deepEqual(searched(R1, one), []);
 });

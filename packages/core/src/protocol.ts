@@ -13,7 +13,7 @@ import type { AgentCapabilities, ApprovalDecision, ApprovalRequest, BrowserSetup
 import type { SessionRecord as RuntimeRecord } from "@sublang/playbook/session-assets";
 import { LANGUAGES, type Language } from "./language.js";
 
-export const PROTOCOL_VERSION = 26;
+export const PROTOCOL_VERSION = 27;
 
 /** The compile pipeline's phases and their human names, shared so the
  * core's thread lines and the UI's band name a phase alike. */
@@ -1226,7 +1226,9 @@ export const commandSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("environment.remove"), id, repository: repositoryKeySchema, name: z.string().min(1) }).strict(),
   z.object({ type: z.literal("environment.resolve"), id, repository: repositoryKeySchema }).strict(),
   z.object({ type: z.literal("environment.install"), id, repository: repositoryKeySchema }).strict(),
-  z.object({ type: z.literal("environment.search"), id, query: z.string().max(200) }).strict(),
+  /** A search names the environment it adds to: the registry of
+   * `repository`'s environment answers it (environments-17, DR-127). */
+  z.object({ type: z.literal("environment.search"), id, repository: repositoryKeySchema, query: z.string().max(200) }).strict(),
   /** `dryRun` runs the checks and replies the inline summary — name,
    * version and the files it would upload — uploading nothing
    * (playbook-library-93). */

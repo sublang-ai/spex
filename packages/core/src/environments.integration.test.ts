@@ -1071,8 +1071,10 @@ test("environments-25: every environment command replies and refuses as its tabl
   assert.deepEqual(Object.keys(initial.packages[0]!).sort(), ["artifacts", "direct", "exports", "installed", "missingPath", "name", "requiredBy", "source", "version"]);
   assert.deepEqual(initial.requests["sublang/playbooks"], { kind: "registry", version: `^${builtinPackage().version}` });
 
-  // environment.search through the registry.
-  const found = await client.expectOk("environment.search", { query: "lint" });
+  // environment.search through the registry of the named spex
+  // repository's environment; a key naming no clone is refused.
+  await client.expectError("environment.search", { repository: "nobody/none-spex", query: "lint" }, "not_found");
+  const found = await client.expectOk("environment.search", { repository: key, query: "lint" });
   assert.deepEqual(found.packages.find((entry) => entry.name === "acme/lint"), { name: "acme/lint", description: "Lint skills", versions: ["1.2.0"] });
 
   // environment.request: refused before any write, else accepted and broadcast.

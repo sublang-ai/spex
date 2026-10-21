@@ -1142,11 +1142,15 @@ export class EnvironmentManager {
     return { done, preview };
   }
 
-  /** `environment.search` through the default instance's registry
-   * (environments-17). */
-  async search(query: string): Promise<{ name: string; description: string | null; versions: string[] }[]> {
+  /** `environment.search` through the registry of the named spex
+   * repository's environment: its instance's, else the default
+   * instance's, with that instance's token where the home is signed in
+   * there (environments-17, environments-5, environments-12); a key
+   * naming no clone on this device is refused first. */
+  async search(key: string, query: string): Promise<{ name: string; description: string | null; versions: string[] }[]> {
+    this.cloneDir(key);
     try {
-      const results = await this.registryAt(this.defaultOrigin()).source.search(query);
+      const results = await this.registryAt(this.registryOriginOf(key)).source.search(query);
       return results.map((result) => ({ name: result.name, description: result.description || null, versions: result.versions }));
     } catch (error) {
       throw new CoreError("invalid_request", error instanceof Error ? error.message : String(error));
