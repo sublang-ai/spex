@@ -960,6 +960,43 @@ export const useAppStore = create<AppState>((set, get) => {
     set({ runErrors: { ...get().runErrors, [sessionId]: message } });
   }
 
+  // Session lists have no revision on the wire. Keep announcements only
+  // while the latest list is pending, including per-ID removals. Its
+  // superseded peers may still finish independent project/prose work.
+  let sessionReads = 0;
+  let sessionConnection = 0;
+  let sessionReadPending = false;
+  const sessionHeard = new Set<string>();
+  async function readSessions(): Promise<boolean> {
+    const read = ++sessionReads;
+    const connection = sessionConnection;
+    sessionReadPending = true;
+    sessionHeard.clear();
+    try {
+      const listed = await getClient().command("session.list", {});
+      if (connection !== sessionConnection) return false;
+      if (read !== sessionReads) return true;
+      const sessions = [
+        ...listed.filter((session) => !sessionHeard.has(session.id)),
+        ...get().sessions.filter((session) => sessionHeard.has(session.id)),
+      ].sort((a, b) => a.createdAt - b.createdAt);
+      for (const old of get().sessions) {
+        if (!sessions.some((session) => session.id === old.id)) get().forgetSession(old.id, old.projectId);
+      }
+      const views = Object.fromEntries(Object.entries(get().views).map(([id, view]) => {
+        const activity = sessionActivity(view, sessions.find((session) => session.id === id));
+        return [id, activity.turnActive === view.turnActive ? view : activity];
+      }));
+      set({ sessions, views });
+      return true;
+    } finally {
+      if (read === sessionReads) {
+        sessionReadPending = false;
+        sessionHeard.clear();
+      }
+    }
+  }
+
   /**
    * Re-read the projects and the sessions after a Groups state named
    * other projects than the page holds (space-59, space-60, space-63):
@@ -969,11 +1006,11 @@ export const useAppStore = create<AppState>((set, get) => {
    */
   async function followProjects(): Promise<void> {
     const read = (projectReads += 1);
-    const [projects, sessions] = await Promise.all([
+    const [projects, sessionsCurrent] = await Promise.all([
       getClient().command("project.list", {}),
-      getClient().command("session.list", {}),
+      readSessions(),
     ]);
-    if (read !== projectReads) return;
+    if (read !== projectReads || !sessionsCurrent) return;
     const state = get();
     const moved = new Map<string, string>();
     for (const old of state.projects) {
@@ -990,14 +1027,10 @@ export const useAppStore = create<AppState>((set, get) => {
       }
       return out;
     };
-    for (const old of state.sessions) {
-      if (!sessions.some((session) => session.id === old.id)) get().forgetSession(old.id, old.projectId);
-    }
     const current = state.currentProjectId && moved.get(state.currentProjectId);
     const expandedProjects = follow(state.expandedProjects);
     set({
       projects,
-      sessions,
       openTabs: follow(get().openTabs),
       workspaceTabs: follow(get().workspaceTabs),
       expandedProjects,
@@ -1549,6 +1582,7 @@ export const useAppStore = create<AppState>((set, get) => {
         break;
       }
       case "session.state": {
+        if (sessionReadPending) sessionHeard.add(message.session.id);
         noteSpaceChange();
         const sessions = get().sessions.filter(
           (session) => session.id !== message.session.id,
@@ -1569,6 +1603,7 @@ export const useAppStore = create<AppState>((set, get) => {
         if (get().views[message.sessionId]) void get().loadPastSession(message.sessionId, true).catch((error: Error) => setRunError(message.sessionId, error.message));
         break;
       case "session.removed":
+        if (sessionReadPending) sessionHeard.add(message.sessionId);
         noteSpaceChange();
         get().forgetSession(message.sessionId, message.projectId);
         break;
@@ -1831,6 +1866,12 @@ export const useAppStore = create<AppState>((set, get) => {
         url: target,
         onMessage: handleMessage,
         onStatus: (connection) => {
+          if (connection !== "open") {
+            sessionConnection += 1;
+            sessionReads += 1;
+            sessionReadPending = false;
+            sessionHeard.clear();
+          }
           set({ connection });
           if (connection === "open") {
             set({ everConnected: true });
@@ -1853,13 +1894,14 @@ export const useAppStore = create<AppState>((set, get) => {
     },
 
     async rereadProse(): Promise<void> {
-      const [configState, readiness, projects, sessions] = await Promise.all([
+      const [configState, readiness, projects, sessionsCurrent] = await Promise.all([
         getClient().command("config.get", {}),
         getClient().command("readiness.get", {}),
         getClient().command("project.list", {}),
-        getClient().command("session.list", {}),
+        readSessions(),
       ]);
-      set({ configState, readiness, projects, sessions });
+      if (!sessionsCurrent) return;
+      set({ configState, readiness, projects });
       void get().loadLedger();
       for (const project of projects) void get().loadProjectMeta(project.id);
       void get().listDrafts().catch(() => {});
@@ -1873,12 +1915,13 @@ export const useAppStore = create<AppState>((set, get) => {
     },
 
     async refresh(): Promise<void> {
-      const [configState, readiness, projects, sessions] = await Promise.all([
+      const [configState, readiness, projects, sessionsCurrent] = await Promise.all([
         getClient().command("config.get", {}),
         getClient().command("readiness.get", {}),
         getClient().command("project.list", {}),
-        getClient().command("session.list", {}),
+        readSessions(),
       ]);
+      if (!sessionsCurrent) return;
       // The home's choice, once connected (localization-3). A
       // preference never blocks the app: the page keeps painting in
       // what it last read until the core answers.
@@ -1892,9 +1935,9 @@ export const useAppStore = create<AppState>((set, get) => {
           // Unreadable: this page's mirror stands.
         }
       })();
+      const sessions = get().sessions;
       const loaded = new Set(Object.keys(get().views));
-      for (const old of get().sessions) if (!sessions.some((session) => session.id === old.id)) get().forgetSession(old.id, old.projectId);
-      set({ configState, readiness, projects, sessions, views:{} });
+      set({ configState, readiness, projects, views:{} });
       void get().loadLedger();
       void get().loadMachineGraphs();
       for (const project of projects) {
