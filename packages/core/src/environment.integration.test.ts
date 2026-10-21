@@ -5,7 +5,8 @@
 // and refused, resolution against the stand-in registry, installs on
 // scratch homes through the store, exports into scratch working folders
 // and a scratch user home, and the built-in spec package seeded and
-// resolved with no registry reachable.
+// resolved with no registry reachable; and the stand-in registry itself
+// answering at several stand-in instances (environments-18).
 
 import { after, before, test } from "node:test";
 import assert from "node:assert/strict";
@@ -69,7 +70,9 @@ import { AGENT_FOLDERS } from "./environment/agent-folders.js";
 import { startGitHttpHost, testCredentialArgs } from "./testing/git-http-host.js";
 import { APP_ENGINE_URL, APP_XSTATE_URL, importsOf, LINKED_ID, recordingResolutions, writeLinkedFixture } from "./testing/linked-artifact.js";
 import { scratchDir } from "./testing/scratch.js";
-import { makeRelease, startStandinRegistry, type ReleaseFixture, type StandinRegistry } from "./testing/standin-registry.js";
+import { browserSignIn, instanceClient } from "./testing/host-sign-in.js";
+import { startStandinHost, type StandinHost } from "./testing/standin-host.js";
+import { makeRelease, RELAY_HEADERS, startStandinRegistry, type ReleaseFixture, type StandinRegistry } from "./testing/standin-registry.js";
 import { stubSlcScriptedSource } from "./testing/stub-slc.js";
 
 const machineIdentity = "machine-id:v1:00000000-0000-4000-8000-0000000000aa";
@@ -959,6 +962,163 @@ test("environments-28: the orgs scripted for the device's app token read sorted 
     assert.equal(asked() - before, 1, "one request");
   } finally {
     registry.script.delayOrgs(0);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// environments-18: one stand-in registry behind several instances
+// ---------------------------------------------------------------------------
+
+test("environments-18: one stand-in registry answers at each instance relaying to it", async () => {
+  const scratch = scratchDir("spex-relay-");
+  const shared = await startStandinRegistry({ dir: join(scratch, "registry") });
+  const first = await startStandinHost({ dir: join(scratch, "first"), displayName: "First", registry: shared.url });
+  const second = await startStandinHost({ dir: join(scratch, "second"), displayName: "Second", person: { id: "1002", login: "bob", displayName: "Bob" }, registry: shared.url });
+  const third = await startStandinHost({ dir: join(scratch, "third"), displayName: "Third", person: { id: "1003", login: "grace", displayName: "Grace Hopper" }, registry: shared.url });
+  try {
+    // A home signed in to the first and the second, another to the third
+    // alone, each app token minted by its instance's own sign-in.
+    const tokenAt = async (home: string, host: StandinHost): Promise<string> => {
+      const signedIn = instanceClient(join(scratch, home), host);
+      await browserSignIn(signedIn);
+      const secret = await signedIn.accessSecret();
+      assert.ok(secret, "the sign-in stored an app token");
+      return secret;
+    };
+    const one = await tokenAt("home", first);
+    const two = await tokenAt("home", second);
+    const three = await tokenAt("other", third);
+    /** The registry as reached at `host`, presenting `token` or none. */
+    const at = (host: Pick<StandinHost, "url">, token?: string): RegistryClient =>
+      new RegistryClient({ url: host.url, ...(token === undefined ? {} : { token: async () => token }) });
+    const refusedAs = (kind: string, code?: string) => (error: unknown): boolean => {
+      assert.ok(error instanceof RegistryError, String(error));
+      assert.equal(error.kind, kind, error.message);
+      if (code !== undefined) assert.equal(error.code, code, error.message);
+      return true;
+    };
+    const versionsOf = async (registry: RegistryClient, name: string): Promise<string[]> => (await registry.index(name)).versions.map((entry) => entry.version);
+    const get = (path: string, instance: string | null, account: string | null, bearer: boolean) => ({ method: "GET", path, instance, account, bearer });
+
+    // A private org whose readers are both instances, published to
+    // through the first as its account: it reads with either instance's
+    // token, finds nothing without one, and is forbidden through the
+    // third, which it does not list, and to the first's token presented
+    // to the registry directly, through no instance.
+    shared.script.setPrivate("vault", [first.url, second.url]);
+    const vault = join(scratch, "vault");
+    await makeRelease(vault, manifestOf("vault/secrets", "1.0.0", { keep: { kind: "skill", language: "en" } }), skillFiles("keep"));
+    let from = shared.script.received.length;
+    const { checksum } = await publishRelease(at(first, one), vault);
+    assert.deepEqual(shared.script.received.slice(from), [{ method: "PUT", path: "/api/v1/packages/vault/secrets/1.0.0", instance: first.url, account: "ada", bearer: true }]);
+    from = shared.script.received.length;
+    assert.equal((await at(first, one).version("vault/secrets", "1.0.0")).checksum, checksum);
+    assert.deepEqual(await versionsOf(at(second, two), "vault/secrets"), ["1.0.0"]);
+    await assert.rejects(at(first).index("vault/secrets"), refusedAs("not_found"));
+    await assert.rejects(at(third, three).index("vault/secrets"), refusedAs("forbidden"));
+    await assert.rejects(at(shared, one).index("vault/secrets"), refusedAs("forbidden"));
+    assert.deepEqual(shared.script.received.slice(from), [
+      get("/api/v1/packages/vault/secrets/1.0.0", first.url, "ada", true),
+      get("/api/v1/packages/vault/secrets", second.url, "bob", true),
+      get("/api/v1/packages/vault/secrets", first.url, null, false),
+      get("/api/v1/packages/vault/secrets", third.url, "grace", true),
+      get("/api/v1/packages/vault/secrets", null, null, true),
+    ]);
+    // No relay header a request carries passes the relay: through the
+    // third, a request claiming the second is still the third's.
+    const forged = await fetch(`${third.url}/api/v1/packages/vault/secrets`, {
+      headers: { authorization: `Bearer ${three}`, [RELAY_HEADERS.instance]: second.url, [RELAY_HEADERS.account]: "bob" },
+    });
+    assert.equal(forged.status, 403);
+    await forged.arrayBuffer();
+    assert.deepEqual(shared.script.received.at(-1), get("/api/v1/packages/vault/secrets", third.url, "grace", true));
+
+    // A token the instance does not know — another instance's, or one
+    // never issued — is refused 401 invalid_token on every route, a public
+    // spec package's among them, which reads there with no token.
+    const open = join(scratch, "open");
+    await makeRelease(open, manifestOf("acme/open", "1.0.0", { tidy: { kind: "skill", language: "en" } }), skillFiles("tidy"));
+    await publishRelease(at(second, two), open);
+    const never = `spexa_${"A".repeat(43)}`;
+    from = shared.script.received.length;
+    for (const [host, token] of [[first, two], [second, never]] as const) {
+      await assert.rejects(at(host, token).index("acme/open"), refusedAs("unauthenticated", "invalid_token"));
+      await assert.rejects(at(host, token).index("vault/secrets"), refusedAs("unauthenticated", "invalid_token"));
+    }
+    assert.deepEqual(shared.script.received.slice(from), [
+      get("/api/v1/packages/acme/open", first.url, null, true),
+      get("/api/v1/packages/vault/secrets", first.url, null, true),
+      get("/api/v1/packages/acme/open", second.url, null, true),
+      get("/api/v1/packages/vault/secrets", second.url, null, true),
+    ]);
+    assert.deepEqual(await versionsOf(at(first), "acme/open"), ["1.0.0"]);
+
+    // A scripted refusal answers one instance's tokens alone, with
+    // token_revoked unless it names another code; a request presenting no
+    // token there still reads the public spec package.
+    shared.script.refuseTokens(first.url);
+    try {
+      await assert.rejects(at(first, one).index("acme/open"), refusedAs("unauthenticated", "token_revoked"));
+      await assert.rejects(at(first, one).version("vault/secrets", "1.0.0"), refusedAs("unauthenticated", "token_revoked"));
+      assert.equal((await at(second, two).version("vault/secrets", "1.0.0")).checksum, checksum);
+      assert.deepEqual(await versionsOf(at(first), "acme/open"), ["1.0.0"]);
+      shared.script.refuseTokens(second.url, "reauth_required");
+      await assert.rejects(at(second, two).index("acme/open"), refusedAs("unauthenticated", "reauth_required"));
+    } finally {
+      shared.script.refuseTokens(null);
+    }
+    assert.equal((await at(first, one).version("vault/secrets", "1.0.0")).checksum, checksum);
+    assert.deepEqual(await versionsOf(at(second, two), "acme/open"), ["1.0.0"]);
+
+    // The orgs scripted for an instance are listed, sorted by name, for
+    // its tokens alone: another instance's token, an unknown one, or none
+    // reads as no answer.
+    shared.script.setOrgs(first.url, [
+      { name: "workshop", path: "acme/workshop", role: "developer" },
+      { name: "alpha", path: "alpha", role: "owner" },
+    ]);
+    shared.script.setOrgs(second.url, [{ name: "beta", path: "beta", role: "maintainer" }]);
+    from = shared.script.received.length;
+    assert.deepEqual(await at(first, one).orgs(), [
+      { name: "alpha", path: "alpha", role: "owner" },
+      { name: "workshop", path: "acme/workshop", role: "developer" },
+    ]);
+    assert.deepEqual(await at(second, two).orgs(), [{ name: "beta", path: "beta", role: "maintainer" }]);
+    assert.equal(await at(third, three).orgs(), null);
+    assert.equal(await at(first, two).orgs(), null);
+    assert.equal(await at(first).orgs(), null);
+    assert.deepEqual(shared.script.received.slice(from), [
+      get("/api/v1/account/orgs", first.url, "ada", true),
+      get("/api/v1/account/orgs", second.url, "bob", true),
+      get("/api/v1/account/orgs", third.url, "grace", true),
+      get("/api/v1/account/orgs", first.url, null, true),
+      get("/api/v1/account/orgs", first.url, null, false),
+    ]);
+
+    // A raw file and a release archive arrive through the relay, a private
+    // one's only to its readers.
+    from = shared.script.received.length;
+    assert.equal(Buffer.from(await at(first, one).file("vault/secrets", "1.0.0", "skills/en/keep/SKILL.md")).toString("utf8"), skillText("keep"));
+    assert.equal(sha256Hex(await at(second, two).archive("vault/secrets", "1.0.0")), checksum);
+    assert.equal(Buffer.from(await at(third).file("acme/open", "1.0.0", "skills/en/tidy/SKILL.md")).toString("utf8"), skillText("tidy"));
+    await assert.rejects(at(third, three).file("vault/secrets", "1.0.0", "skills/en/keep/SKILL.md"), refusedAs("forbidden"));
+    assert.deepEqual(shared.script.received.slice(from), [
+      get("/vault/secrets/1.0.0/skills/en/keep/SKILL.md", first.url, "ada", true),
+      get("/api/v1/packages/vault/secrets/1.0.0/download", second.url, "bob", true),
+      get("/acme/open/1.0.0/skills/en/tidy/SKILL.md", third.url, null, false),
+      get("/vault/secrets/1.0.0/skills/en/keep/SKILL.md", third.url, "grace", true),
+    ]);
+    assert.deepEqual(shared.script.requests.slice(-4), [
+      "GET /vault/secrets/1.0.0/skills/en/keep/SKILL.md",
+      "GET /api/v1/packages/vault/secrets/1.0.0/download",
+      "GET /acme/open/1.0.0/skills/en/tidy/SKILL.md",
+      "GET /vault/secrets/1.0.0/skills/en/keep/SKILL.md",
+    ]);
+    shared.script.clearRequests();
+    assert.deepEqual([shared.script.requests, shared.script.received], [[], []]);
+  } finally {
+    await Promise.all([first.close(), second.close(), third.close()]);
+    await shared.close();
   }
 });
 

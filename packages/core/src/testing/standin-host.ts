@@ -33,6 +33,8 @@ import type { AddressInfo } from "node:net";
 import { dirname, join } from "node:path";
 import { performance } from "node:perf_hooks";
 
+import { RELAY_HEADERS } from "./standin-registry.js";
+
 export interface StandinPerson { id: string; login: string; displayName: string | null }
 
 /** What the stand-in lets the person do in a group (host-4): create a
@@ -302,7 +304,8 @@ export interface StandinHostOptions {
    * the instance whose directory this one shares. */
   dir?: string;
   displayName?: string;
-  /** A stand-in registry whose routes this instance forwards. */
+  /** The URL of a stand-in registry whose routes this instance relays,
+   * naming itself and its verdict on the bearer (environments-18). */
   registry?: string;
   /** The signed-in person; unset, `ada`. */
   person?: StandinPerson;
@@ -603,10 +606,14 @@ function sameGroup(a: StandinGroup, b: StandinGroup): boolean {
 
 /**
  * Start the stand-in. `registry` names a stand-in registry
- * (environments-18) whose routes — `/api/v1/packages…` and
- * `/api/v1/search` — the stand-in forwards, as spex.pub serves the
- * registry beside the host at one origin (DR-104): a journey then signs
- * in here and publishes and installs here (playbook-library-95).
+ * (environments-18) whose routes — `/api/v1/packages…`,
+ * `/api/v1/search`, `/api/v1/account/orgs` and the raw files at
+ * `/<org>/<pkg>/<version>/<path>` — the stand-in relays, as spex.pub
+ * serves the registry beside the host at one origin (DR-104): a journey
+ * then signs in here and publishes and installs here
+ * (playbook-library-95). Each relayed request names this instance and
+ * the account it accepts the bearer as, or the code it refuses it with,
+ * so several instances may relay to one registry (DR-127).
  * `gitBackend` starts another instance over a running one's Git backend
  * (DR-127): its own origin, display name, person, accounts, tokens,
  * groups and description, the first's bare repositories and transport,
@@ -845,8 +852,22 @@ export async function startStandinHost(opts: StandinHostOptions): Promise<Standi
     };
   }
 
-  /** Relay one registry request to the stand-in registry, headers and
-   * body as they came, its answer as it went. */
+  /** Whether a request is the registry's, which an instance set to
+   * relay to one relays (environments-18): its search, packages and the
+   * account's orgs, and a raw file at `/<org>/<pkg>/<version>/<path>`,
+   * which no route of the instance's own shares. */
+  function registryRoute(method: string, path: string): boolean {
+    if (path === "/api/v1/search" || path === "/api/v1/packages" || path.startsWith("/api/v1/packages/") || path === "/api/v1/account/orgs") return true;
+    const segments = path.split("/").filter(Boolean);
+    return (method === "GET" || method === "HEAD") && segments.length >= 4 && !["api", "login", "git"].includes(segments[0]!);
+  }
+
+  /** Relay one registry request to the stand-in registry, its bearer and
+   * body as they came, its answer as it went: only the request's own
+   * credential, body type and accepted types pass, so no relay header it
+   * carries does, and this instance names itself and its verdict on the
+   * bearer — the account it accepts it as, or the code it refuses it
+   * with (environments-18, DR-127). */
   async function forwardToRegistry(req: IncomingMessage, res: ServerResponse, method: string, target: URL, registry: string): Promise<void> {
     const chunks: Buffer[] = [];
     for await (const chunk of req) chunks.push(chunk as Buffer);
@@ -854,6 +875,13 @@ export async function startStandinHost(opts: StandinHostOptions): Promise<Standi
     for (const name of ["authorization", "content-type", "accept"]) {
       const value = req.headers[name];
       if (typeof value === "string") headers[name] = value;
+    }
+    headers[RELAY_HEADERS.instance] = url;
+    const bearer = bearerOf(req);
+    if (bearer !== null) {
+      const found = bearerDevice(bearer);
+      if ("code" in found) headers[RELAY_HEADERS.refused] = found.code;
+      else headers[RELAY_HEADERS.account] = script.person.login;
     }
     const answer = await fetch(new URL(`${target.pathname}${target.search}`, registry), {
       method,
@@ -1096,9 +1124,7 @@ export async function startStandinHost(opts: StandinHostOptions): Promise<Standi
       return json(res, 200, { display_name: displayName, git_origin: gitOrigin, roles, groups: script.canCreateGroup });
     }
     if (path.startsWith("/api/v1/host/")) return hostRoute(req, res, method, path, target);
-    if (opts.registry && (path === "/api/v1/search" || path === "/api/v1/packages" || path.startsWith("/api/v1/packages/"))) {
-      return forwardToRegistry(req, res, method, target, opts.registry);
-    }
+    if (opts.registry && registryRoute(method, path)) return forwardToRegistry(req, res, method, target, opts.registry);
     return envelope(res, 404, "not_found", "Nothing is here.");
   }
 
