@@ -8,6 +8,7 @@
 Accepted; amends [DR-024](024-app-supplied-agent-runtimes.md) (the SDK-supply duty extends to the server shell) and the endpoint items of [core-service](../packages/core-service.md).
 Amended by [DR-036](036-file-state-store.md): the each-shell-one-store rule gives way to one shared state root with a single core admitted at a time.
 Amended by [DR-132](132-team-servers.md) in "a single-user deployment" and "one token, in the URL": a team server is N single-user shells behind a hub admitting a bearer in a header.
+Amended by [DR-133](133-one-desktop-over-several-cores.md) in "the browser is a pure protocol client": a served page may hold the same relayed connections through its own core.
 
 ## Context
 

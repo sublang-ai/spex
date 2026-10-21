@@ -22,7 +22,7 @@ When started on a native platform other than macOS or Linux, the core service sh
 
 #### core-service-1
 
-Where the core service is started by a host shell, when startup completes, the core service shall accept WebSocket connections on its endpoint — a loopback-only socket the service binds itself by default, or a shell-supplied HTTP server the service attaches to, leaving binding and transport security to that shell ([DR-033](../decisions/033-remote-gui-serving.md)) — and report the endpoint address to the host:
+Where the core service is started by a host shell, when startup completes, the core service shall accept WebSocket connections on its endpoint — a loopback-only socket the service binds itself by default, or a shell-supplied HTTP server the service attaches to, leaving binding and transport security to that shell ([DR-033](../decisions/033-remote-gui-serving.md)) — at the path `/`, and on the relay paths of its open seats [[core-service-129](#core-service-129)], refusing any other path, and report the endpoint address to the host:
 
 - When a client connects, the core service sends a hello message carrying the protocol version before any other message, so clients can detect a protocol mismatch before issuing commands.
 
@@ -38,6 +38,8 @@ An Origin is not foreign only in these cases:
 | `null`, or a `file://` origin | the packaged renderer |
 | `http(s)://localhost` or `http(s)://127.0.0.1`, any port | a local dev page |
 | the host the handshake request itself addressed | a page the embedding shell serves ([DR-033](../decisions/033-remote-gui-serving.md)) |
+
+- A relay path of an open seat [[core-service-129](#core-service-129)] admits exactly as the path `/` does: the same token, the same origins ([DR-133](../decisions/133-one-desktop-over-several-cores.md)).
 
 ### Configuration
 
@@ -611,6 +613,32 @@ Where the core runs as a seat with a shared credential file [[core-service-125](
 - an unreadable file leaves the environment as it was and is reported through readiness [[settings-49](settings.md#settings-49)], blocking nothing else;
 - no value of the file is written anywhere or logged.
 
+### Places
+
+#### core-service-128
+
+When a client sends `server.list`, `server.open` or `server.close`, the core service shall act on the seats the person holds on team servers ([DR-133](../decisions/133-one-desktop-over-several-cores.md)):
+
+| Command | Effect |
+| --- | --- |
+| `server.list` | reads each signed-in instance's servers listing [[git-host-29](git-host.md#git-host-29)] and replies with every server — its id, name, group and instance — and whether a seat is open at it, each instance's read standing or failing on its own [[git-host-11](git-host.md#git-host-11)] |
+| `server.open {instance, serverId, consented}` | with `consented` true — the client having shown the contract of the instance's record in its own words — asks the instance for a ticket [[git-host-29](git-host.md#git-host-29)], presents it at the server's address for the admission, keeps the seat's endpoint, bearer and lease expiry under `local/` [[storage-45](storage.md#storage-45)], starts its relay [[core-service-129](#core-service-129)], and replies with the place and the expiry, never the bearer or the endpoint; `consented` absent or false is `invalid_request` and asks nothing |
+| `server.close {instance, serverId}` | ends the seat's relay and removes its entry; the seat's lease continues at the server while work runs there |
+
+- a refusal of the ticket or the admission is relayed with its cause [[git-host-11](git-host.md#git-host-11)], the instance's `host_refused` as refused and its `not_found` as no longer shared;
+- every change of the open seats is announced to every client as `server.state`, each seat by its instance, server, name, group, place, lease expiry and relay state — connecting, open, closed or mismatched;
+- at start the core reopens every seat its file holds, a refusal removing the entry as a close does.
+
+#### core-service-129
+
+While a seat is open [[core-service-128](#core-service-128)], the core service shall expose a relay path for it on its own endpoint, `/seats/<place>`, admitted as the path `/` is [[core-service-24](#core-service-24)], and shall pipe each client connection there, frames unread both ways, through a connection of its own to the seat's endpoint over TLS presenting the bearer in the `Authorization` header and no `Origin` ([DR-133](../decisions/133-one-desktop-over-several-cores.md)):
+
+- one connection to the seat per client connection, so request ids and subscriptions stay the client's own; either side closing closes the other;
+- beside them one watch connection per seat, which relays nothing, reconnects every second as a client does, reads the seat's hello — a protocol version other than this core's marks the place mismatched and stops its reconnecting — and reads the seat's ledger badge on every `intents.changed` there;
+- a close with the lease-end code, or the seat refusing the bearer, removes the seat as a close does and announces it;
+- the shell reads one attention count from the core: this core's badge [[core-service-49](#core-service-49)] plus each open seat's last read badge;
+- the bearer and the endpoint reach no client and no log.
+
 ## Internal Behavior
 
 ### Package Layout
@@ -1146,6 +1174,10 @@ Where two homes pair one project at the same working-folder path and sync its re
 #### core-service-127
 
 Where the core runs as a seat against a stand-in instance with a fixture adapter recording its environment, the integration suite shall assert seat mode [[core-service-125](#core-service-125)]: the device request names the server and the person and a sign-in as another account stores nothing; your own group gains no placement; the path-naming commands are refused with the phrase; a join names no folder; and the shared credential file [[core-service-126](#core-service-126)]: its values reach a run's environment, a value replaced between runs reaches the next run while the running one keeps its own, a member's own credential displaces the shared names of its agent, and an unreadable file is reported without blocking.
+
+#### core-service-130
+
+Where a stand-in instance answers the servers routes and a stand-in hub admits a ticket and relays to a second core as a seat, the integration suite shall assert the places [[core-service-128](#core-service-128)] [[core-service-129](#core-service-129)]: `server.list` names the server; `server.open` without consent asks nothing; with it, the seat's entry is written owner-only and the reply carries no bearer; the relay path admits the local token and refuses a wrong one and a foreign origin; the relayed hello is the seat's and a `project.list` round-trips; a seat whose hello carries another version reads mismatched alone; the attention count includes the seat's badge; a lease-end close and `server.close` each remove the path and the entry and announce `server.state`; no frame to the client carries the bearer; a restarted core reopens the seat.
 
 ## References
 

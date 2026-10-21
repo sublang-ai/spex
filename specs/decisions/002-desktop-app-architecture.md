@@ -9,6 +9,7 @@ Accepted; the Settings surface's profile inventory is amended by [DR-019](019-in
 Supported host platforms are amended by [DR-049](049-supported-app-hosts.md).
 The project session's one-live-session rule is amended by [DR-051](051-runtime-held-for-a-turn.md): one working turn per project, the runtime held only for a turn.
 The CLI release tag namespace is amended by [DR-056](056-release-naming.md): future releases use `cli-v*`, preserving published `v*` tags.
+Amended by [DR-133](133-one-desktop-over-several-cores.md) in "everything it knows arrives through the protocol" and "the single seam between core and UI": the UI holds one connection per core over the same protocol.
 
 ## Context
 

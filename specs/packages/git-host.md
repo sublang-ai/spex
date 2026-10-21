@@ -229,6 +229,10 @@ When an instance answers a call 429, the core shall hold, for that instance alon
 
 Where the core runs as a seat [[core-service-125](core-service.md#core-service-125)], when the device flow runs [[git-host-3](#git-host-3)], the request shall carry `server_id` and `person_id` beside the client id and the label "Spex on <server name>", and the sign-in shall end `failed` with `denied` where the instance denies the code and `failed` naming another account where the person read bears another permanent id than the person's, storing nothing either way ([DR-132](../decisions/132-team-servers.md)).
 
+#### git-host-29
+
+When the core lists a signed-in instance's servers or asks it for a ticket — `GET /api/v1/host/servers` and `POST /api/v1/host/servers/:id/tickets`, with that instance's app token [[git-host-4](#git-host-4)] — it shall take the listing and the ticket as the instance answers them, holding nothing after the reply, and relay any other answer [[git-host-11](#git-host-11)] ([DR-133](../decisions/133-one-desktop-over-several-cores.md)).
+
 ## Internal Behavior
 
 #### git-host-12
@@ -332,6 +336,10 @@ When an integration suite starts a real core against two stand-in instances on s
 #### git-host-28
 
 Where the core runs as a seat against the stand-in instance and the Git HTTP host, the test suite shall assert that the device request carries the server and the person, that a denied code and a person of another id each end the sign-in `failed` storing nothing [[git-host-27](#git-host-27)], and that a transport to the Git HTTP host takes the app's helper with the token the member placed for it and none without one [[git-host-9](#git-host-9)].
+
+#### git-host-30
+
+Where the stand-in instance answers the servers listing and the ticket route, the test suite shall assert that each call carries that instance's app token, that the listing and the ticket are returned as answered and held nowhere, and that a `host_refused`, a `not_found` and a `429` are relayed as [[git-host-11](#git-host-11)] states [[git-host-29](#git-host-29)].
 
 ## References
 

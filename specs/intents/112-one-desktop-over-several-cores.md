@@ -5,7 +5,7 @@
 
 ## Status
 
-Planned (2026-10-21), after the hub admits a seat and after the home's client per instance.
+In progress (2026-10-21), after the hub admits a seat and after the home's client per instance.
 
 ## Intent
 
@@ -13,7 +13,7 @@ Implement [DR-133](../decisions/133-one-desktop-over-several-cores.md): the serv
 
 ## Deliverables
 
-- [ ] The `app-shell`, `dashboard`, `core-service`, `storage`, `run-view`, `approvals`, `settings`, `space`, `playbook-library`, `environments`, `localization` and `git-host` packages state DR-133, and DR-133 reads Accepted.
+- [x] The `app-shell`, `dashboard`, `core-service`, `storage`, `run-view`, `approvals`, `localization` and `git-host` packages state DR-133, the place selector stated once in `run-view`, and DR-133 reads Accepted.
 - [ ] The core's servers and ticket calls, the seats kept under `local/`, the three server commands with their state message, and the protocol bumped.
 - [ ] The relay: a loopback endpoint per seat admitted as the core's own, the bearer in a header with no `Origin`, the watch with hello, mismatch and reopening at start, and the attention count the shell's badge reads.
 - [ ] A store per core with the singletons inside, per-place preferences, the local store's exports kept for the tests, and a connection and banner per place.

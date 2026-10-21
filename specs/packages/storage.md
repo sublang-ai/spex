@@ -46,6 +46,7 @@ The store shall persist core-owned data in Spex home using these locations:
 | `local/prefs.json` | core preferences and viewed markers [[storage-5](#storage-5)] | — |
 | `local/credentials.yaml` | each instance's app token [[storage-19](#storage-19)] | — |
 | `local/code-credentials.yaml` | on a seat, the code-host tokens and agent credentials the member placed [[storage-44](#storage-44)] | — |
+| `local/seats.yaml` | the seats this desktop opened on team servers [[storage-45](#storage-45)] | — |
 | `local/migrations/` | migration receipts and retained inputs [[storage-9](#storage-9)] [[storage-30](#storage-30)] | — |
 | `local/former-home.git`, `local/forge-cache.json` | the former home's Git history kept aside [[storage-9](#storage-9)]; the rebuildable forge cache | — |
 | `.lease/`, `.lease.stage.<token>/`, `.lease.retired/<token>/` | the root lease held by the one process serving this home [[storage-14](#storage-14)], its staging and its permanent retirement records [[storage-26](#storage-26)] | — |
@@ -132,7 +133,7 @@ The credential store shall encode `local/credentials.yaml` as exactly `{format: 
 - where the pairs differ, nothing is written and the writer is told the pair changed meanwhile;
 - a malformed entry for that instance is refused by every read and write, except that a sign-out which could not read it removes it in one step, every other instance's pair kept, unless a well-formed pair stands there by then, which stays;
 - a file of another format, or with no hosts map, is refused and left as it is;
-- no credential is written anywhere else but the member's own on a seat [[storage-44](#storage-44)], and no credential enters a tracked file or a remote URL [[space-5](space.md#space-5)].
+- no credential is written anywhere else but the member's own on a seat [[storage-44](#storage-44)] and the seats a desktop opened [[storage-45](#storage-45)], and no credential enters a tracked file or a remote URL [[space-5](space.md#space-5)].
 
 ### storage-44
 
@@ -140,6 +141,10 @@ Where the core runs as a seat [[core-service-125](core-service.md#core-service-1
 
 - a file of another format is refused and left as it is; a malformed entry is refused by every read and write and reported;
 - the file is removed with its last entry.
+
+### storage-45
+
+The seats store shall encode `local/seats.yaml` as exactly `{format: 1, seats: {<instance origin>#<server id>: {name, group, endpoint, bearer, leaseExpiresAt}}}` with owner-only permissions — each seat the desktop opened [[core-service-128](core-service.md#core-service-128)], its server's name and group, the endpoint and bearer the server's admission answered and the lease expiry in Unix milliseconds — written at an open and removed at a close or a refusal as versioned writes, as the app token's file is [[storage-19](#storage-19)], the file removed with its last entry, and never entering a tracked file, a remote URL or a log ([DR-133](../decisions/133-one-desktop-over-several-cores.md)).
 
 ### storage-6
 

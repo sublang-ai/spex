@@ -5,8 +5,8 @@
 
 ## Status
 
-Proposed (2026-10-21) on the owner's direction: one locally running Spex controls different projects at once, on this computer and on the seats the person holds on team servers ([DR-132](132-team-servers.md)).
-Proposes to amend, under [DR-046](046-decision-record-evolution.md):
+Accepted (2026-10-21) on the owner's direction: one locally running Spex controls different projects at once, on this computer and on the seats the person holds on team servers ([DR-132](132-team-servers.md)).
+Amends, under [DR-046](046-decision-record-evolution.md):
 
 - [DR-002](002-desktop-app-architecture.md) in "everything it knows arrives through the protocol" and "the single seam between core and UI": the UI holds one connection per core, every connection over the same protocol, and merges nothing but what this record names.
 - [DR-029](029-session-history-home.md) in the sidebar: the projects of each core grouped under its place.

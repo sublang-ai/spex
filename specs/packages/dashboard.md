@@ -93,9 +93,10 @@ While an entry bound to an open intent stands on the Dashboard [[dashboard-1](#d
 
 #### dashboard-9
 
-The Dashboard shall publish an attention count equal to the number of entries in the attention queue, from the one ledger fold [[dashboard-10](#dashboard-10)], for consumers such as the sidebar's Dashboard badge and the desktop shell's dock badge ([DR-002](../decisions/002-desktop-app-architecture.md)):
+The Dashboard shall publish an attention count equal to the number of entries in the attention queue, from the one ledger fold [[dashboard-10](#dashboard-10)] of each connected core, for consumers such as the sidebar's Dashboard badge and the desktop shell's dock badge ([DR-002](../decisions/002-desktop-app-architecture.md), [DR-133](../decisions/133-one-desktop-over-several-cores.md)):
 
 - When the queue changes, the published count updates to the new queue size.
+- Where the page holds several places [[run-view-168](run-view.md#run-view-168)], the queue joins each core's entries band by band, each band interleaved by onset, so each core's own order stands, and the count sums the cores' badges; an entry is answered at its own core.
 
 ### Running Band
 

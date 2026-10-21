@@ -44,7 +44,7 @@ When an authenticated client connects or requests approval state, the core shall
 
 While actual pending requests exist [[approvals-4](#approvals-4)], the interface shall provide a global approval inbox with one attention entry and directly accessible answer controls per request:
 
-- the entry names its session or draft, actor, turn, tool, reason where present, and complete safely rendered action input and native details;
+- the entry names its session or draft, actor, turn, tool, reason where present, and complete safely rendered action input and native details, and, where the page holds several places [[run-view-168](run-view.md#run-view-168)], its place, each entry answered at its own core with that core's generation ([DR-133](../decisions/133-one-desktop-over-several-cores.md));
 - Approve once and Deny name only offered choices and remain usable during a running turn, independently of the ordinary composer;
 - a disconnected or answering client disables its controls, preserving a refused answer's cause even if another client has already removed the request;
 - answering, expiry, or cancellation removes only that request, and historical permission telemetry raises no entry;
