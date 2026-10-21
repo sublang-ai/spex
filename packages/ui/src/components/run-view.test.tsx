@@ -1631,7 +1631,9 @@ describe("run-view-90/89: the working line and the bound turn's chip", () => {
       ),
     );
     expect(screen.getByTestId("working-line")).toBeTruthy();
-    expect(document.activeElement).toBe(screen.getByTestId("working-drop"));
+    await vi.waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByTestId("working-drop")),
+    );
     setClientForTests(undefined);
   });
 });
