@@ -25,6 +25,7 @@ import type { GroupsState, RepositoryState } from "@sublang/spex-core/protocol";
 import { useAppStore } from "../state/store.js";
 import { i18n } from "../i18n.js";
 import { useClock } from "../lib/useClock.js";
+import { allRepositories } from "../lib/instances.js";
 import { absoluteTitle, relativeAge } from "../lib/time.js";
 import {
   STEP_LINES,
@@ -63,11 +64,6 @@ export const LINK =
 /** The one live note of the surface (DR-010 §7): steps, copies and
  * refusals land here as well as in place. */
 export type Note = (text: string) => void;
-
-/** Every spex repository of the home, in the groups list's order. */
-export function allRepositories(groups: GroupsState): RepositoryState[] {
-  return groups.groups.flatMap((group) => group.repositories);
-}
 
 /** Why Sync is refused before its first step (space-11): the words
  * shown beside the disabled control. Undefined when the surface knows

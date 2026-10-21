@@ -54,6 +54,7 @@ import {
 } from "../lib/client.js";
 import { activateLanguage, i18n } from "../i18n.js";
 import { currentSessionOf } from "../lib/sessions.js";
+import { allRepositories, anySignedIn } from "../lib/instances.js";
 import type { SpecEditorState } from "../lib/spec-view-model.js";
 import {
   applyRecord,
@@ -126,9 +127,10 @@ export type PlaybookLists = CommandResults["environment.playbooks"] & {
 /** One spec package the registry's search found (playbook-library-92). */
 export type RegistryResult = CommandResults["environment.search"]["packages"][number];
 
-/** Whose members a Groups command names (space-62, DR-114): a group by
- * its host id, or a spex repository by its key. */
-export type SpaceMembersTarget = { group: string } | { repository: string };
+/** Whose members a Groups command names (space-62, space-29, DR-114):
+ * a group by its host id at its instance, by its origin, or a spex
+ * repository by its key. */
+export type SpaceMembersTarget = { instance: string; group: string } | { repository: string };
 
 /** The members of a group or a spex repository as the host lists them
  * (space-62): no page of the host (DR-120). */
@@ -289,44 +291,49 @@ export interface AppState extends AttachmentState {
   loadSpace(): Promise<void>;
   setSpaceSplit(percent: number): void;
   setSpacePrivacyCollapsed(collapsed: boolean): void;
-  /** Ask the core to read the Git host, then re-read the state
-   * (space-2): the reader's Refresh. Signed out, the host is never
-   * contacted and the state alone is re-read (space-3). */
+  /** Ask the core to read every signed-in instance, then re-read the
+   * state (space-2): the reader's Refresh. Signed in nowhere, no
+   * instance is contacted and the state alone is re-read (space-3). */
   spaceRefresh(): Promise<void>;
-  /** Start signing in to the Git host (space-3): the browser flow's
-   * URL or the device flow's code, the outcome arriving as state. */
-  spaceSignIn(): Promise<CommandResults["space.signin.start"]>;
+  /** Start signing in to the instance at `url` (space-3, space-29): the
+   * browser flow's URL or the device flow's code, the outcome arriving
+   * as state. */
+  spaceSignIn(url: string): Promise<CommandResults["space.signin.start"]>;
   /** Stop a sign-in in flight (space-3). */
   spaceSignInCancel(): Promise<boolean>;
-  /** Sign this device out of the Git host (space-6); the reply is
-   * the new state. */
-  spaceSignOut(): Promise<void>;
-  /** Give a local-only spex repository a home on the host (space-58):
-   * a listed spex repository by its host id, or a new one in a
-   * group. `noticed` once the sharing notice was seen for a join
-   * (space-57). Accepted at once, outcome as state. */
+  /** Sign this device out of the instance at `instance`, its origin
+   * (space-6); the reply is the new state. */
+  spaceSignOut(instance: string): Promise<void>;
+  /** Give a local-only spex repository a home at an instance (space-58):
+   * a listed spex repository by its host id, or a new one in a group,
+   * the choice naming the instance it is at (space-29). `noticed` once
+   * the sharing notice was seen for a join (space-57). Accepted at
+   * once, outcome as state. */
   spacePick(
     repository: string,
-    choice: { kind: "join"; hostId: string } | { kind: "create"; groupId: string | null; name: string },
+    choice:
+      | { kind: "join"; instance: string; hostId: string }
+      | { kind: "create"; instance: string; groupId: string | null; name: string },
     noticed?: boolean,
   ): Promise<void>;
-  /** Clone a spex repository the host lists and this device lacks
-   * (space-63), pairing it with a folder. Accepted at once. */
-  spaceJoin(hostId: string, folder?: string): Promise<void>;
+  /** Clone a spex repository an instance lists and this device lacks
+   * (space-63), `instance` the one its row stands under, pairing it with
+   * a folder. Accepted at once. */
+  spaceJoin(instance: string, hostId: string, folder?: string): Promise<void>;
   /** A group's or a spex repository's members as the host reports
    * them, read on every call and held nowhere (space-62). */
   spaceMembers(target: SpaceMembersTarget): Promise<SpaceMembersReply>;
-  /** Create a group on the host at the path `path`, at the top or inside
-   * the group whose host id is `parent` (space-68); the state listing it
-   * arrives before the reply. */
-  spaceGroupCreate(name: string, path: string, parent: string | null): Promise<CommandResults["space.group.create"]>;
+  /** Create a group at the instance `instance` at the path `path`, at
+   * its root or inside the group whose host id is `parent` (space-68);
+   * the state listing it arrives before the reply. */
+  spaceGroupCreate(instance: string, name: string, path: string, parent: string | null): Promise<CommandResults["space.group.create"]>;
   /** Rename a group of the instance by its host id — its name, its path
    * segment, or both (space-76); the state holding it renamed arrives
    * before the reply. */
-  spaceGroupRename(group: string, change: { name?: string; path?: string }): Promise<CommandResults["space.group.rename"]>;
+  spaceGroupRename(instance: string, group: string, change: { name?: string; path?: string }): Promise<CommandResults["space.group.rename"]>;
   /** Delete a group of the instance by its host id (space-77); the state
    * without it arrives before the reply. */
-  spaceGroupDelete(group: string): Promise<CommandResults["space.group.delete"]>;
+  spaceGroupDelete(instance: string, group: string): Promise<CommandResults["space.group.delete"]>;
   /** Move a spex repository, by its key, into a group by its host id, or
    * your own group where `groupId` is null (space-78); the state holding
    * it in its new group arrives before the reply. */
@@ -930,8 +937,7 @@ let projectReads = 0;
  * space-63): a move re-keyed one, or a join added one. */
 export function projectsMoved(state: GroupsState, projects: readonly ProjectInfo[]): boolean {
   const paired = new Set(
-    state.groups
-      .flatMap((group) => group.repositories)
+    allRepositories(state)
       .filter((repository) => repository.folder !== null && repository.state !== "absent")
       .map((repository) => repository.key),
   );
@@ -1765,21 +1771,22 @@ export const useAppStore = create<AppState>((set, get) => {
     },
 
     async spaceRefresh(): Promise<void> {
-      // The host is read only while signed in; the read's end arrives
-      // as `space.state` (space-29), and the state is re-read either way.
-      if (get().space?.account) await getClient().command("space.refresh", {});
+      // An instance is read only while signed in there; the read's end
+      // arrives as `space.state` (space-29), and the state is re-read
+      // either way.
+      if (anySignedIn(get().space)) await getClient().command("space.refresh", {});
       await get().loadSpace();
     },
 
-    spaceSignIn: () => getClient().command("space.signin.start", {}),
+    spaceSignIn: (url) => getClient().command("space.signin.start", { url }),
 
     async spaceSignInCancel(): Promise<boolean> {
       const { stopped } = await getClient().command("space.signin.cancel", {});
       return stopped;
     },
 
-    async spaceSignOut(): Promise<void> {
-      const space = await getClient().command("space.signout", {});
+    async spaceSignOut(instance: string): Promise<void> {
+      const space = await getClient().command("space.signout", { instance });
       spaceReads += 1;
       set({ space, spaceError: undefined, spaceReadAt: Date.now() });
     },
@@ -1788,8 +1795,9 @@ export const useAppStore = create<AppState>((set, get) => {
       await getClient().command("space.pick", { repository, choice, ...(noticed ? { noticed: true } : {}) });
     },
 
-    async spaceJoin(hostId: string, folder?: string): Promise<void> {
+    async spaceJoin(instance: string, hostId: string, folder?: string): Promise<void> {
       await getClient().command("space.join", {
+        instance,
         hostId,
         ...(folder !== undefined ? { folder } : {}),
       });
@@ -1797,11 +1805,11 @@ export const useAppStore = create<AppState>((set, get) => {
 
     spaceMembers: (target) => getClient().command("space.members", { ...target }),
 
-    spaceGroupCreate: (name, path, parent) => getClient().command("space.group.create", { name, path, parent }),
+    spaceGroupCreate: (instance, name, path, parent) => getClient().command("space.group.create", { instance, name, path, parent }),
 
-    spaceGroupRename: (group, change) => getClient().command("space.group.rename", { group, ...change }),
+    spaceGroupRename: (instance, group, change) => getClient().command("space.group.rename", { instance, group, ...change }),
 
-    spaceGroupDelete: (group) => getClient().command("space.group.delete", { group }),
+    spaceGroupDelete: (instance, group) => getClient().command("space.group.delete", { instance, group }),
 
     spaceRepositoryMove: (repository, groupId) => getClient().command("space.repository.move", { repository, groupId }),
 

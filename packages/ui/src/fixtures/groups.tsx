@@ -13,6 +13,8 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import type {
   GroupsState,
   HostMemberInfo,
+  InstanceGroupState,
+  InstanceState,
   RepositoryState,
   SpaceConflict,
   SpaceEntry,
@@ -22,16 +24,22 @@ import type {
 
 import { SpaceSurface } from "../components/SpaceSurface.js";
 import { deliverServerMessageForTests, setClientForTests, useAppStore } from "../state/store.js";
+import { namespace, withMirrors, type GroupsShape } from "./groups-state.js";
+
+export { NO_CAN, namespace, withMirrors } from "./groups-state.js";
 
 export const NOW = Date.now();
 export const MIN = 60_000;
 export const HOUR = 60 * MIN;
 export const HOME = "/Users/jane/.spex";
-/** The project's spex repository the tests open, by its key. */
-export const KEY = "jane/academy-spex";
-/** The one instance the fixtures' home lists. */
+/** The project's spex repository the tests open, by its key: its path
+ * at the instance, under the instance's folder (DR-127). */
+export const KEY = "@spex.example/jane/academy-spex";
+/** The instance the fixtures' home lists first: its default. */
 export const ORIGIN = "https://spex.example";
-/** Your own group's spex repository. */
+/** A second instance, which a home lists after the first. */
+export const SECOND = "https://second.example";
+/** Your own group's spex repository, in your own group's folder. */
 export const OWN = "jane/jane-spex";
 export const CLONE = `${HOME}/workspace/${KEY}`;
 
@@ -168,7 +176,7 @@ export function repo(over: Partial<RepositoryState> = {}): RepositoryState {
     id: "42",
     own: false,
     // A remote at the host reads as its path in the instance (space-30).
-    remote: KEY,
+    remote: "jane/academy-spex",
     code: "https://jane@github.com/jane/academy.git",
     folder: "/Users/jane/code/academy",
     state: "reachable",
@@ -203,7 +211,7 @@ export const OWN_REPO: RepositoryState = repo({
 
 /** The host's own roles in its order, Developer upward may push
  * (DR-114): what a host read brings. */
-export const ROLES: GroupsState["roles"] = [
+export const ROLES: InstanceState["roles"] = [
   { id: "10", name: "Guest", mayPush: false },
   { id: "20", name: "Reporter", mayPush: false },
   { id: "30", name: "Developer", mayPush: true },
@@ -211,54 +219,107 @@ export const ROLES: GroupsState["roles"] = [
   { id: "50", name: "Owner", mayPush: true },
 ];
 
-/** What the host's last read says the person may do in a group: nothing
- * unless a test says otherwise. */
-export const NO_CAN: GroupsState["groups"][number]["can"] = { createSubgroup: false, manageMembers: false, rename: false, delete: false };
-
-/** A signed-in home: your own group with its own spex repository
- * first, then the given ones. The surface reads the default instance's
- * transitional mirrors until it reads `instances` (space-30). */
-export function base(over: Partial<GroupsState> = {}, repos: RepositoryState[] = [repo()]): GroupsState {
+/** The fixtures' instance: signed in as jane with a read held a minute
+ * ago, your namespace there empty unless a test says otherwise. */
+export function instance(over: Partial<InstanceState> = {}): InstanceState {
   return {
+    origin: ORIGIN,
+    host: "spex.example",
+    displayName: "Spex Example",
+    account: { id: "7", login: "jane", displayName: "Jane", canCreateGroup: false },
+    signedIn: true,
+    hostSignedOut: false,
+    read: { phase: "idle" },
+    readAt: NOW - MIN,
+    roles: ROLES,
+    groups: [namespace("jane")],
+    ...over,
+  };
+}
+
+/** What a test says of a home: its fields, and `instance`, merged into
+ * the default instance. */
+export type HomeOver = Partial<GroupsShape> & { instance?: Partial<InstanceState> };
+
+/** A signed-in home: your own group with its own spex repository, then
+ * the instance with the given ones in your namespace there. The surface
+ * reads the default instance's transitional mirrors, derived from it,
+ * until it reads `instances` (space-30). */
+export function base(over: HomeOver = {}, repos: RepositoryState[] = [repo()]): GroupsState {
+  const { instance: at, ...rest } = over;
+  return withMirrors({
     home: HOME,
     git: { ok: true, version: "2.45.0" },
     defaultInstance: ORIGIN,
-    own: { name: "jane", repositories: [OWN_REPO] },
-    instances: [{
-      origin: ORIGIN,
-      host: "spex.example",
-      displayName: "Spex Example",
-      account: { id: "7", login: "jane", displayName: "Jane", canCreateGroup: false },
-      signedIn: true,
-      hostSignedOut: false,
-      read: { phase: "idle" },
-      readAt: NOW - MIN,
-      roles: ROLES,
-      groups: [{ id: null, login: "jane", mine: true, fullPath: "jane", name: "jane", can: NO_CAN, repositories: repos }],
-    }],
-    host: { url: ORIGIN, displayName: "Spex Example" },
-    account: { id: "7", login: "jane", displayName: "Jane", canCreateGroup: false },
     signIn: { phase: "idle" },
-    read: { phase: "idle" },
-    readAt: NOW - MIN,
-    groups: [
-      { id: "1", fullPath: "jane", name: "jane", own: true, can: NO_CAN, repositories: [OWN_REPO, ...repos] },
-    ],
-    roles: ROLES,
+    own: { name: "jane", repositories: [OWN_REPO] },
+    instances: [instance({ groups: [namespace("jane", repos)], ...at })],
     diagnostics: [],
     // The core carries the count (space-1); the fixture derives it the
     // same way, so a test state can never claim an impossible pair.
     issues: 0,
-    ...over,
-    ...(over.diagnostics
-      ? { issues: over.issues ?? over.diagnostics.filter((d) => d.repair?.declined === undefined).length }
+    ...rest,
+    ...(rest.diagnostics
+      ? { issues: rest.issues ?? rest.diagnostics.filter((d) => d.repair?.declined === undefined).length }
       : {}),
-  };
+  });
+}
+
+/** A home with its default instance changed as a test says. */
+export function withInstance(state: GroupsState, over: Partial<InstanceState>): GroupsState {
+  return withMirrors({
+    ...state,
+    instances: state.instances.map((entry) => (entry.origin === state.defaultInstance ? { ...entry, ...over } : entry)),
+  });
+}
+
+/** A home whose default instance lists more groups after its own. */
+export function withGroups(state: GroupsState, ...groups: InstanceGroupState[]): GroupsState {
+  const served = state.instances.find((entry) => entry.origin === state.defaultInstance);
+  return withInstance(state, { groups: [...(served?.groups ?? []), ...groups] });
+}
+
+/** A home that lists no instance: your own group alone, its own spex
+ * repository on this device only, beside the given rows. */
+export function noInstance(over: Partial<GroupsShape> = {}, repos: RepositoryState[] = []): GroupsState {
+  const own = { ...OWN_REPO, state: "local-only" as const, remote: null, id: null, lastSync: null };
+  return base({ instances: [], own: { name: "jane", repositories: [own, ...repos] }, ...over });
+}
+
+/** A home signed out of the instance at `origin`, its entry kept with
+ * its account; `byHost` where that instance signed this device out
+ * (space-3). */
+export function signedOutAt(origin: string, options: { byHost?: boolean } = {}, state: GroupsState = base()): GroupsState {
+  return withMirrors({
+    ...state,
+    instances: state.instances.map((entry) =>
+      entry.origin === origin ? { ...entry, signedIn: false, hostSignedOut: options.byHost ?? false, read: { phase: "idle" } } : entry,
+    ),
+  });
+}
+
+/** A home signed in to the fixtures' instance and to a second one after
+ * it, displayed "Second Example", where you are signed in as jada. */
+export function twoInstances(over: HomeOver = {}, repos: RepositoryState[] = [repo()]): GroupsState {
+  const home = base(over, repos);
+  return withMirrors({
+    ...home,
+    instances: [
+      ...home.instances,
+      instance({
+        origin: SECOND,
+        host: "second.example",
+        displayName: "Second Example",
+        account: { id: "70", login: "jada", displayName: "Jada", canCreateGroup: false },
+        groups: [namespace("jada")],
+      }),
+    ],
+  });
 }
 
 /** The opened repository with local changes of every kind, listed out
  * of order so the grouping is what orders them. */
-export function repoState(over: Partial<RepositoryState> = {}, home: Partial<GroupsState> = {}): GroupsState {
+export function repoState(over: Partial<RepositoryState> = {}, home: HomeOver = {}): GroupsState {
   return base(home, [
     repo({
       local: [OTHER_UNIT, SETTINGS_UNIT, SESSION_UNIT, RULES_UNIT, INTENT_UNIT, CODE_UNIT, ENVIRONMENT_UNIT, AUTHORING_UNIT, DELETED_SESSION],

@@ -22,6 +22,7 @@ import { activateLanguage } from "../i18n.js";
 import { SpexCommandError } from "../lib/client.js";
 import { setClientForTests } from "../state/store.js";
 import {
+  ORIGIN,
   OWN_REPO,
   answer,
   base,
@@ -30,8 +31,11 @@ import {
   deliver,
   installClient,
   live,
+  namespace,
   renderGroups,
   repo,
+  withGroups,
+  withInstance,
 } from "../fixtures/groups.js";
 
 beforeEach(installClient);
@@ -45,8 +49,8 @@ afterEach(() => {
 const ACME = "3";
 const OTHER = "4";
 const EMPTY = "5";
-const A_SPEX = "acme/a-spex";
-const B_SPEX = "other/b-spex";
+const A_SPEX = "@spex.example/acme/a-spex";
+const B_SPEX = "@spex.example/other/b-spex";
 const OWN = OWN_REPO.key;
 
 const member = (login: string, role: string, via: string | null = null, displayName: string | null = null): HostMemberInfo => ({
@@ -71,45 +75,46 @@ const A_MEMBERS = [member("jane", "Owner", "acme", "Jane"), member("bob", "Devel
  * Your own group's flags, and its own repository's, are set too, to
  * show its heading and that row ignore them. */
 function sharingHome(over: { canCreateGroup?: boolean } = {}): GroupsState {
-  const home = base();
   const repository = (key: string, id: string, manage: boolean): RepositoryState =>
     repo({ key, name: key.split("/").pop()!, id, code: null, folder: null, can: { manageMembers: manage, transfer: manage } });
-  return {
-    ...home,
-    account: { ...home.account!, canCreateGroup: over.canCreateGroup ?? true },
+  const home = base({ own: { name: "jane", repositories: [{ ...OWN_REPO, can: { manageMembers: true, transfer: true } }] } });
+  return withInstance(home, {
+    account: { ...home.instances[0]!.account, canCreateGroup: over.canCreateGroup ?? true },
     groups: [
-      {
-        ...home.groups[0]!,
-        can: { createSubgroup: true, manageMembers: true, rename: true, delete: true },
-        repositories: [{ ...OWN_REPO, can: { manageMembers: true, transfer: true } }],
-      },
+      { ...namespace("jane"), can: { createSubgroup: true, manageMembers: true, rename: true, delete: true } },
       {
         id: ACME,
+        login: null,
+        mine: false,
         fullPath: "acme",
         name: "acme",
-        own: false,
         can: { createSubgroup: true, manageMembers: true, rename: true, delete: true },
         repositories: [repository(A_SPEX, "60", true)],
       },
       {
         id: OTHER,
+        login: null,
+        mine: false,
         fullPath: "other",
         name: "Other team",
-        own: false,
         can: { createSubgroup: false, manageMembers: false, rename: false, delete: false },
         repositories: [repository(B_SPEX, "61", false)],
       },
       {
         id: EMPTY,
+        login: null,
+        mine: false,
         fullPath: "empty",
         name: "empty",
-        own: false,
         can: { createSubgroup: true, manageMembers: true, rename: true, delete: true },
         repositories: [],
       },
     ],
-  };
+  });
 }
+
+/** The groups the fixtures' instance lists, in its order. */
+const listedGroups = (state: GroupsState) => state.instances[0]!.groups;
 
 /** The core's answers with each target's members. */
 async function core(type: string, fields: Record<string, unknown> = {}): Promise<unknown> {
@@ -148,7 +153,7 @@ async function openRowMembers(key: string): Promise<HTMLElement> {
   return list;
 }
 
-describe("GROUPS: each act where the host's read says (space-1, space-62)", () => {
+describe("GROUPS: each act where the host's read says (space-1, space-62, space-29)", () => {
   test("New group heads the list; acme's heading carries Members and New subgroup, other's Members alone, your own group's neither", async () => {
     commandMock.mockImplementation(core);
     await renderGroups(sharingHome(), { open: false });
@@ -174,7 +179,7 @@ describe("GROUPS: each act where the host's read says (space-1, space-62)", () =
 
     // acme's members panel: its own members, Share, and Remove on each.
     const acmeList = await openGroupMembers("acme");
-    expect(calls("space.members")).toEqual([{ group: ACME }]);
+    expect(calls("space.members")).toEqual([{ instance: ORIGIN, group: ACME }]);
     expect(within(acmeList).getByTestId("space-share-group:acme").textContent).toBe("Share");
     expect(within(acmeList).getAllByRole("button", { name: /^Remove @/ }).map((button) => button.getAttribute("aria-label"))).toEqual([
       "Remove @jane",
@@ -185,7 +190,7 @@ describe("GROUPS: each act where the host's read says (space-1, space-62)", () =
 
     // other's panel lists its members with no Share and no Remove.
     const otherList = await openGroupMembers("other");
-    expect(calls("space.members")[1]).toEqual({ group: OTHER });
+    expect(calls("space.members")[1]).toEqual({ instance: ORIGIN, group: OTHER });
     expect(within(otherList).queryByRole("button", { name: "Share" })).toBeNull();
     expect(within(otherList).queryByRole("button", { name: /Remove/ })).toBeNull();
     expect(otherList.querySelector("a")).toBeNull();
@@ -235,7 +240,7 @@ describe("GROUPS: each act where the host's read says (space-1, space-62)", () =
     cleanup();
     activateLanguage("en");
     // Before a read is held, neither stands.
-    await renderGroups({ ...refused, readAt: null }, { open: false });
+    await renderGroups(withInstance(refused, { readAt: null }), { open: false });
     expect(screen.queryByTestId("space-groups-made-by")).toBeNull();
     expect(screen.queryByTestId("space-new-group")).toBeNull();
   });
@@ -245,7 +250,7 @@ describe("GROUPS: each act where the host's read says (space-1, space-62)", () =
     expect(screen.queryByTestId("space-new-group")).toBeNull();
     cleanup();
     const out = sharingHome();
-    await renderGroups({ ...out, account: null, readAt: null }, { open: false });
+    await renderGroups(withInstance(out, { signedIn: false, readAt: null }), { open: false });
     expect(screen.queryByTestId("space-new-group")).toBeNull();
     expect(screen.queryByTestId("space-groups-made-by")).toBeNull();
     expect(screen.queryByTestId("space-group-members-acme")).toBeNull();
@@ -253,7 +258,7 @@ describe("GROUPS: each act where the host's read says (space-1, space-62)", () =
   });
 });
 
-describe("GROUPS: New group and New subgroup (space-68)", () => {
+describe("GROUPS: New group and New subgroup (space-68, space-29)", () => {
   test("New subgroup opens the editor in place: the path following the name until edited, Create disabled until both hold text, Escape closing, Creating… until the reply, a refusal kept, a success closing", async () => {
     const replies: ReturnType<typeof deferred<unknown>>[] = [];
     commandMock.mockImplementation(async (type: string, fields?: Record<string, unknown>) => {
@@ -304,7 +309,7 @@ describe("GROUPS: New group and New subgroup (space-68)", () => {
     expect(createAgain.disabled).toBe(true);
     // A second submission while the command runs sends nothing.
     fireEvent.keyDown(name, { key: "Enter" });
-    expect(calls("space.group.create")).toEqual([{ name: "Team 1", path: "team-1", parent: ACME }]);
+    expect(calls("space.group.create")).toEqual([{ instance: ORIGIN, name: "Team 1", path: "team-1", parent: ACME }]);
     // The host reports the name taken: in the editor, the name kept.
     replies[0]!.reject(new SpexCommandError("invalid_request", "Team 1 is taken in acme; name another"));
     await waitFor(() => expect(within(again).getByRole("alert").textContent).toBe("Team 1 is taken in acme; name another"));
@@ -328,21 +333,22 @@ describe("GROUPS: New group and New subgroup (space-68)", () => {
     fireEvent.change(path, { target: { value: "huaxin-lab" } });
     fireEvent.keyDown(path, { key: "Enter" });
     await waitFor(() => expect(calls("space.group.create")).toHaveLength(2));
-    expect(calls("space.group.create")[1]).toEqual({ name: "华芯智造 Lab", path: "huaxin-lab", parent: ACME });
+    expect(calls("space.group.create")[1]).toEqual({ instance: ORIGIN, name: "华芯智造 Lab", path: "huaxin-lab", parent: ACME });
     // The core holds the created group as listed and announces it before
     // its reply; the reply closes the editor with the group standing
     // after acme, its full path beside its name.
     const listed = sharingHome();
-    const [own, acme, other] = listed.groups;
-    deliver({
-      ...listed,
-      groups: [
-        own!,
-        acme!,
-        { id: "70", fullPath: "acme/huaxin-lab", name: "华芯智造 Lab", own: false, can: { createSubgroup: true, manageMembers: true, rename: false, delete: false }, repositories: [] },
-        other!,
-      ],
-    });
+    const [mine, acme, other] = listedGroups(listed);
+    deliver(
+      withInstance(listed, {
+        groups: [
+          mine!,
+          acme!,
+          { id: "70", login: null, mine: false, fullPath: "acme/huaxin-lab", name: "华芯智造 Lab", can: { createSubgroup: true, manageMembers: true, rename: false, delete: false }, repositories: [] },
+          other!,
+        ],
+      }),
+    );
     replies[1]!.resolve({ group: { id: "70", fullPath: "acme/huaxin-lab", name: "华芯智造 Lab" } });
     await waitFor(() => expect(screen.queryByTestId("space-subgroup-acme")).toBeNull());
     await waitFor(() => expect(document.activeElement).toBe(control));
@@ -361,7 +367,7 @@ describe("GROUPS: New group and New subgroup (space-68)", () => {
     const editor = screen.getByTestId("space-new-group-editor");
     fireEvent.change(within(editor).getByLabelText("Group name"), { target: { value: "Workshop" } });
     fireEvent.click(within(editor).getByRole("button", { name: "Create" }));
-    await waitFor(() => expect(calls("space.group.create")).toEqual([{ name: "Workshop", path: "workshop", parent: null }]));
+    await waitFor(() => expect(calls("space.group.create")).toEqual([{ instance: ORIGIN, name: "Workshop", path: "workshop", parent: null }]));
     await waitFor(() => expect(screen.queryByTestId("space-new-group-editor")).toBeNull());
     await waitFor(() => expect(document.activeElement).toBe(control));
     // Cancel closes it too.
@@ -372,7 +378,7 @@ describe("GROUPS: New group and New subgroup (space-68)", () => {
   });
 });
 
-describe("GROUPS: Share (space-69)", () => {
+describe("GROUPS: Share (space-69, space-29)", () => {
   test("Share on acme: the login at the host, the host's roles in its order with Developer chosen, Adding… until the reply, a not-found kept in place, a success saying who was added", async () => {
     const replies: ReturnType<typeof deferred<unknown>>[] = [];
     commandMock.mockImplementation(async (type: string, fields?: Record<string, unknown>) => {
@@ -408,7 +414,7 @@ describe("GROUPS: Share (space-69)", () => {
     await waitFor(() => expect(add.textContent).toBe("Adding…"));
     expect(add.disabled).toBe(true);
     fireEvent.keyDown(login, { key: "Enter" });
-    expect(calls("space.share")).toEqual([{ group: ACME, login: "carol", role: "30" }]);
+    expect(calls("space.share")).toEqual([{ instance: ORIGIN, group: ACME, login: "carol", role: "30" }]);
     // No account under that login: the host's words in the editor, the
     // login kept.
     replies[0]!.reject(new SpexCommandError("not_found", "Spex Example has no account named carol"));
@@ -421,7 +427,7 @@ describe("GROUPS: Share (space-69)", () => {
     fireEvent.change(roles, { target: { value: "40" } });
     fireEvent.click(add);
     await waitFor(() => expect(calls("space.share")).toHaveLength(2));
-    expect(calls("space.share")[1]).toEqual({ group: ACME, login: "carol", role: "40" });
+    expect(calls("space.share")[1]).toEqual({ instance: ORIGIN, group: ACME, login: "carol", role: "40" });
     replies[1]!.resolve({ members: [...ACME_MEMBERS, member("carol", "Maintainer")] });
     await waitFor(() => expect(within(list).queryByTestId("space-share-group:acme-editor")).toBeNull());
     expect(within(list).getByTestId("space-members-outcome-group:acme").textContent).toBe("@carol added as Maintainer");
@@ -464,7 +470,7 @@ describe("GROUPS: Share (space-69)", () => {
   });
 });
 
-describe("GROUPS: Remove (space-72)", () => {
+describe("GROUPS: Remove (space-72, space-29)", () => {
   test("Remove asks inline with Keep focused, Escape keeping; Removing… until the reply; a refusal on the row, the member kept; a success listing the reply", async () => {
     const replies: ReturnType<typeof deferred<unknown>>[] = [];
     commandMock.mockImplementation(async (type: string, fields?: Record<string, unknown>) => {
@@ -493,7 +499,7 @@ describe("GROUPS: Remove (space-72)", () => {
     fireEvent.click(within(within(bob()).getByTestId("space-member-confirm-bob")).getByRole("button", { name: "Remove" }));
     await waitFor(() => expect(remove().textContent).toBe("Removing…"));
     expect(remove().disabled).toBe(true);
-    expect(calls("space.unshare")).toEqual([{ group: ACME, login: "bob" }]);
+    expect(calls("space.unshare")).toEqual([{ instance: ORIGIN, group: ACME, login: "bob" }]);
     replies[0]!.reject(new SpexCommandError("invalid_request", "Spex Example refused: 403 Forbidden"));
     await waitFor(() => expect(within(bob()).getByRole("alert").textContent).toBe("Spex Example refused: 403 Forbidden"));
     expect(remove().textContent).toBe("Remove");
@@ -521,7 +527,7 @@ describe("GROUPS: Remove (space-72)", () => {
   });
 });
 
-describe("GROUPS: Rename, Delete and Move (space-1, space-76, space-77, space-78)", () => {
+describe("GROUPS: Rename, Delete and Move (space-1, space-76, space-77, space-78, space-29)", () => {
   test("Rename stands where the host lets the person, Delete only on an empty group, Move… on a project's row it may move — none on your own group or its own records", async () => {
     commandMock.mockImplementation(core);
     await renderGroups(sharingHome(), { open: false });
@@ -551,14 +557,13 @@ describe("GROUPS: Rename, Delete and Move (space-1, space-76, space-77, space-78
     expect(screen.queryByTestId(`space-row-move-${OWN}`)).toBeNull();
     // A group holding a group offers no Delete either.
     cleanup();
-    const nested = sharingHome();
-    nested.groups.push({ id: "6", fullPath: "empty/team", name: "team", own: false, can: { createSubgroup: true, manageMembers: true, rename: true, delete: true }, repositories: [] });
+    const nested = withGroups(sharingHome(), { id: "6", login: null, mine: false, fullPath: "empty/team", name: "team", can: { createSubgroup: true, manageMembers: true, rename: true, delete: true }, repositories: [] });
     await renderGroups(nested, { open: false });
     expect(within(region("empty")).queryByTestId("space-group-delete-empty")).toBeNull();
     expect(within(region("empty/team")).getByTestId("space-group-delete-empty/team")).toBeTruthy();
     // Signed out, none of them stands.
     cleanup();
-    await renderGroups({ ...sharingHome(), account: null, readAt: null }, { open: false });
+    await renderGroups(withInstance(sharingHome(), { signedIn: false, readAt: null }), { open: false });
     expect(screen.queryByTestId("space-group-rename-acme")).toBeNull();
     expect(screen.queryByTestId("space-group-delete-empty")).toBeNull();
     expect(screen.queryByTestId(`space-row-move-${A_SPEX}`)).toBeNull();
@@ -606,7 +611,7 @@ describe("GROUPS: Rename, Delete and Move (space-1, space-76, space-77, space-78
     expect(save2.disabled).toBe(true);
     fireEvent.keyDown(name2, { key: "Enter" });
     // Only what changed is sent.
-    expect(calls("space.group.rename")).toEqual([{ group: ACME, name: "Acme Labs" }]);
+    expect(calls("space.group.rename")).toEqual([{ instance: ORIGIN, group: ACME, name: "Acme Labs" }]);
     replies[0]!.reject(new SpexCommandError("invalid_request", "Spex Example refused: You need the Owner role to rename acme."));
     await waitFor(() => expect(within(again).getByRole("alert").textContent).toBe("Spex Example refused: You need the Owner role to rename acme."));
     expect(name2.value).toBe("Acme Labs");
@@ -619,10 +624,10 @@ describe("GROUPS: Rename, Delete and Move (space-1, space-76, space-77, space-78
     fireEvent.change(path2, { target: { value: "acme-labs" } });
     fireEvent.keyDown(path2, { key: "Enter" });
     await waitFor(() => expect(calls("space.group.rename")).toHaveLength(2));
-    expect(calls("space.group.rename")[1]).toEqual({ group: ACME, name: "Acme Labs", path: "acme-labs" });
+    expect(calls("space.group.rename")[1]).toEqual({ instance: ORIGIN, group: ACME, name: "Acme Labs", path: "acme-labs" });
     // The core holds the group renamed and announces it before its reply.
     const listed = sharingHome();
-    deliver({ ...listed, groups: listed.groups.map((group) => (group.id === ACME ? { ...group, fullPath: "acme-labs", name: "Acme Labs" } : group)) });
+    deliver(withInstance(listed, { groups: listedGroups(listed).map((group) => (group.id === ACME ? { ...group, fullPath: "acme-labs", name: "Acme Labs" } : group)) }));
     replies[1]!.resolve({ group: { id: ACME, fullPath: "acme-labs", name: "Acme Labs" } });
     await waitFor(() => expect(screen.queryByTestId("space-rename-acme")).toBeNull());
     expect(within(region("acme-labs")).getByRole("heading", { level: 2 }).textContent).toBe("Acme Labs · acme-labs");
@@ -654,7 +659,7 @@ describe("GROUPS: Rename, Delete and Move (space-1, space-76, space-77, space-78
     fireEvent.click(within(screen.getByTestId("space-group-confirm-empty")).getByRole("button", { name: "Delete" }));
     await waitFor(() => expect(control().textContent).toBe("Deleting…"));
     expect(control().disabled).toBe(true);
-    expect(calls("space.group.delete")).toEqual([{ group: EMPTY }]);
+    expect(calls("space.group.delete")).toEqual([{ instance: ORIGIN, group: EMPTY }]);
     replies[0]!.reject(new SpexCommandError("invalid_request", "Spex Example refused: The group is scheduled for deletion already."));
     await waitFor(() => expect(screen.getByTestId("space-group-refusal-empty").textContent).toBe("Spex Example refused: The group is scheduled for deletion already."));
     expect(screen.getByTestId("space-group-refusal-empty").getAttribute("role")).toBe("alert");
@@ -667,7 +672,7 @@ describe("GROUPS: Rename, Delete and Move (space-1, space-76, space-77, space-78
     await waitFor(() => expect(calls("space.group.delete")).toHaveLength(2));
     // The core holds it gone and announces that before its reply.
     const listed = sharingHome();
-    deliver({ ...listed, groups: listed.groups.filter((group) => group.id !== EMPTY) });
+    deliver(withInstance(listed, { groups: listedGroups(listed).filter((group) => group.id !== EMPTY) }));
     replies[1]!.resolve({ deleted: true });
     await waitFor(() => expect(screen.queryByTestId("space-group-empty")).toBeNull());
   });
@@ -722,13 +727,14 @@ describe("GROUPS: Rename, Delete and Move (space-1, space-76, space-77, space-78
     expect(calls("space.repository.move")[1]).toEqual({ repository: A_SPEX, groupId: null });
     // The core holds the row under your own group and announces it first.
     const listed = sharingHome();
-    const moved = listed.groups[1]!.repositories[0]!;
-    deliver({
-      ...listed,
-      groups: listed.groups.map((group) =>
-        group.own ? { ...group, repositories: [...group.repositories, moved] } : group.id === ACME ? { ...group, repositories: [] } : group,
-      ),
-    });
+    const moved = listedGroups(listed)[1]!.repositories[0]!;
+    deliver(
+      withInstance(listed, {
+        groups: listedGroups(listed).map((group) =>
+          group.mine ? { ...group, repositories: [...group.repositories, moved] } : group.id === ACME ? { ...group, repositories: [] } : group,
+        ),
+      }),
+    );
     replies[1]!.resolve({ repository: { id: "60", fullPath: "jane/a-spex" } });
     await waitFor(() => expect(screen.queryByTestId(`space-move-${A_SPEX}`)).toBeNull());
     expect(within(region("Your own group")).getByTestId(`space-row-${A_SPEX}`)).toBeTruthy();

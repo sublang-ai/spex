@@ -54,6 +54,7 @@ function derivedGroupPath(name: string): string {
  * only what differs, disabled while nothing does. */
 export function GroupNameEditor({
   testId,
+  instance,
   parent,
   rename,
   connected,
@@ -61,7 +62,10 @@ export function GroupNameEditor({
   onNote,
 }: {
   testId: string;
-  /** The parent group's host id; null creates at the top. */
+  /** The instance, by its origin, the group is made or renamed at
+   * (space-68, space-76). */
+  instance: string;
+  /** The parent group's host id; null creates at the instance's root. */
   parent: string | null;
   /** The group renamed: its host id, its name and its own path segment. */
   rename?: { group: string; name: string; path: string };
@@ -101,8 +105,8 @@ export function GroupNameEditor({
     setBusy(true);
     setRefusal(undefined);
     try {
-      if (rename) await spaceGroupRename(rename.group, change);
-      else await spaceGroupCreate(chosen, chosenPath, parent);
+      if (rename) await spaceGroupRename(instance, rename.group, change);
+      else await spaceGroupCreate(instance, chosen, chosenPath, parent);
       onClose();
     } catch (cause) {
       const message = (cause as Error).message;
@@ -240,7 +244,7 @@ export function MembersPanel({
   // A read a share or a removal overtook is discarded: the reply after
   // the act is the newer list.
   const reads = useRef(0);
-  const targetKey = "group" in target ? `group:${target.group}` : `repository:${target.repository}`;
+  const targetKey = "group" in target ? `group:${target.instance} ${target.group}` : `repository:${target.repository}`;
 
   useEffect(() => {
     const read = (reads.current += 1);

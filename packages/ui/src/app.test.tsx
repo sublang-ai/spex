@@ -37,10 +37,7 @@ function defaultReply(type: string): object {
       : type === "environment.playbooks"
         ? { project: [], own: [] }
         : type === "space.get"
-          ? {
-              home: "/home/.spex", git: { ok: true, version: "2.50" }, host: { url: "https://host.test", displayName: null },
-              account: null, signIn: { phase: "idle" }, read: { phase: "idle" }, readAt: null, groups: [], diagnostics: [], issues: 0,
-            }
+          ? groupsState()
           : {};
 }
 
@@ -59,6 +56,7 @@ import { initialSessionView, type SessionView } from "./state/reducer.js";
 import { keyLabel } from "./lib/shortcuts.js";
 import type { SessionInfo } from "@sublang/spex-core/protocol";
 import { currentLocale } from "./i18n.js";
+import { groupsState, instanceState, namespace, repositoryRow } from "./fixtures/groups-state.js";
 
 // A live clock: the rows print ages relative to now.
 const NOW = Date.now();
@@ -746,16 +744,8 @@ describe("playbook-library-34, core-service-2: the slash menus offer the project
 });
 
 describe("space-59, space-60, space-63: the page follows a project a move re-keys or a join adds", () => {
-  const repo = (key: string, folder: string | null) => ({
-    key, name: key.split("/").pop(), id: null, own: false, code: null, folder,
-    remote: null, state: "local-only", reason: null, waiting: null, members: null, visibility: null,
-    branch: null, local: [], incoming: [], conflicts: [], lastSync: null, noticed: false, sync: { phase: "idle" },
-  });
-  const groups = (...repositories: object[]) => ({
-    home: "/home/.spex", git: { ok: true, version: "2.50" }, host: { url: "https://host.test", displayName: null },
-    account: null, signIn: { phase: "idle" }, read: { phase: "idle" }, readAt: null, diagnostics: [], issues: 0,
-    groups: [{ id: null, fullPath: "me", name: "me", url: null, own: true, repositories }],
-  }) as never;
+  const repo = (key: string, folder: string | null) => repositoryRow(key, { folder });
+  const groups = (...repositories: ReturnType<typeof repo>[]) => groupsState({ own: { name: "me", repositories } });
   const ALPHA = { id: "acme/alpha-spex", name: "alpha", path: "/tmp/alpha", registeredAt: 0, repository: { key: "acme/alpha-spex", name: "alpha-spex", group: "acme", own: false } };
   const BETA = { id: "p2", name: "beta", path: "/tmp/beta", registeredAt: 1, repository: { key: "p2", name: "beta-spex", group: "me", own: true } };
   const GAMMA = { id: "acme/gamma-spex", name: "gamma", path: "/tmp/gamma", registeredAt: 2, repository: { key: "acme/gamma-spex", name: "gamma-spex", group: "acme", own: false } };
@@ -764,6 +754,33 @@ describe("space-59, space-60, space-63: the page follows a project a move re-key
     render(<App />);
     act(() => {
       deliverServerMessageForTests({ type: "space.state", state: groups(repo("p1", "/tmp/alpha"), repo("p2", "/tmp/beta"), repo("acme/team-spex", null)) });
+    });
+    expect(commandMock).not.toHaveBeenCalledWith("project.list", {});
+  });
+
+  test("space-59, space-60, space-63: a Groups state whose project row stands under a second instance re-reads nothing", () => {
+    render(<App />);
+    // alpha's row stands under the second instance's group, beta's under
+    // your own group: both are the page's projects, wherever the state
+    // heads them (space-1, DR-127).
+    const state = groupsState({
+      own: { name: "me", repositories: [repo("p2", "/tmp/beta")] },
+      instances: [
+        instanceState("https://host.test", { groups: [namespace("me")] }),
+        instanceState("https://second.test", {
+          groups: [
+            namespace("me"),
+            {
+              id: "30", login: null, mine: false, fullPath: "acme", name: "acme",
+              can: { createSubgroup: false, manageMembers: false, rename: false, delete: false },
+              repositories: [repositoryRow("p1", { instance: "https://second.test", folder: "/tmp/alpha", state: "reachable" })],
+            },
+          ],
+        }),
+      ],
+    });
+    act(() => {
+      deliverServerMessageForTests({ type: "space.state", state });
     });
     expect(commandMock).not.toHaveBeenCalledWith("project.list", {});
   });
@@ -870,17 +887,9 @@ describe("run-view-58, projects-4: the Overview tab pins the project's group", (
   });
 
   test("the header's records field names the spex repository with its group and its state", async () => {
-    const row = (state: string, extra: object = {}) => ({
-      key: "p1", name: "alpha-spex", id: null, own: false, code: null, folder: "/tmp/alpha",
-      remote: null, state, reason: null, waiting: null, members: null, visibility: null,
-      branch: null, local: [], incoming: [], conflicts: [], lastSync: null, noticed: false,
-      sync: { phase: "idle" }, can: { manageMembers: false }, ...extra,
-    });
-    const groups = (repository: object) => ({
-      home: "/home/.spex", git: { ok: true, version: "2.50" }, host: { url: "https://host.test", displayName: "Host" },
-      account: null, signIn: { phase: "idle" }, read: { phase: "idle" }, readAt: null, diagnostics: [], issues: 0, roles: [],
-      groups: [{ id: null, fullPath: "me", name: "me", url: null, own: true, can: { createSubgroup: false, manageMembers: false }, repositories: [repository] }],
-    });
+    const row = (state: "local-only", extra: Parameters<typeof repositoryRow>[1] = {}) =>
+      repositoryRow("p1", { name: "alpha-spex", folder: "/tmp/alpha", state, ...extra });
+    const groups = (repository: ReturnType<typeof row>) => groupsState({ own: { name: "me", repositories: [repository] } });
     commandMock.mockImplementation(async (type: string) =>
       type === "space.get"
         ? groups(row("local-only"))
@@ -907,7 +916,7 @@ describe("run-view-58, projects-4: the Overview tab pins the project's group", (
     act(() => {
       deliverServerMessageForTests({
         type: "space.state",
-        state: groups(row("local-only", { waiting: { step: "create", group: "acme", message: "" } })) as never,
+        state: groups(row("local-only", { waiting: { step: "create", group: "acme", message: "" } })),
       });
     });
     expect(screen.getByTestId("overview-records-state").textContent).toBe(

@@ -69,7 +69,7 @@ describe("GROUPS: re-reads on events, never on a timer (space-2)", () => {
     expect(screen.getByTestId(`space-repo-state-${KEY}`).textContent).toBe("Synced 2h ago");
     expect(screen.getByTestId("space-repository")).toBeTruthy();
     expect(syncControl().textContent).toBe("Sync");
-    expect(useAppStore.getState().space?.groups[0].repositories[1].state).toBe("reachable");
+    expect(useAppStore.getState().space?.instances[0]?.groups[0]?.repositories[0]?.state).toBe("reachable");
   });
 
   test("session, ledger and configuration announcements re-read once, debounced by 300 ms, never on a timer", async () => {
@@ -182,7 +182,7 @@ describe("GROUPS: issues and repairs (space-1, space-46..space-56)", () => {
       if (type === "project.list") return [];
       return (await import("../fixtures/groups.js")).answer(type, fields);
     });
-    const repair = unpaired({ repository: KEY, name: KEY.split("/")[1], key: `${KEY}|/code/infra` });
+    const repair = unpaired({ repository: KEY, name: KEY.split("/").pop(), key: `${KEY}|/code/infra` });
     await renderGroups(
       repoState(
         { sync: { phase: "running", op: "sync", step: "apply", since: NOW, cancelable: false } },

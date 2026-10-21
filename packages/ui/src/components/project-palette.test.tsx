@@ -24,9 +24,11 @@ import {
 } from "../state/reducer.js";
 import type {
   ProjectInfo,
+  RepositoryState,
   SessionInfo,
   TmuxPlayRecord,
 } from "@sublang/spex-core/protocol";
+import { NO_CAN, groupsState, instanceState, namespace, repositoryRow } from "../fixtures/groups-state.js";
 
 const PROJECTS: ProjectInfo[] = [
   { id: "me/alpha-spex", path: "/tmp/alpha", name: "alpha", registeredAt: 0, repository: { key: "me/alpha-spex", name: "alpha-spex", group: "me", own: true } },
@@ -302,22 +304,23 @@ describe("DR-015: the palette offers the Academy example", () => {
 
 describe("projects-1, space-58: a folder added while signed in asks for its group in place", () => {
   const ADDED: ProjectInfo = { id: "ada/gamma-spex", path: "/tmp/gamma", name: "gamma", registeredAt: 2, repository: { key: "ada/gamma-spex", name: "gamma-spex", group: "ada", own: true } };
-  const row = (key: string, extra: object = {}) => ({
-    key, name: key.split("/").pop(), id: null, own: false, code: null, folder: "/tmp/gamma",
-    remote: null, state: "local-only", reason: null, waiting: null, members: null, visibility: null,
-    branch: null, local: [], incoming: [], conflicts: [], lastSync: null, noticed: false, sync: { phase: "idle" },
-    can: { manageMembers: false }, ...extra,
-  });
-  const can = { createSubgroup: false, manageMembers: false };
-  const groups = (account: boolean, repositories: object[]) => ({
-    home: "/home/.spex", git: { ok: true, version: "2.50" }, host: { url: "https://host.test", displayName: "Host" },
-    account: account ? { id: "1", login: "ada", displayName: null, canCreateGroup: false } : null,
-    signIn: { phase: "idle" }, read: { phase: "idle" }, readAt: 1, diagnostics: [], issues: 0, roles: [],
-    groups: [
-      { id: "10", fullPath: "ada", name: "ada", url: null, own: true, can, repositories },
-      { id: "20", fullPath: "acme", name: "acme", url: null, own: false, can, repositories: [] },
-    ],
-  }) as never;
+  const HOST = "https://host.test";
+  const SECOND = "https://second.test";
+  const row = (key: string, extra: Partial<RepositoryState> = {}) => repositoryRow(key, { folder: "/tmp/gamma", ...extra });
+  const acme = (id: string) => ({ id, login: null, mine: false, fullPath: "acme", name: "acme", can: NO_CAN, repositories: [] });
+  /** An instance where ada may be signed in, listing her namespace and
+   * acme. */
+  const at = (origin: string, signedIn: boolean, id: string) =>
+    instanceState(origin, {
+      displayName: origin === HOST ? "Host" : "Second",
+      account: { id: "1", login: "ada", displayName: null, canCreateGroup: false },
+      signedIn,
+      groups: [namespace("ada"), acme(id)],
+    });
+  /** Ada's home: signed in to the host where `account`, else listing no
+   * instance; the added folder's clone under her own group. */
+  const groups = (account: boolean, repositories: RepositoryState[]) =>
+    groupsState({ defaultInstance: HOST, own: { name: "ada", repositories }, instances: account ? [at(HOST, true, "20")] : [] });
 
   function add(path = "/tmp/gamma"): void {
     fireEvent.change(screen.getByTestId("palette-path"), { target: { value: path } });
@@ -338,7 +341,7 @@ describe("projects-1, space-58: a folder added while signed in asks for its grou
     expect((screen.getByTestId(`space-pick-name-${ADDED.id}`) as HTMLInputElement).value).toBe("gamma");
     fireEvent.click(screen.getByTestId("space-pick-group-acme"));
     await vi.waitFor(() =>
-      expect(spacePick).toHaveBeenCalledWith(ADDED.id, { kind: "create", groupId: "20", name: "gamma" }),
+      expect(spacePick).toHaveBeenCalledWith(ADDED.id, { kind: "create", instance: HOST, groupId: "20", name: "gamma" }),
     );
     await vi.waitFor(() => expect(onClose).toHaveBeenCalled());
   });
@@ -368,5 +371,28 @@ describe("projects-1, space-58: a folder added while signed in asks for its grou
     await vi.waitFor(() => expect(again.onClose).toHaveBeenCalled());
     expect(again.onPick).toHaveBeenCalledWith(PROJECTS[0].id);
     expect(screen.queryByTestId(`space-picker-${PROJECTS[0].id}`)).toBeNull();
+  });
+
+  test("projects-1, space-58: signed in at any instance the picker stands in place; signed in nowhere the palette just closes", async () => {
+    // Signed out of the default instance, signed in at a second one: the
+    // folder asks for its group in place (projects-1, space-58).
+    const two = (second: boolean) =>
+      groupsState({ defaultInstance: HOST, own: { name: "ada", repositories: [row(ADDED.id)] }, instances: [at(HOST, false, "20"), at(SECOND, second, "30")] });
+    useAppStore.setState({ connection: "open", space: two(true), spacePick: vi.fn(async () => {}) });
+    const first = renderPalette({ onAddPath: vi.fn(async () => ADDED) });
+    add();
+    await screen.findByTestId(`space-picker-${ADDED.id}`);
+    expect(first.onPick).toHaveBeenCalledWith(ADDED.id);
+    expect(first.onClose).not.toHaveBeenCalled();
+    cleanup();
+
+    // Both listed, both signed out: nothing to pick at, so the palette
+    // closes on the current project.
+    useAppStore.setState({ space: two(false) });
+    const again = renderPalette({ onAddPath: vi.fn(async () => ADDED) });
+    add();
+    await vi.waitFor(() => expect(again.onClose).toHaveBeenCalled());
+    expect(again.onPick).toHaveBeenCalledWith(ADDED.id);
+    expect(screen.queryByTestId(`space-picker-${ADDED.id}`)).toBeNull();
   });
 });

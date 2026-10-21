@@ -176,7 +176,7 @@ export function GroupsList({
       className="flex flex-col gap-3"
     >
       {groups.account?.canCreateGroup ? (
-        <NewGroup connected={connected} onNote={onNote} />
+        <NewGroup instance={groups.defaultInstance} connected={connected} onNote={onNote} />
       ) : groups.account && groups.readAt !== null ? (
         <GroupsMadeBy groups={groups} />
       ) : null}
@@ -198,8 +198,8 @@ export function GroupsList({
 }
 
 /** "New group" at the list's head (space-1, space-68): a group at the
- * top of the host, named in place. */
-function NewGroup({ connected, onNote }: { connected: boolean; onNote: Note }) {
+ * root of the instance `instance`, by its origin, named in place. */
+function NewGroup({ instance, connected, onNote }: { instance: string; connected: boolean; onNote: Note }) {
   const [open, setOpen] = useState(false);
   const controlRef = useRef<HTMLButtonElement>(null);
   return (
@@ -218,6 +218,7 @@ function NewGroup({ connected, onNote }: { connected: boolean; onNote: Note }) {
       {open ? (
         <GroupNameEditor
           testId="space-new-group-editor"
+          instance={instance}
           parent={null}
           connected={connected}
           onClose={() => {
@@ -335,6 +336,9 @@ function GroupSection({
   // shared on its spex repositories (DR-114); another account's login,
   // listed by no id, takes nothing either (DR-120).
   const hostGroup = groups.account !== null && !group.own && group.id !== null ? group.id : null;
+  // The groups the list heads are the default instance's (space-30): a
+  // group's command names it there (space-29).
+  const instance = groups.defaultInstance;
   const close = (ref: { current: HTMLButtonElement | null }) => {
     setOpened(undefined);
     // Closing never strands focus (DR-010 §6).
@@ -359,7 +363,7 @@ function GroupSection({
     setDeleting(true);
     setRefusal(undefined);
     try {
-      await spaceGroupDelete(hostGroup);
+      await spaceGroupDelete(instance, hostGroup);
     } catch (cause) {
       const message = (cause as Error).message;
       setRefusal(message);
@@ -486,6 +490,7 @@ function GroupSection({
         <div className="ml-6 min-w-0">
           <GroupNameEditor
             testId={`space-rename-${group.fullPath}`}
+            instance={instance}
             parent={null}
             rename={{ group: hostGroup, name: group.name, path: lastSegment(group.fullPath) }}
             connected={connected}
@@ -498,6 +503,7 @@ function GroupSection({
         <div className="ml-6 min-w-0">
           <GroupNameEditor
             testId={`space-subgroup-${group.fullPath}`}
+            instance={instance}
             parent={hostGroup}
             connected={connected}
             onClose={() => close(subgroupRef)}
@@ -508,7 +514,7 @@ function GroupSection({
       {opened === "members" && hostGroup !== null ? (
         <MembersPanel
           groups={groups}
-          target={{ group: hostGroup }}
+          target={{ instance, group: hostGroup }}
           id={`group:${group.fullPath}`}
           name={group.fullPath}
           canManage={group.can.manageMembers}
@@ -620,14 +626,15 @@ function RepositoryRow({
     }
   };
 
-  /** Join a repository the host lists into a folder (space-63). */
+  /** Join a repository an instance lists into a folder (space-63), at
+   * the instance its row stands under (space-29). */
   const join = async (folder: string): Promise<void> => {
     if (!repo.id) return;
     const key = machineKey;
     setBusy("join");
     setError(undefined);
     try {
-      await spaceJoin(repo.id, folder);
+      await spaceJoin(repo.instance ?? groups.defaultInstance, repo.id, folder);
       setAccepted({ op: "join", key });
       setOpened(undefined);
     } catch (cause) {
@@ -1299,6 +1306,10 @@ export function GroupPicker({
   onNote: Note;
 }) {
   const spacePick = useAppStore((state) => state.spacePick);
+  // Every choice is at the clone's instance where its key lies under
+  // one, else at the default instance, whose groups the picker offers
+  // (space-58, space-29).
+  const instance = repo.instance ?? groups.defaultInstance;
   const code = repo.code;
   // The listed ones are the host's: a host id, a state the host read.
   const listed = groups.groups.flatMap((group) =>
@@ -1342,7 +1353,9 @@ export function GroupPicker({
 
   const pick = async (
     id: string,
-    choice: { kind: "join"; hostId: string } | { kind: "create"; groupId: string | null; name: string },
+    choice:
+      | { kind: "join"; instance: string; hostId: string }
+      | { kind: "create"; instance: string; groupId: string | null; name: string },
     noticed = false,
   ) => {
     setBusy(id);
@@ -1373,7 +1386,7 @@ export function GroupPicker({
       setNotice(other.key);
       return;
     }
-    void pick(other.key, { kind: "join", hostId: other.id! });
+    void pick(other.key, { kind: "join", instance, hostId: other.id! });
   };
 
   const create = (group: GroupsState["groups"][number]) => {
@@ -1385,7 +1398,7 @@ export function GroupPicker({
       return;
     }
     // Your own group is named by none, never by its id (space-58).
-    void pick(`group:${group.fullPath}`, { kind: "create", groupId: group.own ? null : group.id, name: chosen });
+    void pick(`group:${group.fullPath}`, { kind: "create", instance, groupId: group.own ? null : group.id, name: chosen });
   };
 
   const option =
@@ -1449,7 +1462,7 @@ export function GroupPicker({
                       question={sharingNotice(other.visibility)}
                       confirmLabel={continueLabel()}
                       disabled={disabled}
-                      onConfirm={() => void pick(other.key, { kind: "join", hostId: other.id! }, true)}
+                      onConfirm={() => void pick(other.key, { kind: "join", instance, hostId: other.id! }, true)}
                       onCancel={() => closeNotice(other.key)}
                     />
                   </div>

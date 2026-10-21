@@ -50,6 +50,9 @@ export function useSignIn(groups: GroupsState | undefined, onNote: Note): SignIn
   const signIn = groups?.signIn;
   const phase = signIn?.phase;
   const signedIn = groups?.account != null;
+  // The card signs in to the default instance (space-3): the origin it
+  // names in the start (space-29).
+  const url = groups?.defaultInstance;
 
   // The flow ends as the state says (space-3): running gives way to
   // idle, with the account, or to failed, with its cause.
@@ -63,11 +66,12 @@ export function useSignIn(groups: GroupsState | undefined, onNote: Note): SignIn
   }, [signedIn]);
 
   const start = useCallback(() => {
+    if (!url) return;
     setStarting(true);
     setError(undefined);
     void (async () => {
       try {
-        const reply = await spaceSignIn();
+        const reply = await spaceSignIn(url);
         if (reply?.flow !== "browser" && reply?.flow !== "device") {
           throw new Error(i18n._("The sign-in did not start"));
         }
@@ -96,7 +100,7 @@ export function useSignIn(groups: GroupsState | undefined, onNote: Note): SignIn
         setStarting(false);
       }
     })();
-  }, [spaceSignIn, onNote]);
+  }, [spaceSignIn, onNote, url]);
 
   const cancel = useCallback(() => {
     void (async () => {
@@ -158,7 +162,8 @@ export function AccountField({
     setSigningOut(true);
     setSignOutError(undefined);
     try {
-      await spaceSignOut();
+      // The default instance's account the header reads (space-6).
+      await spaceSignOut(groups.defaultInstance);
       onNote(i18n._("Not signed in"));
     } catch (cause) {
       const message = (cause as Error).message;
