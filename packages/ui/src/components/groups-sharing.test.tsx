@@ -79,7 +79,7 @@ const A_MEMBERS = [member("jane", "Owner", "acme", "Jane"), member("bob", "Devel
 function sharingHome(over: { canCreateGroup?: boolean } = {}): GroupsState {
   const repository = (key: string, id: string, manage: boolean): RepositoryState =>
     repo({ key, name: key.split("/").pop()!, id, code: null, folder: null, can: { manageMembers: manage, transfer: manage } });
-  const home = base({ own: { name: "jane", repositories: [{ ...OWN_REPO, can: { manageMembers: true, transfer: true } }] } });
+  const home = base({ own: { name: "jane", named: false, repositories: [{ ...OWN_REPO, can: { manageMembers: true, transfer: true } }] } });
   return withInstance(home, {
     account: { ...home.instances[0]!.account, canCreateGroup: over.canCreateGroup ?? true },
     groups: [

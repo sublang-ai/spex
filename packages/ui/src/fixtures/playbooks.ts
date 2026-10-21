@@ -85,6 +85,8 @@ export function repository(over: Partial<RepositoryState> = {}): RepositoryState
   return {
     key: PROJECT_ID,
     instance: "https://spex.example",
+    // A remote the reader named, a path: no instance governs it.
+    governing: null,
     name: "demo-spex",
     id: "42",
     own: false,
@@ -126,7 +128,7 @@ export function home(
     home: "/home/me/.spex",
     git: { ok: true, version: "2.45.0" },
     defaultInstance: "https://spex.example",
-    own: { name: "me", repositories: account === null ? [own, project] : [own] },
+    own: { name: "me", named: account === null, repositories: account === null ? [own, project] : [own] },
     instances: account === null
       ? []
       : [instanceState("https://spex.example", { displayName: "Spex Example", account, readAt: NOW, groups: [namespace("me", [project])] })],

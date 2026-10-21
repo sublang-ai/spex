@@ -37,15 +37,15 @@ export function instanceState(origin: string, over: Partial<InstanceState> = {})
   };
 }
 
-/** A home with your own group alone and no instance listed, unless a
- * test says otherwise. */
+/** A home with your own group alone and no instance listed, its folder
+ * still bearing this device's user name, unless a test says otherwise. */
 export function groupsState(over: Partial<GroupsState> = {}): GroupsState {
   return {
     home: "/home/.spex",
     git: { ok: true, version: "2.50" },
     defaultInstance: "https://host.test",
     signIn: { phase: "idle" },
-    own: { name: "me", repositories: [] },
+    own: { name: "me", named: true, repositories: [] },
     instances: [],
     diagnostics: [],
     issues: 0,
@@ -59,6 +59,7 @@ export function repositoryRow(key: string, over: Partial<RepositoryState> = {}):
   return {
     key,
     instance: null,
+    governing: null,
     name: key.split("/").pop() ?? key,
     id: null,
     own: false,

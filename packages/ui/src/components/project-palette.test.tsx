@@ -321,7 +321,7 @@ describe("projects-1, space-58: a folder added while signed in asks for its grou
   /** Ada's home: signed in to the host where `account`, else listing no
    * instance; the added folder's clone under her own group. */
   const groups = (account: boolean, repositories: RepositoryState[]) =>
-    groupsState({ defaultInstance: HOST, own: { name: "ada", repositories }, instances: account ? [at(HOST, true, "20")] : [] });
+    groupsState({ defaultInstance: HOST, own: { name: "ada", named: !account, repositories }, instances: account ? [at(HOST, true, "20")] : [] });
 
   function add(path = "/tmp/gamma"): void {
     fireEvent.change(screen.getByTestId("palette-path"), { target: { value: path } });
@@ -378,7 +378,7 @@ describe("projects-1, space-58: a folder added while signed in asks for its grou
     const spacePick = vi.fn(async () => {});
     useAppStore.setState({
       connection: "open",
-      space: groupsState({ defaultInstance: HOST, own: { name: "ada", repositories: [row(ADDED.id)] }, instances: [at(HOST, true, "20"), at(SECOND, true, "30")] }),
+      space: groupsState({ defaultInstance: HOST, own: { name: "ada", named: false, repositories: [row(ADDED.id)] }, instances: [at(HOST, true, "20"), at(SECOND, true, "30")] }),
       spacePick,
     });
     const { onClose } = renderPalette({ onAddPath: vi.fn(async () => ADDED) });
@@ -405,7 +405,7 @@ describe("projects-1, space-58: a folder added while signed in asks for its grou
     // Signed out of the default instance, signed in at a second one: the
     // folder asks for its group in place (projects-1, space-58).
     const two = (second: boolean) =>
-      groupsState({ defaultInstance: HOST, own: { name: "ada", repositories: [row(ADDED.id)] }, instances: [at(HOST, false, "20"), at(SECOND, second, "30")] });
+      groupsState({ defaultInstance: HOST, own: { name: "ada", named: false, repositories: [row(ADDED.id)] }, instances: [at(HOST, false, "20"), at(SECOND, second, "30")] });
     useAppStore.setState({ connection: "open", space: two(true), spacePick: vi.fn(async () => {}) });
     const first = renderPalette({ onAddPath: vi.fn(async () => ADDED) });
     add();

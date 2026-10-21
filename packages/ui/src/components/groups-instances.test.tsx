@@ -39,6 +39,7 @@ import {
   commandMock,
   deliver,
   installClient,
+  instance,
   live,
   namespace,
   noInstance,
@@ -73,7 +74,7 @@ function group(id: string, fullPath: string, name: string, repositories: Reposit
  * second one, as jada, each listing the given entries, your own group
  * holding the given rows. */
 function twoHome(first: InstanceGroupState[], second: InstanceGroupState[], own: RepositoryState[] = [OWN_REPO]): GroupsState {
-  const home = twoInstances({ own: { name: "jane", repositories: own }, instance: { groups: first } });
+  const home = twoInstances({ own: { name: "jane", named: false, repositories: own }, instance: { groups: first } });
   return {
     ...home,
     instances: home.instances.map((entry) => (entry.origin === SECOND ? { ...entry, groups: second } : entry)),
@@ -304,6 +305,9 @@ describe("GROUPS: each instance under its heading (space-1, git-host-5, space-3,
         ]),
       ],
       [group("3", "acme", "Acme Works", [repo({ key: "@second.example/acme/c-spex", instance: SECOND, name: "c-spex", id: "62", state: "unreachable", reason: "the device is offline" })]), namespace("jada")],
+      // Your own group's own repository, which the second lists too, is
+      // governed by the second once the first is signed out (git-host-5).
+      [{ ...OWN_REPO, governing: SECOND }],
     );
     await renderGroups(signedOutAt(ORIGIN, {}, home), { open: false });
     const controls = (key: string) =>
@@ -326,14 +330,15 @@ describe("GROUPS: each instance under its heading (space-1, git-host-5, space-3,
     expect(controls(pathRemote).map((button) => button.textContent)).toEqual(["Retry"]);
     // The other instance, signed in, retries its own.
     expect(controls("@second.example/acme/c-spex").map((button) => button.textContent)).toEqual(["Retry"]);
-    // Your own group's own repository follows the signed-in instance that
-    // lists it: Sync and Members stand (space-60).
+    // Your own group's own repository follows the signed-in instance
+    // governing it: Sync and Members stand (space-60, space-1).
     expect((screen.getByTestId(`space-row-sync-${OWN_REPO.key}`) as HTMLButtonElement).disabled).toBe(false);
     expect(screen.getByTestId(`space-row-members-${OWN_REPO.key}`)).toBeTruthy();
     cleanup();
 
-    // With no signed-in instance to follow, it waits for its own, named
-    // by its host name before any read (space-11).
+    // Governed by none, with no signed-in instance to follow, it waits
+    // for its own, named by its host name before any read (space-11,
+    // space-1).
     await renderGroups(
       signedOutAt(SECOND, {}, signedOutAt(ORIGIN, {}, changed(home, ORIGIN, { displayName: null, readAt: null }))),
       { open: false },
@@ -341,6 +346,41 @@ describe("GROUPS: each instance under its heading (space-1, git-host-5, space-3,
     expect(screen.getByTestId(`space-row-caption-${OWN_REPO.key}`).textContent).toBe("Sign in to spex.example first");
     expect((screen.getByTestId(`space-row-sync-${OWN_REPO.key}`) as HTMLButtonElement).disabled).toBe(true);
     expect(screen.queryByTestId(`space-row-members-${OWN_REPO.key}`)).toBeNull();
+  });
+
+  test("space-1, space-62: a row's members panel reads the roles and host name of the instance the core names as governing it, not of the first signed in", async () => {
+    // Signed out of the first; the third, listed before the second and
+    // signed in, does not list your own group's own repository, which the
+    // second governs (git-host-5).
+    const THIRD = "https://third.example";
+    const home = twoHome([namespace("jane")], [namespace("jada")], [{ ...OWN_REPO, governing: SECOND, can: { manageMembers: true, transfer: false } }]);
+    const roles = [
+      { id: "1", name: "Viewer", mayPush: false },
+      { id: "2", name: "Editor", mayPush: true },
+    ];
+    const state = signedOutAt(ORIGIN, {}, {
+      ...home,
+      instances: [
+        home.instances[0]!,
+        instance({ origin: THIRD, host: "third.example", displayName: "Third Example", account: { id: "90", login: "jen", displayName: null, canCreateGroup: false }, groups: [namespace("jen")] }),
+        { ...home.instances[1]!, roles },
+      ],
+    });
+    await renderGroups(state, { open: false });
+    expect(sections().map((section) => section.dataset.testid)).toEqual([`space-instance-${ORIGIN}`, `space-instance-${THIRD}`, `space-instance-${SECOND}`]);
+    // Members reads the repository from the core, and Share offers the
+    // governing instance's login field and roles (space-62, space-69).
+    fireEvent.click(screen.getByTestId(`space-row-members-${OWN_REPO.key}`));
+    const panel = await screen.findByTestId(`space-members-${OWN_REPO.key}`);
+    await within(panel).findAllByTestId(/^space-member-/);
+    expect(calls("space.members")).toEqual([{ repository: OWN_REPO.key }]);
+    fireEvent.click(within(panel).getByTestId(`space-share-${OWN_REPO.key}`));
+    const editor = within(panel).getByTestId(`space-share-${OWN_REPO.key}-editor`);
+    expect(within(editor).getByLabelText("Login at second.example")).toBeTruthy();
+    expect(within(within(editor).getByRole("listbox", { name: "Role" })).getAllByRole("option").map((option) => option.textContent)).toEqual([
+      "Viewer",
+      "Editor",
+    ]);
   });
 
   test("space-28: every heading control reads at most 14 characters, busy forms included, the read time yields and the heading stacks below 20rem", async () => {

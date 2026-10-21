@@ -250,6 +250,13 @@ describe("GROUPS: the header (space-1, space-2)", () => {
     }
     // Nothing is sent to the host before the control is activated.
     expect(commandMock.mock.calls.map(([type]) => type)).toEqual(["space.get"]);
+    cleanup();
+    // Listing no instance once its folder bears a login — the last
+    // instance forgotten — your own group reads its path, as the core
+    // says it no longer bears this device's user name (space-1).
+    const forgotten = signedOut();
+    await renderGroups({ ...forgotten, own: { ...forgotten.own, named: false } }, { open: false });
+    expect(within(screen.getByTestId("space-own")).getByRole("heading", { level: 2 }).textContent).toBe("Your own group · jane");
   });
 
   test("with no git the guidance replaces every other field", async () => {

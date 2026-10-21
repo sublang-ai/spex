@@ -1927,6 +1927,16 @@ export interface RepositoryState {
    * remote's name names; for a row an instance lists and this device
    * lacks, that instance's; null for a clone with none. */
   instance: string | null;
+  /** The origin of the instance governing it (git-host-5, space-61): its
+   * instance while signed in there, else the earliest signed-in instance
+   * in the home's list that lists it — for a clone at the host whose key
+   * and remote name no instance, the default instance while signed in
+   * there, as its row reads; for a row an instance lists and this device
+   * lacks, that instance's; null while none does — local only, a remote
+   * the reader named, or its instance signed out with no signed-in
+   * instance listing it. Its members panel and its Sync's refusal read
+   * it (space-1). */
+  governing: string | null;
   /** `<name>-spex`, the clone's folder name. */
   name: string;
   /** The Git host's permanent id for it, where known. */
@@ -2000,9 +2010,12 @@ export interface GroupsState {
     /** `instance`: the origin being signed in to. */
     | { phase: "running"; instance: string; flow: "browser" | "device"; userCode?: string; verificationUri?: string; since: number }
     | { phase: "failed"; instance: string; cause: "denied" | "expired" | "refused" | "unreachable"; message: string };
-  /** Your own group, keyed `own`: its folder name and its rows — its own
-   * spex repository and the clones no instance's heading holds (space-1). */
-  own: { name: string; repositories: RepositoryState[] };
+  /** Your own group, keyed `own`: its folder name; whether that folder
+   * still bears this device's user name, as it does until a sign-in names
+   * it after a login (storage-2, space-59), which its heading reads
+   * (space-1); and its rows — its own spex repository and the clones no
+   * instance's heading holds (space-1). */
+  own: { name: string; named: boolean; repositories: RepositoryState[] };
   /** Every instance the home lists, in its order (space-1). */
   instances: InstanceState[];
   diagnostics: { file: string; reason: string; blocking: boolean; repair?: DiagnosticRepair }[];

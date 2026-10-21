@@ -211,7 +211,7 @@ const INSTANCE_KEYS = ["account", "displayName", "groups", "host", "hostSignedOu
 
 const GROUP_ENTRY_KEYS = ["can", "fullPath", "id", "login", "mine", "name", "repositories"];
 
-const REPOSITORY_KEYS = ["branch", "can", "code", "conflicts", "folder", "id", "incoming", "instance", "key", "lastSync", "local", "members", "name", "noticed", "own", "reason", "remote", "state", "sync", "visibility", "waiting"];
+const REPOSITORY_KEYS = ["branch", "can", "code", "conflicts", "folder", "governing", "id", "incoming", "instance", "key", "lastSync", "local", "members", "name", "noticed", "own", "reason", "remote", "state", "sync", "visibility", "waiting"];
 
 const BRANCH_KEYS = ["agreed", "ahead", "behind", "checkedAt", "hostEmpty", "mergePending", "unrelated"];
 
@@ -254,10 +254,11 @@ export function assertGroupsState(state: GroupsState): void {
   const origins = [state.defaultInstance, ...state.instances.map((instance) => instance.origin)];
   const leaks = stringsOf({ ...state, signIn: null }).filter((text) => origins.some((origin) => text.startsWith(`${origin}/`)) || /gitlab/i.test(text));
   assert.deepEqual(leaks, [], "the Groups state names nothing behind the instance");
-  // Your own group by its folder name; then every instance the home
-  // lists, each with its account, its read and its groups (space-30).
-  assert.deepEqual(Object.keys(state.own).sort(), ["name", "repositories"]);
-  assert.equal(typeof state.own.name, "string");
+  // Your own group by its folder name, and whether that folder still
+  // bears this device's user name; then every instance the home lists,
+  // each with its account, its read and its groups (space-30).
+  assert.deepEqual(Object.keys(state.own).sort(), ["name", "named", "repositories"]);
+  assert.ok(typeof state.own.name === "string" && typeof state.own.named === "boolean", JSON.stringify(state.own));
   for (const instance of state.instances) {
     assert.deepEqual(Object.keys(instance).sort(), INSTANCE_KEYS);
     assert.ok(typeof instance.origin === "string" && typeof instance.host === "string" && (instance.displayName === null || typeof instance.displayName === "string"), JSON.stringify(instance));
@@ -296,6 +297,11 @@ export function assertGroupsState(state: GroupsState): void {
       assert.equal(mine.length, 1, `your namespace once at ${instance.origin}`);
       assert.equal(mine[0].login?.toLowerCase(), instance.account.login.toLowerCase(), "your namespace by your login there");
     }
+    // A row under an instance's heading stands there as the instance
+    // governing it, or, governed by none, as its own (space-1).
+    for (const repository of instance.groups.flatMap((group) => group.repositories)) {
+      assert.ok(repository.governing === null || repository.governing === instance.origin, `${repository.key} governed by ${repository.governing} stands under ${instance.origin}`);
+    }
   }
   assert.equal(new Set(state.instances.map((instance) => instance.origin)).size, state.instances.length, "one entry per instance");
   // Every row stands once, under your own group or an instance's
@@ -305,6 +311,10 @@ export function assertGroupsState(state: GroupsState): void {
   for (const repository of rowsOf(state)) {
     assert.deepEqual(Object.keys(repository).sort(), REPOSITORY_KEYS);
     assert.ok(repository.instance === null || typeof repository.instance === "string", JSON.stringify(repository.instance));
+    // The instance governing it by its origin, none while local only
+    // (space-30).
+    assert.ok(repository.governing === null || typeof repository.governing === "string", JSON.stringify(repository.governing));
+    if (repository.state === "local-only") assert.equal(repository.governing, null, `${repository.key} is local only`);
     assert.deepEqual(Object.keys(repository.can), ["manageMembers", "transfer"]);
     assert.ok(typeof repository.can.manageMembers === "boolean" && typeof repository.can.transfer === "boolean", JSON.stringify(repository.can));
     assert.ok(PHASES.has(repository.sync.phase), `phase ${JSON.stringify(repository.sync)}`);

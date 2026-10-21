@@ -28,7 +28,7 @@ import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import { GitHostClient, HostError, credentialsPath, fileCredentialStore, type StoredCredential } from "./git-host.js";
 import { Home } from "./home.js";
 import { needsInstancesMigration } from "./migrate-instances.js";
-import { bareOf, clonePath, createSpaceHarness, hostFolder, hostKey, instanceOf, OWN_KEY, ownClone, prefsOf, repositoryOf, rowsOf, stringsOf } from "./testing/space-harness.js";
+import { bareOf, clonePath, createSpaceHarness, hostFolder, hostKey, instanceOf, OWN, OWN_KEY, ownClone, prefsOf, repositoryOf, rowsOf, stringsOf } from "./testing/space-harness.js";
 import { STANDIN_STORAGE, type StandinHost } from "./testing/standin-host.js";
 import type { GroupsState, InstanceGroupState, ServerMessage } from "./protocol.js";
 
@@ -1938,6 +1938,88 @@ test("space-84, space-82, space-60, space-29, space-5, storage-34: two instances
   const values = [...sentSince(home.client.messages, said), await home.client.expectOk("space.get", {})];
   assert.deepEqual(leaks(first, values), []);
   assert.deepEqual(leaks(second, values), []);
+});
+
+test("git-host-5, space-84, space-30, space-1: signed in at the first, then at a third on a Git backend of its own, then at a second over the first's, a namespace repository joined through the first and one the first lists alone read the first as governing; the first signed out, the namespace repository reads the second, the earliest signed-in instance listing it, not the third before it, and the other none", async (t) => {
+  const bob = { id: "1002", login: "bob", displayName: "Bob" };
+  const first = await startHost();
+  const third = await startHost({ displayName: "Third stand-in", person: bob });
+  const second = await startHost({ gitBackend: first, displayName: "Second stand-in" });
+  // The first and the second list the person's namespace there under
+  // one id; the third, another Git system, lists neither repository
+  // (git-host-12).
+  const a = first.script.addRepository({ group: LOGIN, name: "a-spex" });
+  const solo = first.script.addRepository({ group: "acme", name: "solo-spex" });
+  const home = await startHome("governing", { host: first, project: false });
+  t.after(() => home.stop());
+  let mark = home.client.mark();
+  await signIn(home, first);
+  await home.client.waitRepository(mark, HOST_OWN, (repository) => repository.sync.phase === "done", 30_000);
+  await signIn(home, third);
+  await signIn(home, second);
+  const listed = await refreshed(home);
+  assert.deepEqual(listed.instances.map((instance) => instance.origin), [first.url, third.url, second.url]);
+  const aKey = hostKey(first, `${LOGIN}/a-spex`);
+  const soloKey = hostKey(first, "acme/solo-spex");
+  const governing = (state: GroupsState, key: string): [string, string | null] => [repositoryOf(state, key).state, repositoryOf(state, key).governing];
+
+  // Not on this device, a repository is governed by the earliest
+  // instance whose read lists it, under whose heading it stands
+  // (git-host-5, space-1).
+  assert.deepEqual(governing(listed, aKey), ["absent", first.url]);
+  assert.deepEqual(governing(listed, soloKey), ["absent", first.url]);
+
+  // Joined through the first, each is governed by its clone's instance
+  // while signed in there, as is your own group's own repository
+  // (git-host-5, space-30).
+  for (const [id, key] of [[a.id, aKey], [solo.id, soloKey]] as const) {
+    mark = home.client.mark();
+    await home.client.expectOk("space.join", { instance: first.url, hostId: id });
+    await home.client.waitRepository(mark, key, (repository) => repository.state === "reachable" && repository.sync.phase === "idle", 30_000);
+  }
+  const joined = await home.client.expectOk("space.get", {});
+  for (const key of [aKey, soloKey, HOST_OWN]) assert.deepEqual(governing(joined, key), ["reachable", first.url], key);
+
+  // The first signed out: the namespace repository and your own group's
+  // own repository are governed by the second, the earliest signed-in
+  // instance in the home's list that lists them — the third, signed in
+  // before it, lists neither — and the repository the first lists alone
+  // by none, its row unreachable with Sign in again (git-host-5,
+  // space-30, space-1).
+  const out = await signOut(home, first);
+  assert.equal(instanceOf(out, third.url)?.signedIn, true);
+  assert.deepEqual(governing(out, aKey), ["reachable", second.url]);
+  assert.deepEqual(rowsUnder(out, second.url, LOGIN), [[aKey, "reachable", first.url]]);
+  assert.deepEqual(governing(out, HOST_OWN), ["reachable", second.url]);
+  assert.deepEqual([...governing(out, soloKey), repositoryOf(out, soloKey).reason], ["unreachable", null, "Sign in again"]);
+});
+
+test("space-1, space-30, space-83, space-59, space-82: own.named reads true before any sign-in, false once a sign-in names the folder after the login there, and false still after the sign-out and Forget; where the login there is this device's user name, which names nothing, it reads true still after the Forget", async (t) => {
+  const first = await startHost();
+  const same = await startHost({ displayName: "Same-name stand-in", person: { id: "1009", login: OWN, displayName: "Tester" } });
+  for (const { host, name, named } of [
+    { host: first, name: LOGIN, named: false },
+    { host: same, name: OWN, named: true },
+  ]) {
+    const home = await startHome(`named-${name}`, { host, project: false });
+    t.after(() => home.stop());
+    // Before any sign-in, the folder bears this device's user name
+    // (space-1, storage-2).
+    const before = await home.client.expectOk("space.get", {});
+    assert.deepEqual([before.instances, before.own.name, before.own.named], [[], OWN, true], name);
+    // A sign-in names it after a login there other than that name
+    // (space-59), its own repository pushed there (space-4).
+    const mark = home.client.mark();
+    await signIn(home, host);
+    await home.client.waitRepository(mark, `${name}/${name}-spex`, (repository) => repository.sync.phase === "done", 30_000);
+    const signed = await home.client.expectOk("space.get", {});
+    assert.deepEqual([signed.own.name, signed.own.named], [name, named], name);
+    // Signed out and forgotten, the home lists no instance, and the
+    // folder keeps the name it bears (space-82, space-1).
+    await signOut(home, host);
+    const forgotten = await forget(home, host);
+    assert.deepEqual([forgotten.instances, forgotten.own.name, forgotten.own.named], [[], name, named], name);
+  }
 });
 
 test("space-86: an explicit content-size rejection keeps access and Save, names only the instance and limit, and retries only on an explicit Sync", async (t) => {

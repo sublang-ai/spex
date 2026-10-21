@@ -167,11 +167,15 @@ export const BRANCH: NonNullable<RepositoryState["branch"]> = {
   agreed: null,
 };
 
-/** The opened project's spex repository, reachable, nothing changed. */
+/** The opened project's spex repository, reachable, nothing changed,
+ * governed by its instance — by none while local only — unless a test
+ * says otherwise (space-30). */
 export function repo(over: Partial<RepositoryState> = {}): RepositoryState {
+  const instance = over.instance === undefined ? ORIGIN : over.instance;
   return {
     key: KEY,
-    instance: ORIGIN,
+    instance,
+    governing: over.state === "local-only" ? null : instance,
     name: "academy-spex",
     id: "42",
     own: false,
@@ -250,7 +254,8 @@ export function base(over: HomeOver = {}, repos: RepositoryState[] = [repo()]): 
     git: { ok: true, version: "2.45.0" },
     defaultInstance: ORIGIN,
     signIn: { phase: "idle" },
-    own: { name: "jane", repositories: [OWN_REPO] },
+    // Signed in, your own group's folder bears the login (space-59).
+    own: { name: "jane", named: false, repositories: [OWN_REPO] },
     instances: [instance({ groups: [namespace("jane", repos)], ...at })],
     diagnostics: [],
     // The core carries the count (space-1); the fixture derives it the
@@ -277,22 +282,29 @@ export function withGroups(state: GroupsState, ...groups: InstanceGroupState[]):
   return withInstance(state, { groups: [...(served?.groups ?? []), ...groups] });
 }
 
-/** A home that lists no instance: your own group alone, its own spex
- * repository on this device only, beside the given rows. */
+/** A home that lists no instance: your own group alone, its folder
+ * still bearing this device's user name, its own spex repository on this
+ * device only, beside the given rows. */
 export function noInstance(over: Partial<GroupsState> = {}, repos: RepositoryState[] = []): GroupsState {
-  const own = { ...OWN_REPO, state: "local-only" as const, remote: null, id: null, lastSync: null };
-  return base({ instances: [], own: { name: "jane", repositories: [own, ...repos] }, ...over });
+  const own = { ...OWN_REPO, state: "local-only" as const, governing: null, remote: null, id: null, lastSync: null };
+  return base({ instances: [], own: { name: "jane", named: true, repositories: [own, ...repos] }, ...over });
 }
 
 /** A home signed out of the instance at `origin`, its entry kept with
  * its account; `byHost` where that instance signed this device out
- * (space-3). */
+ * (space-3). A row that instance governed is governed by none, as the
+ * core says while no signed-in instance lists it (space-30). */
 export function signedOutAt(origin: string, options: { byHost?: boolean } = {}, state: GroupsState = base()): GroupsState {
+  const ungoverned = (rows: RepositoryState[]): RepositoryState[] =>
+    rows.map((row) => (row.governing === origin ? { ...row, governing: null } : row));
   return {
     ...state,
-    instances: state.instances.map((entry) =>
-      entry.origin === origin ? { ...entry, signedIn: false, hostSignedOut: options.byHost ?? false, read: { phase: "idle" } } : entry,
-    ),
+    own: { ...state.own, repositories: ungoverned(state.own.repositories) },
+    instances: state.instances.map((entry) => ({
+      ...entry,
+      ...(entry.origin === origin ? { signedIn: false, hostSignedOut: options.byHost ?? false, read: { phase: "idle" as const } } : {}),
+      groups: entry.groups.map((group) => ({ ...group, repositories: ungoverned(group.repositories) })),
+    })),
   };
 }
 

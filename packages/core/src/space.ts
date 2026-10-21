@@ -1157,6 +1157,8 @@ class RepositorySync {
     const state: RepositoryState = {
       key: this.key,
       instance,
+      // The instance governing it is the owner's to read (overlay).
+      governing: null,
       name: splitKey(this.key).name,
       can: { manageMembers: false, transfer: false },
       id: repo.root ? repo.id : null,
@@ -4956,7 +4958,9 @@ export class SpaceManager {
       git: await this.probe.version(),
       defaultInstance: this.defaultInstance().origin,
       signIn: this.signInState,
-      own: { name: store.home.ownName, repositories: placed.own },
+      // Its folder bears this device's user name until a sign-in names
+      // it after a login (space-1, space-59).
+      own: { name: store.home.ownName, named: store.home.ownName === store.deviceOwnName(), repositories: placed.own },
       instances: this.instancesOf(placed.groups),
       diagnostics,
       // One number, so the header and the list cannot drift (space-1):
@@ -5096,6 +5100,7 @@ export class SpaceManager {
     const row: RepositoryState = {
       ...base,
       instance: this.cloneInstance(base.key, facts.remoteName),
+      governing: null,
       id: facts.id,
       remote: this.remoteAsShown(facts, base.key),
       folder: this.host.store.home.folderOf(base.key)?.path ?? null,
@@ -5109,6 +5114,9 @@ export class SpaceManager {
     // git-host-4).
     const instance = this.rowInstance(machine);
     if (!instance) return { row: { ...row, state: "unreachable", reason: signInAgain() } };
+    // That instance governs it, its members panel and its Sync's refusal
+    // reading it (space-1, space-30).
+    const governed: RepositoryState = { ...row, governing: instance.origin };
     // Attached since the view's read began, it counts as listed (git-host-5).
     const target = this.targetOf(instance, facts);
     const listing = this.listingOf(instance, facts);
@@ -5117,8 +5125,8 @@ export class SpaceManager {
     // What the host's listing says, the person's rights on it among it
     // (git-host-5, DR-114).
     const listed: RepositoryState = listing
-      ? { ...row, members: listing.members, visibility: listing.repository.visibility, can: { manageMembers: listing.repository.can.manageMembers, transfer: listing.repository.can.transfer } }
-      : row;
+      ? { ...governed, members: listing.members, visibility: listing.repository.visibility, can: { manageMembers: listing.repository.can.manageMembers, transfer: listing.repository.can.transfer } }
+      : governed;
     // A clone whose join still runs is not on this device yet: its code
     // may still be cloning (space-61, space-63).
     const joinedAt = this.instanceOfClone(machine);
@@ -5130,8 +5138,8 @@ export class SpaceManager {
     if (target?.failure && target.begun > instance.failureRead) return { row: { ...listed, state: "unreachable", reason: target.failure }, group, instance: at };
     if (instance.readFailure !== undefined && (!target || instance.failureRead > target.begun)) return { row: { ...listed, state: "unreachable", reason: instance.readFailure }, group, instance: at };
     // No full or selected reading of its instance since this core started.
-    if (!instance.view && !target) return { row };
-    if (!listing) return { row: { ...row, state: "unreachable", reason: noLongerShared() } };
+    if (!instance.view && !target) return { row: governed };
+    if (!listing) return { row: { ...governed, state: "unreachable", reason: noLongerShared() } };
     if (listing.readOnly) {
       return { row: { ...listed, state: "read-only", reason: listing.readOnly.message || i18n._({ id: "Archived", comment: "A spex repository's read-only reason where the host gave no words for its archive" }) }, group, instance: at };
     }
@@ -5202,8 +5210,10 @@ export class SpaceManager {
     return {
       row: {
         key,
-        // The instance whose read lists it (DR-127).
+        // The instance whose read lists it (DR-127), which governs it
+        // (git-host-5).
         instance: instance.origin,
+        governing: instance.origin,
         name: repository.path,
         can: colliding ? { manageMembers: false, transfer: false } : { manageMembers: repository.can.manageMembers, transfer: repository.can.transfer },
         id: repository.id,

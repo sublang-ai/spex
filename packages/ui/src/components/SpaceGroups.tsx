@@ -651,9 +651,9 @@ function RepositoryRow({
     if (accepted && accepted.key !== machineKey) setAccepted(undefined);
   }, [accepted, machineKey]);
 
-  // The instance governing the row (space-61): its heading's, or, under
-  // your own group, its own or the one it follows (space-60).
-  const governing = governingOf(groups, repo, instance ? { own: false, instance, group } : { own: true });
+  // The instance governing the row, as the core names it, else its own
+  // (space-1, space-61).
+  const governing = governingOf(groups, repo);
   const control = rowControl(groups, group, repo, governing);
   const groupRepository = isGroupRepository(group, repo);
   const close = (focus: "control" | "members" | "folder" | "move" = "control") => {

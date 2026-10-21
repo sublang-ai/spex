@@ -120,29 +120,18 @@ export function entriesOf(instance: InstanceState): InstanceGroupState[] {
   ];
 }
 
-/** The instance governing a row (space-61): the one whose heading it
- * stands under; for a row under your own group, its own instance while
- * signed in there, the first signed-in one where it is reachable through
- * another that lists it (space-60), else its own; none for a row with no
- * instance. */
-export function governingOf(
-  state: GroupsState,
-  repo: RepositoryState,
-  placement: Placement | undefined = placementOf(state, repo.key),
-): InstanceState | undefined {
-  if (placement && !placement.own) return placement.instance;
-  const own = instanceOf(state, repo.instance);
-  if (own?.signedIn) return own;
-  if (repo.state === "reachable" || repo.state === "read-only") return signedInInstances(state)[0] ?? own;
-  return own;
+/** The instance governing a row (space-1, space-61): the one the core
+ * names as governing its spex repository (git-host-5), whose roles and
+ * host name its members panel reads; while none does, its own instance,
+ * signed out, whose sign-in its Sync waits for (space-11); none for a
+ * row with no instance. */
+export function governingOf(state: GroupsState, repo: RepositoryState): InstanceState | undefined {
+  return instanceOf(state, repo.governing) ?? instanceOf(state, repo.instance);
 }
 
 /** Whether your own group's heading reads "named after your login at
  * sign-in" (space-1): while the home lists no instance and its folder
- * still bears this device's user name — which holds while its own spex
- * repository has never been at an instance, a host id kept once it has
- * (space-5, space-82). */
+ * still bears this device's user name, as the core says (space-30). */
 export function ownBeside(state: GroupsState): boolean {
-  const own = state.own.repositories.find((repository) => repository.own);
-  return state.instances.length === 0 && (own?.id ?? null) === null;
+  return state.instances.length === 0 && state.own.named;
 }
