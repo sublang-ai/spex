@@ -11,7 +11,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -22,7 +22,7 @@ import { Home } from "./home.js";
 import { starterText, templatePath, type PlaybookModules } from "./config.js";
 import { speak } from "./i18n.js";
 import type { ProjectInfo } from "./protocol.js";
-import { applyStorageSelection, EMPTY_TREE, planStorageMerge, prepareStorageGitFiles, reserveStorageHome, selectStorageMerge as selectStorageMergeWith, StorageWriteRefused, validateStorageTree, type StorageChoice } from "./storage-git.js";
+import { applyStorageSelection, EMPTY_TREE, planStorageMerge, prepareStorageGitFiles, reserveStorageHome, selectStorageMerge as selectStorageMergeWith, StorageDestinationRefused, StorageWriteRefused, validateStorageTree, type StorageChoice } from "./storage-git.js";
 import { scratchDir } from "./testing/scratch.js";
 import { StorageFormatError } from "./files.js";
 
@@ -964,4 +964,105 @@ test("storage-16: Git selects intent and session media as complete independently
     rmSync(join(intentAssets.directory, ours.assetId.slice(7)));
     await assert.rejects(validateStorageTree(clone), /content|ENOENT|asset/i);
   } finally { dispose(); }
+});
+
+test("storage-16: validation refuses unsafe read boundaries without changing the Git clone", async (t) => {
+  const cases = [
+    ["project.json", "leaf-link"], ["project.json", "directory-leaf"],
+    ["intents", "parent-link"], ["intents", "file-parent"],
+    ["intents/ID.json", "leaf-link"], ["intents/ID.json", "directory-leaf"],
+    ["authoring", "parent-link"], ["authoring", "file-parent"],
+    ["authoring/demo.json", "leaf-link"],
+    ["config", "parent-link"], ["config", "file-parent"],
+    ["config/playbook.config.yaml", "leaf-link"],
+  ] as const;
+  for (const [pattern, kind] of cases) await t.test(`${pattern}: ${kind}`, async () => {
+    const s = setup();
+    try {
+      const path = pattern.replace("ID", randomUUID());
+      const target = join(s.clone, path);
+      const outside = join(s.root, "outside"); mkdirSync(outside);
+      // Invalid owned canaries would yield a parser error if followed.
+      const canary = join(outside, "canary");
+      writeFileSync(canary, "{SYNTHETIC_OUTSIDE_VALIDATOR_CANARY", { mode: 0o640 });
+      rmSync(target, { force: true, recursive: true });
+      mkdirSync(dirname(target), { recursive: true });
+      if (kind === "parent-link") {
+        const name = path === "config" ? "playbook.config.yaml" : path === "authoring" ? "demo.json" : `${randomUUID()}.json`;
+        writeFileSync(join(outside, name), readFileSync(canary), { mode: 0o640 });
+        symlinkSync(outside, target, "dir");
+      } else if (kind === "leaf-link") symlinkSync(canary, target, "file");
+      else if (kind === "file-parent") writeFileSync(target, "not a directory", { mode: 0o640 });
+      else mkdirSync(target);
+      const before = snapshot(s.clone); const outsideBefore = snapshot(outside);
+      const canaryMode = lstatSync(canary).mode;
+      const modes = new Map([...before.keys()].map((p) => [p, lstatSync(join(s.clone, p)).mode]));
+      const index = readFileSync(join(s.clone, ".git", "index"));
+      await assert.rejects(validateStorageTree(s.clone), (error: unknown) => {
+        if (!(error instanceof StorageDestinationRefused)) return false;
+        assert.equal(error.file, path, "the repair target is the offending parent or leaf");
+        if (path === "config" && kind === "file-parent") assert.equal(error.reason, "config is not a directory");
+        return true;
+      }, "an unsafe path must refuse before parsing an outside canary");
+      assert.deepEqual(snapshot(s.clone), before); assert.deepEqual(snapshot(outside), outsideBefore);
+      for (const [p, mode] of modes) assert.equal(lstatSync(join(s.clone, p)).mode, mode, p);
+      assert.equal(lstatSync(canary).mode, canaryMode);
+      assert.deepEqual(readFileSync(join(s.clone, ".git", "index")), index);
+    } finally { s.dispose(); }
+  });
+  if (process.platform !== "win32") await t.test("a special-file leaf refuses without opening it", () => {
+    const s = setup();
+    try {
+      rmSync(join(s.clone, "project.json"));
+      execFileSync("mkfifo", [join(s.clone, "project.json")]);
+      const result = spawnSync(process.execPath, [script, "--home", s.home, "--repository", s.key, "validate"],
+        { env: gitEnv, encoding: "utf8", timeout: 5000 });
+      assert.equal(result.error, undefined, "validation must not block opening a FIFO");
+      assert.notEqual(result.status, 0); assert.match(result.stderr, /not a file/);
+      assert.equal(lstatSync(join(s.clone, "project.json")).isFIFO(), true);
+    } finally { s.dispose(); }
+  });
+});
+
+test("storage-16: validation rechecks an intent parent after its awaited import", async () => {
+  const s = setup();
+  try {
+    const outside = join(s.root, "outside"); mkdirSync(outside);
+    const id = randomUUID();
+    writeFileSync(join(outside, `${id}.json`), "{SYNTHETIC_LATE_VALIDATOR_CANARY", { mode: 0o640 });
+    const index = readFileSync(join(s.clone, ".git", "index"));
+    const canaryMode = lstatSync(join(outside, `${id}.json`)).mode;
+    const running = validateStorageTree(s.clone);
+    // Even a cached dynamic import yields before the next family read.
+    renameSync(join(s.clone, "intents"), join(s.root, "saved-intents"));
+    symlinkSync(outside, join(s.clone, "intents"), "dir");
+    await assert.rejects(running, (error: unknown) => {
+      if (!(error instanceof StorageDestinationRefused)) return false;
+      assert.equal(error.file, "intents", "the late linked parent is the repair target");
+      assert.equal(error.reason, "the path goes through a symbolic link");
+      return true;
+    });
+    assert.equal(readFileSync(join(outside, `${id}.json`), "utf8"), "{SYNTHETIC_LATE_VALIDATOR_CANARY");
+    assert.equal(lstatSync(join(outside, `${id}.json`)).mode, canaryMode);
+    assert.deepEqual(readFileSync(join(s.clone, ".git", "index")), index);
+  } finally { s.dispose(); }
+});
+
+test("storage-16: validation keeps optional absence and malformed-file diagnostics", async () => {
+  const root = mkdtempSync(join(tmpdir(), "spex-validation-optional-"));
+  try {
+    git(root, "init", "-q");
+    assert.deepEqual(await validateStorageTree(root), []);
+    mkdirSync(join(root, "config"));
+    writeFileSync(join(root, "config", "playbook.config.yaml"), "playbooks: [", { mode: 0o600 });
+    await assert.rejects(validateStorageTree(root), (error: unknown) =>
+      error instanceof StorageFormatError && !(error instanceof StorageDestinationRefused) && error.file.endsWith("playbook.config.yaml"));
+    rmSync(join(root, "config"), { recursive: true });
+    writeFileSync(join(root, "project.json"), "{malformed", { mode: 0o640 });
+    const mode = lstatSync(join(root, "project.json")).mode;
+    await assert.rejects(validateStorageTree(root), (error: unknown) =>
+      error instanceof StorageFormatError && !(error instanceof StorageDestinationRefused) && error.file.endsWith("project.json"));
+    assert.equal(readFileSync(join(root, "project.json"), "utf8"), "{malformed");
+    assert.equal(lstatSync(join(root, "project.json")).mode, mode);
+  } finally { rmSync(root, { recursive: true, force: true }); }
 });

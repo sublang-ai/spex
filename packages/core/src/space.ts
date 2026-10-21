@@ -2005,8 +2005,8 @@ class RepositorySync {
 
   private unsafeDestination(error: StorageDestinationRefused): SpaceStopped {
     const guidance = i18n._({
-      id: "Restore the unsafe folder to a regular folder, then Retry. Refresh is deferred; written records and existing repair evidence are kept.",
-      comment: "Sync guidance after a linked or non-directory destination refuses Apply or partial refresh",
+      id: "Restore the reported path to its expected file or folder, then Retry. Refresh is deferred; written records and existing repair evidence are kept.",
+      comment: "Sync guidance after an unsafe destination refuses Apply or partial refresh",
     });
     this.refreshProblem = { file: join(this.dir, error.file), reason: `${error.reason}. ${guidance}`, blocking: true };
     return new SpaceStopped("apply", { cause: "validation", message: `${error.file}: ${error.reason}`, guidance, retry: true });
