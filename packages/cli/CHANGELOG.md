@@ -10,6 +10,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.0.1] - 2026-10-21
+
+### Fixed
+
+- English and Chinese licensing seeds now specify verification of
+  project-owned SPDX headers: native comment syntax and placement,
+  the project's license and copyright holder, first-inclusion year,
+  and no unresolved placeholders. Updated template history lets
+  `--update` refresh recognized pristine seeds while preserving
+  user-modified files.
+
 ## [4.0.0] - 2026-10-02
 
 ### Changed
@@ -352,7 +363,8 @@ into this release. npm users upgrade straight from 0.3.0.
 - Integration tests exercising the CLI binary end-to-end
 - RELEASE spec package with package hygiene and pre-release checks
 
-[Unreleased]: https://github.com/sublang-ai/spex/compare/cli-v4.0.0...HEAD
+[Unreleased]: https://github.com/sublang-ai/spex/compare/cli-v4.0.1...HEAD
+[4.0.1]: https://github.com/sublang-ai/spex/compare/cli-v4.0.0...cli-v4.0.1
 [4.0.0]: https://github.com/sublang-ai/spex/compare/v3.0.0...cli-v4.0.0
 [3.0.0]: https://github.com/sublang-ai/spex/compare/v2.1.1...v3.0.0
 [2.1.1]: https://github.com/sublang-ai/spex/compare/v2.1.0...v2.1.1

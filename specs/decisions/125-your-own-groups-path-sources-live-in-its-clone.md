@@ -11,7 +11,7 @@ Amends, under [DR-046](046-decision-record-evolution.md):
 - [DR-104](104-spec-package-format-and-client-environments.md) in its path source: in your own group's environment a path is relative to the root of its spex repository's clone, where its `spex.yaml` is, confined to what that clone syncs, and used in place on every device it syncs to; a project's and another group's stay relative to the working folder.
 - [DR-103](103-the-home-and-its-groups.md) in its units: a folder holding a spec package's `meta.yaml`, outside Spex's own paths, is one unit with every file under it.
 
-Proposed to be amended by [DR-128](128-a-spex-repository-placed-at-several-instances.md) in Spex's own paths: `placements/` joins them.
+Amended by [DR-128](128-a-spex-repository-placed-at-several-instances.md) in Spex's own paths: `placements/` joins them.
 
 ## Context
 
