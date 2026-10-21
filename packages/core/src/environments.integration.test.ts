@@ -1220,7 +1220,8 @@ test("environments-21 through a real core: the registry presents the access secr
   t.after(() => home.stop());
   const own = `${host.script.person.login}/${host.script.person.login}-spex`;
   const signing = home.client.mark();
-  await harness.signIn(home, host);
+  // The home's instance is the front, which serves the stand-in's sign-in.
+  await harness.signIn(home, host, front.url);
   // Your own group's spex repository is created on the host and pushed
   // before its environment takes a write (environments-17).
   await home.client.waitRepository(signing, own, (repository) => repository.sync.phase === "done", 60_000);

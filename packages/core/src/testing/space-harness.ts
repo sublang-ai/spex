@@ -13,8 +13,8 @@ import { WebSocket } from "ws";
 import { CoreService, type CoreServiceOptions } from "../service.js";
 import { fakeAdapterImports } from "./fake-adapter.js";
 import { createScriptedCaptain } from "./scripted-captain.js";
-import { startStandinHost, type StandinHost } from "./standin-host.js";
-import { instanceFolder, instanceSegmentOf } from "../instance.js";
+import { startStandinHost, type StandinHost, type StandinPerson } from "./standin-host.js";
+import { canonicalOrigin, instanceFolder, instanceSegmentOf } from "../instance.js";
 import type { LineSpawner } from "../compile.js";
 import type { Command, CommandResults, GroupsState, RepositoryState, ServerMessage, SpaceStateMessage, SyncStep, SpaceOp } from "../protocol.js";
 
@@ -59,7 +59,14 @@ export function repositoryOf(state: GroupsState, key: string): RepositoryState {
 }
 
 const describe = (state: GroupsState): string =>
-  JSON.stringify(state.groups.flatMap((group) => group.repositories.map((repository) => `${repository.key}:${JSON.stringify(repository.sync)}`)));
+  JSON.stringify(rowsOf(state).map((repository) => `${repository.key}:${JSON.stringify(repository.sync)}`));
+
+/** The entry the Groups state lists for the instance at `origin`, in any
+ * spelling of it (space-30). */
+export function instanceOf(state: GroupsState, origin: string): GroupsState["instances"][number] | undefined {
+  const canonical = canonicalOrigin(origin);
+  return state.instances.find((instance) => instance.origin === canonical);
+}
 
 class Client {
   private readonly socket: WebSocket;
@@ -520,19 +527,27 @@ playbooks:
 
   const hosts: StandinHost[] = [];
 
-  /** A stand-in Git host (git-host-12) of this suite's own. */
-  async function startHost(): Promise<StandinHost> {
-    const host = await startStandinHost({ dir: mkdtempSync(join(scratch, "host-")) });
+  /** A stand-in Git host (git-host-12) of this suite's own: an instance
+   * at its own loopback origin, on a Git backend of its own or, with
+   * `gitBackend`, over that instance's (DR-127); `person` signs in there
+   * in place of `ada`, and `canCreateGroup` scripts whether the person may
+   * make a root group. */
+  async function startHost(options: { displayName?: string; person?: StandinPerson; gitBackend?: StandinHost; canCreateGroup?: boolean } = {}): Promise<StandinHost> {
+    const { canCreateGroup, gitBackend, ...rest } = options;
+    const host = await startStandinHost({ ...rest, ...(gitBackend ? { gitBackend } : { dir: mkdtempSync(join(scratch, "host-")) }) });
+    if (canCreateGroup !== undefined) host.script.canCreateGroup = canCreateGroup;
     hosts.push(host);
     return host;
   }
 
-  /** Sign a home in at the stand-in through the flow its core runs —
-   * the browser's redirect followed as the system browser would, or the
-   * user code approved — and wait for the set-up to end (space-4). */
-  async function signIn(home: Home, host: StandinHost): Promise<GroupsState> {
+  /** Sign a home in at a stand-in instance by its origin — the
+   * stand-in's own, or `url` where a front serves it — through the flow
+   * its core runs: the browser's redirect followed as the system browser
+   * would, or the user code approved. Waits until that instance's entry
+   * reads signed in with no sign-in running (space-4, DR-127). */
+  async function signIn(home: Home, host: StandinHost, url: string = host.url): Promise<GroupsState> {
     const from = home.client.mark();
-    const started = await home.client.expectOk("space.signin.start", {});
+    const started = await home.client.expectOk("space.signin.start", { url });
     if (started.flow === "browser") {
       const first = await fetch(started.url, { redirect: "manual" });
       const location = first.headers.get("location");
@@ -541,11 +556,21 @@ playbooks:
     } else {
       host.script.approveDevice(started.userCode);
     }
-    return home.client.waitSpace(from, (state) => state.account !== null && state.signIn.phase === "idle", 30_000);
+    return home.client.waitSpace(from, (state) => instanceOf(state, url)?.signedIn === true && state.signIn.phase === "idle", 30_000);
+  }
+
+  /** Sign a home out of one instance by its origin, its entry kept
+   * (space-6, DR-127). */
+  async function signOut(home: Home, host: Pick<StandinHost, "url">): Promise<GroupsState> {
+    const state = await home.client.expectOk("space.signout", { instance: host.url });
+    assert.equal(instanceOf(state, host.url)?.signedIn, false, "the instance reads signed out");
+    return state;
   }
 
   /** A real core on a scratch home whose configuration lies in your own
-   * group's spex repository; `host` names the stand-in it signs in to. */
+   * group's spex repository; `host` names the stand-in the new home
+   * records from `SPEX_HOST_URL` (git-host-1), and any other instance is
+   * reached by a sign-in naming its origin. */
   async function startHome(name: string, options: { model?: string; starter?: boolean; env?: Record<string, string>; dataDir?: string; project?: boolean; host?: StandinHost; extra?: Partial<CoreServiceOptions> } = {}): Promise<Home> {
     const dataDir = options.dataDir ?? mkdtempSync(join(scratch, `${name}-`));
     const configPath = join(ownClone(dataDir), "config", "playbook.config.yaml");
@@ -646,7 +671,7 @@ playbooks:
   ];
 
   return {
-    scratch, config, git, bareRepo, otherDevice, gitFolder, sameNameFolder, addFolder, sleepingSsh, holdingGit, sleep, sleeperPid, joinRemote, hangingCompileSpawner, COMPILE_INPUT, startHome, startHost, signIn, runTurn, snapshot, peerClone, peerPush, turnRecords,
+    scratch, config, git, bareRepo, otherDevice, gitFolder, sameNameFolder, addFolder, sleepingSsh, holdingGit, sleep, sleeperPid, joinRemote, hangingCompileSpawner, COMPILE_INPUT, startHome, startHost, signIn, signOut, runTurn, snapshot, peerClone, peerPush, turnRecords,
     dispose: async () => {
       await Promise.all(hosts.map((host) => host.close()));
       rmSync(scratch, { recursive: true, force: true });

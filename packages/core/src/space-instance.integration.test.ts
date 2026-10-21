@@ -22,12 +22,12 @@ import { createSessionStore } from "@sublang/playbook/session-store";
 import { stringify as stringifyYaml } from "yaml";
 import { Home } from "./home.js";
 import { needsInstancesMigration } from "./migrate-instances.js";
-import { clonePath, createSpaceHarness, hostFolder, hostKey, OWN_KEY, ownClone, prefsOf, repositoryOf, stringsOf } from "./testing/space-harness.js";
+import { clonePath, createSpaceHarness, hostFolder, hostKey, instanceOf, OWN_KEY, ownClone, prefsOf, repositoryOf, stringsOf } from "./testing/space-harness.js";
 import { STANDIN_STORAGE, type StandinHost } from "./testing/standin-host.js";
 import type { GroupsState, ServerMessage } from "./protocol.js";
 
 const fixture = createSpaceHarness();
-const { scratch, git, gitFolder, bareRepo, addFolder, startHome, startHost, signIn, runTurn } = fixture;
+const { scratch, git, gitFolder, bareRepo, addFolder, startHome, startHost, signIn, signOut, runTurn } = fixture;
 test.after(() => fixture.dispose());
 
 /** The stand-in's person, and your own group's repository once signed in. */
@@ -601,4 +601,63 @@ test("space-60, storage-30: a host's rename onto the destination a deferred clon
     assert.equal(moved.sync.phase, "done", JSON.stringify(moved.sync));
     assert.ok(existsSync(join(clonePath(home.dataDir, destination), ".git")) && !existsSync(clonePath(home.dataDir, key)));
   } finally { await deferred.release(); }
+});
+
+test("git-host-12, space-30: the harness runs several stand-in instances at once, two on Git backends of their own and one over the first's, a home at each signing in by its origin, reading it and signing out of it on its own", async (t) => {
+  const bob = { id: "1002", login: "bob", displayName: "Bob" };
+  const grace = { id: "1003", login: "grace", displayName: "Grace Hopper" };
+  const first = await startHost();
+  const second = await startHost({ displayName: "Second stand-in", person: bob, canCreateGroup: false });
+  const over = await startHost({ gitBackend: first, displayName: "Over the first", person: grace });
+  // Each instance at its own origin and folder; the one over the first's
+  // Git backend reports the first's Git origin (git-host-12, DR-127).
+  assert.equal(new Set([first, second, over].map((host) => host.url)).size, 3);
+  assert.equal(new Set([first, second, over].map(hostFolder)).size, 3);
+  assert.notEqual(second.gitOrigin, first.gitOrigin);
+  assert.equal(over.gitOrigin, first.gitOrigin);
+
+  const arranged = [
+    { host: first, login: LOGIN, name: HOST_NAME, canCreateGroup: true, home: await startHome("several-first", { host: first, project: false, extra: { signIn: "browser" } }) },
+    { host: second, login: bob.login, name: "Second stand-in", canCreateGroup: false, home: await startHome("several-second", { host: second, project: false }) },
+    { host: over, login: grace.login, name: "Over the first", canCreateGroup: true, home: await startHome("several-over", { host: over, project: false }) },
+  ];
+  for (const { home } of arranged) t.after(() => home.stop());
+  for (const { host, login, name, canCreateGroup, home } of arranged) {
+    const from = home.client.mark();
+    // Signed in by the instance's origin, the home lists that instance
+    // alone, with the account of the person it signs in (space-30).
+    const signed = await signIn(home, host);
+    assert.equal(signed.defaultInstance, host.url);
+    assert.deepEqual(signed.instances.map((instance) => [instance.origin, instance.account.login, instance.signedIn]), [[host.url, login, true]]);
+    // Its read held names its display name and what the person may do
+    // there; your own group's own repository is made in the person's
+    // namespace there and pushed (space-4).
+    const read = await home.client.waitSpace(from, (state) => (instanceOf(state, host.url)?.readAt ?? null) !== null);
+    assert.deepEqual([instanceOf(read, host.url)?.displayName, instanceOf(read, host.url)?.account.canCreateGroup], [name, canCreateGroup]);
+    await home.client.waitRepository(from, `${login}/${login}-spex`, (repository) => repository.sync.phase === "done", 30_000);
+    assert.notEqual(git(host.bareOf(`${login}/${login}-spex`), "rev-parse", "spex"), "");
+  }
+
+  // Over one Git backend, the namespace's repository is one on the Git
+  // system, listed by both instances under one id, and its push came
+  // through the one transport with a credential the instance over it
+  // issued; the separate instance's stays on its own backend (git-host-12).
+  const listed = (host: typeof first, path: string) => host.script.repositories.find((repository) => `${repository.group.fullPath}/${repository.path}` === path);
+  assert.ok(listed(over, "grace/grace-spex") && listed(over, "grace/grace-spex") === listed(first, "grace/grace-spex"));
+  assert.equal(over.bareOf("grace/grace-spex"), first.bareOf("grace/grace-spex"));
+  assert.equal(listed(first, "bob/bob-spex"), undefined, "the separate instance's repository is not on the first's Git system");
+  const pushers = (host: typeof first) => [...new Set(host.script.transportCredentials.filter((credential) => credential.push).map((credential) => credential.instance))].sort();
+  assert.deepEqual(pushers(first), [first.url, over.url].sort());
+  assert.deepEqual(pushers(second), [second.url]);
+  // Nothing behind the instance over the first's backend is named to its
+  // home, not even under the first's URL, where its Git origin lies
+  // (space-30).
+  const overHome = arranged[2].home;
+  const behind = [...broadcasts(overHome.client.messages), await overHome.client.expectOk("space.get", {})]
+    .flatMap(stringsOf).filter((text) => text.includes(`${first.url}/`) || text.includes(`${over.url}/`) || /gitlab/i.test(text));
+  assert.deepEqual(behind, []);
+
+  // Signed out of its instance, a home keeps its entry, signed out.
+  const out = await signOut(arranged[1].home, second);
+  assert.deepEqual(out.instances.map((instance) => [instance.origin, instance.account.login, instance.signedIn]), [[second.url, bob.login, false]]);
 });
