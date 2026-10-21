@@ -805,6 +805,46 @@ msgstr "Add this machine's SSH key to an account that can see it"
 msgid "an attachment the intent names is missing"
 msgstr "an attachment the intent names is missing"
 
+#. Refusal of a sign-in: the URL's host holds a character outside DNS labels, such as an underscore, or is an IPv6 literal
+#: src/space.ts
+msgid "An instance's host holds only letters, digits, inner hyphens and single dots"
+msgstr "An instance's host holds only letters, digits, inner hyphens and single dots"
+
+#. Refusal of a sign-in: the URL names port 0
+#: src/space.ts
+msgid "An instance's port is from 1 to 65535"
+msgstr "An instance's port is from 1 to 65535"
+
+#. Refusal of a sign-in: the URL's scheme is neither https nor http; http is allowed for an instance on this device alone (localhost or 127.x)
+#: src/space.ts
+msgid "An instance's URL begins with https://, or http:// on this device"
+msgstr "An instance's URL begins with https://, or http:// on this device"
+
+#. Refusal of a sign-in: the URL carries a fragment; an instance is known by its origin alone
+#: src/space.ts
+msgid "An instance's URL carries no fragment, only its scheme, host and port"
+msgstr "An instance's URL carries no fragment, only its scheme, host and port"
+
+#. Refusal of a sign-in: the URL carries a query; an instance is known by its origin alone
+#: src/space.ts
+msgid "An instance's URL carries no query, only its scheme, host and port"
+msgstr "An instance's URL carries no query, only its scheme, host and port"
+
+#. Refusal of a sign-in: the URL carries user info before its host
+#: src/space.ts
+msgid "An instance's URL carries no user or password"
+msgstr "An instance's URL carries no user or password"
+
+#. Refusal of a sign-in: the URL names a path after its host; an instance is known by its origin alone
+#: src/space.ts
+msgid "An instance's URL names no path, only its scheme, host and port"
+msgstr "An instance's URL names no path, only its scheme, host and port"
+
+#. Refusal of a sign-in: the URL is http on a host that is not this device (localhost or 127.x)
+#: src/space.ts
+msgid "An instance's URL uses https://; http:// only on this device"
+msgstr "An instance's URL uses https://; http:// only on this device"
+
 #. A diagnostic's reason, read after the file it names; {cause} is the failure's own text, relayed
 #: src/space.ts
 msgid "an interrupted sync could not be repaired: {cause}"
@@ -1562,6 +1602,11 @@ msgstr "Name the account's login at {host}"
 #: src/space-groups.ts
 msgid "Name the group"
 msgstr "Name the group"
+
+#. Refusal of a sign-in: what the reader gave does not read as a URL at all
+#: src/space.ts
+msgid "Name the instance by its URL, such as https://spex.pub"
+msgstr "Name the instance by its URL, such as https://spex.pub"
 
 #. A stopped transfer's message; {host} is the remote's host
 #. A stopped transfer's message; {host} is the remote's host
@@ -2344,9 +2389,12 @@ msgid "the config is not valid; fix it in Settings before the agent can answer"
 msgstr "the config is not valid; fix it in Settings before the agent can answer"
 
 #. Refusal during attachment admission
+#. Refusal during core shutdown
+#. Refusal during core shutdown
 #. Refusal: environment work asked once the core stops
 #: src/environments.ts
 #: src/service.ts
+#: src/session.ts
 msgid "The core is stopping."
 msgstr "The core is stopping."
 
@@ -2589,6 +2637,11 @@ msgstr "this conversation is waiting for your reply; answer it first"
 #: src/approvals.ts
 msgid "This decision was not offered by the agent."
 msgstr "This decision was not offered by the agent."
+
+#. Refusal of a sign-in: the URL names the host and port of an instance this device already lists, under another scheme; {listed} is that instance's origin
+#: src/space.ts
+msgid "This device already signs in to {listed}, at the same host and port"
+msgstr "This device already signs in to {listed}, at the same host and port"
 
 #. Refusal: a command names an instance, by its address, that this device lists no entry for — never signed in to there, or forgotten since
 #: src/space.ts

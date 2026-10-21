@@ -9,9 +9,10 @@
 // that login; a group named like your login stands apart and takes no
 // folder; a transfer is listed under its new group before its sync moves
 // the clone; a clone keyed outside the instance's folder, or one the
-// instances migration deferred, moves under it at its next sync; and
-// Git's lines carry no URL under the Git origin, a status no rule reads
-// standing as the host's error.
+// instances migration deferred, moves under it at its next sync; Git's
+// lines carry no URL under the Git origin, a status no rule reads
+// standing as the host's error; and a home signs in to several
+// instances by their origins, each entry appended in its turn.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -761,4 +762,118 @@ test("git-host-4, git-host-21, storage-19: the core keeps a client per instance,
   assert.equal(await space.accessSecretFor(first.url), refreshed[first.url].access);
   assert.equal(await space.accessSecretFor(second.url), null);
   assert.deepEqual(again.service.instanceOrigins(), [first.url, second.url], "a signed-out entry stays listed");
+});
+
+/** A device sign-in at `url`, approved at `host`, and the first state
+ * after it ran that reads it ended — signed in, failed or stopped. */
+async function deviceSignIn(home: Awaited<ReturnType<typeof startHome>>, host: StandinHost, url: string): Promise<GroupsState> {
+  const from = home.client.mark();
+  const started = await home.client.expectOk("space.signin.start", { url });
+  assert.ok(started.flow === "device", JSON.stringify(started));
+  const running = await home.client.waitSpace(from, (state) => state.signIn.phase === "running");
+  assert.ok(running.signIn.phase === "running" && running.signIn.instance === canonical(url), JSON.stringify(running.signIn));
+  const ran = home.client.mark();
+  host.script.approveDevice(started.userCode);
+  return home.client.waitSpace(ran, (state) => state.signIn.phase !== "running", 30_000);
+}
+
+/** An origin as the core records it: `HTTP://127.0.0.1:4100/` is
+ * `http://127.0.0.1:4100`. */
+function canonical(url: string): string {
+  return new URL(url).origin;
+}
+
+test("git-host-24, git-host-2, git-host-3: a sign-in at the second instance, then at the first, appends each entry after the listed ones with its token under its origin; one at the first named with a trailing / signs its entry in again, one there as another account ends failed naming the entry's login, both pairs kept; one sign-in runs at a time, whichever instance it names", async (t) => {
+  const bob = { id: "1002", login: "bob", displayName: "Bob" };
+  const first = await startHost();
+  const second = await startHost({ displayName: "Second stand-in", person: bob });
+  const home = await startHome("second-then-first", { host: first, project: false });
+  t.after(() => home.stop());
+  const entries = (): unknown[] => Home.load(home.dataDir).instances().map((entry) => [entry.origin, entry.account?.login, entry.signedOut === true]);
+  const pairs = (): Record<string, StoredCredential> => (parseYaml(readFileSync(credentialsPath(home.dataDir), "utf8")) as { hosts: Record<string, StoredCredential> }).hosts;
+  /** Who the pair stored under an instance's origin signs in as there. */
+  const personAt = async (host: StandinHost): Promise<string> =>
+    (await new GitHostClient({ url: host.url, label: "Spex on test", credentials: fileCredentialStore(home.dataDir, host.url) }).me()).login;
+
+  // A sign-in naming the second runs at the second; while it runs, a
+  // start naming any instance is busy (git-host-3, git-host-2).
+  const from = home.client.mark();
+  const started = await home.client.expectOk("space.signin.start", { url: second.url });
+  assert.ok(started.flow === "device", JSON.stringify(started));
+  const running = await home.client.waitSpace(from, (state) => state.signIn.phase === "running");
+  assert.ok(running.signIn.phase === "running" && running.signIn.instance === second.url, JSON.stringify(running.signIn));
+  await home.client.expectError("space.signin.start", { url: first.url }, "busy");
+  await home.client.expectError("space.signin.start", { url: second.url }, "busy");
+  await home.client.expectError("space.signin.start", {}, "busy");
+  second.script.approveDevice(started.userCode);
+  await home.client.waitSpace(from, (state) => instanceOf(state, second.url)?.signedIn === true && state.signIn.phase === "idle", 30_000);
+  await home.client.waitRepository(from, "bob/bob-spex", (repository) => repository.sync.phase === "done", 30_000);
+  assert.deepEqual(entries(), [[second.url, bob.login, false]]);
+  assert.deepEqual(Object.keys(pairs()), [second.url]);
+
+  // Then the first, appended after the second, each pair under its own
+  // origin signing in as that instance's person (git-host-2, storage-19).
+  const signed = await signIn(home, first);
+  assert.deepEqual(signed.instances.map((instance) => [instance.origin, instance.account.login, instance.signedIn]), [[second.url, bob.login, true], [first.url, LOGIN, true]]);
+  assert.equal(signed.defaultInstance, second.url, "the first entry listed is the default instance");
+  assert.deepEqual(entries(), [[second.url, bob.login, false], [first.url, LOGIN, false]]);
+  assert.deepEqual(Object.keys(pairs()).sort(), [first.url, second.url].sort());
+  assert.deepEqual([await personAt(first), await personAt(second)], [LOGIN, bob.login]);
+
+  // Named with a trailing `/`, the first's entry signs in again: its new
+  // pair in place of its former, the second's untouched, no entry added.
+  const before = pairs();
+  const again = await deviceSignIn(home, first, `${first.url}/`);
+  assert.deepEqual(again.signIn, { phase: "idle" });
+  const after = pairs();
+  assert.notDeepEqual(after[first.url], before[first.url]);
+  assert.deepEqual(after[second.url], before[second.url]);
+  assert.deepEqual(entries(), [[second.url, bob.login, false], [first.url, LOGIN, false]]);
+
+  // As another account there, the sign-in ends failed naming the entry's
+  // login, both stored pairs kept and both entries as they stood.
+  const ada = first.script.person;
+  first.script.person = { id: "1003", login: "grace", displayName: "Grace Hopper" };
+  const refused = await deviceSignIn(home, first, first.url);
+  first.script.person = ada;
+  assert.ok(refused.signIn.phase === "failed", JSON.stringify(refused.signIn));
+  assert.deepEqual([refused.signIn.instance, refused.signIn.cause], [first.url, "refused"]);
+  assert.match(refused.signIn.message, /signed you in as another account; this device uses @ada there/);
+  assert.deepEqual(pairs(), after);
+  assert.deepEqual(entries(), [[second.url, bob.login, false], [first.url, LOGIN, false]]);
+});
+
+test("space-83, space-4, space-59, storage-2: a sign-in at the first, then one naming the second's origin, lists both in that order with their accounts; your own group's folder bears the first's login and its own repository is created in the first's namespace alone, its remote named by the first's folder; the second's sign-in creates and renames nothing", async (t) => {
+  const bob = { id: "1002", login: "bob", displayName: "Bob" };
+  const first = await startHost();
+  const second = await startHost({ displayName: "Second stand-in", person: bob });
+  const home = await startHome("first-then-second", { host: first, project: false });
+  t.after(() => home.stop());
+  const from = home.client.mark();
+  await signIn(home, first);
+  await home.client.waitRepository(from, HOST_OWN, (repository) => repository.sync.phase === "done", 30_000);
+  const read = await home.client.waitSpace(from, (state) => (instanceOf(state, first.url)?.readAt ?? null) !== null);
+  assert.equal(instanceOf(read, first.url)?.displayName, HOST_NAME);
+  // The entry keeps the display name the read named (storage-2).
+  assert.equal(Home.load(home.dataDir).instance(first.url)?.displayName, HOST_NAME);
+
+  const signed = await signIn(home, second);
+  assert.deepEqual(signed.instances.map((instance) => [instance.origin, instance.account.login, instance.signedIn]), [[first.url, LOGIN, true], [second.url, bob.login, true]]);
+  const state = await home.client.expectOk("space.get", {});
+  assert.equal(state.defaultInstance, first.url);
+  assert.deepEqual(state.instances.map((instance) => instance.origin), [first.url, second.url]);
+  assert.deepEqual([instanceOf(state, first.url)?.displayName, instanceOf(state, first.url)?.read, typeof instanceOf(state, first.url)?.readAt], [HOST_NAME, { phase: "idle" }, "number"]);
+  // Your own group's folder bears the first's login, no later sign-in
+  // renaming it; its own repository is the first's, in your namespace
+  // there, its one remote named by the first's folder (space-4, space-59,
+  // space-5).
+  assert.equal(state.own.name, LOGIN);
+  assert.equal(Home.load(home.dataDir).ownName, LOGIN);
+  const own = state.own.repositories.find((repository) => repository.own);
+  assert.deepEqual([own?.key, own?.instance, own?.state], [HOST_OWN, first.url, "reachable"]);
+  assert.deepEqual(git(clonePath(home.dataDir, HOST_OWN), "remote").split("\n"), [hostFolder(first)]);
+  assert.deepEqual(first.script.creations.map((body) => (body as { name?: unknown }).name), [`${LOGIN}-spex`]);
+  assert.deepEqual(second.script.creations, [], "nothing is created at the second");
+  assert.equal(existsSync(join(home.dataDir, "workspace", bob.login)), false, "no folder bears the second's login");
+  assert.deepEqual(readdirSync(join(home.dataDir, "workspace")).sort(), [LOGIN], "nothing moved under an instance's folder");
 });

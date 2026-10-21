@@ -805,6 +805,46 @@ msgstr "把本机的 SSH 密钥添加到有权访问它的账户"
 msgid "an attachment the intent names is missing"
 msgstr "意图引用的附件缺失"
 
+#. Refusal of a sign-in: the URL's host holds a character outside DNS labels, such as an underscore, or is an IPv6 literal
+#: src/space.ts
+msgid "An instance's host holds only letters, digits, inner hyphens and single dots"
+msgstr "实例的主机名只能包含字母、数字、内部连字符和单个点"
+
+#. Refusal of a sign-in: the URL names port 0
+#: src/space.ts
+msgid "An instance's port is from 1 to 65535"
+msgstr "实例的端口应在 1 到 65535 之间"
+
+#. Refusal of a sign-in: the URL's scheme is neither https nor http; http is allowed for an instance on this device alone (localhost or 127.x)
+#: src/space.ts
+msgid "An instance's URL begins with https://, or http:// on this device"
+msgstr "实例的 URL 以 https:// 开头，本机上的实例也可用 http://"
+
+#. Refusal of a sign-in: the URL carries a fragment; an instance is known by its origin alone
+#: src/space.ts
+msgid "An instance's URL carries no fragment, only its scheme, host and port"
+msgstr "实例的 URL 不含片段，只含协议、主机和端口"
+
+#. Refusal of a sign-in: the URL carries a query; an instance is known by its origin alone
+#: src/space.ts
+msgid "An instance's URL carries no query, only its scheme, host and port"
+msgstr "实例的 URL 不含查询参数，只含协议、主机和端口"
+
+#. Refusal of a sign-in: the URL carries user info before its host
+#: src/space.ts
+msgid "An instance's URL carries no user or password"
+msgstr "实例的 URL 不含用户名或密码"
+
+#. Refusal of a sign-in: the URL names a path after its host; an instance is known by its origin alone
+#: src/space.ts
+msgid "An instance's URL names no path, only its scheme, host and port"
+msgstr "实例的 URL 不含路径，只含协议、主机和端口"
+
+#. Refusal of a sign-in: the URL is http on a host that is not this device (localhost or 127.x)
+#: src/space.ts
+msgid "An instance's URL uses https://; http:// only on this device"
+msgstr "实例的 URL 使用 https://；只有本机上的实例才可用 http://"
+
 #. A diagnostic's reason, read after the file it names; {cause} is the failure's own text, relayed
 #: src/space.ts
 msgid "an interrupted sync could not be repaired: {cause}"
@@ -1562,6 +1602,11 @@ msgstr "请填写该账户在 {host} 上的登录名"
 #: src/space-groups.ts
 msgid "Name the group"
 msgstr "请为群组命名"
+
+#. Refusal of a sign-in: what the reader gave does not read as a URL at all
+#: src/space.ts
+msgid "Name the instance by its URL, such as https://spex.pub"
+msgstr "请用实例的 URL 指明它，例如 https://spex.pub"
 
 #. A stopped transfer's message; {host} is the remote's host
 #. A stopped transfer's message; {host} is the remote's host
@@ -2344,9 +2389,12 @@ msgid "the config is not valid; fix it in Settings before the agent can answer"
 msgstr "配置无效；请先在设置中修复，智能体才能作答"
 
 #. Refusal during attachment admission
+#. Refusal during core shutdown
+#. Refusal during core shutdown
 #. Refusal: environment work asked once the core stops
 #: src/environments.ts
 #: src/service.ts
+#: src/session.ts
 msgid "The core is stopping."
 msgstr "核心服务正在停止。"
 
@@ -2589,6 +2637,11 @@ msgstr "该会话正在等待你的回复；请先回复"
 #: src/approvals.ts
 msgid "This decision was not offered by the agent."
 msgstr "智能体未提供此答复选项。"
+
+#. Refusal of a sign-in: the URL names the host and port of an instance this device already lists, under another scheme; {listed} is that instance's origin
+#: src/space.ts
+msgid "This device already signs in to {listed}, at the same host and port"
+msgstr "此设备已登录同一主机和端口上的 {listed}"
 
 #. Refusal: a command names an instance, by its address, that this device lists no entry for — never signed in to there, or forgotten since
 #: src/space.ts

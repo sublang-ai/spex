@@ -323,9 +323,11 @@ for (const next of ["signed-out", "another-account"] as const) {
       // The stand-in's current user's namespace follows the scripted
       // person; existing repositories retain their original group object.
       host.script.groups[0] = { id: "2004", fullPath: "bob", name: "bob", kind: "user" };
-      const signFrom = home.client.mark();
-      await signIn(home, host);
-      await home.client.waitRepository(signFrom, "bob/bob-spex", (row) => row.sync.phase === "done", 30_000);
+      // The sign-in ends once its set-up has run; your own group's folder
+      // keeps the first login's name, which no later sign-in renames
+      // (space-59).
+      const signed = await signIn(home, host);
+      assert.equal(signed.own.name, "ada");
     }
     gate.release();
     const row = await home.client.waitRepository(from, key, (candidate) => candidate.sync.phase === "stopped", 30_000);

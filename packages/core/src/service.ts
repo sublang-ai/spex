@@ -3055,7 +3055,7 @@ export class CoreService {
       case "space.refresh":
         return this.requireSpace().refresh();
       case "space.signin.start":
-        return this.requireSpace().signInStart();
+        return this.requireSpace().signInStart(command.url);
       case "space.signin.cancel":
         return { stopped: this.requireSpace().signInCancel() };
       // Each command names the instance it acts at by its origin, the

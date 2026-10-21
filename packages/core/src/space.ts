@@ -26,7 +26,7 @@ import {
 } from "./git-host.js";
 import { kebab, splitKey, type HomeAccount } from "./home.js";
 import { i18n } from "./i18n.js";
-import { canonicalOrigin, instanceFolder, instanceSegmentOf, isInstanceFolder } from "./instance.js";
+import { canonicalOrigin, instanceFolder, instanceSegmentOf, isInstanceFolder, OriginRefused, parseOrigin, type OriginRefusal } from "./instance.js";
 import { isDeferredClone } from "./migrate-instances.js";
 import type {
   GroupsState,
@@ -274,6 +274,41 @@ const signInThenRetry = (): string => i18n._({
 const signInRunning = (): string => i18n._({
   id: "A sign-in is already running",
   comment: "Refusal of a second sign-in while one runs",
+});
+
+/** The refusal of a sign-in at a URL the origin rule refuses (git-host-2,
+ * storage-2): one sentence naming the part of the rule it breaks. The
+ * URL is never repeated, since its user info may hold a secret. */
+function originRuleRefusal(reason: OriginRefusal): string {
+  switch (reason) {
+    case "invalid":
+      return i18n._({ id: "Name the instance by its URL, such as https://spex.pub", comment: "Refusal of a sign-in: what the reader gave does not read as a URL at all" });
+    case "scheme":
+      return i18n._({ id: "An instance's URL begins with https://, or http:// on this device", comment: "Refusal of a sign-in: the URL's scheme is neither https nor http; http is allowed for an instance on this device alone (localhost or 127.x)" });
+    case "user":
+      return i18n._({ id: "An instance's URL carries no user or password", comment: "Refusal of a sign-in: the URL carries user info before its host" });
+    case "path":
+      return i18n._({ id: "An instance's URL names no path, only its scheme, host and port", comment: "Refusal of a sign-in: the URL names a path after its host; an instance is known by its origin alone" });
+    case "query":
+      return i18n._({ id: "An instance's URL carries no query, only its scheme, host and port", comment: "Refusal of a sign-in: the URL carries a query; an instance is known by its origin alone" });
+    case "fragment":
+      return i18n._({ id: "An instance's URL carries no fragment, only its scheme, host and port", comment: "Refusal of a sign-in: the URL carries a fragment; an instance is known by its origin alone" });
+    case "host":
+      return i18n._({ id: "An instance's host holds only letters, digits, inner hyphens and single dots", comment: "Refusal of a sign-in: the URL's host holds a character outside DNS labels, such as an underscore, or is an IPv6 literal" });
+    case "port":
+      return i18n._({ id: "An instance's port is from 1 to 65535", comment: "Refusal of a sign-in: the URL names port 0" });
+    case "insecure":
+      return i18n._({ id: "An instance's URL uses https://; http:// only on this device", comment: "Refusal of a sign-in: the URL is http on a host that is not this device (localhost or 127.x)" });
+  }
+}
+
+/** The refusal of a sign-in at a new origin whose folder a listed
+ * instance's equals (git-host-2, storage-2): one instance per host and
+ * port, whatever its scheme. */
+const sameFolderRefusal = (listed: string): string => i18n._({
+  id: "This device already signs in to {listed}, at the same host and port",
+  values: { listed },
+  comment: "Refusal of a sign-in: the URL names the host and port of an instance this device already lists, under another scheme; {listed} is that instance's origin",
 });
 
 /** Guidance under a step stopped for a reason the app does not classify. */
@@ -2717,13 +2752,52 @@ export class SpaceManager {
     return underOrigin(url, this.knownOrigin()) || underOrigin(url, this.host.store.home.host.origin);
   }
 
-  /** Start the configured sign-in flow (git-host-2, git-host-3): its
-   * shape goes back at once, and its end sets the home up (space-4). */
-  async signInStart(): Promise<{ flow: "browser"; url: string } | { flow: "device"; userCode: string; verificationUri: string; expiresAt: number }> {
-    const client = this.defaultClient();
-    if (this.flow || this.signInState.phase === "running" || client.signingIn()) throw new CoreError("busy", signInRunning());
+  /** The origin a sign-in names (git-host-2, storage-2): the default
+   * instance's where it names none, else the canonical origin of `url`,
+   * a URL the origin rule refuses — and a new origin at the folder of an
+   * instance the home lists — refused `invalid_request` naming the rule,
+   * before anything listens or any instance is asked. */
+  private signInOrigin(url: string | undefined): string {
+    const home = this.host.store.home;
+    if (url === undefined) return home.defaultInstance().origin;
+    let origin: string;
+    try { origin = parseOrigin(url).origin; }
+    catch (error) {
+      if (error instanceof OriginRefused) throw new CoreError("invalid_request", originRuleRefusal(error.reason));
+      throw error;
+    }
+    if (!home.instance(origin)) {
+      const folder = instanceFolder(origin);
+      const listed = home.instances().find((entry) => instanceFolder(entry.origin) === folder);
+      if (listed) throw new CoreError("invalid_request", sameFolderRefusal(listed.origin));
+    }
+    return origin;
+  }
+
+  /** An instance's name in what the core says of it (space-15): the
+   * default instance's as `hostName` reads it; another's display name as
+   * its last read named it, else its host name. */
+  private instanceName(origin: string): string {
+    const home = this.host.store.home;
+    if (origin === home.defaultInstance().origin) return this.hostName();
+    const named = home.instance(origin)?.displayName;
+    if (named) return named;
+    try { return new URL(origin).hostname; } catch { return origin; }
+  }
+
+  /** Start the configured sign-in flow at the instance `url` names, by
+   * its origin, the default instance where it names none (git-host-2,
+   * git-host-3): its shape goes back at once, and its end sets the home
+   * up for the account there (space-4). At most one sign-in runs,
+   * whichever instance it names. */
+  async signInStart(url?: string): Promise<{ flow: "browser"; url: string } | { flow: "device"; userCode: string; verificationUri: string; expiresAt: number }> {
+    const origin = this.signInOrigin(url);
+    if (this.flow || this.signInState.phase === "running" || [...this.instances.values()].some((entry) => entry.client.signingIn())) {
+      throw new CoreError("busy", signInRunning());
+    }
+    const client = this.instanceAt(origin).client;
     const kind = this.host.signInFlow;
-    const admit = (account: HostAccount): HostError | null => this.admitAccount(account);
+    const admit = (account: HostAccount): HostError | null => this.admitAccount(origin, account);
     let started: { kind: "browser"; flow: BrowserSignIn } | { kind: "device"; flow: DeviceSignIn };
     try {
       started = kind === "browser"
@@ -2731,22 +2805,21 @@ export class SpaceManager {
         : { kind, flow: await client.startDeviceSignIn({ admit }) };
     } catch (error) {
       if (error instanceof SignInBusyError) throw new CoreError("busy", signInRunning());
-      const failure = signInFailure(error, this.hostName());
-      this.signInState = failure ? { phase: "failed", instance: client.url, ...failure } : { phase: "idle" };
+      const failure = signInFailure(error, this.instanceName(origin));
+      this.signInState = failure ? { phase: "failed", instance: origin, ...failure } : { phase: "idle" };
       void this.publish();
-      throw new CoreError("invalid_request", failure?.message ?? relayHostError(error, this.hostName()));
+      throw new CoreError("invalid_request", failure?.message ?? relayHostError(error, this.instanceName(origin)));
     }
     const flow = started.flow;
     this.flow = flow;
     // The flow names the origin it signs in to (space-30).
-    const instance = client.url;
     this.signInState = started.kind === "browser"
-      ? { phase: "running", instance, flow: "browser", since: Date.now() }
-      : { phase: "running", instance, flow: "device", userCode: started.flow.userCode, verificationUri: started.flow.verificationUri, since: Date.now() };
+      ? { phase: "running", instance: origin, flow: "browser", since: Date.now() }
+      : { phase: "running", instance: origin, flow: "device", userCode: started.flow.userCode, verificationUri: started.flow.verificationUri, since: Date.now() };
     void this.publish();
     void flow.done.then(
-      (account) => this.signedInAs(account),
-      (error: unknown) => this.signInEnded(error),
+      (account) => this.signedInAs(origin, account),
+      (error: unknown) => this.signInEnded(origin, error),
     );
     return started.kind === "browser"
       ? { flow: "browser", url: started.flow.url }
@@ -2758,9 +2831,9 @@ export class SpaceManager {
    * its entry's account, read from `home.yaml` in the turn that would
    * store the token; another is refused naming the entry's login, so
    * nothing is stored and the home stays as it stood. */
-  private admitAccount(account: HostAccount): HostError | null {
+  private admitAccount(origin: string, account: HostAccount): HostError | null {
     let listed: HomeAccount | undefined;
-    try { listed = this.host.store.home.instance(this.defaultClient().url)?.account; }
+    try { listed = this.host.store.home.instance(origin)?.account; }
     catch { return null; }
     return listed && listed.id !== account.id ? anotherAccountError(listed.login) : null;
   }
@@ -2773,10 +2846,29 @@ export class SpaceManager {
     return true;
   }
 
-  private async signedInAs(account: HostAccount): Promise<void> {
+  /** A sign-in's token is stored (git-host-2): its account is written
+   * into that origin's entry — appended after the listed ones where none
+   * stands, signed in again where one does — and the home is set up for
+   * it there (space-4). */
+  private async signedInAs(origin: string, account: HostAccount): Promise<void> {
     this.flow = undefined;
     try {
-      this.host.store.signIn(account);
+      const store = this.host.store;
+      const formerDefault = store.home.defaultInstance().origin;
+      store.signIn(origin, account);
+      if (origin !== store.home.defaultInstance().origin) {
+        // Transitional, until each instance is read on its own: the core
+        // reads the default instance alone, so the set-up at another
+        // instance renames your own group's folder where it still bears
+        // this device's user name (space-59), and reads nothing there yet.
+        await this.publish();
+        await this.renameOwn(account, this.accountGeneration);
+        return;
+      }
+      // A first sign-in at another origin than the one the home was
+      // created with makes that origin the default instance: what was
+      // described before was the other instance's.
+      if (formerDefault !== origin) this.described = undefined;
       this.accountGeneration += 1;
       this.hostSignedOut = undefined;
       this.view = undefined;
@@ -2794,10 +2886,10 @@ export class SpaceManager {
     }
   }
 
-  private signInEnded(error: unknown): void {
+  private signInEnded(origin: string, error: unknown): void {
     this.flow = undefined;
-    const failure = signInFailure(error, this.hostName());
-    this.signInState = failure ? { phase: "failed", instance: this.defaultClient().url, ...failure } : { phase: "idle" };
+    const failure = signInFailure(error, this.instanceName(origin));
+    this.signInState = failure ? { phase: "failed", instance: origin, ...failure } : { phase: "idle" };
     void this.publish();
   }
 
@@ -2966,6 +3058,12 @@ export class SpaceManager {
         for (const [machine, target] of this.targets) if (target.begun <= begun) this.targets.delete(machine);
         this.releaseHeld();
         this.described = { displayName: view.displayName, gitOrigin: view.gitOrigin };
+        // The instance's entry keeps its display name as this read named
+        // it, for its heading once it is signed out (storage-2, space-1).
+        if (view.displayName) {
+          try { this.host.store.setDisplayName(client.url, view.displayName); }
+          catch (error) { console.error(`spex: the instance's display name was not recorded: ${error instanceof Error ? error.message : String(error)}`); }
+        }
         this.readFailure = undefined;
         // A clone matched by its remote records the host's id (git-host-5).
         for (const repository of this.host.store.listRepositories()) {
@@ -3052,7 +3150,9 @@ export class SpaceManager {
   // -- your own group (space-4, space-59, space-65) ---------------------------
 
   /** Rename your own group's folder and its spex repository after the
-   * account's login (space-59): one synchronous step at its instant —
+   * account's login (space-59), only while the folder still bears this
+   * device's user name, as it does until the home's first sign-in, so no
+   * later sign-in renames it: one synchronous step at its instant —
    * the clones beneath read now, each moved by one rename, every pair
    * naming one rewritten. A destination already taken is a conflict:
    * nothing moves, and the next set-up asks again. Writers beneath the
@@ -3060,12 +3160,13 @@ export class SpaceManager {
   private async renameOwn(account: Pick<HostAccount, "login">, generation: number): Promise<"none" | "done" | "conflict"> {
     const store = this.host.store;
     const target = ownNameFor(account.login);
-    if (!target || target === store.home.ownName) return "none";
+    const device = store.deviceOwnName();
+    if (!target || target === store.home.ownName || store.home.ownName !== device) return "none";
     const identity = await this.machineIdentity();
     if (generation !== this.accountGeneration) return "none";
     // Nothing is awaited from here to the last rename.
     const current = store.home.ownName;
-    if (target === current) return "none";
+    if (target === current || current !== device) return "none";
     const ownFrom = `${current}/${current}-spex`;
     const ownTo = `${target}/${target}-spex`;
     // Your own group's clone moves last, so the home names its folder

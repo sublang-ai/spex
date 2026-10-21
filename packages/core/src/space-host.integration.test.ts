@@ -125,10 +125,11 @@ test("space-37: the browser sign-in renames your own group after the login, push
   assert.equal(repositoryOf(signed, moved).state, "local-only");
   assert.equal(repositoryOf(signed, moved).folder, home.projectDir);
   assert.ok(!existsSync(join(home.dataDir, "workspace", OWN)), "the former folder left with its clones");
-  // The instance signed in to, by its origin: the home's one entry (DR-127).
+  // The instance signed in to, by its origin: the home's one entry, with
+  // its display name as its read named it (DR-127, storage-2).
   const file = Home.load(home.dataDir).file;
   assert.equal(file.origin, host.url);
-  assert.deepEqual(file.instances, [{ origin: host.url, clientId: "spex", account: { id: "1001", login: LOGIN, displayName: "Ada Lovelace" } }]);
+  assert.deepEqual(file.instances, [{ origin: host.url, clientId: "spex", account: { id: "1001", login: LOGIN, displayName: "Ada Lovelace" }, displayName: HOST_NAME }]);
   assert.equal(file.own, LOGIN);
   assert.deepEqual(file.folders.map((folder) => [folder.path, folder.repository]), [[home.projectDir, moved]]);
   // The app token, owner-only (storage-19).
@@ -1052,6 +1053,57 @@ test("git-host-2: a sign-in at a listed instance as another account ends failed 
   assert.deepEqual(entries(), [[host.url, ada.id, LOGIN, undefined]]);
 });
 
+test("git-host-13, git-host-2, git-host-3: space.signin.start naming a URL the origin rule refuses — a path, a query, a user, http off this device, a host holding `_`, or, once the stand-in is listed, https at its host and port — is refused naming the rule, nothing listening and no request reaching any host; the stand-in's origin in another spelling signs its entry in again", async (t) => {
+  const host = await startHost();
+  const port = new URL(host.url).port;
+  for (const flow of ["browser", "device"] as const) {
+    const home = await startHome(`origin-rule-${flow}`, { host, project: false, extra: { signIn: flow } });
+    t.after(() => home.stop());
+    /** A start refused `invalid_request` with `rule`, before any flow:
+     * the URL's secret not repeated, no sign-in reading as running and
+     * nothing reaching the stand-in, whose own port several URLs name. */
+    const refused = async (url: string, rule: RegExp): Promise<void> => {
+      const asked = host.script.requests.length;
+      const from = home.client.mark();
+      const message = await home.client.expectError("space.signin.start", { url }, "invalid_request", rule);
+      assert.ok(!message.includes("secret") && !message.includes(url), message);
+      assert.equal(host.script.requests.length, asked, `nothing reached the stand-in for ${url}`);
+      const ran = home.client.messages.slice(from).filter((message) => message.type === "space.state" && message.state.signIn.phase !== "idle");
+      assert.deepEqual(ran, [], `no sign-in ran for ${url}`);
+      assert.deepEqual((await home.client.expectOk("space.get", {})).signIn, { phase: "idle" });
+    };
+    await refused(`${host.url}/login`, /An instance's URL names no path, only its scheme, host and port/);
+    await refused(`${host.url}/?next=1`, /An instance's URL carries no query/);
+    await refused(`http://ada:secret@127.0.0.1:${port}`, /An instance's URL carries no user or password/);
+    await refused("http://spex.test", /An instance's URL uses https:\/\/; http:\/\/ only on this device/);
+    await refused("https://spex_pub.test", /An instance's host holds only letters, digits, inner hyphens and single dots/);
+    assert.equal(existsSync(join(home.dataDir, "local", "credentials.yaml")), false, "nothing is stored");
+    assert.deepEqual(Home.load(home.dataDir).instances(), [], "no instance is listed");
+    // Nothing holds the one sign-in: the stand-in's origin signs in.
+    const from = home.client.mark();
+    await signIn(home, host);
+    await home.client.waitRepository(from, HOST_OWN, (repository) => repository.sync.phase === "done", 30_000);
+    // Listed, its host and port under another scheme is refused naming
+    // the instance this device signs in to there.
+    await refused(`https://127.0.0.1:${port}`, new RegExp(`This device already signs in to ${host.url.replace(/[.:/]/g, "\\$&")}, at the same host and port`));
+    // Its origin in another spelling is the same entry, signed in again:
+    // a new pair stored in place of the one that stood, no second entry.
+    const credentials = fileCredentialStore(home.dataDir, host.url);
+    const pair = await credentials.read();
+    const mark = home.client.mark();
+    const started = await home.client.expectOk("space.signin.start", { url: `HTTP://127.0.0.1:${port}/` });
+    const running = await home.client.waitSpace(mark, (state) => state.signIn.phase === "running");
+    assert.ok(running.signIn.phase === "running" && running.signIn.instance === host.url, JSON.stringify(running.signIn));
+    const ran = home.client.mark();
+    if (started.flow === "browser") await (await fetch((await fetch(started.url, { redirect: "manual" })).headers.get("location") ?? "")).text();
+    else host.script.approveDevice(started.userCode);
+    const ended = await home.client.waitSpace(ran, (state) => state.signIn.phase !== "running", 30_000);
+    assert.deepEqual(ended.signIn, { phase: "idle" });
+    assert.ok(pair && !samePair(await credentials.read(), pair), "a new pair stands in place of the former");
+    assert.deepEqual(Home.load(home.dataDir).instances().map((entry) => [entry.origin, entry.account?.login, entry.signedOut === true]), [[host.url, LOGIN, false]]);
+  }
+});
+
 test("git-host-4: a refresh the stand-in refuses, or a device it revoked, signs this device out, the state saying the host did it as whom until the next sign-in", async (t) => {
   const host = await startHost();
   const home = await startHome("host-signout", { host, project: false, extra: { signIn: "browser" } });
@@ -1117,7 +1169,7 @@ test("git-host-4, git-host-10: a refusal or a sign-out overtaken by a newer sign
   await home.client.waitRepository(from, HOST_OWN, (repository) => repository.sync.phase === "done");
   // The core's own client and Groups, reached for what no command shows:
   // its answers held, and the instant its pair is removed.
-  const core = home.service as unknown as { space: { readHost(): Promise<unknown>; signedInAs(account: HostAccount): Promise<void> } };
+  const core = home.service as unknown as { space: { readHost(): Promise<unknown>; signedInAs(origin: string, account: HostAccount): Promise<void> } };
   const client = clientAt(home, host);
   const holds = holdingFetch(client.fetchImpl);
   client.fetchImpl = holds.fetch;
@@ -1186,7 +1238,7 @@ test("git-host-4, git-host-10: a refusal or a sign-out overtaken by a newer sign
       if (replaced && next === null) {
         queueMicrotask(() => {
           published = store.replace(null, latest);
-          void core.space.signedInAs(account);
+          void core.space.signedInAs(host.url, account);
         });
       }
       return replaced;
