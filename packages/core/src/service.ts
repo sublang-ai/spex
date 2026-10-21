@@ -2688,7 +2688,7 @@ export class CoreService {
           if (!existsSync(join(packageDir, "meta.yaml"))) {
             // No one is asked here: the project's defaults stand, with
             // no license where none is derived (playbook-library-69).
-            const defaults = newPackageDefaults(project.id, project.path, await this.environments.publishableOrgs());
+            const defaults = newPackageDefaults(project.id, project.path, await this.environments.publishableOrgs(project.id));
             const fields = { org: defaults.org, ...(defaults.license !== null ? { license: defaults.license } : {}) };
             // A manifest made while the registry was asked stands.
             try {
@@ -3141,9 +3141,9 @@ export class CoreService {
         return this.authors.list();
       case "draft.defaults": {
         // What New playbook fills in, read from the project and the
-        // registry now, the registry asked once (playbook-library-103).
+        // registry of its instance now, asked once (playbook-library-103).
         const { project, repository } = this.draftHome(command.projectId);
-        return newPackageDefaults(repository.key, project.path, await this.environments.publishableOrgs());
+        return newPackageDefaults(repository.key, project.path, await this.environments.publishableOrgs(repository.key));
       }
       case "draft.create": {
         // The ids the config enables are taken (playbook-library-51), as

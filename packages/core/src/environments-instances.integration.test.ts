@@ -12,10 +12,11 @@
 // an instance locks the built-in spec package there; and an install
 // takes each locked release from the environment's instance, else the
 // registry its lock records, else any instance the home is signed in
-// to. A search asks the registry of the environment it names, and a
-// publish goes to it as its instance's account. A registry refusing an
-// instance's token signs that instance alone out, where that token is
-// still the stored pair's.
+// to. A search asks the registry of the environment it names, the orgs
+// a project's new playbook defaults from are asked of its environment's
+// registry, and a publish goes to it as its instance's account. A
+// registry refusing an instance's token signs that instance alone out,
+// where that token is still the stored pair's.
 
 import { test, type TestContext } from "node:test";
 import assert from "node:assert/strict";
@@ -719,4 +720,35 @@ test("environments-34, environments-10, environments-17, environments-5: a publi
   assert.deepEqual(uploads(R2, two), [["/api/v1/packages/acme/own-pub/1.0.0", second.url, LOGIN, true]]);
   assert.equal(R1.script.received.length, one, "the first's registry is asked nothing");
   assert.deepEqual([await holds(R2, "acme/own-pub"), await holds(R1, "acme/own-pub")], [true, false]);
+});
+
+test("environments-34, environments-27: the orgs asked for the second's project are asked of the second's registry once, relayed by the second with its token as its account, the first's registry asked nothing; the local-only project's are asked of the first's with the first's token", { timeout: 300_000 }, async (t) => {
+  const { R1, R2, first, second, home, south, local } = await twoInstances(t, "orgs");
+  // Each registry lists an org for the bearers its own instance accepts
+  // (environments-18), at the namespace both projects' keys name, so an
+  // org replied is the one its registry read (playbook-library-103).
+  R1.script.setOrgs(first.url, [{ name: "first-org", path: LOGIN, role: "owner" }]);
+  R2.script.setOrgs(second.url, [{ name: "second-org", path: LOGIN, role: "owner" }]);
+  // Each orgs request a registry received after a mark: its method, the
+  // instance that relayed it, that instance's account and whether a
+  // bearer came (environments-18).
+  const orgsAsked = (registry: StandinRegistry, from: number): [string, string | null, string | null, boolean][] =>
+    registry.script.received.slice(from).filter((request) => request.path === "/api/v1/account/orgs").map((request) => [request.method, request.instance, request.account, request.bearer]);
+
+  // The second's project asks the second's registry, through the second
+  // with its token, read as the second's account (environments-27).
+  let one = R1.script.received.length;
+  let two = R2.script.received.length;
+  assert.equal((await home.client.expectOk("draft.defaults", { projectId: south })).org, "second-org");
+  assert.deepEqual(orgsAsked(R2, two), [["GET", second.url, LOGIN, true]]);
+  assert.deepEqual(orgsAsked(R1, one), []);
+
+  // The local-only project, which has no instance, asks the first's
+  // registry, the default instance's, with the first's token
+  // (environments-27).
+  one = R1.script.received.length;
+  two = R2.script.received.length;
+  assert.equal((await home.client.expectOk("draft.defaults", { projectId: local })).org, "first-org");
+  assert.deepEqual(orgsAsked(R1, one), [["GET", first.url, LOGIN, true]]);
+  assert.deepEqual(orgsAsked(R2, two), []);
 });

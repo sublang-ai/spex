@@ -406,14 +406,15 @@ export class EnvironmentManager {
       .map(([agent]) => agent);
   }
 
-  /** The orgs the default instance's registry lists the person signed
-   * in there may publish to, asked once (environments-27); null while
-   * signed out there, the registry not asked, and where it gives no
-   * answer. */
-  async publishableOrgs(): Promise<RegistryOrg[] | null> {
-    const origin = this.defaultOrigin();
+  /** The orgs the account at a project's instance may publish to, as
+   * that instance's registry lists them — the default instance's where
+   * the project has none — asked once (environments-27,
+   * playbook-library-103, DR-127); null while the home is not signed in
+   * there, the registry not asked, and where it gives no answer. */
+  async publishableOrgs(key: string): Promise<RegistryOrg[] | null> {
+    const { origin, remote } = this.registryAt(this.registryOriginOf(key));
     if (this.store.home.account(origin) === null) return null;
-    return this.registryAt(origin).remote.orgs();
+    return remote.orgs();
   }
 
   /** The home's default instance's origin (storage-2): the registry of
