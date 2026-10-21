@@ -2190,10 +2190,10 @@ msgstr "Sign in from the header, then Retry."
 msgid "Sign in to {host} first"
 msgstr "Sign in to {host} first"
 
-#. Refusal: publishing to the registry needs the home signed in
+#. Refusal: publishing needs the home signed in at the instance the publish goes to; {name} is that instance's display name as last read, else its host name
 #: src/environments.ts
-msgid "Sign in to publish"
-msgstr "Sign in to publish"
+msgid "Sign in to publish at {name}"
+msgstr "Sign in to publish at {name}"
 
 #. Refusal of Forget: the instance is still signed in; {host} is its display name, or its host name before any read
 #: src/space.ts

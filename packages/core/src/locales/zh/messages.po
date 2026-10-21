@@ -2190,10 +2190,10 @@ msgstr "请从页头登录，然后重试。"
 msgid "Sign in to {host} first"
 msgstr "请先登录 {host}"
 
-#. Refusal: publishing to the registry needs the home signed in
+#. Refusal: publishing needs the home signed in at the instance the publish goes to; {name} is that instance's display name as last read, else its host name
 #: src/environments.ts
-msgid "Sign in to publish"
-msgstr "登录后才能发布"
+msgid "Sign in to publish at {name}"
+msgstr "登录 {name} 后才能发布"
 
 #. Refusal of Forget: the instance is still signed in; {host} is its display name, or its host name before any read
 #: src/space.ts

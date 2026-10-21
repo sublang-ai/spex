@@ -436,7 +436,9 @@ export interface AppState extends AttachmentState {
   removeSpecPackage(repository: string, name: string): Promise<void>;
   resolveEnvironment(repository: string): Promise<void>;
   installEnvironment(repository: string): Promise<void>;
-  searchRegistry(query: string): Promise<RegistryResult[]>;
+  /** Search the registry of a spex repository's environment, the one
+   * a result is added to. */
+  searchRegistry(repository: string, query: string): Promise<RegistryResult[]>;
   /** The inline summary Publish shows before it uploads anything. */
   previewPublish(repository: string, path: string): Promise<PublishPreview>;
   publishSpecPackage(repository: string, path: string): Promise<void>;
@@ -3049,8 +3051,8 @@ export const useAppStore = create<AppState>((set, get) => {
       await getClient().command("environment.install", { repository });
     },
 
-    async searchRegistry(query: string): Promise<RegistryResult[]> {
-      const { packages } = await getClient().command("environment.search", { query });
+    async searchRegistry(repository: string, query: string): Promise<RegistryResult[]> {
+      const { packages } = await getClient().command("environment.search", { repository, query });
       return packages;
     },
 

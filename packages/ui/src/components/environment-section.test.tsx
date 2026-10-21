@@ -269,7 +269,7 @@ describe("playbook-library-94: the environment's controls", () => {
     expect(screen.getByTestId("add-from-registry").getAttribute("aria-expanded")).toBe("true");
     fireEvent.change(screen.getByTestId("registry-query"), { target: { value: "tri" } });
     await vi.waitFor(() =>
-      expect(commandMock).toHaveBeenCalledWith("environment.search", { query: "tri" }),
+      expect(commandMock).toHaveBeenCalledWith("environment.search", { repository: PROJECT_ID, query: "tri" }),
     );
     const result = await screen.findByTestId("registry-result-acme/triage");
     expect(result.textContent).toContain("Sort issues into labels");
@@ -285,6 +285,16 @@ describe("playbook-library-94: the environment's controls", () => {
       }),
     );
     expect((await screen.findByTestId("add-note")).textContent).toBe("Requested acme/triage");
+
+    // Your own group's side searches its own environment's registry.
+    commandMock.mockClear();
+    fireEvent.click(screen.getByTestId("side-own"));
+    await screen.findByTestId("env-package-sublang/playbooks");
+    fireEvent.change(screen.getByTestId("registry-query"), { target: { value: "tidy" } });
+    await vi.waitFor(() =>
+      expect(commandMock).toHaveBeenCalledWith("environment.search", { repository: OWN_KEY, query: "tidy" }),
+    );
+    expect(commandMock).not.toHaveBeenCalledWith("environment.search", expect.objectContaining({ repository: PROJECT_ID, query: "tidy" }));
   });
 
   test("a request the core refuses shows its cause in place", async () => {

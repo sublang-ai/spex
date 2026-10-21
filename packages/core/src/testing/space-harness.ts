@@ -14,6 +14,7 @@ import { CoreService, type CoreServiceOptions } from "../service.js";
 import { fakeAdapterImports } from "./fake-adapter.js";
 import { createScriptedCaptain } from "./scripted-captain.js";
 import { startStandinHost, type StandinHost, type StandinPerson } from "./standin-host.js";
+import type { StandinRegistry } from "./standin-registry.js";
 import { canonicalOrigin, instanceFolder, instanceSegmentOf } from "../instance.js";
 import type { LineSpawner } from "../compile.js";
 import type { Command, CommandResults, GroupsState, RepositoryState, ServerMessage, SpaceStateMessage, SyncStep, SpaceOp } from "../protocol.js";
@@ -542,11 +543,12 @@ playbooks:
   /** A stand-in Git host (git-host-12) of this suite's own: an instance
    * at its own loopback origin, on a Git backend of its own or, with
    * `gitBackend`, over that instance's (DR-127); `person` signs in there
-   * in place of `ada`, and `canCreateGroup` scripts whether the person may
-   * make a root group. */
-  async function startHost(options: { displayName?: string; person?: StandinPerson; gitBackend?: StandinHost; canCreateGroup?: boolean } = {}): Promise<StandinHost> {
-    const { canCreateGroup, gitBackend, ...rest } = options;
-    const host = await startStandinHost({ ...rest, ...(gitBackend ? { gitBackend } : { dir: mkdtempSync(join(scratch, "host-")) }) });
+   * in place of `ada`, `canCreateGroup` scripts whether the person may
+   * make a root group, and `registry` names a stand-in registry the
+   * instance relays to, which may stand behind several (environments-18). */
+  async function startHost(options: { displayName?: string; person?: StandinPerson; gitBackend?: StandinHost; canCreateGroup?: boolean; registry?: StandinRegistry } = {}): Promise<StandinHost> {
+    const { canCreateGroup, gitBackend, registry, ...rest } = options;
+    const host = await startStandinHost({ ...rest, ...(registry ? { registry: registry.url } : {}), ...(gitBackend ? { gitBackend } : { dir: mkdtempSync(join(scratch, "host-")) }) });
     if (canCreateGroup !== undefined) host.script.canCreateGroup = canCreateGroup;
     hosts.push(host);
     return host;

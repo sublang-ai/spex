@@ -3,7 +3,12 @@
 
 // Installing a locked environment (environments-7, DR-104): the lock's
 // selected files, verified by digest into the store, are linked under
-// `<clone>/packages/<org>/<pkg>/` at their release paths. The new tree
+// `<clone>/packages/<org>/<pkg>/` at their release paths. A registry
+// package is fetched from the first of the registries asked that serves
+// its release at the locked version and checksum (DR-127); the built-in
+// spec package is served first from this device's seed where its files
+// carry the lock's digests, whatever archive checksum the lock records
+// (environments-11). The new tree
 // is complete before it replaces the old one; a failure leaves the last
 // files in place. The swap happens only while the lock it installs still
 // stands on disk at the version read and still matches `spex.yaml` and
@@ -37,13 +42,16 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, relative } from "node:path";
 
 import { ENGINE_LINKS_EXCLUDE, prepareArtifactEngine, provisionEngineLinks } from "../compile.js";
+import { seedServes } from "./builtins.js";
 import { fileVersion, VersionConflictError, type FileVersion } from "../files.js";
-import { writeExcludeBlock } from "./exports.js";
-import { listReleaseFiles, parseManifestText, portablePathIssues, type Manifest } from "./format.js";
+import { instanceFolder, parseOrigin } from "../instance.js";
+import { BUILTIN_PACKAGE_NAME, writeExcludeBlock } from "./exports.js";
+import { listReleaseFiles, parseManifestText, portablePathIssues, sha256Hex, type Manifest } from "./format.js";
 import type { GitCredential, GitSource } from "./git-source.js";
-import { isGitSource, isPathSource, isRegistrySource, lockStaleness, sourceValue, type Lock, type LockedFile, type Resolution } from "./lock.js";
+import { isGitSource, isPathSource, isRegistrySource, lockStaleness, sourceValue, type Lock, type LockedFile, type RegistrySourceLock, type Resolution } from "./lock.js";
 import { ownFolderIssue, ownPathIssue, ownPathMessage } from "./own-paths.js";
-import { readVersionResource, type RegistrySource, type VersionResource } from "./registry.js";
+import { readVersionResource, RegistryError, type RegistrySource, type VersionResource } from "./registry.js";
+import { isVersion } from "./semver.js";
 import { DigestError, type ContentStore } from "./store.js";
 import { gunzip, readTar } from "./tar.js";
 
@@ -58,6 +66,15 @@ export interface InstallOptions {
   /** The home's `cache/` folder. */
   cache: string;
   registry: RegistrySource;
+  /** The registries asked for a registry source's files, in order
+   * (environments-7): the first serving its release at the locked
+   * version and checksum serves them. `[registry]` where omitted. */
+  registries?: (source: RegistrySourceLock) => readonly RegistrySource[];
+  /** This device's seed of the built-in spec package (environments-11),
+   * asked first for its locked release: it serves where it holds the
+   * locked version with each locked file at the lock's digest, whatever
+   * archive checksum the lock records (environments-7). */
+  seed?: RegistrySource;
   git: GitSource;
   gitCredential?: (repo: string) => Promise<GitCredential | undefined>;
   /** The folder a path source's path is relative to (environments-2):
@@ -202,25 +219,64 @@ function assertCurrent(options: InstallOptions): void {
   if (stale) throw new VersionConflictError(requestsFile);
 }
 
-async function cachedResource(cache: string, registry: RegistrySource, name: string, version: string): Promise<VersionResource> {
-  const file = join(cache, "registry", ...name.split("/"), `${version}.json`);
-  if (existsSync(file)) {
+const isChecksum = (value: string): boolean => /^[0-9a-f]{64}$/.test(value);
+
+/** A registry's folder under `cache/registry/`: its scheme's, holding
+ * its instance's folder, where its URL is an instance's origin — so two
+ * origins at one loopback host and port, apart by scheme alone, never
+ * share one — else one from its URL's digest, which no scheme's name
+ * begins as. */
+function registryFolder(url: string): string {
+  try { return join(parseOrigin(url).scheme, instanceFolder(url)); } catch { return `_${sha256Hex(url).slice(0, 32)}`; }
+}
+
+/** Where a registry's version resource is cached: per registry, since
+ * each answers for its own releases; none for a version no release may
+ * hold. */
+function resourceFile(cache: string, registry: RegistrySource, name: string, version: string): string | null {
+  return isVersion(version) ? join(cache, "registry", registryFolder(registry.url), ...name.split("/"), `${version}.json`) : null;
+}
+
+/** Where a release archive is cached: by the checksum it was verified
+ * at, whichever registry served it. */
+function archiveFile(cache: string, name: string, source: RegistrySourceLock): string | null {
+  return isVersion(source.version) && isChecksum(source.checksum) ? join(cache, "archives", ...name.split("/"), source.version, `${source.checksum}.tgz`) : null;
+}
+
+/** A registry's version resource, from the cache where the answer kept
+ * there carries the locked checksum, else asked of the registry. */
+async function cachedResource(cache: string, registry: RegistrySource, name: string, source: RegistrySourceLock): Promise<VersionResource> {
+  const file = resourceFile(cache, registry, name, source.version);
+  if (file !== null && existsSync(file)) {
     try {
-      return readVersionResource(name, version, JSON.parse(await readFile(file, "utf8")));
+      const cached = readVersionResource(name, source.version, JSON.parse(await readFile(file, "utf8")));
+      if (cached.checksum === source.checksum) return cached;
     } catch { /* refetch below */ }
   }
-  const resource = await registry.version(name, version);
-  await mkdir(dirname(file), { recursive: true });
-  await writeFile(file, JSON.stringify(resource));
+  const resource = await registry.version(name, source.version);
+  if (file !== null) {
+    await mkdir(dirname(file), { recursive: true });
+    await writeFile(file, JSON.stringify(resource));
+  }
   return resource;
 }
 
-async function cachedArchive(cache: string, registry: RegistrySource, name: string, version: string): Promise<Uint8Array> {
-  const file = join(cache, "archives", ...name.split("/"), `${version}.tgz`);
-  if (existsSync(file)) return new Uint8Array(await readFile(file));
-  const bytes = await registry.archive(name, version);
-  await mkdir(dirname(file), { recursive: true });
-  await writeFile(file, bytes);
+/** The release archive at the locked checksum, from the cache or the
+ * registry; null where the registry's archive is not that release, so
+ * its raw files serve instead. Only an archive at its checksum is kept. */
+async function cachedArchive(cache: string, registry: RegistrySource, name: string, source: RegistrySourceLock): Promise<Uint8Array | null> {
+  const file = archiveFile(cache, name, source);
+  if (file !== null && existsSync(file)) {
+    const bytes = new Uint8Array(await readFile(file));
+    if (sha256Hex(bytes) === source.checksum) return bytes;
+    rmSync(file, { force: true });
+  }
+  const bytes = await registry.archive(name, source.version);
+  if (sha256Hex(bytes) !== source.checksum) return null;
+  if (file !== null) {
+    await mkdir(dirname(file), { recursive: true });
+    await writeFile(file, bytes);
+  }
   return bytes;
 }
 
@@ -249,32 +305,24 @@ async function fetchMissing(options: InstallOptions, name: string, resolution: R
   if (missing.length === 0) return;
   const source = resolution.source;
   if (isRegistrySource(source)) {
-    const resource = await cachedResource(options.cache, options.registry, name, source.version);
-    const total = resource.files?.length ?? resolution.files.length;
-    let remaining = missing;
-    if (missing.length > total / 2) {
-      // The archive holds the release whole: cheaper than many files.
-      const archive = await cachedArchive(options.cache, options.registry, name, source.version);
-      const pkg = name.split("/")[1]!;
-      const entries = new Map<string, Uint8Array>();
+    // The built-in from this device's seed, by its files' digests: the
+    // archive each device packs differs, its files do not.
+    if (name === BUILTIN_PACKAGE_NAME && options.seed && await fetchSeeded(options.seed, store, name, source, resolution)) return;
+    // The first registry serving the release at the locked checksum
+    // serves what is still missing; any other answer moves on.
+    const reasons: string[] = [];
+    for (const registry of options.registries ? options.registries(source) : [options.registry]) {
+      const left = missing.filter((file) => !store.has(file.sha256, file.executable));
+      if (left.length === 0) return;
       try {
-        for (const entry of readTar(gunzip(archive))) {
-          if (entry.type !== "file" || !entry.path.startsWith(`${pkg}/`)) continue;
-          entries.set(entry.path.slice(pkg.length + 1), entry.data);
-        }
-      } catch {
-        rmSync(join(options.cache, "archives", ...name.split("/"), `${source.version}.tgz`), { force: true });
-        entries.clear();
-      }
-      remaining = [];
-      for (const file of missing) {
-        const bytes = entries.get(file.path);
-        if (bytes) putVerified(store, name, file, bytes);
-        else remaining.push(file);
+        if (await fetchFrom(options, registry, name, source, resolution, left)) return;
+        reasons.push(`${registry.url} holds it at another checksum`);
+      } catch (error) {
+        if (!(error instanceof RegistryError)) throw error;
+        reasons.push(`${registry.url}: ${error.message}`);
       }
     }
-    for (const file of remaining) putVerified(store, name, file, await options.registry.file(name, source.version, file.path));
-    return;
+    throw new InstallError(name, `${name} ${source.version}: no registry serves it at the locked checksum${reasons.length > 0 ? `: ${reasons.join("; ")}` : ""}`);
   }
   if (isGitSource(source)) {
     const credential = options.gitCredential ? await options.gitCredential(source.git) : undefined;
@@ -288,6 +336,63 @@ async function fetchMissing(options: InstallOptions, name: string, resolution: R
       putVerified(store, name, file, readFileSync(absolute));
     }
   }
+}
+
+/** Serve the built-in spec package's missing files from this device's
+ * seed, each verified by digest: false where the seed lacks the locked
+ * version, holds a locked file at another digest, or cannot read one, so
+ * the registries are asked instead. */
+async function fetchSeeded(seed: RegistrySource, store: ContentStore, name: string, source: RegistrySourceLock, resolution: Resolution): Promise<boolean> {
+  if (!(await seedServes(seed, source.version, resolution.files))) return false;
+  for (const file of resolution.files) {
+    if (store.has(file.sha256, file.executable)) continue;
+    let bytes: Uint8Array;
+    try {
+      bytes = await seed.file(name, source.version, file.path);
+    } catch (error) {
+      if (error instanceof RegistryError) return false;
+      throw error;
+    }
+    putVerified(store, name, file, bytes);
+  }
+  return true;
+}
+
+/** Fetch a registry package's missing files from one registry, each
+ * verified by digest: false where it holds the release at another
+ * checksum than the lock's. */
+async function fetchFrom(options: InstallOptions, registry: RegistrySource, name: string, source: RegistrySourceLock, resolution: Resolution, missing: LockedFile[]): Promise<boolean> {
+  const { store } = options;
+  const resource = await cachedResource(options.cache, registry, name, source);
+  if (resource.checksum !== source.checksum) return false;
+  const total = resource.files?.length ?? resolution.files.length;
+  let remaining = missing;
+  if (missing.length > total / 2) {
+    // The archive holds the release whole: cheaper than many files.
+    const archive = await cachedArchive(options.cache, registry, name, source);
+    const pkg = name.split("/")[1]!;
+    const entries = new Map<string, Uint8Array>();
+    if (archive !== null) {
+      try {
+        for (const entry of readTar(gunzip(archive))) {
+          if (entry.type !== "file" || !entry.path.startsWith(`${pkg}/`)) continue;
+          entries.set(entry.path.slice(pkg.length + 1), entry.data);
+        }
+      } catch {
+        const file = archiveFile(options.cache, name, source);
+        if (file !== null) rmSync(file, { force: true });
+        entries.clear();
+      }
+    }
+    remaining = [];
+    for (const file of missing) {
+      const bytes = entries.get(file.path);
+      if (bytes) putVerified(store, name, file, bytes);
+      else remaining.push(file);
+    }
+  }
+  for (const file of remaining) putVerified(store, name, file, await registry.file(name, source.version, file.path));
+  return true;
 }
 
 function linkOrCopy(from: string, to: string, executable: boolean): void {

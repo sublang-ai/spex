@@ -43,7 +43,7 @@ import type {
 } from "./protocol.js";
 import { scratchDir } from "./testing/scratch.js";
 import { rowsOf } from "./testing/space-harness.js";
-import { startStandinRegistry } from "./testing/standin-registry.js";
+import { startStandinRegistry, type StandinRegistry } from "./testing/standin-registry.js";
 
 // ---------------------------------------------------------------------------
 // Harness
@@ -1225,47 +1225,70 @@ test("playbook-library-102: a session takes its folder's, its project's, else th
 // playbook-library-104: a new playbook's org and license
 // ---------------------------------------------------------------------------
 
-test("playbook-library-104: New playbook's defaults come from the registry's orgs, else the project's key, and from its LICENSE, and the manifests name the org and license", { timeout: 120_000 }, async (t) => {
-  // A home signed in to the stand-in registry, which is its host, with
-  // a second project paired at that instance two groups deeper than the
-  // home's own, its key led by the instance's folder, which names no
-  // org (DR-127).
-  const registry = await startStandinRegistry({ dir: scratchDir("spex-defaults-registry-") });
-  t.after(() => registry.close());
+test("playbook-library-104: New playbook's defaults come from the orgs the registry of the project's instance lists, else the project's key, and from its LICENSE, each reply asking that registry alone, and the manifests name the org and license", { timeout: 120_000 }, async (t) => {
+  // A home signed in to two stand-in registries, each standing as its
+  // instance, the first the home's default instance, with a project
+  // paired at each instance two groups deeper than the home's own, its
+  // key led by the instance's folder, which names no org (DR-127).
+  const first = await startStandinRegistry({ dir: scratchDir("spex-defaults-first-") });
+  const second = await startStandinRegistry({ dir: scratchDir("spex-defaults-second-") });
+  t.after(() => Promise.all([first.close(), second.close()]));
   const dir = scratchDir("spex-authoring-it-");
-  const nested = `${instanceFolder(registry.url)}/acme/workshop/team/graph-spex`;
+  const atFirst = `${instanceFolder(first.url)}/acme/workshop/team/graph-spex`;
+  const atSecond = `${instanceFolder(second.url)}/acme/workshop/team/graph-spex`;
   const state = join(dir, "state");
-  mkdirSync(join(state, "workspace", ...nested.split("/")), { recursive: true });
+  for (const key of [atFirst, atSecond]) mkdirSync(join(state, "workspace", ...key.split("/")), { recursive: true });
   mkdirSync(join(state, "local"), { recursive: true, mode: 0o700 });
+  const account = { id: "1", login: "tester", displayName: "Tester" };
   writeFileSync(join(state, "home.yaml"), stringifyYaml({
-    format: 2, device: randomUUID(), origin: registry.url,
-    instances: [{ origin: registry.url, clientId: "spex", account: { id: "1", login: "tester", displayName: "Tester" } }],
-    own: "tester", folders: [{ path: realpathSync(workingFolder(join(dir, "graph"))), repository: nested }],
+    format: 2, device: randomUUID(), origin: first.url,
+    instances: [first.url, second.url].map((origin) => ({ origin, clientId: "spex", account })),
+    own: "tester", folders: [
+      { path: realpathSync(workingFolder(join(dir, "graph-first"))), repository: atFirst },
+      { path: realpathSync(workingFolder(join(dir, "graph-second"))), repository: atSecond },
+    ],
   }));
+  const pair = (access: string) => ({ access, accessExpiresAt: Date.now() + 3_600_000, refresh: "refresh" });
   writeFileSync(join(state, "local", "credentials.yaml"), stringifyYaml({
-    format: 1, hosts: { [registry.url]: { access: "tester-token", accessExpiresAt: Date.now() + 3_600_000, refresh: "refresh" } },
+    format: 1, hosts: { [first.url]: pair("first-token"), [second.url]: pair("second-token") },
   }), { mode: 0o600 });
   const harness = await startHarness({ script: {}, slc: stubSlcSource("['Helper']"), dir });
   const { projectId } = harness;
   const client = new Client(harness.service.port());
+  t.after(async () => { client.close(); await harness.service.stop(); });
   await client.open();
   const folder = join(dir, "project");
   const license = join(folder, "LICENSE");
   const org = projectId.split("/")[0];
-  assert.equal(projectId, "tester/project-spex", "the harness's project lives in the home's own group");
-  const orgsAsked = (): number => registry.script.requests.filter((request) => request === "GET /api/v1/account/orgs").length;
-  /** A reply, the registry asked once while signed in. */
-  const defaults = async (id: string, asked = 1): Promise<CommandResults["draft.defaults"]> => {
-    const before = orgsAsked();
+  assert.equal(projectId, "tester/project-spex", "the harness's project lives in the home's own group, local only");
+  // The second's registry lists two orgs throughout, one at the
+  // projects' group.
+  second.script.setOrgs("second-token", [
+    { name: "alpha-two", path: "alpha", role: "owner" },
+    { name: "team-two", path: "acme/workshop/team", role: "maintainer" },
+  ]);
+  const orgsAsked = (registry: StandinRegistry): number => registry.script.requests.filter((request) => request === "GET /api/v1/account/orgs").length;
+  /** A reply, the registry of the project's instance asked once where
+   * the home is signed in there — `asked`, the first's for the
+   * local-only project — and no other registry asked. */
+  const defaults = async (id: string, asked: StandinRegistry | null): Promise<CommandResults["draft.defaults"]> => {
+    const before = [orgsAsked(first), orgsAsked(second)];
     const reply = await client.expectOk("draft.defaults", { projectId: id });
-    assert.equal(orgsAsked() - before, asked, `the registry asked ${asked} time(s) for ${id}`);
+    assert.deepEqual([orgsAsked(first) - before[0]!, orgsAsked(second) - before[1]!], [asked === first ? 1 : 0, asked === second ? 1 : 0], `the registries asked for ${id}`);
     return reply;
   };
-  const orgsOf = async (asked = 1): Promise<[string, string]> => [(await defaults(projectId, asked)).org, (await defaults(nested, asked)).org];
+  const signedIn = { first: true, second: true };
+  /** The org replied for the local-only project and the project at
+   * each instance, in the second table's order. */
+  const orgsOf = async (): Promise<[string, string, string]> => [
+    (await defaults(projectId, signedIn.first ? first : null)).org,
+    (await defaults(atFirst, signedIn.first ? first : null)).org,
+    (await defaults(atSecond, signedIn.second ? second : null)).org,
+  ];
 
-  // The license each LICENSE opens with, read at each reply; the
-  // registry refuses this device's token (401), so the key's first
-  // segment stands.
+  // The license each LICENSE opens with, read at each reply; the first's
+  // registry refuses the first's app token (401, no org scripted for
+  // it), so the key's first segment stands.
   const cases: [string | null, string | null][] = [
     ["﻿\n                                 Apache License\n                           Version 2.0, January 2004\n", "Apache-2.0"],
     ["MIT License\n\nCopyright (c) 2026 Acme\n", "MIT"],
@@ -1275,26 +1298,26 @@ test("playbook-library-104: New playbook's defaults come from the registry's org
   for (const [text, expected] of cases) {
     if (text === null) rmSync(license, { force: true });
     else writeFileSync(license, text);
-    assert.deepEqual(await defaults(projectId), { org, license: expected }, `LICENSE ${JSON.stringify(text?.trim().split("\n")[0] ?? null)}`);
+    assert.deepEqual(await defaults(projectId, first), { org, license: expected }, `LICENSE ${JSON.stringify(text?.trim().split("\n")[0] ?? null)}`);
   }
-  assert.deepEqual(await orgsOf(), ["tester", "acme"], "refused");
+  assert.deepEqual(await orgsOf(), ["tester", "acme", "team-two"], "refused");
 
   // An outage is no answer, and none listed falls back the same way.
-  registry.script.unavailable(2);
-  assert.deepEqual(await orgsOf(), ["tester", "acme"], "out of service");
-  registry.script.setOrgs("tester-token", []);
-  assert.deepEqual(await orgsOf(), ["tester", "acme"], "none listed");
+  first.script.unavailable(2);
+  assert.deepEqual(await orgsOf(), ["tester", "acme", "team-two"], "out of service");
+  first.script.setOrgs("first-token", []);
+  assert.deepEqual(await orgsOf(), ["tester", "acme", "team-two"], "none listed");
   // One listed is it, wherever its path.
-  registry.script.setOrgs("tester-token", [{ name: "workshop-261011", path: "workshop-261011", role: "maintainer" }]);
-  assert.deepEqual(await orgsOf(), ["workshop-261011", "workshop-261011"], "one listed");
+  first.script.setOrgs("first-token", [{ name: "workshop-261011", path: "workshop-261011", role: "maintainer" }]);
+  assert.deepEqual(await orgsOf(), ["workshop-261011", "workshop-261011", "team-two"], "one listed");
   // Of several, the one at an ancestor of the project's group — never
   // `acme/work`, a prefix of `acme/workshop` — else the first listed.
-  registry.script.setOrgs("tester-token", [
+  first.script.setOrgs("first-token", [
     { name: "workshop", path: "acme/workshop", role: "developer" },
     { name: "alpha", path: "alpha", role: "owner" },
     { name: "acme-work", path: "acme/work", role: "maintainer" },
   ]);
-  assert.deepEqual(await orgsOf(), ["acme-work", "workshop"], "several listed");
+  assert.deepEqual(await orgsOf(), ["acme-work", "workshop", "team-two"], "several listed");
 
   // The session's manifest names the org and license given, its
   // package named under that org (playbook-library-70).
@@ -1304,26 +1327,39 @@ test("playbook-library-104: New playbook's defaults come from the registry's org
   assert.deepEqual([meta.org, meta.name, meta.license, meta.description], ["workshop", "intake", "BSD-3-Clause", "The intake playbook"]);
 
   // The one-shot compile asks no one: the project's defaults stand —
-  // the registry's org, no license where none is derived — then, signed
-  // out, the key's first segment and the Apache license (playbook-library-69).
-  const oneShot = (playbookId: string) => client.command("compile.run", {
-    projectId, playbookId, sourceText: "# Solo\n\nRoles:\n\n- Helper\n", roles: ["Helper"], command: playbookId, intent: "a solo workflow", bindings: { Helper: "dev.coder" },
+  // the org the registry of its instance lists, no license where none
+  // is derived (playbook-library-69).
+  const oneShot = (id: string, playbookId: string) => client.command("compile.run", {
+    projectId: id, playbookId, sourceText: "# Solo\n\nRoles:\n\n- Helper\n", roles: ["Helper"], command: playbookId, intent: "a solo workflow", bindings: { Helper: "dev.coder" },
   });
-  await oneShot("bare");
-  const bare = parseYaml(readFileSync(join(folder, "spex-packages", "bare", "meta.yaml"), "utf8")) as Record<string, unknown>;
+  const manifestOf = (working: string, playbookId: string): Record<string, unknown> =>
+    parseYaml(readFileSync(join(working, "spex-packages", playbookId, "meta.yaml"), "utf8")) as Record<string, unknown>;
+  let before = [orgsAsked(first), orgsAsked(second)];
+  await oneShot(projectId, "bare");
+  const bare = manifestOf(folder, "bare");
   assert.deepEqual([bare.org, "license" in bare], ["acme-work", false]);
+  assert.deepEqual([orgsAsked(first) - before[0]!, orgsAsked(second) - before[1]!], [1, 0], "the local-only project's compile asks the first's registry alone");
+  before = [orgsAsked(first), orgsAsked(second)];
+  await oneShot(atSecond, "paired");
+  const paired = manifestOf(join(dir, "graph-second"), "paired");
+  assert.deepEqual([paired.org, "license" in paired], ["team-two", false]);
+  assert.deepEqual([orgsAsked(first) - before[0]!, orgsAsked(second) - before[1]!], [0, 1], "the second's project's compile asks the second's registry alone");
 
-  // Signed out, the registry is not asked and the key's first segment
-  // stands.
-  await client.expectOk("space.signout", { instance: registry.url });
-  assert.deepEqual(await orgsOf(0), ["tester", "acme"], "signed out");
+  // Signed out of the first, its registry is not asked and the key's
+  // first segment stands, the second's still asked; the local-only
+  // project's compile then names that segment and the Apache license.
+  await client.expectOk("space.signout", { instance: first.url });
+  signedIn.first = false;
+  assert.deepEqual(await orgsOf(), ["tester", "acme", "team-two"], "signed out of the first");
   writeFileSync(license, cases[0]![0]!);
-  await oneShot("licensed");
-  const licensed = parseYaml(readFileSync(join(folder, "spex-packages", "licensed", "meta.yaml"), "utf8")) as Record<string, unknown>;
+  await oneShot(projectId, "licensed");
+  const licensed = manifestOf(folder, "licensed");
   assert.deepEqual([licensed.org, licensed.license], [org, "Apache-2.0"]);
 
-  client.close();
-  await harness.service.stop();
+  // Signed out of both, no registry is asked.
+  await client.expectOk("space.signout", { instance: second.url });
+  signedIn.second = false;
+  assert.deepEqual(await orgsOf(), ["tester", "acme", "acme"], "signed out of both");
 });
 
 // ---------------------------------------------------------------------------

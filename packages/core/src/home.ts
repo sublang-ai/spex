@@ -16,7 +16,7 @@ import {
   StorageFormatError, writeApplicationBytes,
 } from "./files.js";
 import { i18n } from "./i18n.js";
-import { canonicalOrigin, hostUrlFor, instanceFolder, instanceSegmentOf, OriginRefused } from "./instance.js";
+import { canonicalOrigin, hostUrlFor, instanceFolder, instanceSegmentOf, isInstanceFolder, OriginRefused } from "./instance.js";
 import { REPOSITORY_KEY_PATTERN } from "./protocol.js";
 
 export { hostUrlFor };
@@ -97,6 +97,42 @@ export function splitKey(key: string): { instance: string | null; group: string;
   const path = instance === null ? key : key.slice(instance.length + 1);
   const at = path.lastIndexOf("/");
   return at < 0 ? { instance, group: "", name: path } : { instance, group: path.slice(0, at), name: path.slice(at + 1) };
+}
+
+/** The Git configuration keys naming each remote's URL. */
+export const REMOTE_URL_KEYS = "^remote\\..+\\.url$";
+
+/** The names of the remotes a clone's configuration gives a URL, read
+ * from the output of `git config -z --get-regexp` over REMOTE_URL_KEYS.
+ * A name may hold dots, as an instance's folder does, so it is what
+ * lies between `remote.` and `.url`. */
+export function remoteNamesIn(output: string): string[] {
+  const names: string[] = [];
+  for (const entry of output.split("\0")) {
+    const key = entry.split("\n", 1)[0];
+    if (!key.startsWith("remote.") || !key.endsWith(".url")) continue;
+    const name = key.slice("remote.".length, -".url".length);
+    if (name !== "" && !names.includes(name)) names.push(name);
+  }
+  return names;
+}
+
+/** The remote a clone syncs with, among the names its remotes bear
+ * (DR-127): its key's instance folder where a remote of that name
+ * stands; else `origin` — a remote the reader named, or one a clone
+ * made before its remote took its instance's name; else the one remote
+ * named by an instance's folder — for a clone keyed in your own group's
+ * folder, which names no instance, your own group's own repository's or
+ * that of a clone a pick left there (storage-35, storage-31); for one
+ * keyed under an instance, the remote a follow half made left named by
+ * another instance's folder, which its next sync renames (space-60);
+ * none otherwise. */
+export function cloneRemoteName(key: string, names: readonly string[]): string | null {
+  const instance = splitKey(key).instance;
+  if (instance !== null && names.includes(instance)) return instance;
+  if (names.includes("origin")) return "origin";
+  const folders = names.filter(isInstanceFolder);
+  return folders.length === 1 ? folders[0] : null;
 }
 
 export const invalidHome = (): string =>
