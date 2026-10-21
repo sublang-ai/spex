@@ -653,6 +653,26 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Fixed
 
+- A package installation stays successful after the new files are committed
+  even if obsolete files cannot be removed. The new package remains installed
+  and its exports proceed; failures before that commit still restore the old
+  files and preserve the original error.
+
+- A delayed session-list reply no longer replaces newer settled or removed
+  session announcements, leaving the composer blocked as if work were still
+  running. Replies from an older connection or read are discarded while
+  project tabs and unchanged view identity are preserved.
+
+- Sync refuses linked or non-directory destination parents before reading or
+  changing their files. A late refusal retains already-written records and
+  existing repair evidence, deferring unsafe refresh until the reported path
+  is restored and Retry completes the selection.
+
+- Storage validation checks parent and leaf kinds at the actual read
+  boundaries, including after awaited work, instead of following unsafe paths.
+  Diagnostics name the offending path to repair; optional missing files and
+  ordinary malformed-file diagnostics keep their existing behavior.
+
 - Stopping the core closes session admission immediately and waits for
   already-admitted opens before disposing runtimes and storage. New and
   resumed turns cannot cross the shutdown fence; unconfirmed cleanup
