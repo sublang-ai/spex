@@ -4193,3 +4193,96 @@ describe("Captain conversation between turns", () => {
     } finally { setClientForTests(undefined); }
   });
 });
+
+const SESSION_RACE = { id: "synthetic", projectId: "synthetic-project", projectPath: "/synthetic", createdAt: 1, live: true, turnActive: true, endedAt: null, players: [], initialVisible: [], turns: 1, failed: false, continuable: true };
+const SETTLED_RACE = { ...SESSION_RACE, live: false, turnActive: false, endedAt: 3 };
+const HISTORY_RACE = { records: [
+  { seq: 1, record: { type: "turn_started", timestamp: 1, turnId: 1, turn: { id: 1, prompt: "synthetic work", timestamp: 1 } } },
+  { seq: 2, record: { type: "captain_reply", timestamp: 2, turnId: 1, text: "Synthetic finished reply" } },
+  { seq: 3, record: { type: "turn_finished", timestamp: 3, turnId: 1 } },
+] };
+function deferredRace<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>(done => { resolve = done; }); return {promise, resolve}; }
+function seedRace(command: (type: string) => Promise<unknown>) {
+  setClientForTests({ command, subscribe: async () => null } as never);
+  useAppStore.setState({ sessions: [SESSION_RACE], views: { synthetic: initialSessionView([]) }, projects: [], specTrees: {}, history: {}, drafts: {}, draftViews: {}, currentProjectId: undefined, activeSessionId: undefined });
+}
+function otherRace(type: string): Promise<unknown> {
+  if (type === "history.get") return Promise.resolve(HISTORY_RACE);
+  if (type === "ledger.get") return Promise.resolve({intents: [], lanes: {}});
+  if (type === "readiness.get" || type === "project.list" || type === "draft.list") return Promise.resolve([]);
+  if (type === "config.get") return Promise.resolve({status: "missing", path: "/synthetic/config"});
+  return Promise.resolve({});
+}
+
+test.each(["refresh", "rereadProse"] as const)("%s preserves a settlement heard after the list reply while config is pending", async (method) => {
+  const before = useAppStore.getState(); const config = deferredRace<unknown>(); let submitted = false;
+  seedRace(type => type === "config.get" ? config.promise : type === "session.list" ? Promise.resolve([SESSION_RACE]) : type === "turn.submit" ? (submitted = true, Promise.resolve({})) : otherRace(type));
+  try {
+    const pending = useAppStore.getState()[method]();
+    await Promise.resolve();
+    deliverServerMessageForTests({type: "session.state", session: SETTLED_RACE} as never);
+    config.resolve({status: "missing", path: "/synthetic/config"});
+    await pending;
+    expect(useAppStore.getState().sessions[0]).toMatchObject({live: false, turnActive: false});
+    expect(useAppStore.getState().views.synthetic.turnActive).toBe(false);
+    await useAppStore.getState().submitBossText("synthetic", "Follow up");
+    expect(submitted).toBe(true);
+  } finally {setClientForTests(undefined); useAppStore.setState(before, true);}
+});
+
+test("an in-flight list preserves per-session removals and creations without discarding unrelated rows", async () => {
+  const before = useAppStore.getState(); const list = deferredRace<unknown>();
+  const created = {...SETTLED_RACE, id: "created", createdAt: 2}; const unrelated = {...SETTLED_RACE, id: "unrelated", createdAt: 3};
+  seedRace(type => type === "session.list" ? list.promise : otherRace(type));
+  try {
+    const pending = useAppStore.getState().refresh();
+    deliverServerMessageForTests({type: "session.removed", sessionId: "synthetic", projectId: "synthetic-project"});
+    deliverServerMessageForTests({type: "session.state", session: created} as never);
+    list.resolve([SESSION_RACE, unrelated]);
+    await pending;
+    expect(useAppStore.getState().sessions.map(s => s.id)).toEqual(["created", "unrelated"]);
+  } finally {setClientForTests(undefined); useAppStore.setState(before, true);}
+});
+
+test("an older list response cannot replace a newer reading, and a later read can refresh an announced ID", async () => {
+  const before = useAppStore.getState(); const first = deferredRace<unknown>(); let lists = 0;
+  seedRace(type => type === "session.list" ? (++lists === 1 ? first.promise : Promise.resolve([SETTLED_RACE])) : otherRace(type));
+  try {
+    const stale = useAppStore.getState().refresh();
+    await useAppStore.getState().refresh();
+    first.resolve([SESSION_RACE]); await stale;
+    expect(useAppStore.getState().sessions[0].live).toBe(false);
+    deliverServerMessageForTests({type: "session.state", session: SESSION_RACE} as never);
+    await useAppStore.getState().refresh();
+    expect(useAppStore.getState().sessions[0].live).toBe(false);
+  } finally {setClientForTests(undefined); useAppStore.setState(before, true);}
+});
+
+test("a newer session read cannot cancel an independent project-key migration", async () => {
+  const before = useAppStore.getState();
+  const movedProjects = deferredRace<unknown>(); const oldList = deferredRace<unknown>();
+  const oldProject = {id: "old-project", name: "Synthetic", path: "/synthetic", registeredAt: 1, repository: {key: "old-project", name: "Synthetic", group: "synthetic", own: false}};
+  const newProject = {...oldProject, id: "new-project", repository: {...oldProject.repository, key: "new-project"}};
+  let projectReads = 0; let sessionReads = 0;
+  seedRace(type => type === "project.list" ? (++projectReads === 1 ? movedProjects.promise : Promise.resolve([oldProject]))
+    : type === "session.list" ? (++sessionReads === 1 ? oldList.promise : Promise.resolve([SETTLED_RACE])) : otherRace(type));
+  useAppStore.setState({projects: [oldProject], currentProjectId: oldProject.id,
+    openTabs: {[oldProject.id]: ["synthetic"]}, workspaceTabs: {[oldProject.id]: "synthetic"},
+    expandedProjects: {[oldProject.id]: true}});
+  try {
+    deliverServerMessageForTests({type: "space.state", state: {groups: [{repositories: [
+      {key: newProject.id, folder: oldProject.path, state: "reachable"},
+    ]}]} } as never);
+    await useAppStore.getState().rereadProse(); // a newer session.list supersedes followProjects' list only
+    oldList.resolve([SESSION_RACE]); movedProjects.resolve([newProject]);
+    await Promise.all([oldList.promise, movedProjects.promise]);
+    await Promise.resolve(); await Promise.resolve();
+    const state = useAppStore.getState();
+    expect(state.currentProjectId).toBe(newProject.id);
+    expect(state.openTabs[newProject.id]).toEqual(["synthetic"]);
+    expect(state.workspaceTabs[newProject.id]).toBe("synthetic");
+    expect(state.expandedProjects[newProject.id]).toBe(true);
+    expect(state.openTabs[oldProject.id]).toBeUndefined();
+    expect(state.sessions[0].live).toBe(false);
+  } finally {setClientForTests(undefined); useAppStore.setState(before, true);}
+});

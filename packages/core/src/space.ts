@@ -59,6 +59,8 @@ import {
 import {
   APPLY_MARKER,
   applyStorageSelection,
+  assertStorageRefreshSafe,
+  StorageDestinationRefused,
   EMPTY_TREE,
   NOT_PACKAGES,
   planStorageUnits,
@@ -2039,10 +2041,11 @@ class RepositorySync {
       // unit makes the selection obsolete: what was written is an ordinary
       // local change, and the sync replans from Save. A moved clone keeps
       // its marker where it now lies.
+      if (error instanceof StorageDestinationRefused) throw this.unsafeDestination(error);
       if (error instanceof StorageWriteRefused && error.reason === "lease") throw this.leaseStop(error.unit);
       if (error instanceof StorageWriteRefused && error.reason === "changed") {
-        rmSync(marker, { force: true });
         if (error.written.length > 0) await this.reindex(error.written.includes("config/playbook.config.yaml"));
+        rmSync(marker, { force: true });
         return "restart";
       }
       if (error instanceof StorageFormatError) {
@@ -2095,6 +2098,14 @@ class RepositorySync {
   /** Re-validate and re-index what an Apply wrote, merged or not
    * (space-20). */
   private async reindex(configChanged: boolean): Promise<void> {
+    const safe = (): void => {
+      try { assertStorageRefreshSafe(this.dir); }
+      catch (error) {
+        if (error instanceof StorageDestinationRefused) throw this.unsafeDestination(error);
+        throw error;
+      }
+    };
+    safe();
     this.refreshProblem = undefined;
     try { await validateStorageTree(this.dir, this.validation()); }
     catch (error) {
@@ -2102,8 +2113,10 @@ class RepositorySync {
         ? { file: error.file, reason: error.reason, blocking: true }
         : { file: this.dir, reason: error instanceof Error ? error.message : String(error), blocking: true };
     }
+    safe();
     this.host.store.reload();
     if (configChanged) await this.host.reloadConfig();
+    safe();
     await this.host.rescanSessions(this.key);
     this.host.ledgerChanged([this.key]);
   }
@@ -2168,8 +2181,19 @@ class RepositorySync {
     catch (error) { throw this.repairFailed(error); }
   }
 
+  private unsafeDestination(error: StorageDestinationRefused): SpaceStopped {
+    const guidance = i18n._({
+      id: "Restore the reported path to its expected file or folder, then Retry. Refresh is deferred; written records and existing repair evidence are kept.",
+      comment: "Sync guidance after an unsafe destination refuses Apply or partial refresh",
+    });
+    this.refreshProblem = { file: join(this.dir, error.file), reason: `${error.reason}. ${guidance}`, blocking: true };
+    return new SpaceStopped("apply", { cause: "validation", message: `${error.file}: ${error.reason}`, guidance, retry: true });
+  }
+
   private repairFailed(error: unknown): SpaceStopped {
     this.repairFailure = error instanceof Error ? error.message : String(error);
+    if (error instanceof SpaceStopped) return error;
+    if (error instanceof StorageDestinationRefused) return this.unsafeDestination(error);
     if (error instanceof StorageWriteRefused && error.reason === "lease") return this.leaseStop(error.unit);
     return new SpaceStopped("apply", { cause: "git", message: `${APPLY_MARKER}: ${repairFailureReason(this.repairFailure)}`, guidance: retryGuidance(), retry: true });
   }
@@ -2208,10 +2232,14 @@ class RepositorySync {
     // merge commit, and the next sync replans from Save. A held lease
     // leaves the marker for a later repair.
     let applied: Awaited<ReturnType<typeof applyStorageSelection>>;
+    assertStorageRefreshSafe(this.dir);
     try {
       applied = await applyStorageSelection(this.dir, { ours: marker.ours, theirs: marker.theirs, base: marker.base, unrelated: marker.base === EMPTY_TREE, units }, choices, this.writeOptions());
     } catch (error) {
-      if (error instanceof StorageWriteRefused && error.reason === "changed") { rmSync(this.markerPath(), { force: true }); return error.written; }
+      if (error instanceof StorageWriteRefused && error.reason === "changed") {
+        if (error.written.length > 0) assertStorageRefreshSafe(this.dir);
+        rmSync(this.markerPath(), { force: true }); return error.written;
+      }
       throw error;
     }
     await this.commitSelection(marker.ours, marker.theirs, applied.tree, resolveStorageChoices(units, choices));

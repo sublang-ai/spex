@@ -203,6 +203,16 @@ msgstr "{host} listed no group {group}"
 msgid "{host} refused"
 msgstr "{host} refused"
 
+#. An explicit content-size rejection whose numeric limit is absent or ambiguous; host is the instance display name
+#: src/space-git.ts
+msgid "{host} refused content above its size limit"
+msgstr "{host} refused content above its size limit"
+
+#. A content-size rejection, naming only the instance and its reported limit, not the storage system or raw transport words
+#: src/space-git.ts
+msgid "{host} refused content above its size limit ({limit})"
+msgstr "{host} refused content above its size limit ({limit})"
+
 #. A stopped transfer's message; {host} is the remote's host
 #: src/space-git.ts
 msgid "{host} refused this machine's access"
@@ -359,15 +369,19 @@ msgstr "{path} is not a canonical player id"
 msgid "{path} is not a canonical player id (lowercase segments, dots optional)"
 msgstr "{path} is not a canonical player id (lowercase segments, dots optional)"
 
+#. Refusal: a storage validation parent or family is no directory
 #. Refusal: the path offered as a project is no directory on this device
 #: src/service.ts
+#: src/storage-git.ts
 msgid "{path} is not a directory"
 msgstr "{path} is not a directory"
 
+#. Refusal: a storage validation leaf is no regular file
 #. Refusal: the explorer was asked to read something that is no file
 #. Refusal: the path offered as a draft's source is no file on this device
 #: src/authoring.ts
 #: src/space.ts
+#: src/storage-git.ts
 msgid "{path} is not a file"
 msgstr "{path} is not a file"
 
@@ -2060,6 +2074,11 @@ msgstr "Resolving stopped: {cause}"
 msgid "Restore the interrupted turn first"
 msgstr "Restore the interrupted turn first"
 
+#. Sync guidance after an unsafe destination refuses Apply or partial refresh
+#: src/space.ts
+msgid "Restore the reported path to its expected file or folder, then Retry. Refresh is deferred; written records and existing repair evidence are kept."
+msgstr "Restore the reported path to its expected file or folder, then Retry. Refresh is deferred; written records and existing repair evidence are kept."
+
 #. Guidance where the Git host asked to wait: Retry waits out the time it asked for before running the step
 #: src/space.ts
 msgid "Retry waits, then runs the step."
@@ -2510,8 +2529,10 @@ msgstr "the owner's machine identity {value} is unverifiable"
 msgid "the path escapes the home"
 msgstr "the path escapes the home"
 
+#. Refusal: a storage validation read would follow a link
 #. Refusal: the explorer follows no symbolic link
 #: src/space.ts
+#: src/storage-git.ts
 msgid "the path goes through a symbolic link"
 msgstr "the path goes through a symbolic link"
 
@@ -2905,3 +2926,8 @@ msgstr "Your merge is saved locally; Retry to send it once the host settles."
 #: src/service.ts
 msgid "your own group's environment can request this spec package by path only from inside its clone; enable it in the project, or publish it and add it from the registry"
 msgstr "your own group's environment can request this spec package by path only from inside its clone; enable it in the project, or publish it and add it from the registry"
+
+#. A content-size rejection keeps access unchanged; no membership, sign-in, deletion or history-rewrite advice is implied
+#: src/space-git.ts
+msgid "Your saved commits remain on this device. Address the content limit, then Retry."
+msgstr "Your saved commits remain on this device. Address the content limit, then Retry."

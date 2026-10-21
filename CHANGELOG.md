@@ -285,6 +285,12 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Changed
 
+- The app requires Playbook 17.11.0, Cligent 0.36.0 and slc 0.19.0, keeping the locked agent SDKs ([DR-130](specs/decisions/130-playbook-17-11-0-cligent-0-36-0-slc-0-19-0-adoption.md)). Captain decision, Judge and reporting calls, and every compiler call, turn off, as far as each agent allows, the skills the agent finds by itself in its project and user skill folders, so the skills and specs Spex exports reach working players and authoring sessions but no longer steer routing, adjudication or compilation; a Kimi Code Captain still reads them, and a session whose Captain conversation began earlier keeps the listings already in it. A Captain or compile whose agent offers the switch but cannot apply it where it runs, such as Gemini CLI under its native sandbox, now fails with an error. The folders Spex exports into now come from Cligent's published table.
+
+- Record the accepted multi-instance home design ([DR-127](specs/decisions/127-a-home-signed-in-to-several-instances.md))
+  and proposed repository-placement design ([DR-128](specs/decisions/128-a-spex-repository-placed-at-several-instances.md)).
+  These specification changes introduce no multi-instance runtime behavior in this beta.
+
 - The app requires Cligent 0.34.1 and slc 0.18.1, keeping Playbook 17.10.1 and the locked agent SDKs ([DR-126](specs/decisions/126-cligent-0-34-1-slc-0-18-1-adoption.md)). On POSIX, Codex retains Unicode line and paragraph separators in valid JSON output; the compiler verifies JSON renderings of typed arrays and records without changing their input shapes.
 
 - The app requires Playbook 17.8.0 and slc 0.16.1 ([DR-116](specs/decisions/116-playbook-17-8-0-slc-0-16-1-adoption.md)).
@@ -646,6 +652,36 @@ and `npm start` (desktop) or `npm run start:server` (server).
 - Your own group's environment requests a spec package by a path in its clone ([DR-125](specs/decisions/125-your-own-groups-path-sources-live-in-its-clone.md)): keep an unpublished skill, spec or playbook of your own in a folder of your own group's spex repository, request it by that path, and edit it in place; the sync carries the folder, as one unit, to every device, where it exports to your agents. A path under Spex's own folders, however it is cased, one the sync rules drop, one reached through a link, and a folder in or holding a Git repository of its own, or holding a link or a file the sync would drop or refuse to share, are refused before anything is written, and again at each resolution and install, so a file added later fails the next install on the device holding it, the last exports standing; a release holding a `uv.lock`, `Cargo.lock` or `*.tmp`, which the sync rules drop anywhere, cannot live there. Explore reads such a folder as a spec package. "Add from folder" on your own group's side asks for a folder inside its clone, and `environment.get` names that folder as `pathRoot`. A request your own group made by a path in a paired working folder reads as missing until its folder moves into the clone. A project's and another group's paths stay relative to the working folder.
 
 ### Fixed
+
+- A package installation stays successful after the new files are committed
+  even if obsolete files cannot be removed. The new package remains installed
+  and its exports proceed; failures before that commit still restore the old
+  files and preserve the original error.
+
+- A delayed session-list reply no longer replaces newer settled or removed
+  session announcements, leaving the composer blocked as if work were still
+  running. Replies from an older connection or read are discarded while
+  project tabs and unchanged view identity are preserved.
+
+- Sync refuses linked or non-directory destination parents before reading or
+  changing their files. A late refusal retains already-written records and
+  existing repair evidence, deferring unsafe refresh until the reported path
+  is restored and Retry completes the selection.
+
+- Storage validation checks parent and leaf kinds at the actual read
+  boundaries, including after awaited work, instead of following unsafe paths.
+  Diagnostics name the offending path to repair; optional missing files and
+  ordinary malformed-file diagnostics keep their existing behavior.
+
+- Stopping the core closes session admission immediately and waits for
+  already-admitted opens before disposing runtimes and storage. New and
+  resumed turns cannot cross the shutdown fence; unconfirmed cleanup
+  retains ownership and remains reported.
+
+- A push rejected specifically for content size keeps saved commits and
+  existing access, and reports instance-only guidance with the reported
+  limit when unambiguous. Explicit access denials retain priority. This
+  correction does not raise the storage limit.
 
 - A path source in your own group's clone reports the unreadable path
   and stops when a nonignored subtree cannot be inspected. Git-ignored

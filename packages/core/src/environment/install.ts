@@ -489,7 +489,13 @@ function replaceTree(staging: string, target: string, trash: string): void {
     if (hadOld) renameSync(trash, target);
     throw error;
   }
-  if (hadOld) rmSync(trash, { recursive: true, force: true });
+  // The complete new tree now stands at target: the install committed.
+  // Garbage collection cannot turn that success into a failed install,
+  // which would skip exports and falsely claim the old files still stand.
+  if (hadOld) {
+    try { rmSync(trash, { recursive: true, force: true }); }
+    catch (error) { console.error(`spex: installed files stand; obsolete tree ${trash} could not be removed: ${String(error)}`); }
+  }
 }
 
 /** Remove every installed file of a clone (an environment emptied). */

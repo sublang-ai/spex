@@ -368,7 +368,9 @@ When a session that is not live is opened [[run-view-68](#run-view-68)], the run
 
 #### run-view-123
 
-When the core reconnects or reports replaced history [[core-service-92](core-service.md#core-service-92)], the run view shall reload affected cached conversations from sequence zero while retaining drafts and queued input.
+When the core reconnects or reports replaced history [[core-service-92](core-service.md#core-service-92)], the run view shall reload affected cached conversations from sequence zero while retaining drafts and queued input:
+
+- session announcements received during an initial session-list read, including removals, remain current when that read finishes; a superseded session reading cannot replace the newer one, and later reads can still refresh every session.
 
 #### run-view-110
 
@@ -1171,7 +1173,7 @@ Where a fixture holds a session whose last turn finished before the client learn
 
 #### run-view-124
 
-When an integration suite reconnects the app store and delivers a history-replacement notification over its protocol boundary, it shall verify reloading from sequence zero with drafts and queued input preserved [[run-view-123](#run-view-123)].
+When an integration suite reconnects the app store and delivers a history-replacement notification over its protocol boundary, it shall verify reloading from sequence zero with drafts and queued input preserved, initial-session-list races preserving newer settlement, creation and removal announcements and newer readings without canceling independent project-key migration [[run-view-123](#run-view-123)].
 
 #### run-view-126
 
