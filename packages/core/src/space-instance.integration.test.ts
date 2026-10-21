@@ -1455,3 +1455,129 @@ test("git-host-24, space-83, git-host-5, space-61, space-30, space-63, space-1: 
   const after = await home.client.expectOk("space.get", {});
   assert.deepEqual(rowsOf(after).filter((repository) => repository.id === team.id && repository.instance === first.url).map((repository) => [repository.key, repository.state]), [[`${hostFolder(first)}/${LOGIN}/team-spex@${team.id}`, "unreachable"]]);
 });
+
+test("git-host-25, space-84, space-60, git-host-22, git-host-9, space-5, space-11, space-12, space-32, space-61: two instances over one Git backend, the first signed out — a namespace repository both list reads reachable through the second, a Check host of it refused until it follows; its next Sync moves its clone under the second's folder with its remote renamed, its pair, session and sync preferences re-keyed and its last sync kept, then reads the second's catalog and pushes with a credential the second issued, its Save commit bearing the account there; your own group's own repository follows by its remote's rename alone; the repository the first lists alone reads unreachable, no transport running for it through the second's credential", async (t) => {
+  const first = await startHost();
+  const second = await startHost({ gitBackend: first, displayName: "Second stand-in" });
+  // Both list the person's namespace there under one id; the first alone
+  // lists its own group's (git-host-12).
+  const a = first.script.addRepository({ group: LOGIN, name: "a-spex" });
+  const solo = first.script.addRepository({ group: "acme", name: "solo-spex" });
+  const home = await startHome("follow-at-check", { host: first, project: false });
+  t.after(() => home.stop());
+  let mark = home.client.mark();
+  await signIn(home, first);
+  await home.client.waitRepository(mark, HOST_OWN, (repository) => repository.sync.phase === "done", 30_000);
+  await signIn(home, second);
+  await refreshed(home);
+  const aKey = hostKey(first, `${LOGIN}/a-spex`);
+  const followedKey = hostKey(second, `${LOGIN}/a-spex`);
+  const soloKey = hostKey(first, "acme/solo-spex");
+
+  // Joined through the first — `a-spex` paired with a working folder and
+  // synced there once, recording this device's last sync — and the
+  // first's own group's repository beside it.
+  const code = gitFolder("a");
+  mark = home.client.mark();
+  await home.client.expectOk("space.join", { hostId: a.id, folder: code });
+  await home.client.waitRepository(mark, aKey, (repository) => repository.state === "reachable" && repository.sync.phase === "idle" && repository.folder !== null, 30_000);
+  mark = home.client.mark();
+  await home.client.expectOk("space.join", { hostId: solo.id });
+  await home.client.waitRepository(mark, soloKey, (repository) => repository.state === "reachable" && repository.sync.phase === "idle", 30_000);
+  const once = await home.client.settle("space.sync", { repository: aKey, noticed: true }, 30_000);
+  assert.deepEqual([once.sync.phase, once.state], ["done", "reachable"], JSON.stringify(once.sync));
+  const last = prefsOf(home.dataDir)[`sync:${aKey}:last`];
+  assert.equal(typeof (last as { at?: unknown } | undefined)?.at, "number", "its last sync is recorded");
+  const sessionId = await runTurn(home, aKey, "Before the follow");
+
+  // The first signed out: both rows stand reachable under the second's
+  // heading, each still the first's clone, read from the second's answer;
+  // the repository the first alone lists reads unreachable (space-61,
+  // space-6, git-host-5).
+  const out = await signOut(home, first);
+  const said = home.client.mark();
+  assert.deepEqual(rowsUnder(out, second.url, LOGIN), [[aKey, "reachable", first.url]]);
+  assert.deepEqual([repositoryOf(out, HOST_OWN).state, repositoryOf(out, HOST_OWN).instance], ["reachable", first.url]);
+  assert.deepEqual([repositoryOf(out, soloKey).state, repositoryOf(out, soloKey).reason, repositoryOf(out, soloKey).instance], ["unreachable", "Sign in again", first.url]);
+
+  // A Check host follows no instance: refused naming the first, nothing
+  // fetched through the second (git-host-9); the first's own group's
+  // repository, which the second does not list, is refused a Sync
+  // likewise (space-11).
+  const transported = first.script.transportCredentials.length;
+  await home.client.expectError("space.fetch", { repository: aKey }, "invalid_request", new RegExp(`^Sign in to ${HOST_NAME} first$`));
+  await home.client.expectError("space.sync", { repository: soloKey }, "invalid_request", new RegExp(`^Sign in to ${HOST_NAME} first$`));
+  assert.equal(first.script.transportCredentials.length, transported, "no transport runs");
+
+  // Its next Sync moves the clone under the second's folder at Check,
+  // before any fetch or push — its remote renamed, its fetched spex and
+  // upstream with it, its pair, session and sync preferences re-keyed and
+  // its last sync kept — then reads the second's catalog and pushes with
+  // a credential the second issued, its Save commit bearing the account
+  // there (space-60, space-5, git-host-22, git-host-9, space-32).
+  const clone = clonePath(home.dataDir, followedKey);
+  const refs = (dir: string): string[] => git(dir, "for-each-ref", "--format=%(refname)", "refs/remotes").split("\n");
+  let atCompare: { last: unknown; former: string[]; remotes: string[]; spex: boolean } | undefined;
+  home.hooks.beforeStep = ({ step, repository }) => {
+    if (step !== "compare" || repository !== followedKey || atCompare) return;
+    const prefs = prefsOf(home.dataDir);
+    atCompare = {
+      last: prefs[`sync:${followedKey}:last`],
+      former: Object.keys(prefs).filter((name) => name.startsWith(`sync:${aKey}:`)),
+      remotes: [...new Set(refs(clone).map((ref) => ref.split("/")[2]))],
+      spex: refs(clone).includes(`refs/remotes/${hostFolder(second)}/spex`),
+    };
+  };
+  const asked = [first.script.requests.length, second.script.requests.length];
+  mark = home.client.mark();
+  await home.client.expectOk("space.sync", { repository: aKey });
+  const moved = await home.client.waitRepository(mark, followedKey, (repository) => repository.sync.phase !== "running" && repository.sync.phase !== "idle", 30_000);
+  home.hooks.beforeStep = undefined;
+  assert.deepEqual([moved.sync.phase, moved.state, moved.id, moved.instance], ["done", "reachable", a.id, second.url], JSON.stringify(moved.sync));
+  assert.ok(moved.sync.phase === "done" && moved.sync.pushed, "pushed");
+  assert.ok(existsSync(join(clone, ".git")) && !existsSync(clonePath(home.dataDir, aKey)), "moved under the second's folder");
+  assert.deepEqual(git(clone, "remote").split("\n"), [hostFolder(second)]);
+  assert.equal(git(clone, "config", "--get", "branch.spex.remote"), hostFolder(second), "its upstream follows");
+  assert.equal(git(clone, "config", "--get", "spex.repositoryId"), a.id);
+  assert.deepEqual(atCompare, { last, former: [], remotes: [hostFolder(second)], spex: true }, "its last sync and fetched spex kept, re-keyed");
+  assert.equal(Home.load(home.dataDir).keyForFolder(code), followedKey, "its pair follows it");
+  assert.ok((await home.client.expectOk("session.list", {})).some((session) => session.id === sessionId && session.projectId === followedKey), "its session follows it");
+  assert.equal(prefsOf(home.dataDir)[`sync:${followedKey}:noticed`], true, "its sync preferences follow it");
+  assert.deepEqual(Object.keys(prefsOf(home.dataDir)).filter((name) => name.startsWith(`sync:${aKey}:`)), []);
+  const apiAt = (host: StandinHost, from: number): string[] => host.script.requests.slice(from).filter((request) => request.path.startsWith("/api/")).map((request) => `${request.method} ${request.path}`);
+  assert.deepEqual(apiAt(first, asked[0]), [], "nothing asks the first");
+  assert.ok(apiAt(second, asked[1]).includes("GET /api/v1/host/repositories"), "its Check reads the second's catalog");
+  assert.ok(apiAt(second, asked[1]).includes("POST /api/v1/host/credential"), "the second brokers its transport");
+  const followed = first.script.transportCredentials.slice(transported).filter((entry) => entry.path.includes(`/${LOGIN}/a-spex.git/`));
+  assert.ok(followed.some((entry) => entry.push), "pushed through the shared transport");
+  assert.deepEqual([...new Set(followed.map((entry) => entry.instance))], [second.url], "with credentials the second issued");
+  assert.equal(git(bareOf(second, followedKey), "rev-parse", "spex"), git(clone, "rev-parse", "spex"));
+  assert.equal(git(clone, "log", "-1", "--format=%an <%ae>", "spex"), `Ada Lovelace <${LOGIN}@users.noreply.127.0.0.1>`);
+  const after = await home.client.expectOk("space.get", {});
+  assert.deepEqual(rowsUnder(after, second.url, LOGIN), [[followedKey, "reachable", second.url]]);
+
+  // Your own group's own repository follows the second by its remote's
+  // rename alone, keeping its folder, and syncs through it (space-60).
+  const ownFrom = first.script.transportCredentials.length;
+  const ownSynced = await home.client.settle("space.sync", { repository: HOST_OWN }, 30_000);
+  assert.deepEqual([ownSynced.sync.phase, ownSynced.state, ownSynced.instance, ownSynced.key], ["done", "reachable", second.url, HOST_OWN], JSON.stringify(ownSynced.sync));
+  assert.deepEqual(git(ownClone(home.dataDir), "remote").split("\n"), [hostFolder(second)]);
+  const ownTransports = first.script.transportCredentials.slice(ownFrom).filter((entry) => entry.path.includes(`/${HOST_OWN}.git/`));
+  assert.ok(ownTransports.length > 0, "its sync reaches the shared transport");
+  assert.deepEqual([...new Set(ownTransports.map((entry) => entry.instance))], [second.url], "with credentials the second issued");
+
+  // The repository the first lists alone stays unreachable, its clone
+  // where it lay; no transport ran for it through the second's
+  // credential (git-host-9, space-61).
+  const end = await home.client.expectOk("space.get", {});
+  assert.deepEqual([repositoryOf(end, soloKey).state, repositoryOf(end, soloKey).reason], ["unreachable", "Sign in again"]);
+  assert.ok(existsSync(join(clonePath(home.dataDir, soloKey), ".git")));
+  assert.deepEqual(first.script.transportCredentials.filter((entry) => entry.path.includes("/acme/solo-spex.git/") && entry.instance === second.url), []);
+
+  // No reply or broadcast since the sign-out holds a string under either
+  // instance's URL, the shared Git origin's among them, but that URL
+  // itself (space-30).
+  const values = [...sentSince(home.client.messages, said), end];
+  assert.deepEqual(leaks(first, values), []);
+  assert.deepEqual(leaks(second, values), []);
+});

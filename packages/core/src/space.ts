@@ -792,14 +792,14 @@ class RepositorySync {
 
   /**
    * One call to the host for the running step (git-host-21): while the
-   * rate limit of the clone's instance holds it, the step offers Stop
-   * (space-16), which ends the wait — a direct call sending nothing, a
-   * shared read left to answer later — and stops the step (space-15).
+   * rate limit of the instance its sync goes to holds it, the step offers
+   * Stop (space-16), which ends the wait — a direct call sending nothing,
+   * a shared read left to answer later — and stops the step (space-15).
    */
   async hostCall<T>(step: SyncStep, call: (signal: AbortSignal) => Promise<T>): Promise<T> {
     const controller = new AbortController();
     this.hostCalls.add(controller);
-    if (this.owner.servingOf(this).client.holding()) this.offerStop();
+    if (this.owner.syncingOf(this).client.holding()) this.offerStop();
     try {
       return await stoppable(call(controller.signal), controller.signal);
     } catch (error) {
@@ -810,17 +810,17 @@ class RepositorySync {
     }
   }
 
-  /** The rate limit of the clone's instance began holding the calls
-   * (git-host-21): a step with one in flight offers Stop. */
+  /** The rate limit of the instance its sync goes to began holding the
+   * calls (git-host-21): a step with one in flight offers Stop. */
   holdBegan(): void {
     if (this.hostCalls.size > 0) this.offerStop();
   }
 
   /** End the waits of the running step's calls to the host, while the
-   * rate limit of the clone's instance holds them; whether any was
-   * ended. */
+   * rate limit of the instance its sync goes to holds them; whether any
+   * was ended. */
   private stopWaits(): boolean {
-    if (this.hostCalls.size === 0 || !this.owner.servingOf(this).client.holding()) return false;
+    if (this.hostCalls.size === 0 || !this.owner.syncingOf(this).client.holding()) return false;
     for (const call of this.hostCalls) call.abort();
     return true;
   }
@@ -1025,22 +1025,26 @@ class RepositorySync {
     }
   }
 
-  /** The clone, moved under its instance's folder while it records the
-   * host's id, names its remote by that folder (DR-127): a remote still
-   * named `origin` is renamed, its fetched `spex` and its upstream with
-   * it, where no remote bears the folder's name already. Read and
-   * written in one synchronous step; a rename Git refuses leaves
-   * `origin`, through which the clone still syncs. */
-  nameRemoteBy(folder: string): void {
+  /** The clone names its remote by the folder of the instance it is at
+   * (DR-127, storage-34), its fetched `spex` and its upstream with it:
+   * a remote still named `origin`, the clone moved under that folder
+   * while it records the host's id, or one named by another instance's
+   * folder, the clone following the instance `folder` names (space-60).
+   * `from` is the name the remote bore as the step began, read before a
+   * move re-keyed the clone; nothing is renamed where a remote bears the
+   * folder's name already. Read and written in one synchronous step; a
+   * rename Git refuses leaves the remote as it stood. */
+  renameRemote(from: string | null, folder: string): void {
+    if (from === null || from === folder || (from !== "origin" && !isInstanceFolder(from))) return;
     const names = remoteNames(this.git.runSync(["config", "-z", "--get-regexp", REMOTE_URL_KEYS]));
-    if (!names.includes("origin") || names.includes(folder)) return;
-    const run = this.git.runSync(["remote", "rename", "origin", folder]);
+    if (!names.includes(from) || names.includes(folder)) return;
+    const run = this.git.runSync(["remote", "rename", from, folder]);
     if (run.code !== 0) {
       console.error(`spex: the remote of ${this.key} keeps its name: ${lastLines(run.stderr)}`);
       return;
     }
-    if (this.facts.remoteName === "origin") this.facts = { ...this.facts, remoteName: folder };
-    if (this.upstreamName === "origin") this.upstreamName = folder;
+    if (this.facts.remoteName === from) this.facts = { ...this.facts, remoteName: folder };
+    if (this.upstreamName === from) this.upstreamName = folder;
   }
 
   /** This clone's own diagnostics: a pending merge, a refresh's finding,
@@ -1648,7 +1652,9 @@ class RepositorySync {
     // and may answer that this account only reads (space-60, space-61).
     let remote = repo.remote;
     let readOnly = false;
-    let atHost = false;
+    // The instance the last Check read, which the push goes to
+    // (space-12); none for a remote not at an instance.
+    let syncsWith: HostInstance | undefined;
     let next: SyncStep | "done" = "save";
     while (next !== "done") {
       switch (next) {
@@ -1665,7 +1671,7 @@ class RepositorySync {
           const checked = await this.check(remote, "sync", internal);
           remote = checked.remote;
           readOnly = checked.readOnly;
-          atHost = checked.atHost;
+          syncsWith = checked.at;
           const remoteEmpty = checked.empty;
           if (remoteEmpty) {
             counts = { sent: planStorageUnits({ ours: readStorageTree(this.dir, "HEAD"), theirs: new Map(), base: new Map() }).length, received: 0 };
@@ -1726,7 +1732,7 @@ class RepositorySync {
             break;
           }
           await this.enter(op, "push", true);
-          const pushed = await this.push(remote, upstream, atHost);
+          const pushed = await this.push(remote, upstream, syncsWith);
           if (pushed === "rejected") {
             if (rechecks >= 1) {
               throw new SpaceStopped("push", {
@@ -1838,17 +1844,18 @@ class RepositorySync {
    * the Git host, prepare its branch before a first push, then fetch the
    * host's `spex` without merging with the brokered credential;
    * `empty` where the host holds no `spex` (space-8, space-12). */
-  private async check(remote: string, op: SpaceOp, internal = false): Promise<{ empty: boolean; readOnly: boolean; atHost: boolean; remote: string }> {
+  private async check(remote: string, op: SpaceOp, internal = false): Promise<{ empty: boolean; readOnly: boolean; at: HostInstance | undefined; remote: string }> {
     const host = await this.owner.hostCheck(this, op, internal);
     const target = host?.remote ?? remote;
     // The remote by its name in the clone, as the host's read left it.
     const name = this.remoteNamed("check");
-    // The clone's instance brokers its transport (git-host-9).
-    const credential = host ? await this.owner.credentialFor(this.owner.servingOf(this), target, "check", this) : null;
+    // The instance the check read brokers its transport — the clone's,
+    // or the one it followed there (git-host-9, space-60).
+    const credential = host ? await this.owner.credentialFor(host.instance, target, "check", this) : null;
     const options = { transport: true, ...(credential ? { credential } : {}) };
     try {
       const heads = await this.git.run(["ls-remote", "--exit-code", "--heads", name, `refs/heads/${SPEX_BRANCH}`], options);
-      const outcome = { readOnly: host?.readOnly ?? false, atHost: host !== undefined, remote: target };
+      const outcome = { readOnly: host?.readOnly ?? false, at: host?.instance, remote: target };
       if (heads.code === 2) {
         this.remoteEmpty = true;
         this.unrelated = false;
@@ -1882,14 +1889,15 @@ class RepositorySync {
    * committed (git-host-7): `main`, one commit of the README the host
    * would have written, made in the object store alone — the clone's
    * working tree, index and refs untouched — with the clone's commit
-   * identity, and pushed with the brokered credential. A refusal stops
-   * the Check step as any transport's does (space-15). */
-  async pushDefaultBranch(remote: string, name: string): Promise<void> {
+   * identity, and pushed with the credential `instance` — the one the
+   * check reads — brokers. A refusal stops the Check step as any
+   * transport's does (space-15). */
+  async pushDefaultBranch(remote: string, name: string, instance: HostInstance): Promise<void> {
     const blob = await this.git.ok(["hash-object", "-w", "--stdin"], { input: `# ${name}\n` });
     const tree = await this.git.ok(["mktree"], { input: `100644 blob ${blob}\tREADME.md\n` });
     const commit = await this.git.ok([...(await this.git.committerArgs()), "commit-tree", tree, "-m", "Initial commit"]);
     const remoteName = this.remoteNamed("check");
-    const credential = await this.owner.credentialFor(this.owner.servingOf(this), remote, "check", this);
+    const credential = await this.owner.credentialFor(instance, remote, "check", this);
     let run: GitRun;
     try {
       run = await this.git.run(["push", "-q", remoteName, `${commit}:refs/heads/main`], { transport: true, ...(credential ? { credential } : {}) });
@@ -2081,14 +2089,16 @@ class RepositorySync {
     this.host.ledgerChanged([this.key]);
   }
 
-  /** Step 6 — Push `spex` to the host, setting the upstream once (space-12). */
-  private async push(remote: string, upstream: boolean, atHost: boolean): Promise<"ok" | "nothing" | "rejected"> {
+  /** Step 6 — Push `spex` to the host, setting the upstream once
+   * (space-12), with the credential the instance the Check read brokers
+   * — `at`, none for a remote not at an instance (git-host-9). */
+  private async push(remote: string, upstream: boolean, at: HostInstance | undefined): Promise<"ok" | "nothing" | "rejected"> {
     const head = await this.git.ok(["rev-parse", "HEAD"]);
     const name = this.remoteNamed("push");
     const ref = this.remoteRef();
     const origin = await this.git.run(["rev-parse", "-q", "--verify", `${ref}^{commit}`]);
     if (upstream && origin.code === 0 && origin.stdout.toString("utf8").trim() === head) return "nothing";
-    const credential = atHost ? await this.owner.credentialFor(this.owner.servingOf(this), remote, "push", this) : null;
+    const credential = at ? await this.owner.credentialFor(at, remote, "push", this) : null;
     let run: GitRun;
     try {
       // The upstream names the remote by its name in the clone (DR-127).
@@ -2103,7 +2113,7 @@ class RepositorySync {
       await this.git.run(["update-ref", ref, head]);
       return "ok";
     }
-    const failure = this.classify(run, remote, atHost);
+    const failure = this.classify(run, remote, at !== undefined);
     if (failure.cause === "rejected") return "rejected";
     throw new SpaceStopped("push", failure);
   }
@@ -2601,14 +2611,33 @@ export class SpaceManager {
     return origin === null ? undefined : this.instanceAt(origin);
   }
 
-  /** The instance a clone's sync — its transport, its commit identity,
-   * its admission and its Check — goes to (git-host-9, space-32,
-   * space-11): its own (storage-31), else, for a clone at the host its key
-   * and remote name no instance for — one an earlier Spex keyed — the
-   * default instance; transitional, until a sync follows the instance
-   * governing it (governingOf, space-60). */
+  /** The instance a clone is at, on whose behalf a transport for it
+   * runs (git-host-9): its own (storage-31), else, for a clone at the
+   * host its key and remote name no instance for — one an earlier Spex
+   * keyed — the default instance, transitional. */
   servingOf(machine: RepositorySync): HostInstance {
     return this.instanceOfClone(machine) ?? this.defaultInstance();
+  }
+
+  /** The instance a sync of a clone goes to — its admission, its Check,
+   * its calls held by that instance's rate limit and the name its reports
+   * give (space-11, space-12, git-host-21, space-15): the one governing it
+   * (rowInstance), which a sync follows where it is not the clone's own
+   * (space-60), else the one it is at. */
+  syncingOf(machine: RepositorySync): HostInstance {
+    return this.rowInstance(machine) ?? this.servingOf(machine);
+  }
+
+  /** The instance an operation of a clone goes to, signed in there
+   * (space-11, space-60): the one governing it (rowInstance); while its
+   * own is signed out, another signed-in instance listing it only for a
+   * sync — `follows` — which moves the clone there at Check before any
+   * transport, every other operation needing its own instance
+   * (git-host-9); undefined where none serves. */
+  private syncsWith(machine: RepositorySync, follows: boolean): HostInstance | undefined {
+    const instance = this.rowInstance(machine);
+    const own = this.instanceOfClone(machine);
+    return !follows && own !== undefined && instance !== own ? undefined : instance;
   }
 
   /** The instance governing a clone's spex repository (git-host-5): its
@@ -2639,6 +2668,12 @@ export class SpaceManager {
     return this.instanceOfClone(machine) === undefined && this.signedInAt(serving) ? serving : undefined;
   }
 
+  /** The clones whose last answers an instance gave (git-host-5): those
+   * at it, and those it governs, their own instance signed out. */
+  private answeredBy(instance: HostInstance): RepositorySync[] {
+    return [...this.machines.values()].filter((machine) => this.servingOf(machine) === instance || this.rowInstance(machine) === instance);
+  }
+
   /** The key of a join's progress (space-63): the instance it joins at
    * and the host's id there. */
   private joinKey(instance: HostInstance, id: string): string {
@@ -2648,7 +2683,7 @@ export class SpaceManager {
   /** The name of the instance a clone syncs with, as a report prints it
    * (space-15). */
   hostNameOf(machine: RepositorySync): string {
-    return this.nameOf(this.servingOf(machine));
+    return this.nameOf(this.syncingOf(machine));
   }
 
   /** The instance a spex repository's key lies under (storage-31), by
@@ -2718,11 +2753,13 @@ export class SpaceManager {
 
   /** A clone's commit identity (space-32): where its instance is signed
    * in, the account's display name or login there, at that instance's
-   * no-reply address; none for a clone not at the host, nor while its
-   * instance is signed out, where Git's own or the fallback serves. */
+   * no-reply address — while its own is signed out, the account at the
+   * instance governing it, whose sync follows that one (space-60); none
+   * for a clone not at the host, nor while no signed-in instance serves
+   * it, where Git's own or the fallback serves. */
   identityFor(machine: RepositorySync): { name: string; email: string } | null {
-    const serving = this.servingOf(machine);
-    const instance = this.instanceOfClone(machine) ?? (this.atHost(machine.facts, serving) ? serving : undefined);
+    const at = this.instanceOfClone(machine) !== undefined || this.atHost(machine.facts, this.servingOf(machine));
+    const instance = at ? this.rowInstance(machine) : undefined;
     const account = instance ? this.host.store.home.account(instance.origin) : null;
     if (!instance || !account) return null;
     let domain: string;
@@ -3064,15 +3101,17 @@ export class SpaceManager {
     const instance = this.instanceAt(origin);
     const account = store.home.account(instance.origin);
     if (account) instance.hostSignedOut = account.login;
+    // Its clones' last answers are its own, and so are those of the
+    // clones it governs: another instance governing one meanwhile reads
+    // it afresh (git-host-5).
+    const answered = this.answeredBy(instance);
     store.signOut(instance.origin);
     instance.readState = { phase: "idle" };
     instance.accountGeneration += 1;
     instance.view = undefined;
     instance.targets.clear();
     this.releaseHeld(instance);
-    // Its clones' last answers are its own: another instance governing
-    // one meanwhile reads it afresh (git-host-5).
-    for (const machine of this.machines.values()) if (this.servingOf(machine) === instance) machine.hostOverride = undefined;
+    for (const machine of answered) machine.hostOverride = undefined;
     void this.publish();
   }
 
@@ -3086,6 +3125,7 @@ export class SpaceManager {
     if (this.signInState.phase === "running" && this.signInState.instance === instance.origin) this.flow?.cancel();
     try {
       await instance.client.signOut(() => {
+        const answered = this.answeredBy(instance);
         this.host.store.signOut(instance.origin);
         instance.accountGeneration += 1;
         instance.hostSignedOut = undefined;
@@ -3098,7 +3138,7 @@ export class SpaceManager {
         // A join still running keeps its progress; its transport holds its
         // own brokered credential or stops asking to sign in (space-15).
         for (const [id, phase] of [...this.joining]) if (phase.phase !== "running") this.joining.delete(id);
-        for (const machine of this.machines.values()) if (this.servingOf(machine) === instance) machine.hostOverride = undefined;
+        for (const machine of answered) machine.hostOverride = undefined;
       });
     } catch (error) {
       if (error instanceof CredentialChanged) throw new CoreError("conflict", relayHostError(error, this.nameOf(instance)));
@@ -3235,13 +3275,16 @@ export class SpaceManager {
           catch (error) { console.error(`spex: the instance's display name was not recorded: ${error instanceof Error ? error.message : String(error)}`); }
         }
         instance.readFailure = undefined;
-        // A clone this instance serves, matched by its remote, records the
-        // host's id (git-host-5).
+        // A clone this instance serves or governs reads its answer afresh
+        // (git-host-5); one it serves, matched by its remote, records the
+        // host's id.
         for (const repository of this.host.store.listRepositories()) {
           if (!this.host.store.repository(repository.key)) continue;
           const machine = this.machine(repository.key);
-          if (this.servingOf(machine) !== instance) continue;
+          const serves = this.servingOf(machine) === instance;
+          if (!serves && this.rowInstance(machine) !== instance) continue;
           if ((instance.targets.get(machine)?.begun ?? 0) <= begun) machine.hostOverride = undefined;
+          if (!serves) continue;
           const facts = await machine.readFacts().catch(() => ({ remote: null, id: null }));
           if (generation !== instance.accountGeneration) throw new CredentialChanged();
           if (facts.id === null && facts.remote !== null) {
@@ -4218,14 +4261,18 @@ export class SpaceManager {
   // -- the sync against the host (space-11, space-12, space-60) ---------------
 
   /** The admission of space-11 an instance decides: a clone at its
-   * instance needs a sign-in there — refused naming that instance — and
-   * its first push into a repository with other members needs the notice
-   * seen (space-57). */
+   * instance needs a sign-in there, or, for a sync, a signed-in instance
+   * listing the host repository it records, which the sync then follows
+   * (space-60) — refused naming its own instance — and its first push
+   * into a repository with other members needs the notice seen, read at
+   * the instance governing it (space-57, git-host-22). A Check host
+   * (`push` false) follows no other instance (git-host-9). */
   async admit(machine: RepositorySync, input: { push: boolean; noticed: boolean }): Promise<void> {
     const facts = machine.facts;
-    const instance = this.servingOf(machine);
-    if (!this.atHost(facts, instance)) return;
-    if (!this.signedInAt(instance)) throw new CoreError("invalid_request", signInTo(this.nameOf(instance)));
+    const serving = this.servingOf(machine);
+    const instance = this.syncsWith(machine, input.push);
+    if (!this.atHost(facts, instance ?? serving)) return;
+    if (!instance) throw new CoreError("invalid_request", signInTo(this.nameOf(serving)));
     if (!input.push || input.noticed) return;
     const store = this.host.store;
     if (store.getPref<unknown>(noticedPref(machine.key)) === true || store.getPref<unknown>(lastSyncPref(machine.key)) !== undefined) return;
@@ -4255,15 +4302,23 @@ export class SpaceManager {
    * hands over, and prepare the branch before a first push (git-host-7).
    * A clone the instances migration deferred moves under its instance's
    * folder first, on a sync, wherever its remote lies (DR-127). The
-   * clone's instance answers it (git-host-22), its catalog read, its
-   * branch prepared, and the clone following the host under its folder.
-   * Undefined for a clone whose remote is not at its instance. */
-  async hostCheck(machine: RepositorySync, op: SpaceOp, internal = false): Promise<{ remote: string; readOnly: boolean } | undefined> {
+   * instance governing the clone answers it (git-host-22), its catalog
+   * read, its branch prepared, and the clone following the host under
+   * its folder; where that is not the clone's own — signed out, another
+   * signed-in instance listing it — a sync follows it there before any
+   * transport, the clone re-keyed under its folder with its remote
+   * renamed, your own group's own repository renaming its remote alone
+   * (space-60). The instance it answered at comes back with the URL;
+   * undefined for a clone whose remote is not at an instance. */
+  async hostCheck(machine: RepositorySync, op: SpaceOp, internal = false): Promise<{ remote: string; readOnly: boolean; instance: HostInstance } | undefined> {
     if (op === "sync") await this.moveDeferred(machine);
     const facts = await machine.readFacts();
-    const instance = this.servingOf(machine);
-    if (!this.atHost(facts, instance)) return undefined;
-    if (!this.signedInAt(instance)) throw new SpaceStopped("check", { cause: "reauth", message: signInAgain(), guidance: signInThenRetry(), retry: true });
+    const serving = this.servingOf(machine);
+    const instance = this.syncsWith(machine, op === "sync");
+    if (!this.atHost(facts, instance ?? serving)) return undefined;
+    if (!instance) throw new SpaceStopped("check", { cause: "reauth", message: signInAgain(), guidance: signInThenRetry(), retry: true });
+    const own = this.instanceOfClone(machine);
+    const follows = own !== undefined && instance !== own;
     // Its name as each report is made, a read meanwhile naming it.
     const host = (): string => this.nameOf(instance);
     let target: TargetReading;
@@ -4291,13 +4346,18 @@ export class SpaceManager {
       machine.hostOverride = { state: "unreachable", reason: namedLikeYourLogin() };
       throw new SpaceStopped("check", { cause: "gone", message: groupNamedLikeYourLogin(repository.group.fullPath), guidance: nothingDeleted(), retry: true });
     }
-    // The clone follows the host under its instance's folder (DR-127);
+    // The clone follows the host under the folder of the instance
+    // answering — its own, or the one it follows (DR-127, space-60);
     // your own group's own repository keeps its folder, which lies
-    // outside every instance's.
+    // outside every instance's, following another instance by its
+    // remote's name alone.
     const key = this.keyAtHost(repository, instance);
-    if (op === "sync" && key && key !== machine.key && machine.key !== this.host.store.home.own()) {
-      await this.moveInSync(instance, machine, key, repository.id, facts.remote, target.accountGeneration);
-    }
+    if (op === "sync" && machine.key !== this.host.store.home.own()) {
+      if (key && key !== machine.key) await this.moveInSync(instance, machine, key, repository.id, facts.remote, target.accountGeneration);
+      // A path that cannot stand as folders here leaves no place to
+      // follow it to: no transport goes through another instance.
+      else if (follows) throw new SpaceStopped("check", { cause: "reauth", message: signInAgain(), guidance: signInThenRetry(), retry: true });
+    } else if (follows) this.followByRemote(instance, machine, repository.id, facts.remote, target.accountGeneration);
     try { this.assertTargetAccount(instance, target.accountGeneration); }
     catch (error) { throw hostStop("check", error, host()); }
     if (facts.remote !== null && facts.remote !== repository.remoteUrl) machine.setOrigin(repository.remoteUrl, facts.remote);
@@ -4324,7 +4384,7 @@ export class SpaceManager {
         // default branch refusing a Developer's initial commit, say — so
         // the core pushes that branch itself, and goes on as if the host
         // had (git-host-7).
-        await machine.pushDefaultBranch(repository.remoteUrl, repository.name);
+        await machine.pushDefaultBranch(repository.remoteUrl, repository.name, instance);
       }
       if (created) machine.forgetCreated();
       let answer: Awaited<ReturnType<GitHostClient["prepareBranch"]>>;
@@ -4336,7 +4396,7 @@ export class SpaceManager {
       }
       if (this.waiting.get(machine.key)?.step === "branch") this.waiting.delete(machine.key);
     } else if (created && !repository.empty) machine.forgetCreated();
-    return { remote: repository.remoteUrl, readOnly };
+    return { remote: repository.remoteUrl, readOnly, instance };
   }
 
   /** Whether a repository the core created, which the host
@@ -4381,7 +4441,9 @@ export class SpaceManager {
    * reads the remote the check read before asking the host — `remote` —
    * and records the host's id, the check's own recording of it included,
    * and still lies where the home says (renameClone). In the same step,
-   * a remote still named `origin` takes the instance's folder's name. */
+   * its remote takes the name of the folder it now lies under: one still
+   * named `origin`, or one named by the instance it followed from
+   * (space-60). */
   private async moveInSync(instance: HostInstance, machine: RepositorySync, to: string, id: string, remote: string | null, accountGeneration: number): Promise<void> {
     const store = this.host.store;
     const from = machine.key;
@@ -4392,11 +4454,29 @@ export class SpaceManager {
     catch (error) { throw hostStop("check", error, this.nameOf(instance)); }
     if (!machine.recordsNow(remote, id)) throw movedMeanwhile(from);
     if (store.repository(from)?.dir !== source || machine.key !== from) throw movedMeanwhile(from);
+    // A sign-in at its own instance since the check read another stands.
+    if (this.syncsWith(machine, true) !== instance) throw movedMeanwhile(from);
+    // Its remote's name as it lies here, which its new key reads no more.
+    const named = machine.remoteNameNow();
     this.renameClone(machine, to, identity);
     // The remote's rename follows the move, made where the clone now lies.
     const folder = instanceSegmentOf(to);
-    if (folder !== null) machine.nameRemoteBy(folder);
+    if (folder !== null) machine.renameRemote(named, folder);
     await this.afterMove([{ from, to }]);
+  }
+
+  /** Your own group's own repository follows another instance listing it
+   * while its own is signed out (space-60): its folder kept, its remote
+   * renamed to that instance's folder at one instant, once the clone
+   * still reads the remote the check read before asking the host —
+   * `remote` — and records the host's id; its fetched `spex`, its
+   * upstream and this device's last sync stay with it (space-5). */
+  private followByRemote(instance: HostInstance, machine: RepositorySync, id: string, remote: string | null, accountGeneration: number): void {
+    try { this.assertTargetAccount(instance, accountGeneration); }
+    catch (error) { throw hostStop("check", error, this.nameOf(instance)); }
+    if (!machine.recordsNow(remote, id) || this.syncsWith(machine, true) !== instance) throw movedMeanwhile(machine.key);
+    const folder = instance.folder();
+    if (folder !== null) machine.renameRemote(machine.remoteNameNow(), folder);
   }
 
   /** A clone the instances migration left where it stood, a session's
@@ -4420,9 +4500,10 @@ export class SpaceManager {
       store.settleDeferred([from]);
       return;
     }
+    const named = machine.remoteNameNow();
     this.renameClone(machine, move.to, identity);
     const folder = instanceSegmentOf(move.to);
-    if (folder !== null && machine.recordedIdNow() !== null) machine.nameRemoteBy(folder);
+    if (folder !== null && machine.recordedIdNow() !== null) machine.renameRemote(named, folder);
     await this.afterMove([{ from, to: move.to }]);
   }
 
@@ -5031,7 +5112,7 @@ export class SpaceManager {
     const held = canonicalOrigin(origin);
     setImmediate(() => {
       for (const machine of this.machines.values()) {
-        if (this.servingOf(machine).origin === held) machine.holdBegan();
+        if (this.syncingOf(machine).origin === held) machine.holdBegan();
       }
     });
   }
