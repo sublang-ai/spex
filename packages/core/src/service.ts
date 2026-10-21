@@ -435,8 +435,6 @@ export class CoreService {
   /** Your own group's config, which follows its clone when your own
    * group is renamed at sign-in (space-59); an explicit path stays. */
   private configPath: string;
-  /** The Git host this home signs in to (git-host-1..11). */
-  private readonly hostClient: GitHostClient;
   /** The runtime the Git credential helper runs on (git-host-9). */
   private readonly hostRuntime: { execPath: string; electron: boolean };
   private readonly env: NodeJS.ProcessEnv;
@@ -523,20 +521,6 @@ export class CoreService {
     this.forge =
       options.forgeAdapter ?? new GitHubForgeAdapter(this.runCommand);
     this.configState = { status: "missing", path: this.configPath };
-    // One client of the Git host the home records (git-host-1): its
-    // credential in `local/credentials.yaml`, this device and app as its
-    // label, a refusal that signs the device out marking the home so
-    // (git-host-4), and a rate limit holding its calls offering Stop on
-    // the steps that wait (git-host-21).
-    const host = store.home.host;
-    this.hostClient = new GitHostClient({
-      url: host.origin,
-      label: `Spex on ${hostname()}`,
-      credentials: fileCredentialStore(store.dir, host.origin),
-      onSignedOut: () => this.space.signedOutByHost(),
-      onHold: () => this.space.holdBegan(),
-      ...(options.hostHoldMaxMs !== undefined ? { holdMaxMs: options.hostHoldMaxMs } : {}),
-    });
     this.hostRuntime = options.hostRuntime ?? currentRuntime();
     this.sessions = new SessionManager({
       approvalHandler: (sessionId) => this.approvals.handler({kind: "session", id: sessionId}, () => {
@@ -651,7 +635,7 @@ export class CoreService {
       assertAuthoringWritable: (key, id) => this.authors.assertTurnWritable(id, key),
       ...(options.spaceTransportTimeoutMs !== undefined ? { transportTimeoutMs: options.spaceTransportTimeoutMs } : {}),
       ...(options.spaceBeforeStep ? { beforeStep: options.spaceBeforeStep } : {}),
-      client: this.hostClient,
+      clientFor: (origin: string) => this.hostClientFor(origin),
       signInFlow: options.signIn ?? "device",
       hostRuntime: this.hostRuntime,
       repositoriesChanged: () => this.afterRepositoriesChanged(),
@@ -758,13 +742,30 @@ export class CoreService {
     return null;
   }
 
-  /** The access secret the registry presents (environments-12): the host
-   * client's, kept current (git-host-4); null while signed out. A host
-   * that cannot be reached, or asks to wait, reads as it answered
-   * (git-host-11). */
+  /** A client of the instance at an origin (git-host-1..11, DR-127),
+   * which the space keeps one of per instance: its app token under that
+   * origin in `local/credentials.yaml`, this device and app as its label,
+   * a refusal that signs the device out of that instance alone, its
+   * entry marked so (git-host-4), and a rate limit holding that
+   * instance's calls, offering Stop on the steps that wait (git-host-21). */
+  private hostClientFor(origin: string): GitHostClient {
+    return new GitHostClient({
+      url: origin,
+      label: `Spex on ${hostname()}`,
+      credentials: fileCredentialStore(this.store.dir, origin),
+      onSignedOut: () => this.space.signedOutByHost(origin),
+      onHold: () => this.space.holdBegan(origin),
+      ...(this.options.hostHoldMaxMs !== undefined ? { holdMaxMs: this.options.hostHoldMaxMs } : {}),
+    });
+  }
+
+  /** The access secret the registry presents (environments-12): the
+   * default instance's, kept current by its client (git-host-4); null
+   * while signed out there. An instance that cannot be reached, or asks
+   * to wait, reads as it answered (git-host-11). */
   private async registryToken(): Promise<string | null> {
     try {
-      return await this.hostClient.accessSecret();
+      return await this.space.accessSecretFor(this.store.home.defaultInstance().origin);
     } catch (error) {
       throw new Error(relayHostError(error, this.space.hostName()));
     }
@@ -1924,6 +1925,13 @@ export class CoreService {
    * pages a shell opens in the system browser (app-shell-20). */
   hostUrl(): string {
     return this.store.home.host.origin;
+  }
+
+  /** The origins of every instance the home lists and of the one a
+   * running sign-in names: those whose sign-in pages a shell may open in
+   * the system browser (app-shell-37, app-shell-20). */
+  instanceOrigins(): string[] {
+    return this.space.instanceOrigins();
   }
 
   private async listen(port: number): Promise<void> {

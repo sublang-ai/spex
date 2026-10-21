@@ -26,7 +26,7 @@ import {
 } from "./git-host.js";
 import { kebab, splitKey, type HomeAccount } from "./home.js";
 import { i18n } from "./i18n.js";
-import { instanceFolder, instanceSegmentOf, isInstanceFolder } from "./instance.js";
+import { canonicalOrigin, instanceFolder, instanceSegmentOf, isInstanceFolder } from "./instance.js";
 import { isDeferredClone } from "./migrate-instances.js";
 import type {
   GroupsState,
@@ -108,9 +108,10 @@ export interface SpaceHost {
    * its validation and its commit (`at: "commit"`), so a suite can act
    * between them deterministically. */
   beforeStep?: (event: { op: SpaceOp; step: SyncStep; repository: string; at?: "commit" }) => void | Promise<void>;
-  /** The Git host's client (git-host-1..11): the one this home signs in
-   * to and reads. */
-  client: GitHostClient;
+  /** A new client of the instance at a canonical origin (git-host-1..11,
+   * DR-127): its own app token, refresh and rate-limit hold. The space
+   * asks once per instance and keeps it for the run. */
+  clientFor: (origin: string) => GitHostClient;
   /** The sign-in flow this deployment runs: the browser flow on the
    * desktop (git-host-2), the device flow on the server (git-host-3). */
   signInFlow: "browser" | "device";
@@ -729,14 +730,14 @@ class RepositorySync {
 
   /**
    * One call to the host for the running step (git-host-21): while the
-   * host's rate limit holds it, the step offers Stop (space-16), which
-   * ends the wait — a direct call sending nothing, a shared read left to
-   * answer later — and stops the step (space-15).
+   * rate limit of the clone's instance holds it, the step offers Stop
+   * (space-16), which ends the wait — a direct call sending nothing, a
+   * shared read left to answer later — and stops the step (space-15).
    */
   async hostCall<T>(step: SyncStep, call: (signal: AbortSignal) => Promise<T>): Promise<T> {
     const controller = new AbortController();
     this.hostCalls.add(controller);
-    if (this.host.client.holding()) this.offerStop();
+    if (this.owner.instanceOfClone(this)?.client.holding()) this.offerStop();
     try {
       return await stoppable(call(controller.signal), controller.signal);
     } catch (error) {
@@ -747,16 +748,17 @@ class RepositorySync {
     }
   }
 
-  /** The host's rate limit began holding the calls (git-host-21): a step
-   * with one in flight offers Stop. */
+  /** The rate limit of the clone's instance began holding the calls
+   * (git-host-21): a step with one in flight offers Stop. */
   holdBegan(): void {
     if (this.hostCalls.size > 0) this.offerStop();
   }
 
   /** End the waits of the running step's calls to the host, while the
-   * host's rate limit holds them; whether any was ended. */
+   * rate limit of the clone's instance holds them; whether any was
+   * ended. */
   private stopWaits(): boolean {
-    if (this.hostCalls.size === 0 || !this.host.client.holding()) return false;
+    if (this.hostCalls.size === 0 || !this.owner.instanceOfClone(this)?.client.holding()) return false;
     for (const call of this.hostCalls) call.abort();
     return true;
   }
@@ -2334,9 +2336,20 @@ class RepositorySync {
   }
 }
 
+/** One instance the core talks to, known by its canonical origin
+ * (git-host intent, DR-127): its own client, which keeps that
+ * instance's app token current, refreshes it one at a time and holds
+ * that instance's calls through its rate limit — for the core's run. */
+class HostInstance {
+  constructor(readonly origin: string, readonly client: GitHostClient) {}
+}
+
 /** Every spex repository's machine and the Groups state they make. */
 export class SpaceManager {
   private readonly machines = new Map<string, RepositorySync>();
+  /** Every instance the core has talked to this run, by canonical
+   * origin: one client each (DR-127). */
+  private readonly instances = new Map<string, HostInstance>();
   /** Runs Git for the questions no one clone answers. */
   private readonly probe: SpaceGit;
   private publishing?: Promise<void>;
@@ -2452,6 +2465,50 @@ export class SpaceManager {
     return home.instances().find((entry) => instanceFolder(entry.origin) === remoteName)?.origin ?? null;
   }
 
+  /** The instance at an origin, in any spelling of it (DR-127): the one
+   * the core keeps for its run, made with a client of its own at the
+   * first ask. */
+  private instanceAt(origin: string): HostInstance {
+    const key = canonicalOrigin(origin);
+    let instance = this.instances.get(key);
+    if (!instance) {
+      instance = new HostInstance(key, this.host.clientFor(key));
+      this.instances.set(key, instance);
+    }
+    return instance;
+  }
+
+  /** Transitional, until each call goes to the instance it concerns: the
+   * default instance's client, through which the core still signs in,
+   * reads and acts (DR-127). */
+  private defaultClient(): GitHostClient {
+    return this.instanceAt(this.host.store.home.defaultInstance().origin).client;
+  }
+
+  /** A clone's instance (storage-31), as `cloneInstance` reads it from
+   * its key and remote as last read; undefined for a clone local only. */
+  instanceOfClone(machine: RepositorySync): HostInstance | undefined {
+    const origin = this.cloneInstance(machine.key, machine.facts.remoteName);
+    return origin === null ? undefined : this.instanceAt(origin);
+  }
+
+  /** The access secret a client of an instance outside the core presents
+   * there — the registry (environments-12) — kept current by that
+   * instance's own client (git-host-4); null where this device holds no
+   * app token for it, or it refused the refresh. */
+  accessSecretFor(origin: string): Promise<string | null> {
+    return this.instanceAt(origin).client.accessSecret();
+  }
+
+  /** The origins of every instance the home lists, in its order, then of
+   * the one a running sign-in names where none is listed there: the
+   * origins whose pages a shell may open (app-shell-37). */
+  instanceOrigins(): string[] {
+    const origins = this.host.store.home.instances().map((entry) => entry.origin);
+    const signingIn = this.signInState.phase === "running" ? this.signInState.instance : null;
+    return signingIn !== null && !origins.includes(signingIn) ? [...origins, signingIn] : origins;
+  }
+
   /** The instance a command names by its origin (space-29), in any
    * spelling of it: the default instance where it names none, and one
    * the home does not list refused `not_found`. */
@@ -2463,10 +2520,10 @@ export class SpaceManager {
     return listed.origin;
   }
 
-  /** Transitional, until the core keeps a client per instance: it acts
-   * at the default instance alone, so a command naming another instance
-   * the home lists finds it not signed in here, and one naming an
-   * instance the home does not list is refused as any is (space-29). */
+  /** Transitional, until each command goes to the instance it names: the
+   * core acts at the default instance alone, so a command naming another
+   * instance the home lists finds it not signed in here, and one naming
+   * an instance the home does not list is refused as any is (space-29). */
   private served(origin: string | undefined): void {
     if (this.namedInstance(origin) !== this.host.store.home.defaultInstance().origin) throw new CoreError("invalid_request", signInFirst());
   }
@@ -2623,7 +2680,7 @@ export class SpaceManager {
     const known = this.knownOrigin();
     if (known) return known;
     try {
-      const described = await this.host.client.describe();
+      const described = await this.defaultClient().describe();
       if (!described.gitOrigin) return undefined;
       this.described = { displayName: described.displayName, gitOrigin: described.gitOrigin };
       return described.gitOrigin;
@@ -2641,7 +2698,7 @@ export class SpaceManager {
     const origin = await this.gitOrigin();
     if (!origin || !underOrigin(repo, origin)) return undefined;
     try {
-      const credential = await this.host.client.credential(origin);
+      const credential = await this.defaultClient().credential(origin);
       return { username: credential.username, secret: credential.secret };
     } catch (error) {
       throw new Error(relayHostError(error, this.hostName()));
@@ -2663,25 +2720,26 @@ export class SpaceManager {
   /** Start the configured sign-in flow (git-host-2, git-host-3): its
    * shape goes back at once, and its end sets the home up (space-4). */
   async signInStart(): Promise<{ flow: "browser"; url: string } | { flow: "device"; userCode: string; verificationUri: string; expiresAt: number }> {
-    if (this.flow || this.signInState.phase === "running" || this.host.client.signingIn()) throw new CoreError("busy", signInRunning());
+    const client = this.defaultClient();
+    if (this.flow || this.signInState.phase === "running" || client.signingIn()) throw new CoreError("busy", signInRunning());
     const kind = this.host.signInFlow;
     const admit = (account: HostAccount): HostError | null => this.admitAccount(account);
     let started: { kind: "browser"; flow: BrowserSignIn } | { kind: "device"; flow: DeviceSignIn };
     try {
       started = kind === "browser"
-        ? { kind, flow: await this.host.client.startBrowserSignIn({ pages: callbackPages(), admit }) }
-        : { kind, flow: await this.host.client.startDeviceSignIn({ admit }) };
+        ? { kind, flow: await client.startBrowserSignIn({ pages: callbackPages(), admit }) }
+        : { kind, flow: await client.startDeviceSignIn({ admit }) };
     } catch (error) {
       if (error instanceof SignInBusyError) throw new CoreError("busy", signInRunning());
       const failure = signInFailure(error, this.hostName());
-      this.signInState = failure ? { phase: "failed", instance: this.host.client.url, ...failure } : { phase: "idle" };
+      this.signInState = failure ? { phase: "failed", instance: client.url, ...failure } : { phase: "idle" };
       void this.publish();
       throw new CoreError("invalid_request", failure?.message ?? relayHostError(error, this.hostName()));
     }
     const flow = started.flow;
     this.flow = flow;
     // The flow names the origin it signs in to (space-30).
-    const instance = this.host.client.url;
+    const instance = client.url;
     this.signInState = started.kind === "browser"
       ? { phase: "running", instance, flow: "browser", since: Date.now() }
       : { phase: "running", instance, flow: "device", userCode: started.flow.userCode, verificationUri: started.flow.verificationUri, since: Date.now() };
@@ -2702,7 +2760,7 @@ export class SpaceManager {
    * nothing is stored and the home stays as it stood. */
   private admitAccount(account: HostAccount): HostError | null {
     let listed: HomeAccount | undefined;
-    try { listed = this.host.store.home.instance(this.host.client.url)?.account; }
+    try { listed = this.host.store.home.instance(this.defaultClient().url)?.account; }
     catch { return null; }
     return listed && listed.id !== account.id ? anotherAccountError(listed.login) : null;
   }
@@ -2739,17 +2797,25 @@ export class SpaceManager {
   private signInEnded(error: unknown): void {
     this.flow = undefined;
     const failure = signInFailure(error, this.hostName());
-    this.signInState = failure ? { phase: "failed", instance: this.host.client.url, ...failure } : { phase: "idle" };
+    this.signInState = failure ? { phase: "failed", instance: this.defaultClient().url, ...failure } : { phase: "idle" };
     void this.publish();
   }
 
-  /** The host signed this device out (git-host-4): the credential is
-   * gone, the account kept and marked signed out, and the header says
-   * the host did it, naming the account's login (space-3). */
-  signedOutByHost(): void {
-    const account = this.host.store.home.account();
+  /** An instance signed this device out (git-host-4): its credential is
+   * gone, its account kept and marked signed out, every other instance's
+   * entry and token untouched. The default instance's, the one the core
+   * still reads alone, also drops its view, and the header says the host
+   * did it, naming the account's login (space-3). */
+  signedOutByHost(origin: string): void {
+    const store = this.host.store;
+    if (canonicalOrigin(origin) !== store.home.defaultInstance().origin) {
+      store.signOut(origin);
+      void this.publish();
+      return;
+    }
+    const account = store.home.account(origin);
     if (account) this.hostSignedOut = account.login;
-    this.host.store.signOut();
+    store.signOut(origin);
     this.readState = { phase: "idle" };
     this.accountGeneration += 1;
     this.view = undefined;
@@ -2766,7 +2832,7 @@ export class SpaceManager {
     this.served(instance);
     this.flow?.cancel();
     try {
-      await this.host.client.signOut(() => {
+      await this.defaultClient().signOut(() => {
         this.host.store.signOut();
         this.accountGeneration += 1;
         this.hostSignedOut = undefined;
@@ -2881,6 +2947,7 @@ export class SpaceManager {
     const previous = this.reading;
     this.fullReadBegun = true;
     this.readState = { phase: "running" };
+    const client = this.defaultClient();
     let work!: Promise<HostView>;
     work = (async (): Promise<HostView> => {
       let begun = 0;
@@ -2891,7 +2958,7 @@ export class SpaceManager {
         let view: HostView;
         do {
           begun = (this.readsBegun += 1);
-          view = await readHostView(this.host.client);
+          view = await readHostView(client);
         } while (begun <= this.changedAfter);
         if (generation !== this.accountGeneration) throw new CredentialChanged();
         this.view = view;
@@ -2917,7 +2984,7 @@ export class SpaceManager {
         // A refusal signed out where its pair was removed (git-host-4);
         // here, only a home whose app token is gone is, checked now.
         if (generation === this.accountGeneration) {
-          if (error instanceof HostError && error.code === "signed_out" && this.signedIn() && this.host.client.holdsNone()) this.signedOutByHost();
+          if (error instanceof HostError && error.code === "signed_out" && this.signedIn() && client.holdsNone()) this.signedOutByHost(client.url);
           if (generation === this.accountGeneration) {
             this.readFailure = relayHostError(error, this.hostName());
             this.failRead(error, generation);
@@ -2955,17 +3022,18 @@ export class SpaceManager {
    * detail (git-host-22). Never joins an unrelated full-view fanout. */
   private async readTarget(machine: RepositorySync, facts: CloneFacts): Promise<TargetReading> {
     const accountGeneration = this.accountGeneration;
+    const client = this.defaultClient();
     let begun = 0;
     try {
       let catalog: HostCatalog;
       let listing: HostListing | undefined;
       do {
         begun = (this.readsBegun += 1);
-        catalog = await readHostCatalog(this.host.client);
+        catalog = await readHostCatalog(client);
         this.assertTargetAccount(accountGeneration);
         const repository = catalog.repositories.find((entry) => entry.id === facts.id)
           ?? catalog.repositories.find((entry) => sameRemote(entry.remoteUrl, facts.remote));
-        listing = repository ? await readHostListing(this.host.client, repository, true) : undefined;
+        listing = repository ? await readHostListing(client, repository, true) : undefined;
         this.assertTargetAccount(accountGeneration);
       } while (begun <= this.changedAfter || begun < Math.max(this.viewRead, this.failureRead));
       const target = { begun, accountGeneration, facts, catalog, listing };
@@ -2973,7 +3041,7 @@ export class SpaceManager {
       this.described = { displayName: catalog.displayName, gitOrigin: catalog.gitOrigin };
       return target;
     } catch (error) {
-      if (error instanceof HostError && error.code === "signed_out" && this.signedIn() && this.host.client.holdsNone()) this.signedOutByHost();
+      if (error instanceof HostError && error.code === "signed_out" && this.signedIn() && client.holdsNone()) this.signedOutByHost(client.url);
       if (accountGeneration === this.accountGeneration && this.signedIn() && (this.targets.get(machine)?.begun ?? 0) < begun) {
         this.targets.set(machine, { begun, accountGeneration, facts, failure: relayHostError(error, this.hostName()) });
       }
@@ -3177,7 +3245,7 @@ export class SpaceManager {
     const ask = { groupId: group.id, name, description };
     let answer: Awaited<ReturnType<GitHostClient["create"]>>;
     try {
-      answer = await this.host.client.create(ask);
+      answer = await this.defaultClient().create(ask);
     } catch (error) {
       if (mode === "refuse") {
         throw new CoreError("invalid_request", error instanceof HostError && error.kind === "name_taken"
@@ -3233,7 +3301,7 @@ export class SpaceManager {
       if (!listing) continue;
       if (listing.branchPresent) { this.waiting.delete(key); continue; }
       try {
-        const answer = await this.host.client.prepareBranch(listing.repository.id);
+        const answer = await this.defaultClient().prepareBranch(listing.repository.id);
         if (answer.status === "ready") {
           this.waiting.delete(key);
           this.startSync(key, {});
@@ -3538,7 +3606,7 @@ export class SpaceManager {
     }
     let created: Awaited<ReturnType<GitHostClient["createGroup"]>>;
     try {
-      created = await this.host.client.createGroup({ name: typed, path: given, parentId: parent });
+      created = await this.defaultClient().createGroup({ name: typed, path: given, parentId: parent });
     } catch (error) {
       if (error instanceof HostError && error.kind === "name_taken") throw new CoreError("invalid_request", groupNameTaken(typed, parentPath, this.hostName()));
       throw this.hostWriteRefusal(error);
@@ -3579,7 +3647,7 @@ export class SpaceManager {
     const from = listed.fullPath;
     let renamed: HostGroup;
     try {
-      renamed = await this.host.client.renameGroup(id, { ...(name !== undefined ? { name } : {}), ...(path !== undefined ? { path } : {}) });
+      renamed = await this.defaultClient().renameGroup(id, { ...(name !== undefined ? { name } : {}), ...(path !== undefined ? { path } : {}) });
     } catch (error) {
       if (error instanceof HostError && error.kind === "name_taken") {
         const parent = from.includes("/") ? from.slice(0, from.lastIndexOf("/")) : null;
@@ -3614,7 +3682,7 @@ export class SpaceManager {
     const listed = this.instanceGroup(id);
     if (this.holdsAnything(listed)) throw new CoreError("invalid_request", groupNotEmpty(listed.fullPath));
     try {
-      await this.host.client.deleteGroup(id);
+      await this.defaultClient().deleteGroup(id);
     } catch (error) {
       throw this.hostWriteRefusal(error);
     }
@@ -3637,7 +3705,7 @@ export class SpaceManager {
     }
     let moved: HostRepository;
     try {
-      moved = await this.host.client.transferRepository(target.id, groupId);
+      moved = await this.defaultClient().transferRepository(target.id, groupId);
     } catch (error) {
       if (error instanceof HostError && error.kind === "name_taken") {
         throw new CoreError("invalid_request", takenIn(splitKey(key).name, into?.fullPath ?? userGroup(this.view)?.fullPath ?? this.host.store.home.ownName));
@@ -3718,7 +3786,7 @@ export class SpaceManager {
     if (!roles.some((role) => role.id === input.role)) throw new CoreError("invalid_request", notARole(input.role, this.hostName()));
     const target = await this.membersTarget(input, "not_found");
     try {
-      await this.host.client.addMember(target, { login, role: input.role });
+      await this.defaultClient().addMember(target, { login, role: input.role });
     } catch (error) {
       throw this.hostWriteRefusal(error);
     }
@@ -3735,7 +3803,7 @@ export class SpaceManager {
     if (login.length === 0) throw new CoreError("invalid_request", nameTheLogin(this.hostName()));
     const target = await this.membersTarget(input, "not_found");
     try {
-      await this.host.client.removeMember(target, login);
+      await this.defaultClient().removeMember(target, login);
     } catch (error) {
       throw this.hostWriteRefusal(error);
     }
@@ -3746,7 +3814,7 @@ export class SpaceManager {
    * (git-host-8, git-host-11). */
   private async listMembers(target: MembersTarget): Promise<{ members: HostMember[] }> {
     try {
-      const answer = await this.host.client.members(target);
+      const answer = await this.defaultClient().members(target);
       return { members: answer.members.map((member) => ({ id: member.id, login: member.login, displayName: member.displayName, role: member.role, direct: member.direct, via: member.via })) };
     } catch (error) {
       throw new CoreError(error instanceof HostError && error.kind === "not_found" ? "not_found" : "invalid_request", relayHostError(error, this.hostName()));
@@ -3911,7 +3979,7 @@ export class SpaceManager {
       }
       if (created) machine.forgetCreated();
       let answer: Awaited<ReturnType<GitHostClient["prepareBranch"]>>;
-      try { answer = await machine.hostCall("check", (signal) => this.host.client.prepareBranch(repository.id, { signal })); }
+      try { answer = await machine.hostCall("check", (signal) => this.defaultClient().prepareBranch(repository.id, { signal })); }
       catch (error) { throw hostStop("check", error, this.hostName()); }
       if (answer.status === "pending") {
         this.waiting.set(machine.key, { step: "branch", group, message: answer.message });
@@ -3930,7 +3998,7 @@ export class SpaceManager {
     for (let reads = 0; reads < CREATED_REREADS && !this.stopping; reads += 1) {
       await new Promise<void>((done) => { setTimeout(done, CREATED_REREAD_MS); });
       let empty: boolean;
-      try { empty = (await machine.hostCall("check", (signal) => this.host.client.repository(id, { signal }))).empty; }
+      try { empty = (await machine.hostCall("check", (signal) => this.defaultClient().repository(id, { signal }))).empty; }
       catch (error) { throw hostStop("check", error, this.hostName()); }
       if (!empty) return true;
     }
@@ -3948,8 +4016,8 @@ export class SpaceManager {
     let credential: { username: string; secret: string; expiresAt: number };
     try {
       credential = machine
-        ? await machine.hostCall(step, (signal) => this.host.client.credential(origin, { signal }))
-        : await this.host.client.credential(origin);
+        ? await machine.hostCall(step, (signal) => this.defaultClient().credential(origin, { signal }))
+        : await this.defaultClient().credential(origin);
     } catch (error) { throw hostStop(step, error, this.hostName()); }
     return withGitCredential(credential, this.host.hostRuntime);
   }
@@ -4556,13 +4624,17 @@ export class SpaceManager {
 
   cancel(key: string): boolean { return this.machine(key).cancel(); }
 
-  /** The host's rate limit began holding every call (git-host-21): each
-   * step with a call to the host in flight offers Stop (space-16). Read
-   * once the answer that set the hold has run its course, so the step
-   * whose own call it answered has stopped rather than offering Stop. */
-  holdBegan(): void {
+  /** An instance's rate limit began holding every call to it
+   * (git-host-21): each step of a clone at that instance with a call in
+   * flight offers Stop (space-16). Read once the answer that set the hold
+   * has run its course, so the step whose own call it answered has
+   * stopped rather than offering Stop. */
+  holdBegan(origin: string): void {
+    const held = canonicalOrigin(origin);
     setImmediate(() => {
-      for (const machine of this.machines.values()) machine.holdBegan();
+      for (const machine of this.machines.values()) {
+        if (this.instanceOfClone(machine)?.origin === held) machine.holdBegan();
+      }
     });
   }
 

@@ -1456,12 +1456,13 @@ export class Store {
     this.saveHome();
   }
 
-  /** The credential went; the account stays, marked signed out
-   * (git-host-4, git-host-10). */
-  signOut(): void {
+  /** An instance's credential went — the default instance's where none
+   * is named; its account stays, marked signed out (git-host-4,
+   * git-host-10). */
+  signOut(origin?: string): void {
     this.refreshHome();
     if (this.homeProblem) return;
-    this.homeFile.signOut();
+    this.homeFile.signOut(origin);
     this.saveHome();
   }
 

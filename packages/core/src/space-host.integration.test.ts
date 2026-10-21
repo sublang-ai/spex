@@ -42,6 +42,12 @@ const HOST_OWN = `${LOGIN}/${LOGIN}-spex`;
 const HOST_NAME = "Stand-in Git host";
 
 /** The remotes a clone holds, by name. */
+/** The client a core keeps for an instance (DR-127), reached for what
+ * no command shows: its answers held, its credential store read. */
+function clientAt(home: { service: unknown }, host: Pick<StandinHost, "url">): { fetchImpl: typeof fetch; credentials: CredentialStore } {
+  return (home.service as { space: { instanceAt(origin: string): { client: { fetchImpl: typeof fetch; credentials: CredentialStore } } } }).space.instanceAt(host.url).client;
+}
+
 function remotesOf(clone: string): string[] {
   const listed = spawnSync("git", ["-C", clone, "remote"], { encoding: "utf8" });
   return listed.stdout.split("\n").filter((name) => name !== "");
@@ -1111,8 +1117,8 @@ test("git-host-4, git-host-10: a refusal or a sign-out overtaken by a newer sign
   await home.client.waitRepository(from, HOST_OWN, (repository) => repository.sync.phase === "done");
   // The core's own client and Groups, reached for what no command shows:
   // its answers held, and the instant its pair is removed.
-  const core = home.service as unknown as { hostClient: GitHostClient; space: { readHost(): Promise<unknown>; signedInAs(account: HostAccount): Promise<void> } };
-  const client = core.hostClient as unknown as { fetchImpl: typeof fetch; credentials: CredentialStore };
+  const core = home.service as unknown as { space: { readHost(): Promise<unknown>; signedInAs(account: HostAccount): Promise<void> } };
+  const client = clientAt(home, host);
   const holds = holdingFetch(client.fetchImpl);
   client.fetchImpl = holds.fetch;
   const store = fileCredentialStore(home.dataDir, host.url);
@@ -2044,7 +2050,7 @@ test("git-host-5: full reads expose running and failure with only local rows, pr
   await home.client.expectOk("space.remote.set", { repository: HOST_OWN, url: null });
   const before = await home.client.expectOk("space.get", {});
   assert.deepEqual(before.read, { phase: "idle" });
-  const client = (home.service as unknown as { hostClient: { fetchImpl: typeof fetch } }).hostClient;
+  const client = clientAt(home, host);
   const holds = holdingFetch(client.fetchImpl);
   client.fetchImpl = holds.fetch;
   host.script.unavailable(1);
@@ -2081,7 +2087,7 @@ test("git-host-5: signed-in startup publishes a failed first read even with only
   await first.stop();
   const home = await startHome("startup-read-outcome", { host, dataDir: first.dataDir, project: false });
   t.after(() => home.stop());
-  const client = (home.service as unknown as { hostClient: { fetchImpl: typeof fetch } }).hostClient;
+  const client = clientAt(home, host);
   const holds = holdingFetch(client.fetchImpl); client.fetchImpl = holds.fetch;
   host.script.unavailable(1);
   const held = holds.hold((_path, status) => status === 503); t.after(() => held.release());
@@ -2107,8 +2113,9 @@ for (const source of ["refresh", "direct-read"] as const) {
     t.after(async () => { release(); await home.stop(); });
     await signIn(home, host);
     await home.client.waitRepository(signed, HOST_OWN, (row) => row.sync.phase === "done");
-    const core = home.service as unknown as { hostClient: { fetchImpl: typeof fetch }; space: { readHost(): Promise<unknown> } };
-    const holds = holdingFetch(core.hostClient.fetchImpl); core.hostClient.fetchImpl = holds.fetch;
+    const core = home.service as unknown as { space: { readHost(): Promise<unknown> } };
+    const client = clientAt(home, host);
+    const holds = holdingFetch(client.fetchImpl); client.fetchImpl = holds.fetch;
     host.script.unavailable(1);
     const held = holds.hold((_path, status) => status === 503); release = held.release;
     const mark = home.client.mark(), requests = host.script.requests.length;

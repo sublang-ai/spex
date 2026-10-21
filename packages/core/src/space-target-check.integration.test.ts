@@ -19,13 +19,19 @@ const OWN = "ada/ada-spex";
 type Home = Awaited<ReturnType<typeof startHome>>;
 
 function internals(home: Home) {
-  return home.service as unknown as {
-    hostClient: { fetchImpl: typeof fetch };
+  const service = home.service as unknown as {
     space: {
       readHost(): Promise<unknown>;
       targets: Map<unknown, { facts: { id: string | null }; listing?: { repository: { id: string } } }>;
+      instanceAt(origin: string): { client: { fetchImpl: typeof fetch } };
     };
     store: Store;
+  };
+  return {
+    space: service.space,
+    store: service.store,
+    /** The client the core keeps for the home's one instance (DR-127). */
+    get hostClient() { return service.space.instanceAt(service.store.home.defaultInstance().origin).client; },
   };
 }
 

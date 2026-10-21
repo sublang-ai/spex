@@ -19,7 +19,8 @@ import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { createSessionStore } from "@sublang/playbook/session-store";
-import { stringify as stringifyYaml } from "yaml";
+import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
+import { GitHostClient, HostError, credentialsPath, fileCredentialStore, type StoredCredential } from "./git-host.js";
 import { Home } from "./home.js";
 import { needsInstancesMigration } from "./migrate-instances.js";
 import { clonePath, createSpaceHarness, hostFolder, hostKey, instanceOf, OWN_KEY, ownClone, prefsOf, repositoryOf, stringsOf } from "./testing/space-harness.js";
@@ -660,4 +661,104 @@ test("git-host-12, space-30: the harness runs several stand-in instances at once
   // Signed out of its instance, a home keeps its entry, signed out.
   const out = await signOut(arranged[1].home, second);
   assert.deepEqual(out.instances.map((instance) => [instance.origin, instance.account.login, instance.signedIn]), [[second.url, bob.login, false]]);
+});
+
+test("git-host-4, git-host-21, storage-19: the core keeps a client per instance, each refreshing its own pair once however many calls wait on it, held by its own rate limit, and signed out of its own instance alone, the other's entry, token and view kept", async (t) => {
+  const bob = { id: "1002", login: "bob", displayName: "Bob" };
+  const first = await startHost();
+  const second = await startHost({ displayName: "Second stand-in", person: bob });
+  const home = await startHome("client-per-instance", { host: first, project: false });
+  t.after(() => home.stop());
+  // The origins a shell may open pages at (app-shell-37): none before a
+  // sign-in, the one a running sign-in names, then the listed ones.
+  assert.deepEqual(home.service.instanceOrigins(), []);
+  const from = home.client.mark();
+  const started = await home.client.expectOk("space.signin.start", { url: first.url });
+  assert.ok(started.flow === "device");
+  assert.deepEqual(home.service.instanceOrigins(), [first.url], "the instance a running sign-in names");
+  first.script.approveDevice(started.userCode);
+  await home.client.waitSpace(from, (state) => instanceOf(state, first.url)?.signedIn === true && state.signIn.phase === "idle", 30_000);
+  await home.client.waitRepository(from, HOST_OWN, (repository) => repository.sync.phase === "done", 30_000);
+  await home.stop();
+
+  // A sign-in at the second stores its pair under its origin beside the
+  // first's and appends its entry, as the core's own does (git-host-2,
+  // storage-19, storage-2).
+  const outside = new GitHostClient({ url: second.url, label: "Spex on test", credentials: fileCredentialStore(home.dataDir, second.url) });
+  const flow = await outside.startBrowserSignIn();
+  const redirect = (await fetch(flow.url, { redirect: "manual" })).headers.get("location");
+  assert.ok(redirect, "the second answered the sign-in page with its redirect");
+  await (await fetch(redirect)).text();
+  const account = await flow.done;
+  const file = Home.load(home.dataDir);
+  file.signIn(second.url, { id: account.id, login: account.login, displayName: account.displayName });
+  file.save();
+
+  const again = await startHome("client-per-instance-again", { dataDir: home.dataDir, project: false });
+  t.after(() => again.stop());
+  assert.deepEqual(again.service.instanceOrigins(), [first.url, second.url]);
+  type Client = Pick<GitHostClient, "url" | "me" | "holding">;
+  const space = (again.service as unknown as { space: { instanceAt(origin: string): { origin: string; client: Client }; accessSecretFor(origin: string): Promise<string | null> } }).space;
+  // One client per instance, by its origin in any spelling (DR-127).
+  const atFirst = space.instanceAt(first.url).client;
+  const atSecond = space.instanceAt(second.url).client;
+  assert.deepEqual([atFirst.url, atSecond.url], [first.url, second.url]);
+  assert.notEqual(atFirst, atSecond);
+  assert.equal(space.instanceAt(`${second.url.toUpperCase()}/`).client, atSecond);
+  const mark = again.client.mark();
+  await again.client.expectOk("space.get", {});
+  const read = await again.client.waitSpace(mark, (state) => (instanceOf(state, first.url)?.readAt ?? null) !== null, 30_000);
+  const readAt = instanceOf(read, first.url)?.readAt;
+
+  const credentials = () => (parseYaml(readFileSync(credentialsPath(home.dataDir), "utf8")) as { hosts: Record<string, StoredCredential> }).hosts;
+  const refreshes = (host: StandinHost) => host.script.tokenGrants.filter((grant) => grant.grantType === "refresh_token").length;
+  const before = credentials();
+  assert.deepEqual(Object.keys(before).sort(), [first.url, second.url].sort());
+  // Each instance refuses its access secret as expired: its own client
+  // refreshes once for the two calls waiting on it, and each refresh
+  // replaces its own instance's pair alone (git-host-4, storage-19).
+  const grants = [refreshes(first), refreshes(second)];
+  first.script.expireAccess();
+  second.script.expireAccess();
+  const people = await Promise.all([atFirst.me(), atFirst.me(), atSecond.me()]);
+  assert.deepEqual(people.map((person) => person.login), [LOGIN, LOGIN, bob.login]);
+  assert.deepEqual([refreshes(first), refreshes(second)], [grants[0] + 1, grants[1] + 1]);
+  const refreshed = credentials();
+  assert.deepEqual(Object.keys(refreshed).sort(), [first.url, second.url].sort());
+  assert.notEqual(refreshed[first.url].access, before[first.url].access);
+  assert.notEqual(refreshed[second.url].access, before[second.url].access);
+  assert.equal(await space.accessSecretFor(first.url), refreshed[first.url].access);
+  assert.equal(await space.accessSecretFor(second.url), refreshed[second.url].access);
+
+  // A 429 from the first holds the first's calls alone: one made there
+  // is refused at once with nothing sent, while one to the second
+  // reaches it at once (git-host-21).
+  first.script.rateLimit(1, "30");
+  const rateLimited = (error: unknown) => error instanceof HostError && error.kind === "rate_limited";
+  await assert.rejects(atFirst.me(), rateLimited);
+  assert.deepEqual([atFirst.holding(), atSecond.holding()], [true, false]);
+  const sentFirst = first.script.requests.length;
+  await assert.rejects(atFirst.me(), rateLimited);
+  assert.equal(first.script.requests.length, sentFirst, "nothing reached the held instance");
+  const sentSecond = second.script.requests.length;
+  assert.equal((await atSecond.me()).login, bob.login);
+  assert.ok(second.script.requests.length > sentSecond, "the other instance answered at once");
+
+  // The second refusing its refresh signs the device out of the second
+  // alone: its pair removed and its entry kept, marked signed out; the
+  // first's pair, entry and view stand (git-host-4, storage-19).
+  second.script.refuseRefresh = true;
+  second.script.expireAccess();
+  await assert.rejects(atSecond.me(), (error: unknown) => error instanceof HostError && error.kind === "reauth");
+  const left = credentials();
+  assert.deepEqual(Object.keys(left), [first.url]);
+  assert.deepEqual(left[first.url], refreshed[first.url]);
+  const recorded = Home.load(home.dataDir);
+  assert.deepEqual(recorded.instances().map((entry) => [entry.origin, entry.account?.login, entry.signedOut === true]), [[first.url, LOGIN, false], [second.url, bob.login, true]]);
+  const state = await again.client.expectOk("space.get", {});
+  assert.deepEqual(state.instances.map((instance) => [instance.origin, instance.signedIn]), [[first.url, true], [second.url, false]]);
+  assert.equal(instanceOf(state, first.url)?.readAt, readAt, "the first's view stands");
+  assert.equal(await space.accessSecretFor(first.url), refreshed[first.url].access);
+  assert.equal(await space.accessSecretFor(second.url), null);
+  assert.deepEqual(again.service.instanceOrigins(), [first.url, second.url], "a signed-out entry stays listed");
 });

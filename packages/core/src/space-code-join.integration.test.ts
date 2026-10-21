@@ -96,9 +96,11 @@ test("space-37, projects-20, git-host-14: joining private code uses the brokered
   await home.stop();
   const again = await startHome("join-private-code-again", { dataDir: home.dataDir, project: false });
   t.after(() => again.stop());
-  const restarted = again.service as unknown as { hostClient: { fetchImpl: typeof fetch } };
-  const holds = holdingFetch(restarted.hostClient.fetchImpl);
-  restarted.hostClient.fetchImpl = holds.fetch;
+  // The client the restarted core keeps for the home's one instance
+  // (DR-127).
+  const restarted = (again.service as unknown as { space: { instanceAt(origin: string): { client: { fetchImpl: typeof fetch } } } }).space.instanceAt(host.url);
+  const holds = holdingFetch(restarted.client.fetchImpl);
+  restarted.client.fetchImpl = holds.fetch;
   const description = holds.hold((path) => path === "/api/v1/host");
   t.after(() => description.release());
   const beforeLocal = host.script.requests.length;
