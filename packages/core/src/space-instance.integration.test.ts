@@ -1070,7 +1070,7 @@ test("git-host-24, git-host-4, git-host-10, space-6: a refresh the first refuses
   assert.equal(meReads(second), readsOfSecond);
   // No sign-in runs; the first's heading says it signed this device out,
   // with the login its account bore (space-3, space-30).
-  assert.deepEqual([out.signIn.phase, atFirst?.hostSignedOut, atFirst?.account.login], ["idle", true, LOGIN]);
+  assert.deepEqual([out.signIn, atFirst?.hostSignedOut, atFirst?.account.login], [{ phase: "idle" }, true, LOGIN]);
 
   // Refresh reads every signed-in instance: the second alone, nothing
   // reaching the first (space-2, space-3).

@@ -46,7 +46,6 @@ import {
   repo,
   signedOutAt,
   twoInstances,
-  withMirrors,
 } from "../fixtures/groups.js";
 
 beforeEach(installClient);
@@ -75,10 +74,10 @@ function group(id: string, fullPath: string, name: string, repositories: Reposit
  * holding the given rows. */
 function twoHome(first: InstanceGroupState[], second: InstanceGroupState[], own: RepositoryState[] = [OWN_REPO]): GroupsState {
   const home = twoInstances({ own: { name: "jane", repositories: own }, instance: { groups: first } });
-  return withMirrors({
+  return {
     ...home,
     instances: home.instances.map((entry) => (entry.origin === SECOND ? { ...entry, groups: second } : entry)),
-  });
+  };
 }
 
 /** Both instances hold `acme` under the id 3; the first also lists
@@ -117,7 +116,7 @@ const sections = (): HTMLElement[] => screen.getAllByTestId(/^space-instance-htt
 
 /** A home whose instances change as a test says, by origin. */
 function changed(home: GroupsState, origin: string, over: Partial<InstanceState>): GroupsState {
-  return withMirrors({ ...home, instances: home.instances.map((entry) => (entry.origin === origin ? { ...entry, ...over } : entry)) });
+  return { ...home, instances: home.instances.map((entry) => (entry.origin === origin ? { ...entry, ...over } : entry)) };
 }
 
 /** The first instance lets the person create a group and lists acme
@@ -395,7 +394,7 @@ describe("GROUPS: each instance under its heading (space-1, git-host-5, space-3,
       type === "space.signout"
         ? signedOutAt(SECOND, {}, headingsHome())
         : type === "space.forget"
-          ? withMirrors({ ...headingsHome(), instances: headingsHome().instances.filter((entry) => entry.origin !== SECOND) })
+          ? { ...headingsHome(), instances: headingsHome().instances.filter((entry) => entry.origin !== SECOND) }
           : answer(type, fields),
     );
     await renderGroups(headingsHome(), { open: false });
@@ -594,7 +593,7 @@ describe("GROUPS: Join at the row's instance (space-63, space-29)", () => {
     // joins there, with its own id.
     commandMock.mockClear();
     const home = joinHome();
-    await renderGroups(withMirrors({ ...home, defaultInstance: SECOND, instances: [...home.instances].reverse() }), { open: false });
+    await renderGroups({ ...home, defaultInstance: SECOND, instances: [...home.instances].reverse() }, { open: false });
     await joinInto(SECOND_DOCS, "/Users/jane/code/docs-second");
     await waitFor(() =>
       expect(calls("space.join")).toEqual([{ instance: SECOND, hostId: "62", folder: "/Users/jane/code/docs-second" }]),
@@ -867,7 +866,7 @@ describe("GROUPS: Forget a signed-out instance (space-82, space-29, space-66)", 
   /** A home that lists the instances but the one at `origin`. */
   const without = (home: GroupsState, origin: string): GroupsState => {
     const instances = home.instances.filter((entry) => entry.origin !== origin);
-    return withMirrors({ ...home, instances, defaultInstance: instances[0]?.origin ?? home.defaultInstance });
+    return { ...home, instances, defaultInstance: instances[0]?.origin ?? home.defaultInstance };
   };
 
   test("space-82, space-29: Forget stands on a signed-out heading only, sends space.forget { instance }, a refusal naming the kept repositories standing beneath the heading with the heading kept; success removes the heading, and with none left the header is the card again", async () => {

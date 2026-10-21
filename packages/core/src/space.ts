@@ -2790,12 +2790,9 @@ export class SpaceManager {
   }
 
   /** The instance a command names by its origin (space-29), in any
-   * spelling of it: the default instance where it names none, and one
-   * the home does not list refused `not_found`. */
-  namedInstance(origin: string | undefined): string {
-    const home = this.host.store.home;
-    if (origin === undefined) return home.defaultInstance().origin;
-    const listed = home.instance(origin);
+   * spelling of it: one the home does not list refused `not_found`. */
+  namedInstance(origin: string): string {
+    const listed = this.host.store.home.instance(origin);
     if (!listed) throw new CoreError("not_found", noSuchInstance(origin));
     return listed.origin;
   }
@@ -3095,14 +3092,12 @@ export class SpaceManager {
     return [this.defaultInstance(), ...this.listedInstances()].some((instance) => underOrigin(url, instance.knownOrigin()) || underOrigin(url, instance.origin));
   }
 
-  /** The origin a sign-in names (git-host-2, storage-2): the default
-   * instance's where it names none, else the canonical origin of `url`,
-   * a URL the origin rule refuses — and a new origin at the folder of an
-   * instance the home lists — refused `invalid_request` naming the rule,
-   * before anything listens or any instance is asked. */
-  private signInOrigin(url: string | undefined): string {
+  /** The origin a sign-in names (git-host-2, storage-2): the canonical
+   * origin of `url`, a URL the origin rule refuses — and a new origin at
+   * the folder of an instance the home lists — refused `invalid_request`
+   * naming the rule, before anything listens or any instance is asked. */
+  private signInOrigin(url: string): string {
     const home = this.host.store.home;
-    if (url === undefined) return home.defaultInstance().origin;
     let origin: string;
     try { origin = parseOrigin(url).origin; }
     catch (error) {
@@ -3118,11 +3113,10 @@ export class SpaceManager {
   }
 
   /** Start the configured sign-in flow at the instance `url` names, by
-   * its origin, the default instance where it names none (git-host-2,
-   * git-host-3): its shape goes back at once, and its end sets the home
-   * up for the account there (space-4). At most one sign-in runs,
-   * whichever instance it names. */
-  async signInStart(url?: string): Promise<{ flow: "browser"; url: string } | { flow: "device"; userCode: string; verificationUri: string; expiresAt: number }> {
+   * its origin (git-host-2, git-host-3): its shape goes back at once, and
+   * its end sets the home up for the account there (space-4). At most
+   * one sign-in runs, whichever instance it names. */
+  async signInStart(url: string): Promise<{ flow: "browser"; url: string } | { flow: "device"; userCode: string; verificationUri: string; expiresAt: number }> {
     const origin = this.signInOrigin(url);
     if (this.flow || this.signInState.phase === "running" || [...this.instances.values()].some((entry) => entry.client.signingIn())) {
       throw new CoreError("busy", signInRunning());
@@ -3243,7 +3237,7 @@ export class SpaceManager {
    * place meanwhile stays, and the account with it. One signed out
    * already is refused, its sign-out mark and its waiting steps kept
    * (space-29). */
-  async signOut(named?: string): Promise<GroupsState> {
+  async signOut(named: string): Promise<GroupsState> {
     const instance = this.instanceAt(this.namedInstance(named));
     if (!this.signedInAt(instance)) throw new CoreError("invalid_request", signInFirst());
     if (this.signInState.phase === "running" && this.signInState.instance === instance.origin) this.flow?.cancel();
@@ -3903,12 +3897,11 @@ export class SpaceManager {
 
   /** Pick a group for a local-only spex repository (space-58): join a
    * listed one, or create `<name>-spex` in a group. */
-  async pick(key: string, choice: { kind: "join"; instance?: string; hostId: string } | { kind: "create"; instance?: string; groupId: string | null; name: string }, noticed = false): Promise<{ accepted: true }> {
-    // The instance the choice is at (space-29): the one it names, else
-    // the one the clone's key lies under, else the default instance; an
-    // instance the home does not list refused `not_found`.
+  async pick(key: string, choice: { kind: "join"; instance: string; hostId: string } | { kind: "create"; instance: string; groupId: string | null; name: string }, noticed = false): Promise<{ accepted: true }> {
+    // The instance the choice is at (space-29), one the home does not
+    // list refused `not_found`.
     const keyed = this.instanceOfKey(key);
-    const instance = choice.instance !== undefined ? this.instanceAt(this.namedInstance(choice.instance)) : keyed ?? this.defaultInstance();
+    const instance = this.instanceAt(this.namedInstance(choice.instance));
     const machine = this.machine(key);
     {
       // The remote is written only where none stands at the write
@@ -3973,11 +3966,11 @@ export class SpaceManager {
   /** Join a spex repository an instance lists and this device lacks
    * (space-63): clone it under the folder of the instance its row stands
    * under at its path there, then the code into `folder`, and pair the
-   * two. The command names the instance by its origin, the default
-   * instance where it names none; a host repository an earlier signed-in
-   * instance in the home's list also lists, by one Git origin and id, has
-   * its row there, and Join keys it there (space-1, DR-127). */
-  async join(named: string | undefined, hostId: string, folder?: string): Promise<{ accepted: true }> {
+   * two. The command names the instance by its origin; a host repository
+   * an earlier signed-in instance in the home's list also lists, by one
+   * Git origin and id, has its row there, and Join keys it there
+   * (space-1, DR-127). */
+  async join(named: string, hostId: string, folder?: string): Promise<{ accepted: true }> {
     const at = this.instanceAt(this.namedInstance(named));
     if (!this.signedInAt(at)) throw new CoreError("invalid_request", signInFirst());
     const atView = at.view ?? await this.readHost(at).catch((error: unknown) => { throw new CoreError("invalid_request", relayHostError(error, this.nameOf(at))); });
@@ -4214,9 +4207,8 @@ export class SpaceManager {
    * (git-host-15); the group then counts as listed until a read begun
    * after its creation is held (git-host-5), announced before the
    * reply. */
-  async createGroup(named: string | undefined, name: string, path: string, parent: string | null): Promise<{ group: { id: string; fullPath: string; name: string } }> {
-    // At the instance the command names (space-29), the default where it
-    // names none.
+  async createGroup(named: string, name: string, path: string, parent: string | null): Promise<{ group: { id: string; fullPath: string; name: string } }> {
+    // At the instance the command names (space-29).
     const instance = this.instanceAt(this.namedInstance(named));
     if (!this.signedInAt(instance)) throw new CoreError("invalid_request", signInFirst());
     const typed = name.trim();
@@ -4260,7 +4252,7 @@ export class SpaceManager {
    * every group and spex repository inside it under its new path, until
    * a read begun after the rename is held (git-host-5), announced before
    * the reply. */
-  async renameGroup(named: string | undefined, id: string, input: { name?: string; path?: string }): Promise<{ group: { id: string; fullPath: string; name: string } }> {
+  async renameGroup(named: string, id: string, input: { name?: string; path?: string }): Promise<{ group: { id: string; fullPath: string; name: string } }> {
     const instance = this.instanceAt(this.namedInstance(named));
     if (!this.signedInAt(instance)) throw new CoreError("invalid_request", signInFirst());
     if (input.name === undefined && input.path === undefined) throw new CoreError("invalid_request", renameNothing());
@@ -4301,7 +4293,7 @@ export class SpaceManager {
    * whatever a group holds with it; the group is held as gone until a
    * read begun after the deletion is held (git-host-5), announced before
    * the reply. */
-  async deleteGroup(named: string | undefined, id: string): Promise<{ deleted: true }> {
+  async deleteGroup(named: string, id: string): Promise<{ deleted: true }> {
     const instance = this.instanceAt(this.namedInstance(named));
     if (!this.signedInAt(instance)) throw new CoreError("invalid_request", signInFirst());
     const listed = this.instanceGroup(instance, id);
@@ -4449,21 +4441,24 @@ export class SpaceManager {
 
   /**
    * The instance a members, share or move command acts at (space-29),
-   * signed in there: for a group, the one the command names — the
-   * default instance where it names none, one the home does not list
-   * refused `not_found`; for a spex repository, the instance governing
-   * it (git-host-5) — its clone's own while signed in, else the earliest
-   * signed-in one listing it — or, for one not on this device, the
-   * instance its key lies under, where its row stands. A command names
-   * exactly one group or one spex repository, and an instance it names
-   * the home lists.
+   * signed in there: for a group, the one the command names with it, one
+   * the home does not list refused `not_found`; for a spex repository,
+   * the instance governing it (git-host-5) — its clone's own while signed
+   * in, else the earliest signed-in one listing it — or, for one not on
+   * this device, the instance its key lies under, where its row stands. A
+   * command names exactly one group or one spex repository, and an
+   * instance it names the home lists.
    */
   private async targetInstance(input: { instance?: string; repository?: string; group?: string }): Promise<HostInstance> {
     if ((input.group === undefined) === (input.repository === undefined)) throw new CoreError("invalid_request", nameOneTarget());
     const named = input.instance === undefined ? undefined : this.namedInstance(input.instance);
     let instance: HostInstance;
-    if (input.repository === undefined) instance = this.instanceAt(named ?? this.namedInstance(undefined));
-    else if (this.host.store.repository(input.repository)) {
+    if (input.repository === undefined) {
+      // A group is a host id at the instance named with it, which the
+      // protocol requires (space-29).
+      if (named === undefined) throw new CoreError("invalid_request", nameOneTarget());
+      instance = this.instanceAt(named);
+    } else if (this.host.store.repository(input.repository)) {
       const machine = this.machine(input.repository);
       await machine.readFacts();
       instance = this.rowInstance(machine) ?? this.servingOf(machine);
@@ -4939,16 +4934,6 @@ export class SpaceManager {
     return state;
   }
 
-  /** Transitional, the mirror the interface reads until it reads each
-   * instance's `hostSignedOut` (space-3, space-30): idle carries the
-   * default instance's sign-out of this device, with the account's
-   * login, while it is signed out. */
-  private signInView(): GroupsState["signIn"] {
-    const instance = this.defaultInstance();
-    if (this.signInState.phase !== "idle" || instance.hostSignedOut === undefined || this.signedInAt(instance)) return this.signInState;
-    return { phase: "idle", signedOut: { by: "host", login: instance.hostSignedOut } };
-  }
-
   private async assemble(recompute: boolean): Promise<GroupsState> {
     const store = this.host.store;
     const repositories: Placed[] = [];
@@ -4965,27 +4950,14 @@ export class SpaceManager {
     for (const key of [...this.machines.keys()]) if (!store.repository(key)) this.machines.delete(key);
     repositories.push(...this.absentRows());
     const diagnostics = await this.host.checkRepairs(this.diagnostics());
-    const host = store.home.host;
-    const served = this.defaultInstance();
-    const view = this.viewOf(served);
     const placed = this.byInstance(repositories);
     return {
       home: resolve(this.host.home),
       git: await this.probe.version(),
-      defaultInstance: host.origin,
-      signIn: this.signInView(),
+      defaultInstance: this.defaultInstance().origin,
+      signIn: this.signInState,
       own: { name: store.home.ownName, repositories: placed.own },
       instances: this.instancesOf(placed.groups),
-      // Transitional mirrors of the default instance (space-30), until
-      // the interface reads `instances`.
-      host: { url: host.origin, displayName: served.view?.displayName ?? served.described?.displayName ?? store.home.instance(served.origin)?.displayName ?? null },
-      // What the host's last read said the person may do, and the roles
-      // it grants: nothing until a read is held (DR-114).
-      account: ((a) => (a ? { ...a, canCreateGroup: served.view?.account.canCreateGroup ?? false } : null))(store.home.account()),
-      read: this.signedInAt(served) ? served.readState : { phase: "idle" },
-      readAt: view?.readAt ?? null,
-      groups: this.groupsOf(repositories),
-      roles: (view?.roles ?? []).map((role) => ({ id: role.id, name: role.name, mayPush: role.mayPush })),
       diagnostics,
       // One number, so the header and the list cannot drift (space-1):
       // what the reader has not answered, and everything unfolded.
@@ -5255,92 +5227,6 @@ export class SpaceManager {
       group: repository.group,
       instance: instance.origin,
     };
-  }
-
-  /** Transitional, the mirror the interface reads until it reads
-   * `instances` (space-30): your own group first, then, by path, every
-   * group the default instance lists and every other account's login
-   * under which it lists a spex repository, each with its spex
-   * repositories, the group's own first (space-1, DR-120). Entries are
-   * known by the group's id, your own once, another account's by its
-   * login: a row stands under the group the default instance's last read
-   * names for it, and under its key's group only where no read lists it,
-   * so no group it lists displaces your own or takes its rows. A row
-   * another instance the home lists governs or holds (DR-127) stands
-   * under that instance's heading alone, never here; your own group's own
-   * repository always stands here. Before sign-in, your own group with
-   * what this device holds. */
-  private groupsOf(placed: Placed[]): GroupsState["groups"] {
-    const store = this.host.store;
-    const ownName = store.home.ownName;
-    const served = this.defaultInstance();
-    const view = this.viewOf(served);
-    const user = userGroup(view);
-    const login = store.home.account()?.login ?? null;
-    type Entry = GroupsState["groups"][number];
-    // What the host's last read lets the person do in each group
-    // (DR-114); nothing in your own, which takes no subgroup or member,
-    // nor in another account's, nor in a group the read did not list.
-    const noCan = (): Entry["can"] => ({ createSubgroup: false, manageMembers: false, rename: false, delete: false });
-    const own: Entry = { id: user?.id ?? null, fullPath: ownName, name: user?.name ?? ownName, own: true, can: noCan(), repositories: [] };
-    const entries: Entry[] = [];
-    const byId = new Map<string, Entry>();
-    const byPath = new Map<string, Entry>();
-    const logins = new Map<string, Entry>();
-    for (const group of view ? this.listedGroups(served, view) : []) {
-      if (group.kind === "user") continue;
-      const can = group.can;
-      const entry: Entry = { id: group.id, fullPath: group.fullPath, name: group.name, own: false, can: { createSubgroup: can.createSubgroup, manageMembers: can.manageMembers, rename: can.rename, delete: can.delete }, repositories: [] };
-      entries.push(entry);
-      if (group.id !== null) byId.set(group.id, entry);
-      if (!byPath.has(group.fullPath)) byPath.set(group.fullPath, entry);
-    }
-    const unlisted = (path: string): Entry => {
-      let entry = byPath.get(path);
-      if (!entry) {
-        entry = { id: null, fullPath: path, name: path.split("/").pop() ?? path, own: false, can: noCan(), repositories: [] };
-        entries.push(entry);
-        byPath.set(path, entry);
-      }
-      return entry;
-    };
-    const ownLogin = (path: string): boolean => path === ownName || (user !== undefined && sameLogin(path, user.fullPath)) || (login !== null && sameLogin(path, login));
-    const loginEntry = (path: string): Entry => {
-      const name = path.toLowerCase();
-      let entry = logins.get(name);
-      if (!entry) {
-        entry = { id: null, fullPath: path, name: path, own: false, can: noCan(), repositories: [] };
-        entries.push(entry);
-        logins.set(name, entry);
-      }
-      return entry;
-    };
-    // Another listed instance's rows stand under its heading alone.
-    const listed = new Set(store.home.instances().map((entry) => entry.origin));
-    const elsewhere = (origin: string | null): boolean => origin !== null && origin !== served.origin && listed.has(origin);
-    // The rows the host lists first, so every login's entry stands
-    // before a row the host lists nothing for falls back to its key.
-    for (const { row, group, instance } of placed) {
-      if (!group || (!row.own && instance !== served.origin)) continue;
-      // Ids are the default instance's alone.
-      const entry = group.kind === "user"
-        ? (ownLogin(group.fullPath) ? own : loginEntry(group.fullPath))
-        : ((instance === served.origin && group.id !== null && byId.get(group.id)?.fullPath === group.fullPath) ? byId.get(group.id)! : unlisted(group.fullPath));
-      entry.repositories.push(row);
-    }
-    for (const { row, group } of placed) {
-      if (group || (!row.own && elsewhere(row.instance))) continue;
-      const path = splitKey(row.key).group;
-      const entry = path === ownName || (user !== undefined && path === user.fullPath)
-        ? own
-        : logins.get(path.toLowerCase()) ?? unlisted(path);
-      entry.repositories.push(row);
-    }
-    const groupsOwn = (entry: Entry, row: RepositoryState): boolean => row.name === `${entry.fullPath.split("/").pop()}-spex`;
-    for (const entry of [own, ...entries]) {
-      entry.repositories.sort((a, b) => Number(groupsOwn(entry, b)) - Number(groupsOwn(entry, a)) || a.key.localeCompare(b.key));
-    }
-    return [own, ...entries.sort((a, b) => a.fullPath.localeCompare(b.fullPath))];
   }
 
   /** Broadcast the state after one machine moved, every clone read at

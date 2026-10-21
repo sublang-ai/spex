@@ -1141,7 +1141,8 @@ test("git-host-4: a refresh the stand-in refuses, or a device it revoked, signs 
   /** The sign-out as the host's: the credential gone, the account kept
    * marked signed out, the remote repository waiting for a sign-in. */
   const assertHostSignedOut = (state: GroupsState): void => {
-    assert.equal(state.signIn.phase, "idle");
+    // Said on the instance's entry alone; no sign-in runs (space-30).
+    assert.deepEqual(state.signIn, { phase: "idle" });
     assert.deepEqual(state.instances.map((instance) => [instance.origin, instance.signedIn, instance.hostSignedOut, instance.account.login]), [[host.url, false, true, LOGIN]]);
     assert.ok(!existsSync(join(home.dataDir, "local", "credentials.yaml")), "the credential is gone");
     const file = Home.load(home.dataDir).file;

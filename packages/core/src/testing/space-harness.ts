@@ -50,10 +50,9 @@ export function rowsOf(state: GroupsState): RepositoryState[] {
 }
 
 /** One repository's state out of the Groups state: under your own group
- * or an instance's heading, else in the transitional mirror. */
+ * or an instance's heading. */
 export function repositoryOf(state: GroupsState, key: string): RepositoryState {
-  const found = rowsOf(state).find((repository) => repository.key === key)
-    ?? state.groups.flatMap((group) => group.repositories).find((repository) => repository.key === key);
+  const found = rowsOf(state).find((repository) => repository.key === key);
   if (found) return found;
   throw new Error(`no repository ${key} in ${JSON.stringify(rowsOf(state).map((repository) => repository.key))}`);
 }
@@ -200,10 +199,13 @@ class Client {
 
 function sleep(ms: number): Promise<void> { return new Promise((resolveSleep) => setTimeout(resolveSleep, ms)); }
 
-/** The Groups state's fields (space-30), with the default instance's
- * transitional mirrors — `account`, `groups`, `host`, `read`, `readAt`
- * and `roles` — until the interface reads `instances`. */
-const GROUPS_KEYS = ["account", "defaultInstance", "diagnostics", "git", "groups", "home", "host", "instances", "issues", "own", "read", "readAt", "roles", "signIn"];
+/** The Groups state's fields (space-30). */
+const GROUPS_KEYS = ["defaultInstance", "diagnostics", "git", "home", "instances", "issues", "own", "signIn"];
+
+/** The fields a running sign-in may carry, and those a failed one does
+ * (space-30). */
+const SIGN_IN_RUNNING_KEYS = new Set(["flow", "instance", "phase", "since", "userCode", "verificationUri"]);
+const SIGN_IN_FAILED_KEYS = ["cause", "instance", "message", "phase"];
 
 const INSTANCE_KEYS = ["account", "displayName", "groups", "host", "hostSignedOut", "origin", "read", "readAt", "roles", "signedIn"];
 
@@ -228,35 +230,23 @@ export function stringsOf(value: unknown): string[] {
 /** Every reply and broadcast carries the GroupsState shape (space-30). */
 export function assertGroupsState(state: GroupsState): void {
   assert.deepEqual(Object.keys(state).sort(), GROUPS_KEYS);
-  assert.ok(typeof state.home === "string" && Array.isArray(state.diagnostics) && Array.isArray(state.groups));
+  assert.ok(typeof state.home === "string" && Array.isArray(state.diagnostics) && Array.isArray(state.instances));
   assert.equal(typeof state.defaultInstance, "string");
-  // The sign-in's phase: idle carries nothing but the host's sign-out,
-  // with the login, and that only while signed out; a running or failed
-  // one names the origin it signs in to (space-30).
+  // The default instance is the first the home lists, while it lists
+  // any (storage-2).
+  if (state.instances.length > 0) assert.equal(state.defaultInstance, state.instances[0].origin, "the default instance is the first listed");
+  // The sign-in's phase: idle carries nothing; a running or failed one
+  // names the origin it signs in to (space-30), an instance's sign-out
+  // of this device said on its entry alone.
   const signIn = state.signIn;
   assert.ok(["idle", "running", "failed"].includes(signIn.phase), JSON.stringify(signIn));
-  if (signIn.phase !== "idle") assert.equal(typeof signIn.instance, "string", JSON.stringify(signIn));
-  if (signIn.phase === "idle" && signIn.signedOut !== undefined) {
-    assert.deepEqual(Object.keys(signIn).sort(), ["phase", "signedOut"]);
-    assert.ok(signIn.signedOut.by === "host" && typeof signIn.signedOut.login === "string" && Object.keys(signIn.signedOut).length === 2, JSON.stringify(signIn));
-    assert.equal(state.account, null, "the host's sign-out is said only while signed out");
-  } else if (signIn.phase === "idle") {
-    assert.deepEqual(Object.keys(signIn), ["phase"]);
-  }
-  // What the host's last read said the person may do, and its roles
-  // (DR-114): booleans, and nothing in your own group.
-  if (state.account !== null) {
-    assert.deepEqual(Object.keys(state.account).sort(), ["canCreateGroup", "displayName", "id", "login"]);
-    assert.equal(typeof state.account.canCreateGroup, "boolean");
-  }
-  assert.ok(["idle", "running", "failed"].includes(state.read.phase));
-  assert.deepEqual(Object.keys(state.read).sort(), state.read.phase === "failed" ? ["message", "phase"] : ["phase"]);
-  if (state.read.phase === "failed") assert.equal(typeof state.read.message, "string");
-  if (state.account === null) assert.deepEqual(state.read, { phase: "idle" });
-  assert.ok(Array.isArray(state.roles));
-  for (const role of state.roles) {
-    assert.deepEqual(Object.keys(role).sort(), ["id", "mayPush", "name"]);
-    assert.ok(typeof role.id === "string" && typeof role.name === "string" && typeof role.mayPush === "boolean", JSON.stringify(role));
+  if (signIn.phase === "idle") assert.deepEqual(Object.keys(signIn), ["phase"]);
+  else {
+    assert.equal(typeof signIn.instance, "string", JSON.stringify(signIn));
+    if (signIn.phase === "running") {
+      assert.ok(Object.keys(signIn).every((field) => SIGN_IN_RUNNING_KEYS.has(field)), JSON.stringify(signIn));
+      assert.ok((signIn.flow === "browser" || signIn.flow === "device") && typeof signIn.since === "number", JSON.stringify(signIn));
+    } else assert.deepEqual(Object.keys(signIn).sort(), SIGN_IN_FAILED_KEYS);
   }
   // The instances alone are named (space-30, DR-120): no string beyond
   // the sign-in's own pages lies under an instance's URL — no Git URL, no
@@ -271,17 +261,24 @@ export function assertGroupsState(state: GroupsState): void {
   for (const instance of state.instances) {
     assert.deepEqual(Object.keys(instance).sort(), INSTANCE_KEYS);
     assert.ok(typeof instance.origin === "string" && typeof instance.host === "string" && (instance.displayName === null || typeof instance.displayName === "string"), JSON.stringify(instance));
+    // What its last read said the person may do there (DR-114).
     assert.deepEqual(Object.keys(instance.account).sort(), ["canCreateGroup", "displayName", "id", "login"]);
     assert.ok(typeof instance.account.canCreateGroup === "boolean" && typeof instance.signedIn === "boolean" && typeof instance.hostSignedOut === "boolean", JSON.stringify(instance));
     if (instance.hostSignedOut) assert.equal(instance.signedIn, false, "an instance's sign-out of this device is said only while signed out");
     assert.ok(["idle", "running", "failed"].includes(instance.read.phase));
     assert.deepEqual(Object.keys(instance.read).sort(), instance.read.phase === "failed" ? ["message", "phase"] : ["phase"]);
+    if (instance.read.phase === "failed") assert.equal(typeof instance.read.message, "string");
     if (!instance.signedIn) assert.deepEqual(instance.read, { phase: "idle" }, "an instance signed out reads idle");
     assert.ok(instance.readAt === null || typeof instance.readAt === "number");
-    for (const role of instance.roles) assert.deepEqual(Object.keys(role).sort(), ["id", "mayPush", "name"]);
+    assert.ok(Array.isArray(instance.roles));
+    for (const role of instance.roles) {
+      assert.deepEqual(Object.keys(role).sort(), ["id", "mayPush", "name"]);
+      assert.ok(typeof role.id === "string" && typeof role.name === "string" && typeof role.mayPush === "boolean", JSON.stringify(role));
+    }
     for (const group of instance.groups) {
       assert.deepEqual(Object.keys(group).sort(), GROUP_ENTRY_KEYS);
       assert.deepEqual(Object.keys(group.can).sort(), ["createSubgroup", "delete", "manageMembers", "rename"]);
+      assert.ok(Object.values(group.can).every((value) => typeof value === "boolean"), JSON.stringify(group.can));
       // A namespace by its login, with no id and nothing to do there; a
       // group with no login, never yours.
       if (group.login !== null) {
@@ -289,40 +286,39 @@ export function assertGroupsState(state: GroupsState): void {
         assert.deepEqual(group.can, { createSubgroup: false, manageMembers: false, rename: false, delete: false }, "a namespace takes no subgroup, member, rename or deletion");
       } else assert.equal(group.mine, false, JSON.stringify(group));
     }
+    // An entry is one by its instance and id (DR-127).
+    const ids = instance.groups.flatMap((group) => (group.id === null ? [] : [group.id]));
+    assert.equal(new Set(ids).size, ids.length, `one entry per group id at ${instance.origin}`);
+    // Signed in, your namespace there stands once, by your login there
+    // (space-1).
+    if (instance.signedIn) {
+      const mine = instance.groups.filter((group) => group.mine);
+      assert.equal(mine.length, 1, `your namespace once at ${instance.origin}`);
+      assert.equal(mine[0].login?.toLowerCase(), instance.account.login.toLowerCase(), "your namespace by your login there");
+    }
   }
   assert.equal(new Set(state.instances.map((instance) => instance.origin)).size, state.instances.length, "one entry per instance");
-  // Transitional: the mirror holds exactly the rows your own group and
-  // the default instance's heading hold, never a row another listed
-  // instance governs or holds, your own group's own repository always.
-  const keys = (rows: RepositoryState[]): string[] => rows.map((repository) => repository.key).sort();
-  const listed = new Set(state.instances.map((instance) => instance.origin));
-  const elsewhere = (repository: RepositoryState): boolean => !repository.own && repository.instance !== null && repository.instance !== state.defaultInstance && listed.has(repository.instance);
-  const served = state.instances.find((instance) => instance.origin === state.defaultInstance)?.groups.flatMap((group) => group.repositories) ?? [];
-  assert.deepEqual(keys(rowsOf(state)), [...new Set(keys(rowsOf(state)))], "every row stands once under your own group or an instance");
-  assert.deepEqual(keys([...state.own.repositories.filter((repository) => !elsewhere(repository)), ...served]), keys(state.groups.flatMap((group) => group.repositories)), "the mirror holds your own group's and the default instance's rows alone");
-  for (const group of state.groups) {
-    assert.deepEqual(Object.keys(group).sort(), ["can", "fullPath", "id", "name", "own", "repositories"]);
-    assert.deepEqual(Object.keys(group.can).sort(), ["createSubgroup", "delete", "manageMembers", "rename"]);
-    assert.ok(Object.values(group.can).every((value) => typeof value === "boolean"), JSON.stringify(group.can));
-    if (group.own) assert.deepEqual(group.can, { createSubgroup: false, manageMembers: false, rename: false, delete: false }, "your own group takes no subgroup, member, rename or deletion");
-    for (const repository of group.repositories) {
-      assert.deepEqual(Object.keys(repository).sort(), REPOSITORY_KEYS);
-      assert.ok(repository.instance === null || typeof repository.instance === "string", JSON.stringify(repository.instance));
-      assert.deepEqual(Object.keys(repository.can), ["manageMembers", "transfer"]);
-      assert.ok(typeof repository.can.manageMembers === "boolean" && typeof repository.can.transfer === "boolean", JSON.stringify(repository.can));
-      assert.ok(PHASES.has(repository.sync.phase), `phase ${JSON.stringify(repository.sync)}`);
-      assert.ok(["local-only", "reachable", "read-only", "unreachable", "absent"].includes(repository.state));
-      if (repository.branch !== null) assert.deepEqual(Object.keys(repository.branch).sort(), BRANCH_KEYS);
-      const agreed = repository.branch?.agreed;
-      if (agreed) assert.ok(Object.keys(agreed).sort().join() === "at,current" && typeof agreed.at === "number" && typeof agreed.current === "boolean", JSON.stringify(agreed));
-      for (const unit of [...repository.local, ...repository.incoming, ...repository.conflicts.map((c) => c.unit)]) {
-        assert.ok(typeof unit.unit === "string" && typeof unit.label === "string" && CHANGES.has(unit.change) && Array.isArray(unit.paths) && typeof unit.diff === "boolean", JSON.stringify(unit));
-      }
-      for (const conflict of repository.conflicts) {
-        assert.ok(CHANGES.has(conflict.mine.change) && CHANGES.has(conflict.remote.change), JSON.stringify(conflict));
-      }
-      if (repository.lastSync !== null) assert.deepEqual(Object.keys(repository.lastSync).sort(), ["at", "received", "sent"]);
+  // Every row stands once, under your own group or an instance's
+  // heading, in its shape (space-30).
+  const keys = rowsOf(state).map((repository) => repository.key);
+  assert.equal(new Set(keys).size, keys.length, `every row stands once: ${JSON.stringify(keys)}`);
+  for (const repository of rowsOf(state)) {
+    assert.deepEqual(Object.keys(repository).sort(), REPOSITORY_KEYS);
+    assert.ok(repository.instance === null || typeof repository.instance === "string", JSON.stringify(repository.instance));
+    assert.deepEqual(Object.keys(repository.can), ["manageMembers", "transfer"]);
+    assert.ok(typeof repository.can.manageMembers === "boolean" && typeof repository.can.transfer === "boolean", JSON.stringify(repository.can));
+    assert.ok(PHASES.has(repository.sync.phase), `phase ${JSON.stringify(repository.sync)}`);
+    assert.ok(["local-only", "reachable", "read-only", "unreachable", "absent"].includes(repository.state));
+    if (repository.branch !== null) assert.deepEqual(Object.keys(repository.branch).sort(), BRANCH_KEYS);
+    const agreed = repository.branch?.agreed;
+    if (agreed) assert.ok(Object.keys(agreed).sort().join() === "at,current" && typeof agreed.at === "number" && typeof agreed.current === "boolean", JSON.stringify(agreed));
+    for (const unit of [...repository.local, ...repository.incoming, ...repository.conflicts.map((c) => c.unit)]) {
+      assert.ok(typeof unit.unit === "string" && typeof unit.label === "string" && CHANGES.has(unit.change) && Array.isArray(unit.paths) && typeof unit.diff === "boolean", JSON.stringify(unit));
     }
+    for (const conflict of repository.conflicts) {
+      assert.ok(CHANGES.has(conflict.mine.change) && CHANGES.has(conflict.remote.change), JSON.stringify(conflict));
+    }
+    if (repository.lastSync !== null) assert.deepEqual(Object.keys(repository.lastSync).sort(), ["at", "received", "sent"]);
   }
 }
 

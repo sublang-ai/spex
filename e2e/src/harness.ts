@@ -277,11 +277,9 @@ export function instanceOf(state: GroupsState, origin: string): GroupsState["ins
 }
 
 /** One repository's state out of the Groups state (space-30): under
- * your own group or an instance's heading, else in the transitional
- * mirror of the default instance's groups. */
+ * your own group or an instance's heading. */
 export function repositoryOf(state: GroupsState, key: string): RepositoryState {
-  const found = rowsOf(state).find((repository) => repository.key === key)
-    ?? state.groups.flatMap((group) => group.repositories).find((repository) => repository.key === key);
+  const found = rowsOf(state).find((repository) => repository.key === key);
   if (found) return found;
   throw new Error(`no repository ${key}`);
 }

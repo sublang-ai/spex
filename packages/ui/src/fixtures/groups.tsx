@@ -24,9 +24,9 @@ import type {
 
 import { SpaceSurface } from "../components/SpaceSurface.js";
 import { deliverServerMessageForTests, setClientForTests, useAppStore } from "../state/store.js";
-import { namespace, withMirrors, type GroupsShape } from "./groups-state.js";
+import { namespace } from "./groups-state.js";
 
-export { NO_CAN, namespace, withMirrors } from "./groups-state.js";
+export { NO_CAN, namespace } from "./groups-state.js";
 
 export const NOW = Date.now();
 export const MIN = 60_000;
@@ -239,15 +239,13 @@ export function instance(over: Partial<InstanceState> = {}): InstanceState {
 
 /** What a test says of a home: its fields, and `instance`, merged into
  * the default instance. */
-export type HomeOver = Partial<GroupsShape> & { instance?: Partial<InstanceState> };
+export type HomeOver = Partial<GroupsState> & { instance?: Partial<InstanceState> };
 
 /** A signed-in home: your own group with its own spex repository, then
- * the instance with the given ones in your namespace there, with the
- * transitional mirrors the core still derives from the default instance
- * (space-30). */
+ * the instance with the given ones in your namespace there (space-30). */
 export function base(over: HomeOver = {}, repos: RepositoryState[] = [repo()]): GroupsState {
   const { instance: at, ...rest } = over;
-  return withMirrors({
+  return {
     home: HOME,
     git: { ok: true, version: "2.45.0" },
     defaultInstance: ORIGIN,
@@ -262,15 +260,15 @@ export function base(over: HomeOver = {}, repos: RepositoryState[] = [repo()]): 
     ...(rest.diagnostics
       ? { issues: rest.issues ?? rest.diagnostics.filter((d) => d.repair?.declined === undefined).length }
       : {}),
-  });
+  };
 }
 
 /** A home with its default instance changed as a test says. */
 export function withInstance(state: GroupsState, over: Partial<InstanceState>): GroupsState {
-  return withMirrors({
+  return {
     ...state,
     instances: state.instances.map((entry) => (entry.origin === state.defaultInstance ? { ...entry, ...over } : entry)),
-  });
+  };
 }
 
 /** A home whose default instance lists more groups after its own. */
@@ -281,7 +279,7 @@ export function withGroups(state: GroupsState, ...groups: InstanceGroupState[]):
 
 /** A home that lists no instance: your own group alone, its own spex
  * repository on this device only, beside the given rows. */
-export function noInstance(over: Partial<GroupsShape> = {}, repos: RepositoryState[] = []): GroupsState {
+export function noInstance(over: Partial<GroupsState> = {}, repos: RepositoryState[] = []): GroupsState {
   const own = { ...OWN_REPO, state: "local-only" as const, remote: null, id: null, lastSync: null };
   return base({ instances: [], own: { name: "jane", repositories: [own, ...repos] }, ...over });
 }
@@ -290,19 +288,19 @@ export function noInstance(over: Partial<GroupsShape> = {}, repos: RepositorySta
  * its account; `byHost` where that instance signed this device out
  * (space-3). */
 export function signedOutAt(origin: string, options: { byHost?: boolean } = {}, state: GroupsState = base()): GroupsState {
-  return withMirrors({
+  return {
     ...state,
     instances: state.instances.map((entry) =>
       entry.origin === origin ? { ...entry, signedIn: false, hostSignedOut: options.byHost ?? false, read: { phase: "idle" } } : entry,
     ),
-  });
+  };
 }
 
 /** A home signed in to the fixtures' instance and to a second one after
  * it, displayed "Second Example", where you are signed in as jada. */
 export function twoInstances(over: HomeOver = {}, repos: RepositoryState[] = [repo()]): GroupsState {
   const home = base(over, repos);
-  return withMirrors({
+  return {
     ...home,
     instances: [
       ...home.instances,
@@ -314,7 +312,7 @@ export function twoInstances(over: HomeOver = {}, repos: RepositoryState[] = [re
         groups: [namespace("jada")],
       }),
     ],
-  });
+  };
 }
 
 /** The opened repository with local changes of every kind, listed out

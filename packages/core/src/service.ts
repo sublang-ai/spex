@@ -1921,12 +1921,6 @@ export class CoreService {
     return this.authToken;
   }
 
-  /** The Git host this home records (git-host-1): the one URL whose
-   * pages a shell opens in the system browser (app-shell-20). */
-  hostUrl(): string {
-    return this.store.home.host.origin;
-  }
-
   /** The origins of every instance the home lists and of the one a
    * running sign-in names: those whose sign-in pages a shell may open in
    * the system browser (app-shell-37, app-shell-20). */
@@ -3064,8 +3058,8 @@ export class CoreService {
         return this.requireSpace().signInStart(command.url);
       case "space.signin.cancel":
         return { stopped: this.requireSpace().signInCancel() };
-      // Each command names the instance it acts at by its origin, the
-      // default instance where it names none (space-29, DR-127).
+      // Each command names the instance it acts at by its origin
+      // (space-29, DR-127).
       case "space.signout":
         return this.requireSpace().signOut(command.instance);
       case "space.forget":
