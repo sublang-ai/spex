@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The Groups surface (DR-103; DR-057 named it Space): the home at a
-// glance in one header — signed out, the sign-in card; signed in, the
-// account, the last read of the Git host with Refresh, the issues and
-// Git's presence (space-1, space-3) — over the groups list, each group with
-// its spex repositories as rows (space-61). Activating a row opens that
+// The Groups surface (DR-103, DR-127; DR-057 named it Space): the home
+// at a glance in one header — while the home lists no instance, the
+// sign-in card; while any is signed in, Refresh, reading each; the
+// issues and Git's presence (space-1, space-3) — over the groups list,
+// your own group and then each instance under its heading, each group
+// with its spex repositories as rows (space-61). Activating a row opens that
 // repository's Sync and Explore tabs beneath the list. The surface
 // renders the core's state and runs no Git and no call to the host
 // itself: every action is a command, a repository named by its key,
@@ -25,8 +26,7 @@ import type { GroupsState, RepositoryState } from "@sublang/spex-core/protocol";
 import { useAppStore } from "../state/store.js";
 import { i18n } from "../i18n.js";
 import { useClock } from "../lib/useClock.js";
-import { allRepositories } from "../lib/instances.js";
-import { absoluteTitle, relativeAge } from "../lib/time.js";
+import { allRepositories, anySignedIn } from "../lib/instances.js";
 import {
   STEP_LINES,
   STEP_NAMES,
@@ -41,7 +41,7 @@ import { Icon } from "./Icon.js";
 import { IssuesList, SyncTab } from "./SpaceSync.js";
 import { ExploreTab } from "./SpaceExplorer.js";
 import { GroupsList, statusDot } from "./SpaceGroups.js";
-import { AccountField, SignInCard, useSignIn, type SignInFlow } from "./SpaceSignIn.js";
+import { SignInCard, useSignIn, type SignInFlow } from "./SpaceSignIn.js";
 
 export interface SpaceSurfaceProps {
   /** Open a session as its tab (space-7, run-view-68). */
@@ -330,7 +330,6 @@ export function SpaceSurface({ onOpenSession, onOpenProject }: SpaceSurfaceProps
         <>
           <HomeHeader
             groups={groups}
-            now={now}
             connected={connected}
             signIn={signIn}
             refreshing={refreshing}
@@ -338,7 +337,6 @@ export function SpaceSurface({ onOpenSession, onOpenProject }: SpaceSurfaceProps
             onRefresh={() => void refresh()}
             issuesOpen={issuesOpen}
             onIssuesOpen={setIssuesOpen}
-            onNote={onNote}
           />
           <IssuesList
             groups={groups}
@@ -355,6 +353,7 @@ export function SpaceSurface({ onOpenSession, onOpenProject }: SpaceSurfaceProps
               selected={selected}
               connected={connected}
               refreshes={refreshes}
+              signIn={signIn}
               onSelect={(key) => setSelected((current) => (current === key ? undefined : key))}
               onNote={onNote}
             />
@@ -370,7 +369,7 @@ export function SpaceSurface({ onOpenSession, onOpenProject }: SpaceSurfaceProps
               onNote={onNote}
             />
           ) : null}
-          {groups.account ? (
+          {anySignedIn(groups) ? (
             // Where this device's files are, said once and quietly at
             // the foot (space-1): selectable, the full path in its title.
             <p
@@ -389,14 +388,15 @@ export function SpaceSurface({ onOpenSession, onOpenProject }: SpaceSurfaceProps
   );
 }
 
-/** The home at a glance (space-1): signed out, the sign-in card
- * (space-3); signed in, the account, the host's last read with Refresh;
- * the issues the core counts, and Git's presence. Below 42rem the read time yields, below
- * 28rem the host's name (space-28); below 20rem the fields stack, the
- * account's control last and full-width. */
+/** The home at a glance (space-1): while the home lists no instance,
+ * the sign-in card (space-3); while any instance is signed in, Refresh,
+ * which reads every signed-in instance and reads "Reading…" until each
+ * read's outcome (git-host-5) — each read's time and failure standing
+ * on its instance's heading; the issues the core counts, and Git's
+ * presence. Below 20rem the fields stack (space-28). A header with
+ * nothing to say takes no room. */
 function HomeHeader({
   groups,
-  now,
   connected,
   signIn,
   refreshing,
@@ -404,10 +404,8 @@ function HomeHeader({
   onRefresh,
   issuesOpen,
   onIssuesOpen,
-  onNote,
 }: {
   groups: GroupsState;
-  now: number;
   connected: boolean;
   signIn: SignInFlow;
   refreshing: boolean;
@@ -415,14 +413,13 @@ function HomeHeader({
   onRefresh(): void;
   issuesOpen: boolean;
   onIssuesOpen(open: boolean): void;
-  onNote: Note;
 }) {
   // The core carries the count (space-1), so the header and the list
   // beneath it cannot drift: what the reader has not answered.
   const issueCount = groups.issues;
-  const readAt = groups.readAt;
-  const reading = refreshing || groups.read.phase === "running";
-  const readError = refreshError ?? (groups.read.phase === "failed" ? groups.read.message : undefined);
+  const reading = refreshing || groups.instances.some((instance) => instance.read.phase === "running");
+  const listed = groups.instances.length > 0;
+  const refresh = anySignedIn(groups);
   const row = "flex min-w-0 flex-col gap-1 @xs:flex-row @xs:flex-wrap @xs:items-center @xs:gap-x-3";
   const issues =
     groups.diagnostics.length > 0 ? (
@@ -444,63 +441,53 @@ function HomeHeader({
           : i18n._({ id: "issues", comment: "the control's name when none are unanswered" })}
       </button>
     ) : null;
+  const empty = groups.git.ok && listed && !refresh && !issues;
   return (
     <header
       data-testid="space-header"
       data-stale={connected ? undefined : "1"}
       // While the core is unreachable the last known state stands,
       // muted.
-      className={`flex min-w-0 flex-col gap-2 rounded-lg border border-neutral-200 bg-white p-3 dark:border-neutral-800 dark:bg-neutral-900 ${
-        connected ? "" : "opacity-70"
-      }`}
+      className={
+        empty
+          ? "hidden"
+          : `flex min-w-0 flex-col gap-2 rounded-lg border border-neutral-200 bg-white p-3 dark:border-neutral-800 dark:bg-neutral-900 ${
+              connected ? "" : "opacity-70"
+            }`
+      }
     >
-      {!groups.git.ok ? null : groups.account ? (
+      {!groups.git.ok ? null : !listed ? (
         <>
-          <AccountField groups={groups} connected={connected} onNote={onNote} />
-          <div className={row}>
-            <Field
-              testId="space-read"
-              title={readAt !== null ? absoluteTitle(readAt) : undefined}
-              className="min-w-0 flex-1 text-neutral-500"
-            >
-              {/* The read time is the first at-a-glance word to yield
-                  (space-28); Refresh's title still prints it. */}
-              <span data-testid="space-read-at" className="hidden min-w-0 truncate text-xs @2xl:inline">
-                {readAt !== null
-                  ? i18n._("Host read {age}", { age: relativeAge(readAt, now) })
-                  : i18n._("Not read yet")}
-              </span>
-            </Field>
-            {issues}
-            {readError ? (
-              <span role="alert" className="min-w-0 text-xs text-red-600 dark:text-red-400">
-                {readError}
-              </span>
-            ) : null}
+          <SignInCard groups={groups} signIn={signIn} connected={connected} />
+          {issues ? <div className={row}>{issues}</div> : null}
+        </>
+      ) : refresh || issues ? (
+        <div className={row}>
+          {issues}
+          {refreshError ? (
+            <span role="alert" className="min-w-0 text-xs text-red-600 dark:text-red-400">
+              {refreshError}
+            </span>
+          ) : null}
+          {refresh ? (
             <button
               type="button"
               data-testid="space-refresh"
               // Only the primary control spans the width when the
               // fields stack (space-28).
-              className={`${SECONDARY} self-start @xs:self-auto`}
+              className={`${SECONDARY} self-start @xs:ml-auto @xs:self-auto`}
               disabled={!connected || reading}
-              title={
-                readAt !== null
-                  ? i18n._("Reads the host again · last read {at}", { at: absoluteTitle(readAt) })
-                  : i18n._("Reads the host again")
-              }
+              title={i18n._({
+                id: "Reads each signed-in instance again",
+                comment: "Refresh's title: it reads every instance the home is signed in to",
+              })}
               onClick={onRefresh}
             >
               {reading ? i18n._({ id: "Reading…", comment: "A full read of the groups is still running" }) : i18n._({ id: "Refresh", comment: "re-read the groups and the Git host" })}
             </button>
-          </div>
-        </>
-      ) : (
-        <>
-          <SignInCard groups={groups} signIn={signIn} connected={connected} />
-          {issues ? <div className={row}>{issues}</div> : null}
-        </>
-      )}
+          ) : null}
+        </div>
+      ) : null}
       {groups.git.ok ? null : (
         <div data-testid="space-no-git" className="text-sm">
           <p className="font-medium">{i18n._("Git is not installed")}</p>

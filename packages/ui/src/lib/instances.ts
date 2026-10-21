@@ -105,3 +105,44 @@ export function placementOf(state: GroupsState, key: string): Placement | undefi
 export function pickInstances(state: GroupsState, repo: RepositoryState): InstanceState[] {
   return signedInInstances(state).filter((instance) => repo.instance === null || instance.origin === repo.instance);
 }
+
+/** An instance's entries in the order its heading lists them (space-1):
+ * every group in the order of their paths, then your namespace there,
+ * then each other account's login — whatever order the state holds. */
+export function entriesOf(instance: InstanceState): InstanceGroupState[] {
+  const groups = instance.groups.filter((entry) => entry.login === null);
+  const mine = instance.groups.filter((entry) => entry.login !== null && entry.mine);
+  const others = instance.groups.filter((entry) => entry.login !== null && !entry.mine);
+  return [
+    ...groups.sort((a, b) => a.fullPath.localeCompare(b.fullPath)),
+    ...mine,
+    ...others.sort((a, b) => (a.login ?? "").localeCompare(b.login ?? "")),
+  ];
+}
+
+/** The instance governing a row (space-61): the one whose heading it
+ * stands under; for a row under your own group, its own instance while
+ * signed in there, the first signed-in one where it is reachable through
+ * another that lists it (space-60), else its own; none for a row with no
+ * instance. */
+export function governingOf(
+  state: GroupsState,
+  repo: RepositoryState,
+  placement: Placement | undefined = placementOf(state, repo.key),
+): InstanceState | undefined {
+  if (placement && !placement.own) return placement.instance;
+  const own = instanceOf(state, repo.instance);
+  if (own?.signedIn) return own;
+  if (repo.state === "reachable" || repo.state === "read-only") return signedInInstances(state)[0] ?? own;
+  return own;
+}
+
+/** Whether your own group's heading reads "named after your login at
+ * sign-in" (space-1): while the home lists no instance and its folder
+ * still bears this device's user name — which holds while its own spex
+ * repository has never been at an instance, a host id kept once it has
+ * (space-5, space-82). */
+export function ownBeside(state: GroupsState): boolean {
+  const own = state.own.repositories.find((repository) => repository.own);
+  return state.instances.length === 0 && (own?.id ?? null) === null;
+}

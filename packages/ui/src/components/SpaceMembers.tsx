@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// Groups and sharing on the Groups surface (DR-114): a group created at
-// the list's head or a subgroup on a group's heading (space-68), or
-// renamed there (space-76, DR-120), and a group's or a spex repository's
-// members panel (space-62) with Share (space-69) and Remove (space-72).
+// Groups and sharing on the Groups surface (DR-114, DR-127): a group
+// created on an instance's heading or a subgroup on a group's heading
+// (space-68), or renamed there (space-76, DR-120), and a group's or a
+// spex repository's members panel (space-62) with Share (space-69) and
+// Remove (space-72), each at the instance that lists it.
 // An act stands exactly where the
 // host's last read says the person may take it; the host is asked
 // whatever the view said, and its refusal stands in place with its
@@ -12,12 +13,11 @@
 // opening, on Refresh, and come back with each share and removal.
 
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
-import type { GroupsState, HostMemberInfo } from "@sublang/spex-core/protocol";
+import type { HostMemberInfo, InstanceState } from "@sublang/spex-core/protocol";
 
 import { useAppStore, type SpaceMembersReply, type SpaceMembersTarget } from "../state/store.js";
 import { i18n } from "../i18n.js";
 import { InlineConfirm } from "./InlineConfirm.js";
-import { siteName } from "./SpaceSignIn.js";
 import { SECONDARY, type Note } from "./SpaceSurface.js";
 
 const EDITOR = "flex min-w-0 flex-col gap-1 rounded border border-neutral-300 p-2 dark:border-neutral-700";
@@ -210,7 +210,7 @@ export function GroupNameEditor({
  * person may manage the members, Share stands in the panel and Remove
  * on each member held directly. */
 export function MembersPanel({
-  groups,
+  instance,
   target,
   id,
   name,
@@ -220,7 +220,9 @@ export function MembersPanel({
   onClose,
   onNote,
 }: {
-  groups: GroupsState;
+  /** The instance that lists the group or governs the repository: its
+   * roles and its host name (space-69). */
+  instance: InstanceState;
   target: SpaceMembersTarget;
   /** What the panel's test ids carry: a repository's key, or
    * `group:<full path>`. */
@@ -335,7 +337,7 @@ export function MembersPanel({
           </div>
           {sharing ? (
             <ShareEditor
-              groups={groups}
+              instance={instance}
               target={target}
               id={id}
               connected={connected}
@@ -475,7 +477,7 @@ function MemberRow({
  * takes no second submission; a refusal stands in the editor with the
  * login kept. */
 function ShareEditor({
-  groups,
+  instance,
   target,
   id,
   connected,
@@ -483,7 +485,7 @@ function ShareEditor({
   onClose,
   onNote,
 }: {
-  groups: GroupsState;
+  instance: InstanceState;
   target: SpaceMembersTarget;
   id: string;
   connected: boolean;
@@ -492,7 +494,7 @@ function ShareEditor({
   onNote: Note;
 }) {
   const spaceShare = useAppStore((state) => state.spaceShare);
-  const roles = groups.roles;
+  const roles = instance.roles;
   const [login, setLogin] = useState("");
   const [role, setRole] = useState(() => (roles.find((entry) => entry.mayPush) ?? roles[0])?.id ?? "");
   const [busy, setBusy] = useState(false);
@@ -541,7 +543,7 @@ function ShareEditor({
           {i18n._({
             id: "Login at {host}",
             comment: "the field for a person's login on the Git host, named by its host name",
-            values: { host: siteName(groups) },
+            values: { host: instance.host },
           })}
         </span>
         <input

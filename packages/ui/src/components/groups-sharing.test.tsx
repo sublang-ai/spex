@@ -2,13 +2,14 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // Groups and sharing through the Groups surface over a mocked client
-// (space-70, DR-114): each act stands exactly where the host's last
-// read says the person may take it (space-1, space-62) — "New group"
-// at the list's head, Members and "New subgroup" on a group's heading,
+// (space-70, DR-114, DR-127): each act stands exactly where the
+// instance's last read says the person may take it (space-1, space-62)
+// — "New group" on the instance's heading, Members and "New subgroup"
+// on a group's heading,
 // Share and Remove in a members panel — the group editor (space-68),
 // Share (space-69), Remove (space-72), and the label budget the fit
 // rests on (space-28); where the person may not create a group, the
-// head's one phrase, and no link to a page of the host anywhere
+// heading's one phrase, and no link to a page of the host anywhere
 // (DR-120); and the undo — "Rename" (space-76) and, on an empty group,
 // "Delete" (space-77) on a heading, "Move to another group" on a
 // project's row (space-78). Each act is checked by the command it
@@ -24,6 +25,7 @@ import { setClientForTests } from "../state/store.js";
 import {
   ORIGIN,
   OWN_REPO,
+  SECOND,
   answer,
   base,
   calls,
@@ -154,26 +156,27 @@ async function openRowMembers(key: string): Promise<HTMLElement> {
 }
 
 describe("GROUPS: each act where the host's read says (space-1, space-62, space-29)", () => {
-  test("New group heads the list; acme's heading carries Members and New subgroup, other's Members alone, your own group's neither", async () => {
+  test("space-70, space-1: New group stands on the instance's heading; acme's heading carries Members and New subgroup, other's Members alone, your own group's and your namespace's neither", async () => {
     commandMock.mockImplementation(core);
     await renderGroups(sharingHome(), { open: false });
-    const list = screen.getByTestId("space-groups");
     const head = screen.getByTestId("space-new-group");
     expect(head.textContent).toBe("New group");
-    expect(list.firstElementChild?.contains(head)).toBe(true);
+    expect(within(screen.getByTestId(`space-instance-${ORIGIN}`)).getByTestId("space-instance-heading").contains(head)).toBe(true);
     // acme: Members and New subgroup beside its heading, outside it.
     const acme = region("acme");
     expect(within(acme).getByTestId("space-group-members-acme").getAttribute("aria-label")).toBe("Members");
     expect(within(acme).getByTestId("space-group-subgroup-acme").textContent).toBe("New subgroup");
-    expect(within(acme).getByRole("heading", { level: 2 }).textContent).toBe("acme");
+    expect(within(acme).getByRole("heading", { level: 3 }).textContent).toBe("acme");
     // other: the host lets the person do neither, so nothing but Members.
     const other = region("other");
     expect(within(other).getByTestId("space-group-members-other")).toBeTruthy();
     expect(within(other).queryByTestId("space-group-subgroup-other")).toBeNull();
-    // Your own group's heading carries neither, whatever the flags say.
+    // Your own group's heading carries neither, nor does your namespace's,
+    // whatever the flags say.
     const own = region("Your own group");
     expect(within(own).queryByTestId("space-group-members-jane")).toBeNull();
     expect(within(own).queryByTestId("space-group-subgroup-jane")).toBeNull();
+    expect(within(screen.getByTestId("space-group-@jane")).queryByRole("button")).toBeNull();
     // Share stands in a members panel only, never on a heading.
     expect(screen.queryByRole("button", { name: "Share" })).toBeNull();
 
@@ -222,27 +225,69 @@ describe("GROUPS: each act where the host's read says (space-1, space-62, space-
     expect(within(own).getByTestId(`space-share-${OWN}`)).toBeTruthy();
   });
 
-  test("where the host's read says no group may be created, the list's head reads who makes groups, with no link and no control (DR-120)", async () => {
+  test.each(["en", "zh"] as const)("space-70, space-1: where the instance's read says no group may be created, its heading holds the phrase naming who makes groups, with no link and no control, neither before a read is held (%s)", async (language) => {
+    activateLanguage(language);
     const refused = sharingHome({ canCreateGroup: false });
     await renderGroups(refused, { open: false });
     expect(screen.queryByTestId("space-new-group")).toBeNull();
-    const phrase = screen.getByTestId("space-groups-made-by");
-    // One key phrase at the list's head, naming the instance, and no
+    const heading = within(screen.getByTestId(`space-instance-${ORIGIN}`)).getByTestId("space-instance-heading");
+    const phrase = within(heading).getByTestId("space-groups-made-by");
+    // One key phrase on the heading, naming the instance, and no
     // sentence explaining what is not offered (DR-069).
-    expect(phrase.textContent).toBe("Groups are made by the people who run Spex Example");
-    expect(screen.getByTestId("space-groups").firstElementChild).toBe(phrase);
+    expect(phrase.textContent).toBe(
+      language === "zh" ? "群组由运营 Spex Example 的人创建" : "Groups are made by the people who run Spex Example",
+    );
     expect(phrase.querySelector("a, button")).toBeNull();
     expect(screen.getByTestId("space-groups").querySelector("a")).toBeNull();
     cleanup();
-    activateLanguage("zh");
-    await renderGroups(refused, { open: false });
-    expect(screen.getByTestId("space-groups-made-by").textContent).toBe("群组由运营 Spex Example 的人创建");
-    cleanup();
-    activateLanguage("en");
     // Before a read is held, neither stands.
     await renderGroups(withInstance(refused, { readAt: null }), { open: false });
     expect(screen.queryByTestId("space-groups-made-by")).toBeNull();
     expect(screen.queryByTestId("space-new-group")).toBeNull();
+  });
+
+  test("space-70, space-29: a group's acts name the instance whose heading it stands under, and its panel reads that instance's roles and host", async () => {
+    // A second instance holds its own acme under the same id, with roles
+    // of its own; the person may manage its members and rename it.
+    const home = sharingHome();
+    const secondAcme = { ...listedGroups(home)[1]!, repositories: [] };
+    const two: GroupsState = {
+      ...home,
+      instances: [
+        ...home.instances,
+        {
+          ...home.instances[0]!,
+          origin: SECOND,
+          host: "second.example",
+          displayName: "Second Example",
+          account: { id: "70", login: "jada", displayName: "Jada", canCreateGroup: false },
+          roles: [
+            { id: "1", name: "Viewer", mayPush: false },
+            { id: "2", name: "Editor", mayPush: true },
+          ],
+          groups: [namespace("jada"), secondAcme],
+        },
+      ],
+    };
+    commandMock.mockImplementation(core);
+    await renderGroups(two, { open: false });
+    const second = within(screen.getByTestId(`space-instance-${SECOND}`));
+    fireEvent.click(second.getByTestId("space-group-members-acme"));
+    const list = await second.findByTestId("space-members-group:acme");
+    await within(list).findAllByTestId(/^space-member-/);
+    expect(calls("space.members")).toEqual([{ instance: SECOND, group: ACME }]);
+    fireEvent.click(within(list).getByTestId("space-share-group:acme"));
+    const editor = within(list).getByTestId("space-share-group:acme-editor");
+    expect(within(editor).getByLabelText("Login at second.example")).toBeTruthy();
+    expect(within(within(editor).getByRole("listbox", { name: "Role" })).getAllByRole("option").map((option) => option.textContent)).toEqual([
+      "Viewer",
+      "Editor",
+    ]);
+    fireEvent.click(second.getByTestId("space-group-rename-acme"));
+    const rename = second.getByTestId("space-rename-acme");
+    fireEvent.change(within(rename).getByLabelText("Group name"), { target: { value: "Acme Two" } });
+    fireEvent.click(within(rename).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(calls("space.group.rename")).toEqual([{ instance: SECOND, group: ACME, name: "Acme Two" }]));
   });
 
   test("nothing stands for an act the host does not let the person take, nor before sign-in", async () => {
@@ -352,14 +397,14 @@ describe("GROUPS: New group and New subgroup (space-68, space-29)", () => {
     replies[1]!.resolve({ group: { id: "70", fullPath: "acme/huaxin-lab", name: "华芯智造 Lab" } });
     await waitFor(() => expect(screen.queryByTestId("space-subgroup-acme")).toBeNull());
     await waitFor(() => expect(document.activeElement).toBe(control));
-    expect(within(region("acme/huaxin-lab")).getByRole("heading", { level: 2 }).textContent).toBe("华芯智造 Lab · acme/huaxin-lab");
+    expect(within(region("acme/huaxin-lab")).getByRole("heading", { level: 3 }).textContent).toBe("华芯智造 Lab · acme/huaxin-lab");
     const headings = [...screen.getByTestId("space-groups").querySelectorAll("[data-testid^='space-group-']")]
       .map((element) => element.getAttribute("data-testid"))
       .filter((id) => id === "space-group-acme" || id === "space-group-acme/huaxin-lab" || id === "space-group-other");
     expect(headings).toEqual(["space-group-acme", "space-group-acme/huaxin-lab", "space-group-other"]);
   });
 
-  test("New group at the list's head creates at the top", async () => {
+  test("space-68: New group on the instance's heading creates at that instance's root", async () => {
     commandMock.mockImplementation(core);
     await renderGroups(sharingHome(), { open: false });
     const control = screen.getByTestId("space-new-group");
@@ -630,7 +675,7 @@ describe("GROUPS: Rename, Delete and Move (space-1, space-76, space-77, space-78
     deliver(withInstance(listed, { groups: listedGroups(listed).map((group) => (group.id === ACME ? { ...group, fullPath: "acme-labs", name: "Acme Labs" } : group)) }));
     replies[1]!.resolve({ group: { id: ACME, fullPath: "acme-labs", name: "Acme Labs" } });
     await waitFor(() => expect(screen.queryByTestId("space-rename-acme")).toBeNull());
-    expect(within(region("acme-labs")).getByRole("heading", { level: 2 }).textContent).toBe("Acme Labs · acme-labs");
+    expect(within(region("acme-labs")).getByRole("heading", { level: 3 }).textContent).toBe("Acme Labs · acme-labs");
     await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId("space-group-rename-acme-labs")));
   });
 
@@ -727,7 +772,7 @@ describe("GROUPS: Rename, Delete and Move (space-1, space-76, space-77, space-78
     fireEvent.click(within(again).getByTestId("space-move-group-@jane"));
     await waitFor(() => expect(calls("space.repository.move")).toHaveLength(2));
     expect(calls("space.repository.move")[1]).toEqual({ repository: A_SPEX, groupId: null });
-    // The core holds the row under your own group and announces it first.
+    // The core holds the row under your namespace and announces it first.
     const listed = sharingHome();
     const moved = listedGroups(listed)[1]!.repositories[0]!;
     deliver(
@@ -739,7 +784,7 @@ describe("GROUPS: Rename, Delete and Move (space-1, space-76, space-77, space-78
     );
     replies[1]!.resolve({ repository: { id: "60", fullPath: "jane/a-spex" } });
     await waitFor(() => expect(screen.queryByTestId(`space-move-${A_SPEX}`)).toBeNull());
-    expect(within(region("Your own group")).getByTestId(`space-row-${A_SPEX}`)).toBeTruthy();
+    expect(within(screen.getByTestId("space-group-@jane")).getByTestId(`space-row-${A_SPEX}`)).toBeTruthy();
     await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId(`space-row-move-${A_SPEX}`)));
   });
 });

@@ -1260,28 +1260,46 @@ export async function seedHostProject(app: App): Promise<{ key: string; code: st
 }
 
 /**
- * Sign in through the page (space-3): Groups' Sign in, the link to the
- * page that carries the code shown while the control reads "Signing
- * in…" and no code is, the code the link carries approved at the
- * stand-in — `app.host` unless another of `app.hosts` is named — as its
- * page would, and the header reading its person's account. Groups must
- * be shown.
+ * Sign in through the page (space-3): while the home lists no instance,
+ * the header card's Sign in at the instance its field holds — filled
+ * with the stand-in's origin where it holds another — and where the home
+ * lists the stand-in, signed out, its heading's "Sign in again"; the link
+ * to the page that carries the code shown while the control reads
+ * "Signing in…" and no code is, the code the link carries approved at
+ * the stand-in — `app.host` unless another of `app.hosts` is named — as
+ * its page would, and the stand-in's heading reading its person's
+ * account. Groups must be shown.
  */
-export async function signInThroughPage(page: Page, app: App, host: StandinHost | undefined = app.host): Promise<void> {
+export async function signInThroughPage(
+  page: Page,
+  app: App,
+  host: StandinHost | undefined = app.host,
+  via?: "card" | "again",
+): Promise<void> {
   if (!host) throw new Error("signing in needs a host");
-  const header = page.getByTestId("space-header");
-  await header.getByTestId("space-signin").click();
-  const link = header.getByTestId("space-signin-link");
+  const section = page.getByTestId(`space-instance-${host.url}`);
+  const how = via ?? ((await section.count()) > 0 ? "again" : "card");
+  const where =
+    how === "card"
+      ? page.getByTestId("space-header").getByTestId("space-signin-card")
+      : section.getByTestId("space-instance-heading");
+  const control = where.getByTestId(how === "card" ? "space-signin" : "space-signin-again");
+  if (how === "card") {
+    const field = where.getByTestId("space-signin-instance");
+    if ((await field.inputValue()) !== host.url) await field.fill(host.url);
+  }
+  await control.click();
+  const link = where.getByTestId("space-signin-link");
   await expect(link).toHaveText(/^Open .+ to sign in$/);
-  await expect(header.getByTestId("space-signin")).toHaveText("Signing in…");
-  await expect(header.getByTestId("space-signin")).toBeDisabled();
+  await expect(control).toHaveText("Signing in…");
+  await expect(control).toBeDisabled();
   const href = new URL((await link.getAttribute("href")) ?? "");
   expect(`${href.origin}${href.pathname}`).toBe(`${host.url}/login/device`);
   const code = href.searchParams.get("user_code") ?? "";
   expect(code).not.toBe("");
   await expect(page.getByTestId("space-surface")).not.toContainText(code);
   host.script.approveDevice(code);
-  await expect(header.getByTestId("space-account")).toContainText(`Signed in as @${host.script.person.login}`);
+  await expect(section.getByTestId("space-account")).toContainText(`Signed in as @${host.script.person.login}`);
 }
 
 /**

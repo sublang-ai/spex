@@ -242,9 +242,9 @@ export function instance(over: Partial<InstanceState> = {}): InstanceState {
 export type HomeOver = Partial<GroupsShape> & { instance?: Partial<InstanceState> };
 
 /** A signed-in home: your own group with its own spex repository, then
- * the instance with the given ones in your namespace there. The surface
- * reads the default instance's transitional mirrors, derived from it,
- * until it reads `instances` (space-30). */
+ * the instance with the given ones in your namespace there, with the
+ * transitional mirrors the core still derives from the default instance
+ * (space-30). */
 export function base(over: HomeOver = {}, repos: RepositoryState[] = [repo()]): GroupsState {
   const { instance: at, ...rest } = over;
   return withMirrors({

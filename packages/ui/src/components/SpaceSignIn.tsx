@@ -1,20 +1,20 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// Signing in to an instance from the Groups surface (space-3, space-6,
-// DR-103, DR-127): signed out, the header is one card with the field
-// captioned "Instance", holding the default instance's origin until the
-// reader edits it, Sign in starting the sign-in at the origin it holds,
-// and the flow in flight; signed in, the account with Sign out. On the
-// desktop the browser flow opens the instance's page through the
-// native bridge (app-shell-37), the card offering it again; where no
-// bridge opened it, and on the served page's device flow, the card
-// links the page to finish at — the device flow's link carries the
-// code, which is never shown — named by the host name of the origin
-// being signed in to. Where the host signed this device out, the card
-// says so with the login to sign in again as. The outcome is state:
-// the surface reads `signIn` and the instances as the core sends them
-// and keeps only the start's reply, which state does not carry.
+// Signing in to an instance from the Groups surface (space-3, DR-103,
+// DR-127): while the home lists no instance, the header is one card
+// with the field captioned "Instance", holding the default instance's
+// origin until the reader edits it, Sign in starting the sign-in at the
+// origin it holds; a signed-out instance's heading starts it again at
+// its own origin (SpaceInstance). Wherever it started, the flow in
+// flight reads there: on the desktop the browser flow opens the
+// instance's page through the native bridge (app-shell-37), offering it
+// again; where no bridge opened it, and on the served page's device
+// flow, it links the page to finish at — the device flow's link carries
+// the code, which is never shown — named by the host name of the origin
+// being signed in to. The outcome is state: the surface reads `signIn`
+// and the instances as the core sends them and keeps only the start's
+// reply, which state does not carry.
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import type { CommandResults, GroupsState } from "@sublang/spex-core/protocol";
@@ -34,10 +34,10 @@ export type SignInAt = "card" | string;
 /** The sign-in as the surface draws it: what the core's state says,
  * filled in with the start's reply. */
 export interface SignInFlow {
-  /** Where the flow running or failed reads: where this page started
-   * it; for one another client started, the heading of the instance it
-   * names where the home lists it, else the card. Undefined while none
-   * runs or stands failed. */
+  /** Where the flow starting, running or failed reads: where this page
+   * started it; for one another client started, the heading of the
+   * instance it names where the home lists it, else the card. Undefined
+   * while none starts, runs or stands failed. */
   at: SignInAt | undefined;
   /** The origin being signed in to, or the one whose sign-in failed. */
   instance: string | undefined;
@@ -89,19 +89,31 @@ export function useSignIn(groups: GroupsState | undefined, onNote: Note): SignIn
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
-  // An instance newly signed in ends the one flow there is.
+  // An instance newly signed in ends the one flow there is; the flow's
+  // controls are gone with it, so focus lands on that instance heading's
+  // Sign out rather than stranding (DR-010 §6). Nothing lands while the
+  // state is first read.
   const signedInAt = groups?.instances.filter((entry) => entry.signedIn).map((entry) => entry.origin) ?? [];
   const signedInKey = signedInAt.join(" ");
-  const lastSignedIn = useRef(signedInAt);
+  const loaded = groups !== undefined;
+  const lastSignedIn = useRef<string[] | undefined>(loaded ? signedInAt : undefined);
   useEffect(() => {
     const before = lastSignedIn.current;
-    lastSignedIn.current = signedInAt;
-    if (signedInAt.some((origin) => !before.includes(origin))) {
-      setStarted(undefined);
-      setMine(undefined);
-    }
+    lastSignedIn.current = loaded ? signedInAt : undefined;
+    if (!before) return;
+    const landed = signedInAt.find((origin) => !before.includes(origin));
+    if (landed === undefined) return;
+    setStarted(undefined);
+    setMine(undefined);
+    setTimeout(() => {
+      const active = document.activeElement;
+      if (active && active.isConnected && active !== document.body) return;
+      document
+        .querySelector<HTMLElement>(`[data-testid="space-instance-${landed}"] [data-testid="space-signout"]`)
+        ?.focus();
+    }, 0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [signedInKey]);
+  }, [signedInKey, loaded]);
 
   const start = useCallback(
     async (url: string, at: SignInAt = "card"): Promise<boolean> => {
@@ -182,167 +194,43 @@ export function useSignIn(groups: GroupsState | undefined, onNote: Note): SignIn
   if (started || (!running && error !== undefined)) instance = mine?.origin;
   else if (signIn && signIn.phase !== "idle") instance = signIn.instance;
   let at: SignInAt | undefined;
-  if (running || failure !== undefined) {
+  if (running || failure !== undefined || starting) {
     at = mine?.at ?? (groups && instanceOf(groups, instance) ? instance : "card");
   }
   const refused = !running && error !== undefined;
   return { at, instance, running, starting, failure, refused, start, cancel };
 }
 
-/** The default instance as the surface names it before a heading does
- * (space-3): its origin's host name — the page the person opens. */
-export function siteName(groups: GroupsState): string {
-  return hostNameOf(groups.defaultInstance);
-}
-
-/** The header's account while signed in (space-1, space-6): who, at
- * which host, with Sign out. */
-export function AccountField({
-  groups,
-  connected,
-  onNote,
-}: {
-  groups: GroupsState;
-  connected: boolean;
-  onNote: Note;
-}) {
-  const spaceSignOut = useAppStore((state) => state.spaceSignOut);
-  const [signingOut, setSigningOut] = useState(false);
-  const [signOutError, setSignOutError] = useState<string>();
-  const host = groups.host.displayName || siteName(groups);
-  const login = groups.account?.login ?? "";
-
-  const signOut = async () => {
-    setSigningOut(true);
-    setSignOutError(undefined);
-    try {
-      // The default instance's account the header reads (space-6).
-      await spaceSignOut(groups.defaultInstance);
-      onNote(i18n._("Not signed in"));
-    } catch (cause) {
-      const message = (cause as Error).message;
-      setSignOutError(message);
-      onNote(message);
-    } finally {
-      setSigningOut(false);
-    }
-  };
-
-  return (
-    <div
-      data-testid="space-account"
-      className="flex min-w-0 flex-col gap-1 @xs:flex-row @xs:flex-wrap @xs:items-center @xs:gap-x-3"
-    >
-      <span className="flex min-w-0 flex-1 items-center gap-1 text-sm" title={groups.host.url}>
-        {/* The host's name yields below @md (space-28); the login
-            stays, and the whole phrase rides the title. */}
-        <span data-testid="space-account-wide" className="hidden min-w-0 truncate @md:inline">
-          {i18n._("Signed in as @{login} at {host}", { login, host })}
-        </span>
-        <span data-testid="space-account-narrow" className="min-w-0 truncate @md:hidden">
-          {i18n._("Signed in as @{login}", { login })}
-        </span>
-      </span>
-      {signOutError ? (
-        <span role="alert" className="min-w-0 text-xs text-red-600 dark:text-red-400">
-          {signOutError}
-        </span>
-      ) : null}
-      <button
-        type="button"
-        data-testid="space-signout"
-        className={`${SECONDARY} self-start @xs:self-auto`}
-        disabled={!connected || signingOut}
-        title={i18n._("Signs this device out of {host}; every record stays here", { host })}
-        onClick={() => void signOut()}
-      >
-        {signingOut
-          ? i18n._({ id: "Signing out…", comment: "the Sign out control, while signing out" })
-          : i18n._({ id: "Sign out", comment: "sign this device out of the Git host" })}
-      </button>
-    </div>
-  );
-}
-
 const LINK_CLASS = "text-brand-600 hover:underline dark:text-brand-300";
 const FIELD =
   "min-w-0 flex-1 rounded border border-neutral-300 bg-white px-1.5 py-0.5 text-sm read-only:text-neutral-500 dark:border-neutral-700 dark:bg-neutral-900";
 
-/** The header while signed out (space-3): one card saying what signing
- * in brings, or that the host signed this device out, or the flow in
- * flight, or why it ended; the field captioned "Instance", holding the
- * default instance's origin until the reader edits it, and Sign in,
- * starting the sign-in at the origin it holds, with Cancel beside it
- * and Escape cancelling while a flow runs. A start the core refuses —
- * a URL the origin rule refuses, or a sign-in already running — reads
- * its cause as one sentence, the field keeping its text and focus. */
-export function SignInCard({
-  groups,
-  signIn,
-  connected,
-}: {
-  groups: GroupsState;
-  signIn: SignInFlow;
-  connected: boolean;
-}) {
-  // What the reader typed; until then the field holds the default
-  // instance's origin (space-3, storage-2).
-  const [typed, setTyped] = useState<string>();
-  const field = typed ?? groups.defaultInstance;
-  const url = field.trim();
-  const fieldRef = useRef<HTMLInputElement>(null);
-  const signInRef = useRef<HTMLButtonElement>(null);
-  const cancelRef = useRef<HTMLButtonElement>(null);
+/** The words of "Sign in again" wherever it stands (space-3): a failed
+ * flow's control, and a signed-out instance's heading's. */
+export const signInAgainLabel = (): string =>
+  i18n._({
+    id: "Sign in again",
+    comment: "the sign-in control on a signed-out instance's heading, and the card's after a sign-in failed",
+  });
+
+/** The words of a sign-in control while its flow runs (space-3). */
+export const signingInLabel = (): string =>
+  i18n._({ id: "Signing in…", comment: "the Sign in control, while the sign-in runs" });
+
+/** What the sign-in reads where its flow stands (space-3): on the
+ * desktop, that the browser is open at the host name, with "Open it
+ * again" through the bridge; where no bridge opened it, and in the
+ * device flow, the page to finish at as a link — the device flow's URL
+ * carries the code, so nothing is typed (git-host-3); a flow that ended
+ * without an account, or a start the core refused, its cause as one
+ * sentence. Null while no flow starts, runs or stands failed. `site` is
+ * the host name of the origin being signed in to. */
+export function signInLines(signIn: SignInFlow, site: string): ReactNode {
   const running = signIn.running;
-  const flowing = running !== null || signIn.starting;
-  // The page the flow opens is named by the host name of the origin
-  // being signed in to (space-3).
-  const site = hostNameOf(signIn.instance ?? url);
-  // The host signed this device out (git-host-4): said with the login
-  // the account bore, until the next sign-in.
-  const hostSignedOut = groups.signIn.phase === "idle" ? groups.signIn.signedOut : undefined;
   const finish = i18n._("Sign in there and approve; you return here signed in.");
-
-  // Focus never strands (DR-010 §6): Sign in, disabled while the flow
-  // runs, hands focus to Cancel, which gives it back when the flow
-  // ends; focus the reader put elsewhere stays there.
-  const isRunning = running !== null;
-  const wasRunning = useRef(isRunning);
-  useEffect(() => {
-    if (wasRunning.current === isRunning) return;
-    wasRunning.current = isRunning;
-    const active = document.activeElement;
-    const stranded = !active || !active.isConnected || active === document.body || active === signInRef.current;
-    if (!stranded) return;
-    if (isRunning) cancelRef.current?.focus();
-    else signInRef.current?.focus();
-  }, [isRunning]);
-
-  const begin = () => {
-    if (!connected || flowing || !url) return;
-    void signIn.start(url, "card").then((started) => {
-      if (!started) fieldRef.current?.focus();
-    });
-  };
-
-  // The page to finish at, as a link: the device flow's URL carries the
-  // code, so nothing is typed (git-host-3).
-  const finishAt = (link: string | undefined) => (
-    <>
-      <p data-testid="space-signin-finish">{i18n._("Continue in your browser:")}</p>
-      {link ? (
-        <a data-testid="space-signin-link" href={link} target="_blank" rel="noreferrer" className={LINK_CLASS}>
-          {i18n._("Open {site} to sign in", { site })}
-        </a>
-      ) : null}
-      <p>{finish}</p>
-    </>
-  );
-
-  let body: ReactNode;
   if (running?.flow === "browser" && (running.opened || !running.url)) {
     const link = running.url;
-    body = (
+    return (
       <p data-testid="space-signin-opened">
         {i18n._("Your browser is open at {site}: sign in there and approve; you return here signed in.", { site })}{" "}
         {link ? (
@@ -366,10 +254,23 @@ export function SignInCard({
         ) : null}
       </p>
     );
-  } else if (running) {
-    body = finishAt(running.flow === "browser" ? running.url : running.verificationUri);
-  } else if (signIn.failure !== undefined) {
-    body = (
+  }
+  if (running) {
+    const link = running.flow === "browser" ? running.url : running.verificationUri;
+    return (
+      <>
+        <p data-testid="space-signin-finish">{i18n._("Continue in your browser:")}</p>
+        {link ? (
+          <a data-testid="space-signin-link" href={link} target="_blank" rel="noreferrer" className={LINK_CLASS}>
+            {i18n._("Open {site} to sign in", { site })}
+          </a>
+        ) : null}
+        <p>{finish}</p>
+      </>
+    );
+  }
+  if (signIn.failure !== undefined) {
+    return (
       <p data-testid="space-signin-error" role="alert" className="text-red-600 dark:text-red-400">
         {i18n._({
           id: "{cause}.",
@@ -378,33 +279,82 @@ export function SignInCard({
         })}
       </p>
     );
-  } else {
-    body = (
-      <>
-        <p data-testid="space-signin-caption">
-          {hostSignedOut
-            ? i18n._("{site} signed this device out. Sign in again to continue as @{login}.", {
-                site: siteName(groups),
-                login: hostSignedOut.login,
-              })
-            : i18n._("Sign in to see your groups and share each project's records with the people in them.")}
-        </p>
-        <p>{i18n._("Until you do, everything stays on this device and nothing is contacted.")}</p>
-      </>
-    );
   }
+  return null;
+}
+
+/** The header while the home lists no instance (space-3): one card
+ * saying what signing in brings, or the flow in flight, or why it ended;
+ * the field captioned "Instance", holding the default instance's origin
+ * until the reader edits it, and Sign in, starting the sign-in at the
+ * origin it holds, with Cancel beside it and Escape cancelling while a
+ * flow runs. A start the core refuses — a URL the origin rule refuses,
+ * or a sign-in already running — reads its cause as one sentence, the
+ * field keeping its text and focus. */
+export function SignInCard({
+  groups,
+  signIn,
+  connected,
+}: {
+  groups: GroupsState;
+  signIn: SignInFlow;
+  connected: boolean;
+}) {
+  // What the reader typed; until then the field holds the default
+  // instance's origin (space-3, storage-2).
+  const [typed, setTyped] = useState<string>();
+  const field = typed ?? groups.defaultInstance;
+  const url = field.trim();
+  const fieldRef = useRef<HTMLInputElement>(null);
+  const signInRef = useRef<HTMLButtonElement>(null);
+  const cancelRef = useRef<HTMLButtonElement>(null);
+  const running = signIn.running;
+  const flowing = running !== null || signIn.starting;
+
+  // Focus never strands (DR-010 §6): Sign in, disabled while the flow
+  // runs, hands focus to Cancel, which gives it back when the flow
+  // ends; focus the reader put elsewhere stays there.
+  const isRunning = running !== null;
+  const wasRunning = useRef(isRunning);
+  useEffect(() => {
+    if (wasRunning.current === isRunning) return;
+    wasRunning.current = isRunning;
+    const active = document.activeElement;
+    const stranded = !active || !active.isConnected || active === document.body || active === signInRef.current;
+    if (!stranded) return;
+    if (isRunning) cancelRef.current?.focus();
+    else signInRef.current?.focus();
+  }, [isRunning]);
+
+  const begin = () => {
+    if (!connected || flowing || !url) return;
+    void signIn.start(url, "card").then((started) => {
+      if (!started) fieldRef.current?.focus();
+    });
+  };
+
+  // The page the flow opens is named by the host name of the origin
+  // being signed in to (space-3).
+  const body = signInLines(signIn, hostNameOf(signIn.instance ?? url)) ?? (
+    <>
+      <p data-testid="space-signin-caption">
+        {i18n._("Sign in to see your groups and share each project's records with the people in them.")}
+      </p>
+      <p>{i18n._("Until you do, everything stays on this device and nothing is contacted.")}</p>
+    </>
+  );
 
   // A flow that ended failed offers the sign-in again; a start the core
   // refused ran none (space-3).
   const label = flowing
-    ? i18n._({ id: "Signing in…", comment: "the Sign in control, while the sign-in runs" })
-    : (signIn.failure !== undefined && !signIn.refused) || hostSignedOut
-      ? i18n._({ id: "Sign in again", comment: "the Sign in control after a sign-in failed or the host signed this device out" })
+    ? signingInLabel()
+    : signIn.failure !== undefined && !signIn.refused
+      ? signInAgainLabel()
       : i18n._({ id: "Sign in", comment: "sign in to the Git host" });
 
   return (
     <div
-      data-testid="space-account"
+      data-testid="space-signin-card"
       className="flex min-w-0 flex-col gap-2"
       onKeyDown={(event) => {
         // Escape cancels the flow in flight (space-3).

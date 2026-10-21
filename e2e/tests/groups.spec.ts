@@ -206,7 +206,7 @@ test.describe("first start", () => {
     // its one primary control, with no home path, read time or Refresh;
     // your own group stands alone beneath, called so, its row with no
     // control (space-1, space-3).
-    await expect(header.getByTestId("space-account").getByRole("heading", { level: 2 })).toHaveText("Not signed in");
+    await expect(header.getByTestId("space-signin-card").getByRole("heading", { level: 2 })).toHaveText("Not signed in");
     await expect(header.getByTestId("space-signin-body")).toHaveText(
       "Sign in to see your groups and share each project's records with the people in them." +
         "Until you do, everything stays on this device and nothing is contacted.",
@@ -222,9 +222,10 @@ test.describe("first start", () => {
     await expect(page.getByTestId("space-read-at")).toHaveCount(0);
     await expect(page.getByTestId("space-home")).toHaveCount(0);
     const groups = page.getByTestId("space-groups");
-    await expect(groups.locator('[data-testid^="space-group-"]')).toHaveCount(1);
-    await expect(groups.getByTestId("space-group-e2e")).toBeVisible();
+    await expect(groups.locator('[data-testid^="space-instance-"]')).toHaveCount(0);
+    await expect(groups.locator('[data-testid^="space-group-"]')).toHaveCount(0);
     const own = groups.getByRole("group", { name: "Your own group" });
+    await expect(own).toHaveAttribute("data-testid", "space-own");
     await expect(own.getByRole("heading", { level: 2 })).toHaveText("Your own group · named after your login at sign-in");
     const ownRow = own.locator('[data-testid^="space-row-"]');
     await expect(ownRow).toHaveCount(1);
@@ -250,9 +251,10 @@ test.describe("first start", () => {
 
     // Sign in links the page that carries the code, named by its host
     // name, and shows no code, reading "Signing in…" until the stand-in
-    // approves; then the header reads the account and Refresh, your own
-    // group bears its login, and the surface ends in where this
-    // device's files are (space-3, space-4, space-1).
+    // approves; then the instance's heading reads the account with Sign
+    // out and the header Refresh, your own group bears its login, your
+    // namespace stands under the instance, and the surface ends in where
+    // this device's files are (space-3, space-4, space-1).
     await header.getByTestId("space-signin").click();
     await expect(header.getByTestId("space-signin-link")).toHaveText(`Open ${new URL(host.url).hostname} to sign in`);
     await expect(header.getByTestId("space-signin-body")).toContainText("Sign in there and approve; you return here signed in.");
@@ -260,13 +262,19 @@ test.describe("first start", () => {
     await header.getByTestId("space-signin-cancel").click();
     await expect(header.getByTestId("space-signin")).toHaveText("Sign in");
     await signInThroughPage(page, app);
-    await expect(header.getByTestId("space-account")).toContainText(`Signed in as @${HOST_LOGIN} at Stand-in Git host`);
-    await expect(header.getByTestId("space-signout")).toHaveText("Sign out");
+    const instance = groups.getByTestId(`space-instance-${host.url}`);
+    await expect(instance).toHaveAttribute("aria-label", "Stand-in Git host");
+    await expect(instance.getByRole("heading", { level: 2 })).toHaveText(`Stand-in Git host · Signed in as @${HOST_LOGIN}`);
+    await expect(instance.getByTestId("space-signout")).toHaveText("Sign out");
+    await expect(header.getByTestId("space-signin-card")).toHaveCount(0);
+    await expect(header.getByTestId("space-signout")).toHaveCount(0);
     await expect(header.getByTestId("space-refresh")).toHaveText("Refresh");
+    await expect(header.getByTestId("space-refresh")).toHaveAttribute("title", "Reads each signed-in instance again");
     await expect(page.getByTestId("space-home")).toHaveText(/^Spex keeps this device's files in /);
     await expect(page.getByTestId("space-home")).toHaveAttribute("title", app.dataDir);
-    await expect(groups.getByTestId(`space-group-${HOST_LOGIN}`)).toBeVisible();
-    await expect(groups.getByTestId("space-group-e2e")).toHaveCount(0);
+    await expect(own.getByRole("heading", { level: 2 })).toHaveText(`Your own group · ${HOST_LOGIN}`);
+    await expect(instance.getByTestId(`space-group-@${HOST_LOGIN}`)).toBeVisible();
+    await expect(instance.getByTestId(`space-group-@${HOST_LOGIN}`).getByRole("heading", { level: 3 })).toHaveText(HOST_LOGIN);
     await expect(page.getByTestId(`space-repo-${OWN_KEY}`)).toHaveAccessibleName(`${HOST_LOGIN}-spex`);
     const projectKey = `${HOST_LOGIN}/demo-project-spex`;
     await expect(page.getByTestId(`space-repo-state-${projectKey}`)).toHaveText("On this device only");
@@ -340,16 +348,16 @@ test.describe("first start", () => {
 
     // An intent queued while Groups is shown lists under local changes
     // with Refresh never activated — the ledger's announcement re-reads
-    // the state — and Refresh's caption reads the time of the read
-    // (space-2, space-7).
+    // the state — and the instance's heading reads the time of the read
+    // Refresh begins (space-2, space-7, space-1).
     await app.core.command("intent.queue", { projectId: TEAM_KEY, text: "Queued while Groups is shown" });
     const intentRow = local.locator('[data-testid^="space-unit-mine-intents/"]');
     await expect(intentRow).toHaveCount(1);
     await expect(intentRow).toContainText("Queued while Groups is shown");
     await expect(intentRow).toHaveAttribute("data-change", "new");
     await header.getByTestId("space-refresh").click();
-    await expect(header.getByTestId("space-read-at")).toHaveText("Host read just now");
-    await expect(header.getByTestId("space-refresh")).toHaveAttribute("title", /^Reads the host again · last read .*\d/);
+    await expect(instance.getByTestId("space-read-at")).toHaveText("Host read just now");
+    await expect(instance.getByTestId("space-read-at")).toHaveAttribute("title", /\d/);
   });
 });
 
@@ -512,10 +520,10 @@ test.describe("organizing", () => {
     await showGroups(page);
     const list = page.getByTestId("space-groups");
 
-    // "New group" stands at the list's head; Create names the group,
-    // which stands with its full path as the editor closes (space-1,
-    // space-68).
-    const newGroup = list.getByTestId("space-new-group");
+    // "New group" stands on the instance's heading; Create names the
+    // group, which stands with its full path as the editor closes
+    // (space-1, space-68).
+    const newGroup = list.getByTestId(`space-instance-${host.url}`).getByTestId("space-instance-heading").getByTestId("space-new-group");
     await expect(newGroup).toHaveText("New group");
     await newGroup.click();
     const top = list.getByTestId("space-new-group-editor");
@@ -624,7 +632,11 @@ test.describe("organizing", () => {
     await share.click();
     await expect(editor).toBeVisible();
     const defects: string[] = [];
-    record("Groups organizing · 320", await measure(page, ['[data-testid^="space-group-"]']), defects);
+    record(
+      "Groups organizing · 320",
+      await measure(page, ['[data-testid^="space-group-"]', '[data-testid="space-instance-heading"] > div']),
+      defects,
+    );
     expect(defects, defects.join("\n")).toEqual([]);
     await editor.getByTestId(`space-share-${PANEL}-cancel`).click();
     await sub.getByTestId(`space-subgroup-${HOST_GROUP}-cancel`).click();
@@ -683,9 +695,9 @@ test.describe("the instance alone", () => {
     };
     const scan = async (where: string): Promise<void> => {
       const surface = page.getByTestId("space-surface");
-      // bob's own group stands under his login, its heading carrying no
-      // control (space-1).
-      const bob = surface.getByTestId("space-group-bob");
+      // bob's own group stands under his login, under the instance, its
+      // heading carrying no control (space-1).
+      const bob = surface.getByTestId(`space-instance-${host.url}`).getByTestId("space-group-@bob");
       await expect(bob.getByTestId(`space-row-${hostKey(host, "bob/notes-spex")}`)).toBeVisible();
       await expect(bob.getByTestId("space-group-members-bob")).toHaveCount(0);
       await expect(bob.getByTestId("space-group-subgroup-bob")).toHaveCount(0);
@@ -700,7 +712,7 @@ test.describe("the instance alone", () => {
     await open(page, app);
     await showGroups(page);
     await page.getByTestId("space-refresh").click();
-    await expect(page.getByTestId("space-group-bob")).toBeVisible();
+    await expect(page.getByTestId("space-group-@bob")).toBeVisible();
     await scan("English");
 
     // Chinese, chosen in Settings: the same surface names nothing more
@@ -759,7 +771,7 @@ test.describe("undo", () => {
     await showGroups(page);
     const list = page.getByTestId("space-groups");
 
-    // A group made at the list's head (space-68).
+    // A group made from the instance's heading (space-68).
     await list.getByTestId("space-new-group").click();
     const top = list.getByTestId("space-new-group-editor");
     await top.getByTestId("space-new-group-editor-name").fill("Platform");
@@ -855,7 +867,11 @@ test.describe("undo", () => {
     await research.getByTestId(`space-row-move-${MOVED}`).click();
     await expect(research.getByTestId(`space-move-${MOVED}`)).toBeVisible();
     const defects: string[] = [];
-    record("Groups undo · 320", await measure(page, ['[data-testid^="space-group-"]']), defects);
+    record(
+      "Groups undo · 320",
+      await measure(page, ['[data-testid^="space-group-"]', '[data-testid="space-instance-heading"] > div']),
+      defects,
+    );
     expect(defects, defects.join("\n")).toEqual([]);
     await research.getByTestId(`space-move-cancel-${MOVED}`).click();
     await research.getByTestId(`space-rename-${RESEARCH}-cancel`).click();
@@ -1273,7 +1289,9 @@ test.describe("fit", () => {
     const defects: string[] = [];
     const containers = [
       '[data-testid="space-header"]',
+      '[data-testid="space-instance-heading"] > div',
       '[data-testid="space-groups"] h2',
+      '[data-testid="space-groups"] h3',
       '[data-testid^="space-row-"]',
       '[data-testid^="space-unit-"]',
       '[data-testid="space-picker"]',
