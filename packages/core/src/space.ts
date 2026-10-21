@@ -53,7 +53,7 @@ import {
 import {
   callbackPages, collidingGroup, groupNameTaken, groupNamedLikeYourLogin, groupNotEmpty, groupNotListed, hostKey, listingFor, namedLikeYourLogin,
   namedLogins, nameOneTarget, nameTaken, nameTheGroup, nameTheLogin, notARole, notFoundAt, ownNameFor, pathTheGroup, readHostCatalog, readHostListing, readHostView, relayHostError,
-  renameNothing, repositoryDescription, sameLogin, sameRemote, signInFailure, takenIn, underOrigin, userGroup, waitingPhrase,
+  renameNothing, repositoryDescription, repositoryFor, sameLogin, sameOrigin, signInFailure, takenIn, underOrigin, userGroup, waitingPhrase,
   type HostCatalog, type HostListing, type HostView,
 } from "./space-groups.js";
 import {
@@ -2493,9 +2493,10 @@ export class SpaceManager {
    * (space-64), by the clone's key; asked again at that instance's next
    * read. */
   private readonly waiting = new Map<string, Waiting>();
-  /** The progress of joins in flight or stopped, by the host's id
-   * (space-63): each join's own entry, which only it replaces or
-   * removes; no join is refused because another runs. */
+  /** The progress of joins in flight or stopped, by the instance each
+   * joins at and the host's id there (space-63, joinKey) — two Git
+   * systems mint one id: each join's own entry, which only it replaces
+   * or removes; no join is refused because another runs. */
   private readonly joining = new Map<string, SpaceSyncPhase>();
   /** Set once the core stops: nothing is read or announced after. */
   private stopping = false;
@@ -2600,13 +2601,48 @@ export class SpaceManager {
     return origin === null ? undefined : this.instanceAt(origin);
   }
 
-  /** The instance a clone's row, its transport, its commit identity and
-   * its commands go to (space-61, git-host-9, space-32): its own
-   * (storage-31), else, for a clone at the host its key and remote name
-   * no instance for — one an earlier Spex keyed — the default instance;
-   * transitional, until the governing instance decides it (git-host-5). */
+  /** The instance a clone's sync — its transport, its commit identity,
+   * its admission and its Check — goes to (git-host-9, space-32,
+   * space-11): its own (storage-31), else, for a clone at the host its key
+   * and remote name no instance for — one an earlier Spex keyed — the
+   * default instance; transitional, until a sync follows the instance
+   * governing it (governingOf, space-60). */
   servingOf(machine: RepositorySync): HostInstance {
     return this.instanceOfClone(machine) ?? this.defaultInstance();
+  }
+
+  /** The instance governing a clone's spex repository (git-host-5): its
+   * own (storage-31) while signed in there, alone deciding its row and
+   * the group it stands under, its read-only state, its unlisting, its
+   * members and what the person may do on it, whatever other instance
+   * lists it; while its own is signed out, or it has none, the earliest
+   * signed-in instance in the home's list whose view lists the same host
+   * repository by its Git origin and id, which its next sync follows
+   * (space-60); undefined where none does. */
+  governingOf(machine: RepositorySync): HostInstance | undefined {
+    const own = this.instanceOfClone(machine);
+    if (own && this.signedInAt(own)) return own;
+    const facts = machine.facts;
+    if (facts.remote === null) return undefined;
+    return this.listedInstances().find((instance) => instance !== own && this.signedInAt(instance) && this.listingOf(instance, facts) !== undefined);
+  }
+
+  /** The instance a clone's row and commands read (space-61, space-29):
+   * the one governing it, else, transitional as servingOf, a clone no
+   * instance holds at the default instance while it is signed in;
+   * undefined where its instance is signed out and no signed-in instance
+   * lists it. */
+  private rowInstance(machine: RepositorySync): HostInstance | undefined {
+    const governing = this.governingOf(machine);
+    if (governing) return governing;
+    const serving = this.servingOf(machine);
+    return this.instanceOfClone(machine) === undefined && this.signedInAt(serving) ? serving : undefined;
+  }
+
+  /** The key of a join's progress (space-63): the instance it joins at
+   * and the host's id there. */
+  private joinKey(instance: HostInstance, id: string): string {
+    return `${instance.origin} ${id}`;
   }
 
   /** The name of the instance a clone syncs with, as a report prints it
@@ -2780,7 +2816,13 @@ export class SpaceManager {
   private listingOf(instance: HostInstance, facts: RemoteFacts): HostListing | undefined {
     const target = this.targetOf(instance, facts);
     if (target && !target.failure) return target.listing;
-    return listingFor(instance.view, facts.id, facts.remote) ?? listingFor({ listings: [...instance.attached.values()] }, facts.id, facts.remote);
+    return listingFor(instance.view, facts.id, facts.remote) ?? listingFor(this.attachedAt(instance), facts.id, facts.remote);
+  }
+
+  /** What this core attached at an instance since its view's read began
+   * (git-host-5), read as a view of that instance, with its Git origin. */
+  private attachedAt(instance: HostInstance): Pick<HostView, "listings" | "gitOrigin"> {
+    return { listings: [...instance.attached.values()], gitOrigin: instance.knownOrigin() ?? "" };
   }
 
   /** An instance's current view while it is signed in (git-host-5). */
@@ -2789,10 +2831,13 @@ export class SpaceManager {
   }
 
   /** Whether a listed group is held as colliding in a view of its
-   * instance (git-host-5): its path is a login's, or lies beneath one. */
+   * instance (git-host-5, DR-127): its path is a login that instance
+   * names — your login there, or another under which it lists a spex
+   * repository — or lies beneath one; so a group collides within its own
+   * instance alone, and never with your own group's folder. */
   private collides(group: Pick<HostGroup, "kind" | "fullPath"> | undefined, view: HostView | HostCatalog | undefined): boolean {
     if (!group || !view) return false;
-    return collidingGroup(group, namedLogins(view, this.host.store.home.ownName));
+    return collidingGroup(group, namedLogins(view));
   }
 
   /** The instance a clone's lines and remote are read for, by its key
@@ -3025,6 +3070,9 @@ export class SpaceManager {
     instance.view = undefined;
     instance.targets.clear();
     this.releaseHeld(instance);
+    // Its clones' last answers are its own: another instance governing
+    // one meanwhile reads it afresh (git-host-5).
+    for (const machine of this.machines.values()) if (this.servingOf(machine) === instance) machine.hostOverride = undefined;
     void this.publish();
   }
 
@@ -3231,7 +3279,7 @@ export class SpaceManager {
   private targetOf(instance: HostInstance, facts: RemoteFacts): TargetReading | undefined {
     return [...instance.targets.values()].filter((target) => target.accountGeneration === instance.accountGeneration && target.begun > instance.viewRead && (
       (target.facts.id === facts.id && target.facts.remote === facts.remote)
-      || (target.listing !== undefined && listingFor({ listings: [target.listing] }, facts.id, facts.remote) !== undefined)
+      || (target.listing !== undefined && listingFor({ listings: [target.listing], gitOrigin: target.catalog?.gitOrigin ?? "" }, facts.id, facts.remote) !== undefined)
     )).sort((a, b) => b.begun - a.begun)[0];
   }
 
@@ -3254,8 +3302,9 @@ export class SpaceManager {
         begun = (instance.readsBegun += 1);
         catalog = await readHostCatalog(client);
         this.assertTargetAccount(instance, accountGeneration);
-        const repository = catalog.repositories.find((entry) => entry.id === facts.id)
-          ?? catalog.repositories.find((entry) => sameRemote(entry.remoteUrl, facts.remote));
+        // One host repository by that instance's Git origin and its id
+        // (git-host-5).
+        const repository = repositoryFor(catalog.repositories, (entry) => entry, catalog.gitOrigin, facts.id, facts.remote);
         listing = repository ? await readHostListing(client, repository, true) : undefined;
         this.assertTargetAccount(instance, accountGeneration);
       } while (begun <= instance.changedAfter || begun < Math.max(instance.viewRead, instance.failureRead));
@@ -3625,15 +3674,19 @@ export class SpaceManager {
   }
 
   /** Join a spex repository an instance lists and this device lacks
-   * (space-63): clone it under that instance's folder at its path there,
-   * then the code into `folder`, and pair the two. The instance is the
-   * one the command names, the default instance where it names none. */
+   * (space-63): clone it under the folder of the instance its row stands
+   * under at its path there, then the code into `folder`, and pair the
+   * two. The command names the instance by its origin, the default
+   * instance where it names none; a host repository an earlier signed-in
+   * instance in the home's list also lists, by one Git origin and id, has
+   * its row there, and Join keys it there (space-1, DR-127). */
   async join(named: string | undefined, hostId: string, folder?: string): Promise<{ accepted: true }> {
-    const instance = this.instanceAt(this.namedInstance(named));
-    if (!this.signedInAt(instance)) throw new CoreError("invalid_request", signInFirst());
-    const view = instance.view ?? await this.readHost(instance).catch((error: unknown) => { throw new CoreError("invalid_request", relayHostError(error, this.nameOf(instance))); });
-    const listing = view.listings.find((entry) => entry.repository.id === hostId);
-    if (!listing) throw new CoreError("not_found", noLongerShared());
+    const at = this.instanceAt(this.namedInstance(named));
+    if (!this.signedInAt(at)) throw new CoreError("invalid_request", signInFirst());
+    const atView = at.view ?? await this.readHost(at).catch((error: unknown) => { throw new CoreError("invalid_request", relayHostError(error, this.nameOf(at))); });
+    const found = atView.listings.find((entry) => entry.repository.id === hostId);
+    if (!found) throw new CoreError("not_found", noLongerShared());
+    const { instance, view, listing } = this.rowOf(at, atView, found);
     // A group named like a login holds no folder of its own (space-61).
     if (this.collides(listing.repository.group, view)) throw new CoreError("invalid_request", groupNamedLikeYourLogin(listing.repository.group.fullPath));
     const key = this.keyAtHost(listing.repository, instance);
@@ -3641,19 +3694,21 @@ export class SpaceManager {
       throw new CoreError("invalid_request", i18n._({ id: "{path} cannot stand as a folder on this device", values: { path: `${listing.repository.group.fullPath}/${listing.repository.path}` }, comment: "Refusal of a join: the host's names hold characters a folder under the home cannot" }));
     }
     const store = this.host.store;
-    // Read from each clone of that instance now: its recorded id or its
-    // remote (git-host-5); your own group's own repository, recording no
-    // id yet, is the one your namespace lists under its name (space-4).
-    // Another instance's ids are its own.
+    // Read from each clone now, whatever instance it lies under: the id
+    // it records beside a remote under that instance's Git origin, or its
+    // remote (git-host-5), so another Git system's same id is another
+    // repository; your own group's own repository, recording no id yet,
+    // is the one your namespace at its instance lists under its name
+    // (space-4).
     const own = store.home.own();
     const here = (await Promise.all(store.listRepositories().map(async (repository) => {
       try {
         const machine = this.machine(repository.key);
         const facts = await machine.readFacts();
-        return { key: repository.key, facts, serving: this.servingOf(machine) };
-      } catch { return { key: repository.key, facts: { remote: null, id: null }, serving: undefined }; }
-    }))).some(({ key: at, facts, serving }) => serving === instance && (facts.id === hostId || listingFor(view, facts.id, facts.remote)?.repository.id === hostId
-      || (at === own && facts.id === null && this.ownNamespaceListing(view)?.repository.id === hostId)));
+        return { facts, ownAt: repository.key === own ? this.servingOf(machine) : undefined };
+      } catch { return { facts: { remote: null, id: null }, ownAt: undefined }; }
+    }))).some(({ facts, ownAt }) => listingFor(view, facts.id, facts.remote)?.repository.id === hostId
+      || (ownAt === instance && facts.id === null && this.ownNamespaceListing(view)?.repository.id === hostId));
     if (here || store.repository(key) || existsSync(store.home.clonePath(key)) || store.deferredMoves().some((move) => move.to === key)) {
       throw new CoreError("invalid_request", i18n._({ id: "{name} is on this device already", values: { name: listing.repository.path }, comment: "Refusal of a join: the spex repository has a clone here" }));
     }
@@ -3662,10 +3717,25 @@ export class SpaceManager {
       throw new CoreError("invalid_request", i18n._({ id: "{path} is another project's working folder", values: { path }, comment: "Refusal of a join: the folder named is paired already" }));
     }
     const progress: SpaceSyncPhase = { phase: "running", op: "join", step: "check", since: Date.now(), cancelable: false };
-    this.joining.set(hostId, progress);
+    this.joining.set(this.joinKey(instance, hostId), progress);
     await this.publish();
     void this.runJoin(instance, listing, key, path, progress);
     return { accepted: true };
+  }
+
+  /** The instance a listed host repository's row stands under (space-1,
+   * git-host-5): the earliest signed-in instance in the home's list whose
+   * view lists it by the Git origin and id `at` lists it by, with that
+   * view and its listing — `at` itself where no earlier one does. */
+  private rowOf(at: HostInstance, atView: HostView, listing: HostListing): { instance: HostInstance; view: HostView; listing: HostListing } {
+    for (const instance of this.listedInstances()) {
+      if (instance === at) break;
+      const view = this.viewOf(instance);
+      if (!view || !sameOrigin(view.gitOrigin, atView.gitOrigin)) continue;
+      const same = view.listings.find((entry) => entry.repository.id === listing.repository.id);
+      if (same) return { instance, view, listing: same };
+    }
+    return { instance: at, view: atView, listing };
   }
 
   /** One join (space-63): the spex repository cloned into a private
@@ -3678,11 +3748,12 @@ export class SpaceManager {
     const id = listing.repository.id;
     const url = listing.repository.remoteUrl;
     const dest = store.home.clonePath(key);
+    const entry = this.joinKey(instance, id);
     let mine = progress;
     const own = (next: SpaceSyncPhase | undefined): void => {
-      if (this.joining.get(id) !== mine) return;
-      if (next) { this.joining.set(id, next); mine = next; }
-      else this.joining.delete(id);
+      if (this.joining.get(entry) !== mine) return;
+      if (next) { this.joining.set(entry, next); mine = next; }
+      else this.joining.delete(entry);
     };
     // No line the report carries names a URL under the host's Git
     // origin (space-15).
@@ -4078,10 +4149,12 @@ export class SpaceManager {
    * The instance a members, share or move command acts at (space-29),
    * signed in there: for a group, the one the command names — the
    * default instance where it names none, one the home does not list
-   * refused `not_found`; for a spex repository, its clone's instance
-   * (storage-31), else, for one not on this device, the instance its key
-   * lies under. A command names exactly one group or one spex
-   * repository, and an instance it names the home lists.
+   * refused `not_found`; for a spex repository, the instance governing
+   * it (git-host-5) — its clone's own while signed in, else the earliest
+   * signed-in one listing it — or, for one not on this device, the
+   * instance its key lies under, where its row stands. A command names
+   * exactly one group or one spex repository, and an instance it names
+   * the home lists.
    */
   private async targetInstance(input: { instance?: string; repository?: string; group?: string }): Promise<HostInstance> {
     if ((input.group === undefined) === (input.repository === undefined)) throw new CoreError("invalid_request", nameOneTarget());
@@ -4091,7 +4164,7 @@ export class SpaceManager {
     else if (this.host.store.repository(input.repository)) {
       const machine = this.machine(input.repository);
       await machine.readFacts();
-      instance = this.servingOf(machine);
+      instance = this.rowInstance(machine) ?? this.servingOf(machine);
     } else instance = this.instanceOfKey(input.repository) ?? this.defaultInstance();
     if (!this.signedInAt(instance)) throw new CoreError("invalid_request", signInFirst());
     return instance;
@@ -4121,7 +4194,7 @@ export class SpaceManager {
         throw new CoreError(localOnly, i18n._({ id: "On this device only", comment: "A spex repository's state: it has no remote on the Git host" }));
       }
       // Attached since the view's read began, it counts as listed (git-host-5).
-      const listing = listingFor(view, facts.id, facts.remote) ?? listingFor({ listings: [...instance.attached.values()] }, facts.id, facts.remote);
+      const listing = listingFor(view, facts.id, facts.remote) ?? listingFor(this.attachedAt(instance), facts.id, facts.remote);
       const id = listing?.repository.id ?? (view ? null : facts.id);
       if (id === null) throw new CoreError("not_found", noLongerShared());
       return { kind: "repository", id };
@@ -4607,13 +4680,15 @@ export class SpaceManager {
    * groups, your namespace there, and each other account's login there
    * with theirs (space-1, space-30, DR-127). A signed-in instance holds
    * your namespace, and every group its own read lists; a row stands
-   * under the group its instance's last read names for it, and under its
-   * key's group at its instance only where that read lists nothing for
-   * it; your own group's own repository, a row keyed in your own group's
-   * folder that no read lists, and a row of an instance the home does
-   * not list stand under your own group alone. Entries are known by the
-   * group's id, a namespace by its login, so no group displaces your own
-   * group or takes its rows. */
+   * under the group the instance governing it (git-host-5) last named for
+   * it, at that instance's heading — a clone whose instance is signed out
+   * under the signed-in instance its next sync follows — and under its
+   * key's group at its own instance only where no read lists it; your own
+   * group's own repository, a row keyed in your own group's folder that
+   * no read lists, and a row of an instance the home does not list stand
+   * under your own group alone. Entries are known by the instance and the
+   * group's id, a namespace by the instance and its login, so no group
+   * displaces your own group or takes its rows. */
   private byInstance(placed: Placed[]): { own: RepositoryState[]; groups: Map<string, InstanceGroupState[]> } {
     const home = this.host.store.home;
     const ownName = home.ownName;
@@ -4689,9 +4764,11 @@ export class SpaceManager {
     return { own, groups };
   }
 
-  /** A clone's state as the last answer of the instance serving it and
-   * this device's files make it (space-61), with the group that
-   * instance's last read names for it, where it lists it (space-1). */
+  /** A clone's state as the last answer of the instance governing it
+   * (git-host-5) and this device's files make it (space-61), with the
+   * group that instance's last read names for it, where it lists it, and
+   * that instance, whose heading it stands under (space-1); every other
+   * instance listing it changes nothing of it. */
   private overlay(machine: RepositorySync, base: RepositoryState): Placed {
     const facts = machine.facts;
     const waiting = this.waiting.get(base.key);
@@ -4707,12 +4784,13 @@ export class SpaceManager {
       waiting: waiting ? { step: waiting.step, group: waiting.group, message: waiting.message } : null,
     };
     if (facts.remote === null) return { row: { ...row, state: "local-only", reason: null } };
-    const instance = this.servingOf(machine);
     // A remote the reader named, a path this device reaches: no host.
-    if (!this.atHost(facts, instance)) return { row };
+    if (!this.atHost(facts, this.servingOf(machine))) return { row };
     // An instance signed out leaves its rows unreachable until its next
-    // sign-in (space-6, git-host-4).
-    if (!this.signedInAt(instance)) return { row: { ...row, state: "unreachable", reason: signInAgain() } };
+    // sign-in, where no signed-in instance lists them (space-6, space-61,
+    // git-host-4).
+    const instance = this.rowInstance(machine);
+    if (!instance) return { row: { ...row, state: "unreachable", reason: signInAgain() } };
     // Attached since the view's read began, it counts as listed (git-host-5).
     const target = this.targetOf(instance, facts);
     const listing = this.listingOf(instance, facts);
@@ -4725,7 +4803,8 @@ export class SpaceManager {
       : row;
     // A clone whose join still runs is not on this device yet: its code
     // may still be cloning (space-61, space-63).
-    const joining = facts.id === null ? undefined : this.joining.get(facts.id);
+    const joinedAt = this.instanceOfClone(machine);
+    const joining = facts.id === null || !joinedAt ? undefined : this.joining.get(this.joinKey(joinedAt, facts.id));
     if (joining?.phase === "running") return { row: { ...listed, state: "absent", reason: null, sync: joining }, group, instance: at };
     // A group named like a login holds no folder of its own (space-61).
     if (this.collides(group, target?.catalog ?? instance.view)) return { row: { ...listed, state: "unreachable", reason: namedLikeYourLogin() }, group, instance: at };
@@ -4741,75 +4820,95 @@ export class SpaceManager {
     return { row: { ...listed, state: "reachable", reason: null }, group, instance: at };
   }
 
-  /** A row for every spex repository a signed-in instance lists and this
-   * device lacks (space-61: "Not on this device"), each from that
-   * instance's own read (git-host-5). */
+  /** A row for every spex repository a signed-in instance lists and no
+   * clone here stands for (space-61: "Not on this device"), each from that
+   * instance's own read (git-host-5), keyed under its folder as its clone
+   * would be (DR-127): a host repository several signed-in instances
+   * list by one Git origin and id is one row, under the earliest of them
+   * in the home's list, every later listing only withholding Join
+   * (space-1); one in a group held as colliding reads unreachable, keyed
+   * `<folder>/<path>@<id>` so it names no clone (space-30). */
   private absentRows(): Placed[] {
+    const store = this.host.store;
     // A clone the instances migration deferred, listed by the key it
     // keeps, holds the key it moves to (DR-127).
-    const deferred = new Set(this.host.store.deferredMoves().map((move) => move.to));
-    return this.listedInstances().flatMap((instance) => this.absentRowsAt(instance, deferred));
-  }
-
-  /** The rows of an instance's read for the spex repositories it lists
-   * and no clone it serves stands for, keyed under its folder as its
-   * clone would be (DR-127); one in a group held as colliding reads
-   * unreachable, keyed `<folder>/<path>@<id>` so it names no clone
-   * (space-30). */
-  private absentRowsAt(instance: HostInstance, deferred: Set<string>): Placed[] {
-    const view = this.viewOf(instance);
-    const folder = instance.folder();
-    if (!view || folder === null) return [];
-    const store = this.host.store;
-    const matched = new Set<string>();
-    for (const repository of store.listRepositories()) {
+    const deferred = new Set(store.deferredMoves().map((move) => move.to));
+    const own = store.home.own();
+    const clones = store.listRepositories().flatMap((repository) => {
       const machine = this.machines.get(repository.key);
-      const facts = machine && this.servingOf(machine) === instance ? machine.facts : undefined;
-      // Your own group's own repository, recording no id yet, is the one
-      // your namespace lists under its name (space-4): never absent.
-      const listing = facts ? listingFor(view, facts.id, facts.remote)
-        ?? (repository.key === store.home.own() && facts.id === null ? this.ownNamespaceListing(view) : undefined) : undefined;
-      if (listing) matched.add(listing.repository.id);
-    }
+      return machine ? [machine] : [];
+    });
+    // The host repositories an earlier instance's listing stands for, by
+    // its Git origin and id.
+    const earlier: { gitOrigin: string; id: string }[] = [];
     const rows: Placed[] = [];
-    for (const listing of view.listings) {
-      const repository = listing.repository;
-      if (matched.has(repository.id)) continue;
-      const colliding = this.collides(repository.group, view);
-      const path = `${repository.group.fullPath}/${repository.path}`;
-      const key = colliding ? `${folder}/${path}@${repository.id}` : hostKey(repository, folder);
-      if (!key || (!colliding && (store.repository(key) || deferred.has(key)))) continue;
-      const code = repository.project && typeof repository.project.remote === "string" ? this.codeRemoteAsShown(repository.project.remote) : null;
-      rows.push({
-        row: {
-          key,
-          // The instance whose read lists it (DR-127).
-          instance: instance.origin,
-          name: repository.path,
-          can: colliding ? { manageMembers: false, transfer: false } : { manageMembers: repository.can.manageMembers, transfer: repository.can.transfer },
-          id: repository.id,
-          own: false,
-          code,
-          folder: null,
-          remote: path,
-          state: colliding ? "unreachable" : "absent",
-          reason: colliding ? namedLikeYourLogin() : null,
-          waiting: null,
-          members: listing.members,
-          visibility: repository.visibility,
-          branch: null,
-          local: [],
-          incoming: [],
-          conflicts: [],
-          lastSync: null,
-          noticed: false,
-          sync: colliding ? { phase: "idle" } : this.joining.get(repository.id) ?? { phase: "idle" },
-        },
-        group: repository.group,
-        instance: instance.origin,
-      });
+    for (const instance of this.listedInstances()) {
+      const view = this.viewOf(instance);
+      const folder = instance.folder();
+      if (!view || folder === null) continue;
+      // Every clone here stands for the listing it matches, whatever
+      // instance it lies under (git-host-5); your own group's own
+      // repository, recording no id yet, for the one your namespace at
+      // its instance lists under its name (space-4): never absent.
+      const matched = new Set<string>();
+      for (const machine of clones) {
+        const facts = machine.facts;
+        const listing = listingFor(view, facts.id, facts.remote)
+          ?? (machine.key === own && facts.id === null && this.servingOf(machine) === instance ? this.ownNamespaceListing(view) : undefined);
+        if (listing) matched.add(listing.repository.id);
+      }
+      for (const listing of view.listings) {
+        const repository = listing.repository;
+        if (matched.has(repository.id)) continue;
+        if (earlier.some((entry) => entry.id === repository.id && sameOrigin(entry.gitOrigin, view.gitOrigin))) continue;
+        earlier.push({ gitOrigin: view.gitOrigin, id: repository.id });
+        const row = this.absentRow(instance, folder, view, listing, deferred);
+        if (row) rows.push(row);
+      }
     }
     return rows;
+  }
+
+  /** The row of one spex repository an instance lists and no clone here
+   * stands for, keyed under that instance's folder, or none where its
+   * names cannot stand as a key or its key holds a clone or a deferred
+   * clone's destination. */
+  private absentRow(instance: HostInstance, folder: string, view: HostView, listing: HostListing, deferred: Set<string>): Placed | undefined {
+    const store = this.host.store;
+    const repository = listing.repository;
+    const colliding = this.collides(repository.group, view);
+    const path = `${repository.group.fullPath}/${repository.path}`;
+    const key = colliding ? `${folder}/${path}@${repository.id}` : hostKey(repository, folder);
+    if (!key || (!colliding && (store.repository(key) || deferred.has(key)))) return undefined;
+    const code = repository.project && typeof repository.project.remote === "string" ? this.codeRemoteAsShown(repository.project.remote) : null;
+    return {
+      row: {
+        key,
+        // The instance whose read lists it (DR-127).
+        instance: instance.origin,
+        name: repository.path,
+        can: colliding ? { manageMembers: false, transfer: false } : { manageMembers: repository.can.manageMembers, transfer: repository.can.transfer },
+        id: repository.id,
+        own: false,
+        code,
+        folder: null,
+        remote: path,
+        state: colliding ? "unreachable" : "absent",
+        reason: colliding ? namedLikeYourLogin() : null,
+        waiting: null,
+        members: listing.members,
+        visibility: repository.visibility,
+        branch: null,
+        local: [],
+        incoming: [],
+        conflicts: [],
+        lastSync: null,
+        noticed: false,
+        sync: colliding ? { phase: "idle" } : this.joining.get(this.joinKey(instance, repository.id)) ?? { phase: "idle" },
+      },
+      group: repository.group,
+      instance: instance.origin,
+    };
   }
 
   /** Transitional, the mirror the interface reads until it reads
