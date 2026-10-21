@@ -165,20 +165,19 @@ function remoteNames(run: GitRun): string[] {
 /** The remote a clone syncs with, among the names its remotes bear
  * (DR-127): its key's instance folder where a remote of that name
  * stands; else `origin` — a remote the reader named, or one a clone
- * made before its remote took its instance's name; else, for a clone
- * keyed in your own group's folder, which names no instance — your own
- * group's own repository, or a clone a pick left there (storage-35) —
- * the one remote named by an instance's folder (storage-31); none
- * otherwise. */
+ * made before its remote took its instance's name; else the one remote
+ * named by an instance's folder — for a clone keyed in your own group's
+ * folder, which names no instance, your own group's own repository's or
+ * that of a clone a pick left there (storage-35, storage-31); for one
+ * keyed under an instance, the remote a follow half made left named by
+ * another instance's folder, which its next sync renames (space-60);
+ * none otherwise. */
 function cloneRemoteName(key: string, names: readonly string[]): string | null {
   const instance = splitKey(key).instance;
   if (instance !== null && names.includes(instance)) return instance;
   if (names.includes("origin")) return "origin";
-  if (instance === null) {
-    const folders = names.filter(isInstanceFolder);
-    if (folders.length === 1) return folders[0];
-  }
-  return null;
+  const folders = names.filter(isInstanceFolder);
+  return folders.length === 1 ? folders[0] : null;
 }
 
 /** The name the host's remote takes in a clone (DR-127, storage-34):
@@ -1049,7 +1048,8 @@ class RepositorySync {
    * `from` is the name the remote bore as the step began, read before a
    * move re-keyed the clone; nothing is renamed where a remote bears the
    * folder's name already. Read and written in one synchronous step; a
-   * rename Git refuses leaves the remote as it stood. */
+   * rename Git refuses leaves the remote as it stood, the clone still
+   * reading it (cloneRemoteName) until its next sync renames it. */
   renameRemote(from: string | null, folder: string): void {
     if (from === null || from === folder || (from !== "origin" && !isInstanceFolder(from))) return;
     const names = remoteNames(this.git.runSync(["config", "-z", "--get-regexp", REMOTE_URL_KEYS]));
@@ -2528,7 +2528,8 @@ export class SpaceManager {
    * or removes; no join is refused because another runs. */
   private readonly joining = new Map<string, SpaceSyncPhase>();
   /** The set-up step bringing your own group's own repository to an
-   * instance (space-4), one at a time across instances: the last begun,
+   * instance (space-4), one at a time across instances, only the earliest
+   * signed-in instance in the home's list bringing it: the last begun,
    * which the next waits for. */
   private owning?: Promise<void>;
   /** Set once the core stops: nothing is read or announced after. */
@@ -3643,14 +3644,16 @@ export class SpaceManager {
   }
 
   /** Step 3 of the set-up at an instance (space-4), after any other
-   * instance's set-up begun before it has taken it: the first to find
-   * your own group's own repository with no remote brings it to its
-   * instance, and every later one finds that remote and leaves it. */
+   * instance's set-up begun before it has taken it: your own group's own
+   * repository with no remote is brought by the earliest signed-in
+   * instance in the home's list, whichever instance's read answers
+   * first (space-83), and every other instance's set-up leaves it. */
   private ensureOwn(instance: HostInstance, view: HostView, generation: number): Promise<void> {
     const previous = this.owning;
     const work = (async () => {
       await previous?.catch(() => undefined);
       if (generation !== instance.accountGeneration || !this.signedInAt(instance)) return;
+      if (this.listedInstances().find((entry) => this.signedInAt(entry)) !== instance) return;
       await this.ensureOwnOnHost(instance, view);
     })();
     this.owning = work;
@@ -4585,6 +4588,9 @@ export class SpaceManager {
       // A path that cannot stand as folders here leaves no place to
       // follow it to: no transport goes through another instance.
       else if (follows) throw new SpaceStopped("check", { cause: "reauth", message: signInAgain(), guidance: signInThenRetry(), retry: true });
+      // A follow or a deferred move half made — the clone under this
+      // instance's folder, its remote's rename not made — is made now.
+      else if (key === machine.key && facts.remoteName !== instance.folder()) this.followByRemote(instance, machine, repository.id, facts.remote, target.accountGeneration);
     } else if (follows) this.followByRemote(instance, machine, repository.id, facts.remote, target.accountGeneration);
     try { this.assertTargetAccount(instance, target.accountGeneration); }
     catch (error) { throw hostStop("check", error, host()); }
@@ -4693,9 +4699,12 @@ export class SpaceManager {
     await this.afterMove([{ from, to }]);
   }
 
-  /** Your own group's own repository follows another instance listing it
-   * while its own is signed out (space-60): its folder kept, its remote
-   * renamed to that instance's folder at one instant, once the clone
+  /** A clone's remote takes the name of the folder of the instance its
+   * sync answers at (space-60, storage-34), its key kept: your own
+   * group's own repository following another instance listing it while
+   * its own is signed out, its folder kept; or a clone already under
+   * that instance's folder whose follow or deferred move renamed the
+   * clone but not its remote. One rename at one instant, once the clone
    * still reads the remote the check read before asking the host —
    * `remote` — and records the host's id; its fetched `spex`, its
    * upstream and this device's last sync stay with it (space-5). */
