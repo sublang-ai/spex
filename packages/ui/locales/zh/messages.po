@@ -2790,6 +2790,8 @@ msgid "Folder its sessions run in on this device"
 msgstr "此设备上运行其会话的文件夹"
 
 #. confirm: forget a folder whose records are gone from this device
+#. on a signed-out instance's heading: remove the instance from this home; nothing at it changes and every record stays
+#: src/components/SpaceInstance.tsx
 #: src/components/SpaceSync.tsx
 msgid "Forget"
 msgstr "忘记"
@@ -2802,6 +2804,16 @@ msgstr "忘记文件夹"
 #: src/components/SpaceSync.tsx
 msgid "Forget this folder here? The folder stays on disk."
 msgstr "在此忘记这个文件夹？文件夹会保留在磁盘上。"
+
+#. Forget's title on a signed-out instance's heading; {host} is the instance's display name, or its host name before any read
+#: src/components/SpaceInstance.tsx
+msgid "Forgets {host} on this device; every record stays here"
+msgstr "在此设备上忘记 {host}；所有记录仍保留在此"
+
+#. the live note once Forget removed the instance from this home; {host} is its display name, or its host name before any read
+#: src/components/SpaceInstance.tsx
+msgid "Forgot {host}"
+msgstr "已忘记 {host}"
 
 #. label before the spec package a playbook comes from
 #: src/components/LibrarySurface.tsx

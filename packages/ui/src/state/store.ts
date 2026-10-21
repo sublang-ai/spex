@@ -304,6 +304,11 @@ export interface AppState extends AttachmentState {
   /** Sign this device out of the instance at `instance`, its origin
    * (space-6); the reply is the new state. */
   spaceSignOut(instance: string): Promise<void>;
+  /** Forget the signed-out instance at `instance`, its origin (space-82,
+   * space-29): the instance leaves the home, nothing at it changing and
+   * every record kept; the reply is the new state. Refused, the core's
+   * words name what is still kept under it. */
+  spaceForget(instance: string): Promise<void>;
   /** Give a local-only spex repository a home at an instance (space-58):
    * a listed spex repository by its host id, or a new one in a group,
    * the choice naming the instance it is at (space-29). `noticed` once
@@ -1787,6 +1792,12 @@ export const useAppStore = create<AppState>((set, get) => {
 
     async spaceSignOut(instance: string): Promise<void> {
       const space = await getClient().command("space.signout", { instance });
+      spaceReads += 1;
+      set({ space, spaceError: undefined, spaceReadAt: Date.now() });
+    },
+
+    async spaceForget(instance: string): Promise<void> {
+      const space = await getClient().command("space.forget", { instance });
       spaceReads += 1;
       set({ space, spaceError: undefined, spaceReadAt: Date.now() });
     },

@@ -13,8 +13,9 @@
 // Move… offers the groups of the row's instance alone (space-78); Join
 // names the instance its row stands under (space-63, space-29);
 // "Add instance…" at the list's foot opens the sign-in card in its place
-// (space-1, space-3, space-28). Each act is checked by the command it
-// sends.
+// (space-1, space-3, space-28); Forget on a signed-out heading removes
+// the instance from the home, a refusal standing beneath it (space-82,
+// space-29). Each act is checked by the command it sends.
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
@@ -369,7 +370,7 @@ describe("GROUPS: each instance under its heading (space-1, git-host-5, space-3,
     fireEvent.click(within(sectionOf(ORIGIN)).getByRole("button", { name: "Sign out" }));
     await waitFor(() => expect(within(sectionOf(ORIGIN)).getByTestId("space-signout").textContent).toBe("Signing out…"));
     measure();
-    for (const label of ["New group", "Sign out", "Signing out…", "Sign in again", "Signing in…", "Cancel"]) {
+    for (const label of ["New group", "Sign out", "Signing out…", "Forget", "Sign in again", "Signing in…", "Cancel"]) {
       expect(seen, label).toContain(label);
     }
     // Each instance is a container; its read time yields below 42rem;
@@ -387,20 +388,34 @@ describe("GROUPS: each instance under its heading (space-1, git-host-5, space-3,
     expect(within(sectionOf(ORIGIN)).getByTestId("space-read-at").className).toContain("@2xl:inline");
   });
 
-  test.each(["en", "zh"] as const)("space-28, space-6: the heading's controls and Sign out's note read the catalog's words (%s)", async (language) => {
+  test.each(["en", "zh"] as const)("space-28, space-6, space-82: the heading's controls and the notes of Sign out and Forget read the catalog's words (%s)", async (language) => {
     activateLanguage(language);
+    const zh = language === "zh";
     commandMock.mockImplementation(async (type: string, fields?: Record<string, unknown>) =>
-      type === "space.signout" ? signedOutAt(SECOND, {}, headingsHome()) : answer(type, fields),
+      type === "space.signout"
+        ? signedOutAt(SECOND, {}, headingsHome())
+        : type === "space.forget"
+          ? withMirrors({ ...headingsHome(), instances: headingsHome().instances.filter((entry) => entry.origin !== SECOND) })
+          : answer(type, fields),
     );
     await renderGroups(headingsHome(), { open: false });
     const second = within(sectionOf(SECOND));
     fireEvent.click(second.getByTestId("space-signout"));
     const again = await second.findByTestId("space-signin-again");
-    expect(again.textContent).toBe(language === "zh" ? "重新登录" : "Sign in again");
-    expect(live()).toBe(language === "zh" ? "已退出 Second Example" : "Signed out of Second Example");
+    expect(again.textContent).toBe(zh ? "重新登录" : "Sign in again");
+    expect(live()).toBe(zh ? "已退出 Second Example" : "Signed out of Second Example");
     expect((screen.getByTestId("space-refresh") as HTMLButtonElement).title).toBe(
-      language === "zh" ? "重新读取每个已登录的实例" : "Reads each signed-in instance again",
+      zh ? "重新读取每个已登录的实例" : "Reads each signed-in instance again",
     );
+    // Forget reads the catalog's word and title, and its note (space-82).
+    const forget = second.getByTestId("space-forget") as HTMLButtonElement;
+    expect(forget.textContent).toBe(zh ? "忘记" : "Forget");
+    expect(forget.title).toBe(
+      zh ? "在此设备上忘记 Second Example；所有记录仍保留在此" : "Forgets Second Example on this device; every record stays here",
+    );
+    fireEvent.click(forget);
+    await waitFor(() => expect(screen.queryByTestId(`space-instance-${SECOND}`)).toBeNull());
+    expect(live()).toBe(zh ? "已忘记 Second Example" : "Forgot Second Example");
   });
 });
 
@@ -841,5 +856,146 @@ describe("GROUPS: Add instance… at the list's foot (space-1, space-3, space-28
     expect(last).toBe(within(card()).getByTestId("space-signin"));
     expect(last.className).toContain("w-full");
     expect(last.className).toContain("@xs:w-auto");
+  });
+});
+
+describe("GROUPS: Forget a signed-out instance (space-82, space-29, space-66)", () => {
+  /** The core's refusal while a clone is still kept under the second
+   * instance (space-82), in its own words. */
+  const KEPT = "Still kept under Second Example: a-spex";
+
+  /** A home that lists the instances but the one at `origin`. */
+  const without = (home: GroupsState, origin: string): GroupsState => {
+    const instances = home.instances.filter((entry) => entry.origin !== origin);
+    return withMirrors({ ...home, instances, defaultInstance: instances[0]?.origin ?? home.defaultInstance });
+  };
+
+  test("space-82, space-29: Forget stands on a signed-out heading only, sends space.forget { instance }, a refusal naming the kept repositories standing beneath the heading with the heading kept; success removes the heading, and with none left the header is the card again", async () => {
+    // Signed in at both, no heading offers Forget (space-1).
+    await renderGroups(headingsHome(), { open: false });
+    expect(screen.queryByTestId("space-forget")).toBeNull();
+    cleanup();
+
+    const out = signedOutAt(SECOND, {}, headingsHome());
+    let release: (() => void) | undefined;
+    let refuse = true;
+    commandMock.mockImplementation(async (type: string, fields?: Record<string, unknown>) => {
+      if (type === "space.signin.start") {
+        return { flow: "device", userCode: "WDJB-MJHT", verificationUri: `${SECOND}/login/device?user_code=WDJB-MJHT`, expiresAt: NOW + 15 * MIN };
+      }
+      if (type !== "space.forget") return answer(type, fields);
+      // The core answers once the test lets it: refused while a-spex is
+      // still kept under the instance, then the home without it.
+      await new Promise<void>((resolve) => (release = resolve));
+      if (refuse) throw new Error(KEPT);
+      return without(out, SECOND);
+    });
+    await renderGroups(out, { open: false });
+    const first = within(sectionOf(ORIGIN));
+    const second = within(sectionOf(SECOND));
+    // On the signed-out heading alone, beside Sign in again, which stays
+    // the last control; its title names the instance and what stays
+    // (space-1, space-28).
+    expect(first.queryByTestId("space-forget")).toBeNull();
+    const forget = second.getByTestId("space-forget") as HTMLButtonElement;
+    expect(forget.textContent).toBe("Forget");
+    expect(forget.title).toBe("Forgets Second Example on this device; every record stays here");
+    const row = second.getByTestId("space-instance-heading").firstElementChild!;
+    expect([...row.querySelectorAll("button")].map((button) => button.dataset.testid)).toEqual(["space-forget", "space-signin-again"]);
+
+    // Forget sends the instance's origin and asks nothing first; while it
+    // runs it keeps its label, disabled, and no sign-in starts here
+    // (space-29, space-28).
+    forget.focus();
+    fireEvent.click(forget);
+    expect(calls("space.forget")).toEqual([{ instance: SECOND }]);
+    expect(screen.queryByRole("dialog")).toBeNull();
+    await waitFor(() => expect(forget.disabled).toBe(true));
+    expect(forget.textContent).toBe("Forget");
+    expect((second.getByTestId("space-signin-again") as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(forget);
+    expect(calls("space.forget")).toHaveLength(1);
+
+    // Refused, the core's words naming what is still kept stand beneath
+    // the heading, which stays with both its controls; the live region
+    // says them too, and Forget takes focus again (space-82).
+    release!();
+    const refusal = await second.findByTestId("space-forget-refusal");
+    expect(refusal.textContent).toBe(KEPT);
+    expect(refusal.getAttribute("role")).toBe("alert");
+    expect(second.getByTestId("space-instance-heading").contains(refusal)).toBe(true);
+    expect(live()).toBe(KEPT);
+    expect(sectionOf(SECOND)).toBeTruthy();
+    await waitFor(() => expect(forget.disabled).toBe(false));
+    expect((second.getByTestId("space-signin-again") as HTMLButtonElement).disabled).toBe(false);
+    await waitFor(() => expect(document.activeElement).toBe(forget));
+    expect(first.queryByTestId("space-forget-refusal")).toBeNull();
+
+    // While a sign-in runs at this instance, Forget waits for its end.
+    fireEvent.click(second.getByTestId("space-signin-again"));
+    await second.findByTestId("space-signin-link");
+    expect(forget.disabled).toBe(true);
+    fireEvent.click(second.getByTestId("space-signin-cancel"));
+    await waitFor(() => expect(calls("space.signin.cancel")).toEqual([{}]));
+    await waitFor(() => expect(forget.disabled).toBe(false));
+
+    // Accepted, the reply is the state: the heading leaves the list, the
+    // other kept, the live region says so, and focus moves to Add
+    // instance… (space-82, DR-010 §6).
+    refuse = false;
+    release = undefined;
+    forget.focus();
+    fireEvent.click(forget);
+    await waitFor(() => expect(release).toBeDefined());
+    release!();
+    await waitFor(() => expect(screen.queryByTestId(`space-instance-${SECOND}`)).toBeNull());
+    expect(calls("space.forget")).toEqual([{ instance: SECOND }, { instance: SECOND }]);
+    expect(sections().map((section) => section.dataset.testid)).toEqual([`space-instance-${ORIGIN}`]);
+    expect(live()).toBe("Forgot Second Example");
+    expect(screen.queryByTestId("space-forget-refusal")).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId("space-add-instance")));
+    cleanup();
+
+    // Forgetting the one instance the home lists leaves it as before any
+    // sign-in: the header is the card again, its field holding the
+    // default instance's origin and taking focus, the list holding your
+    // own group alone and no Add instance… (space-82, space-1, space-3).
+    commandMock.mockReset();
+    commandMock.mockImplementation(async (type: string, fields?: Record<string, unknown>) =>
+      type === "space.forget" ? noInstance() : answer(type, fields),
+    );
+    await renderGroups(signedOutAt(ORIGIN), { open: false });
+    expect(screen.queryByTestId("space-signin-card")).toBeNull();
+    const only = within(sectionOf(ORIGIN)).getByTestId("space-forget");
+    only.focus();
+    fireEvent.click(only);
+    await screen.findByTestId("space-signin-card");
+    expect(calls("space.forget")).toEqual([{ instance: ORIGIN }]);
+    expect(screen.queryAllByTestId(/^space-instance-https?:/)).toEqual([]);
+    expect(screen.queryByTestId("space-add-instance")).toBeNull();
+    expect(screen.getByTestId("space-own")).toBeTruthy();
+    expect(live()).toBe("Forgot Spex Example");
+    const card = within(screen.getByTestId("space-signin-card"));
+    expect((card.getByTestId("space-signin-instance") as HTMLInputElement).value).toBe(ORIGIN);
+    await waitFor(() => expect(document.activeElement).toBe(card.getByTestId("space-signin-instance")));
+  });
+
+  test("space-82: a refusal speaks of the sign-out it met: signed in again it goes, and a later sign-out reads none", async () => {
+    commandMock.mockImplementation(async (type: string, fields?: Record<string, unknown>) => {
+      if (type === "space.forget") throw new Error(KEPT);
+      return answer(type, fields);
+    });
+    const out = signedOutAt(SECOND, {}, headingsHome());
+    await renderGroups(out, { open: false });
+    fireEvent.click(within(sectionOf(SECOND)).getByTestId("space-forget"));
+    expect((await within(sectionOf(SECOND)).findByTestId("space-forget-refusal")).textContent).toBe(KEPT);
+    // Signed in there again, the heading carries no Forget and no refusal.
+    deliver(headingsHome());
+    expect(within(sectionOf(SECOND)).queryByTestId("space-forget")).toBeNull();
+    expect(within(sectionOf(SECOND)).queryByTestId("space-forget-refusal")).toBeNull();
+    // Signed out again, Forget stands with nothing beneath it.
+    deliver(out);
+    expect(within(sectionOf(SECOND)).getByTestId("space-forget")).toBeTruthy();
+    expect(within(sectionOf(SECOND)).queryByTestId("space-forget-refusal")).toBeNull();
   });
 });

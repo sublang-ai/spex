@@ -11,7 +11,8 @@
 // and no control (DR-120), and the time its last read was held, which
 // yields first below 42rem (space-28); a failed read stands on this
 // heading alone (git-host-5). Signed out, the heading keeps the name it
-// last read with "Sign in again", whose flow reads on it, and, where the
+// last read with "Sign in again", whose flow reads on it, and Forget,
+// which removes the instance from the home (space-82), and, where the
 // instance signed this device out, says so with the login to continue
 // as (space-3). Below 20rem the heading stacks, its last control
 // full-width. While the home lists any instance, "Add instance…" stands
@@ -80,9 +81,9 @@ export function InstanceSection({
   );
 }
 
-/** An instance's heading (space-1, space-3, space-6, space-28): what it
- * carries signed in, or signed out, with the sign-in that runs or
- * failed here reading beneath it. */
+/** An instance's heading (space-1, space-3, space-6, space-82,
+ * space-28): what it carries signed in, or signed out, with the sign-in
+ * that runs or failed here, or Forget's refusal, reading beneath it. */
 function InstanceHeading({
   instance,
   now,
@@ -97,12 +98,16 @@ function InstanceHeading({
   onNote: Note;
 }) {
   const spaceSignOut = useAppStore((state) => state.spaceSignOut);
+  const spaceForget = useAppStore((state) => state.spaceForget);
   const [signingOut, setSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState<string>();
+  const [forgetting, setForgetting] = useState(false);
+  const [forgetError, setForgetError] = useState<string>();
   const [creating, setCreating] = useState(false);
   const againRef = useRef<HTMLButtonElement>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
   const newGroupRef = useRef<HTMLButtonElement>(null);
+  const forgetRef = useRef<HTMLButtonElement>(null);
   const origin = instance.origin;
   const name = instanceName(instance);
   // At most one sign-in runs, whichever instance it names (git-host-2):
@@ -122,6 +127,11 @@ function InstanceHeading({
     if (runningHere) cancelRef.current?.focus();
     else againRef.current?.focus();
   }, [runningHere]);
+
+  // Forget's refusal speaks of this sign-out: signed in again, it goes.
+  useEffect(() => {
+    if (instance.signedIn) setForgetError(undefined);
+  }, [instance.signedIn]);
 
   /** Sign out of this instance (space-6): the reply is the state, the
    * heading kept, signed out, and focus moves to its "Sign in again". */
@@ -149,10 +159,57 @@ function InstanceHeading({
     }
   };
 
+  /** Forget this signed-out instance (space-82): the reply is the state,
+   * which lists it no more, so its heading leaves the list — nothing at
+   * the instance changes and every record stays, so nothing is asked
+   * first. Focus, whose control is gone with the heading, moves to "Add
+   * instance…" — the field of its card where the reader opened it — or,
+   * where no instance remains and the header is the sign-in card again,
+   * to that card's field (DR-010 §6). Refused — a spex repository still
+   * kept under it, or a session refusing its follow — the core's words
+   * stand beneath the heading, which stays. */
+  const forget = async () => {
+    if (!connected || forgetting || (here && flowing)) return;
+    setForgetting(true);
+    setForgetError(undefined);
+    try {
+      await spaceForget(origin);
+      onNote(
+        i18n._({
+          id: "Forgot {host}",
+          values: { host: name },
+          comment: "the live note once Forget removed the instance from this home; {host} is its display name, or its host name before any read",
+        }),
+      );
+      setTimeout(() => {
+        if (!stranded()) return;
+        document
+          .querySelector<HTMLElement>(
+            [
+              '[data-testid="space-signin-card"] [data-testid="space-signin-instance"]',
+              '[data-testid="space-add-instance"]',
+              '[data-testid="space-add-card"] [data-testid="space-signin-instance"]',
+            ].join(", "),
+          )
+          ?.focus();
+      }, 0);
+    } catch (cause) {
+      const message = (cause as Error).message;
+      setForgetError(message);
+      onNote(message);
+      // Forget, disabled while it ran, takes focus back.
+      setTimeout(() => {
+        if (stranded()) forgetRef.current?.focus();
+      }, 0);
+    } finally {
+      setForgetting(false);
+    }
+  };
+
   /** Sign in again at this instance's origin (space-3), its flow reading
    * here. */
   const again = () => {
-    if (!connected || flowing) return;
+    if (!connected || flowing || forgetting) return;
     void signIn.start(origin, origin);
   };
 
@@ -192,11 +249,15 @@ function InstanceHeading({
             </span>
           ) : null}
         </h2>
+        {/* Each control is keyed by what it is, so a heading changing
+            state never hands one control's element, and the focus on it,
+            to another. */}
         {instance.signedIn ? (
           <>
             {/* The read time is the first at-a-glance word to yield
                 (space-28); its full moment rides the title. */}
             <span
+              key="read-at"
               data-testid="space-read-at"
               title={readAt !== null ? absoluteTitle(readAt) : undefined}
               className="hidden min-w-0 shrink-0 truncate text-xs text-neutral-500 @2xl:inline"
@@ -207,6 +268,7 @@ function InstanceHeading({
             </span>
             {instance.account.canCreateGroup ? (
               <button
+                key="new-group"
                 ref={newGroupRef}
                 type="button"
                 data-testid="space-new-group"
@@ -219,6 +281,7 @@ function InstanceHeading({
               </button>
             ) : null}
             <button
+              key="signout"
               type="button"
               data-testid="space-signout"
               className={`${SECONDARY} w-full whitespace-nowrap @xs:w-auto`}
@@ -233,8 +296,32 @@ function InstanceHeading({
           </>
         ) : (
           <>
+            {/* Forget removes the instance from the home, nothing at it
+                changing (space-82): no busy form (space-28) and no
+                confirm, the control disabled while it runs and while a
+                sign-in runs here. */}
+            <button
+              key="forget"
+              ref={forgetRef}
+              type="button"
+              data-testid="space-forget"
+              className={`${SECONDARY} self-start whitespace-nowrap @xs:self-auto`}
+              disabled={!connected || forgetting || (here && flowing)}
+              title={i18n._({
+                id: "Forgets {host} on this device; every record stays here",
+                values: { host: name },
+                comment: "Forget's title on a signed-out instance's heading; {host} is the instance's display name, or its host name before any read",
+              })}
+              onClick={() => void forget()}
+            >
+              {i18n._({
+                id: "Forget",
+                comment: "on a signed-out instance's heading: remove the instance from this home; nothing at it changes and every record stays",
+              })}
+            </button>
             {runningHere ? (
               <button
+                key="cancel"
                 ref={cancelRef}
                 type="button"
                 data-testid="space-signin-cancel"
@@ -245,11 +332,12 @@ function InstanceHeading({
               </button>
             ) : null}
             <button
+              key="again"
               ref={againRef}
               type="button"
               data-testid="space-signin-again"
               className={`${SECONDARY} w-full whitespace-nowrap @xs:w-auto`}
-              disabled={!connected || flowing}
+              disabled={!connected || flowing || forgetting}
               title={i18n._("Signs in to {host}", { host: instance.host })}
               onClick={again}
             >
@@ -275,6 +363,11 @@ function InstanceHeading({
       {signOutError ? (
         <p role="alert" className={ALERT}>
           {signOutError}
+        </p>
+      ) : null}
+      {forgetError && !instance.signedIn ? (
+        <p data-testid="space-forget-refusal" role="alert" className={`${ALERT} break-words`}>
+          {forgetError}
         </p>
       ) : null}
       {lines ? (

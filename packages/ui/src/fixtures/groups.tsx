@@ -392,6 +392,7 @@ export async function answer(type: string, fields: Record<string, unknown> = {})
     case "space.get":
     case "space.repair.decline":
     case "space.signout":
+    case "space.forget":
       return home.current;
     case "space.refresh":
     case "space.fetch":

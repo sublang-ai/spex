@@ -383,7 +383,7 @@ describe("GROUPS: signing in (space-3, space-6, space-29)", () => {
     await waitFor(() => expect(screen.getByTestId("space-signin-error").textContent).toBe("A sign-in is already running."));
   });
 
-  test.each(["en", "zh"] as const)("space-66, space-3: where the core reports the instance signed this device out, its heading reads the sentence beside Sign in again; one signed out by the reader carries the control alone (%s)", async (language) => {
+  test.each(["en", "zh"] as const)("space-66, space-3: where the core reports the instance signed this device out, its heading reads the sentence beside Sign in again and Forget; one signed out by the reader carries the two controls alone (%s)", async (language) => {
     activateLanguage(language);
     await renderGroups(signedOutAt(ORIGIN, { byHost: true }), { open: false });
     const section = screen.getByTestId(`space-instance-${ORIGIN}`);
@@ -397,17 +397,23 @@ describe("GROUPS: signing in (space-3, space-6, space-29)", () => {
         ? "spex.example 已让此设备退出登录。重新登录即可以 @jane 继续。"
         : "spex.example signed this device out. Sign in again to continue as @jane.",
     );
-    const again = within(section).getByTestId("space-signin-again");
-    expect(again.textContent).toBe(language === "zh" ? "重新登录" : "Sign in again");
+    // Beside it, the heading's two controls: Forget and Sign in again
+    // (space-1, space-82).
+    const controls = (heading: HTMLElement) =>
+      within(within(heading).getByTestId("space-instance-heading"))
+        .getAllByRole("button")
+        .map((button) => button.textContent);
+    const both = language === "zh" ? ["忘记", "重新登录"] : ["Forget", "Sign in again"];
+    expect(controls(section)).toEqual(both);
     expect(within(section).queryByRole("button", { name: language === "zh" ? "退出登录" : "Sign out" })).toBeNull();
     // The home lists an instance, so no card stands in the header.
     expect(screen.queryByTestId("space-signin-card")).toBeNull();
     cleanup();
-    // Signed out by the reader: the control alone.
+    // Signed out by the reader: the two controls alone.
     await renderGroups(signedOutAt(ORIGIN), { open: false });
     const mine = screen.getByTestId(`space-instance-${ORIGIN}`);
     expect(within(mine).queryByTestId("space-signed-out-by-host")).toBeNull();
-    expect(within(mine).getByTestId("space-signin-again").textContent).toBe(language === "zh" ? "重新登录" : "Sign in again");
+    expect(controls(mine)).toEqual(both);
   });
 
   test("space-3: from the instance's sign-out, Sign in again on its heading starts the flow there, Cancel brings the sentence back, and the next sign-in ends it", async () => {
