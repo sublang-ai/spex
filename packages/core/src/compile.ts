@@ -1185,7 +1185,9 @@ async function compileAdmitted(
   if (moduleValue.spexRegistryContract !== REGISTRY_CONTRACT) {
     throw new Error("generated registry is missing the contract marker");
   }
-  entry.validateOptions(undefined);
+  // Packaging has no selected runtime configuration: a valid entry may
+  // require source-owned options with no default (playbook-library-14).
+  // Enabling and runtime admission validate the actual configured slice.
   const roles = [...entry.requiredRoleIds];
   if (roles.length === 0) {
     // Entries compiled before slc 0.2 can carry no roles when the

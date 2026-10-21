@@ -653,6 +653,10 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Fixed
 
+- Compiling or repackaging a playbook now accepts required runtime
+  options without defaults. Packaging preserves the entry's validator;
+  validation of configured options is unchanged.
+
 - A package installation stays successful after the new files are committed
   even if obsolete files cannot be removed. The new package remains installed
   and its exports proceed; failures before that commit still restore the old
