@@ -9,8 +9,9 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import type { Store } from "./store.js";
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { createSessionStore } from "@sublang/playbook/session-store";
 import { appendHistorySession, seedHistorySession } from "./testing/demo.js";
@@ -396,6 +397,89 @@ test("space-38: Save commits the tree it validated on the HEAD it staged against
   rmSync(stray, { recursive: true, force: true });
   assert.equal((await home.client.settle("space.sync", { repository: key })).sync.phase, "done", "a repaired file admits the sync");
   assert.ok(!(await home.client.expectOk("space.get", {})).diagnostics.some((d) => d.reason.includes("attachments without their intent")));
+});
+
+test("space-38: Sync refuses an incoming write through a parent replaced after Save", async (t) => {
+  const home = await startHome("unsafe-apply-parent"); t.after(() => home.stop());
+  const { key, clone } = await addFolder(home, home.projectDir);
+  mkdirSync(join(clone, "docs")); writeFileSync(join(clone, "docs", "notes.txt"), "base\n");
+  const bare = bareRepo(); await home.client.expectOk("space.remote.set", { repository: key, url: bare });
+  assert.equal((await home.client.settle("space.sync", { repository: key })).sync.phase, "done");
+  await peerPush(peerClone(bare), (dir) => writeFileSync(join(dir, "docs", "notes.txt"), "incoming\n"));
+  const head = git(clone, "rev-parse", "HEAD"); const index = git(clone, "ls-files", "-s");
+  const outside = join(scratch, "outside-unsafe-apply"); mkdirSync(outside);
+  writeFileSync(join(outside, "notes.txt"), "base\n");
+  home.hooks.beforeStep = ({ step, repository }) => {
+    if (step !== "apply" || repository !== key) return;
+    home.hooks.beforeStep = undefined;
+    renameSync(join(clone, "docs"), join(scratch, "preserved-apply-docs"));
+    symlinkSync(outside, join(clone, "docs"), "dir");
+  };
+  const result = await home.client.settle("space.sync", { repository: key });
+  assert.ok(result.sync.phase === "stopped" && result.sync.step === "apply" && result.sync.cause === "validation", JSON.stringify(result.sync));
+  assert.match(result.sync.message, /unsafe destination/);
+  assert.equal(readFileSync(join(outside, "notes.txt"), "utf8"), "base\n");
+  assert.equal(git(clone, "rev-parse", "HEAD"), head, "no merge was committed");
+  assert.equal(git(clone, "ls-files", "-s"), index);
+});
+
+test("space-38: unsafe partial Apply defers refresh and repairs after restoring the parent", async (t) => {
+  for (const refusal of ["destination", "changed"] as const) await t.test(refusal, async (t) => {
+    const home = await startHome(`partial-unsafe-${refusal}`); t.after(() => home.stop());
+    const { key, clone } = await addFolder(home, home.projectDir);
+    const ids = [await seedHistorySession(join(clone, "sessions"), home.projectDir, turnRecords("Base", 1)),
+      await seedHistorySession(join(clone, "sessions"), home.projectDir, turnRecords("Base", 1))].sort();
+    const intent = await home.client.expectOk("intent.queue", { projectId: key, text: "Base intent" });
+    const bare = bareRepo(); await home.client.expectOk("space.remote.set", { repository: key, url: bare });
+    assert.equal((await home.client.settle("space.sync", { repository: key })).sync.phase, "done");
+    const peer = peerClone(bare);
+    await peerPush(peer, async (dir) => {
+      for (const id of ids) await seedHistorySession(join(dir, "sessions"), home.projectDir, turnRecords("Incoming", 2), id);
+      const file = join(dir, "intents", `${intent.id}.json`);
+      writeFileSync(file, JSON.stringify({ ...JSON.parse(readFileSync(file, "utf8")), text: "Incoming intent" }));
+    });
+    const head = git(clone, "rev-parse", "HEAD"); const index = git(clone, "ls-files", "-s");
+    const outside = join(scratch, `partial-outside-${refusal}`); mkdirSync(outside);
+    // A follow-through read would parse this canary and fail with SyntaxError.
+    const canary = join(outside, `${randomUUID()}.json`); writeFileSync(canary, "not json: outside canary");
+    const kept = join(scratch, `partial-intents-${refusal}`);
+    const repository = (Reflect.get(home.service, "store") as Store).repository(key)!;
+    const sessions = repository.store;
+    const acquire = sessions.acquireManagement.bind(sessions);
+    let replaced = false;
+    repository.store = { ...sessions, acquireManagement: async (id) => {
+      const lease = await acquire(id);
+      if (!replaced && id === ids[1]) {
+        assert.match(readFileSync(join(clone, "sessions", `${ids[0]}.records.jsonl`), "utf8"), /Incoming/);
+        renameSync(join(clone, "intents"), kept); symlinkSync(outside, join(clone, "intents"), "dir");
+        if (refusal === "changed") {
+          const file = join(clone, "sessions", `${id}.json`);
+          writeFileSync(file, JSON.stringify({ ...JSON.parse(readFileSync(file, "utf8")), title: "Concurrent title" }));
+        }
+        replaced = true;
+      }
+      return lease;
+    } };
+    const result = await home.client.settle("space.sync", { repository: key });
+    repository.store = sessions;
+    assert.ok(replaced);
+    assert.ok(result.sync.phase === "stopped" && result.sync.step === "apply" && result.sync.cause === "validation", JSON.stringify(result.sync));
+    assert.match(result.sync.guidance, /Restore the unsafe folder.*Refresh is deferred/);
+    assert.equal(existsSync(join(clone, ".spex-apply.json")), true, "the recorded selection survives the unsafe stop");
+    assert.equal(git(clone, "rev-parse", "HEAD"), head, "no merge or second Save");
+    assert.equal(git(clone, "ls-files", "-s"), index, "the candidate index was not published");
+    assert.equal(readFileSync(canary, "utf8"), "not json: outside canary");
+    const state = await home.client.expectOk("space.get", {});
+    assert.ok(state.diagnostics.some((d) => d.file.endsWith("/intents") && /unsafe destination/.test(d.reason)));
+    rmSync(join(clone, "intents")); renameSync(kept, join(clone, "intents"));
+    // Restore the concurrent unit to its recorded preimage for this repair.
+    if (refusal === "changed") writeFileSync(join(clone, "sessions", `${ids[1]}.json`), git(clone, "show", `HEAD:sessions/${ids[1]}.json`));
+    const repaired = await home.client.settle("space.sync", { repository: key });
+    assert.equal(repaired.sync.phase, "done", JSON.stringify(repaired.sync));
+    assert.equal(existsSync(join(clone, ".spex-apply.json")), false);
+    assert.match(readFileSync(join(clone, "intents", `${intent.id}.json`), "utf8"), /Incoming intent/);
+    assert.ok((await home.client.expectOk("session.list", {})).some((row) => row.id === ids[0] && row.turns === 2));
+  });
 });
 
 test("space-38: a half-written selection whose startup repair a held session lease refused is finished by the Sync admitted once that lease is released", async (t) => {

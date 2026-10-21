@@ -11,7 +11,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -24,6 +24,7 @@ import { speak } from "./i18n.js";
 import type { ProjectInfo } from "./protocol.js";
 import { applyStorageSelection, EMPTY_TREE, planStorageMerge, prepareStorageGitFiles, reserveStorageHome, selectStorageMerge as selectStorageMergeWith, StorageWriteRefused, validateStorageTree, type StorageChoice } from "./storage-git.js";
 import { scratchDir } from "./testing/scratch.js";
+import { StorageFormatError } from "./files.js";
 
 /** One fixed machine identity for the in-process writers and the
  * command alike (storage-26): the command reads it from its own state
@@ -458,6 +459,107 @@ test("storage-16: through the apply seam, a file added under a spec package fold
     rmSync(added);
     await applyStorageSelection(clone, plan, {});
     assert.equal(readFileSync(skill, "utf8"), "theirs", "the folder taken whole once nothing stands beside its files");
+  } finally { dispose(); }
+});
+
+test("storage-16: Apply refuses unsafe destination parents before overwrites, creations and deletions", async (t) => {
+  for (const kind of ["overwrite", "create", "delete", "non-directory"] as const) await t.test(kind, async () => {
+    const { root, clone, commit, dispose } = setup();
+    try {
+      const file = kind === "create" ? "docs/missing/new.txt" : "docs/notes.txt";
+      mkdirSync(join(clone, "docs"));
+      writeFileSync(join(clone, "docs", "keep.txt"), "unchanged\n");
+      if (kind !== "create") writeFileSync(join(clone, file), "base\n");
+      commit("base destination");
+      git(clone, "checkout", "-q", "-b", "other");
+      if (kind === "delete") rmSync(join(clone, file));
+      else { mkdirSync(dirname(join(clone, file)), { recursive: true }); writeFileSync(join(clone, file), "incoming\n"); }
+      commit("incoming destination");
+      git(clone, "checkout", "-q", "spex");
+      const plan = planStorageMerge(clone, "HEAD", "other");
+      const head = git(clone, "rev-parse", "HEAD"); const index = git(clone, "ls-files", "-s");
+      const outside = join(root, "outside"); mkdirSync(outside);
+      writeFileSync(join(outside, "keep.txt"), "unchanged\n");
+      if (kind !== "create") writeFileSync(join(outside, "notes.txt"), "base\n");
+      const before = snapshot(outside);
+      // It was safe during Save and the initial pending-unit read. A
+      // different hand replaces only the parent at the Apply boundary.
+      await assert.rejects(() => applyStorageSelection(clone, plan, {}, { beforeWrite: () => {
+        renameSync(join(clone, "docs"), join(root, "preserved-docs"));
+        if (kind === "non-directory") writeFileSync(join(clone, "docs"), "not a directory\n");
+        else symlinkSync(outside, join(clone, "docs"), "dir");
+      } }), (error: unknown) => error instanceof StorageFormatError && /unsafe destination/.test(error.reason));
+      assert.deepEqual(snapshot(outside), before, "no external file changed or was created/deleted");
+      assert.equal(git(clone, "rev-parse", "HEAD"), head);
+      assert.equal(git(clone, "ls-files", "-s"), index);
+    } finally { dispose(); }
+  });
+});
+
+test("storage-16: a safe missing destination tail is created without following a parent", async () => {
+  const { clone, commit, dispose } = setup();
+  try {
+    git(clone, "checkout", "-q", "-b", "other");
+    mkdirSync(join(clone, "new", "nested"), { recursive: true });
+    writeFileSync(join(clone, "new", "nested", "note.txt"), "incoming\n"); commit("incoming new tail");
+    git(clone, "checkout", "-q", "spex");
+    await applyStorageSelection(clone, planStorageMerge(clone, "HEAD", "other"), {});
+    assert.equal(readFileSync(join(clone, "new", "nested", "note.txt"), "utf8"), "incoming\n");
+  } finally { dispose(); }
+});
+
+test("storage-16: a session parent is checked before lease acquisition and again after its await", async (t) => {
+  for (const at of ["before lease", "after lease"] as const) await t.test(at, async () => {
+    const { root, clone, sessionId, bundle, commit, dispose } = setup();
+    try {
+      const assets = createAssetStore({ directory: join(clone, "sessions", `${sessionId}.assets`) });
+      const media = async (label: string) => {
+        await assets.prepare();
+        const asset = await assets.importAsset({ bytes: Buffer.from(label), mimeType: "image/png", name: `${label}.png` });
+        const file = join(clone, "sessions", `${sessionId}.json`); const manifest = JSON.parse(readFileSync(file, "utf8"));
+        manifest.assets = { version: 1, entries: [asset] }; writeFileSync(file, JSON.stringify(manifest));
+      };
+      await media("base"); commit("base session media");
+      git(clone, "checkout", "-q", "-b", "other"); bundle("incoming"); await media("incoming"); commit("incoming session");
+      git(clone, "checkout", "-q", "spex");
+      const plan = planStorageMerge(clone, "HEAD", "other"); const index = git(clone, "ls-files", "-s");
+      const sessions = createSessionStore({ sessionsDir: join(clone, "sessions") }); await sessions.prepare();
+      const outside = join(root, "outside-sessions");
+      const swap = () => { renameSync(join(clone, "sessions"), outside); symlinkSync(outside, join(clone, "sessions"), "dir"); };
+      const before = snapshot(join(clone, "sessions")); let acquisitions = 0;
+      const wrapped = { acquireManagement: async (id: string) => {
+        acquisitions += 1;
+        const lease = await sessions.acquireManagement(id);
+        if (at === "after lease") swap();
+        return lease;
+      } };
+      await assert.rejects(() => applyStorageSelection(clone, plan, {}, {
+        sessions: wrapped, ...(at === "before lease" ? { beforeWrite: swap } : {}),
+      }), (error: unknown) => error instanceof StorageFormatError && /unsafe destination/.test(error.reason));
+      assert.equal(acquisitions, at === "before lease" ? 0 : 1);
+      assert.deepEqual(snapshot(outside), before, "session records stay unchanged outside the clone");
+      assert.equal(git(clone, "ls-files", "-s"), index);
+      assert.ok(existsSync(join(outside, `${sessionId}.json`)));
+    } finally { dispose(); }
+  });
+});
+
+test("storage-16: completed session selection cannot clear hints through a replaced parent", async () => {
+  const { root, clone, sessionId, bundle, commit, dispose } = setup();
+  try {
+    git(clone, "checkout", "-q", "-b", "other"); bundle("incoming"); commit("incoming session");
+    const incoming = git(clone, "rev-parse", "HEAD"); git(clone, "checkout", "-q", "spex");
+    const plan = planStorageMerge(clone, "HEAD", incoming); const index = git(clone, "ls-files", "-s");
+    // An interrupted selection already wrote all selected bytes. There
+    // is no pending unit/lease, but completion still clears its hint.
+    for (const ext of ["json", "records.jsonl"]) writeFileSync(join(clone, "sessions", `${sessionId}.${ext}`), execFileSync("git", ["-C", clone, "show", `${incoming}:sessions/${sessionId}.${ext}`], { env: gitEnv }));
+    writeFileSync(join(clone, "sessions", `${sessionId}.hints.json`), "synthetic local hint\n");
+    const outside = join(root, "outside-hints");
+    await assert.rejects(() => applyStorageSelection(clone, plan, {}, { beforeWrite: () => {
+      renameSync(join(clone, "sessions"), outside); symlinkSync(outside, join(clone, "sessions"), "dir");
+    } }), (error: unknown) => error instanceof StorageFormatError && /unsafe destination/.test(error.reason));
+    assert.equal(readFileSync(join(outside, `${sessionId}.hints.json`), "utf8"), "synthetic local hint\n");
+    assert.equal(git(clone, "ls-files", "-s"), index);
   } finally { dispose(); }
 });
 

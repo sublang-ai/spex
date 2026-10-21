@@ -1991,6 +1991,11 @@ msgstr "解析已停止：{cause}"
 msgid "Restore the interrupted turn first"
 msgstr "请先“恢复”中断的轮次"
 
+#. Sync guidance after a linked or non-directory destination refuses Apply or partial refresh
+#: src/space.ts
+msgid "Restore the unsafe folder to a regular folder, then Retry. Refresh is deferred; written records and existing repair evidence are kept."
+msgstr "请将不安全的文件夹恢复为普通文件夹，然后重试。刷新已暂缓；已写入的记录和现有修复凭据均保留。"
+
 #. Guidance where the Git host asked to wait: Retry waits out the time it asked for before running the step
 #: src/space.ts
 msgid "Retry waits, then runs the step."
