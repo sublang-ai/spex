@@ -10,7 +10,7 @@ Proposes to amend, under [DR-046](046-decision-record-evolution.md):
 
 - [DR-033](033-remote-gui-serving.md) in "a single-user deployment" and "one token, in the URL": a server is N single-user shells, one per member's OS account, behind one hub that admits a bearer in a header and no token in a URL; the single-user shell on a machine of one's own stands.
 - [DR-103](103-the-home-and-its-groups.md) in "Spex adds no access control", in your own group's sign-in and in "What lives where": a seat holds one piece of access state, the execution lease the instance granted; a seat's own group is server-local and joins no repository at the instance; a seat's home holds a `projects/` tree.
-- [DR-127](127-a-home-signed-in-to-several-instances.md) in "your own group's own repository is created or joined at the first sign-in", and [DR-128](128-a-spex-repository-placed-at-several-instances.md), proposed, in placing your own group at every instance: not on a seat.
+- [DR-127](127-a-home-signed-in-to-several-instances.md) in "your own group's own repository is created or joined at the first sign-in", and [DR-128](128-a-spex-repository-placed-at-several-instances.md) in placing your own group at every instance: not on a seat.
 - [DR-004](004-config-and-persistence.md) in its credentials and readiness, and [DR-036](036-file-state-store.md) in "forge auth stay with their own tools": on a seat the core reads the shared credential file into its environment before each run, readiness recognizes the injected forms, and a code host's token the member places is kept under `local/`.
 
 ## Context
