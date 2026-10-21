@@ -124,7 +124,8 @@ export interface EnvironmentManagerOptions {
    * (environments-12). */
   tokenFor: (origin: string) => Promise<string | null>;
   /** Told the token an instance's registry refused with a code that
-   * signs that instance out (environments-12, git-host-4). */
+   * signs that instance out (environments-12, git-host-4); where it
+   * throws, the refused call fails with what it threw. */
   refused?: (origin: string, token: string) => void | Promise<void>;
   /** The brokered credential for a Git source at the host's Git origin,
    * undefined for any other (environments-13). */

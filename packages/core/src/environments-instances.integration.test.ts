@@ -12,13 +12,14 @@
 // an instance locks the built-in spec package there; and an install
 // takes each locked release from the environment's instance, else the
 // registry its lock records, else any instance the home is signed in
-// to.
+// to. A registry refusing an instance's token signs that instance alone
+// out, where that token is still the stored pair's.
 
-import { test } from "node:test";
+import { test, type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { parseDocument } from "yaml";
+import { parse as parseYaml, parseDocument } from "yaml";
 
 import {
   BUILTIN_PACKAGE_NAME,
@@ -36,7 +37,9 @@ import {
   type Resolution,
 } from "./environment/index.js";
 import type { EnvironmentState } from "./protocol.js";
-import { clonePath, createSpaceHarness, hostKey, repositoryOf, rowsOf } from "./testing/space-harness.js";
+import { credentialsPath, fileCredentialStore, GitHostClient, type StoredCredential } from "./git-host.js";
+import { holdingFetch } from "./testing/holding-fetch.js";
+import { clonePath, createSpaceHarness, hostKey, instanceOf, repositoryOf, rowsOf } from "./testing/space-harness.js";
 import type { StandinHost } from "./testing/standin-host.js";
 import { makeRelease, startStandinRegistry, type StandinRegistry, type StandinRegistryRequest } from "./testing/standin-registry.js";
 
@@ -155,12 +158,41 @@ async function joinAt(home: Home, host: StandinHost, path: string, folder?: stri
   return key;
 }
 
-test("environments-34, environments-5, environments-12, environments-3, environments-7, environments-11: the second's project resolves at the second's registry with its token, its lock recording the second's origin, and installs from it, the local-only project resolving at the first's; a lock recording the first's origin for a release the second's registry holds alike keeps it; a project paired at the second by a pick, a join or a rebind locks the built-in there; a release the second's registry lacks installs from the first's; and a second home installs a private release locked at the first's through the third with its token, failing naming it while signed out there", { timeout: 300_000 }, async (t) => {
-  const R1 = await startStandinRegistry({ dir: join(scratch, "registry-first") });
-  const R2 = await startStandinRegistry({ dir: join(scratch, "registry-second") });
+/** Two stand-in instances over one Git backend, each relaying to a
+ * stand-in registry of its own, and a home signed in to the first, its
+ * default instance, then to the second, the same person at both,
+ * holding the second's project and a local-only one (environments-34).
+ * A project added is local only, its pairing locking the built-in at
+ * the default instance's registry; picked into your namespace at the
+ * second, it is the second's project, its built-in locked at the
+ * second's origin (environments-11). `registryFetch` stands between the
+ * core and every registry where given. */
+async function twoInstances(t: TestContext, name: string, registryFetch?: typeof fetch) {
+  const R1 = await startStandinRegistry({ dir: join(scratch, `${name}-registry-first`) });
+  const R2 = await startStandinRegistry({ dir: join(scratch, `${name}-registry-second`) });
   t.after(() => Promise.all([R1.close(), R2.close()]));
   const first = await startHost({ registry: R1 });
   const second = await startHost({ gitBackend: first, registry: R2, displayName: "Second stand-in" });
+  const home = await startHome(name, { host: first, project: false, ...(registryFetch ? { extra: { registryFetch } } : {}) });
+  t.after(() => home.stop());
+  const signing = home.client.mark();
+  await signIn(home, first);
+  await home.client.waitRepository(signing, HOST_OWN, (repository) => repository.sync.phase === "done", 30_000);
+  await signIn(home, second);
+
+  const { key: added } = await addFolder(home, gitFolder("south"));
+  assert.equal(registryOf(lockOf(home, added), BUILTIN_PACKAGE_NAME), first.url);
+  const south = await pickAt(home, added, second, "south");
+  await environmentOf(home, south, (state) => installedFrom(state, BUILTIN_PACKAGE_NAME, second.url));
+  assert.equal(registryOf(lockOf(home, south), BUILTIN_PACKAGE_NAME), second.url);
+  const { key: local } = await addFolder(home, gitFolder("local"));
+  assert.equal(repositoryOf(await home.client.expectOk("space.get", {}), local).instance, null, "a project with no instance");
+  await environmentOf(home, local, (state) => installedFrom(state, BUILTIN_PACKAGE_NAME, first.url));
+  return { R1, R2, first, second, home, south, local };
+}
+
+test("environments-34, environments-5, environments-12, environments-3, environments-7, environments-11: the second's project resolves at the second's registry with its token, its lock recording the second's origin, and installs from it, the local-only project resolving at the first's; a lock recording the first's origin for a release the second's registry holds alike keeps it; a project paired at the second by a pick, a join or a rebind locks the built-in there; a release the second's registry lacks installs from the first's; and a second home installs a private release locked at the first's through the third with its token, failing naming it while signed out there", { timeout: 300_000 }, async (t) => {
+  const { R1, R2, first, second, home, south, local } = await twoInstances(t, "instances");
   const third = await startHost({ registry: R1, displayName: "Third stand-in", person: GRACE });
 
   // Releases: `team/kit` at both registries alike, private at the second
@@ -174,28 +206,6 @@ test("environments-34, environments-5, environments-12, environments-3, environm
   await publishTo(R1, await release("vault/secrets"));
   R1.script.setPrivate("vault", [first.url, third.url]);
   await publishTo(R1, await release("acme/open"));
-
-  // A home signed in to the first, its default instance, then to the
-  // second over the first's Git backend, the same person at both.
-  const home = await startHome("instances", { host: first, project: false });
-  t.after(() => home.stop());
-  const signing = home.client.mark();
-  await signIn(home, first);
-  await home.client.waitRepository(signing, HOST_OWN, (repository) => repository.sync.phase === "done", 30_000);
-  await signIn(home, second);
-
-  // A project added is local only, its pairing locking the built-in at
-  // the default instance's registry; picked into your namespace at the
-  // second, it is the second's project, its built-in locked at the
-  // second's origin (environments-11).
-  const { key: added } = await addFolder(home, gitFolder("south"));
-  assert.equal(registryOf(lockOf(home, added), BUILTIN_PACKAGE_NAME), first.url);
-  const south = await pickAt(home, added, second, "south");
-  await environmentOf(home, south, (state) => installedFrom(state, BUILTIN_PACKAGE_NAME, second.url));
-  assert.equal(registryOf(lockOf(home, south), BUILTIN_PACKAGE_NAME), second.url);
-  const { key: local } = await addFolder(home, gitFolder("local"));
-  assert.equal(repositoryOf(await home.client.expectOk("space.get", {}), local).instance, null, "a project with no instance");
-  await environmentOf(home, local, (state) => installedFrom(state, BUILTIN_PACKAGE_NAME, first.url));
 
   // The second's project resolves at the second's registry with the
   // second's token — the private release reads there — its lock
@@ -327,4 +337,89 @@ test("environments-34, environments-5, environments-12, environments-3, environm
     ["/api/v1/packages/vault/secrets/1.0.0/download", third.url, GRACE.login, true],
   ]);
   assert.equal(registryOf(lockOf(other, copy), "vault/secrets"), first.url);
+});
+
+test("environments-34, environments-12, git-host-4: with the first's registry answering token_revoked to the first's tokens, a resolution in the local-only project signs the first instance alone out and fails, the second staying signed in and its project resolving and installing; a refusal of a pair a refresh replaced meanwhile signs nothing out and fails as changed meanwhile", { timeout: 300_000 }, async (t) => {
+  const holds = holdingFetch();
+  const { R1, R2, first, second, home, south, local } = await twoInstances(t, "refused", holds.fetch);
+  await publishTo(R1, await release("acme/open"));
+  await publishTo(R2, await release("team/kit"));
+  R2.script.setPrivate("team", [second.url]);
+  const pairs = (): Record<string, StoredCredential> => (parseYaml(readFileSync(credentialsPath(home.dataDir), "utf8")) as { hosts: Record<string, StoredCredential> }).hosts;
+  const signedIn = async (): Promise<[boolean | undefined, boolean | undefined][]> => {
+    const space = await home.client.expectOk("space.get", {});
+    return [first, second].map((host) => [instanceOf(space, host.url)?.signedIn, instanceOf(space, host.url)?.hostSignedOut]);
+  };
+
+  // The local-only project locks a public release at the first's
+  // registry, the default instance's, asked with the first's token.
+  await home.client.expectOk("environment.request", { repository: local, name: "acme/open", request: { kind: "registry", version: "^1.0.0" } });
+  let state = await environmentOf(home, local, (candidate) => installedFrom(candidate, "acme/open", first.url) || candidate.error !== null);
+  assert.equal(state.error, null);
+
+  // The first's registry now refuses the first's tokens. A refusal held
+  // while a refresh replaces the pair that presented it answers that
+  // pair alone: nothing is removed or signed out, the refreshed pair
+  // stays, and the resolution fails as changed meanwhile (git-host-4).
+  R1.script.refuseTokens(first.url);
+  const presented = pairs()[first.url]!;
+  let one = R1.script.received.length;
+  const gate = holds.hold((path, status) => path === "/api/v1/packages/acme/open" && status === 401);
+  await home.client.expectOk("environment.resolve", { repository: local });
+  try {
+    await gate.reached;
+    first.script.expireAccess();
+    const outside = new GitHostClient({ url: first.url, label: "Spex on test", credentials: fileCredentialStore(home.dataDir, first.url) });
+    assert.equal((await outside.me()).login, LOGIN);
+  } finally {
+    gate.release();
+  }
+  const refreshed = pairs()[first.url];
+  assert.ok(refreshed && refreshed.access !== presented.access, "a refresh replaced the pair meanwhile");
+  state = await environmentOf(home, local, (candidate) => candidate.error !== null);
+  assert.match(state.error ?? "", /changed meanwhile/);
+  assert.deepEqual(receivedFor(R1, one, "acme/open"), [["/api/v1/packages/acme/open", first.url, LOGIN, true]]);
+  assert.deepEqual(await signedIn(), [[true, false], [true, false]]);
+  assert.equal(pairs()[first.url]?.access, refreshed.access, "the refreshed pair stays");
+
+  // Refused the stored pair, a resolution in the local-only project
+  // signs the first alone out — its credential gone, its entry kept,
+  // the sign-out said as the host's with its login — and fails; the
+  // second's token, entry and rows stay (environments-12, git-host-4).
+  one = R1.script.received.length;
+  const mark = home.client.mark();
+  await home.client.expectOk("environment.resolve", { repository: local });
+  const out = await home.client.waitSpace(mark, (space) => instanceOf(space, first.url)?.signedIn === false, 30_000);
+  assert.equal(instanceOf(out, first.url)?.account.login, LOGIN);
+  state = await environmentOf(home, local, (candidate) => candidate.error !== null && !/changed meanwhile/.test(candidate.error));
+  assert.match(state.error ?? "", /acme\/open/);
+  assert.deepEqual(receivedFor(R1, one, "acme/open"), [["/api/v1/packages/acme/open", first.url, LOGIN, true]]);
+  assert.deepEqual(await signedIn(), [[false, true], [true, false]]);
+  assert.deepEqual(Object.keys(pairs()), [second.url]);
+  assert.equal(repositoryOf(await home.client.expectOk("space.get", {}), south).state, "reachable");
+
+  // The second's project resolves and installs at the second's registry
+  // with the second's token, the private release reading there.
+  let two = R2.script.received.length;
+  await home.client.expectOk("environment.request", { repository: south, name: "team/kit", request: { kind: "registry", version: "^1.0.0" } });
+  state = await environmentOf(home, south, (candidate) => installedFrom(candidate, "team/kit", second.url) || candidate.error !== null);
+  assert.equal(state.error, null);
+  two = R2.script.received.length - two;
+  assert.ok(two > 0);
+  assert.ok(R2.script.received.slice(-two).every((request) => request.instance === second.url && request.account === LOGIN && request.bearer), "every request the second's");
+  one = R1.script.received.length;
+  await home.client.expectOk("environment.install", { repository: south });
+  state = await environmentOf(home, south, (candidate) => installedFrom(candidate, "team/kit", second.url) || candidate.error !== null);
+  assert.equal(state.error, null);
+  assert.equal(R1.script.received.length, one, "the first's registry is asked nothing");
+
+  // Signed out there, the local-only project's resolution asks the
+  // first's registry with no token, and the public release resolves
+  // (environments-12).
+  one = R1.script.received.length;
+  await home.client.expectOk("environment.resolve", { repository: local });
+  state = await environmentOf(home, local, (candidate) => candidate.error === null);
+  const asked = receivedFor(R1, one, "acme/open");
+  assert.ok(asked.length > 0 && asked.every(([, instance, account, bearer]) => instance === first.url && account === null && !bearer), JSON.stringify(asked));
+  assert.deepEqual(await signedIn(), [[false, true], [true, false]]);
 });

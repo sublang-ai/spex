@@ -2795,6 +2795,19 @@ export class SpaceManager {
     return this.instanceAt(origin).client.accessSecret();
   }
 
+  /** The registry of a listed instance refused the access secret a call
+   * presented there with a code that signs the device out
+   * (environments-12): that instance alone is signed out where the pair
+   * that presented it is still the stored one, its client saying so as
+   * a refusal of a host call does (git-host-4); where another pair
+   * replaced it meanwhile, nothing is signed out and `CredentialChanged`
+   * is thrown, the call refused as changed meanwhile. An origin the home
+   * does not list holds no pair, and nothing is done. */
+  async registryRefused(origin: string, access: string): Promise<void> {
+    if (this.host.store.home.instance(origin) === undefined) return;
+    if (!(await this.instanceAt(origin).client.signOutRefused(access))) throw new CredentialChanged();
+  }
+
   /** The origins of every instance the home lists, in its order, then of
    * the one a running sign-in names where none is listed there: the
    * origins whose pages a shell may open (app-shell-37). */

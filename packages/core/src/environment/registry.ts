@@ -226,7 +226,9 @@ export interface RegistryClientOptions {
   token?: () => Promise<string | null>;
   /** Told the token a call presented when the registry refused it with
    * one of `SIGN_OUT_CODES`, before that call fails (environments-12):
-   * awaited, whatever it throws ignored. */
+   * awaited; where it throws — the token no longer the instance's stored
+   * one (git-host-4) — the call fails with what it threw in place of the
+   * registry's words, still `unauthenticated`. */
   refused?: (token: string, code: string) => void | Promise<void>;
   fetch?: typeof fetch;
 }
@@ -278,9 +280,14 @@ export class RegistryClient implements RegistrySource {
     if (response.status === 404) throw new RegistryError("not_found", name, `${about}not found at the registry, or not readable by this account${said}`, code);
     if (response.status === 410) throw new RegistryError("not_found", name, `${about}suppressed by the registry's operator${said}`, code);
     if (response.status === 401) {
-      // A refusal answers the token this call presented (git-host-4).
+      // A refusal answers the token this call presented (git-host-4); a
+      // hook that throws says why the call fails instead.
       if (token && code !== undefined && SIGN_OUT_CODES.includes(code) && this.refused) {
-        try { await this.refused(token, code); } catch { /* the call fails all the same */ }
+        try {
+          await this.refused(token, code);
+        } catch (error) {
+          throw new RegistryError("unauthenticated", name, `${about}${error instanceof Error ? error.message : String(error)}`, code);
+        }
       }
       throw new RegistryError("unauthenticated", name, `${about}the registry did not accept this device's sign-in${said}`, code);
     }

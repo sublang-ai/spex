@@ -562,6 +562,50 @@ test("git-host-4: a held refresh, granted or refused, or a held refusal of a pai
   }
 });
 
+test("git-host-4: a refusal reported from outside the client signs the device out only while the pair that presented it stands", async () => {
+  const skew = { ms: 0 };
+  const t = await setup({ skew });
+  try {
+    const store = fileCredentialStore(t.home, t.host.url);
+    const other = fileCredentialStore(t.home, "https://elsewhere.example");
+    const kept: StoredCredential = { access: "spexa_other", accessExpiresAt: 1, refresh: "spexr_other" };
+    assert.equal(other.replace(null, kept), true);
+    await browserSignIn(t.client);
+    const presented = await store.read();
+    assert.ok(presented);
+
+    // A refresh meanwhile: the refusal of the pair it replaced removes
+    // and signs out nothing, and reads as changed meanwhile.
+    skew.ms = 3_600_000 - 30_000;
+    await t.client.me();
+    skew.ms = 0;
+    const refreshed = await store.read();
+    assert.ok(refreshed && refreshed.access !== presented.access, "the pair was refreshed");
+    assert.equal(await t.client.signOutRefused(presented.access), false);
+    assert.ok(samePair(await store.read(), refreshed), "the refreshed pair stays");
+    assert.deepEqual(t.signedOut, [], "nothing is signed out");
+
+    // The stored pair refused: removed and signed out in one step, said
+    // once, another host's pair kept.
+    assert.equal(await t.client.signOutRefused(refreshed.access), true);
+    assert.equal(await store.read(), null);
+    assert.equal(await t.client.signedIn(), false);
+    assert.deepEqual(t.signedOut, ["reauth"]);
+    assert.ok(samePair(await other.read(), kept), "another host's pair stays");
+
+    // A sign-out meanwhile, then a sign-in meanwhile: the refusal of the
+    // pair gone removes and signs out nothing, the new pair staying.
+    assert.equal(await t.client.signOutRefused(refreshed.access), false);
+    await browserSignIn(t.client);
+    const signedIn = await store.read();
+    assert.equal(await t.client.signOutRefused(refreshed.access), false);
+    assert.ok(samePair(await store.read(), signedIn), "the newer sign-in's pair stays");
+    assert.deepEqual(t.signedOut, ["reauth"], "said once");
+  } finally {
+    await t.dispose();
+  }
+});
+
 test("git-host-2, git-host-3: with the person's read held, a cancel stores nothing, and a pair stored meanwhile stays", async () => {
   const t = await setup();
   try {

@@ -596,6 +596,17 @@ export class CoreService {
           throw new Error(relayHostError(error, this.space.instanceName(origin)));
         }
       },
+      // A registry refusing an instance's token signs that instance alone
+      // out, where that token is still its stored pair's; a pair replaced
+      // meanwhile fails the call as changed meanwhile (environments-12,
+      // git-host-4, DR-127).
+      refused: async (origin, token) => {
+        try {
+          await this.space.registryRefused(origin, token);
+        } catch (error) {
+          throw new Error(relayHostError(error, this.space.instanceName(origin)));
+        }
+      },
       gitCredential: (repo) => this.space.sourceCredential(repo),
       gitLabel: (repo) => this.space.packageSourceAsShown(repo),
       gitFailure: (repo, run) => this.space.packageSourceFailure(repo, run),
