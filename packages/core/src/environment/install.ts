@@ -5,7 +5,10 @@
 // selected files, verified by digest into the store, are linked under
 // `<clone>/packages/<org>/<pkg>/` at their release paths. A registry
 // package is fetched from the first of the registries asked that serves
-// its release at the locked version and checksum (DR-127). The new tree
+// its release at the locked version and checksum (DR-127); the built-in
+// spec package is served first from this device's seed where its files
+// carry the lock's digests, whatever archive checksum the lock records
+// (environments-11). The new tree
 // is complete before it replaces the old one; a failure leaves the last
 // files in place. The swap happens only while the lock it installs still
 // stands on disk at the version read and still matches `spex.yaml` and
@@ -39,9 +42,10 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, relative } from "node:path";
 
 import { ENGINE_LINKS_EXCLUDE, prepareArtifactEngine, provisionEngineLinks } from "../compile.js";
+import { seedServes } from "./builtins.js";
 import { fileVersion, VersionConflictError, type FileVersion } from "../files.js";
 import { instanceFolder } from "../instance.js";
-import { writeExcludeBlock } from "./exports.js";
+import { BUILTIN_PACKAGE_NAME, writeExcludeBlock } from "./exports.js";
 import { listReleaseFiles, parseManifestText, portablePathIssues, sha256Hex, type Manifest } from "./format.js";
 import type { GitCredential, GitSource } from "./git-source.js";
 import { isGitSource, isPathSource, isRegistrySource, lockStaleness, sourceValue, type Lock, type LockedFile, type RegistrySourceLock, type Resolution } from "./lock.js";
@@ -66,6 +70,11 @@ export interface InstallOptions {
    * (environments-7): the first serving its release at the locked
    * version and checksum serves them. `[registry]` where omitted. */
   registries?: (source: RegistrySourceLock) => readonly RegistrySource[];
+  /** This device's seed of the built-in spec package (environments-11),
+   * asked first for its locked release: it serves where it holds the
+   * locked version with each locked file at the lock's digest, whatever
+   * archive checksum the lock records (environments-7). */
+  seed?: RegistrySource;
   git: GitSource;
   gitCredential?: (repo: string) => Promise<GitCredential | undefined>;
   /** The folder a path source's path is relative to (environments-2):
@@ -294,6 +303,9 @@ async function fetchMissing(options: InstallOptions, name: string, resolution: R
   if (missing.length === 0) return;
   const source = resolution.source;
   if (isRegistrySource(source)) {
+    // The built-in from this device's seed, by its files' digests: the
+    // archive each device packs differs, its files do not.
+    if (name === BUILTIN_PACKAGE_NAME && options.seed && await fetchSeeded(options.seed, store, name, source, resolution)) return;
     // The first registry serving the release at the locked checksum
     // serves what is still missing; any other answer moves on.
     const reasons: string[] = [];
@@ -322,6 +334,26 @@ async function fetchMissing(options: InstallOptions, name: string, resolution: R
       putVerified(store, name, file, readFileSync(absolute));
     }
   }
+}
+
+/** Serve the built-in spec package's missing files from this device's
+ * seed, each verified by digest: false where the seed lacks the locked
+ * version, holds a locked file at another digest, or cannot read one, so
+ * the registries are asked instead. */
+async function fetchSeeded(seed: RegistrySource, store: ContentStore, name: string, source: RegistrySourceLock, resolution: Resolution): Promise<boolean> {
+  if (!(await seedServes(seed, source.version, resolution.files))) return false;
+  for (const file of resolution.files) {
+    if (store.has(file.sha256, file.executable)) continue;
+    let bytes: Uint8Array;
+    try {
+      bytes = await seed.file(name, source.version, file.path);
+    } catch (error) {
+      if (error instanceof RegistryError) return false;
+      throw error;
+    }
+    putVerified(store, name, file, bytes);
+  }
+  return true;
 }
 
 /** Fetch a registry package's missing files from one registry, each

@@ -18,7 +18,7 @@ import { readVersioned, VersionConflictError, writeApplicationBytes, writeVersio
 import { packFiles } from "./archive.js";
 import { BUILTIN_PACKAGE_NAME, specExportName } from "./exports.js";
 import { artifactLanguages, inArtifact, parseManifestText, readRelease, ROOT_FILES, sha256Hex, type Manifest, type ReleaseFile } from "./format.js";
-import { isRegistrySource, parseLock, serializeLock, type Lock } from "./lock.js";
+import { isRegistrySource, parseLock, serializeLock, type Lock, type LockedFile } from "./lock.js";
 import { RegistryError, type RegistrySource, type SearchResult, type VersionIndex, type VersionIndexEntry, type VersionResource } from "./registry.js";
 import { parseRequests, requestsDigest } from "./requests.js";
 import { compareVersions, isVersion } from "./semver.js";
@@ -244,6 +244,26 @@ export function builtinRegistrySource(options: BuiltinSourceOptions): RegistrySo
       return [{ name: BUILTIN_PACKAGE_NAME, description, versions: all.map((release) => release.version) }];
     },
   };
+}
+
+/**
+ * Whether this device's seed serves a lock's release of the built-in spec
+ * package (environments-7, environments-11): it holds the locked version
+ * and each locked file at the digest the lock records for it. The
+ * archive's checksum is not compared: each device packs its own archive
+ * from its seed, so another device's lock of the same files may record
+ * another.
+ */
+export async function seedServes(seed: RegistrySource, version: string, files: readonly LockedFile[]): Promise<boolean> {
+  let resource: VersionResource;
+  try {
+    resource = await seed.version(BUILTIN_PACKAGE_NAME, version);
+  } catch (error) {
+    if (error instanceof RegistryError) return false;
+    throw error;
+  }
+  const digests = new Map((resource.files ?? []).map((file) => [file.path, file.sha256]));
+  return files.every((file) => digests.get(file.path) === file.sha256);
 }
 
 function safeBuiltinPackage(): BuiltinPackage | null {

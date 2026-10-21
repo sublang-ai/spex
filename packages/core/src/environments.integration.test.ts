@@ -24,7 +24,7 @@ import { CoreError } from "./session.js";
 import type { Store } from "./store.js";
 import { defaultSpawner, ENGINE_LINKS_EXCLUDE, type LineSpawner } from "./compile.js";
 import { createModuleLoader, starterText, templatePath } from "./config.js";
-import { builtinPackage, INSTALL_RECORD, publishRelease, readRelease, RegistryClient, requestsDigest, type BuiltinPackage, type Lock } from "./environment/index.js";
+import { builtinPackage, INSTALL_RECORD, parseLock, publishRelease, readRelease, RegistryClient, requestsDigest, serializeLock, sha256Hex, type BuiltinPackage, type Lock, type RegistrySourceLock } from "./environment/index.js";
 import type { Command, CommandResults, EnvironmentState, ServerMessage } from "./protocol.js";
 import { authoringScript } from "./testing/authoring.js";
 import { fakeAdapterImports, type FakeScript } from "./testing/fake-adapter.js";
@@ -316,6 +316,54 @@ test("environments-23: a fresh home with no registry reachable seeds the built-i
     && JSON.stringify(state.requests["sublang/playbooks"]) === JSON.stringify({ kind: "registry", version: shipped.version }));
   assert.deepEqual(exact.packages.map((pkg) => [pkg.version, pkg.installed]), [[shipped.version, true]]);
   assert.ok(!("builtinUpdate" in exact), "[environments-11] the request admits only the older release");
+});
+
+test("environments-23, environments-7, environments-11: a lock records the archive checksum the seed packs to; with no registry reachable, a lock of the seeded release at another device's archive checksum with the same files' digests installs from the seed, and one recording another digest for a file fails naming the spec package", { timeout: 120_000 }, async (t) => {
+  const dir = scratchDir("spex-env-builtin-digests-");
+  const core = await startCore(dir, { hostUrl: UNREACHABLE });
+  t.after(() => core.stop());
+  const own = `${OWN}/${OWN}-spex`;
+  const lockFile = join(clonePath(core.dataDir, own), "spex.lock");
+  const shipped = builtinPackage();
+  const lock = parseLock(readFileSync(lockFile, "utf8"));
+  const resolution = lock.packages["sublang/playbooks"]!;
+  const source = resolution.source as RegistrySourceLock;
+  assert.equal(source.version, shipped.version);
+
+  // [environments-11] The lock records the checksum of the archive this
+  // device's seed packs to, as the seeded release's index records it.
+  const seeded = JSON.parse(readFileSync(join(core.dataDir, "cache", "builtins", `${shipped.version}.json`), "utf8")) as { checksum: string };
+  assert.equal(source.checksum, seeded.checksum);
+
+  // Another device's lock of the same release, its archive packed there
+  // to another checksum: written beside the same `spex.yaml`, the store
+  // lacking the release's files, so the install must fetch each.
+  const foreign = sha256Hex(Buffer.from("the archive another device packed"));
+  const stored = (file: { sha256: string; executable: boolean }): string => join(core.dataDir, "store", ...(file.executable ? ["x"] : []), file.sha256);
+  const installWith = async (files: Lock["packages"][string]["files"], done: (state: EnvironmentState) => boolean): Promise<EnvironmentState> => {
+    writeFileSync(lockFile, serializeLock({ ...lock, packages: { "sublang/playbooks": { ...resolution, source: { ...source, checksum: foreign }, files } } }));
+    for (const file of resolution.files) rmSync(stored(file), { force: true });
+    const mark = core.client.mark();
+    await core.client.expectOk("environment.install", { repository: own });
+    return core.client.environment(own, mark, (state) => state.busy === null && done(state));
+  };
+
+  // [environments-7] Its files carry the digests the seed's do, so the
+  // seed serves them, whatever archive checksum the lock records; the
+  // lock stays as written.
+  let state = await installWith(resolution.files, (candidate) => candidate.error !== null || candidate.packages.some((pkg) => pkg.installed));
+  assert.equal(state.error, null);
+  assert.deepEqual(state.packages.map((pkg) => [pkg.name, pkg.version, pkg.installed]), [["sublang/playbooks", shipped.version, true]]);
+  assert.ok(resolution.files.every((file) => existsSync(stored(file))), "the store holds every file again");
+  assert.equal((parseLock(readFileSync(lockFile, "utf8")).packages["sublang/playbooks"]!.source as RegistrySourceLock).checksum, foreign, "an install changes no lock");
+
+  // [environments-7] A lock recording another digest for one file is not
+  // the seed's release, and no registry serves it at its checksum: the
+  // install fails naming the spec package.
+  const [first, ...rest] = resolution.files;
+  state = await installWith([{ ...first!, sha256: sha256Hex(Buffer.from("another file")) }, ...rest], (candidate) => candidate.error !== null);
+  assert.match(state.error ?? "", /sublang\/playbooks/);
+  assert.equal(state.packages.find((pkg) => pkg.name === "sublang/playbooks")?.installed, false);
 });
 
 test("environments-22 through a real core: retained files of another lock are not imported before a successful same-process resolve", { timeout: 120_000 }, async (t) => {

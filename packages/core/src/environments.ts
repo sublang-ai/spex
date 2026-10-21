@@ -763,6 +763,7 @@ export class EnvironmentManager {
         cache: this.cacheDir,
         registry,
         registries: (source) => this.installRegistries(instance, source),
+        seed: this.builtinSource(),
         git: this.git,
         gitCredential: envGit.credential,
         pathRoot,
