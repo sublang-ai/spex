@@ -1179,6 +1179,16 @@ export async function pickGroup(
   return repositoryOf(state, key);
 }
 
+/** A project beside the demo's (space-85): a Git folder named `name`
+ * in the scratch root, registered over the protocol (arrange only), its
+ * spex repository local only under your own group (storage-6). */
+export async function registerLocalProject(app: App, name: string): Promise<{ dir: string; key: string }> {
+  const dir = join(dirname(app.dataDir), name);
+  seedDemoProject(dir);
+  const { id } = await app.core.command("project.register", { path: dir });
+  return { dir, key: id };
+}
+
 /**
  * The two-laptop arrangement against the stand-in (space-41, space-43,
  * space-44): this home signed in, its project picked into the team
@@ -1264,29 +1274,37 @@ export async function seedHostProject(app: App): Promise<{ key: string; code: st
  * the header card's Sign in at the instance its field holds; where the
  * home lists the stand-in, signed out, its heading's "Sign in again";
  * where it lists others alone, the card "Add instance…" opens at the
- * list's foot — each card's field filled with the stand-in's origin
- * where it holds another; the link to the page that carries the code
- * shown while the control reads "Signing in…" and no code is, the code
- * the link carries approved at the stand-in — `app.host` unless another
- * of `app.hosts` is named — as its page would, and the stand-in's
- * heading reading its person's account. Groups must be shown.
+ * list's foot, unless it stands open already — each card's field
+ * filled with the stand-in's origin where it holds another; the link to
+ * the page that carries the code shown while the control reads "Signing
+ * in…" and no code is, `during` then asserting what holds while the
+ * flow runs, the code the link carries approved at the stand-in —
+ * `app.host` unless another of `app.hosts` is named — as its page
+ * would, and the stand-in's heading reading its person's account.
+ * Groups must be shown.
  */
 export async function signInThroughPage(
   page: Page,
   app: App,
   host: StandinHost | undefined = app.host,
   via?: "card" | "again" | "add",
+  during?: () => Promise<void>,
 ): Promise<void> {
   if (!host) throw new Error("signing in needs a host");
   const section = page.getByTestId(`space-instance-${host.url}`);
   const listed = page.locator('[data-testid^="space-instance-http"]');
   const how = via ?? ((await section.count()) > 0 ? "again" : (await listed.count()) > 0 ? "add" : "card");
-  if (how === "add") await page.getByTestId("space-groups").getByTestId("space-add-instance").click();
+  // The card "Add instance…" opens stands in its place until closed, as
+  // after a start the core refused (space-3).
+  const groups = page.getByTestId("space-groups");
+  if (how === "add" && (await groups.getByTestId("space-add-card").count()) === 0) {
+    await groups.getByTestId("space-add-instance").click();
+  }
   const where =
     how === "card"
       ? page.getByTestId("space-header").getByTestId("space-signin-card")
       : how === "add"
-        ? page.getByTestId("space-groups").getByTestId("space-add-card")
+        ? groups.getByTestId("space-add-card")
         : section.getByTestId("space-instance-heading");
   const control = where.getByTestId(how === "again" ? "space-signin-again" : "space-signin");
   if (how !== "again") {
@@ -1303,8 +1321,16 @@ export async function signInThroughPage(
   const code = href.searchParams.get("user_code") ?? "";
   expect(code).not.toBe("");
   await expect(page.getByTestId("space-surface")).not.toContainText(code);
+  await during?.();
   host.script.approveDevice(code);
   await expect(section.getByTestId("space-account")).toContainText(`Signed in as @${host.script.person.login}`);
+}
+
+/** An instance's section of the Groups list (space-1): its heading and
+ * what it lists. Stand-ins share their host name, so a journey finds an
+ * instance by its origin, never by its words. */
+export function instanceSection(page: Page, host: StandinHost) {
+  return page.getByTestId("space-groups").getByTestId(`space-instance-${host.url}`);
 }
 
 /**
