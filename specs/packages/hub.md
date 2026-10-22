@@ -46,7 +46,7 @@ When a person is admitted for the first time, or admitted while their seat is st
 
 - the helper is `spex-seatctl` with exactly one of `create <id>`, `start <id>`, `stop <id>` and `wipe <id>`, `<id>` the person's permanent account id, every other invocation refused by the helper itself; the service manager's policy lets the hub's account run it and nothing else as root;
 - `create` makes the account `spex-<id>` in the group `spex-seats` with a home readable by that account alone; `start` writes the token where the hub and the seat alone read it and starts the unit `spex-seat@<id>`; `stop` stops it; `wipe` deletes the seat's app token and code-credentials files [[storage-44](storage.md#storage-44)] and nothing else;
-- the unit runs the server shell as a seat [[server-shell-25](server-shell.md#server-shell-25)] as that account, with the server's id and name and the instance's URL from the server's environment file, the shared credential file where the administrator placed one, its socket and token under the seat's runtime directory, a stop timeout above the core's own bounds, and a kill of the whole control group at that timeout, so that the core's graceful stop [[core-service-39](core-service.md#core-service-39)] runs first.
+- the unit runs the server shell as a seat [[server-shell-25](server-shell.md#server-shell-25)] as that account, with the server's id and name and the instance's URL from the server's environment file, the shared credential file the install script made for the administrator to fill [[hub-7](#hub-7)], its socket and token under the seat's runtime directory, a stop timeout above the core's own bounds, and a kill of the whole control group at that timeout, so that the core's graceful stop [[core-service-39](core-service.md#core-service-39)] runs first.
 
 #### hub-5
 
@@ -72,9 +72,10 @@ When the administrator runs `spex-hub status`, `spex-hub evict <id>` or `spex-hu
 
 #### hub-7
 
-When the administrator runs the install script of a source release on a Linux host with systemd and sudo, the script shall build the server shell and the hub from that checkout, install them under one prefix with the helper, the two units and the sudoers fragment, create the hub's account and the seats' group, and print the three files the administrator writes before `attach`: the server's environment file, the shared credential file readable by the seats' group, and the TLS material ([DR-132](../decisions/132-team-servers.md), [DR-040](../decisions/040-source-only-app-releases.md)):
+When the administrator runs the install script of a source release on a Linux host with systemd and sudo, the script shall build the server shell and the hub from that checkout, install them under one prefix with the helper and a `spex-hub` command, the two units and the sudoers fragment in the system's own places, create the hub's account and the seats' group, make the shared credential file empty and readable by the seats' group where none exists, and print the three files the administrator writes before `attach`: the server's environment file, the shared credential file, and the TLS material ([DR-132](../decisions/132-team-servers.md), [DR-040](../decisions/040-source-only-app-releases.md)):
 
-- the script installs no binary a release does not build from source.
+- the script installs no binary of Spex's own that the release does not build from source; the dependencies come as `npm ci` fetches them;
+- every refusal — not root, no systemd or sudo, no release checkout, a prefix overlapping the checkout — comes before anything changes, and a second run updates the installed files and leaves the accounts, the groups and the administrator's files as they are.
 
 ## Internal Behavior
 
