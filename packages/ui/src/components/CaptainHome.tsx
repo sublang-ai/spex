@@ -19,7 +19,7 @@ import { canSubmitContent, type ComposerAttachmentControls } from "./ComposerAtt
 import type { AgentPatch } from "../lib/config-ops.js";
 import { playbookIntent } from "../lib/playbook-intent.js";
 import { keyLabel } from "../lib/shortcuts.js";
-import { isLocalPlace, type StagedIntent } from "../state/store.js";
+import { isLocalPlace, placeLabel, type StagedIntent } from "../state/store.js";
 import { usePlaceStore } from "../state/place-context.js";
 import { Rich } from "./Rich.js";
 import { SlashMenuList, slashMatches } from "./SlashMenu.js";
@@ -295,9 +295,19 @@ export function CaptainHome(props: CaptainHomeProps) {
                 ? i18n._(
                     "Hello! I'm your Captain. Pick a project in the sidebar, then tell me what to do with it and I'll route it to a playbook, a scripted workflow the AI players run.",
                   )
-                : i18n._(
-                    "Hello! I'm your Captain. Add a project — any local git repo — and tell me what to do with it; I'll route it to a playbook, a scripted workflow the AI players run.",
-                  )}
+                : seedable
+                  ? i18n._(
+                      "Hello! I'm your Captain. Add a project — any local git repo — and tell me what to do with it; I'll route it to a playbook, a scripted workflow the AI players run.",
+                    )
+                  : // A seat's projects are opened among the member's
+                    // groups, its core allocating every folder: its
+                    // greeting names its groups, no folder of this
+                    // computer (run-view-169).
+                    i18n._({
+                      id: "Hello! I'm your Captain. Open a project from your groups on {server} and tell me what to do with it; I'll route it to a playbook, a scripted workflow the AI players run.",
+                      comment: "the Captain's greeting at a team server's seat holding no project; {server} is the server's name",
+                      values: { server: placeLabel(store.place) },
+                    })}
           </p>
           {!props.hasProject && !props.hasProjects ? (
             // The two ways in, in the greeting itself: nothing in the

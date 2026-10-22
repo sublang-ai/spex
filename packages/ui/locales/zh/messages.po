@@ -3024,6 +3024,11 @@ msgstr "注意 — 部分智能体尚未就绪："
 msgid "Hello! I'm your Captain. Add a project — any local git repo — and tell me what to do with it; I'll route it to a playbook, a scripted workflow the AI players run."
 msgstr "你好！我是你的 Captain。先添加一个项目 — 任意本地 git 仓库 — 再告诉我要做什么；我会把它交给某个规程，也就是由 AI Player 执行的脚本化工作流。"
 
+#. the Captain's greeting at a team server's seat holding no project; {server} is the server's name
+#: src/components/CaptainHome.tsx
+msgid "Hello! I'm your Captain. Open a project from your groups on {server} and tell me what to do with it; I'll route it to a playbook, a scripted workflow the AI players run."
+msgstr "你好！我是你的 Captain。从你在 {server} 上的群组中打开一个项目，再告诉我要做什么；我会把它交给某个规程，也就是由 AI Player 执行的脚本化工作流。"
+
 #: src/components/CaptainHome.tsx
 msgid "Hello! I'm your Captain. Pick a project in the sidebar, then tell me what to do with it and I'll route it to a playbook, a scripted workflow the AI players run."
 msgstr "你好！我是你的 Captain。在侧栏选择一个项目，再告诉我要做什么，我会把它交给某个规程，也就是由 AI Player 执行的脚本化工作流。"

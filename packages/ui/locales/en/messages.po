@@ -3024,6 +3024,11 @@ msgstr "Heads up — some agents aren't ready yet:"
 msgid "Hello! I'm your Captain. Add a project — any local git repo — and tell me what to do with it; I'll route it to a playbook, a scripted workflow the AI players run."
 msgstr "Hello! I'm your Captain. Add a project — any local git repo — and tell me what to do with it; I'll route it to a playbook, a scripted workflow the AI players run."
 
+#. the Captain's greeting at a team server's seat holding no project; {server} is the server's name
+#: src/components/CaptainHome.tsx
+msgid "Hello! I'm your Captain. Open a project from your groups on {server} and tell me what to do with it; I'll route it to a playbook, a scripted workflow the AI players run."
+msgstr "Hello! I'm your Captain. Open a project from your groups on {server} and tell me what to do with it; I'll route it to a playbook, a scripted workflow the AI players run."
+
 #: src/components/CaptainHome.tsx
 msgid "Hello! I'm your Captain. Pick a project in the sidebar, then tell me what to do with it and I'll route it to a playbook, a scripted workflow the AI players run."
 msgstr "Hello! I'm your Captain. Pick a project in the sidebar, then tell me what to do with it and I'll route it to a playbook, a scripted workflow the AI players run."

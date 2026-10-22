@@ -72,6 +72,7 @@ export interface ServerShellOptions {
     | "systemLanguages"
     | "watchConfig"
     | "own"
+    | "serverCertificateAuthorities"
   >;
 }
 
