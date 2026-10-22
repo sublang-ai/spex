@@ -62,6 +62,7 @@ import { Rich } from "./Rich.js";
 import {
   QueuedMark,
   QueueStandingPhrase,
+  runsOnPhrase,
 } from "./QueuedIntentPresentation.js";
 
 // ---------------------------------------------------------------------------
@@ -956,6 +957,15 @@ function MenuItem({
   );
 }
 
+/** Whether a row's menu carries a provenance action (dashboard-29):
+ * an issue or PR with its page, a record, or a capturing session —
+ * exactly the intents `ProvenanceAction` draws an item for. */
+function offersProvenance(intent: IntentInfo): boolean {
+  const source = intent.source;
+  if (!source) return false;
+  return source.kind === "issue" || source.kind === "pr" ? !!source.url : true;
+}
+
 /** The provenance action, named after what it opens (dashboard-29,
  * DR-038): an issue or PR page, the record, or the capturing session. */
 function ProvenanceAction({
@@ -1109,6 +1119,14 @@ function QueueRow({
   // Presence is the core-published Next marker (core-service-107):
   // the oldest queued row.
   const schedule = derived.next;
+  // Assigned to another runtime, the intent runs there alone
+  // (dashboard-29, DR-134): the row reads where it runs in place of
+  // any standing, carries no Start, and its menu offers only its
+  // provenance — never Start, Edit or Remove, acts the core refuses
+  // here. With no provenance to offer, the row draws no menu.
+  const runsOn = derived.runsOn;
+  const startable = runsOn === undefined;
+  const menuOffered = startable || offersProvenance(intent);
 
   // Leaving the edit — saved or cancelled — puts focus back on the
   // row it replaced, never on the page body (DR-010 §6).
@@ -1188,7 +1206,17 @@ function QueueRow({
         >
           {title}
         </span>
-        {schedule ? (
+        {runsOn !== undefined ? (
+          // In the standing's place, sharing its region and its
+          // truncation (dashboard-29).
+          <span
+            data-testid={`upnext-standing-${intent.id}`}
+            title={runsOnPhrase(runsOn)}
+            className="min-w-0 truncate text-xs text-neutral-500 @md:max-w-[45%]"
+          >
+            {runsOnPhrase(runsOn)}
+          </span>
+        ) : schedule ? (
           <QueueStandingPhrase
             schedule={schedule}
             testId={`upnext-standing-${intent.id}`}
@@ -1197,7 +1225,7 @@ function QueueRow({
         ) : null}
       </div>
       <QueuedMark testId={`upnext-queued-${intent.id}`} />
-      {schedule?.manualStart ? (
+      {startable && schedule?.manualStart ? (
         <button
           type="button"
           data-testid={`upnext-start-${intent.id}`}
@@ -1224,20 +1252,22 @@ function QueueRow({
           </span>
         </button>
       ) : null}
-      <button
-        ref={triggerRef}
-        type="button"
-        aria-label={i18n._("Actions for {title}", { title })}
-        aria-haspopup="menu"
-        aria-expanded={menuOpen}
-        aria-controls={menuOpen ? menuId : undefined}
-        data-testid={`upnext-menu-${intent.id}`}
-        onClick={() => onMenuToggle(!menuOpen)}
-        className="min-h-6 min-w-6 shrink-0 rounded px-1 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-600 dark:hover:bg-neutral-800 dark:hover:text-neutral-300"
-      >
-        ⋯
-      </button>
-      {menuOpen ? (
+      {menuOffered ? (
+        <button
+          ref={triggerRef}
+          type="button"
+          aria-label={i18n._("Actions for {title}", { title })}
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
+          aria-controls={menuOpen ? menuId : undefined}
+          data-testid={`upnext-menu-${intent.id}`}
+          onClick={() => onMenuToggle(!menuOpen)}
+          className="min-h-6 min-w-6 shrink-0 rounded px-1 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-600 dark:hover:bg-neutral-800 dark:hover:text-neutral-300"
+        >
+          ⋯
+        </button>
+      ) : null}
+      {menuOpen && menuOffered ? (
         <div
           ref={menuRef}
           id={menuId}
@@ -1246,52 +1276,57 @@ function QueueRow({
           className="absolute right-0 top-full z-10 mt-0.5 flex min-w-44 flex-col rounded-md border border-neutral-200 bg-white p-1 text-xs shadow-lg dark:border-neutral-700 dark:bg-neutral-900"
         >
           {/* The queue has no order of its own to change: age orders
-              it, and any row may be started directly (dashboard-29). */}
-          <MenuItem
-            data-testid={`upnext-start-action-${intent.id}`}
-            onClick={() => {
-              onMenuToggle(false);
-              onStart();
-            }}
-          >
-            {i18n._({
-              id: "Start",
-              comment: "queue row control: begin this queued intent",
-            })}
-          </MenuItem>
-          <MenuItem
-            data-testid={`upnext-edit-action-${intent.id}`}
-            onClick={() => {
-              onMenuToggle(false);
-              const state = useAppStore.getState();
-              const retained = state.attachmentDraftTexts[mediaKey];
-              if (retained === undefined) {
-                state.stageAttachmentAssets(mediaKey, intentMediaOwner(intent), intent.attachments ?? []);
-                state.setAttachmentDraftText(mediaKey, intent.text);
-              }
-              setEditing(retained ?? intent.text);
-            }}
-          >
-            {i18n._({
-              id: "Edit",
-              comment: "row menu item: edit this intent's text and files",
-            })}
-          </MenuItem>
-          <MenuItem
-            data-testid={`upnext-remove-action-${intent.id}`}
-            // Remove acts on the click (dashboard-29, DR-038): no
-            // confirmation, no history — the band's Undo line is the
-            // way back.
-            onClick={(event) => {
-              onMenuToggle(false);
-              void onRemove(activatedByKeyboard(event));
-            }}
-          >
-            {i18n._({
-              id: "Remove",
-              comment: "row menu item: take this row out of the queue",
-            })}
-          </MenuItem>
+              it, and any row this runtime runs may be started directly
+              (dashboard-29). */}
+          {startable ? (
+            <>
+              <MenuItem
+                data-testid={`upnext-start-action-${intent.id}`}
+                onClick={() => {
+                  onMenuToggle(false);
+                  onStart();
+                }}
+              >
+                {i18n._({
+                  id: "Start",
+                  comment: "queue row control: begin this queued intent",
+                })}
+              </MenuItem>
+              <MenuItem
+                data-testid={`upnext-edit-action-${intent.id}`}
+                onClick={() => {
+                  onMenuToggle(false);
+                  const state = useAppStore.getState();
+                  const retained = state.attachmentDraftTexts[mediaKey];
+                  if (retained === undefined) {
+                    state.stageAttachmentAssets(mediaKey, intentMediaOwner(intent), intent.attachments ?? []);
+                    state.setAttachmentDraftText(mediaKey, intent.text);
+                  }
+                  setEditing(retained ?? intent.text);
+                }}
+              >
+                {i18n._({
+                  id: "Edit",
+                  comment: "row menu item: edit this intent's text and files",
+                })}
+              </MenuItem>
+              <MenuItem
+                data-testid={`upnext-remove-action-${intent.id}`}
+                // Remove acts on the click (dashboard-29, DR-038): no
+                // confirmation, no history — the band's Undo line is the
+                // way back.
+                onClick={(event) => {
+                  onMenuToggle(false);
+                  void onRemove(activatedByKeyboard(event));
+                }}
+              >
+                {i18n._({
+                  id: "Remove",
+                  comment: "row menu item: take this row out of the queue",
+                })}
+              </MenuItem>
+            </>
+          ) : null}
           <ProvenanceAction
             intent={intent}
             recordPath={recordPath}

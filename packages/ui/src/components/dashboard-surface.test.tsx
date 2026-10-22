@@ -1368,6 +1368,195 @@ describe("dashboard-26/29: groups and the queue band", () => {
     ).toBe(true);
   });
 
+  test("dashboard-60: a row assigned to another runtime reads where it runs, carries no Start, and its menu offers its provenance alone (dashboard-29)", async () => {
+    // Another runtime's captures, as the core serves them: kept in the
+    // queue by age with that runtime's label, never next here
+    // (core-service-107).
+    const theirs = (
+      id: string,
+      text: string,
+      minutesAgo: number,
+      source?: IntentSource,
+    ): DerivedIntent => ({
+      intent: info({
+        id,
+        projectId: "me/alpha-spex",
+        text,
+        createdAt: NOW - minutesAgo * MIN,
+        ...(source ? { source } : {}),
+      }),
+      state: "queued",
+      runsOn: "build-server",
+    });
+    seed({
+      projects: [PROJECTS[0]],
+      sessions: [
+        {
+          id: "s-chat",
+          projectId: "me/alpha-spex",
+          projectPath: "/tmp/alpha",
+          createdAt: NOW - 2 * MIN,
+          live: false,
+          endedAt: NOW - MIN,
+          players: [],
+          initialVisible: [],
+          turns: 1,
+          failed: false,
+          runsOn: "build-server",
+          continuationReason: "Runs on build-server",
+        },
+      ],
+      ledger: {
+        intents: [
+          theirs("theirs-chat", "Ship the parser", 90, { kind: "chat", ref: "s-chat" }),
+          {
+            intent: info({ id: "mine", projectId: "me/alpha-spex", text: "Mine to run", createdAt: NOW - 60 * MIN }),
+            state: "queued",
+            next: MANUAL_READY,
+          },
+          theirs("theirs-issue", "Address #7: Fix the bug", 45, {
+            kind: "issue",
+            ref: "7",
+            url: "https://github.com/x/y/issues/7",
+          }),
+          theirs("theirs-bare", "Document the parser", 30),
+        ],
+        attention: [],
+        badge: 0,
+      },
+    });
+    const { onOpenSession, onStartIntent } = renderSurface();
+
+    // Each keeps its Queued tag and its place by age, the core's
+    // order, the oldest row this runtime may run being next.
+    expect(
+      screen
+        .getAllByTestId(/^upnext-row-/)
+        .map((el) => el.getAttribute("data-testid")),
+    ).toEqual([
+      "upnext-row-theirs-chat",
+      "upnext-row-mine",
+      "upnext-row-theirs-issue",
+      "upnext-row-theirs-bare",
+    ]);
+    expect(screen.getByTestId("upnext-row-mine").getAttribute("data-next")).toBe("true");
+    expect(screen.getByTestId("upnext-start-mine")).toBeTruthy();
+    for (const id of ["theirs-chat", "theirs-issue", "theirs-bare"]) {
+      expect(screen.getByTestId(`upnext-queued-${id}`).textContent).toBe("Queued");
+      expect(screen.getByTestId(`upnext-row-${id}`).getAttribute("data-next")).toBeNull();
+      // "Runs on <label>" in place of any standing, in full in its
+      // title, and no Start (dashboard-29).
+      const phrase = screen.getByTestId(`upnext-standing-${id}`);
+      expect(phrase.textContent).toBe("Runs on build-server");
+      expect(phrase.getAttribute("title")).toBe("Runs on build-server");
+      expect(screen.queryByTestId(`upnext-start-${id}`)).toBeNull();
+    }
+    // The all-clear pulls this runtime's next, never the older row
+    // another runtime runs (dashboard-8).
+    expect(screen.getByTestId("attention-all-clear").textContent).toContain("Mine to run");
+    expect(screen.getByTestId("attention-all-clear").textContent).not.toContain("Ship the parser");
+
+    // The menu offers neither Start, Edit nor Remove: the provenance
+    // action alone, which still opens what it names (dashboard-29).
+    const items = (title: string) =>
+      within(screen.getByRole("menu", { name: `Actions for ${title}` }))
+        .getAllByRole("menuitem")
+        .map((item) => item.textContent);
+    fireEvent.click(screen.getByTestId("upnext-menu-theirs-chat"));
+    expect(items("Ship the parser")).toEqual(["Session"]);
+    for (const verb of ["start", "edit", "remove"]) {
+      expect(screen.queryByTestId(`upnext-${verb}-action-theirs-chat`)).toBeNull();
+    }
+    fireEvent.click(screen.getByTestId("upnext-source-theirs-chat"));
+    expect(onOpenSession).toHaveBeenCalledWith("s-chat");
+    expect(screen.queryByRole("menu")).toBeNull();
+
+    fireEvent.click(screen.getByTestId("upnext-menu-theirs-issue"));
+    expect(items("Address #7: Fix the bug")).toEqual(["Issue #7 ↗"]);
+    expect(screen.getByTestId("upnext-source-theirs-issue").getAttribute("href")).toBe(
+      "https://github.com/x/y/issues/7",
+    );
+    fireEvent.click(screen.getByTestId("upnext-menu-theirs-issue"));
+
+    // With no provenance there is nothing to offer, so no menu.
+    expect(screen.queryByTestId("upnext-menu-theirs-bare")).toBeNull();
+
+    // This runtime's own row keeps every act.
+    fireEvent.click(screen.getByTestId("upnext-menu-mine"));
+    expect(items("Mine to run")).toEqual(["Start", "Edit", "Remove"]);
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("upnext-start-action-mine"));
+    });
+    expect(onStartIntent).toHaveBeenCalledTimes(1);
+    expect(onStartIntent).toHaveBeenCalledWith(expect.objectContaining({ id: "mine" }));
+    expect(callsOf("intent.close")).toEqual([]);
+    expect(callsOf("intent.edit")).toEqual([]);
+  });
+
+  test("dashboard-10/54: another runtime's records enter no band, the fold serving none of them", () => {
+    // Another runtime's work in every state, with the fold serving no
+    // attention for it (core-service-49): the surface adds none.
+    const elsewhere = (
+      id: string,
+      state: DerivedIntent["state"],
+      over: Partial<DerivedIntent> = {},
+    ): DerivedIntent => ({
+      intent: info({
+        id,
+        projectId: "me/alpha-spex",
+        text: `Their ${id}`,
+        dispatched: { sessionId: "s-there", turnId: 1, at: NOW - 10 * MIN },
+      }),
+      state,
+      runsOn: "build-server",
+      ...over,
+    });
+    seed({
+      projects: [PROJECTS[0]],
+      sessions: [
+        {
+          id: "s-there",
+          projectId: "me/alpha-spex",
+          projectPath: "/tmp/alpha",
+          createdAt: NOW - 20 * MIN,
+          live: false,
+          endedAt: NOW - 5 * MIN,
+          players: [],
+          initialVisible: [],
+          turns: 3,
+          failed: true,
+          title: "Their session",
+          runsOn: "build-server",
+          continuationReason: "Runs on build-server",
+        },
+      ],
+      ledger: {
+        intents: [
+          elsewhere("finished", "finished"),
+          elsewhere("failed", "interrupted", { reason: "failure" }),
+          elsewhere("asking", "interrupted", { reason: "question" }),
+          elsewhere("working", "working"),
+        ],
+        attention: [],
+        badge: 0,
+      },
+    });
+    renderSurface();
+
+    const queue = screen.getByTestId("attention-queue");
+    expect(queue.querySelectorAll("[data-band]")).toHaveLength(0);
+    expect(within(queue).getByTestId("attention-all-clear")).toBeTruthy();
+    expect(queue.textContent).not.toContain("Their");
+    expect(screen.getByTestId("running-empty")).toBeTruthy();
+    expect(screen.queryByTestId("project-attention-me/alpha-spex")).toBeNull();
+    // Never this runtime's conversation (core-service-93), and none of
+    // it queued here.
+    expect(screen.getByTestId("now-me/alpha-spex").textContent).toContain(
+      "Idle — no conversation yet.",
+    );
+    expect(screen.queryAllByTestId(/^upnext-row-/)).toHaveLength(0);
+  });
+
   test("the inline Queue action captures a later row and reveals it without a standing", async () => {
     let current: LedgerState = { ...QUEUE_LEDGER };
     commandMock.mockImplementation(async (type: string, fields) => {

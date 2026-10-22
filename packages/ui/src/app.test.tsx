@@ -507,6 +507,59 @@ describe("run-view-70: the sidebar navigates, the tabs hold what is open", () =>
   });
 });
 
+describe("dashboard-10/54: a session another runtime runs", () => {
+  test("reads the core's phrase as its reason, offers no continuation, Restore or Discard, and summons nothing here", async () => {
+    // As the core lists it (core-service-32): `runsOn` with that
+    // runtime's label, not continuable, the phrase as its reason, no
+    // recovery — whatever failed or was cut short there.
+    const elsewhere = session({
+      id: "elsewhere",
+      title: "ship the parser",
+      failed: true,
+      continuable: undefined,
+      continuationReason: "Runs on build-server",
+      runsOn: "build-server",
+    });
+    const ledger = { intents: [], attention: [], badge: 0 };
+    commandMock.mockImplementation(async (type: string) =>
+      type === "ledger.get"
+        ? ledger
+        : type === "history.get"
+          ? { records: [] }
+          : defaultReply(type),
+    );
+    useAppStore.setState({
+      sessions: [elsewhere],
+      views: { elsewhere: view() },
+      activeSessionId: "elsewhere",
+      workspaceTabs: { p1: "elsewhere" },
+      openTabs: { p1: ["elsewhere"] },
+      ledger: ledger as never,
+    });
+    render(<App />);
+    await act(async () => {});
+
+    // The history notice carries the phrase, and nothing continues,
+    // restores or discards it.
+    expect(screen.getByTestId("history-notice").textContent).toContain(
+      "Runs on build-server",
+    );
+    expect(screen.queryByTestId("boss-composer")).toBeNull();
+    expect(screen.queryByRole("region", { name: "Interrupted turn" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Restore" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Discard" })).toBeNull();
+    // The fold serves no entry for it, and the surfaces add none: no
+    // badge, and its sidebar mark is quiet history, not a summons.
+    expect(screen.queryByTestId("nav-attention-badge")).toBeNull();
+    expect(screen.getByTestId("sidebar-mark-elsewhere").dataset.life).toBe(
+      "history",
+    );
+    expect(
+      commandMock.mock.calls.map(([type]) => type),
+    ).not.toContain("session.restore");
+  });
+});
+
 describe("run-view-72: the chrome folds without dropping a duty", () => {
   test("the binding collapses and the foot control restores", () => {
     const { unmount } = render(<App />);

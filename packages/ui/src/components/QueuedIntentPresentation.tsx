@@ -47,6 +47,18 @@ export function queueStandingPhrase(
   }
 }
 
+/** Where a row assigned to another runtime runs (dashboard-29,
+ * DR-134): the phrase stands in place of any standing, naming that
+ * runtime by the label the core serves. */
+export function runsOnPhrase(label: string): string {
+  return i18n._({
+    id: "Runs on {label}",
+    values: { label },
+    comment:
+      "queued row: the intent is assigned to another runtime, named by its label — the server's name on a seat, else the host name — and runs there alone",
+  });
+}
+
 /** The neutral lifecycle mark every committed queue row carries. */
 export function QueuedMark({ testId }: { testId?: string }) {
   return (
