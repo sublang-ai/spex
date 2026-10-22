@@ -2411,6 +2411,11 @@ msgstr "state root {dir} lock at {lock} cannot be verified: {reason}; stop every
 msgid "Still kept under {host}: {names}"
 msgstr "Still kept under {host}: {names}"
 
+#. Refusal of Forget: spex repositories kept under another instance that are still placed at this one too, no signed-in instance listing that placement; {host} is the instance's display name, {names} the repositories' names as a list
+#: src/space.ts
+msgid "Still placed at {host}: {names}"
+msgstr "Still placed at {host}: {names}"
+
 #. A stopped step's message: the reader stopped it while the Git host's rate limit held its call; {host} is the host's display name
 #: src/space.ts
 msgid "Stopped while waiting for {host}"

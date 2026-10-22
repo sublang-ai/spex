@@ -296,6 +296,15 @@ const stillKeptUnder = (host: string, names: readonly string[]): string => i18n.
   comment: "Refusal of Forget: spex repositories whose clones are still kept under the instance, no signed-in instance listing them; {host} is the instance's display name, {names} the repositories' names as a list",
 });
 
+/** The refusal of Forget while projects are still placed at the
+ * instance by a placement beside their key placement (space-82): each
+ * named, beneath its heading. */
+const stillPlacedAt = (host: string, names: readonly string[]): string => i18n._({
+  id: "Still placed at {host}: {names}",
+  values: { host, names: new Intl.ListFormat(i18n.locale || "en", { type: "conjunction", style: "narrow" }).format(names) },
+  comment: "Refusal of Forget: spex repositories kept under another instance that are still placed at this one too, no signed-in instance listing that placement; {host} is the instance's display name, {names} the repositories' names as a list",
+});
+
 /** The refusal of a sync of a clone no instance holds (space-11). */
 const pickAGroupFirst = (): string => i18n._({
   id: "Pick a group first",
@@ -2447,23 +2456,22 @@ class RepositorySync {
     await this.state(true);
   }
 
-  /** Drop the clone's first placement, its remote named `name`, as a
-   * Forget of its instance drops your own group's own repository's remote
-   * there (space-82): whole, as any drop is (dropPlacement) — its id and
-   * creation mark with its remote's section (storage-34), the `spex` the
-   * clone fetched of it and the upstream naming it, and this device's
+  /** Drop one of the clone's placements, as a Forget of its instance
+   * drops your own group's own repository's remote there (space-82): its
+   * first or a later one, whole, as any drop is (dropPlacement) — its id
+   * and creation mark with its remote's section (storage-34), the `spex`
+   * the clone fetched of it and the upstream naming it, and this device's
    * last sync and notice of it (space-5, storage-5) — its placement file
-   * left as it stands. Written only while that remote still stands as its
-   * first placement. */
-  async dropFirstRemote(name: string): Promise<void> {
+   * left as it stands. Written only while that placement still stands as
+   * it was read. */
+  async dropRemote(placement: Placement): Promise<void> {
     const repo = await this.readRepository();
     this.requireGit(repo);
-    if (!repo.root || this.facts.remoteName !== name) return;
-    const placement = this.placementsNow().find((candidate) => candidate.name === name);
+    if (!repo.root) return;
     // A deferred clone's id, at the top level until its move, is that
     // remote's, and goes with it.
     const deferred = this.deferred();
-    if (!placement || !this.dropPlacement(placement)) return;
+    if (!this.dropPlacement(placement)) return;
     if (deferred) for (const key of [LEGACY_CREATED_KEY, LEGACY_ID_KEY]) this.git.runSync(["config", "--unset", key]);
     if (!this.current) this.phase = { phase: "idle" };
     await this.state(true);
@@ -4944,18 +4952,22 @@ export class SpaceManager {
 
   /**
    * Forget a signed-out instance the command names (space-82), in order:
-   * each clone whose instance it is, other than your own group's own
-   * repository, follows the signed-in instance governing it — the
-   * earliest in the home's list whose view lists the host repository it
-   * records (git-host-5) — re-keyed under that instance's folder with
-   * its remote renamed, as a sync's move makes it follow (space-60);
-   * where any such clone is left — listed by no signed-in instance, or
-   * its follow refused by a session's lease beneath — Forget is refused
-   * naming each, the instance kept with every follow already made; then
-   * your own group's own repository, where that instance is its own,
-   * renames its remote to the folder of the signed-in instance governing
-   * it, else drops that remote, its id, what it fetched and its upstream
-   * with it, its file left (space-5); last, the instance's entry leaves
+   * each placement at that instance of a clone other than your own
+   * group's own repository follows the signed-in instance governing it —
+   * the earliest in the home's list whose view lists the host repository
+   * it records (git-host-5), but none at which the clone holds another
+   * placement — as a sync's follow makes it follow (space-60): the key
+   * placement re-keying the clone under that instance's folder, any other
+   * by its remote's rename alone, its placement file rewritten either
+   * way (storage-36); where any clone still has that instance as its own
+   * (storage-31) or a placement there — listed by no signed-in instance,
+   * or its follow refused by a session's lease beneath — Forget is
+   * refused naming each, the instance kept with every follow already
+   * made; then your own group's own repository's placement there, its
+   * first or a later one, has its remote renamed to the folder of the
+   * signed-in instance governing it, its file rewritten, else that
+   * remote dropped, its id, what it fetched and its upstream with it,
+   * its file left (space-5); last, the instance's entry leaves
    * `home.yaml` (storage-2), and with it what this run held of its
    * account. One still signed in is refused, and one the home does not
    * list `not_found` (space-29).
@@ -4967,29 +4979,32 @@ export class SpaceManager {
     const identity = await this.machineIdentity();
     const own = store.home.own();
     const kept: string[] = [];
+    const placed: string[] = [];
     const inUse: string[] = [];
     for (const repository of store.listRepositories()) {
       if (repository.key === own) continue;
       const outcome = await this.followAtForget(instance, repository.key, identity);
       if (outcome === "kept") kept.push(splitKey(repository.key).name);
+      else if (outcome === "placed") placed.push(splitKey(repository.key).name);
       else if (outcome !== "followed" && outcome !== "other") inUse.push(outcome.inUse);
     }
-    if (kept.length > 0 || inUse.length > 0) {
+    if (kept.length > 0 || placed.length > 0 || inUse.length > 0) {
       await this.publish();
-      const reasons = [...(kept.length > 0 ? [stillKeptUnder(this.nameOf(instance), kept)] : []), ...inUse];
+      const host = this.nameOf(instance);
+      const reasons = [...(kept.length > 0 ? [stillKeptUnder(host, kept)] : []), ...(placed.length > 0 ? [stillPlacedAt(host, placed)] : []), ...inUse];
       throw new CoreError("invalid_request", reasons.join(" · "));
     }
     if (store.repository(own)) {
       const machine = this.machine(own);
       await machine.readFacts();
-      if (this.instanceOfClone(machine) === instance) {
+      const at = this.placementAt(machine.placements, instance);
+      if (at) {
         // Nothing is awaited from the governing instance's choice to the
         // remote's rename.
-        const governing = this.governingOf(machine);
+        const governing = this.governingOfPlacement(machine, at);
         const folder = governing && governing !== instance ? governing.folder() : null;
-        const named = machine.remoteNameNow();
-        if (folder !== null) machine.renameRemote(named, folder);
-        else if (named !== null) await machine.dropFirstRemote(named);
+        if (folder === null) await machine.dropRemote(at);
+        else if (!machine.followRemote(at, folder)) console.error(`spex: the remote of ${own} at ${instance.origin} keeps its name until its next sync`);
       }
     }
     try { store.forget(instance.origin); }
@@ -5013,28 +5028,43 @@ export class SpaceManager {
   }
 
   /**
-   * One clone's follow at a Forget of its instance (space-82): to the
-   * signed-in instance governing it (git-host-5), at the path that
-   * instance's view lists the host repository it records, by one rename
-   * at its instant (renameClone), its remote renamed to that instance's
-   * folder and the host's id recorded beside it, as a sync's move makes
-   * it follow (space-60, storage-34). "other" for a clone of another
-   * instance or none; "kept" where it stays of this one — no signed-in
-   * instance listing it, its path standing as no key there or in a group
-   * held as colliding, a destination taken, or its remote changed
-   * meanwhile; the session's words where a lease beneath holds it.
+   * One clone's follow at a Forget of its instance (space-82): its
+   * placement there follows the signed-in instance governing it
+   * (git-host-5), as a sync's follow makes it follow (space-60) — a
+   * placement beside its key placement by its remote's rename alone
+   * (followPlacementAtForget), moving no clone; the key placement by one
+   * rename of the clone at its instant (renameClone) to the path that
+   * instance's view lists the host repository it records, its remote
+   * renamed to that instance's folder, its placement file rewritten
+   * there (storage-36) and the host's id recorded beside it (storage-34).
+   * "other" for a clone that neither has that instance as its own
+   * (storage-31) nor holds a placement there; "placed" where a placement
+   * beside its key placement stays there; "kept" where the clone stays
+   * of that instance — no signed-in instance listing its key placement,
+   * its path standing as no key there or in a group held as colliding, a
+   * destination taken, or its remote changed meanwhile; the session's
+   * words where a lease beneath holds it.
    */
-  private async followAtForget(instance: HostInstance, key: string, identity: string | undefined): Promise<"other" | "followed" | "kept" | { inUse: string }> {
+  private async followAtForget(instance: HostInstance, key: string, identity: string | undefined): Promise<"other" | "followed" | "kept" | "placed" | { inUse: string }> {
     const store = this.host.store;
     if (!store.repository(key)) return "other";
     const machine = this.machine(key);
-    try { await machine.readFacts(); } catch { return this.instanceOfClone(machine) === instance ? "kept" : "other"; }
+    try { await machine.readFacts(); } catch {
+      if (this.instanceOfClone(machine) === instance) return "kept";
+      return this.placementAt(machine.placements, instance) ? "placed" : "other";
+    }
     // Nothing is awaited from here to the rename: the clone lies where
-    // the home says, with the remote and id just read.
+    // the home says, with the remotes and ids just read.
     const from = machine.key;
     const source = machine.repository.dir;
     if (store.repository(from)?.dir !== source) return "other";
-    if (this.instanceOfClone(machine) !== instance) return "other";
+    const at = this.placementAt(machine.placements, instance);
+    let followed = false;
+    if (at && at.name !== keyPlacement(machine.placements)?.name) {
+      if (!this.followPlacementAtForget(machine, at, instance)) return "placed";
+      followed = true;
+    }
+    if (this.instanceOfClone(machine) !== instance) return followed ? "followed" : "other";
     const facts = machine.facts;
     const governing = this.governingOf(machine);
     if (!governing || governing === instance || facts.remote === null) return "kept";
@@ -5054,6 +5084,26 @@ export class SpaceManager {
     machine.renameRemote(named, folder);
     await this.afterMove([{ from, to }]);
     return "followed";
+  }
+
+  /** A placement beside a clone's key placement follows, at a Forget of
+   * its instance, the signed-in instance governing it (space-82,
+   * space-60): the host's id recorded beside it where its remote records
+   * none, then its remote renamed to that instance's folder, its file
+   * rewritten there and the former instance's deleted, and this device's
+   * records of it re-keyed, in one step at its instant (followRemote),
+   * no clone moved. Whether it followed: not where no signed-in instance
+   * but one holding another placement of the clone lists its host
+   * repository, where that instance holds its group as colliding, or
+   * where it changed meanwhile. */
+  private followPlacementAtForget(machine: RepositorySync, placement: Placement, instance: HostInstance): boolean {
+    const to = this.governingOfPlacement(machine, placement);
+    const folder = to && to !== instance ? to.folder() : null;
+    if (!to || folder === null) return false;
+    const listing = this.listingOf(to, { remote: placement.url, id: placement.id });
+    if (!listing || this.collides(listing.repository.group, this.viewOf(to))) return false;
+    const held = placement.id === null ? machine.recordPlacementId(placement, listing.repository.id) : placement;
+    return machine.followRemote(held, folder) !== undefined;
   }
 
   /** Refresh (space-2): read every signed-in instance, each on its own,

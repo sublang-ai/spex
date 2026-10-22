@@ -2411,6 +2411,11 @@ msgstr "状态根目录 {dir} 在 {lock} 处的锁无法核实：{reason}；请�
 msgid "Still kept under {host}: {names}"
 msgstr "仍位于 {host} 之下：{names}"
 
+#. Refusal of Forget: spex repositories kept under another instance that are still placed at this one too, no signed-in instance listing that placement; {host} is the instance's display name, {names} the repositories' names as a list
+#: src/space.ts
+msgid "Still placed at {host}: {names}"
+msgstr "仍放置在 {host}：{names}"
+
 #. A stopped step's message: the reader stopped it while the Git host's rate limit held its call; {host} is the host's display name
 #: src/space.ts
 msgid "Stopped while waiting for {host}"

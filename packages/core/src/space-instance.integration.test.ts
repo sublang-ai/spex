@@ -27,7 +27,9 @@ import { createSessionStore } from "@sublang/playbook/session-store";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import { GitHostClient, HostError, credentialsPath, fileCredentialStore, type StoredCredential } from "./git-host.js";
 import { Home } from "./home.js";
+import { canonicalOrigin } from "./instance.js";
 import { needsInstancesMigration } from "./migrate-instances.js";
+import { encodePlacementFile, PLACEMENTS_DIR } from "./placements.js";
 import { bareOf, clonePath, createSpaceHarness, hostFolder, hostKey, instanceOf, OWN, OWN_KEY, ownClone, prefsOf, repositoryOf, rowsOf, stringsOf } from "./testing/space-harness.js";
 import { STANDIN_STORAGE, type StandinHost } from "./testing/standin-host.js";
 import type { GroupsState, InstanceGroupState, ServerMessage } from "./protocol.js";
@@ -2050,7 +2052,7 @@ test("space-83, space-82, space-61, space-4, space-59, space-5, space-32, storag
   assert.throws(() => git(ownDir, "config", "--get-regexp", "spexid$"), "no host id recorded");
   assert.equal(git(ownDir, "for-each-ref", "--format=%(refname)", `refs/remotes/${hostFolder(first)}`), "", "what it fetched goes with it");
   assert.throws(() => git(ownDir, "config", "--get", "branch.spex.remote"), "no upstream left");
-  assert.ok(existsSync(join(ownDir, "placements", `${hostFolder(first)}.yaml`)), "its placement file is left");
+  assert.equal(readFileSync(join(ownDir, PLACEMENTS_DIR, `${hostFolder(first)}.yaml`), "utf8"), encodePlacementFile(canonicalOrigin(first.url), created.id as string), "its placement file is left as it stood");
   await home.client.expectError("space.sync", { repository: HOST_OWN }, "invalid_request", /^Pick a group first$/);
 
   // A sign-in then at the second creates `bob-spex` in the second's
@@ -2075,7 +2077,7 @@ test("space-83, space-82, space-61, space-4, space-59, space-5, space-32, storag
   assert.equal(state.own.name, LOGIN);
 });
 
-test("space-84, space-82, space-60, space-29, space-5, storage-34: two instances over one Git backend, the first signed out — space.forget of the first, a session beneath b-spex's clone under a lease taken out of band, is refused naming that session, the instance and that clone kept as they were and a-spex's follow made; the lease released, it re-keys b-spex's clone under the second's folder with its remote renamed and its pair re-keyed and removes the instance, your own group's own repository keeping its folder and syncing with the second through its remote renamed", async (t) => {
+test("space-84, space-82, space-60, space-29, space-5, storage-34, storage-36: two instances over one Git backend, the first signed out — space.forget of the first, a session beneath b-spex's clone under a lease taken out of band, is refused naming that session, the instance and that clone kept as they were and a-spex's follow made; the lease released, it re-keys b-spex's clone under the second's folder with its remote renamed, its pair re-keyed and its placement file rewritten to the second's, and removes the instance, your own group's own repository keeping its folder and syncing with the second through its remote renamed, its placement file rewritten to the second's with the first's deleted", async (t) => {
   const first = await startHost();
   const second = await startHost({ gitBackend: first, displayName: "Second stand-in" });
   const a = first.script.addRepository({ group: LOGIN, name: "a-spex" });
@@ -2147,6 +2149,14 @@ test("space-84, space-82, space-60, space-29, space-5, storage-34: two instances
   assert.equal(Home.load(home.dataDir).keyForFolder(code), bFollowed, "its pair follows it");
   assert.deepEqual(remotes(HOST_OWN), [hostFolder(second)]);
   assert.ok(existsSync(join(ownClone(home.dataDir), ".git")));
+  // Each placement file is rewritten to the second's, the first's
+  // deleted, in the step that renames its remote (storage-36): your own
+  // group's among them (space-82).
+  const ownId = git(ownClone(home.dataDir), "config", "--get", `remote.${hostFolder(second)}.spexId`);
+  for (const [clone, id] of [[clonePath(home.dataDir, bFollowed), b.id], [ownClone(home.dataDir), ownId]] as const) {
+    assert.deepEqual(readdirSync(join(clone, PLACEMENTS_DIR)), [`${hostFolder(second)}.yaml`], clone);
+    assert.equal(readFileSync(join(clone, PLACEMENTS_DIR, `${hostFolder(second)}.yaml`), "utf8"), encodePlacementFile(canonicalOrigin(second.url), id), clone);
+  }
   for (const key of [aFollowed, bFollowed, HOST_OWN]) {
     assert.deepEqual([repositoryOf(forgotten, key).instance, repositoryOf(forgotten, key).state], [second.url, "reachable"], key);
   }
