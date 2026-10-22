@@ -13,7 +13,7 @@ import type { AgentCapabilities, ApprovalDecision, ApprovalRequest, BrowserSetup
 import type { SessionRecord as RuntimeRecord } from "@sublang/playbook/session-assets";
 import { LANGUAGES, type Language } from "./language.js";
 
-export const PROTOCOL_VERSION = 27;
+export const PROTOCOL_VERSION = 28;
 
 /** The compile pipeline's phases and their human names, shared so the
  * core's thread lines and the UI's band name a phase alike. */
@@ -1342,6 +1342,14 @@ export const commandSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("space.tree"), id, repository: repositoryKeySchema, path: z.string().optional() }).strict(),
   z.object({ type: z.literal("space.read"), id, repository: repositoryKeySchema, path: z.string().min(1) }).strict(),
   z.object({ type: z.literal("space.repair.decline"), id, repair: z.string().min(1), declined: z.boolean() }).strict(),
+  // Team servers (core-service-128, DR-133): the servers each signed-in
+  // instance lists, and a seat on one opened or closed, the server named
+  // by its instance's origin and its id there. `consented`: the client
+  // showed the contract of the instance's record; absent or false, the
+  // core refuses the open and asks nothing.
+  z.object({ type: z.literal("server.list"), id }).strict(),
+  z.object({ type: z.literal("server.open"), id, instance: instanceOriginSchema, serverId: z.string().min(1), consented: z.boolean().optional() }).strict(),
+  z.object({ type: z.literal("server.close"), id, instance: instanceOriginSchema, serverId: z.string().min(1) }).strict(),
   // Authoring sessions (DR-058, core-service-96): each in the spex
   // repository of the project `projectId` names; one activity per
   // session, Boss messages queue while a turn or compile runs.
@@ -1537,6 +1545,11 @@ export interface CommandResults {
   "space.tree": { path: string; entries: SpaceEntry[] };
   "space.read": SpaceReadResult;
   "space.repair.decline": GroupsState;
+  "server.list": ServerListing;
+  /** The seat's place and its lease's expiry in Unix milliseconds; never
+   * its endpoint or its bearer (core-service-128). */
+  "server.open": { place: string; leaseExpiresAt: number };
+  "server.close": { closed: true };
   "draft.list": DraftInfo[];
   /** The org and license a new playbook of the project starts from,
    * null where no license is derived (playbook-library-103). */
@@ -2013,6 +2026,40 @@ export interface HostMemberInfo {
   via: string | null;
 }
 
+/** A team server a signed-in instance lists for the person
+ * (core-service-128, DR-133): its instance's origin, its id there, its
+ * name, its group's path in the instance, and whether a seat this core
+ * opened is open at it. */
+export interface ServerInfo { instance: string; id: string; name: string; group: string; open: boolean }
+
+/** `server.list`'s reply (core-service-128): every server each signed-in
+ * instance lists, in the home's order of instances and each instance's
+ * own, and one entry per instance whose read failed, with the failure as
+ * the reader reads it (git-host-11); one instance failing hides no
+ * other's servers. */
+export interface ServerListing { servers: ServerInfo[]; failures: { instance: string; message: string }[] }
+
+/** A seat's relay (core-service-128, core-service-129): connecting to
+ * the seat, open, closed, or mismatched — the seat speaking another
+ * protocol version. */
+export type SeatRelayState = "connecting" | "open" | "closed" | "mismatched";
+
+/** An open seat (core-service-128, DR-133): its instance's origin, its
+ * server's id there, the server's name and group, its place, the lease's
+ * expiry in Unix milliseconds, and its relay's state. Never its endpoint
+ * or its bearer. */
+export interface SeatState {
+  instance: string;
+  serverId: string;
+  name: string;
+  group: string;
+  /** `<instance origin>#<server id>` (storage-45): the place, shown by
+   * the server's name. */
+  place: string;
+  leaseExpiresAt: number;
+  relay: SeatRelayState;
+}
+
 /** The home, its groups and their spex repositories (space-30,
  * DR-127): your own group, then every instance the home lists with its
  * groups. */
@@ -2223,6 +2270,13 @@ export interface SpaceStateMessage {
   state: GroupsState;
 }
 
+/** The open seats, whole (core-service-128): broadcast to every client
+ * on every change, and sent to each client as it connects. */
+export interface ServerStateMessage {
+  type: "server.state";
+  seats: SeatState[];
+}
+
 /** One authoring record, to the subscribers of the draft's channel. */
 export interface DraftRecordMessage {
   type: "draft.record";
@@ -2285,6 +2339,7 @@ export type ServerMessage =
   | IntentsChangedMessage
   | LanguageStateMessage
   | SpaceStateMessage
+  | ServerStateMessage
   | EnvironmentStateMessage
   | DraftRecordMessage
   | DraftStateMessage

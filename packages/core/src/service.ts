@@ -131,6 +131,7 @@ import { ApplicationMedia } from "./media.js";
 import { MediaTransferError } from "./media-transfers.js";
 import { readAgentOptions, type AgentModelDiscovery } from "./agent-options.js";
 import { SpaceManager, type SpaceHost } from "./space.js";
+import { Places } from "./places.js";
 import { GitHostClient, SEAT_ID_MAX, fileCredentialStore } from "./git-host.js";
 import { relayHostError } from "./space-groups.js";
 import { currentRuntime, withGitCredential } from "./git-credential.js";
@@ -260,6 +261,10 @@ export interface CoreServiceOptions {
    * server's name. The ids are at most 64 characters.
    */
   seat?: SeatOptions;
+  /** Test seam (DR-133): CA certificates, PEM, trusted beside the
+   * system's when the core presents a ticket at a team server's address;
+   * a stand-in hub's fixture CA. */
+  serverCertificateAuthorities?: readonly string[];
 }
 
 /** A seat's facts (core-service-125). */
@@ -532,6 +537,8 @@ export class CoreService {
   private readonly submitting = new Map<string, Promise<void>>();
   /** Groups' engine (DR-103): one sync machine per spex repository. */
   private readonly space: SpaceManager;
+  /** The seats this core holds on team servers (core-service-128). */
+  private readonly places: Places;
   /** Every spex repository's environment (DR-104). */
   private readonly environments: EnvironmentManager;
   /** Set once start finished: environment changes then reload. */
@@ -719,6 +726,18 @@ export class CoreService {
       repositoriesMoved: (moves) => this.repositoriesMoved(moves),
     };
     this.space = new SpaceManager(spaceHost);
+    // The seats on team servers (core-service-128, DR-133): each
+    // signed-in instance's servers read through the client this core
+    // keeps for it, every change of the open seats announced.
+    this.places = new Places({
+      homeDir: this.store.dir,
+      signedInOrigins: () => this.space.signedInOrigins(),
+      signedInInstance: (named) => this.space.signedInInstance(named),
+      clientOf: (origin) => this.space.clientOf(origin),
+      instanceName: (origin) => this.space.instanceName(origin),
+      broadcast: (seats) => this.broadcast({ type: "server.state", seats }),
+      ...(options.serverCertificateAuthorities ? { certificateAuthorities: options.serverCertificateAuthorities } : {}),
+    });
     // Authoring sessions live in the spex repository of their project
     // (storage-23); their spec packages in its working folder
     // (environments-10).
@@ -1215,6 +1234,9 @@ export class CoreService {
       service.watchConfigFile();
       service.watchRepositories();
     }
+    // Every seat the seats file holds is read and announced
+    // (core-service-128); each client is sent them as it connects.
+    service.places.start();
     await service.listen(options.port ?? 0);
     service.started = true;
     return service;
@@ -1491,6 +1513,9 @@ export class CoreService {
     this.stopping = true;
     this.sessions.beginShutdown();
     this.approvals.stop();
+    // Every seat's relay ends; the seats stand in their file, reopened at
+    // the next start (DR-133).
+    this.places.stop();
     for (const entry of this.browserPreparations.values()) entry.controller.abort();
     await Promise.allSettled([...this.browserPreparations.values()].map(({done}) => done));
     this.watcher?.close();
@@ -2051,6 +2076,7 @@ export class CoreService {
         coreVersion: CORE_VERSION,
       });
       this.send(socket, {type: "approval.state", state: this.approvals.snapshot()});
+      this.send(socket, {type: "server.state", seats: this.places.state()});
     });
     if (this.options.httpServer) return; // the shell listens
     await new Promise<void>((resolveListen, rejectListen) => {
@@ -3136,6 +3162,14 @@ export class CoreService {
         }
         return { language };
       }
+      // Team servers (core-service-128, DR-133): the servers each signed-in
+      // instance lists, and the seats this core opens and closes on them.
+      case "server.list":
+        return this.places.list();
+      case "server.open":
+        return this.places.open({ instance: command.instance, serverId: command.serverId, ...(command.consented !== undefined ? { consented: command.consented } : {}) });
+      case "server.close":
+        return this.places.close({ instance: command.instance, serverId: command.serverId });
       // Groups (space-29): the core performs every Git operation, one
       // spex repository at a time; long commands reply accepted and
       // report as state.
