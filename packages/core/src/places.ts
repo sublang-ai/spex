@@ -5,9 +5,11 @@
 // opens, holds and closes the seats the person holds on team servers.
 // `server.list` reads each signed-in instance's servers listing, each
 // instance standing or failing on its own (git-host-29, git-host-11);
-// `server.open`, with the person's consent to the contract, asks the
-// instance for a ticket, presents it at the server's address over TLS
-// for the admission (hub-2), keeps the seat's endpoint, bearer and lease
+// `server.open`, with the person's consent to the contract, reads the
+// instance's listing for the server's name, group and address — a
+// server it does not name no longer shared, no ticket asked — then asks
+// the instance for a ticket, presents it at that address over TLS for
+// the admission (hub-2), keeps the seat's endpoint, bearer and lease
 // expiry in `local/seats.yaml` (storage-45) and starts the seat's relay;
 // `server.close` ends the relay and removes the entry, the lease going
 // on at the server. Every change of the open seats is announced to every
@@ -19,7 +21,7 @@
 // the ticket.
 
 import { request } from "node:https";
-import { getCACertificates, rootCertificates } from "node:tls";
+import { getCACertificates, rootCertificates, type TLSSocket } from "node:tls";
 import { CredentialChanged, HostError, type GitHostClient, type HostServer, type HostTicket } from "./git-host.js";
 import { i18n } from "./i18n.js";
 import { canonicalOrigin } from "./instance.js";
@@ -60,12 +62,13 @@ export interface PlacesHost {
  * alone. */
 interface Admitted { endpoint: string; bearer: string; leaseExpiresAt: number }
 
-/** An admission that did not admit (hub-2): the server not reached, an
- * answer that is no admission, or the server's refusal with its status,
- * its code and its words. Its message names none of the secrets. */
+/** An admission that did not admit (hub-2): the server not reached, its
+ * certificate not verified, an answer that is no admission, or the
+ * server's refusal with its status, its code and its words. Its message
+ * names none of the secrets. */
 class AdmissionFailed extends Error {
   constructor(
-    readonly kind: "unreachable" | "unanswered" | "refused",
+    readonly kind: "unreachable" | "untrusted" | "unanswered" | "refused",
     readonly status: number | null = null,
     readonly words: string | null = null,
   ) {
@@ -101,6 +104,13 @@ const seatStopping = (): string => i18n._({
  * say. */
 function admissionFailure(error: AdmissionFailed, server: string, host: string): string {
   if (error.kind === "unreachable") return couldNotReach(server);
+  if (error.kind === "untrusted") {
+    return i18n._({
+      id: "{server}'s certificate could not be verified",
+      values: { server },
+      comment: "A seat's opening failed: the team server's TLS certificate did not verify against the trusted certificate authorities, so nothing was sent to it; {server} is the server's name",
+    });
+  }
   if (error.kind === "unanswered") {
     return i18n._({
       id: "{server} answered no seat",
@@ -190,8 +200,8 @@ function admittedFrom(json: unknown, address: URL): Admitted {
  * Present a ticket at a server's address for the admission (hub-2):
  * `POST <address>/admit` with `{ticket}` over TLS, verified against
  * `ca`, on a connection of its own. A refusal throws with its status and
- * the server's words; no answer, or a certificate that does not verify,
- * throws unreachable.
+ * the server's words; a certificate that does not verify throws
+ * untrusted, the ticket never sent; no answer throws unreachable.
  */
 function admitAt(address: string, ticket: string, ca: string[] | undefined): Promise<Admitted> {
   let target: URL;
@@ -205,7 +215,11 @@ function admitAt(address: string, ticket: string, ca: string[] | undefined): Pro
       settled = true;
       try { resolveAdmit(outcome()); } catch (error) { rejectAdmit(error); }
     };
-    const fail = (): void => settle(() => { throw new AdmissionFailed("unreachable"); });
+    // The socket's authorization error is set where the server's
+    // certificate, or the name it holds, did not verify: the connection
+    // ends before the ticket is sent.
+    let socket: TLSSocket | undefined;
+    const fail = (): void => settle(() => { throw new AdmissionFailed(socket?.authorizationError ? "untrusted" : "unreachable"); });
     const req = request(target, {
       method: "POST",
       agent: false,
@@ -231,6 +245,7 @@ function admitAt(address: string, ticket: string, ca: string[] | undefined): Pro
       res.on("error", fail);
       res.on("close", fail);
     });
+    req.on("socket", (opened) => { socket = opened as TLSSocket; });
     req.on("timeout", () => req.destroy());
     req.on("error", fail);
     req.end(body);
@@ -325,10 +340,12 @@ export class Places {
 
   /**
    * `server.open` (core-service-128): with the person's consent, the
-   * server's group read from the instance's listing — the ticket names
-   * none — a ticket asked for, presented at the server's address, and the
-   * seat kept, its relay started and announced; the reply carries the
-   * place and the expiry alone. Without consent nothing is asked.
+   * server's name, group and address read from the instance's listing —
+   * a server it does not name no longer shared, no ticket asked — a
+   * ticket asked for, presented at that address, and the seat kept, its
+   * relay started and announced; the reply carries the place and the
+   * expiry alone. Without consent nothing is asked. A seat opens none:
+   * the service refuses it before this (core-service-125).
    */
   async open(input: { instance: string; serverId: string; consented?: boolean }): Promise<{ place: string; leaseExpiresAt: number }> {
     if (input.consented !== true) throw new CoreError("invalid_request", consentFirst());
@@ -339,31 +356,31 @@ export class Places {
       const expected = this.store.read(place);
       const client = this.host.clientOf(origin);
       const host = this.host.instanceName(origin);
+      // The listing names the server's name, group and address — the
+      // ticket's answer names no group; the listing's own refusal is
+      // relayed with its cause (git-host-11).
       let listed: HostServer | undefined;
       try {
         listed = (await client.servers()).find((server) => server.id === input.serverId);
       } catch (error) {
         throw hostRefusal(error, host);
       }
-      // A server the listing leaves out is asked for its ticket all the
-      // same: the instance's own answer is the cause relayed — a standing
-      // below the role a seat needs refused in its words, a server it no
-      // longer shares `not_found` (git-host-11) — never one the core
-      // supposes from the listing.
+      // A server the listing does not name is no longer shared with the
+      // person: no ticket is asked for it (core-service-128).
+      if (!listed) throw new CoreError("not_found", noLongerShared());
+      // The ticket's refusal is relayed with its cause: `host_refused` as
+      // refused, `not_found` as no longer shared, a 429 as the instance
+      // asking to wait (git-host-11).
       let ticket: HostTicket;
       try {
         ticket = await client.ticket(input.serverId);
       } catch (error) {
         throw hostRefusal(error, host);
       }
-      // A ticket minted for a server the listing left out: the listing no
-      // longer shares it, so the seat has no group to be kept under. The
-      // ticket is never presented and lapses unspent (servers-6).
-      if (!listed) throw new CoreError("not_found", noLongerShared());
-      const name = ticket.server.name || listed.name;
+      const name = listed.name;
       let admitted: Admitted;
       try {
-        admitted = await admitAt(ticket.server.address, ticket.ticket, this.trust());
+        admitted = await admitAt(listed.address, ticket.ticket, this.trust());
       } catch (error) {
         if (error instanceof AdmissionFailed) throw new CoreError("invalid_request", admissionFailure(error, name, host));
         throw error;
@@ -409,8 +426,11 @@ export class Places {
    * The relay of an open seat starts here: its loopback path, a
    * connection to the seat per client connection, and its watch
    * (core-service-129) — IR-115's task 3, which reads the endpoint and
-   * the bearer from `entry` and reports its state. Until then an
-   * admitted seat reads open.
+   * the bearer from `entry` and reports its state. The path is
+   * `/seats/<place>` with the place percent-encoded: the seats key
+   * `<instance origin>#<server id>` as `encodeURIComponent(place)`, so
+   * the origin's `:` and `/` and the `#` stay inside one path segment.
+   * Until then an admitted seat reads open.
    */
   private startRelay(place: string, _entry: SeatEntry): void {
     this.relays.set(place, "open");

@@ -655,6 +655,11 @@ msgstr "{server} 拒绝了这个席位"
 msgid "{server} refused the seat: {words}"
 msgstr "{server} 拒绝了这个席位：{words}"
 
+#. A seat's opening failed: the team server's TLS certificate did not verify against the trusted certificate authorities, so nothing was sent to it; {server} is the server's name
+#: src/places.ts
+msgid "{server}'s certificate could not be verified"
+msgstr "无法验证 {server} 的证书"
+
 #. Refusal where the folder chosen for the example already holds files
 #: src/forge.ts
 msgid "{target} is not empty; the example seeds only a new or empty directory"
@@ -797,6 +802,11 @@ msgstr "项目的设置只能列出它启用的规程及每个角色使用的 Pl
 #: src/media-transfers.ts
 msgid "A retried upload chunk contains different bytes."
 msgstr "重试上传的数据块与已接收的内容不同。"
+
+#. Refusal on a team server's seat of opening a seat on a team server: a team server's seat holds no seats of its own
+#: src/service.ts
+msgid "A seat opens no server"
+msgstr "席位不能打开服务器"
 
 #. Stands in for the title of a session that has none
 #: src/session.ts

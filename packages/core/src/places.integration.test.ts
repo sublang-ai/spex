@@ -2,21 +2,25 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // The places of one desktop (core-service-128, core-service-130,
-// storage-45, DR-133), through a real core against stand-in instances
-// and a stand-in hub over TLS: `server.list` names each signed-in
-// instance's servers, one instance's failure hiding no other's;
-// `server.open` asks nothing without consent, and with it keeps the
-// seat's entry owner-only and replies with no bearer; a refusal is
-// relayed with its cause and writes nothing; `server.close` removes the
-// entry and announces `server.state`; a restarted core lists the seat
-// again from its file without a new admission; and no reply or event to
-// a client carries the bearer or the endpoint. The relay itself
+// storage-45, storage-46, DR-133), through a real core against stand-in
+// instances and a stand-in hub over TLS: `server.list` names each
+// signed-in instance's servers, one instance's failure hiding no
+// other's; `server.open` asks nothing without consent, and with it keeps
+// the seat's entry owner-only and replies with no bearer; a server the
+// listing does not name is no longer shared, no ticket asked; a refusal
+// is relayed with its cause and writes nothing, a certificate that does
+// not verify read as such; `server.close` removes the entry and
+// announces `server.state`; a restarted core lists the seat again from
+// its file without a new admission; the seats file is written, read
+// back, removed and, in another format, left as it was; and no reply,
+// event or log carries the bearer or the endpoint. The relay itself
 // (core-service-129) is not yet here.
 
-import { test } from "node:test";
+import { test, type TestContext } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
+import { inspect } from "node:util";
 import { parse as parseYaml } from "yaml";
 import type { SeatState, ServerMessage } from "./protocol.js";
 import { seatsPath } from "./seats.js";
@@ -64,6 +68,19 @@ async function signIn(home: Awaited<ReturnType<typeof startHome>>, host: Standin
 
 function mode(path: string): number {
   return statSync(path).mode & 0o777;
+}
+
+/** Everything the cores in this process log from here on — the
+ * console's every level and the standard error — as text, each call
+ * passed through as it was. */
+function captureLogs(t: TestContext): () => string {
+  const spies = [
+    ...(["log", "info", "warn", "error", "debug", "trace"] as const).map((level) => t.mock.method(console, level)),
+    t.mock.method(process.stderr, "write"),
+  ];
+  return () => spies
+    .flatMap((spy) => spy.mock.calls.flatMap((call) => (call.arguments as unknown[]).map((argument) => typeof argument === "string" ? argument : argument instanceof Uint8Array ? Buffer.from(argument).toString("utf8") : inspect(argument, { depth: 10 }))))
+    .join("\n");
 }
 
 test("core-service-130: server.list names each signed-in instance's servers, one instance's failure hiding no other's", async (t) => {
@@ -192,7 +209,7 @@ test("core-service-130: a restarted core over the same home lists the seat again
   assert.ok(admission?.bearer && !frames.includes(admission.bearer) && admission.endpoint && !frames.includes(admission.endpoint));
 });
 
-test("core-service-128: a refusal of the listing, the ticket or the admission is relayed with its cause and writes nothing", async (t) => {
+test("core-service-128: a refusal of the listing, the ticket or the admission is relayed with its cause and writes nothing; a server the listing does not name asks no ticket", async (t) => {
   const host = await startHost();
   const hub = await startHub(host);
   const home = await startHome("places-refusals", { host, project: false, extra: { serverCertificateAuthorities: [hub.ca] } });
@@ -216,31 +233,24 @@ test("core-service-128: a refusal of the listing, the ticket or the admission is
   host.script.faultServersListing(1, { code: "host_refused", message: "Your account is blocked: contact support." });
   assert.deepEqual(await refusedOpen(open, "invalid_request", /^Stand-in Git host refused: Your account is blocked: contact support\.$/), [listing]);
 
-  // A member below the role a seat needs: the listing leaves the server
-  // out, the ticket is asked all the same and the instance's refusal of
-  // it is what the person reads, in its words (git-host-11).
+  // A server the listing does not name is no longer shared, and no
+  // ticket is asked for it: one the listing leaves out — as it leaves out
+  // a server whose group the person holds below Developer — and one the
+  // instance does not know (core-service-128).
   registered.listed = false;
-  host.script.faultTickets(1, { code: "host_refused", message: needsDeveloper });
-  assert.deepEqual(await refusedOpen(open, "invalid_request", new RegExp(`^Stand-in Git host refused: ${needsDeveloper}$`)), [listing, ticketCall(SERVER)]);
-  // Listed, its ticket refused all the same.
+  assert.deepEqual(await refusedOpen(open, "not_found", /^No longer shared with you$/), [listing]);
   registered.listed = true;
+  assert.deepEqual(await refusedOpen({ ...open, serverId: "srv_gone" }, "not_found", /^No longer shared with you$/), [listing]);
+
+  // A listed server's ticket refused, in the instance's words
+  // (git-host-11).
   host.script.faultTickets(1, { code: "host_refused", message: needsDeveloper });
   assert.deepEqual(await refusedOpen(open, "invalid_request", new RegExp(`^Stand-in Git host refused: ${needsDeveloper}$`)), [listing, ticketCall(SERVER)]);
-
-  // The instance's not_found of the ticket as no longer shared: a server
-  // it does not know, and a listed one gone by the ticket's asking.
-  assert.deepEqual(await refusedOpen({ ...open, serverId: "srv_gone" }, "not_found", /^No longer shared with you$/), [listing, ticketCall("srv_gone")]);
+  // The instance's not_found of a listed server's ticket as no longer
+  // shared: gone by the ticket's asking.
   host.script.faultTickets(1, { code: "not_found" });
   assert.deepEqual(await refusedOpen(open, "not_found", /^No longer shared with you$/), [listing, ticketCall(SERVER)]);
   assert.equal(host.script.tickets.length, 0, "no refused call minted a ticket");
-
-  // A ticket minted for a server the listing leaves out is never
-  // presented: the listing no longer shares it.
-  registered.listed = false;
-  assert.deepEqual(await refusedOpen(open, "not_found", /^No longer shared with you$/), [listing, ticketCall(SERVER)]);
-  registered.listed = true;
-  const [unpresented] = host.script.tickets;
-  assert.ok(unpresented && !unpresented.spent, "the ticket was never presented");
   assert.equal(hub.admissions.length, 0, "nothing reached the hub");
 
   // The hub's refusals, with their cause (hub-2).
@@ -258,13 +268,102 @@ test("core-service-128: a refusal of the listing, the ticket or the admission is
   assert.equal(existsSync(file), false, "no refusal writes a seat");
 
   // A hub whose certificate the core does not trust is not reached: no
-  // verification is turned off.
+  // verification is turned off, and the person reads the certificate,
+  // not a server out of reach.
   const untrusted = await startHome("places-untrusted", { host, project: false });
   t.after(() => untrusted.stop());
   await signIn(untrusted, host);
   const before = hub.admissions.length;
-  await untrusted.client.expectError("server.open", open, "invalid_request", /^Could not reach lab-1$/);
+  await untrusted.client.expectError("server.open", open, "invalid_request", /^lab-1's certificate could not be verified$/);
   assert.equal(hub.admissions.length, before, "the admission never reached the hub");
   assert.equal(existsSync(seatsPath(untrusted.dataDir)), false);
+  // A server no connection reaches reads otherwise.
+  host.script.servers.push({ id: "srv_down", name: "lab-down", group: "acme", address: "https://127.0.0.1:1" });
+  await untrusted.client.expectError("server.open", { ...open, serverId: "srv_down" }, "invalid_request", /^Could not reach lab-down$/);
+  assert.equal(existsSync(seatsPath(untrusted.dataDir)), false);
   assert.ok(!JSON.stringify([...home.client.messages, ...untrusted.client.messages]).includes("spext_"), "no frame carries a ticket");
+});
+
+test("storage-46: the seats file is written owner-only under an owner-only local/ at an open, read back at the next start with every entry, removed at the close of its last entry; a file of another format is refused at an open and a close and left byte for byte; the bearer is in no reply, event or log", async (t) => {
+  const logs = captureLogs(t);
+  const host = await startHost();
+  const hub = await startHub(host);
+  // A second server at the same hub, in the same group.
+  host.script.servers.push({ id: "srv_lab2", name: "lab-2", group: "acme", address: hub.url });
+  const extra = { serverCertificateAuthorities: [hub.ca] };
+  const first = await startHome("places-seats-file", { host, project: false, extra });
+  let firstStopped = false;
+  t.after(async () => { if (!firstStopped) await first.stop(); });
+  await signIn(first, host);
+  const file = seatsPath(first.dataDir);
+  const one = `${host.url}#${SERVER}`;
+  const two = `${host.url}#srv_lab2`;
+
+  // Written at an open, owner-only under an owner-only local/
+  // (storage-46): exactly the seat the open kept.
+  const openedOne = await first.client.expectOk("server.open", { instance: host.url, serverId: SERVER, consented: true });
+  assert.equal(mode(file), 0o600, "the seats file is owner-only (storage-46)");
+  assert.equal(mode(dirname(file)), 0o700, "local/ is owner-only (storage-46)");
+  const [admittedOne] = hub.admissions;
+  assert.ok(admittedOne?.bearer && admittedOne.endpoint);
+  const entryOne = { name: "lab-1", group: "acme", endpoint: admittedOne.endpoint, bearer: admittedOne.bearer, leaseExpiresAt: openedOne.leaseExpiresAt };
+  assert.deepEqual(parseYaml(readFileSync(file, "utf8")), { format: 1, seats: { [one]: entryOne } }, "the open's entry, exactly (storage-46)");
+  // A second open adds its entry beside the first, the file owner-only
+  // still (storage-46).
+  const openedTwo = await first.client.expectOk("server.open", { instance: host.url, serverId: "srv_lab2", consented: true });
+  const admittedTwo = hub.admissions[1];
+  assert.ok(admittedTwo?.bearer && admittedTwo.endpoint);
+  const entryTwo = { name: "lab-2", group: "acme", endpoint: admittedTwo.endpoint, bearer: admittedTwo.bearer, leaseExpiresAt: openedTwo.leaseExpiresAt };
+  assert.deepEqual(parseYaml(readFileSync(file, "utf8")), { format: 1, seats: { [one]: entryOne, [two]: entryTwo } }, "every open's entry (storage-46)");
+  assert.equal(mode(file), 0o600, "owner-only after every write (storage-46)");
+  assert.equal(mode(dirname(file)), 0o700);
+  const written = readFileSync(file);
+  await first.stop();
+  firstStopped = true;
+
+  // Read back at the next start with every entry (storage-46): sent at
+  // the connection, listed open, with no new ticket or admission and
+  // the file as the opens left it.
+  const again = await startHome("places-seats-file", { host, project: false, extra, dataDir: first.dataDir });
+  t.after(() => again.stop());
+  const seats = await seatsAfter(() => again.client.messages, 0, (state) => state.length === 2);
+  assert.deepEqual(seats, [
+    { instance: host.url, serverId: SERVER, name: "lab-1", group: "acme", place: one, leaseExpiresAt: openedOne.leaseExpiresAt, relay: "open" },
+    { instance: host.url, serverId: "srv_lab2", name: "lab-2", group: "acme", place: two, leaseExpiresAt: openedTwo.leaseExpiresAt, relay: "open" },
+  ], "every entry read back at the next start (storage-46)");
+  assert.deepEqual((await again.client.expectOk("server.list", {})).servers.map((server) => [server.id, server.open]), [[SERVER, true], ["srv_lab2", true]]);
+  assert.equal(hub.admissions.length, 2, "no new admission at the start");
+  assert.equal(host.script.tickets.length, 2, "no new ticket at the start");
+  assert.ok(readFileSync(file).equals(written), "the start rewrote nothing");
+
+  // Removed at the close of its last entry (storage-46): the first close
+  // leaves the other entry, owner-only; the last takes the file.
+  assert.deepEqual(await again.client.expectOk("server.close", { instance: host.url, serverId: SERVER }), { closed: true });
+  assert.deepEqual(parseYaml(readFileSync(file, "utf8")), { format: 1, seats: { [two]: entryTwo } }, "the other entry stays (storage-46)");
+  assert.equal(mode(file), 0o600);
+  assert.deepEqual(await again.client.expectOk("server.close", { instance: host.url, serverId: "srv_lab2" }), { closed: true });
+  assert.equal(existsSync(file), false, "the file goes with its last entry (storage-46)");
+
+  // A file of another format is refused at an open and a close and left
+  // byte for byte as it was (storage-46); the open asks nothing.
+  const foreign = Buffer.from(`# a later Spex's seats\nformat: 2\nseats:\n  "${one}":\n    name: lab-1\n    future: kept\n`, "utf8");
+  writeFileSync(file, foreign, { mode: 0o600 });
+  const calls = host.script.serverCalls.length;
+  const refusal = /unsupported format 2; preserved unchanged$/;
+  await again.client.expectError("server.open", { instance: host.url, serverId: SERVER, consented: true }, "invalid_request", refusal);
+  assert.ok(readFileSync(file).equals(foreign), "an open leaves the file byte for byte (storage-46)");
+  assert.equal(host.script.serverCalls.length, calls, "the refused open asked no listing and no ticket");
+  assert.equal(hub.admissions.length, 2, "nor any admission");
+  await again.client.expectError("server.close", { instance: host.url, serverId: SERVER }, "invalid_request", refusal);
+  assert.ok(readFileSync(file).equals(foreign), "a close leaves the file byte for byte (storage-46)");
+
+  // The bearer — and the endpoint beside it — in no reply, event or log
+  // (storage-46).
+  const frames = JSON.stringify([...first.client.messages, ...again.client.messages]);
+  const logged = logs();
+  for (const entry of [entryOne, entryTwo]) {
+    assert.ok(!frames.includes(entry.bearer), "no reply or event carries a bearer (storage-46)");
+    assert.ok(!logged.includes(entry.bearer), "no log carries a bearer (storage-46)");
+    assert.ok(!frames.includes(entry.endpoint) && !logged.includes(entry.endpoint), "nor an endpoint");
+  }
 });

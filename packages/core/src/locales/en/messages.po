@@ -655,6 +655,11 @@ msgstr "{server} refused the seat"
 msgid "{server} refused the seat: {words}"
 msgstr "{server} refused the seat: {words}"
 
+#. A seat's opening failed: the team server's TLS certificate did not verify against the trusted certificate authorities, so nothing was sent to it; {server} is the server's name
+#: src/places.ts
+msgid "{server}'s certificate could not be verified"
+msgstr "{server}'s certificate could not be verified"
+
 #. Refusal where the folder chosen for the example already holds files
 #: src/forge.ts
 msgid "{target} is not empty; the example seeds only a new or empty directory"
@@ -797,6 +802,11 @@ msgstr "a project's settings name only the playbooks they enable and the player 
 #: src/media-transfers.ts
 msgid "A retried upload chunk contains different bytes."
 msgstr "A retried upload chunk contains different bytes."
+
+#. Refusal on a team server's seat of opening a seat on a team server: a team server's seat holds no seats of its own
+#: src/service.ts
+msgid "A seat opens no server"
+msgstr "A seat opens no server"
 
 #. Stands in for the title of a session that has none
 #: src/session.ts

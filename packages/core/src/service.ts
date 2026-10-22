@@ -2192,6 +2192,15 @@ export class CoreService {
         comment: "Refusal on a team server's seat of a command naming a working folder: the server allocates every project's folder itself",
       }));
     }
+    // A seat holds no seats of its own (core-service-125): its
+    // `server.open` is refused before anything is asked; `server.list`
+    // and `server.close` answer as on any core.
+    if (this.seat && command.type === "server.open") {
+      throw new CoreError("invalid_request", i18n._({
+        id: "A seat opens no server",
+        comment: "Refusal on a team server's seat of opening a seat on a team server: a team server's seat holds no seats of its own",
+      }));
+    }
     // No operation refuses a command (space-21): each write is checked
     // at its own instant, against its file's version or its session's
     // lease.

@@ -18,7 +18,7 @@
 import { mkdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
-import { writeApplicationBytes } from "./files.js";
+import { knownFormat, writeApplicationBytes } from "./files.js";
 import { canonicalOrigin } from "./instance.js";
 
 /** One seat as its file holds it (storage-45): its server's name and
@@ -112,9 +112,10 @@ export function fileSeatStore(homeDir: string): SeatStore {
       throw new Error(`${file} is not valid YAML; it is left as it is`);
     }
     if (!isRecord(doc)) throw new Error(`${file} holds no seats map; it is left as it is`);
-    if (doc.format !== 1) {
-      throw new Error(`${file} has format ${JSON.stringify(doc.format ?? null)}, which this version of Spex does not read; it is left as it is`);
-    }
+    // A file of another format is refused as every store's is
+    // (storage-1): an open and a close naming it read `invalid_request`,
+    // the file left as it is.
+    knownFormat(doc, file);
     if (!isRecord(doc.seats)) throw new Error(`${file} has no seats map; it is left as it is`);
     return { format: 1, seats: { ...doc.seats } };
   }
