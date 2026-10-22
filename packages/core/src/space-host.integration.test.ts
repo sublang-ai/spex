@@ -223,7 +223,7 @@ test("space-37: the browser sign-in renames your own group after the login, push
   assert.equal(reads() - readsBefore, 1, "one read of the host for every ask since the start");
 });
 
-test("space-37: a fresh core with no sync of a clone recorded reads the last sync the clone holds", async (t) => {
+test("space-37, storage-5: a fresh core with no sync of a clone's placement recorded under sync:<repository>:<placement>:last reads the last sync the clone holds", async (t) => {
   const host = await startHost();
   const home = await startHome("agreed", { host });
   t.after(() => home.stop());
@@ -242,7 +242,7 @@ test("space-37: a fresh core with no sync of a clone recorded reads the last syn
   // the clone itself still holds its last sync (space-61, DR-111).
   const prefsFile = join(home.dataDir, "local", "prefs.json");
   const file = JSON.parse(readFileSync(prefsFile, "utf8")) as { prefs: Record<string, unknown> };
-  delete file.prefs[`sync:${HOST_OWN}:last`];
+  delete file.prefs[`sync:${HOST_OWN}:${hostFolder(host)}:last`];
   writeFileSync(prefsFile, JSON.stringify(file));
   const again = await startHome("agreed-again", { dataDir: home.dataDir, project: false, host });
   t.after(() => again.stop());
@@ -795,7 +795,7 @@ test("space-65: a working folder paired with a group's own spex repository bring
   assert.equal(await home.service.ensureGroupRepository(key), "unchanged");
 });
 
-test("space-37, space-92: a repository listed with no clone here reads as a row carrying its one listed placement; a join pick and the first sync into a repository with other members wait for the notice; space.join clones it with its code; members read live", async (t) => {
+test("space-37, space-92, storage-5: a repository listed with no clone here reads as a row carrying its one listed placement; a join pick and the first sync into a repository with other members wait for the notice, recorded with the last sync under the placement's remote; space.join clones it with its code; members read live", async (t) => {
   const host = await startHost();
   const code = codeRepository("team");
   const bob = { id: "1002", login: "bob", displayName: "Bob", role: "Developer" };
@@ -843,8 +843,8 @@ test("space-37, space-92: a repository listed with no clone here reads as a row 
   assert.ok(done.sync.phase === "done" && done.sync.pushed, JSON.stringify(done.sync));
   assert.equal(done.noticed, true);
   const prefs = prefsOf(home.dataDir);
-  assert.equal(prefs[`sync:${hostKey(host, "acme/team-spex")}:noticed`], true);
-  assert.deepEqual(prefs[`sync:${hostKey(host, "acme/team-spex")}:last`], done.lastSync);
+  assert.equal(prefs[`sync:${hostKey(host, "acme/team-spex")}:${hostFolder(host)}:noticed`], true);
+  assert.deepEqual(prefs[`sync:${hostKey(host, "acme/team-spex")}:${hostFolder(host)}:last`], done.lastSync);
   assert.equal(git(bareOf(host, hostKey(host, "acme/team-spex")), "rev-parse", "spex"), git(clonePath(home.dataDir, hostKey(host, "acme/team-spex")), "rev-parse", "spex"));
   // A pick joining a repository with other members waits for it too.
   const mine = await addFolder(home, gitFolder("pal"));
@@ -855,7 +855,7 @@ test("space-37, space-92: a repository listed with no clone here reads as a row 
   assert.equal(palJoined.state, "reachable");
   // Joined from the listing, it goes straight to its sync (git-host-5).
   assertNeverUnreachable(home.client.readings(fromPal, [mine.key, hostKey(host, "acme/pal-spex")]));
-  assert.equal(prefsOf(home.dataDir)[`sync:${hostKey(host, "acme/pal-spex")}:noticed`], true);
+  assert.equal(prefsOf(home.dataDir)[`sync:${hostKey(host, "acme/pal-spex")}:${hostFolder(host)}:noticed`], true);
 });
 
 test("git-host-14, space-37: with every members route failing at the stand-in, a Refresh and a sync's Check stand with no count, and a pick joining or a first push waits for the notice", async (t) => {
@@ -1576,7 +1576,7 @@ test("space-58, storage-35: a clone under your own group's folder holding only t
   await home.client.expectError("space.pick", { repository: key, choice: { kind: "create", instance: host.url, groupId: "2002", name: "again" } }, "invalid_request", /is on the host already$/);
 });
 
-test("space-73: a path remote named through space.remote.set stands as origin beside the placement's remote, which keeps its id, its spex and this device's record, and goes alone; a repository the host moved keeps them through its next Sync, which moves the clone", async (t) => {
+test("space-73, storage-5: a path remote named through space.remote.set stands as origin beside the placement's remote, which keeps its id, its spex and this device's record under its name, and goes alone; a repository the host moved keeps them through its next Sync, which moves the clone", async (t) => {
   const host = await startHost();
   const home = await startHome("moved-pick", { host, project: false, extra: { signIn: "browser" } });
   t.after(() => home.stop());
@@ -1618,7 +1618,7 @@ test("space-73: a path remote named through space.remote.set stands as origin be
     assert.equal(git(clone, "config", "--get", `remote.${folder}.spexId`), id, `${what}: its id`);
     assert.equal(git(clone, "rev-parse", `refs/remotes/${folder}/spex`), pushed, `${what}: the spex the clone holds of it`);
     assert.equal(git(clone, "config", "--get", "branch.spex.remote"), folder, `${what}: the upstream`);
-    assert.deepEqual(prefsOf(home.dataDir)[`sync:${key}:last`], synced.lastSync, `${what}: this device's record`);
+    assert.deepEqual(prefsOf(home.dataDir)[`sync:${key}:${folder}:last`], synced.lastSync, `${what}: this device's record`);
     assert.deepEqual([row.state, row.instance, row.id, row.remote, row.lastSync, row.branch?.agreed], ["reachable", host.url, id, local, synced.lastSync, { at, current: true }], `${what}: ${JSON.stringify(row)}`);
   };
   kept(named, "a path remote named");

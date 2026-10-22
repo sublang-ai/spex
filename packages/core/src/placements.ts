@@ -42,6 +42,25 @@ export function placementCreatedKey(name: string): string {
   return `remote.${name}.spexCreated`;
 }
 
+/** What this device records of one placement in its preferences
+ * (storage-5): its last completed sync (space-22) and the privacy notice
+ * its reader saw before the first push there (space-57). */
+export type PlacementPrefKind = "last" | "noticed";
+export const PLACEMENT_PREF_KINDS: readonly PlacementPrefKind[] = ["last", "noticed"];
+
+/** The preference holding one of a placement's records (storage-5):
+ * `sync:<repository>:<placement>:<kind>`, `<placement>` the name of that
+ * placement's remote (storage-34), so it follows the remote's rename. */
+export function placementPrefKey(key: string, name: string, kind: PlacementPrefKind): string {
+  return `sync:${key}:${name}:${kind}`;
+}
+
+/** Where a Spex before DR-128 kept that record, one per repository:
+ * read as the clone's first placement's (storage-5). */
+export function formerPlacementPrefKey(key: string, kind: PlacementPrefKind): string {
+  return `sync:${key}:${kind}`;
+}
+
 /** One synchronous local Git command in a clone — a config read or
  * write, or a read of its history — by its exit and its output. */
 export type ConfigRun = (args: string[]) => { ok: boolean; stdout: string };

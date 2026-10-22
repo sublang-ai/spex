@@ -28,7 +28,7 @@ import { InstanceRefused, kebab, REMOTE_URL_KEYS, remoteNamesIn, splitKey, type 
 import { i18n } from "./i18n.js";
 import { canonicalOrigin, instanceFolder, instanceSegmentOf, isInstanceFolder, OriginRefused, parseOrigin, type OriginRefusal } from "./instance.js";
 import { isDeferredClone } from "./migrate-instances.js";
-import { deletePlacementFile, filedIn, keyPlacement, LEGACY_CREATED_KEY, LEGACY_ID_KEY, moveLegacyIds, PATH_PLACEMENT, PLACEMENT_CONFIG_KEYS, PLACEMENTS_DIR, placementCreatedKey, placementIdKey, placementsIn, readPlacements, writePlacementFile, type Placement } from "./placements.js";
+import { deletePlacementFile, filedIn, keyPlacement, LEGACY_CREATED_KEY, LEGACY_ID_KEY, moveLegacyIds, PATH_PLACEMENT, PLACEMENT_CONFIG_KEYS, PLACEMENTS_DIR, placementCreatedKey, placementIdKey, placementsIn, readPlacements, writePlacementFile, type Placement, type PlacementPrefKind } from "./placements.js";
 import type {
   GroupsState,
   InstanceGroupState,
@@ -692,14 +692,18 @@ function countIssues(diagnostics: StorageDiagnostic[]): number {
 
 /** One repair's record in this device's preferences (space-54). */
 const repairPref = (key: string): string => `space:repair:${key}`;
-/** A repository's last completed sync (space-22, storage-5). */
-const lastSyncPref = (key: string): string => `sync:${key}:last`;
 /** Whether a listed repository may have members besides the account: a
  * count above one, or none where the host's read lacked it (space-57,
  * git-host-5). */
 const mayHaveOthers = (listing: HostListing): boolean => listing.members === null || listing.members > 1;
-/** The privacy notice seen for a repository (storage-5, space-57). */
-const noticedPref = (key: string): string => `sync:${key}:noticed`;
+/** A placement's last completed sync as the preferences record it
+ * (space-22, storage-5): `{at, sent, received}`, else none. */
+function lastSyncIn(stored: unknown): { at: number; sent: number; received: number } | null {
+  const value = stored as { at?: unknown; sent?: unknown; received?: unknown } | null | undefined;
+  return value && typeof value.at === "number" && typeof value.sent === "number" && typeof value.received === "number"
+    ? { at: value.at, sent: value.sent, received: value.received }
+    : null;
+}
 
 /** The explorer's refusals of a path outside what it browses (space-35). */
 const escapesTheHome = (): string => i18n._({
@@ -1142,7 +1146,8 @@ class RepositorySync {
     const same = this.recordedIdNow() === id;
     const held = this.remoteRef();
     const heldName = this.facts.remoteName ?? this.upstreamName;
-    const standing = new Set(this.placementsNow().map((placement) => placement.name));
+    const prior = this.placementsNow();
+    const standing = new Set(prior.map((placement) => placement.name));
     // A placement already at the host's URL is the one this attaches;
     // one added is named by its instance's folder (storage-34).
     const added = this.addPlacement(expected, { url, id, ...(created ? { created: id } : {}), folder });
@@ -1152,6 +1157,15 @@ class RepositorySync {
     // clears what a remote taken away or one formerly of its name left,
     // a placement standing keeping what the clone holds of it (space-5).
     if (!added.stood && !same) {
+      // In the step that wrote the remote: what a Spex before DR-128
+      // recorded for the repository was the first placement's — the path
+      // placement now behind this one keeps it — else a remote's taken
+      // away, whose last sync, as one formerly of the added one's name,
+      // says nothing of this repository (storage-5).
+      const store = this.host.store;
+      const before = prior[0]?.name;
+      if (before !== undefined && before !== added.name) store.adoptFormerPlacementPrefs(this.key, before);
+      store.dropPlacementPrefs(this.key, added.name, before === undefined, ["last"]);
       const refs = new Set([`refs/remotes/${added.name}/${SPEX_BRANCH}`]);
       if (heldName === null || !standing.has(heldName)) refs.add(held);
       for (const ref of refs) await this.git.run(["update-ref", "-d", ref]);
@@ -1160,7 +1174,6 @@ class RepositorySync {
         this.upstreamName = null;
       }
       this.checkedAt = null;
-      this.host.store.deletePref(lastSyncPref(this.key));
       this.remoteEmpty = false;
       this.unrelated = false;
     }
@@ -1184,7 +1197,8 @@ class RepositorySync {
   }
 
   /** The clone names its remote by the folder of the instance it is at
-   * (DR-127, storage-34), its fetched `spex` and its upstream with it:
+   * (DR-127, storage-34), its fetched `spex`, its upstream and this
+   * device's last sync and notice of it (storage-5) with it:
    * a remote still named `origin`, the clone moved under that folder
    * while it records the host's id, or one named by another instance's
    * folder, the clone following the instance `folder` names (space-60).
@@ -1203,6 +1217,9 @@ class RepositorySync {
       return;
     }
     if (this.upstreamName === from) this.upstreamName = folder;
+    // This device's last sync and notice of the placement follow its
+    // remote in the same step (storage-5).
+    this.host.store.renamePlacementPrefs(this.key, from, folder);
     this.settleFacts();
     // The placement's file follows its remote in the same step
     // (storage-36, space-60): the followed instance's written, the
@@ -1224,6 +1241,34 @@ class RepositorySync {
   writePlacement(origin: string, id: string): void {
     try { writePlacementFile(this.dir, origin, id); }
     catch (error) { console.error(`spex: the placement file of ${this.key} at ${origin} is not written: ${error instanceof Error ? error.message : String(error)}`); }
+  }
+
+  /** This device's record of one of the clone's placements, by its
+   * remote's name (storage-5): its last completed sync (space-22) or the
+   * notice seen before its first push (space-57), under that name, else,
+   * for the clone's first placement as last read, what a Spex before
+   * DR-128 recorded for the repository; none for no placement. */
+  placementRecord(name: string | null, kind: PlacementPrefKind): unknown {
+    if (name === null) return undefined;
+    return this.host.store.placementPref<unknown>(this.key, name, kind, this.placements[0]?.name === name);
+  }
+
+  /** A placement's last completed sync on this device (space-22). */
+  lastSyncOf(name: string | null): { at: number; sent: number; received: number } | null {
+    return lastSyncIn(this.placementRecord(name, "last"));
+  }
+
+  /** Whether this device's reader saw the notice for a placement
+   * (space-57). */
+  noticedOf(name: string | null): boolean {
+    return this.placementRecord(name, "noticed") === true;
+  }
+
+  /** Record a placement's last sync or its notice seen (storage-5), the
+   * first placement's taking what a Spex before DR-128 recorded. */
+  private recordPlacement(name: string | null, kind: PlacementPrefKind, value: unknown): void {
+    if (name === null) return;
+    this.host.store.setPlacementPref(this.key, name, kind, value, this.placementsNow()[0]?.name === name);
   }
 
   /** This clone's own diagnostics: a pending merge, a refresh's finding,
@@ -1305,10 +1350,9 @@ class RepositorySync {
       behind = 0;
     }
     const store = this.host.store;
-    const stored = store.getPref<{ at?: unknown; sent?: unknown; received?: unknown }>(lastSyncPref(this.key));
-    const lastSync = stored && typeof stored.at === "number" && typeof stored.sent === "number" && typeof stored.received === "number"
-      ? { at: stored.at, sent: stored.sent, received: stored.received }
-      : null;
+    // This device's last sync and notice of its first placement
+    // (storage-5): none where it holds no placement.
+    const lastSync = this.lastSyncOf(this.facts.remoteName);
     // Its instance (storage-31), whose Git origin its code remote is
     // read against first (space-1).
     const instance = this.owner.cloneInstance(this.key, this.facts.remoteName);
@@ -1353,7 +1397,7 @@ class RepositorySync {
       incoming: this.lists.incoming,
       conflicts: this.lists.conflicts,
       lastSync,
-      noticed: store.getPref<unknown>(noticedPref(this.key)) === true,
+      noticed: this.noticedOf(this.facts.remoteName),
       sync: this.phase,
     };
     return state;
@@ -1648,10 +1692,15 @@ class RepositorySync {
       const first = keyPlacement(repo.placements) === undefined;
       // Written over the remote read above, or refused (DR-111).
       if (!this.setPathPlacement(current, url)) throw new CoreError("conflict", changedMeanwhile(splitKey(this.key).name));
+      // In that step, this device's last sync and notice of a path
+      // placement named before leave with it, and, where the path
+      // placement is the first, what a Spex before DR-128 recorded for
+      // the repository (storage-5, space-5).
+      this.host.store.dropPlacementPrefs(this.key, PATH_PLACEMENT, first);
       // Another path placement, or none, clears what the clone held of
       // the former one — its `spex` and the upstream naming it — and,
-      // where it was the first placement, the last sync (space-5): what
-      // the old remote held says nothing of the new one.
+      // where it was the first placement, its check (space-5): what the
+      // old remote held says nothing of the new one.
       if (path !== undefined) {
         await this.git.run(["update-ref", "-d", `refs/remotes/${PATH_PLACEMENT}/${SPEX_BRANCH}`]);
         if (this.upstreamName === PATH_PLACEMENT) {
@@ -1660,7 +1709,6 @@ class RepositorySync {
         }
       }
       if (first) {
-        this.host.store.deletePref(lastSyncPref(this.key));
         this.checkedAt = null;
         this.remoteEmpty = false;
         this.unrelated = false;
@@ -1673,7 +1721,8 @@ class RepositorySync {
   }
 
   /** Drop the clone's placement `name`, its id and creation mark leaving
-   * with its remote's section (storage-34), what the clone fetched of it
+   * with its remote's section (storage-34) and this device's last sync
+   * and notice of it with them (storage-5), what the clone fetched of it
    * and its upstream kept: as a Forget of its instance drops your own
    * group's own repository's remote there (space-82). Written only while
    * that remote still stands as its first placement. */
@@ -1683,8 +1732,10 @@ class RepositorySync {
     if (!repo.root || this.facts.remoteName !== name) return;
     this.gitStep(["config", "--remove-section", `remote.${name}`]);
     // A deferred clone's id, at the top level until its move, is that
-    // remote's, and goes with it.
+    // remote's, and goes with it; so do this device's last sync and
+    // notice of it (storage-5).
     if (this.deferred()) for (const key of [LEGACY_CREATED_KEY, LEGACY_ID_KEY]) this.git.runSync(["config", "--unset", key]);
+    this.host.store.dropPlacementPrefs(this.key, name, true);
     this.settleFacts();
     this.checkedAt = null;
     this.remoteEmpty = false;
@@ -1793,7 +1844,9 @@ class RepositorySync {
         choices[name] = choice === "mine" ? "ours" : "theirs";
       }
     }
-    if (input.noticed === true) this.host.store.setPref(noticedPref(this.key), true);
+    // The notice is seen for the placement the sync pushes into: its
+    // first (space-57, storage-5).
+    if (input.noticed === true) this.recordPlacement(this.facts.remoteName, "noticed", true);
     await this.owner.admit(this, { push: true, noticed: input.noticed === true || input.internal === true });
     // A sync begun while this one was admitted is the one it joins.
     if (this.runningOp() === "sync") return { accepted: true };
@@ -1946,7 +1999,7 @@ class RepositorySync {
             // A read-only spex repository brings and sends nothing; its
             // new sessions stay on this device (space-12, space-61).
             const at = Date.now();
-            this.host.store.setPref(lastSyncPref(this.key), { at, sent: 0, received: counts.received });
+            this.recordPlacement(this.facts.remoteName, "last", { at, sent: 0, received: counts.received });
             this.ended = { phase: "done", at, sent: 0, received: counts.received, pushed: false };
             next = "done";
             break;
@@ -1974,7 +2027,10 @@ class RepositorySync {
           }
           upstream = true;
           const at = Date.now();
-          this.host.store.setPref(lastSyncPref(this.key), { at, sent: counts.sent, received: counts.received });
+          // Recorded for the placement it synced, under the name its
+          // remote bears now, a follow at Check having renamed it
+          // (space-22, storage-5).
+          this.recordPlacement(this.facts.remoteName, "last", { at, sent: counts.sent, received: counts.received });
           this.ended = { phase: "done", at, sent: counts.sent, received: counts.received, pushed: pushed === "ok" };
           next = "done";
           break;
@@ -4160,10 +4216,14 @@ export class SpaceManager {
         // A group named like a login holds no folder of its own (space-61).
         if (this.collides(listing.repository.group, view)) throw new CoreError("invalid_request", groupNamedLikeYourLogin(listing.repository.group.fullPath));
         // Joining pushes this clone's records into a repository others
-        // read: the notice is seen first (space-57).
+        // read: the notice is seen first (space-57), for the placement
+        // the join adds, named by the instance's folder — the clone's
+        // first where it holds none (storage-5, storage-34).
         const store = this.host.store;
-        if (noticed) store.setPref(noticedPref(key), true);
-        else if (!listing.readOnly && mayHaveOthers(listing) && store.getPref<unknown>(noticedPref(key)) !== true) {
+        const placement = placementName(instance.folder());
+        const first = machine.placements.length === 0;
+        if (noticed) store.setPlacementPref(key, placement, "noticed", true, first);
+        else if (!listing.readOnly && mayHaveOthers(listing) && store.placementPref<unknown>(key, placement, "noticed", first) !== true) {
           throw new CoreError("invalid_request", i18n._({
             id: "Read the sharing notice before joining {name}",
             values: { name: listing.repository.path },
@@ -4775,8 +4835,7 @@ export class SpaceManager {
     if (!this.atHost(facts, instance ?? serving)) return;
     if (!instance) throw new CoreError("invalid_request", signInTo(this.nameOf(serving)));
     if (!input.push || input.noticed) return;
-    const store = this.host.store;
-    if (store.getPref<unknown>(noticedPref(machine.key)) === true || store.getPref<unknown>(lastSyncPref(machine.key)) !== undefined) return;
+    if (this.noticeSeen(machine)) return;
     let listing: HostListing | undefined;
     try { listing = (await this.readTarget(instance, machine, facts)).listing; }
     catch (error) {
@@ -4786,10 +4845,17 @@ export class SpaceManager {
     if (notice) throw notice;
   }
 
+  /** Whether the clone's first placement owes no notice for its pushes
+   * on this device's record (space-57, storage-5): its notice seen, or a
+   * sync with it recorded. */
+  private noticeSeen(machine: RepositorySync): boolean {
+    const name = machine.facts.remoteName;
+    return machine.noticedOf(name) || machine.placementRecord(name, "last") !== undefined;
+  }
+
   /** The same first-push condition at admission and at fresh Check. */
   private sharingNotice(machine: RepositorySync, listing: HostListing | undefined): CoreError | undefined {
-    const store = this.host.store;
-    if (store.getPref<unknown>(noticedPref(machine.key)) === true || store.getPref<unknown>(lastSyncPref(machine.key)) !== undefined) return undefined;
+    if (this.noticeSeen(machine)) return undefined;
     if (!listing || listing.readOnly || !mayHaveOthers(listing)) return undefined;
     return new CoreError("invalid_request", i18n._({
       id: "Read the sharing notice before the first sync of {name}",
@@ -5364,8 +5430,9 @@ export class SpaceManager {
    * holds in the order added, the path placement last — the first read
    * as its row is, its state, its listing's members and rights, its
    * branch against that remote's `spex`, its last sync and notice; each
-   * other by its instance's last answer alone — then the one a creation
-   * for it waits at, attached to no remote here. */
+   * other by its instance's last answer and this device's records of it
+   * — then the one a creation for it waits at, attached to no remote
+   * here. */
   private linesOf(machine: RepositorySync, row: RepositoryState): PlacementState[] {
     const lines: PlacementState[] = [];
     const waiting = this.waiting.get(row.key);
@@ -5399,7 +5466,7 @@ export class SpaceManager {
         outcome: null,
       });
     }
-    for (const placement of rest) lines.push(this.heldLine(placement));
+    for (const placement of rest) lines.push(this.heldLine(machine, placement));
     if (waiting && !lines.some((line) => line.waiting !== null)) {
       lines.push({
         instance: waiting.instance,
@@ -5429,8 +5496,9 @@ export class SpaceManager {
    * reads it (space-15); its state from its instance's last answer —
    * signed out, unreachable; listed, reachable or read-only with the
    * listing's members and rights; not listed by a read, unreachable — the
-   * path placement reachable. */
-  private heldLine(placement: Placement): PlacementState {
+   * path placement reachable; this device's last sync and notice of it
+   * as recorded under its remote's name (storage-5). */
+  private heldLine(machine: RepositorySync, placement: Placement): PlacementState {
     const line: PlacementState = {
       instance: placement.instance,
       path: displayRemote(placement.url),
@@ -5445,8 +5513,8 @@ export class SpaceManager {
       branch: null,
       incoming: [],
       conflicts: [],
-      lastSync: null,
-      noticed: false,
+      lastSync: machine.lastSyncOf(placement.name),
+      noticed: machine.noticedOf(placement.name),
       outcome: null,
     };
     if (placement.instance === null) return line;

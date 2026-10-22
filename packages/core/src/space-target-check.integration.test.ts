@@ -137,8 +137,8 @@ test("git-host-23: fresh unknown target members require notice despite a cached 
   assert.equal((await home.client.repository(OWN)).members, 1);
   // Same joined clone, first push on this device: forget only this
   // scratch device's acknowledgments through the real preferences API.
-  core.store.deletePref(`sync:${OWN}:last`);
-  core.store.deletePref(`sync:${OWN}:noticed`);
+  core.store.deletePref(`sync:${OWN}:${hostFolder(host)}:last`);
+  core.store.deletePref(`sync:${OWN}:${hostFolder(host)}:noticed`);
   host.script.failMembers(true);
   await home.client.expectError("space.sync", { repository: OWN }, "invalid_request", /sharing notice/);
   assert.equal((await home.client.repository(OWN)).members, null);
@@ -352,8 +352,8 @@ for (const next of ["signed-out", "another-account"] as const) {
 test("git-host-23: one failed fresh notice read refuses before Save and cannot fall through to a healthy unnoticed Check", async (t) => {
   const { host, home, core, id } = await prepared("notice-admission-failure");
   t.after(() => home.stop());
-  core.store.deletePref(`sync:${OWN}:last`);
-  core.store.deletePref(`sync:${OWN}:noticed`);
+  core.store.deletePref(`sync:${OWN}:${hostFolder(host)}:last`);
+  core.store.deletePref(`sync:${OWN}:${hostFolder(host)}:noticed`);
   const target = host.script.repositories.find((repository) => repository.id === id)!;
   target.members.push({ id: "1002", login: "bob", displayName: "Bob", role: "Developer" });
   const clone = clonePath(home.dataDir, OWN);
@@ -379,14 +379,14 @@ test("git-host-23: one failed fresh notice read refuses before Save and cannot f
   // implicit acknowledgment inherited from the failed read.
   await home.client.expectError("space.sync", { repository: OWN }, "invalid_request", /sharing notice/);
   assert.equal((await home.client.repository(OWN)).noticed, false);
-  assert.equal(core.store.getPref(`sync:${OWN}:last`), undefined);
+  assert.equal(core.store.getPref(`sync:${OWN}:${hostFolder(host)}:last`), undefined);
 });
 
 test("git-host-23: solo membership becoming shared at Check stops before transport and leaves the notice owed", async (t) => {
   const { host, home, core, id } = await prepared("notice-membership-change");
   t.after(() => home.stop());
-  core.store.deletePref(`sync:${OWN}:last`);
-  core.store.deletePref(`sync:${OWN}:noticed`);
+  core.store.deletePref(`sync:${OWN}:${hostFolder(host)}:last`);
+  core.store.deletePref(`sync:${OWN}:${hostFolder(host)}:noticed`);
   const target = host.script.repositories.find((repository) => repository.id === id)!;
   let shared = false;
   home.hooks.beforeStep = (event) => {
@@ -405,7 +405,7 @@ test("git-host-23: solo membership becoming shared at Check stops before transpo
   assert.deepEqual([row.members, row.noticed, row.lastSync], [2, false, null]);
   assert.ok(!host.script.requests.slice(from).some((request) => request.path.includes(".git/") || request.path.endsWith("/credential") || request.path.endsWith("/spex-branch")), "no branch preparation or Git transport");
   await home.client.expectError("space.sync", { repository: OWN }, "invalid_request", /sharing notice/);
-  assert.equal(core.store.getPref(`sync:${OWN}:noticed`), undefined);
+  assert.equal(core.store.getPref(`sync:${OWN}:${hostFolder(host)}:noticed`), undefined);
   const seen = await home.client.settle("space.sync", { repository: OWN, noticed: true });
   assert.deepEqual([seen.sync.phase, seen.noticed], ["done", true]);
 });

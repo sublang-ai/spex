@@ -448,6 +448,13 @@ export function clonePath(dataDir: string, key: string): string {
 export const prefsOf = (dataDir: string): Record<string, unknown> =>
   (JSON.parse(readFileSync(join(dataDir, "local", "prefs.json"), "utf8")) as { prefs: Record<string, unknown> }).prefs;
 
+/** A spex repository's sync records in a scratch home's preferences
+ * (storage-5): each `sync:<repository>:…` entry — its placements' under
+ * `sync:<repository>:<placement>:`, and any a Spex before DR-128 wrote —
+ * with its value. */
+export const syncRecordsOf = (dataDir: string, key: string): Record<string, unknown> =>
+  Object.fromEntries(Object.entries(prefsOf(dataDir)).filter(([name]) => name.startsWith(`sync:${key}:`)));
+
 export function createSpaceHarness() {
   const scratch = mkdtempSync(join(tmpdir(), "spex-space-"));
   const userHome = join(scratch, "home");
