@@ -81,6 +81,7 @@ function renderHome({
   onOpenOwnProject = vi.fn(),
   hasProject = true,
   hasProjects = true,
+  playbooks = PLAYBOOKS as PlaybookSummary[],
   // null renders the no-captain state; undefined would fall back to
   // this default the way an omitted option does.
   captain = CAPTAIN as AgentSummary | null,
@@ -103,7 +104,7 @@ function renderHome({
       hasProject={hasProject}
       hasProjects={hasProjects}
       projectName={hasProject ? PROJECT.name : undefined}
-      playbooks={PLAYBOOKS}
+      playbooks={playbooks}
       captain={captain ?? undefined}
       readiness={readiness}
       connected
@@ -206,6 +207,27 @@ describe("RUN-29: captain home structure and one-motion start", () => {
     expect(screen.getByTestId("start-send").title).toBe(
       "Enter to send · Shift+Enter for a new line",
     );
+  });
+
+  test("a quiet preview explains only configured playbooks without another command control", () => {
+    const inspect: PlaybookSummary = {
+      id: "inspect", from: "@sublang/playbook/inspect/registry", command: "inspect",
+      intent: "inspect supplied material or a running web interface and explain observed evidence without changing the repository",
+      roles: {},
+    };
+    renderHome({ playbooks: [PLAYBOOKS[1], inspect, PLAYBOOKS[0]] });
+    const preview = screen.getByTestId("playbook-preview");
+    expect(preview.textContent).toContain("Playbooks are reusable task workflows");
+    expect(preview.textContent).toContain("/code");
+    expect(preview.textContent).toContain("/inspect");
+    expect(preview.textContent).not.toContain("/review");
+    expect(preview.querySelectorAll("button")).toHaveLength(0);
+    expect(preview.compareDocumentPosition(screen.getByText("Type / to view playbooks")) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
+  });
+
+  test("no playbook preview appears without configured playbooks", () => {
+    renderHome({ playbooks: [] });
+    expect(screen.queryByTestId("playbook-preview")).toBeNull();
   });
 
   test("submitting without a project opens the palette, draft intact", () => {
@@ -486,6 +508,7 @@ describe("run-view-88: the Captain home names the queue's head", () => {
       renderHome({ next: nextCard(schedule, {}, 2) });
 
       const card = screen.getByTestId("next-card");
+      expect(screen.queryByTestId("playbook-preview")).toBeNull();
       expect(card.textContent).toContain("Up next");
       expect(card.textContent).toContain("Address #12: harden the auth flow");
       expect(card.textContent).toContain("+2 more queued");

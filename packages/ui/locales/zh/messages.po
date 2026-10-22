@@ -4357,6 +4357,10 @@ msgstr "规程：{playbookId}"
 msgid "Playbooks"
 msgstr "规程"
 
+#: src/components/CaptainHome.tsx
+msgid "Playbooks are reusable task workflows that arrange AI steps and roles."
+msgstr "规程是可复用的任务流程，安排 AI 的步骤与分工。"
+
 #: src/components/LibrarySurface.tsx
 msgid "Playbooks need a valid config — fix it in <0>Settings</0>."
 msgstr "规程需要有效的配置 — 请在<0>设置</0>中修复。"

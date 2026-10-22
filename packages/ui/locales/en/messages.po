@@ -4357,6 +4357,10 @@ msgstr "playbook: {playbookId}"
 msgid "Playbooks"
 msgstr "Playbooks"
 
+#: src/components/CaptainHome.tsx
+msgid "Playbooks are reusable task workflows that arrange AI steps and roles."
+msgstr "Playbooks are reusable task workflows that arrange AI steps and roles."
+
 #: src/components/LibrarySurface.tsx
 msgid "Playbooks need a valid config — fix it in <0>Settings</0>."
 msgstr "Playbooks need a valid config — fix it in <0>Settings</0>."

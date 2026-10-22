@@ -17,6 +17,7 @@ import { i18n } from "../i18n.js";
 import { canSubmitContent, type ComposerAttachmentControls } from "./ComposerAttachments.js";
 import type { AgentPatch } from "../lib/config-ops.js";
 import { keyLabel } from "../lib/shortcuts.js";
+import { playbookIntent } from "../lib/playbook-intent.js";
 import { useAppStore, type StagedIntent } from "../state/store.js";
 import { SlashMenuList, slashMatches } from "./SlashMenu.js";
 import { AgentChip, agentChipText, fastModeWord, readinessWord } from "./AgentChip.js";
@@ -174,6 +175,12 @@ export function CaptainHome(props: CaptainHomeProps) {
   const slash = slashDismissed ? undefined : slashItems;
   const configBroken =
     props.configStatus === "invalid" || props.configStatus === "missing";
+  const previewPlaybooks = [
+    ...["code", "inspect"].map((command) => playbooks.find((entry) => entry.command === command)),
+    ...playbooks,
+  ].filter((entry, index, entries): entry is PlaybookSummary =>
+    entry !== undefined && entries.findIndex((candidate) => candidate?.id === entry.id) === index,
+  ).slice(0, 2);
 
   async function start(): Promise<void> {
     if (!canSubmitContent(text, props.attachments?.files) || busy || !connected) {
@@ -393,7 +400,7 @@ export function CaptainHome(props: CaptainHomeProps) {
         ) : null}
       </div>
 
-      <div className="mt-3 flex flex-col gap-1.5">
+      <div className="mt-8 flex flex-col gap-2">
         {props.hasProject && captainUnavailable ? (
           <div
             role="status"
@@ -612,7 +619,7 @@ export function CaptainHome(props: CaptainHomeProps) {
                         composerRef.current?.focus();
                       });
                   }}
-                  className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm text-neutral-600 hover:bg-neutral-50 disabled:opacity-40 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
+                  className="min-h-8 rounded px-1 text-xs font-medium text-neutral-500 hover:text-neutral-800 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500 disabled:opacity-40 dark:text-neutral-400 dark:hover:text-neutral-100"
                 >
                   {i18n._("Add to Up next")}
                 </button>
@@ -647,7 +654,7 @@ export function CaptainHome(props: CaptainHomeProps) {
           />
         </div>
         {props.hasProject ? (
-          <div className="min-h-5 text-xs text-neutral-600 dark:text-neutral-300">
+          <div className="mt-1 min-h-5 text-xs text-neutral-600 dark:text-neutral-300">
             {playbooks.length > 0 ? (
               <span id="start-playbook-hint">{i18n._("Type / to view playbooks")}</span>
             ) : (
@@ -656,6 +663,19 @@ export function CaptainHome(props: CaptainHomeProps) {
               </button>
             )}
           </div>
+        ) : null}
+        {props.hasProject && !configBroken && !props.next && previewPlaybooks.length > 0 ? (
+          <section data-testid="playbook-preview" className="mt-5 border-t border-neutral-200 pt-4 text-xs leading-5 text-neutral-500 dark:border-neutral-800 dark:text-neutral-400">
+            <p>{i18n._("Playbooks are reusable task workflows that arrange AI steps and roles.")}</p>
+            <ul className="mt-2 space-y-1">
+              {previewPlaybooks.map((playbook) => (
+                <li key={playbook.id} className="flex min-w-0 items-baseline gap-3">
+                  <span className="shrink-0 font-mono font-medium text-neutral-700 dark:text-neutral-300">/{playbook.command}</span>
+                  <span className="min-w-0 truncate" title={playbookIntent(playbook.intent)}>{playbookIntent(playbook.intent)}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
         ) : null}
       </div>
     </div>
