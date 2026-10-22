@@ -630,6 +630,41 @@ msgstr "{projectId} 在本设备上没有工作文件夹"
 msgid "{role} is not one of the roles {host} grants"
 msgstr "{role} 不是 {host} 授予的角色之一"
 
+#. A seat's opening failed: the team server answered its admission with nothing that opens a seat; {server} is the server's name
+#: src/places.ts
+msgid "{server} answered no seat"
+msgstr "{server} 没有给出席位"
+
+#. A seat's opening failed: the team server could not reach the instance to redeem the ticket; {server} is the server's name, {host} the instance's display name
+#: src/places.ts
+msgid "{server} could not reach {host}"
+msgstr "{server} 无法连接 {host}"
+
+#. A seat's opening failed: the team server did not start the person's seat and said no more; {server} is the server's name
+#: src/places.ts
+msgid "{server} could not start your seat"
+msgstr "{server} 无法启动你的席位"
+
+#. A seat's opening failed: the team server did not start the person's seat; {server} is the server's name, {words} its own words, kept whole
+#: src/places.ts
+msgid "{server} could not start your seat: {words}"
+msgstr "{server} 无法启动你的席位：{words}"
+
+#. A seat's opening refused by the team server with no words of its own; {server} is the server's name
+#: src/places.ts
+msgid "{server} refused the seat"
+msgstr "{server} 拒绝了这个席位"
+
+#. A seat's opening refused by the team server, its refusal relayed from it or from the instance; {server} is the server's name, {words} its own words, kept whole
+#: src/places.ts
+msgid "{server} refused the seat: {words}"
+msgstr "{server} 拒绝了这个席位：{words}"
+
+#. A seat's opening failed: the team server's TLS certificate did not verify against the trusted certificate authorities, so nothing was sent to it; {server} is the server's name
+#: src/places.ts
+msgid "{server}'s certificate could not be verified"
+msgstr "无法验证 {server} 的证书"
+
 #. Refusal where the folder chosen for the example already holds files
 #: src/forge.ts
 msgid "{target} is not empty; the example seeds only a new or empty directory"
@@ -802,6 +837,11 @@ msgstr "项目的设置只能列出它启用的规程及每个角色使用的 Pl
 #: src/media-transfers.ts
 msgid "A retried upload chunk contains different bytes."
 msgstr "重试上传的数据块与已接收的内容不同。"
+
+#. Refusal on a team server's seat of opening a seat on a team server: a team server's seat holds no seats of its own
+#: src/service.ts
+msgid "A seat opens no server"
+msgstr "席位不能打开服务器"
 
 #. Stands in for the title of a session that has none
 #: src/session.ts
@@ -1788,6 +1828,11 @@ msgstr "本机在 {target} 找不到可访问的仓库"
 msgid "no roster player {playerId}"
 msgstr "名单中没有 Player {playerId}"
 
+#. Refusal of a seat's closing: this device holds no seat on the server named
+#: src/places.ts
+msgid "No seat is open on this server"
+msgstr "这台服务器上没有打开的席位"
+
 #. Refusal: no session of this id is known
 #. Refusal: no session of this id is known
 #: src/service.ts
@@ -2121,6 +2166,11 @@ msgstr "已保存文件的长度与上传声明不符。"
 #: src/environments.ts
 msgid "Publishing stopped: {cause}"
 msgstr "发布已停止：{cause}"
+
+#. Refusal of a seat's opening sent without the person's consent to the contract the instance's record fixes for team servers
+#: src/places.ts
+msgid "Read and accept the server's contract before opening a seat"
+msgstr "请先阅读并接受服务器的约定，再打开席位"
 
 #. Refusal of a pick joining a spex repository with other members until the reader has seen the privacy notice
 #: src/space.ts
@@ -2538,8 +2588,10 @@ msgstr "配置无效；请先在设置中修复，智能体才能作答"
 #. Refusal during attachment admission
 #. Refusal during core shutdown
 #. Refusal during core shutdown
+#. Refusal during core shutdown
 #. Refusal: environment work asked once the core stops
 #: src/environments.ts
+#: src/places.ts
 #: src/service.ts
 #: src/session.ts
 msgid "The core is stopping."
@@ -2683,6 +2735,11 @@ msgstr "该仓库还没有任何提交；请重新初始化"
 #: src/service.ts
 msgid "the run is still parked, so the intent stays open"
 msgstr "该运行仍处于搁置状态，因此意图保持未结束"
+
+#. Refusal of a seat's opening or closing: the seats file changed between the core's read and its write
+#: src/places.ts
+msgid "The seats changed meanwhile; try again"
+msgstr "席位在此期间已更改；请重试"
 
 #. Refusal: the session is held, so it cannot be discarded now
 #. Refusal: the session is held, so it cannot be discarded now

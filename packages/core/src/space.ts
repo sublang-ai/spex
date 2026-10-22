@@ -2883,6 +2883,30 @@ export class SpaceManager {
     return listed.origin;
   }
 
+  // -- team servers (git-host-29, core-service-128, DR-133) -----------------
+
+  /** The origins of every instance the home lists and is signed in to,
+   * in its order (storage-2): those whose servers the core lists. */
+  signedInOrigins(): string[] {
+    return this.listedInstances().filter((instance) => this.signedInAt(instance)).map((instance) => instance.origin);
+  }
+
+  /** The instance a command names by its origin, signed in there
+   * (space-29): one the home does not list refused `not_found`, one
+   * signed out asking for a sign-in there. */
+  signedInInstance(named: string): string {
+    const instance = this.instanceAt(this.namedInstance(named));
+    if (!this.signedInAt(instance)) throw new CoreError("invalid_request", signInTo(this.nameOf(instance)));
+    return instance.origin;
+  }
+
+  /** The client this core keeps for an instance (DR-127): a servers
+   * listing or a ticket through it presents that instance's app token,
+   * kept current as every call's is (git-host-4, git-host-29). */
+  clientOf(origin: string): GitHostClient {
+    return this.instanceAt(origin).client;
+  }
+
   /** The key a host repository's clone takes (DR-127): its path in the
    * instance, under the instance's folder — the default instance's
    * where none is named; null where that path cannot stand as folders

@@ -511,6 +511,10 @@ When the root-lease integration suite runs the core's store and the storage Git 
 - a former-layout `.lock/` held by a live owner or another machine's keeps the core out, leaving no lease, and a dead one of this machine is left in place [[storage-26](#storage-26)];
 - a storage command with an unavailable identity refuses before any change, naming the identity file [[storage-10](#storage-10)].
 
+### storage-46
+
+Where a home opens, closes and reopens seats against a stand-in instance and a stand-in hub, the test suite shall assert the seats file [[storage-45](#storage-45)]: written at an open with owner-only permissions under a `local/` of the same, read back at the next start with every entry, removed at the close of its last entry, a file of another format refused at an open and a close and left byte for byte as it was, and the bearer in no reply, event or log.
+
 ## References
 
 [1]: https://github.com/sublang-ai/playbook/blob/main/specs/packages/session-storage.md "Shared Playbook session storage"
