@@ -2231,6 +2231,10 @@ msgstr "拒绝"
 msgid "Describe a project task"
 msgstr "描述项目任务"
 
+#: src/components/CaptainHome.tsx
+msgid "Describe the goal and how to know it is done. Captain will choose a suitable playbook and coordinate AI implementation and review."
+msgstr "说明目标和怎样算完成。Captain 会选择合适的规程，安排 AI 实现与复核。"
+
 #: src/components/DraftConversation.tsx
 msgid "Describe the playbook…"
 msgstr "描述这个规程…"
@@ -2831,6 +2835,10 @@ msgstr "其中的文件夹（可选）"
 msgid "Folder its sessions run in on this device"
 msgstr "此设备上运行其会话的文件夹"
 
+#: src/components/CaptainHome.tsx
+msgid "For example:"
+msgstr "例如："
+
 #. confirm: forget a folder whose records are gone from this device
 #. on a signed-out instance's heading: remove the instance from this home; nothing at it changes and every record stays
 #: src/components/SpaceInstance.tsx
@@ -3051,6 +3059,10 @@ msgstr "图片"
 msgid "implement a coding intent in reviewed, one-commit phases, using an intent record when needed"
 msgstr "分阶段实现编码意图，每个阶段经审阅、形成一个提交，必要时使用意图记录"
 
+#: src/components/CaptainHome.tsx
+msgid "implement in reviewed phases"
+msgstr "分阶段实现与复核"
+
 #: src/App.tsx
 #: src/components/NavRail.tsx
 msgid "in use elsewhere"
@@ -3068,6 +3080,10 @@ msgstr "继承 Player（关闭）"
 #: src/components/BindingEditor.tsx
 msgid "Inherit the player (on)"
 msgstr "继承 Player（开启）"
+
+#: src/components/CaptainHome.tsx
+msgid "inspect material or an interface"
+msgstr "检查材料或界面"
 
 #. the built-in /inspect playbook's intent, as its registry entry states it
 #: src/lib/playbook-intent.ts
@@ -4358,8 +4374,8 @@ msgid "Playbooks"
 msgstr "规程"
 
 #: src/components/CaptainHome.tsx
-msgid "Playbooks are reusable task workflows that arrange AI steps and roles."
-msgstr "规程是可复用的任务流程，安排 AI 的步骤与分工。"
+msgid "Playbooks are reusable task workflows."
+msgstr "规程是可复用的任务流程。"
 
 #: src/components/LibrarySurface.tsx
 msgid "Playbooks need a valid config — fix it in <0>Settings</0>."
@@ -5671,10 +5687,6 @@ msgstr "开始 {title}"
 msgid "Start {title} in {project}"
 msgstr "在 {project} 中开始 {title}"
 
-#: src/components/CaptainHome.tsx
-msgid "Start a checkable change in {project}"
-msgstr "在 {project} 中开始一项可验收的改动"
-
 #: src/lib/shortcuts.ts
 msgid "Start a new session in the current project"
 msgstr "在当前项目中开始新会话"
@@ -5901,10 +5913,6 @@ msgstr "从消息中移除该任务"
 #: src/components/NextCard.tsx
 msgid "Take this task out of the queue — Undo puts it back"
 msgstr "将此任务移出队列 — 撤销可放回"
-
-#: src/components/CaptainHome.tsx
-msgid "Tell Captain what should change and how to know it is done. It will choose a suitable playbook and coordinate AI implementation and review."
-msgstr "告诉 Captain 想改什么、怎样算完成。它会选用合适规程，安排 AI 实现与复核。"
 
 #: src/components/DraftConversation.tsx
 msgid "Tell the agent what the playbook does, who does what, and when it is done"
@@ -6336,8 +6344,8 @@ msgid "Tweak the Captain agent in place"
 msgstr "就地调整 Captain 智能体"
 
 #: src/components/CaptainHome.tsx
-msgid "Type / to view playbooks"
-msgstr "输入 / 查看规程"
+msgid "Type / to view all {count} playbooks"
+msgstr "输入 / 查看全部 {count} 个规程"
 
 #. a required role no player answers yet
 #: src/components/LibrarySurface.tsx
@@ -6578,6 +6586,10 @@ msgstr "等待你的裁定"
 #: src/components/CaptainHome.tsx
 msgid "What should change?"
 msgstr "想改什么、怎样算完成？"
+
+#: src/components/CaptainHome.tsx
+msgid "What would you change in {project}?"
+msgstr "在 {project} 中，想改什么？"
 
 #: src/components/SpaceSync.tsx
 msgid "Where a project lives is recorded on this device only; this never syncs."

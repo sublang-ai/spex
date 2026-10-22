@@ -137,7 +137,7 @@ function renderHome({
 describe("RUN-29: captain home structure and one-motion start", () => {
   test("project task framing, composer, and Captain role render", () => {
     renderHome();
-    expect(screen.getByText("Start a checkable change in demo")).toBeTruthy();
+    expect(screen.getByText("What would you change in demo?")).toBeTruthy();
     expect(screen.getByTestId("start-composer")).toBeTruthy();
     const chip = screen.getByTestId("agent-chip");
     expect(chip.textContent).toContain("claude · claude-opus-4-8 @ high");
@@ -194,8 +194,8 @@ describe("RUN-29: captain home structure and one-motion start", () => {
 
   test("task scope and slash discovery sit outside the input", () => {
     renderHome();
-    expect(screen.getByText(/Tell Captain what should change and how to know it is done/)).toBeTruthy();
-    const hint = screen.getByText("Type / to view playbooks");
+    expect(screen.getByText(/Describe the goal and how to know it is done/)).toBeTruthy();
+    const hint = screen.getByText("Type / to view all 2 playbooks");
     expect(hint.compareDocumentPosition(screen.getByTestId("composer-box")) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
     const field = screen.getByLabelText("Describe a project task");
     expect(field).toBe(screen.getByTestId("start-composer"));
@@ -215,14 +215,17 @@ describe("RUN-29: captain home structure and one-motion start", () => {
       intent: "inspect supplied material or a running web interface and explain observed evidence without changing the repository",
       roles: {},
     };
-    renderHome({ playbooks: [PLAYBOOKS[1], inspect, PLAYBOOKS[0]] });
+    renderHome({ playbooks: [PLAYBOOKS[1], inspect, { ...PLAYBOOKS[0], intent: "implement a coding intent in reviewed, one-commit phases, using an intent record when needed" }] });
     const preview = screen.getByTestId("playbook-preview");
     expect(preview.textContent).toContain("Playbooks are reusable task workflows");
     expect(preview.textContent).toContain("/code");
     expect(preview.textContent).toContain("/inspect");
     expect(preview.textContent).not.toContain("/review");
     expect(preview.querySelectorAll("button")).toHaveLength(0);
-    expect(preview.compareDocumentPosition(screen.getByText("Type / to view playbooks")) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
+    const hint = screen.getByText("Type / to view all 3 playbooks");
+    expect(preview.compareDocumentPosition(hint) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(preview.textContent).toContain("implement in reviewed phases");
+    expect(preview.textContent).toContain("inspect material or an interface");
   });
 
   test("no playbook preview appears without configured playbooks", () => {

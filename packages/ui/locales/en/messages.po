@@ -2231,6 +2231,10 @@ msgstr "Deny"
 msgid "Describe a project task"
 msgstr "Describe a project task"
 
+#: src/components/CaptainHome.tsx
+msgid "Describe the goal and how to know it is done. Captain will choose a suitable playbook and coordinate AI implementation and review."
+msgstr "Describe the goal and how to know it is done. Captain will choose a suitable playbook and coordinate AI implementation and review."
+
 #: src/components/DraftConversation.tsx
 msgid "Describe the playbook…"
 msgstr "Describe the playbook…"
@@ -2831,6 +2835,10 @@ msgstr "Folder inside it (optional)"
 msgid "Folder its sessions run in on this device"
 msgstr "Folder its sessions run in on this device"
 
+#: src/components/CaptainHome.tsx
+msgid "For example:"
+msgstr "For example:"
+
 #. confirm: forget a folder whose records are gone from this device
 #. on a signed-out instance's heading: remove the instance from this home; nothing at it changes and every record stays
 #: src/components/SpaceInstance.tsx
@@ -3051,6 +3059,10 @@ msgstr "image"
 msgid "implement a coding intent in reviewed, one-commit phases, using an intent record when needed"
 msgstr "implement a coding intent in reviewed, one-commit phases, using an intent record when needed"
 
+#: src/components/CaptainHome.tsx
+msgid "implement in reviewed phases"
+msgstr "implement in reviewed phases"
+
 #: src/App.tsx
 #: src/components/NavRail.tsx
 msgid "in use elsewhere"
@@ -3068,6 +3080,10 @@ msgstr "Inherit the player (off)"
 #: src/components/BindingEditor.tsx
 msgid "Inherit the player (on)"
 msgstr "Inherit the player (on)"
+
+#: src/components/CaptainHome.tsx
+msgid "inspect material or an interface"
+msgstr "inspect material or an interface"
 
 #. the built-in /inspect playbook's intent, as its registry entry states it
 #: src/lib/playbook-intent.ts
@@ -4358,8 +4374,8 @@ msgid "Playbooks"
 msgstr "Playbooks"
 
 #: src/components/CaptainHome.tsx
-msgid "Playbooks are reusable task workflows that arrange AI steps and roles."
-msgstr "Playbooks are reusable task workflows that arrange AI steps and roles."
+msgid "Playbooks are reusable task workflows."
+msgstr "Playbooks are reusable task workflows."
 
 #: src/components/LibrarySurface.tsx
 msgid "Playbooks need a valid config — fix it in <0>Settings</0>."
@@ -5671,10 +5687,6 @@ msgstr "Start {title}"
 msgid "Start {title} in {project}"
 msgstr "Start {title} in {project}"
 
-#: src/components/CaptainHome.tsx
-msgid "Start a checkable change in {project}"
-msgstr "Start a checkable change in {project}"
-
 #: src/lib/shortcuts.ts
 msgid "Start a new session in the current project"
 msgstr "Start a new session in the current project"
@@ -5901,10 +5913,6 @@ msgstr "Take the task out of the message"
 #: src/components/NextCard.tsx
 msgid "Take this task out of the queue — Undo puts it back"
 msgstr "Take this task out of the queue — Undo puts it back"
-
-#: src/components/CaptainHome.tsx
-msgid "Tell Captain what should change and how to know it is done. It will choose a suitable playbook and coordinate AI implementation and review."
-msgstr "Tell Captain what should change and how to know it is done. It will choose a suitable playbook and coordinate AI implementation and review."
 
 #: src/components/DraftConversation.tsx
 msgid "Tell the agent what the playbook does, who does what, and when it is done"
@@ -6336,8 +6344,8 @@ msgid "Tweak the Captain agent in place"
 msgstr "Tweak the Captain agent in place"
 
 #: src/components/CaptainHome.tsx
-msgid "Type / to view playbooks"
-msgstr "Type / to view playbooks"
+msgid "Type / to view all {count} playbooks"
+msgstr "Type / to view all {count} playbooks"
 
 #. a required role no player answers yet
 #: src/components/LibrarySurface.tsx
@@ -6578,6 +6586,10 @@ msgstr "waiting for your verdict"
 #: src/components/CaptainHome.tsx
 msgid "What should change?"
 msgstr "What should change?"
+
+#: src/components/CaptainHome.tsx
+msgid "What would you change in {project}?"
+msgstr "What would you change in {project}?"
 
 #: src/components/SpaceSync.tsx
 msgid "Where a project lives is recorded on this device only; this never syncs."

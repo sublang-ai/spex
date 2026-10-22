@@ -295,10 +295,10 @@ The app shell shall fill the window at every size, giving the surface it shows a
 
 Where a project is registered and no session tab is active, when the Projects surface is shown, the run view shall present a project task start with one composer and secondary Captain settings ([DR-007](../decisions/007-conversational-session-start.md), [DR-011](../decisions/011-project-workspace.md), [DR-138](../decisions/138-project-start-explains-the-task-and-slash-discovery.md)):
 
-- the heading names the current project; guidance aligned to the composer's width asks for a change and its acceptance criteria, explaining that Captain chooses a suitable playbook and arranges AI implementation and review rather than presenting an unrestricted chat;
+- the heading asks plainly what to change in the named project; guidance aligned to the composer's width asks for the goal and how to know it is done, explaining that Captain chooses a suitable playbook and arranges AI implementation and review rather than presenting an unrestricted chat;
 - immediately above the composer, Captain wears the same avatar and name as the running Captain pane, beside a clickable chip showing its current adapter, model, effort, fast-mode mark, and readiness; that chip opens the in-place editor [[run-view-32](#run-view-32)], while blocking readiness remains at the composer;
-- the sole task field has an accessible label without a visible label, and a stable hint below the composer says to type `/` in that field to inspect the configured playbooks [[run-view-27](#run-view-27)]; its idle inside-caption is absent while staged-intent and acknowledgment captions still appear [[run-view-106](#run-view-106)];
-- the introduction and the Captain/composer group have more breathing room than the gaps within each group; below the slash hint, a visually quiet read-only explanation defines a playbook and previews at most two configured examples, disappearing when an Up next card takes priority [[run-view-27](#run-view-27)];
+- the sole task field has an accessible label without a visible label, and a stable hint below the composer says to type `/` in that field to inspect all configured playbooks, naming their live count [[run-view-27](#run-view-27)]; its idle inside-caption is absent while staged-intent and acknowledgment captions still appear [[run-view-106](#run-view-106)];
+- the introduction and the Captain/composer group have more breathing room than the gaps within each group; a compact, borderless, low-emphasis footer directly below the composer defines a playbook and previews at most two configured examples before ending with the slash hint, and the preview disappears when an Up next card takes priority [[run-view-27](#run-view-27)];
 - with no project current, the greeting directs the reader to pick one where projects exist;
 - Project choice lives in the sidebar and palette, not in the composer row.
 
@@ -325,7 +325,7 @@ While the Captain home is shown, when the user submits composer text, the run vi
 The run view shall make configured playbooks discoverable at the composer ([DR-138](../decisions/138-project-start-explains-the-task-and-slash-discovery.md)):
 
 - when the user types `/` at the start of a composer, the run view shows the configured playbooks filtered by the typed prefix, each with its intent — a built-in's in the interface language [[localization-4](localization.md#localization-4)] — as the hint, and inserts the selected command into the composer without dispatching it;
-- at the project task start, a stable hint below the composer tells the reader to type `/` to inspect the complete configured list; when playbooks are available and no Up next card is present, up to two configured examples appear in a low-emphasis, read-only explanation below it. Examples do not act as command selectors or quick-start controls.
+- at the project task start, a stable hint at the end of the compact footer below the composer tells the reader to type `/` to inspect all configured playbooks and names their live count; when playbooks are available and no Up next card is present, up to two configured examples appear in a low-emphasis, read-only explanation before that hint. Examples do not act as command selectors or quick-start controls.
 
 #### run-view-30
 

@@ -105,6 +105,16 @@ export function popoverRoom(
     : { direction: "down", room: Math.max(below, 0) };
 }
 
+function previewIntent(playbook: PlaybookSummary): string {
+  if (playbook.command === "code" && playbook.intent === "implement a coding intent in reviewed, one-commit phases, using an intent record when needed") {
+    return i18n._("implement in reviewed phases");
+  }
+  if (playbook.command === "inspect" && playbook.intent === "inspect supplied material or a running web interface and explain observed evidence without changing the repository") {
+    return i18n._("inspect material or an interface");
+  }
+  return playbookIntent(playbook.intent);
+}
+
 function CaptainBubble({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex items-start gap-2">
@@ -333,12 +343,12 @@ export function CaptainHome(props: CaptainHomeProps) {
         {props.hasProject ? (
           <div data-testid="project-task-start" className="w-full">
             <h1 className="text-2xl font-semibold leading-tight tracking-tight text-neutral-900 dark:text-neutral-100">
-              {i18n._("Start a checkable change in {project}", {
+              {i18n._("What would you change in {project}?", {
                 project: props.projectName ?? i18n._("your project"),
               })}
             </h1>
             <p className="mt-3 text-sm leading-6 text-neutral-600 dark:text-neutral-300">
-              {i18n._("Tell Captain what should change and how to know it is done. It will choose a suitable playbook and coordinate AI implementation and review.")}
+              {i18n._("Describe the goal and how to know it is done. Captain will choose a suitable playbook and coordinate AI implementation and review.")}
             </p>
           </div>
         ) : (
@@ -653,29 +663,31 @@ export function CaptainHome(props: CaptainHomeProps) {
             }
           />
         </div>
+        {props.hasProject && !configBroken && !props.next && previewPlaybooks.length > 0 ? (
+          <div data-testid="playbook-preview" className="mt-1 text-xs leading-5 text-neutral-500 dark:text-neutral-400">
+            <p>{i18n._("Playbooks are reusable task workflows.")}</p>
+            <p className="mt-0.5">
+              {i18n._("For example:")}{" "}
+              {previewPlaybooks.map((playbook, index) => (
+                <span key={playbook.id}>
+                  {index > 0 ? " · " : null}
+                  <span className="font-mono">/{playbook.command}</span>{" "}
+                  <span className="inline-block max-w-44 truncate align-bottom" title={playbookIntent(playbook.intent)}>{previewIntent(playbook)}</span>
+                </span>
+              ))}
+            </p>
+          </div>
+        ) : null}
         {props.hasProject ? (
-          <div className="mt-1 min-h-5 text-xs text-neutral-600 dark:text-neutral-300">
+          <div className="mt-0.5 min-h-5 text-xs text-neutral-600 dark:text-neutral-300">
             {playbooks.length > 0 ? (
-              <span id="start-playbook-hint">{i18n._("Type / to view playbooks")}</span>
+              <span id="start-playbook-hint">{i18n._("Type / to view all {count} playbooks", { count: playbooks.length })}</span>
             ) : (
               <button type="button" onClick={() => props.onNavigate("Playbooks")} className="font-medium text-brand-700 hover:underline dark:text-brand-300">
                 {i18n._("No playbooks available — open Playbooks")}
               </button>
             )}
           </div>
-        ) : null}
-        {props.hasProject && !configBroken && !props.next && previewPlaybooks.length > 0 ? (
-          <section data-testid="playbook-preview" className="mt-5 border-t border-neutral-200 pt-4 text-xs leading-5 text-neutral-500 dark:border-neutral-800 dark:text-neutral-400">
-            <p>{i18n._("Playbooks are reusable task workflows that arrange AI steps and roles.")}</p>
-            <ul className="mt-2 space-y-1">
-              {previewPlaybooks.map((playbook) => (
-                <li key={playbook.id} className="flex min-w-0 items-baseline gap-3">
-                  <span className="shrink-0 font-mono font-medium text-neutral-700 dark:text-neutral-300">/{playbook.command}</span>
-                  <span className="min-w-0 truncate" title={playbookIntent(playbook.intent)}>{playbookIntent(playbook.intent)}</span>
-                </li>
-              ))}
-            </ul>
-          </section>
         ) : null}
       </div>
     </div>
