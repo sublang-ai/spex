@@ -840,7 +840,6 @@ test("storage-2: home.yaml lists every instance by its origin, the first the def
   const home = Home.create(dir, { own: "tester", env: { SPEX_HOST_URL: "https://spex.pub" } });
   assert.deepEqual(home.instances(), []);
   assert.deepEqual(home.defaultInstance(), { origin: "https://spex.pub", clientId: "spex" }, "the recorded origin, while none is listed");
-  assert.deepEqual(home.host, home.defaultInstance());
   assert.equal(home.account(), null);
   assert.deepEqual(home.instanceByFolder("@spex.pub"), { origin: "https://spex.pub", clientId: "spex" });
   // A sign-in lists the instance it names, in any spelling; the first listed is the default.

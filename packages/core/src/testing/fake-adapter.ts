@@ -139,6 +139,9 @@ export interface FakeAdapterStats {
     disallowedTools?: string[];
     attachments?: readonly Attachment[];
     browser?: boolean;
+    /** The process environment as the run started, which a real
+     * adapter's runtime inherits at spawn (core-service-126). */
+    env: NodeJS.ProcessEnv;
   }[];
 }
 
@@ -186,6 +189,7 @@ export function fakeAdapterImports(
         ...(options?.disallowedTools ? { disallowedTools: options.disallowedTools } : {}),
         ...(options?.attachments ? { attachments: options.attachments } : {}),
         ...(options?.browser !== undefined ? {browser: options.browser} : {}),
+        env: { ...process.env },
       });
       const sessionId = randomUUID();
       // `<id>` names the cwd's basename — the draft id — in paths,
