@@ -283,7 +283,7 @@ export function CaptainHome(props: CaptainHomeProps) {
             <li className="relative pb-3 pl-5">
               <span aria-hidden="true" className="absolute -left-[5px] top-2 size-2 rounded-full bg-neutral-400 dark:bg-neutral-500" />
               <span className="font-semibold text-neutral-800 dark:text-neutral-100">{i18n._("Playbooks")}</span>
-              <span className="ml-3 text-neutral-600 dark:text-neutral-300">{i18n._("Compile natural-language playbooks into executable workflows")}</span>
+              <span className="ml-3 text-neutral-600 dark:text-neutral-300">{i18n._("Compile natural-language steps into executable workflows")}</span>
             </li>
             <li className="relative pl-5">
               <span aria-hidden="true" className="absolute -left-[5px] top-2 size-2 rounded-full bg-neutral-400 dark:bg-neutral-500" />
@@ -364,15 +364,15 @@ export function CaptainHome(props: CaptainHomeProps) {
         {props.hasProject ? (
           <div data-testid="project-task-start" className="w-full">
             <h1 className="text-2xl font-semibold leading-tight tracking-tight text-neutral-900 dark:text-neutral-100">
-              {i18n._("What would you change in {project}?", {
+              {i18n._("What would you like to change in {project}?", {
                 project: props.projectName ?? i18n._("your project"),
               })}
             </h1>
             <p className="mt-3 text-sm leading-6 text-neutral-600 dark:text-neutral-300">
-              {i18n._("Specs clarify goals and acceptance criteria; Captain uses playbooks to coordinate AI implementation and review.")}
+              {i18n._("Spex's design workflow can write goals and acceptance criteria into specs; implementation updates affected spec items.")}
             </p>
             {props.onOpenSpecs ? (
-              <div data-testid="project-spec-status" className="mt-4 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs leading-5 text-neutral-500 dark:text-neutral-400">
+              <div data-testid="project-spec-status" className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs leading-5 text-neutral-500 dark:text-neutral-400">
                 <span>
                   {specState === "ready" && specCounts
                     ? i18n._("Existing specs: {packages, plural, one {# package} other {# packages}} · {items, plural, one {# item} other {# items}}", { packages: specCounts.packages, items: specCounts.items })
@@ -565,9 +565,45 @@ export function CaptainHome(props: CaptainHomeProps) {
           </span>
         </div>
 
+        {props.hasProject ? (
+          <div className="text-xs leading-5 text-neutral-500 dark:text-neutral-400">
+            {!configBroken && playbooks.length > 0 ? (
+              <p>{i18n._("Captain uses playbooks to coordinate AI implementation and review. Playbooks are like compiled Skills that run through defined steps.")}</p>
+            ) : null}
+            {!configBroken && !props.next && previewPlaybooks.length > 0 ? (
+              <div data-testid="playbook-preview" className="mt-1">
+                <p>
+                  {i18n._("For example:")}{" "}
+                  {previewPlaybooks.map((playbook, index) => (
+                    <span key={playbook.id}>
+                      {index > 0 ? " · " : null}
+                      <code className="font-mono">/{playbook.command}</code>{" "}
+                      <span className="inline-block max-w-44 truncate align-bottom" title={playbookIntent(playbook.intent)}>{previewIntent(playbook)}</span>
+                    </span>
+                  ))}
+                </p>
+              </div>
+            ) : null}
+            <div className="mt-1 min-h-5">
+              {playbooks.length > 0 ? (
+                <span id="start-playbook-hint">
+                  <Rich
+                    text={i18n._("Type <0>/</0> in the task box below to see all {count} playbooks", { count: playbooks.length })}
+                    components={[<code key="slash" className="font-mono" />]}
+                  />
+                </span>
+              ) : (
+                <button type="button" onClick={() => props.onNavigate("Playbooks")} className="font-medium text-brand-700 hover:underline dark:text-brand-300">
+                  {i18n._("No playbooks available — open Playbooks")}
+                </button>
+              )}
+            </div>
+          </div>
+        ) : null}
+
         {props.hasProject ? <label htmlFor="start-composer" className="sr-only">{i18n._("Describe a project task")}</label> : null}
 
-        <div className="relative">
+        <div className={props.hasProject ? "relative mt-1" : "relative"}>
           {slash ? (
             <SlashMenuList
               items={slash}
@@ -714,37 +750,6 @@ export function CaptainHome(props: CaptainHomeProps) {
             }
           />
         </div>
-        {props.hasProject && !configBroken && !props.next && previewPlaybooks.length > 0 ? (
-          <div data-testid="playbook-preview" className="mt-1 text-xs leading-5 text-neutral-500 dark:text-neutral-400">
-            <p>
-              {i18n._("A playbook is like a Skill compiled into an executable workflow: it coordinates AI through predefined steps.")}{" "}
-              {i18n._("For example:")}{" "}
-              {previewPlaybooks.map((playbook, index) => (
-                <span key={playbook.id}>
-                  {index > 0 ? " · " : null}
-                  <code className="font-mono">/{playbook.command}</code>{" "}
-                  <span className="inline-block max-w-44 truncate align-bottom" title={playbookIntent(playbook.intent)}>{previewIntent(playbook)}</span>
-                </span>
-              ))}
-            </p>
-          </div>
-        ) : null}
-        {props.hasProject ? (
-          <div className="mt-1 min-h-5 text-xs text-neutral-500 dark:text-neutral-400">
-            {playbooks.length > 0 ? (
-              <span id="start-playbook-hint">
-                <Rich
-                  text={i18n._("Type <0>/</0> in the task box to see all {count} playbooks", { count: playbooks.length })}
-                  components={[<code key="slash" className="font-mono" />]}
-                />
-              </span>
-            ) : (
-              <button type="button" onClick={() => props.onNavigate("Playbooks")} className="font-medium text-brand-700 hover:underline dark:text-brand-300">
-                {i18n._("No playbooks available — open Playbooks")}
-              </button>
-            )}
-          </div>
-        ) : null}
       </div>
     </div>
   );

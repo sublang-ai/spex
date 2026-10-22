@@ -743,10 +743,6 @@ msgstr "A nested workflow failed"
 msgid "A Playbook defect"
 msgstr "A Playbook defect"
 
-#: src/components/CaptainHome.tsx
-msgid "A playbook is like a Skill compiled into an executable workflow: it coordinates AI through predefined steps."
-msgstr "A playbook is like a Skill compiled into an executable workflow: it coordinates AI through predefined steps."
-
 #: src/lib/labels.ts
 msgid "A player finishes its step"
 msgstr "A player finishes its step"
@@ -1463,6 +1459,10 @@ msgstr "Captain is working. Wait for the turn to finish."
 msgid "Captain is working…"
 msgstr "Captain is working…"
 
+#: src/components/CaptainHome.tsx
+msgid "Captain uses playbooks to coordinate AI implementation and review. Playbooks are like compiled Skills that run through defined steps."
+msgstr "Captain uses playbooks to coordinate AI implementation and review. Playbooks are like compiled Skills that run through defined steps."
+
 #. draft state chip, at most 14 characters: the source changed after the last compile
 #: src/lib/drafts.ts
 msgid "Changed"
@@ -1786,8 +1786,8 @@ msgid "Compile interrupted when Spex closed"
 msgstr "Compile interrupted when Spex closed"
 
 #: src/components/CaptainHome.tsx
-msgid "Compile natural-language playbooks into executable workflows"
-msgstr "Compile natural-language playbooks into executable workflows"
+msgid "Compile natural-language steps into executable workflows"
+msgstr "Compile natural-language steps into executable workflows"
 
 #. draft state chip, at most 14 characters: the last compile succeeded
 #: src/lib/drafts.ts
@@ -5649,10 +5649,6 @@ msgid "Specs"
 msgstr "Specs"
 
 #: src/components/CaptainHome.tsx
-msgid "Specs clarify goals and acceptance criteria; Captain uses playbooks to coordinate AI implementation and review."
-msgstr "Specs clarify goals and acceptance criteria; Captain uses playbooks to coordinate AI implementation and review."
-
-#: src/components/CaptainHome.tsx
 msgid "Specs directory exists, but no packages yet"
 msgstr "Specs directory exists, but no packages yet"
 
@@ -5703,6 +5699,10 @@ msgstr "Spex repository shown"
 #: src/components/ProjectPalette.tsx
 msgid "Spex will create this folder and initialize a Git repository."
 msgstr "Spex will create this folder and initialize a Git repository."
+
+#: src/components/CaptainHome.tsx
+msgid "Spex's design workflow can write goals and acceptance criteria into specs; implementation updates affected spec items."
+msgstr "Spex's design workflow can write goals and acceptance criteria into specs; implementation updates affected spec items."
 
 #: src/lib/failure-catalogue.ts
 msgid "Squash or reset them yourself"
@@ -6380,8 +6380,8 @@ msgid "Tweak the Captain agent in place"
 msgstr "Tweak the Captain agent in place"
 
 #: src/components/CaptainHome.tsx
-msgid "Type <0>/</0> in the task box to see all {count} playbooks"
-msgstr "Type <0>/</0> in the task box to see all {count} playbooks"
+msgid "Type <0>/</0> in the task box below to see all {count} playbooks"
+msgstr "Type <0>/</0> in the task box below to see all {count} playbooks"
 
 #. a required role no player answers yet
 #: src/components/LibrarySurface.tsx
@@ -6636,8 +6636,8 @@ msgid "What should change?"
 msgstr "What should change?"
 
 #: src/components/CaptainHome.tsx
-msgid "What would you change in {project}?"
-msgstr "What would you change in {project}?"
+msgid "What would you like to change in {project}?"
+msgstr "What would you like to change in {project}?"
 
 #: src/components/SpaceSync.tsx
 msgid "Where a project lives is recorded on this device only; this never syncs."

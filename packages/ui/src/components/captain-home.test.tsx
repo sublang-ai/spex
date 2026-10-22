@@ -144,7 +144,7 @@ function renderHome({
 describe("RUN-29: captain home structure and one-motion start", () => {
   test("project task framing, composer, and Captain role render", () => {
     renderHome();
-    expect(screen.getByText("What would you change in demo?")).toBeTruthy();
+    expect(screen.getByText("What would you like to change in demo?")).toBeTruthy();
     expect(screen.getByTestId("start-composer")).toBeTruthy();
     const chip = screen.getByTestId("agent-chip");
     expect(chip.textContent).toContain("claude · claude-opus-4-8 @ high");
@@ -182,7 +182,7 @@ describe("RUN-29: captain home structure and one-motion start", () => {
     expect(screen.getByText("Specs")).toBeTruthy();
     expect(screen.getByText("Define goals and acceptance criteria")).toBeTruthy();
     expect(screen.getByText("Playbooks")).toBeTruthy();
-    expect(screen.getByText("Compile natural-language playbooks into executable workflows")).toBeTruthy();
+    expect(screen.getByText("Compile natural-language steps into executable workflows")).toBeTruthy();
     expect(screen.getByText("Delivery")).toBeTruthy();
     expect(screen.getByText("Coordinate AI implementation and review, with traceable changes")).toBeTruthy();
     const primary = screen.getByTestId("home-add-project");
@@ -201,11 +201,12 @@ describe("RUN-29: captain home structure and one-motion start", () => {
 
   test("task scope and slash discovery sit outside the input", () => {
     renderHome();
-    expect(screen.getByText(/Specs clarify goals and acceptance criteria/)).toBeTruthy();
+    expect(screen.getByText(/design workflow can write goals and acceptance criteria into specs/)).toBeTruthy();
+    expect(screen.getByText(/Captain uses playbooks to coordinate AI implementation and review/)).toBeTruthy();
     const hint = document.getElementById("start-playbook-hint")!;
-    expect(hint.textContent).toBe("Type / in the task box to see all 2 playbooks");
+    expect(hint.textContent).toBe("Type / in the task box below to see all 2 playbooks");
     expect(hint.querySelector("code")?.textContent).toBe("/");
-    expect(hint.compareDocumentPosition(screen.getByTestId("composer-box")) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
+    expect(hint.compareDocumentPosition(screen.getByTestId("composer-box")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     const field = screen.getByLabelText("Describe a project task");
     expect(field).toBe(screen.getByTestId("start-composer"));
     expect(field.getAttribute("aria-describedby")).toBe("start-playbook-hint");
@@ -230,14 +231,14 @@ describe("RUN-29: captain home structure and one-motion start", () => {
       { ...PLAYBOOKS[0], intent: "implement a coding intent in reviewed, one-commit phases, using an intent record when needed" },
     ] });
     const preview = screen.getByTestId("playbook-preview");
-    expect(preview.textContent).toContain("like a Skill compiled into an executable workflow");
+    expect(screen.getByText(/Playbooks are like compiled Skills that run through defined steps/)).toBeTruthy();
     expect(preview.textContent).toContain("/code");
     expect(preview.textContent).toContain("/review");
     expect(preview.textContent).not.toContain("/inspect");
     expect(preview.querySelectorAll("p")).toHaveLength(1);
     expect(preview.querySelectorAll("button")).toHaveLength(0);
     const hint = document.getElementById("start-playbook-hint")!;
-    expect(hint.textContent).toBe("Type / in the task box to see all 3 playbooks");
+    expect(hint.textContent).toBe("Type / in the task box below to see all 3 playbooks");
     expect(preview.compareDocumentPosition(hint) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(preview.textContent).toContain("implement in reviewed phases");
     expect(preview.textContent).toContain("review committed changes");

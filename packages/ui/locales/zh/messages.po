@@ -225,7 +225,7 @@ msgstr "{count, plural, other {# 项需要关注}}"
 
 #: src/App.tsx
 msgid "{count, plural, one {# playbook} other {# playbooks}}"
-msgstr "{count, plural, other {# 个规程}}"
+msgstr "{count, plural, other {# 个「规程」}}"
 
 #: src/components/SpaceExplorer.tsx
 msgid "{count, plural, one {# record} other {# records}}"
@@ -742,10 +742,6 @@ msgstr "嵌套工作流失败"
 #: src/lib/failure-catalogue.ts
 msgid "A Playbook defect"
 msgstr "Playbook 缺陷"
-
-#: src/components/CaptainHome.tsx
-msgid "A playbook is like a Skill compiled into an executable workflow: it coordinates AI through predefined steps."
-msgstr "规程像经过编译的 Skill，可以按预设步骤编排 AI。"
 
 #: src/lib/labels.ts
 msgid "A player finishes its step"
@@ -1463,6 +1459,10 @@ msgstr "Captain 正在工作。请等待本轮结束。"
 msgid "Captain is working…"
 msgstr "Captain 工作中…"
 
+#: src/components/CaptainHome.tsx
+msgid "Captain uses playbooks to coordinate AI implementation and review. Playbooks are like compiled Skills that run through defined steps."
+msgstr "Captain 按「规程」安排 AI 实现与复核。「规程」像编译后的 Skill，按预设步骤运行。"
+
 #. draft state chip, at most 14 characters: the source changed after the last compile
 #: src/lib/drafts.ts
 msgid "Changed"
@@ -1786,8 +1786,8 @@ msgid "Compile interrupted when Spex closed"
 msgstr "Spex 关闭时编译被中断"
 
 #: src/components/CaptainHome.tsx
-msgid "Compile natural-language playbooks into executable workflows"
-msgstr "将自然语言规程编译为可执行流程"
+msgid "Compile natural-language steps into executable workflows"
+msgstr "将自然语言步骤编译为可执行流程"
 
 #. draft state chip, at most 14 characters: the last compile succeeded
 #: src/lib/drafts.ts
@@ -1889,7 +1889,7 @@ msgstr "连接智能体"
 
 #: src/components/CaptainHome.tsx
 msgid "Connect to read project specs"
-msgstr "连接后可查看项目规约"
+msgstr "连接后可查看项目「规约」"
 
 #: src/App.tsx
 msgid "Connected, but {reason}"
@@ -2042,7 +2042,7 @@ msgstr "无法读取：{reason}"
 
 #: src/components/CaptainHome.tsx
 msgid "Couldn't read project specs"
-msgstr "暂时无法读取项目规约"
+msgstr "暂时无法读取项目「规约」"
 
 #: src/components/SpaceExplorer.tsx
 msgid "Couldn't read the files: {reason}"
@@ -2152,7 +2152,7 @@ msgstr "决策记录，共 {count} 条"
 
 #: src/components/CaptainHome.tsx
 msgid "Define checkable specs. Deliver through playbooks."
-msgstr "写清规约，让 AI 按规程交付"
+msgstr "写清「规约」，让 AI 按「规程」交付"
 
 #: src/components/CaptainHome.tsx
 msgid "Define goals and acceptance criteria"
@@ -2628,7 +2628,7 @@ msgstr "已有项目"
 
 #: src/components/CaptainHome.tsx
 msgid "Existing specs: {packages, plural, one {# package} other {# packages}} · {items, plural, one {# item} other {# items}}"
-msgstr "已有规约：{packages} 个规约包 · {items} 个条目"
+msgstr "已有「规约」：{packages} 个规约包 · {items} 个条目"
 
 #: src/components/PlayerPane.tsx
 msgid "Expand {player}"
@@ -3008,7 +3008,7 @@ msgstr "群组由运营 {name} 的人创建"
 
 #: src/components/CaptainHome.tsx
 msgid "Hello! I'm your Captain. Pick a project in the sidebar, then tell me what to do with it and I'll route it to a playbook, a scripted workflow the AI players run."
-msgstr "你好！我是你的 Captain。在侧栏选择一个项目，再告诉我要做什么，我会把它交给某个规程，也就是由 AI Player 执行的脚本化工作流。"
+msgstr "你好！我是你的 Captain。在侧栏选择一个项目，再告诉我要做什么，我会把它交给某个「规程」，也就是由 AI Player 执行的脚本化工作流。"
 
 #: src/components/SpecView.tsx
 msgid "Hide {group} items"
@@ -3773,7 +3773,7 @@ msgstr "没有未关闭的 PR。"
 
 #: src/components/CaptainHome.tsx
 msgid "No playbooks available — open Playbooks"
-msgstr "暂无可用规程，打开“规程”"
+msgstr "暂无可用「规程」，打开「规程」"
 
 #: src/components/LibrarySurface.tsx
 msgid "No playbooks enabled yet — enable a built-in below, or make your own with New playbook."
@@ -3781,7 +3781,7 @@ msgstr "尚未启用任何规程 — 在下方启用内置规程，或用“新�
 
 #: src/App.tsx
 msgid "No playbooks yet"
-msgstr "还没有规程"
+msgstr "还没有「规程」"
 
 #: src/lib/labels.ts
 msgid "No player named \"{player}\" — check the config"
@@ -3801,7 +3801,7 @@ msgstr "没有匹配“{query}”的项目"
 
 #: src/components/CaptainHome.tsx
 msgid "No project specs yet"
-msgstr "尚无项目规约"
+msgstr "尚无项目「规约」"
 
 #: src/components/DashboardSurface.tsx
 msgid "No projects yet — register a repository in the <0>Projects</0> to put its work here."
@@ -4395,7 +4395,7 @@ msgstr "规程：{playbookId}"
 #: src/components/LibrarySurface.tsx
 #: src/components/NavRail.tsx
 msgid "Playbooks"
-msgstr "规程"
+msgstr "「规程」"
 
 #: src/components/LibrarySurface.tsx
 msgid "Playbooks need a valid config — fix it in <0>Settings</0>."
@@ -4644,7 +4644,7 @@ msgstr "正在读取成员…"
 
 #: src/components/CaptainHome.tsx
 msgid "Reading project specs…"
-msgstr "正在读取项目规约…"
+msgstr "正在读取项目「规约」…"
 
 #: src/components/SpecView.tsx
 msgid "reading specs…"
@@ -5646,19 +5646,15 @@ msgstr "规约包需求"
 #: src/components/CaptainHome.tsx
 #: src/components/SpecView.tsx
 msgid "Specs"
-msgstr "规约"
-
-#: src/components/CaptainHome.tsx
-msgid "Specs clarify goals and acceptance criteria; Captain uses playbooks to coordinate AI implementation and review."
-msgstr "规约明确目标与验收标准；Captain 按规程编排 AI 实现与复核。"
+msgstr "「规约」"
 
 #: src/components/CaptainHome.tsx
 msgid "Specs directory exists, but no packages yet"
-msgstr "规约目录已建立，尚无规约包"
+msgstr "「规约」目录已建立，尚无规约包"
 
 #: src/components/CaptainHome.tsx
 msgid "Specs need migration"
-msgstr "规约需要迁移"
+msgstr "「规约」需要迁移"
 
 #: src/components/SpecView.tsx
 msgid "specs/ is present but holds no spec files yet."
@@ -5682,7 +5678,7 @@ msgstr "Spex 无法读取此次将要发布的内容。"
 
 #: src/components/CaptainHome.tsx
 msgid "Spex has no config file yet — playbooks are unavailable."
-msgstr "Spex 还没有配置文件 — 规程不可用。"
+msgstr "Spex 还没有配置文件 — 「规程」不可用。"
 
 #: src/components/SettingsSurface.tsx
 msgid "Spex itself follows your OS theme."
@@ -5703,6 +5699,10 @@ msgstr "显示的 spex 仓库"
 #: src/components/ProjectPalette.tsx
 msgid "Spex will create this folder and initialize a Git repository."
 msgstr "Spex 会创建此文件夹并初始化 Git 仓库。"
+
+#: src/components/CaptainHome.tsx
+msgid "Spex's design workflow can write goals and acceptance criteria into specs; implementation updates affected spec items."
+msgstr "Spex 的设计流程可把目标与验收标准写成「规约」；实现时会同步更新相关条目。"
 
 #: src/lib/failure-catalogue.ts
 msgid "Squash or reset them yourself"
@@ -6380,8 +6380,8 @@ msgid "Tweak the Captain agent in place"
 msgstr "就地调整 Captain 智能体"
 
 #: src/components/CaptainHome.tsx
-msgid "Type <0>/</0> in the task box to see all {count} playbooks"
-msgstr "在输入框输入 <0>/</0>，查看全部 {count} 个规程"
+msgid "Type <0>/</0> in the task box below to see all {count} playbooks"
+msgstr "在下方输入框输入 <0>/</0>，查看全部 {count} 个「规程」"
 
 #. a required role no player answers yet
 #: src/components/LibrarySurface.tsx
@@ -6563,7 +6563,7 @@ msgstr "查看迁移说明"
 
 #: src/components/CaptainHome.tsx
 msgid "View specs"
-msgstr "查看规约"
+msgstr "查看「规约」"
 
 #: src/components/SpaceSurface.tsx
 msgid "Views of {name}"
@@ -6636,8 +6636,8 @@ msgid "What should change?"
 msgstr "想改什么、怎样算完成？"
 
 #: src/components/CaptainHome.tsx
-msgid "What would you change in {project}?"
-msgstr "在 {project} 中，想改什么？"
+msgid "What would you like to change in {project}?"
+msgstr "你想对 {project} 做什么改动？"
 
 #: src/components/SpaceSync.tsx
 msgid "Where a project lives is recorded on this device only; this never syncs."
@@ -6735,7 +6735,7 @@ msgstr "更改已保存；尚未推送"
 
 #: src/components/CaptainHome.tsx
 msgid "Your config file has errors — playbooks are unavailable."
-msgstr "配置文件有错误 — 规程不可用。"
+msgstr "配置文件有错误 — 「规程」不可用。"
 
 #. the list of the home's groups and their spex repositories
 #: src/components/SpaceGroups.tsx
