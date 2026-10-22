@@ -287,7 +287,11 @@ and `npm start` (desktop) or `npm run start:server` (server).
   the instance and presented at the server over TLS — keeps the seat in
   `local/seats.yaml`, owner-only, and closes it ([DR-133](specs/decisions/133-one-desktop-over-several-cores.md)).
   Protocol 28 adds `server.list`, `server.open`, `server.close` and the
-  `server.state` event.
+  `server.state` event. While a seat is open the core's own endpoint
+  relays to it at `/seats/<place>`, admitted as `/` is, presenting the
+  bearer to the server itself; it reconnects to each seat every second,
+  reads a seat speaking another protocol as mismatched, removes a seat
+  whose lease ended, and adds each seat's badge to the dock's count.
 
 ### Changed
 

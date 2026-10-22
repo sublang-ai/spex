@@ -386,6 +386,13 @@ const invalidPlaybookId = (id: string): CoreError =>
     values: { id },
   }));
 
+/** A handshake request's path, its query and fragment left out. */
+function requestPath(url: string | undefined): string {
+  const raw = url ?? "/";
+  const end = raw.search(/[?#]/);
+  return end < 0 ? raw : raw.slice(0, end);
+}
+
 /** Expand a leading ~ so the most natural path spelling works. */
 function expandPath(input: string, home: string): string {
   const trimmed = input.trim();
@@ -398,8 +405,10 @@ export interface CoreServiceEvents {
   /** Local hook for an embedding shell (notifications, badges). */
   onRecord?: (envelope: RecordEnvelope) => void;
   onSessionState?: (session: import("./protocol.js").SessionInfo) => void;
-  /** The ledger fold moved (DR-035): the shell re-reads `ledger()`
-   * for its badge, so the dock and the app never disagree. */
+  /** The attention count moved — this core's ledger fold (DR-035) or
+   * an open seat's badge (core-service-129): the shell re-reads
+   * `attentionCount()` for its badge, so the dock and the app never
+   * disagree. */
   onLedgerChange?: () => void;
 }
 
@@ -736,6 +745,7 @@ export class CoreService {
       clientOf: (origin) => this.space.clientOf(origin),
       instanceName: (origin) => this.space.instanceName(origin),
       broadcast: (seats) => this.broadcast({ type: "server.state", seats }),
+      attentionChanged: () => this.events.onLedgerChange?.(),
       ...(options.serverCertificateAuthorities ? { certificateAuthorities: options.serverCertificateAuthorities } : {}),
     });
     // Authoring sessions live in the spex repository of their project
@@ -1112,7 +1122,14 @@ export class CoreService {
     }, 200);
   }
 
-  /** The one ledger fold (DR-035), for the embedding shell's badge. */
+  /** The one attention count the shell's badge shows
+   * (core-service-129): this core's badge (core-service-49) plus each
+   * open seat's last read badge. */
+  attentionCount(): number {
+    return this.ledger().badge + this.places.badges();
+  }
+
+  /** The one ledger fold (DR-035). */
   ledger(): import("./protocol.js").LedgerState {
     return foldLedger({
       store: this.store,
@@ -2052,13 +2069,24 @@ export class CoreService {
       ) {
         return false;
       }
+      // The path `/`, or an open seat's relay path, admitted alike
+      // (core-service-24, core-service-129); every other path refused.
+      const path = requestPath(info.req.url);
+      if (path !== "/" && !this.places.relaying(path)) return false;
       const query = new URL(info.req.url ?? "/", "ws://127.0.0.1").searchParams;
       return query.get("token") === this.authToken;
     };
     this.wss = this.options.httpServer
       ? new WebSocketServer({ server: this.options.httpServer, verifyClient })
       : new WebSocketServer({ host: "127.0.0.1", port, verifyClient });
-    this.wss.on("connection", (socket) => {
+    this.wss.on("connection", (socket, req) => {
+      // A relay path's connection is the seat's: piped there, frames
+      // unread, with no word of this core's (core-service-129).
+      const path = requestPath(req.url);
+      if (path !== "/") {
+        this.places.pipe(path, socket);
+        return;
+      }
       const client: ClientState = { socket, channels: new Set() };
       this.clients.add(client);
       socket.on("close", () => {

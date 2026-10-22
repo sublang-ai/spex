@@ -16,16 +16,30 @@
 // client as `server.state`. A seat's place is its key in the seats file,
 // `<instance origin>#<server id>`, shown by the server's name.
 //
+// The relay (core-service-129): while a seat is open the core's own
+// endpoint admits `/seats/<place>`, the place percent-encoded, as it
+// admits `/`; each client connection there is piped, frames unread both
+// ways, through a connection of its own to the seat's endpoint over TLS
+// presenting the bearer in the `Authorization` header and no `Origin`
+// (hub-3). Beside them one watch connection per seat relays nothing: it
+// reconnects every second as a client does, reads the seat's hello — a
+// protocol version other than this core's marks the place mismatched
+// and stops its reconnecting — and reads the seat's ledger badge on
+// every `intents.changed` there, which the shell's attention count adds
+// to this core's own. A close with the lease-end code, or the seat
+// refusing the bearer, removes the seat as a close does.
+//
 // The bearer and the endpoint never leave this module and the seats
 // file: no reply, event, error message or log line carries either, nor
 // the ticket.
 
 import { request } from "node:https";
 import { getCACertificates, rootCertificates, type TLSSocket } from "node:tls";
+import { WebSocket, type RawData } from "ws";
 import { CredentialChanged, HostError, type GitHostClient, type HostServer, type HostTicket } from "./git-host.js";
 import { i18n } from "./i18n.js";
 import { canonicalOrigin } from "./instance.js";
-import type { SeatRelayState, SeatState, ServerInfo, ServerListing } from "./protocol.js";
+import { PROTOCOL_VERSION, type SeatRelayState, type SeatState, type ServerInfo, type ServerListing } from "./protocol.js";
 import { fileSeatStore, placeOf, splitPlace, type SeatEntry, type SeatStore } from "./seats.js";
 import { CoreError } from "./session.js";
 import { noLongerShared } from "./space-git.js";
@@ -36,6 +50,15 @@ import { couldNotReach, relayHostError } from "./space-groups.js";
 const ADMIT_TIMEOUT_MS = 45_000;
 /** The most of an admission's answer read. */
 const ANSWER_MAX_BYTES = 64 * 1024;
+/** The watch reconnects as a client does: every second (core-service-129). */
+const WATCH_RECONNECT_MS = 1_000;
+/** The longest a connection to a seat may take to open: the hub waits
+ * for the seat's socket before it upgrades (hub-3). */
+const SEAT_HANDSHAKE_MS = 30_000;
+/** The close code a seat's lease ending closes its relays with (hub-3). */
+const LEASE_END = 4401;
+/** The ids of the watch's own `ledger.get` commands. */
+const WATCH_ID = "spex-watch-ledger";
 
 /** What the places need of the core (DR-133). */
 export interface PlacesHost {
@@ -53,6 +76,9 @@ export interface PlacesHost {
   instanceName(origin: string): string;
   /** Announce the open seats to every client. */
   broadcast(seats: SeatState[]): void;
+  /** An open seat's badge read anew, or a seat with one gone: the
+   * shell's attention count moved (core-service-129). */
+  attentionChanged?(): void;
   /** CA certificates, PEM, trusted beside the system's at a server's
    * address: a test's fixture CA. */
   certificateAuthorities?: readonly string[];
@@ -181,16 +207,35 @@ function trustAnchors(extra: readonly string[]): string[] | undefined {
   return [...base, ...extra];
 }
 
+/** A bearer as it may travel in the `Authorization` header: the
+ * token68 form of RFC 6750's `b64token`, visible ASCII alone. */
+const BEARER_FORM = /^[A-Za-z0-9\-._~+/]+=*$/;
+
+/**
+ * A seat's endpoint and bearer a connection to the seat can present
+ * (core-service-129, hub-3): the endpoint a `wss:` URL with no
+ * credentials and no fragment, the bearer of the token68 form. The URL,
+ * or null where either would not make a connection — read the same at
+ * an admission, so nothing unusable is kept, and at every connection,
+ * so no entry the file holds can throw.
+ */
+function seatTarget(endpoint: string, bearer: string): URL | null {
+  if (!BEARER_FORM.test(bearer) || endpoint.includes("#")) return null;
+  let at: URL;
+  try { at = new URL(endpoint); } catch { return null; }
+  if (at.protocol !== "wss:" || at.username !== "" || at.password !== "") return null;
+  return at;
+}
+
 /** A successful admission's answer (hub-2): the seat's `wss:` endpoint
  * under the address the ticket named, a bearer, the lease's expiry. */
 function admittedFrom(json: unknown, address: URL): Admitted {
   if (!isRecord(json)) throw new AdmissionFailed("unanswered");
   const { endpoint, bearer, lease_expires_at: expires } = json;
-  if (typeof endpoint !== "string" || typeof bearer !== "string" || bearer.length === 0) throw new AdmissionFailed("unanswered");
-  let at: URL;
-  try { at = new URL(endpoint); } catch { throw new AdmissionFailed("unanswered"); }
+  if (typeof endpoint !== "string" || typeof bearer !== "string") throw new AdmissionFailed("unanswered");
+  const at = seatTarget(endpoint, bearer);
   // The bearer goes to the server it came from alone.
-  if (at.protocol !== "wss:" || at.host !== address.host) throw new AdmissionFailed("unanswered");
+  if (!at || at.host !== address.host) throw new AdmissionFailed("unanswered");
   const leaseExpiresAt = typeof expires === "string" ? Date.parse(expires) : Number.NaN;
   if (!Number.isFinite(leaseExpiresAt)) throw new AdmissionFailed("unanswered");
   return { endpoint, bearer, leaseExpiresAt };
@@ -252,14 +297,110 @@ function admitAt(address: string, ticket: string, ca: string[] | undefined): Pro
   });
 }
 
+/** One client connection piped to its own connection to the seat. */
+interface Pipe { client: WebSocket; upstream: WebSocket }
+
+/** An open seat's relay (core-service-129): the entry it connects with,
+ * its state, its watch, the seat's last read badge and the client
+ * connections piped to the seat. */
+interface Relay {
+  entry: SeatEntry;
+  state: SeatRelayState;
+  watch?: WebSocket;
+  timer?: NodeJS.Timeout;
+  badge: number;
+  pipes: Set<Pipe>;
+  ended: boolean;
+}
+
+/** A relay path, `/seats/<place>` with the place percent-encoded: the
+ * place it names, or null. */
+function placeAtPath(path: string): string | null {
+  const match = /^\/seats\/([^/]+)$/.exec(path);
+  if (!match?.[1]) return null;
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return null;
+  }
+}
+
+/** A close code one peer received, as the other may be sent it: none
+ * where none was sent, an abnormal end as an internal error. */
+function forwardable(code: number): number | undefined {
+  if (code === 1005) return undefined;
+  if ((code >= 1000 && code <= 1003) || (code >= 1007 && code <= 1014) || (code >= 3000 && code <= 4999)) return code;
+  return 1011;
+}
+
+/** Close a socket with a code, ending one still connecting. */
+function closeSocket(socket: WebSocket, code?: number, reason?: Buffer | string): void {
+  if (socket.readyState === WebSocket.CLOSING || socket.readyState === WebSocket.CLOSED) return;
+  if (socket.readyState === WebSocket.CONNECTING) {
+    socket.terminate();
+    return;
+  }
+  const text = reason === undefined ? undefined : String(reason);
+  if (code === undefined) socket.close();
+  else socket.close(code, text !== undefined && Buffer.byteLength(text) <= 123 ? text : undefined);
+}
+
+/**
+ * A connection of the core's own to a seat's endpoint (core-service-129,
+ * hub-3): TLS verified against `ca`, the bearer in the `Authorization`
+ * header, no `Origin`. `refused` hears the status of an upgrade the
+ * server answered without upgrading, before the socket closes. None
+ * where the entry would make no connection — an endpoint other than a
+ * plain `wss:` URL, the bearer going nowhere else, or a bearer no
+ * header carries — and none where the connection could not be made:
+ * never a throw, so no entry stops the core's start, an open or a
+ * client's connection.
+ */
+function connectSeat(entry: SeatEntry, ca: string[] | undefined, refused: (status: number) => void): WebSocket | null {
+  const target = seatTarget(entry.endpoint, entry.bearer);
+  if (!target) return null;
+  let socket: WebSocket;
+  try {
+    socket = new WebSocket(target, {
+      headers: { authorization: `Bearer ${entry.bearer}` },
+      perMessageDeflate: false,
+      followRedirects: false,
+      handshakeTimeout: SEAT_HANDSHAKE_MS,
+      ...(ca ? { ca } : {}),
+    });
+  } catch {
+    // A throw's message may name the endpoint: none is read or kept.
+    return null;
+  }
+  // An error's message may name the endpoint: none is read or kept.
+  socket.on("error", () => undefined);
+  socket.on("unexpected-response", (_req, res) => {
+    refused(res.statusCode ?? 0);
+    res.resume();
+    socket.terminate();
+  });
+  return socket;
+}
+
+/** A message's JSON object, or null. */
+function messageOf(data: RawData, isBinary: boolean): Record<string, unknown> | null {
+  if (isBinary) return null;
+  try {
+    const value: unknown = JSON.parse(String(data));
+    return isRecord(value) ? value : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * The seats this core holds on team servers, and the commands that open
  * and close them (core-service-128).
  */
 export class Places {
   private readonly store: SeatStore;
-  /** Each held seat's relay state, by place. */
-  private readonly relays = new Map<string, SeatRelayState>();
+  /** Each held seat's relay, by place (core-service-129). */
+  private readonly relays = new Map<string, Relay>();
   /** One open or close at a time per place. */
   private readonly queues = new Map<string, Promise<unknown>>();
   private anchors?: string[] | null;
@@ -271,10 +412,9 @@ export class Places {
 
   /**
    * At the core's start (core-service-128): every seat the file holds is
-   * read and its relay started, and the seats announced. Reconnecting to
-   * each seat, and a refusal there removing its entry as a close does,
-   * belong to the relay (core-service-129), which IR-115's task 3 starts
-   * from {@link startRelay}.
+   * read and reopened through its relay's watch, and the seats
+   * announced; a refusal there removes the entry as a close does
+   * (core-service-129).
    */
   start(): void {
     let seats: Map<string, SeatEntry>;
@@ -305,7 +445,7 @@ export class Places {
         group: entry.group,
         place,
         leaseExpiresAt: entry.leaseExpiresAt,
-        relay: this.relays.get(place) ?? "closed",
+        relay: this.relays.get(place)?.state ?? "closed",
       });
     }
     return out;
@@ -417,29 +557,218 @@ export class Places {
    * reopened at the next start (DR-133). */
   stop(): void {
     this.stopping = true;
-    for (const place of [...this.relays.keys()]) this.stopRelay(place);
+    for (const place of [...this.relays.keys()]) this.stopRelay(place, 1001);
   }
 
-  // -- the relay's seam (core-service-129) -----------------------------------
+  // -- the relay (core-service-129) ------------------------------------------
 
   /**
-   * The relay of an open seat starts here: its loopback path, a
-   * connection to the seat per client connection, and its watch
-   * (core-service-129) — IR-115's task 3, which reads the endpoint and
-   * the bearer from `entry` and reports its state. The path is
-   * `/seats/<place>` with the place percent-encoded: the seats key
-   * `<instance origin>#<server id>` as `encodeURIComponent(place)`, so
-   * the origin's `:` and `/` and the `#` stay inside one path segment.
-   * Until then an admitted seat reads open.
+   * Whether a request path is an open seat's relay path, `/seats/<place>`
+   * with the place percent-encoded — the seats key `<instance
+   * origin>#<server id>` as `encodeURIComponent(place)`, so the origin's
+   * `:` and `/` and the `#` stay inside one path segment. Admitted as
+   * the path `/` is (core-service-24) while the seat is open.
    */
-  private startRelay(place: string, _entry: SeatEntry): void {
-    this.relays.set(place, "open");
+  relaying(path: string): boolean {
+    const place = placeAtPath(path);
+    return place !== null && this.relays.has(place);
+  }
+
+  /**
+   * Pipe a client connection admitted at a relay path to the seat: a
+   * connection of its own to the seat's endpoint, frames unread both
+   * ways — the client's held until the seat's side opens — and either
+   * side closing closing the other with its code where the protocol
+   * allows (core-service-129). A close with the lease-end code, or the
+   * seat refusing the bearer, removes the seat. A path whose seat closed
+   * meanwhile is closed.
+   */
+  pipe(path: string, client: WebSocket): void {
+    client.on("error", () => undefined);
+    const place = placeAtPath(path);
+    const relay = place === null ? undefined : this.relays.get(place);
+    if (place === null || !relay || relay.ended) {
+      closeSocket(client, 1011);
+      return;
+    }
+    let refused = 0;
+    const upstream = connectSeat(relay.entry, this.trust(), (status) => { refused = status; });
+    if (!upstream) {
+      closeSocket(client, 1011);
+      return;
+    }
+    const pipe: Pipe = { client, upstream };
+    relay.pipes.add(pipe);
+    const held: [RawData, boolean][] = [];
+    client.on("message", (data, isBinary) => {
+      if (upstream.readyState === WebSocket.OPEN) upstream.send(data, { binary: isBinary });
+      else if (upstream.readyState === WebSocket.CONNECTING) held.push([data, isBinary]);
+    });
+    upstream.on("open", () => {
+      for (const [data, isBinary] of held.splice(0)) upstream.send(data, { binary: isBinary });
+    });
+    upstream.on("message", (data, isBinary) => {
+      if (client.readyState === WebSocket.OPEN) client.send(data, { binary: isBinary });
+    });
+    // A close the client began comes back as its own code: never the
+    // seat's lease ending.
+    let clientClosed = false;
+    upstream.on("close", (code, reason) => {
+      relay.pipes.delete(pipe);
+      const ended = !clientClosed && (code === LEASE_END || refused === 401);
+      closeSocket(client, ended ? LEASE_END : forwardable(code), ended ? undefined : reason);
+      if (ended) this.ended(place, relay);
+    });
+    client.on("close", (code, reason) => {
+      clientClosed = true;
+      relay.pipes.delete(pipe);
+      closeSocket(upstream, forwardable(code), reason);
+    });
+  }
+
+  /** The seats' badges the watches last read, summed: what the shell
+   * adds to this core's own badge (core-service-129). */
+  badges(): number {
+    let sum = 0;
+    for (const relay of this.relays.values()) sum += relay.badge;
+    return sum;
+  }
+
+  /**
+   * The relay of an open seat starts here: its path is admitted, and its
+   * watch connects, the place reading connecting until the watch reads
+   * the seat's hello (core-service-129).
+   */
+  private startRelay(place: string, entry: SeatEntry): void {
+    this.stopRelay(place);
+    const relay: Relay = { entry, state: "connecting", badge: 0, pipes: new Set(), ended: false };
+    this.relays.set(place, relay);
+    this.watch(place, relay);
   }
 
   /** The relay of a seat ends here: at its close, at a new admission of
-   * the same place, and at the core's stop (core-service-129). */
-  private stopRelay(place: string): void {
+   * the same place, at its lease's end and at the core's stop — its
+   * watch and every piped connection closed with `code`
+   * (core-service-129). */
+  private stopRelay(place: string, code = 1000): void {
+    const relay = this.relays.get(place);
+    if (!relay) return;
+    relay.ended = true;
     this.relays.delete(place);
+    if (relay.timer) clearTimeout(relay.timer);
+    if (relay.watch) closeSocket(relay.watch, 1000);
+    for (const pipe of [...relay.pipes]) {
+      closeSocket(pipe.client, code);
+      closeSocket(pipe.upstream, 1000);
+    }
+    relay.pipes.clear();
+    if (relay.badge !== 0) this.host.attentionChanged?.();
+  }
+
+  /**
+   * The watch of an open seat (core-service-129): one connection that
+   * relays nothing, reads the seat's hello — another protocol version
+   * marks the place mismatched and stops its reconnecting — then reads
+   * the seat's ledger badge, again on every `intents.changed` the seat
+   * sends. Down, it reads closed and reconnects every second; a close
+   * with the lease-end code, or the seat refusing the bearer, removes
+   * the seat.
+   */
+  private watch(place: string, relay: Relay): void {
+    if (relay.ended) return;
+    let refused = 0;
+    const socket = connectSeat(relay.entry, this.trust(), (status) => { refused = status; });
+    if (!socket) {
+      // An entry no connection can be made with — an endpoint the bearer
+      // may not go to, a bearer no header carries — is never reached and
+      // never retried: the seat reads closed until it is closed or
+      // opened again.
+      this.relayState(relay, "closed");
+      return;
+    }
+    relay.watch = socket;
+    let greeted = false;
+    let asked = 0;
+    const askBadge = (): void => {
+      if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: "ledger.get", id: `${WATCH_ID}-${(asked += 1)}` }));
+    };
+    socket.on("message", (data, isBinary) => {
+      if (relay.ended || relay.watch !== socket) return;
+      // Past the hello the watch reads two kinds of frame alone; the
+      // seat's other broadcasts are not parsed.
+      if (greeted && !isBinary) {
+        const text = String(data);
+        if (!text.includes("\"intents.changed\"") && !text.includes(WATCH_ID)) return;
+      }
+      const message = messageOf(data, isBinary);
+      if (!message) return;
+      if (!greeted) {
+        if (message.type !== "hello") return;
+        greeted = true;
+        if (message.protocolVersion !== PROTOCOL_VERSION) {
+          this.relayState(relay, "mismatched");
+          closeSocket(socket, 1000);
+          return;
+        }
+        this.relayState(relay, "open");
+        askBadge();
+        return;
+      }
+      if (message.type === "intents.changed") {
+        askBadge();
+        return;
+      }
+      if (message.type === "reply" && typeof message.id === "string" && message.id.startsWith(WATCH_ID) && message.ok === true) {
+        const result = message.result;
+        const badge = isRecord(result) ? result.badge : undefined;
+        if (typeof badge === "number" && Number.isInteger(badge) && badge >= 0 && badge !== relay.badge) {
+          relay.badge = badge;
+          this.host.attentionChanged?.();
+        }
+      }
+    });
+    socket.on("close", (code) => {
+      if (relay.watch !== socket) return;
+      relay.watch = undefined;
+      if (relay.ended) return;
+      if (code === LEASE_END || refused === 401) {
+        this.ended(place, relay);
+        return;
+      }
+      if (relay.state === "mismatched") return;
+      this.relayState(relay, "closed");
+      relay.timer = setTimeout(() => {
+        relay.timer = undefined;
+        this.watch(place, relay);
+      }, WATCH_RECONNECT_MS);
+    });
+  }
+
+  /** A relay's state moved: announced (core-service-128). */
+  private relayState(relay: Relay, state: SeatRelayState): void {
+    if (relay.ended || relay.state === state) return;
+    relay.state = state;
+    this.announce();
+  }
+
+  /**
+   * A seat's lease ended or the seat refused its bearer
+   * (core-service-129): the seat removed as a close removes it — its
+   * entry, unless a new admission replaced it meanwhile, and its relay
+   * — and announced.
+   */
+  private ended(place: string, relay: Relay): void {
+    void this.serial(place, async () => {
+      if (this.relays.get(place) !== relay) return;
+      try {
+        const entry = this.store.read(place);
+        if (entry && entry.endpoint === relay.entry.endpoint && entry.bearer === relay.entry.bearer) this.store.replace(place, entry, null);
+      } catch {
+        // A file that will not read is left as it is (storage-45).
+      }
+      this.stopRelay(place, LEASE_END);
+      this.announce();
+    }).catch(() => undefined);
   }
 
   // ---------------------------------------------------------------------------
