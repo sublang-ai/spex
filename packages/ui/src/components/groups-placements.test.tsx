@@ -45,7 +45,10 @@
 // — nothing where the placement only followed another instance — the
 // opened row followed by its folder where the clone moved; the
 // stopped card's Retry sends the Leave again as this page asked it
-// (space-89, space-98, storage-38, space-15, space-28).
+// (space-89, space-98, storage-38, space-15, space-28). Every other
+// group or login whose listing holds a placement of a row shows one
+// line naming the row and where it stands, with no control, and offers
+// no Delete while it does (space-1, space-77).
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
@@ -2819,4 +2822,121 @@ describe("GROUPS: leaving one placement (space-89, space-98, storage-38, space-2
     expect(control.getAttribute("aria-label")).toBeNull();
     expect(control.className.split(/\s+/)).toContain("whitespace-nowrap");
   });
+});
+
+describe("GROUPS: a row's line in each group placing it (space-1, space-77)", () => {
+  /** The space-95 home with the opened project standing under the
+   * first's `acme`, a group whose name and path differ, where the host
+   * moved it, and the second's `workshop` letting the person delete it:
+   * its listing holds that project's second placement and the
+   * repository the other project's file names there, and no row of its
+   * own (space-1). */
+  function placingHome(workshopPlaced?: GroupsState["instances"][number]["groups"][number]["placed"]): GroupsState {
+    const home = twoPlacementsHome();
+    const [first, second] = home.instances;
+    const academy = first!.groups.find((entry) => entry.mine)!.repositories.find((row) => row.key === KEY)!;
+    return {
+      ...home,
+      instances: [
+        {
+          ...first!,
+          groups: first!.groups.map((entry) =>
+            entry.fullPath === "acme"
+              ? { ...entry, repositories: [...entry.repositories, academy] }
+              : entry.mine
+                ? { ...entry, repositories: entry.repositories.filter((row) => row.key !== KEY) }
+                : entry,
+          ),
+        },
+        {
+          ...second!,
+          groups: second!.groups.map((entry) =>
+            entry.fullPath === "workshop"
+              ? { ...entry, can: { ...NO_CAN, delete: true }, placed: workshopPlaced ?? entry.placed }
+              : entry,
+          ),
+        },
+      ],
+    };
+  }
+
+  /** What an entry lists, in order: its rows, then its placed lines. */
+  const itemsOf = (entry: HTMLElement): string[] =>
+    Array.from(entry.querySelector(":scope > ul")?.children ?? []).map((item) => (item as HTMLElement).dataset.testid ?? "");
+
+  test.each(["en", "zh"] as const)(
+    "space-1: the second's group holding a placement shows one line naming the row and the group it stands under, with no control, and carries no Delete; a namespace listing your own group's own repository names your own group (%s)",
+    async (language) => {
+      activateLanguage(language);
+      const words =
+        language === "en"
+          ? {
+              under: (name: string, group: string, at: string) => `${name} stands under ${group} at ${at}`,
+              own: (name: string) => `${name} stands under your own group`,
+              empty: "No spex repositories here yet",
+              delete: "Delete",
+              confirm: "Delete workshop?",
+            }
+          : {
+              under: (name: string, group: string, at: string) => `${name} 位于 ${at} 的 ${group} 下`,
+              own: (name: string) => `${name} 位于你自己的群组下`,
+              empty: "这里还没有 spex 仓库",
+              delete: "删除",
+              confirm: "要删除 workshop 吗？",
+            };
+      await renderGroups(placingHome(), { open: false });
+      const first = screen.getByTestId(`space-instance-${ORIGIN}`);
+      const second = screen.getByTestId(`space-instance-${SECOND}`);
+      const workshop = within(second).getByTestId("space-group-workshop");
+
+      // The second's workshop lists one line per row one of whose
+      // placements it holds, naming the row and the group it stands
+      // under, as the list reads it — a group by its name, a login by
+      // itself — at that group's instance by its display name.
+      expect(itemsOf(workshop)).toEqual([`space-placed-${KEY}`, `space-placed-${BETA}`]);
+      expect(within(workshop).getByTestId(`space-placed-${KEY}`).textContent).toBe(words.under("academy-spex", "Acme", "Spex Example"));
+      expect(within(workshop).getByTestId(`space-placed-${BETA}`).textContent).toBe(words.under("beta-spex", "jane", "Spex Example"));
+      // Each in the secondary tone, whole in its title, with no control
+      // and no link (space-1, DR-120).
+      for (const id of itemsOf(workshop)) {
+        const line = within(workshop).getByTestId(id);
+        expect(line.className).toContain("text-neutral-500");
+        expect(line.getAttribute("title")).toBe(line.textContent);
+        expect(within(line).queryAllByRole("button")).toEqual([]);
+        expect(line.querySelector("a")).toBeNull();
+      }
+      // The rows stand only where they stand: the opened project under
+      // the first's acme, after the group's own.
+      expect(within(second).queryByTestId(`space-row-${KEY}`)).toBeNull();
+      expect(within(second).queryByTestId(`space-row-${BETA}`)).toBeNull();
+      expect(itemsOf(within(first).getByTestId("space-group-acme"))).toEqual([`space-row-${ACME}`, `space-row-${KEY}`]);
+      // The workshop holds a placement, so it carries no Delete though
+      // the host lets the person delete it, and does not read empty.
+      expect(within(workshop).queryByTestId("space-group-delete-workshop")).toBeNull();
+      expect(within(workshop).queryByText(words.empty)).toBeNull();
+
+      // A namespace listing your own group's own repository names your
+      // own group, after that namespace's own rows.
+      const jada = within(second).getByTestId("space-group-@jada");
+      expect(itemsOf(jada)).toEqual([`space-placed-${OWN}`]);
+      expect(within(jada).getByTestId(`space-placed-${OWN}`).textContent).toBe(words.own("jane-spex"));
+      expect(within(jada).queryByText(words.empty)).toBeNull();
+      const jane = within(first).getByTestId("space-group-@jane");
+      expect(itemsOf(jane)).toEqual([`space-row-${BETA}`, `space-placed-${OWN}`]);
+      expect(within(jane).getByTestId(`space-placed-${OWN}`).textContent).toBe(words.own("jane-spex"));
+      // Your own group's section carries no such line: its rows stand
+      // there.
+      expect(within(screen.getByTestId("space-own")).queryAllByTestId(/^space-placed-/)).toEqual([]);
+
+      // Once the workshop's listing holds no placement, it reads empty
+      // and Delete stands, asking as space-77 has it.
+      deliver(placingHome([]));
+      await waitFor(() => expect(within(workshop).queryAllByTestId(/^space-placed-/)).toEqual([]));
+      expect(within(workshop).getByText(words.empty)).toBeTruthy();
+      const remove = within(workshop).getByTestId("space-group-delete-workshop");
+      expect(remove.textContent).toBe(words.delete);
+      fireEvent.click(remove);
+      expect(within(workshop).getByTestId("space-group-confirm-workshop").textContent).toContain(words.confirm);
+    },
+  );
 });

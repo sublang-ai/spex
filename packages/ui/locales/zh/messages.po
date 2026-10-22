@@ -429,6 +429,16 @@ msgstr "{name} 在本次对话中的设置"
 msgid "{name} settings: {reading}"
 msgstr "{name} 设置：{reading}"
 
+#. a line, with no control, under a group of an instance, or a login there, whose listing holds a placement of a spex repository standing elsewhere; {name} is that spex repository's name, {group} the group it stands under, read by its name, or the login it stands under, and {instance} the display name of that group's instance
+#: src/lib/placements.ts
+msgid "{name} stands under {group} at {instance}"
+msgstr "{name} 位于 {instance} 的 {group} 下"
+
+#. a line, with no control, under a group of an instance, or a login there, whose listing holds a placement of a spex repository standing under your own group; {name} is that spex repository's name
+#: src/lib/placements.ts
+msgid "{name} stands under your own group"
+msgstr "{name} 位于你自己的群组下"
+
 #: src/components/SpecGraph.tsx
 msgid "{name}, {items} items, cites {out}, cited by {in}"
 msgstr "{name}，{items} 个条目，引用 {out}，被引用 {in}"

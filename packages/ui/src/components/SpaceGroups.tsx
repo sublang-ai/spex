@@ -28,14 +28,18 @@
 // outcome leaves — Continue, the join of an unrelated history, Retry —
 // stand on each placement's line, acting on that placement at its
 // instance (space-62, space-78, space-57, space-13, space-15, DR-128).
+// Every other group or namespace whose listing holds a placement of a
+// row shows, after its own rows, one line naming that row and the group
+// it stands under, with no control (space-1, DR-128).
 // A group an instance lists carries, while signed in there, Members and,
 // where its read lets the person, "New subgroup", "Rename" and — while
-// the list holds nothing under it — "Delete" on its heading (space-68,
-// space-76, space-77, DR-114); your own group's heading carries none of
-// these, nor does a namespace. While the home lists any
-// instance, "Add instance…" at the list's foot opens the sign-in card in
-// its place (space-1, space-3). No part of the list links a
-// page of the host, or names what stands behind the instance (space-1).
+// the list holds nothing under it, not even a placement — "Delete" on
+// its heading (space-68, space-76, space-77, DR-114); your own group's
+// heading carries none of these, nor does a namespace. While the home
+// lists any instance, "Add instance…" at the list's foot opens the
+// sign-in card in its place (space-1, space-3). No part of the list
+// links a page of the host, or names what stands behind the instance
+// (space-1).
 // Every act is a command whose outcome arrives as state (space-29).
 
 import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
@@ -66,6 +70,7 @@ import {
   leaveStage,
   owesNotice,
   placeInstances,
+  placedReading,
   placementAt,
   rowPlacement,
   runnable,
@@ -349,11 +354,11 @@ function GroupOptionLabel({ entry }: { entry: InstanceGroupState }) {
   );
 }
 
-/** Whether the list holds a spex repository under a group or a group
- * inside it at its instance (space-1): only an empty group offers
- * Delete. */
+/** Whether the list holds a spex repository or a placement of one under
+ * a group, or a group inside it, at its instance (space-1, DR-128): only
+ * an empty group offers Delete. */
 function holdsAnything(instance: InstanceState, group: InstanceGroupState): boolean {
-  if (group.repositories.length > 0) return true;
+  if (group.repositories.length > 0 || group.placed.length > 0) return true;
   const inside = `${group.fullPath}/`.toLowerCase();
   return instance.groups.some((other) => other !== group && other.fullPath.toLowerCase().startsWith(inside));
 }
@@ -363,9 +368,11 @@ function holdsAnything(instance: InstanceState, group: InstanceGroupState): bool
  * an instance's heading. Its heading — with Members and, where the
  * instance lets the person, "New subgroup", "Rename" and, on an empty
  * group, "Delete" on a group of a signed-in instance, your own group's
- * and a namespace's carrying none (DR-114, DR-120) — and its
- * repositories' rows. What a heading's control opens stands beneath the
- * heading; a group's command names its instance (space-29). */
+ * and a namespace's carrying none (DR-114, DR-120) — its repositories'
+ * rows, and after them one line, with no control, for each row standing
+ * elsewhere one of whose placements its listing holds (DR-128). What a
+ * heading's control opens stands beneath the heading; a group's command
+ * names its instance (space-29). */
 function GroupSection({
   groups,
   instance,
@@ -421,8 +428,14 @@ function GroupSection({
     setOpened((was) => (was === which ? undefined : which));
   };
   const membersLabel = i18n._({ id: "Members", comment: "list the people the host lets read a spex repository" });
+  // Each row standing elsewhere one of whose placements this entry's
+  // listing holds, named with where it stands (space-1, DR-128).
+  const placed = group.placed.flatMap((line) => {
+    const reading = placedReading(groups, line);
+    return reading === undefined ? [] : [{ key: line.key, reading }];
+  });
   // Delete stands only where the instance lets the person and the list
-  // holds nothing under the group there (space-1).
+  // holds nothing under the group there, not even a placement (space-1).
   const deletable = hostGroup !== null && instance !== undefined && group.can.delete && !holdsAnything(instance, group);
 
   /** Delete the group (space-77): the heading's control reads
@@ -596,7 +609,7 @@ function GroupSection({
           onNote={onNote}
         />
       ) : null}
-      {group.repositories.length === 0 ? (
+      {group.repositories.length === 0 && placed.length === 0 ? (
         <p className="pl-2 text-xs text-neutral-500">{i18n._("No spex repositories here yet")}</p>
       ) : (
         <ul className="flex min-w-0 flex-col gap-0.5">
@@ -615,6 +628,20 @@ function GroupSection({
               onSelect={() => onSelect(repo.key)}
               onNote={onNote}
             />
+          ))}
+          {/* A row standing elsewhere reads here as one quiet line, in
+              the secondary tone, with no control: it is acted on where
+              it stands (space-1, DR-128). The line truncates, its title
+              keeping the whole (space-28). */}
+          {placed.map((line) => (
+            <li
+              key={`placed:${line.key}`}
+              data-testid={`space-placed-${line.key}`}
+              className="min-w-0 truncate pl-2 text-xs text-neutral-500"
+              title={line.reading}
+            >
+              {line.reading}
+            </li>
           ))}
         </ul>
       )}
