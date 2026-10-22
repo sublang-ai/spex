@@ -18,7 +18,7 @@ import { join, relative } from "node:path";
 import { WebSocket } from "ws";
 
 import { CoreService, type CoreServiceOptions } from "./service.js";
-import { descendantProcesses, processAlive } from "./process-tree.js";
+import { processAlive } from "./process-tree.js";
 import { fakeAdapterImports } from "./testing/fake-adapter.js";
 import { createScriptedCaptain } from "./testing/scripted-captain.js";
 import type { Captain } from "@sublang/cligent/tmux-play";
@@ -552,7 +552,9 @@ function sigterms(log: string): Map<string, number> {
 
 /** A core over a fresh home whose one session's turn starts the
  * stubborn agent, with the stop's bounds shortened through the seams
- * and the real walk of this process's descendants recorded. */
+ * and its real walk of the processes it started recorded; beside it, a
+ * bystander this process started, as a host's own child, ignoring
+ * SIGTERM the same way. */
 async function stubbornTurn(t: TestContext, wedged: boolean, stop: { settleMs: number; killMs: number }) {
   const fixture = scratchDir("spex-stubborn-agent-");
   const script = join(fixture, "agent.cjs");
@@ -560,14 +562,22 @@ async function stubbornTurn(t: TestContext, wedged: boolean, stop: { settleMs: n
   const log = join(fixture, "signals.log");
   writeFileSync(log, "");
   const stubborn = stubbornCaptain(script, log, wedged);
+  const harness = await startHarness([stubborn.captain], { stop });
   const walks: number[][] = [];
-  const harness = await startHarness([stubborn.captain], {
-    stop,
-    agentProcesses: () => {
-      const pids = descendantProcesses();
-      walks.push(pids);
-      return pids;
-    },
+  const started = harness.service["startedProcesses"];
+  const walk = started.pids.bind(started);
+  started.pids = () => {
+    const pids = walk();
+    walks.push(pids);
+    return pids;
+  };
+  const bystander = spawn(process.execPath, [script, log, "bystander"], { stdio: ["ignore", "pipe", "ignore"] });
+  t.after(() => {
+    if (processAlive(bystander.pid as number)) bystander.kill("SIGKILL");
+  });
+  await new Promise<void>((resolve, reject) => {
+    bystander.stdout?.once("data", () => resolve());
+    bystander.once("error", reject);
   });
   const client = new Client(harness.service.port());
   await client.open();
@@ -584,7 +594,7 @@ async function stubbornTurn(t: TestContext, wedged: boolean, stop: { settleMs: n
     for (const pid of [agent.pid as number, child]) if (processAlive(pid)) process.kill(pid, "SIGKILL");
   });
   client.close();
-  return { harness, log, walks, workingFolder, session, agent, child, killed };
+  return { harness, log, walks, workingFolder, session, agent, child, killed, bystander };
 }
 
 /** Every path under `dir` with its size and modification time. */
@@ -614,7 +624,7 @@ async function gone(pid: number, withinMs: number): Promise<boolean> {
 test("CORE-41: a stop bounded by its seams kills an agent ignoring SIGTERM and leaves its turn uncertain", { timeout: 60_000 }, async (t) => {
   const SETTLE_MS = 1_000;
   const KILL_MS = 1_000;
-  const { harness, log, walks, workingFolder, session, agent, child, killed } =
+  const { harness, log, walks, workingFolder, session, agent, child, killed, bystander } =
     await stubbornTurn(t, true, { settleMs: SETTLE_MS, killMs: KILL_MS });
   const before = snapshot(workingFolder);
 
@@ -643,6 +653,11 @@ test("CORE-41: a stop bounded by its seams kills an agent ignoring SIGTERM and l
   assert.ok(returned - began < SETTLE_MS + KILL_MS + 5_000, `the stop returned ${returned - began} ms after it began`);
   assert.ok(walks.some((pids) => pids.includes(agent.pid as number) && pids.includes(child)), "the walk found the agent and its child");
   assert.ok(await gone(child, 5_000), "the agent's child is gone");
+  // Only the processes the core started are signalled: a host's own
+  // child beside the core receives nothing.
+  assert.ok(walks.every((pids) => !pids.includes(bystander.pid as number)), "the walk left the host's process out");
+  assert.equal(sigterms(log).has("bystander"), false, "the host's process received no SIGTERM");
+  assert.ok(processAlive(bystander.pid as number), "the host's process still runs");
 
   // The stop wrote nothing into the working folder and reverted nothing.
   assert.deepEqual(snapshot(workingFolder), before);
@@ -669,7 +684,7 @@ test("CORE-41: once the turns settle, an agent left alive receives SIGTERM at on
   // have begun the signals.
   const SETTLE_MS = 30_000;
   const KILL_MS = 1_000;
-  const { harness, log, walks, workingFolder, agent, child, killed } =
+  const { harness, log, walks, workingFolder, agent, child, killed, bystander } =
     await stubbornTurn(t, false, { settleMs: SETTLE_MS, killMs: KILL_MS });
   const before = snapshot(workingFolder);
 
@@ -690,6 +705,11 @@ test("CORE-41: once the turns settle, an agent left alive receives SIGTERM at on
   assert.ok(returned >= agentTerm + KILL_MS - 50, "the stop waited for the agent SIGTERM reached");
   assert.ok(walks.some((pids) => pids.includes(agent.pid as number) && pids.includes(child)), "the walk found the agent and its child");
   assert.ok(await gone(child, 5_000), "the agent's child is gone");
+  // Only the processes the core started are signalled: a host's own
+  // child beside the core receives nothing.
+  assert.ok(walks.every((pids) => !pids.includes(bystander.pid as number)), "the walk left the host's process out");
+  assert.equal(sigterms(log).has("bystander"), false, "the host's process received no SIGTERM");
+  assert.ok(processAlive(bystander.pid as number), "the host's process still runs");
   assert.deepEqual(snapshot(workingFolder), before);
 });
 

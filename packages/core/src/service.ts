@@ -73,7 +73,7 @@ import { i18n, speak } from "./i18n.js";
 import { CoreError, SessionManager, currentSession, executionConfig, storedMembers, type CaptainFactory, type RecordEnvelope } from "./session.js";
 import { closedStats, foldConditions, foldLedger, intentTitle, queueSchedule, wasWorked } from "./ledger.js";
 import { CORE_STOP_REASON, type TurnControlKind } from "./control-record.js";
-import { descendantProcesses, StopBound } from "./process-tree.js";
+import { StartedProcesses, StopBound } from "./process-tree.js";
 import { readStoredLanguage, Store, type SpexRepository } from "./store.js";
 import { UPLOAD_STAGING } from "./storage-git.js";
 import { foldDiagnostics, StorageFormatError, type RepairChecked, type StorageDiagnostic } from "./app-storage.js";
@@ -251,10 +251,10 @@ export interface CoreServiceOptions {
    * to SIGTERM unless every turn settles first, 10 s by default, and
    * from SIGTERM to SIGKILL, 5 s by default. A test seam. */
   stop?: { settleMs?: number; killMs?: number };
-  /** The agent processes the stop signals (core-service-39): this
-   * process's descendants on macOS and Linux by default. A shell whose
-   * process has children of its own — Electron's helpers — passes none
-   * and bounds its own exit. */
+  /** The agent processes the stop signals (core-service-39): by
+   * default the processes the core started — each child process created
+   * while its own work ran — with their descendants on macOS and Linux.
+   * A shell that bounds its own exit — Electron's — passes none. */
   agentProcesses?: () => number[];
 }
 
@@ -515,7 +515,12 @@ export class CoreService {
    * language re-derives nothing. */
   private spoken: Language = "en";
 
-  private constructor(options: CoreServiceOptions, store: Store) {
+  private constructor(
+    options: CoreServiceOptions,
+    store: Store,
+    /** The processes this core started (core-service-39). */
+    private readonly startedProcesses: StartedProcesses,
+  ) {
     this.options = options;
     this.env = options.env ?? process.env;
     this.home = options.home ?? this.env.HOME ?? homedir();
@@ -1065,6 +1070,13 @@ export class CoreService {
   }
 
   static async start(options: CoreServiceOptions = {}): Promise<CoreService> {
+    // The core's work runs in an async context of its own, so the
+    // processes it starts are told from its host's (core-service-39).
+    const started = new StartedProcesses();
+    return started.run(() => CoreService.boot(options, started));
+  }
+
+  private static async boot(options: CoreServiceOptions, started: StartedProcesses): Promise<CoreService> {
     if (process.platform !== "darwin" && process.platform !== "linux") {
       throw new Error(i18n._({
         id: "Spex desktop and server require macOS or Linux with private POSIX file permissions. On Windows, use the scaffold CLI or connect to a Spex server in your browser.",
@@ -1126,7 +1138,7 @@ export class CoreService {
       ...(builtin ? { prepareRepository: (dir: string, _key: string, registryOrigin: string) => { prepareBuiltinEnvironment(dir, builtin, registryOrigin); } } : {}),
     });
     let service: CoreService;
-    try { service = new CoreService(options, store); }
+    try { service = new CoreService(options, store, started); }
     catch (error) { store.close(); throw error; }
     try {
     // Store construction already holds the exclusive home lease. Never
@@ -1449,7 +1461,7 @@ export class CoreService {
     const bound = new StopBound({
       settleMs: this.options.stop?.settleMs ?? 10_000,
       killMs: this.options.stop?.killMs ?? 5_000,
-      agentProcesses: this.options.agentProcesses ?? (() => descendantProcesses()),
+      agentProcesses: this.options.agentProcesses ?? (() => this.startedProcesses.pids()),
     });
     try {
       this.approvals.stop();
@@ -2013,8 +2025,10 @@ export class CoreService {
           if (entry.client === client) entry.controller.abort();
         }
       });
+      // A shell's server delivers the message in the shell's context:
+      // the command runs as the core's (core-service-39).
       socket.on("message", (data) => {
-        void this.handleMessage(client, String(data));
+        this.startedProcesses.run(() => void this.handleMessage(client, String(data)));
       });
       this.send(socket, {
         type: "hello",

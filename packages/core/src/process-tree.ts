@@ -2,11 +2,17 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // The agent processes a stop signals (core-service-39, DR-134): the
-// adapters spawn their agents in no process group of their own, so the
-// core finds them as this process's descendants, read from `ps`, and
-// signals each one by its pid.
+// processes the core started. The adapters spawn their agents in no
+// process group of their own, and the core may share its process with
+// a host's own children — a browser journey's Chromium, a harness's
+// stand-ins — so the core records each child process created while its
+// own work runs, tells it from its host's by the async context it was
+// created in, finds that child's descendants with `ps`, and signals each
+// one by its pid.
 
-import { spawnSync } from "node:child_process";
+import { AsyncLocalStorage } from "node:async_hooks";
+import { spawnSync, type ChildProcess } from "node:child_process";
+import { subscribe } from "node:diagnostics_channel";
 
 /** esbuild's service, which the core keeps for bundling compiled
  * playbooks (compile.ts) and shares with every core of its process: a
@@ -18,6 +24,12 @@ const ESBUILD_SERVICE = /^\S*\besbuild(\.exe)?\s.*--service=/;
  * and esbuild's service; none on another platform or where `ps` cannot
  * be read. */
 export function descendantProcesses(root: number = process.pid): number[] {
+  return descendantsOf([root]);
+}
+
+/** Every process descending from any of `roots`, the roots left out, as
+ * `descendantProcesses` reads them. */
+function descendantsOf(roots: number[]): number[] {
   if (process.platform !== "darwin" && process.platform !== "linux") return [];
   const listing = spawnSync("ps", ["-A", "-o", "pid=,ppid=,command="], { encoding: "utf8", timeout: 5_000 });
   if (listing.status !== 0 || typeof listing.stdout !== "string") return [];
@@ -32,8 +44,8 @@ export function descendantProcesses(root: number = process.pid): number[] {
     else children.set(ppid, [pid]);
   }
   const found: number[] = [];
-  const seen = new Set<number>([root]);
-  for (let queue = [root]; queue.length;) {
+  const seen = new Set<number>(roots);
+  for (let queue = [...roots]; queue.length;) {
     const next: number[] = [];
     for (const parent of queue) {
       for (const child of children.get(parent) ?? []) {
@@ -46,6 +58,56 @@ export function descendantProcesses(root: number = process.pid): number[] {
     queue = next;
   }
   return found;
+}
+
+/** The core whose work is running, as the async context carries it. */
+const runningCore = new AsyncLocalStorage<StartedProcesses>();
+
+// Node publishes every child process this process creates on its
+// `child_process` channel as the process is constructed: one created
+// while a core's work runs is that core's.
+subscribe("child_process", (message) => {
+  runningCore.getStore()?.record((message as { process: ChildProcess }).process);
+});
+
+/** The processes one core started (core-service-39): each child process
+ * created while the core's work ran — inside `run`, or in anything it
+ * scheduled from there — with the descendants each one still has.
+ * Nothing its host started is among them. */
+export class StartedProcesses {
+  private readonly children = new Set<ChildProcess>();
+
+  /** Run `work` as the core's: a child process it, or anything it
+   * schedules, creates is the core's. */
+  run<T>(work: () => T): T {
+    return runningCore.run(this, work);
+  }
+
+  /** Record a child process created while the core's work ran. */
+  record(child: ChildProcess): void {
+    this.prune();
+    this.children.add(child);
+  }
+
+  /** The core's child processes still running, with their descendants;
+   * never esbuild's service, which every core of this process shares. */
+  pids(): number[] {
+    this.prune();
+    const roots = [...this.children]
+      .filter((child) => !ESBUILD_SERVICE.test(child.spawnargs.join(" ")))
+      .map((child) => child.pid as number);
+    return roots.length ? [...roots, ...descendantsOf(roots)] : [];
+  }
+
+  /** Forget the children that have exited or never started: a spawn is
+   * attempted as its process is created, so one without a pid failed. */
+  private prune(): void {
+    for (const child of this.children) {
+      if (child.pid === undefined || child.exitCode !== null || child.signalCode !== null) {
+        this.children.delete(child);
+      }
+    }
+  }
 }
 
 /** Whether `pid` names a process that still exists. */
