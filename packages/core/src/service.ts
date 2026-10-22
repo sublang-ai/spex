@@ -2355,7 +2355,7 @@ export class CoreService {
           if (key === this.store.home.own() && !this.store.home.folderOf(key)) throw noProject(key);
         };
         assertProject();
-        // What has not reached the host asks a second confirmation
+        // What no placement's `spex` holds asks a second confirmation
         // naming the count (projects-9).
         if (command.confirm !== true) {
           const units = await this.space.pendingUnits(key);

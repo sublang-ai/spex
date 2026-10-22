@@ -1042,9 +1042,9 @@ const RECORD_KINDS = new Set<SpaceUnitKind>(["session", "intent", "authoring", "
 
 /** The record units (projects-9) that some tree of `held` holds and no
  * tree of `others` holds identically — every one where none is given
- * (space-98): each unit grouped across every tree as a sync plans it
- * (storage-11), the placement files, which name placements rather than
- * hold records, left out. */
+ * (space-98, projects-9): each unit grouped across every tree as a sync
+ * plans it (storage-11), the placement files, which name placements
+ * rather than hold records, left out. */
 function unitsHeldByNone(held: readonly StorageTree[], others: readonly StorageTree[]): string[] {
   const files = new Set<string>();
   for (const tree of [...held, ...others]) for (const file of tree.keys()) files.add(file);
@@ -2132,21 +2132,22 @@ class RepositorySync {
     await this.owner.publish();
   }
 
-  /** What a removal of this clone would lose (projects-9): its record
-   * units the host has not received, counted without touching the
-   * clone's own lists. */
+  /** What a removal of this clone would lose (projects-9): the record
+   * units of its working tree that no placement's `spex` holds
+   * identically, each as the clone last fetched or pushed it (space-12)
+   * — the path placement's among them — every unit where it holds none,
+   * counted without touching the clone's own lists. A placement whose
+   * host its last check found holding no `spex` holds none. */
   async pendingUnits(): Promise<number> {
     const repo = await this.readRepository();
     if (!repo.root || repo.head === null) return 0;
-    const mine = await this.workingTree();
-    if (repo.remote === null) {
-      const units = planStorageUnits({ ours: readStorageTree(this.dir, mine), theirs: new Map(), base: new Map() });
-      return units.filter((unit) => RECORD_KINDS.has(spaceUnitKind(unit.name))).length;
+    const placed: StorageTree[] = [];
+    for (const placement of repo.placements) {
+      const spex = repo.spex.get(placement.name) ?? null;
+      if (spex === null || this.runs.get(placement.name)?.remoteEmpty === true) continue;
+      placed.push(readStorageTree(this.dir, spex));
     }
-    // Against its first placement as last checked (space-33).
-    const run = this.runs.get(this.firstName());
-    const { lists } = await this.computeWorkingLists(repo.head, mine, run ? { run, ref: this.remoteRef(), spex: repo.originSpex } : null);
-    return [...lists.local, ...lists.conflicts.map((conflict) => conflict.unit)].filter((unit) => RECORD_KINDS.has(unit.kind)).length;
+    return unitsHeldByNone([readStorageTree(this.dir, await this.workingTree())], placed).length;
   }
 
   /** A Leave's read of the placement it leaves (space-98): that
