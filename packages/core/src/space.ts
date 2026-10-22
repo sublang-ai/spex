@@ -2153,26 +2153,24 @@ class RepositorySync {
     await this.state(true);
   }
 
-  /** Drop the clone's placement `name`, its id and creation mark leaving
-   * with its remote's section (storage-34) and this device's last sync
-   * and notice of it with them (storage-5), what the clone fetched of it
-   * and its upstream kept: as a Forget of its instance drops your own
-   * group's own repository's remote there (space-82). Written only while
-   * that remote still stands as its first placement. */
+  /** Drop the clone's first placement, its remote named `name`, as a
+   * Forget of its instance drops your own group's own repository's remote
+   * there (space-82): whole, as any drop is (dropPlacement) — its id and
+   * creation mark with its remote's section (storage-34), the `spex` the
+   * clone fetched of it and the upstream naming it, and this device's
+   * last sync and notice of it (space-5, storage-5) — its placement file
+   * left as it stands. Written only while that remote still stands as its
+   * first placement. */
   async dropFirstRemote(name: string): Promise<void> {
     const repo = await this.readRepository();
     this.requireGit(repo);
     if (!repo.root || this.facts.remoteName !== name) return;
-    this.gitStep(["config", "--remove-section", `remote.${name}`]);
+    const placement = this.placementsNow().find((candidate) => candidate.name === name);
     // A deferred clone's id, at the top level until its move, is that
-    // remote's, and goes with it; so do this device's last sync and
-    // notice of it (storage-5).
-    if (this.deferred()) for (const key of [LEGACY_CREATED_KEY, LEGACY_ID_KEY]) this.git.runSync(["config", "--unset", key]);
-    this.host.store.dropPlacementPrefs(this.key, name, true);
-    // What this core learnt of it leaves with it (space-31).
-    this.runs.delete(name);
-    this.agreedRead.delete(name);
-    this.settleFacts();
+    // remote's, and goes with it.
+    const deferred = this.deferred();
+    if (!placement || !this.dropPlacement(placement)) return;
+    if (deferred) for (const key of [LEGACY_CREATED_KEY, LEGACY_ID_KEY]) this.git.runSync(["config", "--unset", key]);
     if (!this.current) this.phase = { phase: "idle" };
     await this.state(true);
   }
@@ -4508,11 +4506,11 @@ export class SpaceManager {
    * naming each, the instance kept with every follow already made; then
    * your own group's own repository, where that instance is its own,
    * renames its remote to the folder of the signed-in instance governing
-   * it, else its remote is taken away, its id and what it fetched kept
-   * (space-5); last, the instance's entry leaves `home.yaml`
-   * (storage-2), and with it what this run held of its account. One
-   * still signed in is refused, and one the home does not list
-   * `not_found` (space-29).
+   * it, else drops that remote, its id, what it fetched and its upstream
+   * with it, its file left (space-5); last, the instance's entry leaves
+   * `home.yaml` (storage-2), and with it what this run held of its
+   * account. One still signed in is refused, and one the home does not
+   * list `not_found` (space-29).
    */
   async forget(named: string): Promise<GroupsState> {
     const store = this.host.store;

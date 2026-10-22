@@ -1974,7 +1974,7 @@ test("space-83, space-82, space-29, git-host-10: space.forget of a signed-out in
   assert.deepEqual([first.script.requests.length, second.script.requests.length], asked, "Forget asks nothing of either instance");
 });
 
-test("space-83, space-82, space-61, space-4, space-59, space-5, storage-2, storage-34: on a home signed in at the first alone, space.forget after its sign-out takes your own group's own repository's remote away, its id with it, the state listing no instance and that row local only; a sign-in then at the second creates bob-spex in the second's namespace and pushes it, the folder keeping ada", async (t) => {
+test("space-83, space-82, space-61, space-4, space-59, space-5, space-32, storage-2, storage-34: on a home signed in at the first alone, space.forget after its sign-out drops your own group's own repository's remote, its id, the spex it fetched and its upstream with it, its placement file left, the state listing no instance and that row local only; a sign-in then at the second creates bob-spex in the second's namespace and pushes it, the folder keeping ada", async (t) => {
   const bob = { id: "1002", login: "bob", displayName: "Bob" };
   const first = await startHost();
   const second = await startHost({ displayName: "Second stand-in", person: bob });
@@ -1987,10 +1987,11 @@ test("space-83, space-82, space-61, space-4, space-59, space-5, storage-2, stora
   await signOut(home, first);
 
   // Forget of the first, which no signed-in instance replaces: your own
-  // group's own repository's remote there is taken away — the host's id
-  // in its section with it (storage-34), what it fetched kept, its last
-  // check cleared — and the entry goes, the home as before any sign-in
-  // (space-82, space-5, storage-2).
+  // group's own repository's remote there is dropped — the host's id in
+  // its section (storage-34), the spex it fetched and the upstream naming
+  // it with it, its last check cleared, its placement file left — and the
+  // entry goes, the home as before any sign-in (space-82, space-5,
+  // space-32, storage-2).
   const forgotten = await forget(home, first);
   assert.deepEqual(forgotten.instances, []);
   assert.equal(forgotten.defaultInstance, first.url, "the origin the home was created with");
@@ -2001,7 +2002,9 @@ test("space-83, space-82, space-61, space-4, space-59, space-5, storage-2, stora
   const ownDir = clonePath(home.dataDir, HOST_OWN);
   assert.equal(git(ownDir, "remote"), "");
   assert.throws(() => git(ownDir, "config", "--get-regexp", "spexid$"), "no host id recorded");
-  assert.ok(git(ownDir, "for-each-ref", "--format=%(refname)", "refs/remotes").split("\n").includes(`refs/remotes/${hostFolder(first)}/spex`), "what it fetched is kept");
+  assert.equal(git(ownDir, "for-each-ref", "--format=%(refname)", `refs/remotes/${hostFolder(first)}`), "", "what it fetched goes with it");
+  assert.throws(() => git(ownDir, "config", "--get", "branch.spex.remote"), "no upstream left");
+  assert.ok(existsSync(join(ownDir, "placements", `${hostFolder(first)}.yaml`)), "its placement file is left");
   await home.client.expectError("space.sync", { repository: HOST_OWN }, "invalid_request", /^Pick a group first$/);
 
   // A sign-in then at the second creates `bob-spex` in the second's
