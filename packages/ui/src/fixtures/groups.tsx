@@ -576,6 +576,7 @@ export async function answer(type: string, fields: Record<string, unknown> = {})
     case "space.place":
     case "space.join":
     case "space.attach":
+    case "space.leave":
       return { accepted: true };
     case "space.cancel":
     case "space.signin.cancel":

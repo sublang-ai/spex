@@ -7,7 +7,8 @@
 // issues and Git's presence (space-1, space-3) — over the groups list,
 // your own group and then each instance under its heading, each group
 // with its spex repositories as rows (space-61). Activating a row opens that
-// repository's Sync and Explore tabs beneath the list. The surface
+// repository's Sync and Explore tabs beneath the list, the row followed
+// by its folder where a Leave moves its clone (storage-38). The surface
 // renders the core's state and runs no Git and no call to the host
 // itself: every action is a command, a repository named by its key,
 // whose outcome arrives as state (space-29), and the state is re-read
@@ -27,6 +28,7 @@ import { useAppStore } from "../state/store.js";
 import { i18n } from "../i18n.js";
 import { useClock } from "../lib/useClock.js";
 import { allRepositories, anySignedIn } from "../lib/instances.js";
+import { instanceNameAt, placementAt } from "../lib/placements.js";
 import {
   STEP_LINES,
   STEP_NAMES,
@@ -41,6 +43,7 @@ import { Icon } from "./Icon.js";
 import { IssuesList, SyncTab } from "./SpaceSync.js";
 import { ExploreTab } from "./SpaceExplorer.js";
 import { GroupsList, statusDot } from "./SpaceGroups.js";
+import { removedFrom } from "./SpacePlacementActs.js";
 import { SignInCard, useSignIn, type SignInFlow } from "./SpaceSignIn.js";
 
 export interface SpaceSurfaceProps {
@@ -83,6 +86,23 @@ export function syncRefusal(
   // stand. An operation running here refuses nothing either (space-21):
   // its progress stands on the row instead.
   return undefined;
+}
+
+/** Focus once a row's Leave has run (DR-010 §6): only focus the Leave
+ * left with its row — on the row's name, where Remove parked it, or
+ * nowhere, its row moved — goes to its Leave…, else its Sync, else its
+ * "Pick a group" where the last Leave left it local only, else its
+ * name. */
+function focusAfterLeave(key: string): void {
+  const row = document.querySelector(`[data-testid="space-row-${key}"]`);
+  const name = row?.querySelector<HTMLElement>(`[data-testid="space-repo-${key}"]`);
+  if (!row || !name) return;
+  const active = document.activeElement;
+  if (active && active !== document.body && active !== name) return;
+  const target = [`space-row-leave-${key}`, `space-row-sync-${key}`, `space-row-pick-${key}`]
+    .map((id) => row.querySelector<HTMLButtonElement>(`[data-testid="${id}"]`))
+    .find((control) => control !== null && !control.disabled);
+  (target ?? name).focus();
 }
 
 /** Reveal in the file manager where the bridge exists, Copy path
@@ -308,6 +328,38 @@ export function SpaceSurface({ onOpenSession, onOpenProject }: SpaceSurfaceProps
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [syncKey]);
+
+  // The state before this one: a row a first placement's Leave moved
+  // (storage-38) is the one new row holding its folder, and stays open
+  // as it was; a Leave that has run and left its placement is said in
+  // the live note, focus that stayed with its row moving to its Leave…,
+  // or to its Sync where none is left (space-89, DR-010 §6, §7).
+  const previous = useRef<GroupsState | undefined>(undefined);
+  useEffect(() => {
+    const before = previous.current;
+    previous.current = groups;
+    if (!groups || !before) return;
+    const rows = allRepositories(groups);
+    const was = allRepositories(before);
+    const known = new Set(was.map((row) => row.key));
+    for (const old of was) {
+      let now = rows.find((row) => row.key === old.key);
+      if (!now && old.folder !== null) {
+        const followers = rows.filter((row) => row.folder === old.folder && !known.has(row.key));
+        if (followers.length !== 1) continue;
+        now = followers[0]!;
+        const to = now.key;
+        setSelected((current) => (current === old.key ? to : current));
+      }
+      if (!now) continue;
+      const left = old.sync.phase === "running" && old.sync.op === "leave" ? old.sync.placement : undefined;
+      if (typeof left !== "string") continue;
+      if (now.sync.phase === "running" && now.sync.op === "leave") continue;
+      if (placementAt(now, left)?.attached === true) continue;
+      setNote(removedFrom(instanceNameAt(groups, left)));
+      focusAfterLeave(now.key);
+    }
+  }, [groups]);
 
   const surfaceName = i18n._({
     id: "Groups",

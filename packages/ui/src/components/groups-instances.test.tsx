@@ -318,14 +318,18 @@ describe("GROUPS: each instance under its heading (space-1, git-host-5, space-3,
       [ownRepo({ governing: SECOND, branch: BRANCH })],
     );
     await renderGroups(signedOutAt(ORIGIN, {}, home), { open: false });
+    // Leave… stands on a project's row holding a placement at an
+    // instance, signed in or not (space-89): the controls below are the
+    // state's.
     const controls = (key: string) =>
       within(screen.getByTestId(`space-row-${key}`))
         .getAllByRole("button")
-        .filter((button) => !button.dataset.testid?.startsWith("space-repo-"));
+        .filter((button) => !button.dataset.testid?.startsWith("space-repo-") && !button.dataset.testid?.startsWith("space-row-leave-"));
     // Signed out, a row at the instance offers no Retry, and no row a
     // sign-in: its heading's Sign in again is the one (space-61, space-3).
     expect(screen.getByTestId(`space-repo-state-${KEY}`).textContent).toBe("Unreachable: Sign in again");
     expect(controls(KEY)).toEqual([]);
+    expect(screen.getByTestId(`space-row-leave-${KEY}`).getAttribute("aria-label")).toBe("Remove from Spex Example");
     // A row still read reachable there refuses Sync naming the instance,
     // and its placement's line offers no Members and no Move (space-11,
     // space-87).

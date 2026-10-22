@@ -267,10 +267,12 @@ export function placementPhrase(
 }
 
 /** A group's own spex repository rather than a project's (DR-103):
- * your own group's, or the one named `<group>-spex` in its group — a
- * project of that name is refused at creation, the name being taken. */
-export function isGroupRepository(group: { name: string }, repo: RepositoryState): boolean {
-  return repo.own || repo.name === `${group.name}-spex`;
+ * your own group's, or the one named `<group>-spex` in its group, after
+ * the last segment of the group's path as the core names it (space-65),
+ * whatever the group's name — a project of that name is refused at
+ * creation, the name being taken. */
+export function isGroupRepository(group: { fullPath: string }, repo: RepositoryState): boolean {
+  return repo.own || repo.name === `${lastSegment(group.fullPath)}-spex`;
 }
 
 /** Two code remotes name the same repository (space-58): compared as

@@ -250,6 +250,11 @@ msgstr "{count, plural, other {# 个会话需要关注}}"
 msgid "{count, plural, one {# turn} other {# turns}}"
 msgstr "{count, plural, other {# 个轮次}}"
 
+#. Leave…'s second confirm: units no remaining placement holds; {name} is the instance's display name
+#: src/components/SpacePlacementActs.tsx
+msgid "{count, plural, one {# unit has} other {# units have}} reached no other instance yet. Remove from {name} anyway?"
+msgstr "{count, plural, other {# 个单元}}尚未到达其他任何实例。仍要从 {name} 移除吗？"
+
 #: src/lib/failure-catalogue.ts
 msgid "{count, plural, one {Changed # file without committing} other {Changed # files without committing}}"
 msgstr "{count, plural, other {改动了 # 个文件却未提交}}"
@@ -558,6 +563,8 @@ msgstr "{step}已停止"
 #. {step} is the sync step's name; {message} is the cause the host gave
 #. {step} is the sync step's name; {message} is the cause the host gave
 #. {step} is the sync step's name; {message} is the cause the host gave
+#. {step} is the sync step's name; {message} is the cause the host gave
+#: src/components/SpaceGroups.tsx
 #: src/components/SpaceSurface.tsx
 #: src/components/SpaceSync.tsx
 #: src/lib/space.ts
@@ -1402,6 +1409,7 @@ msgstr "无法连接 {endpoint} 上的 Spex 核心 — 每秒重试中。网页�
 #. leave an editor without saving
 #. leave an editor without saving
 #. leave an editor without saving
+#. leave the editor without changing anything
 #. leave the editor without changing anything
 #. leave the editor without changing anything
 #. leave the editor without changing anything
@@ -3298,6 +3306,7 @@ msgstr "刚刚"
 #. cancel a removal: leave it as it is
 #. cancel a removal: leave it as it is
 #. cancel a removal: leave it as it is
+#. cancel a removal: leave it as it is
 #. cancel: keep the unsaved draft
 #. confirm: keep the intent open
 #. confirm: leave the run as it is
@@ -3311,6 +3320,7 @@ msgstr "刚刚"
 #: src/components/SettingsSurface.tsx
 #: src/components/SpaceGroups.tsx
 #: src/components/SpaceMembers.tsx
+#: src/components/SpacePlacementActs.tsx
 #: src/components/SpecEditor.tsx
 #: src/components/WorkingLine.tsx
 msgid "Keep"
@@ -3351,6 +3361,16 @@ msgstr "租约"
 #: src/lib/space.ts
 msgid "leases and locks"
 msgstr "租约与锁"
+
+#. on a project's row: stop keeping its records at one instance; its title and accessible name are "Remove from <display name>" where one is held
+#: src/components/SpacePlacementActs.tsx
+msgid "Leave…"
+msgstr "移除…"
+
+#. the Leave… control while that placement is checked and removed
+#: src/components/SpacePlacementActs.tsx
+msgid "Leaving…"
+msgstr "移除中…"
 
 #. catalog family: a session file an earlier release wrote
 #: src/lib/space.ts
@@ -4661,6 +4681,11 @@ msgstr "记录"
 msgid "Records go to {path} at {name}."
 msgstr "记录将发往 {name} 上的 {path}。"
 
+#. Leave…'s second confirm where that placement could not be read; {name} is the instance's display name
+#: src/components/SpacePlacementActs.tsx
+msgid "Records pushed to {name} since the last sync may be left behind. Remove anyway?"
+msgstr "上次同步后推送到 {name} 的记录可能会被留下。仍要移除吗？"
+
 #: src/lib/failure-catalogue.ts
 msgid "Recover them from your editor's history, if it keeps one"
 msgstr "若编辑器保留历史，可从中恢复"
@@ -4731,6 +4756,7 @@ msgstr "重新加载页面"
 
 #. confirm: forget this project, leaving the repo on disk
 #. confirm: forget this project, leaving the repo on disk
+#. confirm: stop keeping the records at that instance; nothing there changes
 #. confirm: take the member out on the Git host
 #. confirm: take this player out of the roster
 #. confirm: take this row off the record
@@ -4745,6 +4771,7 @@ msgstr "重新加载页面"
 #: src/components/ProjectsSurface.tsx
 #: src/components/SettingsSurface.tsx
 #: src/components/SpaceMembers.tsx
+#: src/components/SpacePlacementActs.tsx
 msgid "Remove"
 msgstr "移除"
 
@@ -4780,6 +4807,16 @@ msgstr "移除 @{login}"
 #: src/components/SpaceMembers.tsx
 msgid "Remove @{login} from {place}?"
 msgstr "要将 @{login} 从 {place} 中移除吗？"
+
+#. the title and accessible name of Leave… where one instance is held, and of each instance in its choice; {name} is the instance's display name, or its host name before any read
+#: src/components/SpacePlacementActs.tsx
+msgid "Remove from {name}"
+msgstr "从 {name} 移除"
+
+#. Leave…'s inline confirm, answered Remove or Keep; {name} is the instance's display name
+#: src/components/SpacePlacementActs.tsx
+msgid "Remove from {name}? Nothing at {name} changes; these records stop syncing there."
+msgstr "要从 {name} 移除吗？{name} 上的内容不会改变；这些记录将不再同步到那里。"
 
 #: src/components/ProjectsSurface.tsx
 msgid "Remove from Spex (repo stays on disk)"
@@ -4821,6 +4858,11 @@ msgstr "移除这条排队的消息"
 #: src/components/ProjectGroup.tsx
 msgid "Removed “{title}”"
 msgstr "已移除“{title}”"
+
+#. the live note once a placement is left; {name} is the instance's display name
+#: src/components/SpacePlacementActs.tsx
+msgid "Removed from {name}"
+msgstr "已从 {name} 移除"
 
 #. queue row control, busy: the removal is in flight
 #. the removal is in flight

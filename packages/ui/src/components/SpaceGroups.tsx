@@ -13,15 +13,18 @@
 // DR-128), and carries the one control its
 // state offers — Sync, Join, Pick a group, Retry — with, on a project's,
 // "Place at…" where another signed-in instance may take its records too
-// (space-88), and "Pick a group" beside Sync where its clone holds only
+// (space-88), "Leave…" while its clone holds a placement at an instance
+// (space-89), and "Pick a group" beside Sync where its clone holds only
 // the path placement (space-61). What a control opens stands in place
 // beneath its row: the group picker, one section per instance it offers
 // (space-58) — Place's of the instance chosen alone, after the choice of
-// them where it offers several — the folder a Join clones into
-// (space-63), and the first-push notice of a placement, where every
-// placement the sync would run owes it (space-57); a pick or a Place
-// joining a repository others may share says the same notice in the
-// picker first. Members, "Move to another group", and the way forward an
+// them where it offers several — Leave's confirm for the placement
+// chosen, after the choice of them where it offers several, asking
+// again where that Leave stopped short (space-98), the folder a Join
+// clones into (space-63), and the first-push notice of a placement,
+// where every placement the sync would run owes it (space-57); a pick or
+// a Place joining a repository others may share says the same notice in
+// the picker first. Members, "Move to another group", and the way forward an
 // outcome leaves — Continue, the join of an unrelated history, Retry —
 // stand on each placement's line, acting on that placement at its
 // instance (space-62, space-78, space-57, space-13, space-15, DR-128).
@@ -59,6 +62,8 @@ import {
   instanceNameAt,
   instancePlacements,
   keyPlacement,
+  leavePlacements,
+  leaveStage,
   owesNotice,
   placeInstances,
   placementAt,
@@ -84,7 +89,7 @@ import { Icon } from "./Icon.js";
 import { InlineConfirm } from "./InlineConfirm.js";
 import { AddInstance, InstanceSection } from "./SpaceInstance.js";
 import { GroupNameEditor, MembersPanel } from "./SpaceMembers.js";
-import { PlaceChoice, PlaceControl, alsoPlaceAt } from "./SpacePlacementActs.js";
+import { LeaveChoice, LeaveConfirm, LeaveControl, PlaceChoice, PlaceControl, alsoPlaceAt } from "./SpacePlacementActs.js";
 import { PlacementLines, PlacementNotice, continueLabel, sharingNotice } from "./SpacePlacements.js";
 import type { SignInFlow } from "./SpaceSignIn.js";
 import { SECONDARY, syncRefusal, type Note } from "./SpaceSurface.js";
@@ -617,7 +622,7 @@ function GroupSection({
   );
 }
 
-type Opened = "pick" | "join" | "folder" | "notice" | "place-choice" | "place";
+type Opened = "pick" | "join" | "folder" | "notice" | "place-choice" | "place" | "leave-choice" | "leave";
 
 /** One spex repository's row (space-1, space-61): the name owns the
  * slack, the code and the counts hide below @md (space-28), and the
@@ -654,25 +659,35 @@ function RepositoryRow({
   const spaceJoin = useAppStore((state) => state.spaceJoin);
   const spaceRefresh = useAppStore((state) => state.spaceRefresh);
   const spacePlace = useAppStore((state) => state.spacePlace);
+  const spaceLeave = useAppStore((state) => state.spaceLeave);
+  const spaceLastAct = useAppStore((state) => state.spaceLastAct);
   const rebindProject = useAppStore((state) => state.rebindProject);
   const [opened, setOpened] = useState<Opened>();
-  const [busy, setBusy] = useState<"sync" | "join" | "retry" | "place">();
+  const [busy, setBusy] = useState<"sync" | "join" | "retry" | "place" | "leave">();
   // A long command's reply is only "accepted": its control stays busy
   // until the machine's state moves, so nothing re-enables between the
   // reply and the state (DR-010 §3, space-29).
-  const [accepted, setAccepted] = useState<{ op: "sync" | "join" | "place"; key: string }>();
+  const [accepted, setAccepted] = useState<{ op: "sync" | "join" | "place" | "leave"; key: string }>();
   const [error, setError] = useState<string>();
   // The placement the row's notice names, by its instance's origin
   // (space-57).
   const [noticeAt, setNoticeAt] = useState<string | null>();
   // The instance a Place's picker is for, by its origin (space-88).
   const [placeAt, setPlaceAt] = useState<string>();
+  // The placement a Leave's confirm asks about, by its instance's origin
+  // (space-89).
+  const [leaveAt, setLeaveAt] = useState<string>();
+  // The Leave this row sent, until its outcome arrives: the placement,
+  // and the machine's state when it was sent (space-98).
+  const leaveSent = useRef<{ instance: string; key: string }>(undefined);
   const controlRef = useRef<HTMLButtonElement>(null);
   const folderRef = useRef<HTMLButtonElement>(null);
   const placeRef = useRef<HTMLButtonElement>(null);
+  const leaveRef = useRef<HTMLButtonElement>(null);
   const pickRef = useRef<HTMLButtonElement>(null);
   const rowRef = useRef<HTMLButtonElement>(null);
   const placeId = useId();
+  const leaveId = useId();
 
   const sync = repo.sync;
   const running = sync.phase === "running";
@@ -686,14 +701,15 @@ function RepositoryRow({
   const governing = governingOf(groups, repo);
   const control = rowControl(groups, group, repo, governing);
   const groupRepository = isGroupRepository(group, repo);
-  const close = (focus: "control" | "folder" | "place" | "pick" = "control") => {
+  const close = (focus: "control" | "folder" | "place" | "leave" | "pick" = "control") => {
     setOpened(undefined);
-    const ref = { control: controlRef, folder: folderRef, place: placeRef, pick: pickRef }[focus];
-    // Closing never strands focus (DR-010 §6): a Place picked leaves
-    // "Place at…" busy, or gone, and focus on the row.
+    const ref = { control: controlRef, folder: folderRef, place: placeRef, leave: leaveRef, pick: pickRef }[focus];
+    // Closing never strands focus (DR-010 §6): a Place picked or a
+    // Remove answered leaves its control busy, or gone, and focus on the
+    // row.
     setTimeout(() => {
       const target = ref.current;
-      (focus === "place" && (!target || target.disabled) ? rowRef.current : target)?.focus();
+      ((focus === "place" || focus === "leave") && (!target || target.disabled) ? rowRef.current : target)?.focus();
     }, 0);
   };
 
@@ -807,6 +823,29 @@ function RepositoryRow({
     }
   };
 
+  /** Stop keeping the records at the placement at `origin` (space-89,
+   * space-98), `confirmed` on the second Remove: accepted at once,
+   * "Leaving…" until the Leave has run; a refusal stands beside the
+   * row. */
+  const leave = async (origin: string, confirmed: boolean): Promise<void> => {
+    const key = machineKey;
+    setBusy("leave");
+    setError(undefined);
+    // Its outcome may land before the reply (space-29).
+    leaveSent.current = { instance: origin, key };
+    try {
+      await spaceLeave(repo.key, origin, confirmed);
+      setAccepted({ op: "leave", key });
+    } catch (cause) {
+      leaveSent.current = undefined;
+      const message = (cause as Error).message;
+      setError(message);
+      onNote(message);
+    } finally {
+      setBusy(undefined);
+    }
+  };
+
   const retry = async () => {
     setBusy("retry");
     setError(undefined);
@@ -839,7 +878,7 @@ function RepositoryRow({
   const syncing =
     busy === "sync" ||
     accepted?.op === "sync" ||
-    (running && sync.op !== "join" && sync.op !== "check" && sync.op !== "attach" && sync.op !== "place");
+    (running && sync.op !== "join" && sync.op !== "check" && sync.op !== "attach" && sync.op !== "place" && sync.op !== "leave");
   const readOnly = repo.state === "read-only";
   // "Place at…" on a project's row (space-88): busy from the pick until
   // the operation it starts has run, standing through it even once the
@@ -851,6 +890,20 @@ function RepositoryRow({
   const showPlace = !groupRepository && (offered.length > 0 || placing);
   const placeTo = opened === "place" ? signedInInstances(groups).find((entry) => entry.origin === placeAt) : undefined;
   const placeOpened = (opened === "place-choice" && showPlace) || placeTo !== undefined;
+  // "Leave…" on a project's row (space-89): busy from Remove until the
+  // Leave has run, standing through it even once it took the last
+  // placement it offers; a Leave asked while a sync runs follows that
+  // sync (space-21), so only another operation holds it.
+  const leaveOffered = groupRepository ? [] : leavePlacements(repo);
+  const leaving = busy === "leave" || accepted?.op === "leave" || (running && sync.op === "leave");
+  const showLeave = !groupRepository && (leaveOffered.length > 0 || leaving);
+  const leaveLine = opened === "leave" && leaveAt !== undefined ? leaveOffered.find((line) => line.instance === leaveAt) : undefined;
+  const leaveOpened = (opened === "leave-choice" && showLeave) || leaveLine !== undefined;
+  // A stopped Leave stands on its row until the next operation or
+  // Dismiss (space-15): its phase names no placement and no line carries
+  // it, so the row says its step and cause, its guidance in the title,
+  // while its confirm is not asking (space-89).
+  const leaveStop = sync.phase === "stopped" && sync.op === "leave" && dismissed !== JSON.stringify(sync) && !leaveLine ? sync : undefined;
   // A clone holding only its path placement picks a group beside its
   // Sync, the pick adding its first placement with an instance (space-61,
   // space-88, storage-35).
@@ -860,6 +913,33 @@ function RepositoryRow({
     heldPlacements(repo).length > 0 &&
     instancePlacements(repo).length === 0 &&
     pickInstances(groups, repo).length > 0;
+
+  // A Leave this row sent that stopped for records no remaining
+  // placement received, or at a read of its placement it could not make,
+  // asks again in place, Keep focused (space-89, space-98); once that
+  // placement is gone, nothing is left to ask.
+  const heldKey = heldPlacements(repo)
+    .map((line) => line.instance)
+    .join(" ");
+  useEffect(() => {
+    const sent = leaveSent.current;
+    if (!sent) return;
+    if (sync.phase === "stopped" && sync.op === "leave" && machineKey !== sent.key) {
+      leaveSent.current = undefined;
+      if (leaveStage(repo, spaceLastAct(repo.key), sent.instance).stage !== "first") {
+        setLeaveAt(sent.instance);
+        setOpened("leave");
+      }
+      return;
+    }
+    // Gone, it was left — the live note says so (SpaceSurface) — and
+    // "Leaving…" ends even where no state between moved the machine.
+    if (placementAt(repo, sent.instance)?.attached !== true) {
+      leaveSent.current = undefined;
+      setAccepted((was) => (was?.op === "leave" ? undefined : was));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [machineKey, heldKey]);
 
   let controlButton: ReactNode = null;
   const button = (
@@ -1089,7 +1169,7 @@ function RepositoryRow({
             {state}
           </span>
         </button>
-        {needsFolder || showPlace || pickBeside || controlButton ? (
+        {needsFolder || showPlace || showLeave || pickBeside || controlButton ? (
           <div className="ml-auto flex max-w-full flex-wrap items-center justify-end gap-1 @xs:shrink-0">
             {needsFolder ? (
               <button
@@ -1129,6 +1209,33 @@ function RepositoryRow({
                 }}
               />
             ) : null}
+            {showLeave ? (
+              <LeaveControl
+                groups={groups}
+                repoKey={repo.key}
+                id={leaveId}
+                buttonRef={leaveRef}
+                held={leaveOffered}
+                leaving={leaving}
+                expanded={leaveOpened}
+                disabled={disabled || leaving || (running && sync.op !== "sync")}
+                describedBy={leaveStop && !(refusal && !running) && !error ? captionId : undefined}
+                onClick={() => {
+                  if (leaveOpened) {
+                    setOpened(undefined);
+                    return;
+                  }
+                  // One placement held asks about it; several open the
+                  // choice of them (space-89).
+                  if (leaveOffered.length === 1) {
+                    setLeaveAt(leaveOffered[0]!.instance!);
+                    setOpened("leave");
+                  } else {
+                    setOpened("leave-choice");
+                  }
+                }}
+              />
+            ) : null}
             {pickBeside ? (
               <button
                 ref={pickRef}
@@ -1153,6 +1260,14 @@ function RepositoryRow({
       ) : error ? (
         <p id={captionId} data-testid={captionId} role="alert" className="pl-6 text-xs text-red-600 dark:text-red-400">
           {error}
+        </p>
+      ) : leaveStop ? (
+        <p id={captionId} data-testid={captionId} title={leaveStop.guidance} className="pl-6 text-xs text-red-600 dark:text-red-400">
+          {i18n._({
+            id: "{step} stopped — {message}",
+            values: { step: STEP_NAMES[leaveStop.step](), message: leaveStop.message },
+            comment: "{step} is the sync step's name; {message} is the cause the host gave",
+          })}
         </p>
       ) : null}
       <PlacementLines
@@ -1196,6 +1311,36 @@ function RepositoryRow({
           connected={connected}
           onClose={() => close("place")}
           onNote={onNote}
+        />
+      ) : null}
+      {opened === "leave-choice" && showLeave ? (
+        <LeaveChoice
+          groups={groups}
+          repoKey={repo.key}
+          labelledBy={leaveId}
+          held={leaveOffered}
+          connected={connected}
+          onChoose={(chosen) => {
+            setLeaveAt(chosen.instance!);
+            setOpened("leave");
+          }}
+          onCancel={() => close("leave")}
+        />
+      ) : null}
+      {leaveLine ? (
+        <LeaveConfirm
+          // Asked again, it asks afresh, Keep focused (DR-010 §4).
+          key={`${leaveLine.instance}|${leaveStage(repo, spaceLastAct(repo.key), leaveLine.instance!).stage}`}
+          repoKey={repo.key}
+          stage={leaveStage(repo, spaceLastAct(repo.key), leaveLine.instance!)}
+          name={instanceNameAt(groups, leaveLine.instance!)}
+          disabled={disabled || leaving}
+          onRemove={() => {
+            const confirmed = leaveStage(repo, spaceLastAct(repo.key), leaveLine.instance!).stage !== "first";
+            close("leave");
+            void leave(leaveLine.instance!, confirmed);
+          }}
+          onKeep={() => close("leave")}
         />
       ) : null}
       {opened === "join" ? (

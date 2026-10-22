@@ -744,16 +744,16 @@ describe("GROUPS: the groups list and its rows (space-1, space-61, space-64)", (
     expect(screen.queryByTestId("space-repository")).toBeNull();
   });
 
-  test("each state reads its phrase and offers its control; Members stands on a reachable row's placement line alone", async () => {
-    const cases: [RowOver, string, string | null, boolean][] = [
-      [{ state: "reachable", lastSync: null }, "Never synced", "Sync", true],
-      [{ state: "reachable", lastSync: { at: NOW - 5 * MIN, sent: 1, received: 1 } }, "Synced 5m ago", "Sync", true],
-      [{ state: "read-only", reason: "archived" }, "Read-only: archived", "Sync", false],
-      [{ state: "unreachable", reason: "the host stopped listing it" }, "Unreachable: the host stopped listing it", "Retry", false],
-      [{ state: "absent", folder: null, branch: null }, "Not on this device", "Join", false],
-      [{ state: "local-only", remote: null, id: null, branch: null }, "On this device only", "Pick a group", false],
+  test("each state reads its phrase and offers its control; Members stands on a reachable row's placement line alone; Leave… on a project's row holding a placement at an instance (space-89)", async () => {
+    const cases: [RowOver, string, string | null, boolean, boolean][] = [
+      [{ state: "reachable", lastSync: null }, "Never synced", "Sync", true, true],
+      [{ state: "reachable", lastSync: { at: NOW - 5 * MIN, sent: 1, received: 1 } }, "Synced 5m ago", "Sync", true, true],
+      [{ state: "read-only", reason: "archived" }, "Read-only: archived", "Sync", false, true],
+      [{ state: "unreachable", reason: "the host stopped listing it" }, "Unreachable: the host stopped listing it", "Retry", false, true],
+      [{ state: "absent", folder: null, branch: null }, "Not on this device", "Join", false, false],
+      [{ state: "local-only", remote: null, id: null, branch: null }, "On this device only", "Pick a group", false, false],
     ];
-    for (const [over, phrase, controlName, members] of cases) {
+    for (const [over, phrase, controlName, members, leave] of cases) {
       await renderGroups(base({}, [repo(over)]), { open: false });
       const rowItem = screen.getByTestId(`space-row-${KEY}`);
       expect(screen.getByTestId(`space-repo-state-${KEY}`).textContent, phrase).toBe(phrase);
@@ -761,9 +761,14 @@ describe("GROUPS: the groups list and its rows (space-1, space-61, space-64)", (
         .getAllByRole("button")
         .filter((button) => !button.dataset.testid?.startsWith("space-repo-"))
         .map((button) => button.getAttribute("aria-label") ?? button.textContent);
-      // The row's control, then the Members its placement's line carries
-      // (space-87).
-      expect(controls, phrase).toEqual([...(controlName ? [controlName] : []), ...(members ? ["Members"] : [])]);
+      // Leave… named by the instance it leaves, then the row's control,
+      // then the Members its placement's line carries (space-89,
+      // space-87).
+      expect(controls, phrase).toEqual([
+        ...(leave ? ["Remove from Spex Example"] : []),
+        ...(controlName ? [controlName] : []),
+        ...(members ? ["Members"] : []),
+      ]);
       cleanup();
     }
   });
@@ -812,11 +817,15 @@ describe("GROUPS: the groups list and its rows (space-1, space-61, space-64)", (
   test("space-61: signed out, no row offers a sign-in: a repository the instance holds waits for its heading's; a path remote retries", async () => {
     await renderGroups(base({ instance: { signedIn: false } }, [repo({ state: "unreachable", reason: "Sign in again" })]), { open: false });
     expect(screen.getByTestId(`space-repo-state-${KEY}`).textContent).toBe("Unreachable: Sign in again");
+    // Leave… stands, signed in or not, so the placement can be left
+    // before its instance is forgotten (space-89, space-82); nothing
+    // else does.
     expect(
       within(screen.getByTestId(`space-row-${KEY}`))
         .getAllByRole("button")
-        .filter((button) => !button.dataset.testid?.startsWith("space-repo-")),
-    ).toEqual([]);
+        .filter((button) => !button.dataset.testid?.startsWith("space-repo-"))
+        .map((button) => button.dataset.testid),
+    ).toEqual([`space-row-leave-${KEY}`]);
     cleanup();
     await renderGroups(base({ instance: { signedIn: false } }, [repo({ state: "unreachable", reason: "the folder is gone", remote: "/srv/academy-spex.git" })]), { open: false });
     const reads = calls("space.get").length;

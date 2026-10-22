@@ -250,6 +250,11 @@ msgstr "{count, plural, one {# session needs your attention} other {# sessions n
 msgid "{count, plural, one {# turn} other {# turns}}"
 msgstr "{count, plural, one {# turn} other {# turns}}"
 
+#. Leave…'s second confirm: units no remaining placement holds; {name} is the instance's display name
+#: src/components/SpacePlacementActs.tsx
+msgid "{count, plural, one {# unit has} other {# units have}} reached no other instance yet. Remove from {name} anyway?"
+msgstr "{count, plural, one {# unit has} other {# units have}} reached no other instance yet. Remove from {name} anyway?"
+
 #: src/lib/failure-catalogue.ts
 msgid "{count, plural, one {Changed # file without committing} other {Changed # files without committing}}"
 msgstr "{count, plural, one {Changed # file without committing} other {Changed # files without committing}}"
@@ -558,6 +563,8 @@ msgstr "{step} stopped"
 #. {step} is the sync step's name; {message} is the cause the host gave
 #. {step} is the sync step's name; {message} is the cause the host gave
 #. {step} is the sync step's name; {message} is the cause the host gave
+#. {step} is the sync step's name; {message} is the cause the host gave
+#: src/components/SpaceGroups.tsx
 #: src/components/SpaceSurface.tsx
 #: src/components/SpaceSync.tsx
 #: src/lib/space.ts
@@ -1402,6 +1409,7 @@ msgstr "Can't reach the Spex core at {endpoint} — retrying every second. On a 
 #. leave an editor without saving
 #. leave an editor without saving
 #. leave an editor without saving
+#. leave the editor without changing anything
 #. leave the editor without changing anything
 #. leave the editor without changing anything
 #. leave the editor without changing anything
@@ -3298,6 +3306,7 @@ msgstr "just now"
 #. cancel a removal: leave it as it is
 #. cancel a removal: leave it as it is
 #. cancel a removal: leave it as it is
+#. cancel a removal: leave it as it is
 #. cancel: keep the unsaved draft
 #. confirm: keep the intent open
 #. confirm: leave the run as it is
@@ -3311,6 +3320,7 @@ msgstr "just now"
 #: src/components/SettingsSurface.tsx
 #: src/components/SpaceGroups.tsx
 #: src/components/SpaceMembers.tsx
+#: src/components/SpacePlacementActs.tsx
 #: src/components/SpecEditor.tsx
 #: src/components/WorkingLine.tsx
 msgid "Keep"
@@ -3351,6 +3361,16 @@ msgstr "lease"
 #: src/lib/space.ts
 msgid "leases and locks"
 msgstr "leases and locks"
+
+#. on a project's row: stop keeping its records at one instance; its title and accessible name are "Remove from <display name>" where one is held
+#: src/components/SpacePlacementActs.tsx
+msgid "Leave…"
+msgstr "Leave…"
+
+#. the Leave… control while that placement is checked and removed
+#: src/components/SpacePlacementActs.tsx
+msgid "Leaving…"
+msgstr "Leaving…"
 
 #. catalog family: a session file an earlier release wrote
 #: src/lib/space.ts
@@ -4661,6 +4681,11 @@ msgstr "records"
 msgid "Records go to {path} at {name}."
 msgstr "Records go to {path} at {name}."
 
+#. Leave…'s second confirm where that placement could not be read; {name} is the instance's display name
+#: src/components/SpacePlacementActs.tsx
+msgid "Records pushed to {name} since the last sync may be left behind. Remove anyway?"
+msgstr "Records pushed to {name} since the last sync may be left behind. Remove anyway?"
+
 #: src/lib/failure-catalogue.ts
 msgid "Recover them from your editor's history, if it keeps one"
 msgstr "Recover them from your editor's history, if it keeps one"
@@ -4731,6 +4756,7 @@ msgstr "Reload the page"
 
 #. confirm: forget this project, leaving the repo on disk
 #. confirm: forget this project, leaving the repo on disk
+#. confirm: stop keeping the records at that instance; nothing there changes
 #. confirm: take the member out on the Git host
 #. confirm: take this player out of the roster
 #. confirm: take this row off the record
@@ -4745,6 +4771,7 @@ msgstr "Reload the page"
 #: src/components/ProjectsSurface.tsx
 #: src/components/SettingsSurface.tsx
 #: src/components/SpaceMembers.tsx
+#: src/components/SpacePlacementActs.tsx
 msgid "Remove"
 msgstr "Remove"
 
@@ -4780,6 +4807,16 @@ msgstr "Remove @{login}"
 #: src/components/SpaceMembers.tsx
 msgid "Remove @{login} from {place}?"
 msgstr "Remove @{login} from {place}?"
+
+#. the title and accessible name of Leave… where one instance is held, and of each instance in its choice; {name} is the instance's display name, or its host name before any read
+#: src/components/SpacePlacementActs.tsx
+msgid "Remove from {name}"
+msgstr "Remove from {name}"
+
+#. Leave…'s inline confirm, answered Remove or Keep; {name} is the instance's display name
+#: src/components/SpacePlacementActs.tsx
+msgid "Remove from {name}? Nothing at {name} changes; these records stop syncing there."
+msgstr "Remove from {name}? Nothing at {name} changes; these records stop syncing there."
 
 #: src/components/ProjectsSurface.tsx
 msgid "Remove from Spex (repo stays on disk)"
@@ -4821,6 +4858,11 @@ msgstr "Remove this queued message"
 #: src/components/ProjectGroup.tsx
 msgid "Removed “{title}”"
 msgstr "Removed “{title}”"
+
+#. the live note once a placement is left; {name} is the instance's display name
+#: src/components/SpacePlacementActs.tsx
+msgid "Removed from {name}"
+msgstr "Removed from {name}"
 
 #. queue row control, busy: the removal is in flight
 #. the removal is in flight

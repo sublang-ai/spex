@@ -11,6 +11,7 @@
 import type { GroupsState, InstanceGroupState, InstanceState, PlacementState, RepositoryState } from "@sublang/spex-core/protocol";
 
 import { currentLocale } from "../i18n.js";
+import type { SpaceLastAct } from "../state/store.js";
 import { governingOf, hostNameOf, instanceName, instanceOf, signedInInstances, standingOf } from "./instances.js";
 
 /** The placements the clone holds (space-87, storage-34): its remotes
@@ -150,6 +151,35 @@ export function placeInstances(state: GroupsState, repo: RepositoryState): Insta
       (placementAt(repo, instance.origin) !== undefined ||
         !instance.groups.some((entry) => entry.placed.some((placed) => placed.key === repo.key))),
   );
+}
+
+/** The placements "Leave…" offers a row (space-89): every one its clone
+ * holds at an instance — the path placement, which no instance holds,
+ * is offered none — and none on your own group's own repository, which
+ * every sign-in places (space-4). Whether the row is a project's is the
+ * row's to say. */
+export function leavePlacements(repo: RepositoryState): PlacementState[] {
+  return repo.own ? [] : instancePlacements(repo);
+}
+
+/** Which confirm a Leave of a row's placement at `origin` asks
+ * (space-89, space-98). */
+export type LeaveStage = { stage: "first" } | { stage: "unreceived"; count: number } | { stage: "unread" };
+
+/** A Leave's confirm (space-89, space-98): the first, unless the row's
+ * phase is a Leave of that placement this page asked unconfirmed — a
+ * stopped phase names no placement (space-30), so the page's memory of
+ * the act says which — stopped for records no remaining placement
+ * received, asking again with their count, or stopped at its read for
+ * any other cause but a session's lease or Stop, saying that records
+ * pushed there since the last sync may be left behind. */
+export function leaveStage(repo: RepositoryState, act: SpaceLastAct | undefined, origin: string): LeaveStage {
+  const sync = repo.sync;
+  if (sync.phase !== "stopped" || sync.op !== "leave") return { stage: "first" };
+  if (act?.op !== "leave" || act.instance !== origin || act.confirmed) return { stage: "first" };
+  if (sync.cause === "unreceived") return { stage: "unreceived", count: sync.count ?? 0 };
+  if (sync.step === "check" && sync.cause !== "lease" && sync.cause !== "stopped") return { stage: "unread" };
+  return { stage: "first" };
 }
 
 /** The entry a placement stands in at the instance governing it

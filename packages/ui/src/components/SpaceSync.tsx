@@ -6,7 +6,8 @@
 // space-8), the running rail with its step line, the placement in
 // flight and Stop (space-12, space-16), the choices picker for one
 // placement with its one inline confirm (space-9, space-17, space-18),
-// the stopped card with its cause, guidance and Retry (space-15), the
+// the stopped card with its cause, guidance and Retry (space-15) — a
+// stopped Leave's sending that Leave again (space-89) — the
 // unrelated-history card (space-13) and in-place line diffs
 // (space-10); and the home's issues list with its repairs (space-46..
 // space-55). Every side is "mine" or "the host's" (space-27); Git's
@@ -1206,6 +1207,8 @@ export function SyncTab({
 }) {
   const spaceFetch = useAppStore((state) => state.spaceFetch);
   const spaceSync = useAppStore((state) => state.spaceSync);
+  const spaceLeave = useAppStore((state) => state.spaceLeave);
+  const spaceLastAct = useAppStore((state) => state.spaceLastAct);
   const spaceCancel = useAppStore((state) => state.spaceCancel);
   const key = repo.key;
   const sync = repo.sync;
@@ -1358,9 +1361,23 @@ export function SyncTab({
     });
   };
 
+  // A stopped Leave names no placement (space-30): its Retry sends again
+  // the Leave this page asked, confirmed as it was, and with no memory
+  // of one — another page's, or before a reload — none is offered, its
+  // row's Leave… still standing (space-89). A Place or an Attach stops
+  // only in the sync that follows its add — a refused add ends the
+  // operation where it stood — so its Retry syncs (space-97, space-99).
+  const lastAct = sync.phase === "stopped" && sync.op === "leave" ? spaceLastAct(key) : undefined;
+  const leaveAgain = lastAct?.op === "leave" ? lastAct : undefined;
+  const retryOffered = sync.phase === "stopped" && sync.retry && (sync.op !== "leave" || leaveAgain !== undefined);
+
   const retry = () => {
     if (sync.phase !== "stopped") return;
     if (sync.op === "check") return run("retry", () => spaceFetch(key));
+    if (sync.op === "leave") {
+      if (!leaveAgain) return;
+      return run("retry", () => spaceLeave(key, leaveAgain.instance, leaveAgain.confirmed));
+    }
     const input: SyncInput = { ...lastSyncInput.current };
     if (choicesLine && total > 0 && chosen.length === total) {
       input.placement = choicesLine.instance;
@@ -1477,7 +1494,7 @@ export function SyncTab({
             </span>
           ) : null}
           <div className="flex flex-wrap items-center gap-2">
-            {sync.retry ? (
+            {retryOffered ? (
               <button
                 type="button"
                 data-testid="space-retry"

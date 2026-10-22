@@ -32,7 +32,14 @@
 // space.place, its notice in the picker, "Placing…" until the Place has
 // run; a clone holding only its path placement picks a group beside its
 // Sync instead (space-88, space-97, space-57, space-58, space-61,
-// storage-35, space-28).
+// storage-35, space-28). "Leave…" on a project's row holding a
+// placement at an instance asks about the one it holds, or the one
+// chosen, inline — again, naming the count or what may be left behind,
+// where that Leave stopped short, its Remove then confirmed — and reads
+// "Leaving…" until the Leave has run; the live note says what was left,
+// the opened row followed by its folder where the clone moved; the
+// stopped card's Retry sends the Leave again as this page asked it
+// (space-89, space-98, storage-38, space-15, space-28).
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
@@ -2039,5 +2046,490 @@ describe("GROUPS: placing a project at another instance (space-88, space-97, spa
     // DR-041).
     const top = screen.getByTestId(`space-repo-${KEY}`).parentElement!;
     for (const token of ["flex-wrap", "@xs:flex-nowrap"]) expect(top.className.split(/\s+/)).toContain(token);
+  });
+});
+
+/** The Leave running its step at a placement (space-98). */
+const leaveRunning = (placement: string): RepositoryState["sync"] => ({
+  phase: "running",
+  op: "leave",
+  placement,
+  step: "check",
+  since: NOW,
+  cancelable: false,
+});
+
+/** A Leave stopped before anything was removed (space-98): `unreceived`
+ * naming the count of units no remaining placement received, else the
+ * cause its read of the placement stopped in. */
+const leaveStopped = (cause: "unreceived" | "unreachable" | "reauth" | "lease", count?: number): RepositoryState["sync"] => ({
+  phase: "stopped",
+  op: "leave",
+  step: "check",
+  cause,
+  message:
+    cause === "unreceived"
+      ? `${count} records have reached no other placement`
+      : cause === "lease"
+        ? "“Fix the login redirect” is in use"
+        : "Records pushed to Spex Example since the last sync may be left behind",
+  guidance: cause === "lease" ? "Close it there, then Retry." : "Confirm to remove it anyway.",
+  retry: true,
+  ...(cause === "unreceived" ? { count } : {}),
+});
+
+const leaveControl = (key = KEY): HTMLButtonElement => screen.getByTestId(`space-row-leave-${key}`) as HTMLButtonElement;
+const leaveConfirm = (key = KEY): HTMLElement => screen.getByTestId(`space-leave-confirm-${key}`);
+
+/** The opened project, at the second alone in its `workshop` — where
+ * the first placement's Leave moves its clone (storage-38) — or, with
+ * no placement left, local only under your own group's folder; its
+ * folder kept either way. */
+const MOVED = "@second.example/workshop/academy-spex";
+function movedHome(where: "second" | "own", sync: RepositoryState["sync"] = { phase: "idle" }): GroupsState {
+  const home = twoInstances({}, []);
+  const [first, second] = home.instances;
+  if (where === "own") {
+    const local = repo({
+      key: "jane/academy-spex",
+      instance: null,
+      id: null,
+      remote: null,
+      state: "local-only",
+      branch: null,
+      members: null,
+      visibility: null,
+      placements: [],
+      sync,
+    });
+    return { ...home, own: { ...home.own, repositories: [...home.own.repositories, local] } };
+  }
+  const moved = repo({
+    key: MOVED,
+    instance: SECOND,
+    governing: SECOND,
+    id: "52",
+    remote: "workshop/academy-spex",
+    placedAt: [SECOND],
+    sync,
+    placements: [placement({ instance: SECOND, path: "workshop/academy-spex", id: "52", members: 2, branch: { ...BRANCH, ahead: 0, behind: 0 } })],
+  });
+  return {
+    ...home,
+    instances: [
+      first!,
+      {
+        ...second!,
+        groups: [{ id: "81", login: null, mine: false, fullPath: "workshop", name: "Workshop", can: NO_CAN, placed: [], repositories: [moved] }, ...second!.groups],
+      },
+    ],
+  };
+}
+
+describe("GROUPS: leaving one placement (space-89, space-98, storage-38, space-28)", () => {
+  test("space-89: Leave… on the project at one instance, titled and named 'Remove from Spex Example', asks inline with Keep focused, Escape keeping; Remove sends space.leave {repository, instance} and reads 'Leaving…'", async () => {
+    let settle: ((value: unknown) => void) | undefined;
+    commandMock.mockImplementation(async (type: string, fields?: Record<string, unknown>) => {
+      if (type !== "space.leave") return answer(type, fields);
+      return new Promise((resolve) => {
+        settle = resolve;
+      });
+    });
+    await renderGroups(base(), { open: false });
+    const row = screen.getByTestId(`space-row-${KEY}`);
+    const control = leaveControl();
+    // One placement at an instance held: the control names it in full,
+    // as its title and accessible name, its label within the row's
+    // budget (space-89, space-28).
+    expect(control.textContent).toBe("Leave…");
+    expect(control.getAttribute("title")).toBe("Remove from Spex Example");
+    expect(within(row).getByRole("button", { name: "Remove from Spex Example" })).toBe(control);
+    // On the row, never a line, before the state's control (DR-041).
+    expect(within(screen.getByTestId(`space-lines-${KEY}`)).queryByTestId(`space-row-leave-${KEY}`)).toBeNull();
+    expect(control.compareDocumentPosition(rowSync()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    // It asks inline beneath the row, Keep focused: nothing at the
+    // instance changes (space-89, DR-010 §4).
+    fireEvent.click(control);
+    expect(control.getAttribute("aria-expanded")).toBe("true");
+    expect(row.contains(leaveConfirm())).toBe(true);
+    expect(leaveConfirm().dataset.stage).toBe("first");
+    expect(leaveConfirm().textContent).toContain("Remove from Spex Example? Nothing at Spex Example changes; these records stop syncing there.");
+    expect(document.activeElement).toBe(within(leaveConfirm()).getByRole("button", { name: "Keep" }));
+    // Escape and Keep send nothing, focus back on Leave… (DR-010 §6).
+    fireEvent.keyDown(document.activeElement!, { key: "Escape" });
+    expect(screen.queryByTestId(`space-leave-confirm-${KEY}`)).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(control));
+    expect(control.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(control);
+    fireEvent.click(within(leaveConfirm()).getByRole("button", { name: "Keep" }));
+    expect(screen.queryByTestId(`space-leave-confirm-${KEY}`)).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(control));
+    expect(calls("space.leave")).toHaveLength(0);
+
+    // Remove sends space.leave naming that placement's instance, and
+    // Leave… reads "Leaving…" from then, Sync keeping its word, waiting
+    // (space-89, space-98).
+    fireEvent.click(control);
+    fireEvent.click(within(leaveConfirm()).getByRole("button", { name: "Remove" }));
+    await waitFor(() => expect(calls("space.leave")).toEqual([{ repository: KEY, instance: ORIGIN }]));
+    expect(screen.queryByTestId(`space-leave-confirm-${KEY}`)).toBeNull();
+    expect(control.textContent).toBe("Leaving…");
+    expect(control.disabled).toBe(true);
+    expect(control.getAttribute("aria-label")).toBeNull();
+    expect(rowSync().textContent).toBe("Sync");
+    expect(rowSync().disabled).toBe(true);
+    // Closing never strands focus: Leave… busy, it lands on the row
+    // (DR-010 §6).
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId(`space-repo-${KEY}`)));
+    settle!({ accepted: true });
+    // The Leave runs, its step on its placement's line, Leave… busy and
+    // Sync keeping its word (space-12, space-21).
+    deliver(base({}, [repo({ sync: leaveRunning(ORIGIN) })]));
+    await waitFor(() => expect(reading(lineOf(KEY, ORIGIN)).state).toBe("Checking host…"));
+    expect(leaveControl().textContent).toBe("Leaving…");
+    expect(leaveControl().disabled).toBe(true);
+    expect(rowSync().textContent).toBe("Sync");
+    expect(rowSync().disabled).toBe(true);
+    cleanup();
+
+    // A Leave asked while a sync runs follows it (space-21): Leave…
+    // stands ready beside "Syncing…"; another operation holds it.
+    commandMock.mockImplementation(answer);
+    await renderGroups(base({}, [repo({ sync: { phase: "running", op: "sync", placement: ORIGIN, step: "push", since: NOW, cancelable: true } })]), {
+      open: false,
+    });
+    expect(rowSync().textContent).toBe("Syncing…");
+    expect(leaveControl().textContent).toBe("Leave…");
+    expect(leaveControl().disabled).toBe(false);
+    cleanup();
+    await renderGroups(base({}, [repo({ sync: { phase: "running", op: "check", placement: ORIGIN, step: "check", since: NOW, cancelable: true } })]), {
+      open: false,
+    });
+    expect(leaveControl().disabled).toBe(true);
+    cleanup();
+
+    // A refusal stands beside the row, Leave… ready again.
+    commandMock.mockImplementation(async (type: string, fields?: Record<string, unknown>) => {
+      if (type === "space.leave") throw new SpexCommandError("invalid_request", "academy-spex holds no placement at Spex Example");
+      return answer(type, fields);
+    });
+    await renderGroups(base(), { open: false });
+    fireEvent.click(leaveControl());
+    fireEvent.click(within(leaveConfirm()).getByRole("button", { name: "Remove" }));
+    await waitFor(() => expect(screen.getByTestId(`space-row-caption-${KEY}`).textContent).toBe("academy-spex holds no placement at Spex Example"));
+    expect(screen.getByTestId(`space-row-caption-${KEY}`).getAttribute("role")).toBe("alert");
+    expect(live()).toBe("academy-spex holds no placement at Spex Example");
+    expect(leaveControl().textContent).toBe("Leave…");
+    expect(leaveControl().disabled).toBe(false);
+  });
+
+  test("space-89: on the placed project it opens the choice, each named 'Remove from <display name>'", async () => {
+    await renderGroups(twoPlacementsHome(), { open: false });
+    const control = leaveControl();
+    // Several held: the control's words are its name.
+    expect(control.textContent).toBe("Leave…");
+    expect(control.getAttribute("aria-label")).toBeNull();
+    expect(control.getAttribute("title")).toBeNull();
+    fireEvent.click(control);
+    expect(control.getAttribute("aria-expanded")).toBe("true");
+    // The choice stands beneath the row, named by its control, each
+    // placement by its instance's display name and its path there,
+    // named "Remove from <display name>", focus on the first.
+    const choice = screen.getByRole("group", { name: "Leave…" });
+    expect(choice.dataset.testid).toBe(`space-leave-choice-${KEY}`);
+    expect(screen.getByTestId(`space-row-${KEY}`).contains(choice)).toBe(true);
+    expect(screen.queryByTestId(`space-leave-confirm-${KEY}`)).toBeNull();
+    const options = within(choice).getAllByTestId(/^space-leave-instance-/);
+    expect(options.map((option) => option.dataset.testid)).toEqual([`space-leave-instance-${ORIGIN}`, `space-leave-instance-${SECOND}`]);
+    expect(options.map((option) => option.textContent)).toEqual(["Spex Examplejane/academy-spex", "Second Exampleworkshop/academy-spex"]);
+    for (const attribute of ["aria-label", "title"]) {
+      expect(options.map((option) => option.getAttribute(attribute))).toEqual(["Remove from Spex Example", "Remove from Second Example"]);
+    }
+    expect(document.activeElement).toBe(options[0]);
+    // Escape and Cancel close it, focus back on Leave… (DR-010 §6).
+    fireEvent.keyDown(options[0]!, { key: "Escape" });
+    expect(screen.queryByTestId(`space-leave-choice-${KEY}`)).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(control));
+    fireEvent.click(control);
+    fireEvent.click(screen.getByTestId(`space-leave-cancel-${KEY}`));
+    expect(screen.queryByTestId(`space-leave-choice-${KEY}`)).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(control));
+
+    // The placement chosen is asked about in the choice's place, and
+    // Remove names its instance (space-89).
+    fireEvent.click(control);
+    fireEvent.click(screen.getByRole("button", { name: "Remove from Second Example" }));
+    expect(screen.queryByTestId(`space-leave-choice-${KEY}`)).toBeNull();
+    expect(leaveConfirm().textContent).toContain("Remove from Second Example? Nothing at Second Example changes; these records stop syncing there.");
+    expect(document.activeElement).toBe(within(leaveConfirm()).getByRole("button", { name: "Keep" }));
+    fireEvent.click(within(leaveConfirm()).getByRole("button", { name: "Remove" }));
+    await waitFor(() => expect(calls("space.leave")).toEqual([{ repository: KEY, instance: SECOND }]));
+    expect(calls("space.sync")).toHaveLength(0);
+  });
+
+  test("space-89, space-98: a leave stopped for unreceived records asks again naming the count, its Remove sending confirmed; one stopped for a placement it could not read says records pushed there since the last sync may be left behind", async () => {
+    await renderGroups(base(), { open: false });
+    fireEvent.click(leaveControl());
+    fireEvent.click(within(leaveConfirm()).getByRole("button", { name: "Remove" }));
+    await waitFor(() => expect(calls("space.leave")).toEqual([{ repository: KEY, instance: ORIGIN }]));
+    // The Leave runs, then stops for three units no remaining placement
+    // received: it asks again in place, naming the count, Keep focused
+    // (space-89, space-98).
+    deliver(base({}, [repo({ sync: leaveRunning(ORIGIN) })]));
+    await waitFor(() => expect(leaveControl().textContent).toBe("Leaving…"));
+    deliver(base({}, [repo({ sync: leaveStopped("unreceived", 3) })]));
+    await waitFor(() => expect(leaveConfirm().dataset.stage).toBe("unreceived"));
+    expect(leaveConfirm().textContent).toContain("3 units have reached no other instance yet. Remove from Spex Example anyway?");
+    expect(document.activeElement).toBe(within(leaveConfirm()).getByRole("button", { name: "Keep" }));
+    expect(leaveControl().textContent).toBe("Leave…");
+    expect(leaveControl().getAttribute("aria-expanded")).toBe("true");
+    expect(screen.queryByTestId(`space-row-caption-${KEY}`)).toBeNull();
+    // Keep keeps it, its stop standing on the row, the guidance in its
+    // title, Leave… described by it (space-15); while the stop stands,
+    // Leave… asks the same again.
+    fireEvent.click(within(leaveConfirm()).getByRole("button", { name: "Keep" }));
+    expect(screen.queryByTestId(`space-leave-confirm-${KEY}`)).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(leaveControl()));
+    const caption = screen.getByTestId(`space-row-caption-${KEY}`);
+    expect(caption.textContent).toBe("Check stopped — 3 records have reached no other placement");
+    expect(caption.getAttribute("title")).toBe("Confirm to remove it anyway.");
+    expect(leaveControl().getAttribute("aria-describedby")).toBe(`space-row-caption-${KEY}`);
+    expect(calls("space.leave")).toHaveLength(1);
+    fireEvent.click(leaveControl());
+    expect(leaveConfirm().dataset.stage).toBe("unreceived");
+    // Its Remove sends the Leave confirmed (space-98).
+    fireEvent.click(within(leaveConfirm()).getByRole("button", { name: "Remove" }));
+    await waitFor(() => expect(calls("space.leave")[1]).toEqual({ repository: KEY, instance: ORIGIN, confirmed: true }));
+    // A confirmed Leave stopped again reads as its own stop: nothing
+    // asks again (space-15).
+    deliver(base({}, [repo({ sync: leaveRunning(ORIGIN) })]));
+    deliver(base({}, [repo({ sync: leaveStopped("lease") })]));
+    await waitFor(() => expect(leaveControl().textContent).toBe("Leave…"));
+    expect(screen.queryByTestId(`space-leave-confirm-${KEY}`)).toBeNull();
+    fireEvent.click(leaveControl());
+    expect(leaveConfirm().dataset.stage).toBe("first");
+    cleanup();
+
+    // One unit, in the singular.
+    installClient();
+    await renderGroups(base(), { open: false });
+    fireEvent.click(leaveControl());
+    fireEvent.click(within(leaveConfirm()).getByRole("button", { name: "Remove" }));
+    await waitFor(() => expect(calls("space.leave")).toHaveLength(1));
+    deliver(base({}, [repo({ sync: leaveRunning(ORIGIN) })]));
+    deliver(base({}, [repo({ sync: leaveStopped("unreceived", 1) })]));
+    await waitFor(() => expect(leaveConfirm().textContent).toContain("1 unit has reached no other instance yet. Remove from Spex Example anyway?"));
+    cleanup();
+
+    // One stopped at the read of a placement it could not read says that
+    // records pushed there since the last sync may be left behind, its
+    // Remove sending confirmed (space-89, space-98).
+    installClient();
+    await renderGroups(placedAtTwo(), { open: false });
+    fireEvent.click(leaveControl());
+    fireEvent.click(screen.getByRole("button", { name: "Remove from Spex Example" }));
+    fireEvent.click(within(leaveConfirm()).getByRole("button", { name: "Remove" }));
+    await waitFor(() => expect(calls("space.leave")).toEqual([{ repository: KEY, instance: ORIGIN }]));
+    deliver(placedAtTwo({}, { sync: leaveRunning(ORIGIN) }));
+    deliver(placedAtTwo({}, { sync: leaveStopped("unreachable") }));
+    await waitFor(() => expect(leaveConfirm().dataset.stage).toBe("unread"));
+    expect(leaveConfirm().textContent).toContain("Records pushed to Spex Example since the last sync may be left behind. Remove anyway?");
+    expect(document.activeElement).toBe(within(leaveConfirm()).getByRole("button", { name: "Keep" }));
+    fireEvent.click(within(leaveConfirm()).getByRole("button", { name: "Remove" }));
+    await waitFor(() => expect(calls("space.leave")[1]).toEqual({ repository: KEY, instance: ORIGIN, confirmed: true }));
+    cleanup();
+
+    // The stop is that placement's alone: the other placement's Leave
+    // asks the first confirm (space-89).
+    installClient();
+    await renderGroups(placedAtTwo(), { open: false });
+    fireEvent.click(leaveControl());
+    fireEvent.click(screen.getByRole("button", { name: "Remove from Spex Example" }));
+    fireEvent.click(within(leaveConfirm()).getByRole("button", { name: "Remove" }));
+    await waitFor(() => expect(calls("space.leave")).toHaveLength(1));
+    deliver(placedAtTwo({}, { sync: leaveRunning(ORIGIN) }));
+    deliver(placedAtTwo({}, { sync: leaveStopped("reauth") }));
+    await waitFor(() => expect(leaveConfirm().dataset.stage).toBe("unread"));
+    fireEvent.click(within(leaveConfirm()).getByRole("button", { name: "Keep" }));
+    fireEvent.click(leaveControl());
+    fireEvent.click(screen.getByRole("button", { name: "Remove from Second Example" }));
+    expect(leaveConfirm().dataset.stage).toBe("first");
+    cleanup();
+
+    // A stopped Leave this page did not ask — another page's, or before
+    // a reload — asks the first confirm (space-30).
+    installClient();
+    await renderGroups(base({}, [repo({ sync: leaveStopped("unreceived", 3) })]), { open: false });
+    expect(screen.queryByTestId(`space-leave-confirm-${KEY}`)).toBeNull();
+    fireEvent.click(leaveControl());
+    expect(leaveConfirm().dataset.stage).toBe("first");
+  });
+
+  test("space-15, space-89: the stopped card's Retry sends a stopped Leave again as this page asked it, and offers none with no memory of it; a Place or an Attach stopped in its sync syncs again", async () => {
+    await renderGroups(base());
+    fireEvent.click(leaveControl());
+    fireEvent.click(within(leaveConfirm()).getByRole("button", { name: "Remove" }));
+    await waitFor(() => expect(calls("space.leave")).toHaveLength(1));
+    deliver(base({}, [repo({ sync: leaveRunning(ORIGIN) })]));
+    deliver(base({}, [repo({ sync: leaveStopped("unreceived", 2) })]));
+    // The Sync tab's card reads the stop, its Retry sending the same
+    // Leave again (space-15, space-89).
+    await waitFor(() => expect(screen.getByTestId("space-stopped-title").textContent).toBe("Check stopped — 2 records have reached no other placement"));
+    fireEvent.click(within(leaveConfirm()).getByRole("button", { name: "Keep" }));
+    fireEvent.click(screen.getByTestId("space-retry"));
+    await waitFor(() => expect(calls("space.leave")[1]).toEqual({ repository: KEY, instance: ORIGIN }));
+    expect(calls("space.sync")).toHaveLength(0);
+    // Confirmed, it is sent again confirmed.
+    fireEvent.click(leaveControl());
+    fireEvent.click(within(leaveConfirm()).getByRole("button", { name: "Remove" }));
+    await waitFor(() => expect(calls("space.leave")[2]).toEqual({ repository: KEY, instance: ORIGIN, confirmed: true }));
+    deliver(base({}, [repo({ sync: leaveRunning(ORIGIN) })]));
+    deliver(base({}, [repo({ sync: leaveStopped("lease") })]));
+    await waitFor(() => expect(screen.getByTestId("space-retry").textContent).toBe("Retry"));
+    fireEvent.click(screen.getByTestId("space-retry"));
+    await waitFor(() => expect(calls("space.leave")[3]).toEqual({ repository: KEY, instance: ORIGIN, confirmed: true }));
+    cleanup();
+
+    // With no memory of the Leave, no Retry: Leave… stands, the stop
+    // read on its row until Dismiss (space-30, space-15).
+    installClient();
+    await renderGroups(base({}, [repo({ sync: leaveStopped("lease") })]));
+    expect(screen.getByTestId("space-stopped").textContent).toContain("Check stopped — “Fix the login redirect” is in use");
+    expect(screen.queryByTestId("space-retry")).toBeNull();
+    expect(leaveControl().disabled).toBe(false);
+    expect(screen.getByTestId(`space-row-caption-${KEY}`).textContent).toBe("Check stopped — “Fix the login redirect” is in use");
+    fireEvent.click(screen.getByTestId("space-dismiss"));
+    expect(screen.queryByTestId(`space-row-caption-${KEY}`)).toBeNull();
+    expect(leaveControl().getAttribute("aria-describedby")).toBeNull();
+    cleanup();
+
+    // A Place or an Attach stops only in the sync after its add: Retry
+    // syncs (space-97, space-99, space-15).
+    for (const op of ["place", "attach"] as const) {
+      installClient();
+      await renderGroups(
+        placedAtTwo({}, { sync: { phase: "stopped", op, step: "push", cause: "unreachable", message: "Could not reach Second Example", guidance: "Check the network, then Retry.", retry: true } }),
+      );
+      fireEvent.click(screen.getByTestId("space-retry"));
+      await waitFor(() => expect(calls("space.sync"), op).toEqual([{ repository: KEY }]));
+      expect(calls("space.place")).toHaveLength(0);
+      expect(calls("space.attach")).toHaveLength(0);
+      cleanup();
+    }
+  });
+
+  test("space-89: none on your own group's own repository, a group's own, a local-only project, or a clone holding only its path placement", async () => {
+    // The space-95 home: your own group's own placed at both, a group's
+    // own, a local-only project; the project at the first alone whose
+    // file names a repository the second lists holds one placement, so
+    // Leave… names it (space-89, space-87).
+    await renderGroups(twoPlacementsHome(), { open: false });
+    for (const key of [OWN, ACME, GAMMA]) expect(screen.queryByTestId(`space-row-leave-${key}`), key).toBeNull();
+    expect(leaveControl(BETA).getAttribute("aria-label")).toBe("Remove from Spex Example");
+    expect(leaveControl().getAttribute("aria-label")).toBeNull();
+    cleanup();
+
+    // A clone holding only its path placement leaves it by naming no
+    // remote, never here (space-89, space-5).
+    await renderGroups(
+      base({}, [repo({ instance: null, governing: null, id: null, remote: "/Users/jane/backup/academy-spex.git", branch: BRANCH })]),
+      { open: false },
+    );
+    expect(rowSync().textContent).toBe("Sync");
+    expect(screen.queryByTestId(`space-row-leave-${KEY}`)).toBeNull();
+    cleanup();
+
+    // Placed at an instance and a path, only the instance is offered.
+    await renderGroups(
+      base({}, [
+        repo({
+          placements: [placement(), placementState({ path: "/Users/jane/backup/academy-spex.git", branch: BRANCH })],
+        }),
+      ]),
+      { open: false },
+    );
+    expect(leaveControl().getAttribute("aria-label")).toBe("Remove from Spex Example");
+  });
+
+  test("space-89: the live note says 'Removed from <display name>'; a first placement's leave keeps the opened row by its folder", async () => {
+    // The second placement left: its line goes, the live note says so,
+    // and focus goes back to Leave…, which still offers the first
+    // (space-89, DR-010 §6, §7).
+    await renderGroups(placedAtTwo());
+    fireEvent.click(leaveControl());
+    fireEvent.click(screen.getByRole("button", { name: "Remove from Second Example" }));
+    fireEvent.click(within(leaveConfirm()).getByRole("button", { name: "Remove" }));
+    await waitFor(() => expect(calls("space.leave")).toEqual([{ repository: KEY, instance: SECOND }]));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId(`space-repo-${KEY}`)));
+    deliver(placedAtTwo({}, { sync: leaveRunning(SECOND) }));
+    await waitFor(() => expect(live()).toBe("Checking host…"));
+    deliver(twoInstances({}, [repo({ placedAt: [ORIGIN], lastSync: { at: NOW - 5 * MIN, sent: 1, received: 0 } })]));
+    await waitFor(() => expect(live()).toBe("Removed from Second Example"));
+    expect(screen.queryByTestId(`space-line-${SECOND}`)).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(leaveControl()));
+    expect(leaveControl().getAttribute("aria-label")).toBe("Remove from Spex Example");
+    cleanup();
+
+    // The first placement left: the clone moves to the second's path,
+    // the opened row followed by its folder, its tabs still open
+    // beneath the list, and focus on its Leave… (storage-38, space-89).
+    installClient();
+    await renderGroups(placedAtTwo());
+    expect(screen.getByTestId("space-repository").getAttribute("aria-label")).toBe("academy-spex");
+    fireEvent.click(leaveControl());
+    fireEvent.click(screen.getByRole("button", { name: "Remove from Spex Example" }));
+    fireEvent.click(within(leaveConfirm()).getByRole("button", { name: "Remove" }));
+    await waitFor(() => expect(calls("space.leave")).toEqual([{ repository: KEY, instance: ORIGIN }]));
+    deliver(placedAtTwo({}, { sync: leaveRunning(ORIGIN) }));
+    deliver(movedHome("second"));
+    await waitFor(() => expect(live()).toBe("Removed from Spex Example"));
+    expect(screen.queryByTestId(`space-row-${KEY}`)).toBeNull();
+    const moved = screen.getByTestId(`space-repo-${MOVED}`);
+    expect(moved.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByTestId("space-repository").getAttribute("aria-label")).toBe("academy-spex");
+    expect(screen.getByTestId("space-repository-folder").textContent).toBe("~/code/academy");
+    await waitFor(() => expect(document.activeElement).toBe(leaveControl(MOVED)));
+    expect(leaveControl(MOVED).getAttribute("aria-label")).toBe("Remove from Second Example");
+
+    // The last one left: the clone stands under your own group, local
+    // only, still open, with Pick a group (storage-38, space-61).
+    fireEvent.click(leaveControl(MOVED));
+    fireEvent.click(within(leaveConfirm(MOVED)).getByRole("button", { name: "Remove" }));
+    await waitFor(() => expect(calls("space.leave")[1]).toEqual({ repository: MOVED, instance: SECOND }));
+    deliver(movedHome("second", leaveRunning(SECOND)));
+    deliver(movedHome("own"));
+    await waitFor(() => expect(live()).toBe("Removed from Second Example"));
+    expect(screen.getByTestId("space-repo-jane/academy-spex").getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByTestId("space-repo-state-jane/academy-spex").textContent).toBe("On this device only");
+    expect(screen.queryByTestId("space-row-leave-jane/academy-spex")).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId("space-row-pick-jane/academy-spex")));
+  });
+
+  test.each(["en", "zh"] as const)("space-28: Leave… and Leaving… within 14 characters (%s)", async (language) => {
+    activateLanguage(language);
+    commandMock.mockImplementation(async (type: string, fields?: Record<string, unknown>) =>
+      type === "space.leave" ? new Promise(() => {}) : answer(type, fields),
+    );
+    await renderGroups(base(), { open: false });
+    const control = leaveControl();
+    const idle = control.textContent ?? "";
+    expect(idle).toBe(language === "en" ? "Leave…" : "移除…");
+    // Its long name is its title and accessible name (space-28).
+    const long = language === "en" ? "Remove from Spex Example" : "从 Spex Example 移除";
+    expect(control.getAttribute("aria-label")).toBe(long);
+    expect(control.getAttribute("title")).toBe(long);
+    fireEvent.click(control);
+    expect(leaveConfirm().textContent).toContain(
+      language === "en"
+        ? "Remove from Spex Example? Nothing at Spex Example changes; these records stop syncing there."
+        : "要从 Spex Example 移除吗？Spex Example 上的内容不会改变；这些记录将不再同步到那里。",
+    );
+    fireEvent.click(within(leaveConfirm()).getByRole("button", { name: language === "en" ? "Remove" : "移除" }));
+    await waitFor(() => expect(control.textContent).toBe(language === "en" ? "Leaving…" : "移除中…"));
+    for (const label of [idle, control.textContent ?? ""]) expect(label.length, `"${label}"`).toBeLessThanOrEqual(14);
+    // Busy, its words are its name.
+    expect(control.getAttribute("aria-label")).toBeNull();
+    expect(control.className.split(/\s+/)).toContain("whitespace-nowrap");
   });
 });

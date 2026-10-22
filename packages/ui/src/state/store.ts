@@ -141,6 +141,14 @@ export type SpaceGroupChoice =
   | { kind: "join"; instance: string; hostId: string }
   | { kind: "create"; instance: string; groupId: string | null; name: string };
 
+/** What the page last asked of a clone's machine beyond a sync
+ * (space-29, space-30): the instance an Attach, a Place or a Leave named,
+ * a Place's choice and whether a Leave was confirmed. */
+export type SpaceLastAct =
+  | { op: "attach"; instance: string }
+  | { op: "place"; instance: string; choice: SpaceGroupChoice }
+  | { op: "leave"; instance: string; confirmed: boolean };
+
 /** The members of a group or a spex repository as the host lists them
  * (space-62): no page of the host (DR-120). */
 export type SpaceMembersReply = { members: HostMemberInfo[] };
@@ -341,6 +349,16 @@ export interface AppState extends AttachmentState {
    * (space-99). Accepted once the placement is added, its sync then
    * running as state. */
   spaceAttach(repository: string, instance: string): Promise<void>;
+  /** Stop keeping a project's records at one instance (space-89,
+   * space-98): its placement at `instance`, its origin, fetched first
+   * and refused, unless `confirmed`, while records it or the clone holds
+   * reached no remaining placement, or while it cannot be read; nothing
+   * at the host changes. Accepted at once, outcome as state. */
+  spaceLeave(repository: string, instance: string, confirmed?: boolean): Promise<void>;
+  /** What the page last asked of a spex repository's clone beyond a
+   * sync — an Attach, a Place or a Leave, and where — which a stopped
+   * phase does not name (space-30); none after a reload. */
+  spaceLastAct(repository: string): SpaceLastAct | undefined;
   /** A group's or a spex repository placement's members as its
    * instance reports them, read on every call and held nowhere
    * (space-62). */
@@ -934,6 +952,8 @@ export function getClient(): SpexClient {
  * module mocks cannot reach — vitest injects a fake through here. */
 export function setClientForTests(fake: SpexClient | undefined): void {
   client = fake;
+  // What a page asked of the clones goes with its client.
+  lastActs.clear();
 }
 
 let deliver: ((message: ServerMessage) => void) | undefined;
@@ -959,10 +979,11 @@ const sentMarkers = new Map<string, number>();
 
 /** What the page last asked of a clone's machine beyond a sync, by the
  * spex repository's key: a stopped phase names no placement (space-30),
- * so this remembers the instance an Attach or a Place named, and a
- * Place's choice, to send it again. It outlives a row remounting and not
- * a reload. */
-const lastActs = new Map<string, { op: "attach"; instance: string } | { op: "place"; instance: string; choice: SpaceGroupChoice }>();
+ * so this remembers the instance an Attach, a Place or a Leave named, a
+ * Place's choice and whether a Leave was confirmed — which confirm a
+ * stopped Leave asks next, and what its Retry sends again (space-89).
+ * It outlives a row remounting and not a reload. */
+const lastActs = new Map<string, SpaceLastAct>();
 
 /** The newest Space read's number (space-2): a `space.get` reply older
  * than a `space.state` broadcast or a newer read is discarded. */
@@ -1862,6 +1883,15 @@ export const useAppStore = create<AppState>((set, get) => {
       lastActs.set(repository, { op: "attach", instance });
       await getClient().command("space.attach", { repository, instance, noticed: true });
     },
+
+    async spaceLeave(repository, instance, confirmed): Promise<void> {
+      // Remembered before the reply: a stop inside the operation is
+      // still this Leave's (space-30).
+      lastActs.set(repository, { op: "leave", instance, confirmed: confirmed === true });
+      await getClient().command("space.leave", { repository, instance, ...(confirmed ? { confirmed: true } : {}) });
+    },
+
+    spaceLastAct: (repository) => lastActs.get(repository),
 
     spaceMembers: (target) => getClient().command("space.members", { ...target }),
 
