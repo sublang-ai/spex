@@ -16,6 +16,7 @@ import { createScriptedCaptain } from "./scripted-captain.js";
 import { startStandinHost, type StandinHost, type StandinPerson } from "./standin-host.js";
 import type { StandinRegistry } from "./standin-registry.js";
 import { canonicalOrigin, instanceFolder, instanceSegmentOf } from "../instance.js";
+import { encodePlacementFile, PLACEMENTS_DIR } from "../placements.js";
 import type { LineSpawner } from "../compile.js";
 import type { Command, CommandResults, GroupsState, PlacementState, RepositoryState, ServerMessage, SpaceStateMessage, SyncStep, SpaceOp } from "../protocol.js";
 
@@ -782,13 +783,34 @@ playbooks:
     return git(dir, "rev-parse", "HEAD");
   }
 
+  /** A placement of a clone at another instance, made by hand as a
+   * device holding it would have made it (storage-34, storage-36): a
+   * spex repository named as the clone's added to `group` at `host`, the
+   * clone's `spex` pushed there as a peer pushes, a remote named by that
+   * instance's folder with the host's id in its own section, and the
+   * placement's file written in the clone, uncommitted; its host id, its
+   * remote URL and that folder. */
+  function attachByHand(home: Home, key: string, host: StandinHost, group = "acme"): { id: string; url: string; folder: string } {
+    const clone = clonePath(home.dataDir, key);
+    const name = key.slice(key.lastIndexOf("/") + 1);
+    const repository = host.script.addRepository({ group, name });
+    const url = `${host.gitOrigin}/${host.storage}/${group}/${name}.git`;
+    git(clone, "push", "-q", host.bareOf(`${group}/${name}`), "spex:spex");
+    const folder = hostFolder(host);
+    git(clone, "remote", "add", folder, url);
+    git(clone, "config", `remote.${folder}.spexId`, repository.id);
+    mkdirSync(join(clone, PLACEMENTS_DIR), { recursive: true, mode: 0o700 });
+    writeFileSync(join(clone, PLACEMENTS_DIR, `${folder}.yaml`), encodePlacementFile(canonicalOrigin(host.url), repository.id));
+    return { id: repository.id, url, folder };
+  }
+
   const turnRecords = (prompt: string, turnId: number, at = Date.now()): Record<string, unknown>[] => [
     { type: "turn_started", turnId, turn: { id: turnId, prompt }, timestamp: at },
     { type: "turn_finished", turnId, timestamp: at + 1 },
   ];
 
   return {
-    scratch, config, git, bareRepo, otherDevice, gitFolder, sameNameFolder, addFolder, sleepingSsh, holdingGit, sleep, sleeperPid, joinRemote, hangingCompileSpawner, COMPILE_INPUT, startHome, startHost, signIn, signOut, forget, runTurn, snapshot, peerClone, peerPush, turnRecords,
+    scratch, config, git, bareRepo, otherDevice, gitFolder, sameNameFolder, addFolder, sleepingSsh, holdingGit, sleep, sleeperPid, joinRemote, hangingCompileSpawner, COMPILE_INPUT, startHome, startHost, signIn, signOut, forget, runTurn, snapshot, peerClone, peerPush, attachByHand, turnRecords,
     dispose: async () => {
       await Promise.all(hosts.map((host) => host.close()));
       rmSync(scratch, { recursive: true, force: true });

@@ -263,6 +263,11 @@ msgstr "{name} changed in {path}; resolve again to install"
 msgid "{name} has no folder on this device"
 msgstr "{name} has no folder on this device"
 
+#. Refusal: the command names a placement — an instance, or the remote the reader named — that the spex repository {name} does not hold
+#: src/space.ts
+msgid "{name} holds no such placement"
+msgstr "{name} holds no such placement"
+
 #. Refusal: another host holds this project's conversation
 #: src/session.ts
 msgid "{name} is in use elsewhere in {project}"
