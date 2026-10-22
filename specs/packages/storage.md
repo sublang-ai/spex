@@ -139,7 +139,7 @@ The credential store shall encode `local/credentials.yaml` as exactly `{format: 
 
 Where the core runs as a seat [[core-service-125](core-service.md#core-service-125)], the credential store shall encode `local/code-credentials.yaml` as exactly `{format: 1, hosts: {<host>: {token, username?}}, agents: {<adapter>: {<NAME>: value}}}` with owner-only permissions — a code host's token and each agent credential the member placed [[settings-48](settings.md#settings-48)] — written and removed as versioned writes as the app token's file is [[storage-19](#storage-19)], read before each transport and each agent run, and never entering a tracked file, a remote URL or a log ([DR-132](../decisions/132-team-servers.md)):
 
-- a file of another format is refused and left as it is; a malformed entry is refused by every read and write and reported;
+- a file of another format is refused and left as it is; a malformed entry is refused by every read and write and reported; no refusal, diagnostic or warning repeats the file's content, the format named only where it is a number;
 - the file is removed with its last entry.
 
 ### storage-45
