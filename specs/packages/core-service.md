@@ -1174,7 +1174,7 @@ Where two homes pair one project at the same working-folder path and sync its re
 
 #### core-service-127
 
-Where the core runs as a seat against a stand-in instance with a fixture adapter recording its environment, the integration suite shall assert seat mode [[core-service-125](#core-service-125)]: the device request names the server and the person and a sign-in as another account stores nothing; your own group gains no placement; the path-naming commands are refused with the phrase; a join names no folder; and the shared credential file [[core-service-126](#core-service-126)]: its values reach a run's environment, a value replaced between runs reaches the next run while the running one keeps its own, a member's own credential displaces the shared names of its agent, and an unreadable file is reported without blocking.
+Where the core runs as a seat against a stand-in instance with a fixture adapter recording its environment, the integration suite shall assert seat mode [[core-service-125](#core-service-125)]: the device request names the server and the person and a sign-in as another account stores nothing; your own group gains no placement; the path-naming commands are refused with the phrase; a join names no folder; an intent holding no runtime is listed queued, never next while a newer intent the seat captured is, and refused `conflict`, "Runs nowhere yet", on a turn while its edit and close succeed; and the shared credential file [[core-service-126](#core-service-126)]: its values reach a run's environment, a value replaced between runs reaches the next run while the running one keeps its own, a member's own credential displaces the shared names of its agent, and an unreadable file is reported without blocking.
 
 #### core-service-130
 
