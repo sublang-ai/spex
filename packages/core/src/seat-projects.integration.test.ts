@@ -4,16 +4,19 @@
 // A seat's projects (space-103, space-104, projects-37, git-host-9,
 // DR-132), against the stand-in instance and a Git HTTP host that is no
 // instance: a join, or a pick, allocates the project's folder under the
-// seat's `projects/` tree and clones the code there with the member's
+// seat's `projects/` tree at the repository's own path, no project's
+// folder inside another's, and clones the code there with the member's
 // own token through the app's helper; a clone failing for want of a
-// credential leaves the records readable, naming the host; a join again
-// after `credential.set` clones into the same folder, and a folder
-// allocated before is reused.
+// credential leaves the records readable, naming the host, one whose
+// token will not read says so, and an ssh remote's failure shows as it
+// is; a join again after `credential.set` clones into the same folder,
+// and a folder allocated before is reused.
 
 import { test, type TestContext } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { isAbsolute, join, relative } from "node:path";
+import { codeCredentialsPath } from "./code-credentials.js";
 import { GIT_CREDENTIAL_FILE_ENV } from "./git-credential.js";
 import { Home } from "./home.js";
 import { SpaceGit, type GitRunOptions } from "./space-git.js";
@@ -51,9 +54,17 @@ function inspectCredential(options: GitRunOptions): { file: string; mode: number
 }
 
 /** The folder the core allocates on a seat for a spex repository at a
- * stand-in instance (space-103). */
-function allocated(dataDir: string, host: { url: string }, group: string, name: string): string {
-  return join(dataDir, "projects", hostFolder(host), group, name);
+ * stand-in instance (space-103): `projects/@<host>/<group path>/
+ * <repository>/`, `<repository>` its own path name with its `-spex`
+ * kept. */
+function allocated(dataDir: string, host: { url: string }, group: string, repository: string): string {
+  return join(dataDir, "projects", hostFolder(host), ...group.split("/"), repository);
+}
+
+/** Whether `folder` is `outer` or lies inside it. */
+function within(folder: string, outer: string): boolean {
+  const rest = relative(outer, folder);
+  return rest === "" || (!rest.startsWith("..") && !isAbsolute(rest));
 }
 
 test("space-104, space-103, projects-37, git-host-9: a seat's join allocates the folder at its path, clones the code with the member's own token at a host no instance is, pairs the two, and reuses that folder", async (t) => {
@@ -61,6 +72,9 @@ test("space-104, space-103, projects-37, git-host-9: a seat's join allocates the
   const host = await startHost();
   const records = host.script.addRepository({ group: "acme", name: "alpha-spex", project: { format: 1, name: "alpha", remote: code.remote } });
   const key = hostKey(host, "acme/alpha-spex");
+  // A repository x-spex in the subgroup acme/alpha, beside it.
+  host.script.groups.push({ id: "2011", fullPath: "acme/alpha", name: "Alpha", kind: "group" });
+  const nested = host.script.addRepository({ group: "acme/alpha", name: "x-spex", project: { format: 1, name: "x" } });
   const home = await startHome("seat-allocate", { host, project: false, extra: { seat: SEAT } });
   t.after(() => home.stop());
   await signIn(home, host);
@@ -80,9 +94,9 @@ test("space-104, space-103, projects-37, git-host-9: a seat's join allocates the
   const from = home.client.mark();
   await home.client.expectOk("space.join", { instance: host.url, hostId: records.id });
   const joined = await home.client.waitRepository(from, key, (repository) => repository.folder !== null || repository.sync.phase === "stopped", 30_000);
-  const folder = allocated(home.dataDir, host, "acme", "alpha");
-  // The folder the core allocated, `<name>` without `-spex`, paired with
-  // the records (space-103).
+  const folder = allocated(home.dataDir, host, "acme", "alpha-spex");
+  // The folder the core allocated, `<repository>` with its `-spex` kept,
+  // paired with the records (space-103).
   assert.deepEqual([joined.folder, joined.sync.phase, joined.state], [folder, "idle", "reachable"], JSON.stringify(joined.sync));
   assert.ok((await home.client.expectOk("project.list", {})).some((project) => project.id === key && project.path === folder));
   assert.equal(git(folder, "rev-parse", "HEAD"), code.head, "the code is cloned into that folder");
@@ -111,7 +125,16 @@ test("space-104, space-103, projects-37, git-host-9: a seat's join allocates the
   const rejoined = await home.client.waitRepository(again, key, (repository) => repository.folder !== null || repository.sync.phase === "stopped", 30_000);
   assert.deepEqual([rejoined.folder, rejoined.sync.phase], [folder, "idle"], JSON.stringify(rejoined.sync));
   assert.equal(codeClones, 1, "the allocated folder is paired as it stands, its code not cloned again");
-  assert.deepEqual(readdirSync(join(home.dataDir, "projects", hostFolder(host), "acme")), ["alpha"], "no second folder is made");
+  assert.deepEqual(readdirSync(join(home.dataDir, "projects", hostFolder(host), "acme")), ["alpha-spex"], "no second folder is made");
+
+  // The repository x-spex in the subgroup acme/alpha takes a folder of
+  // its own, neither folder lying inside the other (space-103).
+  const nestedKey = hostKey(host, "acme/alpha/x-spex");
+  const fromNested = home.client.mark();
+  await home.client.expectOk("space.join", { instance: host.url, hostId: nested.id });
+  const other = await home.client.waitRepository(fromNested, nestedKey, (repository) => repository.folder !== null || repository.sync.phase === "stopped", 30_000);
+  assert.deepEqual([other.folder, other.sync.phase], [allocated(home.dataDir, host, "acme/alpha", "x-spex"), "idle"], JSON.stringify(other.sync));
+  assert.ok(other.folder !== null && !within(other.folder, folder) && !within(folder, other.folder), `${other.folder} and ${folder} lie apart`);
 });
 
 test("space-104, space-103: a code clone failing for want of the member's credential leaves the records readable with the phrase and the host in `credential`; a join again after credential.set clones into the same folder", async (t) => {
@@ -152,7 +175,9 @@ test("space-104, space-103: a code clone failing for want of the member's creden
   assert.deepEqual([stopped.sync.op, stopped.sync.step, stopped.folder], ["join", "code", null]);
   assert.equal(stopped.sync.message, `Code not cloned: ${code.host} needs a credential of yours. Add one under Settings.`);
   assert.equal(stopped.sync.credential, code.host);
-  const folder = allocated(home.dataDir, host, "acme", "alpha");
+  // A retry is a join of it again (space-103).
+  assert.equal(stopped.sync.guidance, "The spex repository is here; join it again to clone its code.");
+  const folder = allocated(home.dataDir, host, "acme", "alpha-spex");
   // The records are cloned, their session and intent readable in the
   // repository's explorer (space-35).
   assert.ok(existsSync(join(home.dataDir, "workspace", ...key.split("/"), "project.json")), "the records are cloned");
@@ -176,8 +201,70 @@ test("space-104, space-103: a code clone failing for want of the member's creden
   const joined = await home.client.waitRepository(again, key, (repository) => repository.folder !== null, 30_000);
   assert.deepEqual([joined.folder, joined.sync.phase], [folder, "idle"], JSON.stringify(joined.sync));
   assert.equal(git(folder, "rev-parse", "HEAD"), code.head);
-  assert.deepEqual(readdirSync(join(home.dataDir, "projects", hostFolder(host), "acme")), ["alpha"]);
+  assert.deepEqual(readdirSync(join(home.dataDir, "projects", hostFolder(host), "acme")), ["alpha-spex"]);
   assert.deepEqual(home.client.messages.flatMap(stringsOf).filter((text) => text.includes(TOKEN)), [], "no message carries the token");
+});
+
+test("space-103, storage-44: on a seat an ssh remote's failed code clone shows as it is, naming no credential; an https host whose token of the member's will not read says so, the host in `credential`", async (t) => {
+  const code = await codeHost(t);
+  const host = await startHost();
+  const ssh = host.script.addRepository({ group: "acme", name: "gamma-spex", project: { format: 1, name: "gamma", remote: "ssh://git@127.0.0.1:1/acme/gamma.git" } });
+  const https = host.script.addRepository({ group: "acme", name: "alpha-spex", project: { format: 1, name: "alpha", remote: code.remote } });
+  const home = await startHome("seat-failures", { host, project: false, extra: { seat: SEAT } });
+  t.after(() => home.stop());
+  await signIn(home, host);
+
+  // An ssh remote whose host has no token of the member's: Git's own
+  // failure, no credential named (space-103).
+  const sshKey = hostKey(host, "acme/gamma-spex");
+  const fromSsh = home.client.mark();
+  await home.client.expectOk("space.join", { instance: host.url, hostId: ssh.id });
+  const sshStop = await home.client.waitRepository(fromSsh, sshKey, (repository) => repository.folder !== null || repository.sync.phase === "stopped", 30_000);
+  assert.ok(sshStop.sync.phase === "stopped", JSON.stringify(sshStop.sync));
+  assert.deepEqual([sshStop.sync.op, sshStop.sync.step, sshStop.folder], ["join", "code", null]);
+  assert.equal(Object.hasOwn(sshStop.sync, "credential"), false, JSON.stringify(sshStop.sync));
+  assert.ok(!/needs a credential of yours|cannot be read/.test(sshStop.sync.message), sshStop.sync.message);
+  assert.ok(existsSync(join(home.dataDir, "workspace", ...sshKey.split("/"), "project.json")), "the records are cloned");
+
+  // The member's entry for the https host, written by hand, is malformed:
+  // refused by the read before the clone, the clone fails, and the row
+  // says the credential cannot be read, the host in `credential`
+  // (space-103, storage-44).
+  const file = codeCredentialsPath(home.dataDir);
+  mkdirSync(join(home.dataDir, "local"), { recursive: true, mode: 0o700 });
+  writeFileSync(file, `format: 1\nhosts:\n  "${code.host}":\n    token: 5\nagents: {}\n`, { mode: 0o600 });
+  const httpsKey = hostKey(host, "acme/alpha-spex");
+  const fromHttps = home.client.mark();
+  await home.client.expectOk("space.join", { instance: host.url, hostId: https.id });
+  const unread = await home.client.waitRepository(fromHttps, httpsKey, (repository) => repository.folder !== null || repository.sync.phase === "stopped", 30_000);
+  assert.ok(unread.sync.phase === "stopped", JSON.stringify(unread.sync));
+  assert.deepEqual([unread.sync.op, unread.sync.step, unread.folder], ["join", "code", null]);
+  assert.equal(unread.sync.message, `Code not cloned: your credential for ${code.host} cannot be read`);
+  assert.equal(unread.sync.credential, code.host);
+  assert.equal(unread.sync.guidance, "The spex repository is here; join it again to clone its code.");
+  const folder = allocated(home.dataDir, host, "acme", "alpha-spex");
+  assert.ok(existsSync(join(home.dataDir, "workspace", ...httpsKey.split("/"), "project.json")), "the records are cloned");
+
+  // A join of it again, in Chinese, runs the code clone alone into the
+  // same folder, the entry still unread: the row says so in Chinese,
+  // the guidance a join again (space-103).
+  await home.client.expectOk("language.set", { language: "zh" });
+  const codeInto: (string | undefined)[] = [];
+  let recordClones = 0;
+  const run = SpaceGit.prototype.run;
+  t.mock.method(SpaceGit.prototype, "run", function (this: SpaceGit, args: string[], options: GitRunOptions = {}) {
+    if (args[0] === "clone" && args.includes(code.remote)) codeInto.push(args.at(-1));
+    else if (args[0] === "clone") recordClones += 1;
+    return run.call(this, args, options);
+  });
+  const said = unread.sync.message;
+  const fromAgain = home.client.mark();
+  await home.client.expectOk("space.join", { instance: host.url, hostId: https.id });
+  const again = await home.client.waitRepository(fromAgain, httpsKey, (repository) => repository.folder !== null || (repository.sync.phase === "stopped" && repository.sync.message !== said), 30_000);
+  assert.ok(again.sync.phase === "stopped", JSON.stringify(again.sync));
+  assert.deepEqual([again.sync.message, again.sync.credential, again.sync.guidance], [`代码未克隆：无法读取你为 ${code.host} 设置的凭据`, code.host, "spex 仓库已在本设备上；再次加入即可克隆其代码。"]);
+  assert.deepEqual([codeInto, recordClones], [[folder], 0], "the code clone runs alone, into the folder allocated for it");
+  await home.client.expectOk("language.set", { language: "en" });
 });
 
 test("space-103, space-58: on a seat a pick joining a listed spex repository for a clone no folder pairs allocates the folder and clones the code there with the member's token", async (t) => {
@@ -206,7 +293,7 @@ test("space-103, space-58: on a seat a pick joining a listed spex repository for
   const from = home.client.mark();
   await home.client.expectOk("space.pick", { repository: picked, choice: { kind: "join", instance: host.url, hostId: records.id }, noticed: true });
   const joined = await home.client.waitRepository(from, key, (repository) => repository.folder !== null || (repository.sync.phase === "stopped" && repository.sync.op === "join"), 30_000);
-  const folder = allocated(home.dataDir, host, "acme", "alpha");
+  const folder = allocated(home.dataDir, host, "acme", "alpha-spex");
   assert.equal(joined.folder, folder, JSON.stringify(joined.sync));
   assert.equal(git(folder, "rev-parse", "HEAD"), code.head);
   assert.equal(git(folder, "remote", "get-url", "origin"), code.remote);

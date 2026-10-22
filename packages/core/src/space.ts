@@ -126,7 +126,8 @@ export interface SpaceHost {
   /** On a seat, the member's own token for a code host (storage-44,
    * git-host-9), keyed as `credential.set` names it, read from its file
    * at each ask, before each transport to that host; null where none is
-   * set or its entry will not read. Absent off a seat. */
+   * set; refused — it throws — where its entry, or the file, will not
+   * read. Absent off a seat. */
   hostToken?: (host: string) => { token: string; username?: string } | null;
   /** The runtime the credential helper runs on (git-host-9). */
   hostRuntime: { execPath: string; electron: boolean };
@@ -306,10 +307,20 @@ function codeHostOf(remote: string): string | null {
   return host ? canonicalHost(host) : null;
 }
 
+/** Whether a remote is an https remote — or an http one, which Git
+ * serves alike: the transports Git asks a credential helper for, a
+ * member's token among them (space-103, git-host-9). */
+const httpRemote = (remote: string): boolean => /^https?:\/\//i.test(remote);
+
 /** The username sent with a member's code-host token whose entry names
  * none (git-host-9): hosts that take a token as the password accept any
  * username. */
 const TOKEN_USERNAME = "token";
+
+/** A member's token for a code host whose entry, or file, will not read
+ * (storage-44): it serves no transport, the storage diagnostics
+ * reporting it. */
+const UNREADABLE = "unreadable";
 
 /** A code clone on a seat that failed for want of a member's credential
  * at its host (space-103): the phrase a client opens the Credentials
@@ -318,6 +329,15 @@ const codeNeedsCredential = (host: string): string => i18n._({
   id: "Code not cloned: {host} needs a credential of yours. Add one under Settings.",
   values: { host },
   comment: "A project's code clone failed on a team server's seat where the member placed no token for the code's host, which is no signed-in instance's; {host} is the code host's name as the Credentials section in Settings takes it",
+});
+
+/** A code clone on a seat that failed where the member's token for its
+ * host will not read (space-103, storage-44): the phrase a client opens
+ * the Credentials section from. */
+const codeCredentialUnreadable = (host: string): string => i18n._({
+  id: "Code not cloned: your credential for {host} cannot be read",
+  values: { host },
+  comment: "A project's code clone failed on a team server's seat where the member's token for the code's host, which is no signed-in instance's, cannot be read from the server's credentials file, its entry or the file malformed; {host} is the code host's name as the Credentials section in Settings takes it",
 });
 
 /** The guidance after a code clone failed on a seat (space-103): the
@@ -3144,8 +3164,9 @@ export class SpaceManager {
       }
     }
     // On a seat, a source at a host the member placed a token for takes
-    // that token (git-host-9, storage-44).
-    return this.memberToken(repo) ?? undefined;
+    // that token (git-host-9, storage-44); one that will not read, none.
+    const token = this.memberToken(repo);
+    return token && token !== UNREADABLE ? token : undefined;
   }
 
   /** Whether a clone lies at its instance (git-host-9): it records the
@@ -4117,14 +4138,14 @@ export class SpaceManager {
 
   /** On a seat, the working folder the core allocates for a spex
    * repository keyed `key` under its instance's folder (space-103,
-   * storage-1): `projects/@<host>/<group path>/<name>/` under the Spex
-   * home, `<name>` its name without `-spex`. One path per repository, so
-   * a folder allocated for it before — its code there — is the one used
-   * again, and a retry clones into the same folder. */
+   * storage-1): `projects/@<host>/<group path>/<repository>/` under the
+   * Spex home, `<repository>` its own path name with its `-spex` kept, so
+   * that no project's folder lies inside another's — `acme/alpha-spex`'s
+   * would hold `acme/alpha/x-spex`'s with the suffix dropped. One path
+   * per repository, so a folder allocated for it before — its code there
+   * — is the one used again, and a retry clones into the same folder. */
   private allocatedFolder(key: string): string {
-    const segments = key.split("/");
-    const name = segments.pop() ?? key;
-    return join(this.host.home, "projects", ...segments, name.replace(/-spex$/, "") || name);
+    return join(this.host.home, "projects", ...key.split("/"));
   }
 
   /** A seat's join of a spex repository whose clone is here and paired
@@ -4332,9 +4353,10 @@ export class SpaceManager {
         mkdirSync(dirname(folder), { recursive: true });
         const brokered = instance ? await this.credentialFor(instance, remote, at) : null;
         // Any other remote takes none of the app's — on a seat, the
-        // member's own token where they placed one for its host
-        // (projects-37, git-host-9).
-        const own = brokered ? null : await this.memberCredential(remote);
+        // member's own token where they placed one for its host and it
+        // reads (projects-37, git-host-9, storage-44).
+        const token = brokered ? null : this.memberToken(remote);
+        const own = token && token !== UNREADABLE ? await withGitCredential(token, this.host.hostRuntime) : null;
         const credential = brokered ?? own;
         let run: GitRun;
         try {
@@ -4343,13 +4365,15 @@ export class SpaceManager {
           await credential?.dispose();
         }
         if (run.code !== 0) {
-          // On a seat, a host holding no token of the member's at no
-          // signed-in instance's Git origin names the credential it needs,
-          // carried in `credential` for a client to open Settings by
-          // (space-103, settings-48).
+          // On a seat, an https remote at no signed-in instance's Git
+          // origin whose host holds no token of the member's — or one
+          // that will not read — names that host, carried in
+          // `credential` for a client to open Settings by (space-103,
+          // settings-48); any other failure shows as it is.
           const needed = !brokered && !own ? this.credentialNeeded(remote) : null;
           if (needed !== null) {
-            return stopped({ cause: run.killed ?? "git", message: codeNeedsCredential(needed), guidance: chooseFolder(), retry: false }, needed);
+            const message = token === UNREADABLE ? codeCredentialUnreadable(needed) : codeNeedsCredential(needed);
+            return stopped({ cause: run.killed ?? "git", message, guidance: chooseFolder(), retry: false }, needed);
           }
           return stopped({
             ...(brokered && instance ? classifyHostTransportFailure(run, this.nameOf(instance)) : {
@@ -4375,12 +4399,13 @@ export class SpaceManager {
   }
 
   /** On a seat, the code host a failed code clone needs a credential of
-   * the member's for (space-103): the remote's host, where it lies under
-   * no signed-in instance's Git origin; null off a seat, for a remote
-   * naming no host, and at a signed-in instance's Git origin. Asked only
-   * where the member placed no token for that host. */
+   * the member's for (space-103): an https remote's host, where it lies
+   * under no signed-in instance's Git origin; null off a seat, for an
+   * ssh, scp-like, local or any other remote, whose failure shows as it
+   * is, and at a signed-in instance's Git origin. Asked only where no
+   * token of the member's for that host served the clone. */
   private credentialNeeded(remote: string): string | null {
-    if (!this.host.seat) return null;
+    if (!this.host.seat || !httpRemote(remote)) return null;
     const host = codeHostOf(remote);
     if (host === null) return null;
     return this.listedInstances().some((instance) => this.signedInAt(instance) && underOrigin(remote, instance.knownOrigin())) ? null : host;
@@ -4902,12 +4927,15 @@ export class SpaceManager {
   /** On a seat, the member's own token for a remote's code host
    * (git-host-9, storage-44), read from its file now, before this
    * transport; null off a seat, for a remote naming no host, and where
-   * no token is set there. The token enters no URL, log or reply. */
-  private memberToken(remote: string): { username: string; secret: string } | null {
+   * no token is set there; `UNREADABLE` where the member's entry for that
+   * host, or the file, will not read, which serves no transport. The
+   * token enters no URL, log or reply. */
+  private memberToken(remote: string): { username: string; secret: string } | typeof UNREADABLE | null {
     const read = this.host.seat ? this.host.hostToken : undefined;
     const host = read ? codeHostOf(remote) : null;
     if (!read || host === null) return null;
-    const entry = read(host);
+    let entry: { token: string; username?: string } | null;
+    try { entry = read(host); } catch { return UNREADABLE; }
     return entry ? { username: entry.username ?? TOKEN_USERNAME, secret: entry.token } : null;
   }
 
@@ -4918,7 +4946,7 @@ export class SpaceManager {
    * (credentialFor) is none. */
   async memberCredential(remote: string): Promise<GitCredentialHandle | null> {
     const token = this.memberToken(remote);
-    return token ? withGitCredential(token, this.host.hostRuntime) : null;
+    return token && token !== UNREADABLE ? withGitCredential(token, this.host.hostRuntime) : null;
   }
 
   /** Follow the host's rename or transfer of one clone within its sync

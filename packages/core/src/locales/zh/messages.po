@@ -1017,6 +1017,11 @@ msgstr "请为该单元改选另一个版本，或修好该文件，然后重试
 msgid "Code not cloned: {host} needs a credential of yours. Add one under Settings."
 msgstr "代码未克隆：{host} 需要你自己的凭据。请在“设置”中添加一个。"
 
+#. A project's code clone failed on a team server's seat where the member's token for the code's host, which is no signed-in instance's, cannot be read from the server's credentials file, its entry or the file malformed; {host} is the code host's name as the Credentials section in Settings takes it
+#: src/space.ts
+msgid "Code not cloned: your credential for {host} cannot be read"
+msgstr "代码未克隆：无法读取你为 {host} 设置的凭据"
+
 #. Where a project's code lives before every instance has reported its Git origin, or when its remote lies under another instance's; the actual remote is withheld
 #: src/space.ts
 msgid "Code on a remote"
