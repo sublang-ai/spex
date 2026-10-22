@@ -15,6 +15,7 @@ import { lstatSync, mkdirSync, readdirSync, readFileSync, rmSync } from "node:fs
 import { join } from "node:path";
 import { writeApplicationBytes } from "./files.js";
 import { i18n } from "./i18n.js";
+import { orderRemotes, remoteOrderOf } from "./home.js";
 import { instanceFolder, isInstanceFolder, parseOrigin } from "./instance.js";
 
 /** The remote the reader names: the clone's one path placement, which
@@ -135,7 +136,7 @@ interface ConfiguredRemote { name: string; url: string; id: string | null; creat
  * remote's name may hold dots, as an instance's folder does, so it is
  * what lies between `remote.` and the last dot; a remote holding no URL
  * is none, and of several URLs its first is the one Git fetches. */
-function configuredRemotes(output: string): { remotes: ConfiguredRemote[]; legacy: { id: string | null; created: string | null } } {
+function configuredRemotes(output: string, order: readonly string[] = []): { remotes: ConfiguredRemote[]; legacy: { id: string | null; created: string | null } } {
   const urls = new Map<string, string>();
   const ids = new Map<string, string>();
   const created = new Map<string, string>();
@@ -157,7 +158,7 @@ function configuredRemotes(output: string): { remotes: ConfiguredRemote[]; legac
     else if (variable === "spexid") ids.set(name, value);
     else if (variable === "spexcreated") created.set(name, value);
   }
-  const remotes = [...urls].map(([name, url]) => ({ name, url, id: ids.get(name) ?? null, created: created.get(name) ?? null }));
+  const remotes = orderRemotes([...urls].map(([name, url]) => ({ name, url, id: ids.get(name) ?? null, created: created.get(name) ?? null })), (remote) => remote.name, order);
   return { remotes, legacy };
 }
 
@@ -176,8 +177,8 @@ function configuredRemotes(output: string): { remotes: ConfiguredRemote[]; legac
  * as its placement at the instance that entry names, with the id and
  * mark it records at the top level.
  */
-export function placementsIn(output: string, key: string, home: PlacementHome, deferred: readonly { from: string; to: string }[], filed: FiledOrigin = NO_FILES): Placement[] {
-  const { remotes, legacy } = configuredRemotes(output);
+export function placementsIn(output: string, key: string, home: PlacementHome, deferred: readonly { from: string; to: string }[], filed: FiledOrigin = NO_FILES, order: readonly string[] = []): Placement[] {
+  const { remotes, legacy } = configuredRemotes(output, order);
   const move = deferred.find((entry) => entry.from === key);
   const movedTo = move ? home.instanceOfKey(move.to)?.origin ?? null : null;
   let held: ConfiguredRemote | undefined;
@@ -213,9 +214,9 @@ export function placementsIn(output: string, key: string, home: PlacementHome, d
 /** A clone's placements as its Git configuration holds them at this
  * instant (placementsIn), read by one synchronous command; none where
  * Git finds no key or cannot read the configuration. */
-export function readPlacements(run: ConfigRun, key: string, home: PlacementHome, deferred: readonly { from: string; to: string }[], filed: FiledOrigin = NO_FILES): Placement[] {
+export function readPlacements(run: ConfigRun, key: string, home: PlacementHome, deferred: readonly { from: string; to: string }[], filed: FiledOrigin = NO_FILES, dir?: string): Placement[] {
   const read = run(["config", "-z", "--get-regexp", PLACEMENT_CONFIG_KEYS]);
-  return read.ok ? placementsIn(read.stdout, key, home, deferred, filed) : [];
+  return read.ok ? placementsIn(read.stdout, key, home, deferred, filed, dir === undefined ? [] : remoteOrderOf(dir)) : [];
 }
 
 /** A clone's key placement (storage-31): its first placement with an

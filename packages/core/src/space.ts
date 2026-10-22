@@ -24,7 +24,7 @@ import {
   anotherAccountError, CredentialChanged, HostError, SignInBusyError, type BrowserSignIn, type DeviceSignIn, type GitHostClient, type HostAccount, type HostGroup,
   type HostMember, type HostRepository, type MembersTarget,
 } from "./git-host.js";
-import { InstanceRefused, kebab, REMOTE_URL_KEYS, remoteNamesIn, splitKey, type HomeAccount } from "./home.js";
+import { InstanceRefused, kebab, REMOTE_URL_KEYS, remoteNamesIn, remoteOrderOf, splitKey, type HomeAccount } from "./home.js";
 import { i18n } from "./i18n.js";
 import { canonicalOrigin, instanceFolder, instanceSegmentOf, isInstanceFolder, OriginRefused, parseOrigin, type OriginRefusal } from "./instance.js";
 import { isDeferredClone } from "./migrate-instances.js";
@@ -169,8 +169,8 @@ type RemoteFacts = Pick<CloneFacts, "remote" | "id"> & { remoteName?: string | n
 /** The names of the remotes a clone's configuration gives a URL, read
  * from `git config -z --get-regexp` over REMOTE_URL_KEYS: none where
  * Git found no key. */
-function remoteNames(run: GitRun): string[] {
-  return run.code === 0 ? remoteNamesIn(run.stdout.toString("utf8")) : [];
+function remoteNames(run: GitRun, dir?: string): string[] {
+  return run.code === 0 ? remoteNamesIn(run.stdout.toString("utf8"), dir === undefined ? [] : remoteOrderOf(dir)) : [];
 }
 
 /** The name a placement's remote takes in a clone (storage-34): the
@@ -1405,7 +1405,7 @@ class RepositorySync {
     return readPlacements((args) => {
       const run = this.git.runSync(args);
       return { ok: run.code === 0, stdout: run.stdout.toString("utf8") };
-    }, this.key, store.home, store.deferredMoves(), filedIn(this.dir));
+    }, this.key, store.home, store.deferredMoves(), filedIn(this.dir), this.dir);
   }
 
   /** Whether this clone is a group's own spex repository — holding no
@@ -1698,7 +1698,7 @@ class RepositorySync {
    * whether it renamed the remote. */
   renameRemote(from: string | null, folder: string): boolean {
     if (from === null || from === folder || (from !== "origin" && !isInstanceFolder(from))) return false;
-    const names = remoteNames(this.git.runSync(["config", "-z", "--get-regexp", REMOTE_URL_KEYS]));
+    const names = remoteNames(this.git.runSync(["config", "-z", "--get-regexp", REMOTE_URL_KEYS]), this.dir);
     if (!names.includes(from) || names.includes(folder)) return false;
     const run = this.git.runSync(["remote", "rename", from, folder]);
     if (run.code !== 0) {

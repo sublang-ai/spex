@@ -674,7 +674,7 @@ export class Store {
     const placements = readPlacements((args) => {
       const run = spawnSync("git", ["-C", dir, ...args], { env: gitEnvironment(this.env), stdio: ["ignore", "pipe", "ignore"], timeout: 10_000 });
       return { ok: !run.error && run.status === 0, stdout: run.stdout?.toString("utf8") ?? "" };
-    }, key, this.homeFile, this.deferred, filedIn(dir));
+    }, key, this.homeFile, this.deferred, filedIn(dir), dir);
     return placements[0]?.name ?? null;
   }
 
