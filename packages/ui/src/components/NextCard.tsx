@@ -14,7 +14,7 @@ import type {
   QueueSchedule,
 } from "@sublang/spex-core/protocol";
 
-import { useAppStore } from "../state/store.js";
+import { usePlaceStore } from "../state/place-context.js";
 import { i18n } from "../i18n.js";
 import { activatedByKeyboard, useUndoLine } from "../lib/useUndoLine.js";
 import { intentTitle } from "./DeliveryCard.js";
@@ -48,8 +48,9 @@ export function NextCard({
   /** Stage the intent into the home composer (run-view-86/88). */
   onStartIntent?: (intent: IntentInfo) => Promise<void> | void;
 }) {
-  const closeIntent = useAppStore((state) => state.closeIntent);
-  const queueIntent = useAppStore((state) => state.queueIntent);
+  const store = usePlaceStore();
+  const closeIntent = store((state) => state.closeIntent);
+  const queueIntent = store((state) => state.queueIntent);
   const [staging, setStaging] = useState(false);
   const [removing, setRemoving] = useState(false);
   const [refocusIntentId, setRefocusIntentId] = useState<string>();
@@ -107,7 +108,7 @@ export function NextCard({
       // The queue is ordered by age, so the restored intent is next
       // only where nothing older is queued; focus follows the project's
       // next row either way, never the page body.
-      const head = useAppStore
+      const head = store
         .getState()
         .ledger?.intents.find(
           (entry) => entry.intent.projectId === restored.projectId && entry.next,

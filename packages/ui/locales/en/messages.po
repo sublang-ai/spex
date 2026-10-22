@@ -742,6 +742,11 @@ msgstr "A merge is in progress in your terminal. Finish or abort it there."
 msgid "A nested workflow failed"
 msgstr "A nested workflow failed"
 
+#. project palette: where a project added or created by path lands; {place} is the place's name, "This computer"
+#: src/components/ProjectPalette.tsx
+msgid "A new project is added on {place}."
+msgstr "A new project is added on {place}."
+
 #: src/lib/failure-catalogue.ts
 msgid "A Playbook defect"
 msgstr "A Playbook defect"
