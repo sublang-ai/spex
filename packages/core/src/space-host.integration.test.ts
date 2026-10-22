@@ -262,7 +262,7 @@ test("space-37, storage-5: a fresh core with no sync of a clone's placement reco
   assert.deepEqual(ahead.branch?.agreed, { at, current: false });
 });
 
-test("space-5, space-12, storage-34: your own group's clone syncs through a remote still named origin and through one a terminal adds again under its instance's folder, a remote removed taking its id and one under a folder no instance resolves being none; a remote the reader sets is origin beside the placement", async (t) => {
+test("space-5, space-12, storage-34, space-87: your own group's clone syncs through a remote still named origin and through one a terminal adds again under its instance's folder, a remote removed taking its id and one under a folder no instance resolves being none, its placement file still naming the placement not on this device; a remote the reader sets is origin beside the placement", async (t) => {
   const host = await startHost();
   const home = await startHome("remote-names", { host, project: false });
   t.after(() => home.stop());
@@ -292,20 +292,26 @@ test("space-5, space-12, storage-34: your own group's clone syncs through a remo
   assert.equal(git(clone, "rev-parse", "refs/remotes/origin/spex"), git(clone, "rev-parse", "spex"));
 
   // Removed from a terminal, the clone stands on this device only, the
-  // host's id gone with that remote's section (storage-34).
+  // host's id gone with that remote's section (storage-34); its
+  // placement file still names that host repository, which the host
+  // lists and no remote here holds: a line not on this device
+  // (space-87).
   assert.equal(git(clone, "config", "--get", "remote.origin.spexId"), synced.id, "the rename carried the id");
   git(clone, "remote", "remove", "origin");
   const away = await home.client.repository(HOST_OWN);
   assert.equal(away.state, "local-only");
   assert.equal(away.id, null);
+  const lines = (row: RepositoryState) => row.placements.map((line) => [line.instance, line.attached, line.state, line.id]);
+  assert.deepEqual(lines(away), [[host.url, false, "absent", synced.id]]);
 
   // Added under a folder that names no instance of the home — a name Git
   // admits for a remote and its refs — it is no placement, and the clone
-  // stays on this device only (storage-34).
+  // stays on this device only, its one line the placement its file
+  // names (storage-34, space-87).
   git(clone, "remote", "add", "@unlisted.example", url);
   const unlisted = await home.client.repository(HOST_OWN);
   assert.equal(unlisted.state, "local-only");
-  assert.deepEqual(unlisted.placements, []);
+  assert.deepEqual(lines(unlisted), [[host.url, false, "absent", synced.id]]);
   git(clone, "remote", "remove", "@unlisted.example");
 
   // Added again under its instance's folder, it is the clone's placement

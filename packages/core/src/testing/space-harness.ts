@@ -332,6 +332,15 @@ export function assertGroupsState(state: GroupsState): void {
         assert.deepEqual(group.can, { createSubgroup: false, manageMembers: false, rename: false, delete: false }, "a namespace takes no subgroup, member, rename or deletion");
       } else assert.equal(group.mine, false, JSON.stringify(group));
     }
+    // A line naming a row stands where the row does not, the row
+    // standing once elsewhere in the state (space-1).
+    for (const group of instance.groups) {
+      for (const line of group.placed) {
+        assert.ok(!group.repositories.some((repository) => repository.key === line.key), `${line.key} stands in ${group.fullPath} and is named there`);
+        const named = rowsOf(state).find((repository) => repository.key === line.key);
+        assert.equal(named?.name, line.name, `${group.fullPath} names a row standing elsewhere: ${JSON.stringify(line)}`);
+      }
+    }
     // An entry is one by its instance and id (DR-127).
     const ids = instance.groups.flatMap((group) => (group.id === null ? [] : [group.id]));
     assert.equal(new Set(ids).size, ids.length, `one entry per group id at ${instance.origin}`);
@@ -399,7 +408,12 @@ function assertPlacements(row: RepositoryState): void {
     assert.ok(Array.isArray(line.incoming) && Array.isArray(line.conflicts) && typeof line.noticed === "boolean", JSON.stringify(line));
     if (!line.attached) assert.equal(line.branch, null, `${row.key}: a line no remote here holds has no branch`);
   }
-  if (row.state === "local-only") assert.ok(row.placements.every((line) => !line.attached && line.waiting !== null), `${row.key}: local only holds no line but a creation's wait`);
+  // Local only, a clone holds no placement: its lines are a creation's
+  // wait and the placements its files name, none attached (space-87).
+  if (row.state === "local-only") assert.ok(row.placements.every((line) => !line.attached && (line.waiting !== null || line.state === "absent" || line.state === "unreachable")), `${row.key}: local only holds no line but a creation's wait or a placement its files name`);
+  // A line no remote here holds comes after every line held (space-87).
+  const unheld = row.placements.findIndex((line) => !line.attached);
+  assert.ok(unheld < 0 || row.placements.slice(unheld).every((line) => !line.attached), `${row.key}: the lines held come first`);
   // A phase in choices or with an unrelated history names a placement
   // the clone holds (space-30).
   const sync = row.sync;

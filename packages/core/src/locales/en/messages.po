@@ -273,6 +273,11 @@ msgstr "{name} has no folder on this device"
 msgid "{name} holds no such placement"
 msgstr "{name} holds no such placement"
 
+#. Refusal of a join: a placement file of the spex repository {repository}, on this device, names the spex repository {name} listed at an instance; it stands as a line of {repository}'s row, to attach there, not as a repository of its own
+#: src/space.ts
+msgid "{name} is a placement of {repository} not on this device yet"
+msgstr "{name} is a placement of {repository} not on this device yet"
+
 #. Refusal: another host holds this project's conversation
 #: src/session.ts
 msgid "{name} is in use elsewhere in {project}"

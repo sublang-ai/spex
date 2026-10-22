@@ -211,8 +211,11 @@ interface TargetReading {
 }
 
 /** A row with the group the last read of its instance names for it,
- * where it lists it (space-1), and that instance's origin. */
-interface Placed { row: RepositoryState; group?: HostGroup; instance?: string }
+ * where it lists it (space-1), and that instance's origin; and every
+ * other group the listing of one of its placements names, at the
+ * instance governing that placement, where it shows one line naming
+ * the row (space-1, DR-128). */
+interface Placed { row: RepositoryState; group?: HostGroup; instance?: string; elsewhere?: { instance: string; group: HostGroup }[] }
 
 /** The last sync a clone holds (space-61). */
 type Agreed = NonNullable<NonNullable<RepositoryState["branch"]>["agreed"]>;
@@ -538,9 +541,10 @@ type RepositoryInfo =
     };
 type ReadyRepository = Extract<RepositoryInfo, { root: true }> & { head: string; remote: string };
 /** A clone's row as its machine reads it at one instant, each line
- * carrying what this device holds of its placement, and the placements
- * those lines are of, in their order (space-30, space-87). */
-interface MachineRead { row: RepositoryState; held: Placement[] }
+ * carrying what this device holds of its placement, the placements
+ * those lines are of, in their order, and the placements its placement
+ * files name as they stand (space-30, space-87, storage-41). */
+interface MachineRead { row: RepositoryState; held: Placement[]; files: PlacementFile[] }
 
 /** The steps a placement's own turn runs at its host (space-12): a
  * stop there stops that placement alone. */
@@ -1712,6 +1716,9 @@ class RepositorySync {
     }
     const first = lines[0];
     const store = this.host.store;
+    // The placements its files name as they stand, held here or not, a
+    // file that does not read naming none (storage-36, storage-41).
+    const files = repo.root ? readPlacementFiles(this.dir).files : [];
     // Its instance (storage-31), whose Git origin its code remote is
     // read against first (space-1).
     const instance = this.owner.cloneInstance(this.key, this.facts.remoteName);
@@ -1740,7 +1747,8 @@ class RepositorySync {
       reason: null,
       mergePending: repo.root ? repo.mergePending : false,
       placements: lines,
-      placedAt: [],
+      // Each instance its files name, held here or not (space-62).
+      placedAt: files.map((file) => file.origin),
       waiting: null,
       members: null,
       visibility: null,
@@ -1754,7 +1762,7 @@ class RepositorySync {
       noticed: first?.noticed ?? false,
       sync: this.phase,
     };
-    return { row: state, held };
+    return { row: state, held, files };
   }
 
   /** The clone's `spex` against one placement's, by its remote's name
@@ -5244,22 +5252,29 @@ export class SpaceManager {
     }
     const store = this.host.store;
     // Read from each clone now, whatever instance it lies under: the id
-    // it records beside a remote under that instance's Git origin, or its
-    // remote (git-host-5), so another Git system's same id is another
-    // repository; your own group's own repository, recording no id yet,
-    // is the one your namespace at its instance lists under its name
-    // (space-4).
+    // it records beside the remote of any placement it holds under that
+    // instance's Git origin, or that remote (git-host-5), so another Git
+    // system's same id is another repository; your own group's own
+    // repository, recording no id yet, is the one your namespace at its
+    // instance lists under its name (space-4). Otherwise a clone whose
+    // placement file names it holds it as a placement not on this
+    // device, to attach on its row (space-87).
     const own = store.home.own();
-    const here = (await Promise.all(store.listRepositories().map(async (repository) => {
+    const clones = await Promise.all(store.listRepositories().map(async (repository) => {
       try {
         const machine = this.machine(repository.key);
         const facts = await machine.readFacts();
-        return { facts, ownAt: repository.key === own ? this.servingOf(machine) : undefined };
-      } catch { return { facts: { remote: null, id: null }, ownAt: undefined }; }
-    }))).some(({ facts, ownAt }) => listingFor(view, facts.id, facts.remote)?.repository.id === hostId
+        return { name: splitKey(repository.key).name, facts, held: machine.placements, files: readPlacementFiles(machine.repository.dir).files, ownAt: repository.key === own ? this.servingOf(machine) : undefined };
+      } catch { return { name: splitKey(repository.key).name, facts: { remote: null, id: null }, held: [], files: [], ownAt: undefined }; }
+    }));
+    const here = clones.some(({ facts, held, ownAt }) => held.some((placement) => listingFor(view, placement.id, placement.url)?.repository.id === hostId)
       || (ownAt === instance && facts.id === null && this.ownNamespaceListing(view)?.repository.id === hostId));
     if (here || store.repository(key) || existsSync(store.home.clonePath(key)) || store.deferredMoves().some((move) => move.to === key)) {
       throw new CoreError("invalid_request", i18n._({ id: "{name} is on this device already", values: { name: listing.repository.path }, comment: "Refusal of a join: the spex repository has a clone here" }));
+    }
+    const filed = clones.find(({ files }) => files.some((file) => file.id === hostId && (this.fileNamesAt(file, instance, view.gitOrigin) || this.fileNamesAt(file, at, atView.gitOrigin))));
+    if (filed) {
+      throw new CoreError("invalid_request", i18n._({ id: "{name} is a placement of {repository} not on this device yet", values: { name: listing.repository.path, repository: filed.name }, comment: "Refusal of a join: a placement file of the spex repository {repository}, on this device, names the spex repository {name} listed at an instance; it stands as a line of {repository}'s row, to attach there, not as a repository of its own" }));
     }
     const path = folder === undefined ? undefined : resolve(folder);
     if (path !== undefined && store.home.keyForFolder(path)) {
@@ -6562,7 +6577,7 @@ export class SpaceManager {
 
   private async assemble(recompute: boolean): Promise<GroupsState> {
     const store = this.host.store;
-    const repositories: Placed[] = [];
+    const reads: { placed: Placed; read: MachineRead }[] = [];
     for (const repository of store.listRepositories()) {
       // A clone that moved while this read waited is read under its
       // new key, and its old one names nothing (space-59, space-60).
@@ -6571,10 +6586,23 @@ export class SpaceManager {
       // Every row is read from its clone at this instant (space-61).
       const read = await machine.state(recompute);
       if (this.host.store.repository(repository.key)?.dir !== machine.repository.dir) continue;
-      repositories.push(this.overlay(machine, read));
+      reads.push({ placed: this.overlay(machine, read), read });
     }
     for (const key of [...this.machines.keys()]) if (!store.repository(key)) this.machines.delete(key);
-    repositories.push(...this.absentRows());
+    // Every clone here now, as read above, or, moved while the read
+    // waited, as its machine last read it.
+    const byKey = new Map(reads.map(({ placed, read }) => [placed.row.key, read]));
+    const clones = store.listRepositories().flatMap((repository) => {
+      const read = byKey.get(repository.key);
+      if (read) return [{ key: repository.key, held: read.held, files: read.files }];
+      const machine = this.machines.get(repository.key);
+      return machine ? [{ key: repository.key, held: machine.placements, files: readPlacementFiles(machine.repository.dir).files }] : [];
+    });
+    // A placement its files name is a line of its clone's row only where
+    // no remote here holds it (space-87), every clone read first.
+    const held = clones.flatMap((clone) => clone.held);
+    const repositories = reads.map(({ placed, read }) => this.withFiled(placed, read.files, held));
+    repositories.push(...this.absentRows(clones));
     const diagnostics = await this.host.checkRepairs(this.diagnostics());
     const git = await this.probe.version();
     // The headings and their groups are read from the home at one
@@ -6683,6 +6711,10 @@ export class SpaceManager {
         if (!heading.byPath.has(group.fullPath)) heading.byPath.set(group.fullPath, entry);
       }
     }
+    // The entry a listed group stands as under its instance's heading.
+    const entryOf = (heading: Heading, group: HostGroup): InstanceGroupState => group.kind === "user"
+      ? namespace(heading, group.fullPath)
+      : (group.id !== null && heading.byId.get(group.id)?.fullPath === group.fullPath ? heading.byId.get(group.id)! : unlisted(heading, group.fullPath));
     const own: RepositoryState[] = [];
     // The rows a read lists first, so every login's entry stands before
     // a row no read lists falls back to its key.
@@ -6690,10 +6722,7 @@ export class SpaceManager {
       if (!group) continue;
       const heading = instance === undefined ? undefined : headings.get(instance);
       if (row.own || !heading) { own.push(row); continue; }
-      const entry = group.kind === "user"
-        ? namespace(heading, group.fullPath)
-        : (group.id !== null && heading.byId.get(group.id)?.fullPath === group.fullPath ? heading.byId.get(group.id)! : unlisted(heading, group.fullPath));
-      entry.repositories.push(row);
+      entryOf(heading, group).repositories.push(row);
     }
     for (const { row, group } of placed) {
       if (group) continue;
@@ -6703,12 +6732,25 @@ export class SpaceManager {
       const entry = heading.logins.get(path.toLowerCase()) ?? (sameLogin(path, heading.login) ? namespace(heading, path) : unlisted(heading, path));
       entry.repositories.push(row);
     }
+    // Every other group the listing of one of a row's placements names
+    // shows one line naming the row, once, with no control (space-1,
+    // DR-128): none where the row itself stands.
+    for (const { row, elsewhere } of placed) {
+      for (const at of elsewhere ?? []) {
+        const heading = headings.get(at.instance);
+        if (!heading) continue;
+        const entry = entryOf(heading, at.group);
+        if (entry.repositories.includes(row) || entry.placed.some((line) => line.key === row.key)) continue;
+        entry.placed.push({ key: row.key, name: row.name });
+      }
+    }
     const groupsOwn = (entry: InstanceGroupState, row: RepositoryState): boolean => row.name === `${entry.fullPath.split("/").pop()}-spex`;
     own.sort((a, b) => Number(b.own) - Number(a.own) || a.key.localeCompare(b.key));
     const groups = new Map<string, InstanceGroupState[]>();
     for (const [origin, heading] of headings) {
       for (const entry of heading.entries) {
         entry.repositories.sort((a, b) => Number(groupsOwn(entry, b)) - Number(groupsOwn(entry, a)) || a.key.localeCompare(b.key));
+        entry.placed.sort((a, b) => a.key.localeCompare(b.key));
       }
       groups.set(origin, heading.entries.sort((a, b) => a.fullPath.localeCompare(b.fullPath)));
     }
@@ -6726,7 +6768,99 @@ export class SpaceManager {
   private overlay(machine: RepositorySync, read: MachineRead): Placed {
     const placed = this.overlaid(machine, read.row);
     const lines = this.linesOf(machine, placed.row, read.held);
-    return { ...placed, row: { ...placed.row, ...this.rowStateOf(placed.row, lines), placements: lines } };
+    return { ...placed, row: { ...placed.row, ...this.rowStateOf(placed.row, lines), placements: lines }, elsewhere: this.elsewhereOf(machine, read.held) };
+  }
+
+  /** The groups each placement a clone holds beside its key placement
+   * stands in, as the listing of the instance governing it names them
+   * (space-1, git-host-5): each shows one line naming the row, which
+   * stands under its key placement's (overlaid). */
+  private elsewhereOf(machine: RepositorySync, held: Placement[]): { instance: string; group: HostGroup }[] {
+    const key = keyPlacement(held);
+    return held.flatMap((placement) => {
+      if (placement === key || placement.instance === null) return [];
+      const instance = this.governingOfPlacement(machine, placement);
+      const listing = instance ? this.listingOf(instance, { remote: placement.url, id: placement.id }) : undefined;
+      return instance && listing ? [{ instance: instance.origin, group: listing.repository.group }] : [];
+    });
+  }
+
+  /**
+   * A clone's row with the lines of the placements its files name that
+   * no remote here holds (space-87, git-host-5): each a file names whose
+   * instance is signed in and lists its id — in its last read or among
+   * what this core attached there since — and no placement any clone
+   * here holds is, by that instance's Git origin and the id, or by its
+   * remote, after the lines its clone holds and before a creation's
+   * wait; one line per host repository, "Not on this device", with that
+   * listing's path, members and rights, or unreachable in a group named
+   * like a login (space-61); each listing's group showing one line naming
+   * the row (space-1). `held` is every placement a remote here holds.
+   */
+  private withFiled(placed: Placed, files: PlacementFile[], held: Placement[]): Placed {
+    const lines: PlacementState[] = [];
+    const elsewhere = [...placed.elsewhere ?? []];
+    const seen = new Set<string>();
+    for (const file of files) {
+      const named = this.fileListing(file);
+      if (!named) continue;
+      const { instance, listing, gitOrigin } = named;
+      const repository = listing.repository;
+      const one = `${gitOrigin.replace(/\/+$/, "")} ${repository.id}`;
+      if (seen.has(one)) continue;
+      seen.add(one);
+      if (held.some((placement) => repositoryFor([listing], (entry) => entry.repository, gitOrigin, placement.id, placement.url) !== undefined)) continue;
+      const colliding = this.collides(repository.group, instance.view);
+      lines.push({
+        instance: instance.origin,
+        path: `${repository.group.fullPath}/${repository.path}`,
+        id: repository.id,
+        attached: false,
+        state: colliding ? "unreachable" : "absent",
+        reason: colliding ? namedLikeYourLogin() : null,
+        waiting: null,
+        members: listing.members,
+        visibility: repository.visibility,
+        can: colliding ? { manageMembers: false, transfer: false } : { manageMembers: repository.can.manageMembers, transfer: repository.can.transfer },
+        branch: null,
+        incoming: [],
+        conflicts: [],
+        lastSync: null,
+        noticed: false,
+        outcome: null,
+      });
+      elsewhere.push({ instance: instance.origin, group: repository.group });
+    }
+    if (lines.length === 0) return placed;
+    const placements = placed.row.placements;
+    const at = placements.findIndex((line) => !line.attached);
+    const ordered = at < 0 ? [...placements, ...lines] : [...placements.slice(0, at), ...lines, ...placements.slice(at)];
+    return { ...placed, row: { ...placed.row, placements: ordered }, elsewhere };
+  }
+
+  /** The host repository a placement file names, as the signed-in
+   * instance it names lists it (git-host-5): in that instance's last
+   * read, or among what this core attached there since, by the id; with
+   * that instance's Git origin as the core read it. None where the home
+   * does not list that instance, it is signed out, or it lists no such
+   * repository. */
+  private fileListing(file: PlacementFile): { instance: HostInstance; listing: HostListing; gitOrigin: string } | undefined {
+    if (!this.host.store.home.instance(file.origin)) return undefined;
+    const instance = this.instanceAt(file.origin);
+    if (!this.signedInAt(instance)) return undefined;
+    const listing = instance.view?.listings.find((entry) => entry.repository.id === file.id) ?? instance.attached.get(file.id);
+    const gitOrigin = instance.knownOrigin();
+    return listing && gitOrigin !== undefined ? { instance, listing, gitOrigin } : undefined;
+  }
+
+  /** Whether a placement file names a host repository an instance lists
+   * (git-host-5): one at that instance, or at an instance the home lists
+   * whose Git origin, as the core read it, is the one that instance
+   * reports, the id compared by the caller. */
+  private fileNamesAt(file: PlacementFile, instance: HostInstance, gitOrigin: string): boolean {
+    if (canonicalOrigin(file.origin) === instance.origin) return true;
+    if (!this.host.store.home.instance(file.origin)) return false;
+    return sameOrigin(this.instanceAt(file.origin).knownOrigin(), gitOrigin);
   }
 
   /** A clone's state from its lines (space-61): the state its key
@@ -6907,17 +7041,15 @@ export class SpaceManager {
    * list by one Git origin and id is one row, under the earliest of them
    * in the home's list, every later listing only withholding Join
    * (space-1); one in a group held as colliding reads unreachable, keyed
-   * `<folder>/<path>@<id>` so it names no clone (space-30). */
-  private absentRows(): Placed[] {
+   * `<folder>/<path>@<id>` so it names no clone (space-30). `clones`
+   * are the clones read, each with the placements it holds and those
+   * its files name. */
+  private absentRows(clones: { key: string; held: Placement[]; files: PlacementFile[] }[]): Placed[] {
     const store = this.host.store;
     // A clone the instances migration deferred, listed by the key it
     // keeps, holds the key it moves to (DR-127).
     const deferred = new Set(store.deferredMoves().map((move) => move.to));
     const own = store.home.own();
-    const clones = store.listRepositories().flatMap((repository) => {
-      const machine = this.machines.get(repository.key);
-      return machine ? [machine] : [];
-    });
     // The host repositories an earlier instance's listing stands for, by
     // its Git origin and id.
     const earlier: { gitOrigin: string; id: string }[] = [];
@@ -6926,16 +7058,24 @@ export class SpaceManager {
       const view = this.viewOf(instance);
       const folder = instance.folder();
       if (!view || folder === null) continue;
-      // Every clone here stands for the listing it matches, whatever
-      // instance it lies under (git-host-5); your own group's own
-      // repository, recording no id yet, for the one your namespace at
-      // its instance lists under its name (space-4): never absent.
+      // Every clone here stands for each listing a placement it holds
+      // matches, whatever instance it lies under, and otherwise for each
+      // one its placement files name, as a placement not on this device
+      // (git-host-5, space-87); your own group's own repository,
+      // recording no id yet, for the one your namespace at its instance
+      // lists under its name (space-4): never absent.
       const matched = new Set<string>();
-      for (const machine of clones) {
-        const facts = machine.facts;
-        const listing = listingFor(view, facts.id, facts.remote)
-          ?? (machine.key === own && facts.id === null && this.servingOf(machine) === instance ? this.ownNamespaceListing(view) : undefined);
-        if (listing) matched.add(listing.repository.id);
+      for (const clone of clones) {
+        for (const placement of clone.held) {
+          const listing = listingFor(view, placement.id, placement.url);
+          if (listing) matched.add(listing.repository.id);
+        }
+        for (const file of clone.files) if (this.fileNamesAt(file, instance, view.gitOrigin)) matched.add(file.id);
+        const machine = this.machines.get(clone.key);
+        if (clone.key === own && machine && machine.facts.id === null) {
+          const listing = this.servingOf(machine) === instance ? this.ownNamespaceListing(view) : undefined;
+          if (listing) matched.add(listing.repository.id);
+        }
       }
       for (const listing of view.listings) {
         const repository = listing.repository;
