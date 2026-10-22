@@ -237,6 +237,48 @@ test("space-29, git-host-20, space-60, space-61: space.repository.move naming th
   assert.equal(second.script.repositories.find((repository) => repository.id === placed.id)?.group.fullPath, "acme/research", "nothing more moved");
 });
 
+test("storage-34, space-5, space-29: a clone placed at the second holds one remote there — a second remote at the second's Git origin under another name than its folder is no placement, with no line, nothing fetched under it and nothing pushed to its repository, and one named through space.remote.set is refused", async (t) => {
+  const { first, second, home, key, clone } = await placedAtBoth("one-per-instance");
+  t.after(() => home.stop());
+  const spare = second.script.addRepository({ group: "acme", name: "spare-spex" });
+  const spareUrl = `${second.gitOrigin}/${second.storage}/acme/spare-spex.git`;
+  git(clone, "remote", "add", "spare", spareUrl);
+  const refs = (dir: string): string => git(dir, "for-each-ref", "--format=%(refname) %(objectname)");
+  const spareRefs = refs(spare.bare);
+
+  // Its placements stay one per instance, the spare remote read as none:
+  // no line names it, the sync fetches nothing under it and pushes
+  // nothing to its repository, and leaves it as it stands (storage-34).
+  const synced = await home.client.settle("space.sync", { repository: key }, 30_000);
+  assert.equal(synced.sync.phase, "done", JSON.stringify(synced.sync));
+  assert.deepEqual(synced.placements.map((line) => [line.instance, line.attached, line.outcome?.kind]), [[first.url, true, "synced"], [second.url, true, "synced"]]);
+  assert.equal(git(clone, "for-each-ref", "--format=%(refname)", "refs/remotes/spare"), "");
+  assert.equal(refs(spare.bare), spareRefs, "nothing pushed to its repository");
+  assert.deepEqual(git(clone, "remote").split("\n").sort(), [hostFolder(first), hostFolder(second), "spare"].sort());
+  assert.equal(git(clone, "config", "--get", "remote.spare.url"), spareUrl);
+
+  // A remote the reader names at that instance's Git origin is refused,
+  // nothing written (space-5, space-29).
+  await home.client.expectError("space.remote.set", { repository: key, url: spareUrl }, "invalid_request", /used as the host gives them/);
+  assert.ok(!git(clone, "remote").split("\n").includes("origin"), "no path placement written");
+});
+
+test("space-100, space-11, space-6: with both instances signed out no placement can run, and the Sync is refused naming the first's display name, nothing run", async (t) => {
+  const { first, second, home, key, clone } = await placedAtBoth("both-out");
+  t.after(() => home.stop());
+  await signOut(home, first);
+  await signOut(home, second);
+  const steps = recordSteps(home, key, { first, second });
+  const head = git(clone, "rev-parse", "HEAD");
+  await home.client.expectError("space.sync", { repository: key }, "invalid_request", new RegExp(`^Sign in to ${HOST_NAME} first$`));
+  home.hooks.beforeStep = undefined;
+  assert.deepEqual(steps, [], "nothing run, Save among it");
+  assert.equal(git(clone, "rev-parse", "HEAD"), head);
+  const row = await home.client.repository(key);
+  assert.deepEqual(row.placements.map((line) => [line.instance, line.state, line.reason]), [[first.url, "unreachable", "Sign in again"], [second.url, "unreachable", "Sign in again"]]);
+  assert.equal(row.state, "unreachable");
+});
+
 /** A placed clone settled by one Sync: the second's placement file
  * committed, and each placement holding what the clone holds. */
 async function settledAtBoth(name: string) {

@@ -398,3 +398,92 @@ test("storage-38, space-91: a first placement's drop a merge brings is refused, 
   assert.equal(Home.load(home.dataDir).keyForFolder(code), movedKey);
   assert.equal(git(firstBare, "rev-parse", "spex"), atFirst);
 });
+
+test("storage-38, space-91, storage-31, space-57: your own group's own repository placed at two instances on separate Git backends, owing its notice at the second until continued, a peer's commit at the second removing the first's placement file drops the first's remote alone at that merge, the clone keeping its folder, the second synced and the row then at the second", async (t) => {
+  const first = await startHost();
+  const second = await startHost({ displayName: SECOND_NAME, person: { id: "1002", login: "bob", displayName: "Bob" } });
+  const firstFolder = hostFolder(first);
+  const secondFolder = hostFolder(second);
+  const firstFile = `placements/${firstFolder}.yaml`;
+  const home = await startHome("own-dropped", { host: first, project: false });
+  t.after(() => home.stop());
+  const mark = home.client.mark();
+  await signIn(home, first);
+  await home.client.waitRepository(mark, HOST_OWN, (repository) => repository.sync.phase === "done", 30_000);
+  await signIn(home, second);
+  const own = clonePath(home.dataDir, HOST_OWN);
+  attachByHand(home, HOST_OWN, second, "bob");
+  // Your own group's own repository owes its notice at the second, its
+  // only member the account there: that line waits for Continue while
+  // the first syncs; continued, both sync (space-57).
+  const owed = await home.client.settle("space.sync", { repository: HOST_OWN }, 30_000);
+  assert.deepEqual(owed.placements.map((line) => [line.instance, line.outcome?.kind]), [[first.url, "synced"], [second.url, "waiting"]], JSON.stringify(owed.sync));
+  const both = await home.client.settle("space.sync", { repository: HOST_OWN, placement: second.url, noticed: true }, 30_000);
+  assert.equal(both.sync.phase, "done", JSON.stringify(both.sync));
+  assert.deepEqual(both.placements.map((line) => [line.instance, line.outcome?.kind]), [[first.url, "synced"], [second.url, "synced"]]);
+  const firstBare = bareOf(first, HOST_OWN);
+  const secondBare = second.bareOf("bob/ada-spex");
+  const atFirst = git(firstBare, "rev-parse", "spex");
+
+  // A peer at the second removes the first's file: at the second's merge
+  // the first's remote is dropped alone, its fetched spex, upstream and
+  // records with it, the clone keeping its folder; the second syncs and
+  // the row reads at the second, nothing more sent to the first
+  // (storage-38, space-91, storage-31).
+  const removed = await peerPush(peerClone(secondBare), (dir) => rmSync(join(dir, firstFile)));
+  const dropped = await home.client.settle("space.sync", { repository: HOST_OWN }, 30_000);
+  assert.equal(dropped.sync.phase, "done", JSON.stringify(dropped.sync));
+  assert.deepEqual([dropped.key, dropped.own, dropped.instance], [HOST_OWN, true, second.url]);
+  assert.deepEqual(dropped.placements.map((line) => [line.instance, line.outcome?.kind]), [[second.url, "synced"]]);
+  assert.ok(existsSync(join(own, ".git")), "the clone keeps its folder");
+  assert.deepEqual(git(own, "remote").split("\n"), [secondFolder]);
+  assert.equal(git(own, "for-each-ref", "--format=%(refname)", `refs/remotes/${firstFolder}`), "");
+  const upstream = ((): string | null => { try { return git(own, "config", "--get", "branch.spex.remote"); } catch { return null; } })();
+  assert.notEqual(upstream, firstFolder);
+  assert.deepEqual(Object.keys(syncRecordsOf(home.dataDir, HOST_OWN)).filter((name) => name.includes(`:${firstFolder}:`)), []);
+  assert.equal(existsSync(join(own, firstFile)), false);
+  assert.ok(git(own, "rev-list", "HEAD").split("\n").includes(removed), "the second's merge stands");
+  assert.equal(git(secondBare, "rev-parse", "spex"), git(own, "rev-parse", "HEAD"));
+  assert.equal(git(firstBare, "rev-parse", "spex"), atFirst, "the first's host repository left as it stands");
+});
+
+test("space-91, storage-41, storage-12: a placement's file a merge makes unreadable drops nothing: the placement stays and syncs, the file reported as nonblocking, and the catch-up carries it to that placement too", async (t) => {
+  const first = await startHost();
+  const second = await startHost({ displayName: SECOND_NAME, person: { id: "1002", login: "bob", displayName: "Bob" } });
+  const firstFolder = hostFolder(first);
+  const secondFolder = hostFolder(second);
+  const firstFile = `placements/${firstFolder}.yaml`;
+  const { home, key, clone } = await projectAt("reconcile-unreadable", [first, second]);
+  t.after(() => home.stop());
+  attachByHand(home, key, second);
+  const both = await home.client.settle("space.sync", { repository: key }, 30_000);
+  assert.deepEqual(both.placements.map((line) => [line.instance, line.outcome?.kind]), [[first.url, "synced"], [second.url, "synced"]], JSON.stringify(both.sync));
+  const firstBare = bareOf(first, key);
+  const secondBare = second.bareOf("acme/atlas-spex");
+
+  // A peer at the second rewrites the first's file as no encoding reads.
+  const unreadable = "format: 2\ninstance: elsewhere\n";
+  await peerPush(peerClone(secondBare), (dir) => { writeFileSync(join(dir, firstFile), unreadable); });
+  const merged = await home.client.settle("space.sync", { repository: key }, 30_000);
+  assert.equal(merged.sync.phase, "done", JSON.stringify(merged.sync));
+  assert.deepEqual(merged.placements.map((line) => [line.instance, line.outcome?.kind]), [[first.url, "synced"], [second.url, "synced"]]);
+  assert.deepEqual(git(clone, "remote").split("\n"), [firstFolder, secondFolder]);
+  assert.equal(readFileSync(join(clone, firstFile), "utf8"), unreadable);
+  const diagnostics = await home.client.expectOk("storage.diagnostics", {});
+  assert.deepEqual(
+    diagnostics.filter((diagnostic) => diagnostic.file === join(clone, firstFile)).map((diagnostic) => [diagnostic.reason, diagnostic.blocking]),
+    [["does not read as format: 1, instance and id, one line each", false]],
+  );
+  // The catch-up carried the merge to the first, the file as it stands.
+  const head = git(clone, "rev-parse", "HEAD");
+  assert.deepEqual([git(firstBare, "rev-parse", "spex"), git(secondBare, "rev-parse", "spex")], [head, head]);
+  assert.equal(`${git(firstBare, "show", `spex:${firstFile}`)}\n`, unreadable);
+
+  // The Sync after still syncs the first, writing nothing over the file
+  // (storage-37).
+  writeFileSync(join(clone, "later.md"), "after the merge\n");
+  const later = await home.client.settle("space.sync", { repository: key }, 30_000);
+  assert.deepEqual([later.sync.phase, ...later.placements.map((line) => line.outcome?.kind)], ["done", "synced", "synced"]);
+  assert.equal(readFileSync(join(clone, firstFile), "utf8"), unreadable);
+  assert.equal(git(firstBare, "rev-parse", "spex"), git(clone, "rev-parse", "HEAD"));
+});
