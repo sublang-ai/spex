@@ -127,6 +127,14 @@ Spex home — `~/.spex`, or `SPEX_HOME` — in spex repositories under
 `workspace/<you>/<you>-spex/config/playbook.config.yaml`
 ([storage](docs/storage.md)).
 
+**Shared session upgrades.** Spex requires Playbook 18 for bounded session
+persistence. Before upgrading a shared home, stop every older desktop, server
+and Playbook CLI writer, snapshot the home, and upgrade them together.
+Monolithic schema-7 sessions remain readable; continuing one requires explicit
+`playbook migrate-session <id>` with configuration selecting that clone's
+session store. The [storage guide](docs/storage.md#migration-and-definitions)
+describes the retained originals and migration boundaries.
+
 **Playbooks come in spec packages.** Each spex repository has an
 environment: `spex.yaml` requests spec packages — specs with the skills
 and playbooks made from them — from the Git host's registry, a Git
@@ -183,9 +191,8 @@ before submission; failed uploads can be retried, and a refused submission
 keeps its text and files. A file-only message is accepted and the Captain
 can ask what you want done with it. Each file may be up to 100 MiB; one
 message may contain up to 16 files and 256 MiB total. The selected agent
-and model determine which formats they can interpret. When upgrading a shared
-Spex home, stop older desktop, server and Playbook CLI writers first and update
-them together before saving sessions with attachments.
+and model determine which formats they can interpret. Attachment-bearing sessions
+also require every writer sharing the store to support that format.
 
 For browser work, open the working agent in Settings → Agents, choose
 **Set up browser**, and then enable **Browser** and save. Setup checks the

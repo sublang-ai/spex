@@ -499,6 +499,7 @@ The core service shall persist and replay sessions through Playbook's hydrated m
 - valid opaque v1 records, including unknown/headerless objects, remain in sequence/digest accounting; unsupported presentation is skipped without damage;
 - record-write failure preserves live presentation and durable recovery, marks the manifest's replay incomplete and refuses later continuation [[core-service-73](#core-service-73)]; a restart cannot clear the marker merely because the retained bytes parse;
 - a reader serves the valid complete prefix with the damaged boundary reported, without altering files during a read;
+- a monolithic schema-7 session remains readable without implicit conversion; continuation follows Playbook's explicit migration requirement ([DR-132](../decisions/132-bounded-session-storage.md));
 - token-free presentation includes synthesized visible failures [[core-service-30](#core-service-30)]; provider hints never enter the portable stream or manifest;
 - historical participants, settings, bindings and graphs come from stored context [[core-service-80](#core-service-80)], not today's installed modules.
 

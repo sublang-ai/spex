@@ -285,12 +285,26 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Changed
 
-- Shared session persistence now uses bounded files and deduplicated immutable
-  chunks, with Sync selecting each complete session family together
+- Playbook 18 shared session persistence now uses bounded files and
+  deduplicated immutable chunks, with Sync selecting each complete session
+  family together
   ([DR-132](specs/decisions/132-bounded-session-storage.md)). Legacy sessions
   remain readable and require explicit Playbook migration before continuation.
+  Stop older Playbook CLIs and Spex shells sharing a home before any upgraded
+  writer starts.
 
-- The app requires Playbook 17.11.0, Cligent 0.36.0 and slc 0.19.0, keeping the locked agent SDKs ([DR-130](specs/decisions/130-playbook-17-11-0-cligent-0-36-0-slc-0-19-0-adoption.md)). Captain decision, Judge and reporting calls, and every compiler call, turn off, as far as each agent allows, the skills the agent finds by itself in its project and user skill folders, so the skills and specs Spex exports reach working players and authoring sessions but no longer steer routing, adjudication or compilation; a Kimi Code Captain still reads them, and a session whose Captain conversation began earlier keeps the listings already in it. A Captain or compile whose agent offers the switch but cannot apply it where it runs, such as Gemini CLI under its native sandbox, now fails with an error. The folders Spex exports into now come from Cligent's published table.
+- The app requires Cligent 0.36.0 and slc 0.19.0, keeping the locked agent
+  SDKs ([DR-130](specs/decisions/130-playbook-17-11-0-cligent-0-36-0-slc-0-19-0-adoption.md)).
+  Captain decision, Judge and reporting calls, and every compiler call, turn
+  off, as far as each agent allows, the skills the agent finds by itself in
+  its project and user skill folders, so the skills and specs Spex exports
+  reach working players and authoring sessions but no longer steer routing,
+  adjudication or compilation; a Kimi Code Captain still reads them, and a
+  session whose Captain conversation began earlier keeps the listings already
+  in it. A Captain or compile whose agent offers the switch but cannot apply
+  it where it runs, such as Gemini CLI under its native sandbox, now fails
+  with an error. The folders Spex exports into now come from Cligent's
+  published table.
 
 - A home can sign in to several instances, with each instance's account,
   Groups listing and repository operations kept separate ([DR-127](specs/decisions/127-a-home-signed-in-to-several-instances.md)).
