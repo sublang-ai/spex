@@ -499,3 +499,45 @@ test("storage-37, storage-38, space-91: a placement file a commit once held, rem
     assert.equal(git(bare, "rev-parse", "spex"), removed, "the host's repository is left as it stands");
   } finally { if (!released) await live.release(); }
 });
+
+test("space-91, storage-38: a lone placement's file deleted by hand on this device is the proposal to drop it: the next sync's Save commits the deletion and the drop before its turn moves the clone, its last placement gone, under your own group's folder, local only, its pair following, nothing sent to the host", async (t) => {
+  const host = await startHost();
+  const folder = hostFolder(host);
+  const file = `placements/${folder}.yaml`;
+  const home = await startHome("dropped-by-hand", { host, project: false });
+  t.after(() => home.stop());
+  let from = home.client.mark();
+  await signIn(home, host);
+  await home.client.waitRepository(from, HOST_OWN, (repository) => repository.sync.phase === "done", 30_000);
+  const code = gitFolder("lone");
+  const local = await addFolder(home, code);
+  from = home.client.mark();
+  await home.client.expectOk("space.pick", { repository: local.key, choice: { kind: "create", instance: host.url, groupId: "2002", name: "lone" } });
+  const key = hostKey(host, "acme/lone-spex");
+  const created = await home.client.waitRepository(from, key, (repository) => repository.sync.phase === "done", 30_000);
+  const clone = clonePath(home.dataDir, key);
+  const bare = bareOf(host, key);
+  assert.equal(committed(bare, file), placementBytes(host.url, created.id));
+  const atHost = git(bare, "rev-parse", "spex");
+
+  // The reader deletes the file; the next sync's Save commits that, and
+  // the placement is dropped before its turn: the clone moves under your
+  // own group's folder, local only, its records and pair with it, and
+  // the deletion never reaches the host (space-91, storage-38).
+  rmSync(join(clone, file));
+  const transports = host.script.transportCredentials.length;
+  const ownKey = `${LOGIN}/lone-spex`;
+  from = home.client.mark();
+  await home.client.expectOk("space.sync", { repository: key });
+  const dropped = await home.client.waitRepository(from, ownKey, (repository) => repository.sync.phase !== "running" && repository.sync.phase !== "idle", 30_000);
+  assert.deepEqual([dropped.state, dropped.placements, dropped.id], ["local-only", [], null], JSON.stringify(dropped.sync));
+  const ownClone = clonePath(home.dataDir, ownKey);
+  assert.ok(existsSync(join(ownClone, ".git")) && !existsSync(clone), "moved under your own group's folder");
+  assert.equal(git(ownClone, "remote"), "");
+  assert.throws(() => git(ownClone, "cat-file", "-e", `HEAD:${file}`), "the Save committed the deletion");
+  assert.equal(existsSync(join(ownClone, file)), false);
+  assert.equal(Home.load(home.dataDir).keyForFolder(code), ownKey);
+  assert.deepEqual({ ...syncRecordsOf(home.dataDir, key), ...syncRecordsOf(home.dataDir, ownKey) }, {});
+  assert.equal(host.script.transportCredentials.length, transports, "nothing fetched from or pushed to the host");
+  assert.equal(git(bare, "rev-parse", "spex"), atHost, "the host's repository is left as it stands");
+});

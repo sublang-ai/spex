@@ -179,7 +179,7 @@ When a sync's Save step [[space-12](space.md#space-12)] finds a placement with a
 
 ### storage-38
 
-When the core drops a clone's first placement — by Leave [[space-98](space.md#space-98)], or by a sync whose merge removed its file or changed it to name another host repository [[space-91](space.md#space-91)] — it shall, in the same step, move the clone to the path of its next placement with an instance, at that instance [[storage-1](#storage-1)], or to `workspace/<own>/<name>-spex/` where none is left, rewriting every pair, session location, sync preference [[storage-5](#storage-5)] and export naming it, as a host's rename moves them [[space-60](space.md#space-60)] ([DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md)):
+When the core drops a clone's first placement — by Leave [[space-98](space.md#space-98)], or by a sync whose merge, or whose Save of a change made on this device, removed its file or changed it to name another host repository [[space-91](space.md#space-91)] — it shall, in the same step, move the clone to the path of its next placement with an instance, at that instance [[storage-1](#storage-1)], or to `workspace/<own>/<name>-spex/` where none is left, rewriting every pair, session location, sync preference [[storage-5](#storage-5)] and export naming it, as a host's rename moves them [[space-60](space.md#space-60)] ([DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md)):
 
 | The clone | Outcome |
 | --- | --- |

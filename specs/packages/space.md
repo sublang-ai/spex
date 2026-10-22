@@ -481,6 +481,7 @@ When a placement's merge in a sync changes the clone's placement files [[storage
 | a placement with no file, the path placement among them | drops nothing |
 | a file that does not read as its encoding | drops and offers nothing |
 
+- a placement's file removed on this device, or changed there to name another host repository, fares as the first two rows say — the file being the proposal — at the next sync, its Save committing that change and the reconcile coming before that placement's turn;
 - a drop the clone's move refuses [[storage-38](storage.md#storage-38)] waits for the next sync, which retries it before that placement's turn and syncs nothing with that placement while it waits;
 - two devices placing the clone at one instance meet as one choice of that file [[space-17](#space-17)], the side not chosen dropping its remote at its next sync and leaving its host repository to its owner.
 
