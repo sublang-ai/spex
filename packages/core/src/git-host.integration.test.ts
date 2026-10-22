@@ -4,9 +4,10 @@
 // The Git host client against the stand-in host (git-host-13,
 // git-host-14): both sign-in flows, token keeping, reads and writes,
 // sign-out, the relayed failures, and a real `git push` through the
-// credential helper.
+// credential helper; a credentials file the YAML parser would quote is
+// refused by its path alone, in the store and in a core reading it.
 
-import { test } from "node:test";
+import { test, type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
@@ -35,6 +36,10 @@ import { holdingFetch, samePair, settled } from "./testing/holding-fetch.js";
 import { browserSignIn, instanceClient } from "./testing/host-sign-in.js";
 import { readHostView, relayHostError } from "./space-groups.js";
 import { STANDIN_STORAGE, startStandinHost, type StandinHost } from "./testing/standin-host.js";
+import { createSpaceHarness, stringsOf } from "./testing/space-harness.js";
+
+const space = createSpaceHarness();
+test.after(() => space.dispose());
 
 async function setup(options: { skew?: { ms: number }; holdMaxMs?: number } = {}) {
   const scratch = mkdtempSync(join(tmpdir(), "spex-git-host-"));
@@ -468,6 +473,74 @@ test("git-host-10: another host's credential stays; a file of another format is 
   } finally {
     await t.dispose();
   }
+});
+
+/** Every warning the process emits and every line logged from here on,
+ * each still printed. */
+function captureOutput(t: TestContext): { warnings: string[]; logged: string[] } {
+  const warnings: string[] = [];
+  const onWarning = (warning: Error): void => { warnings.push(`${warning.name}: ${warning.message}`); };
+  process.on("warning", onWarning);
+  t.after(() => { process.off("warning", onWarning); });
+  const logged: string[] = [];
+  for (const name of ["log", "info", "warn", "error"] as const) {
+    const original = console[name].bind(console);
+    t.mock.method(console, name, (...args: unknown[]) => {
+      logged.push(args.map(String).join(" "));
+      original(...args);
+    });
+  }
+  return { warnings, logged };
+}
+
+test("storage-19, git-host-11: a credentials file the YAML parser would quote, or whose format is a token, is refused by its path alone: no refusal, warning, log line, diagnostic or reply repeats its content", async (t) => {
+  const SECRET = "spexa_quoted-access-7c1d";
+  const { warnings, logged } = captureOutput(t);
+  const host = await space.startHost();
+  const first = await space.startHome("quoted-credentials", { host, project: false });
+  await space.signIn(first, host);
+  await first.stop();
+  const file = credentialsPath(first.dataDir);
+  const key = host.url.replace(/\/+$/, "");
+  // A tagged token as the format, a token as the format, a tagged token
+  // in a malformed entry, a directive carrying the token before a second
+  // document: the first, third and fourth make the parser warn, quoting
+  // the token, and every one is refused.
+  const files: [string, RegExp][] = [
+    [`format: !secret ${SECRET}\nhosts: {}\n`, /: unsupported format; preserved unchanged$/],
+    [`format: ${SECRET}\nhosts: {}\n`, /: unsupported format; preserved unchanged$/],
+    [`format: 1\nhosts:\n  "${key}":\n    access: !secret ${SECRET}\n    accessExpiresAt: soon\n    refresh: r\n`, /holds a malformed entry for /],
+    [`%SECRET ${SECRET}\n---\nformat: 1\nhosts: {}\n---\n${SECRET}\n`, /is not valid YAML; it is left as it is$/],
+  ];
+  const replies: unknown[] = [];
+  for (const [text, refusal] of files) {
+    writeFileSync(file, text, { mode: 0o600 });
+    // The store refuses each read and write, naming the file and no
+    // secret, and leaves it as it is (storage-19).
+    const store = fileCredentialStore(first.dataDir, host.url);
+    const refused = (error: unknown): boolean => {
+      const words = `${String(error)} ${JSON.stringify(error)}`;
+      assert.ok(words.includes(file), words);
+      assert.match((error as Error).message, refusal);
+      assert.ok(!words.includes(SECRET), words);
+      return true;
+    };
+    await assert.rejects(store.read(), refused);
+    assert.throws(() => store.replace(null, { access: "a", accessExpiresAt: 1, refresh: "r" }), refused);
+    assert.equal(readFileSync(file, "utf8"), text, "the file is left as it is");
+    // A core reading it at start says so in the Groups state, naming the
+    // file and none of its content.
+    const home = await space.startHome("quoted-credentials-again", { host, project: false, dataDir: first.dataDir });
+    replies.push(await home.client.command("space.get", {}), await home.client.command("storage.diagnostics", {}));
+    const said = await home.client.waitFor((message) => message.type === "space.state" &&
+      stringsOf(message).some((words) => words.startsWith(file) && refusal.test(words)), 20_000);
+    assert.ok(said, "the core relays the refusal");
+    replies.push(...home.client.messages);
+    await home.stop();
+  }
+  assert.deepEqual(warnings.filter((warning) => warning.includes(SECRET) || warning.startsWith("YAMLWarning")), [], "the parser warns nowhere");
+  assert.deepEqual(logged.filter((line) => line.includes(SECRET)), [], "no log line repeats the file");
+  assert.deepEqual(replies.flatMap(stringsOf).filter((text) => text.includes(SECRET)), [], "no reply, diagnostic or message repeats the file");
 });
 
 test("storage-19: a credential write replaces or removes only the pair it names, another host's pair kept", async () => {

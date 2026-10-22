@@ -24,6 +24,7 @@ import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import { writeApplicationBytes } from "./files.js";
+import { i18n } from "./i18n.js";
 import { canonicalOrigin } from "./instance.js";
 
 export { DEFAULT_HOST_URL, hostUrlFor } from "./instance.js";
@@ -284,7 +285,9 @@ export function credentialsPath(homeDir: string): string {
  * keyed by the instance's canonical origin (DR-127),
  * written atomically with owner-only permissions under a `local/` made
  * owner-only (storage-19). A file of another format is refused, never
- * guessed at or overwritten. Other instances' entries are kept; removing
+ * guessed at or overwritten, and no refusal or warning repeats the file's
+ * content, a secret among it: the format is named only where it is a
+ * number. Other instances' entries are kept; removing
  * the last one removes the file. Every access is synchronous, so a
  * replacement's read, comparison and rename leave no await between them.
  */
@@ -303,11 +306,17 @@ export function fileCredentialStore(homeDir: string, hostUrl: string): Credentia
     }
     let doc: unknown;
     try {
-      doc = parseYaml(text);
+      // At "error" the parser emits no warning, each quoting the file,
+      // yet still throws where the YAML will not read; "silent" would
+      // read it. Its words are never repeated.
+      doc = parseYaml(text, { logLevel: "error" });
     } catch {
       throw new Error(`${file} is not valid YAML; it is left as it is`);
     }
     if (!isRecord(doc)) throw new Error(`${file} holds no credentials map; it is left as it is`);
+    if (typeof doc.format !== "number") {
+      throw new Error(`${file}: ${i18n._({ id: "unsupported format; preserved unchanged", comment: "Storage diagnostic: a credentials file names a layout version that is no number, which is not repeated; the file is left as it is" })}`);
+    }
     if (doc.format !== 1) {
       throw new Error(`${file} has format ${JSON.stringify(doc.format ?? null)}, which this version of Spex does not read; it is left as it is`);
     }

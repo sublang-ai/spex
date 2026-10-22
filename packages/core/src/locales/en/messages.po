@@ -2931,8 +2931,10 @@ msgstr "unsupported act/version"
 msgid "unsupported format {format}; preserved unchanged"
 msgstr "unsupported format {format}; preserved unchanged"
 
-#. Storage diagnostic: the seat's credentials file names a layout version that is no number, which is not repeated; the file is left as it is
+#. Storage diagnostic: a credentials file names a layout version that is no number, which is not repeated; the file is left as it is
+#. Storage diagnostic: a credentials file names a layout version that is no number, which is not repeated; the file is left as it is
 #: src/code-credentials.ts
+#: src/git-host.ts
 msgid "unsupported format; preserved unchanged"
 msgstr "unsupported format; preserved unchanged"
 

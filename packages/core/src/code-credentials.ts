@@ -135,7 +135,7 @@ export function codeCredentialStore(homeDir: string): CodeCredentialStore {
     // may hold anything, a secret among it.
     need(typeof doc.format === "number", file, i18n._({
       id: "unsupported format; preserved unchanged",
-      comment: "Storage diagnostic: the seat's credentials file names a layout version that is no number, which is not repeated; the file is left as it is",
+      comment: "Storage diagnostic: a credentials file names a layout version that is no number, which is not repeated; the file is left as it is",
     }));
     knownFormat(doc, file, 1);
     closed(doc, ["format", "hosts", "agents"], [], file);
