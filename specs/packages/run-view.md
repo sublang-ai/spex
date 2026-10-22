@@ -1054,7 +1054,7 @@ When the captain editor popover is opened from the Captain home with a fixture c
 
 #### run-view-36
 
-Where a fixture holds one history-only session with a stored transcript and one session awaiting a Boss reply, the test suite shall assert that opening the history session shows a loading note and then its transcript with the history notice and a start-a-new-session affordance, that an idle continuable session shows its composer with no notice, that a failed load offers a retry instead of an empty run [[run-view-33](#run-view-33)], and that the Dashboard navigation badge shows the count 1 [[run-view-34](#run-view-34)].
+Where a fixture holds one history-only session with a stored transcript and one session awaiting a Boss reply, the test suite shall assert that opening the history session shows a loading note and then its transcript with the history notice and a start-a-new-session affordance, that an idle continuable session shows its composer with no notice, that a failed load offers a retry instead of an empty run [[run-view-33](#run-view-33)], that a session assigned to another runtime shows its reason "Runs on <label>" as the history notice with no composer, Restore or Discard [[run-view-33](#run-view-33)], and that the Dashboard navigation badge shows the count 1 [[run-view-34](#run-view-34)].
 
 #### run-view-52
 
