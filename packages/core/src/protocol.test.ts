@@ -78,7 +78,7 @@ test("parseCommand accepts the space commands and their optional fields", () => 
   assert.ok(!parseCommand({ type: "space.init", id: "s2" }).ok);
 });
 
-test("space-29, space-82: a space command names the instance it acts at by its origin, Forget always, and a sign-in the URL as the reader gave it", () => {
+test("space-29, space-82: a space command names the instance it acts at by its origin, a group with its instance, and a sign-in the URL as the reader gave it", () => {
   const instance = "https://spex.pub";
   const repository = "@spex.pub/acme/a-spex";
   const named = [
@@ -100,14 +100,40 @@ test("space-29, space-82: a space command names the instance it acts at by its o
     const parsed = parseCommand(command);
     assert.ok(parsed.ok, `${command.type}: ${parsed.ok ? "" : parsed.error}`);
   }
-  // Until the interface sends them, a command naming none acts at the
-  // default instance — a pick and a join at the clone's or the row's.
+  // A command acting at an instance names it, and a sign-in its URL:
+  // none stands in for a default.
   for (const command of [
     { type: "space.signin.start", id: "d1" },
-    { type: "space.signout", id: "d2" },
-    { type: "space.pick", id: "d3", repository: "ada/a-spex", choice: { kind: "join", hostId: "42" } },
-    { type: "space.join", id: "d4", hostId: "42" },
-    { type: "space.group.create", id: "d5", name: "Acme", path: "acme", parent: null },
+    { type: "space.signin.start", id: "d2", url: "" },
+    { type: "space.signout", id: "d3" },
+    { type: "space.pick", id: "d4", repository: "ada/a-spex", choice: { kind: "join", hostId: "42" } },
+    { type: "space.pick", id: "d5", repository: "ada/a-spex", choice: { kind: "create", groupId: null, name: "a" } },
+    { type: "space.join", id: "d6", hostId: "42" },
+    { type: "space.group.create", id: "d7", name: "Acme", path: "acme", parent: null },
+    { type: "space.group.rename", id: "d8", group: "7", name: "Acme Corp" },
+    { type: "space.group.delete", id: "d9", group: "7" },
+  ]) {
+    const parsed = parseCommand(command);
+    assert.ok(!parsed.ok, JSON.stringify(command));
+    if (!parsed.ok) assert.equal(parsed.id, command.id);
+  }
+  // A group is named with its instance; a spex repository by its key
+  // alone, which names its own.
+  for (const command of [
+    { type: "space.members", id: "g1", group: "7" },
+    { type: "space.share", id: "g2", group: "7", login: "bob", role: "30" },
+    { type: "space.unshare", id: "g3", group: "7", login: "bob" },
+  ]) {
+    const parsed = parseCommand(command);
+    assert.ok(!parsed.ok, JSON.stringify(command));
+    if (!parsed.ok) {
+      assert.equal(parsed.id, command.id);
+      assert.match(parsed.error, /a group is named with its instance/);
+    }
+  }
+  for (const command of [
+    { type: "space.share", id: "k1", repository, login: "bob", role: "30" },
+    { type: "space.unshare", id: "k2", repository, login: "bob" },
   ]) {
     const parsed = parseCommand(command);
     assert.ok(parsed.ok, `${command.type}: ${parsed.ok ? "" : parsed.error}`);

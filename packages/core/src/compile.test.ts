@@ -29,7 +29,7 @@ import { RUNTIME_ABI } from "@sublang/playbook/xstate-runtime";
 import { parse as parseYaml } from "yaml";
 
 import type { RegistryEntryLike } from "./config.js";
-import { ARTIFACT_SCHEMAS } from "./config.js";
+import { ARTIFACT_SCHEMAS, composeConfig } from "./config.js";
 import { APP_ENGINE_URL, APP_XSTATE_URL, importsOf, LINKED_ID, recordingResolutions, writeLinkedFixture } from "./testing/linked-artifact.js";
 import { stubSlcScriptedSource, stubSlcSource } from "./testing/stub-slc.js";
 import { scratchDir } from "./testing/scratch.js";
@@ -196,6 +196,69 @@ test("a compiled registry module imports the app's engine rather than carrying o
   const imports = importsOf(resolutions, module);
   assert.equal(imports.get("@sublang/playbook/xstate-runtime"), APP_ENGINE_URL);
   assert.equal(imports.get("xstate"), APP_XSTATE_URL);
+});
+
+test("required runtime options survive compilation and repackaging without a configuration (playbook-library-112)", async (t) => {
+  const dir = scratchDir("spex-compile-required-options-");
+  const fixture = writeLinkedFixture(join(dir, "fixture"));
+  const eventsKey = `spex-required-options-${dir}`;
+  const globals = globalThis as unknown as Record<string, unknown>;
+  const events: string[] = [];
+  globals[eventsKey] = events;
+  t.after(() => { delete globals[eventsKey]; });
+  const entryPath = join(fixture, `${LINKED_ID}.ts`);
+  const originalEntry = readFileSync(entryPath, "utf8");
+  const validatorSentinel = "const validateOptions: (value: unknown) => RuntimeOptions = linkedValidateOptions;";
+  const runtimeSentinel = "const validated = validateOptions(configuredOptions);";
+  assert.equal(originalEntry.split(validatorSentinel).length - 1, 1, "exactly one validator fixture sentinel");
+  assert.equal(originalEntry.split(runtimeSentinel).length - 1, 1, "exactly one runtime fixture sentinel");
+  writeFileSync(entryPath, originalEntry
+    .replace("const validateOptions: (value: unknown) => RuntimeOptions = linkedValidateOptions;", `const validateOptions: (value: unknown) => RuntimeOptions = (value) => {
+  (globalThis as unknown as Record<string, string[]>)[${JSON.stringify(eventsKey)}]!.push('validate');
+  if (!value || typeof value !== 'object') {
+    throw new TypeError('catalog is required');
+  }
+  const { catalog, ...options } = value as Record<string, unknown>;
+  if (!Array.isArray(catalog)) throw new TypeError('catalog is required');
+  if (catalog.length !== 1 || catalog[0] !== 'review') throw new TypeError('catalog must name review');
+  return linkedValidateOptions(options);
+};`)
+    .replace("const validated = validateOptions(configuredOptions);", `(globalThis as unknown as Record<string, string[]>)[${JSON.stringify(eventsKey)}]!.push('runtime');
+    const validated = validateOptions(configuredOptions);`));
+  const stubPath = join(dir, "stub-slc.cjs");
+  writeFileSync(stubPath, stubSlcScriptedSource(["ok"], "['coder', 'reviewer']", { fixtureDir: fixture }));
+  const options = {
+    playbookId: LINKED_ID,
+    source: { text: readFileSync(join(fixture, `${LINKED_ID}.md`), "utf8") },
+    roles: ["coder", "reviewer"], command: LINKED_ID, intent: "Review a change",
+    libraryDir: join(dir, "library"),
+    env: { SPEX_SLC: `${process.execPath} ${stubPath}` }, spawner: testSpawner(),
+  };
+  const compiled = await compilePlaybook(options);
+  const compiledBytes = readFileSync(compiled.from);
+  const packaged = await compilePlaybook({ ...options, source: {}, skipSlc: true });
+  assert.equal(packaged.from, compiled.from);
+  assert.deepEqual(readFileSync(packaged.from), compiledBytes, "compilation and repackaging preserve the same module bytes");
+  assert.equal(events.length, 0, "[playbook-library-14] packaging calls neither option validation nor runtime construction");
+  const { default: entry } = await import(pathToFileURL(packaged.from).href) as { default: RegistryEntryLike };
+  assert.deepEqual(entry.requiredRoleIds, ["coder", "reviewer"]);
+  assert.throws(() => entry.validateOptions(undefined), /catalog is required/);
+  assert.throws(() => entry.validateOptions({ catalog: ["wrong"] }), /catalog must name review/);
+  assert.doesNotThrow(() => entry.validateOptions({ catalog: ["review"] }));
+  const top = {
+    captain: { adapter: "codex" },
+    players: { coder: { adapter: "codex" }, reviewer: { adapter: "codex" } },
+    playbooks: { review: { roles: { coder: "coder", reviewer: "reviewer" } } },
+  };
+  const composition = { cwd: dir, modules: {
+    repository: "fixture/fixture-spex",
+    find: () => ({ module: packaged.from, builtin: false }),
+  } };
+  await assert.rejects(composeConfig(top, undefined, join(dir, "config.yaml"), composition), /playbooks\.review: catalog is required/);
+  await assert.rejects(composeConfig({ ...top, playbooks: { review: { ...top.playbooks.review, catalog: ["wrong"] } } }, undefined, join(dir, "config.yaml"), composition), /playbooks\.review: catalog must name review/);
+  const valid = await composeConfig({ ...top, playbooks: { review: { ...top.playbooks.review, catalog: ["review"] } } }, undefined, join(dir, "config.yaml"), composition);
+  assert.deepEqual(valid.captainOptions.playbooks.review?.options, { catalog: ["review"] });
+  assert.equal(events.includes("runtime"), false, "[playbook-library-15] validation constructs no workflow runtime");
 });
 
 test("a playbook folder gone before its preparation takes no link and is not made again (playbook-library-46)", async () => {

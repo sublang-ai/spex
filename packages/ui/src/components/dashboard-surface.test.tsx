@@ -41,6 +41,7 @@ import { setClientForTests, useAppStore } from "../state/store.js";
 import { initialSessionView } from "../state/reducer.js";
 import { SpexCommandError } from "../lib/client.js";
 import { currentLocale } from "../i18n.js";
+import { groupsState } from "../fixtures/groups-state.js";
 
 afterEach(() => {
   cleanup();
@@ -91,10 +92,7 @@ function q(
 
 /** A Groups state holding no spex repository: the Overview's records
  * field reads its row from it (projects-4). */
-const EMPTY_GROUPS = {
-  home: "/home/.spex", git: { ok: true, version: "2.50" }, host: { url: "https://host.test", displayName: null },
-  account: null, signIn: { phase: "idle" }, read: { phase: "idle" }, readAt: null, groups: [], diagnostics: [], issues: 0,
-};
+const EMPTY_GROUPS = groupsState();
 
 /** Seed the real store; the client is faked via setClientForTests. */
 function seed(over: Record<string, unknown> = {}) {

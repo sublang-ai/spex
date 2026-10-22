@@ -12,11 +12,14 @@ import type {
   EnvironmentPackage,
   EnvironmentState,
   GroupsState,
+  InstanceState,
   PlaybookAvailability,
   ProjectInfo,
   ReadinessEntry,
   RepositoryState,
 } from "@sublang/spex-core/protocol";
+
+import { groupsState, instanceState, namespace } from "./groups-state.js";
 
 export const NOW = Date.UTC(2026, 9, 6, 12);
 export const PROJECT_ID = "me/demo-spex";
@@ -82,6 +85,8 @@ export function repository(over: Partial<RepositoryState> = {}): RepositoryState
   return {
     key: PROJECT_ID,
     instance: "https://spex.example",
+    // A remote the reader named, a path: no instance governs it.
+    governing: null,
     name: "demo-spex",
     id: "42",
     own: false,
@@ -106,9 +111,11 @@ export function repository(over: Partial<RepositoryState> = {}): RepositoryState
 }
 
 /** The home: your own group's spex repository and the project's, the
- * account signed in unless a test says otherwise. */
+ * account signed in unless a test says otherwise — signed in nowhere,
+ * the home lists no instance and the project's clone stands under your
+ * own group. */
 export function home(
-  options: { syncing?: string; account?: GroupsState["account"] } = {},
+  options: { syncing?: string; account?: InstanceState["account"] | null } = {},
 ): GroupsState {
   const sync = (key: string): RepositoryState["sync"] =>
     options.syncing === key
@@ -117,45 +124,15 @@ export function home(
   const account = options.account === undefined ? { id: "7", login: "me", displayName: "Me", canCreateGroup: false } : options.account;
   const own = repository({ key: OWN_KEY, name: "me-spex", own: true, folder: null, sync: sync(OWN_KEY) });
   const project = repository({ sync: sync(PROJECT_ID) });
-  const noCan = { createSubgroup: false, manageMembers: false, rename: false, delete: false };
-  return {
+  return groupsState({
     home: "/home/me/.spex",
     git: { ok: true, version: "2.45.0" },
     defaultInstance: "https://spex.example",
-    signIn: { phase: "idle" },
-    own: { name: "me", repositories: [own] },
-    instances: account === null ? [] : [{
-      origin: "https://spex.example",
-      host: "spex.example",
-      displayName: "Spex Example",
-      account,
-      signedIn: true,
-      hostSignedOut: false,
-      read: { phase: "idle" },
-      readAt: NOW,
-      roles: [],
-      groups: [{ id: null, login: "me", mine: true, fullPath: "me", name: "me", can: noCan, repositories: [project] }],
-    }],
-    // The transitional mirrors the surface reads until it reads
-    // `instances` (space-30).
-    host: { url: "https://spex.example", displayName: "Spex Example" },
-    account,
-    read: { phase: "idle" },
-    readAt: NOW,
-    groups: [
-      {
-        id: "1",
-        fullPath: "me",
-        name: "me",
-        own: true,
-        can: noCan,
-        repositories: [own, project],
-      },
-    ],
-    roles: [],
-    diagnostics: [],
-    issues: 0,
-  };
+    own: { name: "me", named: account === null, repositories: account === null ? [own, project] : [own] },
+    instances: account === null
+      ? []
+      : [instanceState("https://spex.example", { displayName: "Spex Example", account, readAt: NOW, groups: [namespace("me", [project])] })],
+  });
 }
 
 /** A playbook an environment exports, enabled nowhere unless told. */

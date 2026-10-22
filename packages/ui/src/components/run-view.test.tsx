@@ -1631,7 +1631,9 @@ describe("run-view-90/89: the working line and the bound turn's chip", () => {
       ),
     );
     expect(screen.getByTestId("working-line")).toBeTruthy();
-    expect(document.activeElement).toBe(screen.getByTestId("working-drop"));
+    await vi.waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByTestId("working-drop")),
+    );
     setClientForTests(undefined);
   });
 });
@@ -4270,9 +4272,9 @@ test("a newer session read cannot cancel an independent project-key migration", 
     openTabs: {[oldProject.id]: ["synthetic"]}, workspaceTabs: {[oldProject.id]: "synthetic"},
     expandedProjects: {[oldProject.id]: true}});
   try {
-    deliverServerMessageForTests({type: "space.state", state: {groups: [{repositories: [
+    deliverServerMessageForTests({type: "space.state", state: {own: {name: "synthetic", repositories: []}, instances: [{groups: [{repositories: [
       {key: newProject.id, folder: oldProject.path, state: "reachable"},
-    ]}]} } as never);
+    ]}]}]} } as never);
     await useAppStore.getState().rereadProse(); // a newer session.list supersedes followProjects' list only
     oldList.resolve([SESSION_RACE]); movedProjects.resolve([newProject]);
     await Promise.all([oldList.promise, movedProjects.promise]);

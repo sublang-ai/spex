@@ -34,6 +34,7 @@ import {
   newPlayerId,
 } from "../lib/drafts.js";
 import { ownRepositoryKey } from "../lib/environments.js";
+import { defaultSignedIn } from "../lib/instances.js";
 import { i18n } from "../i18n.js";
 import { AgentChip } from "./AgentChip.js";
 import { AgentEditorPopover } from "./AgentEditor.js";
@@ -436,7 +437,7 @@ export function DraftRegisterTab({
             : i18n._({ id: "Enable", comment: "enable this playbook in this config" })}
         </button>
       </div>
-      <PublishControl draft={draft} signedIn={Boolean(space?.account)} onNavigate={onNavigate} />
+      <PublishControl draft={draft} signedIn={defaultSignedIn(space)} onNavigate={onNavigate} />
     </div>
   );
 }

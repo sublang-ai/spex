@@ -393,10 +393,8 @@ function MissingPlayerRow({ entry }: { entry: MissingPlayer }) {
  * to (settings-46): as Space reads it, else from the file's place
  * under `workspace/<key>/config/` (DR-103). */
 function ownRepositoryOf(space: GroupsState | undefined, path: string): string | undefined {
-  for (const group of space?.groups ?? []) {
-    const repository = group.repositories.find((entry) => entry.own);
-    if (repository) return repository.key;
-  }
+  const repository = space?.own.repositories.find((entry) => entry.own);
+  if (repository) return repository.key;
   return /\/workspace\/([a-z0-9][a-z0-9/-]*-spex)\/config\//u.exec(path)?.[1];
 }
 
