@@ -180,7 +180,7 @@ describe("projects-22: with no project, the palette is an add flow", () => {
   });
 
   test("welcome own-project entry focuses the path without repeating Academy", () => {
-    renderPalette({ ...EMPTY, ownProjectOnly: true });
+    renderPalette({ ...EMPTY, addProjectOnly: true });
     expect(document.activeElement).toBe(screen.getByTestId("palette-path"));
     expect(screen.queryByTestId("palette-academy")).toBeNull();
   });
@@ -189,7 +189,7 @@ describe("projects-22: with no project, the palette is an add flow", () => {
     useAppStore.setState({ space: undefined });
     const onPickFolder = vi.fn(async () => "/tmp/existing");
     const onAddPath = vi.fn(async () => PROJECTS[0]);
-    const { onPick } = renderPalette({ ...EMPTY, ownProjectOnly: true, onPickFolder, onAddPath });
+    const { onPick } = renderPalette({ ...EMPTY, addProjectOnly: true, onPickFolder, onAddPath });
     const folder = screen.getByTestId("palette-open-folder");
     expect(document.activeElement).toBe(folder);
     expect(folder.textContent).toContain("Choose a project folder");
@@ -204,7 +204,7 @@ describe("projects-22: with no project, the palette is an add flow", () => {
   });
 
   test("manual existing path and new-folder path are separate choices", () => {
-    renderPalette({ ...EMPTY, ownProjectOnly: true, onPickFolder: vi.fn(async () => null) });
+    renderPalette({ ...EMPTY, addProjectOnly: true, onPickFolder: vi.fn(async () => null) });
     fireEvent.click(screen.getByTestId("palette-manual-path-start"));
     expect(document.activeElement).toBe(screen.getByTestId("palette-path"));
     expect(screen.getByText("Path to an existing Git repository")).toBeTruthy();
@@ -218,7 +218,7 @@ describe("projects-22: with no project, the palette is an add flow", () => {
   });
 
   test("without a native picker, the existing path remains reachable above creation", () => {
-    renderPalette({ ...EMPTY, ownProjectOnly: true });
+    renderPalette({ ...EMPTY, addProjectOnly: true });
     fireEvent.click(screen.getByTestId("palette-create-start"));
     expect(screen.queryByTestId("palette-path")).toBeNull();
     fireEvent.click(screen.getByTestId("palette-manual-path-start"));
@@ -228,7 +228,7 @@ describe("projects-22: with no project, the palette is an add flow", () => {
 
   test("new project expands its own path and keeps existing-path Add separate", async () => {
     const onCreatePath = vi.fn(async () => PROJECTS[1]);
-    renderPalette({ ...EMPTY, ownProjectOnly: true, onCreatePath });
+    renderPalette({ ...EMPTY, addProjectOnly: true, onCreatePath });
     fireEvent.click(screen.getByTestId("palette-create-start"));
     expect(document.activeElement).toBe(screen.getByTestId("palette-new-path"));
     fireEvent.change(screen.getByTestId("palette-new-path"), {
@@ -236,6 +236,23 @@ describe("projects-22: with no project, the palette is an add flow", () => {
     });
     fireEvent.click(screen.getByTestId("palette-create"));
     await vi.waitFor(() => expect(onCreatePath).toHaveBeenCalledWith("/tmp/brand-new", true));
+  });
+
+  test("sidebar add mode uses the same form when projects already exist", async () => {
+    useAppStore.setState({ space: undefined });
+    const onPickFolder = vi.fn(async () => "/tmp/existing");
+    const onAddPath = vi.fn(async () => PROJECTS[0]);
+    const { onPick } = renderPalette({ addProjectOnly: true, onPickFolder, onAddPath });
+    expect(screen.getByRole("dialog", { name: "Add a project" })).toBeTruthy();
+    expect(screen.queryByTestId("palette-search")).toBeNull();
+    expect(screen.queryByTestId("palette-project-me/alpha-spex")).toBeNull();
+    expect(screen.queryByTestId("palette-academy")).toBeNull();
+    expect(screen.getByTestId("palette-create-start")).toBeTruthy();
+    const folder = screen.getByTestId("palette-open-folder");
+    expect(document.activeElement).toBe(folder);
+    fireEvent.click(folder);
+    await vi.waitFor(() => expect(onAddPath).toHaveBeenCalledWith("/tmp/existing"));
+    expect(onPick).toHaveBeenCalledWith(PROJECTS[0].id);
   });
 });
 

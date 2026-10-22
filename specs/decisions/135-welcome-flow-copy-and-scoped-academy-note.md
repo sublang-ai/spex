@@ -7,6 +7,7 @@
 
 Accepted (2026-10-22) for the owner's P0-0 revision.
 Amends [DR-134](134-specs-first-welcome-and-distinct-project-paths.md) in the welcome presentation and first-project picker.
+The welcome value explanation and Academy caption are amended by [DR-136](136-quieter-welcome-flow-and-academy-choice.md).
 
 ## Context
 

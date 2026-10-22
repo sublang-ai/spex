@@ -524,14 +524,15 @@ describe("run-view-72: the chrome folds without dropping a duty", () => {
     // Sessions stop listing, but the open tab is still the reach.
     expect(screen.queryByTestId("sidebar-session-a-live")).toBeNull();
     expect(screen.getByRole("tab", { selected: true })).toBeTruthy();
-    // The palette control keeps its icon-only form under the
-    // Projects entry (DR-030): collapse never hides a duty.
-    const palette = screen.getByLabelText("Switch or add a project");
-    expect(palette.title).toBe(`Switch or add a project (${keyLabel("P")})`);
-    fireEvent.click(palette);
-    expect(screen.getByRole("dialog", { name: "Choose a project" })).toBeTruthy();
-    fireEvent.keyDown(screen.getByTestId("palette-search"), { key: "Escape" });
-    expect(screen.queryByRole("dialog", { name: "Choose a project" })).toBeNull();
+    // The add control keeps its icon-only form under the Projects
+    // entry (DR-030): collapse never hides a duty.
+    const addProject = screen.getByLabelText("Add a local project");
+    expect(addProject.title).toBe("Add a local project");
+    fireEvent.click(addProject);
+    expect(screen.getByRole("dialog", { name: "Add a project" })).toBeTruthy();
+    expect(screen.getByTestId("palette-own-project")).toBeTruthy();
+    fireEvent.keyDown(screen.getByTestId("palette-path"), { key: "Escape" });
+    expect(screen.queryByRole("dialog", { name: "Add a project" })).toBeNull();
 
     // Chrome state is a preference: it survives a remount.
     unmount();
@@ -688,7 +689,7 @@ describe("run-view-57: a workspace holding projects opens inside one", () => {
 });
 
 describe("run-view-168: first-project welcome route", () => {
-  test("own-project path focuses the palette; a later ordinary opening restores Academy", () => {
+  test("landing and sidebar add the same way; the switch shortcut still offers Academy", () => {
     useAppStore.setState({
       projects: [],
       sessions: [],
@@ -710,6 +711,10 @@ describe("run-view-168: first-project welcome route", () => {
     fireEvent.keyDown(window, { key: "p", metaKey: true });
     expect(screen.queryByTestId("project-palette")).toBeNull();
     fireEvent.click(screen.getByTestId("sidebar-palette"));
+    expect(screen.getByTestId("palette-own-project")).toBeTruthy();
+    expect(screen.queryByTestId("palette-academy")).toBeNull();
+    fireEvent.keyDown(screen.getByTestId("palette-path"), { key: "Escape" });
+    fireEvent.keyDown(window, { key: "p", metaKey: true });
     expect(screen.getByTestId("palette-academy")).toBeTruthy();
   });
 });

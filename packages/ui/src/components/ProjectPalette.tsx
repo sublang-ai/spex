@@ -7,8 +7,8 @@
 // keystroke away. With nothing registered there is nothing to filter,
 // so the palette opens as an add flow: the path field focused and the
 // Academy example leading its ordinary list (projects-22). The welcome
-// page's own-project route leads with the native folder picker and keeps
-// creating a new project separate (projects-42). The palette owns
+// page and sidebar's add route lead with the native folder picker and
+// keep creating a new project separate (projects-42). The palette owns
 // focus while open — Tab wraps inside it and Escape closes from
 // anywhere in it — and returns focus to the opener with any draft
 // intact (run-view-42).
@@ -54,9 +54,9 @@ export interface ProjectPaletteProps {
   /** Register an existing repository by path (store's addProjectByPath). */
   onAddPath: (path: string) => Promise<ProjectInfo>;
   onCreatePath: (path: string, scaffold: boolean) => Promise<ProjectInfo>;
-  /** Opened from the welcome page's local-project choice: lead with
-   * folder selection without repeating the Academy choice above it. */
-  ownProjectOnly?: boolean;
+  /** Opened from a project-add action: lead with folder selection,
+   * keeping project switching and the Academy choice out of this form. */
+  addProjectOnly?: boolean;
   onClose: () => void;
 }
 
@@ -106,16 +106,16 @@ export function ProjectPalette(props: ProjectPaletteProps) {
   useEffect(() => {
     if (picking && !pickingRepo) onClose();
   }, [picking, pickingRepo, onClose]);
-  // No project registered: the remedy is adding one, so the filter
-  // goes and the add flow takes the front (projects-22).
+  // With no project registered, the ordinary switcher has no filter;
+  // the explicit add form works with or without registered projects.
   const empty = props.projects.length === 0;
-  const welcomeAdd = empty && props.ownProjectOnly === true;
+  const addProjectOnly = props.addProjectOnly === true;
   const hasFolderPicker = Boolean(props.onPickFolder);
 
   // The palette owns focus while open and hands it back on close.
   useEffect(() => {
     openerRef.current = document.activeElement;
-    (welcomeAdd && hasFolderPicker
+    (addProjectOnly && hasFolderPicker
       ? folderRef.current
       : empty
         ? pathRef.current
@@ -131,9 +131,9 @@ export function ProjectPalette(props: ProjectPaletteProps) {
   useEffect(() => {
     if (creating) newPathRef.current?.focus();
     else if (manualPath) pathRef.current?.focus();
-    else if (welcomeAdd && hasFolderPicker) folderRef.current?.focus();
-    else if (welcomeAdd) pathRef.current?.focus();
-  }, [creating, manualPath, welcomeAdd, hasFolderPicker]);
+    else if (addProjectOnly && hasFolderPicker) folderRef.current?.focus();
+    else if (addProjectOnly) pathRef.current?.focus();
+  }, [creating, manualPath, addProjectOnly, hasFolderPicker]);
 
   const rowState = useMemo(() => {
     const attention = [...props.attention.values()];
@@ -166,7 +166,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
 
   // Entries the arrow keys traverse, in visual order: the Academy row
   // where it leads the list, then projects, then Open folder…
-  const lead = empty && !props.ownProjectOnly ? 1 : 0;
+  const lead = empty && !addProjectOnly ? 1 : 0;
   const entryCount = lead + filtered.length + (props.onPickFolder ? 1 : 0);
   const clamped = Math.min(index, Math.max(0, entryCount - 1));
   const openFolderIndex = lead + filtered.length;
@@ -201,7 +201,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
   }
 
   async function runAdd(create: boolean): Promise<void> {
-    const path = (create && welcomeAdd ? newPathDraft : pathDraft).trim();
+    const path = (create && addProjectOnly ? newPathDraft : pathDraft).trim();
     if (!path || busy) return;
     setBusy(true);
     setError(undefined);
@@ -287,13 +287,13 @@ export function ProjectPalette(props: ProjectPaletteProps) {
   }
 
   function pathKeydown(event: React.KeyboardEvent): void {
-    if (!welcomeAdd && moveHighlight(event)) return;
+    if (!addProjectOnly && moveHighlight(event)) return;
     if (event.key === "Enter") {
       event.preventDefault();
       // A typed path adds; an empty field hands Enter to the
       // highlighted row, so the zero-state is one keystroke deep.
       if (pathDraft.trim()) void runAdd(false);
-      else if (!welcomeAdd) activate(clamped);
+      else if (!addProjectOnly) activate(clamped);
     }
   }
 
@@ -366,7 +366,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
         role="dialog"
         aria-modal="true"
         aria-label={
-          empty ? i18n._("Add a project") : i18n._("Choose a project")
+          addProjectOnly || empty ? i18n._("Add a project") : i18n._("Choose a project")
         }
         onKeyDown={dialogKeydown}
         className="flex max-h-full w-[28rem] max-w-[90vw] flex-col overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-2xl dark:border-neutral-700 dark:bg-neutral-900"
@@ -383,7 +383,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
               onNote={() => {}}
             />
           </div>
-        ) : welcomeAdd ? (
+        ) : addProjectOnly ? (
           <div data-testid="palette-own-project" className="min-h-0 overflow-y-auto p-4">
             <h2 className="text-base font-semibold text-neutral-900 dark:text-neutral-100">
               {i18n._("Add a local project")}
@@ -536,7 +536,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
             path row, its options, and a failure message keep their
             place at every window height (projects-30). */}
         <div className="relative min-h-0 flex-1 overflow-y-auto py-1">
-          {empty && !props.ownProjectOnly ? (
+          {empty && !addProjectOnly ? (
             <button
               type="button"
               data-testid="palette-academy"

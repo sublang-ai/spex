@@ -158,6 +158,7 @@ meta.md       The spec of specs
 | [DR-133](decisions/133-the-first-project-picker-leads-with-a-folder.md) | 133-the-first-project-picker-leads-with-a-folder.md | Welcome page's local-project choice opens a folder-first palette with separate existing and new-project paths; amends DR-132 and DR-011 in that entry |
 | [DR-134](decisions/134-specs-first-welcome-and-distinct-project-paths.md) | 134-specs-first-welcome-and-distinct-project-paths.md | Specs-first welcome copy, local-project primary action, neutral folder picker and distinct existing/new paths; amends DR-132 and DR-133 |
 | [DR-135](decisions/135-welcome-flow-copy-and-scoped-academy-note.md) | 135-welcome-flow-copy-and-scoped-academy-note.md | Arrow-separated specs-to-delivery explanation, Academy-only caption and no redundant creation-form back link; amends DR-134 |
+| [DR-136](decisions/136-quieter-welcome-flow-and-academy-choice.md) | 136-quieter-welcome-flow-and-academy-choice.md | Compact connected specs-to-delivery steps and no Academy caption on the welcome page; amends DR-135 |
 
 ## Packages
 

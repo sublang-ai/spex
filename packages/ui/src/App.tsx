@@ -960,9 +960,13 @@ export function App() {
     safeStorageSet(SURFACE_KEY, next);
   }, []);
   const [paletteOpen, setPaletteOpen] = useState(false);
-  const [paletteOwnProject, setPaletteOwnProject] = useState(false);
+  const [paletteAddProject, setPaletteAddProject] = useState(false);
   const openPalette = () => {
-    setPaletteOwnProject(false);
+    setPaletteAddProject(false);
+    setPaletteOpen(true);
+  };
+  const openAddProject = () => {
+    setPaletteAddProject(true);
     setPaletteOpen(true);
   };
   const configState = useAppStore((state) => state.configState);
@@ -1178,7 +1182,7 @@ export function App() {
         }
         if (event.key.toLowerCase() === "p") {
           event.preventDefault();
-          setPaletteOwnProject(false);
+          setPaletteAddProject(false);
           setPaletteOpen((open) => !open);
           return;
         }
@@ -1330,7 +1334,7 @@ export function App() {
       <Announcer />
       {paletteOpen ? (
         <ProjectPalette
-          ownProjectOnly={paletteOwnProject}
+          addProjectOnly={paletteAddProject}
           projects={projects}
           sessions={sessions}
           attention={attentionBySession}
@@ -1345,7 +1349,7 @@ export function App() {
           onCreatePath={(path, scaffold) => createProject(path, scaffold)}
           onClose={() => {
             setPaletteOpen(false);
-            setPaletteOwnProject(false);
+            setPaletteAddProject(false);
           }}
         />
       ) : null}
@@ -1376,7 +1380,7 @@ export function App() {
           onDeleteSession={(sessionId) =>
             useAppStore.getState().deleteSession(sessionId)
           }
-          onOpenPalette={openPalette}
+          onAddProject={openAddProject}
           foot={configFoot}
         />
         <main
@@ -1408,10 +1412,7 @@ export function App() {
             <WorkspaceSurface
               onNavigate={setSurface}
               onOpenPalette={openPalette}
-              onOpenOwnProject={() => {
-                setPaletteOwnProject(true);
-                setPaletteOpen(true);
-              }}
+              onOpenOwnProject={openAddProject}
               attentionBySession={attentionBySession}
               pendingFocus={pendingFocus}
               onFocusHandled={() => setPendingFocus(undefined)}

@@ -301,10 +301,10 @@ Where a project is registered and no session tab is active, when the Projects su
 
 #### run-view-168
 
-While no project is registered, the Projects surface shall show a welcome page naming checkable specs as the leading value and compiled playbooks as the way AI implementation and review are coordinated, with one primary "Add a local project" action [[projects-42](projects.md#projects-42)] and one secondary action to open the current Academy specs example [[projects-27](projects.md#projects-27)] ([DR-132](../decisions/132-a-welcome-page-before-the-first-project.md), [DR-133](../decisions/133-the-first-project-picker-leads-with-a-folder.md), [DR-134](../decisions/134-specs-first-welcome-and-distinct-project-paths.md), [DR-135](../decisions/135-welcome-flow-copy-and-scoped-academy-note.md)):
+While no project is registered, the Projects surface shall show a welcome page naming checkable specs as the leading value and compiled playbooks as the way AI implementation and review are coordinated, with one primary "Add a local project" action [[projects-42](projects.md#projects-42)] and one secondary action to open the current Academy specs example [[projects-27](projects.md#projects-27)] ([DR-132](../decisions/132-a-welcome-page-before-the-first-project.md), [DR-133](../decisions/133-the-first-project-picker-leads-with-a-folder.md), [DR-134](../decisions/134-specs-first-welcome-and-distinct-project-paths.md), [DR-135](../decisions/135-welcome-flow-copy-and-scoped-academy-note.md), [DR-136](../decisions/136-quieter-welcome-flow-and-academy-choice.md)):
 
 - the Academy action shall acknowledge seeding and report a refusal in place, and its copy shall not promise a recorded replay before one exists;
-- the value explanation shall use Spex as its common actor and three stacked, arrow-linked stages to show the path from specs through compiled playbooks to coordinated implementation and review; the Academy explanation shall sit with the Academy action, not below both actions;
+- the value explanation shall show the path from specs through compiled playbooks to coordinated implementation and review as three compact, connected steps with short labels and descriptions; the Academy action shall have no caption below it;
 - the page shall hide the Captain chat, composer, agent identity, quick-start playbooks, and adapter-readiness warning;
 - the sidebar shall retain its compact project-palette control without a second prominent add control;
 - shared config errors shall remain visible with a Settings action [[run-view-44](#run-view-44)], and connection failures shall remain visible [[run-view-50](#run-view-50)].
@@ -609,7 +609,7 @@ While the app is connected, the sidebar shall present navigation as surface entr
 - activating a project row makes it the current project and changes no disclosure;
 - a disclosed project lists its sessions by last activity, a working one first, the five most recent shown with one control revealing the rest in place and one control opening that project's start tab — a project holds at most one turn in flight [[core-service-4](core-service.md#core-service-4)], so starting a session is a composer away, never a conflict away ([DR-051](../decisions/051-runtime-held-for-a-turn.md));
 - a project whose sessions need a human carries a dot in the most severe of their colors on its own row, disclosed or not [[run-view-73](#run-view-73)];
-- the section header carries the control that opens the project palette [[run-view-42](#run-view-42)], where projects are added and created;
+- the section header carries a plus control that opens the local-project add form [[projects-42](projects.md#projects-42)], where projects are added and created;
 - the surface entries are a navigation list publishing the current surface, and the projects and their sessions are one tree publishing disclosure, selection, and a single focus stop;
 - the tree's selection follows the surface: the current project's row and the session row whose tab is shown are selected only while Projects is the surface — on the Dashboard, Playbooks, Space, or Settings no row is selected and that surface's entry alone reads as current — and choosing Projects again selects the remembered project once more.
 - the surface the reader stands on is remembered across launches ([DR-030](../decisions/030-workspace-chrome.md)), so reopening the app — or reloading the page after a failure — returns them to it rather than to Projects.
@@ -679,8 +679,8 @@ While a session's tab is shown, the run view shall lay the Captain column and th
 
 The project palette shall be fully keyboard-operable ([DR-011](../decisions/011-project-workspace.md)):
 
-- it opens from Cmd/Ctrl+P, the sidebar's Projects section — in the expanded tree and the collapsed rail alike [[run-view-71](#run-view-71)] — the Captain home's greeting where nothing is registered [[run-view-25](#run-view-25)], or submitting a composer with no project chosen;
-- its filter input holds focus — the path field where no project is registered, the palette then being an add flow [[projects-22](projects.md#projects-22)];
+- its searchable switcher opens from Cmd/Ctrl+P or submitting a composer with no project chosen, while the sidebar's Projects plus — in the expanded tree and the collapsed rail alike [[run-view-71](#run-view-71)] — and the welcome page's local-project action [[run-view-168](#run-view-168)] open its add form [[projects-42](projects.md#projects-42)];
+- the switcher's filter input holds focus — the path field where no project is registered, the ordinary palette then being an add flow [[projects-22](projects.md#projects-22)] — while the add form focuses the folder choice or its existing-path fallback [[projects-42](projects.md#projects-42)];
 - arrow keys move the highlight over the Academy row where it leads the list, the project rows, and "Open folder…";
 - Enter picks, in an empty path field too, while a typed path adds;
 - the palette announces itself modal, and Tab and Shift+Tab wrap inside it;
@@ -749,7 +749,7 @@ Where the Captain home has nothing to report (no warnings or errors), it shall c
 
 The Projects surface shall name the current project in the sidebar's Projects section rather than in a bar of its own [[run-view-67](#run-view-67)] ([DR-029](../decisions/029-session-history-home.md)):
 
-- the project palette opens from its keyboard binding [[run-view-49](#run-view-49)] and from the sidebar's Projects section;
+- the project switcher opens from its keyboard binding [[run-view-49](#run-view-49)], and the sidebar's Projects plus opens the add form [[projects-42](projects.md#projects-42)];
 - while no project is chosen, the tab strip (including pinned tabs) is absent and the sidebar plus the Captain home's guidance is the whole surface.
 
 

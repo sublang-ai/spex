@@ -649,14 +649,6 @@ msgstr "← Back"
 msgid "← Back to {surface}"
 msgstr "← Back to {surface}"
 
-#: src/components/CaptainHome.tsx
-msgid "→ Compiles natural-language playbooks into executable workflows"
-msgstr "→ Compiles natural-language playbooks into executable workflows"
-
-#: src/components/CaptainHome.tsx
-msgid "→ Coordinates AI implementation and review, leaving traceable changes"
-msgstr "→ Coordinates AI implementation and review, leaving traceable changes"
-
 #. act: jump to the end of the transcript; ↓ stays as it is
 #. act: jump to the end of the transcript; ↓ stays as it is
 #. jump to the newest entry; the arrow is part of the pill
@@ -1795,6 +1787,10 @@ msgstr "Compile failed at an unknown phase"
 msgid "Compile interrupted when Spex closed"
 msgstr "Compile interrupted when Spex closed"
 
+#: src/components/CaptainHome.tsx
+msgid "Compile natural-language playbooks into executable workflows"
+msgstr "Compile natural-language playbooks into executable workflows"
+
 #. draft state chip, at most 14 characters: the last compile succeeded
 #: src/lib/drafts.ts
 msgid "Compiled"
@@ -1928,6 +1924,10 @@ msgstr "Continue in your browser:"
 #: src/components/ApprovalInbox.tsx
 msgid "Conversation: {name}"
 msgstr "Conversation: {name}"
+
+#: src/components/CaptainHome.tsx
+msgid "Coordinate AI implementation and review, with traceable changes"
+msgstr "Coordinate AI implementation and review, with traceable changes"
 
 #. the item's ID went to the clipboard
 #: src/components/SpecItemRows.tsx
@@ -2148,6 +2148,10 @@ msgstr "Decisions, {count} records"
 msgid "Define checkable specs. Deliver through playbooks."
 msgstr "Define checkable specs. Deliver through playbooks."
 
+#: src/components/CaptainHome.tsx
+msgid "Define goals and acceptance criteria"
+msgstr "Define goals and acceptance criteria"
+
 #. confirm: delete the group on the Git host
 #. confirm: delete this session for good
 #. confirm: remove the authoring session for good
@@ -2219,6 +2223,10 @@ msgstr "deleting…"
 #: src/components/SpaceGroups.tsx
 msgid "Deleting…"
 msgstr "Deleting…"
+
+#: src/components/CaptainHome.tsx
+msgid "Delivery"
+msgstr "Delivery"
 
 #. how a tool call ended: permission was refused
 #: src/components/PlayerPane.tsx
@@ -4358,6 +4366,7 @@ msgstr "playbook: {playbookId}"
 #. the surface listing every playbook
 #. the surface listing every playbook
 #: src/components/AuthoringWorkspace.tsx
+#: src/components/CaptainHome.tsx
 #: src/components/LibrarySurface.tsx
 #: src/components/NavRail.tsx
 msgid "Playbooks"
@@ -5601,6 +5610,7 @@ msgstr "spec package requests"
 #. the spec view's own heading
 #. the spec view's own heading
 #: src/App.tsx
+#: src/components/CaptainHome.tsx
 #: src/components/SpecView.tsx
 msgid "Specs"
 msgstr "Specs"
@@ -5644,10 +5654,6 @@ msgstr "Spex navigation"
 #: src/components/LibrarySurface.tsx
 msgid "Spex repository shown"
 msgstr "Spex repository shown"
-
-#: src/components/CaptainHome.tsx
-msgid "Spex uses specs to define goals and acceptance criteria"
-msgstr "Spex uses specs to define goals and acceptance criteria"
 
 #: src/components/ProjectPalette.tsx
 msgid "Spex will create this folder and initialize a Git repository."
@@ -5822,10 +5828,6 @@ msgstr "Supported by this model"
 msgid "Switch or add a project"
 msgstr "Switch or add a project"
 
-#: src/components/NavRail.tsx
-msgid "Switch or add a project ({keys})"
-msgstr "Switch or add a project ({keys})"
-
 #: src/components/ProjectPalette.tsx
 msgid "Switch to a project…"
 msgstr "Switch to a project…"
@@ -5965,10 +5967,6 @@ msgstr "The /{command} workflow failed and is waiting for you."
 #: src/components/ParkedRun.tsx
 msgid "The /{command} workflow is waiting for your answer."
 msgstr "The /{command} workflow is waiting for your answer."
-
-#: src/components/CaptainHome.tsx
-msgid "The Academy example creates a local project with specs to explore. It does not play a recorded task yet."
-msgstr "The Academy example creates a local project with specs to explore. It does not play a recorded task yet."
 
 #: src/lib/labels.ts
 msgid "The agent process exited unexpectedly ({code})"

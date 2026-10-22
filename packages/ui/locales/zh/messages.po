@@ -649,14 +649,6 @@ msgstr "← 返回"
 msgid "← Back to {surface}"
 msgstr "← 返回{surface}"
 
-#: src/components/CaptainHome.tsx
-msgid "→ Compiles natural-language playbooks into executable workflows"
-msgstr "→ 将自然语言规程编译为可执行流程"
-
-#: src/components/CaptainHome.tsx
-msgid "→ Coordinates AI implementation and review, leaving traceable changes"
-msgstr "→ 编排 AI 实现与复核，留下可追溯的改动"
-
 #. act: jump to the end of the transcript; ↓ stays as it is
 #. act: jump to the end of the transcript; ↓ stays as it is
 #. jump to the newest entry; the arrow is part of the pill
@@ -1795,6 +1787,10 @@ msgstr "编译在未知阶段失败"
 msgid "Compile interrupted when Spex closed"
 msgstr "Spex 关闭时编译被中断"
 
+#: src/components/CaptainHome.tsx
+msgid "Compile natural-language playbooks into executable workflows"
+msgstr "将自然语言规程编译为可执行流程"
+
 #. draft state chip, at most 14 characters: the last compile succeeded
 #: src/lib/drafts.ts
 msgid "Compiled"
@@ -1928,6 +1924,10 @@ msgstr "请在浏览器中继续："
 #: src/components/ApprovalInbox.tsx
 msgid "Conversation: {name}"
 msgstr "对话：{name}"
+
+#: src/components/CaptainHome.tsx
+msgid "Coordinate AI implementation and review, with traceable changes"
+msgstr "编排 AI 实现与复核，改动可追溯"
 
 #. the item's ID went to the clipboard
 #: src/components/SpecItemRows.tsx
@@ -2148,6 +2148,10 @@ msgstr "决策记录，共 {count} 条"
 msgid "Define checkable specs. Deliver through playbooks."
 msgstr "写清规约，让 AI 按规程交付"
 
+#: src/components/CaptainHome.tsx
+msgid "Define goals and acceptance criteria"
+msgstr "明确目标与验收标准"
+
 #. confirm: delete the group on the Git host
 #. confirm: delete this session for good
 #. confirm: remove the authoring session for good
@@ -2219,6 +2223,10 @@ msgstr "删除中…"
 #: src/components/SpaceGroups.tsx
 msgid "Deleting…"
 msgstr "删除中…"
+
+#: src/components/CaptainHome.tsx
+msgid "Delivery"
+msgstr "交付"
 
 #. how a tool call ended: permission was refused
 #: src/components/PlayerPane.tsx
@@ -4358,6 +4366,7 @@ msgstr "规程：{playbookId}"
 #. the surface listing every playbook
 #. the surface listing every playbook
 #: src/components/AuthoringWorkspace.tsx
+#: src/components/CaptainHome.tsx
 #: src/components/LibrarySurface.tsx
 #: src/components/NavRail.tsx
 msgid "Playbooks"
@@ -5601,6 +5610,7 @@ msgstr "规约包需求"
 #. the spec view's own heading
 #. the spec view's own heading
 #: src/App.tsx
+#: src/components/CaptainHome.tsx
 #: src/components/SpecView.tsx
 msgid "Specs"
 msgstr "规约"
@@ -5644,10 +5654,6 @@ msgstr "Spex 导航"
 #: src/components/LibrarySurface.tsx
 msgid "Spex repository shown"
 msgstr "显示的 spex 仓库"
-
-#: src/components/CaptainHome.tsx
-msgid "Spex uses specs to define goals and acceptance criteria"
-msgstr "Spex 用规约明确目标与验收标准"
 
 #: src/components/ProjectPalette.tsx
 msgid "Spex will create this folder and initialize a Git repository."
@@ -5822,10 +5828,6 @@ msgstr "此模型支持"
 msgid "Switch or add a project"
 msgstr "切换或添加项目"
 
-#: src/components/NavRail.tsx
-msgid "Switch or add a project ({keys})"
-msgstr "切换或添加项目（{keys}）"
-
 #: src/components/ProjectPalette.tsx
 msgid "Switch to a project…"
 msgstr "切换到项目…"
@@ -5965,10 +5967,6 @@ msgstr "/{command} 工作流失败，正在等待你处理。"
 #: src/components/ParkedRun.tsx
 msgid "The /{command} workflow is waiting for your answer."
 msgstr "/{command} 工作流正在等待你的答复。"
-
-#: src/components/CaptainHome.tsx
-msgid "The Academy example creates a local project with specs to explore. It does not play a recorded task yet."
-msgstr "Academy 示例会创建一个包含规约的本地项目，供你探索；目前还没有任务回放。"
 
 #: src/lib/labels.ts
 msgid "The agent process exited unexpectedly ({code})"

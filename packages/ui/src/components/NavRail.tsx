@@ -102,7 +102,7 @@ export interface NavRailProps {
   /** Delete an idle session this core owns (DR-038); rejects with
    * the core's reason, which the row shows. */
   onDeleteSession(sessionId: string): Promise<void>;
-  onOpenPalette(): void;
+  onAddProject(): void;
   /** Config status / playbook count, the foot's other tenant. */
   foot?: ReactNode;
 }
@@ -510,15 +510,15 @@ export function NavRail(props: NavRailProps) {
     }`;
   }
 
-  // The palette control keeps its icon-only form across the fold
-  // (DR-030): collapse never hides the way to add or switch a project.
+  // The add control keeps its icon-only form across the fold
+  // (DR-030): collapse never hides the way to add a project.
   const paletteControl = (
     <button
       type="button"
       data-testid="sidebar-palette"
-      onClick={props.onOpenPalette}
-      title={i18n._("Switch or add a project ({keys})", { keys: keyLabel("P") })}
-      aria-label={i18n._("Switch or add a project")}
+      onClick={props.onAddProject}
+      title={i18n._("Add a local project")}
+      aria-label={i18n._("Add a local project")}
       className={`flex h-6 w-6 shrink-0 items-center justify-center rounded text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-200 ${
         collapsed ? "self-center" : "-my-0.5"
       }`}

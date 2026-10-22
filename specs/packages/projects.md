@@ -146,7 +146,7 @@ The project palette's path row shall offer distinct "Add" (an existing repo) and
 
 #### projects-42
 
-Where the welcome page opens the first-project palette [[run-view-168](run-view.md#run-view-168)], the palette shall show a clearly clickable but neutral existing-folder choice before an optional manual existing-path entry and a separate expandable new-project path with its specs-scaffold option ([DR-133](../decisions/133-the-first-project-picker-leads-with-a-folder.md), [DR-134](../decisions/134-specs-first-welcome-and-distinct-project-paths.md), [DR-135](../decisions/135-welcome-flow-copy-and-scoped-academy-note.md)):
+When the welcome page's local-project action [[run-view-168](run-view.md#run-view-168)] or the sidebar's Projects plus [[run-view-67](run-view.md#run-view-67)] opens the add form, regardless of whether projects are registered, the palette shall show a clearly clickable but neutral existing-folder choice before an optional manual existing-path entry and a separate expandable new-project path with its specs-scaffold option ([DR-133](../decisions/133-the-first-project-picker-leads-with-a-folder.md), [DR-134](../decisions/134-specs-first-welcome-and-distinct-project-paths.md), [DR-135](../decisions/135-welcome-flow-copy-and-scoped-academy-note.md), [DR-136](../decisions/136-quieter-welcome-flow-and-academy-choice.md)):
 
 - when the native folder picker is available, the folder choice shall receive initial focus;
 - without a native folder picker, the existing-path field shall receive initial focus;
