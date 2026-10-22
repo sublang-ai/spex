@@ -29,7 +29,7 @@ import type {
   SessionInfo,
   TmuxPlayRecord,
 } from "@sublang/spex-core/protocol";
-import { NO_CAN, groupsState, instanceState, namespace, repositoryRow } from "../fixtures/groups-state.js";
+import { NO_CAN, groupsState, instanceState, namespace, repositoryRow, type RowOver } from "../fixtures/groups-state.js";
 
 const PROJECTS: ProjectInfo[] = [
   { id: "me/alpha-spex", path: "/tmp/alpha", name: "alpha", registeredAt: 0, repository: { key: "me/alpha-spex", name: "alpha-spex", group: "me", own: true } },
@@ -307,7 +307,7 @@ describe("projects-1, space-58: a folder added while signed in asks for its grou
   const ADDED: ProjectInfo = { id: "ada/gamma-spex", path: "/tmp/gamma", name: "gamma", registeredAt: 2, repository: { key: "ada/gamma-spex", name: "gamma-spex", group: "ada", own: true } };
   const HOST = "https://host.test";
   const SECOND = "https://second.test";
-  const row = (key: string, extra: Partial<RepositoryState> = {}) => repositoryRow(key, { folder: "/tmp/gamma", ...extra });
+  const row = (key: string, extra: RowOver = {}) => repositoryRow(key, { folder: "/tmp/gamma", ...extra });
   const acme = (id: string) => ({ id, login: null, mine: false, fullPath: "acme", name: "acme", can: NO_CAN, placed: [], repositories: [] });
   /** An instance where ada may be signed in, listing her namespace and
    * acme. */

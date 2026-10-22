@@ -44,6 +44,7 @@ import {
   namespace,
   noInstance,
   renderGroups,
+  ownRepo,
   repo,
   signedOutAt,
   twoInstances,
@@ -355,7 +356,7 @@ describe("GROUPS: each instance under its heading (space-1, git-host-5, space-3,
     // signed in, does not list your own group's own repository, which the
     // second governs (git-host-5).
     const THIRD = "https://third.example";
-    const home = twoHome([namespace("jane")], [namespace("jada")], [{ ...OWN_REPO, governing: SECOND, can: { manageMembers: true, transfer: false } }]);
+    const home = twoHome([namespace("jane")], [namespace("jada")], [ownRepo({ governing: SECOND, can: { manageMembers: true, transfer: false } })]);
     const roles = [
       { id: "1", name: "Viewer", mayPush: false },
       { id: "2", name: "Editor", mayPush: true },

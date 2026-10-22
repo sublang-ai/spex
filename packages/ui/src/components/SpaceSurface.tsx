@@ -75,7 +75,7 @@ export function syncRefusal(
 ): string | undefined {
   if (!groups.git.ok) return groups.git.guidance;
   if (repo.state === "absent") return i18n._("Not on this device");
-  if (repo.branch?.mergePending) {
+  if (repo.mergePending) {
     return i18n._("Finish or abort the merge in your terminal");
   }
   // A diagnostic shown under issues refuses nothing here: it may be

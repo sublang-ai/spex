@@ -26,6 +26,7 @@ import type {
 
 import { useAppStore } from "../state/store.js";
 import { i18n } from "../i18n.js";
+import { rowPlacement } from "../lib/placements.js";
 import { relativeAge } from "../lib/time.js";
 import {
   KIND_LABELS,
@@ -1120,7 +1121,10 @@ export function SyncTab({
   const spaceCancel = useAppStore((state) => state.spaceCancel);
   const key = repo.key;
   const sync = repo.sync;
-  const branch = repo.branch;
+  // Its key placement's, until each placement lists its own (space-8).
+  const placement = rowPlacement(repo);
+  const branch = placement?.branch ?? null;
+  const incoming = placement?.incoming ?? [];
   const running = sync.phase === "running";
 
   const [choices, setChoices] = useState<Record<string, Side>>({});
@@ -1141,9 +1145,9 @@ export function SyncTab({
   // lists a unit changed on both sides under conflicts alone, and its
   // row here reads the host's change beside the mark to choose.
   const incomingUnits: SpaceUnit[] = [
-    ...repo.incoming,
+    ...incoming,
     ...repo.conflicts
-      .filter((conflict) => !repo.incoming.some((unit) => unit.unit === conflict.unit.unit))
+      .filter((conflict) => !incoming.some((unit) => unit.unit === conflict.unit.unit))
       .map((conflict) => ({ ...conflict.unit, change: conflict.remote.change })),
   ];
   const chosen = Object.entries(choices).filter(([unit]) => conflictUnits.has(unit));
@@ -1245,11 +1249,11 @@ export function SyncTab({
   // A repository only on this device has no host copy to check
   // (space-29: `space.fetch` refuses a local-only one).
   const checkDisabled =
-    disabled || running || pending || branch?.mergePending === true || repo.state === "local-only";
+    disabled || running || pending || repo.mergePending || repo.state === "local-only";
 
   return (
     <div data-testid="space-sync-tab" className="flex flex-col gap-3">
-      {branch?.mergePending ? (
+      {repo.mergePending ? (
         <Card testId="space-merge-note" tone="amber">
           {i18n._("A merge is in progress in your terminal. Finish or abort it there.")}
         </Card>

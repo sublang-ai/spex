@@ -15,6 +15,8 @@ import type {
   HostMemberInfo,
   InstanceGroupState,
   InstanceState,
+  PlacementBranch,
+  PlacementState,
   RepositoryState,
   SpaceConflict,
   SpaceEntry,
@@ -24,9 +26,9 @@ import type {
 
 import { SpaceSurface } from "../components/SpaceSurface.js";
 import { deliverServerMessageForTests, setClientForTests, useAppStore } from "../state/store.js";
-import { namespace } from "./groups-state.js";
+import { namespace, placementState, rowOf, type RowOver } from "./groups-state.js";
 
-export { NO_CAN, namespace } from "./groups-state.js";
+export { NO_CAN, namespace, placementState, type RowOver } from "./groups-state.js";
 
 export const NOW = Date.now();
 export const MIN = 60_000;
@@ -157,22 +159,38 @@ export const CONFLICTS: SpaceConflict[] = [
   },
 ];
 
-export const BRANCH: NonNullable<RepositoryState["branch"]> = {
+export const BRANCH: PlacementBranch = {
   ahead: 2,
   behind: 1,
   checkedAt: NOW - 5 * MIN,
   hostEmpty: false,
   unrelated: false,
-  mergePending: false,
   agreed: null,
 };
 
+/** The opened project's placement at the fixtures' instance, held and
+ * reachable, its only member the account, nothing synced since its
+ * check, unless a test says otherwise (space-30, space-87). */
+export function placement(over: Partial<PlacementState> = {}): PlacementState {
+  return placementState({
+    instance: ORIGIN,
+    path: "jane/academy-spex",
+    id: "42",
+    members: 1,
+    visibility: "private",
+    branch: BRANCH,
+    noticed: true,
+    ...over,
+  });
+}
+
 /** The opened project's spex repository, reachable, nothing changed,
  * governed by its instance — by none while local only — unless a test
- * says otherwise (space-30). */
-export function repo(over: Partial<RepositoryState> = {}): RepositoryState {
+ * says otherwise (space-30): what a test says of its key placement is
+ * that placement's line, as `rowOf` routes it. */
+export function repo(over: RowOver = {}): RepositoryState {
   const instance = over.instance === undefined ? ORIGIN : over.instance;
-  return {
+  return rowOf({
     key: KEY,
     instance,
     governing: over.state === "local-only" ? null : instance,
@@ -186,7 +204,6 @@ export function repo(over: Partial<RepositoryState> = {}): RepositoryState {
     state: "reachable",
     reason: null,
     mergePending: false,
-    placements: [],
     placedAt: [],
     waiting: null,
     members: 1,
@@ -200,21 +217,28 @@ export function repo(over: Partial<RepositoryState> = {}): RepositoryState {
     sync: { phase: "idle" },
     can: { manageMembers: false, transfer: false },
     ...over,
-  };
+  });
+}
+
+/** Your own group's spex repository, on the host, as a test says
+ * otherwise of it. */
+export function ownRepo(over: RowOver = {}): RepositoryState {
+  return repo({
+    key: OWN,
+    name: "jane-spex",
+    id: "7",
+    own: true,
+    remote: OWN,
+    code: null,
+    folder: null,
+    branch: null,
+    lastSync: { at: NOW - 3 * HOUR, sent: 1, received: 0 },
+    ...over,
+  });
 }
 
 /** Your own group's spex repository, on the host. */
-export const OWN_REPO: RepositoryState = repo({
-  key: OWN,
-  name: "jane-spex",
-  id: "7",
-  own: true,
-  remote: OWN,
-  code: null,
-  folder: null,
-  branch: null,
-  lastSync: { at: NOW - 3 * HOUR, sent: 1, received: 0 },
-});
+export const OWN_REPO: RepositoryState = ownRepo();
 
 /** The host's own roles in its order, Developer upward may push
  * (DR-114): what a host read brings. */
@@ -289,7 +313,7 @@ export function withGroups(state: GroupsState, ...groups: InstanceGroupState[]):
  * still bearing this device's user name, its own spex repository on this
  * device only, beside the given rows. */
 export function noInstance(over: Partial<GroupsState> = {}, repos: RepositoryState[] = []): GroupsState {
-  const own = { ...OWN_REPO, state: "local-only" as const, governing: null, remote: null, id: null, lastSync: null };
+  const own = ownRepo({ state: "local-only", remote: null, id: null, lastSync: null });
   return base({ instances: [], own: { name: "jane", named: true, repositories: [own, ...repos] }, ...over });
 }
 
@@ -332,7 +356,7 @@ export function twoInstances(over: HomeOver = {}, repos: RepositoryState[] = [re
 
 /** The opened repository with local changes of every kind, listed out
  * of order so the grouping is what orders them. */
-export function repoState(over: Partial<RepositoryState> = {}, home: HomeOver = {}): GroupsState {
+export function repoState(over: RowOver = {}, home: HomeOver = {}): GroupsState {
   return base(home, [
     repo({
       local: [OTHER_UNIT, SETTINGS_UNIT, SESSION_UNIT, RULES_UNIT, INTENT_UNIT, CODE_UNIT, ENVIRONMENT_UNIT, AUTHORING_UNIT, DELETED_SESSION],

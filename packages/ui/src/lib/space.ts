@@ -14,6 +14,7 @@
 // would freeze the language this module was imported in.
 
 import type {
+  PlacementState,
   RepositoryState,
   SpaceEntry,
   SpaceUnit,
@@ -22,6 +23,7 @@ import type {
 } from "@sublang/spex-core/protocol";
 
 import { i18n } from "../i18n.js";
+import { rowPlacement, rowWaiting } from "./placements.js";
 import { relativeAge, shortMoment } from "./time.js";
 
 /** The home's path with the user's home directory as `~` (space-1):
@@ -40,12 +42,12 @@ export function displayRemote(url: string): string {
   return embedded ? `${embedded[1]}${embedded[3]}` : url;
 }
 
-/** Whether a spex repository's clone is on this device: the core reads
- * no branch where none is (space-30) — a row the host lists that this
+/** Whether a spex repository's clone is on this device (space-61): it
+ * is local only or holds a placement; a row the host lists that this
  * device lacks, or one in a group named like a login, which takes no
- * folder (space-61). */
+ * folder, holds none (space-30). */
 export function cloneHere(repo: RepositoryState): boolean {
-  return repo.state === "local-only" || repo.branch !== null;
+  return repo.state === "local-only" || repo.placements.some((placement) => placement.attached);
 }
 
 /** A spex repository's clone: its key is its path under `workspace/`
@@ -57,24 +59,27 @@ export function clonePath(home: string, key: string): string {
 /** The phrase a step waiting on someone else's rights reads on its
  * row (space-58, space-64): the step and the group, phrased here in the
  * reader's language; the host's own words ride the row's title. */
-export function waitingPhrase(waiting: NonNullable<RepositoryState["waiting"]>): string {
+export function waitingPhrase(waiting: NonNullable<PlacementState["waiting"]>): string {
   return waiting.step === "create"
     ? i18n._("Waiting for a member who can create it in {group}", { group: waiting.group })
     : i18n._("Waiting for a member who can prepare its branch in {group}", { group: waiting.group });
 }
 
-/** A spex repository's last sync (space-61): this device's last
- * completed sync of it, else the last one its clone holds — current
- * where the clone's `spex` is still the host's — else none. */
+/** A spex repository's last sync (space-61), its key placement's: this
+ * device's last completed sync with it, else the last one its clone
+ * holds — current where the clone's `spex` is still that placement's —
+ * else none. */
 export function lastSyncOf(repo: RepositoryState): { at: number; current: boolean } | null {
-  if (repo.lastSync) return { at: repo.lastSync.at, current: true };
-  return repo.branch?.agreed ?? null;
+  const placement = rowPlacement(repo);
+  if (placement?.lastSync) return { at: placement.lastSync.at, current: true };
+  return placement?.branch?.agreed ?? null;
 }
 
 /** What a spex repository's row reads for its state (space-61): a
  * waiting step's phrase stands in place of the state's (space-64). */
 export function repositoryStatePhrase(repo: RepositoryState, now: number): string {
-  if (repo.waiting) return waitingPhrase(repo.waiting);
+  const waiting = rowWaiting(repo);
+  if (waiting) return waitingPhrase(waiting);
   switch (repo.state) {
     case "local-only":
       return i18n._("On this device only");

@@ -45,6 +45,7 @@ import {
   repo,
   repoState,
   strayRemote,
+  type RowOver,
 } from "../fixtures/groups.js";
 
 const syncControl = () => screen.getByTestId(`space-row-sync-${KEY}`) as HTMLButtonElement;
@@ -119,7 +120,7 @@ describe("GROUPS: issues and repairs (space-1, space-46..space-56)", () => {
   test("issues open in place, a pending merge read in plain words and the merge noted in the Sync tab", async () => {
     await renderGroups(
       repoState(
-        { branch: { ...BRANCH, mergePending: true } },
+        { mergePending: true },
         {
           diagnostics: [
             { file: "workspace/jane/academy-spex/sessions/x.json", reason: "recorded at /Users/jane/code/infra", blocking: false },
@@ -501,7 +502,7 @@ describe("GROUPS: syncing from the row (space-11, space-12, space-15, space-16, 
   });
 
   test("Sync is refused before the first step with the reason beside the disabled control", async () => {
-    await renderGroups(repoState({ branch: { ...BRANCH, mergePending: true } }));
+    await renderGroups(repoState({ mergePending: true }));
     expect(syncControl().disabled).toBe(true);
     const caption = screen.getByTestId(`space-row-caption-${KEY}`);
     expect(caption.textContent).toBe("Finish or abort the merge in your terminal");
@@ -679,7 +680,7 @@ describe("GROUPS: syncing from the row (space-11, space-12, space-15, space-16, 
 });
 
 describe("GROUPS: choices (space-9, space-17, space-18)", () => {
-  const choicesState = (over: Partial<RepositoryState> = {}) =>
+  const choicesState = (over: RowOver = {}) =>
     repoState({
       incoming: [SESSION_UNIT, SETTINGS_UNIT, INCOMING_INTENT],
       conflicts: CONFLICTS,
@@ -1038,7 +1039,7 @@ describe("GROUPS: copy and roles (space-27, space-28, space-44)", () => {
       repoState(),
       repoState({ incoming: [SESSION_UNIT, SETTINGS_UNIT], conflicts: CONFLICTS, sync: { phase: "choices", placement: ORIGIN, savedCommit: null } }),
       repoState({ sync: { phase: "running", op: "sync", step: "apply", since: NOW, cancelable: false } }),
-      repoState({ branch: { ...BRANCH, unrelated: true, mergePending: true }, sync: { phase: "unrelated", placement: ORIGIN } }, { diagnostics: [MERGE_DIAGNOSTIC] }),
+      repoState({ branch: { ...BRANCH, unrelated: true }, mergePending: true, sync: { phase: "unrelated", placement: ORIGIN } }, { diagnostics: [MERGE_DIAGNOSTIC] }),
       repoState({ sync: { phase: "stopped", op: "sync", step: "push", cause: "rejected", message: "The host changed again", guidance: "Sync again.", retry: true } }),
       repoState({ sync: { phase: "done", at: NOW, sent: 1, received: 2, pushed: true } }),
     ];

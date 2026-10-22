@@ -49,6 +49,7 @@ import {
   withGroups,
   withInstance,
   type HomeOver,
+  type RowOver,
 } from "../fixtures/groups.js";
 
 beforeEach(installClient);
@@ -735,7 +736,7 @@ describe("GROUPS: the groups list and its rows (space-1, space-61, space-64)", (
   });
 
   test("each state reads its phrase and offers its control; Members stands on a reachable row alone", async () => {
-    const cases: [Partial<RepositoryState>, string, string | null, boolean][] = [
+    const cases: [RowOver, string, string | null, boolean][] = [
       [{ state: "reachable", lastSync: null }, "Never synced", "Sync", true],
       [{ state: "reachable", lastSync: { at: NOW - 5 * MIN, sent: 1, received: 1 } }, "Synced 5m ago", "Sync", true],
       [{ state: "read-only", reason: "archived" }, "Read-only: archived", "Sync", false],
@@ -761,7 +762,7 @@ describe("GROUPS: the groups list and its rows (space-1, space-61, space-64)", (
     const recorded = NOW - 5 * MIN;
     const agreedAt = NOW - 3 * HOUR;
     const since = NOW - 26 * HOUR;
-    const cases: [Partial<RepositoryState>, string, number | null][] = [
+    const cases: [RowOver, string, number | null][] = [
       // This device's record stands over what the clone holds.
       [{ lastSync: { at: recorded, sent: 1, received: 0 }, branch: held(since, false) }, "Synced 5m ago", recorded],
       // None recorded — a core started afresh after a sync, a joined
@@ -945,9 +946,9 @@ describe("GROUPS: Pick a group (space-58, space-29)", () => {
     // A project this device's reader has not been told about, beside a
     // team's spex repository for the same code.
     const LISTED = "@spex.example/acme/team/academy-spex";
-    const joining = (listed: Partial<RepositoryState>, local: Partial<RepositoryState> = {}): GroupsState => {
+    const joining = (listed: RowOver, local: RowOver = {}): GroupsState => {
       const state = base({}, [repo({ state: "local-only", remote: null, id: null, code: CODE, branch: null, members: null, noticed: false, ...local })]);
-      const team = repo({ key: LISTED, name: "academy-spex", id: "51", code: CODE, folder: null, members: 3, state: "absent", branch: null, ...listed });
+      const team = repo({ key: LISTED, name: "academy-spex", id: "51", code: CODE, folder: null, members: 3, state: "absent", branch: null, noticed: false, ...listed });
       return withGroups(state, teamGroup([team]));
     };
     const option = () => screen.getByTestId(`space-pick-repo-${LISTED}`);
@@ -1019,9 +1020,9 @@ describe("GROUPS: Pick a group (space-58, space-29)", () => {
     cleanup();
     commandMock.mockImplementation(answer);
 
-    // The account its only member, or the notice seen already: the pick
-    // joins at once, without noticed.
-    for (const [listed, local] of [[{ members: 1 }, {}], [{ members: 3 }, { noticed: true }], [{ members: null }, { noticed: true }]] as const) {
+    // The account its only member, or the notice seen already for that
+    // placement: the pick joins at once, without noticed.
+    for (const [listed, local] of [[{ members: 1 }, {}], [{ members: 3, noticed: true }, {}], [{ members: null, noticed: true }, {}]] as const) {
       commandMock.mockClear();
       await renderGroups(joining(listed, local), { open: false });
       fireEvent.click(screen.getByTestId(`space-row-pick-${KEY}`));

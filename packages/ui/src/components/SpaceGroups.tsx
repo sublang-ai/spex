@@ -30,7 +30,7 @@
 // Every act is a command whose outcome arrives as state (space-29).
 
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
-import type { GroupsState, InstanceGroupState, InstanceState, RepositoryState } from "@sublang/spex-core/protocol";
+import type { GroupsState, InstanceGroupState, InstanceState, PlacementState, RepositoryState } from "@sublang/spex-core/protocol";
 
 import { useAppStore } from "../state/store.js";
 import { i18n } from "../i18n.js";
@@ -44,8 +44,9 @@ import {
   namespaceOf,
   ownBeside,
   pickInstances,
-  placementOf,
+  standingOf,
 } from "../lib/instances.js";
+import { rowPlacement, rowWaiting } from "../lib/placements.js";
 import { absoluteTitle } from "../lib/time.js";
 import {
   STEP_LINES,
@@ -132,7 +133,7 @@ const isPathRemote = (url: string | null): boolean => url !== null && url.starts
  * path remote is reached without one, and a row no instance governs
  * waits while the home is signed in nowhere. */
 function signedOutFor(groups: GroupsState, repo: RepositoryState, governing: InstanceState | undefined): boolean {
-  if (isPathRemote(repo.remote)) return false;
+  if (isPathRemote(rowPlacement(repo)?.path ?? null)) return false;
   return governing ? !governing.signedIn : !anySignedIn(groups);
 }
 
@@ -156,7 +157,7 @@ export function rowSyncRefusal(
 
 /** The sharing notice's words (space-57): what goes to a repository
  * others share, and that a public one's records are public. */
-function sharingNotice(visibility: RepositoryState["visibility"]): string {
+function sharingNotice(visibility: PlacementState["visibility"]): string {
   return visibility === "public"
     ? i18n._(
         "Every session goes there whole — hidden parts and attachments included — and nothing recalls what others downloaded. This repository is public, so its records are public.",
@@ -196,7 +197,7 @@ function rowControl(
       return signedOutFor(groups, repo, governing) ? "none" : "retry";
     case "reachable":
     case "read-only":
-      return repo.sync.phase === "unrelated" || repo.branch?.unrelated === true ? "unrelated" : "sync";
+      return repo.sync.phase === "unrelated" || rowPlacement(repo)?.branch?.unrelated === true ? "unrelated" : "sync";
     default:
       return "none";
   }
@@ -657,6 +658,9 @@ function RepositoryRow({
   const governing = governingOf(groups, repo);
   const control = rowControl(groups, group, repo, governing);
   const groupRepository = isGroupRepository(group, repo);
+  // The placement the row reads as its own: its key placement, or the
+  // one it lists with no clone here (space-30).
+  const placement = rowPlacement(repo);
   const close = (focus: "control" | "members" | "folder" | "move" = "control") => {
     setOpened(undefined);
     const ref = focus === "members" ? membersRef : focus === "folder" ? folderRef : focus === "move" ? moveRef : controlRef;
@@ -778,7 +782,8 @@ function RepositoryRow({
   // there (space-57); one whose only member is the account says nothing,
   // and one whose count the host's read lacks, never synced from here,
   // may have others.
-  const needsNotice = !repo.noticed && (repo.members === null ? repo.lastSync === null : repo.members > 1);
+  const members = placement?.members ?? null;
+  const needsNotice = !placement?.noticed && (members === null ? !placement?.lastSync : members > 1);
   const joining = busy === "join" || accepted?.op === "join" || (running && sync.op === "join");
   const syncing =
     busy === "sync" || accepted?.op === "sync" || (running && sync.op !== "join" && sync.op !== "check");
@@ -887,7 +892,7 @@ function RepositoryRow({
   // On a project's under a signed-in instance's heading, where its last
   // read lets the person move it; a group's own records stay in their
   // group, and your own group's in yours (space-1, DR-103).
-  const showMove = instance?.signedIn === true && repo.can.transfer && !groupRepository;
+  const showMove = instance?.signedIn === true && placement?.can.transfer === true && !groupRepository;
   const moveName = i18n._({ id: "Move to another group", comment: "move a spex repository into another group of the instance, or your own" });
 
   const code = repo.code
@@ -904,12 +909,13 @@ function RepositoryRow({
       ? i18n._("On this device only — shared once you sign in")
       : repositoryStatePhrase(repo, now);
   const dot = statusDot(repo);
-  const branch = repo.branch;
+  const branch = placement?.branch ?? null;
   const counted = branch && branch.checkedAt !== null && !branch.unrelated;
   // The last sync recorded, else the one the clone holds (space-61).
   const last = lastSyncOf(repo);
-  const stateTitle = repo.waiting
-    ? repo.waiting.message
+  const waiting = rowWaiting(repo);
+  const stateTitle = waiting
+    ? waiting.message
     : readOnly
       ? i18n._("{state} · new sessions stay on this device", { state })
       : last && repo.state !== "reachable"
@@ -1129,7 +1135,7 @@ function RepositoryRow({
           target={{ repository: repo.key }}
           id={repo.key}
           name={repo.name}
-          canManage={repo.can.manageMembers}
+          canManage={placement?.can.manageMembers === true}
           connected={connected}
           refreshes={refreshes}
           onClose={() => close("members")}
@@ -1139,7 +1145,7 @@ function RepositoryRow({
       {opened === "notice" ? (
         <div data-testid="space-notice-confirm" className="pl-6">
           <InlineConfirm
-            question={sharingNotice(repo.visibility)}
+            question={sharingNotice(placement?.visibility ?? null)}
             confirmLabel={continueLabel()}
             onConfirm={() => {
               setOpened(undefined);
@@ -1195,9 +1201,9 @@ function MovePicker({
   // The instance whose heading the row stands under, and the entry it
   // stands in there; a row under your own group moves at its own
   // instance, leaving no entry out.
-  const placement = placementOf(groups, repo.key);
-  const instance = placement && !placement.own ? placement.instance : instanceOf(groups, repo.instance);
-  const standing = placement && !placement.own ? placement.group : undefined;
+  const stands = standingOf(groups, repo.key);
+  const instance = stands && !stands.own ? stands.instance : instanceOf(groups, repo.instance);
+  const standing = stands && !stands.own ? stands.group : undefined;
   const mine = instance ? namespaceOf(instance) : undefined;
   // Your namespace is named by none, a group by its host id (space-29).
   const targets: { entry: InstanceGroupState; groupId: string | null }[] = instance
@@ -1359,7 +1365,7 @@ function FolderEditor({
  * lists, never another account's login. */
 interface PickSection {
   instance: InstanceState;
-  listed: { group: InstanceGroupState; repo: RepositoryState }[];
+  listed: { group: InstanceGroupState; repo: RepositoryState; placement: PlacementState | undefined }[];
   creatable: InstanceGroupState[];
 }
 
@@ -1405,7 +1411,9 @@ export function GroupPicker({
               other.code !== null &&
               sameRemote(other.code, code),
           )
-          .map((other) => ({ group, repo: other })),
+          // Its members and visibility are its placement's there
+          // (space-30).
+          .map((other) => ({ group, repo: other, placement: rowPlacement(other) })),
       ),
       // GroupsState names no right to create a repository, so every
       // group is offered and a refusal waits on the row (space-64).
@@ -1464,10 +1472,12 @@ export function GroupPicker({
   /** Join a listed spex repository at its instance (space-58): one
    * whose only member is the account joins at once; one with others, or
    * whose count the host's last read lacks, says the notice first
-   * unless this device's reader has seen it for this repository
+   * unless this device's reader has seen it for that placement
    * (space-57). */
   const join = (instance: InstanceState, other: RepositoryState) => {
-    if (!repo.noticed && (other.members === null || other.members > 1)) {
+    const listed = rowPlacement(other);
+    const members = listed?.members ?? null;
+    if (!listed?.noticed && (members === null || members > 1)) {
       setRefusal(undefined);
       setNotice(other.key);
       return;
@@ -1543,7 +1553,7 @@ export function GroupPicker({
                   })}
                 </h4>
                 <ul className="flex min-w-0 flex-col gap-1">
-                  {listed.map(({ group, repo: other }) => (
+                  {listed.map(({ group, repo: other, placement }) => (
                     <li key={other.key} className="min-w-0">
                       <button
                         ref={takeFirst()}
@@ -1562,16 +1572,16 @@ export function GroupPicker({
                         >
                           <GroupOptionLabel entry={group} />
                         </span>
-                        {other.members !== null ? (
+                        {placement && placement.members !== null ? (
                           <span className="shrink-0 text-xs text-neutral-500">
-                            {i18n._("{count, plural, one {# member} other {# members}}", { count: other.members })}
+                            {i18n._("{count, plural, one {# member} other {# members}}", { count: placement.members })}
                           </span>
                         ) : null}
                       </button>
                       {notice === other.key ? (
                         <div data-testid={`space-pick-notice-${repo.key}`} className="mt-1 pl-2">
                           <InlineConfirm
-                            question={sharingNotice(other.visibility)}
+                            question={sharingNotice(placement?.visibility ?? null)}
                             confirmLabel={continueLabel()}
                             disabled={disabled}
                             onConfirm={() =>

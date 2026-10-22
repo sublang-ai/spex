@@ -22,6 +22,7 @@ import {
 import { useAppStore } from "../state/store.js";
 import { i18n } from "../i18n.js";
 import { allRepositories, anySignedIn, pickInstances } from "../lib/instances.js";
+import { waitingOf } from "../lib/placements.js";
 import { Icon } from "./Icon.js";
 import { GroupPicker } from "./SpaceGroups.js";
 
@@ -170,7 +171,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
     if (!known && !row()) await loadSpace().catch(() => {});
     const repo = known ? undefined : row();
     const current = useAppStore.getState().space;
-    if (repo && repo.state === "local-only" && !repo.waiting && current && pickInstances(current, repo).length > 0) {
+    if (repo && repo.state === "local-only" && !waitingOf(repo) && current && pickInstances(current, repo).length > 0) {
       setPicking(key);
       return;
     }
