@@ -103,7 +103,7 @@ describe("localization-4: slash menu discovery", () => {
 
     expect(screen.queryByTestId("quick-start")).toBeNull();
     const hint = document.getElementById("start-playbook-hint")!;
-    expect(hint.textContent).toBe(`在下方输入框输入 /，查看全部 ${summaries().length} 个「规程」`);
+    expect(hint.textContent).toBe(`在输入框输入 /，查看全部 ${summaries().length} 个规程`);
     expect(hint.querySelector("code")?.textContent).toBe("/");
 
     // The slash menu offers every playbook, each intent its hint.
