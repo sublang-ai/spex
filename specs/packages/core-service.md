@@ -603,6 +603,7 @@ Where the core runs as a seat — started with a server's id and name, the admit
 - your own group is placed at no instance [[space-102](space.md#space-102)];
 - every command naming a working folder path — `project.register`, `project.rebind`, `project.create`, and a join naming a folder — is refused `invalid_request`, "Projects on a server are opened from their group"; a join names no folder, the core allocating it [[space-103](space.md#space-103)];
 - intents without a runtime are run nowhere here [[core-service-107](#core-service-107)];
+- the seat account's own Git configuration names the app's credential helper in its member mode, so the pushes agents make from a work tree carry the member's token [[git-host-9](git-host.md#git-host-9)];
 - the runtime's label is the server's name [[core-service-4](#core-service-4)].
 
 #### core-service-126
@@ -1174,7 +1175,7 @@ Where two homes pair one project at the same working-folder path and sync its re
 
 #### core-service-127
 
-Where the core runs as a seat against a stand-in instance with a fixture adapter recording its environment, the integration suite shall assert seat mode [[core-service-125](#core-service-125)]: the device request names the server and the person and a sign-in as another account stores nothing; your own group gains no placement; the path-naming commands are refused with the phrase; a join names no folder; and the shared credential file [[core-service-126](#core-service-126)]: its values reach a run's environment, a value replaced between runs reaches the next run while the running one keeps its own, a member's own credential displaces the shared names of its agent, and an unreadable file is reported without blocking.
+Where the core runs as a seat against a stand-in instance with a fixture adapter recording its environment, the integration suite shall assert seat mode [[core-service-125](#core-service-125)]: the device request names the server and the person and a sign-in as another account stores nothing; your own group gains no placement; the path-naming commands are refused with the phrase; a join names no folder; a `git push` run outside the app in a project's work tree reaches an `https` host the member placed a token for with that token and a host without one with none [[core-service-125](#core-service-125)]; and the shared credential file [[core-service-126](#core-service-126)]: its values reach a run's environment, a value replaced between runs reaches the next run while the running one keeps its own, a member's own credential displaces the shared names of its agent, and an unreadable file is reported without blocking.
 
 #### core-service-130
 

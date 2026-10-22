@@ -32,7 +32,7 @@ Implement [DR-132](../decisions/132-team-servers.md): seat mode in the core and 
 6. Add the hub: TLS, ticket redemption, the bearer, the relay with no `Origin` admitted, the lease table and its renewal at the instance, the bounded stop through the helper, and the four commands, with a fake helper and the stand-in instance in tests.
 7. Add the helper with its argument checks, the seat and hub units, the sudoers fragment and the install script.
 8. Add the privileged lane and record the live acceptance with two members on a Linux server.
-9. Decide how the pushes agents make from a seat's work tree carry the member's code-host token — git-host-9's "pushed" half — and implement the decision.
+9. Name the app's helper in its member mode in the seat account's Git configuration, so the pushes agents make from the work tree carry the member's token, with a test over the Git HTTP host.
 
 ## Verification
 
