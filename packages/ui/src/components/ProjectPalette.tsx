@@ -39,6 +39,7 @@ import {
   pickInstances,
   signedInInstances,
 } from "../lib/instances.js";
+import { awaitsFolder } from "../lib/space.js";
 import { Icon } from "./Icon.js";
 import { GroupPicker } from "./SpaceGroups.js";
 
@@ -70,6 +71,8 @@ export interface PalettePlace {
   /** The member's groups at the seat, as its Groups state reads them;
    * absent until read (run-view-169). */
   groups?: GroupsState;
+  /** Whether the seat's connection is open, so its groups can be read. */
+  connected?: boolean;
   /** Open a spex repository of the member's groups at the seat:
    * `space.join` with no folder, the seat allocating one (space-103). */
   onJoin?: (instance: string, hostId: string) => Promise<void>;
@@ -78,14 +81,18 @@ export interface PalettePlace {
 }
 
 /** A spex repository a seat may open (run-view-169): one a signed-in
- * instance of that place lists in the member's groups, with no clone
- * there and no join of it running, as its Join row stands (space-61). */
+ * instance of that place lists in the member's groups, with no join of
+ * it running — with no clone there, as its Join row stands (space-61),
+ * or cloned there with its code clone failed, joined again as its row's
+ * "Join again" is (space-103). */
 interface PaletteJoin {
   seat: PalettePlace;
   /** The origin of the instance whose heading lists it (space-29). */
   instance: string;
   group: InstanceGroupState;
   repo: RepositoryState;
+  /** Joined there before, its code clone failed: joined again. */
+  again: boolean;
 }
 
 function joinable(seat: PalettePlace): PaletteJoin[] {
@@ -93,8 +100,13 @@ function joinable(seat: PalettePlace): PaletteJoin[] {
   return signedInInstances(seat.groups).flatMap((instance) =>
     entriesOf(instance).flatMap((group) =>
       group.repositories
-        .filter((repo) => repo.state === "absent" && repo.id !== null && repo.sync.phase !== "running")
-        .map((repo) => ({ seat, instance: instance.origin, group, repo })),
+        .filter(
+          (repo) =>
+            repo.id !== null &&
+            repo.sync.phase !== "running" &&
+            (repo.state === "absent" || awaitsFolder(group, repo)),
+        )
+        .map((repo) => ({ seat, instance: instance.origin, group, repo, again: repo.state !== "absent" })),
     ),
   );
 }
@@ -246,13 +258,27 @@ export function ProjectPalette(props: ProjectPaletteProps) {
       project.path.toLowerCase().includes(query.toLowerCase()),
   );
 
-  // Each seat's Groups state is read as the palette opens, where nothing
-  // has read it yet, so its groups' projects can be named (run-view-169).
+  // Each seat's Groups state is read where nothing has read it yet, so
+  // its groups' projects can be named (run-view-169): as the palette
+  // opens, and as a seat connects while it is open. One read per
+  // connection; the store keeps them fresh from there.
+  const asked = useRef(new Set<string>());
+  const unread = (props.seats ?? [])
+    .map((seat) => `${seat.key}:${seat.connected === true}:${seat.groups !== undefined}`)
+    .join("\n");
   useEffect(() => {
-    for (const seat of props.seats ?? []) if (!seat.groups) seat.onReadGroups?.();
-    // The opening reads them; the store keeps them fresh from there.
+    for (const seat of props.seats ?? []) {
+      if (seat.connected === false) {
+        asked.current.delete(seat.key);
+        continue;
+      }
+      if (seat.groups || asked.current.has(seat.key)) continue;
+      asked.current.add(seat.key);
+      seat.onReadGroups?.();
+    }
+    // The seats' keys, connections and reads are the inputs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [unread]);
   // Each seat's spex repositories of the member's groups not there yet,
   // under the seat's name, filtered as the projects are.
   const joinSections = (props.seats ?? [])
@@ -348,8 +374,10 @@ export function ProjectPalette(props: ProjectPaletteProps) {
 
   /** Open a seat's project from the member's groups (run-view-169):
    * `space.join` naming its instance and host id, and no folder, to that
-   * seat's core; accepted, the palette closes, the join reporting on the
-   * seat's Groups row (space-63). */
+   * seat's core — again where its code clone failed, its core cloning
+   * the code into the folder it allocated (space-103); accepted, the
+   * palette closes, the join reporting on the seat's Groups row
+   * (space-63). */
   async function runJoin(entry: PaletteJoin): Promise<void> {
     if (busy || entry.repo.id === null || !entry.seat.onJoin) return;
     setBusy(true);
@@ -647,7 +675,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
                   <button
                     key={key}
                     type="button"
-                    data-testid={`palette-join-${key}`}
+                    data-testid={entry.again ? `palette-join-again-${key}` : `palette-join-${key}`}
                     disabled={busy}
                     title={entry.repo.key}
                     onClick={() => void runJoin(entry)}
@@ -663,6 +691,15 @@ export function ProjectPalette(props: ProjectPaletteProps) {
                     {joining === key ? (
                       <span className="ml-auto shrink-0 text-xs text-neutral-500">
                         {i18n._({ id: "Joining…", comment: "the Join control, while the join runs" })}
+                      </span>
+                    ) : entry.again ? (
+                      // Cloned there, its code clone failed: the seat's
+                      // row offers the same (space-103).
+                      <span className="ml-auto shrink-0 text-xs text-neutral-500">
+                        {i18n._({
+                          id: "Join again",
+                          comment: "on a team server's project whose code clone failed: join it again, cloning its code into the folder the server allocated",
+                        })}
                       </span>
                     ) : null}
                   </button>

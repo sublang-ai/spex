@@ -3316,6 +3316,8 @@ msgid "Join"
 msgstr "加入"
 
 #. on a team server's project whose code clone failed: join it again, cloning its code into the folder the server allocated
+#. on a team server's project whose code clone failed: join it again, cloning its code into the folder the server allocated
+#: src/components/ProjectPalette.tsx
 #: src/components/SpaceGroups.tsx
 msgid "Join again"
 msgstr "重新加入"
@@ -4328,6 +4330,10 @@ msgid "Paste"
 msgstr "粘贴"
 
 #: src/components/DraftSourceTab.tsx
+msgid "Paste a source"
+msgstr "粘贴源文"
+
+#: src/components/DraftSourceTab.tsx
 msgid "Paste a source or pick a file"
 msgstr "粘贴源文或选择文件"
 
@@ -4925,6 +4931,10 @@ msgstr "重命名"
 #: src/components/SpaceSync.tsx
 msgid "Replace {count, plural, one {# unit} other {# units}} with the host's version? The other version stays in Git history; a replaced session loses its local resume hints and where you stopped reading."
 msgstr "用托管平台的版本替换 {count, plural, other {# 个单元}}？另一版本仍保留在 Git 历史中；被替换的会话会丢失本地的续接提示和你读到的位置。"
+
+#: src/components/DraftSourceTab.tsx
+msgid "Replace the source with pasted text"
+msgstr "用粘贴的文本替换源文"
 
 #: src/components/DraftSourceTab.tsx
 msgid "Replace the source with pasted text or a file"

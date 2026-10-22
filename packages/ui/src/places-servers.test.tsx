@@ -11,7 +11,10 @@
 // whether a seat is open there; the first Open on this device shows the
 // instance's contract and sends `server.open` with consent only on "I
 // understand", a later Open sending it at once; Close sends
-// `server.close`; and a refusal reads the core's cause in place.
+// `server.close`; a refusal reads the core's cause in place; and the
+// page waits for an open or a close as long as the admission may take.
+// A new playbook asked for from a seat's Captain home opens Playbooks at
+// that seat.
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
@@ -27,7 +30,7 @@ import { App } from "./App.js";
 import { groupsState, instanceState } from "./fixtures/groups-state.js";
 import { CONFIG_STATE, available, environment, specPackage } from "./fixtures/playbooks.js";
 import { activateLanguage } from "./i18n.js";
-import { SpexCommandError, type SpexClient } from "./lib/client.js";
+import { SpexClient, SpexCommandError } from "./lib/client.js";
 import { usePlaces } from "./state/places.js";
 import {
   createAppStore,
@@ -376,6 +379,35 @@ const control = (place: string): HTMLButtonElement =>
 const CONTRACT =
   "Opening a seat places your sign-in on lab-box. Whoever runs lab-box can act as you: in your spaces, in your records, and with the account you sign in to spex.pub with, wherever it reaches. Agents on lab-box run on the sign-ins its administrator set up, unless you set your own. A credential you place on lab-box stays there until you remove it. Retiring the server or revoking the seat under Devices stops new use; a credential already on the server lasts until it expires.";
 
+describe("run-view-168: a new playbook asked for at a seat", () => {
+  test("the Captain home's New playbook opens Playbooks at the seat shown, its field focused", async () => {
+    const summary = (SEAT_CONFIG as Extract<ConfigState, { status: "valid" }>).summary;
+    alphaStore.setState({
+      configState: {
+        ...SEAT_CONFIG,
+        summary: {
+          ...summary,
+          playbooks: [{ id: "train", from: "acme/gpu-tools", command: "train", intent: "train a model", roles: {} }],
+        },
+      } as ConfigState,
+    });
+    render(<App />);
+    // The seat's project shown: its Captain home.
+    fireEvent.click(screen.getByTestId(`sidebar-project-p2@${ALPHA.place}`));
+    await settle();
+    fireEvent.change(screen.getByTestId("start-composer"), { target: { value: "/" } });
+    fireEvent.mouseDown(screen.getByTestId("slash-new-playbook"));
+    await settle();
+    // [run-view-168] asked at the place shown, Playbooks opens there with
+    // the new playbook's field focused (playbook-library-51).
+    expect(shownPlace()).toBe("build-box");
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId("new-playbook-id")));
+    expect(alphaStore.getState().newPlaybookRequested).toBe(false);
+    expect(useAppStore.getState().newPlaybookRequested).toBe(false);
+    expect(callsOf(alpha, "environment.playbooks")).toContainEqual({ projectId: "p2" });
+  });
+});
+
 describe("run-view-170: the servers under each instance's heading", () => {
   test("each server by its name and group, Open or Close by whether a seat is open there", async () => {
     const servers = await openGroups();
@@ -519,5 +551,71 @@ describe("run-view-170: the servers under each instance's heading", () => {
     fireEvent.click(control(ALPHA.place));
     await settle();
     expect(within(row(ALPHA.place)).getByRole("alert").textContent).toBe("No seat is open on this server");
+  });
+});
+
+/** The local core's socket, answering nothing until the test says. */
+class SilentSocket extends EventTarget {
+  readyState = 1;
+  readonly sent: { type: string; id: string }[] = [];
+
+  send(data: string): void {
+    this.sent.push(JSON.parse(data) as { type: string; id: string });
+  }
+
+  close(): void {
+    this.readyState = 3;
+    this.dispatchEvent(new Event("close"));
+  }
+
+  reply(id: string, result: unknown): void {
+    this.dispatchEvent(new MessageEvent("message", { data: JSON.stringify({ type: "reply", id, ok: true, result }) }));
+  }
+}
+
+describe("run-view-170: the page waits for an open as long as the admission may take", () => {
+  test("server.open and server.close outwait a seat's thirty-second start, where another command times out", async () => {
+    vi.useFakeTimers();
+    try {
+      const socket = new SilentSocket();
+      const client = new SpexClient({
+        url: "ws://127.0.0.1:8137/?token=secret",
+        onMessage: () => {},
+        onStatus: () => {},
+        reconnectMs: 0,
+        webSocketFactory: () => socket as unknown as WebSocket,
+      });
+      client.connect();
+      const watch = (promise: Promise<unknown>) => {
+        const seen = { state: "pending" };
+        promise.then(
+          () => (seen.state = "answered"),
+          (cause: SpexCommandError) => (seen.state = cause.code),
+        );
+        return seen;
+      };
+      const read = watch(client.command("config.get", {}));
+      const open = watch(client.command("server.open", { instance: SPEX, serverId: "43", consented: true }));
+      const close = watch(client.command("server.close", { instance: SPEX, serverId: "41" }));
+      await vi.advanceTimersByTimeAsync(30_000);
+      // A reply the core composes itself is awaited thirty seconds.
+      expect(read.state).toBe("timeout");
+      // [run-view-170] an open waits on the server's admission, a seat
+      // starting there within thirty seconds: still awaited at sixty,
+      // and so is a close.
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(open.state).toBe("pending");
+      expect(close.state).toBe("pending");
+      const [, opened, closed] = socket.sent;
+      expect([opened!.type, closed!.type]).toEqual(["server.open", "server.close"]);
+      socket.reply(opened!.id, { place: LAB_BOX, leaseExpiresAt: Date.now() + 3_600_000 });
+      socket.reply(closed!.id, { closed: true });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(open.state).toBe("answered");
+      expect(close.state).toBe("answered");
+      client.close();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

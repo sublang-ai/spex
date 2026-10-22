@@ -3316,6 +3316,8 @@ msgid "Join"
 msgstr "Join"
 
 #. on a team server's project whose code clone failed: join it again, cloning its code into the folder the server allocated
+#. on a team server's project whose code clone failed: join it again, cloning its code into the folder the server allocated
+#: src/components/ProjectPalette.tsx
 #: src/components/SpaceGroups.tsx
 msgid "Join again"
 msgstr "Join again"
@@ -4328,6 +4330,10 @@ msgid "Paste"
 msgstr "Paste"
 
 #: src/components/DraftSourceTab.tsx
+msgid "Paste a source"
+msgstr "Paste a source"
+
+#: src/components/DraftSourceTab.tsx
 msgid "Paste a source or pick a file"
 msgstr "Paste a source or pick a file"
 
@@ -4925,6 +4931,10 @@ msgstr "Rename"
 #: src/components/SpaceSync.tsx
 msgid "Replace {count, plural, one {# unit} other {# units}} with the host's version? The other version stays in Git history; a replaced session loses its local resume hints and where you stopped reading."
 msgstr "Replace {count, plural, one {# unit} other {# units}} with the host's version? The other version stays in Git history; a replaced session loses its local resume hints and where you stopped reading."
+
+#: src/components/DraftSourceTab.tsx
+msgid "Replace the source with pasted text"
+msgstr "Replace the source with pasted text"
 
 #: src/components/DraftSourceTab.tsx
 msgid "Replace the source with pasted text or a file"
