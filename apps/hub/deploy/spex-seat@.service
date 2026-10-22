@@ -6,7 +6,10 @@
 # stop the core's graceful stop runs first; what remains of the seat's
 # control group is killed at the timeout, above the core's own bounds.
 # The server's environment file names SPEX_HOST_URL, SPEX_SERVER_ID and
-# SPEX_SERVER_NAME.
+# SPEX_SERVER_NAME. The runtime directory /run/spex/seats/%i, the seat
+# account's with the hub's group, is made by the helper at each start
+# (server-shell-25). install.sh writes this unit for its prefix and node,
+# in place of /opt/spex and /usr/bin/node; its header holds the paths.
 
 [Unit]
 Description=Spex seat of person %i

@@ -4,7 +4,8 @@
 # Installed as /etc/sudoers.d/spex-hub, mode 0440 (sudo skips a name
 # with a dot in it). The hub's account may run the seat helper as root
 # and nothing else; the helper itself refuses every invocation but its
-# four forms with a numeric seat id (hub-4).
+# four forms with a numeric seat id (hub-4). install.sh writes it for its
+# prefix, in place of /opt/spex, and checks it with `visudo -cf` first.
 
 Defaults:spex-hub !requiretty
 spex-hub ALL=(root) NOPASSWD: /opt/spex/libexec/spex-seatctl create *, /opt/spex/libexec/spex-seatctl start *, /opt/spex/libexec/spex-seatctl stop *, /opt/spex/libexec/spex-seatctl wipe *
