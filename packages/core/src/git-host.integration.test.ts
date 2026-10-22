@@ -306,6 +306,57 @@ test("git-host-3: slow_down backs the polling off by five seconds", async () => 
 });
 
 // ---------------------------------------------------------------------------
+// git-host-27, git-host-28: a seat's device request
+
+test("git-host-28: a seat's device request carries the server and the person; a denied code and a person of another id each end the sign-in failed, storing nothing", async () => {
+  const t = await setup();
+  try {
+    const store = fileCredentialStore(t.home, t.host.url);
+    const seat = new GitHostClient({
+      url: t.host.url,
+      label: "Spex on lab-1",
+      credentials: store,
+      server: { id: "srv_42", personId: "1001" },
+    });
+    // A device request names the server and the person beside the
+    // client id and the label (git-host-27); a client of no seat names
+    // neither.
+    const plain = await t.client.startDeviceSignIn();
+    plain.cancel();
+    await assert.rejects(plain.done, hostError("reauth", { cause: "stopped" }));
+    const denied = await seat.startDeviceSignIn();
+    assert.deepEqual(t.host.script.deviceRequests, [
+      { label: "Spex on test", serverId: null, personId: null },
+      { label: "Spex on lab-1", serverId: "srv_42", personId: "1001" },
+    ]);
+    // The instance denying the code ends it `denied` (git-host-27).
+    t.host.script.denyDevice(denied.userCode);
+    await assert.rejects(denied.done, hostError("reauth", { cause: "denied" }));
+    assert.equal(await store.read(), null, "a denied code stores nothing");
+
+    // A person bearing another permanent id ends it naming the account
+    // signed in, and nothing is stored (git-host-27).
+    t.host.script.person = { id: "1002", login: "bob", displayName: "Bob" };
+    const other = await seat.startDeviceSignIn();
+    t.host.script.approveDevice(other.userCode);
+    await assert.rejects(other.done, hostError("reauth", { cause: "person", words: "bob" }));
+    assert.equal(await store.read(), null, "a person of another id stores nothing");
+    assert.equal(existsSync(credentialsPath(t.home)), false);
+    assert.equal(await seat.signedIn(), false);
+
+    // The admitted person signs in and the token is stored.
+    t.host.script.person = { id: "1001", login: "ada", displayName: "Ada Lovelace" };
+    const admitted = await seat.startDeviceSignIn();
+    t.host.script.approveDevice(admitted.userCode);
+    assert.equal((await admitted.done).id, "1001");
+    assert.ok(await store.read(), "the person's sign-in is stored");
+    assert.deepEqual(t.host.script.deviceRequests.slice(2).map((request) => [request.serverId, request.personId]), [["srv_42", "1001"], ["srv_42", "1001"]]);
+  } finally {
+    await t.dispose();
+  }
+});
+
+// ---------------------------------------------------------------------------
 // git-host-4: token keeping
 
 test("git-host-4: an access secret within a minute of expiring is refreshed once before the call", async () => {

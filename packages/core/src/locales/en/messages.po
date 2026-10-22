@@ -223,6 +223,11 @@ msgstr "{host} refused this machine's access"
 msgid "{host} refused: {words}"
 msgstr "{host} refused: {words}"
 
+#. A sign-in on a team server's seat refused, nothing stored: the account approved at the instance is not the member the seat was opened for; {host} is the instance's display name, {login} the login of the account that signed in
+#: src/space-groups.ts
+msgid "{host} signed you in as @{login}; this seat is another member's"
+msgstr "{host} signed you in as @{login}; this seat is another member's"
+
 #. A sign-in refused, nothing stored: the person signed in at an instance the home lists as another account than the one it lists there; {host} is the instance's display name, {login} the listed account's login
 #: src/space-groups.ts
 msgid "{host} signed you in as another account; this device uses @{login} there"
@@ -2039,6 +2044,11 @@ msgstr "project directory is missing"
 msgid "Project is unavailable."
 msgstr "Project is unavailable."
 
+#. Refusal on a team server's seat of a command naming a working folder: the server allocates every project's folder itself
+#: src/service.ts
+msgid "Projects on a server are opened from their group"
+msgstr "Projects on a server are opened from their group"
+
 #. Media storage failure
 #: src/media-transfers.ts
 msgid "Published upload has a different byte length."
@@ -2936,6 +2946,11 @@ msgstr "You stopped the transfer; your commits stand. Git runs without prompts, 
 #: src/space.ts
 msgid "Your merge is saved locally; Retry to send it once the host settles."
 msgstr "Your merge is saved locally; Retry to send it once the host settles."
+
+#. Refusal on a team server's seat of a pick or a remote for your own group: its records stay on the server and are placed at no instance
+#: src/space.ts
+msgid "Your own group stays on this server"
+msgstr "Your own group stays on this server"
 
 #. Refusal: your own group's request by path names a folder inside its spex repository's clone (environments-2), and this spec package lies elsewhere
 #: src/service.ts

@@ -37,6 +37,9 @@ import { RELAY_HEADERS } from "./standin-registry.js";
 
 export interface StandinPerson { id: string; login: string; displayName: string | null }
 
+/** A device request as the stand-in admitted it (auth-71). */
+export interface StandinDeviceRequest { label: string; serverId: string | null; personId: string | null }
+
 /** What the stand-in lets the person do in a group (host-4): create a
  * subgroup, manage its members, rename it, delete it. */
 export interface StandinGroupCan { createSubgroup: boolean; manageMembers: boolean; rename: boolean; delete: boolean }
@@ -165,6 +168,10 @@ export interface StandinScript {
   requests: StandinRequest[];
   /** Every token grant, in order. */
   tokenGrants: { grantType: string; ok: boolean; error: string | null }[];
+  /** Every device request admitted (auth-71), in order: its label and,
+   * from a seat, the server's id and the person's id it named, which the
+   * stand-in accepts unchecked as the instance does; null where absent. */
+  deviceRequests: StandinDeviceRequest[];
   /** Every `POST /api/v1/host/repositories` body admitted, as it came,
    * in order (host-6). */
   creations: unknown[];
@@ -974,6 +981,7 @@ export async function startStandinHost(opts: StandinHostOptions): Promise<Standi
     refuseRefresh: false,
     requests: [],
     tokenGrants: [],
+    deviceRequests: [],
     creations: [],
     heldSignIns: () => held.length,
     approveHeld: async () => {
@@ -1186,6 +1194,15 @@ export async function startStandinHost(opts: StandinHostOptions): Promise<Standi
     if (!isRecord(body)) return envelope(res, 400, "invalid_request", "The body must be a JSON object.");
     if (body.client_id !== "spex") return envelope(res, 400, "invalid_client", "The client is not known.");
     if (typeof body.label !== "string" || body.label.length === 0 || body.label.length > 80) return envelope(res, 400, "invalid_request", "A label of at most 80 characters is required.");
+    // A seat's server and person come together or not at all, each at
+    // most 64 characters, accepted unchecked (auth-71, servers-10).
+    const seatId = (value: unknown): string | null | false => value === undefined ? null : typeof value === "string" && value.length <= 64 ? value : false;
+    const serverId = seatId(body.server_id);
+    const personId = seatId(body.person_id);
+    if (serverId === false || personId === false || (serverId === null) !== (personId === null)) {
+      return envelope(res, 400, "invalid_request", "A server_id and a person_id of at most 64 characters come together or not at all.");
+    }
+    script.deviceRequests.push({ label: body.label, serverId, personId });
     const deviceCode = secret("");
     const code = userCode();
     const now = performance.now();

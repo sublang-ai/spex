@@ -131,7 +131,7 @@ import { ApplicationMedia } from "./media.js";
 import { MediaTransferError } from "./media-transfers.js";
 import { readAgentOptions, type AgentModelDiscovery } from "./agent-options.js";
 import { SpaceManager, type SpaceHost } from "./space.js";
-import { GitHostClient, fileCredentialStore } from "./git-host.js";
+import { GitHostClient, SEAT_ID_MAX, fileCredentialStore } from "./git-host.js";
 import { relayHostError } from "./space-groups.js";
 import { currentRuntime, withGitCredential } from "./git-credential.js";
 import { displayRemote, validateRemoteUrl } from "./space-git.js";
@@ -247,9 +247,39 @@ export interface CoreServiceOptions {
   /** The registry's fetch (environments-12); a test seam. */
   registryFetch?: typeof fetch;
   /** This runtime's label, stored beside the home's device at assignment
-   * for display alone (DR-134): the server's name on a seat, the host
-   * name by default. */
+   * for display alone (DR-134): the server's name on a seat, else this
+   * label, else the host name. */
   runtimeLabel?: string;
+  /**
+   * Seat mode (core-service-125, DR-132): this core runs on a team
+   * server for one member — the server's id and name and the admitted
+   * person's permanent account id at the instance. Its sign-in is the
+   * device flow naming the server and the person (git-host-27), your
+   * own group is placed at no instance (space-102), the commands naming
+   * a working folder are refused, and the runtime's label is the
+   * server's name. The ids are at most 64 characters.
+   */
+  seat?: SeatOptions;
+}
+
+/** A seat's facts (core-service-125). */
+export interface SeatOptions {
+  serverId: string;
+  serverName: string;
+  personId: string;
+}
+
+/** A seat's options checked at start: both ids hold 1 to 64 characters
+ * (git-host-27) and the name some text. A shell's mistake, in English. */
+function checkSeat(seat: SeatOptions): SeatOptions {
+  for (const [name, value] of [["serverId", seat.serverId], ["personId", seat.personId]] as const) {
+    if (typeof value !== "string" || value.length === 0 || value.length > SEAT_ID_MAX) {
+      throw new Error(`spex: a seat's ${name} must hold 1 to ${SEAT_ID_MAX} characters`);
+    }
+  }
+  const serverName = typeof seat.serverName === "string" ? seat.serverName.trim() : "";
+  if (serverName.length === 0) throw new Error("spex: a seat's serverName must hold some text");
+  return { serverId: seat.serverId, serverName, personId: seat.personId };
 }
 
 // The Sources cache ages out at ten minutes (dashboard-14).
@@ -441,8 +471,13 @@ export class CoreService {
   private configPath: string;
   /** The runtime the Git credential helper runs on (git-host-9). */
   private readonly hostRuntime: { execPath: string; electron: boolean };
-  /** This runtime's label for display (DR-134); its name is the home's
-   * device, read when a record is assigned. */
+  /** This core's seat on a team server, where it runs as one
+   * (core-service-125); none on a machine of one's own. */
+  private readonly seat?: SeatOptions;
+  /** This runtime's label for display (core-service-4, DR-134): the
+   * server's name on a seat, else the given label, else this machine's
+   * host name; its name is the home's device, read when a record is
+   * assigned. */
   private readonly runtimeLabel: string;
   private readonly env: NodeJS.ProcessEnv;
   private readonly home: string;
@@ -514,6 +549,8 @@ export class CoreService {
 
   private constructor(options: CoreServiceOptions, store: Store) {
     this.options = options;
+    if (options.seat) this.seat = options.seat;
+    this.runtimeLabel = options.seat?.serverName ?? (options.runtimeLabel || hostname());
     this.env = options.env ?? process.env;
     this.home = options.home ?? this.env.HOME ?? homedir();
     this.store = store;
@@ -529,7 +566,6 @@ export class CoreService {
       options.forgeAdapter ?? new GitHubForgeAdapter(this.runCommand);
     this.configState = { status: "missing", path: this.configPath };
     this.hostRuntime = options.hostRuntime ?? currentRuntime();
-    this.runtimeLabel = options.runtimeLabel || hostname();
     this.sessions = new SessionManager({
       approvalHandler: (sessionId) => this.approvals.handler({kind: "session", id: sessionId}, () => {
         const session = this.store.describeSession(sessionId);
@@ -676,7 +712,9 @@ export class CoreService {
       ...(options.spaceTransportTimeoutMs !== undefined ? { transportTimeoutMs: options.spaceTransportTimeoutMs } : {}),
       ...(options.spaceBeforeStep ? { beforeStep: options.spaceBeforeStep } : {}),
       clientFor: (origin: string) => this.hostClientFor(origin),
-      signInFlow: options.signIn ?? "device",
+      // A seat signs in through the device flow alone (core-service-125).
+      signInFlow: options.seat ? "device" : options.signIn ?? "device",
+      seat: options.seat !== undefined,
       hostRuntime: this.hostRuntime,
       repositoriesChanged: () => this.afterRepositoriesChanged(),
       repositoriesMoved: (moves) => this.repositoriesMoved(moves),
@@ -814,11 +852,14 @@ export class CoreService {
    * origin in `local/credentials.yaml`, this device and app as its label,
    * a refusal that signs the device out of that instance alone, its
    * entry marked so (git-host-4), and a rate limit holding that
-   * instance's calls, offering Stop on the steps that wait (git-host-21). */
+   * instance's calls, offering Stop on the steps that wait (git-host-21).
+   * On a seat, the label names the server and the device request the
+   * server and the person (git-host-27). */
   private hostClientFor(origin: string): GitHostClient {
     return new GitHostClient({
       url: origin,
-      label: `Spex on ${hostname()}`,
+      label: `Spex on ${this.runtimeLabel}`,
+      ...(this.seat ? { server: { id: this.seat.serverId, personId: this.seat.personId } } : {}),
       credentials: fileCredentialStore(this.store.dir, origin),
       onSignedOut: () => this.space.signedOutByHost(origin),
       onHold: () => this.space.holdBegan(origin),
@@ -1101,6 +1142,8 @@ export class CoreService {
       }));
     }
     if (options.dataDir) ApplicationMedia.assertStagingParents(options.dataDir);
+    // A seat's facts are checked before anything opens (core-service-125).
+    if (options.seat) options = { ...options, seat: checkSeat(options.seat) };
     const env = options.env ?? process.env;
     // The store's load composes diagnostics, so the home's stored
     // language is spoken before it opens (core-service-111); the full
@@ -2135,6 +2178,15 @@ export class CoreService {
   ): Promise<unknown> {
     if (this.stopping && ["session.create", "turn.submit", "session.restore", "session.control"].includes(command.type)) {
       throw new CoreError("busy", i18n._({id: "The core is stopping.", comment: "Refusal during core shutdown"}));
+    }
+    // On a seat no command names a working folder (core-service-125): a
+    // project is opened from its group, the core allocating its folder.
+    if (this.seat && (command.type === "project.register" || command.type === "project.rebind" || command.type === "project.create" ||
+      (command.type === "space.join" && command.folder !== undefined))) {
+      throw new CoreError("invalid_request", i18n._({
+        id: "Projects on a server are opened from their group",
+        comment: "Refusal on a team server's seat of a command naming a working folder: the server allocates every project's folder itself",
+      }));
     }
     // No operation refuses a command (space-21): each write is checked
     // at its own instant, against its file's version or its session's

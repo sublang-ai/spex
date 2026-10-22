@@ -223,6 +223,11 @@ msgstr "{host} 拒绝了本机的访问"
 msgid "{host} refused: {words}"
 msgstr "{host} 拒绝了：{words}"
 
+#. A sign-in on a team server's seat refused, nothing stored: the account approved at the instance is not the member the seat was opened for; {host} is the instance's display name, {login} the login of the account that signed in
+#: src/space-groups.ts
+msgid "{host} signed you in as @{login}; this seat is another member's"
+msgstr "{host} 登录的是 @{login}；这个席位属于另一位成员"
+
 #. A sign-in refused, nothing stored: the person signed in at an instance the home lists as another account than the one it lists there; {host} is the instance's display name, {login} the listed account's login
 #: src/space-groups.ts
 msgid "{host} signed you in as another account; this device uses @{login} there"
@@ -2039,6 +2044,11 @@ msgstr "项目目录不存在"
 msgid "Project is unavailable."
 msgstr "项目不可用。"
 
+#. Refusal on a team server's seat of a command naming a working folder: the server allocates every project's folder itself
+#: src/service.ts
+msgid "Projects on a server are opened from their group"
+msgstr "服务器上的项目要从其所在群组打开"
+
 #. Media storage failure
 #: src/media-transfers.ts
 msgid "Published upload has a different byte length."
@@ -2936,6 +2946,11 @@ msgstr "你已停止传输；你的提交仍然有效。Git 以无交互方式�
 #: src/space.ts
 msgid "Your merge is saved locally; Retry to send it once the host settles."
 msgstr "合并已保存在本地；待托管平台稳定后重试即可发送。"
+
+#. Refusal on a team server's seat of a pick or a remote for your own group: its records stay on the server and are placed at no instance
+#: src/space.ts
+msgid "Your own group stays on this server"
+msgstr "你自己的群组只留在这台服务器上"
 
 #. Refusal: your own group's request by path names a folder inside its spex repository's clone (environments-2), and this spec package lies elsewhere
 #: src/service.ts
