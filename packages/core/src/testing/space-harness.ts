@@ -157,7 +157,7 @@ class Client {
    * reading that is not running settles the command only after one of
    * its own running readings, or where a read made after the reply
    * agrees the machine no longer runs. */
-  async settle<T extends "space.sync" | "space.fetch" | "space.place">(type: T, fields: Omit<Extract<Command, { type: T }>, "type" | "id">, timeoutMs = 20_000): Promise<RepositoryState> {
+  async settle<T extends "space.sync" | "space.fetch" | "space.place" | "space.leave">(type: T, fields: Omit<Extract<Command, { type: T }>, "type" | "id">, timeoutMs = 20_000): Promise<RepositoryState> {
     const key = (fields as { repository: string }).repository;
     const from = this.messages.length;
     // The core runs in this process: its steps' `since` reads this clock.
@@ -257,6 +257,10 @@ function assertPhase(sync: RepositoryState["sync"]): void {
   const fields = Object.keys(sync);
   assert.ok(keys.required.every((field) => fields.includes(field)) && fields.every((field) => keys.required.includes(field) || keys.optional.includes(field)), `phase fields ${JSON.stringify(sync)}`);
   if ("placement" in sync && sync.placement !== undefined) assert.ok(sync.placement === null || typeof sync.placement === "string", JSON.stringify(sync));
+  // A count is a leave's units no remaining placement received, and
+  // comes with that cause alone (space-30, space-98).
+  if (sync.phase === "stopped") assert.equal(sync.count !== undefined, sync.cause === "unreceived", JSON.stringify(sync));
+  if (sync.phase === "stopped" && sync.count !== undefined) assert.ok(sync.op === "leave" && Number.isInteger(sync.count) && sync.count > 0, JSON.stringify(sync));
 }
 
 const CHANGES = new Set(["new", "updated", "deleted"]);

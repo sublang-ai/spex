@@ -13,7 +13,13 @@
 // before its turn at each sync; and a placement beside the first follows
 // a signed-in instance listing it while its own is signed out, moving no
 // clone, never onto an instance the clone holds another placement at
-// (space-60) — hermetic, on loopback alone, in a file budget of its own.
+// (space-60). Leave fetches a placement first and stops, unless
+// confirmed, for records no remaining placement holds or for a placement
+// it cannot read; it then drops it and deletes its file, the first
+// moving the clone, a lease beneath refusing it whole; and a placement
+// whose instance is signed out, listed at another, follows that one
+// instead (space-98, storage-38) — hermetic, on loopback alone, in a
+// file budget of its own.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -33,6 +39,7 @@ test.after(() => fixture.dispose());
 /** The stand-in's person, and your own group's repository once signed in. */
 const LOGIN = "ada";
 const HOST_OWN = `${LOGIN}/${LOGIN}-spex`;
+const FIRST_NAME = "Stand-in Git host";
 const SECOND_NAME = "Second stand-in";
 const THIRD_NAME = "Third stand-in";
 
@@ -486,4 +493,177 @@ test("space-91, storage-41, storage-12: a placement's file a merge makes unreada
   assert.deepEqual([later.sync.phase, ...later.placements.map((line) => line.outcome?.kind)], ["done", "synced", "synced"]);
   assert.equal(readFileSync(join(clone, firstFile), "utf8"), unreadable);
   assert.equal(git(firstBare, "rev-parse", "spex"), git(clone, "rev-parse", "HEAD"));
+});
+
+test("space-101, space-98, space-15, space-31, storage-38, space-7, space-29: for a project placed at the first and the third of three instances, the first two over one Git backend, the first lacking a record the third holds — space.leave refused at an instance it holds no placement at, at one the home does not list and for your own group's own repository — space.leave of the third, fetched first, stops unreceived naming the count, the placement kept; of the first, while a lease taken out of band stands beneath, is refused whole naming the session with Retry, and once it is released moves the clone under the third's folder with its pair re-keyed, its file deleted as a local change; and of the third, the last, sent confirmed after it stops naming every unit, moves the clone under your own group's folder, local only, nothing at either host changed", async (t) => {
+  const first = await startHost();
+  const second = await startHost({ gitBackend: first, displayName: SECOND_NAME });
+  const third = await startHost({ displayName: THIRD_NAME });
+  const firstFolder = hostFolder(first);
+  const thirdFolder = hostFolder(third);
+  const firstFile = `placements/${firstFolder}.yaml`;
+  const thirdFile = `placements/${thirdFolder}.yaml`;
+  const { home, key, code, clone } = await projectAt("leave-each", [first, second, third]);
+  t.after(() => home.stop());
+  // A record every placement receives, and the project placed in the
+  // third's acme (space-97).
+  writeFileSync(join(clone, "notes.md"), "everywhere\n");
+  const placed = await home.client.settle("space.place", { repository: key, choice: { kind: "create", instance: third.url, groupId: "2002", name: "atlas" }, noticed: true }, 30_000);
+  assert.equal(placed.sync.phase, "done", JSON.stringify(placed.sync));
+  assert.deepEqual(placed.placements.map((line) => [line.instance, line.outcome?.kind]), [[first.url, "synced"], [third.url, "synced"]]);
+  const firstBare = bareOf(first, key);
+  const thirdBare = third.bareOf("acme/atlas-spex");
+  const atFirst = git(firstBare, "rev-parse", "spex");
+  // A peer at the third adds a record the first lacks.
+  const atThird = await peerPush(peerClone(thirdBare), (dir) => { writeFileSync(join(dir, "peer.md"), "the third's alone\n"); });
+
+  // Refused before anything runs: an instance the clone holds no
+  // placement at, one the home does not list, and your own group's own
+  // spex repository (space-29).
+  await home.client.expectError("space.leave", { repository: key, instance: second.url }, "invalid_request", /^atlas-spex holds no such placement$/);
+  await home.client.expectError("space.leave", { repository: key, instance: "https://unlisted.example" }, "not_found");
+  await home.client.expectError("space.leave", { repository: HOST_OWN, instance: first.url }, "invalid_request", /^ada-spex holds a group's records/);
+
+  // The third left: fetched first, the record it holds that no remaining
+  // placement holds stops the leave, naming the count, nothing dropped
+  // (space-98).
+  const unreceived = await home.client.settle("space.leave", { repository: key, instance: third.url }, 30_000);
+  assert.deepEqual(unreceived.sync, { phase: "stopped", op: "leave", step: "check", cause: "unreceived", message: "1 record has reached no other placement", guidance: "Confirm to remove it anyway.", retry: true, count: 1 });
+  assert.equal(git(clone, "rev-parse", `refs/remotes/${thirdFolder}/spex`), atThird, "the third fetched first");
+  assert.deepEqual(git(clone, "remote").split("\n"), [firstFolder, thirdFolder]);
+  assert.ok(existsSync(join(clone, thirdFile)), "its file kept");
+  assert.deepEqual(unreceived.placements.map((line) => line.instance), [first.url, third.url]);
+
+  // The first left while a writer of another process holds the clone:
+  // its drop, which moves the clone, is refused whole, naming the
+  // session, with Retry, nothing dropped or moved (space-98, storage-38).
+  const sessions = createSessionStore({ sessionsDir: join(clone, "sessions") });
+  await sessions.prepare();
+  const lease = randomUUID();
+  const live = await sessions.acquireManagement(lease);
+  let released = false;
+  try {
+    const leased = await home.client.settle("space.leave", { repository: key, instance: first.url }, 30_000);
+    assert.ok(leased.sync.phase === "stopped" && leased.sync.op === "leave" && leased.sync.step === "check" && leased.sync.cause === "lease" && leased.sync.retry && leased.sync.message.includes(lease.slice(0, 8)), JSON.stringify(leased.sync));
+    assert.deepEqual(git(clone, "remote").split("\n"), [firstFolder, thirdFolder]);
+    assert.ok(existsSync(join(clone, firstFile)), "its file kept");
+    assert.equal(Home.load(home.dataDir).keyForFolder(code), key);
+    await live.release();
+    released = true;
+  } finally { if (!released) await live.release(); }
+
+  // Released, the first left: dropped with its remote, id, fetched spex
+  // and records, and its file deleted, a local change the clone's next
+  // sync carries; the clone moved to its path at the third with its pair
+  // (space-98, storage-38, space-7).
+  const movedKey = hostKey(third, "acme/atlas-spex");
+  const movedClone = clonePath(home.dataDir, movedKey);
+  let mark = home.client.mark();
+  assert.deepEqual(await home.client.expectOk("space.leave", { repository: key, instance: first.url }), { accepted: true });
+  const moved = await home.client.waitRepository(mark, movedKey, (repository) => repository.sync.phase !== "running", 30_000);
+  assert.deepEqual([moved.sync, moved.instance, moved.placements.map((line) => line.instance)], [{ phase: "idle" }, third.url, [third.url]], JSON.stringify(moved));
+  assert.ok(existsSync(join(movedClone, ".git")) && !existsSync(clone), "moved under the third's folder");
+  assert.equal(Home.load(home.dataDir).keyForFolder(code), movedKey, "its pair re-keyed");
+  assert.deepEqual(git(movedClone, "remote").split("\n"), [thirdFolder]);
+  assert.throws(() => git(movedClone, "rev-parse", "-q", "--verify", `refs/remotes/${firstFolder}/spex`));
+  assert.equal(existsSync(join(movedClone, firstFile)), false, "its file deleted");
+  assert.ok(moved.local.some((unit) => unit.unit === firstFile && unit.change === "deleted"), JSON.stringify(moved.local));
+  assert.deepEqual(Object.keys({ ...syncRecordsOf(home.dataDir, key), ...syncRecordsOf(home.dataDir, movedKey) }).filter((name) => name.includes(`:${firstFolder}:`)), []);
+  assert.equal(git(firstBare, "rev-parse", "spex"), atFirst, "nothing at the first changed");
+
+  // The third, the last, left: every record unit it or the clone holds —
+  // the environment, notes.md and peer.md — reached no remaining
+  // placement, which stops it; sent confirmed, it is dropped and the clone
+  // moves under your own group's folder, local only, its records kept
+  // (space-98, storage-38).
+  const every = await home.client.settle("space.leave", { repository: movedKey, instance: third.url }, 30_000);
+  assert.deepEqual(every.sync, { phase: "stopped", op: "leave", step: "check", cause: "unreceived", message: "3 records have reached no other placement", guidance: "Confirm to remove it anyway.", retry: true, count: 3 });
+  assert.deepEqual(git(movedClone, "remote").split("\n"), [thirdFolder]);
+  const localKey = `${LOGIN}/atlas-spex`;
+  const localClone = clonePath(home.dataDir, localKey);
+  mark = home.client.mark();
+  assert.deepEqual(await home.client.expectOk("space.leave", { repository: movedKey, instance: third.url, confirmed: true }), { accepted: true });
+  const local = await home.client.waitRepository(mark, localKey, (repository) => repository.sync.phase !== "running", 30_000);
+  assert.deepEqual([local.sync, local.state, local.instance, local.id, local.placements], [{ phase: "idle" }, "local-only", null, null, []], JSON.stringify(local));
+  assert.ok(existsSync(join(localClone, ".git")) && !existsSync(movedClone), "moved under your own group's folder");
+  assert.equal(Home.load(home.dataDir).keyForFolder(code), localKey);
+  assert.equal(git(localClone, "remote"), "");
+  assert.equal(existsSync(join(localClone, thirdFile)), false, "its file deleted");
+  assert.equal(readFileSync(join(localClone, "notes.md"), "utf8"), "everywhere\n", "its records kept");
+  assert.equal(git(thirdBare, "rev-parse", "spex"), atThird, "nothing at the third changed");
+});
+
+test("space-101, space-98, space-60, space-61, storage-36, storage-38: with the first of three instances signed out, the first two over one Git backend, space.leave of the first for a project placed there alone, whose repository the second lists, renames its remote to the second's folder and rewrites its file, the clone following it there, nothing fetched or dropped; a project placed at the first and at the second reads its first placement unreachable, its Sync's Check following nothing, and its space.leave of the first stops for the placement it could not read, then, sent confirmed, drops it, moving the clone to its path at the second", async (t) => {
+  const first = await startHost();
+  const second = await startHost({ gitBackend: first, displayName: SECOND_NAME });
+  const third = await startHost({ displayName: THIRD_NAME });
+  const firstFolder = hostFolder(first);
+  const secondFolder = hostFolder(second);
+  const secondFile = `placements/${secondFolder}.yaml`;
+  const { home, key: atlas, clone: atlasClone } = await projectAt("leave-signed-out", [first, second, third]);
+  t.after(() => home.stop());
+  // A second project in the person's namespace at the first, which the
+  // second lists under one id (git-host-12).
+  const beaconCode = gitFolder("beacon");
+  const { key: local } = await addFolder(home, beaconCode);
+  let mark = home.client.mark();
+  await home.client.expectOk("space.pick", { repository: local, choice: { kind: "create", instance: first.url, groupId: null, name: "beacon" } });
+  const beacon = hostKey(first, `${LOGIN}/beacon-spex`);
+  const beaconId = (await home.client.waitRepository(mark, beacon, (repository) => repository.sync.phase === "done", 30_000)).id as string;
+  // The first project placed in the second's acme as well, a group of the
+  // second's own under its own id (space-97).
+  const acme = second.script.groups.find((group) => group.kind === "group" && group.fullPath === "acme");
+  assert.ok(acme, "the second's acme");
+  const placed = await home.client.settle("space.place", { repository: atlas, choice: { kind: "create", instance: second.url, groupId: acme.id, name: "atlas" }, noticed: true }, 30_000);
+  assert.deepEqual(placed.placements.map((line) => [line.instance, line.outcome?.kind]), [[first.url, "synced"], [second.url, "synced"]], JSON.stringify(placed.sync));
+  await refreshed(home);
+  await signOut(home, first);
+
+  // The first left for the project placed there alone: the second lists
+  // its host repository, so its remote is renamed to the second's folder
+  // with its id and last sync, its file rewritten to the second's, and the
+  // clone follows it to its path there — nothing fetched or dropped
+  // (space-98, space-60, storage-36).
+  const followed = hostKey(second, `${LOGIN}/beacon-spex`);
+  const followedClone = clonePath(home.dataDir, followed);
+  const transports = first.script.transportCredentials.length;
+  mark = home.client.mark();
+  assert.deepEqual(await home.client.expectOk("space.leave", { repository: beacon, instance: first.url }), { accepted: true });
+  const renamed = await home.client.waitRepository(mark, followed, (repository) => repository.sync.phase !== "running", 30_000);
+  assert.deepEqual([renamed.sync, renamed.instance, renamed.id, renamed.placements.map((line) => [line.instance, line.id])], [{ phase: "idle" }, second.url, beaconId, [[second.url, beaconId]]], JSON.stringify(renamed));
+  assert.ok(existsSync(join(followedClone, ".git")) && !existsSync(clonePath(home.dataDir, beacon)), "the clone follows its key placement");
+  assert.equal(Home.load(home.dataDir).keyForFolder(beaconCode), followed);
+  assert.deepEqual(git(followedClone, "remote").split("\n"), [secondFolder]);
+  assert.equal(git(followedClone, "config", "--get", `remote.${secondFolder}.spexId`), beaconId);
+  assert.deepEqual(readdirSync(join(followedClone, "placements")), [`${secondFolder}.yaml`]);
+  assert.equal(readFileSync(join(followedClone, secondFile), "utf8"), placementBytes(second.url, beaconId));
+  assert.ok(syncRecordsOf(home.dataDir, followed)[`sync:${followed}:${secondFolder}:last`], "its last sync kept under its remote");
+  assert.deepEqual(first.script.transportCredentials.slice(transports), [], "nothing fetched");
+
+  // The project placed at both reads its first placement unreachable,
+  // its Sync's Check following nothing, as the clone holds a placement at
+  // the second (space-61, space-60).
+  const stranded = await home.client.settle("space.sync", { repository: atlas }, 30_000);
+  assert.equal(stranded.sync.phase, "done", JSON.stringify(stranded.sync));
+  const line = placementOf(stranded, first.url);
+  assert.deepEqual([line.state, line.reason, line.outcome?.kind], ["unreachable", "Sign in again", "stopped"], JSON.stringify(line));
+  assert.equal(placementOf(stranded, second.url).outcome?.kind, "synced");
+  assert.deepEqual(git(atlasClone, "remote").split("\n"), [firstFolder, secondFolder]);
+
+  // Its first left: a placement it cannot read stops the leave, saying
+  // records pushed there since the last sync may be left behind, nothing
+  // dropped; sent confirmed, it is dropped, the clone moving to its path
+  // at the second (space-98, storage-38).
+  const unread = await home.client.settle("space.leave", { repository: atlas, instance: first.url }, 30_000);
+  assert.deepEqual(unread.sync, { phase: "stopped", op: "leave", step: "check", cause: "reauth", message: `Records pushed to ${FIRST_NAME} since the last sync may be left behind`, guidance: "Confirm to remove it anyway.", retry: true });
+  assert.deepEqual(git(atlasClone, "remote").split("\n"), [firstFolder, secondFolder]);
+  const atSecond = hostKey(second, "acme/atlas-spex");
+  const atSecondClone = clonePath(home.dataDir, atSecond);
+  mark = home.client.mark();
+  assert.deepEqual(await home.client.expectOk("space.leave", { repository: atlas, instance: first.url, confirmed: true }), { accepted: true });
+  const dropped = await home.client.waitRepository(mark, atSecond, (repository) => repository.sync.phase !== "running", 30_000);
+  assert.deepEqual([dropped.sync, dropped.instance, dropped.placements.map((each) => each.instance)], [{ phase: "idle" }, second.url, [second.url]], JSON.stringify(dropped));
+  assert.ok(existsSync(join(atSecondClone, ".git")) && !existsSync(atlasClone), "moved to its path at the second");
+  assert.deepEqual(git(atSecondClone, "remote").split("\n"), [secondFolder]);
+  assert.deepEqual(readdirSync(join(atSecondClone, "placements")), [`${secondFolder}.yaml`]);
 });

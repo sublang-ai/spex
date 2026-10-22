@@ -1274,6 +1274,11 @@ export const commandSchema = z.discriminatedUnion("type", [
     /** The privacy notice was shown for that placement (space-57). */
     noticed: z.boolean().optional(),
   }).strict(),
+  /** A placement left (space-98, DR-128): `instance` the placement's;
+   * `confirmed` the reader's second Remove, after a leave stopped for
+   * records no remaining placement received or for a placement it could
+   * not read. */
+  z.object({ type: z.literal("space.leave"), id, repository: repositoryKeySchema, instance: instanceOriginSchema, confirmed: z.boolean().optional() }).strict(),
   /** `instance`: the one the row stands under (space-1). */
   z.object({ type: z.literal("space.join"), id, instance: instanceOriginSchema, hostId: z.string().min(1), folder: z.string().min(1).optional() }).strict(),
   // Members of a spex repository's placement by its key — `instance` the
@@ -1536,6 +1541,8 @@ export interface CommandResults {
   /** Once the creation or the join is accepted at the host, the sync
    * following as state (space-29). */
   "space.place": { accepted: true };
+  /** At once, its outcome as state (space-29). */
+  "space.leave": { accepted: true };
   "space.join": { accepted: true };
   "space.members": { members: HostMemberInfo[] };
   "space.group.create": { group: { id: string; fullPath: string; name: string } };

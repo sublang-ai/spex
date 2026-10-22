@@ -353,6 +353,38 @@ const mayNotManageEvery = (name: string): string => i18n._({
   comment: "Refusal of Place: the person may not manage the members of every placement the spex repository holds, and placing it shares its records with more people; {name} is the repository's name",
 });
 
+/** The refusal of a Leave of a group's own spex repository or your own
+ * group's (space-29, space-89): a project's placement alone is left. */
+const groupRecordsKept = (name: string): string => i18n._({
+  id: "{name} holds a group's records; only a project's are removed from an instance",
+  values: { name },
+  comment: "Refusal of Leave: the spex repository is a group's own or your own group's, whose placements Leave does not remove; {name} is the repository's name",
+});
+
+/** A Leave stopped, unconfirmed, for records of the placement left or
+ * of the clone that no remaining placement received (space-98), naming
+ * their count. */
+const unreceivedRecords = (count: number): string => i18n._({
+  id: "{count, plural, one {# record has} other {# records have}} reached no other placement",
+  values: { count },
+  comment: "A stopped Leave: that many records, of the placement being removed or of this device, are held by none of the spex repository's other placements, as this device last fetched or pushed them; a second confirmation removes it anyway",
+});
+
+/** A Leave stopped, unconfirmed, for a placement it could not read
+ * (space-98), naming that placement's instance. */
+const leftBehind = (host: string): string => i18n._({
+  id: "Records pushed to {host} since the last sync may be left behind",
+  values: { host },
+  comment: "A stopped Leave: the placement being removed, at the instance {host} (its display name), could not be read, so records others pushed there since this device's last sync with it would not reach this device; a second confirmation removes it anyway",
+});
+
+/** Guidance under a Leave stopped before anything was removed
+ * (space-98, space-89). */
+const confirmToRemove = (): string => i18n._({
+  id: "Confirm to remove it anyway.",
+  comment: "Guidance under a stopped Leave: confirming again removes the placement whatever it holds",
+});
+
 /** The refusal of a command naming an instance the home does not list
  * (space-29); a URL's user info, which may hold a secret, is never
  * repeated. */
@@ -963,6 +995,31 @@ const noSuchPlacement = (name: string): string => i18n._({
 /** Units that count as something a removal would lose (projects-9):
  * every record but what the clone regenerates. */
 const RECORD_KINDS = new Set<SpaceUnitKind>(["session", "intent", "authoring", "environment", "settings", "other"]);
+
+/** The record units (projects-9) that some tree of `held` holds and no
+ * tree of `others` holds identically — every one where none is given
+ * (space-98): each unit grouped across every tree as a sync plans it
+ * (storage-11), the placement files, which name placements rather than
+ * hold records, left out. */
+function unitsHeldByNone(held: readonly StorageTree[], others: readonly StorageTree[]): string[] {
+  const files = new Set<string>();
+  for (const tree of [...held, ...others]) for (const file of tree.keys()) files.add(file);
+  const packages = specPackageFolders(files);
+  const groups = new Map<string, string[]>();
+  for (const file of files) {
+    const unit = storageUnitName(file, packages);
+    const paths = groups.get(unit);
+    if (paths) paths.push(file);
+    else groups.set(unit, [file]);
+  }
+  const unheld: string[] = [];
+  for (const [unit, paths] of groups) {
+    if (unit.startsWith(`${PLACEMENTS_DIR}/`) || !RECORD_KINDS.has(spaceUnitKind(unit))) continue;
+    const reached = (tree: StorageTree): boolean => !paths.some((path) => tree.has(path)) || others.some((other) => paths.every((path) => tree.get(path) === other.get(path)));
+    if (!held.every(reached)) unheld.push(unit);
+  }
+  return unheld.sort();
+}
 
 /** One spex repository's sync machine (space-31): one operation on this
  * clone at a time — a second Sync or Check joins it — any number of
@@ -2043,6 +2100,62 @@ class RepositorySync {
     return [...lists.local, ...lists.conflicts.map((conflict) => conflict.unit)].filter((unit) => RECORD_KINDS.has(unit.kind)).length;
   }
 
+  /** A Leave's read of the placement it leaves (space-98): that
+   * placement's `spex` fetched with the credential its instance,
+   * `instance`, brokers (git-host-9), its calls held by that instance's
+   * rate limit alone, following nothing; a host holding no `spex` there
+   * holds nothing of it to fetch. A failure is thrown as its Check's stop
+   * (space-15). */
+  async fetchPlacement(placement: Placement, instance: HostInstance): Promise<void> {
+    this.turnAt = instance.origin;
+    try {
+      const credential = await this.owner.credentialFor(instance, placement.url, "check", this);
+      const options = { transport: true, ...(credential ? { credential } : {}) };
+      try {
+        const heads = await this.git.run(["ls-remote", "--exit-code", "--heads", placement.name, `refs/heads/${SPEX_BRANCH}`], options);
+        const run = this.runOf(placement.name);
+        if (heads.code === 2) {
+          run.remoteEmpty = true;
+          run.unrelated = false;
+          run.checkedAt = Date.now();
+          return;
+        }
+        if (heads.code !== 0) throw this.transportStop("check", heads, placement.url, true, placement);
+        const fetched = await this.git.run(["fetch", "-q", "--no-tags", placement.name, `+refs/heads/${SPEX_BRANCH}:${this.refOf(placement.name)}`], options);
+        if (fetched.code !== 0) throw this.transportStop("check", fetched, placement.url, true, placement);
+        run.remoteEmpty = false;
+        run.checkedAt = Date.now();
+      } finally {
+        await credential?.dispose();
+      }
+    } finally {
+      this.turnAt = undefined;
+    }
+  }
+
+  /** How many record units the placement whose remote bears `name`, or
+   * the clone, holds that no other placement's `spex` holds identically,
+   * each as the clone last fetched or pushed it — every unit where none
+   * remains (space-98): the units a Leave of it, unconfirmed, stops for.
+   * The clone's are its working tree's; a placement whose host its last
+   * check found holding no `spex` holds none. */
+  async unreceivedUnits(name: string): Promise<number> {
+    const spexOf = async (remote: string): Promise<string | null> => {
+      const read = await this.git.run(["rev-parse", "-q", "--verify", `${this.refOf(remote)}^{commit}`]);
+      return read.code === 0 ? read.stdout.toString("utf8").trim() : null;
+    };
+    const held = [readStorageTree(this.dir, await this.workingTree())];
+    const leaving = this.runs.get(name)?.remoteEmpty === true ? null : await spexOf(name);
+    if (leaving !== null) held.push(readStorageTree(this.dir, leaving));
+    const others: StorageTree[] = [];
+    for (const placement of this.placementsNow()) {
+      if (placement.name === name) continue;
+      const spex = await spexOf(placement.name);
+      if (spex !== null) others.push(readStorageTree(this.dir, spex));
+    }
+    return unitsHeldByNone(held, others).length;
+  }
+
   // -- the plan (space-33) and its labels (space-34) ------------------------
 
   /** The working tree as a tree object, through a temporary index. */
@@ -2554,6 +2667,23 @@ class RepositorySync {
       }
     }, this.current?.work, { keep: true });
     return reply;
+  }
+
+  /**
+   * Leave a placement (space-98, space-31): an operation of the clone's
+   * machine, following one running (space-21), answered at once, its
+   * outcome as state. Its step names the placement at `origin`, its
+   * instance; `body` follows, fetches and drops it, and gives back the
+   * stop a leave not confirmed ends in, else none, the operation then
+   * ending idle: a leave syncs nothing. A refusal of its move, thrown,
+   * stops it whole with Retry.
+   */
+  leave(origin: string, body: () => Promise<SpaceSyncPhase | undefined>): { accepted: true } {
+    void this.runOperation("leave", async () => {
+      await this.enter("leave", "check", false, origin);
+      this.ended = (await body()) ?? { phase: "idle" };
+    }, this.current?.work);
+    return { accepted: true };
   }
 
   /** The placement a sync's choices, join and notice are for (space-29):
@@ -5616,6 +5746,90 @@ export class SpaceManager {
     return remotesRead(placements);
   }
 
+  /**
+   * Leave a project's placement at an instance (space-98, space-29):
+   * refused before anything runs for a group's or your own group's own
+   * spex repository, or an instance the clone holds no placement at — one
+   * the home does not list, or a key naming no clone, `not_found`. Then,
+   * as an operation of the clone's machine (space-31), answered at once:
+   * the placement followed, fetched and dropped (leaveNow).
+   */
+  async leave(key: string, named: string, confirmed = false): Promise<{ accepted: true }> {
+    const instance = this.instanceAt(this.namedInstance(named));
+    const machine = this.machine(key);
+    const name = splitKey(key).name;
+    await machine.readFacts();
+    // A group's own records stay at its group's instance, and your own
+    // group's at every instance it signs in to (space-89, space-4).
+    if (key === this.host.store.home.own() || !existsSync(machine.repository.projectFile)) throw new CoreError("invalid_request", groupRecordsKept(name));
+    if (!this.placementAt(machine.placements, instance)) throw new CoreError("invalid_request", noSuchPlacement(name));
+    return machine.leave(instance.origin, () => this.leaveNow(machine, instance, confirmed));
+  }
+
+  /** The clone's placement whose remote names an instance (storage-34):
+   * at most one. */
+  private placementAt(placements: readonly Placement[], instance: HostInstance): Placement | undefined {
+    return placements.find((placement) => placement.instance !== null && canonicalOrigin(placement.instance) === instance.origin);
+  }
+
+  /**
+   * A Leave's work inside its operation (space-98), once any operation
+   * it followed has ended, on the clone's placement at `instance` as it
+   * stands then — none left, nothing to do:
+   * 1. its instance signed out, another signed-in instance listing its
+   *    host repository and the clone holding no placement there: it
+   *    follows that instance as a sync's follow makes it (space-60) —
+   *    its remote renamed, its file rewritten, the key placement's clone
+   *    moved to its path there — nothing fetched or dropped;
+   * 2. unless `confirmed`, it is fetched with its instance's credential,
+   *    one it cannot read stopping the leave in that read's cause, saying
+   *    records pushed there since the last sync may be left behind, and a
+   *    record unit it or the clone holds that no remaining placement's
+   *    `spex` holds stopping it `unreceived` with their count;
+   * 3. it is dropped — its remote with its id, its fetched `spex`, the
+   *    upstream naming it and this device's records of it — its file
+   *    deleted, the first moving the clone (storage-38), a refusal of
+   *    that move stopping the leave whole with Retry.
+   * Nothing at the host changes. The stop a leave ends in, else none.
+   */
+  private async leaveNow(machine: RepositorySync, instance: HostInstance, confirmed: boolean): Promise<SpaceSyncPhase | undefined> {
+    await machine.readFacts();
+    const placement = this.placementAt(machine.placements, instance);
+    if (!placement) return undefined;
+    const origin = instance.origin;
+    if (!this.signedInAt(instance)) {
+      const to = this.governingOfPlacement(machine, placement);
+      const listing = to ? this.listingOf(to, { remote: placement.url, id: placement.id }) : undefined;
+      if (to && to !== instance && listing) {
+        await this.followByFile(machine, placement, to, listing, await this.machineIdentity());
+        // A step the host left waiting at the instance it left is no more
+        // this placement's.
+        this.endWaiting(machine.key, origin);
+        return undefined;
+      }
+    }
+    if (!confirmed) {
+      const host = this.nameOf(instance);
+      let unread: SpaceStopped | undefined;
+      if (!this.signedInAt(instance)) unread = new SpaceStopped("check", { cause: "reauth", message: signInAgain(), guidance: signInThenRetry(), retry: true });
+      else {
+        try { await machine.fetchPlacement(placement, instance); }
+        catch (error) {
+          const stop = hostStop("check", error, host);
+          // Stop ends the leave as it stands (space-16).
+          if (stop.failure.cause === "stopped") throw stop;
+          unread = stop;
+        }
+      }
+      if (unread) return { phase: "stopped", op: "leave", step: "check", cause: unread.failure.cause, message: leftBehind(host), guidance: confirmToRemove(), retry: true };
+      const count = await machine.unreceivedUnits(placement.name);
+      if (count > 0) return { phase: "stopped", op: "leave", step: "check", cause: "unreceived", message: unreceivedRecords(count), guidance: confirmToRemove(), retry: true, count };
+    }
+    await this.dropByFile(machine, placement, await this.machineIdentity(), true);
+    this.endWaiting(machine.key, origin);
+    return undefined;
+  }
+
   private projectFile(repository: SpexRepository): { name: string; remote: string | null } | undefined {
     try {
       const value = existsSync(repository.projectFile) ? readJsonFile(repository.projectFile) as { name?: unknown; remote?: unknown } : undefined;
@@ -6762,14 +6976,25 @@ export class SpaceManager {
    * moved, while a session's lease beneath holds the clone, where no read
    * of this run placed that next placement, naming its instance, and
    * where the destination is taken, as a sync's move is (storage-38).
+   * A Leave's drop, `leaves`, deletes that placement's file in the same
+   * step (space-98), a local change the clone's next sync carries.
    */
-  private async dropByFile(machine: RepositorySync, placement: Placement, identity: string | undefined): Promise<void> {
+  private async dropByFile(machine: RepositorySync, placement: Placement, identity: string | undefined, leaves = false): Promise<void> {
     const store = this.host.store;
     const from = machine.key;
     const placements = machine.placementsNow();
     if (store.repository(from)?.dir !== machine.repository.dir || !machine.stillReads(placement)) throw movedMeanwhile(from);
+    // Its file is under its instance's folder, the name its remote bears
+    // but for a clone the instances migration deferred (storage-34).
+    const folder = placement.instance === null ? placement.name : instanceFolder(placement.instance);
+    const deleteFile = (): void => {
+      if (!leaves) return;
+      try { deletePlacementFile(machine.repository.dir, folder); }
+      catch (error) { console.error(`spex: the placement file ${placementFilePath(folder)} of ${machine.key} stays: ${error instanceof Error ? error.message : String(error)}`); }
+    };
     if (placements[0]?.name !== placement.name || from === store.home.own()) {
       if (!machine.dropPlacement(placement)) throw movedMeanwhile(from);
+      deleteFile();
       return;
     }
     const leased = heldSessionLease(machine.repository.dir, identity);
@@ -6785,6 +7010,7 @@ export class SpaceManager {
     }
     if (to !== from) this.renameClone(machine, to, identity);
     if (!machine.dropPlacement(placement)) console.error(`spex: the remote of ${machine.key} stands until its next sync`);
+    else deleteFile();
     if (to !== from) await this.afterMove([{ from, to }]);
   }
 

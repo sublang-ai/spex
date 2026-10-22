@@ -99,6 +99,11 @@ msgstr "{command} 失败：{output}"
 msgid "{count, plural, one {# record has} other {# records have}} not reached the host and would be lost; confirm to remove anyway"
 msgstr "{count, plural, other {# 条记录}}尚未送达托管平台，移除将丢失这些记录；仍要移除请再次确认"
 
+#. A stopped Leave: that many records, of the placement being removed or of this device, are held by none of the spex repository's other placements, as this device last fetched or pushed them; a second confirmation removes it anyway
+#: src/space.ts
+msgid "{count, plural, one {# record has} other {# records have}} reached no other placement"
+msgstr "{count, plural, other {# 条记录}}尚未到达其他任何放置"
+
 #. A session unit's detail: how many turns it holds
 #: src/space.ts
 msgid "{count, plural, one {# turn} other {# turns}}"
@@ -272,6 +277,11 @@ msgstr "{name} 在本设备上没有文件夹"
 #: src/space.ts
 msgid "{name} holds a group's records; only a project's are placed at another instance"
 msgstr "{name} 存放的是群组的记录；只有项目的记录才能放置到另一个实例"
+
+#. Refusal of Leave: the spex repository is a group's own or your own group's, whose placements Leave does not remove; {name} is the repository's name
+#: src/space.ts
+msgid "{name} holds a group's records; only a project's are removed from an instance"
+msgstr "{name} 存放的是群组的记录；只有项目的记录才能从实例移除"
 
 #. Refusal: the command names a placement — an instance, or the remote the reader named — that the spex repository {name} does not hold
 #: src/space.ts
@@ -1067,6 +1077,11 @@ msgstr "配置无效：{errors}"
 #: src/config.ts
 msgid "config must be a YAML mapping"
 msgstr "配置必须是 YAML 映射"
+
+#. Guidance under a stopped Leave: confirming again removes the placement whatever it holds
+#: src/space.ts
+msgid "Confirm to remove it anyway."
+msgstr "仍要移除请再次确认。"
 
 #. A stopped transfer's message; {host} is the remote's host
 #. A stopped transfer's message; {host} is the remote's host
@@ -2093,6 +2108,11 @@ msgstr "加入 {name} 之前，请先阅读共享说明"
 #: src/space.ts
 msgid "Read the sharing notice before the first sync of {name}"
 msgstr "首次同步 {name} 之前，请先阅读共享说明"
+
+#. A stopped Leave: the placement being removed, at the instance {host} (its display name), could not be read, so records others pushed there since this device's last sync with it would not reach this device; a second confirmation removes it anyway
+#: src/space.ts
+msgid "Records pushed to {host} since the last sync may be left behind"
+msgstr "自上次同步以来推送到 {host} 的记录可能会被遗漏"
 
 #. Guidance where the core must read an instance before a spex repository's clone can move to its path there
 #: src/space.ts

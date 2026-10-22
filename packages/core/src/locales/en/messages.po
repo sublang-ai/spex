@@ -99,6 +99,11 @@ msgstr "{command} failed: {output}"
 msgid "{count, plural, one {# record has} other {# records have}} not reached the host and would be lost; confirm to remove anyway"
 msgstr "{count, plural, one {# record has} other {# records have}} not reached the host and would be lost; confirm to remove anyway"
 
+#. A stopped Leave: that many records, of the placement being removed or of this device, are held by none of the spex repository's other placements, as this device last fetched or pushed them; a second confirmation removes it anyway
+#: src/space.ts
+msgid "{count, plural, one {# record has} other {# records have}} reached no other placement"
+msgstr "{count, plural, one {# record has} other {# records have}} reached no other placement"
+
 #. A session unit's detail: how many turns it holds
 #: src/space.ts
 msgid "{count, plural, one {# turn} other {# turns}}"
@@ -272,6 +277,11 @@ msgstr "{name} has no folder on this device"
 #: src/space.ts
 msgid "{name} holds a group's records; only a project's are placed at another instance"
 msgstr "{name} holds a group's records; only a project's are placed at another instance"
+
+#. Refusal of Leave: the spex repository is a group's own or your own group's, whose placements Leave does not remove; {name} is the repository's name
+#: src/space.ts
+msgid "{name} holds a group's records; only a project's are removed from an instance"
+msgstr "{name} holds a group's records; only a project's are removed from an instance"
 
 #. Refusal: the command names a placement — an instance, or the remote the reader named — that the spex repository {name} does not hold
 #: src/space.ts
@@ -1067,6 +1077,11 @@ msgstr "config is invalid: {errors}"
 #: src/config.ts
 msgid "config must be a YAML mapping"
 msgstr "config must be a YAML mapping"
+
+#. Guidance under a stopped Leave: confirming again removes the placement whatever it holds
+#: src/space.ts
+msgid "Confirm to remove it anyway."
+msgstr "Confirm to remove it anyway."
 
 #. A stopped transfer's message; {host} is the remote's host
 #. A stopped transfer's message; {host} is the remote's host
@@ -2093,6 +2108,11 @@ msgstr "Read the sharing notice before joining {name}"
 #: src/space.ts
 msgid "Read the sharing notice before the first sync of {name}"
 msgstr "Read the sharing notice before the first sync of {name}"
+
+#. A stopped Leave: the placement being removed, at the instance {host} (its display name), could not be read, so records others pushed there since this device's last sync with it would not reach this device; a second confirmation removes it anyway
+#: src/space.ts
+msgid "Records pushed to {host} since the last sync may be left behind"
+msgstr "Records pushed to {host} since the last sync may be left behind"
 
 #. Guidance where the core must read an instance before a spex repository's clone can move to its path there
 #: src/space.ts

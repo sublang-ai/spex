@@ -78,7 +78,7 @@ test("parseCommand accepts the space commands and their optional fields", () => 
   assert.ok(!parseCommand({ type: "space.init", id: "s2" }).ok);
 });
 
-test("space-29, space-82: a space command names the instance it acts at by its origin, a group with its instance, and a sign-in the URL as the reader gave it", () => {
+test("space-29, space-82, space-98: a space command names the instance it acts at by its origin, a group with its instance, a placement left by its instance, and a sign-in the URL as the reader gave it", () => {
   const instance = "https://spex.pub";
   const repository = "@spex.pub/acme/a-spex";
   const named = [
@@ -97,6 +97,8 @@ test("space-29, space-82: a space command names the instance it acts at by its o
     { type: "space.forget", id: "i13", instance },
     { type: "space.place", id: "i14", repository, choice: { kind: "join", instance: "https://second.example", hostId: "7" }, noticed: true },
     { type: "space.place", id: "i15", repository, choice: { kind: "create", instance: "https://second.example", groupId: null, name: "a" } },
+    { type: "space.leave", id: "i16", repository, instance: "https://second.example" },
+    { type: "space.leave", id: "i17", repository, instance, confirmed: true },
   ];
   for (const command of named) {
     const parsed = parseCommand(command);
@@ -112,6 +114,8 @@ test("space-29, space-82: a space command names the instance it acts at by its o
     { type: "space.pick", id: "d5", repository: "ada/a-spex", choice: { kind: "create", groupId: null, name: "a" } },
     { type: "space.place", id: "d10", repository, choice: { kind: "join", hostId: "42" } },
     { type: "space.place", id: "d11", repository, choice: { kind: "create", groupId: null, name: "a" } },
+    { type: "space.leave", id: "d12", repository },
+    { type: "space.leave", id: "d13", repository, instance: "", confirmed: true },
     { type: "space.join", id: "d6", hostId: "42" },
     { type: "space.group.create", id: "d7", name: "Acme", path: "acme", parent: null },
     { type: "space.group.rename", id: "d8", group: "7", name: "Acme Corp" },
