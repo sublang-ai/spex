@@ -1266,11 +1266,12 @@ test.describe("daily sync", () => {
     const sync = page.getByTestId(`space-row-sync-${TEAM_KEY}`);
 
     // Check host lists the peer's session and Settings as incoming, the
-    // units changed on both sides marked, and the row reads behind
-    // (space-8).
+    // units changed on both sides marked, under the placement's instance,
+    // and the row reads behind (space-8).
     await expect(tab.getByTestId("space-check")).toHaveText("Check host");
     await tab.getByTestId("space-check").click();
     const incoming = tab.getByTestId("space-incoming-list");
+    await expect(tab.getByTestId(`space-incoming-${host.url}`).getByRole("heading", { level: 3 })).toHaveText("Stand-in Git host");
     const incomingSession = incoming.getByTestId(`space-unit-remote-${sessionUnit}`);
     await expect(incomingSession).toContainText(SESSION_TITLE);
     await expect(incomingSession).toHaveAttribute("data-change", "updated");
@@ -1307,7 +1308,7 @@ test.describe("daily sync", () => {
     await sync.click();
     const note = tab.getByTestId("space-choices-note");
     await expect(note.getByTestId("space-step-line")).toHaveText("Needs your choice");
-    await expect(note).toContainText("Your changes are saved; nothing is pushed yet");
+    await expect(note).toContainText("Your changes are saved; nothing is pushed to Stand-in Git host yet");
     const picker = tab.getByTestId("space-picker");
     await expect(picker).toContainText("Choose for 2 conflicts");
     await expect(picker.getByTestId("space-chosen")).toHaveText("0 of 2 chosen");
@@ -1325,7 +1326,8 @@ test.describe("daily sync", () => {
     const sessionGroup = picker.getByRole("radiogroup", { name: SESSION_TITLE });
     const settingsGroup = picker.getByRole("radiogroup", { name: "Settings changed" });
     await expect(sessionGroup).toContainText(/Keep mine\s+updated/);
-    await expect(sessionGroup).toContainText(/Take host's\s+updated/);
+    // The host's side names the placement's instance (space-17).
+    await expect(sessionGroup).toContainText(/Take host's\s+Stand-in Git host\s+·\s+updated/);
     await sessionGroup.getByRole("radio", { name: /Keep mine/ }).focus();
     await page.keyboard.press("ArrowDown");
     await expect(sessionGroup.getByRole("radio", { name: /Take host's/ })).toBeChecked();
@@ -1642,6 +1644,7 @@ test.describe("fit", () => {
       '[data-testid="space-groups"] h3',
       '[data-testid^="space-row-"]',
       '[data-testid^="space-line-"]',
+      '[data-testid^="space-incoming-"]',
       '[data-testid^="space-unit-"]',
       '[data-testid="space-picker"]',
       '[role="radiogroup"]',

@@ -437,7 +437,9 @@ describe("GROUPS: changes (space-7, space-8, space-10)", () => {
     const incoming = screen.getByTestId("space-unit-remote-config/playbook.config.yaml");
     fireEvent.click(within(incoming).getByRole("button", { name: "View diff" }));
     await waitFor(() => expect(calls("space.diff")).toHaveLength(2));
-    expect(calls("space.diff")[1]).toEqual({ repository: KEY, unit: "config/playbook.config.yaml", path: "config/playbook.config.yaml", side: "remote" });
+    // The host's side is the placement's the incoming row came from
+    // (space-10).
+    expect(calls("space.diff")[1]).toEqual({ repository: KEY, unit: "config/playbook.config.yaml", path: "config/playbook.config.yaml", side: "remote", placement: ORIGIN });
     await waitFor(() => expect(screen.getByTestId("space-diff-remote-config/playbook.config.yaml").textContent).toContain("The host's version against the common ancestor"));
   });
 
@@ -708,7 +710,10 @@ describe("GROUPS: choices (space-9, space-17, space-18)", () => {
   test("choices needed shows the incoming list above the picker with the step line and caption", async () => {
     await renderGroups(choicesState());
     expect(screen.getByTestId("space-step-line").textContent).toBe("Needs your choice");
-    expect(screen.getByText("Your changes are saved; nothing is pushed yet")).toBeTruthy();
+    // The caption and the incoming section name the placement's
+    // instance (space-8, space-9).
+    expect(screen.getByText("Your changes are saved; nothing is pushed to Spex Example yet")).toBeTruthy();
+    expect(within(screen.getByTestId(`space-incoming-${ORIGIN}`)).getByRole("heading", { level: 3 }).textContent).toBe("Spex Example");
     const incoming = screen.getByTestId("space-incoming-list");
     const picker = screen.getByTestId("space-picker");
     expect(incoming.compareDocumentPosition(picker) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -781,7 +786,7 @@ describe("GROUPS: choices (space-9, space-17, space-18)", () => {
     fireEvent.click(within(screen.getByTestId("space-apply-confirm")).getByRole("button", { name: "Apply" }));
     await waitFor(() =>
       expect(calls("space.sync")).toEqual([
-        { repository: KEY, choices: { "sessions/s1": "remote", "config/playbook.config.yaml": "mine" } },
+        { repository: KEY, placement: ORIGIN, choices: { "sessions/s1": "remote", "config/playbook.config.yaml": "mine" } },
       ]),
     );
   });
@@ -806,9 +811,10 @@ describe("GROUPS: choices (space-9, space-17, space-18)", () => {
     fireEvent.click(within(screen.getByRole("radiogroup", { name: "Settings changed" })).getByLabelText(/Keep mine/));
     fireEvent.click(screen.getByTestId("space-apply"));
     fireEvent.click(within(screen.getByTestId("space-apply-confirm")).getByRole("button", { name: "Apply" }));
-    // Apply carries the choices and the join (space-13, space-18).
+    // Apply carries the choices and the join, for that placement
+    // (space-13, space-18).
     await waitFor(() =>
-      expect(calls("space.sync")).toEqual([{ repository: KEY, choices: { "config/playbook.config.yaml": "mine" }, join: true }]),
+      expect(calls("space.sync")).toEqual([{ repository: KEY, placement: ORIGIN, choices: { "config/playbook.config.yaml": "mine" }, join: true }]),
     );
   });
 
@@ -850,7 +856,7 @@ describe("GROUPS: choices (space-9, space-17, space-18)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     await waitFor(() =>
       expect(calls("space.sync")).toEqual([
-        { repository: KEY, choices: { "sessions/s1": "mine", "config/playbook.config.yaml": "mine" } },
+        { repository: KEY, placement: ORIGIN, choices: { "sessions/s1": "mine", "config/playbook.config.yaml": "mine" } },
       ]),
     );
   });

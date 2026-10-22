@@ -557,6 +557,7 @@ msgstr "{step} stopped"
 #. {step} is the sync step's name; {message} is the cause the host gave
 #. {step} is the sync step's name; {message} is the cause the host gave
 #. {step} is the sync step's name; {message} is the cause the host gave
+#. {step} is the sync step's name; {message} is the cause the host gave
 #: src/components/SpaceSurface.tsx
 #: src/components/SpaceSync.tsx
 #: src/lib/space.ts
@@ -6634,9 +6635,10 @@ msgstr "Your browser is open at {site}: sign in there and approve; you return he
 msgid "Your changes are saved locally ({count, plural, one {# commit} other {# commits}} ahead)."
 msgstr "Your changes are saved locally ({count, plural, one {# commit} other {# commits}} ahead)."
 
+#. the choices note; {name} is that placement's instance's display name, or the path placement's remote
 #: src/components/SpaceSync.tsx
-msgid "Your changes are saved; nothing is pushed yet"
-msgstr "Your changes are saved; nothing is pushed yet"
+msgid "Your changes are saved; nothing is pushed to {name} yet"
+msgstr "Your changes are saved; nothing is pushed to {name} yet"
 
 #: src/components/CaptainHome.tsx
 msgid "Your config file has errors — playbooks are unavailable."

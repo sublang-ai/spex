@@ -17,11 +17,16 @@
 // can run (space-57); an unrelated placement joins from its line
 // (space-13); a stopped one retries from its line (space-15); and the
 // row's sign-in refusal and Retry follow every placement (space-11,
-// space-61).
+// space-61). The Sync tab lists each placement's incoming units under
+// its instance's display name (space-8); choices stand for one
+// placement, its incoming list above the picker and the caption and the
+// host's side naming its instance, Apply naming it (space-9, space-14,
+// space-17, space-18); a host-side diff names its placement (space-10);
+// and the rail names the placement in flight (space-12).
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
-import type { GroupsState, PlacementState, RepositoryState } from "@sublang/spex-core/protocol";
+import type { GroupsState, PlacementState, RepositoryState, SpaceOp } from "@sublang/spex-core/protocol";
 
 import { activateLanguage } from "../i18n.js";
 import { SpexCommandError } from "../lib/client.js";
@@ -31,14 +36,18 @@ import {
   ACME,
   BETA,
   BRANCH,
+  CONFLICTS,
   GAMMA,
   HOUR,
+  INCOMING_INTENT,
+  INCOMING_SESSION,
   KEY,
   MIN,
   NOW,
   ORIGIN,
   OWN,
   SECOND,
+  SETTINGS_UNIT,
   answer,
   base,
   calls,
@@ -1021,5 +1030,238 @@ describe("GROUPS: a placement's notice, join and retry (space-57, space-13, spac
     expect(screen.getByTestId(`space-row-retry-${KEY}`)).toBeTruthy();
     expect(within(lineOf(KEY, ORIGIN)).queryByTestId("space-line-retry")).toBeNull();
     expect(within(lineOf(KEY, SECOND)).queryByTestId("space-line-retry")).toBeNull();
+  });
+});
+
+describe("GROUPS: each placement's incoming units and choices (space-8, space-9, space-14, space-17, space-18, space-10, space-12)", () => {
+  /** The Sync tab's incoming sections, in the order they stand. */
+  const sectionsOf = (): HTMLElement[] =>
+    screen.queryAllByTestId(/^space-incoming-/).filter((each) => each.dataset.testid !== "space-incoming-list");
+  const sectionAt = (origin: string | null): HTMLElement => screen.getByTestId(`space-incoming-${origin ?? "path"}`);
+  /** What a section is headed by. */
+  const headOf = (section: HTMLElement): string => within(section).getByRole("heading", { level: 3 }).textContent ?? "";
+  /** The path placement after both, a remote this device reaches. */
+  const PATH = placementState({ path: "/srv/git/academy.git", branch: { ...BRANCH, checkedAt: null } });
+  const CHOICES = { phase: "choices", placement: SECOND, savedCommit: "abc123" } as const;
+  /** Choices at the second placement, the first's merge and push
+   * standing (space-14): its incoming units and both conflicts. */
+  const choicesAtSecond = (second: Partial<PlacementState> = {}, over: Partial<RepositoryState> = {}): GroupsState =>
+    placedAtTwo(
+      {
+        first: { incoming: [INCOMING_SESSION] },
+        second: { incoming: [INCOMING_INTENT, SETTINGS_UNIT], conflicts: CONFLICTS, ...second },
+      },
+      { conflicts: CONFLICTS, sync: CHOICES, ...over },
+    );
+
+  test("space-8: Check host lists each placement's incoming units under its instance's display name, marked to choose from that placement's conflicts; a placement holding no spex says Sync will send these; an unrelated placement lists nothing", async () => {
+    const lines = (second: Partial<PlacementState>): GroupsState => {
+      const state = placedAtTwo({
+        first: { incoming: [INCOMING_SESSION], conflicts: [CONFLICTS[0]!] },
+        second: { incoming: [INCOMING_INTENT, SETTINGS_UNIT], conflicts: [CONFLICTS[1]!], ...second },
+      });
+      const [row] = state.instances[0]!.groups[0]!.repositories;
+      row!.placements = [...row!.placements, PATH];
+      row!.conflicts = [CONFLICTS[0]!, CONFLICTS[1]!];
+      return state;
+    };
+    await renderGroups(lines({}));
+    // One section per placement the clone holds, in order, each headed
+    // by its instance's display name, the path placement by its remote
+    // (space-8, space-87).
+    expect(sectionsOf().map(headOf)).toEqual(["Spex Example", "Second Example", "/srv/git/academy.git"]);
+    expect(sectionsOf().map((each) => each.dataset.testid)).toEqual([
+      `space-incoming-${ORIGIN}`,
+      `space-incoming-${SECOND}`,
+      "space-incoming-path",
+    ]);
+    // The count is every section's; the kinds stand beneath each
+    // placement's heading.
+    expect(screen.getByRole("heading", { level: 2, name: "From the host (4)" })).toBeTruthy();
+    expect(within(sectionAt(ORIGIN)).getAllByRole("heading", { level: 4 }).map((h) => h.textContent)).toEqual(["Sessions"]);
+    // Each placement's units, a unit changed on both sides marked to
+    // choose from that placement's conflicts alone.
+    const first = sectionAt(ORIGIN);
+    expect(within(first).getByTestId("space-unit-remote-sessions/s2").textContent).toContain("Draft the release notes");
+    expect(within(first).getByTestId("space-choose-sessions/s1")).toBeTruthy();
+    expect(within(first).queryByTestId("space-choose-config/playbook.config.yaml")).toBeNull();
+    const second = sectionAt(SECOND);
+    expect(within(second).getByTestId("space-unit-remote-intents/1c2d3e4f-5a6b-4c7d-8e9f-a0b1c2d3e4f5").textContent).toContain("Ship the docs");
+    expect(within(second).getAllByTestId("space-unit-remote-config/playbook.config.yaml")).toHaveLength(1);
+    expect(within(second).getByTestId("space-choose-config/playbook.config.yaml")).toBeTruthy();
+    expect(within(second).queryByTestId("space-unit-remote-sessions/s1")).toBeNull();
+    expect(within(sectionAt(null)).getByText("Not checked yet")).toBeTruthy();
+    // Check host checks every placement at once.
+    fireEvent.click(screen.getByTestId("space-check"));
+    await waitFor(() => expect(calls("space.fetch")).toEqual([{ repository: KEY }]));
+
+    // A placement holding no spex says Sync will send these.
+    deliver(lines({ incoming: [], conflicts: [], branch: { ...BRANCH, hostEmpty: true, behind: 0 } }));
+    expect(within(sectionAt(SECOND)).getByText("The host holds no records yet; Sync will send these")).toBeTruthy();
+    expect(within(sectionAt(SECOND)).queryByTestId("space-incoming-list")).toBeNull();
+    expect(within(sectionAt(ORIGIN)).getByTestId("space-incoming-list")).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 2, name: "From the host (2)" })).toBeTruthy();
+
+    // An unrelated placement lists nothing; Join stands on its line
+    // (space-13).
+    deliver(lines({ incoming: [], conflicts: [], branch: { ...BRANCH, unrelated: true, ahead: null, behind: null } }));
+    expect(within(sectionAt(SECOND)).getByText("Unrelated history")).toBeTruthy();
+    expect(within(sectionAt(SECOND)).queryByTestId("space-incoming-list")).toBeNull();
+    expect(within(lineOf(KEY, SECOND)).getByTestId("space-line-join")).toBeTruthy();
+
+    // A check that stopped there reads its step and cause (space-15).
+    deliver(
+      lines({
+        incoming: [],
+        conflicts: [],
+        branch: { ...BRANCH, checkedAt: null },
+        outcome: { kind: "stopped", step: "check", cause: "unreachable", message: "Could not reach Second Example", guidance: "Check the network, then Retry.", retry: true },
+      }),
+    );
+    expect(within(sectionAt(SECOND)).getByText("Check stopped — Could not reach Second Example")).toBeTruthy();
+  });
+
+  test("space-9, space-14: choices at the second placement show its incoming list above the picker and the caption naming its display name", async () => {
+    await renderGroups(choicesAtSecond());
+    expect(screen.getByTestId("space-step-line").textContent).toBe("Needs your choice");
+    expect(screen.getByTestId("space-choices-note").textContent).toContain("Your changes are saved; nothing is pushed to Second Example yet");
+    // That placement's units alone, above the picker for its conflicts.
+    expect(sectionsOf().map((each) => each.dataset.testid)).toEqual([`space-incoming-${SECOND}`]);
+    expect(headOf(sectionAt(SECOND))).toBe("Second Example");
+    const incoming = within(sectionAt(SECOND)).getByTestId("space-incoming-list");
+    expect(within(incoming).getByTestId("space-unit-remote-intents/1c2d3e4f-5a6b-4c7d-8e9f-a0b1c2d3e4f5")).toBeTruthy();
+    expect(screen.queryByTestId("space-unit-remote-sessions/s2")).toBeNull();
+    const picker = screen.getByTestId("space-picker");
+    expect(incoming.compareDocumentPosition(picker) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Choose for 2 conflicts" })).toBeTruthy();
+    // The first placement's merge stands: its line reads synced.
+    expect(reading(lineOf(KEY, ORIGIN)).state).toBe("Synced 5m ago");
+  });
+
+  test("space-17: the host's side names the instance the choices are for", async () => {
+    await renderGroups(choicesAtSecond());
+    const session = screen.getByRole("radiogroup", { name: "Fix the login redirect" });
+    expect(within(session).getByLabelText(/Take host's/).parentElement?.textContent).toBe("Take host's Second Example · updated 5h ago · 9 turns");
+    expect(within(session).getByLabelText(/Keep mine/).parentElement?.textContent).toBe("Keep mine updated 2h ago · 12 turns");
+    // The label keeps its budget; the instance stands beside it.
+    expect(within(session).getByRole("radio", { name: /^Take host's Second Example/ })).toBeTruthy();
+  });
+
+  test("space-18: Apply sends {placement, choices}, and join while that placement's history is unrelated", async () => {
+    await renderGroups(choicesAtSecond());
+    fireEvent.click(screen.getByRole("button", { name: "All mine" }));
+    fireEvent.click(screen.getByTestId("space-apply"));
+    fireEvent.click(within(screen.getByTestId("space-apply-confirm")).getByRole("button", { name: "Apply" }));
+    await waitFor(() =>
+      expect(calls("space.sync")).toEqual([
+        { repository: KEY, placement: SECOND, choices: { "sessions/s1": "mine", "config/playbook.config.yaml": "mine" } },
+      ]),
+    );
+    cleanup();
+
+    // A join of the second waiting for its choices applies with the join.
+    commandMock.mockClear();
+    await renderGroups(choicesAtSecond({ branch: { ...BRANCH, unrelated: true, ahead: null, behind: null }, conflicts: [CONFLICTS[1]!] }));
+    expect(within(sectionAt(SECOND)).getByTestId("space-incoming-list")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "All host's" }));
+    fireEvent.click(screen.getByTestId("space-apply"));
+    fireEvent.click(within(screen.getByTestId("space-apply-confirm")).getByRole("button", { name: "Apply" }));
+    await waitFor(() =>
+      expect(calls("space.sync")).toEqual([
+        { repository: KEY, placement: SECOND, choices: { "config/playbook.config.yaml": "remote" }, join: true },
+      ]),
+    );
+    cleanup();
+
+    // An Apply that stopped names no placement: the picker stands for
+    // the first in order holding conflicts, and Retry carries them for
+    // it.
+    commandMock.mockClear();
+    await renderGroups(
+      choicesAtSecond(
+        {},
+        {
+          sync: {
+            phase: "stopped",
+            op: "sync",
+            step: "apply",
+            cause: "validation",
+            message: "Settings changed: playbook.config.yaml is not valid YAML",
+            guidance: "Choose the other version, or fix the file.",
+            retry: true,
+          },
+        },
+      ),
+    );
+    expect(screen.getByTestId("space-conflict-config/playbook.config.yaml").getAttribute("data-marked")).toBe("1");
+    fireEvent.click(screen.getByRole("button", { name: "All mine" }));
+    fireEvent.click(within(screen.getByTestId("space-stopped")).getByRole("button", { name: "Retry" }));
+    await waitFor(() =>
+      expect(calls("space.sync")).toEqual([
+        { repository: KEY, placement: SECOND, choices: { "sessions/s1": "mine", "config/playbook.config.yaml": "mine" } },
+      ]),
+    );
+  });
+
+  test("space-10: a remote side's diff names its placement", async () => {
+    await renderGroups(placedAtTwo({ first: { incoming: [INCOMING_SESSION] }, second: { incoming: [SETTINGS_UNIT] } }, { local: [SETTINGS_UNIT] }));
+    // The host's side of an incoming row is its placement's.
+    const incoming = within(sectionAt(SECOND)).getByTestId("space-unit-remote-config/playbook.config.yaml");
+    fireEvent.click(within(incoming).getByRole("button", { name: "View diff" }));
+    await waitFor(() =>
+      expect(calls("space.diff")).toEqual([
+        { repository: KEY, unit: "config/playbook.config.yaml", path: "config/playbook.config.yaml", side: "remote", placement: SECOND },
+      ]),
+    );
+    // This device's side is the clone's own, naming none.
+    fireEvent.click(within(screen.getByTestId("space-unit-mine-config/playbook.config.yaml")).getByRole("button", { name: "View diff" }));
+    await waitFor(() => expect(calls("space.diff")).toHaveLength(2));
+    expect(calls("space.diff")[1]).toEqual({ repository: KEY, unit: "config/playbook.config.yaml", path: "config/playbook.config.yaml", side: "mine" });
+    cleanup();
+
+    // A conflict's host side is the placement the choices are for.
+    commandMock.mockClear();
+    await renderGroups(choicesAtSecond());
+    const settings = screen.getByRole("radiogroup", { name: "Settings changed" });
+    fireEvent.click(within(settings).getAllByRole("button", { name: "View diff" })[1]!);
+    await waitFor(() =>
+      expect(calls("space.diff")).toEqual([
+        { repository: KEY, unit: "config/playbook.config.yaml", path: "config/playbook.config.yaml", side: "remote", placement: SECOND },
+      ]),
+    );
+  });
+
+  test("space-12: the rail names the placement in flight beside the step line", async () => {
+    const running = (op: SpaceOp, placement?: string | null): GroupsState =>
+      placedAtTwo({}, { sync: { phase: "running", op, step: "push", since: NOW, cancelable: true, ...(placement !== undefined ? { placement } : {}) } });
+    await renderGroups(placedAtTwo());
+    deliver(running("sync", SECOND));
+    // The step line reads the step alone; the placement stands beside it.
+    expect(screen.getByTestId("space-step-line").textContent).toBe("Pushing…");
+    expect(screen.getByTestId("space-step-placement").textContent).toBe("Second Example");
+    expect(screen.getByTestId("space-step-save").getAttribute("data-state")).toBe("done");
+    deliver(running("sync", ORIGIN));
+    expect(screen.getByTestId("space-step-placement").textContent).toBe("Spex Example");
+    // Save is at no placement.
+    deliver(placedAtTwo({}, { sync: { phase: "running", op: "sync", step: "save", since: NOW, cancelable: false } }));
+    expect(screen.getByTestId("space-step-line").textContent).toBe("Saving changes…");
+    expect(screen.queryByTestId("space-step-placement")).toBeNull();
+    // A Place and an Attach run the steps; a check and a Leave read
+    // their step line alone.
+    for (const op of ["place", "attach"] as const) {
+      deliver(running(op, SECOND));
+      expect(screen.getByTestId("space-step-push").getAttribute("data-state")).toBe("current");
+    }
+    for (const op of ["check", "leave"] as const) {
+      deliver(running(op, SECOND));
+      expect(screen.queryByTestId("space-step-push")).toBeNull();
+      expect(screen.getByTestId("space-step-line").textContent).toBe("Pushing…");
+    }
+    cleanup();
+
+    // A clone holding one placement names none beside the step line.
+    await renderGroups(base({}, [repo({ sync: { phase: "running", op: "sync", placement: ORIGIN, step: "push", since: NOW, cancelable: true } })]));
+    expect(screen.getByTestId("space-step-line").textContent).toBe("Pushing…");
+    expect(screen.queryByTestId("space-step-placement")).toBeNull();
   });
 });

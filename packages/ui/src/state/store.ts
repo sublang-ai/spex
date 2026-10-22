@@ -375,7 +375,16 @@ export interface AppState extends AttachmentState {
   ): Promise<void>;
   /** Stop the running transport step (space-16). */
   spaceCancel(repository: string): Promise<boolean>;
-  spaceDiff(repository: string, unit: string, path: string, side: SpaceChoice): Promise<{ patch: string; truncated: boolean }>;
+  /** One unit's line diff (space-10): this device's side, or the host's
+   * side of the placement `placement` names — its instance's origin,
+   * null for the path placement, its first where omitted (space-29). */
+  spaceDiff(
+    repository: string,
+    unit: string,
+    path: string,
+    side: SpaceChoice,
+    placement?: string | null,
+  ): Promise<{ patch: string; truncated: boolean }>;
   spaceTree(repository: string, path?: string): Promise<{ path: string; entries: SpaceEntry[] }>;
   spaceRead(repository: string, path: string): Promise<SpaceReadResult>;
 
@@ -1876,8 +1885,14 @@ export const useAppStore = create<AppState>((set, get) => {
       return stopped;
     },
 
-    spaceDiff: (repository, unit, path, side) =>
-      getClient().command("space.diff", { repository, unit, path, side }),
+    spaceDiff: (repository, unit, path, side, placement) =>
+      getClient().command("space.diff", {
+        repository,
+        unit,
+        path,
+        side,
+        ...(placement !== undefined ? { placement } : {}),
+      }),
 
     spaceTree: (repository, path) =>
       getClient().command("space.tree", {
