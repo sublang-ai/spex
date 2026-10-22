@@ -8,6 +8,7 @@
 Question presentation and active-turn input are amended by [DR-085](085-boss-talks-through-captain.md).
 
 Accepted.
+The conversation-first principle begins after project registration under [DR-132](132-a-welcome-page-before-the-first-project.md).
 §8's interaction hue is amended by [DR-013](013-sublang-brand.md): brand purple replaces indigo.
 A ninth principle, chrome that fits, is added by [DR-041](041-chrome-that-fits.md).
 §8's type scale is sharpened on the owner's audience review (2026-09-02): the small step is 12px, and an arbitrary 10–11px size lives only inside a tooltip.

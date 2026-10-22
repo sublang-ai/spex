@@ -536,16 +536,6 @@ export function NavRail(props: NavRailProps) {
       onKeyDown={onTreeKeyDown}
       className="relative flex min-h-0 flex-1 flex-col overflow-y-auto"
     >
-      {projects.length === 0 ? (
-        <button
-          type="button"
-          data-testid="sidebar-add-project"
-          onClick={props.onOpenPalette}
-          className="rounded-md border border-brand-300 px-2 py-1 text-left text-[13px] text-brand-600 hover:bg-brand-50 dark:border-brand-800 dark:text-brand-300 dark:hover:bg-brand-950"
-        >
-          {i18n._("Add a project…")}
-        </button>
-      ) : null}
       {projects.map((project) => {
         const open = isExpanded(project.id);
         const bucket = byProject.get(project.id) ?? { live: [], idle: [] };

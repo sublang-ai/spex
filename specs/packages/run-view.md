@@ -293,19 +293,27 @@ The app shell shall fill the window at every size, giving the surface it shows a
 
 #### run-view-25
 
-Where no session tab is active, when the Projects surface is shown, the run view shall present the Captain home: a chat thread opened by a Captain greeting, a chat composer, and the captain's adapter, model, and effort — with a lightning mark after them while the captain runs in fast mode, "fast mode" in its tooltip, as every agent chip wears it ([DR-038](../decisions/038-history-is-done-work.md)) — with a gear control opening the in-place agent editor, per [DR-007](../decisions/007-conversational-session-start.md) and [DR-011](../decisions/011-project-workspace.md):
+Where a project is registered and no session tab is active, when the Projects surface is shown, the run view shall present the Captain home: a chat thread opened by a Captain greeting, a chat composer, and the captain's adapter, model, and effort — with a lightning mark after them while the captain runs in fast mode, "fast mode" in its tooltip, as every agent chip wears it ([DR-038](../decisions/038-history-is-done-work.md)) — with a gear control opening the in-place agent editor, per [DR-007](../decisions/007-conversational-session-start.md) and [DR-011](../decisions/011-project-workspace.md):
 
 - the greeting names the current project and asks what to do with it, since the reader is already inside one and the question is the work, not the place, and says in one clause what a playbook is — a scripted workflow the AI players run — so the first sentence needs no glossary;
-- with no project current, the greeting names the remedy the workspace actually has — picking one where projects exist, adding one where none do — never sending the reader to a sidebar holding nothing;
-- with no project registered, the greeting itself carries the two ways in — a control opening the project palette [[run-view-42](#run-view-42)] and one seeding the Academy example through the same action the palette uses [[projects-27](projects.md#projects-27)] — acknowledging in place while it seeds and reporting a refusal in the thread;
+- with no project current, the greeting directs the reader to pick one where projects exist;
 - Project choice lives in the sidebar and palette, not in the composer row.
+
+#### run-view-168
+
+While no project is registered, the Projects surface shall show a welcome page naming the development-task workflow and its reviewable result, with one primary action to open the current Academy specs example [[projects-27](projects.md#projects-27)] and one secondary action to use the reader's own project [[projects-22](projects.md#projects-22)] ([DR-132](../decisions/132-a-welcome-page-before-the-first-project.md)):
+
+- the Academy action shall acknowledge seeding and report a refusal in place, and its copy shall not promise a recorded replay before one exists;
+- the page shall hide the Captain chat, composer, agent identity, quick-start playbooks, and adapter-readiness warning;
+- the sidebar shall retain its compact project-palette control without a second prominent add control;
+- shared config errors shall remain visible with a Settings action [[run-view-44](#run-view-44)], and connection failures shall remain visible [[run-view-50](#run-view-50)].
 
 #### run-view-26
 
 While the Captain home is shown, when the user submits composer text, the run view shall act by whether the workspace has a current project:
 
 - a current project — the run view creates a session for that project, dispatches the text as the session's first Boss turn, and switches to the new session's tab;
-- no project chosen — the workspace opens the project palette instead of dispatching, keeping the draft intact, and the draft equally survives a project arriving through the greeting's own controls [[run-view-25](#run-view-25)], so the text goes the moment there is somewhere to send it;
+- no project chosen while projects exist — the workspace opens the project palette instead of dispatching, keeping the draft intact;
 - the send control's tooltip says how to send — Enter, with Shift+Enter for a new line — and, with no project, what to do first, naming the palette's binding the platform's way [[run-view-49](#run-view-49)].
 
 #### run-view-27
@@ -313,7 +321,7 @@ While the Captain home is shown, when the user submits composer text, the run vi
 The run view shall make configured playbooks discoverable at the composer:
 
 - when the user types `/` at the start of a composer, the run view shows the configured playbooks filtered by the typed prefix, each with its intent — a built-in's in the interface language [[localization-4](localization.md#localization-4)] — as the hint, and inserts the selected command into the composer without dispatching it;
-- the Captain home shows highlighted playbooks, each with its command and that intent, as a quick start card that the user can dismiss, with the dismissal persisting across launches.
+- once a project is registered, the Captain home shows highlighted playbooks, each with its command and that intent, as a quick start card that the user can dismiss, with the dismissal persisting across launches.
 
 #### run-view-30
 
@@ -707,12 +715,13 @@ The app shall provide keyboard shortcuts implemented in the web UI (so they work
 
 #### run-view-44
 
-While the shared config is invalid or missing, the Captain home shall say so in the thread — listing the actual errors, or saying there is no config file yet where it is missing — with an in-place link to Settings, where the missing file's remedy waits [[settings-24](settings.md#settings-24)], never rendering the captain identity blank.
+While the shared config is invalid or missing, the Captain home shall say so in the thread — listing the actual errors, or saying there is no config file yet where it is missing — with an in-place link to Settings, where the missing file's remedy waits [[settings-24](settings.md#settings-24)], never rendering the captain identity blank; with no project registered, the welcome page shall show the same failure and Settings action [[run-view-168](#run-view-168)].
 
 #### run-view-45
 
-The not-ready heads-up shall offer an in-place re-check, with copy that is honest about env vars requiring a restart:
+While the selected Captain adapter reports not ready on a project's home, the run view shall explain beside the composer that a task cannot start, keep its draft editable, block dispatch, and offer Settings and an in-place re-check ([DR-132](../decisions/132-a-welcome-page-before-the-first-project.md)):
 
+- where a different adapter is ready, the notice shall also open the Captain's in-place agent editor to switch to it [[run-view-32](#run-view-32)];
 - the app re-checks readiness when its window regains focus while anything is not ready;
 - readiness covers every adapter any configured agent names.
 
@@ -1011,7 +1020,7 @@ When fixture turn and question states, real record-folded turns and deferred sub
 Where no session is live, when the Projects surface renders with a fixture config of one project and one playbook, the test suite shall assert the Captain home's one-motion start:
 
 - the Captain home shows the greeting naming the current project, the chat composer, and the captain identity [[run-view-25](#run-view-25)];
-- with no project current, the greeting offers picking one where the workspace holds projects and adding one where it holds none [[run-view-25](#run-view-25)];
+- with no project current but projects registered, the greeting offers picking one [[run-view-25](#run-view-25)]; with none registered, the welcome page offers the Academy example and own-project paths without a composer [[run-view-168](#run-view-168)];
 - when text is submitted with a current project, a session is created for that project and the text is dispatched as its first Boss turn [[run-view-26](#run-view-26)];
 - when text is submitted with no project chosen, the palette opens and the draft survives [[run-view-26](#run-view-26)].
 

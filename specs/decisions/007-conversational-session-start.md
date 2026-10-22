@@ -6,6 +6,7 @@
 ## Status
 
 Accepted (revised 2026-07-11 after the owner's review of the first build); the Captain identity's profile wording is amended by [DR-019](019-inline-agent-configuration.md) — the chip and its popover show and edit the Captain's inline agent block.
+The no-project landing state is amended by [DR-132](132-a-welcome-page-before-the-first-project.md); the conversational home begins once a project is registered.
 
 ## Context
 

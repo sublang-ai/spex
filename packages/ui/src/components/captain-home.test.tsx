@@ -87,6 +87,7 @@ function renderHome({
   onSaveCaptain = vi.fn(async (_patch: AgentPatch) => {}),
   onNavigate = vi.fn(),
   onOpenPalette = vi.fn(),
+  onOpenOwnProject = vi.fn(),
   hasProject = true,
   hasProjects = true,
   // null renders the no-captain state; undefined would fall back to
@@ -120,6 +121,7 @@ function renderHome({
       configErrors={configErrors}
       onRecheckReadiness={onRecheckReadiness}
       onOpenPalette={onOpenPalette}
+      onOpenOwnProject={onOpenOwnProject}
       onNavigate={onNavigate}
       onSaveCaptain={onSaveCaptain}
       onStart={onStart}
@@ -137,6 +139,7 @@ function renderHome({
     onSaveCaptain,
     onNavigate,
     onOpenPalette,
+    onOpenOwnProject,
     storage,
     view,
   };
@@ -175,16 +178,19 @@ describe("RUN-29: captain home structure and one-motion start", () => {
     await vi.waitFor(() => expect(onStart).toHaveBeenCalledWith("fix the bug"));
   });
 
-  test("with no project registered, the greeting offers adding one", () => {
-    // The remedy the workspace actually has: with nothing registered,
-    // there is nothing in the sidebar to pick (run-view-25).
-    renderHome({ hasProject: false, hasProjects: false });
-    expect(screen.getByText(/Add a project — any local git repo/)).toBeTruthy();
-    expect(screen.queryByText(/Pick a project in the sidebar/)).toBeNull();
-    // Send says what to do first, with this platform's modifier.
-    expect(screen.getByTestId("start-send").title).toBe(
-      `Add a project first (${keyLabel("P")})`,
-    );
+  test("with no project registered, welcome gives two clear paths without Captain chrome", () => {
+    const { onOpenOwnProject } = renderHome({ hasProject: false, hasProjects: false,
+      readiness: [{ adapter: "claude", ready: false, requirement: "sign in", usedBy: ["captain"], fastModeSupported: true, subagentModelSupported: true }],
+    });
+    expect(screen.getByTestId("welcome-home")).toBeTruthy();
+    expect(screen.getByText("Turn development tasks into reviewable changes")).toBeTruthy();
+    expect(screen.getByTestId("home-academy").textContent).toContain("Academy example project");
+    expect(screen.getByText(/does not play a recorded task yet/)).toBeTruthy();
+    expect(screen.queryByTestId("start-composer")).toBeNull();
+    expect(screen.queryByTestId("quick-start")).toBeNull();
+    expect(screen.queryByTestId("captain-readiness")).toBeNull();
+    fireEvent.click(screen.getByTestId("home-add-project"));
+    expect(onOpenOwnProject).toHaveBeenCalledOnce();
   });
 
   test("the greeting says what a playbook is, and Send says how", () => {
@@ -198,7 +204,9 @@ describe("RUN-29: captain home structure and one-motion start", () => {
   });
 
   test("submitting without a project opens the palette, draft intact", () => {
-    const { onStart, onOpenPalette } = renderHome({ hasProject: false });
+    const { onStart, onOpenPalette } = renderHome({ hasProject: false,
+      readiness: [{ adapter: "claude", ready: false, requirement: "sign in", usedBy: ["captain"], fastModeSupported: true, subagentModelSupported: true }],
+    });
     expect(screen.getByText(/Pick a project in the sidebar/)).toBeTruthy();
     expect(screen.getByTestId("start-send").title).toBe(
       `Pick a project first (${keyLabel("P")})`,
@@ -214,8 +222,8 @@ describe("RUN-29: captain home structure and one-motion start", () => {
   });
 });
 
-describe("run-view-25: with nothing registered, the greeting carries the ways in", () => {
-  test("a seeding failure lands in the thread, the controls stay", async () => {
+describe("run-view-168: with nothing registered, the welcome page carries the ways in", () => {
+  test("a seeding failure lands on the page, the controls stay", async () => {
     useAppStore.setState({
       openAcademyExample: vi.fn(async (): Promise<never> => {
         throw new Error("target directory is not empty");
@@ -365,7 +373,7 @@ describe("RUN-44: broken config surfaces in the thread", () => {
 });
 
 describe("RUN-45: readiness heals at hand", () => {
-  test("the heads-up bubble names the adapter and offers a re-check", async () => {
+  test("only the selected Captain blocks dispatch and offers a re-check", async () => {
     const onRecheckReadiness = vi.fn(async () => {});
     renderHome({
       onRecheckReadiness,
@@ -379,14 +387,26 @@ describe("RUN-45: readiness heals at hand", () => {
         },
       ],
     });
-    const bubble = screen.getByText(/aren't ready yet/).closest("div")!;
-    expect(bubble.textContent).toContain("claude");
-    expect(bubble.textContent).toContain("ANTHROPIC_API_KEY");
-    // Within the label budget (DR-041): the bubble's prose says what
-    // to set up, the control just re-checks.
+    const status = screen.getByTestId("captain-readiness");
+    expect(status.textContent).toContain("selected agent is not ready");
+    const composer = screen.getByTestId("start-composer") as HTMLTextAreaElement;
+    fireEvent.change(composer, { target: { value: "Review this task" } });
+    expect(composer.value).toBe("Review this task");
+    expect((screen.getByTestId("start-send") as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByTestId("recheck-readiness").textContent).toBe("Re-check");
     fireEvent.click(screen.getByTestId("recheck-readiness"));
     await vi.waitFor(() => expect(onRecheckReadiness).toHaveBeenCalled());
+  });
+
+  test("a ready alternative opens the Captain agent picker", () => {
+    renderHome({
+      readiness: [
+        { adapter: "claude", ready: false, requirement: "sign in", usedBy: ["captain"], fastModeSupported: true, subagentModelSupported: true },
+        { adapter: "codex", ready: true, usedBy: ["code.coder"], fastModeSupported: false, subagentModelSupported: false },
+      ],
+    });
+    fireEvent.click(screen.getByText("Switch to a ready agent"));
+    expect(screen.getByTestId("agent-popover")).toBeTruthy();
   });
 });
 

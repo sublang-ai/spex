@@ -178,6 +178,12 @@ describe("projects-22: with no project, the palette is an add flow", () => {
       expect(onAddPath).toHaveBeenCalledWith("/tmp/repo"),
     );
   });
+
+  test("welcome own-project entry focuses the path without repeating Academy", () => {
+    renderPalette({ ...EMPTY, ownProjectOnly: true });
+    expect(document.activeElement).toBe(screen.getByTestId("palette-path"));
+    expect(screen.queryByTestId("palette-academy")).toBeNull();
+  });
 });
 
 describe("projects-26: the palette's path actions, live rows and plain words", () => {

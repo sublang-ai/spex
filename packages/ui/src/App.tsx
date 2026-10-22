@@ -325,6 +325,7 @@ function sessionTooltip(
 function WorkspaceSurface({
   onNavigate,
   onOpenPalette,
+  onOpenOwnProject,
   attentionBySession,
   pendingFocus,
   onFocusHandled,
@@ -339,6 +340,7 @@ function WorkspaceSurface({
 }: {
   onNavigate: (surface: Surface) => void;
   onOpenPalette: () => void;
+  onOpenOwnProject: () => void;
   /** Per-project spec view state, held above the workspace so a
    * draft under edit survives every surface (spec-view-51). */
   specViewStates: Record<string, SpecViewState>;
@@ -534,6 +536,7 @@ function WorkspaceSurface({
       onDraftChange={setHomeDraft}
       onRecheckReadiness={refreshReadiness}
       onOpenPalette={onOpenPalette}
+      onOpenOwnProject={onOpenOwnProject}
       onNavigate={(surface) => onNavigate(surface)}
       onSaveCaptain={setCaptain}
       next={
@@ -957,6 +960,11 @@ export function App() {
     safeStorageSet(SURFACE_KEY, next);
   }, []);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [paletteOwnProject, setPaletteOwnProject] = useState(false);
+  const openPalette = () => {
+    setPaletteOwnProject(false);
+    setPaletteOpen(true);
+  };
   const configState = useAppStore((state) => state.configState);
   const sessions = useAppStore((state) => state.sessions);
   const views = useAppStore((state) => state.views);
@@ -1170,6 +1178,7 @@ export function App() {
         }
         if (event.key.toLowerCase() === "p") {
           event.preventDefault();
+          setPaletteOwnProject(false);
           setPaletteOpen((open) => !open);
           return;
         }
@@ -1179,7 +1188,7 @@ export function App() {
           if (projectId) {
             state.setWorkspaceTab(projectId, "start");
             setLanding({ on: "surface" });
-          } else setPaletteOpen(true);
+          } else openPalette();
           return;
         }
         if (event.key.toLowerCase() === "b") {
@@ -1321,6 +1330,7 @@ export function App() {
       <Announcer />
       {paletteOpen ? (
         <ProjectPalette
+          ownProjectOnly={paletteOwnProject}
           projects={projects}
           sessions={sessions}
           attention={attentionBySession}
@@ -1333,7 +1343,10 @@ export function App() {
           onPick={pickProject}
           onAddPath={addProjectByPath}
           onCreatePath={(path, scaffold) => createProject(path, scaffold)}
-          onClose={() => setPaletteOpen(false)}
+          onClose={() => {
+            setPaletteOpen(false);
+            setPaletteOwnProject(false);
+          }}
         />
       ) : null}
       <div className="flex min-h-0 flex-1">
@@ -1363,7 +1376,7 @@ export function App() {
           onDeleteSession={(sessionId) =>
             useAppStore.getState().deleteSession(sessionId)
           }
-          onOpenPalette={() => setPaletteOpen(true)}
+          onOpenPalette={openPalette}
           foot={configFoot}
         />
         <main
@@ -1394,7 +1407,11 @@ export function App() {
           ) : (
             <WorkspaceSurface
               onNavigate={setSurface}
-              onOpenPalette={() => setPaletteOpen(true)}
+              onOpenPalette={openPalette}
+              onOpenOwnProject={() => {
+                setPaletteOwnProject(true);
+                setPaletteOpen(true);
+              }}
               attentionBySession={attentionBySession}
               pendingFocus={pendingFocus}
               onFocusHandled={() => setPendingFocus(undefined)}

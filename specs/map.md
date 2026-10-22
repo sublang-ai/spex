@@ -154,6 +154,7 @@ meta.md       The spec of specs
 | [DR-129](decisions/129-content-size-is-not-permission.md) | 129-content-size-is-not-permission.md | Explicit content-size rejection is not permission: distinct cause, retained access and Save, instance-only cause and reported limit; amends DR-064 and DR-120 |
 | [DR-130](decisions/130-playbook-17-11-0-cligent-0-36-0-slc-0-19-0-adoption.md) | 130-playbook-17-11-0-cligent-0-36-0-slc-0-19-0-adoption.md | Playbook 17.11.0, Cligent 0.36.0 and slc 0.19.0: floors `^17.11.0`, `^0.36.0` and `^0.19.0`, one copy of each; the agent table reads its project and user folders from Cligent's native-skill support; Captain control and compiler calls no longer read exported skills except on Kimi Code; amends DR-123, DR-124 and DR-126; Playbook patch floor by DR-131 |
 | [DR-131](decisions/131-playbook-17-11-1-adoption.md) | 131-playbook-17-11-1-adoption.md | Playbook 17.11.1 adoption: floor, verified public-registry lock and staged built-ins; Cligent, slc, xstate and SDK identities kept; narrowly amends DR-130 |
+| [DR-132](decisions/132-a-welcome-page-before-the-first-project.md) | 132-a-welcome-page-before-the-first-project.md | First-project welcome page with Academy example and own-project paths, progressive Captain disclosure, and contextual selected-agent readiness; amends DR-007 and DR-010 for the zero-project state |
 
 ## Packages
 

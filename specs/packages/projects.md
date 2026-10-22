@@ -141,7 +141,7 @@ When the user confirms removal in the Overview tab, the workspace shall forget t
 
 The project palette's path row shall offer distinct "Add" (an existing repo) and "Create" (a new project) actions on the typed path, titled "Register this existing repository" and "Create a new repository at this path" and both disabled until a path is typed, and the palette shall list projects with filter-as-you-type matching on name and path:
 
-- With no project registered there is nothing to filter: the palette drops its filter, names itself an add flow, opens with the path field focused and its placeholder saying a project is added by path, and leads its list with the Academy-example action [[projects-27](#projects-27)];
+- With no project registered there is nothing to filter: the palette drops its filter, names itself an add flow, and opens with the path field focused and its placeholder saying a project is added by path; its ordinary entry leads the list with the Academy-example action [[projects-27](#projects-27)], while the welcome page's own-project entry omits that repeated choice [[run-view-168](run-view.md#run-view-168)];
 - the palette is where projects are browsed, chosen and created; it is not the only place one is added, a Space repair adding the project it already names from the folder it has checked ([DR-065](../decisions/065-repairs-the-reader-answers.md)).
 
 #### projects-23

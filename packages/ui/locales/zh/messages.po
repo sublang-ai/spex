@@ -659,11 +659,6 @@ msgstr "+{count} 项已排队"
 msgid "+{count} more under <0>/</0>"
 msgstr "+{count} 个在 <0>/</0> 下"
 
-#. an agent runtime, then what it is missing
-#: src/components/CaptainHome.tsx
-msgid "<0>{adapter}</0> — {requirement}"
-msgstr "<0>{adapter}</0> — {requirement}"
-
 #: src/components/CitationPreview.tsx
 msgid "<0>{id}</0> — not in the tree"
 msgstr "<0>{id}</0> — 不在规约树中"
@@ -873,11 +868,6 @@ msgstr "请先添加项目"
 #: src/components/CaptainHome.tsx
 msgid "Add a project first ({keys})"
 msgstr "请先添加项目（{keys}）"
-
-#: src/components/CaptainHome.tsx
-#: src/components/NavRail.tsx
-msgid "Add a project…"
-msgstr "添加项目…"
 
 #: src/components/EnvironmentSection.tsx
 msgid "Add a spec package"
@@ -1868,6 +1858,10 @@ msgstr "确认命令、意图、Player 以及启用位置"
 #: src/components/DeliveryCard.tsx
 msgid "Confirming…"
 msgstr "确认中…"
+
+#: src/components/CaptainHome.tsx
+msgid "Connect an agent"
+msgstr "连接智能体"
 
 #: src/App.tsx
 msgid "Connected, but {reason}"
@@ -2939,14 +2933,6 @@ msgstr "群组"
 #: src/components/SpaceInstance.tsx
 msgid "Groups are made by the people who run {name}"
 msgstr "群组由运营 {name} 的人创建"
-
-#: src/components/CaptainHome.tsx
-msgid "Heads up — some agents aren't ready yet:"
-msgstr "注意 — 部分智能体尚未就绪："
-
-#: src/components/CaptainHome.tsx
-msgid "Hello! I'm your Captain. Add a project — any local git repo — and tell me what to do with it; I'll route it to a playbook, a scripted workflow the AI players run."
-msgstr "你好！我是你的 Captain。先添加一个项目 — 任意本地 git 仓库 — 再告诉我要做什么；我会把它交给某个规程，也就是由 AI Player 执行的脚本化工作流。"
 
 #: src/components/CaptainHome.tsx
 msgid "Hello! I'm your Captain. Pick a project in the sidebar, then tell me what to do with it and I'll route it to a playbook, a scripted workflow the AI players run."
@@ -4112,6 +4098,10 @@ msgstr "打开设置 →"
 msgid "Open Settings to see what's wrong"
 msgstr "打开设置查看问题所在"
 
+#: src/components/CaptainHome.tsx
+msgid "Open the Academy example project"
+msgstr "打开 Academy 示例项目"
+
 #: src/components/SourcesTabs.tsx
 msgid "Open the project's Overview"
 msgstr "打开项目的概览"
@@ -5131,10 +5121,6 @@ msgstr "生成示例失败"
 msgid "Seeding…"
 msgstr "生成中…"
 
-#: src/components/CaptainHome.tsx
-msgid "Seeds a sample project with specs, ready to run"
-msgstr "生成带规约的示例项目，可直接运行"
-
 #: src/components/SpaceExplorer.tsx
 msgid "Select an entry to preview it."
 msgstr "选择一个条目以预览。"
@@ -5435,10 +5421,6 @@ msgstr "已以 @{login} 登录"
 msgid "Signed out of {host}"
 msgstr "已退出 {host} 的登录"
 
-#: src/components/CaptainHome.tsx
-msgid "Signing in from a terminal is picked up on re-check; a newly exported env var needs a Spex restart."
-msgstr "在终端登录后，重新检查即可识别；新导出的环境变量需重启 Spex。"
-
 #. the Sign in control, while the sign-in runs
 #: src/components/SpaceSignIn.tsx
 msgid "Signing in…"
@@ -5592,6 +5574,10 @@ msgstr "Spex 将此设备的文件保存在 {path}"
 #: src/components/NavRail.tsx
 msgid "Spex navigation"
 msgstr "Spex 导航"
+
+#: src/components/CaptainHome.tsx
+msgid "Spex organizes AI work into clear steps, review, and a traceable result."
+msgstr "Spex 用明确步骤组织 AI 执行与复核，并留下可追溯的结果。"
 
 #: src/components/LibrarySurface.tsx
 msgid "Spex repository shown"
@@ -5774,6 +5760,10 @@ msgstr "切换或添加项目（{keys}）"
 msgid "Switch to a project…"
 msgstr "切换到项目…"
 
+#: src/components/CaptainHome.tsx
+msgid "Switch to a ready agent"
+msgstr "切换到已就绪智能体"
+
 #. tab and control: send and bring back changes
 #. tab and control: send and bring back changes
 #: src/components/SpaceGroups.tsx
@@ -5905,6 +5895,10 @@ msgstr "/{command} 工作流失败，正在等待你处理。"
 #: src/components/ParkedRun.tsx
 msgid "The /{command} workflow is waiting for your answer."
 msgstr "/{command} 工作流正在等待你的答复。"
+
+#: src/components/CaptainHome.tsx
+msgid "The Academy example creates a local project with specs to explore. It does not play a recorded task yet."
+msgstr "Academy 示例会创建一个包含规约的本地项目，供你探索；目前还没有任务回放。"
 
 #: src/lib/labels.ts
 msgid "The agent process exited unexpectedly ({code})"
@@ -6040,6 +6034,10 @@ msgstr "重新加载失败"
 #: src/components/SpecEditor.tsx
 msgid "the save failed"
 msgstr "保存失败"
+
+#: src/components/CaptainHome.tsx
+msgid "The selected agent is not ready, so this task cannot start yet."
+msgstr "当前选中的智能体尚未就绪，暂时无法启动任务。"
 
 #: src/components/SpaceSignIn.tsx
 msgid "The sign-in did not start"
@@ -6237,7 +6235,6 @@ msgstr "无法加载对话记录：{reason}"
 msgid "Try again"
 msgstr "重试"
 
-#: src/components/CaptainHome.tsx
 #: src/components/ProjectPalette.tsx
 #: src/components/SpecView.tsx
 msgid "Try the Academy example"
@@ -6255,6 +6252,10 @@ msgstr "调优属于个人设置 — 请在“设置”中调整"
 #: src/lib/media.ts
 msgid "Turn {turn}"
 msgstr "第 {turn} 轮"
+
+#: src/components/CaptainHome.tsx
+msgid "Turn development tasks into reviewable changes"
+msgstr "把开发任务变成可检查的改动"
 
 #: src/components/AgentSettings.tsx
 #: src/components/BindingEditor.tsx
@@ -6430,6 +6431,10 @@ msgstr "使用设置中的浏览器选项"
 #: src/components/AgentSettings.tsx
 msgid "Use default"
 msgstr "使用默认"
+
+#: src/components/CaptainHome.tsx
+msgid "Use your own project"
+msgstr "使用自己的项目"
 
 #: src/components/EnvironmentSection.tsx
 msgid "Version of {name}"

@@ -659,11 +659,6 @@ msgstr "+{count} more queued"
 msgid "+{count} more under <0>/</0>"
 msgstr "+{count} more under <0>/</0>"
 
-#. an agent runtime, then what it is missing
-#: src/components/CaptainHome.tsx
-msgid "<0>{adapter}</0> — {requirement}"
-msgstr "<0>{adapter}</0> — {requirement}"
-
 #: src/components/CitationPreview.tsx
 msgid "<0>{id}</0> — not in the tree"
 msgstr "<0>{id}</0> — not in the tree"
@@ -873,11 +868,6 @@ msgstr "Add a project first"
 #: src/components/CaptainHome.tsx
 msgid "Add a project first ({keys})"
 msgstr "Add a project first ({keys})"
-
-#: src/components/CaptainHome.tsx
-#: src/components/NavRail.tsx
-msgid "Add a project…"
-msgstr "Add a project…"
 
 #: src/components/EnvironmentSection.tsx
 msgid "Add a spec package"
@@ -1868,6 +1858,10 @@ msgstr "Confirm the command, intent, players and where to enable it"
 #: src/components/DeliveryCard.tsx
 msgid "Confirming…"
 msgstr "Confirming…"
+
+#: src/components/CaptainHome.tsx
+msgid "Connect an agent"
+msgstr "Connect an agent"
 
 #: src/App.tsx
 msgid "Connected, but {reason}"
@@ -2939,14 +2933,6 @@ msgstr "Groups"
 #: src/components/SpaceInstance.tsx
 msgid "Groups are made by the people who run {name}"
 msgstr "Groups are made by the people who run {name}"
-
-#: src/components/CaptainHome.tsx
-msgid "Heads up — some agents aren't ready yet:"
-msgstr "Heads up — some agents aren't ready yet:"
-
-#: src/components/CaptainHome.tsx
-msgid "Hello! I'm your Captain. Add a project — any local git repo — and tell me what to do with it; I'll route it to a playbook, a scripted workflow the AI players run."
-msgstr "Hello! I'm your Captain. Add a project — any local git repo — and tell me what to do with it; I'll route it to a playbook, a scripted workflow the AI players run."
 
 #: src/components/CaptainHome.tsx
 msgid "Hello! I'm your Captain. Pick a project in the sidebar, then tell me what to do with it and I'll route it to a playbook, a scripted workflow the AI players run."
@@ -4112,6 +4098,10 @@ msgstr "Open Settings →"
 msgid "Open Settings to see what's wrong"
 msgstr "Open Settings to see what's wrong"
 
+#: src/components/CaptainHome.tsx
+msgid "Open the Academy example project"
+msgstr "Open the Academy example project"
+
 #: src/components/SourcesTabs.tsx
 msgid "Open the project's Overview"
 msgstr "Open the project's Overview"
@@ -5131,10 +5121,6 @@ msgstr "seeding the example failed"
 msgid "Seeding…"
 msgstr "Seeding…"
 
-#: src/components/CaptainHome.tsx
-msgid "Seeds a sample project with specs, ready to run"
-msgstr "Seeds a sample project with specs, ready to run"
-
 #: src/components/SpaceExplorer.tsx
 msgid "Select an entry to preview it."
 msgstr "Select an entry to preview it."
@@ -5435,10 +5421,6 @@ msgstr "Signed in as @{login}"
 msgid "Signed out of {host}"
 msgstr "Signed out of {host}"
 
-#: src/components/CaptainHome.tsx
-msgid "Signing in from a terminal is picked up on re-check; a newly exported env var needs a Spex restart."
-msgstr "Signing in from a terminal is picked up on re-check; a newly exported env var needs a Spex restart."
-
 #. the Sign in control, while the sign-in runs
 #: src/components/SpaceSignIn.tsx
 msgid "Signing in…"
@@ -5592,6 +5574,10 @@ msgstr "Spex keeps this device's files in {path}"
 #: src/components/NavRail.tsx
 msgid "Spex navigation"
 msgstr "Spex navigation"
+
+#: src/components/CaptainHome.tsx
+msgid "Spex organizes AI work into clear steps, review, and a traceable result."
+msgstr "Spex organizes AI work into clear steps, review, and a traceable result."
 
 #: src/components/LibrarySurface.tsx
 msgid "Spex repository shown"
@@ -5774,6 +5760,10 @@ msgstr "Switch or add a project ({keys})"
 msgid "Switch to a project…"
 msgstr "Switch to a project…"
 
+#: src/components/CaptainHome.tsx
+msgid "Switch to a ready agent"
+msgstr "Switch to a ready agent"
+
 #. tab and control: send and bring back changes
 #. tab and control: send and bring back changes
 #: src/components/SpaceGroups.tsx
@@ -5905,6 +5895,10 @@ msgstr "The /{command} workflow failed and is waiting for you."
 #: src/components/ParkedRun.tsx
 msgid "The /{command} workflow is waiting for your answer."
 msgstr "The /{command} workflow is waiting for your answer."
+
+#: src/components/CaptainHome.tsx
+msgid "The Academy example creates a local project with specs to explore. It does not play a recorded task yet."
+msgstr "The Academy example creates a local project with specs to explore. It does not play a recorded task yet."
 
 #: src/lib/labels.ts
 msgid "The agent process exited unexpectedly ({code})"
@@ -6040,6 +6034,10 @@ msgstr "the reload failed"
 #: src/components/SpecEditor.tsx
 msgid "the save failed"
 msgstr "the save failed"
+
+#: src/components/CaptainHome.tsx
+msgid "The selected agent is not ready, so this task cannot start yet."
+msgstr "The selected agent is not ready, so this task cannot start yet."
 
 #: src/components/SpaceSignIn.tsx
 msgid "The sign-in did not start"
@@ -6237,7 +6235,6 @@ msgstr "transcript could not be loaded: {reason}"
 msgid "Try again"
 msgstr "Try again"
 
-#: src/components/CaptainHome.tsx
 #: src/components/ProjectPalette.tsx
 #: src/components/SpecView.tsx
 msgid "Try the Academy example"
@@ -6255,6 +6252,10 @@ msgstr "Tuning is personal — set it in Settings"
 #: src/lib/media.ts
 msgid "Turn {turn}"
 msgstr "Turn {turn}"
+
+#: src/components/CaptainHome.tsx
+msgid "Turn development tasks into reviewable changes"
+msgstr "Turn development tasks into reviewable changes"
 
 #: src/components/AgentSettings.tsx
 #: src/components/BindingEditor.tsx
@@ -6430,6 +6431,10 @@ msgstr "Use browser setting from Settings"
 #: src/components/AgentSettings.tsx
 msgid "Use default"
 msgstr "Use default"
+
+#: src/components/CaptainHome.tsx
+msgid "Use your own project"
+msgstr "Use your own project"
 
 #: src/components/EnvironmentSection.tsx
 msgid "Version of {name}"

@@ -6,7 +6,8 @@
 // each project's live state so quiet runs in other projects stay one
 // keystroke away. With nothing registered there is nothing to filter,
 // so the palette opens as an add flow: the path field focused and the
-// Academy example leading the list (projects-22). The palette owns
+// Academy example leading its ordinary list (projects-22). The welcome
+// page's own-project route omits that duplicate example. The palette owns
 // focus while open — Tab wraps inside it and Escape closes from
 // anywhere in it — and returns focus to the opener with any draft
 // intact (run-view-42).
@@ -52,6 +53,9 @@ export interface ProjectPaletteProps {
   /** Register-or-init by path (store's addProjectByPath). */
   onAddPath: (path: string) => Promise<ProjectInfo>;
   onCreatePath: (path: string, scaffold: boolean) => Promise<ProjectInfo>;
+  /** Opened from the welcome page's own-project choice: focus the
+   * path without repeating the Academy choice above it. */
+  ownProjectOnly?: boolean;
   onClose: () => void;
 }
 
@@ -143,7 +147,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
 
   // Entries the arrow keys traverse, in visual order: the Academy row
   // where it leads the list, then projects, then Open folder…
-  const lead = empty ? 1 : 0;
+  const lead = empty && !props.ownProjectOnly ? 1 : 0;
   const entryCount = lead + filtered.length + (props.onPickFolder ? 1 : 0);
   const clamped = Math.min(index, Math.max(0, entryCount - 1));
   const openFolderIndex = lead + filtered.length;
@@ -229,7 +233,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
 
   /** Enter on the highlighted entry. */
   function activate(at: number): void {
-    if (empty && at === 0) {
+    if (lead === 1 && at === 0) {
       void runAcademy();
       return;
     }
@@ -364,7 +368,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
             path row, its options, and a failure message keep their
             place at every window height (projects-30). */}
         <div className="relative min-h-0 flex-1 overflow-y-auto py-1">
-          {empty ? (
+          {empty && !props.ownProjectOnly ? (
             <button
               type="button"
               data-testid="palette-academy"

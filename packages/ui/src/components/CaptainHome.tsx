@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The Captain home (DR-007 revised, RUN-25..27): an IM-style thread
-// the Captain opens with a greeting, a project chip menu with silent
-// git init, a dismissible quick start card, and a "/" slash menu.
+// The Captain home (DR-007, DR-132): a welcome page until a project
+// exists, then an IM-style thread with playbooks in the composer.
 // Props-driven so RUN-29/31 exercise it without a live core.
 
 import { useEffect, useRef, useState } from "react";
@@ -85,6 +84,9 @@ export interface CaptainHomeProps {
   onRecheckReadiness?: () => Promise<unknown>;
   /** Enter with no project opens the palette (DR-011). */
   onOpenPalette: () => void;
+  /** The welcome page's own-project path opens the palette without
+   * repeating the Academy choice. */
+  onOpenOwnProject?: () => void;
   onNavigate: (surface: "Settings" | "Playbooks") => void;
   /** Apply a merge patch to the Captain's block (captain.set). */
   onSaveCaptain: (patch: AgentPatch) => Promise<unknown>;
@@ -183,8 +185,7 @@ export function CaptainHome(props: CaptainHomeProps) {
   const [queueNote, setQueueNote] = useState<string>();
   const [captainPopover, setCaptainPopover] =
     useState<ReturnType<typeof popoverRoom>>();
-  // With nothing registered the greeting itself carries the ways in
-  // (run-view-25); seeding is the store action the palette uses.
+  // Seeding is the same store action the palette uses (run-view-168).
   const openAcademyExample = useAppStore((state) => state.openAcademyExample);
   const [seeding, setSeeding] = useState(false);
   const composerRef = useRef<HTMLTextAreaElement>(null);
@@ -203,19 +204,25 @@ export function CaptainHome(props: CaptainHomeProps) {
   const captainReadiness = captain
     ? readiness.find((entry) => entry.adapter === captain.adapter)
     : undefined;
-  const notReady = readiness.filter((entry) => entry.ready === false);
+  const captainUnavailable = captainReadiness?.ready === false;
+  const readyAlternative = captainUnavailable && readiness.some(
+    (entry) => entry.ready && entry.adapter !== captain?.adapter,
+  );
   const slashItems = slashMatches(text, playbooks);
   const slash = slashDismissed ? undefined : slashItems;
   const configBroken =
     props.configStatus === "invalid" || props.configStatus === "missing";
 
   async function start(): Promise<void> {
-    if (!canSubmitContent(text, props.attachments?.files) || busy || !connected) return;
+    if (!canSubmitContent(text, props.attachments?.files) || busy || !connected) {
+      return;
+    }
     if (!props.hasProject) {
       // The palette owns project choice (DR-011); the draft stays.
       props.onOpenPalette();
       return;
     }
+    if (captainUnavailable) return;
     setError(undefined);
     setBusy(true);
     try {
@@ -239,8 +246,8 @@ export function CaptainHome(props: CaptainHomeProps) {
     setSeeding(true);
     setError(undefined);
     try {
-      // Registration and selection happen in the store; the greeting
-      // then names the project and the draft is ready to send.
+      // Registration and selection happen in the store; the project
+      // home then takes over this welcome page.
       await openAcademyExample();
     } catch (cause) {
       setError((cause as Error).message);
@@ -250,11 +257,89 @@ export function CaptainHome(props: CaptainHomeProps) {
     }
   }
 
-  // A fresh canvas centers the whole cluster — greeting, quick start,
+  // A fresh Captain canvas centers the cluster — greeting, quick start,
   // project chip, composer — instead of hugging the bottom fifth of
   // an empty window (DR-010 §8). Any real content reverts to the IM
   // bottom-docked layout.
-  const emptyCanvas = notReady.length === 0 && !configBroken && !error;
+  const emptyCanvas = !configBroken && !error;
+
+  if (!props.hasProject && !props.hasProjects) {
+    return (
+      <section
+        data-testid="welcome-home"
+        className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col overflow-y-auto px-6 py-10 sm:px-10"
+      >
+        <div className="my-auto max-w-xl">
+          <span className="mb-5 inline-flex rounded-full border border-brand-200 bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700 dark:border-brand-800 dark:bg-brand-950 dark:text-brand-300">
+            Spex
+          </span>
+          <h1 className="text-3xl font-semibold leading-tight tracking-tight text-neutral-900 dark:text-neutral-100 sm:text-4xl">
+            {i18n._("Turn development tasks into reviewable changes")}
+          </h1>
+          <p className="mt-4 max-w-lg text-base leading-relaxed text-neutral-600 dark:text-neutral-300">
+            {i18n._(
+              "Spex organizes AI work into clear steps, review, and a traceable result.",
+            )}
+          </p>
+          <div className="mt-9 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
+            <button
+              type="button"
+              data-testid="home-academy"
+              disabled={seeding || !connected}
+              onClick={() => void runAcademy()}
+              className="rounded-lg bg-brand-600 px-5 py-3 text-sm font-semibold text-white hover:bg-brand-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500 disabled:opacity-40"
+            >
+              {seeding
+                ? i18n._("Seeding…")
+                : i18n._("Open the Academy example project")}
+            </button>
+            <button
+              type="button"
+              data-testid="home-add-project"
+              onClick={props.onOpenOwnProject ?? props.onOpenPalette}
+              className="rounded-lg border border-neutral-300 px-5 py-3 text-sm font-medium text-neutral-700 hover:bg-neutral-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800"
+            >
+              {i18n._("Use your own project")}
+            </button>
+          </div>
+          <p className="mt-4 text-xs leading-relaxed text-neutral-500 dark:text-neutral-400">
+            {i18n._(
+              "The Academy example creates a local project with specs to explore. It does not play a recorded task yet.",
+            )}
+          </p>
+          {configBroken ? (
+            <div
+              role="alert"
+              className="mt-6 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200"
+            >
+              <p>
+                {props.configStatus === "missing"
+                  ? i18n._("Spex has no config file yet — playbooks are unavailable.")
+                  : i18n._("Your config file has errors — playbooks are unavailable.")}
+              </p>
+              {props.configErrors?.slice(0, 3).map((entry, index) => (
+                <p key={index} className="mt-1 font-mono text-xs">
+                  {entry}
+                </p>
+              ))}
+              <button
+                type="button"
+                onClick={() => props.onNavigate("Settings")}
+                className="mt-2 font-medium text-brand-600 hover:underline dark:text-brand-300"
+              >
+                {i18n._("Open Settings →")}
+              </button>
+            </div>
+          ) : null}
+          {error ? (
+            <p role="alert" className="mt-6 text-sm text-red-700 dark:text-red-300">
+              {error}
+            </p>
+          ) : null}
+        </div>
+      </section>
+    );
+  }
 
   return (
     // The surface root is height-constrained (DR-041 §9): the shell
@@ -285,38 +370,10 @@ export function CaptainHome(props: CaptainHomeProps) {
                       }),
                   },
                 )
-              : props.hasProjects
-                ? i18n._(
-                    "Hello! I'm your Captain. Pick a project in the sidebar, then tell me what to do with it and I'll route it to a playbook, a scripted workflow the AI players run.",
-                  )
-                : i18n._(
-                    "Hello! I'm your Captain. Add a project — any local git repo — and tell me what to do with it; I'll route it to a playbook, a scripted workflow the AI players run.",
-                  )}
+              : i18n._(
+                  "Hello! I'm your Captain. Pick a project in the sidebar, then tell me what to do with it and I'll route it to a playbook, a scripted workflow the AI players run.",
+                )}
           </p>
-          {!props.hasProject && !props.hasProjects ? (
-            // The two ways in, in the greeting itself: nothing in the
-            // sidebar to pick means nothing to send the reader to.
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                data-testid="home-add-project"
-                onClick={props.onOpenPalette}
-                className="rounded-md bg-brand-600 px-3 py-1 text-xs font-medium text-white hover:bg-brand-500"
-              >
-                {i18n._("Add a project…")}
-              </button>
-              <button
-                type="button"
-                data-testid="home-academy"
-                disabled={seeding || !connected}
-                title={i18n._("Seeds a sample project with specs, ready to run")}
-                onClick={() => void runAcademy()}
-                className="rounded-md border border-brand-300 px-3 py-1 text-xs font-medium text-brand-700 hover:bg-brand-50 disabled:opacity-40 dark:border-brand-700 dark:text-brand-300 dark:hover:bg-brand-950"
-              >
-                {seeding ? i18n._("Seeding…") : i18n._("Try the Academy example")}
-              </button>
-            </div>
-          ) : null}
         </CaptainBubble>
 
         {configBroken ? (
@@ -352,60 +409,6 @@ export function CaptainHome(props: CaptainHomeProps) {
           </CaptainBubble>
         ) : null}
 
-        {notReady.length > 0 ? (
-          <CaptainBubble>
-            <p className="text-xs">
-              {i18n._("Heads up — some agents aren't ready yet:")}
-            </p>
-            <ul className="mt-1 flex flex-col gap-0.5 text-xs text-neutral-600 dark:text-neutral-300">
-              {notReady.map((entry) => (
-                // The adapter's name and what it asks for are both the
-                // core's words; the line that joins them is ours.
-                <li key={entry.adapter}>
-                  <Rich
-                    text={i18n._({
-                      id: "<0>{adapter}</0> — {requirement}",
-                      values: {
-                        adapter: entry.adapter,
-                        requirement: entry.requirement,
-                      },
-                      comment: "an agent runtime, then what it is missing",
-                    })}
-                    components={[
-                      <span key="adapter" className="font-mono font-semibold" />,
-                    ]}
-                  />
-                </li>
-              ))}
-            </ul>
-            <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
-              {i18n._(
-                "Signing in from a terminal is picked up on re-check; a newly exported env var needs a Spex restart.",
-              )}
-            </p>
-            {props.onRecheckReadiness ? (
-              <button
-                type="button"
-                data-testid="recheck-readiness"
-                disabled={rechecking}
-                onClick={() => {
-                  setRechecking(true);
-                  void props
-                    .onRecheckReadiness?.()
-                    .finally(() => setRechecking(false));
-                }}
-                className="mt-1 text-xs font-medium text-brand-600 hover:underline disabled:opacity-50 dark:text-brand-300"
-              >
-                {rechecking
-                  ? i18n._("Checking…")
-                  : i18n._({
-                      id: "Re-check",
-                      comment: "act: ask the agents whether they are ready now",
-                    })}
-              </button>
-            ) : null}
-          </CaptainBubble>
-        ) : null}
 
         {/* The project's plan (run-view-88): the core-published next
          * intent with its standing and available actions, beside the
@@ -480,6 +483,52 @@ export function CaptainHome(props: CaptainHomeProps) {
       </div>
 
       <div className="mt-3 flex flex-col gap-1.5">
+        {props.hasProject && captainUnavailable ? (
+          <div
+            role="status"
+            data-testid="captain-readiness"
+            className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200"
+          >
+            <span>
+              {i18n._("The selected agent is not ready, so this task cannot start yet.")}
+            </span>{" "}
+            <button
+              type="button"
+              onClick={() => props.onNavigate("Settings")}
+              className="font-medium underline"
+            >
+              {i18n._("Connect an agent")}
+            </button>
+            {readyAlternative ? (
+              <button
+                type="button"
+                onClick={() => setCaptainPopover(popoverRoom(gearRef.current))}
+                className="ml-3 font-medium underline"
+              >
+                {i18n._("Switch to a ready agent")}
+              </button>
+            ) : null}
+            {props.onRecheckReadiness ? (
+              <button
+                type="button"
+                data-testid="recheck-readiness"
+                disabled={rechecking}
+                onClick={() => {
+                  setRechecking(true);
+                  void props.onRecheckReadiness?.().finally(() => setRechecking(false));
+                }}
+                className="ml-3 font-medium underline disabled:opacity-50"
+              >
+                {rechecking
+                  ? i18n._("Checking…")
+                  : i18n._({
+                      id: "Re-check",
+                      comment: "act: ask the agents whether they are ready now",
+                    })}
+              </button>
+            ) : null}
+          </div>
+        ) : null}
         <div className="flex items-center gap-2">
           {/* The anchor grants the popover its room (run-view-32):
               the dialog it holds is capped to what the window can
@@ -669,7 +718,7 @@ export function CaptainHome(props: CaptainHomeProps) {
               <button
                 type="button"
                 data-testid="start-send"
-                disabled={busy || !connected || !canSubmitContent(text, props.attachments?.files)}
+                disabled={busy || !connected || (props.hasProject && captainUnavailable) || !canSubmitContent(text, props.attachments?.files)}
                 onClick={() => void start()}
                 title={
                   props.hasProject

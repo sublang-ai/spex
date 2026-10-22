@@ -687,6 +687,33 @@ describe("run-view-57: a workspace holding projects opens inside one", () => {
   });
 });
 
+describe("run-view-168: first-project welcome route", () => {
+  test("own-project path focuses the palette; a later ordinary opening restores Academy", () => {
+    useAppStore.setState({
+      projects: [],
+      sessions: [],
+      views: {},
+      currentProjectId: undefined,
+      activeSessionId: undefined,
+      workspaceTabs: {},
+      openTabs: {},
+      ledger: { intents: [], attention: [], badge: 0 } as never,
+    });
+    render(<App />);
+
+    expect(screen.getByTestId("welcome-home")).toBeTruthy();
+    expect(screen.queryByTestId("sidebar-add-project")).toBeNull();
+    fireEvent.click(screen.getByTestId("home-add-project"));
+    expect(document.activeElement).toBe(screen.getByTestId("palette-path"));
+    expect(screen.queryByTestId("palette-academy")).toBeNull();
+
+    fireEvent.keyDown(window, { key: "p", metaKey: true });
+    expect(screen.queryByTestId("project-palette")).toBeNull();
+    fireEvent.click(screen.getByTestId("sidebar-palette"));
+    expect(screen.getByTestId("palette-academy")).toBeTruthy();
+  });
+});
+
 describe("playbook-library-34, core-service-2: the slash menus offer the project's composed catalog", () => {
   const entry = (id: string) => ({ id, from: "", command: id, intent: `the ${id} playbook`, roles: {} });
   const valid = (...ids: string[]) =>
