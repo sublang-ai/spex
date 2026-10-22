@@ -11,6 +11,7 @@ import { tmpdir } from "node:os";
 import { basename, join, relative } from "node:path";
 import { WebSocket } from "ws";
 import { CoreService, type CoreServiceOptions } from "../service.js";
+import type { SpaceStepEvent } from "../space.js";
 import { fakeAdapterImports } from "./fake-adapter.js";
 import { createScriptedCaptain } from "./scripted-captain.js";
 import { startStandinHost, type StandinHost, type StandinPerson } from "./standin-host.js";
@@ -18,7 +19,7 @@ import type { StandinRegistry } from "./standin-registry.js";
 import { canonicalOrigin, instanceFolder, instanceSegmentOf } from "../instance.js";
 import { encodePlacementFile, PLACEMENTS_DIR } from "../placements.js";
 import type { LineSpawner } from "../compile.js";
-import type { Command, CommandResults, GroupsState, PlacementState, RepositoryState, ServerMessage, SpaceStateMessage, SyncStep, SpaceOp } from "../protocol.js";
+import type { Command, CommandResults, GroupsState, PlacementState, RepositoryState, ServerMessage, SpaceStateMessage } from "../protocol.js";
 
 /** Every scratch home's own group: a name no device user collides with. */
 export const OWN = "tester";
@@ -428,7 +429,7 @@ interface Home {
   dataDir: string;
   projectDir: string;
   configPath: string;
-  hooks: { beforeStep?: (event: { op: SpaceOp; step: SyncStep; repository: string; at?: "commit" }) => void | Promise<void> };
+  hooks: { beforeStep?: (event: SpaceStepEvent) => void | Promise<void> };
   stop(): Promise<void>;
 }
 

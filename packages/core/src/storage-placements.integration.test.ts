@@ -182,7 +182,7 @@ test("storage-41, storage-12: a placement file that does not read as its encodin
   assert.deepEqual(await lines(), [held]);
 });
 
-test("storage-5, space-22, space-5: this device's last sync and notice are kept per placement under sync:<repository>:<placement>:, a former sync:<repository>:last and :noticed reading as the first placement's — a path placement's kept under its own name once a pick places the clone at an instance in front of it, an instance placement's until its next sync records its own, which removes them — and a placement dropped takes its own alone", async (t) => {
+test("storage-5, space-22, space-5, space-15: this device's last sync and notice are kept per placement under sync:<repository>:<placement>:, a former sync:<repository>:last and :noticed reading as the first placement's — a path placement's kept under its own name once a pick places the clone at an instance in front of it, an instance placement's until its next sync records its own, which removes them — and a placement dropped takes its own alone", async (t) => {
   const host = await startHost();
   const folder = hostFolder(host);
   const home = await startHome("per-placement", { host, project: false });
@@ -196,7 +196,8 @@ test("storage-5, space-22, space-5: this device's last sync and notice are kept 
   // `origin` (space-22); written back as an earlier Spex kept it, one
   // record per repository, it reads as that first placement's.
   const local = await addFolder(home, gitFolder("kept"));
-  await home.client.expectOk("space.remote.set", { repository: local.key, url: bareRepo() });
+  const pathBare = bareRepo();
+  await home.client.expectOk("space.remote.set", { repository: local.key, url: pathBare });
   const viaPath = await home.client.settle("space.sync", { repository: local.key }, 30_000);
   assert.equal(viaPath.sync.phase, "done", JSON.stringify(viaPath.sync));
   const former = viaPath.lastSync;
@@ -211,13 +212,19 @@ test("storage-5, space-22, space-5: this device's last sync and notice are kept 
 
   // A pick places it at the stand-in, in front of its path placement:
   // the path placement keeps that record under its own name, following
-  // the clone's move, and the new placement's sync records its own.
+  // the clone's move, and the new placement's sync records its own. The
+  // path placement's remote set aside meanwhile, the pick's sync stops
+  // that placement alone, recording nothing of it (space-12, space-15).
+  const aside = `${pathBare}-aside`;
+  renameSync(pathBare, aside);
   from = home.client.mark();
   await home.client.expectOk("space.pick", { repository: local.key, choice: { kind: "create", instance: host.url, groupId: "2002", name: "kept" } });
   const key = hostKey(host, "acme/kept-spex");
   // Moved as the creation lands, it reads the path sync's outcome until
   // its own sync ends.
   const picked = await home.client.waitRepository(from, key, (repository) => repository.sync.phase === "done" && repository.sync.at > former.at, 30_000);
+  renameSync(aside, pathBare);
+  assert.deepEqual(picked.placements.map((line) => line.outcome?.kind), ["synced", "stopped"]);
   assert.ok(picked.lastSync && picked.lastSync.at > former.at, JSON.stringify(picked.lastSync));
   assert.deepEqual(syncRecordsOf(home.dataDir, key), { [`sync:${key}:${folder}:last`]: picked.lastSync, [`sync:${key}:origin:last`]: former });
   assert.deepEqual(syncRecordsOf(home.dataDir, local.key), {});
@@ -226,7 +233,8 @@ test("storage-5, space-22, space-5: this device's last sync and notice are kept 
   // A former record of the repository reads as its first placement's —
   // now its instance placement — the path placement reading its own,
   // until that placement's next sync records its own, which removes
-  // both former keys, the notice kept as that placement's (storage-5).
+  // both former keys, the notice kept as that placement's; the path
+  // placement's turn of that sync records its own (storage-5, space-22).
   const earlier = { at: 1, sent: 2, received: 3 };
   rewritePrefs(home.dataDir, (prefs) => {
     delete prefs[`sync:${key}:${folder}:last`];
@@ -238,12 +246,14 @@ test("storage-5, space-22, space-5: this device's last sync and notice are kept 
   const synced = await home.client.settle("space.sync", { repository: key }, 30_000);
   assert.equal(synced.sync.phase, "done", JSON.stringify(synced.sync));
   assert.ok(synced.lastSync && synced.lastSync.at > earlier.at, JSON.stringify(synced.lastSync));
+  const pathSynced = synced.placements[1].lastSync;
+  assert.ok(pathSynced && pathSynced.at > former.at, JSON.stringify(pathSynced));
   assert.deepEqual(syncRecordsOf(home.dataDir, key), {
     [`sync:${key}:${folder}:last`]: synced.lastSync,
     [`sync:${key}:${folder}:noticed`]: true,
-    [`sync:${key}:origin:last`]: former,
+    [`sync:${key}:origin:last`]: pathSynced,
   });
-  assert.deepEqual([synced.noticed, lines(synced)], [true, [[host.url, synced.lastSync, true], [null, former, false]]]);
+  assert.deepEqual([synced.noticed, lines(synced)], [true, [[host.url, synced.lastSync, true], [null, pathSynced, false]]]);
 
   // The path placement dropped takes its own record alone (space-5).
   const dropped = repositoryOf(await home.client.expectOk("space.remote.set", { repository: key, url: null }), key);

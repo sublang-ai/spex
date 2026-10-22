@@ -9,18 +9,26 @@
 // incoming units and conflicts on its own line, the units local against
 // either on the row (space-8, space-7); a placement whose check stops
 // stops alone (space-15); and each line reads its own instance's answer,
-// the row reachable where any placement is (space-61) — hermetic, on
-// loopback alone, in a file budget of its own.
+// the row reachable where any placement is (space-61). A Sync saves once
+// and runs each placement's turn in the order added, each Apply against
+// the previous placement's merge, then catches the earlier placements
+// up; a placement's stop stands on its line while the next runs, and
+// Stop, an Apply's refusal and Git's own error end the sync (space-12,
+// space-15, space-19, space-31) — hermetic, on loopback alone, in a file
+// budget of its own.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { writeFileSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { canonicalOrigin } from "./instance.js";
 import type { GroupsState, RepositoryState, SpaceConflict, SpaceUnit } from "./protocol.js";
-import { bareOf, clonePath, createSpaceHarness, hostFolder, hostKey, instanceOf, placementOf, repositoryOf } from "./testing/space-harness.js";
+import type { SpaceStepEvent } from "./space.js";
+import { bareOf, clonePath, createSpaceHarness, hostFolder, hostKey, instanceOf, placementOf, repositoryOf, syncRecordsOf } from "./testing/space-harness.js";
 
 const fixture = createSpaceHarness();
-const { git, gitFolder, addFolder, peerClone, peerPush, attachByHand, startHome, startHost, signIn, signOut } = fixture;
+const { scratch, git, gitFolder, addFolder, bareRepo, peerClone, peerPush, attachByHand, startHome, startHost, signIn, signOut, sleep } = fixture;
 test.after(() => fixture.dispose());
 
 /** The stand-in's person, and your own group's repository once signed in. */
@@ -68,10 +76,14 @@ test("space-8, space-31, space-33, space-7, space-15, space-10, space-29: Check 
   const { first, second, home, key, clone, placed, firstBare, secondBare } = await placedAtBoth("check-each");
   t.after(() => home.stop());
 
-  // A unit sent to the first alone: the second lacks it.
+  // A unit sent to the first alone, the second unreachable meanwhile:
+  // the second lacks it.
   writeFileSync(join(clone, "sent.md"), "sent to the first\n");
+  second.script.failTransport(503);
   const sent = await home.client.settle("space.sync", { repository: key }, 30_000);
+  second.script.failTransport(null);
   assert.equal(sent.sync.phase, "done", JSON.stringify(sent.sync));
+  assert.equal(placementOf(sent, second.url).outcome?.kind, "stopped", JSON.stringify(placementOf(sent, second.url).outcome));
   // A peer at each advances its `spex`, the second's with a unit this
   // device then changes too.
   const firstPeer = peerClone(firstBare);
@@ -172,4 +184,397 @@ test("space-61, space-87: with the first instance signed out, the first placemen
   // The row stands where its key lies, under the first's heading
   // (space-1).
   assert.ok(instanceOf(out, first.url)?.groups.some((group) => group.repositories.some((repository) => repository.key === key)));
+});
+
+/** A placed clone settled by one Sync: the second's placement file
+ * committed, and each placement holding what the clone holds. */
+async function settledAtBoth(name: string) {
+  const placed = await placedAtBoth(name);
+  const synced = await placed.home.client.settle("space.sync", { repository: placed.key }, 30_000);
+  assert.equal(synced.sync.phase, "done", JSON.stringify(synced.sync));
+  assert.deepEqual(synced.placements.map((line) => line.outcome?.kind), ["synced", "synced"]);
+  return { ...placed, synced };
+}
+
+/** The steps a home's operations on `key` enter, each as
+ * `<placement>:<step>`, the placement read as `first`, `second` or
+ * `path`, Save as `save`, the catch-up's push as `<placement>:catch-up`;
+ * `then` runs at each step before it does. */
+function recordSteps(home: Awaited<ReturnType<typeof startHome>>, key: string, hosts: { first: { url: string }; second: { url: string } }, then?: (event: SpaceStepEvent, label: string) => void | Promise<void>): string[] {
+  const steps: string[] = [];
+  const name = (placement: string | null | undefined): string => placement === undefined ? "" : placement === null ? "path"
+    : canonicalOrigin(placement) === canonicalOrigin(hosts.first.url) ? "first" : canonicalOrigin(placement) === canonicalOrigin(hosts.second.url) ? "second" : placement;
+  home.hooks.beforeStep = async (event) => {
+    if (event.repository !== key || event.at === "commit") return;
+    const label = event.placement === undefined ? event.step : `${name(event.placement)}:${event.at === "catch-up" ? "catch-up" : event.step}`;
+    steps.push(label);
+    await then?.(event, label);
+  };
+  return steps;
+}
+
+/** A peer working copy of the second's bare repository standing on the
+ * first's `spex`, as a member holding both carried it there: its next
+ * push to the second descends from the first's history. */
+function peerOnFirst(secondBare: string, firstBare: string): string {
+  const dir = peerClone(secondBare);
+  git(dir, "fetch", "-q", firstBare, "spex");
+  git(dir, "reset", "-q", "--hard", "FETCH_HEAD");
+  return dir;
+}
+
+/** A peer's commit pushed to its origin's `spex` from where the copy
+ * stands, with no fetch first. */
+function pushFrom(dir: string, files: Record<string, string>): string {
+  for (const [path, text] of Object.entries(files)) writeFileSync(join(dir, path), text);
+  git(dir, "add", "-A", "--", ".");
+  git(dir, "-c", "commit.gpgsign=false", "commit", "-q", "-m", "peer change");
+  git(dir, "push", "-q", "origin", "HEAD:spex");
+  return git(dir, "rev-parse", "HEAD");
+}
+
+test("space-92, space-12, space-19, space-33, space-31, space-22: one Sync saves once, merges the first placement's spex, then the second's against the first's merge, then pushes the first once more as a fast-forward, each line synced, a unit the first's merge rewrote taken from the second's side with no restart, and each placement's last sync recorded apart; a catch-up push the first rejects runs it once more from Check, and rejected again leaves its line behind", async (t) => {
+  const { first, second, home, key, clone, firstBare, secondBare } = await settledAtBoth("merge-each");
+  t.after(() => home.stop());
+  writeFileSync(join(clone, "unit.md"), "original\n");
+  assert.equal((await home.client.settle("space.sync", { repository: key }, 30_000)).sync.phase, "done");
+  // The first's peer rewrites the unit; the second's peer, holding the
+  // first's history, rewrites it again; this device changes another.
+  const firstPeer = peerClone(firstBare);
+  const atFirst = await peerPush(firstPeer, (dir) => {
+    writeFileSync(join(dir, "unit.md"), "the first's rewrite\n");
+    writeFileSync(join(dir, "from-first.md"), "the first's\n");
+  });
+  const atSecond = pushFrom(peerOnFirst(secondBare, firstBare), { "unit.md": "the second's rewrite\n", "from-second.md": "the second's\n" });
+  writeFileSync(join(clone, "local.md"), "this device's\n");
+
+  const steps = recordSteps(home, key, { first, second });
+  const merged = await home.client.settle("space.sync", { repository: key }, 30_000);
+  assert.ok(merged.sync.phase === "done" && merged.sync.pushed, JSON.stringify(merged.sync));
+  // Save once, each placement's turn in the order added, then the first
+  // caught up; no Apply restarted (space-12, space-19, space-31).
+  assert.deepEqual(steps, [
+    "save",
+    "first:check", "first:compare", "first:apply", "first:refresh", "first:push",
+    "second:check", "second:compare", "second:apply", "second:refresh", "second:push",
+    "first:catch-up",
+  ]);
+  // The second's merge stands on the first's, and the unit the first's
+  // merge rewrote holds the second's side (space-19, space-33).
+  const [firstMerge, secondParent] = git(clone, "log", "-1", "--format=%P", "HEAD").split(" ");
+  assert.equal(secondParent, atSecond);
+  assert.equal(git(clone, "log", "-1", "--format=%P", firstMerge).split(" ")[1], atFirst);
+  assert.equal(readFileSync(join(clone, "unit.md"), "utf8"), "the second's rewrite\n");
+  assert.ok(existsSync(join(clone, "from-first.md")) && existsSync(join(clone, "from-second.md")));
+  // Each placement holds the clone's `spex`, the first by the catch-up's
+  // fast-forward, and each line reads synced with its own counts
+  // (space-12, space-22).
+  const head = git(clone, "rev-parse", "HEAD");
+  assert.deepEqual([git(firstBare, "rev-parse", "spex"), git(secondBare, "rev-parse", "spex")], [head, head]);
+  assert.deepEqual(merged.placements.map((line) => line.outcome), [
+    { kind: "synced", sent: 1, received: 2 },
+    { kind: "synced", sent: 1, received: 2 },
+  ]);
+  const records = syncRecordsOf(home.dataDir, key);
+  const last = (host: { url: string }) => records[`sync:${key}:${hostFolder(host)}:last`] as { at: number; sent: number; received: number } | undefined;
+  assert.deepEqual([last(first)?.sent, last(first)?.received, last(second)?.sent, last(second)?.received], [1, 2, 1, 2], JSON.stringify(records));
+  assert.ok((last(second)?.at ?? 0) >= (last(first)?.at ?? Infinity), "each recorded at its own push");
+  assert.deepEqual(merged.placements.map((line) => line.lastSync), [last(first), last(second)]);
+  assert.deepEqual(merged.placements.map((line) => [line.branch?.ahead, line.branch?.behind]), [[0, 0], [0, 0]]);
+
+  // A catch-up push the first rejects — its host moved meanwhile — runs
+  // the first once more from Check, merging what it received, and the
+  // second is caught up to that merge (space-12).
+  const secondPeer = peerClone(secondBare);
+  await peerPush(firstPeer, (dir) => { writeFileSync(join(dir, "f2.md"), "the first's, again\n"); });
+  await peerPush(secondPeer, (dir) => { writeFileSync(join(dir, "s2.md"), "the second's, again\n"); });
+  const rejectedOnce = recordSteps(home, key, { first, second }, async (_event, label) => {
+    if (label === "first:catch-up" && !existsSync(join(clone, "f3.md"))) await peerPush(firstPeer, (dir) => { writeFileSync(join(dir, "f3.md"), "meanwhile at the first\n"); });
+  });
+  const rerun = await home.client.settle("space.sync", { repository: key }, 30_000);
+  assert.equal(rerun.sync.phase, "done", JSON.stringify(rerun.sync));
+  assert.deepEqual(rejectedOnce.slice(11), [
+    "first:catch-up",
+    "first:check", "first:compare", "first:apply", "first:refresh", "first:push",
+    "second:catch-up",
+  ]);
+  assert.equal(readFileSync(join(clone, "f3.md"), "utf8"), "meanwhile at the first\n");
+  const again = git(clone, "rev-parse", "HEAD");
+  assert.deepEqual([git(firstBare, "rev-parse", "spex"), git(secondBare, "rev-parse", "spex")], [again, again]);
+  assert.deepEqual(rerun.placements.map((line) => line.outcome?.kind), ["synced", "synced"]);
+
+  // Rejected again, the first ends behind while the second is caught up
+  // to the first's merge (space-12).
+  await peerPush(firstPeer, (dir) => { writeFileSync(join(dir, "f4.md"), "the first's, later\n"); });
+  await peerPush(secondPeer, (dir) => { writeFileSync(join(dir, "s4.md"), "the second's, later\n"); });
+  let moved = 0;
+  recordSteps(home, key, { first, second }, async (event, label) => {
+    if ((label === "first:catch-up" && moved === 0) || (label === "first:push" && moved === 1)) {
+      moved += 1;
+      await peerPush(firstPeer, (dir) => { writeFileSync(join(dir, `f${4 + moved}.md`), "meanwhile at the first\n"); });
+    }
+  });
+  const behind = await home.client.settle("space.sync", { repository: key }, 30_000);
+  home.hooks.beforeStep = undefined;
+  assert.equal(moved, 2, "the catch-up push and the run's push again each met the first moved");
+  assert.ok(behind.sync.phase === "done", JSON.stringify(behind.sync));
+  assert.deepEqual(behind.placements.map((line) => line.outcome?.kind), ["behind", "synced"]);
+  assert.ok(existsSync(join(clone, "f5.md")) && !existsSync(join(clone, "f6.md")), "the run again merged what the first received before its push");
+  const later = git(clone, "rev-parse", "HEAD");
+  assert.equal(git(secondBare, "rev-parse", "spex"), later);
+  assert.notEqual(git(firstBare, "rev-parse", "spex"), later);
+  // The next Sync brings the first in line.
+  const caught = await home.client.settle("space.sync", { repository: key }, 30_000);
+  assert.deepEqual([caught.sync.phase, ...caught.placements.map((line) => line.outcome?.kind)], ["done", "synced", "synced"]);
+  assert.equal(git(firstBare, "rev-parse", "spex"), git(secondBare, "rev-parse", "spex"));
+});
+
+test("space-92, space-14, space-9, space-17, space-18, space-29: a conflict at the second ends that placement in choices, naming it, with the first's merge and push standing; choices are the named placement's, a placement the clone does not hold refused; the sync sent with them runs from Save, passing the first as a fast-forward", async (t) => {
+  const { first, second, home, key, clone, firstBare, secondBare } = await settledAtBoth("choices-second");
+  t.after(() => home.stop());
+  await peerPush(peerClone(firstBare), (dir) => { writeFileSync(join(dir, "from-first.md"), "the first's\n"); });
+  await peerPush(peerClone(secondBare), (dir) => { writeFileSync(join(dir, "both.md"), "theirs\n"); });
+  writeFileSync(join(clone, "both.md"), "mine\n");
+
+  const ended = await home.client.settle("space.sync", { repository: key }, 30_000);
+  // The second in choices names it; the first's merge and push stand,
+  // its line synced and holding nothing incoming (space-14, space-9).
+  assert.ok(ended.sync.phase === "choices" && ended.sync.placement === canonicalOrigin(second.url), JSON.stringify(ended.sync));
+  const head = git(clone, "rev-parse", "HEAD");
+  assert.equal(ended.sync.savedCommit, git(clone, "rev-parse", "HEAD^1"), "the merge stands on the Save commit");
+  assert.equal(git(firstBare, "rev-parse", "spex"), head);
+  assert.ok(existsSync(join(clone, "from-first.md")));
+  assert.deepEqual(ended.placements.map((line) => line.outcome?.kind), ["synced", "choices"]);
+  assert.deepEqual(placementOf(ended, first.url).incoming, []);
+  assert.deepEqual(choices(placementOf(ended, second.url).conflicts), ["both.md"]);
+  assert.deepEqual(choices(ended.conflicts), ["both.md"]);
+  assert.notEqual(git(secondBare, "rev-parse", "spex"), head, "nothing is pushed to the second");
+  assert.equal(readFileSync(join(clone, "both.md"), "utf8"), "mine\n");
+
+  // Choices are validated against the placement they are for (space-29).
+  await home.client.expectError("space.sync", { repository: key, placement: "http://127.0.0.1:9", choices: { "both.md": "mine" } }, "invalid_request", /^atlas-spex holds no such placement$/);
+  await home.client.expectError("space.sync", { repository: key, placement: null, choices: { "both.md": "mine" } }, "invalid_request", /^atlas-spex holds no such placement$/);
+  await home.client.expectError("space.sync", { repository: key, placement: first.url, choices: { "both.md": "mine" } }, "invalid_request", /no divergent change|unknown unit/);
+
+  // Sent with them, the sync runs from Save, the first already equal
+  // passing as a fast-forward — no merge made there — and the second
+  // merged with the choice (space-18).
+  const steps = recordSteps(home, key, { first, second });
+  const chosen = await home.client.settle("space.sync", { repository: key, placement: second.url, choices: { "both.md": "mine" } }, 30_000);
+  home.hooks.beforeStep = undefined;
+  assert.equal(chosen.sync.phase, "done", JSON.stringify(chosen.sync));
+  assert.deepEqual(steps.filter((step) => step.startsWith("first:")), ["first:check", "first:compare", "first:push", "first:catch-up"]);
+  assert.equal(git(clone, "log", "-1", "--format=%P", "HEAD").split(" ")[0], head, "the second's merge stands on the first's");
+  const now = git(clone, "rev-parse", "HEAD");
+  assert.deepEqual([git(firstBare, "rev-parse", "spex"), git(secondBare, "rev-parse", "spex")], [now, now]);
+  assert.equal(readFileSync(join(clone, "both.md"), "utf8"), "mine\n");
+  assert.deepEqual(chosen.placements.map((line) => line.outcome?.kind), ["synced", "synced"]);
+});
+
+test("space-92, space-12, space-5: a path placement set by space.remote.set syncs last, with no catalog read and no notice, the upstream staying at the first placement, and no merge drops it", async (t) => {
+  const { first, second, home, key, clone } = await settledAtBoth("path-last");
+  t.after(() => home.stop());
+  const bare = bareRepo();
+  await home.client.expectOk("space.remote.set", { repository: key, url: bare });
+  writeFileSync(join(clone, "for-everyone.md"), "every placement's\n");
+  const requests = (): number => first.script.requests.length + second.script.requests.length;
+  let atPath: number | undefined;
+  const steps = recordSteps(home, key, { first, second }, (event) => { if (event.placement === null && event.step === "check") atPath ??= requests(); });
+  const synced = await home.client.settle("space.sync", { repository: key }, 30_000);
+  home.hooks.beforeStep = undefined;
+  assert.equal(synced.sync.phase, "done", JSON.stringify(synced.sync));
+  // Its turn comes last, the host empty there taking every unit at its
+  // push (space-12).
+  assert.deepEqual(steps.filter((step) => step.startsWith("path:")), ["path:check", "path:push"]);
+  assert.ok(steps.indexOf("path:check") > steps.lastIndexOf("second:push"));
+  assert.equal(requests(), atPath, "no instance is read for the path placement");
+  assert.equal(git(bare, "rev-parse", "spex"), git(clone, "rev-parse", "HEAD"));
+  const path = placementOf(synced, null);
+  assert.deepEqual([path.path, path.state, path.noticed, path.outcome?.kind], [bare, "reachable", false, "synced"]);
+  assert.deepEqual(synced.placements.map((line) => line.instance), [canonicalOrigin(first.url), canonicalOrigin(second.url), null]);
+  // The upstream stays at the first placement, and the path placement
+  // stands after the merge (space-12, space-5).
+  assert.equal(git(clone, "config", "--get", "branch.spex.remote"), hostFolder(first));
+  assert.deepEqual(git(clone, "remote").split("\n").sort(), [hostFolder(first), hostFolder(second), "origin"].sort());
+  assert.equal(git(clone, "rev-parse", "refs/remotes/origin/spex"), git(clone, "rev-parse", "HEAD"));
+});
+
+test("space-100, space-15, space-61, git-host-26, git-host-9: the first answering 503 at Check stops its line alone, unreachable, while the second syncs and the row stays reachable; a credential the second refuses signs the second out alone, its line unreachable, while the first syncs", async (t) => {
+  const { first, second, home, key, clone, firstBare, secondBare } = await settledAtBoth("one-down");
+  t.after(() => home.stop());
+  first.script.failTransport(503);
+  t.after(() => first.script.failTransport(null));
+  writeFileSync(join(clone, "while-first-down.md"), "sent where it can go\n");
+  const firstDown = await home.client.settle("space.sync", { repository: key }, 30_000);
+  first.script.failTransport(null);
+  // The row's sync is done: the second synced (space-15, space-12).
+  assert.ok(firstDown.sync.phase === "done" && firstDown.sync.pushed, JSON.stringify(firstDown.sync));
+  assert.deepEqual(placementOf(firstDown, first.url).outcome, {
+    kind: "stopped", step: "check", cause: "unreachable", message: `Could not reach ${HOST_NAME}`, guidance: "Check the network, then Retry.", retry: true,
+  });
+  assert.equal(placementOf(firstDown, second.url).outcome?.kind, "synced");
+  assert.deepEqual([firstDown.state, firstDown.reason], ["reachable", null]);
+  const head = git(clone, "rev-parse", "HEAD");
+  assert.equal(git(secondBare, "rev-parse", "spex"), head);
+  assert.notEqual(git(firstBare, "rev-parse", "spex"), head);
+
+  // The second refusing this device's credential signs the second out
+  // alone; its line reads unreachable, and the first syncs (git-host-26,
+  // git-host-9, git-host-4).
+  second.script.revokeDevices();
+  const secondOut = await home.client.settle("space.sync", { repository: key }, 30_000);
+  assert.ok(secondOut.sync.phase === "done", JSON.stringify(secondOut.sync));
+  const state = await home.client.expectOk("space.get", {});
+  assert.deepEqual([instanceOf(state, first.url)?.signedIn, instanceOf(state, second.url)?.signedIn], [true, false]);
+  const row = repositoryOf(state, key);
+  const atSecond = placementOf(row, second.url);
+  assert.ok(atSecond.outcome?.kind === "stopped" && atSecond.outcome.cause === "reauth", JSON.stringify(atSecond.outcome));
+  assert.deepEqual([atSecond.state, atSecond.reason], ["unreachable", "Sign in again"]);
+  assert.deepEqual([placementOf(row, first.url).outcome?.kind, row.state], ["synced", "reachable"]);
+  assert.equal(git(firstBare, "rev-parse", "spex"), git(clone, "rev-parse", "HEAD"));
+  // Each placement's transport took its own instance's credential
+  // (git-host-9).
+  assert.ok(first.script.transportCredentials.length > 0 && first.script.transportCredentials.every((credential) => credential.instance === first.url), JSON.stringify(first.script.transportCredentials));
+  assert.ok(second.script.transportCredentials.length > 0 && second.script.transportCredentials.every((credential) => credential.instance === second.url), JSON.stringify(second.script.transportCredentials));
+});
+
+test("space-100, space-15, space-16, space-31: Stop during the first's Check, a chosen unit refused by validation at the first's Apply, and a stale lock on the first's remote-tracking ref failing its fetch with Git's own error each end the sync, the second not run", async (t) => {
+  const { first, second, home, key, clone, firstBare, secondBare } = await settledAtBoth("ends-whole");
+  t.after(() => home.stop());
+  const firstPeer = peerClone(firstBare);
+  const notAtSecond = (steps: string[]): void => assert.ok(!steps.some((step) => step.startsWith("second:")), `the second not run: ${steps.join(", ")}`);
+
+  // Stop while the first's transport sleeps (space-16).
+  first.script.sleepTransport(30_000);
+  t.after(() => first.script.sleepTransport(0));
+  let steps = recordSteps(home, key, { first, second });
+  const from = home.client.mark();
+  assert.deepEqual(await home.client.expectOk("space.sync", { repository: key }), { accepted: true });
+  await home.client.waitRepository(from, key, (repository) => repository.sync.phase === "running" && repository.sync.step === "check" && repository.sync.placement === canonicalOrigin(first.url) && repository.sync.cancelable, 30_000);
+  assert.deepEqual(await home.client.expectOk("space.cancel", { repository: key }), { stopped: true });
+  const stopped = await home.client.waitRepository(from, key, (repository) => repository.sync.phase === "stopped", 30_000);
+  first.script.sleepTransport(0);
+  assert.ok(stopped.sync.phase === "stopped" && stopped.sync.step === "check" && stopped.sync.cause === "stopped", JSON.stringify(stopped.sync));
+  assert.equal(placementOf(stopped, first.url).outcome?.kind, "stopped");
+  assert.equal(placementOf(stopped, second.url).outcome, null);
+  notAtSecond(steps);
+
+  // A chosen unit refused by validation at the first's Apply: two open
+  // intents from one issue (space-15).
+  const one = randomUUID();
+  const two = randomUUID();
+  const fromIssue = (id: string, text: string): string => JSON.stringify({ format: 1, id, text, createdAt: 1, source: { kind: "issue", ref: "#7" } });
+  await peerPush(firstPeer, (dir) => {
+    mkdirSync(join(dir, "intents"), { recursive: true });
+    writeFileSync(join(dir, "intents", `${one}.json`), fromIssue(one, "Fix issue 7"));
+    writeFileSync(join(dir, "intents", `${two}.json`), fromIssue(two, "Fix issue 7 again"));
+  });
+  steps = recordSteps(home, key, { first, second });
+  const refused = await home.client.settle("space.sync", { repository: key }, 30_000);
+  assert.ok(refused.sync.phase === "stopped" && refused.sync.step === "apply" && refused.sync.cause === "validation" && /duplicate open source #7/.test(refused.sync.message), JSON.stringify(refused.sync));
+  assert.ok(placementOf(refused, first.url).outcome?.kind === "stopped");
+  notAtSecond(steps);
+  await peerPush(firstPeer, (dir) => {
+    writeFileSync(join(dir, "intents", `${two}.json`), JSON.stringify({ ...JSON.parse(fromIssue(two, "Fix issue 7 again")), closed: { as: "dropped", at: 2 } }));
+  });
+  assert.equal((await home.client.settle("space.sync", { repository: key }, 30_000)).sync.phase, "done");
+
+  // A stale lock on the first's remote-tracking ref fails its fetch with
+  // Git's own error, which ends the sync (space-15, space-31).
+  await peerPush(firstPeer, (dir) => { writeFileSync(join(dir, "locked-out.md"), "not fetched\n"); });
+  const lock = join(clone, ".git", "refs", "remotes", hostFolder(first), "spex.lock");
+  writeFileSync(lock, "");
+  steps = recordSteps(home, key, { first, second });
+  const locked = await home.client.settle("space.sync", { repository: key }, 30_000);
+  assert.ok(locked.sync.phase === "stopped" && locked.sync.step === "check" && locked.sync.cause === "git", JSON.stringify(locked.sync));
+  assert.match(locked.sync.message, /lock/i);
+  notAtSecond(steps);
+  rmSync(lock);
+  home.hooks.beforeStep = undefined;
+  const after = await home.client.settle("space.sync", { repository: key }, 30_000);
+  assert.deepEqual([after.sync.phase, ...after.placements.map((line) => line.outcome?.kind)], ["done", "synced", "synced"]);
+  assert.ok(existsSync(join(clone, "locked-out.md")));
+  assert.equal(git(secondBare, "rev-parse", "spex"), git(clone, "rev-parse", "HEAD"));
+});
+
+test("space-100, space-20, space-67, space-19, space-13, space-15, space-31: a file another process leaves invalid during the first's Apply stands as the refresh's finding while the first pushes and the second syncs; a repair marker left at the second on the first's merge commit is finished by the next admission into the recorded merge; a placement whose spex shares no ancestor stops alone as unrelated, and a join of it compares from the empty tree", async (t) => {
+  const { first, second, home, key, clone, firstBare, secondBare } = await settledAtBoth("apply-each");
+  t.after(() => home.stop());
+  const firstPeer = peerClone(firstBare);
+  const secondPeer = peerClone(secondBare);
+
+  // The refresh's finding stops nothing (space-20, space-15).
+  await peerPush(firstPeer, (dir) => { writeFileSync(join(dir, "from-first.md"), "the first's\n"); });
+  await peerPush(secondPeer, (dir) => { writeFileSync(join(dir, "from-second.md"), "the second's\n"); });
+  const stray = join(clone, "intents", `${randomUUID()}.assets`);
+  recordSteps(home, key, { first, second }, (_event, label) => {
+    if (label !== "first:apply") return;
+    mkdirSync(stray, { recursive: true });
+    writeFileSync(join(stray, "stray.png"), "no intent names this");
+  });
+  const found = await home.client.settle("space.sync", { repository: key }, 30_000);
+  home.hooks.beforeStep = undefined;
+  assert.equal(found.sync.phase, "done", JSON.stringify(found.sync));
+  assert.deepEqual(found.placements.map((line) => line.outcome?.kind), ["synced", "synced"]);
+  const head = git(clone, "rev-parse", "HEAD");
+  assert.deepEqual([git(firstBare, "rev-parse", "spex"), git(secondBare, "rev-parse", "spex")], [head, head]);
+  assert.ok((await home.client.expectOk("space.get", {})).diagnostics.some((d) => d.blocking && d.reason.includes("attachments without their intent")), "the refresh's finding is reported");
+  rmSync(stray, { recursive: true, force: true });
+
+  // The first merged while the second could not be reached: a merge
+  // commit the second's selection is then planted on, half written.
+  await peerPush(firstPeer, (dir) => { writeFileSync(join(dir, "f.md"), "the first's, again\n"); });
+  writeFileSync(join(clone, "l.md"), "this device's\n");
+  second.script.failTransport(503);
+  const firstOnly = await home.client.settle("space.sync", { repository: key }, 30_000);
+  second.script.failTransport(null);
+  assert.deepEqual(firstOnly.placements.map((line) => line.outcome?.kind), ["synced", "stopped"]);
+  const firstMerge = git(clone, "rev-parse", "HEAD");
+  assert.equal(git(clone, "log", "-1", "--format=%P", firstMerge).split(" ").length, 2, "the first's merge is a merge commit");
+  const theirs = await peerPush(secondPeer, (dir) => {
+    writeFileSync(join(dir, "s.md"), "the second's, written\n");
+    writeFileSync(join(dir, "s2.md"), "the second's, not yet written\n");
+  });
+  git(clone, "fetch", "-q", secondBare, `+spex:refs/remotes/${hostFolder(second)}/spex`);
+  const base = git(clone, "merge-base", firstMerge, theirs);
+  writeFileSync(join(clone, ".spex-apply.json"), JSON.stringify({ v: 1, placement: canonicalOrigin(second.url), ours: firstMerge, theirs, base, choices: {}, at: Date.now() }));
+  writeFileSync(join(clone, "s.md"), "the second's, written\n");
+  const repaired = await home.client.settle("space.sync", { repository: key }, 30_000);
+  assert.equal(repaired.sync.phase, "done", JSON.stringify(repaired.sync));
+  assert.equal(existsSync(join(clone, ".spex-apply.json")), false);
+  assert.equal(readFileSync(join(clone, "s2.md"), "utf8"), "the second's, not yet written\n");
+  const merge = git(clone, "rev-parse", "HEAD");
+  assert.equal(git(clone, "log", "-1", "--format=%P", merge), `${firstMerge} ${theirs}`, "the recorded merge, on the first's merge commit");
+  assert.deepEqual([git(firstBare, "rev-parse", "spex"), git(secondBare, "rev-parse", "spex")], [merge, merge]);
+  assert.deepEqual(repaired.placements.map((line) => line.outcome?.kind), ["synced", "synced"]);
+
+  // The second replaced by a history sharing no ancestor (space-13).
+  writeFileSync(join(clone, "both.md"), "mine\n");
+  assert.equal((await home.client.settle("space.sync", { repository: key }, 30_000)).sync.phase, "done");
+  const foreign = join(mkdtempSync(join(scratch, "foreign-")), "foreign");
+  mkdirSync(foreign);
+  git(foreign, "init", "-q", "-b", "spex");
+  writeFileSync(join(foreign, "both.md"), "theirs\n");
+  writeFileSync(join(foreign, "only-there.md"), "theirs alone\n");
+  git(foreign, "add", "-A", "--", ".");
+  git(foreign, "-c", "commit.gpgsign=false", "commit", "-q", "-m", "another history");
+  git(foreign, "push", "-q", "-f", secondBare, "spex:spex");
+  writeFileSync(join(clone, "l2.md"), "this device's, later\n");
+  const unrelated = await home.client.settle("space.sync", { repository: key }, 30_000);
+  assert.ok(unrelated.sync.phase === "unrelated" && unrelated.sync.placement === canonicalOrigin(second.url), JSON.stringify(unrelated.sync));
+  assert.deepEqual(unrelated.placements.map((line) => line.outcome?.kind), ["synced", "unrelated"]);
+  assert.equal(placementOf(unrelated, second.url).branch?.unrelated, true);
+  assert.equal(git(firstBare, "rev-parse", "spex"), git(clone, "rev-parse", "HEAD"), "the first synced");
+  // A join of it plans from the empty tree: every unit on both sides
+  // with other bytes a choice (space-13).
+  const joined = await home.client.settle("space.sync", { repository: key, placement: second.url, join: true }, 30_000);
+  assert.ok(joined.sync.phase === "choices" && joined.sync.placement === canonicalOrigin(second.url), JSON.stringify(joined.sync));
+  assert.deepEqual(choices(joined.conflicts), ["both.md"]);
+  const done = await home.client.settle("space.sync", { repository: key, placement: second.url, join: true, choices: { "both.md": "mine" } }, 30_000);
+  assert.equal(done.sync.phase, "done", JSON.stringify(done.sync));
+  assert.deepEqual(done.placements.map((line) => line.outcome?.kind), ["synced", "synced"]);
+  assert.equal(readFileSync(join(clone, "both.md"), "utf8"), "mine\n");
+  assert.equal(readFileSync(join(clone, "only-there.md"), "utf8"), "theirs alone\n");
+  const now = git(clone, "rev-parse", "HEAD");
+  assert.deepEqual([git(firstBare, "rev-parse", "spex"), git(secondBare, "rev-parse", "spex")], [now, now]);
 });

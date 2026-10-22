@@ -685,6 +685,55 @@ test("storage-16: the apply seam writes each changed unit under the version it r
   } finally { dispose(); }
 });
 
+test("storage-16: through the apply seam, against an earlier placement's merge commit as a later placement's base, a file changed while its session's lease is awaited is refused with the change kept and the index unchanged, and the apply then stages the validated tree with the lease free", async () => {
+  const { home, clone, sessionId, bundle, commit, dispose } = setup();
+  try {
+    git(clone, "branch", "first");
+    git(clone, "branch", "second");
+    // Each placement's `spex`: the first's adds a note, the second's
+    // changes the session this device changed too.
+    git(clone, "checkout", "-q", "first"); writeFileSync(join(clone, "first.md"), "the first's\n"); commit("first's");
+    git(clone, "checkout", "-q", "second"); bundle("second's"); commit("second's");
+    const second = git(clone, "rev-parse", "HEAD");
+    const theirsRecords = readFileSync(join(clone, "sessions", `${sessionId}.records.jsonl`), "utf8");
+    git(clone, "checkout", "-q", "spex"); bundle("ours"); commit("saved");
+    // The first placement's merge, as a sync's Apply records it: `spex`
+    // and the first's `spex` as parents.
+    git(clone, "merge", "-q", "--no-ff", "--no-edit", "first");
+    const firstMerge = git(clone, "rev-parse", "HEAD");
+    assert.equal(git(clone, "log", "-1", "--format=%P", firstMerge).split(" ").length, 2);
+    const records = join(clone, "sessions", `${sessionId}.records.jsonl`);
+    const oursRecords = readFileSync(records, "utf8");
+    const plan = planStorageMerge(clone, "HEAD", "second");
+    assert.equal(plan.ours, firstMerge);
+    const choices = { [`sessions/${sessionId}`]: "theirs" as const };
+    const store = createSessionStore({ sessionsDir: join(clone, "sessions") }); await store.prepare();
+    const index = git(clone, "ls-files", "-s");
+    const release = reserveStorageHome(home, machineIdentity);
+    try {
+      // A writer appending just before the lease is granted has its change
+      // refused over and kept, and the index stays (storage-14).
+      const appendFirst = { acquireManagement: (id: string) => { writeFileSync(records, `${oursRecords}{"appended":true}\n`); return store.acquireManagement(id); } };
+      await assert.rejects(() => applyStorageSelection(clone, plan, choices, { sessions: appendFirst }), (error: StorageWriteRefused) => error instanceof StorageWriteRefused && error.reason === "changed" && error.unit === `sessions/${sessionId}`);
+      assert.match(readFileSync(records, "utf8"), /appended/);
+      assert.equal(git(clone, "ls-files", "-s"), index, "the index stays");
+      await (await store.acquireManagement(sessionId)).release();
+      writeFileSync(records, oursRecords);
+      // The selection on the first's merge stages its validated tree: the
+      // first's note and this device's commit kept, the second's session
+      // taken, and the session's lease the write's alone (storage-21).
+      const applied = await applyStorageSelection(clone, plan, choices);
+      assert.deepEqual(applied.written, [`sessions/${sessionId}`]);
+      assert.equal(readFileSync(records, "utf8"), theirsRecords);
+      assert.equal(git(clone, "write-tree"), applied.tree, "the index holds the validated tree");
+      assert.equal(git(clone, "rev-parse", `${applied.tree}:first.md`), git(clone, "rev-parse", `${firstMerge}:first.md`));
+      assert.equal(git(clone, "rev-parse", `${applied.tree}:sessions/${sessionId}.records.jsonl`), git(clone, "rev-parse", `${second}:sessions/${sessionId}.records.jsonl`));
+      await (await store.acquireManagement(sessionId)).release();
+    } finally { release(); }
+    assert.equal(git(clone, "rev-parse", "HEAD"), firstMerge, "the seam commits nothing itself");
+  } finally { dispose(); }
+});
+
 test("storage-16: under select, a unit changed after the apply read Git's merge output is refused and kept, and a clone moved or removed during a lease's await is never made anew", async () => {
   const { root, home, key, clone, sessionId, bundle, commit, dispose } = setup();
   try {

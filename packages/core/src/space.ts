@@ -50,7 +50,7 @@ import type {
 } from "./protocol.js";
 import { CoreError } from "./session.js";
 import {
-  classifyHostTransportFailure, classifyTransportFailure, displayRemote, GitMissingError, lastLines, remoteHost, membersDecide, noLongerShared,
+  classifyHostTransportFailure, classifyTransportFailure, displayRemote, GitMissingError, hostErrorStatus, lastLines, remoteHost, membersDecide, noLongerShared,
   signInAgain, SpaceGit, validateRemoteUrl, withoutHostUrls, type GitFailure, type GitRun, type GitRunOptions,
 } from "./space-git.js";
 import {
@@ -86,6 +86,11 @@ import {
 import { prefsFileOf, type SpexRepository, type Store } from "./store.js";
 import { foldTurnEvent } from "./stream-fold.js";
 
+/** A step about to run (SpaceHost.beforeStep): `placement` names the
+ * placement whose turn it is — its instance's origin, or null for the
+ * path placement — absent for Save (space-12, space-31). */
+export interface SpaceStepEvent { op: SpaceOp; step: SyncStep; repository: string; placement?: string | null; at?: "commit" | "catch-up" }
+
 /** What the core lends the Groups engine: the home, its indexes, the
  * admission facts only the service knows, and the hooks a refresh
  * needs to re-index the running core (space-20). */
@@ -111,8 +116,10 @@ export interface SpaceHost {
   transportTimeoutMs?: number;
   /** Test seam: awaited before each step runs, and inside Save between
    * its validation and its commit (`at: "commit"`), so a suite can act
-   * between them deterministically. */
-  beforeStep?: (event: { op: SpaceOp; step: SyncStep; repository: string; at?: "commit" }) => void | Promise<void>;
+   * between them deterministically; a placement's step names that
+   * placement, and a push after every placement's turn is the catch-up's
+   * (`at: "catch-up"`, space-12). */
+  beforeStep?: (event: SpaceStepEvent) => void | Promise<void>;
   /** A new client of the instance at a canonical origin (git-host-1..11,
    * DR-127): its own app token, refresh and rate-limit hold. The space
    * asks once per instance and keeps it for the run. */
@@ -185,6 +192,12 @@ function factsOf(placements: readonly Placement[]): CloneFacts {
 /** A clone's placements' remotes, by their names and URLs in order. */
 function remotesRead(placements: readonly Placement[]): string {
   return JSON.stringify(placements.map((placement) => [placement.name, placement.url]));
+}
+
+/** A remote URL's last segment, without `.git`: a placement's path
+ * where no listing names it (space-87). */
+function remoteSegment(url: string): string {
+  return /([^/:]+?)(?:\.git)?\/*$/.exec(url)?.[1] ?? url;
 }
 
 /** One destination read, ordered independently of full-view completion. */
@@ -423,9 +436,9 @@ function hostStop(step: SyncStep, error: unknown, host: string): SpaceStopped {
 }
 
 /** A move stopped: the clone changed between the sync's read and its
- * rename. */
+ * rename — a Check cause, stopping its placement alone (space-15). */
 function movedMeanwhile(key: string): SpaceStopped {
-  return new SpaceStopped("check", { cause: "git", message: changedMeanwhile(`workspace/${key}`), guidance: retryGuidance(), retry: true });
+  return new SpaceStopped("check", { cause: "git", message: changedMeanwhile(`workspace/${key}`), guidance: retryGuidance(), retry: true }, false);
 }
 
 /** A unit's write refused, or a move stopped, for a session's lease or an
@@ -508,11 +521,23 @@ type ReadyRepository = Extract<RepositoryInfo, { root: true }> & { head: string;
  * those lines are of, in their order (space-30, space-87). */
 interface MachineRead { row: RepositoryState; held: Placement[] }
 
+/** The steps a placement's own turn runs at its host (space-12): a
+ * stop there stops that placement alone. */
+const PLACEMENT_STEPS = new Set<SyncStep>(["check", "compare", "push"]);
+
 /** A step ended in the stopped state of space-15. */
 class SpaceStopped extends Error {
-  constructor(readonly step: SyncStep, readonly failure: GitFailure) {
+  /** Whether the stop ends the whole sync, no later placement running
+   * (space-15): a Save's, an Apply's or a Refresh's stop, Stop, and Git's
+   * own error; any other Check, Compare or Push cause stops its placement
+   * alone. The host answering its transport with an HTTP status, and a
+   * clone changed meanwhile at a Check's move, are Check causes, named so
+   * where they are made. */
+  readonly whole: boolean;
+  constructor(readonly step: SyncStep, readonly failure: GitFailure, whole?: boolean) {
     super(failure.message);
     this.name = "SpaceStopped";
+    this.whole = whole ?? (!PLACEMENT_STEPS.has(step) || failure.cause === "stopped" || failure.cause === "git");
   }
 }
 
@@ -541,13 +566,57 @@ interface PlacementRun {
   lists: Lists;
   /** Its plan, which `space.diff` and a choice's validation read. */
   plan?: LastPlan;
+  /** What the last operation left on its line (space-87, space-12):
+   * cleared as the next operation on the clone begins. */
+  outcome?: PlacementOutcome;
 }
+/** What a sync or check left on a placement's line (space-30). */
+type PlacementOutcome = NonNullable<PlacementState["outcome"]>;
+/** The placement a sync's choices, join and notice are for (space-29):
+ * by its remote's name as admission read it, and whether it was the
+ * clone's first then, which a follow at its Check may rename (space-60). */
+interface SyncTarget { name: string; first: boolean }
+/** What a sync carries into each placement's turn (space-12). */
+interface TurnInput {
+  choices: Record<string, StorageChoice>;
+  join: boolean;
+  /** A set-up join's own Saves (space-59), for the placement it joins. */
+  setUpSaves?: ReadonlySet<string>;
+  internal: boolean;
+  /** A turn run again after its catch-up push was rejected: a push
+   * rejected once more leaves it behind (space-12). */
+  catchUp?: boolean;
+}
+/** One placement's turn of a sync, as it ended (space-12): its remote's
+ * name and URL as it ended, its instance's origin and the instance whose
+ * credential its transport took, what it ended in, and its counts so far
+ * in this sync. */
+interface Turn {
+  first: boolean;
+  name: string;
+  origin: string | null;
+  remote: string;
+  at: HostInstance | undefined;
+  readOnly: boolean;
+  outcome: PlacementOutcome;
+  /** When its turn completed through its Push, recorded as its last sync. */
+  syncedAt?: number;
+  pushed: boolean;
+  tally: { sent: number; received: number };
+}
+/** A turn whose Apply met a unit changed since its base (space-19): the
+ * sync runs again from Save; the placement's remote's name, and the
+ * placement for a later one. */
+interface Restart { restart: string; placement: Placement | undefined }
 /** Units in the order a list shows them (space-7): by kind, then label. */
 const unitOrder = (a: SpaceUnit, b: SpaceUnit): number =>
   KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind) || a.label.localeCompare(b.label) || a.unit.localeCompare(b.unit);
-interface Pending { head: string; origin: string; base: string; units: StorageMergeUnit[]; resolved: Map<string, StorageChoice>; counts: { sent: number; received: number } }
+/** A selection to apply at one placement (space-19): `placement` its
+ * instance's origin, null for the path placement, which the repair
+ * marker records (space-31). */
+interface Pending { head: string; origin: string; base: string; units: StorageMergeUnit[]; resolved: Map<string, StorageChoice>; counts: { sent: number; received: number }; placement: string | null }
 interface Applied { headBefore: string; headAfter: string }
-interface ApplyMarker { v: 1; ours: string; theirs: string; base: string; choices: Record<string, StorageChoice>; at: number }
+interface ApplyMarker { v: 1; placement?: string | null; ours: string; theirs: string; base: string; choices: Record<string, StorageChoice>; at: number }
 type CompareResult =
   | { outcome: "unrelated" }
   | { outcome: "choices" }
@@ -856,37 +925,42 @@ class RepositorySync {
    * that ends its wait for the host's rate limit (git-host-21). */
   private readonly hostCalls = new Set<AbortController>();
 
+  /** The origin of the instance of the placement whose turn runs, where
+   * it is not the clone's first (space-12): its step's calls to the host
+   * go there, held by that instance's rate limit (git-host-21). */
+  turnAt?: string;
+
   /**
    * One call to the host for the running step (git-host-21): while the
-   * rate limit of the instance its sync goes to holds it, the step offers
+   * rate limit of the instance its turn goes to holds it, the step offers
    * Stop (space-16), which ends the wait — a direct call sending nothing,
    * a shared read left to answer later — and stops the step (space-15).
    */
   async hostCall<T>(step: SyncStep, call: (signal: AbortSignal) => Promise<T>): Promise<T> {
     const controller = new AbortController();
     this.hostCalls.add(controller);
-    if (this.owner.syncingOf(this).client.holding()) this.offerStop();
+    if (this.owner.turnInstance(this).client.holding()) this.offerStop();
     try {
       return await stoppable(call(controller.signal), controller.signal);
     } catch (error) {
-      if (controller.signal.aborted) throw waitStopped(step, this.owner.hostNameOf(this));
+      if (controller.signal.aborted) throw waitStopped(step, this.owner.turnName(this));
       throw error;
     } finally {
       this.hostCalls.delete(controller);
     }
   }
 
-  /** The rate limit of the instance its sync goes to began holding the
+  /** The rate limit of the instance its turn goes to began holding the
    * calls (git-host-21): a step with one in flight offers Stop. */
   holdBegan(): void {
     if (this.hostCalls.size > 0) this.offerStop();
   }
 
   /** End the waits of the running step's calls to the host, while the
-   * rate limit of the instance its sync goes to holds them; whether any
+   * rate limit of the instance its turn goes to holds them; whether any
    * was ended. */
   private stopWaits(): boolean {
-    if (this.hostCalls.size === 0 || !this.owner.syncingOf(this).client.holding()) return false;
+    if (this.hostCalls.size === 0 || !this.owner.turnInstance(this).client.holding()) return false;
     for (const call of this.hostCalls) call.abort();
     return true;
   }
@@ -1127,7 +1201,7 @@ class RepositorySync {
    * step. */
   private remoteNamed(step: SyncStep): string {
     const name = this.facts.remoteName;
-    if (name === null) throw new SpaceStopped(step, { cause: "git", message: changedMeanwhile(splitKey(this.key).name), guidance: retryGuidance(), retry: true });
+    if (name === null) throw new SpaceStopped(step, { cause: "git", message: changedMeanwhile(splitKey(this.key).name), guidance: retryGuidance(), retry: true }, false);
     return name;
   }
 
@@ -1281,7 +1355,7 @@ class RepositorySync {
    * under its name. */
   setOrigin(url: string, expected: string): void {
     if (!this.publishRemote(expected, { url })) {
-      throw new SpaceStopped("check", { cause: "git", message: changedMeanwhile(splitKey(this.key).name), guidance: retryGuidance(), retry: true });
+      throw new SpaceStopped("check", { cause: "git", message: changedMeanwhile(splitKey(this.key).name), guidance: retryGuidance(), retry: true }, false);
     }
   }
 
@@ -1473,7 +1547,7 @@ class RepositorySync {
           conflicts: run?.lists.conflicts ?? [],
           lastSync: this.lastSyncOf(placement.name),
           noticed: this.noticedOf(placement.name),
-          outcome: null,
+          outcome: run?.outcome ?? null,
         });
       }
     }
@@ -1590,14 +1664,20 @@ class RepositorySync {
    * as that placement's lists and plan — against `HEAD` for one not
    * checked — and the clone's local units with them (space-7, space-8,
    * space-33); a failure keeps the last ones. `spex` is each placement's
-   * `spex` as the clone holds it, by its remote's name. */
-  private async refreshLists(head: string, spex: ReadonlyMap<string, string | null>): Promise<void> {
+   * `spex` as the clone holds it, by its remote's name. With
+   * `keepChoices`, a placement a sync left in choices keeps that sync's
+   * plan and lists, which its picker and its choices' validation read
+   * (space-9, space-18). */
+  private async refreshLists(head: string, spex: ReadonlyMap<string, string | null>, keepChoices = false): Promise<void> {
     try {
+      const kept = (placement: Placement): boolean => keepChoices && this.runs.get(placement.name)?.outcome?.kind === "choices";
+      if (keepChoices && this.placements.every(kept)) return;
       const mine = await this.workingTree();
       // The plan against `HEAD`, read once where some list needs it.
       let againstHead: { plan: LastPlan; lists: Lists; unrelated?: boolean } | undefined;
       const headPlan = async (): Promise<{ plan: LastPlan; lists: Lists; unrelated?: boolean }> => (againstHead ??= await this.computeWorkingLists(head, mine, null));
       for (const placement of this.placements) {
+        if (kept(placement)) continue;
         const run = this.runOf(placement.name);
         const computed = run.checkedAt === null
           ? await headPlan()
@@ -1948,6 +2028,9 @@ class RepositorySync {
     entry.work = (async () => {
       await after?.catch(() => undefined);
       this.ended = undefined;
+      // What the last operation left on each placement's line stands
+      // until this one begins (space-87).
+      for (const run of this.runs.values()) run.outcome = undefined;
       try { await body(); }
       catch (error) {
         this.ended = undefined;
@@ -1968,9 +2051,11 @@ class RepositorySync {
         // never pairs the new phase with the former lists (space-29).
         const ended = this.takeEnded();
         try {
-          if (ended && ended.phase !== "choices") {
+          // Ended in choices, the placements so ended keep the sync's
+          // plan; every other reads the working tree (space-9).
+          if (ended) {
             const repo = await this.readRepository();
-            if (repo.root && repo.head !== null) await this.refreshLists(repo.head, repo.spex);
+            if (repo.root && repo.head !== null) await this.refreshLists(repo.head, repo.spex, ended.phase === "choices");
           }
         } catch (error) { console.error(`spex: space listing failed: ${error instanceof Error ? error.message : String(error)}`); }
         if (ended) this.phase = ended;
@@ -1983,12 +2068,33 @@ class RepositorySync {
     return entry.work;
   }
 
-  /** Enter a step. Check enters with no Stop: its host read comes
-   * first, and Stop is offered once its Git child runs (space-16). */
-  private async enter(op: SpaceOp, step: SyncStep, cancelable: boolean): Promise<void> {
-    this.phase = { phase: "running", op, step, since: Date.now(), cancelable };
+  /** Enter a step: `placement` names the placement whose turn it is —
+   * its instance's origin, or null for the path placement — absent for
+   * Save (space-12, space-30). Check enters with no Stop: its host read
+   * comes first, and Stop is offered once its Git child runs (space-16). */
+  private async enter(op: SpaceOp, step: SyncStep, cancelable: boolean, placement?: string | null, at?: "catch-up"): Promise<void> {
+    this.phase = { phase: "running", op, ...(placement !== undefined ? { placement } : {}), step, since: Date.now(), cancelable };
     await this.broadcast(false);
-    await this.host.beforeStep?.({ op, step, repository: this.key });
+    await this.host.beforeStep?.({ op, step, repository: this.key, ...(placement !== undefined ? { placement } : {}), ...(at ? { at } : {}) });
+  }
+
+  /** The instance's origin of a placement whose turn runs, the first's
+   * read from the clone as a follow at its Check left it (space-30). */
+  private originOf(placement: Placement | undefined): string | null {
+    return placement ? placement.instance : this.owner.placementOf(this);
+  }
+
+  /** A stop at a placement on its line (space-15, space-87): its lines
+   * with no URL under any instance's Git origin, every placement's remote
+   * reading as its path in its instance; the stop as it stands, so the
+   * row's state carries the same lines. */
+  private stopOn(name: string, placement: Placement | undefined, error: unknown): SpaceStopped {
+    const stop = error instanceof SpaceStopped
+      ? error
+      : new SpaceStopped(this.phase.phase === "running" ? this.phase.step : "check", { cause: "git", message: lastLines(error instanceof Error ? error.message : String(error)), guidance: retryGuidance(), retry: true }, true);
+    const failure = this.owner.placementFailure(this, stop.failure, placement);
+    this.runOf(name).outcome = { kind: "stopped", step: stop.step, ...failure };
+    return new SpaceStopped(stop.step, failure, stop.whole);
   }
 
   /** Check the host (space-8): each placement's `spex` fetched in the
@@ -2013,14 +2119,18 @@ class RepositorySync {
       for (const [index, name] of names.entries()) {
         const placement = index === 0 ? undefined : this.placementsNow().find((candidate) => candidate.name === name);
         if (index > 0 && placement === undefined) continue;
-        await this.enter("check", "check", false);
+        this.turnAt = placement?.instance ?? undefined;
         try {
+          await this.enter("check", "check", false, this.originOf(placement));
           await this.check(placement?.url ?? repo.remote, "check", false, placement);
           checked = true;
         } catch (error) {
-          if (!(error instanceof SpaceStopped) || error.failure.cause === "stopped") throw error;
-          stopped ??= error;
-        }
+          // Its stop stands on its line; Stop and Git's own error end the
+          // check (space-15).
+          const stop = this.stopOn(placement?.name ?? this.facts.remoteName ?? this.firstName(), placement, error);
+          if (stop.whole) throw stop;
+          stopped ??= stop;
+        } finally { this.turnAt = undefined; }
       }
       if (!checked && stopped) throw stopped;
       this.ended = { phase: "idle" };
@@ -2035,7 +2145,7 @@ class RepositorySync {
    * the clone holds nothing of its own (space-59). A Sync asked while a
    * sync runs joins it; one asked while a check runs follows that check.
    * Nothing beneath the clone is refused meanwhile (space-21). */
-  async sync(input: { choices?: Record<string, SpaceChoice>; join?: boolean; noticed?: boolean; internal?: boolean; setUp?: boolean }): Promise<{ accepted: true }> {
+  async sync(input: { placement?: string | null; choices?: Record<string, SpaceChoice>; join?: boolean; noticed?: boolean; internal?: boolean; setUp?: boolean }): Promise<{ accepted: true }> {
     if (this.current?.op === "sync") return { accepted: true };
     const choices: Record<string, StorageChoice> = {};
     const repo = await this.requireReady();
@@ -2043,10 +2153,13 @@ class RepositorySync {
     // finding an earlier repair left never refuses this admission.
     const blocking = this.blocking(false);
     if (blocking) throw new CoreError("invalid_request", `${blocking.file}: ${blocking.reason}`);
+    // The placement the choices, the join and the notice are for
+    // (space-29): the one named, a placement the clone does not hold
+    // refused.
+    const target = this.syncTarget(input.placement, repo.placements);
     if (input.choices && Object.keys(input.choices).length > 0) {
-      // Validated against the plan of the placement the choices are for:
-      // its first (space-18).
-      const run = this.runs.get(this.firstName());
+      // Validated against that placement's plan (space-18).
+      const run = this.runs.get(target.name);
       const plan = run?.plan?.units ?? [];
       for (const [name, choice] of Object.entries(input.choices)) {
         const unit = plan.find((u) => u.name === name);
@@ -2062,9 +2175,8 @@ class RepositorySync {
         choices[name] = choice === "mine" ? "ours" : "theirs";
       }
     }
-    // The notice is seen for the placement the sync pushes into: its
-    // first (space-57, storage-5).
-    if (input.noticed === true) this.recordPlacement(this.facts.remoteName, "noticed", true);
+    // The notice is seen for that placement (space-57, storage-5).
+    if (input.noticed === true) this.recordPlacement(target.name, "noticed", true);
     await this.owner.admit(this, { push: true, noticed: input.noticed === true || input.internal === true });
     // A sync begun while this one was admitted is the one it joins.
     if (this.runningOp() === "sync") return { accepted: true };
@@ -2085,9 +2197,26 @@ class RepositorySync {
           retry: false,
         });
       }
-      await this.syncBody(repo, choices, input.join === true, input.join === true && input.setUp === true, input.internal === true);
+      await this.syncBody(repo, { choices, join: input.join === true, setUp: input.join === true && input.setUp === true, internal: input.internal === true, target });
     }, this.current?.work);
     return { accepted: true };
+  }
+
+  /** The placement a sync's choices, join and notice are for (space-29):
+   * the one `placement` names — its instance's origin, or null for the
+   * path placement — a placement the clone does not hold refused; where
+   * none is named, the one the row's choices or unrelated history names,
+   * else the clone's first. Transitional: `placement` is optional until
+   * the interface reads placements. */
+  private syncTarget(placement: string | null | undefined, placements: readonly Placement[]): SyncTarget {
+    const at = (origin: string | null): Placement | undefined => placements.find((candidate) => (candidate.instance === null ? null : canonicalOrigin(candidate.instance)) === (origin === null ? null : canonicalOrigin(origin)));
+    let named: Placement | undefined;
+    if (placement !== undefined) {
+      named = at(placement);
+      if (!named) throw new CoreError("invalid_request", noSuchPlacement(splitKey(this.key).name));
+    } else if (this.phase.phase === "choices" || this.phase.phase === "unrelated") named = at(this.phase.placement);
+    named ??= placements[0];
+    return named ? { name: named.name, first: named === placements[0] } : { name: this.firstName(), first: true };
   }
 
   /** The first blocking diagnostic refusing this clone's sync (space-11):
@@ -2128,133 +2257,282 @@ class RepositorySync {
 
   // -- the steps (space-12, space-15) ----------------------------------------
 
-  private async syncBody(repo: ReadyRepository, choices: Record<string, StorageChoice>, join: boolean, setUp: boolean, internal: boolean): Promise<void> {
+  /** A sync (space-12, space-31): Save once, then each placement's turn
+   * in the order added, the path placement last — Check, Compare, Apply,
+   * Refresh and Push against that placement — then the catch-up. A stop
+   * of one placement stands on its line and the next runs; a stop of the
+   * whole sync ends it (space-15). An Apply whose unit changed since its
+   * base runs the sync again from Save, once (space-19). */
+  private async syncBody(repo: ReadyRepository, input: { choices: Record<string, StorageChoice>; join: boolean; setUp: boolean; internal: boolean; target: SyncTarget }): Promise<void> {
     const op: SpaceOp = "sync";
     let restarts = 0;
-    let rechecks = 0;
     let savedCommit: string | null = null;
     // Saves may carry authored changes; only an exact generated-bootstrap
     // tree can make a set-up join automatic (space-59).
     const saves = new Set<string>();
+    // Whether `spex`'s upstream is the first placement's remote, set once
+    // at the first placement's push (space-12).
+    const upstream = { set: repo.upstream };
+    // Each placement's counts in this sync, kept across a restart from
+    // Save, the first's by its turn as a follow may rename it.
+    const tallies = new Map<string, { sent: number; received: number }>();
+    const tallyOf = (key: string): { sent: number; received: number } => {
+      let tally = tallies.get(key);
+      if (!tally) { tally = { sent: 0, received: 0 }; tallies.set(key, tally); }
+      return tally;
+    };
+    for (;;) {
+      await this.enter(op, "save", false);
+      const saved = await this.save();
+      if (saved !== null) saves.add(saved);
+      savedCommit = saved ?? savedCommit;
+      // The placements, read once after Save (space-12): each later one
+      // found again by its remote's name at its turn — a placement taken
+      // away meanwhile is not run — the first by the clone's facts, which
+      // its Check's follow renames (space-60).
+      const order = this.placementsNow();
+      const names = order.length > 0 ? order.map((placement) => placement.name) : [this.firstName()];
+      const turns: Turn[] = [];
+      let restart: Restart | undefined;
+      for (const [index, name] of names.entries()) {
+        const placement = index === 0 ? undefined : this.placementsNow().find((candidate) => candidate.name === name);
+        if (index > 0 && placement === undefined) continue;
+        const forTarget = index === 0 ? input.target.first : input.target.name === name;
+        const turned = await this.turn(op, placement, {
+          choices: forTarget ? input.choices : {},
+          join: forTarget && input.join,
+          ...(forTarget && input.setUp ? { setUpSaves: saves } : {}),
+          internal: input.internal,
+        }, upstream, tallyOf(index === 0 ? "" : name));
+        if ("restart" in turned) { restart = turned; break; }
+        turns.push(turned);
+      }
+      if (!restart) {
+        const caught = await this.catchUp(op, turns, input.internal, upstream);
+        if (caught) restart = caught;
+      }
+      if (restart) {
+        if (restarts >= 1) {
+          // On the line of the placement whose Apply met the change
+          // (space-15).
+          throw this.stopOn(restart.restart, restart.placement, new SpaceStopped("apply", {
+            cause: "writer",
+            message: i18n._({
+              id: "The space changed twice while syncing",
+              comment: "A stopped sync's message: the home was written to twice under the sync",
+            }),
+            guidance: i18n._({
+              id: "Another process is writing to the home; wait for it to finish, then Retry.",
+              comment: "Guidance under a sync another writer keeps restarting",
+            }),
+            retry: true,
+          }));
+        }
+        restarts += 1;
+        // The sync runs again from Save, every placement afresh.
+        for (const run of this.runs.values()) run.outcome = undefined;
+        continue;
+      }
+      this.ended = this.endedBy(turns, savedCommit);
+      return;
+    }
+  }
+
+  /** How a sync ends, from its placements' turns in their order
+   * (space-12, space-30): in choices at the first placement so ended,
+   * else with an unrelated history at the first so ended; else stopped
+   * as the first stop, where no placement synced, ended behind or waits;
+   * else done with every placement's counts, pushed where any was. */
+  private endedBy(turns: Turn[], savedCommit: string | null): SpaceSyncPhase {
+    const choices = turns.find((turn) => turn.outcome.kind === "choices");
+    if (choices) return { phase: "choices", placement: choices.origin, savedCommit };
+    const unrelated = turns.find((turn) => turn.outcome.kind === "unrelated");
+    if (unrelated) return { phase: "unrelated", placement: unrelated.origin };
+    const went = turns.filter((turn) => turn.outcome.kind === "synced" || turn.outcome.kind === "behind" || turn.outcome.kind === "waiting");
+    const stopped = turns.find((turn) => turn.outcome.kind === "stopped");
+    if (went.length === 0 && stopped?.outcome.kind === "stopped") {
+      const { kind: _, ...stop } = stopped.outcome;
+      return { phase: "stopped", op: "sync", ...stop };
+    }
+    const times = went.flatMap((turn) => (turn.syncedAt === undefined ? [] : [turn.syncedAt]));
+    return {
+      phase: "done",
+      at: times.length > 0 ? Math.max(...times) : Date.now(),
+      sent: went.reduce((sum, turn) => sum + (turn.outcome.kind === "stopped" ? 0 : turn.outcome.sent), 0),
+      received: went.reduce((sum, turn) => sum + (turn.outcome.kind === "stopped" ? 0 : turn.outcome.received), 0),
+      pushed: went.some((turn) => turn.pushed),
+    };
+  }
+
+  /**
+   * One placement's turn of a sync (space-12, space-31): Check, Compare,
+   * Apply, Refresh and Push against it — `placement` a later one, or
+   * undefined for the clone's first, whose Check reads the host for the
+   * clone and follows it (space-60). Its Compare plans `HEAD` as the
+   * previous placement's merge left it (space-19, space-33). A push
+   * rejected runs it once more from Check, and rejected again stops it;
+   * a turn run again for its catch-up ends behind instead. A stop of
+   * this placement alone ends its turn on its line; any other ends the
+   * sync, its line saying so too (space-15).
+   */
+  private async turn(op: SpaceOp, placement: Placement | undefined, input: TurnInput, upstream: { set: boolean }, tally: { sent: number; received: number }): Promise<Turn | Restart> {
+    const first = placement === undefined;
+    // The placement's remote's name as it stands, the first's after its
+    // follow (space-60).
+    const nameNow = (): string => placement?.name ?? this.facts.remoteName ?? this.firstName();
+    let remote = placement?.url ?? this.facts.remote ?? "";
+    let readOnly = false;
+    let at: HostInstance | undefined;
+    let rechecks = 0;
     let pending: Pending | undefined;
     let counts = { sent: 0, received: 0 };
-    let upstream = repo.upstream;
-    // The host may hand over another URL, after a rename or a transfer,
-    // and may answer that this account only reads (space-60, space-61).
-    let remote = repo.remote;
-    let readOnly = false;
-    // The instance the last Check read, which the push goes to
-    // (space-12); none for a remote not at an instance.
-    let syncsWith: HostInstance | undefined;
-    let next: SyncStep | "done" = "save";
-    while (next !== "done") {
-      switch (next) {
-        case "save": {
-          await this.enter(op, "save", false);
-          const saved = await this.save();
-          if (saved !== null) saves.add(saved);
-          savedCommit = saved ?? savedCommit;
-          next = "check";
-          break;
-        }
-        case "check": {
-          await this.enter(op, "check", false);
-          const checked = await this.check(remote, "sync", internal);
-          remote = checked.remote;
-          readOnly = checked.readOnly;
-          syncsWith = checked.at;
-          const remoteEmpty = checked.empty;
-          if (remoteEmpty) {
-            counts = { sent: planStorageUnits({ ours: readStorageTree(this.dir, "HEAD"), theirs: new Map(), base: new Map() }).length, received: 0 };
+    const ended = (outcome: PlacementOutcome, extra: { syncedAt?: number; pushed?: boolean } = {}): Turn => {
+      const name = nameNow();
+      this.runOf(name).outcome = outcome;
+      return { first, name, origin: this.originOf(placement), remote, at, readOnly, outcome, pushed: extra.pushed ?? false, tally, ...(extra.syncedAt !== undefined ? { syncedAt: extra.syncedAt } : {}) };
+    };
+    this.turnAt = placement?.instance ?? undefined;
+    try {
+      let next: "check" | "compare" | "apply" | "refresh" | "push" = "check";
+      for (;;) {
+        switch (next) {
+          case "check": {
+            await this.enter(op, "check", false, this.originOf(placement));
+            const checked = await this.check(remote, op, input.internal, placement);
+            // The host may hand over another URL, after a rename or a
+            // transfer, and may answer that this account only reads
+            // (space-60, space-61); the push goes to the instance the
+            // check read (git-host-9).
+            remote = checked.remote;
+            readOnly = checked.readOnly;
+            at = checked.at;
+            if (checked.empty) {
+              counts = { sent: planStorageUnits({ ours: readStorageTree(this.dir, "HEAD"), theirs: new Map(), base: new Map() }).length, received: 0 };
+              next = "push";
+            } else next = "compare";
+            break;
+          }
+          case "compare": {
+            await this.enter(op, "compare", false, this.originOf(placement));
+            const result = await this.compare(nameNow(), input.choices, input.join, input.setUpSaves);
+            if (result.outcome === "unrelated") return ended({ kind: "unrelated", sent: tally.sent, received: tally.received });
+            if (result.outcome === "choices") return ended({ kind: "choices", sent: tally.sent, received: tally.received });
+            if (result.outcome === "nothing") { counts = result.counts; next = "push"; break; }
+            pending = result.pending;
+            counts = pending.counts;
+            next = "apply";
+            break;
+          }
+          case "apply": {
+            await this.enter(op, "apply", false, this.originOf(placement));
+            if (await this.apply(pending as Pending) === "restart") return { restart: nameNow(), placement };
+            next = "refresh";
+            break;
+          }
+          case "refresh": {
+            await this.enter(op, "refresh", false, this.originOf(placement));
+            await this.refresh(nameNow());
             next = "push";
-          } else next = "compare";
-          break;
-        }
-        case "compare": {
-          await this.enter(op, "compare", false);
-          const result = await this.compare(choices, join, setUp ? saves : undefined);
-          if (result.outcome === "unrelated") { this.ended = { phase: "unrelated", placement: this.owner.placementOf(this) }; return; }
-          if (result.outcome === "choices") { this.ended = { phase: "choices", placement: this.owner.placementOf(this), savedCommit }; return; }
-          if (result.outcome === "nothing") { counts = result.counts; next = "push"; break; }
-          pending = result.pending;
-          counts = pending.counts;
-          next = "apply";
-          break;
-        }
-        case "apply": {
-          await this.enter(op, "apply", false);
-          const applied = await this.apply(pending as Pending);
-          if (applied === "restart") {
-            if (restarts >= 1) {
-              throw new SpaceStopped("apply", {
-                cause: "writer",
-                message: i18n._({
-                  id: "The space changed twice while syncing",
-                  comment: "A stopped sync's message: the home was written to twice under the sync",
-                }),
-                guidance: i18n._({
-                  id: "Another process is writing to the home; wait for it to finish, then Retry.",
-                  comment: "Guidance under a sync another writer keeps restarting",
-                }),
-                retry: true,
-              });
+            break;
+          }
+          case "push": {
+            if (readOnly) {
+              // A read-only placement brings and sends nothing; new
+              // sessions stay for the placements that take pushes
+              // (space-12, space-61). Its turn completes here (space-22).
+              tally.received += counts.received;
+              const time = Date.now();
+              this.recordPlacement(nameNow(), "last", { at: time, sent: 0, received: tally.received });
+              return ended({ kind: "synced", sent: 0, received: tally.received }, { syncedAt: time });
             }
-            restarts += 1;
-            next = "save";
-            break;
-          }
-          next = "refresh";
-          break;
-        }
-        case "refresh": {
-          await this.enter(op, "refresh", false);
-          await this.refresh();
-          next = "push";
-          break;
-        }
-        case "push": {
-          if (readOnly) {
-            // A read-only spex repository brings and sends nothing; its
-            // new sessions stay on this device (space-12, space-61).
-            const at = Date.now();
-            this.recordPlacement(this.facts.remoteName, "last", { at, sent: 0, received: counts.received });
-            this.ended = { phase: "done", at, sent: 0, received: counts.received, pushed: false };
-            next = "done";
-            break;
-          }
-          await this.enter(op, "push", true);
-          const pushed = await this.push(remote, upstream, syncsWith);
-          if (pushed === "rejected") {
-            if (rechecks >= 1) {
-              throw new SpaceStopped("push", {
-                cause: "rejected",
-                message: i18n._({
-                  id: "The host changed again",
-                  comment: "A stopped sync's message: the host's branch moved while this machine was sending",
-                }),
-                guidance: i18n._({
-                  id: "Your merge is saved locally; Retry to send it once the host settles.",
-                  comment: "Guidance under a push the remote rejected twice",
-                }),
-                retry: true,
-              });
+            await this.enter(op, "push", true, this.originOf(placement));
+            // The upstream is set once, at the first placement (space-12).
+            const pushed = await this.push(first ? this.remoteNamed("push") : nameNow(), remote, first && !upstream.set, at, placement);
+            if (pushed === "rejected") {
+              if (input.catchUp) return ended({ kind: "behind", sent: tally.sent, received: tally.received });
+              if (rechecks >= 1) {
+                throw new SpaceStopped("push", {
+                  cause: "rejected",
+                  message: i18n._({
+                    id: "The host changed again",
+                    comment: "A stopped sync's message: the host's branch moved while this machine was sending",
+                  }),
+                  guidance: i18n._({
+                    id: "Your merge is saved locally; Retry to send it once the host settles.",
+                    comment: "Guidance under a push the remote rejected twice",
+                  }),
+                  retry: true,
+                });
+              }
+              rechecks += 1;
+              next = "check";
+              break;
             }
-            rechecks += 1;
-            next = "check";
-            break;
+            if (first) upstream.set = true;
+            tally.sent += counts.sent;
+            tally.received += counts.received;
+            const time = Date.now();
+            // Recorded for the placement it synced, under the name its
+            // remote bears now, a follow at Check having renamed it
+            // (space-22, storage-5).
+            this.recordPlacement(nameNow(), "last", { at: time, sent: tally.sent, received: tally.received });
+            return ended({ kind: "synced", sent: tally.sent, received: tally.received }, { syncedAt: time, pushed: pushed === "ok" });
           }
-          upstream = true;
-          const at = Date.now();
-          // Recorded for the placement it synced, under the name its
-          // remote bears now, a follow at Check having renamed it
-          // (space-22, storage-5).
-          this.recordPlacement(this.facts.remoteName, "last", { at, sent: counts.sent, received: counts.received });
-          this.ended = { phase: "done", at, sent: counts.sent, received: counts.received, pushed: pushed === "ok" };
-          next = "done";
-          break;
         }
       }
+    } catch (error) {
+      const stop = this.stopOn(nameNow(), placement, error);
+      if (stop.whole) throw stop;
+      return ended(this.runOf(nameNow()).outcome as PlacementOutcome);
+    } finally { this.turnAt = undefined; }
+  }
+
+  /**
+   * The catch-up (space-12): `spex` pushed once more, a fast-forward, to
+   * each placement whose turn synced it and a later merge left behind,
+   * in the order added. A push rejected runs that placement once more
+   * from Check, after which the others are caught up again; rejected
+   * again, it ends behind. A read-only placement receives nothing.
+   */
+  private async catchUp(op: SpaceOp, turns: Turn[], internal: boolean, upstream: { set: boolean }): Promise<Restart | undefined> {
+    const rerun = new Set<Turn["tally"]>();
+    for (let again = true; again;) {
+      again = false;
+      const head = await this.git.ok(["rev-parse", "HEAD"]);
+      for (const [index, turn] of turns.entries()) {
+        if (turn.readOnly || turn.outcome.kind !== "synced") continue;
+        const placement = turn.first ? undefined : this.placementsNow().find((candidate) => candidate.name === turn.name);
+        if (!turn.first && placement === undefined) continue;
+        const ref = await this.git.run(["rev-parse", "-q", "--verify", `${this.refOf(turn.name)}^{commit}`]);
+        if (ref.code === 0 && ref.stdout.toString("utf8").trim() === head) continue;
+        this.turnAt = placement?.instance ?? undefined;
+        let pushed: "ok" | "nothing" | "rejected";
+        try {
+          await this.enter(op, "push", true, turn.origin, "catch-up");
+          pushed = await this.push(turn.name, turn.remote, false, turn.at, placement);
+        } catch (error) {
+          const stop = this.stopOn(turn.name, placement, error);
+          if (stop.whole) throw stop;
+          turns[index] = { ...turn, outcome: this.runOf(turn.name).outcome as PlacementOutcome };
+          continue;
+        } finally { this.turnAt = undefined; }
+        if (pushed !== "rejected") { if (pushed === "ok") turns[index] = { ...turn, pushed: true }; continue; }
+        if (rerun.has(turn.tally)) {
+          const behind: PlacementOutcome = { kind: "behind", sent: turn.tally.sent, received: turn.tally.received };
+          this.runOf(turn.name).outcome = behind;
+          turns[index] = { ...turn, outcome: behind };
+          continue;
+        }
+        rerun.add(turn.tally);
+        const ranAgain = await this.turn(op, placement, { choices: {}, join: false, internal, catchUp: true }, upstream, turn.tally);
+        if ("restart" in ranAgain) return ranAgain;
+        turns[index] = { ...ranAgain, pushed: ranAgain.pushed || turn.pushed };
+        // `HEAD` moved: every other placement is caught up again.
+        again = true;
+        break;
+      }
     }
+    return undefined;
   }
 
   /** Step 1 — Save: refresh the rules, stage, refuse a leak, validate,
@@ -2386,9 +2664,9 @@ class RepositorySync {
         run.checkedAt = Date.now();
         return { empty: true, ...outcome };
       }
-      if (heads.code !== 0) throw new SpaceStopped("check", this.classify(heads, target, host !== undefined, placement));
+      if (heads.code !== 0) throw this.transportStop("check", heads, target, host !== undefined, placement);
       const fetched = await this.git.run(["fetch", "-q", "--no-tags", name, `+refs/heads/${SPEX_BRANCH}:${ref}`], options);
-      if (fetched.code !== 0) throw new SpaceStopped("check", this.classify(fetched, target, host !== undefined, placement));
+      if (fetched.code !== 0) throw this.transportStop("check", fetched, target, host !== undefined, placement);
       run.remoteEmpty = false;
       run.checkedAt = Date.now();
       return { empty: false, ...outcome };
@@ -2414,6 +2692,13 @@ class RepositorySync {
     return failure;
   }
 
+  /** A failed transport's stop (space-15): its placement's alone, but
+   * where Git's own error ends the whole sync — the host's answer with an
+   * HTTP status no row reads being the host's error, its placement's. */
+  private transportStop(step: SyncStep, run: GitRun, remote: string, atHost: boolean, placement?: Placement, failure: GitFailure = this.classify(run, remote, atHost, placement)): SpaceStopped {
+    return new SpaceStopped(step, failure, failure.cause === "git" && atHost && hostErrorStatus(run.stderr) !== undefined ? false : undefined);
+  }
+
   /** Give the host's empty repository the default branch it never
    * committed (git-host-7): `main`, one commit of the README the host
    * would have written, made in the object store alone — the clone's
@@ -2433,22 +2718,24 @@ class RepositorySync {
     } finally {
       await credential?.dispose();
     }
-    if (run.code !== 0) throw new SpaceStopped("check", this.classify(run, remote, true));
+    if (run.code !== 0) throw this.transportStop("check", run, remote, true);
   }
 
-  /** Step 3 — Compare: the plan of HEAD against the host's `spex` over
-   * their ancestor, or the empty tree for a join (space-13, space-14).
-   * A set-up join, given its own Saves, takes the host's side of every
-   * unit both sides hold where the clone holds nothing of its own — the
-   * selection "All host's" sends (space-17, space-59). */
-  private async compare(choices: Record<string, StorageChoice>, join: boolean, setUpSaves?: ReadonlySet<string>): Promise<CompareResult> {
-    const originRef = this.remoteRef();
+  /** Step 3 — Compare: the plan of HEAD — as the previous placement's
+   * merge left it — against the `spex` of the placement whose remote
+   * bears `name`, over their ancestor, or the empty tree for a join
+   * (space-13, space-14, space-33). A set-up join, given its own Saves,
+   * takes the host's side of every unit both sides hold where the clone
+   * holds nothing of its own — the selection "All host's" sends
+   * (space-17, space-59). */
+  private async compare(name: string, choices: Record<string, StorageChoice>, join: boolean, setUpSaves?: ReadonlySet<string>): Promise<CompareResult> {
+    const originRef = this.refOf(name);
     const head = await this.git.ok(["rev-parse", "HEAD"]);
     const origin = await this.git.ok(["rev-parse", originRef]);
     const merged = await this.git.run(["merge-base", "HEAD", originRef]);
-    // The plan is the placement's it compares against: the first
-    // (space-31, space-33).
-    const run = this.runOf(this.firstName());
+    // The plan is the placement's it compares against (space-31,
+    // space-33).
+    const run = this.runOf(name);
     run.unrelated = merged.code !== 0;
     if (run.unrelated && !join) return { outcome: "unrelated" };
     const base = run.unrelated ? EMPTY_TREE : merged.stdout.toString("utf8").trim();
@@ -2475,7 +2762,7 @@ class RepositorySync {
       sent: local.length + conflicts.filter((c) => resolved.get(c.name) === "ours").length,
       received: incoming.length + conflicts.filter((c) => resolved.get(c.name) === "theirs").length,
     };
-    return { outcome: "apply", pending: { head, origin, base, units, resolved, counts } };
+    return { outcome: "apply", pending: { head, origin, base, units, resolved, counts, placement: this.placements.find((placement) => placement.name === name)?.instance ?? null } };
   }
 
   /** Whether the saved clone still holds its exact generated bootstrap
@@ -2545,7 +2832,7 @@ class RepositorySync {
         {
           ...this.writeOptions(),
           beforeWrite: () => {
-            const record: ApplyMarker = { v: 1, ours: pending.head, theirs: pending.origin, base: pending.base, choices: Object.fromEntries(pending.resolved), at: Date.now() };
+            const record: ApplyMarker = { v: 1, placement: pending.placement, ours: pending.head, theirs: pending.origin, base: pending.base, choices: Object.fromEntries(pending.resolved), at: Date.now() };
             writeApplicationFile(marker, record);
           },
         },
@@ -2600,11 +2887,12 @@ class RepositorySync {
   }
 
   /** Step 5 — Refresh: re-validate and re-index the running core so every
-   * view reflects the selected state (space-20). */
-  private async refresh(): Promise<void> {
+   * view reflects the selected state (space-20); the placement whose
+   * remote bears `name` now shares the clone's history. */
+  private async refresh(name: string): Promise<void> {
     const applied = this.applied as Applied;
     await this.reindex(!(await this.git.succeeds(["diff", "--quiet", applied.headBefore, applied.headAfter, "--", "config/playbook.config.yaml"])));
-    this.runOf(this.firstName()).unrelated = false;
+    this.runOf(name).unrelated = false;
     this.applied = undefined;
     // The lists are recomputed at Refresh (space-29): the working tree
     // now holds the selected state.
@@ -2637,33 +2925,35 @@ class RepositorySync {
     this.host.ledgerChanged([this.key]);
   }
 
-  /** Step 6 — Push `spex` to the host, setting the upstream once
-   * (space-12), with the credential the instance the Check read brokers
-   * — `at`, none for a remote not at an instance (git-host-9). */
-  private async push(remote: string, upstream: boolean, at: HostInstance | undefined): Promise<"ok" | "nothing" | "rejected"> {
+  /** Step 6 — Push `spex` to the placement whose remote bears `name`,
+   * setting the upstream where `setUpstream` asks — once, at the first
+   * placement (space-12) — with the credential its instance brokers —
+   * `at`, the instance its Check read, none for a remote not at an
+   * instance (git-host-9). `placement` names a placement beside the
+   * first, whose instance's name a failure carries. */
+  private async push(name: string, remote: string, setUpstream: boolean, at: HostInstance | undefined, placement?: Placement): Promise<"ok" | "nothing" | "rejected"> {
     const head = await this.git.ok(["rev-parse", "HEAD"]);
-    const name = this.remoteNamed("push");
-    const ref = this.remoteRef();
+    const ref = this.refOf(name);
     const origin = await this.git.run(["rev-parse", "-q", "--verify", `${ref}^{commit}`]);
-    if (upstream && origin.code === 0 && origin.stdout.toString("utf8").trim() === head) return "nothing";
+    if (!setUpstream && origin.code === 0 && origin.stdout.toString("utf8").trim() === head) return "nothing";
     const credential = at ? await this.owner.credentialFor(at, remote, "push", this) : null;
     let run: GitRun;
     try {
       // The upstream names the remote by its name in the clone (DR-127).
-      run = await this.git.run(upstream ? ["push", "-q", name, SPEX_BRANCH] : ["push", "-q", "-u", name, SPEX_BRANCH], { transport: true, ...(credential ? { credential } : {}) });
+      run = await this.git.run(setUpstream ? ["push", "-q", "-u", name, SPEX_BRANCH] : ["push", "-q", name, SPEX_BRANCH], { transport: true, ...(credential ? { credential } : {}) });
     } finally {
       await credential?.dispose();
     }
     if (run.code === 0) {
       // The host now holds `spex`: later plans compare against it.
       this.runOf(name).remoteEmpty = false;
-      if (!upstream) this.upstreamName = name;
+      if (setUpstream) this.upstreamName = name;
       await this.git.run(["update-ref", ref, head]);
       return "ok";
     }
-    const failure = this.classify(run, remote, at !== undefined);
+    const failure = this.classify(run, remote, at !== undefined, placement);
     if (failure.cause === "rejected") return "rejected";
-    throw new SpaceStopped("push", failure);
+    throw this.transportStop("push", run, remote, at !== undefined, placement, failure);
   }
 
   // -- repair (space-67) -----------------------------------------------------
@@ -3269,6 +3559,19 @@ export class SpaceManager {
     return this.nameOf(this.syncingOf(machine));
   }
 
+  /** The instance a clone's running turn goes to (space-12, git-host-21):
+   * that of the placement whose turn runs, where it is not the clone's
+   * first, else the one its sync goes to. */
+  turnInstance(machine: RepositorySync): HostInstance {
+    return machine.turnAt !== undefined ? this.instanceAt(machine.turnAt) : this.syncingOf(machine);
+  }
+
+  /** The name of the instance a clone's running turn goes to, as a report
+   * prints it (space-15). */
+  turnName(machine: RepositorySync): string {
+    return this.nameOf(this.turnInstance(machine));
+  }
+
   /** The instance a spex repository's key lies under (storage-31), by
    * its folder: an instance the home lists, or the origin it records;
    * none for a key in your own group's folder. */
@@ -3546,30 +3849,68 @@ export class SpaceManager {
    * first, then every other the home lists in its order: its own
    * remote reads as its path in its instance — as that instance's
    * listing names it, else its key without its instance's folder
-   * (DR-127) — and any other URL under an instance's Git origin as that
-   * instance's name, the clone's own instance's where several report one
-   * origin. */
-  private urlRules(facts: RemoteFacts, key: string, at?: string): Parameters<typeof withoutHostUrls>[1][] {
+   * (DR-127), a placement beside the first's its URL's last segment —
+   * and any other URL under an instance's Git origin as that instance's
+   * name, the clone's own instance's where several report one origin;
+   * then each placement `beside` reading as its own path in its instance,
+   * a path placement as itself with any embedded user removed (DR-128). */
+  private urlRules(facts: RemoteFacts, key: string, at?: string, beside: readonly Placement[] = []): Parameters<typeof withoutHostUrls>[1][] {
     const own = at === undefined ? this.servingAt(key, facts) : this.instanceAt(at);
     const listing = facts.remote === null ? undefined : this.listingOf(own, facts);
     const segment = instanceSegmentOf(key);
-    const path = listing ? `${listing.repository.group.fullPath}/${listing.repository.path}` : segment === null ? key : key.slice(segment.length + 1);
-    return [own, ...this.listedInstances().filter((instance) => instance !== own)].map((instance, index) => ({
+    const path = listing ? `${listing.repository.group.fullPath}/${listing.repository.path}`
+      : at !== undefined && facts.remote !== null ? remoteSegment(facts.remote)
+      : segment === null ? key : key.slice(segment.length + 1);
+    const rules: Parameters<typeof withoutHostUrls>[1][] = [own, ...this.listedInstances().filter((instance) => instance !== own)].map((instance, index) => ({
       origin: instance.knownOrigin() ?? null,
       host: this.nameOf(instance),
       instance: instance.origin,
       own: index === 0 && facts.remote !== null ? { remote: facts.remote, path } : null,
     }));
+    for (const placement of beside) {
+      if (placement.url === facts.remote) continue;
+      rules.push({ host: "", own: { remote: placement.url, path: this.placementPath(placement) } });
+    }
+    return rules;
   }
 
   /** A stopped step's lines with no URL under any instance's Git origin
    * (space-15, space-32): `facts` are the placement's the step ran on,
    * at the instance `at` where it is not the clone's own — a placement
-   * beside the first, whose remote reads as its path there. */
-  withoutHostUrls(failure: GitFailure, facts: RemoteFacts, key: string, at?: string): GitFailure {
-    const rules = this.urlRules(facts, key, at);
-    const clean = (text: string): string => rules.reduce((out, rule) => withoutHostUrls(out, rule), text);
+   * beside the first, whose remote reads as its path there — and every
+   * placement `beside` reads as its own path, before any URL under an
+   * instance's Git origin reads as that instance's name, so placements
+   * over one Git backend each keep their own. */
+  withoutHostUrls(failure: GitFailure, facts: RemoteFacts, key: string, at?: string, beside: readonly Placement[] = []): GitFailure {
+    const rules = this.urlRules(facts, key, at, beside);
+    const clean = (text: string): string => {
+      const owned = rules.reduce((out, rule) => withoutHostUrls(out, { host: rule.host, own: rule.own ?? null }), text);
+      return rules.reduce((out, rule) => withoutHostUrls(out, { origin: rule.origin ?? null, host: rule.host, instance: rule.instance ?? null }), owned);
+    };
     return { ...failure, message: clean(failure.message), guidance: clean(failure.guidance) };
+  }
+
+  /** A stop's lines as a placement's line and the row carry them
+   * (space-15): `placement` the one it stopped at, beside the clone's
+   * first, or the first where none is named; every placement the clone
+   * holds reading as its path in its instance. A path placement beside
+   * the first is read under the first's rules, its own remote as
+   * itself. */
+  placementFailure(machine: RepositorySync, failure: GitFailure, placement?: Placement): GitFailure {
+    const beside = machine.placements;
+    if (!placement?.instance) return this.withoutHostUrls(failure, machine.facts, machine.key, undefined, beside);
+    return this.withoutHostUrls(failure, { remote: placement.url, id: placement.id, remoteName: placement.name }, machine.key, placement.instance, beside);
+  }
+
+  /** A placement's path as its line and a report read it (space-87,
+   * space-15): as its instance's listing names it, else its URL's last
+   * segment; the path placement's remote as itself with any embedded
+   * user removed. */
+  private placementPath(placement: Placement): string {
+    if (placement.instance === null) return displayRemote(placement.url);
+    const instance = this.instanceAt(placement.instance);
+    const listing = this.signedInAt(instance) ? this.listingOf(instance, { remote: placement.url, id: placement.id, remoteName: placement.name }) : undefined;
+    return listing ? `${listing.repository.group.fullPath}/${listing.repository.path}` : remoteSegment(placement.url);
   }
 
   /** A clone's remote as the state carries it (space-30): one at the
@@ -5421,7 +5762,7 @@ export class SpaceManager {
         message: i18n._({ id: "{path} already exists, so the clone cannot follow the host there", values: { path: `workspace/${to}` }, comment: "A stopped sync: the folder a renamed spex repository moves to is taken" }),
         guidance: i18n._({ id: "Move that folder aside, then Retry.", comment: "Guidance where a renamed spex repository's new folder is taken" }),
         retry: true,
-      });
+      }, false);
     }
     if (taken !== undefined) {
       throw new SpaceStopped("check", {
@@ -5430,7 +5771,7 @@ export class SpaceManager {
           comment: "A stopped sync: the folder a renamed spex repository moves to is where another clone, {other}, which the instances migration left at its former place, moves at its own next sync" }),
         guidance: i18n._({ id: "Sync {other} first, then Retry.", values: { other: taken.waiting }, comment: "Guidance where a renamed spex repository's new folder is another clone's destination" }),
         retry: true,
-      });
+      }, false);
     }
     mkdirSync(dirname(target), { recursive: true, mode: 0o700 });
     renameSync(source, target);
@@ -5832,8 +6173,7 @@ export class SpaceManager {
     const signedIn = this.signedInAt(instance);
     const target = signedIn ? this.targetOf(instance, facts) : undefined;
     const listing = signedIn ? this.listingOf(instance, facts) : undefined;
-    const segment = /([^/:]+?)(?:\.git)?\/*$/.exec(placement.url)?.[1] ?? placement.url;
-    const own: PlacementState = { ...line, path: listing ? `${listing.repository.group.fullPath}/${listing.repository.path}` : segment, state: "reachable", reason: null };
+    const own: PlacementState = { ...line, path: listing ? `${listing.repository.group.fullPath}/${listing.repository.path}` : remoteSegment(placement.url), state: "reachable", reason: null };
     if (!signedIn) return { ...own, state: "unreachable", reason: signInAgain() };
     const listed: PlacementState = listing
       ? { ...own, members: listing.members, visibility: listing.repository.visibility, can: { manageMembers: listing.repository.can.manageMembers, transfer: listing.repository.can.transfer } }
@@ -6046,10 +6386,9 @@ export class SpaceManager {
   fetch(key: string): Promise<{ accepted: true }> { return this.machine(key).fetch(); }
 
   /** `placement` names the placement `choices`, `join` and `noticed`
-   * are for (space-29): a clone holds one remote yet, whose they are. */
+   * are for (space-29). */
   sync(key: string, input: { placement?: string | null; choices?: Record<string, SpaceChoice>; join?: boolean; noticed?: boolean }): Promise<{ accepted: true }> {
-    const { placement: _, ...rest } = input;
-    return this.machine(key).sync(rest);
+    return this.machine(key).sync(input);
   }
 
   cancel(key: string): boolean { return this.machine(key).cancel(); }
@@ -6063,7 +6402,7 @@ export class SpaceManager {
     const held = canonicalOrigin(origin);
     setImmediate(() => {
       for (const machine of this.machines.values()) {
-        if (this.syncingOf(machine).origin === held) machine.holdBegan();
+        if (this.turnInstance(machine).origin === held) machine.holdBegan();
       }
     });
   }

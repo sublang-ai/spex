@@ -130,12 +130,11 @@ import { browserAgent } from "./browser.js";
 import { ApplicationMedia } from "./media.js";
 import { MediaTransferError } from "./media-transfers.js";
 import { readAgentOptions, type AgentModelDiscovery } from "./agent-options.js";
-import { SpaceManager, type SpaceHost } from "./space.js";
+import { SpaceManager, type SpaceHost, type SpaceStepEvent } from "./space.js";
 import { GitHostClient, fileCredentialStore } from "./git-host.js";
 import { relayHostError } from "./space-groups.js";
 import { currentRuntime, withGitCredential } from "./git-credential.js";
 import { displayRemote, validateRemoteUrl } from "./space-git.js";
-import type { SpaceOp, SyncStep } from "./protocol.js";
 import { isFastModeSupported, isSubagentModelSupported } from "@sublang/cligent";
 import type { PlayerAdapterImports } from "@sublang/cligent/tmux-play";
 
@@ -222,8 +221,10 @@ export interface CoreServiceOptions {
   hostHoldMaxMs?: number;
   /** Test seam: awaited before each Space step runs, and inside Save
    * between its validation and its commit (`at: "commit"`), so a suite can
-   * act between them deterministically. */
-  spaceBeforeStep?: (event: { op: SpaceOp; step: SyncStep; repository: string; at?: "commit" }) => void | Promise<void>;
+   * act between them deterministically; a placement's step names that
+   * placement, and the catch-up's push is marked `at: "catch-up"`
+   * (space-12). */
+  spaceBeforeStep?: (event: SpaceStepEvent) => void | Promise<void>;
   /** Your own group's folder name for a new home; this device's user
    * name by default (storage-2). */
   own?: string;
