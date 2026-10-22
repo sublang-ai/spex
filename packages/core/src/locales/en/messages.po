@@ -919,6 +919,11 @@ msgstr "an interrupted sync could not be repaired: {cause}"
 msgid "an open intent already holds this source: \"{title}\""
 msgstr "an open intent already holds this source: \"{title}\""
 
+#. Stands for the label in “Runs on {label}” where the record naming the runtime cannot be read
+#: src/control-record.ts
+msgid "an unknown runtime"
+msgstr "an unknown runtime"
+
 #. Guidance under a sync another writer keeps restarting
 #: src/space.ts
 msgid "Another process is writing to the home; wait for it to finish, then Retry."
@@ -2168,6 +2173,16 @@ msgstr "Retry; if it fails again, run the step in a terminal for detail."
 #: src/space-git.ts
 msgid "Retry; if it fails again, the host's error stands for now."
 msgstr "Retry; if it fails again, the host's error stands for now."
+
+#. Why an intent cannot run on a team server's seat: it names no runtime, captured before runtimes were recorded or by the Playbook CLI, and a seat runs only what is assigned to it
+#: src/session.ts
+msgid "Runs nowhere yet"
+msgstr "Runs nowhere yet"
+
+#. Why a session or an intent does not run here: it is assigned to another runtime, named by its label — the server's name on a seat, else the host name
+#: src/control-record.ts
+msgid "Runs on {label}"
+msgstr "Runs on {label}"
 
 #. Refusal when the registry's scaffold CLI exits non-zero because the app supplied none; command and output are verbatim
 #: src/forge.ts
