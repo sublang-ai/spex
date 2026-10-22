@@ -1136,7 +1136,7 @@ describe("run-view-48/50: the strip walks by keyboard and names its attention", 
     const failed = screen.getByRole("tab", {
       name: "chase the flaky test",
     });
-    const plus = screen.getByRole("tab", { name: "Start another session" });
+    const plus = screen.getByRole("tab", { name: "New task" });
     const specs = screen.getByTestId("workspace-tab-specs");
     const overview = screen.getByTestId("workspace-tab-overview");
     expect(live.tabIndex).toBe(0);
@@ -1164,7 +1164,7 @@ describe("run-view-48/50: the strip walks by keyboard and names its attention", 
     expect(specs.title).toBe(
       `The project's spec packages (${keyLabel("⇧S")})`,
     );
-    expect(plus.title).toBe(`Start another session (${keyLabel("N")})`);
+    expect(plus.title).toBe(`New task (${keyLabel("N")})`);
   });
 
   test("a failure tab's tooltip says why it failed", async () => {
@@ -1361,7 +1361,7 @@ describe("run-view-88: Captain Home consumes the published next standing", () =>
 });
 
 describe("spec-view-58: the Specs tab on a project with no specs/", () => {
-  test("the project start links to existing specs and the pinned tab shows package count", async () => {
+  test("the project start links to existing specs and the pinned tab shows item count", async () => {
     useAppStore.setState({
       workspaceTabs: { p1: "start" },
       specTrees: { p1: {
@@ -1376,12 +1376,15 @@ describe("spec-view-58: the Specs tab on a project with no specs/", () => {
     });
     render(<App />);
     const tab = screen.getByTestId("workspace-tab-specs");
-    expect(tab.querySelector('[aria-hidden="true"]')?.textContent).toBe("(2)");
-    expect(screen.getByRole("tab", { name: "Specs, 2 spec packages" })).toBe(tab);
+    expect(tab.querySelector('[aria-hidden="true"]')?.textContent).toBe("(1)");
+    expect(screen.getByRole("tab", { name: "Specs, 1 spec item" })).toBe(tab);
     expect(tab.getAttribute("aria-selected")).toBe("false");
     expect(screen.getByTestId("project-spec-status").textContent).toContain("2 packages · 1 item");
     fireEvent.click(within(screen.getByTestId("project-spec-status")).getByRole("button", { name: "View specs" }));
     expect(tab.getAttribute("aria-selected")).toBe("true");
+    fireEvent.click(screen.getByRole("tab", { name: "New task" }));
+    expect(tab.getAttribute("aria-selected")).toBe("false");
+    expect(screen.getByRole("textbox", { name: "Describe a project task" })).toBeTruthy();
   });
 
   // The tree the core replies with when a project has no `specs/`

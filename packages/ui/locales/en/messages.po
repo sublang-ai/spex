@@ -71,8 +71,8 @@ msgid "— seeds a sample project"
 msgstr "— seeds a sample project"
 
 #: src/App.tsx
-msgid ", {count, plural, one {# spec package} other {# spec packages}}"
-msgstr ", {count, plural, one {# spec package} other {# spec packages}}"
+msgid ", {count, plural, one {# spec item} other {# spec items}}"
+msgstr ", {count, plural, one {# spec item} other {# spec items}}"
 
 #. tail of a run's one-line strip: the state that called it
 #: src/components/MachineCard.tsx
@@ -3702,6 +3702,14 @@ msgstr "New sessions stay on this device"
 msgid "New subgroup"
 msgstr "New subgroup"
 
+#: src/App.tsx
+msgid "New task"
+msgstr "New task"
+
+#: src/App.tsx
+msgid "New task ({keys})"
+msgstr "New task ({keys})"
+
 #: src/components/SourcesTabs.tsx
 msgid "Next page"
 msgstr "Next page"
@@ -5641,6 +5649,10 @@ msgid "Specs"
 msgstr "Specs"
 
 #: src/components/CaptainHome.tsx
+msgid "Specs clarify goals and acceptance criteria; Captain uses playbooks to coordinate AI implementation and review."
+msgstr "Specs clarify goals and acceptance criteria; Captain uses playbooks to coordinate AI implementation and review."
+
+#: src/components/CaptainHome.tsx
 msgid "Specs directory exists, but no packages yet"
 msgstr "Specs directory exists, but no packages yet"
 
@@ -5726,14 +5738,6 @@ msgstr "Start a new session in the current project"
 #: src/components/RunView.tsx
 msgid "Start a new session in this project"
 msgstr "Start a new session in this project"
-
-#: src/App.tsx
-msgid "Start another session"
-msgstr "Start another session"
-
-#: src/App.tsx
-msgid "Start another session ({keys})"
-msgstr "Start another session ({keys})"
 
 #: src/components/CaptainHome.tsx
 msgid "Start task"
@@ -5945,10 +5949,6 @@ msgstr "Take the task out of the message"
 #: src/components/NextCard.tsx
 msgid "Take this task out of the queue — Undo puts it back"
 msgstr "Take this task out of the queue — Undo puts it back"
-
-#: src/components/CaptainHome.tsx
-msgid "Tell Captain what should change and how to know it is done. Specs clarify goals and acceptance criteria; Captain chooses a playbook to coordinate AI implementation and review."
-msgstr "Tell Captain what should change and how to know it is done. Specs clarify goals and acceptance criteria; Captain chooses a playbook to coordinate AI implementation and review."
 
 #: src/components/DraftConversation.tsx
 msgid "Tell the agent what the playbook does, who does what, and when it is done"

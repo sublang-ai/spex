@@ -368,8 +368,8 @@ export function CaptainHome(props: CaptainHomeProps) {
                 project: props.projectName ?? i18n._("your project"),
               })}
             </h1>
-            <p className="mt-3 text-balance text-sm leading-6 text-neutral-600 dark:text-neutral-300">
-              {i18n._("Tell Captain what should change and how to know it is done. Specs clarify goals and acceptance criteria; Captain chooses a playbook to coordinate AI implementation and review.")}
+            <p className="mt-3 text-sm leading-6 text-neutral-600 dark:text-neutral-300">
+              {i18n._("Specs clarify goals and acceptance criteria; Captain uses playbooks to coordinate AI implementation and review.")}
             </p>
             {props.onOpenSpecs ? (
               <div data-testid="project-spec-status" className="mt-4 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs leading-5 text-neutral-500 dark:text-neutral-400">

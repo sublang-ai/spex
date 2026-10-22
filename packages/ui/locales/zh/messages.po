@@ -71,8 +71,8 @@ msgid "— seeds a sample project"
 msgstr "— 生成一个示例项目"
 
 #: src/App.tsx
-msgid ", {count, plural, one {# spec package} other {# spec packages}}"
-msgstr "，{count} 个规约包"
+msgid ", {count, plural, one {# spec item} other {# spec items}}"
+msgstr "，{count} 个规约条目"
 
 #. tail of a run's one-line strip: the state that called it
 #: src/components/MachineCard.tsx
@@ -3702,6 +3702,14 @@ msgstr "新会话留在此设备上"
 msgid "New subgroup"
 msgstr "新建子群组"
 
+#: src/App.tsx
+msgid "New task"
+msgstr "新任务"
+
+#: src/App.tsx
+msgid "New task ({keys})"
+msgstr "新任务（{keys}）"
+
 #: src/components/SourcesTabs.tsx
 msgid "Next page"
 msgstr "下一页"
@@ -5641,6 +5649,10 @@ msgid "Specs"
 msgstr "规约"
 
 #: src/components/CaptainHome.tsx
+msgid "Specs clarify goals and acceptance criteria; Captain uses playbooks to coordinate AI implementation and review."
+msgstr "规约明确目标与验收标准；Captain 按规程编排 AI 实现与复核。"
+
+#: src/components/CaptainHome.tsx
 msgid "Specs directory exists, but no packages yet"
 msgstr "规约目录已建立，尚无规约包"
 
@@ -5726,14 +5738,6 @@ msgstr "在当前项目中开始新会话"
 #: src/components/RunView.tsx
 msgid "Start a new session in this project"
 msgstr "在此项目中开始新会话"
-
-#: src/App.tsx
-msgid "Start another session"
-msgstr "再开一个会话"
-
-#: src/App.tsx
-msgid "Start another session ({keys})"
-msgstr "再开一个会话（{keys}）"
 
 #: src/components/CaptainHome.tsx
 msgid "Start task"
@@ -5945,10 +5949,6 @@ msgstr "从消息中移除该任务"
 #: src/components/NextCard.tsx
 msgid "Take this task out of the queue — Undo puts it back"
 msgstr "将此任务移出队列 — 撤销可放回"
-
-#: src/components/CaptainHome.tsx
-msgid "Tell Captain what should change and how to know it is done. Specs clarify goals and acceptance criteria; Captain chooses a playbook to coordinate AI implementation and review."
-msgstr "告诉 Captain 想改什么、怎样算完成。规约明确目标与验收标准，Captain 选择规程安排 AI 实现与复核。"
 
 #: src/components/DraftConversation.tsx
 msgid "Tell the agent what the playbook does, who does what, and when it is done"

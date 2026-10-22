@@ -433,8 +433,8 @@ function WorkspaceSurface({
         "start"));
   const projectSpecTree = currentProjectId ? specTrees[currentProjectId] : undefined;
   const projectSpecError = currentProjectId ? specErrors[currentProjectId] : undefined;
-  const projectSpecPackageCount = projectSpecTree?.present && !projectSpecTree.legacy && !projectSpecError
-    ? treeCounts(projectSpecTree.files).packages
+  const projectSpecItemCount = projectSpecTree?.present && !projectSpecTree.legacy && !projectSpecError
+    ? treeCounts(projectSpecTree.files).items
     : 0;
 
   // The task start and pinned Specs tab need the project's real state
@@ -790,19 +790,19 @@ function WorkspaceSurface({
             if (element) tabRefs.current.set("start", element);
             else tabRefs.current.delete("start");
           }}
-          title={i18n._("Start another session ({keys})", {
+          title={i18n._("New task ({keys})", {
             keys: keyLabel("N"),
           })}
-          aria-label={i18n._("Start another session")}
           onKeyDown={(event) => walkTabs(event, "start")}
           onClick={() => pickTab("start")}
-          className={`shrink-0 rounded-t-md px-3 py-1.5 text-sm ${
+          className={`inline-flex shrink-0 items-center gap-1.5 rounded-t-md px-3 py-1.5 text-sm ${
             tab === "start"
               ? "border border-b-0 border-neutral-200 bg-white font-medium dark:border-neutral-800 dark:bg-neutral-900"
               : "text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200"
           }`}
         >
           <Icon name="plus" className="h-4 w-4" />
+          <span>{i18n._("New task")}</span>
         </button>
       </div>
       {(["specs", "overview"] as const).map((pinned) => (
@@ -840,11 +840,11 @@ function WorkspaceSurface({
                 id: "Specs",
                 comment: "tab name: the project's spec packages",
               })}
-              {projectSpecPackageCount > 0 ? (
+              {projectSpecItemCount > 0 ? (
                 <>
-                  <span aria-hidden="true" className="ml-1 text-xs text-neutral-500 dark:text-neutral-400">({projectSpecPackageCount})</span>
+                  <span aria-hidden="true" className="ml-1 text-xs text-neutral-500 dark:text-neutral-400">({projectSpecItemCount})</span>
                   <span className="sr-only">
-                    {i18n._(", {count, plural, one {# spec package} other {# spec packages}}", { count: projectSpecPackageCount })}
+                    {i18n._(", {count, plural, one {# spec item} other {# spec items}}", { count: projectSpecItemCount })}
                   </span>
                 </>
               ) : null}
