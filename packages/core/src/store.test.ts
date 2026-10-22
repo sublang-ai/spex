@@ -653,14 +653,82 @@ test("storage-4: one closed file per intent; a malformed one is reported, kept a
   assert.ok(reopened.storageDiagnostics().some((entry) => entry.file === join(intents, `${nextId}.json`) && !entry.blocking));
   assert.equal(readFileSync(join(intents, `${nextId}.json`), "utf8"), damaged, "the reader deletes nothing");
   // A format this Spex does not know is refused, never guessed.
-  writeFileSync(join(intents, `${nextId}.json`), '{"format":2,"id":"' + nextId + '","text":"x","createdAt":2}');
+  writeFileSync(join(intents, `${nextId}.json`), '{"format":3,"id":"' + nextId + '","text":"x","createdAt":2}');
   reopened.reload();
-  assert.ok(reopened.storageDiagnostics().some((entry) => /unsupported format 2/.test(entry.reason)));
+  assert.ok(reopened.storageDiagnostics().some((entry) => /unsupported format 3/.test(entry.reason)));
   // A remove deletes the file and its attachments.
   mkdirSync(join(intents, `${firstId}.assets`));
   reopened.removeIntent(firstId);
   assert.ok(!existsSync(join(intents, `${firstId}.json`)) && !existsSync(join(intents, `${firstId}.assets`)));
   reopened.close();
+});
+
+test("storage-4: a capture writes format 2 with its runtime; edit, dispatch and close keep a file's format and runtime; format 3 and a misplaced runtime are malformed", () => {
+  const dir = tempRoot(); const store = new Store({ machineIdentity, dir, own: "tester" });
+  const project = store.registerProject(join(tmpdir(), "spex-runtime"), "runtime", 1);
+  const intents = join(dir, "workspace", "tester", "runtime-spex", "intents");
+  const read = (id: string): Record<string, unknown> =>
+    JSON.parse(readFileSync(join(intents, `${id}.json`), "utf8")) as Record<string, unknown>;
+  // The runtime is named by the home's device (storage-2).
+  const { device } = parseYaml(readFileSync(join(dir, "home.yaml"), "utf8")) as { device: string };
+  assert.equal(store.home.device, device);
+  const runtime = { device, label: "laptop" };
+
+  // A capture is written at format 2 with this home's runtime.
+  const captured = "71000000-0000-4000-8000-000000000011";
+  store.addIntent({ id: captured, projectId: project.id, text: "Captured", createdAt: 1, runtime });
+  assert.deepEqual(read(captured), { format: 2, id: captured, text: "Captured", runtime, createdAt: 1 });
+  assert.deepEqual(store.getIntent(captured)?.runtime, runtime);
+
+  // A format 1 file, written before runtimes were recorded, reads with none.
+  const former = "71000000-0000-4000-8000-000000000012";
+  writeFileSync(join(intents, `${former}.json`), JSON.stringify({ format: 1, id: former, text: "Former", createdAt: 2 }));
+  assert.ok(!Object.hasOwn(store.getIntent(former)!, "runtime"));
+
+  // An edit, a dispatch and a close rewrite each file whole, keeping its
+  // format and its runtime as they were.
+  const kept = (id: string, format: 1 | 2): Record<string, unknown> => {
+    const file = read(id);
+    assert.equal(file.format, format, id);
+    if (format === 2) assert.deepEqual(file.runtime, runtime);
+    else assert.ok(!Object.hasOwn(file, "runtime"), id);
+    return file;
+  };
+  for (const [id, format, turnId] of [[captured, 2, 1], [former, 1, 2]] as const) {
+    store.editIntent(id, "Edited");
+    assert.equal(kept(id, format).text, "Edited");
+    store.stampIntentDispatch(id, SESSION, turnId, 5);
+    assert.deepEqual(kept(id, format).dispatched, { sessionId: SESSION, turnId, at: 5 });
+    store.closeIntent(id, "done", 9);
+    assert.deepEqual(kept(id, format).closed, { as: "done", at: 9 });
+  }
+  assert.deepEqual(store.getIntent(captured)?.runtime, runtime);
+
+  // A format above 2, a format 1 file naming a runtime, and a format 2
+  // file naming none or a malformed one are malformed: reported without
+  // blocking, their bytes kept, refused with their cause, listed nowhere.
+  const malformed: [string, Record<string, unknown>, RegExp?][] = [
+    ["71000000-0000-4000-8000-000000000013", { format: 3, text: "Later", runtime, createdAt: 3 }, /unsupported format 3/],
+    ["71000000-0000-4000-8000-000000000014", { format: 1, text: "Named", runtime, createdAt: 3 }],
+    ["71000000-0000-4000-8000-000000000015", { format: 2, text: "Unnamed", createdAt: 3 }],
+    ["71000000-0000-4000-8000-000000000016", { format: 2, text: "Shouted", runtime: { device: device.toUpperCase(), label: "laptop" }, createdAt: 3 }],
+    ["71000000-0000-4000-8000-000000000017", { format: 2, text: "Blank", runtime: { device, label: "" }, createdAt: 3 }],
+    ["71000000-0000-4000-8000-000000000018", { format: 2, text: "Extra", runtime: { ...runtime, host: "laptop.local" }, createdAt: 3 }],
+  ];
+  for (const [id, fields, reason] of malformed) {
+    const file = join(intents, `${id}.json`);
+    const bytes = JSON.stringify({ id, ...fields });
+    writeFileSync(file, bytes);
+    assert.equal(store.getIntent(id), undefined, id);
+    const report = store.storageDiagnostics().find((entry) => entry.file === file);
+    assert.ok(report && !report.blocking, id);
+    if (reason) assert.match(report.reason, reason);
+    assert.throws(() => store.editIntent(id, "lost"), (error: Error & { file?: string }) => error.file === file);
+    assert.equal(readFileSync(file, "utf8"), bytes, "the reader deletes nothing");
+  }
+  assert.deepEqual(store.listOpenIntents(), []);
+  assert.deepEqual(store.listClosedIntents(project.id, 10).map((intent) => intent.id).sort(), [captured, former]);
+  store.close();
 });
 
 test("an unreadable legacy store skips its import and never blocks startup", async () => {
@@ -772,7 +840,6 @@ test("storage-2: home.yaml lists every instance by its origin, the first the def
   const home = Home.create(dir, { own: "tester", env: { SPEX_HOST_URL: "https://spex.pub" } });
   assert.deepEqual(home.instances(), []);
   assert.deepEqual(home.defaultInstance(), { origin: "https://spex.pub", clientId: "spex" }, "the recorded origin, while none is listed");
-  assert.deepEqual(home.host, home.defaultInstance());
   assert.equal(home.account(), null);
   assert.deepEqual(home.instanceByFolder("@spex.pub"), { origin: "https://spex.pub", clientId: "spex" });
   // A sign-in lists the instance it names, in any spelling; the first listed is the default.

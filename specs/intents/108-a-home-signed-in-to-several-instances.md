@@ -5,7 +5,7 @@
 
 ## Status
 
-In progress (2026-10-20).
+Implemented (2026-10-21); the live check that the production and internal instances sign in to one home is pending.
 
 ## Intent
 
@@ -17,7 +17,7 @@ Implement [DR-127](../decisions/127-a-home-signed-in-to-several-instances.md): i
 - [x] `home.yaml` format 2 with its instances and default instance, origin canonicalization, `@<host>` keys and folders, the clone's remote named by its instance, and the instances migration with its receipt.
 - [x] A client per instance: sign-in by origin, sign-out and Forget per instance, reads per instance, the credential by the clone's instance, the shared-origin rule and the follow, your namespace per instance, and the stand-in run as several instances.
 - [x] The Groups surface with a heading per instance, Pick and Move per instance, and the browser opened at any instance; the journeys over two stand-ins.
-- [ ] The registry, Git sources and publishing by instance with the default instance, the Org default, and the intent's author.
+- [x] The registry, Git sources and publishing by instance with the default instance, the Org default, and the intent's author.
 
 ## Tasks
 
