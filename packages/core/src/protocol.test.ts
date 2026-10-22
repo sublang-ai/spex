@@ -282,6 +282,23 @@ test("environments-17: a search names the spex repository whose environment's re
   }
 });
 
+test("core-service-128: the server commands name a server by its instance and its id; consent is the open's alone", () => {
+  assert.ok(parseCommand({ type: "server.list", id: "s1" }).ok);
+  assert.ok(parseCommand({ type: "server.open", id: "s2", instance: "https://spex.pub", serverId: "srv_1", consented: true }).ok);
+  // Without consent the open still parses: the core refuses it itself.
+  assert.ok(parseCommand({ type: "server.open", id: "s3", instance: "https://spex.pub", serverId: "srv_1" }).ok);
+  assert.ok(parseCommand({ type: "server.close", id: "s4", instance: "https://spex.pub", serverId: "srv_1" }).ok);
+  for (const command of [
+    { type: "server.list", id: "s5", instance: "https://spex.pub" },
+    { type: "server.open", id: "s6", instance: "https://spex.pub", consented: true },
+    { type: "server.open", id: "s7", instance: "https://spex.pub", serverId: "", consented: true },
+    { type: "server.open", id: "s8", instance: "https://spex.pub", serverId: "srv_1", consented: "yes" },
+    { type: "server.close", id: "s9", instance: "https://spex.pub", serverId: "srv_1", consented: true },
+  ]) {
+    assert.ok(!parseCommand(command).ok, JSON.stringify(command));
+  }
+});
+
 test("projects-9: removal takes an optional confirmation; rebind names a key and no revision", () => {
   assert.ok(parseCommand({ type: "project.remove", id: "p1", projectId: "alice/a-spex", confirm: true }).ok);
   assert.ok(parseCommand({ type: "project.rebind", id: "p2", projectId: "alice/a-spex", path: "/w/a", aliases: ["/old/a"] }).ok);

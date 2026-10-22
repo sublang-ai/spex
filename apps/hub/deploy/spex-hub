@@ -1,0 +1,19 @@
+#!/bin/sh
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
+
+# spex-hub: the administrator's command (hub-1, hub-6), run as the hub's
+# account, e.g. `sudo -u spex-hub /opt/spex/bin/spex-hub status`. It hands
+# every command that takes one the installed helper, so status, evict and
+# retire reach it when no hub runs; a --helper given after it still wins.
+# install.sh writes it as <prefix>/bin/spex-hub for its prefix and node,
+# in place of /opt/spex and /usr/bin/node; its header holds the paths.
+
+case "${1-}" in
+  attach | serve | status | evict | retire)
+    command=$1
+    shift
+    exec /usr/bin/node /opt/spex/app/apps/hub/dist/main.js "$command" --helper=/opt/spex/libexec/spex-seatctl "$@"
+    ;;
+esac
+exec /usr/bin/node /opt/spex/app/apps/hub/dist/main.js "$@"

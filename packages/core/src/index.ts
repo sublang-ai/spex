@@ -15,7 +15,7 @@ export {
   type RecordEnvelope,
   type SessionManagerOptions,
 } from "./session.js";
-export { CoreService, createCoreService, type CoreServiceOptions } from "./service.js";
+export { CoreService, createCoreService, type CoreServiceOptions, type SeatOptions } from "./service.js";
 export { suppliedScaffold, type SuppliedScaffold } from "./forge.js";
 export {
   checkToolchain,
