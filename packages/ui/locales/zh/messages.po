@@ -1175,9 +1175,19 @@ msgstr "位于 {state} — 正在调用 /{playbookId}"
 msgid "at {state} → calling /{playbookId}"
 msgstr "位于 {state} → 正在调用 /{playbookId}"
 
+#. on a line naming a placement another device named, not yet on this device: brings it here after the sharing notice
+#: src/components/SpacePlacements.tsx
+msgid "Attach"
+msgstr "接入"
+
 #: src/components/ComposerAttachments.tsx
 msgid "Attach files"
 msgstr "添加文件"
+
+#. the Attach control while the placement is added and synced
+#: src/components/SpacePlacements.tsx
+msgid "Attaching…"
+msgstr "接入中…"
 
 #: src/components/Composer.tsx
 #: src/components/DraftConversation.tsx

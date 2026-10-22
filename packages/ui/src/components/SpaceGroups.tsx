@@ -798,8 +798,12 @@ function RepositoryRow({
   const noticeFirst = runs.length > 0 && owing.length === runs.length ? owing[0] : undefined;
   const noticeLine = opened === "notice" && noticeAt !== undefined ? placementAt(repo, noticeAt) : undefined;
   const joining = busy === "join" || accepted?.op === "join" || (running && sync.op === "join");
+  // An Attach's own control reads its busy form while the sync it starts
+  // runs; Sync keeps its word, waiting (space-90).
   const syncing =
-    busy === "sync" || accepted?.op === "sync" || (running && sync.op !== "join" && sync.op !== "check");
+    busy === "sync" ||
+    accepted?.op === "sync" ||
+    (running && sync.op !== "join" && sync.op !== "check" && sync.op !== "attach");
   const readOnly = repo.state === "read-only";
 
   let controlButton: ReactNode = null;

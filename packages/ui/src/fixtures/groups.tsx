@@ -574,6 +574,7 @@ export async function answer(type: string, fields: Record<string, unknown> = {})
     case "space.sync":
     case "space.pick":
     case "space.join":
+    case "space.attach":
       return { accepted: true };
     case "space.cancel":
     case "space.signin.cancel":

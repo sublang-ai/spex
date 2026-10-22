@@ -1175,9 +1175,19 @@ msgstr "at {state} — calling /{playbookId}"
 msgid "at {state} → calling /{playbookId}"
 msgstr "at {state} → calling /{playbookId}"
 
+#. on a line naming a placement another device named, not yet on this device: brings it here after the sharing notice
+#: src/components/SpacePlacements.tsx
+msgid "Attach"
+msgstr "Attach"
+
 #: src/components/ComposerAttachments.tsx
 msgid "Attach files"
 msgstr "Attach files"
+
+#. the Attach control while the placement is added and synced
+#: src/components/SpacePlacements.tsx
+msgid "Attaching…"
+msgstr "Attaching…"
 
 #: src/components/Composer.tsx
 #: src/components/DraftConversation.tsx

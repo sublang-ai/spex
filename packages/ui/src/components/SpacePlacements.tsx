@@ -20,11 +20,15 @@
 // (space-57); an unrelated history Join, confirmed inline (space-13); a
 // stop Retry (space-15); and an unreachable placement whose instance is
 // signed in, on a row still reachable, Retry reading the instances again
-// (space-61). Each control is described by the line's instance name, so
-// two lines' alike controls are told apart. The instance's name owns the
-// slack, the path yields below @md, the phrase truncates with its title,
-// Members shows its mark below @md and below @xs the controls wrap
-// beneath (space-28).
+// (space-61). A placement a file of the clone names and no remote here
+// holds — another device's or another member's proposal — reads "Not on
+// this device" with Attach, which says the sharing notice beneath the
+// line whatever its members and attaches only on Continue, reading
+// "Attaching…" until the attach that follows has run (space-90). Each
+// control is described by the line's instance name, so two lines' alike
+// controls are told apart. The instance's name owns the slack, the path
+// yields below @md, the phrase truncates with its title, Members shows
+// its mark below @md and below @xs the controls wrap beneath (space-28).
 
 import { useEffect, useId, useRef, useState } from "react";
 import type { GroupsState, PlacementState, RepositoryState } from "@sublang/spex-core/protocol";
@@ -157,8 +161,9 @@ export function PlacementLines({
 }
 
 /** What a placement's line answers for the reader (space-87): the
- * sharing notice it owes, the join of its history, or a retry. */
-type LineAct = "continue" | "join" | "retry";
+ * sharing notice it owes, the join of its history, a retry, or bringing
+ * here a placement another device named. */
+type LineAct = "continue" | "join" | "retry" | "attach";
 
 /** One placement's line (space-87): its instance, its path there and
  * its phrase, each truncating with its title, then the acts on that
@@ -188,7 +193,9 @@ function PlacementLine({
   const spaceSync = useAppStore((state) => state.spaceSync);
   const spaceFetch = useAppStore((state) => state.spaceFetch);
   const spaceRefresh = useAppStore((state) => state.spaceRefresh);
-  const [opened, setOpened] = useState<"members" | "move" | "notice" | "join">();
+  const spaceAttach = useAppStore((state) => state.spaceAttach);
+  // "notice" says the sharing notice for a sync, "attach" for an Attach.
+  const [opened, setOpened] = useState<"members" | "move" | "notice" | "attach" | "join">();
   const [moving, setMoving] = useState(false);
   const [busy, setBusy] = useState<LineAct>();
   // A long command's reply is only "accepted": its control stays busy
@@ -198,12 +205,16 @@ function PlacementLine({
   // What the notice's Continue sends beside `noticed`: the join a
   // refusal for want of the notice held back (space-57, space-13).
   const [carried, setCarried] = useState<{ join?: true }>({});
+  // This line's Attach was continued: its control reads "Attaching…"
+  // through the attach that follows, the placement held by then.
+  const [attachAsked, setAttachAsked] = useState(false);
   const nameId = useId();
   const membersRef = useRef<HTMLButtonElement>(null);
   const moveRef = useRef<HTMLButtonElement>(null);
   const continueRef = useRef<HTMLButtonElement>(null);
   const joinRef = useRef<HTMLButtonElement>(null);
   const retryRef = useRef<HTMLButtonElement>(null);
+  const attachRef = useRef<HTMLButtonElement>(null);
   // The control the notice answers, which Cancel hands focus back to.
   const askedRef = useRef<HTMLButtonElement | null>(null);
   const name = placementName(groups, line);
@@ -217,6 +228,15 @@ function PlacementLine({
   }, [accepted, machineKey]);
   const pending = busy !== undefined || accepted !== undefined || running;
   const workingOn = (act: LineAct): boolean => busy === act || accepted?.act === act;
+  // An Attach runs from Continue until the operation it starts ends
+  // (space-99): the reply comes once the placement is added, and the
+  // sync after it runs as an attach.
+  const attachRuns = running && sync.op === "attach";
+  const attachHeld = workingOn("attach");
+  const attaching = attachHeld || (attachAsked && attachRuns);
+  useEffect(() => {
+    if (attachAsked && !attachHeld && !attachRuns) setAttachAsked(false);
+  }, [attachAsked, attachHeld, attachRuns]);
   // The outcome the last sync left on the line, its way forward beside
   // it (space-87): the notice owed (space-57), an unrelated history
   // (space-13), a stop that retrying can help (space-15).
@@ -239,6 +259,11 @@ function PlacementLine({
     instanceOf(groups, line.instance)?.signedIn === true &&
     repo.state !== "unreachable";
   const showRetry = stoppedRetry || unreachableRetry;
+  // A placement a file of the clone names that no remote here holds,
+  // no creation waiting at it: Attach brings it here (space-87,
+  // space-90); its control stays, busy, while its attach runs.
+  const showAttach =
+    (!line.attached && line.waiting === null && line.state === "absent" && line.instance !== null) || attaching;
   // The instance governing the placement: its roles and host name, and
   // whether its acts stand (space-1, space-62, git-host-5).
   const governing = governingOfPlacement(groups, repo, line);
@@ -265,6 +290,14 @@ function PlacementLine({
     setCarried(answer);
     setError(undefined);
     setOpened("notice");
+  };
+
+  /** Say the sharing notice for an Attach beneath the line, whatever its
+   * members (space-90), Cancel handing focus back to Attach. */
+  const askAttach = () => {
+    askedRef.current = attachRef.current;
+    setError(undefined);
+    setOpened("attach");
   };
 
   /** Send one of the line's acts: accepted at once, its control busy
@@ -303,6 +336,16 @@ function PlacementLine({
   const continueSync = () => {
     setOpened(undefined);
     void send("continue", () => spaceSync(repo.key, { placement: line.instance, ...carried, noticed: true }));
+  };
+
+  /** Attach this placement with its notice seen (space-90, space-99): a
+   * refusal stands on the line. */
+  const attach = () => {
+    const instance = line.instance;
+    if (instance === null) return;
+    setOpened(undefined);
+    setAttachAsked(true);
+    void send("attach", () => spaceAttach(repo.key, instance));
   };
 
   /** Join this placement's history with the clone's (space-13). */
@@ -391,7 +434,7 @@ function PlacementLine({
         >
           {phrase.text}
         </span>
-        {showMembers || showMove || showContinue || showJoin || showRetry ? (
+        {showMembers || showMove || showContinue || showJoin || showRetry || showAttach ? (
           <div className="ml-auto flex shrink-0 items-center gap-1">
             {showMembers ? (
               <button
@@ -485,6 +528,26 @@ function PlacementLine({
                   : i18n._({ id: "Retry", comment: "run the stopped step again" })}
               </button>
             ) : null}
+            {showAttach ? (
+              <button
+                ref={attachRef}
+                type="button"
+                data-testid="space-line-attach"
+                aria-describedby={nameId}
+                aria-expanded={opened === "attach"}
+                className={`${SECONDARY} shrink-0 whitespace-nowrap`}
+                disabled={!connected || pending}
+                onClick={() => (opened === "attach" ? close(attachRef) : askAttach())}
+              >
+                {attaching
+                  ? i18n._({ id: "Attaching…", comment: "the Attach control while the placement is added and synced" })
+                  : i18n._({
+                      id: "Attach",
+                      comment:
+                        "on a line naming a placement another device named, not yet on this device: brings it here after the sharing notice",
+                    })}
+              </button>
+            ) : null}
           </div>
         ) : null}
       </div>
@@ -493,13 +556,13 @@ function PlacementLine({
           {error}
         </p>
       ) : null}
-      {opened === "notice" ? (
+      {opened === "notice" || (opened === "attach" && showAttach) ? (
         <div data-testid="space-line-notice" className="px-2">
           <PlacementNotice
             groups={groups}
             line={line}
             disabled={!connected}
-            onContinue={continueSync}
+            onContinue={opened === "attach" ? attach : continueSync}
             onCancel={() => close(askedRef)}
           />
         </div>

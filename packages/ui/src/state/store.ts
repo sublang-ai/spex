@@ -326,6 +326,12 @@ export interface AppState extends AttachmentState {
    * (space-63), `instance` the one its row stands under, pairing it with
    * a folder. Accepted at once. */
   spaceJoin(instance: string, hostId: string, folder?: string): Promise<void>;
+  /** Bring here a placement a placement file of the clone names and no
+   * remote here holds (space-90): the host repository at `instance`,
+   * its origin, with its sharing notice seen, as `space.attach` requires
+   * (space-99). Accepted once the placement is added, its sync then
+   * running as state. */
+  spaceAttach(repository: string, instance: string): Promise<void>;
   /** A group's or a spex repository placement's members as its
    * instance reports them, read on every call and held nowhere
    * (space-62). */
@@ -941,6 +947,12 @@ let playbookListReads = 0;
  * from re-sending the same marker while the fold catches up. A refused
  * write drops its entry so the next push takes the act again. */
 const sentMarkers = new Map<string, number>();
+
+/** What the page last asked of a clone's machine beyond a sync, by the
+ * spex repository's key: a stopped phase names no placement (space-30),
+ * so this remembers the instance an Attach named, to send it again. It
+ * outlives a row remounting and not a reload. */
+const lastActs = new Map<string, { op: "attach"; instance: string }>();
 
 /** The newest Space read's number (space-2): a `space.get` reply older
  * than a `space.state` broadcast or a newer read is discarded. */
@@ -1829,6 +1841,11 @@ export const useAppStore = create<AppState>((set, get) => {
         hostId,
         ...(folder !== undefined ? { folder } : {}),
       });
+    },
+
+    async spaceAttach(repository, instance): Promise<void> {
+      lastActs.set(repository, { op: "attach", instance });
+      await getClient().command("space.attach", { repository, instance, noticed: true });
     },
 
     spaceMembers: (target) => getClient().command("space.members", { ...target }),

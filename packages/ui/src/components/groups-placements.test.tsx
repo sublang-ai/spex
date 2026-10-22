@@ -22,7 +22,10 @@
 // placement, its incoming list above the picker and the caption and the
 // host's side naming its instance, Apply naming it (space-9, space-14,
 // space-17, space-18); a host-side diff names its placement (space-10);
-// and the rail names the placement in flight (space-12).
+// and the rail names the placement in flight (space-12). A placement a
+// file of the clone names, not yet on this device, offers Attach on its
+// line: the sharing notice whatever its members, then space.attach with
+// the notice seen, a refusal standing on that line (space-90).
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
@@ -55,6 +58,7 @@ import {
   deliver,
   installClient,
   instance,
+  live,
   ownRepo,
   placement,
   placementState,
@@ -1263,5 +1267,229 @@ describe("GROUPS: each placement's incoming units and choices (space-8, space-9,
     await renderGroups(base({}, [repo({ sync: { phase: "running", op: "sync", placement: ORIGIN, step: "push", since: NOW, cancelable: true } })]));
     expect(screen.getByTestId("space-step-line").textContent).toBe("Pushing…");
     expect(screen.queryByTestId("space-step-placement")).toBeNull();
+  });
+});
+
+/** space-95's home with the project at the first alone changed as a
+ * test says: its line at the second — the placement its file names —
+ * and its row. */
+function betaHome(second: Partial<PlacementState> = {}, row: Partial<RepositoryState> = {}): GroupsState {
+  const home = twoPlacementsHome();
+  const change = (entry: RepositoryState): RepositoryState =>
+    entry.key !== BETA
+      ? entry
+      : {
+          ...entry,
+          ...row,
+          placements: entry.placements.map((line) => (line.instance === SECOND ? { ...line, ...second } : line)),
+        };
+  return {
+    ...home,
+    instances: home.instances.map((at) => ({
+      ...at,
+      groups: at.groups.map((group) => ({ ...group, repositories: group.repositories.map(change) })),
+    })),
+  };
+}
+
+/** The placement at the second once attached: held, reachable, never
+ * synced from here. */
+const ATTACHED: Partial<PlacementState> = { attached: true, state: "reachable", branch: { ...BRANCH, ahead: 0, behind: 0 } };
+
+/** The attach's sync running its step at a placement (space-99,
+ * space-12). */
+const attachRunning = (placement: string, step: "check" | "push"): RepositoryState["sync"] => ({
+  phase: "running",
+  op: "attach",
+  placement,
+  step,
+  since: NOW,
+  cancelable: step === "push",
+});
+
+describe("GROUPS: attaching a placement another device named (space-90, space-99, space-87, space-57, space-28)", () => {
+  test("space-90: a 'Not on this device' line offers Attach, which shows the notice on its line naming the instance's display name and path whatever its members, Cancel focused; Cancel attaches nothing and Attach stands again; Continue sends space.attach {repository, instance, noticed: true} and reads 'Attaching…' until the attach ends", async () => {
+    let settle: ((value: unknown) => void) | undefined;
+    commandMock.mockImplementation(async (type: string, fields?: Record<string, unknown>) => {
+      if (type !== "space.attach") return answer(type, fields);
+      return new Promise((resolve) => {
+        settle = resolve;
+      });
+    });
+    await renderGroups(twoPlacementsHome(), { open: false });
+    // The repository the project's file names at the second stands as
+    // its line, not on this device, with Attach (space-87).
+    const line = lineOf(BETA, SECOND);
+    expect(reading(line).state).toBe("Not on this device");
+    const attach = within(line).getByTestId("space-line-attach") as HTMLButtonElement;
+    expect(attach.textContent).toBe("Attach");
+    expect(attach.disabled).toBe(false);
+    // Described by its line's instance (space-87).
+    expect(describedAs(attach)).toBe("Second Example");
+    // It acts nowhere else: no Members or Move on a placement not here,
+    // and no Attach on one the clone holds.
+    expect(within(line).queryByTestId("space-line-members")).toBeNull();
+    expect(within(line).queryByTestId("space-line-move")).toBeNull();
+    expect(within(lineOf(BETA, ORIGIN)).queryByTestId("space-line-attach")).toBeNull();
+    expect(within(lineOf(KEY, SECOND)).queryByTestId("space-line-attach")).toBeNull();
+    expect(within(lineOf(OWN, SECOND)).queryByTestId("space-line-attach")).toBeNull();
+
+    // The notice stands beneath the line, naming where the records go,
+    // Cancel focused; Escape attaches nothing, focus back on Attach
+    // (space-57, DR-010 §4, §6).
+    fireEvent.click(attach);
+    expect(attach.getAttribute("aria-expanded")).toBe("true");
+    let notice = within(line).getByTestId("space-line-notice");
+    expect(notice.textContent).toContain("Records go to workshop/beta-spex at Second Example.");
+    expect(notice.textContent).toContain("Every session goes there whole — hidden parts and attachments included");
+    expect(notice.textContent).toContain("nothing recalls what others downloaded");
+    expect(document.activeElement).toBe(within(notice).getByRole("button", { name: "Cancel" }));
+    fireEvent.keyDown(document.activeElement!, { key: "Escape" });
+    expect(within(line).queryByTestId("space-line-notice")).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(attach));
+    // Cancel attaches nothing either, and Attach stands again.
+    fireEvent.click(attach);
+    fireEvent.click(within(within(line).getByTestId("space-line-notice")).getByRole("button", { name: "Cancel" }));
+    expect(within(line).queryByTestId("space-line-notice")).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(attach));
+    expect(attach.textContent).toBe("Attach");
+    expect(attach.getAttribute("aria-expanded")).toBe("false");
+    expect(calls("space.attach")).toHaveLength(0);
+
+    // Continue attaches that placement with its notice seen, and Attach
+    // reads "Attaching…" until the reply.
+    fireEvent.click(attach);
+    notice = within(line).getByTestId("space-line-notice");
+    fireEvent.click(within(notice).getByRole("button", { name: "Continue" }));
+    await waitFor(() => expect(calls("space.attach")).toEqual([{ repository: BETA, instance: SECOND, noticed: true }]));
+    expect(within(line).queryByTestId("space-line-notice")).toBeNull();
+    expect(attach.textContent).toBe("Attaching…");
+    expect(attach.disabled).toBe(true);
+    expect(calls("space.sync")).toHaveLength(0);
+    settle!({ accepted: true });
+
+    // The placement added, the attach syncs the clone: the line is held
+    // and each placement names its step in turn; Attach stays busy and
+    // the row's Sync keeps its word, waiting (space-99, space-12).
+    deliver(betaHome(ATTACHED, { sync: attachRunning(ORIGIN, "check") }));
+    await waitFor(() => expect(lineOf(BETA, SECOND).dataset.attached).toBe("true"));
+    expect(reading(lineOf(BETA, ORIGIN)).state).toBe("Checking host…");
+    expect(reading(lineOf(BETA, SECOND)).state).toBe("Never synced");
+    let busy = within(lineOf(BETA, SECOND)).getByTestId("space-line-attach") as HTMLButtonElement;
+    expect(busy.textContent).toBe("Attaching…");
+    expect(busy.disabled).toBe(true);
+    expect(rowSync(BETA).textContent).toBe("Sync");
+    expect(rowSync(BETA).disabled).toBe(true);
+    deliver(betaHome(ATTACHED, { sync: attachRunning(SECOND, "push") }));
+    await waitFor(() => expect(reading(lineOf(BETA, SECOND)).state).toBe("Pushing…"));
+    busy = within(lineOf(BETA, SECOND)).getByTestId("space-line-attach") as HTMLButtonElement;
+    expect(busy.textContent).toBe("Attaching…");
+
+    // The attach ended: the placement is here, its line synced, and
+    // Attach is gone.
+    deliver(
+      betaHome(
+        { ...ATTACHED, lastSync: { at: NOW, sent: 0, received: 3 }, outcome: { kind: "synced", sent: 0, received: 3 } },
+        { sync: { phase: "done", at: NOW, sent: 0, received: 3, pushed: true } },
+      ),
+    );
+    await waitFor(() => expect(within(lineOf(BETA, SECOND)).queryByTestId("space-line-attach")).toBeNull());
+    expect(reading(lineOf(BETA, SECOND)).state).toBe("Synced just now · 0 sent · 3 received");
+    expect(rowSync(BETA).textContent).toBe("Sync");
+    expect(rowSync(BETA).disabled).toBe(false);
+    cleanup();
+
+    // Whatever its members: a repository whose only member is the
+    // account says the notice before an Attach too.
+    commandMock.mockClear();
+    commandMock.mockImplementation(answer);
+    await renderGroups(betaHome({ members: 1 }), { open: false });
+    fireEvent.click(within(lineOf(BETA, SECOND)).getByTestId("space-line-attach"));
+    notice = within(lineOf(BETA, SECOND)).getByTestId("space-line-notice");
+    expect(notice.textContent).toContain("Records go to workshop/beta-spex at Second Example.");
+    fireEvent.click(within(notice).getByRole("button", { name: "Continue" }));
+    await waitFor(() => expect(calls("space.attach")).toEqual([{ repository: BETA, instance: SECOND, noticed: true }]));
+    cleanup();
+
+    // A public repository says its records are public.
+    await renderGroups(betaHome({ visibility: "public" }), { open: false });
+    fireEvent.click(within(lineOf(BETA, SECOND)).getByTestId("space-line-attach"));
+    expect(within(lineOf(BETA, SECOND)).getByTestId("space-line-notice").textContent).toContain("its records are public");
+    cleanup();
+
+    // A creation waiting at an instance is no placement a file names: its
+    // line offers no Attach (space-64).
+    await renderGroups(
+      betaHome({ waiting: { step: "create", group: "workshop", message: "403 Forbidden: you need at least the Maintainer role" } }),
+      { open: false },
+    );
+    expect(reading(lineOf(BETA, SECOND)).state).toBe("Waiting for a member who can create it in workshop");
+    expect(within(lineOf(BETA, SECOND)).queryByTestId("space-line-attach")).toBeNull();
+  });
+
+  test("space-90: a refusal stands on the line", async () => {
+    const refusals = [
+      new SpexCommandError("invalid_request", "beta-spex is on this device already, as a placement of academy-spex"),
+      new SpexCommandError("conflict", "The remotes of beta-spex changed meanwhile; retry"),
+    ];
+    commandMock.mockImplementation(async (type: string, fields?: Record<string, unknown>) => {
+      if (type === "space.attach") throw refusals.shift()!;
+      return answer(type, fields);
+    });
+    await renderGroups(twoPlacementsHome(), { open: false });
+    const line = lineOf(BETA, SECOND);
+    const attach = within(line).getByTestId("space-line-attach") as HTMLButtonElement;
+    const attachOnce = async () => {
+      fireEvent.click(attach);
+      fireEvent.click(within(within(line).getByTestId("space-line-notice")).getByRole("button", { name: "Continue" }));
+    };
+
+    // The core's words stand on that line as an alert, and are said
+    // politely; Attach stands again, ready.
+    await attachOnce();
+    const error = await within(line).findByTestId("space-line-error");
+    expect(error.getAttribute("role")).toBe("alert");
+    expect(error.textContent).toBe("beta-spex is on this device already, as a placement of academy-spex");
+    expect(live()).toContain("beta-spex is on this device already");
+    expect(attach.textContent).toBe("Attach");
+    expect(attach.disabled).toBe(false);
+    // No other line carries it.
+    expect(within(lineOf(BETA, ORIGIN)).queryByTestId("space-line-error")).toBeNull();
+
+    // Asking again puts the refusal away; a remote set meanwhile stands
+    // in its place.
+    fireEvent.click(attach);
+    expect(within(line).queryByTestId("space-line-error")).toBeNull();
+    fireEvent.click(within(within(line).getByTestId("space-line-notice")).getByRole("button", { name: "Continue" }));
+    await waitFor(() => expect(within(line).getByTestId("space-line-error").textContent).toBe("The remotes of beta-spex changed meanwhile; retry"));
+    expect(calls("space.attach")).toEqual([
+      { repository: BETA, instance: SECOND, noticed: true },
+      { repository: BETA, instance: SECOND, noticed: true },
+    ]);
+    expect(attach.textContent).toBe("Attach");
+    expect(attach.disabled).toBe(false);
+  });
+
+  test.each(["en", "zh"] as const)("space-28: Attach and Attaching… within 14 characters (%s)", async (language) => {
+    activateLanguage(language);
+    commandMock.mockImplementation(async (type: string, fields?: Record<string, unknown>) =>
+      type === "space.attach" ? new Promise(() => {}) : answer(type, fields),
+    );
+    await renderGroups(twoPlacementsHome(), { open: false });
+    const line = lineOf(BETA, SECOND);
+    const attach = within(line).getByTestId("space-line-attach") as HTMLButtonElement;
+    const idle = attach.textContent ?? "";
+    expect(idle).toBe(language === "en" ? "Attach" : "接入");
+    fireEvent.click(attach);
+    fireEvent.click(within(within(line).getByTestId("space-line-notice")).getByRole("button", { name: language === "en" ? "Continue" : "继续" }));
+    await waitFor(() => expect(attach.textContent).toBe(language === "en" ? "Attaching…" : "接入中…"));
+    for (const label of [idle, attach.textContent ?? ""]) expect(label.length, `"${label}"`).toBeLessThanOrEqual(14);
+    // Its words are its name, the line's instance describing it.
+    expect(attach.getAttribute("aria-label")).toBeNull();
+    expect(describedAs(attach)).toBe("Second Example");
+    // The line's controls wrap beneath its name below @xs (space-28).
+    const row = within(line).getByTestId("space-line-instance").parentElement!;
+    for (const token of ["flex-wrap", "@xs:flex-nowrap"]) expect(row.className.split(/\s+/)).toContain(token);
+    expect(attach.className.split(/\s+/)).toContain("whitespace-nowrap");
   });
 });
