@@ -135,6 +135,7 @@ import { DEFAULT_ADAPTER_IMPORTS } from "./agent-runtime.js";
 import { canonicalHost, codeCredentialsPath, codeCredentialStore, isAdapterName, type AgentCredential, type CodeCredentialStore, type HostCredential } from "./code-credentials.js";
 import { AGENT_CREDENTIAL_FORMS, SeatEnvironment, seatAdapterImports, seatCredentialHalf, type SeatCredentialSources } from "./seat-credentials.js";
 import { SpaceManager, type SpaceHost } from "./space.js";
+import { Places } from "./places.js";
 import { GitHostClient, SEAT_ID_MAX, fileCredentialStore } from "./git-host.js";
 import { relayHostError } from "./space-groups.js";
 import { currentRuntime, withGitCredential } from "./git-credential.js";
@@ -266,6 +267,10 @@ export interface CoreServiceOptions {
    * (core-service-126).
    */
   seat?: SeatOptions;
+  /** Test seam (DR-133): CA certificates, PEM, trusted beside the
+   * system's when the core presents a ticket at a team server's address;
+   * a stand-in hub's fixture CA. */
+  serverCertificateAuthorities?: readonly string[];
 }
 
 /** A seat's facts (core-service-125). */
@@ -385,6 +390,16 @@ function agentCredentialOf(adapter: AdapterName, values: Record<string, string>)
       }));
     }
   }
+  // A credential holds the agent's key form: Kimi's model name, base URL
+  // and provider type only accompany its key (settings-48, settings-49).
+  const keys = AGENT_CREDENTIAL_FORMS[adapter].keys;
+  if (!names.some((name) => keys.includes(name))) {
+    throw new CoreError("invalid_request", i18n._({
+      id: "A {adapter} credential needs {keys}",
+      comment: "Refusal of an agent's credential on a team server's seat: it carries only names that accompany the agent's key, such as Kimi's model name, and not the key; `adapter` is the agent's name and `keys` lists the key's variable names, any one of which will do, both as they are",
+      values: { adapter, keys: listed(keys) },
+    }));
+  }
   return { ...values };
 }
 
@@ -487,6 +502,13 @@ const invalidPlaybookId = (id: string): CoreError =>
     values: { id },
   }));
 
+/** A handshake request's path, its query and fragment left out. */
+function requestPath(url: string | undefined): string {
+  const raw = url ?? "/";
+  const end = raw.search(/[?#]/);
+  return end < 0 ? raw : raw.slice(0, end);
+}
+
 /** Expand a leading ~ so the most natural path spelling works. */
 function expandPath(input: string, home: string): string {
   const trimmed = input.trim();
@@ -499,8 +521,10 @@ export interface CoreServiceEvents {
   /** Local hook for an embedding shell (notifications, badges). */
   onRecord?: (envelope: RecordEnvelope) => void;
   onSessionState?: (session: import("./protocol.js").SessionInfo) => void;
-  /** The ledger fold moved (DR-035): the shell re-reads `ledger()`
-   * for its badge, so the dock and the app never disagree. */
+  /** The attention count moved — this core's ledger fold (DR-035) or
+   * a seat's counted badge (core-service-129): the shell re-reads
+   * `attentionCount()` for its badge, so the dock and the app never
+   * disagree. */
   onLedgerChange?: () => void;
 }
 
@@ -648,6 +672,8 @@ export class CoreService {
   private readonly submitting = new Map<string, Promise<void>>();
   /** Groups' engine (DR-103): one sync machine per spex repository. */
   private readonly space: SpaceManager;
+  /** The seats this core holds on team servers (core-service-128). */
+  private readonly places: Places;
   /** Every spex repository's environment (DR-104). */
   private readonly environments: EnvironmentManager;
   /** Set once start finished: environment changes then reload. */
@@ -842,6 +868,19 @@ export class CoreService {
       repositoriesMoved: (moves) => this.repositoriesMoved(moves),
     };
     this.space = new SpaceManager(spaceHost);
+    // The seats on team servers (core-service-128, DR-133): each
+    // signed-in instance's servers read through the client this core
+    // keeps for it, every change of the open seats announced.
+    this.places = new Places({
+      homeDir: this.store.dir,
+      signedInOrigins: () => this.space.signedInOrigins(),
+      signedInInstance: (named) => this.space.signedInInstance(named),
+      clientOf: (origin) => this.space.clientOf(origin),
+      instanceName: (origin) => this.space.instanceName(origin),
+      broadcast: (seats) => this.broadcast({ type: "server.state", seats }),
+      attentionChanged: () => this.events.onLedgerChange?.(),
+      ...(options.serverCertificateAuthorities ? { certificateAuthorities: options.serverCertificateAuthorities } : {}),
+    });
     // Authoring sessions live in the spex repository of their project
     // (storage-23); their spec packages in its working folder
     // (environments-10).
@@ -1239,7 +1278,15 @@ export class CoreService {
     }, 200);
   }
 
-  /** The one ledger fold (DR-035), for the embedding shell's badge. */
+  /** The one attention count the shell's badge shows
+   * (core-service-129): this core's badge (core-service-49) plus each
+   * seat's last read badge while its relay stands open or closed, none
+   * for a mismatched seat. */
+  attentionCount(): number {
+    return this.ledger().badge + this.places.badges();
+  }
+
+  /** The one ledger fold (DR-035). */
   ledger(): import("./protocol.js").LedgerState {
     return foldLedger({
       store: this.store,
@@ -1364,6 +1411,9 @@ export class CoreService {
       service.watchConfigFile();
       service.watchRepositories();
     }
+    // Every seat the seats file holds is read and announced
+    // (core-service-128); each client is sent them as it connects.
+    service.places.start();
     await service.listen(options.port ?? 0);
     service.started = true;
     return service;
@@ -1640,6 +1690,9 @@ export class CoreService {
     this.stopping = true;
     this.sessions.beginShutdown();
     this.approvals.stop();
+    // Every seat's relay ends; the seats stand in their file, reopened at
+    // the next start (DR-133).
+    this.places.stop();
     for (const entry of this.browserPreparations.values()) entry.controller.abort();
     await Promise.allSettled([...this.browserPreparations.values()].map(({done}) => done));
     this.watcher?.close();
@@ -2188,13 +2241,24 @@ export class CoreService {
       ) {
         return false;
       }
+      // The path `/`, or an open seat's relay path, admitted alike
+      // (core-service-24, core-service-129); every other path refused.
+      const path = requestPath(info.req.url);
+      if (path !== "/" && !this.places.relaying(path)) return false;
       const query = new URL(info.req.url ?? "/", "ws://127.0.0.1").searchParams;
       return query.get("token") === this.authToken;
     };
     this.wss = this.options.httpServer
       ? new WebSocketServer({ server: this.options.httpServer, verifyClient })
       : new WebSocketServer({ host: "127.0.0.1", port, verifyClient });
-    this.wss.on("connection", (socket) => {
+    this.wss.on("connection", (socket, req) => {
+      // A relay path's connection is the seat's: piped there, frames
+      // unread, with no word of this core's (core-service-129).
+      const path = requestPath(req.url);
+      if (path !== "/") {
+        this.places.pipe(path, socket);
+        return;
+      }
       const client: ClientState = { socket, channels: new Set() };
       this.clients.add(client);
       socket.on("close", () => {
@@ -2212,6 +2276,7 @@ export class CoreService {
         coreVersion: CORE_VERSION,
       });
       this.send(socket, {type: "approval.state", state: this.approvals.snapshot()});
+      this.send(socket, {type: "server.state", seats: this.places.state()});
     });
     if (this.options.httpServer) return; // the shell listens
     await new Promise<void>((resolveListen, rejectListen) => {
@@ -2325,6 +2390,15 @@ export class CoreService {
       throw new CoreError("invalid_request", i18n._({
         id: "Projects on a server are opened from their group",
         comment: "Refusal on a team server's seat of a command naming a working folder: the server allocates every project's folder itself",
+      }));
+    }
+    // A seat holds no seats of its own (core-service-125): its
+    // `server.open` is refused before anything is asked; `server.list`
+    // and `server.close` answer as on any core.
+    if (this.seat && command.type === "server.open") {
+      throw new CoreError("invalid_request", i18n._({
+        id: "A seat opens no server",
+        comment: "Refusal on a team server's seat of opening a seat on a team server: a team server's seat holds no seats of its own",
       }));
     }
     // No operation refuses a command (space-21): each write is checked
@@ -3328,6 +3402,14 @@ export class CoreService {
         }
         return { language };
       }
+      // Team servers (core-service-128, DR-133): the servers each signed-in
+      // instance lists, and the seats this core opens and closes on them.
+      case "server.list":
+        return this.places.list();
+      case "server.open":
+        return this.places.open({ instance: command.instance, serverId: command.serverId, ...(command.consented !== undefined ? { consented: command.consented } : {}) });
+      case "server.close":
+        return this.places.close({ instance: command.instance, serverId: command.serverId });
       // Groups (space-29): the core performs every Git operation, one
       // spex repository at a time; long commands reply accepted and
       // report as state.
