@@ -33,12 +33,6 @@ export function anySignedIn(state: GroupsState | undefined): boolean {
   return state?.instances.some((instance) => instance.signedIn) ?? false;
 }
 
-/** Whether the home lists its default instance and is signed in there:
- * where a publish goes (DR-127). */
-export function defaultSignedIn(state: GroupsState | undefined): boolean {
-  return state ? instanceOf(state, state.defaultInstance)?.signedIn === true : false;
-}
-
 /** An origin's host name, as the sign-in names the page it opens
  * (space-3): the URL's host name, or the text itself where it is no
  * URL. */

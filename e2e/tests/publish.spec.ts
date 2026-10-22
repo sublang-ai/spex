@@ -1,22 +1,30 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// Publishing and installing elsewhere (playbook-library-95, DR-104):
-// a home signed in at the stand-in Git host, which fronts the stand-in
-// registry at its own origin as spex.pub serves both, holds a compiled
-// authoring session enabled in its project; Publish uploads its spec
-// package under development, and a second scratch home on the same
-// host finds it by search, requests it, and enables its playbook; the
-// first home, signed out, offers "Sign in to publish" instead.
+// Publishing at the project's instance and installing elsewhere
+// (playbook-library-95, DR-104, DR-127): a home signed in to two
+// stand-in instances, each fronting a stand-in registry of its own at
+// its own origin as spex.pub serves both, the first its default
+// instance, holds a compiled authoring session enabled in a project
+// picked into its namespace at the second; Publish uploads its spec
+// package under development to the second's registry alone, as the
+// account there, and a second scratch home signed in to the second
+// instance alone finds it by search, requests it, and enables its
+// playbook; the first home, signed out of the second alone, offers
+// "Sign in to publish at <name>" instead, naming the second.
 
 import type { Page } from "@playwright/test";
 import { AUTHORING_SOURCE } from "@sublang/spex-core/testing";
 
 import {
   HOST_LOGIN,
+  SECOND_HOST_NAME,
   expect,
+  instanceSection,
   nav,
   open,
+  pickGroup,
+  signInCore,
   startApp,
   test,
   type App,
@@ -74,26 +82,35 @@ async function openEnableTab(page: Page): Promise<void> {
 test.use({
   appOptions: {
     project: true,
-    host: { registry: true },
+    host: { registry: true, second: { registry: true } },
     signedIn: true,
     authoring: { slc: "ok", phaseDelayMs: 50, script: { fallback: { deltas: ["Compiled."], result: "Compiled." } } },
   },
 });
 
-test("playbook-library-95: Publish reads the version with its link, a second home installs and enables it, a signed-out home is asked to sign in", async ({
+test("playbook-library-95: Publish from a project at the second instance reads the version with its link to the second's registry, the first's holding no such release; a home signed in to the second alone installs and enables it; the first home, signed out of the second alone, is asked to sign in there", async ({
   page,
   app,
 }) => {
-  test.setTimeout(180_000);
-  const host = app.host!;
-  const registry = app.registry!;
+  test.setTimeout(240_000);
+  const [first, second] = app.hosts;
+  const [firstRegistry, secondRegistry] = app.registries;
+  if (!first || !second || !firstRegistry || !secondRegistry) throw new Error("two instances, each fronting a registry");
+  // Signed in to the second as well, the first staying the default
+  // instance, and the project picked into the account's namespace at
+  // the second, so a publish from it goes to the second (arrange only).
+  await signInCore(app, second);
+  const project = await pickGroup(app, { host: second, namespace: true });
+  expect(project.instance).toBe(second.url);
   await arrangeEnabled(app);
   await open(page, app);
   await openEnableTab(page);
 
   // Publish shows the package, its version and the files it would
   // upload inline, then uploads them; the published version reads with
-  // a link to its page at the registry (playbook-library-93).
+  // a link to its page at the second's registry, which holds the
+  // release, uploaded as the account there, while the first's holds
+  // none (playbook-library-93).
   const publish = page.getByTestId("publish");
   await publish.getByTestId("publish-button").click();
   const summary = publish.getByTestId("publish-summary");
@@ -104,16 +121,23 @@ test("playbook-library-95: Publish reads the version with its link, a second hom
   await summary.getByTestId("publish-confirm").click();
   const done = publish.getByTestId("publish-done");
   await expect(done).toContainText(`Published ${PACKAGE} 0.1.0`, { timeout: 30_000 });
-  await expect(done.getByTestId("publish-link")).toHaveAttribute("href", `${host.url}/${PACKAGE}`);
-  // The registry holds the release.
-  expect((await fetch(`${registry.url}/api/v1/packages/${PACKAGE}/0.1.0`)).status).toBe(200);
+  await expect(done.getByTestId("publish-link")).toHaveAttribute("href", `${second.url}/${PACKAGE}`);
+  expect((await fetch(`${secondRegistry.url}/api/v1/packages/${PACKAGE}/0.1.0`)).status).toBe(200);
+  expect(secondRegistry.script.received.filter((request) => request.method === "PUT")).toEqual([
+    { method: "PUT", path: `/api/v1/packages/${PACKAGE}/0.1.0`, instance: second.url, account: HOST_LOGIN, bearer: true },
+  ]);
+  expect((await fetch(`${firstRegistry.url}/api/v1/packages/${PACKAGE}/0.1.0`)).status).toBe(404);
+  expect(firstRegistry.script.received.filter((request) => request.method === "PUT")).toEqual([]);
 
-  // A second scratch home on the same host finds it by search, Add
-  // requests it, and its playbook lists from the registry source and
-  // enables (playbook-library-92, playbook-library-34).
-  const second = await startApp({ project: true, host: { share: { host, registry } } });
+  // A second scratch home signed in to the second instance alone finds
+  // it by search, Add requests it, and its playbook lists from the
+  // registry source and enables (playbook-library-92,
+  // playbook-library-34).
+  const other = await startApp({ project: true, host: { share: { host: second, registry: secondRegistry } }, signedIn: true });
   try {
-    await open(page, second);
+    const listed = (await other.core.command("space.get", {})).instances;
+    expect(listed.map((instance) => [instance.origin, instance.signedIn])).toEqual([[second.url, true]]);
+    await open(page, other);
     await nav(page, "Playbooks").click();
     await expect(page.getByTestId("side-project")).toHaveAttribute("aria-pressed", "true");
     await page.getByTestId("add-from-registry").click();
@@ -133,19 +157,22 @@ test("playbook-library-95: Publish reads the version with its link, a second hom
     await card.getByTestId(`playbook-enable-${ID}`).click();
     const enabled = page.getByTestId("playbooks-enabled").getByTestId(`playbook-card-${ID}`);
     await expect(enabled.getByTestId(`playbook-enabled-${ID}`)).toHaveText("Enabled in the project");
-    await expect.poll(() => second.readProjectConfig()).toContain(`${ID}:`);
+    await expect.poll(() => other.readProjectConfig()).toContain(`${ID}:`);
   } finally {
-    await second.close();
+    await other.close();
   }
 
-  // Signed out, the first home shows "Sign in to publish" in the
-  // control's place (playbook-library-93).
+  // Signed out of the second alone, the first instance still signed in
+  // and the default, the first home shows "Sign in to publish at
+  // <name>" with the second's display name in the control's place
+  // (playbook-library-93).
   await open(page, app);
   await nav(page, "Groups").click();
-  const instance = page.getByTestId(`space-instance-${host.url}`);
-  await instance.getByTestId("space-signout").click();
-  await expect(instance.getByTestId("space-signin-again")).toHaveText("Sign in again");
+  const secondSection = instanceSection(page, second);
+  await secondSection.getByTestId("space-signout").click();
+  await expect(secondSection.getByTestId("space-signin-again")).toHaveText("Sign in again");
+  await expect(instanceSection(page, first).getByTestId("space-account")).toContainText(`Signed in as @${HOST_LOGIN}`);
   await openEnableTab(page);
-  await expect(page.getByTestId("publish").getByTestId("publish-signin")).toHaveText("Sign in to publish");
+  await expect(page.getByTestId("publish").getByTestId("publish-signin")).toHaveText(`Sign in to publish at ${SECOND_HOST_NAME}`);
   await expect(page.getByTestId("publish-button")).toHaveCount(0);
 });

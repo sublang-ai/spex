@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
+#
+# Installed as /etc/tmpfiles.d/spex-hub.conf by install.sh: the seats'
+# runtime base, made again at every boot, in the modes spex-seatctl
+# keeps (hub-4). Each seat's own directory under it is made by the
+# helper at the seat's start.
+
+d /run/spex       0711 root root -
+d /run/spex/seats 0711 root root -
