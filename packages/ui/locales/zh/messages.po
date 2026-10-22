@@ -739,6 +739,10 @@ msgstr "嵌套工作流失败"
 msgid "A Playbook defect"
 msgstr "Playbook 缺陷"
 
+#: src/components/CaptainHome.tsx
+msgid "A playbook is like a Skill compiled into an executable workflow: it coordinates AI through predefined steps."
+msgstr "规程像经过编译的 Skill，可以按预设步骤编排 AI。"
+
 #: src/lib/labels.ts
 msgid "A player finishes its step"
 msgstr "Player 完成步骤"
@@ -3081,10 +3085,6 @@ msgstr "继承 Player（关闭）"
 msgid "Inherit the player (on)"
 msgstr "继承 Player（开启）"
 
-#: src/components/CaptainHome.tsx
-msgid "inspect material or an interface"
-msgstr "检查材料或界面"
-
 #. the built-in /inspect playbook's intent, as its registry entry states it
 #: src/lib/playbook-intent.ts
 msgid "inspect supplied material or a running web interface and explain observed evidence without changing the repository"
@@ -4373,10 +4373,6 @@ msgstr "规程：{playbookId}"
 msgid "Playbooks"
 msgstr "规程"
 
-#: src/components/CaptainHome.tsx
-msgid "Playbooks are reusable task workflows."
-msgstr "规程是可复用的任务流程。"
-
 #: src/components/LibrarySurface.tsx
 msgid "Playbooks need a valid config — fix it in <0>Settings</0>."
 msgstr "规程需要有效的配置 — 请在<0>设置</0>中修复。"
@@ -5058,6 +5054,10 @@ msgstr "重试中…"
 #: src/lib/playbook-intent.ts
 msgid "review a supplied scope of committed work until no unsettled findings remain"
 msgstr "审阅给定范围内已提交的工作，直到没有未解决的审阅意见"
+
+#: src/components/CaptainHome.tsx
+msgid "review committed changes"
+msgstr "审阅已提交改动"
 
 #. attention row control: say this turn has been read
 #: src/components/DashboardSurface.tsx
@@ -6344,8 +6344,8 @@ msgid "Tweak the Captain agent in place"
 msgstr "就地调整 Captain 智能体"
 
 #: src/components/CaptainHome.tsx
-msgid "Type / to view all {count} playbooks"
-msgstr "输入 / 查看全部 {count} 个规程"
+msgid "Type <0>/</0> in the task box to see all {count} playbooks"
+msgstr "在输入框输入 <0>/</0>，查看全部 {count} 个规程"
 
 #. a required role no player answers yet
 #: src/components/LibrarySurface.tsx

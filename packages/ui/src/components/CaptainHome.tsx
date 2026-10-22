@@ -24,6 +24,7 @@ import { AgentChip, agentChipText, fastModeWord, readinessWord } from "./AgentCh
 import { AgentEditorPopover } from "./AgentEditor.js";
 import { Icon } from "./Icon.js";
 import { NextCard, type NextCardIntent } from "./NextCard.js";
+import { Rich } from "./Rich.js";
 import {
   ComposerBox,
   ComposerCaption,
@@ -109,8 +110,8 @@ function previewIntent(playbook: PlaybookSummary): string {
   if (playbook.command === "code" && playbook.intent === "implement a coding intent in reviewed, one-commit phases, using an intent record when needed") {
     return i18n._("implement in reviewed phases");
   }
-  if (playbook.command === "inspect" && playbook.intent === "inspect supplied material or a running web interface and explain observed evidence without changing the repository") {
-    return i18n._("inspect material or an interface");
+  if (playbook.command === "review" && playbook.intent === "review a supplied scope of committed work until no unsettled findings remain") {
+    return i18n._("review committed changes");
   }
   return playbookIntent(playbook.intent);
 }
@@ -186,7 +187,7 @@ export function CaptainHome(props: CaptainHomeProps) {
   const configBroken =
     props.configStatus === "invalid" || props.configStatus === "missing";
   const previewPlaybooks = [
-    ...["code", "inspect"].map((command) => playbooks.find((entry) => entry.command === command)),
+    ...["code", "review"].map((command) => playbooks.find((entry) => entry.command === command)),
     ...playbooks,
   ].filter((entry, index, entries): entry is PlaybookSummary =>
     entry !== undefined && entries.findIndex((candidate) => candidate?.id === entry.id) === index,
@@ -665,13 +666,13 @@ export function CaptainHome(props: CaptainHomeProps) {
         </div>
         {props.hasProject && !configBroken && !props.next && previewPlaybooks.length > 0 ? (
           <div data-testid="playbook-preview" className="mt-1 text-xs leading-5 text-neutral-500 dark:text-neutral-400">
-            <p>{i18n._("Playbooks are reusable task workflows.")}</p>
-            <p className="mt-0.5">
+            <p>
+              {i18n._("A playbook is like a Skill compiled into an executable workflow: it coordinates AI through predefined steps.")}{" "}
               {i18n._("For example:")}{" "}
               {previewPlaybooks.map((playbook, index) => (
                 <span key={playbook.id}>
                   {index > 0 ? " · " : null}
-                  <span className="font-mono">/{playbook.command}</span>{" "}
+                  <code className="font-mono">/{playbook.command}</code>{" "}
                   <span className="inline-block max-w-44 truncate align-bottom" title={playbookIntent(playbook.intent)}>{previewIntent(playbook)}</span>
                 </span>
               ))}
@@ -679,9 +680,14 @@ export function CaptainHome(props: CaptainHomeProps) {
           </div>
         ) : null}
         {props.hasProject ? (
-          <div className="mt-0.5 min-h-5 text-xs text-neutral-600 dark:text-neutral-300">
+          <div className="mt-1 min-h-5 text-xs text-neutral-500 dark:text-neutral-400">
             {playbooks.length > 0 ? (
-              <span id="start-playbook-hint">{i18n._("Type / to view all {count} playbooks", { count: playbooks.length })}</span>
+              <span id="start-playbook-hint">
+                <Rich
+                  text={i18n._("Type <0>/</0> in the task box to see all {count} playbooks", { count: playbooks.length })}
+                  components={[<code key="slash" className="font-mono" />]}
+                />
+              </span>
             ) : (
               <button type="button" onClick={() => props.onNavigate("Playbooks")} className="font-medium text-brand-700 hover:underline dark:text-brand-300">
                 {i18n._("No playbooks available — open Playbooks")}

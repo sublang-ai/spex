@@ -739,6 +739,10 @@ msgstr "A nested workflow failed"
 msgid "A Playbook defect"
 msgstr "A Playbook defect"
 
+#: src/components/CaptainHome.tsx
+msgid "A playbook is like a Skill compiled into an executable workflow: it coordinates AI through predefined steps."
+msgstr "A playbook is like a Skill compiled into an executable workflow: it coordinates AI through predefined steps."
+
 #: src/lib/labels.ts
 msgid "A player finishes its step"
 msgstr "A player finishes its step"
@@ -3081,10 +3085,6 @@ msgstr "Inherit the player (off)"
 msgid "Inherit the player (on)"
 msgstr "Inherit the player (on)"
 
-#: src/components/CaptainHome.tsx
-msgid "inspect material or an interface"
-msgstr "inspect material or an interface"
-
 #. the built-in /inspect playbook's intent, as its registry entry states it
 #: src/lib/playbook-intent.ts
 msgid "inspect supplied material or a running web interface and explain observed evidence without changing the repository"
@@ -4373,10 +4373,6 @@ msgstr "playbook: {playbookId}"
 msgid "Playbooks"
 msgstr "Playbooks"
 
-#: src/components/CaptainHome.tsx
-msgid "Playbooks are reusable task workflows."
-msgstr "Playbooks are reusable task workflows."
-
 #: src/components/LibrarySurface.tsx
 msgid "Playbooks need a valid config — fix it in <0>Settings</0>."
 msgstr "Playbooks need a valid config — fix it in <0>Settings</0>."
@@ -5058,6 +5054,10 @@ msgstr "Retrying…"
 #: src/lib/playbook-intent.ts
 msgid "review a supplied scope of committed work until no unsettled findings remain"
 msgstr "review a supplied scope of committed work until no unsettled findings remain"
+
+#: src/components/CaptainHome.tsx
+msgid "review committed changes"
+msgstr "review committed changes"
 
 #. attention row control: say this turn has been read
 #: src/components/DashboardSurface.tsx
@@ -6344,8 +6344,8 @@ msgid "Tweak the Captain agent in place"
 msgstr "Tweak the Captain agent in place"
 
 #: src/components/CaptainHome.tsx
-msgid "Type / to view all {count} playbooks"
-msgstr "Type / to view all {count} playbooks"
+msgid "Type <0>/</0> in the task box to see all {count} playbooks"
+msgstr "Type <0>/</0> in the task box to see all {count} playbooks"
 
 #. a required role no player answers yet
 #: src/components/LibrarySurface.tsx
