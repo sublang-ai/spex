@@ -26,8 +26,9 @@
 // protocol version other than this core's marks the place mismatched
 // and stops its reconnecting — and reads the seat's ledger badge on
 // every `intents.changed` there, which the shell's attention count adds
-// to this core's own. A close with the lease-end code, or the seat
-// refusing the bearer, removes the seat as a close does.
+// to this core's own while the relay stands open or closed — a
+// mismatched seat's counts no more. A close with the lease-end code, or
+// the seat refusing the bearer, removes the seat as a close does.
 //
 // The bearer and the endpoint never leave this module and the seats
 // file: no reply, event, error message or log line carries either, nor
@@ -76,8 +77,8 @@ export interface PlacesHost {
   instanceName(origin: string): string;
   /** Announce the open seats to every client. */
   broadcast(seats: SeatState[]): void;
-  /** An open seat's badge read anew, or a seat with one gone: the
-   * shell's attention count moved (core-service-129). */
+  /** An open seat's badge read anew, or a seat with one gone or turned
+   * mismatched: the shell's attention count moved (core-service-129). */
   attentionChanged?(): void;
   /** CA certificates, PEM, trusted beside the system's at a server's
    * address: a test's fixture CA. */
@@ -311,6 +312,13 @@ interface Relay {
   badge: number;
   pipes: Set<Pipe>;
   ended: boolean;
+}
+
+/** The badge a relay adds to the attention count: the seat's last read
+ * badge while its relay stands open or closed, none for a mismatched
+ * seat (core-service-129). */
+function counted(relay: Relay): number {
+  return relay.state === "mismatched" ? 0 : relay.badge;
 }
 
 /** A relay path, `/seats/<place>` with the place percent-encoded: the
@@ -626,11 +634,12 @@ export class Places {
     });
   }
 
-  /** The seats' badges the watches last read, summed: what the shell
-   * adds to this core's own badge (core-service-129). */
+  /** The seats' badges the watches last read, summed, a mismatched
+   * seat's left out: what the shell adds to this core's own badge
+   * (core-service-129). */
   badges(): number {
     let sum = 0;
-    for (const relay of this.relays.values()) sum += relay.badge;
+    for (const relay of this.relays.values()) sum += counted(relay);
     return sum;
   }
 
@@ -662,7 +671,7 @@ export class Places {
       closeSocket(pipe.upstream, 1000);
     }
     relay.pipes.clear();
-    if (relay.badge !== 0) this.host.attentionChanged?.();
+    if (counted(relay) !== 0) this.host.attentionChanged?.();
   }
 
   /**
@@ -744,11 +753,15 @@ export class Places {
     });
   }
 
-  /** A relay's state moved: announced (core-service-128). */
+  /** A relay's state moved: announced (core-service-128), and the
+   * shell told where the badge it counts moved with it — a seat turned
+   * mismatched counts its last read badge no more (core-service-129). */
   private relayState(relay: Relay, state: SeatRelayState): void {
     if (relay.ended || relay.state === state) return;
+    const before = counted(relay);
     relay.state = state;
     this.announce();
+    if (counted(relay) !== before) this.host.attentionChanged?.();
   }
 
   /**

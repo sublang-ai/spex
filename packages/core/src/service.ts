@@ -406,7 +406,7 @@ export interface CoreServiceEvents {
   onRecord?: (envelope: RecordEnvelope) => void;
   onSessionState?: (session: import("./protocol.js").SessionInfo) => void;
   /** The attention count moved — this core's ledger fold (DR-035) or
-   * an open seat's badge (core-service-129): the shell re-reads
+   * a seat's counted badge (core-service-129): the shell re-reads
    * `attentionCount()` for its badge, so the dock and the app never
    * disagree. */
   onLedgerChange?: () => void;
@@ -1124,7 +1124,8 @@ export class CoreService {
 
   /** The one attention count the shell's badge shows
    * (core-service-129): this core's badge (core-service-49) plus each
-   * open seat's last read badge. */
+   * seat's last read badge while its relay stands open or closed, none
+   * for a mismatched seat. */
   attentionCount(): number {
     return this.ledger().badge + this.places.badges();
   }

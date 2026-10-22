@@ -19,7 +19,8 @@
 // the relay path admits the local token alone, from the origins `/`
 // admits; the relayed hello and replies are the seat's; a seat speaking
 // another protocol version reads mismatched alone; the attention count
-// adds the seat's badge; a lease's end and a close each remove the path
+// adds the seat's badge, still while the seat is down and no more once
+// it turns mismatched; a lease's end and a close each remove the path
 // and the entry; no frame to the client carries the bearer; and an
 // endpoint or a bearer no connection can present is refused at the
 // admission and, held in the file, stops neither the core's start nor a
@@ -618,6 +619,51 @@ test("core-service-130: the attention count is this core's badge plus each open 
   await home.client.expectOk("server.close", { instance: host.url, serverId: SERVER });
   assert.equal(home.service.attentionCount(), 1);
   assert.ok(told > before, "the shell was told the seat's badge left");
+});
+
+test("core-service-130: a seat's last read badge still counts while its watch is down, and no more once a reconnect reads it mismatched, the shell told, the other seat's badge counted on", async (t) => {
+  const host = await startHost();
+  const seat = await startSeat(t, "places-turned-seat");
+  const turning = await startSeat(t, "places-turned-other");
+  const hub = await startHub(host, SERVER, "lab-1", seat);
+  const other = await startHub(host, "srv_lab2", "lab-2", turning);
+  const home = await startHome("places-turned", { host, project: false, extra: { serverCertificateAuthorities: [hub.ca] } });
+  t.after(() => home.stop());
+  await signIn(home, host);
+  /** The count the shell read at each time it was told. */
+  const read: number[] = [];
+  home.service.events.onLedgerChange = () => { read.push(home.service.attentionCount()); };
+  await home.client.expectOk("server.open", { instance: host.url, serverId: SERVER, consented: true });
+  await home.client.expectOk("server.open", { instance: host.url, serverId: "srv_lab2", consented: true });
+  await seatsAfter(() => home.client.messages, 0, (state) => state.length === 2 && state.every((one) => one.relay === "open"));
+
+  // A finished turn on each seat: each badge of 1 read while open.
+  await fixture.runTurn(seat, seat.project, "Seat work");
+  await fixture.runTurn(turning, turning.project, "Other seat work");
+  await until(() => home.service.attentionCount() === 2, "both seats' badges counted");
+
+  // The second seat goes down, the hub answering 502 while none stands:
+  // its watch reads closed and reconnects, and the badge it last read
+  // still counts (core-service-129).
+  other.relayTo(null);
+  const down = home.client.mark();
+  await turning.stop();
+  await seatsAfter(() => home.client.messages, down, (state) => state[0]?.relay === "open" && state[1]?.relay === "closed");
+  const refusedFrom = other.upgrades.length;
+  await until(() => other.upgrades.slice(refusedFrom).some((upgrade) => upgrade.status === 502), "a reconnection answered 502");
+  assert.equal(home.service.attentionCount(), 2, "a closed seat's last read badge still counts");
+
+  // A seat speaking another protocol version stands there again: the
+  // next reconnection reads its hello mismatched, its badge counts no
+  // more and the shell is told, while the first seat's badge counts on
+  // (core-service-129).
+  const told = read.length;
+  other.helloVersion(PROTOCOL_VERSION + 1);
+  other.relayTo(seatUrl(seat));
+  const seats = await seatsAfter(() => home.client.messages, down, (state) => state[1]?.relay === "mismatched");
+  assert.deepEqual(seats.map((one) => [one.serverId, one.relay]), [[SERVER, "open"], ["srv_lab2", "mismatched"]]);
+  assert.equal(home.service.attentionCount(), 1, "the mismatched seat's badge counts no more, the other's on");
+  assert.ok(read.slice(told).includes(1), "the shell was told the mismatched seat's badge left the count");
 });
 
 test("core-service-130: a lease-end close and server.close each remove the relay path and the entry and announce server.state", async (t) => {
