@@ -194,6 +194,7 @@ function PlacementLine({
   const spaceFetch = useAppStore((state) => state.spaceFetch);
   const spaceRefresh = useAppStore((state) => state.spaceRefresh);
   const spaceAttach = useAppStore((state) => state.spaceAttach);
+  const spaceLastAct = useAppStore((state) => state.spaceLastAct);
   // "notice" says the sharing notice for a sync, "attach" for an Attach.
   const [opened, setOpened] = useState<"members" | "move" | "notice" | "attach" | "join">();
   const [moving, setMoving] = useState(false);
@@ -358,16 +359,26 @@ function PlacementLine({
   };
 
   /** Run again what stopped (space-15): a stopped check checks again,
-   * any other stop syncs again; an unreachable placement reads every
-   * signed-in instance again, as the row's Retry does (space-2). */
+   * any other stop syncs again — as the join of the placement the page's
+   * own join named, as the Sync tab's Retry does, and plainly otherwise,
+   * an unrelated history then offering Join again (space-13); an
+   * unreachable placement reads every signed-in instance again, as the
+   * row's Retry does (space-2). */
   const retry = () => {
     if (!stoppedRetry) {
       void send("retry", () => spaceRefresh(), { holds: false });
       return;
     }
-    const check = sync.phase === "stopped" && sync.op === "check";
-    void send("retry", () => (check ? spaceFetch(repo.key) : spaceSync(repo.key, {})), {
-      answer: check ? undefined : {},
+    if (sync.phase === "stopped" && sync.op === "check") {
+      void send("retry", () => spaceFetch(repo.key), { from: retryRef.current });
+      return;
+    }
+    const act = spaceLastAct(repo.key);
+    const joined = act?.op === "join" ? act.instance : undefined;
+    void send("retry", () => spaceSync(repo.key, joined !== undefined ? { placement: joined, join: true } : {}), {
+      // The notice this line owes carries the join where it is this
+      // line's (space-57).
+      answer: joined === line.instance ? { join: true } : {},
       from: retryRef.current,
     });
   };

@@ -7,7 +7,8 @@
 // flight and Stop (space-12, space-16), the choices picker for one
 // placement with its one inline confirm (space-9, space-17, space-18),
 // the stopped card with its cause, guidance and Retry (space-15) — a
-// stopped Leave's sending that Leave again (space-89) — the
+// stopped Leave's sending that Leave again (space-89), and a join only
+// where this page joined that placement (space-13) — the
 // unrelated-history card (space-13) and in-place line diffs
 // (space-10); and the home's issues list with its repairs (space-46..
 // space-55). Every side is "mine" or "the host's" (space-27); Git's
@@ -1340,11 +1341,6 @@ export function SyncTab({
     }
   };
 
-  // While a placement's history is still unrelated — a join's merge has
-  // not landed — a sync the tab starts for it is a join (space-13,
-  // space-18).
-  const unrelatedLine = choicesLine?.branch?.unrelated ? choicesLine : held.find((line) => line.branch?.unrelated);
-
   const apply = () => {
     if (!choicesLine) return;
     const line = choicesLine;
@@ -1379,12 +1375,18 @@ export function SyncTab({
       return run("retry", () => spaceLeave(key, leaveAgain.instance, leaveAgain.confirmed));
     }
     const input: SyncInput = { ...lastSyncInput.current };
+    delete input.join;
     if (choicesLine && total > 0 && chosen.length === total) {
       input.placement = choicesLine.instance;
       input.choices = chosenChoices;
     }
-    // A join stopped on its way runs again as the join of its placement.
-    const joining = unrelatedLine ?? (sync.op === "join" ? keyPlacement(repo) : undefined);
+    // Only a join this page sent runs again as a join, of the placement
+    // it named, and a join stopped on its way as the join of its
+    // placement (space-13): an unrelated placement nobody here joined
+    // syncs plainly, stopping as "Unrelated history" again with Join on
+    // its line, the confirm still the reader's.
+    const act = spaceLastAct(key);
+    const joining = act?.op === "join" ? act : sync.op === "join" ? keyPlacement(repo) : undefined;
     if (joining && (input.placement === undefined || input.placement === joining.instance)) {
       input.placement = joining.instance;
       input.join = true;

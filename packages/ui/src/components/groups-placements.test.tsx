@@ -15,7 +15,8 @@
 // sharing notice waits with Continue, the notice naming its path at its
 // instance; the row's Sync says it first only where no other placement
 // can run (space-57); an unrelated placement joins from its line
-// (space-13); a stopped one retries from its line (space-15); and the
+// (space-13), a Retry joining only the placement this page joined; a
+// stopped one retries from its line (space-15); and the
 // row's sign-in refusal and Retry follow every placement (space-11,
 // space-61). The Sync tab lists each placement's incoming units under
 // its instance's display name (space-8); choices stand for one
@@ -963,6 +964,63 @@ describe("GROUPS: a placement's notice, join and retry (space-57, space-13, spac
     expect(within(lineOf(KEY, ORIGIN)).queryByTestId("space-line-join")).toBeNull();
   });
 
+  test("space-13, space-15: a stopped sync's Retry joins no unrelated placement the reader has not joined, its line offering Join again; after the line's Join, both Retries join that placement alone, and a plain sync forgets it", async () => {
+    // Offline, every placement stopped at its check: the second's history
+    // was found unrelated before.
+    const atCheck = {
+      outcome: { kind: "stopped" as const, step: "check" as const, cause: "unreachable" as const, message: "Could not reach the host", guidance: "Check the network, then Retry.", retry: true },
+    };
+    const unrelated = { branch: { ...BRANCH, unrelated: true, ahead: null, behind: null } };
+    const stopped: RepositoryState["sync"] = {
+      phase: "stopped",
+      op: "sync",
+      step: "check",
+      cause: "unreachable",
+      message: "Could not reach the host",
+      guidance: "Check the network, then Retry.",
+      retry: true,
+    };
+    const running: RepositoryState["sync"] = { phase: "running", op: "sync", placement: ORIGIN, step: "check", since: NOW, cancelable: true };
+    const offline = (): GroupsState => placedAtTwo({ first: atCheck, second: { ...unrelated, ...atCheck } }, { sync: stopped });
+    await renderGroups(offline());
+    expect(within(lineOf(KEY, SECOND)).getByTestId("space-line-join")).toBeTruthy();
+    // The Sync tab's Retry syncs plainly: nobody here joined it.
+    fireEvent.click(screen.getByTestId("space-retry"));
+    await waitFor(() => expect(calls("space.sync")).toEqual([{ repository: KEY }]));
+    // The placement stops as "Unrelated history" again, Join on its line.
+    deliver(placedAtTwo({ second: { ...unrelated, outcome: { kind: "unrelated", sent: 0, received: 0 } } }, { sync: { phase: "unrelated", placement: SECOND } }));
+    expect(reading(lineOf(KEY, SECOND)).state).toBe("Unrelated history");
+    const join = within(lineOf(KEY, SECOND)).getByTestId("space-line-join");
+    fireEvent.click(join);
+    fireEvent.click(within(within(lineOf(KEY, SECOND)).getByTestId("space-line-join-confirm")).getByRole("button", { name: "Join" }));
+    await waitFor(() => expect(calls("space.sync")[1]).toEqual({ repository: KEY, placement: SECOND, join: true }));
+
+    // The join stops offline: the Sync tab's Retry joins that placement
+    // alone.
+    deliver(placedAtTwo({ second: unrelated }, { sync: running }));
+    deliver(offline());
+    await waitFor(() => expect((screen.getByTestId("space-retry") as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(screen.getByTestId("space-retry"));
+    await waitFor(() => expect(calls("space.sync")[2]).toEqual({ repository: KEY, placement: SECOND, join: true }));
+    // So does a line's Retry, whichever line stopped.
+    fireEvent.click(within(lineOf(KEY, ORIGIN)).getByTestId("space-line-retry"));
+    await waitFor(() => expect(calls("space.sync")[3]).toEqual({ repository: KEY, placement: SECOND, join: true }));
+
+    // The row's plain Sync forgets the join: the next Retry syncs
+    // plainly.
+    deliver(placedAtTwo({ second: unrelated }, { sync: running }));
+    deliver(offline());
+    await waitFor(() => expect(rowSync().disabled).toBe(false));
+    fireEvent.click(rowSync());
+    await waitFor(() => expect(calls("space.sync")[4]).toEqual({ repository: KEY }));
+    deliver(placedAtTwo({ second: unrelated }, { sync: running }));
+    deliver(offline());
+    await waitFor(() => expect((screen.getByTestId("space-retry") as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(screen.getByTestId("space-retry"));
+    await waitFor(() => expect(calls("space.sync")[5]).toEqual({ repository: KEY }));
+    expect(calls("space.sync")).toHaveLength(6);
+  });
+
   test("space-15: a stopped placement's Retry runs the sync again, and a stopped check runs the check again", async () => {
     const stoppedAt = (step: "check" | "push", retry = true): Partial<PlacementState> => ({
       outcome: { kind: "stopped", step, cause: "unreachable", message: "Could not reach Second Example", guidance: "Check the network, then Retry.", retry },
@@ -1196,8 +1254,8 @@ describe("GROUPS: each placement's incoming units and choices (space-8, space-9,
 
     // An Apply that stopped names no placement: the picker stands for
     // the first in order holding conflicts, and Retry carries them for
-    // it.
-    commandMock.mockClear();
+    // it — on a page that sent no join (space-13).
+    installClient();
     await renderGroups(
       choicesAtSecond(
         {},

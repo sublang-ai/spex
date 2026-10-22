@@ -141,10 +141,13 @@ export type SpaceGroupChoice =
   | { kind: "join"; instance: string; hostId: string }
   | { kind: "create"; instance: string; groupId: string | null; name: string };
 
-/** What the page last asked of a clone's machine beyond a sync
- * (space-29, space-30): the instance an Attach, a Place or a Leave named,
- * a Place's choice and whether a Leave was confirmed. */
+/** What the page last asked of a clone's machine beyond a plain sync
+ * (space-29, space-30): the placement a join named — its instance's
+ * origin, null for the path placement (space-13) — the instance an
+ * Attach, a Place or a Leave named, a Place's choice and whether a Leave
+ * was confirmed. */
 export type SpaceLastAct =
+  | { op: "join"; instance: string | null }
   | { op: "attach"; instance: string }
   | { op: "place"; instance: string; choice: SpaceGroupChoice }
   | { op: "leave"; instance: string; confirmed: boolean };
@@ -356,8 +359,9 @@ export interface AppState extends AttachmentState {
    * at the host changes. Accepted at once, outcome as state. */
   spaceLeave(repository: string, instance: string, confirmed?: boolean): Promise<void>;
   /** What the page last asked of a spex repository's clone beyond a
-   * sync — an Attach, a Place or a Leave, and where — which a stopped
-   * phase does not name (space-30); none after a reload. */
+   * plain sync — a join, an Attach, a Place or a Leave, and where —
+   * which a stopped phase does not name (space-30); none after a
+   * reload. */
   spaceLastAct(repository: string): SpaceLastAct | undefined;
   /** A group's or a spex repository placement's members as its
    * instance reports them, read on every call and held nowhere
@@ -977,12 +981,13 @@ let playbookListReads = 0;
  * write drops its entry so the next push takes the act again. */
 const sentMarkers = new Map<string, number>();
 
-/** What the page last asked of a clone's machine beyond a sync, by the
- * spex repository's key: a stopped phase names no placement (space-30),
- * so this remembers the instance an Attach, a Place or a Leave named, a
- * Place's choice and whether a Leave was confirmed — which confirm a
- * stopped Leave asks next, and what its Retry sends again (space-89).
- * It outlives a row remounting and not a reload. */
+/** What the page last asked of a clone's machine beyond a plain sync,
+ * by the spex repository's key: a stopped phase names no placement
+ * (space-30), so this remembers the placement a join named — the only
+ * one a Retry joins again (space-13) — the instance an Attach, a Place
+ * or a Leave named, a Place's choice and whether a Leave was confirmed —
+ * which confirm a stopped Leave asks next, and what its Retry sends
+ * again (space-89). It outlives a row remounting and not a reload. */
 const lastActs = new Map<string, SpaceLastAct>();
 
 /** The newest Space read's number (space-2): a `space.get` reply older
@@ -1933,6 +1938,15 @@ export const useAppStore = create<AppState>((set, get) => {
     },
 
     async spaceSync(repository, input): Promise<void> {
+      // A join is remembered by the placement it names, before the
+      // reply, so a stop inside it is still this join's; a sync asking
+      // none forgets it, the page having last asked a plain sync
+      // (space-13, space-30).
+      if (input.join === true && input.placement !== undefined) {
+        lastActs.set(repository, { op: "join", instance: input.placement });
+      } else if (lastActs.get(repository)?.op === "join") {
+        lastActs.delete(repository);
+      }
       await getClient().command("space.sync", {
         repository,
         ...(input.placement !== undefined ? { placement: input.placement } : {}),
