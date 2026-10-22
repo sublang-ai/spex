@@ -117,6 +117,9 @@ export interface SpaceHost {
   /** The sign-in flow this deployment runs: the browser flow on the
    * desktop (git-host-2), the device flow on the server (git-host-3). */
   signInFlow: "browser" | "device";
+  /** Whether the core runs as a seat on a team server (core-service-125):
+   * your own group is then placed at no instance (space-102). */
+  seat?: boolean;
   /** The runtime the credential helper runs on (git-host-9). */
   hostRuntime: { execPath: string; electron: boolean };
   /** Clones appeared under `workspace/` — a join's (space-63): the core
@@ -267,6 +270,13 @@ const stillKeptUnder = (host: string, names: readonly string[]): string => i18n.
 const pickAGroupFirst = (): string => i18n._({
   id: "Pick a group first",
   comment: "Refusal: the spex repository is only on this device; a group must be picked for it",
+});
+
+/** The refusal on a seat of a pick or a remote for your own group,
+ * which stays on the server (space-102). */
+const ownStaysOnTheServer = (): string => i18n._({
+  id: "Your own group stays on this server",
+  comment: "Refusal on a team server's seat of a pick or a remote for your own group: its records stay on the server and are placed at no instance",
 });
 
 /** The refusal of a pick naming another instance than the one whose
@@ -3439,7 +3449,9 @@ export class SpaceManager {
     let view: HostView;
     try { view = await this.readHost(instance); } catch { return; }
     if (generation !== instance.accountGeneration) return;
-    if (renamed !== "conflict") await this.ensureOwn(instance, view, generation);
+    // On a seat your own group stays on the server: nothing is created
+    // or joined for it at any instance (space-102).
+    if (renamed !== "conflict" && !this.host.seat) await this.ensureOwn(instance, view, generation);
     if (generation !== instance.accountGeneration) return;
     await this.retryWaiting(instance, view);
     await this.publish();
@@ -3906,6 +3918,8 @@ export class SpaceManager {
   /** Pick a group for a local-only spex repository (space-58): join a
    * listed one, or create `<name>-spex` in a group. */
   async pick(key: string, choice: { kind: "join"; instance: string; hostId: string } | { kind: "create"; instance: string; groupId: string | null; name: string }, noticed = false): Promise<{ accepted: true }> {
+    // On a seat your own group is offered no pick (space-102).
+    if (this.host.seat && key === this.host.store.home.own()) throw new CoreError("invalid_request", ownStaysOnTheServer());
     // The instance the choice is at (space-29), one the home does not
     // list refused `not_found`.
     const keyed = this.instanceOfKey(key);
@@ -5268,6 +5282,8 @@ export class SpaceManager {
   }
 
   async setRemote(key: string, url: string | null): Promise<GroupsState> {
+    // On a seat your own group takes no remote (space-102).
+    if (this.host.seat && key === this.host.store.home.own()) throw new CoreError("invalid_request", ownStaysOnTheServer());
     await this.machine(key).setRemote(url);
     const state = await this.state();
     this.host.broadcast(state);

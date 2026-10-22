@@ -1018,6 +1018,9 @@ export function foldLedger(sources: LedgerSources): LedgerState {
 
   // Presence of `next` is the project-local next marker: the oldest
   // queued row, by capture time then id (core-service-107).
+  // TODO(core-service-125, core-service-107): on a seat an intent holding
+  // no runtime is never next — leave it out of `eligible` — once intents
+  // record the runtime that captured them (DR-131); none records one yet.
   const lanesByProject = new Map(lanes.map((lane) => [lane.projectId, lane]));
   for (const projectId of new Set(derived.map((entry) => entry.intent.projectId))) {
     const lane = lanesByProject.get(projectId);

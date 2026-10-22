@@ -44,6 +44,9 @@ export const RATE_LIMIT_HOLD_MAX_MS = 120_000;
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
 const SLOW_DOWN_STEP_MS = 5_000;
 const LABEL_MAX = 80;
+/** The longest a server's id or a person's id may be in a device
+ * request (git-host-27; the instance's own bound). */
+export const SEAT_ID_MAX = 64;
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const MONTH = MONTHS.join("|");
@@ -161,8 +164,10 @@ export type HostErrorKind =
   | "unreachable"
   | "bad_request";
 
-/** Why a sign-in ended without an account (git-host-2, git-host-3). */
-export type SignInCause = "denied" | "expired" | "stopped" | "refused" | "state" | "unreachable" | "account";
+/** Why a sign-in ended without an account (git-host-2, git-host-3):
+ * `account` a person other than a listed instance's account, `person` a
+ * person other than the one a seat's device request named (git-host-27). */
+export type SignInCause = "denied" | "expired" | "stopped" | "refused" | "state" | "unreachable" | "account" | "person";
 
 /**
  * A host answer other than success (git-host-11). `words` is the host's
@@ -381,6 +386,11 @@ export interface GitHostClientOptions {
   /** Test seam (git-host-21): the longest a rate limit holds the calls;
    * 120 s by default. */
   holdMaxMs?: number;
+  /** On a seat (git-host-27): the server's id and the admitted person's
+   * permanent account id at the instance, which the device request
+   * carries as `server_id` and `person_id`; a sign-in whose person bears
+   * another id ends `failed`, storing nothing. */
+  server?: { id: string; personId: string };
 }
 
 /** Whether a sign-in may store its token for the person it read
@@ -392,6 +402,13 @@ export type AdmitAccount = (account: HostAccount) => HostError | null;
  * its entry's account (git-host-2): `words` carries the entry's login. */
 export function anotherAccountError(login: string): HostError {
   return signInError("account", { words: login });
+}
+
+/** The refusal of a seat's sign-in as a person other than the one its
+ * device request named (git-host-27): `words` carries the login the
+ * instance signed in. */
+export function anotherPersonError(login: string): HostError {
+  return signInError("person", { words: login });
 }
 
 /** A running browser sign-in (git-host-2). */
@@ -454,6 +471,7 @@ export class GitHostClient {
   private readonly requestTimeoutMs: number;
   private readonly onHold?: (until: number) => void;
   private readonly holdMaxMs: number;
+  private readonly server?: { id: string; personId: string };
   private refreshing: Promise<StoredCredential> | null = null;
   private signIn: object | null = null;
   /** The instant the host's last rate limit asked every call to wait
@@ -472,6 +490,7 @@ export class GitHostClient {
     this.requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
     this.onHold = options.onHold;
     this.holdMaxMs = options.holdMaxMs ?? RATE_LIMIT_HOLD_MAX_MS;
+    if (options.server) this.server = { id: options.server.id, personId: options.server.personId };
   }
 
   /** Whether the host's rate limit holds the calls now (git-host-21). */
@@ -625,7 +644,10 @@ export class GitHostClient {
     const { slot, expected } = await this.beginSignIn();
     let start: { deviceCode: string; userCode: string; verificationUri: string; expiresIn: number; interval: number };
     try {
-      const answer = await this.send("POST", "/api/v1/auth/device", { body: { client_id: this.clientId, label: this.label } });
+      // A seat names its server and the person it was opened for, both
+      // or neither (git-host-27).
+      const seat = this.server ? { server_id: this.server.id, person_id: this.server.personId } : {};
+      const answer = await this.send("POST", "/api/v1/auth/device", { body: { client_id: this.clientId, label: this.label, ...seat } });
       if (answer.status !== 200) throw answerError(answer);
       const body = record(answer.json);
       start = {
@@ -993,12 +1015,14 @@ export class GitHostClient {
   }
 
   /** Store an issued token in place of the pair its sign-in began over;
-   * the caller ends the sign-in in the same turn. A person `admit`
-   * refuses ends it with that refusal, and another pair stored meanwhile
-   * ends it `stopped`, that pair kept: either stores nothing
-   * (git-host-2). */
+   * the caller ends the sign-in in the same turn. On a seat, a person
+   * bearing another permanent id than the one the request named ends it
+   * naming the account signed in (git-host-27); a person `admit` refuses
+   * ends it with that refusal; and another pair stored meanwhile ends it
+   * `stopped`, that pair kept: each stores nothing (git-host-2). */
   private publish(expected: StoredCredential | null, issued: Issued, admit?: AdmitAccount): { account: HostAccount } | { error: HostError } {
     try {
+      if (this.server && issued.account.id !== this.server.personId) return { error: anotherPersonError(issued.account.login) };
       const refused = admit?.(issued.account);
       if (refused) return { error: refused };
       return this.credentials.replace(expected, issued.credential) ? { account: issued.account } : { error: signInError("stopped") };
