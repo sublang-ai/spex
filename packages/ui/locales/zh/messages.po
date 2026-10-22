@@ -633,6 +633,14 @@ msgstr "/{playbookId} — {where}{from}"
 msgid "/{playbookId} failed"
 msgstr "/{playbookId} 失败"
 
+#: src/components/ProjectPalette.tsx
+msgid "/path/to/existing-project"
+msgstr "/path/to/existing-project"
+
+#: src/components/ProjectPalette.tsx
+msgid "/path/to/new-project"
+msgstr "/path/to/new-project"
+
 #: src/components/SpecView.tsx
 msgid "← Back"
 msgstr "← 返回"
@@ -836,6 +844,7 @@ msgstr "适配器选项；模型支持未验证。"
 #. add the person at the chosen role on the Git host
 #. create this player in your own roster
 #. register the typed path as an existing repository
+#. register the typed path as an existing repository
 #. request this spec package at the chosen version
 #. request this spec package at the chosen version
 #: src/components/EnvironmentSection.tsx
@@ -848,6 +857,11 @@ msgstr "添加"
 #: src/components/SettingsSurface.tsx
 msgid "Add {id} with the neutral agent, then tune it here"
 msgstr "以中性智能体添加 {id}，再在此调整"
+
+#: src/components/CaptainHome.tsx
+#: src/components/ProjectPalette.tsx
+msgid "Add a local project"
+msgstr "添加本地项目"
 
 #: src/components/SettingsSurface.tsx
 msgid "Add a player"
@@ -1552,6 +1566,14 @@ msgstr "选择列出的子代理推理强度、采用配置值，或由代理选
 msgid "Choose a project"
 msgstr "选择项目"
 
+#: src/components/ProjectPalette.tsx
+msgid "Choose a project folder…"
+msgstr "选择项目文件夹…"
+
+#: src/components/ProjectPalette.tsx
+msgid "Choose an existing Git repository, or create a new one."
+msgstr "选择已有 Git 仓库，或创建一个新项目。"
+
 #. empty choice of the reasoning-effort select
 #: src/components/TuningField.tsx
 msgid "Choose effort…"
@@ -2050,6 +2072,10 @@ msgid "Create"
 msgstr "新建"
 
 #: src/components/ProjectPalette.tsx
+msgid "Create a new project…"
+msgstr "创建新项目…"
+
+#: src/components/ProjectPalette.tsx
 msgid "Create a new repository at this path"
 msgstr "在此路径新建一个仓库"
 
@@ -2057,6 +2083,10 @@ msgstr "在此路径新建一个仓库"
 #: src/lib/playbook-intent.ts
 msgid "create and check out a new branch for a GitHub issue or request before pull-request delivery"
 msgstr "在以 PR 交付之前，为 GitHub Issue 或请求创建并检出新分支"
+
+#: src/components/ProjectPalette.tsx
+msgid "Create project"
+msgstr "创建项目"
 
 #: src/components/SettingsSurface.tsx
 msgid "Created a starter config at <0>{path}</0>"
@@ -2520,6 +2550,10 @@ msgstr "输入模型 ID、采用已配置的值，或使用服务商默认值。
 msgid "Enter sends"
 msgstr "Enter 发送"
 
+#: src/components/ProjectPalette.tsx
+msgid "Enter the path to an existing project"
+msgstr "输入已有项目的路径"
+
 #: src/components/Composer.tsx
 msgid "Enter to send · Shift+Enter for a new line"
 msgstr "Enter 发送 · Shift+Enter 换行"
@@ -2561,6 +2595,10 @@ msgstr "示例"
 #: src/components/LibrarySurface.tsx
 msgid "Example: {title}"
 msgstr "示例：{title}"
+
+#: src/components/ProjectPalette.tsx
+msgid "Existing project"
+msgstr "已有项目"
 
 #: src/components/PlayerPane.tsx
 msgid "Expand {player}"
@@ -3602,6 +3640,14 @@ msgstr "新建规程…"
 msgid "New player {id}"
 msgstr "新建 Player {id}"
 
+#: src/components/ProjectPalette.tsx
+msgid "New project"
+msgstr "新项目"
+
+#: src/components/ProjectPalette.tsx
+msgid "New project path"
+msgstr "新项目路径"
+
 #. stands as the title of a conversation that has none yet
 #: src/App.tsx
 #: src/components/RunView.tsx
@@ -4144,6 +4190,10 @@ msgstr "打开名为 {id} 的规程，并备好可粘贴的规范化文本 — �
 #: src/lib/compile-log.ts
 msgid "Optimize"
 msgstr "优化"
+
+#: src/components/ProjectPalette.tsx
+msgid "Or enter its path"
+msgstr "或输入项目路径"
 
 #. field of New playbook: the registry org its spec package is published under
 #: src/components/LibrarySurface.tsx
@@ -6432,10 +6482,6 @@ msgstr "使用设置中的浏览器选项"
 msgid "Use default"
 msgstr "使用默认"
 
-#: src/components/CaptainHome.tsx
-msgid "Use your own project"
-msgstr "使用自己的项目"
-
 #: src/components/EnvironmentSection.tsx
 msgid "Version of {name}"
 msgstr "{name} 的版本"
@@ -6523,6 +6569,10 @@ msgstr "项目所在位置只记录在本设备；从不同步。"
 #: src/lib/space.ts
 msgid "where projects live"
 msgstr "项目所在位置"
+
+#: src/components/ProjectPalette.tsx
+msgid "Where should the new project live?"
+msgstr "新项目要创建在哪里？"
 
 #: src/lib/space.ts
 msgid "where you last stopped reading in each session"

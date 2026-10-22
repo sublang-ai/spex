@@ -299,7 +299,7 @@ export function CaptainHome(props: CaptainHomeProps) {
               onClick={props.onOpenOwnProject ?? props.onOpenPalette}
               className="rounded-lg border border-neutral-300 px-5 py-3 text-sm font-medium text-neutral-700 hover:bg-neutral-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800"
             >
-              {i18n._("Use your own project")}
+              {i18n._("Add a local project")}
             </button>
           </div>
           <p className="mt-4 text-xs leading-relaxed text-neutral-500 dark:text-neutral-400">

@@ -141,8 +141,16 @@ When the user confirms removal in the Overview tab, the workspace shall forget t
 
 The project palette's path row shall offer distinct "Add" (an existing repo) and "Create" (a new project) actions on the typed path, titled "Register this existing repository" and "Create a new repository at this path" and both disabled until a path is typed, and the palette shall list projects with filter-as-you-type matching on name and path:
 
-- With no project registered there is nothing to filter: the palette drops its filter, names itself an add flow, and opens with the path field focused and its placeholder saying a project is added by path; its ordinary entry leads the list with the Academy-example action [[projects-27](#projects-27)], while the welcome page's own-project entry omits that repeated choice [[run-view-168](run-view.md#run-view-168)];
+- With no project registered there is nothing to filter: the palette drops its filter and names itself an add flow; its ordinary entry opens with the path field focused and leads the list with the Academy-example action [[projects-27](#projects-27)], while the welcome page's "Add a local project" entry omits that repeated choice and separates an existing repository from creating a new one [[run-view-168](run-view.md#run-view-168)] ([DR-133](../decisions/133-the-first-project-picker-leads-with-a-folder.md));
 - the palette is where projects are browsed, chosen and created; it is not the only place one is added, a Space repair adding the project it already names from the folder it has checked ([DR-065](../decisions/065-repairs-the-reader-answers.md)).
+
+#### projects-42
+
+Where the welcome page opens the first-project palette [[run-view-168](run-view.md#run-view-168)], the palette shall show a prominent existing-folder choice before manual existing-path entry and a separate expandable new-project path with its specs-scaffold option ([DR-133](../decisions/133-the-first-project-picker-leads-with-a-folder.md)):
+
+- when the native folder picker is available, the folder choice shall receive initial focus;
+- without a native folder picker, the existing-path field shall receive initial focus;
+- adding an existing repository and creating a new one shall keep their distinct core actions [[projects-1](#projects-1)] [[projects-3](#projects-3)].
 
 #### projects-23
 

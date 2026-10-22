@@ -184,6 +184,33 @@ describe("projects-22: with no project, the palette is an add flow", () => {
     expect(document.activeElement).toBe(screen.getByTestId("palette-path"));
     expect(screen.queryByTestId("palette-academy")).toBeNull();
   });
+
+  test("desktop own-project entry makes folder choice primary and focuses it", async () => {
+    useAppStore.setState({ space: undefined });
+    const onPickFolder = vi.fn(async () => "/tmp/existing");
+    const onAddPath = vi.fn(async () => PROJECTS[0]);
+    const { onPick } = renderPalette({ ...EMPTY, ownProjectOnly: true, onPickFolder, onAddPath });
+    const folder = screen.getByTestId("palette-open-folder");
+    expect(document.activeElement).toBe(folder);
+    expect(folder.textContent).toContain("Choose a project folder");
+    expect(screen.getByText("Or enter its path")).toBeTruthy();
+    expect(screen.queryByTestId("palette-create")).toBeNull();
+    fireEvent.click(folder);
+    await vi.waitFor(() => expect(onAddPath).toHaveBeenCalledWith("/tmp/existing"));
+    expect(onPick).toHaveBeenCalledWith(PROJECTS[0].id);
+  });
+
+  test("new project expands its own path and keeps existing-path Add separate", async () => {
+    const onCreatePath = vi.fn(async () => PROJECTS[1]);
+    renderPalette({ ...EMPTY, ownProjectOnly: true, onCreatePath });
+    fireEvent.click(screen.getByTestId("palette-create-start"));
+    expect(document.activeElement).toBe(screen.getByTestId("palette-new-path"));
+    fireEvent.change(screen.getByTestId("palette-new-path"), {
+      target: { value: "/tmp/brand-new" },
+    });
+    fireEvent.click(screen.getByTestId("palette-create"));
+    await vi.waitFor(() => expect(onCreatePath).toHaveBeenCalledWith("/tmp/brand-new", true));
+  });
 });
 
 describe("projects-26: the palette's path actions, live rows and plain words", () => {

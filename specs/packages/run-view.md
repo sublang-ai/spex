@@ -301,7 +301,7 @@ Where a project is registered and no session tab is active, when the Projects su
 
 #### run-view-168
 
-While no project is registered, the Projects surface shall show a welcome page naming the development-task workflow and its reviewable result, with one primary action to open the current Academy specs example [[projects-27](projects.md#projects-27)] and one secondary action to use the reader's own project [[projects-22](projects.md#projects-22)] ([DR-132](../decisions/132-a-welcome-page-before-the-first-project.md)):
+While no project is registered, the Projects surface shall show a welcome page naming the development-task workflow and its reviewable result, with one primary action to open the current Academy specs example [[projects-27](projects.md#projects-27)] and one secondary "Add a local project" action [[projects-42](projects.md#projects-42)] ([DR-132](../decisions/132-a-welcome-page-before-the-first-project.md), [DR-133](../decisions/133-the-first-project-picker-leads-with-a-folder.md)):
 
 - the Academy action shall acknowledge seeding and report a refusal in place, and its copy shall not promise a recorded replay before one exists;
 - the page shall hide the Captain chat, composer, agent identity, quick-start playbooks, and adapter-readiness warning;
