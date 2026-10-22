@@ -6,8 +6,10 @@
 // repository the host lists, each with what decides its state — its
 // archived flag and the account's role as the host reports them, its
 // `spex` branch, and its members' count — held as the home's current
-// view until the next read. Clones are matched to listings by the id in
-// their Git configuration, else by their remote URL, never by name.
+// view until the next read. A host repository is one by its instance's
+// Git origin and its id (DR-127): clones are matched to listings by the id
+// in their Git configuration beside a remote under that Git origin, else
+// by their remote URL, never by name.
 // The phrases the core composes for the host's answers live here too
 // (git-host-11), each keeping the host's own words whole.
 
@@ -23,7 +25,7 @@ import {
   type SignInCause,
 } from "./git-host.js";
 import { i18n } from "./i18n.js";
-import { REPOSITORY_KEY_PATTERN } from "./protocol.js";
+import { INSTANCE_FOLDER_PATTERN, REPOSITORY_KEY_PATTERN } from "./protocol.js";
 import { hostRefused, noLongerShared, signInAgain } from "./space-git.js";
 
 /** One spex repository the host listed, with what its state needs. */
@@ -126,19 +128,24 @@ async function memberCount(client: GitHostClient, id: string): Promise<number | 
 
 /** The key a listed repository's clone takes under `workspace/`: its
  * group's path in the instance joined to its own, as the host answers
- * them (git-host-5, DR-120); null where those names cannot stand as a
- * key. A group held as colliding is the caller's to refuse
+ * them (git-host-5, DR-120), under the instance's folder where one is
+ * named (DR-127); null where those names cannot stand as a key — a path
+ * beginning with `@` among them, which would read as an instance's
+ * folder. A group held as colliding is the caller's to refuse
  * ([[collidingGroup]]). */
-export function hostKey(repository: HostRepository): string | null {
-  const key = `${repository.group.fullPath}/${repository.path}`;
-  return REPOSITORY_KEY_PATTERN.test(key) ? key : null;
+export function hostKey(repository: HostRepository, instance?: string): string | null {
+  const path = `${repository.group.fullPath}/${repository.path}`;
+  if (path.startsWith("@") || !REPOSITORY_KEY_PATTERN.test(path)) return null;
+  if (instance === undefined) return path;
+  return INSTANCE_FOLDER_PATTERN.test(instance) ? `${instance}/${path}` : null;
 }
 
-/** The logins a view names besides groups (git-host-5, DR-120): your
- * own group's folder name, the account's login, and every other
- * account's under which the host lists a spex repository. */
-export function namedLogins(view: Pick<HostCatalog, "account"> & (Pick<HostView, "listings"> | Pick<HostCatalog, "repositories">), ownName: string): string[] {
-  const logins = new Set<string>([ownName, view.account.login]);
+/** The logins a view of one instance names besides groups (git-host-5,
+ * DR-127): the account's login there, and every other account's under
+ * which that instance lists a spex repository — never your own group's
+ * folder name, which lies outside every instance's folder. */
+export function namedLogins(view: Pick<HostCatalog, "account"> & (Pick<HostView, "listings"> | Pick<HostCatalog, "repositories">)): string[] {
+  const logins = new Set<string>([view.account.login]);
   const repositories = "repositories" in view ? view.repositories : view.listings.map((listing) => listing.repository);
   for (const repository of repositories) if (repository.group.kind === "user") logins.add(repository.group.fullPath);
   return [...logins];
@@ -179,15 +186,32 @@ export function underOrigin(remote: string | null, origin: string | null | undef
   return remote === base || remote.startsWith(`${base}/`);
 }
 
-/** The listing a clone stands for: by its recorded id, else by its
- * remote URL, never by name (git-host-5). */
-export function listingFor(view: Pick<HostView, "listings"> | undefined, id: string | null, remote: string | null): HostListing | undefined {
-  if (!view) return undefined;
-  if (id !== null) {
-    const byId = view.listings.find((listing) => listing.repository.id === id);
+/** Whether two Git origins are one: equal but for a trailing slash. */
+export function sameOrigin(a: string | null | undefined, b: string | null | undefined): boolean {
+  if (!a || !b) return false;
+  return a.replace(/\/+$/, "") === b.replace(/\/+$/, "");
+}
+
+/** The host repository a clone stands for among those one instance
+ * answered (git-host-5, DR-127): one by that instance's Git origin and
+ * its id — the id the clone records beside a remote under that Git
+ * origin — else the one whose remote URL is the clone's, never by name;
+ * so ids two Git systems both mint stay two repositories, and instances
+ * sharing one Git origin list one. */
+export function repositoryFor<T>(entries: readonly T[], repository: (entry: T) => HostRepository, gitOrigin: string | null | undefined, id: string | null, remote: string | null): T | undefined {
+  if (id !== null && underOrigin(remote, gitOrigin)) {
+    const byId = entries.find((entry) => repository(entry).id === id);
     if (byId) return byId;
   }
-  return view.listings.find((listing) => sameRemote(listing.repository.remoteUrl, remote));
+  return entries.find((entry) => sameRemote(repository(entry).remoteUrl, remote));
+}
+
+/** The listing a clone stands for in a view of one instance, by that
+ * instance's Git origin and the clone's recorded id, else by its remote
+ * URL (repositoryFor). */
+export function listingFor(view: Pick<HostView, "listings" | "gitOrigin"> | undefined, id: string | null, remote: string | null): HostListing | undefined {
+  if (!view) return undefined;
+  return repositoryFor(view.listings, (listing) => listing.repository, view.gitOrigin, id, remote);
 }
 
 /** The person's own group as the host lists it. */
@@ -423,6 +447,9 @@ export function signInFailure(error: unknown, host: string): { cause: "denied" |
       return { cause, message: i18n._({ id: "The sign-in expired before it was approved", comment: "A sign-in that ended because nobody approved it in time" }) };
     case "unreachable":
       return { cause, message: couldNotReach(host) };
+    case "account":
+      return { cause: "refused", message: i18n._({ id: "{host} signed you in as another account; this device uses @{login} there", values: { host, login: words ?? "" },
+        comment: "A sign-in refused, nothing stored: the person signed in at an instance the home lists as another account than the one it lists there; {host} is the instance's display name, {login} the listed account's login" }) };
     case "state":
     case "refused":
     default:

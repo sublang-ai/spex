@@ -10,7 +10,11 @@
 // Scripted yank, suppression, private namespaces honouring app tokens,
 // the orgs each app token's person may publish to, held as scripted,
 // and outages let the core's tests and the browser journeys drive every
-// registry answer.
+// registry answer. It answers at each stand-in instance set to relay to
+// it (DR-127): the instance names itself and its verdict on the bearer
+// in the relay headers, so one registry stands behind several instances,
+// honouring each one's tokens, and a scripted refusal answers one
+// instance's tokens alone.
 
 import { existsSync, mkdirSync, readdirSync, readFileSync, symlinkSync, writeFileSync, chmodSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
@@ -63,24 +67,63 @@ interface Stored {
   suppressed: boolean;
 }
 
+/** The headers a stand-in instance relaying a request to the registry
+ * sets (environments-18), every inbound one of these names dropped
+ * first: the instance by its origin, and its verdict on the bearer — the
+ * account it accepts it as, or the code it refuses it with. */
+export const RELAY_HEADERS = {
+  instance: "x-standin-instance",
+  account: "x-standin-account",
+  refused: "x-standin-refused",
+} as const;
+
+/** One request as the registry received it (environments-18). */
+export interface StandinRegistryRequest {
+  method: string;
+  /** The path without its query. */
+  path: string;
+  /** The stand-in instance that relayed it, by its origin; null for a
+   * request made to the registry directly. */
+  instance: string | null;
+  /** The account the relaying instance accepted the bearer as; null
+   * where it accepted none, or for a direct request. */
+  account: string | null;
+  /** Whether it presented a bearer. */
+  bearer: boolean;
+}
+
+/**
+ * A reader of a private org, a holder of orgs and a scripted refusal
+ * name the bearers they cover: a literal token presented as the bearer,
+ * as a direct caller presents one, or a stand-in instance's origin,
+ * standing for every bearer that instance relays as one it accepts.
+ */
 export interface StandinRegistryScript {
   /** Yank a version: caret and tilde stop picking it. */
   yank(name: string, version: string): void;
   /** Suppress a version as the operator: nothing picks or serves it. */
   suppress(name: string, version: string): void;
   /** Make an org private: a request without a bearer finds nothing
-   * (404), one whose bearer is not listed is forbidden (403). */
-  setPrivate(org: string, tokens: Set<string>): void;
-  /** The orgs the person presenting `token` may publish to, which
-   * `GET /api/v1/account/orgs` lists sorted by name; any other token, or
-   * none, is answered 401. */
-  setOrgs(token: string, orgs: { name: string; path: string; role: string }[]): void;
+   * (404), one whose bearer no reader covers is forbidden (403). */
+  setPrivate(org: string, readers: Iterable<string>): void;
+  /** The orgs the person presenting a bearer `reader` covers may publish
+   * to, which `GET /api/v1/account/orgs` lists sorted by name; any other
+   * bearer, or none, is answered 401. */
+  setOrgs(reader: string, orgs: { name: string; path: string; role: string }[]): void;
+  /** Answer every request presenting a bearer `reader` covers 401 with
+   * `code`, `token_revoked` unless given, as spex.pub answers a device
+   * signed out; null lifts every such refusal. */
+  refuseTokens(reader: string | null, code?: string): void;
   /** Hold each orgs answer `ms` before sending it. */
   delayOrgs(ms: number): void;
   /** Answer the next `count` requests 500, as an outage. */
   unavailable(count: number): void;
   /** Every request as `<METHOD> <path>`, in order. */
   readonly requests: string[];
+  /** Every request with the instance that relayed it and the account it
+   * came as, in order. */
+  readonly received: StandinRegistryRequest[];
+  /** Forget `requests` and `received`. */
   clearRequests(): void;
 }
 
@@ -100,6 +143,22 @@ function sendError(res: ServerResponse, status: number, code: string, message: s
   sendJson(res, status, { error: { code, message, ...(details ? { details } : {}) } });
 }
 
+/** The words spex.pub answers a refused bearer with, by its code. */
+const REFUSED_WORDS: Record<string, string> = {
+  invalid_token: "The token is not known.",
+  token_revoked: "This device was signed out.",
+  token_expired: "The access token expired.",
+  reauth_required: "Sign in again.",
+};
+
+function headerOf(req: IncomingMessage, name: string): string | null {
+  const value = req.headers[name];
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+/** An origin as a reader names it, without a trailing slash. */
+const readerKey = (reader: string): string => reader.replace(/\/+$/, "");
+
 async function readBody(req: IncomingMessage): Promise<Uint8Array> {
   const chunks: Buffer[] = [];
   for await (const chunk of req) chunks.push(chunk as Buffer);
@@ -113,8 +172,10 @@ export async function startStandinRegistry(options: { dir: string }): Promise<St
   const releases = new Map<string, Map<string, Stored>>();
   const privateOrgs = new Map<string, Set<string>>();
   const accountOrgs = new Map<string, { name: string; path: string; role: string }[]>();
+  const refusedReaders = new Map<string, string>();
   let orgsDelay = 0;
   const requests: string[] = [];
+  const received: StandinRegistryRequest[] = [];
   let outages = 0;
 
   /** Keep a release; a publish also holds it to the fields the
@@ -150,13 +211,51 @@ export async function startStandinRegistry(options: { dir: string }): Promise<St
     }
   }
 
-  function access(org: string, req: IncomingMessage, res: ServerResponse): boolean {
-    const tokens = privateOrgs.get(org);
-    if (!tokens) return true;
+  /** Who a request comes from: the bearer it presents and, relayed by a
+   * stand-in instance, that instance and its verdict on the bearer. */
+  interface Caller {
+    bearer: string | null;
+    instance: string | null;
+    account: string | null;
+    refused: string | null;
+  }
+
+  function callerOf(req: IncomingMessage): Caller {
     const header = req.headers.authorization;
-    const bearer = header?.startsWith("Bearer ") ? header.slice(7) : undefined;
-    if (!bearer) { sendError(res, 404, "not_found", "not found"); return false; }
-    if (!tokens.has(bearer)) { sendError(res, 403, "forbidden", "this token may not read the namespace"); return false; }
+    const bearer = header?.startsWith("Bearer ") && header.length > 7 ? header.slice(7) : null;
+    const instance = headerOf(req, RELAY_HEADERS.instance);
+    return {
+      bearer,
+      instance: instance === null ? null : readerKey(instance),
+      account: instance === null || bearer === null ? null : headerOf(req, RELAY_HEADERS.account),
+      refused: instance === null || bearer === null ? null : headerOf(req, RELAY_HEADERS.refused),
+    };
+  }
+
+  /** The readers a caller's bearer is covered by: the token itself, and
+   * the relaying instance where it accepted the bearer. */
+  function readersOf(caller: Caller): string[] {
+    if (caller.bearer === null) return [];
+    return caller.account !== null && caller.instance !== null ? [caller.bearer, caller.instance] : [caller.bearer];
+  }
+
+  /** The 401 a bearer earns before any route: the relaying instance's
+   * refusal of it, or a refusal scripted for a reader covering it. */
+  function refusal(caller: Caller): string | null {
+    if (caller.bearer === null) return null;
+    if (caller.refused !== null) return caller.refused;
+    for (const reader of readersOf(caller)) {
+      const code = refusedReaders.get(reader);
+      if (code !== undefined) return code;
+    }
+    return null;
+  }
+
+  function access(org: string, caller: Caller, res: ServerResponse): boolean {
+    const readers = privateOrgs.get(org);
+    if (!readers) return true;
+    if (caller.bearer === null) { sendError(res, 404, "not_found", "not found"); return false; }
+    if (!readersOf(caller).some((reader) => readers.has(reader))) { sendError(res, 403, "forbidden", "this token may not read the namespace"); return false; }
     return true;
   }
 
@@ -241,17 +340,22 @@ export async function startStandinRegistry(options: { dir: string }): Promise<St
   async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const url = new URL(req.url ?? "/", "http://standin");
     const method = req.method ?? "GET";
+    const caller = callerOf(req);
     requests.push(`${method} ${url.pathname}`);
+    received.push({ method, path: url.pathname, instance: caller.instance, account: caller.account, bearer: caller.bearer !== null });
     if (outages > 0) {
       outages -= 1;
       sendError(res, 500, "internal_error", "the stand-in registry is scripted to be unavailable");
       return;
     }
+    // A refused bearer is answered 401 on every route, whatever it names
+    // and whether it exists, as spex.pub answers it.
+    const refused = refusal(caller);
+    if (refused !== null) { sendError(res, 401, refused, REFUSED_WORDS[refused] ?? "The token was refused."); return; }
     const segments = url.pathname.split("/").filter(Boolean).map((segment) => decodeURIComponent(segment));
     if (method === "GET" && url.pathname === "/api/v1/account/orgs") {
       if (orgsDelay > 0) await new Promise((resolve) => setTimeout(resolve, orgsDelay));
-      const header = req.headers.authorization;
-      const orgs = header?.startsWith("Bearer ") ? accountOrgs.get(header.slice(7)) : undefined;
+      const orgs = readersOf(caller).map((reader) => accountOrgs.get(reader)).find((found) => found !== undefined);
       if (!orgs) { sendError(res, 401, "unauthenticated", "sign in to list your orgs"); return; }
       sendJson(res, 200, { orgs: [...orgs].sort((a, b) => a.name.localeCompare(b.name)) });
       return;
@@ -270,7 +374,7 @@ export async function startStandinRegistry(options: { dir: string }): Promise<St
       const [org, pkg, version, tail] = [segments[3]!, segments[4]!, segments[5], segments[6]];
       const name = `${org}/${pkg}`;
       if (method === "PUT" && version && segments.length === 6) {
-        if (!access(org, req, res)) return;
+        if (!access(org, caller, res)) return;
         if (!isVersion(version)) { sendError(res, 400, "bad_request", `${version} is not a version`); return; }
         const body = await readBody(req);
         if (releases.get(name)?.has(version)) { sendError(res, 409, "version_exists", `${name} ${version} is already published`); return; }
@@ -283,7 +387,7 @@ export async function startStandinRegistry(options: { dir: string }): Promise<St
         return;
       }
       if (method !== "GET") { sendError(res, 400, "bad_request", "unsupported method"); return; }
-      if (!access(org, req, res)) return;
+      if (!access(org, caller, res)) return;
       const versions = releases.get(name);
       if (!versions) { sendError(res, 404, "not_found", `${name} is not published`); return; }
       if (!version) { sendJson(res, 200, packageResource(name, versions)); return; }
@@ -301,7 +405,7 @@ export async function startStandinRegistry(options: { dir: string }): Promise<St
     }
     if (method === "GET" && segments.length >= 4 && segments[0] !== "api") {
       const [org, pkg, version] = [segments[0]!, segments[1]!, segments[2]!];
-      if (!access(org, req, res)) return;
+      if (!access(org, caller, res)) return;
       const stored = releases.get(`${org}/${pkg}`)?.get(version);
       if (stored?.suppressed) { sendError(res, 410, "suppressed", `${org}/${pkg} ${version} is suppressed`); return; }
       const bytes = stored?.data.get(segments.slice(3).join("/"));
@@ -333,12 +437,17 @@ export async function startStandinRegistry(options: { dir: string }): Promise<St
     script: {
       yank: (name, version) => { find(name, version).yanked = true; },
       suppress: (name, version) => { find(name, version).suppressed = true; },
-      setPrivate: (org, tokens) => { privateOrgs.set(org, new Set(tokens)); },
-      setOrgs: (token, orgs) => { accountOrgs.set(token, orgs.map((org) => ({ ...org }))); },
+      setPrivate: (org, readers) => { privateOrgs.set(org, new Set([...readers].map(readerKey))); },
+      setOrgs: (reader, orgs) => { accountOrgs.set(readerKey(reader), orgs.map((org) => ({ ...org }))); },
+      refuseTokens: (reader, code = "token_revoked") => {
+        if (reader === null) refusedReaders.clear();
+        else refusedReaders.set(readerKey(reader), code);
+      },
       delayOrgs: (ms) => { orgsDelay = ms; },
       unavailable: (count) => { outages = count; },
       requests,
-      clearRequests: () => { requests.length = 0; },
+      received,
+      clearRequests: () => { requests.length = 0; received.length = 0; },
     },
     close: () => new Promise<void>((resolve) => {
       server.closeAllConnections();

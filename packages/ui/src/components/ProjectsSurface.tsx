@@ -13,6 +13,7 @@ import type { IntentInfo, ProjectInfo } from "@sublang/spex-core/protocol";
 import { useAppStore, type ProjectMeta } from "../state/store.js";
 import { i18n } from "../i18n.js";
 import { repositoryStatePhrase } from "../lib/space.js";
+import { allRepositories } from "../lib/instances.js";
 import { Icon } from "./Icon.js";
 import { InlineConfirm } from "./InlineConfirm.js";
 import {
@@ -106,9 +107,7 @@ function RecordsLine({ project, now }: { project: ProjectInfo; now: number }) {
     if (connected && !useAppStore.getState().space) void loadSpace().catch(() => {});
   }, [connected, loadSpace]);
   const { key, name, group } = project.repository;
-  const row = space?.groups
-    .flatMap((entry) => entry.repositories)
-    .find((repository) => repository.key === key);
+  const row = space ? allRepositories(space).find((repository) => repository.key === key) : undefined;
   const state = row ? repositoryStatePhrase(row, now) : undefined;
   return (
     <div

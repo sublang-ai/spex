@@ -9,6 +9,8 @@ Accepted (2026-10-20) on the owner's direction to adopt the native-skill release
 Amends [DR-126](126-cligent-0-34-1-slc-0-18-1-adoption.md) and [DR-123](123-playbook-17-10-1-cligent-0-34-0-slc-0-18-0-adoption.md) in their floors and lock resolutions alone: Playbook `^17.11.0`, Cligent `^0.36.0` and slc `^0.19.0`; the skills decisions and every other constraint stand.
 Amends [DR-124](124-skills-reach-every-agent.md) in where the agent table's folders come from and in which agents see the exports: the project-level and user-level folders are Cligent's published ones, and Captain control and compiler calls no longer read them except where an agent offers no switch.
 
+Amended by [DR-131](131-playbook-17-11-1-adoption.md) in the Playbook floor, lock resolution and built-in spec package version alone; every other decision stands.
+
 ## Context
 
 - Cligent 0.35.0 publishes `NATIVE_SKILL_SUPPORT`: per adapter, the project-level and user-level folders where its runtime discovers a persistent skill, the folders DR-124 copied from Cligent's DR-036, and whether a per-run `nativeSkills: false` turns that discovery off [[1]].

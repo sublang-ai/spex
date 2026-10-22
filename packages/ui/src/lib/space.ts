@@ -322,7 +322,7 @@ export function staysHere(): readonly { family: string; reason: string }[] {
     },
     {
       family: i18n._({ id: "credentials", comment: "a file family that stays on this device" }),
-      reason: i18n._("this device's sign-in to the Git host"),
+      reason: i18n._("this device's sign-in to each instance"),
     },
     {
       family: i18n._({

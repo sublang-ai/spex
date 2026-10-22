@@ -24,13 +24,13 @@ import { CoreError } from "./session.js";
 import type { Store } from "./store.js";
 import { defaultSpawner, ENGINE_LINKS_EXCLUDE, type LineSpawner } from "./compile.js";
 import { createModuleLoader, starterText, templatePath } from "./config.js";
-import { builtinPackage, INSTALL_RECORD, publishRelease, readRelease, RegistryClient, requestsDigest, type BuiltinPackage, type Lock } from "./environment/index.js";
+import { builtinPackage, INSTALL_RECORD, parseLock, publishRelease, readRelease, RegistryClient, requestsDigest, serializeLock, sha256Hex, type BuiltinPackage, type Lock, type RegistrySourceLock } from "./environment/index.js";
 import type { Command, CommandResults, EnvironmentState, ServerMessage } from "./protocol.js";
 import { authoringScript } from "./testing/authoring.js";
 import { fakeAdapterImports, type FakeScript } from "./testing/fake-adapter.js";
 import { createScriptedCaptain } from "./testing/scripted-captain.js";
 import { scratchDir } from "./testing/scratch.js";
-import { createSpaceHarness, ownClone } from "./testing/space-harness.js";
+import { createSpaceHarness, instanceOf, ownClone, rowsOf } from "./testing/space-harness.js";
 import { STANDIN_STORAGE } from "./testing/standin-host.js";
 import { makeRelease, startStandinRegistry } from "./testing/standin-registry.js";
 import { stubSlcSource } from "./testing/stub-slc.js";
@@ -173,8 +173,9 @@ function probeSpawner(): LineSpawner {
 function signedInHome(dataDir: string, hostUrl: string, token: string): void {
   mkdirSync(join(dataDir, "local"), { recursive: true, mode: 0o700 });
   writeFileSync(join(dataDir, "home.yaml"), stringifyYaml({
-    format: 1, device: randomUUID(), own: OWN, folders: [],
-    host: { url: hostUrl, clientId: "spex", account: { id: "1", login: OWN, displayName: "Tester" } },
+    format: 2, device: randomUUID(), origin: hostUrl,
+    instances: [{ origin: hostUrl, clientId: "spex", account: { id: "1", login: OWN, displayName: "Tester" } }],
+    own: OWN, folders: [],
   }));
   writeFileSync(join(dataDir, "local", "credentials.yaml"), stringifyYaml({
     format: 1, hosts: { [hostUrl]: { access: token, accessExpiresAt: Date.now() + 3_600_000, refresh: "refresh" } },
@@ -315,6 +316,54 @@ test("environments-23: a fresh home with no registry reachable seeds the built-i
     && JSON.stringify(state.requests["sublang/playbooks"]) === JSON.stringify({ kind: "registry", version: shipped.version }));
   assert.deepEqual(exact.packages.map((pkg) => [pkg.version, pkg.installed]), [[shipped.version, true]]);
   assert.ok(!("builtinUpdate" in exact), "[environments-11] the request admits only the older release");
+});
+
+test("environments-23, environments-7, environments-11: a lock records the archive checksum the seed packs to; with no registry reachable, a lock of the seeded release at another device's archive checksum with the same files' digests installs from the seed, and one recording another digest for a file fails naming the spec package", { timeout: 120_000 }, async (t) => {
+  const dir = scratchDir("spex-env-builtin-digests-");
+  const core = await startCore(dir, { hostUrl: UNREACHABLE });
+  t.after(() => core.stop());
+  const own = `${OWN}/${OWN}-spex`;
+  const lockFile = join(clonePath(core.dataDir, own), "spex.lock");
+  const shipped = builtinPackage();
+  const lock = parseLock(readFileSync(lockFile, "utf8"));
+  const resolution = lock.packages["sublang/playbooks"]!;
+  const source = resolution.source as RegistrySourceLock;
+  assert.equal(source.version, shipped.version);
+
+  // [environments-11] The lock records the checksum of the archive this
+  // device's seed packs to, as the seeded release's index records it.
+  const seeded = JSON.parse(readFileSync(join(core.dataDir, "cache", "builtins", `${shipped.version}.json`), "utf8")) as { checksum: string };
+  assert.equal(source.checksum, seeded.checksum);
+
+  // Another device's lock of the same release, its archive packed there
+  // to another checksum: written beside the same `spex.yaml`, the store
+  // lacking the release's files, so the install must fetch each.
+  const foreign = sha256Hex(Buffer.from("the archive another device packed"));
+  const stored = (file: { sha256: string; executable: boolean }): string => join(core.dataDir, "store", ...(file.executable ? ["x"] : []), file.sha256);
+  const installWith = async (files: Lock["packages"][string]["files"], done: (state: EnvironmentState) => boolean): Promise<EnvironmentState> => {
+    writeFileSync(lockFile, serializeLock({ ...lock, packages: { "sublang/playbooks": { ...resolution, source: { ...source, checksum: foreign }, files } } }));
+    for (const file of resolution.files) rmSync(stored(file), { force: true });
+    const mark = core.client.mark();
+    await core.client.expectOk("environment.install", { repository: own });
+    return core.client.environment(own, mark, (state) => state.busy === null && done(state));
+  };
+
+  // [environments-7] Its files carry the digests the seed's do, so the
+  // seed serves them, whatever archive checksum the lock records; the
+  // lock stays as written.
+  let state = await installWith(resolution.files, (candidate) => candidate.error !== null || candidate.packages.some((pkg) => pkg.installed));
+  assert.equal(state.error, null);
+  assert.deepEqual(state.packages.map((pkg) => [pkg.name, pkg.version, pkg.installed]), [["sublang/playbooks", shipped.version, true]]);
+  assert.ok(resolution.files.every((file) => existsSync(stored(file))), "the store holds every file again");
+  assert.equal((parseLock(readFileSync(lockFile, "utf8")).packages["sublang/playbooks"]!.source as RegistrySourceLock).checksum, foreign, "an install changes no lock");
+
+  // [environments-7] A lock recording another digest for one file is not
+  // the seed's release, and no registry serves it at its checksum: the
+  // install fails naming the spec package.
+  const [first, ...rest] = resolution.files;
+  state = await installWith([{ ...first!, sha256: sha256Hex(Buffer.from("another file")) }, ...rest], (candidate) => candidate.error !== null);
+  assert.match(state.error ?? "", /sublang\/playbooks/);
+  assert.equal(state.packages.find((pkg) => pkg.name === "sublang/playbooks")?.installed, false);
 });
 
 test("environments-22 through a real core: retained files of another lock are not imported before a successful same-process resolve", { timeout: 120_000 }, async (t) => {
@@ -1070,8 +1119,10 @@ test("environments-25: every environment command replies and refuses as its tabl
   assert.deepEqual(Object.keys(initial.packages[0]!).sort(), ["artifacts", "direct", "exports", "installed", "missingPath", "name", "requiredBy", "source", "version"]);
   assert.deepEqual(initial.requests["sublang/playbooks"], { kind: "registry", version: `^${builtinPackage().version}` });
 
-  // environment.search through the registry.
-  const found = await client.expectOk("environment.search", { query: "lint" });
+  // environment.search through the registry of the named spex
+  // repository's environment; a key naming no clone is refused.
+  await client.expectError("environment.search", { repository: "nobody/none-spex", query: "lint" }, "not_found");
+  const found = await client.expectOk("environment.search", { repository: key, query: "lint" });
   assert.deepEqual(found.packages.find((entry) => entry.name === "acme/lint"), { name: "acme/lint", description: "Lint skills", versions: ["1.2.0"] });
 
   // environment.request: refused before any write, else accepted and broadcast.
@@ -1117,8 +1168,11 @@ test("environments-25: every environment command replies and refuses as its tabl
   assert.equal(removed.conflicts, null);
   assert.ok(!existsSync(join(working, ".claude", "skills", "tidy")), "a skill the lock no longer selects leaves the folder");
 
-  // environment.publish: signed out, and not a release.
-  await client.expectError("environment.publish", { repository: key, path: "spex-packages/none" }, "invalid_request", /Sign in to publish/);
+  // environment.publish: not signed in at the instance it publishes to
+  // — the home's recorded origin, no instance listed yet, named by its
+  // host name — and not a release (environments-17).
+  await client.expectError("environment.publish", { repository: key, path: "spex-packages/none" }, "invalid_request",
+    new RegExp(`^Sign in to publish at ${new URL(registry.url).hostname.replace(/\./g, "\\.")}$`));
   await client.expectError("environment.publish", { repository: key, path: "spex-packages/none", dryRun: true }, "invalid_request", /not a spec package release/);
 
   // The playbooks both environments export, with where each is enabled.
@@ -1135,7 +1189,7 @@ test("environments-25: every environment command replies and refuses as its tabl
   await client.expectOk("space.remote.set", { repository: key, url: bare });
   const from = client.mark();
   await client.expectOk("space.sync", { repository: key });
-  await client.waitFor((m) => m.type === "space.state" && m.state.groups.some((group) => group.repositories.some((repository) => repository.key === key && repository.sync.phase === "done")), 30_000, from);
+  await client.waitFor((m) => m.type === "space.state" && rowsOf(m.state).some((repository) => repository.key === key && repository.sync.phase === "done"), 30_000, from);
 
   // Another member changes the environment on the host: the lock a sync
   // applies installs and exports, its state broadcast (environments-17).
@@ -1219,7 +1273,8 @@ test("environments-21 through a real core: the registry presents the access secr
   t.after(() => home.stop());
   const own = `${host.script.person.login}/${host.script.person.login}-spex`;
   const signing = home.client.mark();
-  await harness.signIn(home, host);
+  // The home's instance is the front, which serves the stand-in's sign-in.
+  await harness.signIn(home, host, front.url);
   // Your own group's spex repository is created on the host and pushed
   // before its environment takes a write (environments-17).
   await home.client.waitRepository(signing, own, (repository) => repository.sync.phase === "done", 60_000);
@@ -1310,7 +1365,7 @@ test("environments-21 through a real core: the registry presents the access secr
   from = home.client.mark();
   await home.client.expectOk("environment.remove", { repository: own, name: "acme/toolbox" });
   assert.equal((await ran(from)).error, null);
-  await home.client.expectOk("space.signout", {});
+  await home.client.expectOk("space.signout", { instance: front.url });
   front.log.length = 0;
   from = home.client.mark();
   await home.client.expectOk("environment.resolve", { repository: own });
@@ -1936,7 +1991,7 @@ test("instance package sources keep transport locators out of state and broadcas
     if (state.busy === null && state.error) assert.fail(state.error);
     await sleep(15);
   }
-  const instance = (await home.client.expectOk("space.get", {})).host.displayName;
+  const instance = instanceOf(await home.client.expectOk("space.get", {}), host.url)?.displayName;
   assert.ok(instance);
   const commitPrefix = harness.git(work, "rev-parse", "HEAD").slice(0, 12);
   const safe = (value: unknown): void => {
@@ -2068,7 +2123,7 @@ test("instance package sources keep transport locators out of state and broadcas
   assert.equal(host.script.requests.length, seen, "environment.get does not read the host");
   const reading = restarted.client.mark();
   await restarted.client.expectOk("space.get", {});
-  await restarted.client.waitSpace(reading, (view) => view.readAt !== null);
+  await restarted.client.waitSpace(reading, (view) => typeof instanceOf(view, host.url)?.readAt === "number");
   state = await restarted.client.expectOk("environment.get", { repository: own });
   assert.equal((state.requests["acme/toolbox"] as unknown as { repository: string }).repository, instance);
   assert.deepEqual(readFileSync(join(clone, "spex.yaml")), requests);

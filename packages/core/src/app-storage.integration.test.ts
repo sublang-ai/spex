@@ -210,7 +210,9 @@ test("storage-15: a former home of two projects and one unmatched session migrat
   // 2 — home.yaml: this device's user name, both folders, B's alias.
   const own = defaultOwnName();
   const file = parseYaml(readFileSync(join(home, "home.yaml"), "utf8")) as { format: number; own: string; folders: { path: string; repository: string; aliases?: string[] }[] };
-  assert.equal(file.format, 1);
+  // Written in this Spex's format, so no instances migration follows (DR-127).
+  assert.equal(file.format, 2);
+  assert.deepEqual(readdirSync(join(home, "local", "migrations")), receipts);
   assert.equal(file.own, own);
   const keyA = `${own}/alpha-spex`; const keyB = `${own}/beta-spex`;
   assert.deepEqual(file.folders, [{ path: folderA, repository: keyA }, { path: folderB, repository: keyB, aliases: [formerB] }]);

@@ -2,10 +2,11 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // The Groups surface's header and groups list over a mocked client
-// (DR-103): the header in both signed states with Refresh and the
-// host's last read (space-1, space-2), signing in through the browser
-// flow and the device flow, its failure, Cancel, the host's sign-out
-// and Sign out (space-3, space-6), every row state with its control and phrase (space-61,
+// (DR-103, DR-127): the header with Refresh or the sign-in card, and the
+// instance's heading with its account and last read (space-1, space-2),
+// signing in through the browser flow and the device flow, its failure,
+// Cancel, the instance's sign-out of this device and Sign out on its
+// heading (space-3, space-6), every row state with its control and phrase (space-61,
 // space-64), Pick a group (space-58), Join (space-63), Members
 // (space-62), the vocabulary (space-27) and the label budget and the
 // container steps the fit rests on (space-28). Each act is checked by
@@ -13,7 +14,7 @@
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
-import type { GroupsState, RepositoryState } from "@sublang/spex-core/protocol";
+import type { GroupsState, InstanceGroupState, RepositoryState } from "@sublang/spex-core/protocol";
 
 import { activateLanguage } from "../i18n.js";
 import { absoluteTitle, shortMoment } from "../lib/time.js";
@@ -29,7 +30,8 @@ import {
   NOW,
   NO_CAN,
   OWN,
-  OWN_REPO,
+  ORIGIN,
+  SECOND,
   SESSION_UNIT,
   answer,
   base,
@@ -38,9 +40,15 @@ import {
   deliver,
   installClient,
   live,
+  namespace,
+  noInstance,
   renderGroups,
   repo,
+  signedOutAt,
   strayRemote,
+  withGroups,
+  withInstance,
+  type HomeOver,
 } from "../fixtures/groups.js";
 
 beforeEach(installClient);
@@ -57,42 +65,71 @@ const CODE = "git@github.com:jane/academy.git";
 /** A team group the host lists: its own spex repository, the same
  * project's spex repository another member pushed, a project this
  * device lacks, and one it may only read. */
-function teamGroup(repos?: RepositoryState[]): GroupsState["groups"][number] {
+function teamGroup(repos?: RepositoryState[]): InstanceGroupState {
   return {
     id: "2",
+    login: null,
+    mine: false,
     fullPath: "acme/team",
     name: "team",
-    own: false,
     can: NO_CAN,
     repositories: repos ?? [
-      repo({ key: "acme/team/team-spex", name: "team-spex", id: "50", code: null, folder: null, members: 4 }),
-      repo({ key: "acme/team/academy-spex", name: "academy-spex", id: "51", code: CODE, folder: null, members: 3, state: "absent", branch: null }),
-      repo({ key: "acme/team/docs-spex", name: "docs-spex", id: "52", code: "git@github.com:acme/docs.git", folder: null, state: "absent", branch: null }),
-      repo({ key: "acme/team/old-spex", name: "old-spex", id: "53", code: "git@github.com:acme/old.git", state: "read-only", reason: "archived", lastSync: { at: NOW - 30 * MIN, sent: 0, received: 2 } }),
+      repo({ key: "@spex.example/acme/team/team-spex", name: "team-spex", id: "50", code: null, folder: null, members: 4 }),
+      repo({ key: "@spex.example/acme/team/academy-spex", name: "academy-spex", id: "51", code: CODE, folder: null, members: 3, state: "absent", branch: null }),
+      repo({ key: "@spex.example/acme/team/docs-spex", name: "docs-spex", id: "52", code: "git@github.com:acme/docs.git", folder: null, state: "absent", branch: null }),
+      repo({ key: "@spex.example/acme/team/old-spex", name: "old-spex", id: "53", code: "git@github.com:acme/old.git", state: "read-only", reason: "archived", lastSync: { at: NOW - 30 * MIN, sent: 0, received: 2 } }),
     ],
   };
 }
 
 /** A signed-in home whose project is still only on this device. */
-function localProject(over: Partial<GroupsState> = {}): GroupsState {
+function localProject(over: HomeOver = {}): GroupsState {
   const state = base(over, [repo({ state: "local-only", remote: null, id: null, code: CODE, branch: null, members: null })]);
-  return over.groups ? state : { ...state, groups: [...state.groups, teamGroup()] };
+  return over.instance?.groups ? state : withGroups(state, teamGroup());
 }
 
-/** A home not signed in: your own group alone, its repositories local. */
-function signedOut(over: Partial<GroupsState> = {}): GroupsState {
-  const own = { ...OWN_REPO, state: "local-only" as const, remote: null, id: null, lastSync: null };
-  const project = repo({ state: "local-only", remote: null, id: null, code: CODE, branch: null, members: null });
-  return {
-    ...base({ account: null, readAt: null, ...over }),
-    groups: [{ id: null, fullPath: "jane", name: "jane", own: true, can: NO_CAN, repositories: [own, project] }],
-  };
+/** A home that lists no instance: your own group alone, its
+ * repositories local. */
+function signedOut(over: HomeOver = {}): GroupsState {
+  return noInstance(over, [repo({ state: "local-only", remote: null, id: null, code: CODE, branch: null, members: null })]);
 }
 
 describe("GROUPS: the header (space-1, space-2)", () => {
-  test("signed in, it reads the account, the host's last read with Refresh, Sign out, and where the files are at the foot", async () => {
-    await renderGroups(base(), { open: false });
+  test("space-66, space-1: signed in, the instance's heading reads its host name until a read names its display name, then its display name, Signed in as @login with Sign out and its read time; the header holds Refresh, and the surface ends in where the files are", async () => {
+    await renderGroups(base({ instance: { displayName: null } }), { open: false });
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Groups");
+    // Before a read names it, the instance is named by its host name
+    // (space-1).
+    const section = screen.getByTestId(`space-instance-${ORIGIN}`);
+    expect(screen.getByRole("group", { name: "spex.example" })).toBe(section);
+    const heading = within(section).getByRole("heading", { level: 2 });
+    expect(heading.textContent).toBe("spex.example · Signed in as @jane");
+    // A read names its display name.
+    deliver(base());
+    expect(screen.getByRole("group", { name: "Spex Example" })).toBe(section);
+    expect(heading.textContent).toBe("Spex Example · Signed in as @jane");
+    // The account stands beside the name after the separator, in the
+    // secondary tone (space-1).
+    const account = within(section).getByTestId("space-account");
+    expect(heading.contains(account)).toBe(true);
+    expect(account.firstElementChild?.getAttribute("aria-hidden")).toBe("true");
+    expect(account.className).toContain("text-neutral-500");
+    const signOut = within(section).getByRole("button", { name: "Sign out" }) as HTMLButtonElement;
+    expect(signOut.title).toBe("Signs this device out of Spex Example; every record stays here");
+    // The read time is the instance's, from the core; it yields below
+    // @2xl, its full moment in its title (space-28).
+    const readAt = within(section).getByTestId("space-read-at");
+    expect(readAt.textContent).toBe("Read 1m ago");
+    expect(readAt.className).toContain("@2xl:inline");
+    expect(readAt.getAttribute("title")).toBe(absoluteTitle(NOW - MIN));
+    // The header holds Refresh, reading every signed-in instance, and
+    // neither the account nor a read time nor the card (space-1).
+    const header = screen.getByTestId("space-header");
+    expect(within(header).getByRole("button", { name: "Refresh" }).title).toBe("Reads each signed-in instance again");
+    expect(within(header).queryByRole("button", { name: "Sign out" })).toBeNull();
+    expect(within(header).queryByTestId("space-read-at")).toBeNull();
+    expect(screen.queryByTestId("space-signin-card")).toBeNull();
+    expect(screen.queryByTestId("space-signin")).toBeNull();
     // The home is one quiet line at the surface's foot: selectable, its
     // full path in its title, with no control (space-1).
     const home = screen.getByTestId("space-home");
@@ -101,19 +138,12 @@ describe("GROUPS: the header (space-1, space-2)", () => {
     expect(home.className).toContain("select-text");
     expect(home.querySelector("button")).toBeNull();
     expect(screen.getByTestId("space-surface").lastElementChild).toBe(home);
-    expect(within(screen.getByTestId("space-header")).queryByRole("button", { name: "Copy path" })).toBeNull();
-    // The host's name yields first below @md; the login stays.
-    expect(screen.getByTestId("space-account-wide").textContent).toBe("Signed in as @jane at Spex Example");
-    expect(screen.getByTestId("space-account-wide").className).toContain("@md:inline");
-    expect(screen.getByTestId("space-account-narrow").textContent).toBe("Signed in as @jane");
-    expect(screen.getByTestId("space-account-narrow").className).toContain("@md:hidden");
-    expect(screen.getByRole("button", { name: "Sign out" })).toBeTruthy();
-    expect(screen.queryByTestId("space-signin")).toBeNull();
-    // The read time is the host's, from the core; it yields below @2xl.
-    const readAt = screen.getByTestId("space-read-at");
-    expect(readAt.textContent).toBe("Host read 1m ago");
-    expect(readAt.className).toContain("@2xl:inline");
-    expect(screen.getByTestId("space-refresh").title).toContain("last read");
+    expect(within(header).queryByRole("button", { name: "Copy path" })).toBeNull();
+    // Signed out there, the line and Refresh go; the heading stays.
+    deliver(signedOutAt(ORIGIN));
+    expect(screen.queryByTestId("space-home")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Refresh" })).toBeNull();
+    expect(within(section).getByRole("heading", { level: 2 }).textContent).toBe("Spex Example");
   });
 
   test("Refresh asks the core to read the host and re-reads the state; signed out there is none", async () => {
@@ -123,11 +153,11 @@ describe("GROUPS: the header (space-1, space-2)", () => {
     await waitFor(() => expect(calls("space.get")).toHaveLength(2));
     expect(calls("space.refresh")).toHaveLength(1);
     // The host's read lands as a broadcast, and its time with it.
-    deliver(base({ readAt: NOW }));
-    expect(screen.getByTestId("space-read-at").textContent).toBe("Host read just now");
+    deliver(base({ instance: { readAt: NOW } }));
+    expect(screen.getByTestId("space-read-at").textContent).toBe("Read just now");
     cleanup();
     commandMock.mockClear();
-    await renderGroups(base({ readAt: null }), { open: false });
+    await renderGroups(base({ instance: { readAt: null } }), { open: false });
     expect(screen.getByTestId("space-read-at").textContent).toBe("Not read yet");
     cleanup();
     await renderGroups(signedOut(), { open: false });
@@ -138,28 +168,28 @@ describe("GROUPS: the header (space-1, space-2)", () => {
   test("accepted Refresh stays visibly running until its actual outcome, and asynchronous failure offers retry", async () => {
     await renderGroups(base(), { open: false });
     commandMock.mockImplementation(async (type: string, fields?: Record<string, unknown>) => {
-      if (type === "space.refresh") { deliver(base({ read: { phase: "running" } })); return { accepted: true }; }
+      if (type === "space.refresh") { deliver(base({ instance: { read: { phase: "running" } } })); return { accepted: true }; }
       return answer(type, fields);
     });
     fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
     await waitFor(() => expect(calls("space.refresh")).toHaveLength(1));
     await waitFor(() => expect(screen.getByRole("button", { name: "Reading…" })).toHaveProperty("disabled", true));
-    deliver(base({ read: { phase: "failed", message: "Could not reach Spex Example" } }));
+    deliver(base({ instance: { read: { phase: "failed", message: "Could not reach Spex Example" } } }));
     expect(screen.getByRole("alert").textContent).toBe("Could not reach Spex Example");
     expect(screen.getByRole("button", { name: "Refresh" })).toHaveProperty("disabled", false);
     fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
     await waitFor(() => expect(calls("space.refresh")).toHaveLength(2));
-    deliver(base({ read: { phase: "idle" }, readAt: NOW }));
+    deliver(base({ instance: { read: { phase: "idle" }, readAt: NOW } }));
     expect(screen.queryByRole("alert")).toBeNull();
     expect(screen.getByRole("button", { name: "Refresh" })).toHaveProperty("disabled", false);
   });
 
   test("first-read failure is visible with local-only rows and no previous read", async () => {
     const row = repo({ state: "local-only", reason: null, remote: null, id: null });
-    await renderGroups(base({ readAt: null, read: { phase: "failed", message: "Could not reach Spex Example" } }, [row]), { open: false });
+    await renderGroups(base({ instance: { readAt: null, read: { phase: "failed", message: "Could not reach Spex Example" } } }, [row]), { open: false });
     expect(screen.getByRole("alert").textContent).toBe("Could not reach Spex Example");
     expect(screen.getByTestId("space-read-at").textContent).toBe("Not read yet");
-    deliver(base({ account: null, read: { phase: "idle" }, readAt: null }));
+    deliver(base({ instance: { signedIn: false, read: { phase: "idle" }, readAt: null } }));
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
@@ -174,9 +204,9 @@ describe("GROUPS: the header (space-1, space-2)", () => {
     expect(live()).toBe("Could not reach Spex Example");
   });
 
-  test("signed out, the header is one card with what signing in brings and Sign in, and the list holds your own group alone", async () => {
+  test("space-66, space-1: listing no instance, the header is one card with what signing in brings and Sign in, and the list holds your own group alone", async () => {
     await renderGroups(signedOut(), { open: false });
-    const account = screen.getByTestId("space-account");
+    const account = screen.getByTestId("space-signin-card");
     expect(within(account).getByRole("heading", { level: 2 }).textContent).toBe("Not signed in");
     expect(screen.getByTestId("space-signin-body").textContent).toBe(
       "Sign in to see your groups and share each project's records with the people in them." +
@@ -220,13 +250,21 @@ describe("GROUPS: the header (space-1, space-2)", () => {
     }
     // Nothing is sent to the host before the control is activated.
     expect(commandMock.mock.calls.map(([type]) => type)).toEqual(["space.get"]);
+    cleanup();
+    // Listing no instance once its folder bears a login — the last
+    // instance forgotten — your own group reads its path, as the core
+    // says it no longer bears this device's user name (space-1).
+    const forgotten = signedOut();
+    await renderGroups({ ...forgotten, own: { ...forgotten.own, named: false } }, { open: false });
+    expect(within(screen.getByTestId("space-own")).getByRole("heading", { level: 2 }).textContent).toBe("Your own group · jane");
   });
 
   test("with no git the guidance replaces every other field", async () => {
     await renderGroups(base({ git: { ok: false, guidance: "Install Git from git-scm.com, then reopen Groups." } }));
     expect(screen.getByTestId("space-no-git").textContent).toContain("Git is not installed");
     expect(screen.getByTestId("space-no-git").textContent).toContain("git-scm.com");
-    expect(screen.queryByTestId("space-account")).toBeNull();
+    expect(screen.queryByTestId("space-signin-card")).toBeNull();
+    expect(screen.queryByTestId(`space-instance-${ORIGIN}`)).toBeNull();
     expect(screen.queryByTestId("space-refresh")).toBeNull();
     expect(screen.queryByTestId("space-groups")).toBeNull();
     expect(screen.queryByTestId("space-repository")).toBeNull();
@@ -234,14 +272,14 @@ describe("GROUPS: the header (space-1, space-2)", () => {
   });
 });
 
-describe("GROUPS: signing in (space-3, space-6)", () => {
+describe("GROUPS: signing in (space-3, space-6, space-29)", () => {
   test("the browser flow opens the host's page through the bridge, reads 'Signing in…' with Cancel, and ends as the state says", async () => {
     const openExternal = vi.fn<(url: string) => Promise<boolean>>().mockResolvedValue(true);
     (window as { spexNative?: unknown }).spexNative = { pickDirectory: vi.fn(), openExternal };
     await renderGroups(signedOut(), { open: false });
     fireEvent.click(screen.getByTestId("space-signin"));
     await waitFor(() => expect(openExternal).toHaveBeenCalledWith("https://spex.example/login/app?client_id=spex&state=s"));
-    expect(calls("space.signin.start")).toEqual([{}]);
+    expect(calls("space.signin.start")).toEqual([{ url: ORIGIN }]);
     const control = screen.getByTestId("space-signin") as HTMLButtonElement;
     await waitFor(() => expect(control.textContent).toBe("Signing in…"));
     expect(control.disabled).toBe(true);
@@ -257,11 +295,17 @@ describe("GROUPS: signing in (space-3, space-6)", () => {
     expect(openExternal).toHaveBeenCalledTimes(2);
     expect(screen.getByRole("button", { name: "Cancel" })).toBeTruthy();
     // The core reports the flow running, then its end with the account.
-    deliver(signedOut({ signIn: { phase: "running", flow: "browser", since: NOW } }));
+    deliver(signedOut({ signIn: { phase: "running", instance: ORIGIN, flow: "browser", since: NOW } }));
     expect(control.textContent).toBe("Signing in…");
+    // Signed in, the card gives way to the instance's heading, focus
+    // landing on its Sign out (DR-010 §6).
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId("space-signin-cancel")));
     deliver(base());
-    expect(screen.getByTestId("space-account-wide").textContent).toBe("Signed in as @jane at Spex Example");
-    expect(screen.getByRole("button", { name: "Sign out" })).toBeTruthy();
+    const section = screen.getByTestId(`space-instance-${ORIGIN}`);
+    expect(within(section).getByTestId("space-account").textContent).toBe("· Signed in as @jane");
+    expect(screen.queryByTestId("space-signin-card")).toBeNull();
+    const signOut = within(section).getByRole("button", { name: "Sign out" });
+    await waitFor(() => expect(document.activeElement).toBe(signOut));
   });
 
   test("with no bridge, or one that refuses, the browser flow's page stands as a link to finish at", async () => {
@@ -297,7 +341,7 @@ describe("GROUPS: signing in (space-3, space-6)", () => {
         ? { flow: "device", userCode: "WDJB-MJHT", verificationUri: complete, expiresAt: NOW + 15 * MIN }
         : answer(type, fields),
     );
-    await renderGroups(signedOut({ host: { url: "https://spex.example", displayName: null } }), { open: false });
+    await renderGroups(signedOut(), { open: false });
     fireEvent.click(screen.getByTestId("space-signin"));
     const link = (await screen.findByTestId("space-signin-link")) as HTMLAnchorElement;
     // The link names the page it opens by its host name.
@@ -308,9 +352,11 @@ describe("GROUPS: signing in (space-3, space-6)", () => {
       "Continue in your browser:Open spex.example to sign in" +
         "Sign in there and approve; you return here signed in.",
     );
-    // The code is never shown, nor offered to copy.
+    // The code is never shown, nor offered to copy: the one field is
+    // the Instance field, holding the origin.
     expect(document.body.textContent).not.toContain("WDJB-MJHT");
-    expect(screen.queryByRole("textbox")).toBeNull();
+    expect(screen.getAllByRole("textbox")).toEqual([screen.getByTestId("space-signin-instance")]);
+    expect((screen.getByTestId("space-signin-instance") as HTMLInputElement).value).toBe(ORIGIN);
     const control = screen.getByTestId("space-signin") as HTMLButtonElement;
     expect(control.textContent).toBe("Signing in…");
     expect(control.disabled).toBe(true);
@@ -319,7 +365,7 @@ describe("GROUPS: signing in (space-3, space-6)", () => {
     // A page that opens mid-flow reads the link from the state alone.
     cleanup();
     await renderGroups(
-      signedOut({ signIn: { phase: "running", flow: "device", userCode: "ABCD-EFGH", verificationUri: complete, since: NOW } }),
+      signedOut({ signIn: { phase: "running", instance: ORIGIN, flow: "device", userCode: "ABCD-EFGH", verificationUri: complete, since: NOW } }),
       { open: false },
     );
     expect(screen.getByTestId("space-signin-link").textContent).toBe("Open spex.example to sign in");
@@ -330,8 +376,8 @@ describe("GROUPS: signing in (space-3, space-6)", () => {
   });
 
   test("a denial, an expiry or a refusal ends the flow with its cause beside the control, which reads Sign in again", async () => {
-    await renderGroups(signedOut({ signIn: { phase: "running", flow: "device", userCode: "ABCD-EFGH", verificationUri: "https://spex.example/oauth/device", since: NOW } }), { open: false });
-    deliver(signedOut({ signIn: { phase: "failed", cause: "denied", message: "The sign-in was denied at Spex Example" } }));
+    await renderGroups(signedOut({ signIn: { phase: "running", instance: ORIGIN, flow: "device", userCode: "ABCD-EFGH", verificationUri: "https://spex.example/oauth/device", since: NOW } }), { open: false });
+    deliver(signedOut({ signIn: { phase: "failed", instance: ORIGIN, cause: "denied", message: "The sign-in was denied at Spex Example" } }));
     expect(screen.getByTestId("space-signin-error").textContent).toBe("The sign-in was denied at Spex Example.");
     expect(screen.getByTestId("space-signin").textContent).toBe("Sign in again");
     expect(screen.queryByTestId("space-signin-link")).toBeNull();
@@ -344,48 +390,93 @@ describe("GROUPS: signing in (space-3, space-6)", () => {
     await waitFor(() => expect(screen.getByTestId("space-signin-error").textContent).toBe("A sign-in is already running."));
   });
 
-  test.each(["en", "zh"] as const)("where the host signed this device out, the card says so with the login, and the control reads Sign in again (%s)", async (language) => {
+  test.each(["en", "zh"] as const)("space-66, space-3: where the core reports the instance signed this device out, its heading reads the sentence beside Sign in again and Forget; one signed out by the reader carries the two controls alone (%s)", async (language) => {
     activateLanguage(language);
-    await renderGroups(signedOut({ signIn: { phase: "idle", signedOut: { by: "host", login: "jane" } } }), { open: false });
-    // The host's name is its URL's host name, as on the rest of the card.
-    expect(screen.getByTestId("space-signin-body").textContent).toBe(
+    await renderGroups(signedOutAt(ORIGIN, { byHost: true }), { open: false });
+    const section = screen.getByTestId(`space-instance-${ORIGIN}`);
+    // Signed out, the heading keeps the display name it last read, with
+    // no account beside it (space-1).
+    expect(within(section).getByRole("heading", { level: 2 }).textContent).toBe("Spex Example");
+    expect(within(section).queryByTestId("space-account")).toBeNull();
+    // The host name is the instance's, with the login it bore there.
+    expect(within(section).getByTestId("space-signed-out-by-host").textContent).toBe(
       language === "zh"
-        ? "spex.example 已让此设备退出登录。重新登录即可以 @jane 继续。在此之前，一切都只保存在此设备上，不会联系任何服务。"
-        : "spex.example signed this device out. Sign in again to continue as @jane." +
-            "Until you do, everything stays on this device and nothing is contacted.",
+        ? "spex.example 已让此设备退出登录。重新登录即可以 @jane 继续。"
+        : "spex.example signed this device out. Sign in again to continue as @jane.",
     );
-    expect(screen.getByTestId("space-signin").textContent).toBe(language === "zh" ? "重新登录" : "Sign in again");
-    expect(within(screen.getByTestId("space-account")).getByRole("heading", { level: 2 }).textContent).toBe(
-      language === "zh" ? "未登录" : "Not signed in",
-    );
+    // Beside it, the heading's two controls: Forget and Sign in again
+    // (space-1, space-82).
+    const controls = (heading: HTMLElement) =>
+      within(within(heading).getByTestId("space-instance-heading"))
+        .getAllByRole("button")
+        .map((button) => button.textContent);
+    const both = language === "zh" ? ["忘记", "重新登录"] : ["Forget", "Sign in again"];
+    expect(controls(section)).toEqual(both);
+    expect(within(section).queryByRole("button", { name: language === "zh" ? "退出登录" : "Sign out" })).toBeNull();
+    // The home lists an instance, so no card stands in the header.
+    expect(screen.queryByTestId("space-signin-card")).toBeNull();
+    cleanup();
+    // Signed out by the reader: the two controls alone.
+    await renderGroups(signedOutAt(ORIGIN), { open: false });
+    const mine = screen.getByTestId(`space-instance-${ORIGIN}`);
+    expect(within(mine).queryByTestId("space-signed-out-by-host")).toBeNull();
+    expect(controls(mine)).toEqual(both);
   });
 
-  test("from the host's sign-out, Sign in again starts the flow, Cancel brings the sentence back, and the next sign-in ends it", async () => {
-    const out = signedOut({ signIn: { phase: "idle", signedOut: { by: "host", login: "jane" } } });
+  test("space-3: from the instance's sign-out, Sign in again on its heading starts the flow there, Cancel brings the sentence back, and the next sign-in ends it", async () => {
+    const complete = `${ORIGIN}/login/device?user_code=WDJB-MJHT`;
+    commandMock.mockImplementation(async (type: string, fields?: Record<string, unknown>) =>
+      type === "space.signin.start"
+        ? { flow: "device", userCode: "WDJB-MJHT", verificationUri: complete, expiresAt: NOW + 15 * MIN }
+        : answer(type, fields),
+    );
+    const out = signedOutAt(ORIGIN, { byHost: true });
     await renderGroups(out, { open: false });
-    fireEvent.click(screen.getByTestId("space-signin"));
-    await screen.findByTestId("space-signin-link");
-    expect(calls("space.signin.start")).toEqual([{}]);
-    expect(screen.getByTestId("space-signin").textContent).toBe("Signing in…");
-    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-    await waitFor(() => expect(screen.getByTestId("space-signin").textContent).toBe("Sign in again"));
-    expect(screen.getByTestId("space-signin-caption").textContent).toBe("spex.example signed this device out. Sign in again to continue as @jane.");
+    const section = screen.getByTestId(`space-instance-${ORIGIN}`);
+    const again = within(section).getByTestId("space-signin-again") as HTMLButtonElement;
+    fireEvent.click(again);
+    // The flow reads on the heading: the link to finish at, named by
+    // the instance's host name, no code shown (space-3).
+    const link = (await within(section).findByTestId("space-signin-link")) as HTMLAnchorElement;
+    expect(calls("space.signin.start")).toEqual([{ url: ORIGIN }]);
+    expect(link.textContent).toBe("Open spex.example to sign in");
+    expect(link.href).toBe(complete);
+    expect(document.body.textContent).not.toContain("WDJB-MJHT");
+    expect(again.textContent).toBe("Signing in…");
+    expect(again.disabled).toBe(true);
+    expect(within(section).queryByTestId("space-signed-out-by-host")).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(within(section).getByTestId("space-signin-cancel")));
+    fireEvent.click(within(section).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(again.textContent).toBe("Sign in again"));
+    expect(within(section).queryByTestId("space-signin-link")).toBeNull();
+    expect(within(section).getByTestId("space-signed-out-by-host").textContent).toBe(
+      "spex.example signed this device out. Sign in again to continue as @jane.",
+    );
+    await waitFor(() => expect(document.activeElement).toBe(again));
     // A sign-in that completes reads the account, the sentence gone.
     deliver(base());
-    expect(screen.getByTestId("space-account-wide").textContent).toBe("Signed in as @jane at Spex Example");
-    expect(screen.queryByTestId("space-signin-caption")).toBeNull();
+    expect(within(section).getByTestId("space-account").textContent).toBe("· Signed in as @jane");
+    expect(within(section).queryByTestId("space-signed-out-by-host")).toBeNull();
   });
 
-  test("Sign out sends the command and every repository reads as the core then says", async () => {
+  test("space-6: Sign out on the instance's heading sends space.signout naming it, keeps the heading signed out with Sign in again, and every row reads as the core then says", async () => {
     await renderGroups(base(), { open: false });
+    const after = signedOutAt(ORIGIN, {}, base({}, [repo({ state: "unreachable", reason: "Sign in again" })]));
     commandMock.mockImplementation(async (type: string, fields?: Record<string, unknown>) =>
-      type === "space.signout" ? signedOut() : answer(type, fields),
+      type === "space.signout" ? after : answer(type, fields),
     );
-    fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
-    await waitFor(() => expect(calls("space.signout")).toEqual([{}]));
-    await waitFor(() => expect(screen.getByTestId("space-account").textContent).toContain("Not signed in"));
-    expect(screen.getByTestId(`space-repo-state-${KEY}`).textContent).toBe("On this device only");
-    expect(screen.getByTestId("space-signin").textContent).toBe("Sign in");
+    const section = screen.getByTestId(`space-instance-${ORIGIN}`);
+    fireEvent.click(within(section).getByRole("button", { name: "Sign out" }));
+    await waitFor(() => expect(calls("space.signout")).toEqual([{ instance: ORIGIN }]));
+    // The reply is the state: the heading kept, signed out, with Sign in
+    // again, which takes focus; the live region says so (space-6).
+    const again = await within(section).findByTestId("space-signin-again");
+    expect(again.textContent).toBe("Sign in again");
+    expect(within(section).getByRole("heading", { level: 2 }).textContent).toBe("Spex Example");
+    expect(live()).toBe("Signed out of Spex Example");
+    await waitFor(() => expect(document.activeElement).toBe(again));
+    expect(screen.getByTestId(`space-repo-state-${KEY}`).textContent).toBe("Unreachable: Sign in again");
+    expect(screen.queryByTestId("space-signin-card")).toBeNull();
     // A refusal — a sync running — stays beside the control.
     cleanup();
     await renderGroups(base(), { open: false });
@@ -399,40 +490,222 @@ describe("GROUPS: signing in (space-3, space-6)", () => {
   });
 });
 
+describe("GROUPS: the sign-in card's Instance field (space-66, space-3, git-host-2, git-host-3)", () => {
+  /** The card's field, by its caption. */
+  const field = () => screen.getByRole("textbox", { name: "Instance" }) as HTMLInputElement;
+  /** The start answered by the device flow at the origin it names. */
+  const deviceAt = (origin: string) =>
+    commandMock.mockImplementation(async (type: string, fields?: Record<string, unknown>) =>
+      type === "space.signin.start"
+        ? { flow: "device", userCode: "WDJB-MJHT", verificationUri: `${origin}/login/device?user_code=WDJB-MJHT`, expiresAt: NOW + 15 * MIN }
+        : answer(type, fields),
+    );
+
+  test("space-66, space-3: signed out, the card holds its two sentences, the Instance field holding the default instance's origin, and Sign in, with no home path, Copy path, read time or Refresh", async () => {
+    await renderGroups(signedOut(), { open: false });
+    const card = screen.getByTestId("space-signin-card");
+    expect(within(card).getByRole("heading", { level: 2 }).textContent).toBe("Not signed in");
+    expect(screen.getByTestId("space-signin-body").textContent).toBe(
+      "Sign in to see your groups and share each project's records with the people in them." +
+        "Until you do, everything stays on this device and nothing is contacted.",
+    );
+    // The field is captioned "Instance" and holds the default instance's
+    // origin until the reader edits it (space-3, storage-2).
+    expect(within(card).getByTestId("space-signin-instance")).toBe(field());
+    expect(field().value).toBe(ORIGIN);
+    expect(field().readOnly).toBe(false);
+    const signIn = within(card).getByRole("button", { name: "Sign in" }) as HTMLButtonElement;
+    expect(signIn.disabled).toBe(false);
+    expect(signIn.title).toBe("Signs in to spex.example");
+    // Sign in is the card's one primary control, after the field.
+    expect(card.querySelectorAll("button.bg-brand-600")).toHaveLength(1);
+    expect(field().compareDocumentPosition(signIn) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const header = screen.getByTestId("space-header");
+    expect(header.textContent).not.toContain("~/.spex");
+    expect(screen.queryByTestId("space-home")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Copy path" })).toBeNull();
+    expect(screen.queryByTestId("space-read-at")).toBeNull();
+    expect(screen.queryByTestId("space-refresh")).toBeNull();
+  });
+
+  test("space-3, git-host-3: an edited field starts the sign-in at the origin it holds, the flow's lines naming that origin's host name", async () => {
+    deviceAt(SECOND);
+    await renderGroups(signedOut(), { open: false });
+    fireEvent.change(field(), { target: { value: `  ${SECOND}  ` } });
+    expect(screen.getByTestId("space-signin").title).toBe("Signs in to second.example");
+    fireEvent.click(screen.getByTestId("space-signin"));
+    await waitFor(() => expect(calls("space.signin.start")).toEqual([{ url: SECOND }]));
+    // The page the person opens is named by the host name of the origin
+    // being signed in to, never the default instance's (space-3).
+    const link = (await screen.findByTestId("space-signin-link")) as HTMLAnchorElement;
+    expect(link.textContent).toBe("Open second.example to sign in");
+    expect(link.href).toBe(`${SECOND}/login/device?user_code=WDJB-MJHT`);
+    // The origin being signed in to stands in the field while it runs.
+    expect(field().value).toBe(SECOND);
+    expect(field().readOnly).toBe(true);
+    expect(screen.getByTestId("space-signin").textContent).toBe("Signing in…");
+    deliver(signedOut({ signIn: { phase: "running", instance: SECOND, flow: "device", userCode: "WDJB-MJHT", verificationUri: link.href, since: NOW } }));
+    expect(screen.getByTestId("space-signin-link").textContent).toBe("Open second.example to sign in");
+  });
+
+  test("space-3, git-host-2: the browser flow at an edited origin reads that the browser is open at its host name", async () => {
+    const openExternal = vi.fn<(url: string) => Promise<boolean>>().mockResolvedValue(true);
+    (window as { spexNative?: unknown }).spexNative = { pickDirectory: vi.fn(), openExternal };
+    commandMock.mockImplementation(async (type: string, fields?: Record<string, unknown>) =>
+      type === "space.signin.start" ? { flow: "browser", url: `${SECOND}/login/app?client_id=spex&state=s` } : answer(type, fields),
+    );
+    await renderGroups(signedOut(), { open: false });
+    fireEvent.change(field(), { target: { value: SECOND } });
+    fireEvent.click(screen.getByTestId("space-signin"));
+    await waitFor(() => expect(openExternal).toHaveBeenCalledWith(`${SECOND}/login/app?client_id=spex&state=s`));
+    expect(calls("space.signin.start")).toEqual([{ url: SECOND }]);
+    expect((await screen.findByTestId("space-signin-opened")).textContent).toBe(
+      "Your browser is open at second.example: sign in there and approve; you return here signed in. Open it again",
+    );
+  });
+
+  test("space-3, git-host-2: a URL the core refuses by the origin rule starts no flow, its cause read as one sentence, the field kept and focused", async () => {
+    commandMock.mockImplementation(async (type: string, fields?: Record<string, unknown>) => {
+      if (type === "space.signin.start") throw new Error("An instance is named by its origin alone, with no path, query or user");
+      return answer(type, fields);
+    });
+    await renderGroups(signedOut(), { open: false });
+    fireEvent.change(field(), { target: { value: `${SECOND}/x` } });
+    fireEvent.click(screen.getByTestId("space-signin"));
+    await waitFor(() =>
+      expect(screen.getByTestId("space-signin-error").textContent).toBe(
+        "An instance is named by its origin alone, with no path, query or user.",
+      ),
+    );
+    expect(calls("space.signin.start")).toEqual([{ url: `${SECOND}/x` }]);
+    expect(live()).toBe("An instance is named by its origin alone, with no path, query or user");
+    // No flow: no link, no Cancel, Sign in standing again with the field
+    // keeping the reader's text and taking focus.
+    expect(screen.queryByTestId("space-signin-link")).toBeNull();
+    expect(screen.queryByTestId("space-signin-cancel")).toBeNull();
+    expect(field().value).toBe(`${SECOND}/x`);
+    expect(field().readOnly).toBe(false);
+    await waitFor(() => expect(document.activeElement).toBe(field()));
+    const signIn = screen.getByTestId("space-signin") as HTMLButtonElement;
+    expect(signIn.textContent).toBe("Sign in");
+    expect(signIn.disabled).toBe(false);
+    // The corrected origin starts the sign-in, the cause gone.
+    commandMock.mockImplementation(answer);
+    fireEvent.change(field(), { target: { value: SECOND } });
+    fireEvent.keyDown(field(), { key: "Enter" });
+    await waitFor(() => expect(calls("space.signin.start")).toEqual([{ url: `${SECOND}/x` }, { url: SECOND }]));
+    await screen.findByTestId("space-signin-link");
+    expect(screen.queryByTestId("space-signin-error")).toBeNull();
+  });
+
+  test("space-3: a blank field disables Sign in and sends nothing; Enter in a filled one starts the sign-in", async () => {
+    await renderGroups(signedOut(), { open: false });
+    fireEvent.change(field(), { target: { value: "   " } });
+    const signIn = screen.getByTestId("space-signin") as HTMLButtonElement;
+    expect(signIn.disabled).toBe(true);
+    expect(signIn.getAttribute("title")).toBeNull();
+    fireEvent.click(signIn);
+    fireEvent.keyDown(field(), { key: "Enter" });
+    expect(calls("space.signin.start")).toEqual([]);
+    fireEvent.change(field(), { target: { value: ORIGIN } });
+    expect(signIn.disabled).toBe(false);
+    fireEvent.keyDown(field(), { key: "Enter" });
+    await waitFor(() => expect(calls("space.signin.start")).toEqual([{ url: ORIGIN }]));
+  });
+
+  test("space-3: Sign in hands focus to Cancel while the flow runs; Escape cancels it, focus back on Sign in", async () => {
+    await renderGroups(signedOut(), { open: false });
+    fireEvent.click(screen.getByTestId("space-signin"));
+    await screen.findByTestId("space-signin-link");
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId("space-signin-cancel")));
+    fireEvent.keyDown(field(), { key: "Escape" });
+    await waitFor(() => expect(calls("space.signin.cancel")).toEqual([{}]));
+    await waitFor(() => expect(screen.getByTestId("space-signin").textContent).toBe("Sign in"));
+    expect(screen.queryByTestId("space-signin-link")).toBeNull();
+    expect(screen.getByTestId("space-signin-caption")).toBeTruthy();
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId("space-signin")));
+    // With no flow running, Escape cancels nothing.
+    fireEvent.keyDown(field(), { key: "Escape" });
+    expect(calls("space.signin.cancel")).toHaveLength(1);
+  });
+
+  test("space-3: a page that opens on a flow another client runs names the host of the state's instance in its link", async () => {
+    const complete = `${SECOND}/login/device?user_code=ABCD-EFGH`;
+    await renderGroups(
+      signedOut({ signIn: { phase: "running", instance: SECOND, flow: "device", userCode: "ABCD-EFGH", verificationUri: complete, since: NOW } }),
+      { open: false },
+    );
+    const link = screen.getByTestId("space-signin-link") as HTMLAnchorElement;
+    expect(link.textContent).toBe("Open second.example to sign in");
+    expect(link.href).toBe(complete);
+    expect(document.body.textContent).not.toContain("ABCD-EFGH");
+    // The field still holds the default instance's origin, read only
+    // while the flow runs.
+    expect(field().value).toBe(ORIGIN);
+    expect(field().readOnly).toBe(true);
+  });
+
+  test.each(["en", "zh"] as const)("space-3: the field's caption reads in the interface's language (%s)", async (language) => {
+    activateLanguage(language);
+    await renderGroups(signedOut(), { open: false });
+    const caption = language === "zh" ? "实例" : "Instance";
+    const input = screen.getByRole("textbox", { name: caption }) as HTMLInputElement;
+    expect(input).toBe(screen.getByTestId("space-signin-instance"));
+    expect(input.value).toBe(ORIGIN);
+  });
+});
+
 describe("GROUPS: the groups list and its rows (space-1, space-61, space-64)", () => {
-  test("your own group first, then each group the host lists with its full path, each repository a row", async () => {
+  test("space-1, space-66: your own group first, then the instance's heading over every group it lists in the order of their paths, each by its name and its full path, then your namespace by your login, each repository a row", async () => {
     const mine = base({}, [repo({ local: [SESSION_UNIT], lastSync: { at: NOW - 2 * 60 * MIN, sent: 1, received: 0 } })]);
     // A personal group the host names after the login, its path apart
     // from its name, and a group whose name is its path (space-1).
-    const personal = { ...teamGroup([]), id: "3", fullPath: "jane1", name: "jane", url: "https://spex.example/jane1" };
-    const plain = { ...teamGroup([]), id: "4", fullPath: "lab", name: "lab", url: "https://spex.example/lab" };
-    await renderGroups({ ...mine, groups: [...mine.groups, teamGroup(), personal, plain] }, { open: false });
+    const personal = { ...teamGroup([]), id: "3", fullPath: "jane1", name: "jane" };
+    const plain = { ...teamGroup([]), id: "4", fullPath: "lab", name: "lab" };
+    await renderGroups(withGroups(mine, plain, teamGroup(), personal), { open: false });
     const groups = within(screen.getByTestId("space-groups")).getAllByRole("group");
-    expect(groups.map((group) => group.getAttribute("aria-label"))).toEqual(["Your own group", "acme/team", "jane1", "lab"]);
-    // Signed in, your own group's path stands beside its heading, after
-    // the separator, as a path apart from a group's name does; a path
-    // that is the name reads once.
-    const heading = (index: number) => within(groups[index]!).getByRole("heading", { level: 2 });
-    expect(heading(0).textContent).toBe("Your own group · jane");
-    expect(heading(1).textContent).toBe("team · acme/team");
-    expect(heading(2).textContent).toBe("jane · jane1");
-    expect(heading(3).textContent).toBe("lab");
+    expect(groups.map((group) => group.getAttribute("aria-label"))).toEqual([
+      "Your own group",
+      "Spex Example",
+      "acme/team",
+      "jane1",
+      "lab",
+      "jane",
+    ]);
+    // Your own group stands first, apart from every instance; signed in,
+    // its path stands beside its heading after the separator (space-1).
+    expect(groups[0]).toBe(screen.getByTestId("space-own"));
+    expect(within(groups[0]!).getByRole("heading", { level: 2 }).textContent).toBe("Your own group · jane");
+    // Under the instance's heading, each group a heading of its own: a
+    // path apart from the name stands beside it, a path that is the name
+    // reads once, and your namespace reads your login.
+    const instance = screen.getByTestId(`space-instance-${ORIGIN}`);
+    expect(groups[1]).toBe(instance);
+    expect(within(instance).getAllByRole("heading", { level: 3 }).map((heading) => heading.textContent)).toEqual([
+      "team · acme/team",
+      "jane · jane1",
+      "lab",
+      "jane",
+    ]);
+    expect(groups[5]).toBe(screen.getByTestId("space-group-@jane"));
     // The separator is the eye's: the heading's name reads its words.
     expect(screen.getByTestId("space-heading-beside-jane1").firstElementChild?.getAttribute("aria-hidden")).toBe("true");
     expect(screen.getByTestId("space-heading-beside-jane1").className).toContain("text-neutral-500");
     expect(screen.queryByTestId("space-heading-beside-lab")).toBeNull();
+    expect(screen.queryByTestId("space-heading-beside-@jane")).toBeNull();
     // In each group the rows stand in the core's order, its own first.
-    expect(within(groups[1]!).getAllByRole("listitem").map((item) => item.dataset.testid)).toEqual([
-      "space-row-acme/team/team-spex",
-      "space-row-acme/team/academy-spex",
-      "space-row-acme/team/docs-spex",
-      "space-row-acme/team/old-spex",
+    expect(within(groups[2]!).getAllByRole("listitem").map((item) => item.dataset.testid)).toEqual([
+      "space-row-@spex.example/acme/team/team-spex",
+      "space-row-@spex.example/acme/team/academy-spex",
+      "space-row-@spex.example/acme/team/docs-spex",
+      "space-row-@spex.example/acme/team/old-spex",
     ]);
 
     // A project's row: its name, where its code lives with no user in
     // it, its local changes, ahead and behind, and its last sync.
     const row = screen.getByTestId(`space-repo-${KEY}`);
-    expect(within(groups[0]!).getByRole("button", { name: "academy-spex", expanded: false })).toBe(row);
+    expect(within(groups[5]!).getByRole("button", { name: "academy-spex", expanded: false })).toBe(row);
+    expect(within(groups[0]!).getByTestId(`space-row-${OWN}`)).toBeTruthy();
     expect(screen.getByTestId(`space-repo-code-${KEY}`).textContent).toBe("https://github.com/jane/academy.git");
     expect(screen.getByTestId(`space-repo-code-${KEY}`).getAttribute("title")).toBe("https://jane@github.com/jane/academy.git");
     expect(screen.getByTestId(`space-repo-changes-${KEY}`).getAttribute("title")).toBe("1 local change");
@@ -446,7 +719,7 @@ describe("GROUPS: the groups list and its rows (space-1, space-61, space-64)", (
     );
     // A group's own spex repository holds the group's records.
     expect(screen.getByTestId(`space-repo-code-${OWN}`).textContent).toBe("Group records");
-    expect(screen.getByTestId("space-repo-code-acme/team/team-spex").textContent).toBe("Group records");
+    expect(screen.getByTestId("space-repo-code-@spex.example/acme/team/team-spex").textContent).toBe("Group records");
 
     // Activating a row opens its tabs beneath the list; again folds them.
     expect(screen.queryByTestId("space-repository")).toBeNull();
@@ -516,8 +789,8 @@ describe("GROUPS: the groups list and its rows (space-1, space-61, space-64)", (
     expect(screen.getByTestId(`space-repo-code-${KEY}`).textContent).toBe("Code not on a remote");
   });
 
-  test("signed out, no row offers a sign-in: a repository the host holds waits for the header's; a path remote retries", async () => {
-    await renderGroups(base({ account: null }, [repo({ state: "unreachable", reason: "Sign in again" })]), { open: false });
+  test("space-61: signed out, no row offers a sign-in: a repository the instance holds waits for its heading's; a path remote retries", async () => {
+    await renderGroups(base({ instance: { signedIn: false } }, [repo({ state: "unreachable", reason: "Sign in again" })]), { open: false });
     expect(screen.getByTestId(`space-repo-state-${KEY}`).textContent).toBe("Unreachable: Sign in again");
     expect(
       within(screen.getByTestId(`space-row-${KEY}`))
@@ -525,7 +798,7 @@ describe("GROUPS: the groups list and its rows (space-1, space-61, space-64)", (
         .filter((button) => !button.dataset.testid?.startsWith("space-repo-")),
     ).toEqual([]);
     cleanup();
-    await renderGroups(base({ account: null }, [repo({ state: "unreachable", reason: "the folder is gone", remote: "/srv/academy-spex.git" })]), { open: false });
+    await renderGroups(base({ instance: { signedIn: false } }, [repo({ state: "unreachable", reason: "the folder is gone", remote: "/srv/academy-spex.git" })]), { open: false });
     const reads = calls("space.get").length;
     fireEvent.click(screen.getByTestId(`space-row-retry-${KEY}`));
     // Signed out, a retry re-reads the state and contacts no host.
@@ -543,7 +816,7 @@ describe("GROUPS: the groups list and its rows (space-1, space-61, space-64)", (
   test("a group's own repository waiting on someone's rights reads the step and group, the host's words in the title (space-64)", async () => {
     const waiting = (step: "create" | "branch") =>
       repo({
-        key: "acme/team/team-spex",
+        key: "@spex.example/acme/team/team-spex",
         name: "team-spex",
         id: null,
         code: null,
@@ -557,14 +830,14 @@ describe("GROUPS: the groups list and its rows (space-1, space-61, space-64)", (
       ["create", "Waiting for a member who can create it in acme/team"],
       ["branch", "Waiting for a member who can prepare its branch in acme/team"],
     ] as const) {
-      await renderGroups({ ...base(), groups: [...base().groups, teamGroup([waiting(step)])] }, { open: false });
-      const state = screen.getByTestId("space-repo-state-acme/team/team-spex");
+      await renderGroups(withGroups(base(), teamGroup([waiting(step)])), { open: false });
+      const state = screen.getByTestId("space-repo-state-@spex.example/acme/team/team-spex");
       expect(state.textContent).toBe(phrase);
       expect(state.getAttribute("title")).toBe("403 Forbidden: you need at least the Maintainer role");
       // A group's own repository is made at its first session, never
       // picked for; the row names no host page to change.
-      expect(within(screen.getByTestId("space-row-acme/team/team-spex")).queryByRole("button", { name: "Pick a group" })).toBeNull();
-      expect(screen.getByTestId("space-row-acme/team/team-spex").querySelector("a")).toBeNull();
+      expect(within(screen.getByTestId("space-row-@spex.example/acme/team/team-spex")).queryByRole("button", { name: "Pick a group" })).toBeNull();
+      expect(screen.getByTestId("space-row-@spex.example/acme/team/team-spex").querySelector("a")).toBeNull();
       cleanup();
     }
   });
@@ -595,39 +868,47 @@ describe("GROUPS: the groups list and its rows (space-1, space-61, space-64)", (
   });
 });
 
-describe("GROUPS: Pick a group (space-58)", () => {
-  test("one picker offers the spex repositories listed for the same code, each with its group and members, then every group", async () => {
-    // Beside your own group and the team, a group named apart from its
+describe("GROUPS: Pick a group (space-58, space-29)", () => {
+  test("space-66, space-58: one picker offers, under the instance's display name, the spex repositories listed for the same code, each with its group and members, then your namespace by your login and every group", async () => {
+    // Beside your namespace and the team, a group named apart from its
     // path, as a team named in Chinese is, and one whose name is its path.
     const home = localProject();
     const huaxin = { ...teamGroup([]), id: "5", fullPath: "acme/huaxin-mfg", name: "华芯智造" };
     const lab = { ...teamGroup([]), id: "6", fullPath: "lab", name: "lab" };
-    await renderGroups({ ...home, groups: [home.groups[0]!, huaxin, home.groups[1]!, lab] }, { open: false });
+    const [mine, team] = home.instances[0]!.groups;
+    await renderGroups(withInstance(home, { groups: [mine!, huaxin, team!, lab] }), { open: false });
     const control = screen.getByTestId(`space-row-pick-${KEY}`);
     expect(control.textContent).toBe("Pick a group");
     fireEvent.click(control);
     expect(control.getAttribute("aria-expanded")).toBe("true");
     const picker = screen.getByRole("group", { name: "Pick a group for academy-spex" });
+    // Everything stands under the instance's display name, its heading
+    // naming its section (space-58).
+    const section = within(picker).getByRole("group", { name: "Spex Example" });
+    expect(section).toBe(within(picker).getByTestId(`space-pick-instance-${ORIGIN}`));
+    expect(within(section).getByRole("heading", { level: 3 }).textContent).toBe("Spex Example");
     // Only the one whose project.json names the folder's remote.
-    const listed = within(picker).getAllByTestId(/^space-pick-repo-/);
-    expect(listed.map((option) => option.dataset.testid)).toEqual(["space-pick-repo-acme/team/academy-spex"]);
+    const listed = within(section).getAllByTestId(/^space-pick-repo-/);
+    expect(listed.map((option) => option.dataset.testid)).toEqual(["space-pick-repo-@spex.example/acme/team/academy-spex"]);
     expect(listed[0]!.textContent).toContain("academy-spex");
     // Its group reads as the group's heading reads: its name, then its
     // path where the two differ (space-58).
-    expect(screen.getByTestId("space-pick-listed-group-acme/team/academy-spex").textContent).toBe("team · acme/team");
+    expect(screen.getByTestId("space-pick-listed-group-@spex.example/acme/team/academy-spex").textContent).toBe("team · acme/team");
     expect(listed[0]!.textContent).toContain("3 members");
     expect(document.activeElement).toBe(listed[0]);
-    // Below them, every group, with the folder's name to create, each
-    // read as its heading reads: your own group so called, a group by
-    // its name with its path after the separator where the two differ,
-    // and by its name alone where they are equal (space-58).
-    const offered = within(picker).getAllByTestId(/^space-pick-group-/);
+    // Below them, your namespace and every group, with the folder's
+    // name to create, each read as the list reads it: your namespace by
+    // your login alone, a group by its name with its path after the
+    // separator where the two differ, and by its name alone where they
+    // are equal (space-58).
+    const offered = within(section).getAllByTestId(/^space-pick-group-/);
     expect(offered.map((option) => option.textContent)).toEqual([
-      "Your own group · jane",
+      "jane",
       "华芯智造 · acme/huaxin-mfg",
       "team · acme/team",
       "lab",
     ]);
+    expect(offered[0]!.dataset.testid).toBe("space-pick-group-@jane");
     // The separator is the eye's: the button's name says the group's
     // name first, then its path (space-58).
     expect(within(picker).getByRole("button", { name: "华芯智造 acme/huaxin-mfg" })).toBe(offered[1]);
@@ -639,34 +920,34 @@ describe("GROUPS: Pick a group (space-58)", () => {
   test("picking a listed spex repository sends its host id; picking a group sends the group and the name", async () => {
     await renderGroups(localProject(), { open: false });
     fireEvent.click(screen.getByTestId(`space-row-pick-${KEY}`));
-    fireEvent.click(screen.getByTestId("space-pick-repo-acme/team/academy-spex"));
+    fireEvent.click(screen.getByTestId("space-pick-repo-@spex.example/acme/team/academy-spex"));
     await waitFor(() =>
-      expect(calls("space.pick")).toEqual([{ repository: KEY, choice: { kind: "join", hostId: "51" } }]),
+      expect(calls("space.pick")).toEqual([{ repository: KEY, choice: { kind: "join", instance: ORIGIN, hostId: "51" } }]),
     );
     await waitFor(() => expect(screen.queryByTestId(`space-picker-${KEY}`)).toBeNull());
     fireEvent.click(screen.getByTestId(`space-row-pick-${KEY}`));
     fireEvent.change(screen.getByTestId(`space-pick-name-${KEY}`), { target: { value: "academy-notes" } });
     fireEvent.click(screen.getByTestId("space-pick-group-acme/team"));
     await waitFor(() =>
-      expect(calls("space.pick")[1]).toEqual({ repository: KEY, choice: { kind: "create", groupId: "2", name: "academy-notes" } }),
+      expect(calls("space.pick")[1]).toEqual({ repository: KEY, choice: { kind: "create", instance: ORIGIN, groupId: "2", name: "academy-notes" } }),
     );
-    // Your own group is named by none, never by its id.
+    // Your namespace is named by none, never by an id.
     await waitFor(() => expect(screen.queryByTestId(`space-picker-${KEY}`)).toBeNull());
     fireEvent.click(screen.getByTestId(`space-row-pick-${KEY}`));
-    fireEvent.click(screen.getByTestId("space-pick-group-jane"));
+    fireEvent.click(screen.getByTestId("space-pick-group-@jane"));
     await waitFor(() =>
-      expect(calls("space.pick")[2]).toEqual({ repository: KEY, choice: { kind: "create", groupId: null, name: "academy" } }),
+      expect(calls("space.pick")[2]).toEqual({ repository: KEY, choice: { kind: "create", instance: ORIGIN, groupId: null, name: "academy" } }),
     );
   });
 
   test("space-57: a pick joining a repository others may share says the sharing notice in the picker first; Continue joins with noticed", async () => {
     // A project this device's reader has not been told about, beside a
     // team's spex repository for the same code.
-    const LISTED = "acme/team/academy-spex";
+    const LISTED = "@spex.example/acme/team/academy-spex";
     const joining = (listed: Partial<RepositoryState>, local: Partial<RepositoryState> = {}): GroupsState => {
       const state = base({}, [repo({ state: "local-only", remote: null, id: null, code: CODE, branch: null, members: null, noticed: false, ...local })]);
       const team = repo({ key: LISTED, name: "academy-spex", id: "51", code: CODE, folder: null, members: 3, state: "absent", branch: null, ...listed });
-      return { ...state, groups: [...state.groups, teamGroup([team])] };
+      return withGroups(state, teamGroup([team]));
     };
     const option = () => screen.getByTestId(`space-pick-repo-${LISTED}`);
     const notice = () => screen.getByTestId(`space-pick-notice-${KEY}`);
@@ -698,7 +979,7 @@ describe("GROUPS: Pick a group (space-58)", () => {
     fireEvent.click(option());
     fireEvent.click(within(notice()).getByRole("button", { name: "Continue" }));
     await waitFor(() =>
-      expect(calls("space.pick")).toEqual([{ repository: KEY, choice: { kind: "join", hostId: "51" }, noticed: true }]),
+      expect(calls("space.pick")).toEqual([{ repository: KEY, choice: { kind: "join", instance: ORIGIN, hostId: "51" }, noticed: true }]),
     );
     await waitFor(() => expect(screen.queryByTestId(`space-picker-${KEY}`)).toBeNull());
     cleanup();
@@ -714,7 +995,7 @@ describe("GROUPS: Pick a group (space-58)", () => {
     expect(notice().textContent).toContain("its records are public");
     fireEvent.click(within(notice()).getByRole("button", { name: "Continue" }));
     await waitFor(() =>
-      expect(calls("space.pick")).toEqual([{ repository: KEY, choice: { kind: "join", hostId: "51" }, noticed: true }]),
+      expect(calls("space.pick")).toEqual([{ repository: KEY, choice: { kind: "join", instance: ORIGIN, hostId: "51" }, noticed: true }]),
     );
     cleanup();
 
@@ -745,7 +1026,7 @@ describe("GROUPS: Pick a group (space-58)", () => {
       fireEvent.click(screen.getByTestId(`space-row-pick-${KEY}`));
       fireEvent.click(option());
       expect(screen.queryByTestId(`space-pick-notice-${KEY}`)).toBeNull();
-      await waitFor(() => expect(calls("space.pick")).toEqual([{ repository: KEY, choice: { kind: "join", hostId: "51" } }]));
+      await waitFor(() => expect(calls("space.pick")).toEqual([{ repository: KEY, choice: { kind: "join", instance: ORIGIN, hostId: "51" } }]));
       cleanup();
     }
   });
@@ -755,7 +1036,7 @@ describe("GROUPS: Pick a group (space-58)", () => {
     fireEvent.click(screen.getByTestId(`space-row-pick-${KEY}`));
     const name = screen.getByTestId(`space-pick-name-${KEY}`);
     fireEvent.change(name, { target: { value: "  " } });
-    fireEvent.click(screen.getByTestId("space-pick-group-jane"));
+    fireEvent.click(screen.getByTestId("space-pick-group-@jane"));
     expect(within(screen.getByTestId(`space-picker-${KEY}`)).getByRole("alert").textContent).toBe("Name the new spex repository.");
     expect(document.activeElement).toBe(name);
     expect(calls("space.pick")).toHaveLength(0);
@@ -764,7 +1045,7 @@ describe("GROUPS: Pick a group (space-58)", () => {
       return answer(type, fields);
     });
     fireEvent.change(name, { target: { value: "academy" } });
-    fireEvent.click(screen.getByTestId("space-pick-group-jane"));
+    fireEvent.click(screen.getByTestId("space-pick-group-@jane"));
     await waitFor(() =>
       expect(within(screen.getByTestId(`space-picker-${KEY}`)).getByRole("alert").textContent).toBe("academy-spex is taken in jane; name another"),
     );
@@ -780,15 +1061,15 @@ describe("GROUPS: Pick a group (space-58)", () => {
     expect(screen.queryByTestId(`space-picker-${KEY}`)).toBeNull();
     await waitFor(() => expect(document.activeElement).toBe(control));
     fireEvent.click(control);
-    fireEvent.keyDown(screen.getByTestId("space-pick-group-jane"), { key: "Escape" });
+    fireEvent.keyDown(screen.getByTestId("space-pick-group-@jane"), { key: "Escape" });
     expect(screen.queryByTestId(`space-picker-${KEY}`)).toBeNull();
     expect(calls("space.pick")).toHaveLength(0);
     expect(screen.getByTestId(`space-repo-state-${KEY}`).textContent).toBe("On this device only");
   });
 });
 
-describe("GROUPS: Join (space-63)", () => {
-  const ABSENT = "acme/team/docs-spex";
+describe("GROUPS: Join (space-63, space-29)", () => {
+  const ABSENT = "@spex.example/acme/team/docs-spex";
 
   test("with no directory picker Join asks for the folder in place and sends the host id with it", async () => {
     await renderGroups(localProject(), { open: false });
@@ -805,18 +1086,18 @@ describe("GROUPS: Join (space-63)", () => {
     fireEvent.click(control);
     fireEvent.change(screen.getByTestId(`space-join-${ABSENT}-path`), { target: { value: "/Users/jane/code/docs" } });
     fireEvent.click(within(screen.getByTestId(`space-join-${ABSENT}`)).getByRole("button", { name: "Join" }));
-    await waitFor(() => expect(calls("space.join")).toEqual([{ hostId: "52", folder: "/Users/jane/code/docs" }]));
+    await waitFor(() => expect(calls("space.join")).toEqual([{ instance: ORIGIN, hostId: "52", folder: "/Users/jane/code/docs" }]));
     // Accepted, the control stays busy until the machine moves.
     await waitFor(() => expect(screen.getByTestId(`space-row-join-${ABSENT}`).textContent).toBe("Joining…"));
   });
 
   test("a group's own spex repository asks for the folder its sessions run in", async () => {
     await renderGroups(
-      { ...base(), groups: [...base().groups, teamGroup([repo({ key: "acme/team/team-spex", name: "team-spex", id: "50", code: null, folder: null, state: "absent", branch: null })])] },
+      withGroups(base(), teamGroup([repo({ key: "@spex.example/acme/team/team-spex", name: "team-spex", id: "50", code: null, folder: null, state: "absent", branch: null })])),
       { open: false },
     );
-    fireEvent.click(screen.getByTestId("space-row-join-acme/team/team-spex"));
-    expect(screen.getByTestId("space-join-acme/team/team-spex").textContent).toContain("Folder its sessions run in on this device");
+    fireEvent.click(screen.getByTestId("space-row-join-@spex.example/acme/team/team-spex"));
+    expect(screen.getByTestId("space-join-@spex.example/acme/team/team-spex").textContent).toContain("Folder its sessions run in on this device");
   });
 
   test("with the directory picker Join asks through it, and a cancelled pick sends nothing", async () => {
@@ -828,7 +1109,7 @@ describe("GROUPS: Join (space-63)", () => {
     expect(screen.queryByTestId(`space-join-${ABSENT}`)).toBeNull();
     expect(calls("space.join")).toHaveLength(0);
     fireEvent.click(screen.getByTestId(`space-row-join-${ABSENT}`));
-    await waitFor(() => expect(calls("space.join")).toEqual([{ hostId: "52", folder: "/Users/jane/code/docs" }]));
+    await waitFor(() => expect(calls("space.join")).toEqual([{ instance: ORIGIN, hostId: "52", folder: "/Users/jane/code/docs" }]));
   });
 
   test("a refused join keeps the folder in place with Git's words", async () => {
@@ -852,77 +1133,88 @@ describe("GROUPS: the instance's entries (space-1, space-58, space-61, DR-120)",
    * lists a repository; and a group named like your login. */
   function instanceHome(): GroupsState {
     const home = base({}, [repo({ state: "local-only", remote: null, id: null, branch: null, members: null })]);
-    return {
-      ...home,
-      groups: [
-        home.groups[0]!,
-        { id: "3", fullPath: "acme", name: "Acme", own: false, can: { createSubgroup: true, manageMembers: true, rename: false, delete: false }, repositories: [] },
-        {
-          id: null,
-          fullPath: "bob",
-          name: "bob",
-          own: false,
-          can: NO_CAN,
-          repositories: [repo({ key: "bob/notes-spex", name: "notes-spex", id: "80", remote: "bob/notes-spex", code: null, folder: null, members: 2, can: { manageMembers: true, transfer: false } })],
-        },
-        {
-          id: "9",
-          fullPath: "jane",
-          name: "Jane's team",
-          own: false,
-          can: { createSubgroup: true, manageMembers: true, rename: false, delete: false },
-          repositories: [
-            repo({ key: "jane/jane-spex@81", name: "jane-spex", id: "81", remote: "jane/jane-spex", code: null, folder: null, state: "unreachable", reason: "a group named like your login", branch: null }),
-          ],
-        },
-      ],
-    };
+    return withGroups(
+      home,
+      { id: "3", login: null, mine: false, fullPath: "acme", name: "Acme", can: { createSubgroup: true, manageMembers: true, rename: false, delete: false }, repositories: [] },
+      namespace(
+        "bob",
+        [repo({ key: "@spex.example/bob/notes-spex", name: "notes-spex", id: "80", remote: "bob/notes-spex", code: null, folder: null, members: 2, can: { manageMembers: true, transfer: false } })],
+        false,
+      ),
+      {
+        id: "9",
+        login: null,
+        mine: false,
+        fullPath: "jane",
+        name: "Jane's team",
+        can: { createSubgroup: true, manageMembers: true, rename: false, delete: false },
+        repositories: [
+          repo({ key: "@spex.example/jane/jane-spex@81", name: "jane-spex", id: "81", remote: "jane/jane-spex", code: null, folder: null, state: "unreachable", reason: "a group named like your login", branch: null }),
+        ],
+      },
+    );
   }
 
   test("another login's entry carries no control on its heading, its row its own Members; a group named like your login stands apart, unreachable with no Join and no Sync", async () => {
     await renderGroups(instanceHome(), { open: false });
     const own = screen.getByRole("group", { name: "Your own group" });
     expect(within(own).getByRole("heading", { level: 2 }).textContent).toBe("Your own group · jane");
+    // Under the instance's heading, every group in the order of their
+    // paths, then your namespace, then another account's login (space-1).
+    const instance = screen.getByTestId(`space-instance-${ORIGIN}`);
+    expect(within(instance).getAllByTestId(/^space-group-[^-]+$/).map((entry) => entry.dataset.testid)).toEqual([
+      "space-group-acme",
+      "space-group-jane",
+      "space-group-@jane",
+      "space-group-@bob",
+    ]);
     // bob: headed by the login, nothing on its heading (space-1).
-    const bob = screen.getByRole("group", { name: "bob" });
-    expect(within(bob).getByRole("heading", { level: 2 }).textContent).toBe("bob");
+    const bob = screen.getByTestId("space-group-@bob");
+    expect(bob).toBe(screen.getByRole("group", { name: "bob" }));
+    expect(within(bob).getByRole("heading", { level: 3 }).textContent).toBe("bob");
     expect(screen.queryByTestId("space-group-members-bob")).toBeNull();
     expect(screen.queryByTestId("space-group-subgroup-bob")).toBeNull();
     // Its row carries its own Members, Share where the host says so (space-62).
-    fireEvent.click(screen.getByTestId("space-row-members-bob/notes-spex"));
-    const members = await screen.findByTestId("space-members-bob/notes-spex");
+    fireEvent.click(screen.getByTestId("space-row-members-@spex.example/bob/notes-spex"));
+    const members = await screen.findByTestId("space-members-@spex.example/bob/notes-spex");
     await within(members).findByTestId("space-member-jane");
-    expect(within(members).getByTestId("space-share-bob/notes-spex").textContent).toBe("Share");
+    expect(within(members).getByTestId("space-share-@spex.example/bob/notes-spex").textContent).toBe("Share");
     // The group named like your login: its own entry, its row
     // unreachable with the cause, Retry its one control (space-61).
-    const apart = screen.getByRole("group", { name: "jane" });
-    expect(within(apart).getByRole("heading", { level: 2 }).textContent).toBe("Jane's team · jane");
-    const row = within(apart).getByTestId("space-row-jane/jane-spex@81");
-    expect(within(row).getByTestId("space-repo-state-jane/jane-spex@81").textContent).toBe("Unreachable: a group named like your login");
-    expect(within(row).queryByTestId("space-row-join-jane/jane-spex@81")).toBeNull();
-    expect(within(row).queryByTestId("space-row-sync-jane/jane-spex@81")).toBeNull();
-    expect(within(row).getByTestId("space-row-retry-jane/jane-spex@81").textContent).toBe("Retry");
+    const apart = screen.getByTestId("space-group-jane");
+    expect(within(apart).getByRole("heading", { level: 3 }).textContent).toBe("Jane's team · jane");
+    // Your namespace stands apart from it, headed by your login.
+    expect(within(screen.getByTestId("space-group-@jane")).getByRole("heading", { level: 3 }).textContent).toBe("jane");
+    const row = within(apart).getByTestId("space-row-@spex.example/jane/jane-spex@81");
+    expect(within(row).getByTestId("space-repo-state-@spex.example/jane/jane-spex@81").textContent).toBe("Unreachable: a group named like your login");
+    expect(within(row).queryByTestId("space-row-join-@spex.example/jane/jane-spex@81")).toBeNull();
+    expect(within(row).queryByTestId("space-row-sync-@spex.example/jane/jane-spex@81")).toBeNull();
+    expect(within(row).getByTestId("space-row-retry-@spex.example/jane/jane-spex@81").textContent).toBe("Retry");
     // No link anywhere, and no URL but a code remote as the reader set
     // it (space-1).
     const list = screen.getByTestId("space-groups");
     expect(list.querySelector("a")).toBeNull();
     expect(list.textContent ?? "").not.toMatch(/spex\.example\//);
-    expect(within(row).queryByTestId("space-row-folder-jane/jane-spex@81")).toBeNull();
+    expect(within(row).queryByTestId("space-row-folder-@spex.example/jane/jane-spex@81")).toBeNull();
   });
 
   test("a row with no clone here opens with no clone's path or tree, and the pick offers no login's entry", async () => {
     await renderGroups(instanceHome(), { open: false });
-    fireEvent.click(screen.getByTestId("space-repo-jane/jane-spex@81"));
+    fireEvent.click(screen.getByTestId("space-repo-@spex.example/jane/jane-spex@81"));
     const panel = await screen.findByTestId("space-repository");
     expect(within(panel).queryByTestId("space-clone-path")).toBeNull();
     expect(within(screen.getByTestId("space-sync-tab")).getByText("Not on this device")).toBeTruthy();
-    // The pick offers your own group and the host's groups, each read as
-    // its heading reads, never another account's login (space-58).
+    // The pick offers your namespace by your login and the host's
+    // groups, each read as the list reads it, the group named like your
+    // login apart from your namespace, never another account's login
+    // (space-58).
     fireEvent.click(screen.getByTestId(`space-row-pick-${KEY}`));
     const picker = await screen.findByTestId(`space-picker-${KEY}`);
-    const offered = within(picker).getAllByTestId(/^space-pick-group-/).map((button) => button.textContent);
-    expect(offered).toEqual(["Your own group · jane", "Acme · acme", "Jane's team · jane"]);
+    const options = within(picker).getAllByTestId(/^space-pick-group-/);
+    expect(options.map((button) => button.textContent)).toEqual(["jane", "Acme · acme", "Jane's team · jane"]);
+    expect(options.map((button) => button.dataset.testid)).toEqual(["space-pick-group-@jane", "space-pick-group-acme", "space-pick-group-jane"]);
     expect(within(picker).queryByTestId("space-pick-group-bob")).toBeNull();
+    expect(within(picker).queryByTestId("space-pick-group-@bob")).toBeNull();
   });
 });
 
@@ -965,8 +1257,8 @@ describe("GROUPS: Members (space-62)", () => {
 describe("GROUPS: copy and fit (space-27, space-28)", () => {
   const states = (): GroupsState[] => [
     signedOut(),
-    signedOut({ signIn: { phase: "running", flow: "device", userCode: "ABCD-EFGH", verificationUri: "https://spex.example/oauth/device", since: NOW } }),
-    signedOut({ signIn: { phase: "failed", cause: "expired", message: "The code expired" } }),
+    signedOut({ signIn: { phase: "running", instance: ORIGIN, flow: "device", userCode: "ABCD-EFGH", verificationUri: "https://spex.example/oauth/device", since: NOW } }),
+    signedOut({ signIn: { phase: "failed", instance: ORIGIN, cause: "expired", message: "The code expired" } }),
     localProject(),
     base({}, [
       repo({ state: "read-only", reason: "archived" }),

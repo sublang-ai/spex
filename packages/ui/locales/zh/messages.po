@@ -500,7 +500,7 @@ msgstr "{role} 的 Player"
 msgid "{seconds}s"
 msgstr "{seconds} 秒"
 
-#: src/components/SpaceSignIn.tsx
+#: src/components/SpaceInstance.tsx
 msgid "{site} signed this device out. Sign in again to continue as @{login}."
 msgstr "{site} 已让此设备退出登录。重新登录即可以 @{login} 继续。"
 
@@ -902,6 +902,11 @@ msgstr "从 Git 添加"
 msgid "Add from registry"
 msgstr "从注册表添加"
 
+#. at the groups list's foot: opens the sign-in card for another instance; its title and accessible name are "Another instance"
+#: src/components/SpaceInstance.tsx
+msgid "Add instance…"
+msgstr "添加实例…"
+
 #: src/components/ProjectGroup.tsx
 msgid "Add intent…"
 msgstr "添加意图…"
@@ -1058,6 +1063,11 @@ msgstr "无条件"
 #: src/lib/failure-catalogue.ts
 msgid "An agent failed"
 msgstr "有智能体失败"
+
+#. the title and accessible name of "Add instance…" at the groups list's foot, and the name of the sign-in card it opens
+#: src/components/SpaceInstance.tsx
+msgid "Another instance"
+msgstr "另一个实例"
 
 #: src/components/ParkedRun.tsx
 msgid "Answer below, or drop the run"
@@ -1375,6 +1385,8 @@ msgstr "无法连接 {endpoint} 上的 Spex 核心 — 每秒重试中。网页�
 #. leave the editor without changing anything
 #. leave the editor without changing anything
 #. leave the editor without changing anything
+#. leave the editor without changing anything
+#. leave the editor without changing anything
 #. stop the running compile
 #: src/components/AgentEditor.tsx
 #: src/components/AgentSettings.tsx
@@ -1385,6 +1397,7 @@ msgstr "无法连接 {endpoint} 上的 Spex 核心 — 每秒重试中。网页�
 #: src/components/InlineConfirm.tsx
 #: src/components/ProjectGroup.tsx
 #: src/components/SpaceGroups.tsx
+#: src/components/SpaceInstance.tsx
 #: src/components/SpaceMembers.tsx
 #: src/components/SpaceSignIn.tsx
 #: src/components/SpaceSync.tsx
@@ -2777,6 +2790,8 @@ msgid "Folder its sessions run in on this device"
 msgstr "此设备上运行其会话的文件夹"
 
 #. confirm: forget a folder whose records are gone from this device
+#. on a signed-out instance's heading: remove the instance from this home; nothing at it changes and every record stays
+#: src/components/SpaceInstance.tsx
 #: src/components/SpaceSync.tsx
 msgid "Forget"
 msgstr "忘记"
@@ -2789,6 +2804,16 @@ msgstr "忘记文件夹"
 #: src/components/SpaceSync.tsx
 msgid "Forget this folder here? The folder stays on disk."
 msgstr "在此忘记这个文件夹？文件夹会保留在磁盘上。"
+
+#. Forget's title on a signed-out instance's heading; {host} is the instance's display name, or its host name before any read
+#: src/components/SpaceInstance.tsx
+msgid "Forgets {host} on this device; every record stays here"
+msgstr "在此设备上忘记 {host}；所有记录仍保留在此"
+
+#. the live note once Forget removed the instance from this home; {host} is its display name, or its host name before any read
+#: src/components/SpaceInstance.tsx
+msgid "Forgot {host}"
+msgstr "已忘记 {host}"
 
 #. label before the spec package a playbook comes from
 #: src/components/LibrarySurface.tsx
@@ -2910,8 +2935,8 @@ msgstr "群组记录"
 msgid "Groups"
 msgstr "群组"
 
-#. the groups list's head where the person may not create a group; {name} is the instance's display name; no link, no control
-#: src/components/SpaceGroups.tsx
+#. on an instance's heading where the person may not create a group there; {name} is the instance's display name; no link, no control
+#: src/components/SpaceInstance.tsx
 msgid "Groups are made by the people who run {name}"
 msgstr "群组由运营 {name} 的人创建"
 
@@ -2970,10 +2995,6 @@ msgstr "历史 — 此会话无法继续"
 #: src/components/NavRail.tsx
 msgid "history, can't be continued"
 msgstr "历史，无法继续"
-
-#: src/components/SpaceSurface.tsx
-msgid "Host read {age}"
-msgstr "{age}读取托管平台"
 
 #. a spex repository's status: nothing is running
 #. session row: no turn in flight
@@ -3073,6 +3094,11 @@ msgstr "正在安装浏览器…"
 #: src/lib/environments.ts
 msgid "Installing…"
 msgstr "安装中…"
+
+#. the sign-in card's field caption: the URL of the instance to sign in to, held by its origin (https://spex.pub)
+#: src/components/SpaceSignIn.tsx
+msgid "Instance"
+msgstr "实例"
 
 #. catalog family: one intent's file
 #. chip on a queued message: it carries a queued intent
@@ -3565,8 +3591,8 @@ msgstr "从未同步"
 msgid "new"
 msgstr "新增"
 
-#. create a group on the Git host
-#: src/components/SpaceGroups.tsx
+#. create a group at the root of the instance whose heading carries it
+#: src/components/SpaceInstance.tsx
 msgid "New group"
 msgstr "新建群组"
 
@@ -3836,7 +3862,7 @@ msgstr "未安装"
 msgid "Not on this device"
 msgstr "不在此设备上"
 
-#: src/components/SpaceSurface.tsx
+#: src/components/SpaceInstance.tsx
 msgid "Not read yet"
 msgstr "尚未读取"
 
@@ -3984,10 +4010,6 @@ msgstr "开启（当前）"
 msgid "On (unsupported)"
 msgstr "开启（不支持）"
 
-#: src/components/SpaceGroups.tsx
-msgid "On the host for this code"
-msgstr "托管平台上对应此代码的仓库"
-
 #: src/lib/space.ts
 msgid "On this device only"
 msgstr "仅在此设备上"
@@ -3995,6 +4017,11 @@ msgstr "仅在此设备上"
 #: src/components/SpaceGroups.tsx
 msgid "On this device only — shared once you sign in"
 msgstr "仅在此设备上 — 登录后即可共享"
+
+#. the picker's heading, inside one instance's section, over the spex repositories that instance lists for the folder's code
+#: src/components/SpaceGroups.tsx
+msgid "On this instance for this code"
+msgstr "此实例上对应此代码的仓库"
 
 #: src/components/LibrarySurface.tsx
 #: src/components/PlaybookStages.tsx
@@ -4502,6 +4529,11 @@ msgstr "重新检查适配器就绪状态（例如登录之后）"
 msgid "read {age}"
 msgstr "{age}读取"
 
+#. on a signed-in instance's heading: when its last read was held; {age} is relative, such as '5m ago'
+#: src/components/SpaceInstance.tsx
+msgid "Read {age}"
+msgstr "{age}已读取"
+
 #. a spex repository's state: the host lets this account only read it
 #: src/lib/space.ts
 msgid "Read-only"
@@ -4544,14 +4576,11 @@ msgstr "读取中…"
 msgid "Reading…"
 msgstr "读取中…"
 
+#. Refresh's title: it reads every instance the home is signed in to
 #: src/components/SpaceGroups.tsx
 #: src/components/SpaceSurface.tsx
-msgid "Reads the host again"
-msgstr "重新读取托管平台"
-
-#: src/components/SpaceSurface.tsx
-msgid "Reads the host again · last read {at}"
-msgstr "重新读取托管平台 · 上次读取于 {at}"
+msgid "Reads each signed-in instance again"
+msgstr "重新读取每个已登录的实例"
 
 #. session status: ready to be told what to do
 #. the adapter is signed in and usable
@@ -4798,12 +4827,12 @@ msgid "Request {requirement}"
 msgstr "请求 {requirement}"
 
 #: src/components/EnvironmentSection.tsx
-msgid "Request a spec package by its folder"
-msgstr "按文件夹请求一个规约包"
-
-#: src/components/EnvironmentSection.tsx
 msgid "Request a Git repository at a branch, tag or commit"
 msgstr "请求某个分支、标签或提交上的 Git 仓库"
+
+#: src/components/EnvironmentSection.tsx
+msgid "Request a spec package by its folder"
+msgstr "按文件夹请求一个规约包"
 
 #: src/components/EnvironmentSection.tsx
 msgid "Requested {name}"
@@ -5359,12 +5388,14 @@ msgstr "筛选外仍显示"
 msgid "shown despite search"
 msgstr "搜索外仍显示"
 
-#. sign in to the Git host
+#. sign in to an instance
+#. sign in to an instance
+#: src/components/SpaceInstance.tsx
 #: src/components/SpaceSignIn.tsx
 msgid "Sign in"
 msgstr "登录"
 
-#. the Sign in control after a sign-in failed or the host signed this device out
+#. the sign-in control on a signed-out instance's heading, and the card's after a sign-in failed
 #: src/components/SpaceSignIn.tsx
 msgid "Sign in again"
 msgstr "重新登录"
@@ -5373,38 +5404,41 @@ msgstr "重新登录"
 msgid "Sign in again with that agent's CLI"
 msgstr "用该智能体的 CLI 重新登录"
 
-#: src/components/SpaceGroups.tsx
-msgid "Sign in first"
-msgstr "请先登录"
-
 #: src/components/SpaceSignIn.tsx
 msgid "Sign in there and approve; you return here signed in."
 msgstr "请在那里登录并批准；完成后回到这里即已登录。"
+
+#. beside a disabled Sync: the row's instance is signed out; {host} its display name, or its host name before any read
+#: src/components/SpaceGroups.tsx
+msgid "Sign in to {host} first"
+msgstr "请先登录 {host}"
 
 #: src/lib/failure-catalogue.ts
 msgid "Sign in to {who} again"
 msgstr "重新登录 {who}"
 
+#. in Publish's place: the home is not signed in to the instance a publish from this project goes to; {name} is that instance's display name as last read, else its host name
 #: src/components/DraftRegisterTab.tsx
-msgid "Sign in to publish"
-msgstr "登录后发布"
+msgid "Sign in to publish at {name}"
+msgstr "登录 {name} 后发布"
 
 #: src/components/SpaceSignIn.tsx
 msgid "Sign in to see your groups and share each project's records with the people in them."
 msgstr "登录后即可查看你的群组，并与群组中的成员共享各项目的记录。"
 
-#. sign this device out of the Git host
-#: src/components/SpaceSignIn.tsx
+#. sign this device out of the instance whose heading carries it
+#: src/components/SpaceInstance.tsx
 msgid "Sign out"
 msgstr "退出登录"
 
-#: src/components/SpaceSignIn.tsx
+#: src/components/SpaceInstance.tsx
 msgid "Signed in as @{login}"
 msgstr "已以 @{login} 登录"
 
-#: src/components/SpaceSignIn.tsx
-msgid "Signed in as @{login} at {host}"
-msgstr "已在 {host} 以 @{login} 登录"
+#. the live note once Sign out signed this device out of one instance; {host} is its display name, or its host name before any read
+#: src/components/SpaceInstance.tsx
+msgid "Signed out of {host}"
+msgstr "已退出 {host} 的登录"
 
 #: src/components/CaptainHome.tsx
 msgid "Signing in from a terminal is picked up on re-check; a newly exported env var needs a Spex restart."
@@ -5416,15 +5450,16 @@ msgid "Signing in…"
 msgstr "登录中…"
 
 #. the Sign out control, while signing out
-#: src/components/SpaceSignIn.tsx
+#: src/components/SpaceInstance.tsx
 msgid "Signing out…"
 msgstr "退出中…"
 
+#: src/components/SpaceInstance.tsx
 #: src/components/SpaceSignIn.tsx
 msgid "Signs in to {host}"
 msgstr "登录 {host}"
 
-#: src/components/SpaceSignIn.tsx
+#: src/components/SpaceInstance.tsx
 msgid "Signs this device out of {host}; every record stays here"
 msgstr "让此设备退出 {host}；所有记录仍保留在此"
 
@@ -6094,8 +6129,8 @@ msgid "This device against the common ancestor"
 msgstr "本设备相对共同祖先的差异"
 
 #: src/lib/space.ts
-msgid "this device's sign-in to the Git host"
-msgstr "此设备在 Git 托管平台上的登录凭据"
+msgid "this device's sign-in to each instance"
+msgstr "此设备在每个实例上的登录凭据"
 
 #: src/state/store.ts
 msgid "This draft is no longer listed."

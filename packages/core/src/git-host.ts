@@ -24,10 +24,9 @@ import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import { writeApplicationBytes } from "./files.js";
+import { canonicalOrigin } from "./instance.js";
 
-/** The Git host a new home records unless `SPEX_HOST_URL` names another
- * (git-host-1). */
-export const DEFAULT_HOST_URL = "https://spex.pub";
+export { DEFAULT_HOST_URL, hostUrlFor } from "./instance.js";
 
 /** The public OAuth client id Spex signs in as. */
 export const CLIENT_ID = "spex";
@@ -88,19 +87,6 @@ export function retryAfterSeconds(value: string | null | undefined, now: number 
   }
   const at = httpDate(text, now);
   return at === null ? null : Math.max(0, Math.ceil((at - now) / 1000));
-}
-
-/**
- * The host URL a home uses (git-host-1): a home that already records one
- * keeps it whatever the environment says; a new home takes a nonempty
- * `SPEX_HOST_URL`, else spex.pub. Trailing slashes are dropped so routes
- * join cleanly.
- */
-export function hostUrlFor(env: NodeJS.ProcessEnv, existing: string | null | undefined): string {
-  if (typeof existing === "string" && existing.trim().length > 0) return trimUrl(existing.trim());
-  const fromEnv = env.SPEX_HOST_URL;
-  if (typeof fromEnv === "string" && fromEnv.trim().length > 0) return trimUrl(fromEnv.trim());
-  return DEFAULT_HOST_URL;
 }
 
 function trimUrl(url: string): string {
@@ -176,7 +162,7 @@ export type HostErrorKind =
   | "bad_request";
 
 /** Why a sign-in ended without an account (git-host-2, git-host-3). */
-export type SignInCause = "denied" | "expired" | "stopped" | "refused" | "state" | "unreachable";
+export type SignInCause = "denied" | "expired" | "stopped" | "refused" | "state" | "unreachable" | "account";
 
 /**
  * A host answer other than success (git-host-11). `words` is the host's
@@ -288,18 +274,19 @@ export function credentialsPath(homeDir: string): string {
 }
 
 /**
- * The app token of one Git host in `local/credentials.yaml`, exactly
- * `{format: 1, hosts: {<url>: {access, accessExpiresAt, refresh}}}`,
+ * The app token of one instance in `local/credentials.yaml`, exactly
+ * `{format: 1, hosts: {<origin>: {access, accessExpiresAt, refresh}}}`
+ * keyed by the instance's canonical origin (DR-127),
  * written atomically with owner-only permissions under a `local/` made
  * owner-only (storage-19). A file of another format is refused, never
- * guessed at or overwritten. Other hosts' entries are kept; removing the
- * last one removes the file. Every access is synchronous, so a
+ * guessed at or overwritten. Other instances' entries are kept; removing
+ * the last one removes the file. Every access is synchronous, so a
  * replacement's read, comparison and rename leave no await between them.
  */
 export function fileCredentialStore(homeDir: string, hostUrl: string): CredentialStore {
   const dir = join(homeDir, "local");
   const file = credentialsPath(homeDir);
-  const key = trimUrl(hostUrl);
+  const key = canonicalOrigin(hostUrl);
 
   function load(): CredentialsFile | null {
     let text: string;
@@ -394,6 +381,17 @@ export interface GitHostClientOptions {
   /** Test seam (git-host-21): the longest a rate limit holds the calls;
    * 120 s by default. */
   holdMaxMs?: number;
+}
+
+/** Whether a sign-in may store its token for the person it read
+ * (git-host-2): null admits them; a refusal ends the sign-in `failed`
+ * with it, storing nothing. Called in the turn that would store it. */
+export type AdmitAccount = (account: HostAccount) => HostError | null;
+
+/** The refusal of a sign-in at a listed instance as another person than
+ * its entry's account (git-host-2): `words` carries the entry's login. */
+export function anotherAccountError(login: string): HostError {
+  return signInError("account", { words: login });
 }
 
 /** A running browser sign-in (git-host-2). */
@@ -507,7 +505,7 @@ export class GitHostClient {
    * `127.0.0.1` at an OS-assigned port for one callback, an S256
    * challenge, and the host's `/login/app` URL to open.
    */
-  async startBrowserSignIn(options: { timeoutMs?: number; pages?: CallbackPages } = {}): Promise<BrowserSignIn> {
+  async startBrowserSignIn(options: { timeoutMs?: number; pages?: CallbackPages; admit?: AdmitAccount } = {}): Promise<BrowserSignIn> {
     const { slot, expected } = await this.beginSignIn();
     const pages = options.pages ?? DEFAULT_PAGES;
     const server = createServer();
@@ -579,7 +577,7 @@ export class GitHostClient {
           return;
         }
         // Stored and ended in one turn: no cancel falls between them.
-        const outcome = "issued" in answered ? this.publish(expected, answered.issued) : answered;
+        const outcome = "issued" in answered ? this.publish(expected, answered.issued, options.admit) : answered;
         // The page goes out before the listener closes, so the browser
         // always sees how the sign-in ended.
         end(outcome, true);
@@ -623,7 +621,7 @@ export class GitHostClient {
    * URL, completed with the code where the host gives it, then polling the token endpoint at its interval, five seconds
    * slower on each `slow_down`, until the token, a denial or the expiry.
    */
-  async startDeviceSignIn(): Promise<DeviceSignIn> {
+  async startDeviceSignIn(options: { admit?: AdmitAccount } = {}): Promise<DeviceSignIn> {
     const { slot, expected } = await this.beginSignIn();
     let start: { deviceCode: string; userCode: string; verificationUri: string; expiresIn: number; interval: number };
     try {
@@ -696,7 +694,7 @@ export class GitHostClient {
           }
           if (settled) return;
           // Stored and ended in one turn: no cancel falls between them.
-          end("issued" in answered ? this.publish(expected, answered.issued) : answered);
+          end("issued" in answered ? this.publish(expected, answered.issued, options.admit) : answered);
           return;
         }
         const code = codeOf(answer);
@@ -944,6 +942,22 @@ export class GitHostClient {
     }
   }
 
+  /**
+   * A client of the same host outside this one — the registry
+   * (environments-12) — was refused `access` with a code that signs the
+   * device out: as a refusal of this client's own call does (git-host-4),
+   * the pair that presented it is removed and the device signed out of
+   * this host alone in one step, `onSignedOut` called; true then. Where
+   * it is no longer the stored pair's — a sign-in, a refresh or a
+   * sign-out meanwhile — nothing is removed or said, and false comes
+   * back: the call stands refused as changed meanwhile.
+   */
+  async signOutRefused(access: string): Promise<boolean> {
+    const stored = await this.credentials.read();
+    if (stored === null || stored.access !== access) return false;
+    return !(this.signOutLocally(stored, new HostError("reauth")) instanceof CredentialChanged);
+  }
+
   // -------------------------------------------------------------------------
 
   private claimSignIn(): object {
@@ -979,10 +993,14 @@ export class GitHostClient {
   }
 
   /** Store an issued token in place of the pair its sign-in began over;
-   * the caller ends the sign-in in the same turn. Another pair stored
-   * meanwhile ends it `stopped`, that pair kept (git-host-2). */
-  private publish(expected: StoredCredential | null, issued: Issued): { account: HostAccount } | { error: HostError } {
+   * the caller ends the sign-in in the same turn. A person `admit`
+   * refuses ends it with that refusal, and another pair stored meanwhile
+   * ends it `stopped`, that pair kept: either stores nothing
+   * (git-host-2). */
+  private publish(expected: StoredCredential | null, issued: Issued, admit?: AdmitAccount): { account: HostAccount } | { error: HostError } {
     try {
+      const refused = admit?.(issued.account);
+      if (refused) return { error: refused };
       return this.credentials.replace(expected, issued.credential) ? { account: issued.account } : { error: signInError("stopped") };
     } catch (error) {
       return { error: asSignInError(error) };

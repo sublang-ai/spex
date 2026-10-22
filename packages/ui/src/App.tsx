@@ -94,10 +94,10 @@ declare global {
        * Source tab's Pick file (playbook-library-56). */
       pickFile?(): Promise<string | null>;
       revealPath?(path: string): Promise<boolean>;
-      /** Open the Git host's sign-in URL in the system's default
+      /** Open an instance's sign-in URL in the system's default
        * browser (app-shell-37, space-3): false when the shell refuses
-       * it — a URL not at the home's recorded host — and the page then
-       * shows the URL as a link instead. */
+       * it — a URL not at an instance the home lists or is signing in
+       * to — and the page then shows the URL as a link instead. */
       openExternal?(url: string): Promise<boolean>;
     };
   }

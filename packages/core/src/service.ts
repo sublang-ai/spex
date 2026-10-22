@@ -435,8 +435,6 @@ export class CoreService {
   /** Your own group's config, which follows its clone when your own
    * group is renamed at sign-in (space-59); an explicit path stays. */
   private configPath: string;
-  /** The Git host this home signs in to (git-host-1..11). */
-  private readonly hostClient: GitHostClient;
   /** The runtime the Git credential helper runs on (git-host-9). */
   private readonly hostRuntime: { execPath: string; electron: boolean };
   private readonly env: NodeJS.ProcessEnv;
@@ -523,20 +521,6 @@ export class CoreService {
     this.forge =
       options.forgeAdapter ?? new GitHubForgeAdapter(this.runCommand);
     this.configState = { status: "missing", path: this.configPath };
-    // One client of the Git host the home records (git-host-1): its
-    // credential in `local/credentials.yaml`, this device and app as its
-    // label, a refusal that signs the device out marking the home so
-    // (git-host-4), and a rate limit holding its calls offering Stop on
-    // the steps that wait (git-host-21).
-    const host = store.home.host;
-    this.hostClient = new GitHostClient({
-      url: host.url,
-      label: `Spex on ${hostname()}`,
-      credentials: fileCredentialStore(store.dir, host.url),
-      onSignedOut: () => this.space.signedOutByHost(),
-      onHold: () => this.space.holdBegan(),
-      ...(options.hostHoldMaxMs !== undefined ? { holdMaxMs: options.hostHoldMaxMs } : {}),
-    });
     this.hostRuntime = options.hostRuntime ?? currentRuntime();
     this.sessions = new SessionManager({
       approvalHandler: (sessionId) => this.approvals.handler({kind: "session", id: sessionId}, () => {
@@ -597,14 +581,40 @@ export class CoreService {
       ...(options.compileRuntime?.modulePaths ? { modulePaths: options.compileRuntime.modulePaths } : {}),
       builtin: CoreService.shippedBuiltin(options),
       ...(options.registryFetch ? { fetch: options.registryFetch } : {}),
-      // The registry presents the access secret the host client keeps
-      // current (environments-12, git-host-4); a Git source at the
-      // host's origin takes its brokered credential through the app's
-      // helper (environments-13, git-host-9).
-      token: () => this.registryToken(),
-      gitCredential: (repo) => this.space.sourceCredential(repo),
-      gitLabel: (repo) => this.space.packageSourceAsShown(repo),
-      gitFailure: (repo, run) => this.space.packageSourceFailure(repo, run),
+      // An environment's instance is its spex repository's (storage-31);
+      // its registry presents the access secret that instance's client
+      // keeps current, asked only where the home is signed in there
+      // (environments-12, git-host-4, DR-127), an instance that cannot
+      // be reached, or asks to wait, read as it answered (git-host-11).
+      instanceOf: (key) => this.space.instanceOriginOf(key),
+      tokenFor: async (origin) => {
+        try {
+          return await this.space.accessSecretFor(origin);
+        } catch (error) {
+          throw new Error(relayHostError(error, this.space.instanceName(origin)));
+        }
+      },
+      // The instance a publish goes to, named by its display name as last
+      // read, else its host name (environments-10, playbook-library-93).
+      instanceName: (origin) => this.space.instanceName(origin),
+      // A registry refusing an instance's token signs that instance alone
+      // out, where that token is still its stored pair's; a pair replaced
+      // meanwhile fails the call as changed meanwhile (environments-12,
+      // git-host-4, DR-127).
+      refused: async (origin, token) => {
+        try {
+          await this.space.registryRefused(origin, token);
+        } catch (error) {
+          throw new Error(relayHostError(error, this.space.instanceName(origin)));
+        }
+      },
+      // A Git source at a signed-in instance's Git origin takes the
+      // credential that instance brokers, through the app's helper, and
+      // reads as an instance's name, the environment's own instance
+      // preferred (environments-13, environments-29, git-host-9, DR-127).
+      gitCredential: (repo, preferred) => this.space.sourceCredential(repo, preferred),
+      gitLabel: (repo, preferred) => this.space.packageSourceAsShown(repo, preferred),
+      gitFailure: (repo, run, preferred) => this.space.packageSourceFailure(repo, run, preferred),
       credentialArgs: async (credential) => {
         const handle = await withGitCredential(credential, this.hostRuntime);
         const env: Record<string, string> = {};
@@ -622,6 +632,11 @@ export class CoreService {
     const spaceHost: SpaceHost & SpaceEnvironmentHooks = {
       environmentChanged: (key: string) => this.environments.applied(key),
       environmentMoved: (oldKey: string, newKey: string) => this.environments.moved(oldKey, newKey),
+      // A clone a join paired requests the built-in spec package at its
+      // instance's registry, then installs and exports; one a pick placed
+      // at an instance locks it there (environments-11, environments-31).
+      environmentPaired: (key: string) => { void this.environments.paired(key).catch(() => {}); },
+      environmentPlaced: (key: string) => { void this.environments.placed(key).catch(() => {}); },
       home: this.store.dir,
       env: this.env,
       store: this.store,
@@ -651,7 +666,7 @@ export class CoreService {
       assertAuthoringWritable: (key, id) => this.authors.assertTurnWritable(id, key),
       ...(options.spaceTransportTimeoutMs !== undefined ? { transportTimeoutMs: options.spaceTransportTimeoutMs } : {}),
       ...(options.spaceBeforeStep ? { beforeStep: options.spaceBeforeStep } : {}),
-      client: this.hostClient,
+      clientFor: (origin: string) => this.hostClientFor(origin),
       signInFlow: options.signIn ?? "device",
       hostRuntime: this.hostRuntime,
       repositoriesChanged: () => this.afterRepositoriesChanged(),
@@ -758,16 +773,21 @@ export class CoreService {
     return null;
   }
 
-  /** The access secret the registry presents (environments-12): the host
-   * client's, kept current (git-host-4); null while signed out. A host
-   * that cannot be reached, or asks to wait, reads as it answered
-   * (git-host-11). */
-  private async registryToken(): Promise<string | null> {
-    try {
-      return await this.hostClient.accessSecret();
-    } catch (error) {
-      throw new Error(relayHostError(error, this.space.hostName()));
-    }
+  /** A client of the instance at an origin (git-host-1..11, DR-127),
+   * which the space keeps one of per instance: its app token under that
+   * origin in `local/credentials.yaml`, this device and app as its label,
+   * a refusal that signs the device out of that instance alone, its
+   * entry marked so (git-host-4), and a rate limit holding that
+   * instance's calls, offering Stop on the steps that wait (git-host-21). */
+  private hostClientFor(origin: string): GitHostClient {
+    return new GitHostClient({
+      url: origin,
+      label: `Spex on ${hostname()}`,
+      credentials: fileCredentialStore(this.store.dir, origin),
+      onSignedOut: () => this.space.signedOutByHost(origin),
+      onHold: () => this.space.holdBegan(origin),
+      ...(this.options.hostHoldMaxMs !== undefined ? { holdMaxMs: this.options.hostHoldMaxMs } : {}),
+    });
   }
 
   /** Playbook ids a new authoring session of a project may not take:
@@ -1093,7 +1113,7 @@ export class CoreService {
       env,
       ...(options.dataDir ? { libraryDir: options.libraryDir ?? join(options.dataDir, "playbooks") } : {}),
       ...(relocateConfig ? { relocateConfig } : {}),
-      ...(builtin ? { prepareRepository: (dir: string, _key: string, hostUrl: string) => { prepareBuiltinEnvironment(dir, builtin, hostUrl); } } : {}),
+      ...(builtin ? { prepareRepository: (dir: string, _key: string, registryOrigin: string) => { prepareBuiltinEnvironment(dir, builtin, registryOrigin); } } : {}),
     });
     let service: CoreService;
     try { service = new CoreService(options, store); }
@@ -1920,10 +1940,11 @@ export class CoreService {
     return this.authToken;
   }
 
-  /** The Git host this home records (git-host-1): the one URL whose
-   * pages a shell opens in the system browser (app-shell-20). */
-  hostUrl(): string {
-    return this.store.home.host.url;
+  /** The origins of every instance the home lists and of the one a
+   * running sign-in names: those whose sign-in pages a shell may open in
+   * the system browser (app-shell-37, app-shell-20). */
+  instanceOrigins(): string[] {
+    return this.space.instanceOrigins();
   }
 
   private async listen(port: number): Promise<void> {
@@ -2276,9 +2297,12 @@ export class CoreService {
           throw noProject(command.projectId);
         }
         const { originUrl, ...status } = await repoStatus(project.path, this.runCommand);
+        // Only a remote outside the default instance's and every listed
+        // instance's reported Git origin is named, with no user in it
+        // (projects-36).
         return {
           ...status,
-          ...(originUrl && this.space.codeRemoteKind(originUrl) === "external" ? { originUrl: displayRemote(originUrl) } : {}),
+          ...(originUrl && this.space.codeRemoteKind(originUrl, this.space.instanceOriginOf(project.id)) === "external" ? { originUrl: displayRemote(originUrl) } : {}),
         };
       }
       case "forge.items": {
@@ -2287,16 +2311,18 @@ export class CoreService {
           throw noProject(command.projectId);
         }
         // The real origin stays internal for binding. A response's
-        // guidance follows the origin known now, even from an older
-        // cache; local status never asks the host (projects-7, -11).
+        // guidance follows the origins known now, even from an older
+        // cache, read against the project's instance first — its spex
+        // repository's, the default instance where it has none; local
+        // status never asks any instance (projects-7, -11).
         const status = await repoStatus(project.path, this.runCommand);
         const shown = (state: ForgeState): ForgeState => {
           if (!status.originUrl || state.repo) return state;
-          const kind = this.space.codeRemoteKind(status.originUrl);
+          const kind = this.space.codeRemoteKind(status.originUrl, this.space.instanceOriginOf(project.id));
           if (kind === "external") return state;
           return { ...state, guidance: kind === "instance"
-            ? i18n._({ id: "Issues and PRs come from GitHub; this project's code is on this instance.", comment: "Forge setup guidance for code on the instance's reported Git origin, whose underlying Git system is never named" })
-            : i18n._({ id: "Issues and PRs come from GitHub; this project's code is on a remote.", comment: "Forge setup guidance before the instance has reported its Git origin; the actual remote and hostname stay internal" }) };
+            ? i18n._({ id: "Issues and PRs come from GitHub; this project's code is on this instance.", comment: "Forge setup guidance for code on the reported Git origin of the project's instance, whose underlying Git system is never named" })
+            : i18n._({ id: "Issues and PRs come from GitHub; this project's code is on a remote.", comment: "Forge setup guidance before every instance has reported its Git origin, or for code under another instance's; the actual remote and hostname stay internal" }) };
         };
         // The cache is persisted in the app store (dashboard-14), so a
         // restart serves the last lists rather than a blank.
@@ -2656,7 +2682,7 @@ export class CoreService {
           if (!existsSync(join(packageDir, "meta.yaml"))) {
             // No one is asked here: the project's defaults stand, with
             // no license where none is derived (playbook-library-69).
-            const defaults = newPackageDefaults(project.id, project.path, await this.environments.publishableOrgs());
+            const defaults = newPackageDefaults(project.id, project.path, await this.environments.publishableOrgs(project.id));
             const fields = { org: defaults.org, ...(defaults.license !== null ? { license: defaults.license } : {}) };
             // A manifest made while the registry was asked stands.
             try {
@@ -2826,10 +2852,11 @@ export class CoreService {
         // An intent holds no place of its own: the queue is its project's
         // queued intents oldest first (core-service-42, core-service-107).
         const id = randomUUID();
-        const account = this.store.home.host;
-        const author = account.account && !account.signedOut
-          ? { login: account.account.login, displayName: account.account.displayName }
-          : undefined;
+        // The account signed in at the instance of the project's spex
+        // repository, none where it has none (core-service-42).
+        const at = this.space.instanceOriginOf(project.id);
+        const account = at === null ? null : this.store.home.account(at);
+        const author = account ? { login: account.login, displayName: account.displayName } : undefined;
         const intent = {
           id,
           projectId: project.id,
@@ -3047,36 +3074,40 @@ export class CoreService {
       case "space.refresh":
         return this.requireSpace().refresh();
       case "space.signin.start":
-        return this.requireSpace().signInStart();
+        return this.requireSpace().signInStart(command.url);
       case "space.signin.cancel":
         return { stopped: this.requireSpace().signInCancel() };
+      // Each command names the instance it acts at by its origin
+      // (space-29, DR-127).
       case "space.signout":
-        return this.requireSpace().signOut();
+        return this.requireSpace().signOut(command.instance);
+      case "space.forget":
+        return this.requireSpace().forget(command.instance);
       case "space.pick":
         return this.requireSpace().pick(command.repository, command.choice, command.noticed === true);
       case "space.join":
-        return this.requireSpace().join(command.hostId, command.folder === undefined ? undefined : expandPath(command.folder, this.home));
+        return this.requireSpace().join(command.instance, command.hostId, command.folder === undefined ? undefined : expandPath(command.folder, this.home));
       case "space.members":
-        return this.requireSpace().members({ repository: command.repository, group: command.group });
+        return this.requireSpace().members({ instance: command.instance, repository: command.repository, group: command.group });
       // Groups and sharing (git-host-15..17, DR-114): the host is asked,
       // and its answer is the reply.
       case "space.group.create":
-        return this.requireSpace().createGroup(command.name, command.path, command.parent);
+        return this.requireSpace().createGroup(command.instance, command.name, command.path, command.parent);
       // Undo in Spex (git-host-18..20, DR-120): the host is asked, and its
       // answer is the reply.
       case "space.group.rename":
-        return this.requireSpace().renameGroup(command.group, {
+        return this.requireSpace().renameGroup(command.instance, command.group, {
           ...(command.name !== undefined ? { name: command.name } : {}),
           ...(command.path !== undefined ? { path: command.path } : {}),
         });
       case "space.group.delete":
-        return this.requireSpace().deleteGroup(command.group);
+        return this.requireSpace().deleteGroup(command.instance, command.group);
       case "space.repository.move":
         return this.requireSpace().moveRepository(command.repository, command.groupId);
       case "space.share":
-        return this.requireSpace().share({ repository: command.repository, group: command.group, login: command.login, role: command.role });
+        return this.requireSpace().share({ instance: command.instance, repository: command.repository, group: command.group, login: command.login, role: command.role });
       case "space.unshare":
-        return this.requireSpace().unshare({ repository: command.repository, group: command.group, login: command.login });
+        return this.requireSpace().unshare({ instance: command.instance, repository: command.repository, group: command.group, login: command.login });
       case "space.remote.set":
         return this.requireSpace().setRemote(command.repository, command.url);
       case "space.fetch":
@@ -3104,9 +3135,9 @@ export class CoreService {
         return this.authors.list();
       case "draft.defaults": {
         // What New playbook fills in, read from the project and the
-        // registry now, the registry asked once (playbook-library-103).
+        // registry of its instance now, asked once (playbook-library-103).
         const { project, repository } = this.draftHome(command.projectId);
-        return newPackageDefaults(repository.key, project.path, await this.environments.publishableOrgs());
+        return newPackageDefaults(repository.key, project.path, await this.environments.publishableOrgs(repository.key));
       }
       case "draft.create": {
         // The ids the config enables are taken (playbook-library-51), as
@@ -3254,7 +3285,7 @@ export class CoreService {
         void this.environments.installLater(command.repository).catch(() => {});
         return { accepted: true };
       case "environment.search":
-        return { packages: await this.environments.search(command.query) };
+        return { packages: await this.environments.search(command.repository, command.query) };
       case "environment.publish": {
         // A dry run replies the inline summary and uploads nothing
         // (playbook-library-93); the upload reports through state.

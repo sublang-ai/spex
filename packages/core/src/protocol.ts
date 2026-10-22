@@ -13,7 +13,7 @@ import type { AgentCapabilities, ApprovalDecision, ApprovalRequest, BrowserSetup
 import type { SessionRecord as RuntimeRecord } from "@sublang/playbook/session-assets";
 import { LANGUAGES, type Language } from "./language.js";
 
-export const PROTOCOL_VERSION = 26;
+export const PROTOCOL_VERSION = 27;
 
 /** The compile pipeline's phases and their human names, shared so the
  * core's thread lines and the UI's band name a phase alike. */
@@ -45,14 +45,35 @@ export const mediaAssetSchema = z.object({
 }).strict();
 /** Wire-validated form of Playbook's SessionAssetRef. */
 export type MediaAsset = z.infer<typeof mediaAssetSchema>;
+const KEY_SEGMENT = "[A-Za-z0-9_][A-Za-z0-9._-]*";
+/** A DNS label in lowercase: letters, digits and `-`, neither first nor
+ * last a hyphen. */
+const HOST_LABEL = "[a-z0-9](?:[a-z0-9-]*[a-z0-9])?";
+/** A host name: labels joined by single dots, none leading or trailing. */
+const HOST_NAME = `${HOST_LABEL}(?:\\.${HOST_LABEL})*`;
+/** A port from 1 to 65535, written without a leading zero. */
+const PORT = "(?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])";
+const INSTANCE_SEGMENT = `@${HOST_NAME}(?:_${PORT})?`;
+/** An instance's folder under `workspace/` (DR-127): `@`, its host in
+ * lowercase, and `_<port>` where its origin names a port or its scheme
+ * is `http` — `@spex.pub`, `@127.0.0.1_4100`. */
+export const INSTANCE_FOLDER_PATTERN = new RegExp(`^${INSTANCE_SEGMENT}$`);
 /** A spex repository's key: its clone's path under `workspace/`, the
- * name ending in `-spex` (storage-1, projects-10), each segment spelled
- * as the Git host spells its paths — letters, digits, `.`, `_` and `-`,
+ * name ending in `-spex` (storage-1, projects-10). A clone at an
+ * instance lies under that instance's folder, its key's first segment,
+ * with at least its group's or its namespace's segment before its name
+ * (`@spex.pub/acme/a-spex`, DR-127); every other segment is spelled as
+ * the Git host spells its paths — letters, digits, `.`, `_` and `-`,
  * never starting with a dot or a hyphen — so a host's group or
- * repository name stands as a segment unchanged. A project is named by
- * its spex repository's key. */
-export const REPOSITORY_KEY_PATTERN = /^[A-Za-z0-9_][A-Za-z0-9._-]*(?:\/[A-Za-z0-9_][A-Za-z0-9._-]*)*-spex$/;
+ * repository name stands as a segment unchanged, and only an instance's
+ * folder begins with `@`. A project is named by its spex repository's
+ * key. */
+export const REPOSITORY_KEY_PATTERN = new RegExp(`^(?:${INSTANCE_SEGMENT}/${KEY_SEGMENT}/)?(?:${KEY_SEGMENT}/)*${KEY_SEGMENT}-spex$`);
 export const repositoryKeySchema = z.string().regex(REPOSITORY_KEY_PATTERN);
+/** An instance a command names, by its origin as the Groups state
+ * carries it (space-29, DR-127): the core reads it in any spelling and
+ * refuses one the home does not list. */
+const instanceOriginSchema = z.string().min(1);
 
 /** A request in `spex.yaml` (environments-2): exactly one source. */
 export const environmentRequestSchema = z.union([
@@ -706,7 +727,9 @@ export interface IntentInfo {
   text: string;
   attachments?: readonly MediaAsset[];
   source?: IntentSource;
-  /** Who captured it, where the home was signed in. */
+  /** The account that captured it at its project's instance; none where
+   * the project has no instance or the home is not signed in there
+   * (core-service-42, core-service-52). */
   author?: IntentAuthor;
   /** The capture time, which orders the queue (core-service-107). */
   createdAt: number;
@@ -1203,38 +1226,46 @@ export const commandSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("environment.remove"), id, repository: repositoryKeySchema, name: z.string().min(1) }).strict(),
   z.object({ type: z.literal("environment.resolve"), id, repository: repositoryKeySchema }).strict(),
   z.object({ type: z.literal("environment.install"), id, repository: repositoryKeySchema }).strict(),
-  z.object({ type: z.literal("environment.search"), id, query: z.string().max(200) }).strict(),
+  /** A search names the environment it adds to: the registry of
+   * `repository`'s environment answers it (environments-17, DR-127). */
+  z.object({ type: z.literal("environment.search"), id, repository: repositoryKeySchema, query: z.string().max(200) }).strict(),
   /** `dryRun` runs the checks and replies the inline summary — name,
    * version and the files it would upload — uploading nothing
    * (playbook-library-93). */
   z.object({ type: z.literal("environment.publish"), id, repository: repositoryKeySchema, path: z.string().min(1), dryRun: z.boolean().optional() }).strict(),
   z.object({ type: z.literal("environment.playbooks"), id, projectId: repositoryKeySchema.optional() }).strict(),
   // Groups (space-29, DR-103): the core performs every Git operation,
-  // one spex repository at a time, `repository` naming it by its key;
-  // long commands reply `accepted` at once and report their outcome as
-  // `space.state`.
+  // one spex repository at a time, `repository` naming it by its key
+  // and `instance` an instance by its origin (DR-127); long commands
+  // reply `accepted` at once and report their outcome as `space.state`.
   z.object({ type: z.literal("space.get"), id }).strict(),
   z.object({ type: z.literal("space.refresh"), id }).strict(),
-  z.object({ type: z.literal("space.signin.start"), id }).strict(),
+  /** `url`: the instance's URL as the reader gave it, held by its origin. */
+  z.object({ type: z.literal("space.signin.start"), id, url: z.string().min(1) }).strict(),
   z.object({ type: z.literal("space.signin.cancel"), id }).strict(),
-  z.object({ type: z.literal("space.signout"), id }).strict(),
+  z.object({ type: z.literal("space.signout"), id, instance: instanceOriginSchema }).strict(),
+  /** `instance`: the signed-out instance to remove from the home (space-82). */
+  z.object({ type: z.literal("space.forget"), id, instance: instanceOriginSchema }).strict(),
   z.object({
     type: z.literal("space.pick"),
     id,
     repository: repositoryKeySchema,
+    /** `instance`: the one the choice is at. */
     choice: z.union([
-      z.object({ kind: z.literal("join"), hostId: z.string().min(1) }).strict(),
-      z.object({ kind: z.literal("create"), groupId: z.string().min(1).nullable(), name: z.string().min(1) }).strict(),
+      z.object({ kind: z.literal("join"), instance: instanceOriginSchema, hostId: z.string().min(1) }).strict(),
+      z.object({ kind: z.literal("create"), instance: instanceOriginSchema, groupId: z.string().min(1).nullable(), name: z.string().min(1) }).strict(),
     ]),
     /** The privacy notice was shown for a join into a repository with other members (space-57). */
     noticed: z.boolean().optional(),
   }).strict(),
-  z.object({ type: z.literal("space.join"), id, hostId: z.string().min(1), folder: z.string().min(1).optional() }).strict(),
-  // Members of a spex repository by key, or of a group by its host id;
-  // exactly one (space-29).
-  z.object({ type: z.literal("space.members"), id, repository: repositoryKeySchema.optional(), group: z.string().min(1).optional() }).strict(),
-  // Groups and sharing (DR-114, space-29).
-  z.object({ type: z.literal("space.group.create"), id, name: z.string().min(1), path: z.string().min(1), parent: z.string().min(1).nullable() }).strict(),
+  /** `instance`: the one the row stands under (space-1). */
+  z.object({ type: z.literal("space.join"), id, instance: instanceOriginSchema, hostId: z.string().min(1), folder: z.string().min(1).optional() }).strict(),
+  // Members of a spex repository by key, or of a group by its host id
+  // at its instance; exactly one (space-29), a group with its instance
+  // (parseCommand).
+  z.object({ type: z.literal("space.members"), id, instance: instanceOriginSchema.optional(), repository: repositoryKeySchema.optional(), group: z.string().min(1).optional() }).strict(),
+  // Groups and sharing (DR-114, space-29), a group at the instance named.
+  z.object({ type: z.literal("space.group.create"), id, instance: instanceOriginSchema, name: z.string().min(1), path: z.string().min(1), parent: z.string().min(1).nullable() }).strict(),
   // Undo in Spex (DR-120, space-29): a group of the instance renamed or
   // deleted by its host id, a spex repository moved by its key into a
   // group by its host id, or into your own group where none is named.
@@ -1242,17 +1273,19 @@ export const commandSchema = z.discriminatedUnion("type", [
     .object({
       type: z.literal("space.group.rename"),
       id,
+      instance: instanceOriginSchema,
       group: z.string().min(1),
       name: z.string().min(1).optional(),
       path: z.string().min(1).optional(),
     })
     .strict(),
-  z.object({ type: z.literal("space.group.delete"), id, group: z.string().min(1) }).strict(),
+  z.object({ type: z.literal("space.group.delete"), id, instance: instanceOriginSchema, group: z.string().min(1) }).strict(),
   z.object({ type: z.literal("space.repository.move"), id, repository: repositoryKeySchema, groupId: z.string().min(1).nullable() }).strict(),
   z
     .object({
       type: z.literal("space.share"),
       id,
+      instance: instanceOriginSchema.optional(),
       group: z.string().min(1).optional(),
       repository: repositoryKeySchema.optional(),
       login: z.string().min(1),
@@ -1263,6 +1296,7 @@ export const commandSchema = z.discriminatedUnion("type", [
     .object({
       type: z.literal("space.unshare"),
       id,
+      instance: instanceOriginSchema.optional(),
       group: z.string().min(1).optional(),
       repository: repositoryKeySchema.optional(),
       login: z.string().min(1),
@@ -1471,6 +1505,7 @@ export interface CommandResults {
     | { flow: "device"; userCode: string; verificationUri: string; expiresAt: number };
   "space.signin.cancel": { stopped: boolean };
   "space.signout": GroupsState;
+  "space.forget": GroupsState;
   "space.pick": { accepted: true };
   "space.join": { accepted: true };
   "space.members": { members: HostMemberInfo[] };
@@ -1886,9 +1921,26 @@ export type SpaceSyncPhase =
 
 /** One spex repository as the Groups surface reads it (space-30, space-61). */
 export interface RepositoryState {
-  /** The clone's path under `workspace/`; for a row the host lists in a
-   * group held as colliding, `<path>@<id>`, naming no clone (space-61). */
+  /** The clone's path under `workspace/`, beginning with its instance's
+   * folder where it lies at an instance (`@spex.pub/acme/a-spex`,
+   * DR-127); for a row the host lists in a group held as colliding,
+   * `<folder>/<path>@<id>`, naming no clone (space-61). */
   key: string;
+  /** Its instance's origin (storage-31, DR-127): the one its key's
+   * folder names, the one a migration deferred it to, else the one its
+   * remote's name names; for a row an instance lists and this device
+   * lacks, that instance's; null for a clone with none. */
+  instance: string | null;
+  /** The origin of the instance governing it (git-host-5, space-61): its
+   * instance while signed in there, else the earliest signed-in instance
+   * in the home's list that lists it — for a clone at the host whose key
+   * and remote name no instance, the default instance while signed in
+   * there, as its row reads; for a row an instance lists and this device
+   * lacks, that instance's; null while none does — local only, a remote
+   * the reader named, or its instance signed out with no signed-in
+   * instance listing it. Its members panel and its Sync's refusal read
+   * it (space-1). */
+  governing: string | null;
   /** `<name>-spex`, the clone's folder name. */
   name: string;
   /** The Git host's permanent id for it, where known. */
@@ -1949,48 +2001,78 @@ export interface HostMemberInfo {
   via: string | null;
 }
 
-/** The home, its groups and their spex repositories (space-30). */
-
+/** The home, its groups and their spex repositories (space-30,
+ * DR-127): your own group, then every instance the home lists with its
+ * groups. */
 export interface GroupsState {
   home: string;
   git: { ok: true; version: string } | { ok: false; guidance: string };
-  host: { url: string; displayName: string | null };
-  /** `canCreateGroup`: as the host's last read said (DR-114); false until one is held. */
-  account: { id: string; login: string; displayName: string | null; canCreateGroup: boolean } | null;
+  /** The default instance's origin, which the sign-in card holds (space-3). */
+  defaultInstance: string;
   signIn:
-    /** `signedOut`: the host signed this device out (git-host-4), with
-     * the login the account bore; held for the core's run, until the
-     * next sign-in (space-3). */
-    | { phase: "idle"; signedOut?: { by: "host"; login: string } }
-    | { phase: "running"; flow: "browser" | "device"; userCode?: string; verificationUri?: string; since: number }
-    | { phase: "failed"; cause: "denied" | "expired" | "refused" | "unreachable"; message: string };
-  /** The full host read and accepted Refresh setup, independent of sign-in and the last complete view. */
-  read: { phase: "idle" } | { phase: "running" } | { phase: "failed"; message: string };
-  readAt: number | null;
-  /** One entry per group the host lists, by its id; your own once; one
-   * per other account's login under which the host lists a spex
-   * repository (space-1, DR-120). */
-  groups: {
-    /** The host's id; null for another account's login, and for a key's
-     * group no read lists. */
-    id: string | null;
-    /** The path in the instance; your own group's folder name; or that
-     * login. */
-    fullPath: string;
-    name: string;
-    own: boolean;
-    /** What the host's last read said the person may do there (DR-114,
-     * DR-120): all false until a read is held, and for your own group. */
-    can: { createSubgroup: boolean; manageMembers: boolean; rename: boolean; delete: boolean };
-    repositories: RepositoryState[];
-  }[];
-  /** The host's own roles in its order, empty until a read is held (DR-114). */
-  roles: { id: string; name: string; mayPush: boolean }[];
+    | { phase: "idle" }
+    /** `instance`: the origin being signed in to. */
+    | { phase: "running"; instance: string; flow: "browser" | "device"; userCode?: string; verificationUri?: string; since: number }
+    | { phase: "failed"; instance: string; cause: "denied" | "expired" | "refused" | "unreachable"; message: string };
+  /** Your own group, keyed `own`: its folder name; whether that folder
+   * still bears this device's user name, as it does until a sign-in names
+   * it after a login (storage-2, space-59), which its heading reads
+   * (space-1); and its rows — its own spex repository and the clones no
+   * instance's heading holds (space-1). */
+  own: { name: string; named: boolean; repositories: RepositoryState[] };
+  /** Every instance the home lists, in its order (space-1). */
+  instances: InstanceState[];
   diagnostics: { file: string; reason: string; blocking: boolean; repair?: DiagnosticRepair }[];
   /** What the header counts (space-1): the repairs this device's
    * reader has not answered, plus every diagnostic no repair folds.
    * Carried as one number so header and list cannot disagree. */
   issues: number;
+}
+
+/** An instance the home lists, as the Groups surface heads it (space-30,
+ * DR-127). */
+export interface InstanceState {
+  /** The instance's origin, naming it in every command. */
+  origin: string;
+  /** Its host name. */
+  host: string;
+  /** As last read, null until one is. */
+  displayName: string | null;
+  /** The account there; `canCreateGroup` as its last read said (DR-114),
+   * false until one is held. */
+  account: { id: string; login: string; displayName: string | null; canCreateGroup: boolean };
+  signedIn: boolean;
+  /** It signed this device out (git-host-4), held for the core's run
+   * (space-3). */
+  hostSignedOut: boolean;
+  /** Its full read and accepted Refresh setup; idle while signed out. */
+  read: { phase: "idle" } | { phase: "running" } | { phase: "failed"; message: string };
+  /** Its last complete view, retained while reading or after failure. */
+  readAt: number | null;
+  /** Its own roles in its order, empty until a read is held. */
+  roles: { id: string; name: string; mayPush: boolean }[];
+  /** Its groups, your namespace there, and each other account's login
+   * under which it lists a spex repository (space-1). */
+  groups: InstanceGroupState[];
+}
+
+/** A group an instance lists, or a namespace there (space-30): keyed with
+ * its instance by id, a namespace by login. */
+export interface InstanceGroupState {
+  /** The host's id; null for a namespace and for a key's group no read
+   * lists. */
+  id: string | null;
+  /** A namespace's login — your login there, `mine`, or another
+   * account's; null for a group. */
+  login: string | null;
+  mine: boolean;
+  /** The path in the instance. */
+  fullPath: string;
+  name: string;
+  /** What its last read said the person may do there; all false until
+   * one is held, and in a namespace. */
+  can: { createSubgroup: boolean; manageMembers: boolean; rename: boolean; delete: boolean };
+  repositories: RepositoryState[];
 }
 
 /** One entry of a `space.tree` level of a clone, annotated from the
@@ -2225,6 +2307,12 @@ export function parseCommand(raw: unknown): ParseCommandResult {
       (command.type === "turn.submit" && command.intentId === undefined)) &&
       command.text.length === 0 && !command.attachments?.length) {
       return { ok: false, error: "text or an attachment is required", id: command.id };
+    }
+    // A group is a host id at one instance, so a command naming one names
+    // that instance too; a spex repository's key names its own (space-29).
+    if ((command.type === "space.members" || command.type === "space.share" || command.type === "space.unshare") &&
+      command.group !== undefined && command.instance === undefined) {
+      return { ok: false, error: "instance: a group is named with its instance", id: command.id };
     }
     return { ok: true, command };
   }

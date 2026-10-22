@@ -19,7 +19,11 @@
 // person may, with taken paths and scripted refusals. Like spex.pub
 // (DR-120) it answers every path relative to the instance's root, keeps
 // no group of its own, hides the service identity a root creation adds
-// as an Owner, and answers no page URL.
+// as an Owner, and answers no page URL. Several run at once as several
+// instances (DR-127), each at its own origin; one started over another's
+// Git backend shares its bare repositories, its transport at one Git
+// origin and the accounts' namespaces, keeping its groups in a container
+// of its own.
 
 import { execFile, execFileSync, spawn, type ChildProcess } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
@@ -28,6 +32,8 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import type { AddressInfo } from "node:net";
 import { dirname, join } from "node:path";
 import { performance } from "node:perf_hooks";
+
+import { RELAY_HEADERS } from "./standin-registry.js";
 
 export interface StandinPerson { id: string; login: string; displayName: string | null }
 
@@ -84,6 +90,18 @@ export interface StandinRepository {
   can?: { manageMembers: boolean; transfer: boolean };
 }
 
+/** A transport request whose credential the Git transport accepted
+ * (git-host-12, DR-127): the instance that issued that credential. */
+export interface StandinTransportCredential {
+  /** The issuing instance's origin, e.g. `http://127.0.0.1:41234`. */
+  instance: string;
+  method: string;
+  /** The path without its query, under the Git origin's. */
+  path: string;
+  /** Whether the request belongs to a push. */
+  push: boolean;
+}
+
 export interface StandinRequest {
   method: string;
   /** The path without its query. */
@@ -121,7 +139,15 @@ export interface StandinScript {
   /** Full paths of groups that exist at the host beyond the person's
    * sight: creating one there answers `name_taken` (host-26). */
   takenGroups: string[];
-  repositories: StandinRepository[];
+  /** The repositories this instance lists, as a fresh list each read:
+   * those in its groups and those in every account's namespace — over a
+   * shared Git backend the same objects, under the same ids, at both
+   * instances (DR-127). */
+  readonly repositories: readonly StandinRepository[];
+  /** Every transport request whose credential the Git transport accepted,
+   * in arrival order, with the instance that issued it; one list for the
+   * instances over one Git backend (DR-127). */
+  transportCredentials: StandinTransportCredential[];
   /** How `/login/app` answers a well-formed request. */
   browser: "approve" | "deny" | "hold";
   /** The device flow's announced polling interval, in seconds. */
@@ -174,11 +200,15 @@ export interface StandinScript {
   /** Rename or transfer a repository: its bare repository moves and its
    * `path` and `remote_url` change; its id stays. */
   rename(id: string, change: { name?: string; group?: string }): void;
-  /** Archive a repository, or unarchive it with `false`. */
+  /** Archive a repository, or unarchive it with `false`. Over another
+   * instance's Git backend, only what this instance answers changes: the
+   * Git system's own state, which the transport follows, is the first
+   * instance's to script (DR-127). */
   archive(id: string, archived?: boolean): void;
   /** Remove the person from a repository's members. */
   removeMember(id: string): void;
-  /** Set the person's role on a repository. */
+  /** Set the person's role on a repository; over another instance's Git
+   * backend, in this instance's answers alone, as `archive`. */
   accessLevel(id: string, role: string): void;
   /** While set, creation answers 202 pending with these words. */
   refuseCreate(message: string | null): void;
@@ -204,8 +234,10 @@ export interface StandinScript {
   /** While set, the host's receive check refuses every push in these
    * words, which Git prints as `remote:` lines. */
   refusePush(message: string | null): void;
-  /** While set, every transport request answers 401, as to a credential
-   * the host no longer accepts for Git. */
+  /** While set, every transport request carrying a credential this
+   * instance issued answers 401, as to a credential the host no longer
+   * accepts for Git. The transport's other scripting is its Git
+   * backend's, shared by the instances over it. */
   unauthorizeTransport(on: boolean): void;
   /** Delay every transport response by this long; 0 stops delaying. */
   sleepTransport(ms: number): void;
@@ -253,19 +285,50 @@ export interface StandinHost {
   /** The bare repository a key names: its group's path in the instance
    * and its own, as the stand-in answers them. */
   bareOf(key: string): string;
-  /** `<url>/git`: the origin its credential is valid for, every
-   * repository's remote URL under it. */
+  /** `<url>/git`, or over another instance's Git backend that instance's:
+   * the origin its credential is valid for, every repository's remote URL
+   * under it. */
   gitOrigin: string;
-  /** The directory of bare repositories. */
+  /** The directory of bare repositories, shared over one Git backend. */
   dir: string;
+  /** The container this instance keeps its groups in on the Git system
+   * (DR-120): `STANDIN_STORAGE`, and `standin-storage-<n>` for the n-th
+   * instance over one Git backend (DR-127). */
+  storage: string;
   script: StandinScript;
   close(): Promise<void>;
+}
+
+export interface StandinHostOptions {
+  /** The directory of bare repositories; none where `gitBackend` names
+   * the instance whose directory this one shares. */
+  dir?: string;
+  displayName?: string;
+  /** The URL of a stand-in registry whose routes this instance relays,
+   * naming itself and its verdict on the bearer (environments-18). */
+  registry?: string;
+  /** The signed-in person; unset, `ada`. */
+  person?: StandinPerson;
+  /** Run over this instance's Git backend (DR-127): its bare
+   * repositories, its transport at its Git origin, which accepts the
+   * credentials this instance issues, and the accounts' namespaces, this
+   * instance's groups in a container of its own. */
+  gitBackend?: StandinHost;
 }
 
 /** The group the stand-in keeps every group of the instance in, as a
  * spex.pub deployment keeps its container on its Git system (DR-120): on
  * its Git URLs and its disk alone, never in an answer's path. */
 export const STANDIN_STORAGE = "standin-storage";
+
+/** The person every instance signs in unless started with another. */
+const DEFAULT_PERSON: StandinPerson = { id: "1001", login: "ada", displayName: "Ada Lovelace" };
+/** The accounts a host knows besides the default person. */
+const DEFAULT_ACCOUNTS: StandinPerson[] = [
+  { id: "1002", login: "bob", displayName: "Bob" },
+  { id: "1003", login: "grace", displayName: "Grace Hopper" },
+  { id: "1004", login: "alan", displayName: null },
+];
 
 /** The roles spex.pub reports for GitLab.com (host-14): those that read
  * a private repository, least first, Developer upward pushing. */
@@ -308,6 +371,48 @@ interface DeviceCode {
 }
 
 interface HeldSignIn { redirectUri: string; state: string; challenge: string; label: string }
+
+/** An instance over a Git backend, as its transport sees it. */
+interface BackendInstance {
+  url: string;
+  /** Its container on the Git system. */
+  storage: string;
+  groups(): StandinGroup[];
+  roles(): StandinRole[];
+  /** Whether a credential it issued is live. */
+  issued(token: string): boolean;
+  /** Whether it scripted its credentials refused at the transport. */
+  unauthorized(): boolean;
+}
+
+/** One Git system behind one stand-in instance or several (DR-127): its
+ * directory of bare repositories, its transport at one Git origin, its
+ * ids, every repository on it and each account's own group. */
+interface GitBackend {
+  dir: string;
+  gitOrigin: string;
+  /** The receive check a refused push runs. */
+  hooks: string;
+  nextId: number;
+  /** Every repository on the Git system, in creation order. */
+  repositories: StandinRepository[];
+  /** Each account's own group, one object per login. */
+  namespaces: Map<string, StandinGroup>;
+  /** Created repositories whose README is held, with the reads left. */
+  uninitialized: Map<StandinRepository, number>;
+  /** The instances over it in start order; the first serves its
+   * transport. */
+  instances: BackendInstance[];
+  transportCredentials: StandinTransportCredential[];
+  children: Set<ChildProcess>;
+  defaultBranchRefusal: string | null;
+  transportRefusal: string | null;
+  transportFailure: { status: number; which: "all" | "push" } | null;
+  pushRefusal: string | null;
+  transportSleepMs: number;
+}
+
+const backends = new WeakMap<StandinHost, GitBackend>();
 
 /** A group or a repository whose own members a write changes. */
 interface MembersPlace {
@@ -443,31 +548,10 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolveSleep) => setTimeout(resolveSleep, ms));
 }
 
-/**
- * Start the stand-in. `registry` names a stand-in registry
- * (environments-18) whose routes — `/api/v1/packages…` and
- * `/api/v1/search` — the stand-in forwards, as spex.pub serves the
- * registry beside the host at one origin (DR-104): a journey then signs
- * in here and publishes and installs here (playbook-library-95).
- */
-export async function startStandinHost(opts: { dir: string; displayName?: string; registry?: string }): Promise<StandinHost> {
-  const dir = opts.dir;
+/** A new Git backend over `dir`, its transport to be served at
+ * `gitOrigin`. */
+function newBackend(dir: string, gitOrigin: string): GitBackend {
   mkdirSync(dir, { recursive: true });
-  const displayName = opts.displayName ?? "Stand-in Git host";
-  const server = createServer();
-  const children = new Set<ChildProcess>();
-
-  const devices = new Map<string, Device>();
-  const authCodes = new Map<string, AuthCode>();
-  const deviceCodes = new Map<string, DeviceCode>();
-  const held: HeldSignIn[] = [];
-  let nextId = 3001;
-  let createRefusal: string | null = null;
-  let branchRefusal: string | null = null;
-  let initializationHold: number | null = null;
-  /** Created repositories whose README is held, with the reads left. */
-  const uninitialized = new Map<StandinRepository, number>();
-  let defaultBranchRefusal: string | null = null;
   /** The receive check a refused default branch runs, named to Git by
    * `core.hooksPath` only while that refusal is set. */
   const hooks = join(dir, ".hooks");
@@ -487,11 +571,71 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
     "exit 0",
     "",
   ].join("\n"), { mode: 0o755 });
-  let transportRefusal: string | null = null;
-  let transportFailure: { status: number; which: "all" | "push" } | null = null;
-  let pushRefusal: string | null = null;
+  return {
+    dir,
+    gitOrigin,
+    hooks,
+    nextId: 3001,
+    repositories: [],
+    namespaces: new Map(),
+    uninitialized: new Map(),
+    instances: [],
+    transportCredentials: [],
+    children: new Set(),
+    defaultBranchRefusal: null,
+    transportRefusal: null,
+    transportFailure: null,
+    pushRefusal: null,
+    transportSleepMs: 0,
+  };
+}
+
+/** Where a group stands on a Git backend: an account's own group at its
+ * login, a group of an instance inside that instance's container. */
+function storagePathOn(backend: GitBackend, group: StandinGroup): string {
+  if (group.kind === "user") return group.fullPath;
+  const holder = backend.instances.find((instance) => instance.groups().includes(group)) ?? backend.instances[0];
+  return `${holder?.storage ?? STANDIN_STORAGE}/${group.fullPath}`;
+}
+
+/** Whether two groups are one: an account's own group by its login,
+ * which every instance over one Git backend shares. */
+function sameGroup(a: StandinGroup, b: StandinGroup): boolean {
+  return a === b || (a.kind === "user" && b.kind === "user" && a.fullPath === b.fullPath);
+}
+
+/**
+ * Start the stand-in. `registry` names a stand-in registry
+ * (environments-18) whose routes — `/api/v1/packages…`,
+ * `/api/v1/search`, `/api/v1/account/orgs` and the raw files at
+ * `/<org>/<pkg>/<version>/<path>` — the stand-in relays, as spex.pub
+ * serves the registry beside the host at one origin (DR-104): a journey
+ * then signs in here and publishes and installs here
+ * (playbook-library-95). Each relayed request names this instance and
+ * the account it accepts the bearer as, or the code it refuses it with,
+ * so several instances may relay to one registry (DR-127).
+ * `gitBackend` starts another instance over a running one's Git backend
+ * (DR-127): its own origin, display name, person, accounts, tokens,
+ * groups and description, the first's bare repositories and transport,
+ * and the accounts' namespaces listed by both under the same ids.
+ */
+export async function startStandinHost(opts: StandinHostOptions): Promise<StandinHost> {
+  const shared = opts.gitBackend === undefined ? undefined : backends.get(opts.gitBackend);
+  if (opts.gitBackend !== undefined && shared === undefined) throw new Error("stand-in: gitBackend names no stand-in instance");
+  if (opts.gitBackend !== undefined && opts.dir !== undefined) throw new Error("stand-in: dir and gitBackend name two Git backends");
+  if (opts.gitBackend === undefined && opts.dir === undefined) throw new Error("stand-in: a dir or a gitBackend is required");
+  const displayName = opts.displayName ?? "Stand-in Git host";
+  const person: StandinPerson = { ...(opts.person ?? DEFAULT_PERSON) };
+  const server = createServer();
+
+  const devices = new Map<string, Device>();
+  const authCodes = new Map<string, AuthCode>();
+  const deviceCodes = new Map<string, DeviceCode>();
+  const held: HeldSignIn[] = [];
+  let createRefusal: string | null = null;
+  let branchRefusal: string | null = null;
+  let initializationHold: number | null = null;
   let transportUnauthorized = false;
-  let transportSleepMs = 0;
   let listingSleepMs = 0;
   let groupCreateRefusal: string | null = null;
   let groupListingLag = false;
@@ -503,6 +647,10 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
   let groupDeleteRefusal: string | null = null;
   let transferRefusal: string | null = null;
   const hostFaults: ({ kind: "rate"; retryAfter: string | null } | { kind: "unavailable" } | { kind: "refused"; message: string })[] = [];
+  /** What this instance answers of a repository unlike its Git backend's
+   * own state, scripted over another instance's backend (DR-127). */
+  const archivedHere = new Map<StandinRepository, boolean>();
+  const roleHere = new Map<StandinRepository, string>();
 
   await new Promise<void>((resolveListen, rejectListen) => {
     server.once("error", rejectListen);
@@ -512,24 +660,28 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
     });
   });
   const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
-  const gitOrigin = `${url}/git`;
+  const backend = shared ?? newBackend(opts.dir as string, `${url}/git`);
+  const { dir, gitOrigin } = backend;
+  /** Whether this instance serves its Git backend's transport and
+   * scripts the Git system's own state. */
+  const serves = backend.instances.length === 0;
+  const storage = serves ? STANDIN_STORAGE : `${STANDIN_STORAGE}-${backend.instances.length + 1}`;
 
   /** Where a group stands on the Git system: an account's own group at
-   * its login, a group of the instance inside the storage group. */
-  const storagePath = (group: StandinGroup): string => group.kind === "user" ? group.fullPath : `${STANDIN_STORAGE}/${group.fullPath}`;
-  const remoteUrl = (repo: StandinRepository): string => `${gitOrigin}/${storagePath(repo.group)}/${repo.path}.git`;
+   * its login, a group of the instance inside its container. */
+  const storagePath = (group: StandinGroup): string => group.kind === "user" ? group.fullPath : `${storage}/${group.fullPath}`;
+  const remoteUrl = (repo: StandinRepository): string => `${gitOrigin}/${storagePathOn(backend, repo.group)}/${repo.path}.git`;
   const bareFor = (group: StandinGroup, path: string): string => join(dir, ...storagePath(group).split("/"), `${path}.git`);
   const own = (): StandinGroup => script.groups.find((g) => g.kind === "user") ?? script.groups[0];
-  /** Another account's own group, by its login: one object per login,
-   * never listed among the person's groups. */
-  const namespaces = new Map<string, StandinGroup>();
+  /** Another account's own group, by its login: one object per login on
+   * the Git system, never listed among the person's groups. */
   const namespaceOf = (login: string): StandinGroup | undefined => {
     const found = script.accounts.find((account) => account.login === login);
     if (!found) return undefined;
-    let group = namespaces.get(found.login);
+    let group = backend.namespaces.get(found.login);
     if (!group) {
       group = { id: `u${found.id}`, fullPath: found.login, name: found.displayName ?? found.login, kind: "user" };
-      namespaces.set(found.login, group);
+      backend.namespaces.set(found.login, group);
     }
     return group;
   };
@@ -538,12 +690,17 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
     if (!group) throw new Error(`stand-in: no group ${key}`);
     return group;
   };
+  /** The repositories this instance lists: those in its own groups and
+   * those in any account's namespace. */
+  const mine = (): StandinRepository[] => backend.repositories.filter((r) => r.group.kind === "user" || script.groups.includes(r.group));
   const findRepository = (id: string): StandinRepository => {
-    const repo = script.repositories.find((r) => r.id === id);
+    const repo = mine().find((r) => r.id === id);
     if (!repo) throw new Error(`stand-in: no repository ${id}`);
     return repo;
   };
-  const visible = (id: string): StandinRepository | undefined => script.repositories.find((r) => r.id === id && r.listed && r.path.endsWith("-spex"));
+  const visible = (id: string): StandinRepository | undefined => mine().find((r) => r.id === id && r.listed && r.path.endsWith("-spex"));
+  const archivedOf = (repo: StandinRepository): boolean => archivedHere.get(repo) ?? repo.archived;
+  const roleOf = (repo: StandinRepository): string => roleHere.get(repo) ?? repo.role;
 
   // No page URL in any answer (DR-120).
   const groupWire = (group: StandinGroup) => ({ id: group.id, full_path: group.fullPath, name: group.name, kind: group.kind });
@@ -558,7 +715,7 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
     return { ...groupWire(group), can: { create_subgroup: can.createSubgroup, manage_members: can.manageMembers, rename: can.rename, delete: can.delete } };
   };
   const repositoryCan = (repo: StandinRepository): { manageMembers: boolean; transfer: boolean } =>
-    repo.can ?? { manageMembers: MANAGING_ROLES.has(repo.role), transfer: repo.role === MOVING_ROLE };
+    repo.can ?? { manageMembers: MANAGING_ROLES.has(roleOf(repo)), transfer: roleOf(repo) === MOVING_ROLE };
 
   // ---- members (host-8, host-27, host-28) ------------------------------------
 
@@ -604,7 +761,7 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
   };
   /** A repository's own members: the person, at their role, while it is
    * listed for them, and the others. */
-  const repositoryOwn = (repo: StandinRepository): StandinMember[] => [personMember(repo.role), ...repo.members];
+  const repositoryOwn = (repo: StandinRepository): StandinMember[] => [personMember(roleOf(repo)), ...repo.members];
   const repositoryMembers = (repo: StandinRepository) => listMembers(repositoryOwn(repo), lineage(repo.group.fullPath, true));
   const groupMembers = (group: StandinGroup) => listMembers(group.members ?? [], lineage(group.fullPath, false));
   /** The account the host lists under exactly `login`. */
@@ -629,7 +786,7 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
   /** The host's README on `main`, committed into a created repository
    * whose initialization was held. */
   function initialize(repo: StandinRepository): void {
-    uninitialized.delete(repo);
+    backend.uninitialized.delete(repo);
     commitFile(repo.bare, "refs/heads/main", "README.md", `# ${repo.name}\n`, "Initial commit");
   }
 
@@ -640,7 +797,7 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
     try {
       const heads = gitSync(["-C", repo.bare, "for-each-ref", "--format=%(refname)", "refs/heads/"]).split("\n").filter(Boolean);
       if (heads.length === 0) return;
-      uninitialized.delete(repo);
+      backend.uninitialized.delete(repo);
       if (wasEmpty && !heads.includes(gitSync(["-C", repo.bare, "symbolic-ref", "HEAD"]))) {
         gitSync(["-C", repo.bare, "symbolic-ref", "HEAD", heads[0]]);
       }
@@ -649,9 +806,9 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
 
   async function repositoryWire(repo: StandinRepository): Promise<Record<string, unknown>> {
     // A held README: one read fewer to go, committed once none is.
-    const left = uninitialized.get(repo);
+    const left = backend.uninitialized.get(repo);
     if (left !== undefined) {
-      if (left > 0) uninitialized.set(repo, left - 1);
+      if (left > 0) backend.uninitialized.set(repo, left - 1);
       else initialize(repo);
     }
     const heads = await branches(repo.bare);
@@ -663,7 +820,7 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
       group: groupWire(repo.group),
       remote_url: remoteUrl(repo),
       visibility: repo.visibility,
-      archived: repo.archived,
+      archived: archivedOf(repo),
       empty: !heads.has("main"),
       lfs: repo.lfs,
       spex_branch: spex,
@@ -672,28 +829,45 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
     };
   }
 
-  const mayPush = (repo: StandinRepository): boolean => script.roles.some((role) => role.name === repo.role && role.mayPush);
+  /** Whether the person's role on a repository may push, as this
+   * instance answers it. */
+  const mayPush = (repo: StandinRepository): boolean => script.roles.some((role) => role.name === roleOf(repo) && role.mayPush);
 
   async function detailWire(repo: StandinRepository): Promise<Record<string, unknown>> {
     const base = await repositoryWire(repo);
     const present = base.spex_branch === true;
-    const readOnly = repo.archived
+    const archived = archivedOf(repo);
+    const readOnly = archived
       ? { reason: "archived", message: "This project is archived and its repository is read-only." }
-      : mayPush(repo) ? null : { reason: "access", message: `You have the ${repo.role} role, which may not push to this project.` };
+      : mayPush(repo) ? null : { reason: "access", message: `You have the ${roleOf(repo)} role, which may not push to this project.` };
     return {
       ...base,
       read_only: readOnly,
       branch: {
         present,
-        can_push: present ? !repo.archived && mayPush(repo) : null,
+        can_push: present ? !archived && mayPush(repo) : null,
         protected: present ? false : null,
         blocked: repo.blocked,
       },
     };
   }
 
-  /** Relay one registry request to the stand-in registry, headers and
-   * body as they came, its answer as it went. */
+  /** Whether a request is the registry's, which an instance set to
+   * relay to one relays (environments-18): its search, packages and the
+   * account's orgs, and a raw file at `/<org>/<pkg>/<version>/<path>`,
+   * which no route of the instance's own shares. */
+  function registryRoute(method: string, path: string): boolean {
+    if (path === "/api/v1/search" || path === "/api/v1/packages" || path.startsWith("/api/v1/packages/") || path === "/api/v1/account/orgs") return true;
+    const segments = path.split("/").filter(Boolean);
+    return (method === "GET" || method === "HEAD") && segments.length >= 4 && !["api", "login", "git"].includes(segments[0]!);
+  }
+
+  /** Relay one registry request to the stand-in registry, its bearer and
+   * body as they came, its answer as it went: only the request's own
+   * credential, body type and accepted types pass, so no relay header it
+   * carries does, and this instance names itself and its verdict on the
+   * bearer — the account it accepts it as, or the code it refuses it
+   * with (environments-18, DR-127). */
   async function forwardToRegistry(req: IncomingMessage, res: ServerResponse, method: string, target: URL, registry: string): Promise<void> {
     const chunks: Buffer[] = [];
     for await (const chunk of req) chunks.push(chunk as Buffer);
@@ -701,6 +875,13 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
     for (const name of ["authorization", "content-type", "accept"]) {
       const value = req.headers[name];
       if (typeof value === "string") headers[name] = value;
+    }
+    headers[RELAY_HEADERS.instance] = url;
+    const bearer = bearerOf(req);
+    if (bearer !== null) {
+      const found = bearerDevice(bearer);
+      if ("code" in found) headers[RELAY_HEADERS.refused] = found.code;
+      else headers[RELAY_HEADERS.account] = script.person.login;
     }
     const answer = await fetch(new URL(`${target.pathname}${target.search}`, registry), {
       method,
@@ -761,24 +942,30 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
 
   // ---- the script -----------------------------------------------------------
 
+  // The person's own group is the Git system's, one object per login
+  // over one Git backend (DR-127): `2001` for the default person, any
+  // other's `u<id>` as another account's is. Over another instance's
+  // backend, this instance's groups take that Git system's next ids.
+  const personGroup: StandinGroup = backend.namespaces.get(person.login)
+    ?? { id: person.id === DEFAULT_PERSON.id ? "2001" : `u${person.id}`, fullPath: person.login, name: person.login, kind: "user" };
+  backend.namespaces.set(person.login, personGroup);
+  const groupId = (id: string): string => serves ? id : String(backend.nextId++);
+
   const script: StandinScript = {
-    person: { id: "1001", login: "ada", displayName: "Ada Lovelace" },
+    person,
     canCreateGroup: true,
     serviceAccount: { id: "1900", login: "standin-service", displayName: "Stand-in service" },
     admitLoginGroups: false,
     roles: DEFAULT_ROLES.map((role) => ({ ...role })),
-    accounts: [
-      { id: "1002", login: "bob", displayName: "Bob" },
-      { id: "1003", login: "grace", displayName: "Grace Hopper" },
-      { id: "1004", login: "alan", displayName: null },
-    ],
+    accounts: [DEFAULT_PERSON, ...DEFAULT_ACCOUNTS].filter((account) => account.login !== person.login).map((account) => ({ ...account })),
     groups: [
-      { id: "2001", fullPath: "ada", name: "ada", kind: "user" },
-      { id: "2002", fullPath: "acme", name: "Acme", kind: "group", members: [{ id: "1001", login: "ada", displayName: "Ada Lovelace", role: "Owner" }] },
-      { id: "2003", fullPath: "acme/research", name: "Research", kind: "group" },
+      personGroup,
+      { id: groupId("2002"), fullPath: "acme", name: "Acme", kind: "group", members: [{ ...person, role: "Owner" }] },
+      { id: groupId("2003"), fullPath: "acme/research", name: "Research", kind: "group" },
     ],
     takenGroups: [],
-    repositories: [],
+    get repositories() { return mine(); },
+    transportCredentials: backend.transportCredentials,
     browser: "approve",
     deviceInterval: 1,
     devicePollFloor: null,
@@ -817,7 +1004,7 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
       if (existsSync(bare)) throw new Error(`stand-in: ${group.fullPath}/${input.name} exists`);
       initBare(bare, { name: input.name, empty: input.empty === true, project: input.project });
       const repo: StandinRepository = {
-        id: String(nextId++),
+        id: String(backend.nextId++),
         name: input.name,
         path: input.name,
         group,
@@ -831,7 +1018,7 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
         blocked: false,
         bare,
       };
-      script.repositories.push(repo);
+      backend.repositories.push(repo);
       return repo;
     },
     rename: (id, change) => {
@@ -851,21 +1038,29 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
       repo.group = group;
       repo.bare = bare;
     },
-    archive: (id, archived = true) => { findRepository(id).archived = archived; },
+    archive: (id, archived = true) => {
+      const repo = findRepository(id);
+      if (serves) repo.archived = archived;
+      else archivedHere.set(repo, archived);
+    },
     removeMember: (id) => { findRepository(id).listed = false; },
-    accessLevel: (id, role) => { findRepository(id).role = role; },
+    accessLevel: (id, role) => {
+      const repo = findRepository(id);
+      if (serves) repo.role = role;
+      else roleHere.set(repo, role);
+    },
     refuseCreate: (message) => { createRefusal = message; },
     holdInitialization: (reads) => {
       initializationHold = reads;
-      if (reads === null) for (const repo of [...uninitialized.keys()]) initialize(repo);
+      if (reads === null) for (const repo of mine()) if (backend.uninitialized.has(repo)) initialize(repo);
     },
-    refuseDefaultBranch: (message) => { defaultBranchRefusal = message; },
+    refuseDefaultBranch: (message) => { backend.defaultBranchRefusal = message; },
     refuseBranch: (message) => { branchRefusal = message; },
-    refuseTransport: (message) => { transportRefusal = message; },
-    failTransport: (status, which = "all") => { transportFailure = status === null ? null : { status, which }; },
-    refusePush: (message) => { pushRefusal = message; },
+    refuseTransport: (message) => { backend.transportRefusal = message; },
+    failTransport: (status, which = "all") => { backend.transportFailure = status === null ? null : { status, which }; },
+    refusePush: (message) => { backend.pushRefusal = message; },
     unauthorizeTransport: (on) => { transportUnauthorized = on; },
-    sleepTransport: (ms) => { transportSleepMs = Math.max(0, ms); },
+    sleepTransport: (ms) => { backend.transportSleepMs = Math.max(0, ms); },
     sleepListing: (ms) => { listingSleepMs = Math.max(0, ms); },
     rateLimit: (count, retryAfter) => {
       for (let i = 0; i < count; i += 1) hostFaults.push({ kind: "rate", retryAfter });
@@ -914,7 +1109,9 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
     script.requests.push({ method, path: target.pathname, query: target.search, authorization: typeof req.headers.authorization === "string", at: performance.now() });
     const path = target.pathname;
 
-    if (path === "/git" || path.startsWith("/git/")) return transport(req, res, target);
+    // The transport is served at one origin: over another instance's Git
+    // backend, `/git` here is nothing (DR-127).
+    if (serves && (path === "/git" || path.startsWith("/git/"))) return transport(req, res, target);
     if (path === "/login/app" && method === "GET") return loginApp(res, target.searchParams);
     if (path === "/login/device") return loginDevice(req, res, target.searchParams);
     if (path === "/api/v1/auth/device" && method === "POST") return deviceStart(req, res);
@@ -927,9 +1124,7 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
       return json(res, 200, { display_name: displayName, git_origin: gitOrigin, roles, groups: script.canCreateGroup });
     }
     if (path.startsWith("/api/v1/host/")) return hostRoute(req, res, method, path, target);
-    if (opts.registry && (path === "/api/v1/search" || path === "/api/v1/packages" || path.startsWith("/api/v1/packages/"))) {
-      return forwardToRegistry(req, res, method, target, opts.registry);
-    }
+    if (opts.registry && registryRoute(method, path)) return forwardToRegistry(req, res, method, target, opts.registry);
     return envelope(res, 404, "not_found", "Nothing is here.");
   }
 
@@ -1148,7 +1343,7 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
         if (!match) return envelope(res, 400, "bad_request", "The cursor is malformed.");
         offset = Number(match[1]);
       }
-      const all = script.repositories.filter((r) => r.listed && r.path.endsWith("-spex"));
+      const all = mine().filter((r) => r.listed && r.path.endsWith("-spex"));
       const page = all.slice(offset, offset + PAGE_SIZE);
       const next = offset + PAGE_SIZE < all.length ? `o${offset + PAGE_SIZE}` : null;
       const repositories = await Promise.all(page.map(repositoryWire));
@@ -1211,12 +1406,12 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
     if (!group) return envelope(res, 404, "not_found", "The group is not known.");
     if (createRefusal !== null) return json(res, 202, { status: "pending", message: createRefusal });
     const bare = bareFor(group, name);
-    if (existsSync(bare) || script.repositories.some((r) => r.group.id === group.id && r.path === name)) {
+    if (existsSync(bare) || mine().some((r) => sameGroup(r.group, group) && r.path === name)) {
       return envelope(res, 409, "name_taken", "A repository of that name exists in the group.");
     }
     initBare(bare, { name, empty: initializationHold !== null });
     const repo: StandinRepository = {
-      id: String(nextId++),
+      id: String(backend.nextId++),
       name,
       path: name,
       group,
@@ -1230,8 +1425,8 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
       blocked: false,
       bare,
     };
-    script.repositories.push(repo);
-    if (initializationHold !== null) uninitialized.set(repo, initializationHold);
+    backend.repositories.push(repo);
+    if (initializationHold !== null) backend.uninitialized.set(repo, initializationHold);
     json(res, 201, { status: "created", repository: await repositoryWire(repo) });
   }
 
@@ -1266,7 +1461,7 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
     // Owners; a subgroup, the person (DR-120).
     const service: StandinMember = { ...script.serviceAccount, role: "Owner" };
     const group: StandinGroup = {
-      id: String(nextId++),
+      id: String(backend.nextId++),
       fullPath,
       name: name.trim(),
       kind: "group",
@@ -1313,13 +1508,13 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
       if (taken === "group") return envelope(res, 409, "name_taken", "Failed to save group: Path has already been taken.");
       // Everything inside moves with it, on the Git system as at the host.
       const inside = script.groups.filter((g) => g.kind === "group" && (g === group || g.fullPath.startsWith(`${from}/`)));
-      const store = (fullPath: string): string => join(dir, STANDIN_STORAGE, ...fullPath.split("/"));
+      const store = (fullPath: string): string => join(dir, storage, ...fullPath.split("/"));
       if (existsSync(store(from))) {
         mkdirSync(dirname(store(to)), { recursive: true });
         renameSync(store(from), store(to));
       }
       for (const g of inside) g.fullPath = g === group ? to : `${to}${g.fullPath.slice(from.length)}`;
-      for (const repo of script.repositories) if (inside.includes(repo.group)) repo.bare = bareFor(repo.group, repo.path);
+      for (const repo of backend.repositories) if (inside.includes(repo.group)) repo.bare = bareFor(repo.group, repo.path);
     }
     if (typeof name === "string") group.name = name.trim();
     json(res, 200, { group: listedGroupWire(group) });
@@ -1335,8 +1530,8 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
       script.groups.splice(script.groups.indexOf(g), 1);
       lagging.delete(g);
     }
-    for (const repo of script.repositories) if (inside.includes(repo.group)) repo.listed = false;
-    rmSync(join(dir, STANDIN_STORAGE, ...group.fullPath.split("/")), { recursive: true, force: true });
+    for (const repo of backend.repositories) if (inside.includes(repo.group)) repo.listed = false;
+    rmSync(join(dir, storage, ...group.fullPath.split("/")), { recursive: true, force: true });
     res.writeHead(204, { "cache-control": "no-store" }).end();
   }
 
@@ -1352,8 +1547,8 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
     if (!target) return envelope(res, 404, "not_found", "The group is not known.");
     if (transferRefusal !== null) return envelope(res, 403, "host_refused", transferRefusal);
     if (!repositoryCan(repo).transfer) return envelope(res, 403, "host_refused", `You are not allowed to transfer ${repo.group.fullPath}/${repo.path}.`);
-    if (target === repo.group) return envelope(res, 403, "host_refused", `The project is already in ${target.fullPath}.`);
-    if (existsSync(bareFor(target, repo.path)) || script.repositories.some((r) => r !== repo && r.group === target && r.path === repo.path)) {
+    if (sameGroup(target, repo.group)) return envelope(res, 403, "host_refused", `The project is already in ${target.fullPath}.`);
+    if (existsSync(bareFor(target, repo.path)) || mine().some((r) => r !== repo && sameGroup(r.group, target) && r.path === repo.path)) {
       return envelope(res, 409, "name_taken", "A repository of that name exists in the group.");
     }
     script.rename(repo.id, { group: target.id });
@@ -1403,34 +1598,42 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
     return decoded.slice(colon + 1);
   }
 
+  /** The Git transport, which the first instance over a Git backend
+   * serves at its Git origin: a credential any instance over it issued is
+   * accepted, its issuer recorded (DR-127), and the Git system's own
+   * archive and roles decide a push. */
   async function transport(req: IncomingMessage, res: ServerResponse, target: URL): Promise<void> {
-    if (transportSleepMs > 0) await sleep(transportSleepMs);
-    const found = bearerDevice(basicToken(req));
-    if ("code" in found || transportUnauthorized) {
+    if (backend.transportSleepMs > 0) await sleep(backend.transportSleepMs);
+    const token = basicToken(req);
+    const issuer = token === null ? undefined : backend.instances.find((instance) => instance.issued(token));
+    if (issuer === undefined || issuer.unauthorized()) {
       res.writeHead(401, { "www-authenticate": "Basic realm=\"Stand-in Git host\"", "content-type": "text/plain; charset=utf-8" });
       res.end("HTTP Basic: Access denied.\n");
       return;
     }
-    if (transportRefusal !== null) {
+    const pushes = target.searchParams.get("service") === "git-receive-pack" || target.pathname.endsWith("/git-receive-pack");
+    backend.transportCredentials.push({ instance: issuer.url, method: req.method ?? "GET", path: target.pathname, push: pushes });
+    if (backend.transportRefusal !== null) {
       res.writeHead(403, { "content-type": "text/plain; charset=utf-8" });
-      res.end(`${transportRefusal}\n`);
+      res.end(`${backend.transportRefusal}\n`);
       return;
     }
-    const pushes = target.searchParams.get("service") === "git-receive-pack" || target.pathname.endsWith("/git-receive-pack");
-    if (transportFailure !== null && (transportFailure.which === "all" || pushes)) {
-      res.writeHead(transportFailure.status, { "content-type": "text/plain; charset=utf-8" });
+    const failure = backend.transportFailure;
+    if (failure !== null && (failure.which === "all" || pushes)) {
+      res.writeHead(failure.status, { "content-type": "text/plain; charset=utf-8" });
       res.end("Something went wrong.\n");
       return;
     }
     const pathInfo = target.pathname.slice("/git".length);
-    const repo = script.repositories.find((r) => r.listed && pathInfo.startsWith(`/${storagePath(r.group)}/${r.path}.git/`));
+    const repo = backend.repositories.find((r) => r.listed && pathInfo.startsWith(`/${storagePathOn(backend, r.group)}/${r.path}.git/`));
     if (!repo) {
       res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
       res.end("The project you were looking for could not be found.\n");
       return;
     }
     const receive = target.searchParams.get("service") === "git-receive-pack" || pathInfo.endsWith("/git-receive-pack");
-    if (receive && (repo.archived || !mayPush(repo))) {
+    const gitMayPush = (backend.instances[0]?.roles() ?? script.roles).some((role) => role.name === repo.role && role.mayPush);
+    if (receive && (repo.archived || !gitMayPush)) {
       res.writeHead(403, { "content-type": "text/plain; charset=utf-8" });
       res.end(repo.archived ? "You are not allowed to push code to an archived project.\n" : "You are not allowed to push code to this project.\n");
       return;
@@ -1454,21 +1657,21 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
       ...(header("content-encoding") !== undefined ? { HTTP_CONTENT_ENCODING: header("content-encoding") } : {}),
       // A protected default branch refuses `main`; a refused push, every
       // ref, in words Git prints as `remote:` lines.
-      ...(receive && (defaultBranchRefusal !== null || pushRefusal !== null)
+      ...(receive && (backend.defaultBranchRefusal !== null || backend.pushRefusal !== null)
         ? {
             GIT_CONFIG_COUNT: "1",
             GIT_CONFIG_KEY_0: "core.hooksPath",
-            GIT_CONFIG_VALUE_0: hooks,
-            STANDIN_MAIN_REFUSAL: defaultBranchRefusal ?? "",
-            STANDIN_PUSH_REFUSAL: pushRefusal ?? "",
+            GIT_CONFIG_VALUE_0: backend.hooks,
+            STANDIN_MAIN_REFUSAL: backend.defaultBranchRefusal ?? "",
+            STANDIN_PUSH_REFUSAL: backend.pushRefusal ?? "",
           }
         : {}),
     };
     const pushing = receive && req.method === "POST";
     const wasEmpty = pushing && (await branches(repo.bare)).size === 0;
     const child = spawn("git", ["http-backend"], { env, stdio: ["pipe", "pipe", "pipe"] });
-    children.add(child);
-    child.on("close", () => children.delete(child));
+    backend.children.add(child);
+    child.on("close", () => backend.children.delete(child));
     child.stdin.on("error", () => undefined);
     child.stderr.resume();
     req.pipe(child.stdin);
@@ -1530,26 +1733,39 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
     });
   });
 
-  return {
+  backend.instances.push({
+    url,
+    storage,
+    groups: () => script.groups,
+    roles: () => script.roles,
+    issued: (token) => !("code" in bearerDevice(token)),
+    unauthorized: () => transportUnauthorized,
+  });
+
+  const host: StandinHost = {
     url,
     bareOf: (key: string): string => {
       const slash = key.lastIndexOf("/");
       const path = key.slice(slash + 1);
       const fullPath = key.slice(0, slash);
-      const found = script.repositories.find((r) => r.path === path && r.group.fullPath === fullPath);
+      const found = mine().find((r) => r.path === path && r.group.fullPath === fullPath);
       if (found) return found.bare;
       const group = script.groups.find((g) => g.fullPath === fullPath) ?? namespaceOf(fullPath);
-      return group ? bareFor(group, path) : join(dir, STANDIN_STORAGE, ...fullPath.split("/"), `${path}.git`);
+      return group ? bareFor(group, path) : join(dir, storage, ...fullPath.split("/"), `${path}.git`);
     },
     gitOrigin,
     dir,
+    storage,
     script,
     close: async () => {
-      for (const child of children) child.kill("SIGKILL");
+      // The transport's Git children are the serving instance's to end.
+      if (serves) for (const child of backend.children) child.kill("SIGKILL");
       await new Promise<void>((resolveClose) => {
         server.close(() => resolveClose());
         server.closeAllConnections();
       });
     },
   };
+  backends.set(host, backend);
+  return host;
 }

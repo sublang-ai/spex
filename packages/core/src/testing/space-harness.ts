@@ -13,7 +13,9 @@ import { WebSocket } from "ws";
 import { CoreService, type CoreServiceOptions } from "../service.js";
 import { fakeAdapterImports } from "./fake-adapter.js";
 import { createScriptedCaptain } from "./scripted-captain.js";
-import { startStandinHost, type StandinHost } from "./standin-host.js";
+import { startStandinHost, type StandinHost, type StandinPerson } from "./standin-host.js";
+import type { StandinRegistry } from "./standin-registry.js";
+import { canonicalOrigin, instanceFolder, instanceSegmentOf } from "../instance.js";
 import type { LineSpawner } from "../compile.js";
 import type { Command, CommandResults, GroupsState, RepositoryState, ServerMessage, SpaceStateMessage, SyncStep, SpaceOp } from "../protocol.js";
 
@@ -21,17 +23,50 @@ import type { Command, CommandResults, GroupsState, RepositoryState, ServerMessa
 export const OWN = "tester";
 export const OWN_KEY = `${OWN}/${OWN}-spex`;
 
-/** One repository's state out of the Groups state. */
+/** The stand-in's folder under `workspace/` (DR-127):
+ * `@127.0.0.1_<port>`. */
+export function hostFolder(host: Pick<StandinHost, "url">): string {
+  return instanceFolder(host.url);
+}
+
+/** The key of a spex repository the stand-in holds at `path`, its path
+ * in the instance (`acme/a-spex`): under the stand-in's folder, as its
+ * clone lies (DR-127). */
+export function hostKey(host: Pick<StandinHost, "url">, path: string): string {
+  return `${hostFolder(host)}/${path}`;
+}
+
+/** The stand-in's bare repository of a spex repository, by its key or
+ * its path in the instance: the key's instance folder is not the
+ * stand-in's to read. */
+export function bareOf(host: StandinHost, key: string): string {
+  const folder = instanceSegmentOf(key);
+  return host.bareOf(folder === null ? key : key.slice(folder.length + 1));
+}
+
+/** Every row of the Groups state, as your own group and the instances'
+ * headings hold them (space-30). */
+export function rowsOf(state: GroupsState): RepositoryState[] {
+  return [...state.own.repositories, ...state.instances.flatMap((instance) => instance.groups.flatMap((group) => group.repositories))];
+}
+
+/** One repository's state out of the Groups state: under your own group
+ * or an instance's heading. */
 export function repositoryOf(state: GroupsState, key: string): RepositoryState {
-  for (const group of state.groups) {
-    const found = group.repositories.find((repository) => repository.key === key);
-    if (found) return found;
-  }
-  throw new Error(`no repository ${key} in ${JSON.stringify(state.groups.map((group) => group.repositories.map((repository) => repository.key)))}`);
+  const found = rowsOf(state).find((repository) => repository.key === key);
+  if (found) return found;
+  throw new Error(`no repository ${key} in ${JSON.stringify(rowsOf(state).map((repository) => repository.key))}`);
 }
 
 const describe = (state: GroupsState): string =>
-  JSON.stringify(state.groups.flatMap((group) => group.repositories.map((repository) => `${repository.key}:${JSON.stringify(repository.sync)}`)));
+  JSON.stringify(rowsOf(state).map((repository) => `${repository.key}:${JSON.stringify(repository.sync)}`));
+
+/** The entry the Groups state lists for the instance at `origin`, in any
+ * spelling of it (space-30). */
+export function instanceOf(state: GroupsState, origin: string): GroupsState["instances"][number] | undefined {
+  const canonical = canonicalOrigin(origin);
+  return state.instances.find((instance) => instance.origin === canonical);
+}
 
 class Client {
   private readonly socket: WebSocket;
@@ -165,9 +200,19 @@ class Client {
 
 function sleep(ms: number): Promise<void> { return new Promise((resolveSleep) => setTimeout(resolveSleep, ms)); }
 
-const GROUPS_KEYS = ["account", "diagnostics", "git", "groups", "home", "host", "issues", "read", "readAt", "roles", "signIn"];
+/** The Groups state's fields (space-30). */
+const GROUPS_KEYS = ["defaultInstance", "diagnostics", "git", "home", "instances", "issues", "own", "signIn"];
 
-const REPOSITORY_KEYS = ["branch", "can", "code", "conflicts", "folder", "id", "incoming", "key", "lastSync", "local", "members", "name", "noticed", "own", "reason", "remote", "state", "sync", "visibility", "waiting"];
+/** The fields a running sign-in may carry, and those a failed one does
+ * (space-30). */
+const SIGN_IN_RUNNING_KEYS = new Set(["flow", "instance", "phase", "since", "userCode", "verificationUri"]);
+const SIGN_IN_FAILED_KEYS = ["cause", "instance", "message", "phase"];
+
+const INSTANCE_KEYS = ["account", "displayName", "groups", "host", "hostSignedOut", "origin", "read", "readAt", "roles", "signedIn"];
+
+const GROUP_ENTRY_KEYS = ["can", "fullPath", "id", "login", "mine", "name", "repositories"];
+
+const REPOSITORY_KEYS = ["branch", "can", "code", "conflicts", "folder", "governing", "id", "incoming", "instance", "key", "lastSync", "local", "members", "name", "noticed", "own", "reason", "remote", "state", "sync", "visibility", "waiting"];
 
 const BRANCH_KEYS = ["agreed", "ahead", "behind", "checkedAt", "hostEmpty", "mergePending", "unrelated"];
 
@@ -186,60 +231,105 @@ export function stringsOf(value: unknown): string[] {
 /** Every reply and broadcast carries the GroupsState shape (space-30). */
 export function assertGroupsState(state: GroupsState): void {
   assert.deepEqual(Object.keys(state).sort(), GROUPS_KEYS);
-  assert.ok(typeof state.home === "string" && Array.isArray(state.diagnostics) && Array.isArray(state.groups));
-  // The sign-in's phase: idle carries nothing but the host's sign-out,
-  // with the login, and that only while signed out (space-30).
+  assert.ok(typeof state.home === "string" && Array.isArray(state.diagnostics) && Array.isArray(state.instances));
+  assert.equal(typeof state.defaultInstance, "string");
+  // The default instance is the first the home lists, while it lists
+  // any (storage-2).
+  if (state.instances.length > 0) assert.equal(state.defaultInstance, state.instances[0].origin, "the default instance is the first listed");
+  // The sign-in's phase: idle carries nothing; a running or failed one
+  // names the origin it signs in to (space-30), an instance's sign-out
+  // of this device said on its entry alone.
   const signIn = state.signIn;
   assert.ok(["idle", "running", "failed"].includes(signIn.phase), JSON.stringify(signIn));
-  if (signIn.phase === "idle" && signIn.signedOut !== undefined) {
-    assert.deepEqual(Object.keys(signIn).sort(), ["phase", "signedOut"]);
-    assert.ok(signIn.signedOut.by === "host" && typeof signIn.signedOut.login === "string" && Object.keys(signIn.signedOut).length === 2, JSON.stringify(signIn));
-    assert.equal(state.account, null, "the host's sign-out is said only while signed out");
-  } else if (signIn.phase === "idle") {
-    assert.deepEqual(Object.keys(signIn), ["phase"]);
+  if (signIn.phase === "idle") assert.deepEqual(Object.keys(signIn), ["phase"]);
+  else {
+    assert.equal(typeof signIn.instance, "string", JSON.stringify(signIn));
+    if (signIn.phase === "running") {
+      assert.ok(Object.keys(signIn).every((field) => SIGN_IN_RUNNING_KEYS.has(field)), JSON.stringify(signIn));
+      assert.ok((signIn.flow === "browser" || signIn.flow === "device") && typeof signIn.since === "number", JSON.stringify(signIn));
+    } else assert.deepEqual(Object.keys(signIn).sort(), SIGN_IN_FAILED_KEYS);
   }
-  // What the host's last read said the person may do, and its roles
-  // (DR-114): booleans, and nothing in your own group.
-  if (state.account !== null) {
-    assert.deepEqual(Object.keys(state.account).sort(), ["canCreateGroup", "displayName", "id", "login"]);
-    assert.equal(typeof state.account.canCreateGroup, "boolean");
-  }
-  assert.ok(["idle", "running", "failed"].includes(state.read.phase));
-  assert.deepEqual(Object.keys(state.read).sort(), state.read.phase === "failed" ? ["message", "phase"] : ["phase"]);
-  if (state.read.phase === "failed") assert.equal(typeof state.read.message, "string");
-  if (state.account === null) assert.deepEqual(state.read, { phase: "idle" });
-  assert.ok(Array.isArray(state.roles));
-  for (const role of state.roles) {
-    assert.deepEqual(Object.keys(role).sort(), ["id", "mayPush", "name"]);
-    assert.ok(typeof role.id === "string" && typeof role.name === "string" && typeof role.mayPush === "boolean", JSON.stringify(role));
-  }
-  // The instance alone is named (space-30, DR-120): no string beyond the
-  // sign-in's own pages lies under the host's URL — no Git URL, no page —
-  // and none names the Git system behind it.
-  const leaks = stringsOf({ ...state, signIn: null }).filter((text) => text.startsWith(`${state.host.url}/`) || /gitlab/i.test(text));
+  // The instances alone are named (space-30, DR-120): no string beyond
+  // the sign-in's own pages lies under an instance's URL — no Git URL, no
+  // page — and none names the Git system behind it.
+  const origins = [state.defaultInstance, ...state.instances.map((instance) => instance.origin)];
+  const leaks = stringsOf({ ...state, signIn: null }).filter((text) => origins.some((origin) => text.startsWith(`${origin}/`)) || /gitlab/i.test(text));
   assert.deepEqual(leaks, [], "the Groups state names nothing behind the instance");
-  for (const group of state.groups) {
-    assert.deepEqual(Object.keys(group).sort(), ["can", "fullPath", "id", "name", "own", "repositories"]);
-    assert.deepEqual(Object.keys(group.can).sort(), ["createSubgroup", "delete", "manageMembers", "rename"]);
-    assert.ok(Object.values(group.can).every((value) => typeof value === "boolean"), JSON.stringify(group.can));
-    if (group.own) assert.deepEqual(group.can, { createSubgroup: false, manageMembers: false, rename: false, delete: false }, "your own group takes no subgroup, member, rename or deletion");
-    for (const repository of group.repositories) {
-      assert.deepEqual(Object.keys(repository).sort(), REPOSITORY_KEYS);
-      assert.deepEqual(Object.keys(repository.can), ["manageMembers", "transfer"]);
-      assert.ok(typeof repository.can.manageMembers === "boolean" && typeof repository.can.transfer === "boolean", JSON.stringify(repository.can));
-      assert.ok(PHASES.has(repository.sync.phase), `phase ${JSON.stringify(repository.sync)}`);
-      assert.ok(["local-only", "reachable", "read-only", "unreachable", "absent"].includes(repository.state));
-      if (repository.branch !== null) assert.deepEqual(Object.keys(repository.branch).sort(), BRANCH_KEYS);
-      const agreed = repository.branch?.agreed;
-      if (agreed) assert.ok(Object.keys(agreed).sort().join() === "at,current" && typeof agreed.at === "number" && typeof agreed.current === "boolean", JSON.stringify(agreed));
-      for (const unit of [...repository.local, ...repository.incoming, ...repository.conflicts.map((c) => c.unit)]) {
-        assert.ok(typeof unit.unit === "string" && typeof unit.label === "string" && CHANGES.has(unit.change) && Array.isArray(unit.paths) && typeof unit.diff === "boolean", JSON.stringify(unit));
-      }
-      for (const conflict of repository.conflicts) {
-        assert.ok(CHANGES.has(conflict.mine.change) && CHANGES.has(conflict.remote.change), JSON.stringify(conflict));
-      }
-      if (repository.lastSync !== null) assert.deepEqual(Object.keys(repository.lastSync).sort(), ["at", "received", "sent"]);
+  // Your own group by its folder name, and whether that folder still
+  // bears this device's user name; then every instance the home lists,
+  // each with its account, its read and its groups (space-30).
+  assert.deepEqual(Object.keys(state.own).sort(), ["name", "named", "repositories"]);
+  assert.ok(typeof state.own.name === "string" && typeof state.own.named === "boolean", JSON.stringify(state.own));
+  for (const instance of state.instances) {
+    assert.deepEqual(Object.keys(instance).sort(), INSTANCE_KEYS);
+    assert.ok(typeof instance.origin === "string" && typeof instance.host === "string" && (instance.displayName === null || typeof instance.displayName === "string"), JSON.stringify(instance));
+    // What its last read said the person may do there (DR-114).
+    assert.deepEqual(Object.keys(instance.account).sort(), ["canCreateGroup", "displayName", "id", "login"]);
+    assert.ok(typeof instance.account.canCreateGroup === "boolean" && typeof instance.signedIn === "boolean" && typeof instance.hostSignedOut === "boolean", JSON.stringify(instance));
+    if (instance.hostSignedOut) assert.equal(instance.signedIn, false, "an instance's sign-out of this device is said only while signed out");
+    assert.ok(["idle", "running", "failed"].includes(instance.read.phase));
+    assert.deepEqual(Object.keys(instance.read).sort(), instance.read.phase === "failed" ? ["message", "phase"] : ["phase"]);
+    if (instance.read.phase === "failed") assert.equal(typeof instance.read.message, "string");
+    if (!instance.signedIn) assert.deepEqual(instance.read, { phase: "idle" }, "an instance signed out reads idle");
+    assert.ok(instance.readAt === null || typeof instance.readAt === "number");
+    assert.ok(Array.isArray(instance.roles));
+    for (const role of instance.roles) {
+      assert.deepEqual(Object.keys(role).sort(), ["id", "mayPush", "name"]);
+      assert.ok(typeof role.id === "string" && typeof role.name === "string" && typeof role.mayPush === "boolean", JSON.stringify(role));
     }
+    for (const group of instance.groups) {
+      assert.deepEqual(Object.keys(group).sort(), GROUP_ENTRY_KEYS);
+      assert.deepEqual(Object.keys(group.can).sort(), ["createSubgroup", "delete", "manageMembers", "rename"]);
+      assert.ok(Object.values(group.can).every((value) => typeof value === "boolean"), JSON.stringify(group.can));
+      // A namespace by its login, with no id and nothing to do there; a
+      // group with no login, never yours.
+      if (group.login !== null) {
+        assert.equal(group.id, null, JSON.stringify(group));
+        assert.deepEqual(group.can, { createSubgroup: false, manageMembers: false, rename: false, delete: false }, "a namespace takes no subgroup, member, rename or deletion");
+      } else assert.equal(group.mine, false, JSON.stringify(group));
+    }
+    // An entry is one by its instance and id (DR-127).
+    const ids = instance.groups.flatMap((group) => (group.id === null ? [] : [group.id]));
+    assert.equal(new Set(ids).size, ids.length, `one entry per group id at ${instance.origin}`);
+    // Signed in, your namespace there stands once, by your login there
+    // (space-1).
+    if (instance.signedIn) {
+      const mine = instance.groups.filter((group) => group.mine);
+      assert.equal(mine.length, 1, `your namespace once at ${instance.origin}`);
+      assert.equal(mine[0].login?.toLowerCase(), instance.account.login.toLowerCase(), "your namespace by your login there");
+    }
+    // A row under an instance's heading stands there as the instance
+    // governing it, or, governed by none, as its own (space-1).
+    for (const repository of instance.groups.flatMap((group) => group.repositories)) {
+      assert.ok(repository.governing === null || repository.governing === instance.origin, `${repository.key} governed by ${repository.governing} stands under ${instance.origin}`);
+    }
+  }
+  assert.equal(new Set(state.instances.map((instance) => instance.origin)).size, state.instances.length, "one entry per instance");
+  // Every row stands once, under your own group or an instance's
+  // heading, in its shape (space-30).
+  const keys = rowsOf(state).map((repository) => repository.key);
+  assert.equal(new Set(keys).size, keys.length, `every row stands once: ${JSON.stringify(keys)}`);
+  for (const repository of rowsOf(state)) {
+    assert.deepEqual(Object.keys(repository).sort(), REPOSITORY_KEYS);
+    assert.ok(repository.instance === null || typeof repository.instance === "string", JSON.stringify(repository.instance));
+    // The instance governing it by its origin, none while local only
+    // (space-30).
+    assert.ok(repository.governing === null || typeof repository.governing === "string", JSON.stringify(repository.governing));
+    if (repository.state === "local-only") assert.equal(repository.governing, null, `${repository.key} is local only`);
+    assert.deepEqual(Object.keys(repository.can), ["manageMembers", "transfer"]);
+    assert.ok(typeof repository.can.manageMembers === "boolean" && typeof repository.can.transfer === "boolean", JSON.stringify(repository.can));
+    assert.ok(PHASES.has(repository.sync.phase), `phase ${JSON.stringify(repository.sync)}`);
+    assert.ok(["local-only", "reachable", "read-only", "unreachable", "absent"].includes(repository.state));
+    if (repository.branch !== null) assert.deepEqual(Object.keys(repository.branch).sort(), BRANCH_KEYS);
+    const agreed = repository.branch?.agreed;
+    if (agreed) assert.ok(Object.keys(agreed).sort().join() === "at,current" && typeof agreed.at === "number" && typeof agreed.current === "boolean", JSON.stringify(agreed));
+    for (const unit of [...repository.local, ...repository.incoming, ...repository.conflicts.map((c) => c.unit)]) {
+      assert.ok(typeof unit.unit === "string" && typeof unit.label === "string" && CHANGES.has(unit.change) && Array.isArray(unit.paths) && typeof unit.diff === "boolean", JSON.stringify(unit));
+    }
+    for (const conflict of repository.conflicts) {
+      assert.ok(CHANGES.has(conflict.mine.change) && CHANGES.has(conflict.remote.change), JSON.stringify(conflict));
+    }
+    if (repository.lastSync !== null) assert.deepEqual(Object.keys(repository.lastSync).sort(), ["at", "received", "sent"]);
   }
 }
 
@@ -450,19 +540,28 @@ playbooks:
 
   const hosts: StandinHost[] = [];
 
-  /** A stand-in Git host (git-host-12) of this suite's own. */
-  async function startHost(): Promise<StandinHost> {
-    const host = await startStandinHost({ dir: mkdtempSync(join(scratch, "host-")) });
+  /** A stand-in Git host (git-host-12) of this suite's own: an instance
+   * at its own loopback origin, on a Git backend of its own or, with
+   * `gitBackend`, over that instance's (DR-127); `person` signs in there
+   * in place of `ada`, `canCreateGroup` scripts whether the person may
+   * make a root group, and `registry` names a stand-in registry the
+   * instance relays to, which may stand behind several (environments-18). */
+  async function startHost(options: { displayName?: string; person?: StandinPerson; gitBackend?: StandinHost; canCreateGroup?: boolean; registry?: StandinRegistry } = {}): Promise<StandinHost> {
+    const { canCreateGroup, gitBackend, registry, ...rest } = options;
+    const host = await startStandinHost({ ...rest, ...(registry ? { registry: registry.url } : {}), ...(gitBackend ? { gitBackend } : { dir: mkdtempSync(join(scratch, "host-")) }) });
+    if (canCreateGroup !== undefined) host.script.canCreateGroup = canCreateGroup;
     hosts.push(host);
     return host;
   }
 
-  /** Sign a home in at the stand-in through the flow its core runs —
-   * the browser's redirect followed as the system browser would, or the
-   * user code approved — and wait for the set-up to end (space-4). */
-  async function signIn(home: Home, host: StandinHost): Promise<GroupsState> {
+  /** Sign a home in at a stand-in instance by its origin — the
+   * stand-in's own, or `url` where a front serves it — through the flow
+   * its core runs: the browser's redirect followed as the system browser
+   * would, or the user code approved. Waits until that instance's entry
+   * reads signed in with no sign-in running (space-4, DR-127). */
+  async function signIn(home: Home, host: StandinHost, url: string = host.url): Promise<GroupsState> {
     const from = home.client.mark();
-    const started = await home.client.expectOk("space.signin.start", {});
+    const started = await home.client.expectOk("space.signin.start", { url });
     if (started.flow === "browser") {
       const first = await fetch(started.url, { redirect: "manual" });
       const location = first.headers.get("location");
@@ -471,11 +570,29 @@ playbooks:
     } else {
       host.script.approveDevice(started.userCode);
     }
-    return home.client.waitSpace(from, (state) => state.account !== null && state.signIn.phase === "idle", 30_000);
+    return home.client.waitSpace(from, (state) => instanceOf(state, url)?.signedIn === true && state.signIn.phase === "idle", 30_000);
+  }
+
+  /** Sign a home out of one instance by its origin, its entry kept
+   * (space-6, DR-127). */
+  async function signOut(home: Home, host: Pick<StandinHost, "url">): Promise<GroupsState> {
+    const state = await home.client.expectOk("space.signout", { instance: host.url });
+    assert.equal(instanceOf(state, host.url)?.signedIn, false, "the instance reads signed out");
+    return state;
+  }
+
+  /** Forget one signed-out instance by its origin (space-82): its entry
+   * gone from the state the reply carries. */
+  async function forget(home: Home, host: Pick<StandinHost, "url">): Promise<GroupsState> {
+    const state = await home.client.expectOk("space.forget", { instance: host.url });
+    assert.equal(instanceOf(state, host.url), undefined, "the instance is listed no more");
+    return state;
   }
 
   /** A real core on a scratch home whose configuration lies in your own
-   * group's spex repository; `host` names the stand-in it signs in to. */
+   * group's spex repository; `host` names the stand-in the new home
+   * records from `SPEX_HOST_URL` (git-host-1), and any other instance is
+   * reached by a sign-in naming its origin. */
   async function startHome(name: string, options: { model?: string; starter?: boolean; env?: Record<string, string>; dataDir?: string; project?: boolean; host?: StandinHost; extra?: Partial<CoreServiceOptions> } = {}): Promise<Home> {
     const dataDir = options.dataDir ?? mkdtempSync(join(scratch, `${name}-`));
     const configPath = join(ownClone(dataDir), "config", "playbook.config.yaml");
@@ -576,7 +693,7 @@ playbooks:
   ];
 
   return {
-    scratch, config, git, bareRepo, otherDevice, gitFolder, sameNameFolder, addFolder, sleepingSsh, holdingGit, sleep, sleeperPid, joinRemote, hangingCompileSpawner, COMPILE_INPUT, startHome, startHost, signIn, runTurn, snapshot, peerClone, peerPush, turnRecords,
+    scratch, config, git, bareRepo, otherDevice, gitFolder, sameNameFolder, addFolder, sleepingSsh, holdingGit, sleep, sleeperPid, joinRemote, hangingCompileSpawner, COMPILE_INPUT, startHome, startHost, signIn, signOut, forget, runTurn, snapshot, peerClone, peerPush, turnRecords,
     dispose: async () => {
       await Promise.all(hosts.map((host) => host.close()));
       rmSync(scratch, { recursive: true, force: true });

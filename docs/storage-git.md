@@ -7,18 +7,23 @@ Every project and group keeps its records in its own spex repository, cloned und
 The desktop and server app sync each one from the Space surface without stopping the core.
 The commands below are the command-line path for one spex repository and require the core stopped.
 
-Each command names the home with `--home` (else `SPEX_HOME`, else `~/.spex`) and the spex repository with `--repository <key>`, the clone's path under `workspace/`, such as `alice/a-spex`.
+Each command names the home with `--home` (else `SPEX_HOME`, else `~/.spex`) and the spex repository with `--repository <key>`, the clone's path under `workspace/`, such as `alice/a-spex` or `@spex.pub/acme/a-spex`.
 Spex writes `.gitignore` and `.gitattributes` in every clone for the portable format.
 
 Stop the desktop/server core and all CLI sessions of that spex repository before committing, checking out or merging its records. Run each session on only one device at a time. The commands below operate locally; use ordinary Git fetch/push for transport.
 
+A clone's remote is named by its instance's folder, such as `@spex.pub` for spex.pub.
+A remote you named yourself is `origin`.
+Once the instances migration has moved them, the clones an earlier Spex made that record the host's id have their remote named by the folder too, while a remote you named stays `origin`; `git remote` in the clone shows which.
+The example below syncs your own group's spex repository, `alice/alice-spex`, at spex.pub.
+
 ```sh
-cd ~/.spex/workspace/alice/a-spex
+cd ~/.spex/workspace/alice/alice-spex
 umask 077
 
-git fetch origin
-node /path/to/spex/scripts/storage-git.mjs --repository alice/a-spex plan HEAD origin/spex
-git merge --no-commit --no-ff origin/spex
+git fetch @spex.pub
+node /path/to/spex/scripts/storage-git.mjs --repository alice/alice-spex plan HEAD @spex.pub/spex
+git merge --no-commit --no-ff @spex.pub/spex
 ```
 
 The plan compares both revisions with their common ancestor. Each `sessions/<id>` entry is one manifest/replay/assets bundle; each `intents/<id>` is one intent file with its attachments; each `authoring/<id>` is one authoring session; `environment` is `spex.yaml` with `spex.lock`; the configuration and `project.json` are separate entries. A `conflict` requires an explicit choice even if Git reports a clean text merge. An intent added on either side is never a conflict.
@@ -26,7 +31,7 @@ The plan compares both revisions with their common ancestor. Each `sessions/<id>
 While the merge is pending, choose each conflicting entry and apply the validated selection:
 
 ```sh
-node /path/to/spex/scripts/storage-git.mjs --repository alice/a-spex select \
+node /path/to/spex/scripts/storage-git.mjs --repository alice/alice-spex select \
   sessions/<session-id>=theirs \
   intents/<intent-id>=ours
 
@@ -41,7 +46,7 @@ Validation failure leaves the selected files unapplied. Resolve the reported iss
 After an ordinary checkout or fast-forward, validate before reopening:
 
 ```sh
-node /path/to/spex/scripts/storage-git.mjs --repository alice/a-spex validate
+node /path/to/spex/scripts/storage-git.mjs --repository alice/alice-spex validate
 ```
 
 Validation tightens safe session and asset permissions and rejects malformed data, mismatched replay bytes, missing referenced assets or corrupt content, duplicate open sources and invalid dispatches. With the core stopped, pair a spex repository with its working folder on this device:

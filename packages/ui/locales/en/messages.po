@@ -500,7 +500,7 @@ msgstr "{role} runs as"
 msgid "{seconds}s"
 msgstr "{seconds}s"
 
-#: src/components/SpaceSignIn.tsx
+#: src/components/SpaceInstance.tsx
 msgid "{site} signed this device out. Sign in again to continue as @{login}."
 msgstr "{site} signed this device out. Sign in again to continue as @{login}."
 
@@ -902,6 +902,11 @@ msgstr "Add from Git"
 msgid "Add from registry"
 msgstr "Add from registry"
 
+#. at the groups list's foot: opens the sign-in card for another instance; its title and accessible name are "Another instance"
+#: src/components/SpaceInstance.tsx
+msgid "Add instance…"
+msgstr "Add instance…"
+
 #: src/components/ProjectGroup.tsx
 msgid "Add intent…"
 msgstr "Add intent…"
@@ -1058,6 +1063,11 @@ msgstr "always"
 #: src/lib/failure-catalogue.ts
 msgid "An agent failed"
 msgstr "An agent failed"
+
+#. the title and accessible name of "Add instance…" at the groups list's foot, and the name of the sign-in card it opens
+#: src/components/SpaceInstance.tsx
+msgid "Another instance"
+msgstr "Another instance"
 
 #: src/components/ParkedRun.tsx
 msgid "Answer below, or drop the run"
@@ -1375,6 +1385,8 @@ msgstr "Can't reach the Spex core at {endpoint} — retrying every second. On a 
 #. leave the editor without changing anything
 #. leave the editor without changing anything
 #. leave the editor without changing anything
+#. leave the editor without changing anything
+#. leave the editor without changing anything
 #. stop the running compile
 #: src/components/AgentEditor.tsx
 #: src/components/AgentSettings.tsx
@@ -1385,6 +1397,7 @@ msgstr "Can't reach the Spex core at {endpoint} — retrying every second. On a 
 #: src/components/InlineConfirm.tsx
 #: src/components/ProjectGroup.tsx
 #: src/components/SpaceGroups.tsx
+#: src/components/SpaceInstance.tsx
 #: src/components/SpaceMembers.tsx
 #: src/components/SpaceSignIn.tsx
 #: src/components/SpaceSync.tsx
@@ -2777,6 +2790,8 @@ msgid "Folder its sessions run in on this device"
 msgstr "Folder its sessions run in on this device"
 
 #. confirm: forget a folder whose records are gone from this device
+#. on a signed-out instance's heading: remove the instance from this home; nothing at it changes and every record stays
+#: src/components/SpaceInstance.tsx
 #: src/components/SpaceSync.tsx
 msgid "Forget"
 msgstr "Forget"
@@ -2789,6 +2804,16 @@ msgstr "Forget folder"
 #: src/components/SpaceSync.tsx
 msgid "Forget this folder here? The folder stays on disk."
 msgstr "Forget this folder here? The folder stays on disk."
+
+#. Forget's title on a signed-out instance's heading; {host} is the instance's display name, or its host name before any read
+#: src/components/SpaceInstance.tsx
+msgid "Forgets {host} on this device; every record stays here"
+msgstr "Forgets {host} on this device; every record stays here"
+
+#. the live note once Forget removed the instance from this home; {host} is its display name, or its host name before any read
+#: src/components/SpaceInstance.tsx
+msgid "Forgot {host}"
+msgstr "Forgot {host}"
 
 #. label before the spec package a playbook comes from
 #: src/components/LibrarySurface.tsx
@@ -2910,8 +2935,8 @@ msgstr "Group records"
 msgid "Groups"
 msgstr "Groups"
 
-#. the groups list's head where the person may not create a group; {name} is the instance's display name; no link, no control
-#: src/components/SpaceGroups.tsx
+#. on an instance's heading where the person may not create a group there; {name} is the instance's display name; no link, no control
+#: src/components/SpaceInstance.tsx
 msgid "Groups are made by the people who run {name}"
 msgstr "Groups are made by the people who run {name}"
 
@@ -2970,10 +2995,6 @@ msgstr "History — this session can't be continued"
 #: src/components/NavRail.tsx
 msgid "history, can't be continued"
 msgstr "history, can't be continued"
-
-#: src/components/SpaceSurface.tsx
-msgid "Host read {age}"
-msgstr "Host read {age}"
 
 #. a spex repository's status: nothing is running
 #. session row: no turn in flight
@@ -3073,6 +3094,11 @@ msgstr "Installing browser…"
 #: src/lib/environments.ts
 msgid "Installing…"
 msgstr "Installing…"
+
+#. the sign-in card's field caption: the URL of the instance to sign in to, held by its origin (https://spex.pub)
+#: src/components/SpaceSignIn.tsx
+msgid "Instance"
+msgstr "Instance"
 
 #. catalog family: one intent's file
 #. chip on a queued message: it carries a queued intent
@@ -3565,8 +3591,8 @@ msgstr "Never synced"
 msgid "new"
 msgstr "new"
 
-#. create a group on the Git host
-#: src/components/SpaceGroups.tsx
+#. create a group at the root of the instance whose heading carries it
+#: src/components/SpaceInstance.tsx
 msgid "New group"
 msgstr "New group"
 
@@ -3836,7 +3862,7 @@ msgstr "Not installed"
 msgid "Not on this device"
 msgstr "Not on this device"
 
-#: src/components/SpaceSurface.tsx
+#: src/components/SpaceInstance.tsx
 msgid "Not read yet"
 msgstr "Not read yet"
 
@@ -3984,10 +4010,6 @@ msgstr "On (current)"
 msgid "On (unsupported)"
 msgstr "On (unsupported)"
 
-#: src/components/SpaceGroups.tsx
-msgid "On the host for this code"
-msgstr "On the host for this code"
-
 #: src/lib/space.ts
 msgid "On this device only"
 msgstr "On this device only"
@@ -3995,6 +4017,11 @@ msgstr "On this device only"
 #: src/components/SpaceGroups.tsx
 msgid "On this device only — shared once you sign in"
 msgstr "On this device only — shared once you sign in"
+
+#. the picker's heading, inside one instance's section, over the spex repositories that instance lists for the folder's code
+#: src/components/SpaceGroups.tsx
+msgid "On this instance for this code"
+msgstr "On this instance for this code"
 
 #: src/components/LibrarySurface.tsx
 #: src/components/PlaybookStages.tsx
@@ -4502,6 +4529,11 @@ msgstr "Re-run adapter readiness checks (e.g. after signing in)"
 msgid "read {age}"
 msgstr "read {age}"
 
+#. on a signed-in instance's heading: when its last read was held; {age} is relative, such as '5m ago'
+#: src/components/SpaceInstance.tsx
+msgid "Read {age}"
+msgstr "Read {age}"
+
 #. a spex repository's state: the host lets this account only read it
 #: src/lib/space.ts
 msgid "Read-only"
@@ -4544,14 +4576,11 @@ msgstr "reading…"
 msgid "Reading…"
 msgstr "Reading…"
 
+#. Refresh's title: it reads every instance the home is signed in to
 #: src/components/SpaceGroups.tsx
 #: src/components/SpaceSurface.tsx
-msgid "Reads the host again"
-msgstr "Reads the host again"
-
-#: src/components/SpaceSurface.tsx
-msgid "Reads the host again · last read {at}"
-msgstr "Reads the host again · last read {at}"
+msgid "Reads each signed-in instance again"
+msgstr "Reads each signed-in instance again"
 
 #. session status: ready to be told what to do
 #. the adapter is signed in and usable
@@ -4798,12 +4827,12 @@ msgid "Request {requirement}"
 msgstr "Request {requirement}"
 
 #: src/components/EnvironmentSection.tsx
-msgid "Request a spec package by its folder"
-msgstr "Request a spec package by its folder"
-
-#: src/components/EnvironmentSection.tsx
 msgid "Request a Git repository at a branch, tag or commit"
 msgstr "Request a Git repository at a branch, tag or commit"
+
+#: src/components/EnvironmentSection.tsx
+msgid "Request a spec package by its folder"
+msgstr "Request a spec package by its folder"
 
 #: src/components/EnvironmentSection.tsx
 msgid "Requested {name}"
@@ -5359,12 +5388,14 @@ msgstr "shown despite filter"
 msgid "shown despite search"
 msgstr "shown despite search"
 
-#. sign in to the Git host
+#. sign in to an instance
+#. sign in to an instance
+#: src/components/SpaceInstance.tsx
 #: src/components/SpaceSignIn.tsx
 msgid "Sign in"
 msgstr "Sign in"
 
-#. the Sign in control after a sign-in failed or the host signed this device out
+#. the sign-in control on a signed-out instance's heading, and the card's after a sign-in failed
 #: src/components/SpaceSignIn.tsx
 msgid "Sign in again"
 msgstr "Sign in again"
@@ -5373,38 +5404,41 @@ msgstr "Sign in again"
 msgid "Sign in again with that agent's CLI"
 msgstr "Sign in again with that agent's CLI"
 
-#: src/components/SpaceGroups.tsx
-msgid "Sign in first"
-msgstr "Sign in first"
-
 #: src/components/SpaceSignIn.tsx
 msgid "Sign in there and approve; you return here signed in."
 msgstr "Sign in there and approve; you return here signed in."
+
+#. beside a disabled Sync: the row's instance is signed out; {host} its display name, or its host name before any read
+#: src/components/SpaceGroups.tsx
+msgid "Sign in to {host} first"
+msgstr "Sign in to {host} first"
 
 #: src/lib/failure-catalogue.ts
 msgid "Sign in to {who} again"
 msgstr "Sign in to {who} again"
 
+#. in Publish's place: the home is not signed in to the instance a publish from this project goes to; {name} is that instance's display name as last read, else its host name
 #: src/components/DraftRegisterTab.tsx
-msgid "Sign in to publish"
-msgstr "Sign in to publish"
+msgid "Sign in to publish at {name}"
+msgstr "Sign in to publish at {name}"
 
 #: src/components/SpaceSignIn.tsx
 msgid "Sign in to see your groups and share each project's records with the people in them."
 msgstr "Sign in to see your groups and share each project's records with the people in them."
 
-#. sign this device out of the Git host
-#: src/components/SpaceSignIn.tsx
+#. sign this device out of the instance whose heading carries it
+#: src/components/SpaceInstance.tsx
 msgid "Sign out"
 msgstr "Sign out"
 
-#: src/components/SpaceSignIn.tsx
+#: src/components/SpaceInstance.tsx
 msgid "Signed in as @{login}"
 msgstr "Signed in as @{login}"
 
-#: src/components/SpaceSignIn.tsx
-msgid "Signed in as @{login} at {host}"
-msgstr "Signed in as @{login} at {host}"
+#. the live note once Sign out signed this device out of one instance; {host} is its display name, or its host name before any read
+#: src/components/SpaceInstance.tsx
+msgid "Signed out of {host}"
+msgstr "Signed out of {host}"
 
 #: src/components/CaptainHome.tsx
 msgid "Signing in from a terminal is picked up on re-check; a newly exported env var needs a Spex restart."
@@ -5416,15 +5450,16 @@ msgid "Signing in…"
 msgstr "Signing in…"
 
 #. the Sign out control, while signing out
-#: src/components/SpaceSignIn.tsx
+#: src/components/SpaceInstance.tsx
 msgid "Signing out…"
 msgstr "Signing out…"
 
+#: src/components/SpaceInstance.tsx
 #: src/components/SpaceSignIn.tsx
 msgid "Signs in to {host}"
 msgstr "Signs in to {host}"
 
-#: src/components/SpaceSignIn.tsx
+#: src/components/SpaceInstance.tsx
 msgid "Signs this device out of {host}; every record stays here"
 msgstr "Signs this device out of {host}; every record stays here"
 
@@ -6094,8 +6129,8 @@ msgid "This device against the common ancestor"
 msgstr "This device against the common ancestor"
 
 #: src/lib/space.ts
-msgid "this device's sign-in to the Git host"
-msgstr "this device's sign-in to the Git host"
+msgid "this device's sign-in to each instance"
+msgstr "this device's sign-in to each instance"
 
 #: src/state/store.ts
 msgid "This draft is no longer listed."

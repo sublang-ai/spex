@@ -2,11 +2,11 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // The Playbooks surface's reading of environments (DR-104): which
-// spex repository each side shows, whether it syncs, what its words
-// are for sources, artifacts and the core's busy states, and the two
-// name rules the surface checks in place. Pure functions; the
-// components render them. Every phrase is read when called, never at
-// module load (localization-4).
+// spex repository each side shows, whether it syncs, where a publish
+// goes, what its words are for sources, artifacts and the core's busy
+// states, and the two name rules the surface checks in place. Pure
+// functions; the components render them. Every phrase is read when
+// called, never at module load (localization-4).
 
 import type {
   EnvironmentPackage,
@@ -19,6 +19,7 @@ import type {
 } from "@sublang/spex-core/protocol";
 
 import { i18n } from "../i18n.js";
+import { allRepositories, hostNameOf, instanceName, instanceOf } from "./instances.js";
 
 /** A spec package's name, `<org>/<pkg>` in lowercase kebab-case
  * (DR-104), as `environment.request` takes it. */
@@ -38,17 +39,13 @@ export function chosenProject(
   return projects.find((project) => project.id === currentProjectId) ?? projects[0];
 }
 
-/** Your own group's spex repository: as Space reads it, else as the
- * playbook list names it. */
+/** Your own group's spex repository: as Space reads it under your own
+ * group (space-1), else as the playbook list names it. */
 export function ownRepositoryKey(
   space: GroupsState | undefined,
   own: readonly PlaybookAvailability[] | undefined,
 ): string | undefined {
-  for (const group of space?.groups ?? []) {
-    const repository = group.repositories.find((entry) => entry.own);
-    if (repository) return repository.key;
-  }
-  return own?.[0]?.repository;
+  return space?.own.repositories.find((entry) => entry.own)?.key ?? own?.[0]?.repository;
 }
 
 /** One spex repository as Space last read it. */
@@ -56,12 +53,29 @@ export function repositoryOf(
   space: GroupsState | undefined,
   key: string | undefined,
 ): RepositoryState | undefined {
-  if (!key) return undefined;
-  for (const group of space?.groups ?? []) {
-    const repository = group.repositories.find((entry) => entry.key === key);
-    if (repository) return repository;
-  }
-  return undefined;
+  if (!key || !space) return undefined;
+  return allRepositories(space).find((entry) => entry.key === key);
+}
+
+/** The instance a publish from a spex repository goes to
+ * (playbook-library-93, environments-10, DR-127): whether the home is
+ * signed in there, and the name "Sign in to publish at <name>" gives it,
+ * the instance's display name as the home last read it, else its host
+ * name. */
+export interface PublishTarget {
+  signedIn: boolean;
+  name: string;
+}
+
+/** The publish target of the spex repository at `key` as the Groups
+ * state reads it, so a sign-in or sign-out anywhere re-reads it: its
+ * instance, or the home's default instance where it has none; none
+ * until that state is held. */
+export function publishTargetOf(space: GroupsState | undefined, key: string): PublishTarget | undefined {
+  if (!space) return undefined;
+  const origin = repositoryOf(space, key)?.instance ?? space.defaultInstance;
+  const entry = instanceOf(space, origin);
+  return { signedIn: entry?.signedIn ?? false, name: entry ? instanceName(entry) : hostNameOf(origin) };
 }
 
 /** What the core is doing to an environment, as its line reads. */

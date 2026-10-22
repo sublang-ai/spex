@@ -430,11 +430,12 @@ When `slc` completes successfully, the registry generator shall derive `idleStat
 
 #### playbook-library-14
 
-When the Enable form [[playbook-library-7](#playbook-library-7)] is submitted with valid entries, the registry generator shall emit a registry manifest module into the playbook artifact's folder as a thin wrapper over the `slc`-emitted registry entry ([DR-014](../decisions/014-released-toolchain.md)), returning the module's path for the environment's export [[environments-9](environments.md#environments-9)] and the derived role ids:
+When the compile flow packages a compiled playbook, the registry generator shall emit a registry manifest module into the playbook artifact's folder as a thin wrapper over the `slc`-emitted registry entry ([DR-014](../decisions/014-released-toolchain.md)), returning the module's path for the environment's export [[environments-9](environments.md#environments-9)] and the derived role ids:
 
 - the user's command and intent override the entry's;
 - every other member of the entry passes through unchanged, including the role ids in their authored casing and the artifact schema the entry advertises — under artifact schema 2 a role is a playbook-local slot a user binds to a player, not a host player id ([DR-032](../decisions/032-session-players.md));
 - the module carries the registry-contract marker;
+- packaging validates the registry’s structure without calling its runtime-option validator or constructing a runtime, so an entry may require options with no default;
 - the module holds the wrapper, the entry and the artifact the entry links, and imports the playbook engine — `xstate` and `@sublang/playbook`, each with its subpaths — rather than carrying it, resolving it at load through the engine links of its folder [[playbook-library-12](#playbook-library-12)], so it runs on the engine of the app that loads it;
 - two role ids colliding fails the compile naming the offending role.
 
@@ -600,6 +601,10 @@ Where a stub `slc` executable that emits a valid compiled playbook output is nam
 #### playbook-library-47
 
 Where a stub `slc` named as the configured compiler places an artifact as `slc` links one — Playbook's own `review`, its machine importing `xstate` and its runtime the engine, with the entry `slc` emits beside them — when the test suite compiles it through the compile runner, the test suite shall assert that the registry module imports `xstate` and `@sublang/playbook/xstate-runtime`, declares no `RUNTIME_ABI` and inlines no engine source while it inlines the linked artifact, and that its imports, as the compile's fail-closed import loaded it, resolved to the very engine and machine library modules the app runs [[playbook-library-14](#playbook-library-14)].
+
+#### playbook-library-112
+
+Where a linked artifact's entry requires a runtime option without a default, when the integration suite compiles and repackages it with unchanged command and intent through the compile runner, the suite shall verify that both produce the same structurally valid registry module without calling its option validator or constructing its runtime, preserving the validator's refusal of missing or invalid options and acceptance of the supplied valid option [[playbook-library-14](#playbook-library-14)], and that selected-project composition refuses missing or invalid options and accepts the valid configured option without constructing a runtime [[playbook-library-15](#playbook-library-15)].
 
 #### playbook-library-108
 

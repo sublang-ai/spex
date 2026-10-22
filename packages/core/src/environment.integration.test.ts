@@ -5,7 +5,8 @@
 // and refused, resolution against the stand-in registry, installs on
 // scratch homes through the store, exports into scratch working folders
 // and a scratch user home, and the built-in spec package seeded and
-// resolved with no registry reachable.
+// resolved with no registry reachable; and the stand-in registry itself
+// answering at several stand-in instances (environments-18).
 
 import { after, before, test } from "node:test";
 import assert from "node:assert/strict";
@@ -22,8 +23,10 @@ import { parse as parseYaml } from "yaml";
 import { compilePlaybook, defaultSpawner, ENGINE_LINKS_EXCLUDE, moduleDirectoriesAbove, type LineSpawner } from "./compile.js";
 import { createModuleLoader, isValidRegistryEntry, type RegistryEntryLike } from "./config.js";
 import { fileVersion } from "./files.js";
+import { instanceFolder } from "./instance.js";
 import {
   artifactLanguages,
+  builtinLock,
   builtinPackage,
   builtinRegistrySource,
   compositeRegistry,
@@ -62,6 +65,7 @@ import {
   type InstallOptions,
   type Lock,
   type RegistrySource,
+  type RegistrySourceLock,
   type ResolveResult,
   type RunGit,
 } from "./environment/index.js";
@@ -69,7 +73,9 @@ import { AGENT_FOLDERS } from "./environment/agent-folders.js";
 import { startGitHttpHost, testCredentialArgs } from "./testing/git-http-host.js";
 import { APP_ENGINE_URL, APP_XSTATE_URL, importsOf, LINKED_ID, recordingResolutions, writeLinkedFixture } from "./testing/linked-artifact.js";
 import { scratchDir } from "./testing/scratch.js";
-import { makeRelease, startStandinRegistry, type ReleaseFixture, type StandinRegistry } from "./testing/standin-registry.js";
+import { browserSignIn, instanceClient } from "./testing/host-sign-in.js";
+import { startStandinHost, type StandinHost } from "./testing/standin-host.js";
+import { makeRelease, RELAY_HEADERS, startStandinRegistry, type ReleaseFixture, type StandinRegistry } from "./testing/standin-registry.js";
 import { stubSlcScriptedSource } from "./testing/stub-slc.js";
 
 const machineIdentity = "machine-id:v1:00000000-0000-4000-8000-0000000000aa";
@@ -187,6 +193,10 @@ function snapshot(dir: string): Record<string, string> {
   walk("");
   return out;
 }
+
+/** A registry's folder under `cache/registry/`: its scheme's, holding
+ * its instance's folder (environments-7). */
+const cacheFolderOf = (url: string): string => join(new URL(url).protocol.slice(0, -1), instanceFolder(url));
 
 const requestsYaml = (packages: Record<string, unknown>, language?: string): string =>
   `# The environment's requests.\nformat: 1\n${language ? `language: ${language}\n` : ""}packages:\n${Object.entries(packages)
@@ -593,7 +603,7 @@ test("environments-21: files land with bytes and flags through a store keeping e
   // Half the files or fewer missing: fetched as raw files.
   assert.ok(registry.script.requests.includes("GET /acme/kit/1.0.0/skills/en/tidy/other.txt"), JSON.stringify(registry.script.requests));
   assert.equal(rebuilt.unchanged, false);
-  assert.ok(existsSync(join(home.cache, "registry", "acme", "kit", "1.0.0.json")));
+  assert.ok(existsSync(join(home.cache, "registry", cacheFolderOf(registry.url), "acme", "kit", "1.0.0.json")));
   assert.deepEqual(snapshot(join(home.clone, "packages")), before);
 
   // A changed spex.yaml marks the lock stale: nothing new is installed.
@@ -959,6 +969,551 @@ test("environments-28: the orgs scripted for the device's app token read sorted 
     assert.equal(asked() - before, 1, "one request");
   } finally {
     registry.script.delayOrgs(0);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// environments-18: one stand-in registry behind several instances
+// ---------------------------------------------------------------------------
+
+test("environments-18: one stand-in registry answers at each instance relaying to it", async () => {
+  const scratch = scratchDir("spex-relay-");
+  const shared = await startStandinRegistry({ dir: join(scratch, "registry") });
+  const first = await startStandinHost({ dir: join(scratch, "first"), displayName: "First", registry: shared.url });
+  const second = await startStandinHost({ dir: join(scratch, "second"), displayName: "Second", person: { id: "1002", login: "bob", displayName: "Bob" }, registry: shared.url });
+  const third = await startStandinHost({ dir: join(scratch, "third"), displayName: "Third", person: { id: "1003", login: "grace", displayName: "Grace Hopper" }, registry: shared.url });
+  try {
+    // A home signed in to the first and the second, another to the third
+    // alone, each app token minted by its instance's own sign-in.
+    const tokenAt = async (home: string, host: StandinHost): Promise<string> => {
+      const signedIn = instanceClient(join(scratch, home), host);
+      await browserSignIn(signedIn);
+      const secret = await signedIn.accessSecret();
+      assert.ok(secret, "the sign-in stored an app token");
+      return secret;
+    };
+    const one = await tokenAt("home", first);
+    const two = await tokenAt("home", second);
+    const three = await tokenAt("other", third);
+    /** The registry as reached at `host`, presenting `token` or none. */
+    const at = (host: Pick<StandinHost, "url">, token?: string): RegistryClient =>
+      new RegistryClient({ url: host.url, ...(token === undefined ? {} : { token: async () => token }) });
+    const refusedAs = (kind: string, code?: string) => (error: unknown): boolean => {
+      assert.ok(error instanceof RegistryError, String(error));
+      assert.equal(error.kind, kind, error.message);
+      if (code !== undefined) assert.equal(error.code, code, error.message);
+      return true;
+    };
+    const versionsOf = async (registry: RegistryClient, name: string): Promise<string[]> => (await registry.index(name)).versions.map((entry) => entry.version);
+    const get = (path: string, instance: string | null, account: string | null, bearer: boolean) => ({ method: "GET", path, instance, account, bearer });
+
+    // A private org whose readers are both instances, published to
+    // through the first as its account: it reads with either instance's
+    // token, finds nothing without one, and is forbidden through the
+    // third, which it does not list, and to the first's token presented
+    // to the registry directly, through no instance.
+    shared.script.setPrivate("vault", [first.url, second.url]);
+    const vault = join(scratch, "vault");
+    await makeRelease(vault, manifestOf("vault/secrets", "1.0.0", { keep: { kind: "skill", language: "en" } }), skillFiles("keep"));
+    let from = shared.script.received.length;
+    const { checksum } = await publishRelease(at(first, one), vault);
+    assert.deepEqual(shared.script.received.slice(from), [{ method: "PUT", path: "/api/v1/packages/vault/secrets/1.0.0", instance: first.url, account: "ada", bearer: true }]);
+    from = shared.script.received.length;
+    assert.equal((await at(first, one).version("vault/secrets", "1.0.0")).checksum, checksum);
+    assert.deepEqual(await versionsOf(at(second, two), "vault/secrets"), ["1.0.0"]);
+    await assert.rejects(at(first).index("vault/secrets"), refusedAs("not_found"));
+    await assert.rejects(at(third, three).index("vault/secrets"), refusedAs("forbidden"));
+    await assert.rejects(at(shared, one).index("vault/secrets"), refusedAs("forbidden"));
+    assert.deepEqual(shared.script.received.slice(from), [
+      get("/api/v1/packages/vault/secrets/1.0.0", first.url, "ada", true),
+      get("/api/v1/packages/vault/secrets", second.url, "bob", true),
+      get("/api/v1/packages/vault/secrets", first.url, null, false),
+      get("/api/v1/packages/vault/secrets", third.url, "grace", true),
+      get("/api/v1/packages/vault/secrets", null, null, true),
+    ]);
+    // No relay header a request carries passes the relay: through the
+    // third, a request claiming the second is still the third's.
+    const forged = await fetch(`${third.url}/api/v1/packages/vault/secrets`, {
+      headers: { authorization: `Bearer ${three}`, [RELAY_HEADERS.instance]: second.url, [RELAY_HEADERS.account]: "bob" },
+    });
+    assert.equal(forged.status, 403);
+    await forged.arrayBuffer();
+    assert.deepEqual(shared.script.received.at(-1), get("/api/v1/packages/vault/secrets", third.url, "grace", true));
+
+    // A token the instance does not know — another instance's, or one
+    // never issued — is refused 401 invalid_token on every route, a public
+    // spec package's among them, which reads there with no token.
+    const open = join(scratch, "open");
+    await makeRelease(open, manifestOf("acme/open", "1.0.0", { tidy: { kind: "skill", language: "en" } }), skillFiles("tidy"));
+    await publishRelease(at(second, two), open);
+    const never = `spexa_${"A".repeat(43)}`;
+    from = shared.script.received.length;
+    for (const [host, token] of [[first, two], [second, never]] as const) {
+      await assert.rejects(at(host, token).index("acme/open"), refusedAs("unauthenticated", "invalid_token"));
+      await assert.rejects(at(host, token).index("vault/secrets"), refusedAs("unauthenticated", "invalid_token"));
+    }
+    assert.deepEqual(shared.script.received.slice(from), [
+      get("/api/v1/packages/acme/open", first.url, null, true),
+      get("/api/v1/packages/vault/secrets", first.url, null, true),
+      get("/api/v1/packages/acme/open", second.url, null, true),
+      get("/api/v1/packages/vault/secrets", second.url, null, true),
+    ]);
+    assert.deepEqual(await versionsOf(at(first), "acme/open"), ["1.0.0"]);
+
+    // A scripted refusal answers one instance's tokens alone, with
+    // token_revoked unless it names another code; a request presenting no
+    // token there still reads the public spec package.
+    shared.script.refuseTokens(first.url);
+    try {
+      await assert.rejects(at(first, one).index("acme/open"), refusedAs("unauthenticated", "token_revoked"));
+      await assert.rejects(at(first, one).version("vault/secrets", "1.0.0"), refusedAs("unauthenticated", "token_revoked"));
+      assert.equal((await at(second, two).version("vault/secrets", "1.0.0")).checksum, checksum);
+      assert.deepEqual(await versionsOf(at(first), "acme/open"), ["1.0.0"]);
+      shared.script.refuseTokens(second.url, "reauth_required");
+      await assert.rejects(at(second, two).index("acme/open"), refusedAs("unauthenticated", "reauth_required"));
+    } finally {
+      shared.script.refuseTokens(null);
+    }
+    assert.equal((await at(first, one).version("vault/secrets", "1.0.0")).checksum, checksum);
+    assert.deepEqual(await versionsOf(at(second, two), "acme/open"), ["1.0.0"]);
+
+    // The orgs scripted for an instance are listed, sorted by name, for
+    // its tokens alone: another instance's token, an unknown one, or none
+    // reads as no answer.
+    shared.script.setOrgs(first.url, [
+      { name: "workshop", path: "acme/workshop", role: "developer" },
+      { name: "alpha", path: "alpha", role: "owner" },
+    ]);
+    shared.script.setOrgs(second.url, [{ name: "beta", path: "beta", role: "maintainer" }]);
+    from = shared.script.received.length;
+    assert.deepEqual(await at(first, one).orgs(), [
+      { name: "alpha", path: "alpha", role: "owner" },
+      { name: "workshop", path: "acme/workshop", role: "developer" },
+    ]);
+    assert.deepEqual(await at(second, two).orgs(), [{ name: "beta", path: "beta", role: "maintainer" }]);
+    assert.equal(await at(third, three).orgs(), null);
+    assert.equal(await at(first, two).orgs(), null);
+    assert.equal(await at(first).orgs(), null);
+    assert.deepEqual(shared.script.received.slice(from), [
+      get("/api/v1/account/orgs", first.url, "ada", true),
+      get("/api/v1/account/orgs", second.url, "bob", true),
+      get("/api/v1/account/orgs", third.url, "grace", true),
+      get("/api/v1/account/orgs", first.url, null, true),
+      get("/api/v1/account/orgs", first.url, null, false),
+    ]);
+
+    // A raw file and a release archive arrive through the relay, a private
+    // one's only to its readers.
+    from = shared.script.received.length;
+    assert.equal(Buffer.from(await at(first, one).file("vault/secrets", "1.0.0", "skills/en/keep/SKILL.md")).toString("utf8"), skillText("keep"));
+    assert.equal(sha256Hex(await at(second, two).archive("vault/secrets", "1.0.0")), checksum);
+    assert.equal(Buffer.from(await at(third).file("acme/open", "1.0.0", "skills/en/tidy/SKILL.md")).toString("utf8"), skillText("tidy"));
+    await assert.rejects(at(third, three).file("vault/secrets", "1.0.0", "skills/en/keep/SKILL.md"), refusedAs("forbidden"));
+    assert.deepEqual(shared.script.received.slice(from), [
+      get("/vault/secrets/1.0.0/skills/en/keep/SKILL.md", first.url, "ada", true),
+      get("/api/v1/packages/vault/secrets/1.0.0/download", second.url, "bob", true),
+      get("/acme/open/1.0.0/skills/en/tidy/SKILL.md", third.url, null, false),
+      get("/vault/secrets/1.0.0/skills/en/keep/SKILL.md", third.url, "grace", true),
+    ]);
+    assert.deepEqual(shared.script.requests.slice(-4), [
+      "GET /vault/secrets/1.0.0/skills/en/keep/SKILL.md",
+      "GET /api/v1/packages/vault/secrets/1.0.0/download",
+      "GET /acme/open/1.0.0/skills/en/tidy/SKILL.md",
+      "GET /vault/secrets/1.0.0/skills/en/keep/SKILL.md",
+    ]);
+    shared.script.clearRequests();
+    assert.deepEqual([shared.script.requests, shared.script.received], [[], []]);
+  } finally {
+    await Promise.all([first.close(), second.close(), third.close()]);
+    await shared.close();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// environments-5, environments-7, environments-12: several registries
+// ---------------------------------------------------------------------------
+
+/** Stand-in registries of a test's own, each under the scratch folder. */
+function ownRegistries(scratch: string, count: number): Promise<StandinRegistry[]> {
+  return Promise.all(Array.from({ length: count }, (_, at) => startStandinRegistry({ dir: join(scratch, `registry-${at + 1}`) })));
+}
+
+/** The registry source a lock records for a spec package. */
+function registrySourceOf(lock: Lock, name: string): RegistrySourceLock {
+  const source = lock.packages[name]?.source;
+  assert.ok(source && "registry" in source, `${name} is locked from a registry`);
+  return source as RegistrySourceLock;
+}
+
+test("environments-5: a resolution keeps the registry its lock records where it reproduces the version and checksum, and records the one asked otherwise", async () => {
+  const scratch = scratchDir("spex-keep-");
+  const [r1, r2] = await ownRegistries(scratch, 2);
+  try {
+    const one = new RegistryClient({ url: r1.url });
+    const two = new RegistryClient({ url: r2.url });
+    // One release folder published to both packs to one archive, so both
+    // hold it at one checksum; another spec package is published at one
+    // version as a release of its own to each; a third has a newer
+    // version at the second alone.
+    const same = await makeRelease(join(scratch, "same"), manifestOf("acme/same", "1.0.0", { same: { kind: "skill", language: "en" } }), skillFiles("same"));
+    assert.equal((await publishRelease(one, same)).checksum, (await publishRelease(two, same)).checksum);
+    await publish(manifestOf("acme/differs", "1.0.0", { differs: { kind: "skill", language: "en" } }), skillFiles("differs", "en", "the first's release"), one);
+    await publish(manifestOf("acme/differs", "1.0.0", { differs: { kind: "skill", language: "en" } }), skillFiles("differs", "en", "the second's release"), two);
+    const newer = await makeRelease(join(scratch, "newer"), manifestOf("acme/newer", "1.0.0", { newer: { kind: "skill", language: "en" } }), skillFiles("newer"));
+    await publishRelease(one, newer);
+    await publishRelease(two, newer);
+    await publish(manifestOf("acme/newer", "1.1.0", { newer: { kind: "skill", language: "en" } }), skillFiles("newer", "en", "newer"), two);
+
+    const home = makeHome();
+    const text = requestsYaml({ "acme/same": { version: "^1.0.0" }, "acme/differs": { version: "^1.0.0" }, "acme/newer": { version: "^1.0.0" } });
+    const resolveAt = async (registry: RegistrySource, previous?: Lock, requestsText = text): Promise<Lock> => locked(await resolve({
+      requests: parseRequests(requestsText), requestsText, registry, pathRoot: null, git: gitSource(home.cache), ...(previous ? { previous } : {}),
+    }));
+
+    // Resolved at the first, every spec package records the first.
+    const first = await resolveAt(one);
+    for (const name of ["acme/differs", "acme/newer", "acme/same"]) assert.equal(registrySourceOf(first, name).registry, r1.url, name);
+    assert.equal(registrySourceOf(first, "acme/newer").version, "1.0.0");
+
+    // Resolved again at the second with that lock in hand: the release
+    // the second holds at the recorded version and checksum keeps the
+    // first; another checksum, or another version, records the second.
+    const again = await resolveAt(two, first);
+    assert.deepEqual(registrySourceOf(again, "acme/same"), registrySourceOf(first, "acme/same"));
+    assert.equal(registrySourceOf(again, "acme/differs").registry, r2.url);
+    assert.equal(registrySourceOf(again, "acme/differs").version, "1.0.0");
+    assert.notEqual(registrySourceOf(again, "acme/differs").checksum, registrySourceOf(first, "acme/differs").checksum);
+    assert.equal(registrySourceOf(again, "acme/newer").registry, r2.url);
+    assert.equal(registrySourceOf(again, "acme/newer").version, "1.1.0");
+
+    // Only the label is kept: the solution is the one resolved there
+    // with no lock in hand, which records the second throughout.
+    const fresh = await resolveAt(two);
+    for (const name of ["acme/differs", "acme/newer", "acme/same"]) assert.equal(registrySourceOf(fresh, name).registry, r2.url, name);
+    const unlabelled = (lock: Lock): Lock => {
+      const copy = structuredClone(lock);
+      for (const resolution of Object.values(copy.packages)) if ("registry" in resolution.source) resolution.source.registry = "";
+      return copy;
+    };
+    assert.deepEqual(unlabelled(again), unlabelled(fresh));
+
+    // The built-in spec package's resolution, made from the seed offline,
+    // records the registry it was resolved at, and keeps the one a lock
+    // records at its version and checksum; neither registry is asked.
+    const pkg = builtinPackage();
+    const builtinText = requestsYaml({ "sublang/playbooks": { version: `^${pkg.version}` } });
+    const seeded = compositeRegistry(builtinRegistrySource({ store: home.store, cacheDir: home.cache, url: two.url, shipped: pkg }), two);
+    r1.script.clearRequests();
+    r2.script.clearRequests();
+    const resolvedThere = await resolveAt(seeded, undefined, builtinText);
+    assert.equal(registrySourceOf(resolvedThere, "sublang/playbooks").registry, r2.url);
+    const recorded = builtinLock(pkg, r1.url, builtinText);
+    const kept = await resolveAt(seeded, recorded, builtinText);
+    assert.deepEqual(registrySourceOf(kept, "sublang/playbooks"), registrySourceOf(recorded, "sublang/playbooks"));
+    assert.deepEqual([r1.script.requests, r2.script.requests], [[], []]);
+  } finally {
+    await Promise.all([r1.close(), r2.close()]);
+  }
+});
+
+test("environments-5, environments-3: a lock's registry is kept only as an instance's canonical origin — another spelling of an origin kept as that origin, a path, a file URL, a user or no URL at all giving way to the registry asked", async () => {
+  const scratch = scratchDir("spex-keep-origin-");
+  const [r1, r2] = await ownRegistries(scratch, 2);
+  try {
+    const one = new RegistryClient({ url: r1.url });
+    await publishRelease(one, await makeRelease(join(scratch, "same"), manifestOf("acme/same", "1.0.0", { same: { kind: "skill", language: "en" } }), skillFiles("same")));
+    const home = makeHome();
+    const text = requestsYaml({ "acme/same": { version: "^1.0.0" } });
+    const resolveAt = async (previous?: Lock): Promise<Lock> => locked(await resolve({
+      requests: parseRequests(text), requestsText: text, registry: one, pathRoot: null, git: gitSource(home.cache), ...(previous ? { previous } : {}),
+    }));
+    const first = await resolveAt();
+    assert.equal(registrySourceOf(first, "acme/same").registry, r1.url);
+    /** The same lock, its release recorded at `registry`. */
+    const recording = (registry: string): Lock => {
+      const copy = structuredClone(first);
+      (copy.packages["acme/same"]!.source as RegistrySourceLock).registry = registry;
+      return copy;
+    };
+    const port = new URL(r2.url).port;
+    r2.script.clearRequests();
+
+    // Another spelling of the second's origin, for the release the first
+    // reproduces at that version and checksum, is kept as the second's
+    // canonical origin (environments-5, environments-3).
+    for (const spelling of [`HTTP://127.0.0.1:${port}/`, `http://127.0.0.1:0${port}`]) {
+      const kept = await resolveAt(recording(spelling));
+      assert.deepEqual(registrySourceOf(kept, "acme/same"), { ...registrySourceOf(first, "acme/same"), registry: r2.url }, spelling);
+    }
+
+    // A recorded registry that names no origin is not kept: the
+    // resolution records the registry it asked (environments-3).
+    for (const recorded of [`${r2.url}/api/v1`, "file:///srv/registry", `http://reader@127.0.0.1:${port}`, "_"]) {
+      const asked = await resolveAt(recording(recorded));
+      assert.deepEqual(registrySourceOf(asked, "acme/same"), registrySourceOf(first, "acme/same"), recorded);
+    }
+    assert.deepEqual(r2.script.requests, [], "the recorded registry is asked nothing");
+  } finally {
+    await Promise.all([r1.close(), r2.close()]);
+  }
+});
+
+test("environments-7: an install takes each registry package from the first registry serving its locked checksum", async () => {
+  const scratch = scratchDir("spex-candidates-");
+  const [r1, r2, r3] = await ownRegistries(scratch, 3);
+  try {
+    const [one, two, three] = [r1, r2, r3].map((registry) => new RegistryClient({ url: registry.url })) as [RegistryClient, RegistryClient, RegistryClient];
+    // The first holds `acme/kept` and `acme/both`; the second neither; the
+    // third `acme/kept` as another release at that version, and `acme/both`
+    // as the first holds it.
+    const keptRelease = await makeRelease(join(scratch, "kept"), manifestOf("acme/kept", "1.0.0", { kept: { kind: "skill", language: "en" } }), {
+      ...skillFiles("kept"),
+      "skills/en/kept/notes.txt": "kept notes\n",
+    });
+    await publishRelease(one, keptRelease);
+    await publish(manifestOf("acme/kept", "1.0.0", { kept: { kind: "skill", language: "en" } }), skillFiles("kept", "en", "another release"), three);
+    const bothRelease = await makeRelease(join(scratch, "both"), manifestOf("acme/both", "1.0.0", { both: { kind: "skill", language: "en" } }), skillFiles("both"));
+    await publishRelease(one, bothRelease);
+    await publishRelease(three, bothRelease);
+
+    const text = requestsYaml({ "acme/kept": { version: "1.0.0" }, "acme/both": { version: "1.0.0" } });
+    const home = makeHome();
+    const lock = locked(await resolveText(home.clone, text, { through: one }));
+    await writeLock(join(home.clone, "spex.lock"), lock);
+    const kept = registrySourceOf(lock, "acme/kept");
+    const both = registrySourceOf(lock, "acme/both");
+    /** A home of its own holding the environment's files, sharing `cache`
+     * where given. */
+    const homeWith = (cache?: string): Home => {
+      const made = makeHome();
+      mkdirSync(made.clone, { recursive: true });
+      cpSync(join(home.clone, "spex.yaml"), join(made.clone, "spex.yaml"));
+      cpSync(join(home.clone, "spex.lock"), join(made.clone, "spex.lock"));
+      return cache === undefined ? made : { ...made, cache };
+    };
+    const installAt = (at: Home, registries: readonly RegistrySource[], asked: RegistrySourceLock[] = []) => installAsOnDisk({
+      cloneDir: at.clone, lock, store: at.store, cache: at.cache, registry: one, git: gitSource(at.cache), pathRoot: null,
+      registries: (source) => { asked.push(source); return registries; },
+    });
+    const clear = (): void => { for (const registry of [r1, r2, r3]) registry.script.clearRequests(); };
+    const version = (name: string): string => `GET /api/v1/packages/${name}/1.0.0`;
+    const download = (name: string): string => `GET /api/v1/packages/${name}/1.0.0/download`;
+    const installedAsLocked = (at: Home): void => {
+      for (const name of ["acme/both", "acme/kept"]) {
+        for (const file of lock.packages[name]!.files) {
+          assert.equal(sha256Hex(readFileSync(join(at.clone, "packages", ...name.split("/"), ...file.path.split("/")))), file.sha256, `${name} ${file.path}`);
+        }
+      }
+    };
+
+    // Asked in turn — the second lacking both, the third holding `acme/kept`
+    // at another checksum — each spec package comes from the first
+    // registry serving its locked checksum: `acme/both` from the third,
+    // `acme/kept` from the first, the third's other release fetched not.
+    clear();
+    const asked: RegistrySourceLock[] = [];
+    const report = await installAt(home, [two, three, one], asked);
+    assert.deepEqual(report.installed, ["acme/both", "acme/kept"]);
+    assert.deepEqual(asked, [both, kept]);
+    installedAsLocked(home);
+    assert.deepEqual(r2.script.requests, [version("acme/both"), version("acme/kept")]);
+    assert.deepEqual(r3.script.requests, [version("acme/both"), download("acme/both"), version("acme/kept")]);
+    assert.deepEqual(r1.script.requests, [version("acme/kept"), download("acme/kept")]);
+
+    // The cache holds each registry's answer under that registry's folder,
+    // and each archive under the checksum it was verified at.
+    const resourceAt = (registry: StandinRegistry, cache: string, name: string): string => join(cache, "registry", cacheFolderOf(registry.url), ...name.split("/"), "1.0.0.json");
+    const archivesOf = (cache: string, name: string): string[] => readdirSync(join(cache, "archives", ...name.split("/"), "1.0.0")).sort();
+    for (const [registry, name] of [[r1, "acme/kept"], [r3, "acme/kept"], [r3, "acme/both"]] as const) assert.ok(existsSync(resourceAt(registry, home.cache, name)), `${registry.url} ${name}`);
+    assert.notEqual(JSON.parse(readFileSync(resourceAt(r3, home.cache, "acme/kept"), "utf8")).checksum, kept.checksum);
+    assert.ok(!existsSync(join(home.cache, "registry", cacheFolderOf(r2.url))), "a registry lacking the release leaves nothing cached");
+    assert.deepEqual(archivesOf(home.cache, "acme/kept"), [`${kept.checksum}.tgz`]);
+    assert.deepEqual(archivesOf(home.cache, "acme/both"), [`${both.checksum}.tgz`]);
+
+    // A home sharing that cache: an answer cached with the locked checksum
+    // and an archive cached at it serve without a request, an answer
+    // cached with another checksum is asked again.
+    clear();
+    const sharing = homeWith(home.cache);
+    await installAt(sharing, [two, three, one]);
+    installedAsLocked(sharing);
+    assert.deepEqual(r1.script.requests, []);
+    assert.deepEqual(r3.script.requests, [version("acme/kept")]);
+    assert.deepEqual(r2.script.requests, [version("acme/both"), version("acme/kept")]);
+
+    // An outage moves on as well.
+    clear();
+    r2.script.unavailable(1);
+    const afterOutage = homeWith();
+    assert.deepEqual((await installAt(afterOutage, [two, one])).installed, ["acme/both", "acme/kept"]);
+    installedAsLocked(afterOutage);
+    assert.deepEqual(r2.script.requests, [version("acme/both"), version("acme/kept")]);
+    assert.deepEqual(r1.script.requests, [version("acme/both"), download("acme/both"), version("acme/kept"), download("acme/kept")]);
+
+    // Where none serves it at the locked checksum, the install fails naming
+    // the spec package and each registry's answer, and installs nothing.
+    const unserved = homeWith();
+    await assert.rejects(installAt(unserved, [two, three]), (error: unknown) => {
+      assert.ok(error instanceof InstallError, String(error));
+      assert.equal(error.packageName, "acme/kept");
+      assert.match(error.message, /^acme\/kept 1\.0\.0: no registry serves it at the locked checksum: /);
+      assert.ok(error.message.includes(`${r2.url}: acme/kept: not found at the registry`), error.message);
+      assert.ok(error.message.includes(`${r3.url} holds it at another checksum`), error.message);
+      return true;
+    });
+    assert.equal(existsSync(join(unserved.clone, "packages")), false);
+
+    // cache/ deleted, an install that needs it rebuilds it in that layout.
+    rmSync(home.cache, { recursive: true, force: true });
+    const rebuilt = homeWith(home.cache);
+    await installAt(rebuilt, [two, three, one]);
+    installedAsLocked(rebuilt);
+    assert.ok(existsSync(resourceAt(r1, home.cache, "acme/kept")));
+    assert.deepEqual(archivesOf(home.cache, "acme/kept"), [`${kept.checksum}.tgz`]);
+  } finally {
+    await Promise.all([r1.close(), r2.close(), r3.close()]);
+  }
+});
+
+test("environments-7: two registries at one loopback host and port, apart by scheme alone, cache their answers apart, so one's answer never counts for the other", async () => {
+  const scratch = scratchDir("spex-scheme-cache-");
+  const [r1, r2] = await ownRegistries(scratch, 2);
+  try {
+    const one = new RegistryClient({ url: r1.url });
+    const two = new RegistryClient({ url: r2.url });
+    // The first holds the release the lock records; the second another
+    // release at that version, answering as `https` at the first's host
+    // and port, so the two registries' instances share one folder.
+    const manifest = manifestOf("acme/kept", "1.0.0", { kept: { kind: "skill", language: "en" } });
+    await publishRelease(one, await makeRelease(join(scratch, "kept"), manifest, skillFiles("kept")));
+    await publish(manifest, skillFiles("kept", "en", "another release"), two);
+    const secure = `https://127.0.0.1:${new URL(r1.url).port}`;
+    assert.equal(instanceFolder(secure), instanceFolder(r1.url));
+    const apart: RegistrySource = {
+      url: secure,
+      index: (name) => two.index(name),
+      version: (name, version) => two.version(name, version),
+      file: (name, version, path) => two.file(name, version, path),
+      archive: (name, version) => two.archive(name, version),
+      publish: (name, version, tgz) => two.publish(name, version, tgz),
+      search: (query) => two.search(query),
+    };
+
+    const text = requestsYaml({ "acme/kept": { version: "1.0.0" } });
+    const home = makeHome();
+    const lock = locked(await resolveText(home.clone, text, { through: one }));
+    await writeLock(join(home.clone, "spex.lock"), lock);
+    const kept = registrySourceOf(lock, "acme/kept");
+    const installAt = (at: Home) => installAsOnDisk({
+      cloneDir: at.clone, lock, store: at.store, cache: at.cache, registry: one, git: gitSource(at.cache), pathRoot: null,
+      registries: () => [apart, one],
+    });
+    const clear = (): void => { for (const registry of [r1, r2]) registry.script.clearRequests(); };
+    const version = "GET /api/v1/packages/acme/kept/1.0.0";
+
+    // Asked first, the `https` registry answers another checksum and the
+    // `http` one serves the release; each answer is cached apart, under
+    // its scheme's folder.
+    clear();
+    assert.deepEqual((await installAt(home)).installed, ["acme/kept"]);
+    const cachedAt = (url: string): string => (JSON.parse(readFileSync(join(home.cache, "registry", cacheFolderOf(url), "acme", "kept", "1.0.0.json"), "utf8")) as { checksum: string }).checksum;
+    assert.equal(cachedAt(r1.url), kept.checksum);
+    assert.notEqual(cachedAt(secure), kept.checksum);
+    assert.deepEqual(r2.script.requests, [version]);
+
+    // A home sharing that cache: the `https` registry's own answer, at
+    // another checksum, has it asked again, the `http` one's answer and
+    // archive serving with no request; the `http` answer never counts for
+    // the `https` registry.
+    clear();
+    const sharing = { ...makeHome(), cache: home.cache };
+    mkdirSync(sharing.clone, { recursive: true });
+    for (const file of ["spex.yaml", "spex.lock"]) cpSync(join(home.clone, file), join(sharing.clone, file));
+    assert.deepEqual((await installAt(sharing)).installed, ["acme/kept"]);
+    assert.deepEqual(r2.script.requests, [version]);
+    assert.deepEqual(r1.script.requests, []);
+  } finally {
+    await Promise.all([r1.close(), r2.close()]);
+  }
+});
+
+test("environments-12: a registry answering invalid_token, token_revoked or reauth_required reports the token it refused and fails the call; token_expired, another 401 and a call without a token report none", async () => {
+  const scratch = scratchDir("spex-refused-");
+  const [registryAt, spare] = await ownRegistries(scratch, 2);
+  try {
+    const release = await makeRelease(join(scratch, "open"), manifestOf("acme/open", "1.0.0", { open: { kind: "skill", language: "en" } }), skillFiles("open"));
+    await publishRelease(new RegistryClient({ url: registryAt.url }), release);
+    await publishRelease(new RegistryClient({ url: spare.url }), release);
+    const reported: [string, string][] = [];
+    const presenting = (registry: StandinRegistry, token: string | null): RegistryClient =>
+      new RegistryClient({ url: registry.url, token: async () => token, refused: (refused, code) => { reported.push([refused, code]); } });
+    const failedAs = (kind: string, code?: string) => (error: unknown): boolean => {
+      assert.ok(error instanceof RegistryError, String(error));
+      assert.equal(error.kind, kind, error.message);
+      assert.equal(error.code, code, error.message);
+      return true;
+    };
+
+    // Each sign-out code, on every call presenting the token: the call
+    // fails, the token it presented and the code reported once per call;
+    // the orgs still read as no answer.
+    for (const code of ["invalid_token", "token_revoked", "reauth_required"]) {
+      const token = `refused-as-${code}`;
+      registryAt.script.refuseTokens(token, code);
+      const client = presenting(registryAt, token);
+      reported.length = 0;
+      await assert.rejects(client.index("acme/open"), failedAs("unauthenticated", code));
+      await assert.rejects(client.version("acme/open", "1.0.0"), failedAs("unauthenticated", code));
+      await assert.rejects(client.file("acme/open", "1.0.0", "skills/en/open/SKILL.md"), failedAs("unauthenticated", code));
+      await assert.rejects(client.archive("acme/open", "1.0.0"), failedAs("unauthenticated", code));
+      await assert.rejects(client.search("open"), failedAs("unauthenticated", code));
+      await assert.rejects(publishRelease(client, release), failedAs("unauthenticated", code));
+      assert.equal(await client.orgs(), null);
+      assert.deepEqual(reported, Array.from({ length: 7 }, () => [token, code]), code);
+    }
+
+    // A resolution presenting it fails, the refusal reported; an install
+    // presenting it there moves on to the next registry serving the
+    // release, as it does past a token that cannot be had, which reaches
+    // no registry and is reported as no refusal.
+    const revoked = "refused-as-token_revoked";
+    const home = makeHome();
+    const text = requestsYaml({ "acme/open": { version: "^1.0.0" } });
+    reported.length = 0;
+    await assert.rejects(resolveText(home.clone, text, { through: presenting(registryAt, revoked) }), failedAs("unauthenticated", "token_revoked"));
+    assert.deepEqual(reported, [[revoked, "token_revoked"]]);
+    const lock = locked(await resolveText(home.clone, text, { through: presenting(registryAt, null) }));
+    await writeLock(join(home.clone, "spex.lock"), lock);
+    const unhad = new RegistryClient({ url: registryAt.url, token: async () => { throw new Error("the instance could not be reached"); }, refused: () => { reported.push(["", "unhad"]); } });
+    registryAt.script.clearRequests();
+    await assert.rejects(unhad.index("acme/open"), (error: unknown) => {
+      assert.ok(error instanceof RegistryError, String(error));
+      assert.equal(error.kind, "unavailable");
+      assert.equal(error.packageName, "acme/open");
+      assert.match(error.message, /the instance could not be reached/);
+      return true;
+    });
+    assert.deepEqual(registryAt.script.requests, []);
+    reported.length = 0;
+    const report = await installAsOnDisk({
+      cloneDir: home.clone, lock, store: home.store, cache: home.cache, registry: presenting(registryAt, revoked), git: gitSource(home.cache), pathRoot: null,
+      registries: () => [presenting(registryAt, revoked), unhad, presenting(spare, null)],
+    });
+    assert.deepEqual(report.installed, ["acme/open"]);
+    assert.deepEqual(reported, [[revoked, "token_revoked"]]);
+
+    // An expired access secret fails its call, reporting nothing; so does
+    // another 401 — the orgs refused to a token none are scripted for, and
+    // to a call without a token, which a public spec package answers.
+    registryAt.script.refuseTokens("expired", "token_expired");
+    reported.length = 0;
+    await assert.rejects(presenting(registryAt, "expired").index("acme/open"), failedAs("unauthenticated", "token_expired"));
+    assert.equal(await presenting(registryAt, "unscripted").orgs(), null);
+    assert.equal(await presenting(registryAt, null).orgs(), null);
+    assert.deepEqual((await presenting(registryAt, null).index("acme/open")).versions.map((entry) => entry.version), ["1.0.0"]);
+    assert.deepEqual(reported, []);
+  } finally {
+    await Promise.all([registryAt.close(), spare.close()]);
   }
 });
 

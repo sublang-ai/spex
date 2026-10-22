@@ -37,6 +37,7 @@ import type {
 } from "@sublang/spex-core";
 import { ARTIFACT_SCHEMAS, suppliedCompiler, templatePath } from "@sublang/spex-core";
 import { defaultRunCommand } from "../../packages/core/dist/forge.js";
+import { canonicalOrigin, instanceFolder, instanceSegmentOf } from "../../packages/core/dist/instance.js";
 import {
   DEMO_CONFIG,
   authoringScript,
@@ -59,6 +60,7 @@ import {
   stubSlcScriptedSource,
   type FakeScript,
   type StandinHost,
+  type StandinPerson,
   type StandinRegistry,
   type StubSlcStep,
 } from "@sublang/spex-core/testing";
@@ -163,8 +165,19 @@ export interface AppOptions {
    * another app started. The home's configuration lies in your own
    * group's spex repository and follows it when sign-in renames it
    * (space-59), and the core's Git is the isolated one of `remote`.
+   * `second` starts a second stand-in instance after it (DR-127), at an
+   * origin of its own that the home reaches only by a sign-in naming it:
+   * on a Git backend of its own (`separate`, the default) or over the
+   * first's (`shared`), with its own display name, the person it signs
+   * in and whether that person may make a root group; its `registry`
+   * starts a stand-in registry of its own that the second fronts at its
+   * origin, as each instance serves its own (environments-18).
    */
-  host?: boolean | { registry?: boolean; share?: { host: StandinHost; registry?: StandinRegistry } };
+  host?: boolean | {
+    registry?: boolean;
+    share?: { host: StandinHost; registry?: StandinRegistry };
+    second?: { backend?: "separate" | "shared"; displayName?: string; person?: StandinPerson; canCreateGroup?: boolean; registry?: boolean };
+  };
   /** Signed in at the stand-in before the page opens: the device flow
    * started over the protocol, its code approved through the script,
    * and the account's set-up awaited (space-4). Needs `host`. */
@@ -224,6 +237,9 @@ export const E2E_OWN = "e2e";
 /** The stand-in's account (git-host-12): sign-in renames your own group
  * after it (space-59). */
 export const HOST_LOGIN = "ada";
+/** The second stand-in instance's display name unless one is named
+ * (`host.second`, DR-127). */
+export const SECOND_HOST_NAME = "Second stand-in";
 /** The stand-in's team group and its id (git-host-12). */
 export const HOST_GROUP = "acme";
 export const HOST_GROUP_ID = "2002";
@@ -249,12 +265,24 @@ export function clonePath(dataDir: string, key: string): string {
   return join(dataDir, "workspace", ...key.split("/"));
 }
 
-/** One repository's state out of the Groups state (space-30). */
+/** Every row of the Groups state, as your own group and the instances'
+ * headings hold them (space-30). */
+export function rowsOf(state: GroupsState): RepositoryState[] {
+  return [...state.own.repositories, ...state.instances.flatMap((instance) => instance.groups.flatMap((group) => group.repositories))];
+}
+
+/** The entry the Groups state lists for the instance at `origin`, in any
+ * spelling of it (space-30). */
+export function instanceOf(state: GroupsState, origin: string): GroupsState["instances"][number] | undefined {
+  const canonical = canonicalOrigin(origin);
+  return state.instances.find((instance) => instance.origin === canonical);
+}
+
+/** One repository's state out of the Groups state (space-30): under
+ * your own group or an instance's heading. */
 export function repositoryOf(state: GroupsState, key: string): RepositoryState {
-  for (const group of state.groups) {
-    const found = group.repositories.find((repository) => repository.key === key);
-    if (found) return found;
-  }
+  const found = rowsOf(state).find((repository) => repository.key === key);
+  if (found) return found;
   throw new Error(`no repository ${key}`);
 }
 
@@ -499,7 +527,7 @@ export class CoreClient {
         const seen = this.messages
           .slice(from)
           .filter((m) => m.type === "space.state")
-          .map((m) => (m.type === "space.state" ? JSON.stringify(m.state.groups.flatMap((group) => group.repositories.map((repository) => [repository.key, repository.sync]))) : ""));
+          .map((m) => (m.type === "space.state" ? JSON.stringify(rowsOf(m.state).map((repository) => [repository.key, repository.sync])) : ""));
         throw new Error(`timeout waiting for space state; saw ${seen.join(" | ")}`);
       }
       await new Promise((r) => setTimeout(r, 10));
@@ -571,10 +599,19 @@ export interface App {
   /** Arrange-only protocol client on the running shell. */
   core: CoreClient;
   /** The stand-in Git host (with `host`): its `script` approves device
-   * codes and holds the fixture (git-host-12). */
+   * codes and holds the fixture (git-host-12). The home's default
+   * instance, from `SPEX_HOST_URL`. */
   host?: StandinHost;
-  /** The stand-in registry the host fronts (with `host.registry`). */
+  /** Every stand-in instance of the journey, the first being `host` and
+   * the second `host.second`'s (DR-127); empty without `host`. */
+  hosts: StandinHost[];
+  /** The stand-in registry the host fronts (with `host.registry`):
+   * `registries[0]`. */
   registry?: StandinRegistry;
+  /** The stand-in registry each of `hosts` fronts, index for index,
+   * undefined where that instance fronts none (`host.registry`,
+   * `host.second.registry`, environments-18). */
+  registries: (StandinRegistry | undefined)[];
   /** Your own group's spex repository's key, as `home.yaml` now names
    * it (storage-1). */
   readonly ownKey: string;
@@ -693,6 +730,8 @@ async function arrangeApp(
   // new home records the host from `SPEX_HOST_URL` (git-host-1).
   let host: StandinHost | undefined;
   let registry: StandinRegistry | undefined;
+  const hosts: StandinHost[] = [];
+  const registries: (StandinRegistry | undefined)[] = [];
   const owned: { close(): Promise<void> }[] = [];
   if (hostMode) {
     const spec = typeof options.host === "object" ? options.host : {};
@@ -706,6 +745,30 @@ async function arrangeApp(
       }
       host = await startStandinHost({ dir: join(scratch, "host"), ...(registry ? { registry: registry.url } : {}) });
       owned.push(host);
+    }
+    hosts.push(host);
+    registries.push(registry);
+    // The second instance, after the first and closed before it: over
+    // the first's Git backend or on one of its own (git-host-12),
+    // fronting a registry of its own where asked, started before it and
+    // closed after it (environments-18).
+    if (spec.second) {
+      const { backend, displayName, person, canCreateGroup } = spec.second;
+      let fronted: StandinRegistry | undefined;
+      if (spec.second.registry) {
+        fronted = await startStandinRegistry({ dir: join(scratch, "registry-2") });
+        owned.push(fronted);
+      }
+      const second = await startStandinHost({
+        ...(backend === "shared" ? { gitBackend: host } : { dir: join(scratch, "host-2") }),
+        displayName: displayName ?? SECOND_HOST_NAME,
+        ...(person ? { person } : {}),
+        ...(fronted ? { registry: fronted.url } : {}),
+      });
+      owned.push(second);
+      if (canCreateGroup !== undefined) second.script.canCreateGroup = canCreateGroup;
+      hosts.push(second);
+      registries.push(fronted);
     }
   }
   const closeOwned = async (): Promise<void> => {
@@ -839,7 +902,9 @@ async function arrangeApp(
     },
     projectDir,
     host,
+    hosts,
     registry,
+    registries,
     get ownKey() {
       return ownKey(dataDir);
     },
@@ -1043,11 +1108,27 @@ export async function settled(app: App): Promise<void> {
 // The stand-in host: sign-in, picks and a peer (git-host-12, DR-103)
 // ---------------------------------------------------------------------------
 
+/** The stand-in's folder under `workspace/` (DR-127):
+ * `@127.0.0.1_<port>`. */
+export function hostFolder(host: StandinHost): string {
+  return instanceFolder(host.url);
+}
+
+/** The key of a spex repository the stand-in holds at `path`, its path
+ * in the instance (`acme/<name>-spex`): under the stand-in's folder, as
+ * its clone lies (DR-127). */
+export function hostKey(host: StandinHost, path: string): string {
+  return `${hostFolder(host)}/${path}`;
+}
+
 /** The stand-in's bare repository of a spex repository, by its key
- * (`<group>/<name>-spex`), as a peer reaches it on disk. */
+ * (`<folder>/<group>/<name>-spex`) or its path in the instance, as a
+ * peer reaches it on disk. */
 export function bareOf(host: StandinHost, key: string): string {
-  const found = host.script.repositories.find((repo) => `${repo.group.fullPath}/${repo.path}` === key);
-  if (!found) throw new Error(`the stand-in holds no ${key}`);
+  const folder = instanceSegmentOf(key);
+  const path = folder === null ? key : key.slice(folder.length + 1);
+  const found = host.script.repositories.find((repo) => `${repo.group.fullPath}/${repo.path}` === path);
+  if (!found) throw new Error(`the stand-in holds no ${path}`);
   return found.bare;
 }
 
@@ -1062,52 +1143,54 @@ export async function refreshProjectKey(app: App): Promise<string | undefined> {
 }
 
 /**
- * Sign the home in at the stand-in over the protocol (arrange only):
- * the device flow the served core runs (space-3), its user code
- * approved through the script, and the account's set-up awaited —
- * your own group renamed after the login, created on the host and
- * pushed (space-4, space-59, space-65).
+ * Sign the home in at a stand-in instance over the protocol (arrange
+ * only), by its origin — the home's default instance unless another
+ * of `app.hosts` is named (DR-127): the device flow the served core
+ * runs (space-3), its user code approved through the script, and the
+ * account's set-up awaited — your own group renamed after the login,
+ * created on the host and pushed (space-4, space-59, space-65).
  */
-export async function signInCore(app: App): Promise<GroupsState> {
-  const host = app.host;
+export async function signInCore(app: App, host: StandinHost | undefined = app.host): Promise<GroupsState> {
   if (!host) throw new Error("signing in needs a host");
   const from = app.core.mark();
-  const started = await app.core.command("space.signin.start", {});
+  const started = await app.core.command("space.signin.start", { url: host.url });
   if (started.flow !== "device") throw new Error(`the served core started the ${started.flow} flow`);
   host.script.approveDevice(started.userCode);
-  const state = await app.core.waitSpace(from, (candidate) => ownSetUp(candidate), 60_000);
+  const state = await app.core.waitSpace(from, (candidate) => ownSetUp(candidate, host.url), 60_000);
   await refreshProjectKey(app);
   return state;
 }
 
-/** Whether a sign-in's set-up has ended: signed in, nothing in flight,
- * and your own group's spex repository on the host (space-4). */
-export function ownSetUp(state: GroupsState): boolean {
-  if (state.account === null || state.signIn.phase !== "idle") return false;
-  const login = state.account.login;
-  try {
-    const own = repositoryOf(state, `${login}/${login}-spex`);
-    return own.state !== "local-only" && own.sync.phase !== "running";
-  } catch {
-    return false;
-  }
+/** Whether a sign-in's set-up has ended: signed in at the instance at
+ * `origin` (the default instance unless named), nothing in flight, and
+ * your own group's spex repository at an instance (space-4). */
+export function ownSetUp(state: GroupsState, origin: string = state.defaultInstance): boolean {
+  if (!instanceOf(state, origin)?.signedIn || state.signIn.phase !== "idle") return false;
+  const { name } = state.own;
+  const own = state.own.repositories.find((repository) => repository.key === `${name}/${name}-spex`);
+  return own !== undefined && own.state !== "local-only" && own.sync.phase !== "running";
 }
 
 /** Pick a group for the demo project's local-only spex repository over
- * the protocol (arrange only): `<name>-spex` created in that group and
- * pushed (space-58); the project's key and remote follow it. */
+ * the protocol (arrange only), at the stand-in instance named — the
+ * home's default instance unless another of `app.hosts` is — in its
+ * team group, another group, or with `namespace` the account's
+ * namespace there: `<name>-spex` created there and pushed, its clone
+ * moving under that instance's folder (space-58, DR-127); the
+ * project's key and remote follow it. */
 export async function pickGroup(
   app: App,
-  options: { name?: string; groupId?: string; groupPath?: string } = {},
+  options: { host?: StandinHost; namespace?: boolean; name?: string; groupId?: string; groupPath?: string } = {},
 ): Promise<RepositoryState> {
-  const host = app.host;
+  const host = options.host ?? app.host;
   if (!host || !app.projectId) throw new Error("a pick needs a host and the project");
   const name = options.name ?? "demo-project";
-  const key = `${options.groupPath ?? HOST_GROUP}/${name}-spex`;
+  const path = options.namespace ? host.script.person.login : options.groupPath ?? HOST_GROUP;
+  const key = hostKey(host, `${path}/${name}-spex`);
   const from = app.core.mark();
   await app.core.command("space.pick", {
     repository: app.projectId,
-    choice: { kind: "create", groupId: options.groupId ?? HOST_GROUP_ID, name },
+    choice: { kind: "create", instance: host.url, groupId: options.namespace ? null : options.groupId ?? HOST_GROUP_ID, name },
   });
   const state = await app.core.waitSpace(from, (candidate) => {
     try { return repositoryOf(candidate, key).sync.phase === "done"; } catch { return false; }
@@ -1115,6 +1198,16 @@ export async function pickGroup(
   app.projectId = key;
   app.remotePath = bareOf(host, key);
   return repositoryOf(state, key);
+}
+
+/** A project beside the demo's (space-85): a Git folder named `name`
+ * in the scratch root, registered over the protocol (arrange only), its
+ * spex repository local only under your own group (storage-6). */
+export async function registerLocalProject(app: App, name: string): Promise<{ dir: string; key: string }> {
+  const dir = join(dirname(app.dataDir), name);
+  seedDemoProject(dir);
+  const { id } = await app.core.command("project.register", { path: dir });
+  return { dir, key: id };
 }
 
 /**
@@ -1128,7 +1221,7 @@ export async function pickGroup(
  */
 export async function arrangeHostPeer(app: App): Promise<void> {
   if (!app.projectId || !app.host) throw new Error("the host peer needs project and host");
-  if (app.core.messages.every((m) => m.type !== "space.state" || m.state.account === null)) {
+  if (app.core.messages.every((m) => m.type !== "space.state" || m.state.instances.every((instance) => !instance.signedIn))) {
     await signInCore(app);
   }
   const session = await app.core.command("session.create", { projectId: app.projectId });
@@ -1175,7 +1268,7 @@ export async function seedHostProject(app: App): Promise<{ key: string; code: st
     project: { format: 1, name: "demo-project", remote: code },
     members: [PEER_MEMBER],
   });
-  const key = `${HOST_GROUP}/demo-project-spex`;
+  const key = hostKey(host, `${HOST_GROUP}/demo-project-spex`);
   const dir = join(dirname(app.dataDir), "peer");
   git(dirname(app.dataDir), "clone", "-q", "--branch", "spex", repo.bare, dir);
   // The team's settings name players alone (core-service-2): the ones
@@ -1198,28 +1291,67 @@ export async function seedHostProject(app: App): Promise<{ key: string; code: st
 }
 
 /**
- * Sign in through the page (space-3): Groups' Sign in, the link to the
- * page that carries the code shown while the control reads "Signing
- * in…" and no code is, the code the link carries approved at the
- * stand-in as its page would, and the header reading the account.
+ * Sign in through the page (space-3): while the home lists no instance,
+ * the header card's Sign in at the instance its field holds; where the
+ * home lists the stand-in, signed out, its heading's "Sign in again";
+ * where it lists others alone, the card "Add instance…" opens at the
+ * list's foot, unless it stands open already — each card's field
+ * filled with the stand-in's origin where it holds another; the link to
+ * the page that carries the code shown while the control reads "Signing
+ * in…" and no code is, `during` then asserting what holds while the
+ * flow runs, the code the link carries approved at the stand-in —
+ * `app.host` unless another of `app.hosts` is named — as its page
+ * would, and the stand-in's heading reading its person's account.
  * Groups must be shown.
  */
-export async function signInThroughPage(page: Page, app: App): Promise<void> {
-  const host = app.host;
+export async function signInThroughPage(
+  page: Page,
+  app: App,
+  host: StandinHost | undefined = app.host,
+  via?: "card" | "again" | "add",
+  during?: () => Promise<void>,
+): Promise<void> {
   if (!host) throw new Error("signing in needs a host");
-  const header = page.getByTestId("space-header");
-  await header.getByTestId("space-signin").click();
-  const link = header.getByTestId("space-signin-link");
+  const section = page.getByTestId(`space-instance-${host.url}`);
+  const listed = page.locator('[data-testid^="space-instance-http"]');
+  const how = via ?? ((await section.count()) > 0 ? "again" : (await listed.count()) > 0 ? "add" : "card");
+  // The card "Add instance…" opens stands in its place until closed, as
+  // after a start the core refused (space-3).
+  const groups = page.getByTestId("space-groups");
+  if (how === "add" && (await groups.getByTestId("space-add-card").count()) === 0) {
+    await groups.getByTestId("space-add-instance").click();
+  }
+  const where =
+    how === "card"
+      ? page.getByTestId("space-header").getByTestId("space-signin-card")
+      : how === "add"
+        ? groups.getByTestId("space-add-card")
+        : section.getByTestId("space-instance-heading");
+  const control = where.getByTestId(how === "again" ? "space-signin-again" : "space-signin");
+  if (how !== "again") {
+    const field = where.getByTestId("space-signin-instance");
+    if ((await field.inputValue()) !== host.url) await field.fill(host.url);
+  }
+  await control.click();
+  const link = where.getByTestId("space-signin-link");
   await expect(link).toHaveText(/^Open .+ to sign in$/);
-  await expect(header.getByTestId("space-signin")).toHaveText("Signing in…");
-  await expect(header.getByTestId("space-signin")).toBeDisabled();
+  await expect(control).toHaveText("Signing in…");
+  await expect(control).toBeDisabled();
   const href = new URL((await link.getAttribute("href")) ?? "");
   expect(`${href.origin}${href.pathname}`).toBe(`${host.url}/login/device`);
   const code = href.searchParams.get("user_code") ?? "";
   expect(code).not.toBe("");
   await expect(page.getByTestId("space-surface")).not.toContainText(code);
+  await during?.();
   host.script.approveDevice(code);
-  await expect(header.getByTestId("space-account")).toContainText(`Signed in as @${HOST_LOGIN}`);
+  await expect(section.getByTestId("space-account")).toContainText(`Signed in as @${host.script.person.login}`);
+}
+
+/** An instance's section of the Groups list (space-1): its heading and
+ * what it lists. Stand-ins share their host name, so a journey finds an
+ * instance by its origin, never by its words. */
+export function instanceSection(page: Page, host: StandinHost) {
+  return page.getByTestId("space-groups").getByTestId(`space-instance-${host.url}`);
 }
 
 /**

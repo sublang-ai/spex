@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// A new import stage (storage-36), around the released groups migration:
+// A new import stage (storage-43), around the released groups migration:
 // retain bounded CLI families before that migration sees root session files,
 // then publish them into the home it established, without changing its code.
 import { randomUUID } from "node:crypto";
@@ -55,6 +55,7 @@ function pending(root: string): Pending[] {
           typeof entry.id !== "string" || !UUID.test(entry.id) || seen.has(entry.id) || typeof entry.cwd !== "string" || !entry.cwd ||
           !Array.isArray(entry.files) || !entry.files.length || [entry.retained, entry.staged, entry.complete].some((flag) => typeof flag !== "boolean") ||
           (entry.repository !== undefined && (typeof entry.repository !== "string" || !isRepositoryKey(entry.repository)))) fail(file, "invalid bounded session import entry");
+      if (entry.staged && !entry.retained || entry.complete && (!entry.retained || !entry.staged || entry.repository === undefined)) fail(file, "invalid bounded session import state");
       seen.add(entry.id);
       const paths = new Set<string>();
       for (const input of entry.files) {
@@ -63,6 +64,7 @@ function pending(root: string): Pending[] {
         paths.add(input.path);
       }
     }
+    if (value.complete && value.sessions.some((entry) => !isObject(entry) || entry.complete !== true)) fail(file, "incomplete bounded session import receipt marked complete");
     if (!value.complete) found.push({ receipt: value as unknown as ImportReceipt, dir });
   }
   return found;
