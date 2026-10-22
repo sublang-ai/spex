@@ -881,11 +881,16 @@ export class SessionManager {
    * (core-service-82) in the named sessions — every session, at start —
    * that no one holds: under its lease, the settled checkpoint's
    * position is appended once, and the session's history and summary
-   * refresh with it. A session held elsewhere is left to the next open. */
+   * refresh with it. A session held elsewhere is left to the next open,
+   * and one assigned to another runtime — its `runsOn`, the label
+   * `runsElsewhere` reads from its runtime record against this home's
+   * device — is left as it is, that runtime's to complete (storage-43,
+   * DR-134); one naming no runtime is completed as before. */
   async completeRestores(ids?: Iterable<string>): Promise<void> {
     const named = ids ? new Set(ids) : undefined;
     for (const session of this.store.listSessions()) {
       if (named && !named.has(session.id)) continue;
+      if (session.runsOn !== undefined) continue;
       if (session.live || session.externalWriter || this.live.has(session.id) || this.settling.has(session.id)) continue;
       const pending = pendingRestore(this.store.getRecords(session.id));
       if (!pending) continue;

@@ -11,7 +11,10 @@ import { test, type TestContext } from "node:test";
 import { isDeepStrictEqual } from "node:util";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import { executionConfigFromPlan, loadLaunchPlan, openSessionHost } from "@sublang/playbook/session-host";
+import { createSessionStore } from "@sublang/playbook/session-store";
 import { composeConfig } from "./config.js";
+import { restoringRecord } from "./control-record.js";
+import { CoreService } from "./service.js";
 import { SessionManager, CoreError } from "./session.js";
 import { Store } from "./store.js";
 import { parkingScript } from "./testing/demo.js";
@@ -339,4 +342,78 @@ test("core-service-124: an uncertain session offers Restore on its own runtime a
   assert.equal(restored?.continuable, undefined);
   assert.equal(restored?.recovery, undefined);
   assert.equal(store.hasContinuableCheckpoint(id), false);
+});
+
+test("core-service-84: a restore left unrecorded is completed by a core on the session's own runtime alone", { timeout: 180_000 }, async (t) => {
+  const dir = scratchDir("spex-restore-runtime-");
+  const projectPath = join(dir, "project"); mkdirSync(projectPath);
+  execFileSync("git", ["init", "-q", projectPath]);
+  writeFileSync(join(projectPath, "work.txt"), "baseline\n");
+  execFileSync("git", ["-C", projectPath, "add", "-A"]);
+  execFileSync("git", ["-C", projectPath, "-c", "user.name=Spex Test", "-c", "user.email=spex@example.test", "-c", "commit.gpgsign=false", "commit", "-q", "-m", "baseline"]);
+  const configPath = join(dir, "config.yaml"); writeFileSync(configPath, CONFIG);
+  const stateDir = join(dir, "state");
+  // The folder paired before any core starts, so the other runtime's
+  // writes land in its spex repository's session store (storage-6).
+  const paired = new Store({ machineIdentity, dir: stateDir, own: "tester" });
+  const sessionsDir = paired.sessionStore(paired.registerProject(projectPath, "restore runtime fixture", 1).id).sessionsDir;
+  paired.close();
+  const shared = createSessionStore({ sessionsDir });
+  const there = { device: randomUUID(), label: "build-server" };
+  const { imports, stats } = fakeAdapterImports(parkingScript());
+  const start = () => CoreService.start({ token: "test", configPath, dataDir: stateDir, adapterImports: imports, adapterRuntime: () => ({ usable: true }), env: {}, home: join(dir, "home"), watchConfig: false });
+  let service: CoreService | undefined = await start();
+  const restart = async (): Promise<CoreService> => {
+    await service?.stop();
+    service = undefined;
+    service = await start();
+    return service;
+  };
+  t.after(async () => { await service?.stop(); rmSync(dir, { recursive: true, force: true }); });
+
+  // There's writer stops mid-step, and a core of there marks and reports
+  // the restore, then stops before it records where the runs stand: the
+  // marker and the settled report stand, and no position.
+  const sessionId = await stopWriterOn(there, sessionsDir, projectPath, configPath, "Add a line to work.txt");
+  const controller = await openSessionHost({
+    store: shared, sessionId, mode: "recover", cwd: projectPath,
+    loadModule: (specifier: string) => import(specifier), adapterImports: imports,
+  });
+  const saved = await controller.read();
+  assert.equal(saved?.state, "uncertain");
+  await controller.lease.append(restoringRecord(saved!.uncertain!.input, Date.now()));
+  await controller.recover();
+  assert.equal((await controller.read())?.state, "settled");
+  await controller.dispose();
+  const entries = async () => (await shared.readHistory(sessionId)).entries;
+  const positions = async () => (await entries()).filter(({ record }) => (record as { topic?: unknown }).topic === "spex.session.restored");
+  const count = (await entries()).length;
+
+  // Here, the session joins the listing as there's, and this core
+  // appends nothing to it (core-service-82).
+  await service["syncForeignSessions"]();
+  assert.equal(service["store"].describeSession(sessionId)?.runsOn, "build-server");
+  assert.equal((await entries()).length, count, "joining the listing appends nothing here");
+  // A start here appends nothing either (core-service-82).
+  service = await restart();
+  assert.equal(service["store"].describeSession(sessionId)?.runsOn, "build-server");
+  assert.equal((await entries()).length, count, "a start appends nothing here");
+  assert.deepEqual(await positions(), []);
+
+  // The same core on the session's own runtime completes the restore
+  // once at its start, naming the report's turn (core-service-82).
+  setDevice(stateDir, there.device);
+  service = await restart();
+  const recorded = await positions();
+  assert.equal(recorded.length, 1);
+  assert.equal((await entries()).length, count + 1);
+  const report = (await entries()).filter(({ record }) => record.type === "turn_started").at(-1)?.record as { turn?: { id?: number } } | undefined;
+  assert.equal((recorded[0]?.record as { turnId?: unknown }).turnId, report?.turn?.id);
+  // Once: a later listing and a later start append nothing more
+  // (core-service-82).
+  await service["syncForeignSessions"]();
+  service = await restart();
+  assert.equal((await positions()).length, 1);
+  assert.equal((await entries()).length, count + 1);
+  assert.equal(stats.runs.length, 0, "completing a restore calls no agent");
 });
