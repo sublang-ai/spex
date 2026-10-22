@@ -18,6 +18,7 @@ import { homedir, hostname, tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { type StorageDiagnostic } from "./app-storage.js";
 import { heldSessionLease, occupied, pruneEmptyFolders } from "./clone-moves.js";
+import { canonicalHost } from "./code-credentials.js";
 import { readJsonFile, StorageFormatError, UUID, writeApplicationFile } from "./files.js";
 import { withGitCredential, type GitCredentialHandle } from "./git-credential.js";
 import {
@@ -118,8 +119,16 @@ export interface SpaceHost {
    * desktop (git-host-2), the device flow on the server (git-host-3). */
   signInFlow: "browser" | "device";
   /** Whether the core runs as a seat on a team server (core-service-125):
-   * your own group is then placed at no instance (space-102). */
+   * your own group is then placed at no instance (space-102), and a
+   * project's working folder is the one the core allocates under
+   * `projects/` (space-103). */
   seat?: boolean;
+  /** On a seat, the member's own token for a code host (storage-44,
+   * git-host-9), keyed as `credential.set` names it, read from its file
+   * at each ask, before each transport to that host; null where none is
+   * set; refused — it throws — where its entry, or the file, will not
+   * read. Absent off a seat. */
+  hostToken?: (host: string) => { token: string; username?: string } | null;
   /** The runtime the credential helper runs on (git-host-9). */
   hostRuntime: { execPath: string; electron: boolean };
   /** Clones appeared under `workspace/` — a join's (space-63): the core
@@ -278,6 +287,70 @@ const ownStaysOnTheServer = (): string => i18n._({
   id: "Your own group stays on this server",
   comment: "Refusal on a team server's seat of a pick or a remote for your own group: its records stay on the server and are placed at no instance",
 });
+
+/** The code host a remote's transport reaches (git-host-9, storage-44):
+ * an http(s) or ssh URL's host, with its port where the URL names one
+ * other than the scheme's default, or an scp-like form's host, as a
+ * member names it in Settings (settings-48); null for a local path or
+ * anything naming no host. */
+function codeHostOf(remote: string): string | null {
+  let host: string | undefined;
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(remote)) {
+    let url: URL;
+    try { url = new URL(remote); } catch { return null; }
+    if (!["http:", "https:", "ssh:", "git+ssh:", "ssh+git:"].includes(url.protocol)) return null;
+    host = url.host;
+  } else if (!/^[a-z]:[\\/]/i.test(remote)) {
+    // An scp-like form, never a drive letter's path.
+    host = /^(?:[^@/:\s]+@)?([^/:\s]+):/.exec(remote)?.[1];
+  }
+  return host ? canonicalHost(host) : null;
+}
+
+/** Whether a remote is an https remote — or an http one, which Git
+ * serves alike: the transports Git asks a credential helper for, a
+ * member's token among them (space-103, git-host-9). */
+const httpRemote = (remote: string): boolean => /^https?:\/\//i.test(remote);
+
+/** The username sent with a member's code-host token whose entry names
+ * none (git-host-9): hosts that take a token as the password accept any
+ * username. */
+const TOKEN_USERNAME = "token";
+
+/** A member's token for a code host whose entry, or file, will not read
+ * (storage-44): it serves no transport, the storage diagnostics
+ * reporting it. */
+const UNREADABLE = "unreadable";
+
+/** A code clone on a seat that failed for want of a member's credential
+ * at its host (space-103): the phrase a client opens the Credentials
+ * section from. */
+const codeNeedsCredential = (host: string): string => i18n._({
+  id: "Code not cloned: {host} needs a credential of yours. Add one under Settings.",
+  values: { host },
+  comment: "A project's code clone failed on a team server's seat where the member placed no token for the code's host, which is no signed-in instance's; {host} is the code host's name as the Credentials section in Settings takes it",
+});
+
+/** A code clone on a seat that failed where the member's token for its
+ * host will not read (space-103, storage-44): the phrase a client opens
+ * the Credentials section from. */
+const codeCredentialUnreadable = (host: string): string => i18n._({
+  id: "Code not cloned: your credential for {host} cannot be read",
+  values: { host },
+  comment: "A project's code clone failed on a team server's seat where the member's token for the code's host, which is no signed-in instance's, cannot be read from the server's credentials file, its entry or the file malformed; {host} is the code host's name as the Credentials section in Settings takes it",
+});
+
+/** The guidance after a code clone failed on a seat (space-103): the
+ * records are here, and a join of it again clones its code into the
+ * folder the core allocated for it. */
+const joinAgainForCode = (): string => i18n._({
+  id: "The spex repository is here; join it again to clone its code.",
+  comment: "Guidance after a project's code clone failed on a team server's seat, where the server allocates the code's folder: joining the repository again clones its code there",
+});
+
+/** The refusal of a join whose folder another project's pair holds
+ * (space-63, space-103). */
+const folderPaired = (path: string): CoreError => new CoreError("invalid_request", i18n._({ id: "{path} is another project's working folder", values: { path }, comment: "Refusal of a join: the folder named is paired already" }));
 
 /** The refusal of a pick naming another instance than the one whose
  * folder the clone's key lies in (space-29, space-58). */
@@ -840,6 +913,11 @@ class RepositorySync {
 
   /** Whether an operation runs on this clone. */
   running(): boolean { return this.current !== undefined; }
+
+  /** Resolves once no operation runs on this clone. */
+  async settled(): Promise<void> {
+    while (this.current) await this.current.work.catch(() => undefined);
+  }
 
   /** The kind of operation running on this clone, if any. */
   private runningOp(): SpaceOp | undefined { return this.current?.op; }
@@ -1868,7 +1946,8 @@ class RepositorySync {
     const name = this.remoteNamed("check");
     // The instance the check read brokers its transport — the clone's,
     // or the one it followed there (git-host-9, space-60).
-    const credential = host ? await this.owner.credentialFor(host.instance, target, "check", this) : null;
+    // On behalf of none, the member's own token on a seat.
+    const credential = (host ? await this.owner.credentialFor(host.instance, target, "check", this) : null) ?? await this.owner.memberCredential(target);
     const options = { transport: true, ...(credential ? { credential } : {}) };
     try {
       const heads = await this.git.run(["ls-remote", "--exit-code", "--heads", name, `refs/heads/${SPEX_BRANCH}`], options);
@@ -1914,7 +1993,7 @@ class RepositorySync {
     const tree = await this.git.ok(["mktree"], { input: `100644 blob ${blob}\tREADME.md\n` });
     const commit = await this.git.ok([...(await this.git.committerArgs()), "commit-tree", tree, "-m", "Initial commit"]);
     const remoteName = this.remoteNamed("check");
-    const credential = await this.owner.credentialFor(instance, remote, "check", this);
+    const credential = await this.owner.credentialFor(instance, remote, "check", this) ?? await this.owner.memberCredential(remote);
     let run: GitRun;
     try {
       run = await this.git.run(["push", "-q", remoteName, `${commit}:refs/heads/main`], { transport: true, ...(credential ? { credential } : {}) });
@@ -2119,14 +2198,15 @@ class RepositorySync {
 
   /** Step 6 — Push `spex` to the host, setting the upstream once
    * (space-12), with the credential the instance the Check read brokers
-   * — `at`, none for a remote not at an instance (git-host-9). */
+   * — `at`, none for a remote not at an instance but the member's own
+   * token on a seat (git-host-9). */
   private async push(remote: string, upstream: boolean, at: HostInstance | undefined): Promise<"ok" | "nothing" | "rejected"> {
     const head = await this.git.ok(["rev-parse", "HEAD"]);
     const name = this.remoteNamed("push");
     const ref = this.remoteRef();
     const origin = await this.git.run(["rev-parse", "-q", "--verify", `${ref}^{commit}`]);
     if (upstream && origin.code === 0 && origin.stdout.toString("utf8").trim() === head) return "nothing";
-    const credential = at ? await this.owner.credentialFor(at, remote, "push", this) : null;
+    const credential = (at ? await this.owner.credentialFor(at, remote, "push", this) : null) ?? await this.owner.memberCredential(remote);
     let run: GitRun;
     try {
       // The upstream names the remote by its name in the clone (DR-127).
@@ -3092,7 +3172,8 @@ export class SpaceManager {
    * at whose Git origin the source lies — `preferred` first where it is
    * one, then the default instance and every other the home lists in its
    * order; none for a source at the Git origin of no signed-in instance,
-   * where this device's own Git fetches it. A refusal reads as that
+   * where this device's own Git fetches it — on a seat, the member's own
+   * token where they placed one for its host. A refusal reads as that
    * instance said. */
   async sourceCredential(repo: string, preferred: string | null = null): Promise<{ username: string; secret: string } | undefined> {
     for (const instance of this.preferring(preferred)) {
@@ -3106,7 +3187,10 @@ export class SpaceManager {
         throw new Error(relayHostError(error, this.nameOf(instance)));
       }
     }
-    return undefined;
+    // On a seat, a source at a host the member placed a token for takes
+    // that token (git-host-9, storage-44); one that will not read, none.
+    const token = this.memberToken(repo);
+    return token && token !== UNREADABLE ? token : undefined;
   }
 
   /** Whether a clone lies at its instance (git-host-9): it records the
@@ -3783,10 +3867,11 @@ export class SpaceManager {
    * over `expected`, the one the caller read before asking the host.
    * `setUp` marks the account's set-up joining your own group's spex
    * repository (space-4, space-59), and `created` a repository the core
-   * just created, which the clone records with its remote (git-host-7). */
-  private async adopt(instance: HostInstance, machine: RepositorySync, listing: HostListing, join: boolean, options: { expected?: string | null; setUp?: boolean; created?: boolean } = {}): Promise<void> {
+   * just created, which the clone records with its remote (git-host-7);
+   * `then` runs once that sync has ended, whatever its outcome. */
+  private async adopt(instance: HostInstance, machine: RepositorySync, listing: HostListing, join: boolean, options: { expected?: string | null; setUp?: boolean; created?: boolean; then?: () => Promise<void> } = {}): Promise<void> {
     const { repository } = listing;
-    const { expected = null, setUp = false, created = false } = options;
+    const { expected = null, setUp = false, created = false, then } = options;
     instance.changedAfter = instance.readsBegun;
     instance.targets.delete(machine);
     instance.attached.set(repository.id, listing);
@@ -3804,7 +3889,7 @@ export class SpaceManager {
     // this one before its records first sync (environments-11, DR-127).
     if (picked) this.host.environmentPlaced?.(machine.key);
     await this.publish();
-    this.startSync(machine.key, { join, ...(setUp ? { setUp } : {}) });
+    this.startSync(machine.key, { join, ...(setUp ? { setUp } : {}) }, then);
   }
 
   /**
@@ -3931,11 +4016,19 @@ export class SpaceManager {
     }
   }
 
-  private startSync(key: string, input: { join?: boolean; setUp?: boolean }): void {
+  /** Start a sync of a clone; `then`, where given, runs once it has
+   * ended — or failed to start — and nothing runs on the clone. */
+  private startSync(key: string, input: { join?: boolean; setUp?: boolean }, then?: () => Promise<void>): void {
     const machine = this.machines.get(key);
     if (!machine || this.stopping) return;
-    machine.sync({ ...input, internal: true }).catch((error: unknown) => {
+    void machine.sync({ ...input, internal: true }).catch((error: unknown) => {
       console.error(`spex: ${key} did not start syncing: ${error instanceof Error ? error.message : String(error)}`);
+    }).then(async () => {
+      if (!then) return;
+      await machine.settled();
+      if (!this.stopping) await then();
+    }).catch((error: unknown) => {
+      console.error(`spex: ${machine.key} did not continue after its sync: ${error instanceof Error ? error.message : String(error)}`);
     });
   }
 
@@ -3978,7 +4071,11 @@ export class SpaceManager {
             comment: "Refusal of a pick joining a spex repository with other members until the reader has seen the privacy notice",
           }), { notice: true, members: listing.members, visibility: listing.repository.visibility });
         }
-        await this.adopt(instance, machine, listing, true);
+        // On a seat a clone no folder pairs takes the folder the core
+        // allocates, its code cloned there once its records synced
+        // (space-103).
+        const allocate = this.host.seat && !this.host.store.home.folderOf(key);
+        await this.adopt(instance, machine, listing, true, allocate ? { then: () => this.codeAfterPick(instance, machine, listing) } : {});
         return { accepted: true };
       }
       const base = kebab(choice.name.trim().replace(/-spex$/i, ""));
@@ -4041,22 +4138,98 @@ export class SpaceManager {
       try {
         const machine = this.machine(repository.key);
         const facts = await machine.readFacts();
-        return { facts, ownAt: repository.key === own ? this.servingOf(machine) : undefined };
-      } catch { return { facts: { remote: null, id: null }, ownAt: undefined }; }
-    }))).some(({ facts, ownAt }) => listingFor(view, facts.id, facts.remote)?.repository.id === hostId
+        return { key: repository.key, facts, ownAt: repository.key === own ? this.servingOf(machine) : undefined };
+      } catch { return { key: repository.key, facts: { remote: null, id: null }, ownAt: undefined }; }
+    }))).find(({ facts, ownAt }) => listingFor(view, facts.id, facts.remote)?.repository.id === hostId
       || (ownAt === instance && facts.id === null && this.ownNamespaceListing(view)?.repository.id === hostId));
+    // On a seat the core allocates the working folder (space-103): a
+    // clone here that no folder pairs — its code clone failed — is
+    // joined again by cloning its code into that same folder.
+    if (this.host.seat && folder === undefined && here && here.key !== own && store.repository(here.key) && !store.home.folderOf(here.key)) {
+      return this.joinCodeAgain(instance, listing, here.key);
+    }
     if (here || store.repository(key) || existsSync(store.home.clonePath(key)) || store.deferredMoves().some((move) => move.to === key)) {
       throw new CoreError("invalid_request", i18n._({ id: "{name} is on this device already", values: { name: listing.repository.path }, comment: "Refusal of a join: the spex repository has a clone here" }));
     }
-    const path = folder === undefined ? undefined : resolve(folder);
-    if (path !== undefined && store.home.keyForFolder(path)) {
-      throw new CoreError("invalid_request", i18n._({ id: "{path} is another project's working folder", values: { path }, comment: "Refusal of a join: the folder named is paired already" }));
-    }
+    const path = folder === undefined ? (this.host.seat ? this.allocatedFolder(key) : undefined) : resolve(folder);
+    if (path !== undefined && store.home.keyForFolder(path)) throw folderPaired(path);
     const progress: SpaceSyncPhase = { phase: "running", op: "join", step: "check", since: Date.now(), cancelable: false };
     this.joining.set(this.joinKey(instance, hostId), progress);
     await this.publish();
     void this.runJoin(instance, listing, key, path, progress);
     return { accepted: true };
+  }
+
+  /** On a seat, the working folder the core allocates for a spex
+   * repository keyed `key` under its instance's folder (space-103,
+   * storage-1): `projects/@<host>/<group path>/<repository>/` under the
+   * Spex home, `<repository>` its own path name with its `-spex` kept, so
+   * that no project's folder lies inside another's — `acme/alpha-spex`'s
+   * would hold `acme/alpha/x-spex`'s with the suffix dropped. One path
+   * per repository, so a folder allocated for it before — its code there
+   * — is the one used again, and a retry clones into the same folder. */
+  private allocatedFolder(key: string): string {
+    return join(this.host.home, "projects", ...key.split("/"));
+  }
+
+  /** A seat's join of a spex repository whose clone is here and paired
+   * with no folder (space-103): its code cloned again into the folder
+   * the core allocates for it — a credential placed since serving it —
+   * and the two paired, the join's Code step showing meanwhile
+   * (space-63); a join of it already running is the one this joins. */
+  private async joinCodeAgain(instance: HostInstance, listing: HostListing, key: string): Promise<{ accepted: true }> {
+    const folder = this.allocatedFolder(splitKey(key).instance === null ? this.keyAtHost(listing.repository, instance) ?? key : key);
+    if (this.host.store.home.keyForFolder(folder)) throw folderPaired(folder);
+    const entry = this.joinKey(instance, listing.repository.id);
+    if (this.joining.get(entry)?.phase === "running") return { accepted: true };
+    const progress: SpaceSyncPhase = { phase: "running", op: "join", step: "code", since: Date.now(), cancelable: false };
+    this.joining.set(entry, progress);
+    await this.publish();
+    void this.codeInto(instance, listing.repository.id, this.machine(key), folder, progress);
+    return { accepted: true };
+  }
+
+  /** After a seat's pick joined a listed spex repository and its records
+   * synced (space-58, space-103): where no folder pairs its clone by then,
+   * its code cloned into the folder the core allocates for it, and the
+   * two paired. */
+  private async codeAfterPick(instance: HostInstance, machine: RepositorySync, listing: HostListing): Promise<void> {
+    const store = this.host.store;
+    if (!store.repository(machine.key) || store.home.folderOf(machine.key)) return;
+    const key = splitKey(machine.key).instance === null ? this.keyAtHost(listing.repository, instance) : machine.key;
+    if (!key) return;
+    const folder = this.allocatedFolder(key);
+    if (store.home.keyForFolder(folder)) return;
+    const entry = this.joinKey(instance, listing.repository.id);
+    if (this.joining.get(entry)?.phase === "running") return;
+    const progress: SpaceSyncPhase = { phase: "running", op: "join", step: "code", since: Date.now(), cancelable: false };
+    this.joining.set(entry, progress);
+    await this.publish();
+    await this.codeInto(instance, listing.repository.id, machine, folder, progress);
+  }
+
+  /** The Code step of a join for a clone here (space-63, space-103): its
+   * code cloned into `folder` and paired, shown on its row through the
+   * join's progress `progress` while it runs; a failure stays on the
+   * row, and a success clears the failure a former join left there. */
+  private async codeInto(instance: HostInstance, id: string, machine: RepositorySync, folder: string, progress: SpaceSyncPhase): Promise<void> {
+    const entry = this.joinKey(instance, id);
+    let mine = progress;
+    const own = (next: SpaceSyncPhase | undefined): void => {
+      if (this.joining.get(entry) !== mine) return;
+      if (next) { this.joining.set(entry, next); mine = next; }
+      else this.joining.delete(entry);
+    };
+    try {
+      const next = await this.pairJoined(machine, folder, (phase) => own(phase));
+      if (next) machine.report(next);
+      else if (machine.phase.phase === "stopped" && machine.phase.op === "join") machine.report({ phase: "idle" });
+    } catch (error) {
+      console.error(`spex: ${machine.key} did not take its code: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      own(undefined);
+      await this.publish();
+    }
   }
 
   /** The instance a listed host repository's row stands under (space-1,
@@ -4100,12 +4273,14 @@ export class SpaceManager {
       stage = mkdtempSync(join(dirname(dest), `.${basename(dest)}.join-`));
       const dir = join(stage, "clone");
       // The instance it is joined at brokers its clone (git-host-9).
-      let credential: GitCredentialHandle | null;
-      try { credential = await this.credentialFor(instance, url, "check"); }
+      let brokered: GitCredentialHandle | null;
+      try { brokered = await this.credentialFor(instance, url, "check"); }
       catch (error) {
         if (error instanceof SpaceStopped) { stop(error.failure); return; }
         throw error;
       }
+      // At no instance's Git origin, the member's own token on a seat.
+      const credential = brokered ?? await this.memberCredential(url);
       // Sessions are private: the clone is written owner-only (space-32).
       // Each child inherits the owner-only umask as it is spawned — `run`
       // spawns synchronously — and the core's own is restored before
@@ -4133,7 +4308,7 @@ export class SpaceManager {
         await credential?.dispose();
       }
       if (run.code !== 0) {
-        stop(credential ? classifyHostTransportFailure(run, this.nameOf(instance)) : classifyTransportFailure(run, url));
+        stop(brokered ? classifyHostTransportFailure(run, this.nameOf(instance)) : classifyTransportFailure(run, url));
         return;
       }
       await this.probe.run(["-C", dir, "config", "spex.repositoryId", id]);
@@ -4187,15 +4362,26 @@ export class SpaceManager {
     // The project's instance is its spex repository's (projects-37,
     // storage-31): never one chosen by the code's Git origin alone.
     const instance = this.instanceOfClone(machine);
-    const stopped = (failure: GitFailure): SpaceSyncPhase => ({
+    const stopped = (failure: GitFailure, credential?: string): SpaceSyncPhase => ({
       phase: "stopped", op: "join", step: at,
       ...this.withoutHostUrls(failure, { remote: null, id: null, remoteName: machine.facts.remoteName }, machine.key),
+      ...(credential !== undefined ? { credential } : {}),
     });
-    const chooseFolder = (): string => i18n._({ id: "The spex repository is here; choose a folder for its code to pair it.", comment: "Guidance after a join's code clone failed" });
+    // On a seat no folder is chosen: a join again clones into the one
+    // the core allocates (space-103).
+    const chooseFolder = (): string => this.host.seat
+      ? joinAgainForCode()
+      : i18n._({ id: "The spex repository is here; choose a folder for its code to pair it.", comment: "Guidance after a join's code clone failed" });
     try {
       if (remote) {
         mkdirSync(dirname(folder), { recursive: true });
-        const credential = instance ? await this.credentialFor(instance, remote, at) : null;
+        const brokered = instance ? await this.credentialFor(instance, remote, at) : null;
+        // Any other remote takes none of the app's — on a seat, the
+        // member's own token where they placed one for its host and it
+        // reads (projects-37, git-host-9, storage-44).
+        const token = brokered ? null : this.memberToken(remote);
+        const own = token && token !== UNREADABLE ? await withGitCredential(token, this.host.hostRuntime) : null;
+        const credential = brokered ?? own;
         let run: GitRun;
         try {
           run = await this.probe.run(["clone", "-q", remote, folder], { transport: true, ...(credential ? { credential } : {}) });
@@ -4203,8 +4389,18 @@ export class SpaceManager {
           await credential?.dispose();
         }
         if (run.code !== 0) {
+          // On a seat, an https remote at no signed-in instance's Git
+          // origin whose host holds no token of the member's — or one
+          // that will not read — names that host, carried in
+          // `credential` for a client to open Settings by (space-103,
+          // settings-48); any other failure shows as it is.
+          const needed = !brokered && !own ? this.credentialNeeded(remote) : null;
+          if (needed !== null) {
+            const message = token === UNREADABLE ? codeCredentialUnreadable(needed) : codeNeedsCredential(needed);
+            return stopped({ cause: run.killed ?? "git", message, guidance: chooseFolder(), retry: false }, needed);
+          }
           return stopped({
-            ...(credential && instance ? classifyHostTransportFailure(run, this.nameOf(instance)) : {
+            ...(brokered && instance ? classifyHostTransportFailure(run, this.nameOf(instance)) : {
               cause: run.killed ?? "git",
               message: lastLines(run.stderr) || i18n._({ id: "Git could not clone the code", comment: "A join's stop where git failed to clone the code and printed nothing" }),
             }),
@@ -4224,6 +4420,19 @@ export class SpaceManager {
       if (error instanceof SpaceStopped) return stopped({ ...error.failure, guidance: chooseFolder(), retry: false });
       return stopped({ cause: "git", message: lastLines(error instanceof Error ? error.message : String(error)), guidance: retryGuidance(), retry: false });
     }
+  }
+
+  /** On a seat, the code host a failed code clone needs a credential of
+   * the member's for (space-103): an https remote's host, where it lies
+   * under no signed-in instance's Git origin; null off a seat, for an
+   * ssh, scp-like, local or any other remote, whose failure shows as it
+   * is, and at a signed-in instance's Git origin. Asked only where no
+   * token of the member's for that host served the clone. */
+  private credentialNeeded(remote: string): string | null {
+    if (!this.host.seat || !httpRemote(remote)) return null;
+    const host = codeHostOf(remote);
+    if (host === null) return null;
+    return this.listedInstances().some((instance) => this.signedInAt(instance) && underOrigin(remote, instance.knownOrigin())) ? null : host;
   }
 
   private async workTreeRoot(folder: string): Promise<boolean> {
@@ -4737,6 +4946,31 @@ export class SpaceManager {
         : await instance.client.credential(origin);
     } catch (error) { throw hostStop(step, error, this.nameOf(instance)); }
     return withGitCredential(credential, this.host.hostRuntime);
+  }
+
+  /** On a seat, the member's own token for a remote's code host
+   * (git-host-9, storage-44), read from its file now, before this
+   * transport; null off a seat, for a remote naming no host, and where
+   * no token is set there; `UNREADABLE` where the member's entry for that
+   * host, or the file, will not read, which serves no transport. The
+   * token enters no URL, log or reply. */
+  private memberToken(remote: string): { username: string; secret: string } | typeof UNREADABLE | null {
+    const read = this.host.seat ? this.host.hostToken : undefined;
+    const host = read ? codeHostOf(remote) : null;
+    if (!read || host === null) return null;
+    let entry: { token: string; username?: string } | null;
+    try { entry = read(host); } catch { return UNREADABLE; }
+    return entry ? { username: entry.username ?? TOKEN_USERNAME, secret: entry.token } : null;
+  }
+
+  /** The credential a transport on behalf of no instance hands Git
+   * (git-host-9, projects-37): none, the device's own Git serving it,
+   * except on a seat at a host the member placed a token for, which the
+   * app's helper serves with that token. Asked where the brokered one
+   * (credentialFor) is none. */
+  async memberCredential(remote: string): Promise<GitCredentialHandle | null> {
+    const token = this.memberToken(remote);
+    return token && token !== UNREADABLE ? withGitCredential(token, this.host.hostRuntime) : null;
   }
 
   /** Follow the host's rename or transfer of one clone within its sync

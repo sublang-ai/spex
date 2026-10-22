@@ -1052,6 +1052,16 @@ msgstr "Check the URL, create the repository if it is not there yet, or {act}. T
 msgid "Choose the other side for this unit or fix the file, then Retry."
 msgstr "Choose the other side for this unit or fix the file, then Retry."
 
+#. A project's code clone failed on a team server's seat where the member placed no token for the code's host, which is no signed-in instance's; {host} is the code host's name as the Credentials section in Settings takes it
+#: src/space.ts
+msgid "Code not cloned: {host} needs a credential of yours. Add one under Settings."
+msgstr "Code not cloned: {host} needs a credential of yours. Add one under Settings."
+
+#. A project's code clone failed on a team server's seat where the member's token for the code's host, which is no signed-in instance's, cannot be read from the server's credentials file, its entry or the file malformed; {host} is the code host's name as the Credentials section in Settings takes it
+#: src/space.ts
+msgid "Code not cloned: your credential for {host} cannot be read"
+msgstr "Code not cloned: your credential for {host} cannot be read"
+
 #. Where a project's code lives before every instance has reported its Git origin, or when its remote lies under another instance's; the actual remote is withheld
 #: src/space.ts
 msgid "Code on a remote"
@@ -2782,6 +2792,11 @@ msgstr "the spec package of {id} is missing from the working folder"
 #: src/space.ts
 msgid "The spex repository is here; choose a folder for its code to pair it."
 msgstr "The spex repository is here; choose a folder for its code to pair it."
+
+#. Guidance after a project's code clone failed on a team server's seat, where the server allocates the code's folder: joining the repository again clones its code there
+#: src/space.ts
+msgid "The spex repository is here; join it again to clone its code."
+msgstr "The spex repository is here; join it again to clone its code."
 
 #. Repair row: a working folder is paired with a spex repository whose clone is gone
 #: src/store.ts
