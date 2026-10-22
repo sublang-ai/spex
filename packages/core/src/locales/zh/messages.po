@@ -273,7 +273,7 @@ msgstr "{name} 在 {path} 中已更改；请重新解析后再安装"
 msgid "{name} has no folder on this device"
 msgstr "{name} 在本设备上没有文件夹"
 
-#. Refusal of Place: the spex repository is a group's own or your own group's, which Place does not place; {name} is the repository's name
+#. Refusal of Place or Attach: the spex repository is a group's own (or, for Place, your own group's), which stays at its one instance; {name} is the repository's name
 #: src/space.ts
 msgid "{name} holds a group's records; only a project's are placed at another instance"
 msgstr "{name} 存放的是群组的记录；只有项目的记录才能放置到另一个实例"
@@ -319,7 +319,7 @@ msgstr "{name} 已在托管平台上"
 msgid "{name} is on this device already"
 msgstr "{name} 已在本设备上"
 
-#. Refusal of Attach: the spex repository {name} listed at an instance is already held on this device by the spex repository {repository}, which syncs with it
+#. Refusal of a pick, Place or Attach that joins the spex repository {name} listed at an instance, already held on this device by the spex repository {repository}, which syncs with it
 #: src/space.ts
 msgid "{name} is on this device already, as a placement of {repository}"
 msgstr "{name} 已作为 {repository} 的放置在本设备上"

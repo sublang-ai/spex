@@ -337,12 +337,12 @@ const nameNeedsALetter = (): string => i18n._({ id: "The name must hold a letter
 const noSuchGroup = (): string => i18n._({ id: "The host lists no such group", comment: "Refusal of a pick naming a group the Git host does not list" });
 
 /** The refusal of a Place of a group's own spex repository or your own
- * group's (space-29, space-88): a project's alone is placed by the
- * reader. */
+ * group's, and of an Attach of a group's own (space-29, space-88,
+ * space-87): a project's alone is placed by the reader. */
 const groupRecordsStay = (name: string): string => i18n._({
   id: "{name} holds a group's records; only a project's are placed at another instance",
   values: { name },
-  comment: "Refusal of Place: the spex repository is a group's own or your own group's, which Place does not place; {name} is the repository's name",
+  comment: "Refusal of Place or Attach: the spex repository is a group's own (or, for Place, your own group's), which stays at its one instance; {name} is the repository's name",
 });
 
 /** The refusal of a Place or an Attach at an instance the clone holds a
@@ -369,12 +369,13 @@ const readNoticeBeforeAttaching = (name: string): string => i18n._({
   comment: "Refusal of Attach until the reader has seen the privacy notice for that placement: every record reaches its members; {name} is the spex repository's name at that instance",
 });
 
-/** The refusal of an Attach of a host repository another clone here
- * holds as a placement (git-host-5). */
+/** The refusal of a join — a pick's, a Place's or an Attach's — of a
+ * host repository another clone here holds as a placement (space-29,
+ * git-host-5). */
 const heldByAnother = (name: string, repository: string): string => i18n._({
   id: "{name} is on this device already, as a placement of {repository}",
   values: { name, repository },
-  comment: "Refusal of Attach: the spex repository {name} listed at an instance is already held on this device by the spex repository {repository}, which syncs with it",
+  comment: "Refusal of a pick, Place or Attach that joins the spex repository {name} listed at an instance, already held on this device by the spex repository {repository}, which syncs with it",
 });
 
 /** The refusal of a Place while the view does not say the person may
@@ -1406,6 +1407,25 @@ class RepositorySync {
     }, this.key, store.home, store.deferredMoves(), filedIn(this.dir));
   }
 
+  /** Whether this clone is a group's own spex repository — holding no
+   * `project.json`, and not your own group's — whose records stay in its
+   * group at one instance (space-87, DR-128). */
+  recordsStay(): boolean {
+    return this.key !== this.host.store.home.own() && !existsSync(this.repository.projectFile);
+  }
+
+  /** The placement files of the clone that name a placement, as they
+   * stand (storage-36, storage-41): every one that reads, but that a
+   * group's own spex repository's file naming a host repository its
+   * clone does not hold — by its folder and its id — names none, so it
+   * is no line, offers no Attach and holds no row's listing (space-87).
+   * `held` is the placements the clone holds, as read. */
+  namedByFiles(held: readonly Placement[] = this.placementsNow()): PlacementFile[] {
+    const files = readPlacementFiles(this.dir).files;
+    if (!this.recordsStay()) return files;
+    return files.filter((file) => held.some((placement) => placement.name === file.folder && (placement.id === null || placement.id === file.id)));
+  }
+
   /** The placements and the first one's facts, read again after a write
    * of a remote. */
   private settleFacts(): void {
@@ -1956,8 +1976,9 @@ class RepositorySync {
     const first = lines[0];
     const store = this.host.store;
     // The placements its files name as they stand, held here or not, a
-    // file that does not read naming none (storage-36, storage-41).
-    const files = repo.root ? readPlacementFiles(this.dir).files : [];
+    // file that does not read naming none (storage-36, storage-41), nor
+    // a group's own repository's naming one it does not hold (space-87).
+    const files = repo.root ? this.namedByFiles(held) : [];
     // Its instance (storage-31), whose Git origin its code remote is
     // read against first (space-1).
     const instance = this.owner.cloneInstance(this.key, this.facts.remoteName);
@@ -5804,6 +5825,7 @@ export class SpaceManager {
         if (!listing) throw new CoreError("not_found", noLongerShared());
         // A group named like a login holds no folder of its own (space-61).
         if (this.collides(listing.repository.group, view)) throw new CoreError("invalid_request", groupNamedLikeYourLogin(listing.repository.group.fullPath));
+        await this.refuseHeldElsewhere(machine.key, listing, view.gitOrigin);
         // Joining pushes this clone's records into a repository others
         // read: the notice is seen first (space-57), for the placement
         // the join adds, named by the instance's folder — the clone's
@@ -5851,7 +5873,8 @@ export class SpaceManager {
    * saying the person may manage the members of every placement it
    * holds; a join into a repository that may have other members before
    * its notice is seen (space-57); and, as a pick's, a malformed name, a
-   * group or a repository the view does not list, one held as colliding.
+   * group or a repository the view does not list, one held as colliding,
+   * and one another clone here holds (git-host-5).
    * The host's step and the placement's add are the first step of an
    * operation of the clone's machine (space-31), the reply answering
    * once they are done: the name taken, a remote set meanwhile.
@@ -5885,6 +5908,7 @@ export class SpaceManager {
       if (!listing) throw new CoreError("not_found", noLongerShared());
       // A group named like a login holds no folder of its own (space-61).
       if (this.collides(listing.repository.group, view)) throw new CoreError("invalid_request", groupNamedLikeYourLogin(listing.repository.group.fullPath));
+      await this.refuseHeldElsewhere(machine.key, listing, view.gitOrigin);
       // Joining pushes every record into a repository others read: the
       // notice is seen first, for the placement the join adds, named by
       // the instance's folder (space-57, storage-5); the members of the
@@ -6036,11 +6060,13 @@ export class SpaceManager {
    * named by that instance's folder with the host's id in its own
    * section (storage-34), then the clone synced, that placement among its
    * placements (space-12). Refused before anything runs: an instance the
-   * home does not list, or a key naming no clone, `not_found`; that
+   * home does not list, or a key naming no clone, `not_found`; a group's
+   * own spex repository, whose records stay in its group (space-87); that
    * instance signed out; no file of the clone naming a host repository it
    * lists; the clone holding a placement there already, or another clone
-   * here holding that repository; and the notice not seen, Attach being
-   * that placement's notice (space-90). The add is the first step of an
+   * here holding that repository; one in a group held as colliding
+   * (space-61); and the notice not seen, Attach being that placement's
+   * notice (space-90). The add is the first step of an
    * operation of the clone's machine (space-31), checked again once any
    * operation it followed has ended, the reply answering once it is done.
    */
@@ -6048,21 +6074,13 @@ export class SpaceManager {
     const instance = this.instanceAt(this.namedInstance(named));
     const machine = this.machine(key);
     await machine.readFacts();
+    // A group's own records stay in its group at one instance, refused
+    // before any host is asked (space-87).
+    if (machine.recordsStay()) throw new CoreError("invalid_request", groupRecordsStay(splitKey(key).name));
     if (this.signedInAt(instance) && !instance.view) await this.readHost(instance).catch((error: unknown) => { throw new CoreError("invalid_request", relayHostError(error, this.nameOf(instance))); });
     const { listing, gitOrigin } = this.attachable(machine, machine.placements, instance);
     const path = listing.repository.path;
-    // One clone per host repository: another clone here holding it holds
-    // it as its own placement (git-host-5).
-    const store = this.host.store;
-    const others = await Promise.all(store.listRepositories().filter((repository) => repository.key !== machine.key).map(async (repository) => {
-      try {
-        const other = this.machine(repository.key);
-        await other.readFacts();
-        return { name: splitKey(repository.key).name, held: other.placements };
-      } catch { return { name: splitKey(repository.key).name, held: [] as Placement[] }; }
-    }));
-    const holder = others.find(({ held }) => held.some((placement) => repositoryFor([listing], (entry) => entry.repository, gitOrigin, placement.id, placement.url) !== undefined));
-    if (holder) throw new CoreError("invalid_request", heldByAnother(path, holder.name));
+    await this.refuseHeldElsewhere(machine.key, listing, gitOrigin);
     // Attach is that placement's notice, whatever its members (space-90).
     if (!noticed) throw new CoreError("invalid_request", readNoticeBeforeAttaching(path), { notice: true, members: listing.members, visibility: listing.repository.visibility, placement: instance.origin });
     return machine.attach(instance.origin, async () => {
@@ -6074,17 +6092,39 @@ export class SpaceManager {
 
   /** The host repository an Attach at `instance` adds (space-29,
    * git-host-5): one a placement file of the clone names that the
-   * instance, signed in, lists; refused where it is signed out, where no
-   * file names one it lists, and where the clone holds a placement there
-   * already — by the instance's folder, or one whose host repository it
-   * lists (storage-34). */
+   * instance, signed in, lists; refused for a group's own spex
+   * repository, whose records stay in its group at one instance
+   * (space-87), where the instance is signed out, where no file names
+   * one it lists, where the clone holds a placement there already — by
+   * the instance's folder, or one whose host repository it lists
+   * (storage-34) — and where it lies in a group held as colliding, so no
+   * clone is made or moved for it (space-61). */
   private attachable(machine: RepositorySync, placements: readonly Placement[], instance: HostInstance): { listing: HostListing; gitOrigin: string } {
     const name = splitKey(machine.key).name;
+    if (machine.recordsStay()) throw new CoreError("invalid_request", groupRecordsStay(name));
     if (!this.signedInAt(instance)) throw new CoreError("invalid_request", signInFirst());
     const filed = readPlacementFiles(machine.repository.dir).files.map((file) => this.fileListing(file)).find((found) => found?.instance === instance);
     if (!filed) throw new CoreError("invalid_request", noFiledPlacement(name, this.nameOf(instance)));
     if (this.placedAt(placements, instance)) throw new CoreError("invalid_request", placedAlready(name, this.nameOf(instance)));
+    const group = filed.listing.repository.group;
+    if (this.collides(group, instance.view)) throw new CoreError("invalid_request", groupNamedLikeYourLogin(group.fullPath));
     return { listing: filed.listing, gitOrigin: filed.gitOrigin };
+  }
+
+  /** One clone per host repository (git-host-5): a join — a pick's, a
+   * Place's or an Attach's — of one another clone here holds as one of
+   * its placements, by the instance's Git origin and the id or the
+   * remote it records, is refused naming that clone (space-29). */
+  private async refuseHeldElsewhere(key: string, listing: HostListing, gitOrigin: string): Promise<void> {
+    const others = await Promise.all(this.host.store.listRepositories().filter((repository) => repository.key !== key).map(async (repository) => {
+      try {
+        const other = this.machine(repository.key);
+        await other.readFacts();
+        return { name: splitKey(repository.key).name, held: other.placements };
+      } catch { return { name: splitKey(repository.key).name, held: [] as Placement[] }; }
+    }));
+    const holder = others.find(({ held }) => held.some((placement) => repositoryFor([listing], (entry) => entry.repository, gitOrigin, placement.id, placement.url) !== undefined));
+    if (holder) throw new CoreError("invalid_request", heldByAnother(listing.repository.path, holder.name));
   }
 
   /**
@@ -6166,7 +6206,7 @@ export class SpaceManager {
       try {
         const machine = this.machine(repository.key);
         const facts = await machine.readFacts();
-        return { name: splitKey(repository.key).name, facts, held: machine.placements, files: readPlacementFiles(machine.repository.dir).files, ownAt: repository.key === own ? this.servingOf(machine) : undefined };
+        return { name: splitKey(repository.key).name, facts, held: machine.placements, files: machine.namedByFiles(machine.placements), ownAt: repository.key === own ? this.servingOf(machine) : undefined };
       } catch { return { name: splitKey(repository.key).name, facts: { remote: null, id: null }, held: [], files: [], ownAt: undefined }; }
     }));
     const here = clones.some(({ facts, held, ownAt }) => held.some((placement) => listingFor(view, placement.id, placement.url)?.repository.id === hostId)
@@ -7557,7 +7597,7 @@ export class SpaceManager {
       const read = byKey.get(repository.key);
       if (read) return [{ key: repository.key, held: read.held, files: read.files }];
       const machine = this.machines.get(repository.key);
-      return machine ? [{ key: repository.key, held: machine.placements, files: readPlacementFiles(machine.repository.dir).files }] : [];
+      return machine ? [{ key: repository.key, held: machine.placements, files: machine.namedByFiles(machine.placements) }] : [];
     });
     // A placement its files name is a line of its clone's row only where
     // no remote here holds it (space-87), every clone read first.
