@@ -512,6 +512,7 @@ export const TREE: Record<string, SpaceEntry[]> = {
     { name: "sessions", path: "sessions", kind: "dir", family: "Not a Spex folder", sync: "shared", count: 4, preview: "none" },
     { name: "intents", path: "intents", kind: "dir", family: "Not a Spex folder", sync: "pending", count: 0, preview: "none" },
     { name: "packages", path: "packages", kind: "dir", family: "installed spec packages", sync: "local", count: 1, preview: "none" },
+    { name: "placements", path: "placements", kind: "dir", family: "placement", sync: "shared", count: 1, preview: "none" },
     { name: "spex.yaml", path: "spex.yaml", kind: "file", family: "spec package requests", sync: "local", size: 512, preview: "text" },
     { name: "project.json", path: "project.json", kind: "file", family: "code remote", sync: "shared", size: 4200, preview: "text" },
     { name: "README.md", path: "README.md", kind: "file", family: "Not a Spex file", sync: "pending", size: 300, preview: "text" },
@@ -523,6 +524,11 @@ export const TREE: Record<string, SpaceEntry[]> = {
     { name: "s1.records.jsonl", path: "sessions/s1.records.jsonl", kind: "file", family: "session records", sync: "shared", size: 310_000, owner: owner("s1", "Fix the login redirect"), preview: "text" },
     { name: "s1.hints.json", path: "sessions/s1.hints.json", kind: "file", family: "provider hints", sync: "local", size: 100, owner: owner("s1", "Fix the login redirect"), preview: "withheld" },
     { name: "s2.json", path: "sessions/s2.json", kind: "file", family: "session manifest", sync: "pending", size: 900, owner: owner("s2", "Draft the release notes"), preview: "text" },
+  ],
+  // The placement's file at the fixtures' instance (storage-36): its
+  // folder is the instance's, and it names nothing of the Git system.
+  placements: [
+    { name: "@spex.example.yaml", path: "placements/@spex.example.yaml", kind: "file", family: "placement", sync: "shared", size: 52, preview: "text" },
   ],
 };
 

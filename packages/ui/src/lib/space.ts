@@ -447,6 +447,7 @@ export const FAMILY_LABELS: Record<string, () => string> = {
   "upload staging": () => i18n._({ id: "upload staging", comment: "catalog family: files uploaded and not yet attached" }),
   Settings: () => i18n._({ id: "Settings", comment: "catalog family: the shared config the Settings surface edits" }),
   "code remote": () => i18n._({ id: "code remote", comment: "catalog family: the file naming where a project's code lives" }),
+  placement: () => i18n._({ id: "placement", comment: "catalog family: a file naming one instance these records are kept at, or the folder holding those files" }),
   "installed spec packages": () => i18n._({ id: "installed spec packages", comment: "catalog family: spec packages installed on this device from the lock" }),
   "exported skills": () => i18n._({ id: "exported skills", comment: "catalog family: skills exported from the installed spec packages" }),
   "sync rules": () => i18n._({ id: "sync rules", comment: "catalog family: the files saying what syncs" }),

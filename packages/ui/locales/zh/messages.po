@@ -4337,6 +4337,11 @@ msgstr "指定一个值…"
 msgid "Place at…"
 msgstr "放到…"
 
+#. catalog family: a file naming one instance these records are kept at, or the folder holding those files
+#: src/lib/space.ts
+msgid "placement"
+msgstr "放置"
+
 #: src/components/DraftConversation.tsx
 msgid "Places the six-line example as your first message"
 msgstr "把六行示例放为你的第一条消息"

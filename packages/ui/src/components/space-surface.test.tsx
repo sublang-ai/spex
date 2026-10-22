@@ -17,6 +17,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import type { GroupsState, RepositoryState, SessionInfo } from "@sublang/spex-core/protocol";
 
+import { activateLanguage } from "../i18n.js";
 import { deliverServerMessageForTests, setClientForTests, useAppStore } from "../state/store.js";
 import {
   BRANCH,
@@ -58,6 +59,7 @@ afterEach(() => {
   cleanup();
   setClientForTests(undefined);
   vi.useRealTimers();
+  activateLanguage("en");
 });
 
 describe("GROUPS: re-reads on events, never on a timer (space-2)", () => {
@@ -898,6 +900,29 @@ describe("GROUPS: the explorer (space-23, space-24, space-25)", () => {
     fireEvent.click(git);
     expect(calls("space.tree").some((fields) => fields.path === ".git")).toBe(false);
     expect(screen.getByTestId("space-preview").textContent).toContain("not shown");
+  });
+
+  test.each(["en", "zh"] as const)("space-23: `placements/<folder>.yaml` and its folder read 'placement', Shared (%s)", async (language) => {
+    activateLanguage(language);
+    const zh = language === "zh";
+    const family = zh ? "放置" : "placement";
+    const shared = zh ? "已共享" : "Shared";
+    await renderGroups(repoState());
+    fireEvent.click(screen.getByRole("tab", { name: zh ? "浏览" : "Explore" }));
+    // The core names the folder and each file in it by one family
+    // (space-35); the entry reads this interface's word for it, never
+    // the raw family in another language (space-23).
+    const folder = await screen.findByTestId("space-node-placements");
+    expect(within(folder).getByText(family).textContent).toBe(family);
+    expect(folder.querySelector("[data-sync]")?.getAttribute("data-sync")).toBe("shared");
+    expect(folder.querySelector("[data-sync]")?.textContent).toBe(shared);
+    fireEvent.click(folder);
+    const file = await screen.findByTestId("space-node-placements/@spex.example.yaml");
+    expect(calls("space.tree").at(-1)).toEqual({ repository: KEY, path: "placements" });
+    expect(file.getAttribute("aria-level")).toBe("2");
+    expect(within(file).getByText(family).textContent).toBe(family);
+    expect(file.querySelector("[data-sync]")?.getAttribute("data-sync")).toBe("shared");
+    expect(file.querySelector("[data-sync]")?.textContent).toBe(shared);
   });
 
   test("'Stays on this device' names the eight families with one reason each", async () => {

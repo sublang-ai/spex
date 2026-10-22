@@ -103,6 +103,7 @@ Product names and the role names Playbook defines stay as authored; everything e
 | spex repository | spex 仓库 | one project's or group's records, `<name>-spex` |
 | Sign in / Signing in… / Sign in again / Sign out | 登录 / 登录中… / 重新登录 / 退出登录 | signing in to an instance |
 | Pick a group / Members | 选择群组 / 成员 | a spex repository's row controls |
+| placement | 放置 | one instance a spex repository's records are kept at, named by its file under `placements/`; never 部署 or 位置 |
 | Waiting for you to continue | 等待你继续 | a placement's first push waiting on the sharing notice |
 | Attach / Attaching… | 接入 / 接入中… | bring a placement another device named to this device; not 附加 or 附件, which are attachments |
 | Place at… / Also place at <instance> / Placing… | 放到… / 同时放到 <实例> / 放置中… | a project's row: keep its records at another instance too |

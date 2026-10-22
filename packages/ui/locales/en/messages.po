@@ -4337,6 +4337,11 @@ msgstr "pin a value…"
 msgid "Place at…"
 msgstr "Place at…"
 
+#. catalog family: a file naming one instance these records are kept at, or the folder holding those files
+#: src/lib/space.ts
+msgid "placement"
+msgstr "placement"
+
 #: src/components/DraftConversation.tsx
 msgid "Places the six-line example as your first message"
 msgstr "Places the six-line example as your first message"
