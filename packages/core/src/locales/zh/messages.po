@@ -89,6 +89,11 @@ msgstr "{act}；首次连接时，请在终端中接受主机密钥。然后重�
 msgid "{act}. Then Retry."
 msgstr "{act}。然后重试。"
 
+#. Refusal of an agent's credential on a team server's seat: a variable's name is none of the agent's forms; `adapter` is the agent's name and `forms` lists the variables' names, both as they are
+#: src/service.ts
+msgid "{adapter} takes only {forms}"
+msgstr "{adapter} 只接受 {forms}"
+
 #. Project creation refusal; command and its output are verbatim
 #: src/forge.ts
 msgid "{command} failed: {output}"
@@ -763,10 +768,35 @@ msgstr "◇ 现在由 Captain 作答 — 此前的对话已重放给它"
 msgid "◇ The provider rejected the resumed conversation — replaying it"
 msgstr "◇ 服务商拒绝了续接的对话 — 正在重放"
 
+#. Refusal of an agent's credential on a team server's seat: it carries only names that accompany the agent's key, such as Kimi's model name, and not the key; `adapter` is the agent's name and `keys` lists the key's variable names, any one of which will do, both as they are
+#: src/service.ts
+msgid "A {adapter} credential needs {keys}"
+msgstr "{adapter} 的凭据需要 {keys}"
+
+#. Refusal of a code host's credential on a team server's seat: it names a field other than the token and the username
+#: src/service.ts
+msgid "A code host's credential is a token and, where the host asks for one, a username"
+msgstr "代码主机的凭据是一个令牌，主机需要时再加一个用户名"
+
+#. Refusal of a code host's credential on a team server's seat: the token or the username holds a line break or another control character
+#: src/service.ts
+msgid "A code host's token and username are each one line of text"
+msgstr "代码主机的令牌和用户名都只能是一行文本"
+
 #. Refusal: another compile of this core writes the playbook's artifact folder
 #: src/compile.ts
 msgid "a compile is writing {folder}; retry once it ends"
 msgstr "一个编译正在写入 {folder}；请在它结束后重试"
+
+#. Refusal of a credential on a team server's seat: the host's or the agent's name, or a variable's name, is blank
+#: src/service.ts
+msgid "A credential needs a name"
+msgstr "凭据需要一个名称"
+
+#. Refusal of a credential on a team server's seat: a token, a username or an agent's value is blank, or none is given
+#: src/service.ts
+msgid "A credential's value cannot be blank"
+msgstr "凭据的值不能为空"
 
 #. Refusal during attachment admission
 #: src/service.ts
@@ -787,6 +817,11 @@ msgstr "Git 合并尚未结束；请先在终端完成或中止，再进行同�
 #: src/space-groups.ts
 msgid "a group named like your login"
 msgstr "一个与你的用户名同名的群组"
+
+#. Storage diagnostic: the seat's credentials file holds a code host's entry under a key that is no host name, which is not repeated
+#: src/code-credentials.ts
+msgid "a host entry keyed by no host name is malformed; preserved unchanged"
+msgstr "一个主机条目的键不是主机名，格式有误；已原样保留"
 
 #. Refusal: the license a new playbook's spec package names is empty, spans lines or is edged with spaces
 #: src/service.ts
@@ -863,6 +898,16 @@ msgstr "把本机的 SSH 密钥添加到有权访问它的账户"
 #: src/space-git.ts
 msgid "Add this machine's SSH key to an account that can see it"
 msgstr "把本机的 SSH 密钥添加到有权访问它的账户"
+
+#. Storage diagnostic: the seat's credentials file holds an agent's entry under a key that is no agent's name, which is not repeated
+#: src/code-credentials.ts
+msgid "an agent entry keyed by no agent's name is malformed; preserved unchanged"
+msgstr "一个智能体条目的键不是智能体名称，格式有误；已原样保留"
+
+#. Refusal of an agent's credential on a team server's seat: a value holds a NUL character, which no process environment carries
+#: src/service.ts
+msgid "An agent's credential cannot hold a NUL character"
+msgstr "智能体的凭据不能包含 NUL 字符"
 
 #. Migration diagnostic: a stored intent references an attachment whose bytes are gone
 #: src/migrate-home.ts
@@ -1106,6 +1151,11 @@ msgstr "无法连接 {host}"
 msgid "Could not refresh groups; try again"
 msgstr "无法刷新群组，请重试"
 
+#. Refusal of a credentials command on a machine of one's own: Spex keeps a member's code-host and agent credentials only on a team server's seat
+#: src/service.ts
+msgid "Credentials are kept on a server's seat"
+msgstr "凭据只保存在服务器的席位上"
+
 #. Storage diagnostic; Delete is the control's own name on the draft's row
 #: src/authoring.ts
 msgid "damaged transcript after record {seq}; the draft refuses everything but Delete"
@@ -1190,7 +1240,10 @@ msgstr "环境中的规约包已安装"
 #. Diagnostic for a damaged file: its top level is not an object
 #. Storage diagnostic: a record in the file is not an object
 #. Storage diagnostic: a record in the file is not an object
+#. Storage diagnostic: a record in the file is not an object
+#. Storage diagnostic: a record in the file is not an object
 #: src/app-storage.ts
+#: src/code-credentials.ts
 #: src/drafts.ts
 #: src/files.ts
 msgid "expected an object"
@@ -1832,6 +1885,11 @@ msgstr "当前不在任何分支上；请在终端中切换到 spex"
 msgid "Not signed in"
 msgstr "未登录"
 
+#. Storage diagnostic: a YAML file of the home does not parse; the file is left as it is
+#: src/code-credentials.ts
+msgid "not valid YAML; preserved unchanged"
+msgstr "不是有效的 YAML；已原样保留"
+
 #. Guidance where the Git host no longer lists a spex repository for this account
 #. Guidance where the Git host no longer lists a spex repository for this account
 #: src/space-git.ts
@@ -2253,6 +2311,11 @@ msgstr "在终端运行 claude 登录，或设置 ANTHROPIC_API_KEY"
 msgid "sign in by running codex in a terminal, or set OPENAI_API_KEY"
 msgstr "在终端运行 codex 登录，或设置 OPENAI_API_KEY"
 
+#. Adapter requirement on a team server's seat, where no credential of the agent is set; `adapter` is the agent's name and the Credentials section is the one in Settings
+#: src/seat-credentials.ts
+msgid "sign in by setting your own credential for {adapter} in the Credentials section"
+msgstr "在“凭据”部分为 {adapter} 设置你自己的凭据以登录"
+
 #. Refusal: the act needs the Git host, and the home is not signed in
 #: src/space.ts
 msgid "Sign in first"
@@ -2294,6 +2357,11 @@ msgstr "在该主机上用有权访问它的账户为本机登录"
 #: src/space-groups.ts
 msgid "Signed in"
 msgstr "已登录"
+
+#. Readiness on a team server's seat: the agent runs on the sign-in the server's administrator shared
+#: src/seat-credentials.ts
+msgid "Signed in by this server's administrator"
+msgstr "由本服务器的管理员登录"
 
 #. Spec notice: a link under specs/ pointed outside the project and was not read
 #: src/specs.ts
@@ -2437,6 +2505,16 @@ msgstr "已被占用，{key} 无法移到其实例文件夹下的这里；请将
 msgid "Text or an attachment is required."
 msgstr "请输入文字或添加附件。"
 
+#. Refusal of a code host's credential on a team server's seat: the name given is not a DNS host name with an optional port
+#: src/service.ts
+msgid "That is not a host name: give the host alone, with a port where it needs one, and no scheme, path, user or spaces"
+msgstr "这不是主机名：只填写主机，需要时加上端口，不要包含协议、路径、用户或空格"
+
+#. Refusal of an agent's credential on a team server's seat: the name is no agent's; `agents` lists the agents' names as they are
+#: src/service.ts
+msgid "That is not an agent: name one of {agents}"
+msgstr "这不是智能体：请指定 {agents} 之一"
+
 #. Refusal: a summons is marked read only once its turn ended
 #: src/service.ts
 msgid "That turn has not ended, so it cannot be marked as read."
@@ -2466,6 +2544,11 @@ msgstr "活动锁为空目录"
 #: src/authoring.ts
 msgid "the agent ended with status {status}"
 msgstr "智能体以状态 {status} 结束"
+
+#. Storage diagnostic: an agent's entry in the seat's credentials file will not read; {name} is the agent's name
+#: src/code-credentials.ts
+msgid "the agent entry {name} is malformed; preserved unchanged"
+msgstr "智能体条目 {name} 格式有误；已原样保留"
 
 #. Refusal of a remote URL carrying a user before the host
 #: src/space-git.ts
@@ -2545,6 +2628,11 @@ msgstr "空间目录不是一个文件夹"
 #: src/space.ts
 msgid "The host changed again"
 msgstr "托管平台再次发生变化"
+
+#. Storage diagnostic: a code host's entry in the seat's credentials file will not read; {name} is its host name as the file keys it
+#: src/code-credentials.ts
+msgid "the host entry {name} is malformed; preserved unchanged"
+msgstr "主机条目 {name} 格式有误；已原样保留"
 
 #. Refusal of a pick naming a group the Git host does not list
 #: src/space.ts
@@ -2796,6 +2884,16 @@ msgstr "此运行不再提供“{actionId}”。"
 msgid "This run offers no recovery to rerun."
 msgstr "此运行没有可重新执行的恢复操作。"
 
+#. Readiness on a team server's seat: the file holding the administrator's shared sign-ins cannot be read
+#: src/seat-credentials.ts
+msgid "This server's shared sign-in cannot be read: ask its administrator"
+msgstr "无法读取本服务器的共享登录：请联系其管理员"
+
+#. Readiness on a team server's seat: the agent's status command reports the administrator's shared sign-in expired or refused
+#: src/seat-credentials.ts
+msgid "This server's shared sign-in has expired: ask its administrator"
+msgstr "本服务器的共享登录已过期：请联系其管理员"
+
 #. Refusal: nothing in the session's history can be continued
 #: src/service.ts
 msgid "this session has no compatible checkpoint"
@@ -3008,6 +3106,16 @@ msgstr "你已停止传输；你的提交仍然有效。Git 以无交互方式�
 #: src/space.ts
 msgid "Your merge is saved locally; Retry to send it once the host settles."
 msgstr "合并已保存在本地；待托管平台稳定后重试即可发送。"
+
+#. Readiness on a team server's seat: the agent runs on a credential the member placed in Settings
+#: src/seat-credentials.ts
+msgid "Your own credential"
+msgstr "你自己的凭据"
+
+#. Readiness on a team server's seat: the agent's status command reports the credential the member placed expired or refused
+#: src/seat-credentials.ts
+msgid "Your own credential has expired"
+msgstr "你自己的凭据已过期"
 
 #. Refusal on a team server's seat of a pick or a remote for your own group: its records stay on the server and are placed at no instance
 #: src/space.ts

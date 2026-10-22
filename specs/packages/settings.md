@@ -250,7 +250,7 @@ Where the core runs as a seat [[core-service-125](core-service.md#core-service-1
 
 - the core keeps them under `local/` [[storage-44](storage.md#storage-44)], applies an agent's to its runs as its environment [[core-service-126](core-service.md#core-service-126)] and a host's to every transport to that host [[git-host-9](git-host.md#git-host-9)];
 - the section says "A credential you place here stays on this server until you remove it", and names a host whose clone failed for want of one [[space-103](space.md#space-103)];
-- a blank name or value, or a host name that is no host, is refused `invalid_request` before anything is written.
+- a blank name or value, a host name that is no host, or an agent credential without the agent's key form — Kimi's `KIMI_MODEL_API_KEY` beside its companions [[settings-49](#settings-49)] — is refused `invalid_request` before anything is written.
 
 #### settings-49
 

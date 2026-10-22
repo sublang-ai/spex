@@ -52,6 +52,7 @@ import {
   type PlaybookModules,
 } from "./config.js";
 import {
+  adapterNameSchema,
   CAPTAIN_AGENT_ID,
   parseCommand,
   PACKAGE_LICENSE_PATTERN,
@@ -130,6 +131,9 @@ import { browserAgent } from "./browser.js";
 import { ApplicationMedia } from "./media.js";
 import { MediaTransferError } from "./media-transfers.js";
 import { readAgentOptions, type AgentModelDiscovery } from "./agent-options.js";
+import { DEFAULT_ADAPTER_IMPORTS } from "./agent-runtime.js";
+import { canonicalHost, codeCredentialsPath, codeCredentialStore, isAdapterName, type AgentCredential, type CodeCredentialStore, type HostCredential } from "./code-credentials.js";
+import { AGENT_CREDENTIAL_FORMS, SeatEnvironment, seatAdapterImports, seatCredentialHalf, type SeatCredentialSources } from "./seat-credentials.js";
 import { SpaceManager, type SpaceHost } from "./space.js";
 import { Places } from "./places.js";
 import { GitHostClient, SEAT_ID_MAX, fileCredentialStore } from "./git-host.js";
@@ -258,7 +262,9 @@ export interface CoreServiceOptions {
    * device flow naming the server and the person (git-host-27), your
    * own group is placed at no instance (space-102), the commands naming
    * a working folder are refused, and the runtime's label is the
-   * server's name. The ids are at most 64 characters.
+   * server's name. The ids are at most 64 characters. Its runs inherit
+   * the shared credential file's forms and the member's own credentials
+   * (core-service-126).
    */
   seat?: SeatOptions;
   /** Test seam (DR-133): CA certificates, PEM, trusted beside the
@@ -272,10 +278,15 @@ export interface SeatOptions {
   serverId: string;
   serverName: string;
   personId: string;
+  /** The administrator's shared credential file, an absolute path: its
+   * `NAME=value` lines are read into the environment of every agent run
+   * (core-service-126). */
+  sharedCredentialFile?: string;
 }
 
 /** A seat's options checked at start: both ids hold 1 to 64 characters
- * (git-host-27) and the name some text. A shell's mistake, in English. */
+ * (git-host-27), the name some text, and a shared credential file, where
+ * one is given, an absolute path. A shell's mistake, in English. */
 function checkSeat(seat: SeatOptions): SeatOptions {
   for (const [name, value] of [["serverId", seat.serverId], ["personId", seat.personId]] as const) {
     if (typeof value !== "string" || value.length === 0 || value.length > SEAT_ID_MAX) {
@@ -284,7 +295,112 @@ function checkSeat(seat: SeatOptions): SeatOptions {
   }
   const serverName = typeof seat.serverName === "string" ? seat.serverName.trim() : "";
   if (serverName.length === 0) throw new Error("spex: a seat's serverName must hold some text");
-  return { serverId: seat.serverId, serverName, personId: seat.personId };
+  const shared = seat.sharedCredentialFile;
+  if (shared !== undefined && (typeof shared !== "string" || !isAbsolute(shared))) {
+    throw new Error("spex: a seat's sharedCredentialFile must be an absolute path");
+  }
+  return { serverId: seat.serverId, serverName, personId: seat.personId, ...(shared !== undefined ? { sharedCredentialFile: shared } : {}) };
+}
+
+/** The refusal off a seat of a command on the member's own credentials
+ * (settings-48). */
+const credentialsOffSeat = (): CoreError => new CoreError("invalid_request", i18n._({
+  id: "Credentials are kept on a server's seat",
+  comment: "Refusal of a credentials command on a machine of one's own: Spex keeps a member's code-host and agent credentials only on a team server's seat",
+}));
+
+// A credential command's fields, each checked before anything is written
+// (settings-48); a refusal never repeats what was given, which may hold
+// a secret.
+const blankCredentialName = (): CoreError => new CoreError("invalid_request", i18n._({
+  id: "A credential needs a name",
+  comment: "Refusal of a credential on a team server's seat: the host's or the agent's name, or a variable's name, is blank",
+}));
+const blankCredentialValue = (): CoreError => new CoreError("invalid_request", i18n._({
+  id: "A credential's value cannot be blank",
+  comment: "Refusal of a credential on a team server's seat: a token, a username or an agent's value is blank, or none is given",
+}));
+
+/** A code host as the member names it, in lowercase. */
+function credentialHost(name: string): string {
+  if (name.trim() === "") throw blankCredentialName();
+  const host = canonicalHost(name);
+  if (host === null) {
+    throw new CoreError("invalid_request", i18n._({
+      id: "That is not a host name: give the host alone, with a port where it needs one, and no scheme, path, user or spaces",
+      comment: "Refusal of a code host's credential on a team server's seat: the name given is not a DNS host name with an optional port",
+    }));
+  }
+  return host;
+}
+
+/** An agent as the member names it: one of the adapters. */
+function credentialAgent(name: string): AdapterName {
+  if (name.trim() === "") throw blankCredentialName();
+  if (!isAdapterName(name)) {
+    throw new CoreError("invalid_request", i18n._({
+      id: "That is not an agent: name one of {agents}",
+      comment: "Refusal of an agent's credential on a team server's seat: the name is no agent's; `agents` lists the agents' names as they are",
+      values: { agents: listed(adapterNameSchema.options) },
+    }));
+  }
+  return name;
+}
+
+/** A code host's credential: a token and an optional username, each one
+ * line of text. */
+function hostCredentialOf(values: Record<string, string>): HostCredential {
+  if (Object.keys(values).some((field) => field !== "token" && field !== "username")) {
+    throw new CoreError("invalid_request", i18n._({
+      id: "A code host's credential is a token and, where the host asks for one, a username",
+      comment: "Refusal of a code host's credential on a team server's seat: it names a field other than the token and the username",
+    }));
+  }
+  const { token, username } = values;
+  if (token === undefined || token.trim() === "" || (username !== undefined && username.trim() === "")) throw blankCredentialValue();
+  if ([token, username ?? ""].some((value) => /[\u0000-\u001f\u007f]/.test(value))) {
+    throw new CoreError("invalid_request", i18n._({
+      id: "A code host's token and username are each one line of text",
+      comment: "Refusal of a code host's credential on a team server's seat: the token or the username holds a line break or another control character",
+    }));
+  }
+  return { token, ...(username !== undefined ? { username } : {}) };
+}
+
+/** An agent's own credential: values by the agent's forms (settings-49). */
+function agentCredentialOf(adapter: AdapterName, values: Record<string, string>): AgentCredential {
+  const names = Object.keys(values);
+  if (names.length === 0) throw blankCredentialValue();
+  const forms = AGENT_CREDENTIAL_FORMS[adapter].names;
+  for (const name of names) {
+    if (name.trim() === "") throw blankCredentialName();
+    if (!forms.includes(name)) {
+      throw new CoreError("invalid_request", i18n._({
+        id: "{adapter} takes only {forms}",
+        comment: "Refusal of an agent's credential on a team server's seat: a variable's name is none of the agent's forms; `adapter` is the agent's name and `forms` lists the variables' names, both as they are",
+        values: { adapter, forms: listed(forms) },
+      }));
+    }
+    const value = values[name] ?? "";
+    if (value.trim() === "") throw blankCredentialValue();
+    if (value.includes("\0")) {
+      throw new CoreError("invalid_request", i18n._({
+        id: "An agent's credential cannot hold a NUL character",
+        comment: "Refusal of an agent's credential on a team server's seat: a value holds a NUL character, which no process environment carries",
+      }));
+    }
+  }
+  // A credential holds the agent's key form: Kimi's model name, base URL
+  // and provider type only accompany its key (settings-48, settings-49).
+  const keys = AGENT_CREDENTIAL_FORMS[adapter].keys;
+  if (!names.some((name) => keys.includes(name))) {
+    throw new CoreError("invalid_request", i18n._({
+      id: "A {adapter} credential needs {keys}",
+      comment: "Refusal of an agent's credential on a team server's seat: it carries only names that accompany the agent's key, such as Kimi's model name, and not the key; `adapter` is the agent's name and `keys` lists the key's variable names, any one of which will do, both as they are",
+      values: { adapter, keys: listed(keys) },
+    }));
+  }
+  return { ...values };
 }
 
 // The Sources cache ages out at ten minutes (dashboard-14).
@@ -488,6 +604,13 @@ export class CoreService {
   /** This core's seat on a team server, where it runs as one
    * (core-service-125); none on a machine of one's own. */
   private readonly seat?: SeatOptions;
+  /** On a seat, the environment its agent runs inherit (core-service-126)
+   * and the member's own credentials (storage-44). */
+  private readonly seatEnvironment?: SeatEnvironment;
+  private readonly codeCredentials?: CodeCredentialStore;
+  /** The adapter imports every agent run loads: on a seat, each run
+   * first writes its environment (core-service-126). */
+  private readonly adapterImports?: PlayerAdapterImports;
   /** This runtime's label for display (core-service-4, DR-134): the
    * server's name on a seat, else the given label, else this machine's
    * host name; its name is the home's device, read when a record is
@@ -534,6 +657,9 @@ export class CoreService {
   private ledgerTimer?: NodeJS.Timeout;
   /** Monotonic reload identity; a superseded reload commits nothing. */
   private reloadGeneration = 0;
+  /** Each readiness push a change of the member's agent credentials
+   * started, the newest alone announced (settings-49). */
+  private credentialPushes = 0;
   /** The reload in flight, awaited before a runtime opens (core-service-92). */
   private reloading?: Promise<void>;
   private readonly migrationDiagnostics: {file: string; reason: string; blocking: boolean}[] = [];
@@ -570,6 +696,13 @@ export class CoreService {
     this.env = options.env ?? process.env;
     this.home = options.home ?? this.env.HOME ?? homedir();
     this.store = store;
+    if (options.seat) {
+      const credentials = codeCredentialStore(store.dir);
+      const environment = new SeatEnvironment(process.env, options.seat.sharedCredentialFile, () => credentials.readAgents());
+      this.codeCredentials = credentials;
+      this.seatEnvironment = environment;
+      this.adapterImports = seatAdapterImports(options.adapterImports ?? DEFAULT_ADAPTER_IMPORTS, () => { environment.prepare(); });
+    } else if (options.adapterImports) this.adapterImports = options.adapterImports;
     // Your own group's config, inside its clone (storage-1, DR-103); an
     // explicit path is the operator's.
     this.configPath = options.configPath ?? store.ownRepository().configPath;
@@ -591,7 +724,7 @@ export class CoreService {
       cancelApprovals: (sessionId) => this.approvals.cancel({kind: "session", id: sessionId}),
       store: this.store,
       loadModule: this.options.loadModule,
-      adapterImports: options.adapterImports,
+      adapterImports: this.adapterImports,
       captainFactory: options.captainFactory,
       env: this.env,
       runtime: () => this.assignableRuntime(),
@@ -702,7 +835,7 @@ export class CoreService {
       env: this.env,
       store: this.store,
       libraryDir: this.libraryDir(),
-      diagnostics: () => foldDiagnostics([...this.migrationDiagnostics, ...this.store.storageDiagnostics(), ...this.store.sessionDiagnostics()]),
+      diagnostics: () => foldDiagnostics([...this.migrationDiagnostics, ...this.store.storageDiagnostics(), ...this.store.sessionDiagnostics(), ...this.credentialDiagnostics()]),
       checkRepairs: (diagnostics) => checkRepairs(
         diagnostics,
         this.store.listProjects().map((project) => ({ id: project.id, name: project.name, path: project.path })),
@@ -767,7 +900,8 @@ export class CoreService {
       // Read when used: your own group's config moves with its clone.
       get configPath() { return service.configPath; },
       env: this.env,
-      adapterImports: options.adapterImports,
+      agentEnv: () => service.agentRunEnv(),
+      adapterImports: this.adapterImports,
       compileSpawner: options.compileSpawner,
       compileRuntime: options.compileRuntime,
       composed: () => this.composed,
@@ -847,6 +981,28 @@ export class CoreService {
     if (options.home !== undefined) return options.home;
     if (options.dataDir && resolve(options.dataDir) === resolve(home, ".spex") && !env.SPEX_HOME?.trim()) return home;
     return null;
+  }
+
+  /** The environment an agent run the core spawns itself inherits — a
+   * compile's slc and the agent it drives (playbook-library-42), a
+   * model discovery: on a seat, the shared credential file and the
+   * member's own credentials read afresh first, as before every agent
+   * run (core-service-126). */
+  private agentRunEnv(): NodeJS.ProcessEnv {
+    const seat = this.seatEnvironment;
+    if (!seat) return this.env;
+    seat.prepare();
+    return seat.envFor(this.env);
+  }
+
+  /** On a seat, the member's credentials file refused or its malformed
+   * entries (storage-44), as the file stands now. */
+  private credentialDiagnostics(): StorageDiagnostic[] {
+    try {
+      return this.codeCredentials?.diagnostics() ?? [];
+    } catch {
+      return [];
+    }
   }
 
   /** This runtime (DR-134): one core on one home, named by the home's
@@ -1239,6 +1395,9 @@ export class CoreService {
     let service: CoreService;
     try { service = new CoreService(options, store); }
     catch (error) { store.close(); throw error; }
+    // A seat reads its credentials into the environment at start
+    // (core-service-126).
+    service.seatEnvironment?.prepare();
     try {
     // Store construction already holds the exclusive home lease. Never
     // reclaim another live core's incomplete uploads before that boundary.
@@ -1597,6 +1756,9 @@ export class CoreService {
     // No draft is written once the authors have stopped; a scratch
     // home goes with its store.
     this.store.close();
+    // No run of this seat remains: the forms go back as the process
+    // started with them.
+    this.seatEnvironment?.restore();
     if (failure) throw failure.error;
   }
 
@@ -2034,6 +2196,13 @@ export class CoreService {
       if (player.boundBy.length === 0) continue;
       note(player.agent.adapter, `${player.id} (${player.boundBy.join(", ")})`);
     }
+    // On a seat the credential half is the forms a run would inherit
+    // now, read as before a run (settings-49, core-service-126).
+    const seat = this.seatEnvironment;
+    const sources: SeatCredentialSources | undefined = seat?.prepare();
+    const credentialHalf = seat && sources
+      ? (adapter: AdapterName) => seatCredentialHalf(adapter, sources, seat.runValues(adapter), this.runCommand)
+      : undefined;
     return Promise.all(
       [...positions.entries()].map(async ([adapter, usedBy]) => {
         const readiness = await checkAdapterReadiness(
@@ -2041,6 +2210,7 @@ export class CoreService {
           this.env,
           this.home,
           this.options.adapterRuntime ?? checkAdapterRuntime,
+          credentialHalf,
         );
         this.readinessByAdapter.set(adapter, readiness.ready);
         return {
@@ -2049,6 +2219,7 @@ export class CoreService {
           ...(readiness.requirement
             ? { requirement: readiness.requirement }
             : {}),
+          ...(readiness.credential ? { credential: readiness.credential } : {}),
           usedBy,
           // The embedded runtime declares which adapters take fast mode
           // (DR-038); the editor offers the switch only for those.
@@ -2223,7 +2394,7 @@ export class CoreService {
       cwd = packageDir;
     }
     try {
-      return await browserAgent(command.agent, cwd, command.context?.kind === "draft", this.options.adapterImports);
+      return await browserAgent(command.agent, cwd, command.context?.kind === "draft", this.adapterImports);
     } catch (cause) {
       throw new CoreError("invalid_config", cause instanceof Error ? cause.message : String(cause));
     }
@@ -2309,6 +2480,36 @@ export class CoreService {
         await this.settledConfig();
         if (command.projectId === undefined) return this.configState;
         return this.projectConfigState(command.projectId, true);
+      case "credential.list": {
+        const credentials = this.codeCredentials;
+        if (!credentials) throw credentialsOffSeat();
+        return credentials.list();
+      }
+      case "credential.set":
+      case "credential.remove": {
+        // Each field is checked before anything is written; the entry is
+        // replaced as read, in one synchronous step (settings-48,
+        // storage-44).
+        const credentials = this.codeCredentials;
+        if (!credentials) throw credentialsOffSeat();
+        if (command.kind === "host") {
+          const host = credentialHost(command.name);
+          const next = command.type === "credential.set" ? hostCredentialOf(command.values) : null;
+          if (!credentials.replaceHost(host, credentials.readHost(host), next)) throw changedMeanwhile(codeCredentialsPath(this.store.dir));
+        } else {
+          const adapter = credentialAgent(command.name);
+          const next = command.type === "credential.set" ? agentCredentialOf(adapter, command.values) : null;
+          if (!credentials.replaceAgent(adapter, credentials.readAgent(adapter), next)) throw changedMeanwhile(codeCredentialsPath(this.store.dir));
+          // The agent's credential class follows (settings-49): pushed
+          // unless a newer change or a reload answers after it.
+          const generation = this.reloadGeneration;
+          const push = ++this.credentialPushes;
+          void this.readiness().then((entries) => {
+            if (generation === this.reloadGeneration && push === this.credentialPushes) this.broadcast({ type: "readiness.state", entries });
+          }).catch(() => {});
+        }
+        return credentials.list();
+      }
       case "readiness.get": {
         await this.settledConfig();
         // The probes await: their answer stands only on the files it read.
@@ -2319,7 +2520,7 @@ export class CoreService {
         return entries;
       }
       case "agent.options":
-        return readAgentOptions(command.adapter, this.env, this.options.discoverAgentModels);
+        return readAgentOptions(command.adapter, this.agentRunEnv(), this.options.discoverAgentModels);
       case "project.list":
         return this.store.listProjects();
       case "project.register": {
@@ -2393,7 +2594,7 @@ export class CoreService {
         return project;
       }
       case "storage.diagnostics":
-        return foldDiagnostics([...this.migrationDiagnostics, ...this.store.storageDiagnostics(), ...this.store.sessionDiagnostics(), ...this.authors.diagnostics()]);
+        return foldDiagnostics([...this.migrationDiagnostics, ...this.store.storageDiagnostics(), ...this.store.sessionDiagnostics(), ...this.authors.diagnostics(), ...this.credentialDiagnostics()]);
       case "project.create": {
         const path = expandPath(command.path, this.home);
         const registered = this.store.getProjectByPath(path);
@@ -2869,7 +3070,8 @@ export class CoreService {
               command: command.command,
               intent: command.intent,
               libraryDir,
-              env: this.env,
+              // The compile's agent is an agent run (core-service-126).
+              env: this.agentRunEnv(),
               // The form's compile runs on the Captain's block
               // (playbook-library-42).
               ...(this.composed
