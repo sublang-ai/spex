@@ -27,7 +27,7 @@
 
 import AxeBuilder from "@axe-core/playwright";
 import type { Locator, Page } from "@playwright/test";
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { STANDIN_STORAGE, seedDemoProject } from "@sublang/spex-core/testing";
 
@@ -1447,6 +1447,20 @@ test.describe("exploring", () => {
     const synced = await app.settleSpace("space.sync", { repository: key });
     if (synced.sync.phase !== "done") throw new Error(`the arranged sync ended ${JSON.stringify(synced.sync)}`);
     writeFileSync(join(app.sharedSessionsDir, `${session.id}.hints.json`), "{}\n");
+    const sessionRoot = `sessions/${session.id}.json`;
+    const replayRoot = `sessions/${session.id}.replay.json`;
+    const chunkDirectory = `sessions/${session.id}.chunks`;
+    const chunkNames = readdirSync(join(clone, chunkDirectory)).sort();
+    expect(chunkNames.length).toBeGreaterThan(0);
+    expect(chunkNames.every((name) => /^[0-9a-f]{64}$/.test(name))).toBe(true);
+    const savedFiles = [sessionRoot, replayRoot, ...chunkNames.map((name) => `${chunkDirectory}/${name}`)]
+      .map((path) => ({ path, bytes: readFileSync(join(clone, path)) }));
+    for (const file of savedFiles) expect(file.bytes.length).toBeLessThanOrEqual(8 * 1024 * 1024);
+    expect(JSON.parse(savedFiles[0]!.bytes.toString())).toMatchObject({ schemaVersion: 8, kind: "captain-session-storage", sessionId: session.id });
+    const replayDescriptor = JSON.parse(savedFiles[1]!.bytes.toString());
+    expect(replayDescriptor).toMatchObject({ schemaVersion: 1, kind: "captain-session-replay", sessionId: session.id });
+    expect(replayDescriptor.byteLength).toBeGreaterThan(0);
+    expect(replayDescriptor.head.sha256).toMatch(/^[0-9a-f]{64}$/);
     // intents/ with nothing queued yet: a tracked kind, nothing committed.
     mkdirSync(join(clone, "intents"), { recursive: true });
     await context.grantPermissions(["clipboard-read", "clipboard-write"], { origin: app.origin });
@@ -1462,8 +1476,8 @@ test.describe("exploring", () => {
     await expect(explore).toContainText(join("workspace", ...key.split("/")));
 
     // The session's files group under one node titled by its first
-    // turn: the manifest Shared, the hints Stays here, the records
-    // offering Open session (space-23).
+    // turn: bounded roots and chunks Shared, hints Stays here, and
+    // owned files offering Open session (space-23).
     const sessionsDir = tree.getByTestId("space-node-sessions");
     await expect(sessionsDir).toContainText("sessions/");
     await sessionsDir.click();
@@ -1472,12 +1486,15 @@ test.describe("exploring", () => {
     await sessionNode.click();
     const manifest = tree.getByTestId(`space-node-sessions/${session.id}.json`);
     const records = tree.getByTestId(`space-node-sessions/${session.id}.replay.json`);
+    const chunks = tree.getByTestId(`space-node-${chunkDirectory}`);
     const hints = tree.getByTestId(`space-node-sessions/${session.id}.hints.json`);
     await expect(manifest).toContainText("manifest");
     await expect(manifest).toContainText("Shared");
     await expect(manifest.locator("[data-sync]")).toHaveAttribute("data-sync", "shared");
     await expect(records).toContainText("records");
     await expect(records).toContainText("Shared");
+    await expect(chunks).toContainText("session chunks");
+    await expect(chunks.locator("[data-sync]")).toHaveAttribute("data-sync", "shared");
     await expect(hints).toContainText("provider hints");
     await expect(hints).toContainText("Stays here");
     await expect(hints.locator("[data-sync]")).toHaveAttribute("data-sync", "local");
@@ -1492,8 +1509,8 @@ test.describe("exploring", () => {
     await expect(intents).not.toContainText("Stays here");
     await expect(intents.locator("[data-sync]")).toHaveAttribute("data-sync", "pending");
 
-    // The manifest previews as pretty-printed JSON; the records offer
-    // Open session; the hints read withheld (space-24).
+    // Both bounded roots preview as pretty-printed JSON; their owned
+    // chunks stay shared, records offer Open session, and hints are withheld.
     const preview = explore.getByTestId("space-preview");
     await manifest.click();
     await expect(preview).toContainText("session manifest");
@@ -1502,9 +1519,16 @@ test.describe("exploring", () => {
     await expect(json).toContainText('"sessionId"');
     expect((await json.textContent())!.startsWith('{\n  "')).toBe(true);
     await records.click();
-    await expect(preview.getByTestId("space-preview-jsonl")).toContainText(/\d+ records/);
-    await expect(preview.getByTestId("space-preview-jsonl")).toContainText("reads better as a conversation");
-    await expect(preview.getByTestId("space-preview-jsonl").getByRole("button", { name: "Open session" })).toBeVisible();
+    await expect(json).toContainText('"captain-session-replay"');
+    expect(JSON.parse((await json.textContent())!)).toEqual(replayDescriptor);
+    expect((await json.textContent())!.startsWith('{\n  "')).toBe(true);
+    await expect(preview.getByRole("button", { name: "Open session" })).toBeVisible();
+    await chunks.click();
+    const chunk = tree.getByTestId(`space-node-${chunkDirectory}/${chunkNames[0]}`);
+    await expect(chunk.locator("[data-sync]")).toHaveAttribute("data-sync", "shared");
+    await chunk.click();
+    await expect(preview).toContainText("session chunks");
+    await expect(preview.getByTestId("space-preview-owner")).toHaveText(`"${SESSION_TITLE}"`);
     await hints.click();
     await expect(preview.getByTestId("space-preview-withheld")).toContainText("May hold provider tokens — not shown");
     await expect(preview.getByTestId("space-preview-text")).toHaveCount(0);
@@ -1556,6 +1580,16 @@ test.describe("exploring", () => {
     await expect(page.getByTestId("space-live")).toHaveText(`Copied ${clone}`);
     expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(clone);
     await expect(page.getByTestId("space-repository-header")).not.toContainText("Copied");
+
+    // Opening the conversation navigates without rewriting its immutable
+    // evidence or replacing either bounded root (space-23).
+    if ((await sessionsDir.getAttribute("aria-expanded")) !== "true") await sessionsDir.click();
+    if ((await sessionNode.getAttribute("aria-expanded")) !== "true") await sessionNode.click();
+    await records.click();
+    await preview.getByRole("button", { name: "Open session" }).click();
+    await expect(page.getByRole("tab", { name: new RegExp(SESSION_TITLE, "i") })).toHaveAttribute("aria-selected", "true");
+    for (const file of savedFiles) expect(readFileSync(join(clone, file.path))).toEqual(file.bytes);
+    expect(readdirSync(join(clone, chunkDirectory)).sort()).toEqual(chunkNames);
   });
 });
 
