@@ -8,7 +8,9 @@
 // other account's login under which it lists a spex repository — each
 // with its spex repositories as rows. A row reads the repository's
 // name, where its code lives, its reachability, its local changes,
-// ahead and behind and its last sync, and carries the one control its
+// ahead and behind and its last sync — its key placement's — with a line
+// per placement beneath it saying what that placement did (space-87,
+// DR-128), and carries the one control its
 // state offers — Sync, Join, Pick a group, Retry — with Members on a
 // reachable row whose instance is signed in, each read from the
 // instance governing it. What a control opens stands in place beneath
@@ -46,7 +48,7 @@ import {
   pickInstances,
   standingOf,
 } from "../lib/instances.js";
-import { rowPlacement, rowWaiting } from "../lib/placements.js";
+import { keyPlacement, rowPlacement } from "../lib/placements.js";
 import { absoluteTitle } from "../lib/time.js";
 import {
   STEP_LINES,
@@ -55,6 +57,7 @@ import {
   isGroupRepository,
   lastSegment,
   cloneHere,
+  countsTitle,
   lastSyncOf,
   pickDirectoryBridge,
   repositoryStatePhrase,
@@ -64,6 +67,7 @@ import { Icon } from "./Icon.js";
 import { InlineConfirm } from "./InlineConfirm.js";
 import { AddInstance, InstanceSection } from "./SpaceInstance.js";
 import { GroupNameEditor, MembersPanel } from "./SpaceMembers.js";
+import { PlacementLines } from "./SpacePlacements.js";
 import type { SignInFlow } from "./SpaceSignIn.js";
 import { SECONDARY, syncRefusal, type Note } from "./SpaceSurface.js";
 
@@ -214,6 +218,7 @@ export function GroupsList({
   selected,
   connected,
   refreshes,
+  dismissed,
   signIn,
   onSelect,
   onNote,
@@ -224,6 +229,9 @@ export function GroupsList({
   connected: boolean;
   /** How many times the reader's own Refresh has re-read the state. */
   refreshes: number;
+  /** The sync phase the reader dismissed on each row's Sync tab, by its
+   * key: the outcomes it put away stay away on the row's lines. */
+  dismissed: Readonly<Record<string, string>>;
   signIn: SignInFlow;
   onSelect(key: string): void;
   onNote: Note;
@@ -238,6 +246,7 @@ export function GroupsList({
       selected={selected}
       connected={connected}
       refreshes={refreshes}
+      dismissed={dismissed}
       onSelect={onSelect}
       onNote={onNote}
     />
@@ -353,6 +362,7 @@ function GroupSection({
   selected,
   connected,
   refreshes,
+  dismissed,
   onSelect,
   onNote,
 }: {
@@ -365,6 +375,7 @@ function GroupSection({
   selected?: string;
   connected: boolean;
   refreshes: number;
+  dismissed: Readonly<Record<string, string>>;
   onSelect(key: string): void;
   onNote: Note;
 }) {
@@ -588,6 +599,7 @@ function GroupSection({
               selected={repo.key === selected}
               connected={connected}
               refreshes={refreshes}
+              dismissed={dismissed[repo.key]}
               onSelect={() => onSelect(repo.key)}
               onNote={onNote}
             />
@@ -612,6 +624,7 @@ function RepositoryRow({
   selected,
   connected,
   refreshes,
+  dismissed,
   onSelect,
   onNote,
 }: {
@@ -625,6 +638,8 @@ function RepositoryRow({
   selected: boolean;
   connected: boolean;
   refreshes: number;
+  /** The sync phase the reader dismissed on its Sync tab. */
+  dismissed?: string;
   onSelect(): void;
   onNote: Note;
 }) {
@@ -909,20 +924,25 @@ function RepositoryRow({
       ? i18n._("On this device only — shared once you sign in")
       : repositoryStatePhrase(repo, now);
   const dot = statusDot(repo);
-  const branch = placement?.branch ?? null;
+  // Ahead and behind on the row are its key placement's; each line's
+  // own ride its title (space-8).
+  const branch = keyPlacement(repo)?.branch ?? null;
   const counted = branch && branch.checkedAt !== null && !branch.unrelated;
-  // The last sync recorded, else the one the clone holds (space-61).
+  // The key placement's last sync recorded, else the one the clone
+  // holds (space-61).
   const last = lastSyncOf(repo);
-  const waiting = rowWaiting(repo);
-  const stateTitle = waiting
-    ? waiting.message
-    : readOnly
-      ? i18n._("{state} · new sessions stay on this device", { state })
-      : last && repo.state !== "reachable"
-        ? i18n._("{state} · last synced {at}", { state, at: absoluteTitle(last.at) })
-        : last
-          ? absoluteTitle(last.at)
-          : state;
+  const stateTitle = readOnly
+    ? i18n._("{state} · new sessions stay on this device", { state })
+    : last && repo.state !== "reachable"
+      ? i18n._("{state} · last synced {at}", { state, at: absoluteTitle(last.at) })
+      : last
+        ? absoluteTitle(last.at)
+        : state;
+  // Where its lines say what each placement did, the row's reachable or
+  // read-only phrase repeats its key placement's at a glance and yields
+  // below @md, describing the row still (space-87, DR-041).
+  const lined = cloneHere(repo) && repo.placements.length > 0;
+  const stateYields = lined && (repo.state === "reachable" || repo.state === "read-only");
   // The row is named by the repository alone, its code, counts and
   // state describing it: a name that holds still while the state's age
   // ticks on (DR-041).
@@ -938,7 +958,9 @@ function RepositoryRow({
 
   return (
     <li data-testid={`space-row-${repo.key}`} data-state={repo.state} className="@container flex min-w-0 flex-col gap-1">
-      <div className="flex min-w-0 items-center gap-1">
+      {/* The name owns the slack; below @xs the row's controls wrap
+          beneath it, the state's control last (space-28, DR-041). */}
+      <div className="flex min-w-0 flex-wrap items-center gap-1 @xs:flex-nowrap">
         <button
           type="button"
           data-testid={`space-repo-${repo.key}`}
@@ -948,7 +970,7 @@ function RepositoryRow({
           aria-expanded={selected}
           aria-controls={selected ? "space-repository" : undefined}
           onClick={onSelect}
-          className={`flex min-w-0 flex-1 items-center gap-2 rounded px-2 py-1 text-left text-sm ${
+          className={`flex min-w-0 grow basis-full items-center gap-2 rounded px-2 py-1 text-left text-sm @xs:basis-0 ${
             selected
               ? "bg-brand-50 text-brand-800 dark:bg-brand-950 dark:text-brand-200"
               : "hover:bg-neutral-100 dark:hover:bg-neutral-800"
@@ -1001,10 +1023,7 @@ function RepositoryRow({
               id={describe("counts")}
               data-testid={`space-repo-counts-${repo.key}`}
               className="hidden shrink-0 text-xs text-neutral-500 @md:inline"
-              title={i18n._(
-                "{ahead, plural, one {# commit} other {# commits}} ahead, {behind, plural, one {# commit} other {# commits}} behind · checked {at}",
-                { ahead: branch.ahead ?? 0, behind: branch.behind ?? 0, at: absoluteTitle(branch.checkedAt!) },
-              )}
+              title={countsTitle(branch) ?? undefined}
             >
               <span aria-hidden>↑</span>
               {branch.ahead ?? 0}
@@ -1021,65 +1040,69 @@ function RepositoryRow({
           <span
             id={describe("state")}
             data-testid={`space-repo-state-${repo.key}`}
-            className="min-w-0 max-w-[45%] shrink truncate text-xs text-neutral-500"
+            className={`min-w-0 max-w-[45%] shrink truncate text-xs text-neutral-500 ${stateYields ? "hidden @md:inline" : ""}`}
             title={stateTitle}
           >
             {state}
           </span>
         </button>
-        {needsFolder ? (
-          <button
-            ref={folderRef}
-            type="button"
-            data-testid={`space-row-folder-${repo.key}`}
-            className={`${SECONDARY} shrink-0 whitespace-nowrap`}
-            title={i18n._("Pairs it with its folder on this device")}
-            disabled={disabled || running}
-            onClick={() => void askFolder("folder")}
-          >
-            {i18n._("Choose folder…")}
-          </button>
+        {needsFolder || showMembers || showMove || controlButton ? (
+          <div className="ml-auto flex max-w-full flex-wrap items-center justify-end gap-1 @xs:shrink-0">
+            {needsFolder ? (
+              <button
+                ref={folderRef}
+                type="button"
+                data-testid={`space-row-folder-${repo.key}`}
+                className={`${SECONDARY} shrink-0 whitespace-nowrap`}
+                title={i18n._("Pairs it with its folder on this device")}
+                disabled={disabled || running}
+                onClick={() => void askFolder("folder")}
+              >
+                {i18n._("Choose folder…")}
+              </button>
+            ) : null}
+            {showMembers ? (
+              <button
+                ref={membersRef}
+                type="button"
+                data-testid={`space-row-members-${repo.key}`}
+                aria-label={i18n._({ id: "Members", comment: "list the people the host lets read a spex repository" })}
+                title={i18n._({ id: "Members", comment: "list the people the host lets read a spex repository" })}
+                aria-expanded={opened === "members"}
+                className={`${SECONDARY} shrink-0 whitespace-nowrap`}
+                disabled={disabled}
+                onClick={() => setOpened((was) => (was === "members" ? undefined : "members"))}
+              >
+                {/* Below @md the control keeps its name and shows its mark
+                    (DR-041). */}
+                <span className="hidden @md:inline">
+                  {i18n._({ id: "Members", comment: "list the people the host lets read a spex repository" })}
+                </span>
+                <Icon name="list" className="h-3.5 w-3.5 @md:hidden" />
+              </button>
+            ) : null}
+            {showMove ? (
+              <button
+                ref={moveRef}
+                type="button"
+                data-testid={`space-row-move-${repo.key}`}
+                // The long name is its title and its accessible name; the
+                // label keeps to the row's budget (space-28, DR-041).
+                aria-label={moving ? undefined : moveName}
+                title={moveName}
+                aria-expanded={opened === "move"}
+                className={`${SECONDARY} shrink-0 whitespace-nowrap`}
+                disabled={disabled || moving}
+                onClick={() => setOpened((was) => (was === "move" ? undefined : "move"))}
+              >
+                {moving
+                  ? i18n._({ id: "Moving…", comment: "the Move control, while the host moves the spex repository" })
+                  : i18n._({ id: "Move…", comment: "open the groups a spex repository may move to; its full name is 'Move to another group'" })}
+              </button>
+            ) : null}
+            {controlButton}
+          </div>
         ) : null}
-        {showMembers ? (
-          <button
-            ref={membersRef}
-            type="button"
-            data-testid={`space-row-members-${repo.key}`}
-            aria-label={i18n._({ id: "Members", comment: "list the people the host lets read a spex repository" })}
-            title={i18n._({ id: "Members", comment: "list the people the host lets read a spex repository" })}
-            aria-expanded={opened === "members"}
-            className={`${SECONDARY} shrink-0 whitespace-nowrap`}
-            disabled={disabled}
-            onClick={() => setOpened((was) => (was === "members" ? undefined : "members"))}
-          >
-            {/* Below @md the control keeps its name and shows its mark
-                (DR-041). */}
-            <span className="hidden @md:inline">
-              {i18n._({ id: "Members", comment: "list the people the host lets read a spex repository" })}
-            </span>
-            <Icon name="list" className="h-3.5 w-3.5 @md:hidden" />
-          </button>
-        ) : null}
-        {showMove ? (
-          <button
-            ref={moveRef}
-            type="button"
-            data-testid={`space-row-move-${repo.key}`}
-            // The long name is its title and its accessible name; the
-            // label keeps to the row's budget (space-28, DR-041).
-            aria-label={moving ? undefined : moveName}
-            title={moveName}
-            aria-expanded={opened === "move"}
-            className={`${SECONDARY} shrink-0 whitespace-nowrap`}
-            disabled={disabled || moving}
-            onClick={() => setOpened((was) => (was === "move" ? undefined : "move"))}
-          >
-            {moving
-              ? i18n._({ id: "Moving…", comment: "the Move control, while the host moves the spex repository" })
-              : i18n._({ id: "Move…", comment: "open the groups a spex repository may move to; its full name is 'Move to another group'" })}
-          </button>
-        ) : null}
-        {controlButton}
       </div>
       {refusal && !running ? (
         <p id={captionId} data-testid={captionId} className="pl-6 text-xs text-neutral-500">
@@ -1090,6 +1113,7 @@ function RepositoryRow({
           {error}
         </p>
       ) : null}
+      <PlacementLines groups={groups} repo={repo} now={now} dismissed={dismissed} />
       {opened === "pick" ? (
         <GroupPicker groups={groups} repo={repo} connected={connected} onClose={() => close()} onNote={onNote} />
       ) : null}

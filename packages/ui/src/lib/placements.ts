@@ -8,7 +8,9 @@
 // creation waits at. Pure functions over the state the core sends; the
 // surfaces render them.
 
-import type { PlacementState, RepositoryState } from "@sublang/spex-core/protocol";
+import type { GroupsState, InstanceState, PlacementState, RepositoryState } from "@sublang/spex-core/protocol";
+
+import { hostNameOf, instanceName, instanceOf, signedInInstances } from "./instances.js";
 
 /** The placements the clone holds (space-87, storage-34): its remotes
  * in the order added, the path placement last. */
@@ -45,14 +47,6 @@ export function rowPlacement(repo: RepositoryState): PlacementState | undefined 
   return keyPlacement(repo) ?? listedPlacement(repo);
 }
 
-/** The wait a row reads in place of its state until each placement has
- * its line (space-64): its first instance placement's, else, while it
- * holds none, the first line's that waits. */
-export function rowWaiting(repo: RepositoryState): PlacementState["waiting"] {
-  const key = instancePlacements(repo)[0];
-  return key ? key.waiting : (waitingOf(repo)?.waiting ?? null);
-}
-
 /** A row's line at an instance, by its origin; null names the path
  * placement (space-29, space-87). */
 export function placementAt(repo: RepositoryState, origin: string | null): PlacementState | undefined {
@@ -63,4 +57,39 @@ export function placementAt(repo: RepositoryState, origin: string | null): Place
  * space-87). */
 export function waitingOf(repo: RepositoryState): PlacementState | undefined {
   return repo.placements.find((placement) => placement.waiting !== null);
+}
+
+/** How a line names an instance (space-62, space-87): its display name
+ * as the home last read it, else its origin's host name — an instance
+ * this home does not list among them. */
+export function instanceNameAt(state: GroupsState, origin: string): string {
+  const instance = instanceOf(state, origin);
+  return instance ? instanceName(instance) : hostNameOf(origin);
+}
+
+/** What a placement's line is named by (space-87): its instance, or,
+ * for the path placement, its remote as a report reads it (space-15),
+ * which the core sends as its path. */
+export function placementName(state: GroupsState, line: PlacementState): string {
+  return line.instance === null ? line.path : instanceNameAt(state, line.instance);
+}
+
+/** A placement's last sync (space-61): this device's last completed
+ * sync with it, else the last one its clone holds — current where the
+ * clone's `spex` is still that placement's — else none. */
+export function placementLastSync(line: PlacementState | undefined): { at: number; current: boolean } | null {
+  if (line?.lastSync) return { at: line.lastSync.at, current: true };
+  return line?.branch?.agreed ?? null;
+}
+
+/** The instance governing a placement (space-61, space-60): its own
+ * where signed in; where it reads reachable or read-only through a
+ * signed-in instance it follows, the first signed-in one; else its own,
+ * signed out. None for the path placement, which no instance governs. */
+export function governingOfPlacement(state: GroupsState, line: PlacementState): InstanceState | undefined {
+  if (line.instance === null) return undefined;
+  const own = instanceOf(state, line.instance);
+  if (own?.signedIn) return own;
+  if (line.state === "reachable" || line.state === "read-only") return signedInInstances(state)[0] ?? own;
+  return own;
 }

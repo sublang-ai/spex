@@ -1106,6 +1106,8 @@ export function SyncTab({
   repo,
   now,
   connected,
+  dismissed,
+  onDismiss,
   onOpenSession,
   onNote,
 }: {
@@ -1113,6 +1115,11 @@ export function SyncTab({
   repo: RepositoryState;
   now: number;
   connected: boolean;
+  /** The sync phase whose outcome the reader dismissed: the surface
+   * holds it, so its row's placement lines put the same outcomes away
+   * (space-87). */
+  dismissed?: string;
+  onDismiss(phase: string): void;
   onOpenSession(sessionId: string): void;
   onNote: Note;
 }) {
@@ -1135,7 +1142,6 @@ export function SyncTab({
   // outcome that landed first.
   const [accepted, setAccepted] = useState<{ where: "check" | "apply" | "retry" | "stop"; key: string }>();
   const [error, setError] = useState<{ where: "check" | "apply" | "retry"; message: string }>();
-  const [dismissed, setDismissed] = useState<string>();
   const lastSyncInput = useRef<{ choices?: Record<string, Side>; join?: boolean }>({});
 
   // The picker's choices outlive a stop and a re-plan: a choice for a
@@ -1322,7 +1328,7 @@ export function SyncTab({
               type="button"
               data-testid="space-dismiss"
               className={SECONDARY}
-              onClick={() => setDismissed(phaseKey)}
+              onClick={() => onDismiss(phaseKey)}
             >
               {i18n._({ id: "Dismiss", comment: "put this outcome card away" })}
             </button>
@@ -1353,7 +1359,7 @@ export function SyncTab({
               type="button"
               data-testid="space-dismiss"
               className={SECONDARY}
-              onClick={() => setDismissed(phaseKey)}
+              onClick={() => onDismiss(phaseKey)}
             >
               {i18n._({ id: "Dismiss", comment: "put this outcome card away" })}
             </button>

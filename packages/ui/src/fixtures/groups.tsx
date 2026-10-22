@@ -26,7 +26,7 @@ import type {
 
 import { SpaceSurface } from "../components/SpaceSurface.js";
 import { deliverServerMessageForTests, setClientForTests, useAppStore } from "../state/store.js";
-import { namespace, placementState, rowOf, type RowOver } from "./groups-state.js";
+import { NO_CAN, namespace, placementState, rowOf, type RowOver } from "./groups-state.js";
 
 export { NO_CAN, namespace, placementState, type RowOver } from "./groups-state.js";
 
@@ -350,6 +350,144 @@ export function twoInstances(over: HomeOver = {}, repos: RepositoryState[] = [re
         account: { id: "70", login: "jada", displayName: "Jada", canCreateGroup: false },
         groups: [namespace("jada")],
       }),
+    ],
+  };
+}
+
+/** The project at the first instance alone, whose placement file names
+ * a repository the second lists (space-95). */
+export const BETA = "@spex.example/jane/beta-spex";
+/** A project on this device only, in your own group's folder. */
+export const GAMMA = "jane/gamma-spex";
+/** A group's own spex repository at the first instance. */
+export const ACME = "@spex.example/acme/acme-spex";
+
+/**
+ * A home signed in to two instances, as space-95 arranges it (DR-128):
+ * the opened project placed at both — its key placement at the first in
+ * your namespace, its second in the second's `workshop`, whose listing
+ * names it as placed there; a project at the first alone whose placement
+ * file names a repository the second's `workshop` lists, with two
+ * members; a local-only project; a group's own spex repository in the
+ * first's `acme`; and your own group's own repository placed at both,
+ * which each namespace lists. `placedAt` is what the files say.
+ */
+export function twoPlacementsHome(): GroupsState {
+  const may = { manageMembers: true, transfer: true };
+  const academy = repo({
+    placedAt: [ORIGIN, SECOND],
+    lastSync: { at: NOW - 5 * MIN, sent: 1, received: 0 },
+    can: may,
+    placements: [
+      placement({ lastSync: { at: NOW - 5 * MIN, sent: 1, received: 0 }, can: may }),
+      placementState({
+        instance: SECOND,
+        path: "workshop/academy-spex",
+        id: "52",
+        members: 2,
+        visibility: "private",
+        branch: { ...BRANCH, ahead: 0, behind: 0 },
+        noticed: true,
+        lastSync: { at: NOW - HOUR, sent: 0, received: 1 },
+        can: may,
+      }),
+    ],
+  });
+  const beta = repo({
+    key: BETA,
+    name: "beta-spex",
+    id: "43",
+    remote: "jane/beta-spex",
+    code: "https://github.com/jane/beta.git",
+    folder: "/Users/jane/code/beta",
+    placedAt: [ORIGIN, SECOND],
+    lastSync: { at: NOW - 2 * HOUR, sent: 2, received: 0 },
+    can: may,
+    placements: [
+      placement({ path: "jane/beta-spex", id: "43", lastSync: { at: NOW - 2 * HOUR, sent: 2, received: 0 }, can: may }),
+      placementState({
+        instance: SECOND,
+        path: "workshop/beta-spex",
+        id: "53",
+        attached: false,
+        state: "absent",
+        members: 2,
+        visibility: "private",
+      }),
+    ],
+  });
+  const gamma = repo({
+    key: GAMMA,
+    name: "gamma-spex",
+    instance: null,
+    id: null,
+    remote: null,
+    code: "https://github.com/jane/gamma.git",
+    folder: "/Users/jane/code/gamma",
+    state: "local-only",
+    branch: null,
+    members: null,
+    visibility: null,
+  });
+  const acme = repo({
+    key: ACME,
+    name: "acme-spex",
+    id: "60",
+    remote: "acme/acme-spex",
+    code: null,
+    folder: null,
+    members: 3,
+    lastSync: { at: NOW - 4 * HOUR, sent: 0, received: 2 },
+    placedAt: [ORIGIN],
+  });
+  const own = ownRepo({
+    placedAt: [ORIGIN, SECOND],
+    placements: [
+      placement({ path: OWN, id: "7", branch: null, lastSync: { at: NOW - 3 * HOUR, sent: 1, received: 0 } }),
+      placementState({
+        instance: SECOND,
+        path: "jada/jada-spex",
+        id: "71",
+        members: 1,
+        visibility: "private",
+        noticed: true,
+        lastSync: { at: NOW - 3 * HOUR, sent: 1, received: 0 },
+      }),
+    ],
+  });
+  const home = twoInstances({}, [academy, beta]);
+  const [first, second] = home.instances;
+  const ownPlaced = [{ key: OWN, name: "jane-spex" }];
+  return {
+    ...home,
+    own: { ...home.own, repositories: [own, gamma] },
+    instances: [
+      {
+        ...first!,
+        groups: [
+          { id: "3", login: null, mine: false, fullPath: "acme", name: "Acme", can: NO_CAN, placed: [], repositories: [acme] },
+          { ...namespace("jane", [academy, beta]), placed: ownPlaced },
+        ],
+      },
+      {
+        ...second!,
+        groups: [
+          {
+            id: "81",
+            login: null,
+            mine: false,
+            fullPath: "workshop",
+            name: "Workshop",
+            can: NO_CAN,
+            placed: [
+              { key: KEY, name: "academy-spex" },
+              { key: BETA, name: "beta-spex" },
+            ],
+            repositories: [],
+          },
+          { ...namespace("jada"), placed: ownPlaced },
+        ],
+      },
     ],
   };
 }

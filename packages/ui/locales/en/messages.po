@@ -115,7 +115,7 @@ msgstr "{actor} · Turn {turn}"
 msgid "{adapter} is not ready — check Settings"
 msgstr "{adapter} is not ready — check Settings"
 
-#: src/components/SpaceGroups.tsx
+#: src/lib/space.ts
 msgid "{ahead, plural, one {# commit} other {# commits}} ahead, {behind, plural, one {# commit} other {# commits}} behind · checked {at}"
 msgstr "{ahead, plural, one {# commit} other {# commits}} ahead, {behind, plural, one {# commit} other {# commits}} behind · checked {at}"
 
@@ -541,6 +541,7 @@ msgid "{stage} not found beside this playbook's module"
 msgstr "{stage} not found beside this playbook's module"
 
 #: src/components/SpaceGroups.tsx
+#: src/lib/space.ts
 msgid "{state} · last synced {at}"
 msgstr "{state} · last synced {at}"
 
@@ -555,8 +556,10 @@ msgstr "{step} stopped"
 
 #. {step} is the sync step's name; {message} is the cause the host gave
 #. {step} is the sync step's name; {message} is the cause the host gave
+#. {step} is the sync step's name; {message} is the cause the host gave
 #: src/components/SpaceSurface.tsx
 #: src/components/SpaceSync.tsx
+#: src/lib/space.ts
 msgid "{step} stopped — {message}"
 msgstr "{step} stopped — {message}"
 
@@ -1235,6 +1238,11 @@ msgstr "back to {id}"
 msgid "Back to the playbook list — the session stays as it is"
 msgstr "Back to the playbook list — the session stays as it is"
 
+#. a placement's line: the sync left its copy behind this device's; another Sync carries it
+#: src/lib/space.ts
+msgid "Behind — Sync again"
+msgstr "Behind — Sync again"
+
 #: src/components/ProjectsSurface.tsx
 msgid "behind upstream"
 msgstr "behind upstream"
@@ -1287,6 +1295,7 @@ msgid "Brings it to this device"
 msgstr "Brings it to this device"
 
 #: src/components/SpaceSync.tsx
+#: src/lib/space.ts
 msgid "Brought {received}; nothing sent"
 msgstr "Brought {received}; nothing sent"
 
@@ -2556,6 +2565,7 @@ msgstr "Every session goes there whole — hidden parts and attachments included
 
 #: src/components/SpaceSurface.tsx
 #: src/components/SpaceSync.tsx
+#: src/lib/space.ts
 msgid "Everything is in sync"
 msgstr "Everything is in sync"
 
@@ -3565,6 +3575,7 @@ msgstr "needs your choice"
 
 #: src/components/SpaceSurface.tsx
 #: src/components/SpaceSync.tsx
+#: src/lib/space.ts
 msgid "Needs your choice"
 msgstr "Needs your choice"
 
@@ -5814,6 +5825,7 @@ msgid "Synced {age}"
 msgstr "Synced {age}"
 
 #: src/components/SpaceSync.tsx
+#: src/lib/space.ts
 msgid "Synced {age} · {sent} sent · {received} received"
 msgstr "Synced {age} · {sent} sent · {received} received"
 
@@ -6333,6 +6345,7 @@ msgstr "unrelated history"
 
 #: src/components/SpaceSurface.tsx
 #: src/components/SpaceSync.tsx
+#: src/lib/space.ts
 msgid "Unrelated history"
 msgstr "Unrelated history"
 
@@ -6493,6 +6506,11 @@ msgstr "Waiting for a member who can create it in {group}"
 #: src/lib/space.ts
 msgid "Waiting for a member who can prepare its branch in {group}"
 msgstr "Waiting for a member who can prepare its branch in {group}"
+
+#. a placement's line: its first push waits for the sharing notice to be seen; Continue stands beside it
+#: src/lib/space.ts
+msgid "Waiting for you to continue"
+msgstr "Waiting for you to continue"
 
 #: src/components/CompileBand.tsx
 msgid "waiting for your queued message"

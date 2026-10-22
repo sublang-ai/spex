@@ -695,8 +695,14 @@ describe("GROUPS: the groups list and its rows (space-1, space-61, space-64)", (
     expect(screen.getByTestId("space-heading-beside-jane1").className).toContain("text-neutral-500");
     expect(screen.queryByTestId("space-heading-beside-lab")).toBeNull();
     expect(screen.queryByTestId("space-heading-beside-@jane")).toBeNull();
-    // In each group the rows stand in the core's order, its own first.
-    expect(within(groups[2]!).getAllByRole("listitem").map((item) => item.dataset.testid)).toEqual([
+    // In each group the rows stand in the core's order, its own first;
+    // a row's placement lines are items of its own list (space-87).
+    const rowsOf = (group: HTMLElement) =>
+      within(group)
+        .getAllByRole("listitem")
+        .map((item) => item.dataset.testid)
+        .filter((id) => id?.startsWith("space-row-"));
+    expect(rowsOf(groups[2]!)).toEqual([
       "space-row-@spex.example/acme/team/team-spex",
       "space-row-@spex.example/acme/team/academy-spex",
       "space-row-@spex.example/acme/team/docs-spex",
@@ -757,7 +763,7 @@ describe("GROUPS: the groups list and its rows (space-1, space-61, space-64)", (
     }
   });
 
-  test("a reachable row reads its recorded sync, else the last one its clone holds (space-61)", async () => {
+  test("space-61, space-66: a reachable row and its placement's line read its recorded sync, else the last one its clone holds", async () => {
     const held = (at: number, current: boolean) => ({ ...BRANCH, agreed: { at, current } });
     const recorded = NOW - 5 * MIN;
     const agreedAt = NOW - 3 * HOUR;
@@ -777,6 +783,13 @@ describe("GROUPS: the groups list and its rows (space-1, space-61, space-64)", (
       expect(state.textContent, phrase).toBe(phrase);
       // The full moment rides the title (DR-010 §2).
       expect(state.getAttribute("title"), phrase).toBe(at === null ? phrase : absoluteTitle(at));
+      // Its placement's line reads the same last sync, its own ahead and
+      // behind beside it in the title (space-87, space-8).
+      const line = within(within(screen.getByTestId(`space-row-${KEY}`)).getByTestId(`space-line-${ORIGIN}`)).getByTestId("space-line-state");
+      expect(line.textContent, phrase).toBe(phrase);
+      expect(line.getAttribute("title"), phrase).toBe(
+        `${at === null ? phrase : absoluteTitle(at)} · 2 commits ahead, 1 commit behind · checked ${absoluteTitle(BRANCH.checkedAt!)}`,
+      );
       cleanup();
     }
     // In the reader's language, the moment as the locale writes it.
@@ -815,7 +828,7 @@ describe("GROUPS: the groups list and its rows (space-1, space-61, space-64)", (
     await waitFor(() => expect(calls("space.get")).toHaveLength(2));
   });
 
-  test("a group's own repository waiting on someone's rights reads the step and group, the host's words in the title (space-64)", async () => {
+  test("space-64, space-87: a waiting creation's phrase stands on its line, the host's words in its title, the row reading On this device only", async () => {
     const waiting = (step: "create" | "branch") =>
       repo({
         key: "@spex.example/acme/team/team-spex",
@@ -833,7 +846,15 @@ describe("GROUPS: the groups list and its rows (space-1, space-61, space-64)", (
       ["branch", "Waiting for a member who can prepare its branch in acme/team"],
     ] as const) {
       await renderGroups(withGroups(base(), teamGroup([waiting(step)])), { open: false });
-      const state = screen.getByTestId("space-repo-state-@spex.example/acme/team/team-spex");
+      // The row holds no placement: it reads local only (space-61).
+      expect(screen.getByTestId("space-repo-state-@spex.example/acme/team/team-spex").textContent).toBe("On this device only");
+      // The step waits on the line of the instance it waits at, the
+      // group named, the host's words in its title.
+      const line = within(screen.getByTestId("space-lines-@spex.example/acme/team/team-spex")).getByTestId(`space-line-${ORIGIN}`);
+      expect(line.dataset.attached).toBe("false");
+      expect(within(line).getByTestId("space-line-instance").textContent).toBe("Spex Example");
+      expect(within(line).getByTestId("space-line-at").textContent).toBe("acme/team/team-spex");
+      const state = within(line).getByTestId("space-line-state");
       expect(state.textContent).toBe(phrase);
       expect(state.getAttribute("title")).toBe("403 Forbidden: you need at least the Maintainer role");
       // A group's own repository is made at its first session, never

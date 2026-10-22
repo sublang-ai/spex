@@ -115,7 +115,7 @@ msgstr "{actor} · 第 {turn} 轮"
 msgid "{adapter} is not ready — check Settings"
 msgstr "{adapter} 未就绪 — 请查看设置"
 
-#: src/components/SpaceGroups.tsx
+#: src/lib/space.ts
 msgid "{ahead, plural, one {# commit} other {# commits}} ahead, {behind, plural, one {# commit} other {# commits}} behind · checked {at}"
 msgstr "领先 {ahead, plural, other {# 个提交}}，落后 {behind, plural, other {# 个提交}} · {at} 检查过"
 
@@ -541,6 +541,7 @@ msgid "{stage} not found beside this playbook's module"
 msgstr "在该规程的模块旁未找到 {stage}"
 
 #: src/components/SpaceGroups.tsx
+#: src/lib/space.ts
 msgid "{state} · last synced {at}"
 msgstr "{state} · 上次同步于 {at}"
 
@@ -555,8 +556,10 @@ msgstr "{step}已停止"
 
 #. {step} is the sync step's name; {message} is the cause the host gave
 #. {step} is the sync step's name; {message} is the cause the host gave
+#. {step} is the sync step's name; {message} is the cause the host gave
 #: src/components/SpaceSurface.tsx
 #: src/components/SpaceSync.tsx
+#: src/lib/space.ts
 msgid "{step} stopped — {message}"
 msgstr "{step}已停止 — {message}"
 
@@ -1235,6 +1238,11 @@ msgstr "返回 {id}"
 msgid "Back to the playbook list — the session stays as it is"
 msgstr "返回规程列表 — 会话保持原样"
 
+#. a placement's line: the sync left its copy behind this device's; another Sync carries it
+#: src/lib/space.ts
+msgid "Behind — Sync again"
+msgstr "落后 — 请再次同步"
+
 #: src/components/ProjectsSurface.tsx
 msgid "behind upstream"
 msgstr "落后于上游"
@@ -1287,6 +1295,7 @@ msgid "Brings it to this device"
 msgstr "将它取到此设备上"
 
 #: src/components/SpaceSync.tsx
+#: src/lib/space.ts
 msgid "Brought {received}; nothing sent"
 msgstr "收到 {received}；未发出任何内容"
 
@@ -2556,6 +2565,7 @@ msgstr "每个会话都会完整地发往那里——包括隐藏部分和附件
 
 #: src/components/SpaceSurface.tsx
 #: src/components/SpaceSync.tsx
+#: src/lib/space.ts
 msgid "Everything is in sync"
 msgstr "全部已同步"
 
@@ -3565,6 +3575,7 @@ msgstr "需要你选择"
 
 #: src/components/SpaceSurface.tsx
 #: src/components/SpaceSync.tsx
+#: src/lib/space.ts
 msgid "Needs your choice"
 msgstr "需要你选择"
 
@@ -5814,6 +5825,7 @@ msgid "Synced {age}"
 msgstr "{age}同步"
 
 #: src/components/SpaceSync.tsx
+#: src/lib/space.ts
 msgid "Synced {age} · {sent} sent · {received} received"
 msgstr "{age}同步 · 发出 {sent} · 收到 {received}"
 
@@ -6333,6 +6345,7 @@ msgstr "历史互不相关"
 
 #: src/components/SpaceSurface.tsx
 #: src/components/SpaceSync.tsx
+#: src/lib/space.ts
 msgid "Unrelated history"
 msgstr "历史互不相关"
 
@@ -6493,6 +6506,11 @@ msgstr "等待能在 {group} 中创建它的成员"
 #: src/lib/space.ts
 msgid "Waiting for a member who can prepare its branch in {group}"
 msgstr "等待能在 {group} 中准备其分支的成员"
+
+#. a placement's line: its first push waits for the sharing notice to be seen; Continue stands beside it
+#: src/lib/space.ts
+msgid "Waiting for you to continue"
+msgstr "等待你继续"
 
 #: src/components/CompileBand.tsx
 msgid "waiting for your queued message"

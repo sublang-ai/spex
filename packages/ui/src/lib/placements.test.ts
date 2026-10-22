@@ -7,15 +7,15 @@
 
 import { describe, expect, test } from "vitest";
 
-import { placementState, repositoryRow } from "../fixtures/groups-state.js";
+import { groupsState, instanceState, placementState, repositoryRow } from "../fixtures/groups-state.js";
 import {
+  governingOfPlacement,
   heldPlacements,
   instancePlacements,
   keyPlacement,
   listedPlacement,
   placementAt,
   rowPlacement,
-  rowWaiting,
   waitingOf,
 } from "./placements.js";
 import { cloneHere, lastSyncOf } from "./space.js";
@@ -48,15 +48,6 @@ describe("placements", () => {
     expect(placementAt(placed, THIRD)).toBe(named);
     expect(placementAt(placed, "https://elsewhere.example")).toBeUndefined();
     expect(waitingOf(placed)).toBe(waiting);
-    // The row reads its key placement's wait, none here, not a later
-    // creation's (space-64).
-    expect(rowWaiting(placed)).toBeNull();
-    const preparing = repositoryRow(KEY, {
-      instance: FIRST,
-      state: "reachable",
-      placements: [{ ...first, waiting: { ...wait("acme"), step: "branch" } }, waiting],
-    });
-    expect(rowWaiting(preparing)).toEqual({ ...wait("acme"), step: "branch" });
 
     // A clone holding only the path placement: its key follows it, and
     // no instance placement stands.
@@ -72,7 +63,6 @@ describe("placements", () => {
     expect(listedPlacement(local)).toBeUndefined();
     expect(rowPlacement(local)).toBeUndefined();
     expect(waitingOf(local)).toBe(waiting);
-    expect(rowWaiting(local)).toEqual(wait("lab"));
 
     // A row an instance lists with no clone here reads its one listed
     // placement, which no clone holds.
@@ -106,5 +96,21 @@ describe("placements", () => {
     expect(lastSyncOf(repositoryRow(KEY, { state: "reachable", placements: [{ ...held, lastSync: { at, sent: 0, received: 2 } }, second] }))).toEqual({ at, current: true });
     expect(lastSyncOf(repositoryRow(KEY, { state: "reachable", placements: [{ ...held, branch: agreed }, second] }))).toEqual({ at: at - 60_000, current: false });
     expect(lastSyncOf(repositoryRow(KEY, { state: "reachable", placements: [held, second] }))).toBeNull();
+  });
+
+  test("space-61, space-60: a placement is governed by its own instance where signed in, by a signed-in one it follows where it reads reachable or read-only, else by its own, signed out; the path placement by none", () => {
+    const home = groupsState({
+      instances: [instanceState(FIRST, { signedIn: false }), instanceState(SECOND), instanceState(THIRD)],
+    });
+    const at = (origin: string, over: Parameters<typeof placementState>[0] = {}) =>
+      placementState({ instance: origin, path: "acme/academy-spex", ...over });
+    expect(governingOfPlacement(home, at(SECOND))?.origin).toBe(SECOND);
+    expect(governingOfPlacement(home, at(THIRD, { state: "unreachable" }))?.origin).toBe(THIRD);
+    // Its own signed out, a placement still read through a signed-in
+    // instance follows it; one read through none stays with its own.
+    expect(governingOfPlacement(home, at(FIRST))?.origin).toBe(SECOND);
+    expect(governingOfPlacement(home, at(FIRST, { state: "read-only" }))?.origin).toBe(SECOND);
+    expect(governingOfPlacement(home, at(FIRST, { state: "unreachable" }))?.origin).toBe(FIRST);
+    expect(governingOfPlacement(home, placementState({ path: "/srv/academy-spex.git" }))).toBeUndefined();
   });
 });

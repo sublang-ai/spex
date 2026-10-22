@@ -231,6 +231,11 @@ export function SpaceSurface({ onOpenSession, onOpenProject }: SpaceSurfaceProps
   const [refreshing, setRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState<string>();
   const [note, setNote] = useState("");
+  // The sync phase the reader dismissed on each repository's Sync tab,
+  // by its key: the outcome cards it put away, and the same outcomes on
+  // its row's placement lines (space-15, space-87), stay away while the
+  // surface stands, whichever row is open.
+  const [dismissed, setDismissed] = useState<Readonly<Record<string, string>>>({});
 
   const onNote = useCallback<Note>((text) => setNote(text), []);
   const signIn = useSignIn(groups, onNote);
@@ -353,6 +358,7 @@ export function SpaceSurface({ onOpenSession, onOpenProject }: SpaceSurfaceProps
               selected={selected}
               connected={connected}
               refreshes={refreshes}
+              dismissed={dismissed}
               signIn={signIn}
               onSelect={(key) => setSelected((current) => (current === key ? undefined : key))}
               onNote={onNote}
@@ -365,6 +371,8 @@ export function SpaceSurface({ onOpenSession, onOpenProject }: SpaceSurfaceProps
               repo={repo}
               now={now}
               connected={connected}
+              dismissed={dismissed[repo.key]}
+              onDismiss={(phase) => setDismissed((was) => ({ ...was, [repo.key]: phase }))}
               onOpenSession={onOpenSession}
               onNote={onNote}
             />
@@ -506,6 +514,8 @@ function RepositoryPanel({
   repo,
   now,
   connected,
+  dismissed,
+  onDismiss,
   onOpenSession,
   onNote,
 }: {
@@ -513,6 +523,9 @@ function RepositoryPanel({
   repo: RepositoryState;
   now: number;
   connected: boolean;
+  /** The sync phase the reader dismissed on its Sync tab. */
+  dismissed?: string;
+  onDismiss(phase: string): void;
   onOpenSession(sessionId: string): void;
   onNote: Note;
 }) {
@@ -557,10 +570,12 @@ function RepositoryPanel({
       id="space-repository"
       data-testid="space-repository"
       aria-label={repo.name}
-      // The explorer fills the pane and scrolls inside itself; the Sync
-      // tab keeps its whole height, so a long groups list scrolls the
-      // surface instead of laying the foot over its lists (space-28).
-      className={`flex min-w-0 flex-1 flex-col gap-3 ${tab === "explore" ? "min-h-0" : ""}`}
+      // The explorer fills the pane and scrolls inside itself, keeping a
+      // floor of 24rem, so a long groups list — a line per placement
+      // beneath each row (space-87) — scrolls the surface instead of
+      // folding the explorer under the foot; the Sync tab keeps its
+      // whole height for the same reason (space-28).
+      className={`flex min-w-0 flex-1 flex-col gap-3 ${tab === "explore" ? "min-h-96" : ""}`}
     >
       <div
         data-testid="space-repository-header"
@@ -614,6 +629,8 @@ function RepositoryPanel({
             repo={repo}
             now={now}
             connected={connected}
+            dismissed={dismissed}
+            onDismiss={onDismiss}
             onOpenSession={onOpenSession}
             onNote={onNote}
           />

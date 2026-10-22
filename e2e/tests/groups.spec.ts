@@ -309,6 +309,14 @@ test.describe("first start", () => {
     await section.getByTestId(`space-pick-group-${HOST_GROUP}`).click();
     await expect(page.getByTestId(`space-repo-state-${TEAM_KEY}`)).toHaveText("Synced just now", { timeout: 30_000 });
     await expect(page.getByTestId(`space-row-${TEAM_KEY}`)).toHaveAttribute("data-state", "reachable");
+    // Beneath the row, its one placement's line names the stand-in by its
+    // display name and the repository's path there, and says what the
+    // sync did there (space-87, space-12).
+    const line = page.getByTestId(`space-row-${TEAM_KEY}`).getByTestId(`space-line-${host.url}`);
+    await expect(line).toHaveAttribute("data-state", "reachable");
+    await expect(line.getByTestId("space-line-instance")).toHaveText("Stand-in Git host");
+    await expect(line.getByTestId("space-line-at")).toHaveText(TEAM_PATH);
+    await expect(line.getByTestId("space-line-state")).toHaveText(/^Synced just now/);
     await expect(page.getByTestId(`space-row-sync-${TEAM_KEY}`)).toHaveText("Sync");
     const clone = clonePath(app.dataDir, TEAM_KEY);
     expect(git(bareOf(host, TEAM_KEY), "rev-parse", "spex")).toBe(git(clone, "rev-parse", "spex"));
@@ -1625,6 +1633,7 @@ test.describe("fit", () => {
       '[data-testid="space-groups"] h2',
       '[data-testid="space-groups"] h3',
       '[data-testid^="space-row-"]',
+      '[data-testid^="space-line-"]',
       '[data-testid^="space-unit-"]',
       '[data-testid="space-picker"]',
       '[role="radiogroup"]',

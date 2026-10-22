@@ -12,7 +12,7 @@ import type { IntentInfo, ProjectInfo } from "@sublang/spex-core/protocol";
 
 import { useAppStore, type ProjectMeta } from "../state/store.js";
 import { i18n } from "../i18n.js";
-import { repositoryStatePhrase } from "../lib/space.js";
+import { recordsStatePhrase } from "../lib/space.js";
 import { allRepositories } from "../lib/instances.js";
 import { Icon } from "./Icon.js";
 import { InlineConfirm } from "./InlineConfirm.js";
@@ -97,8 +97,9 @@ function GitHubLine({ meta, projectId }: { meta?: ProjectMeta; projectId: string
 
 /** Where the project's records live (projects-4): its spex repository's
  * name with its group, and its state worded as the Groups surface
- * words its row (space-61) — read from the Groups state, which this
- * line asks for when nothing has read it yet. */
+ * words its row (space-61), or a placement's waiting step where one
+ * waits (space-64) — read from the Groups state, which this line asks
+ * for when nothing has read it yet. */
 function RecordsLine({ project, now }: { project: ProjectInfo; now: number }) {
   const space = useAppStore((state) => state.space);
   const loadSpace = useAppStore((state) => state.loadSpace);
@@ -108,7 +109,7 @@ function RecordsLine({ project, now }: { project: ProjectInfo; now: number }) {
   }, [connected, loadSpace]);
   const { key, name, group } = project.repository;
   const row = space ? allRepositories(space).find((repository) => repository.key === key) : undefined;
-  const state = row ? repositoryStatePhrase(row, now) : undefined;
+  const state = row ? recordsStatePhrase(row, now) : undefined;
   return (
     <div
       data-testid="overview-records"
