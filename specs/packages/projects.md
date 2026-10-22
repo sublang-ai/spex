@@ -146,11 +146,12 @@ The project palette's path row shall offer distinct "Add" (an existing repo) and
 
 #### projects-42
 
-Where the welcome page opens the first-project palette [[run-view-168](run-view.md#run-view-168)], the palette shall show a clearly clickable but neutral existing-folder choice before an optional manual existing-path entry and a separate expandable new-project path with its specs-scaffold option ([DR-133](../decisions/133-the-first-project-picker-leads-with-a-folder.md), [DR-134](../decisions/134-specs-first-welcome-and-distinct-project-paths.md)):
+Where the welcome page opens the first-project palette [[run-view-168](run-view.md#run-view-168)], the palette shall show a clearly clickable but neutral existing-folder choice before an optional manual existing-path entry and a separate expandable new-project path with its specs-scaffold option ([DR-133](../decisions/133-the-first-project-picker-leads-with-a-folder.md), [DR-134](../decisions/134-specs-first-welcome-and-distinct-project-paths.md), [DR-135](../decisions/135-welcome-flow-copy-and-scoped-academy-note.md)):
 
 - when the native folder picker is available, the folder choice shall receive initial focus;
 - without a native folder picker, the existing-path field shall receive initial focus;
 - where a folder picker is available, the manual existing-path field shall appear only when its alternative is chosen; opening the new-project path shall hide that manual field;
+- the creation form shall have no bottom link back to adding an existing repository; its existing-folder action shall remain available above the form, or where no native folder picker exists, an alternative above the form shall reopen the existing-path field;
 - the existing path shall name a Git repository already on disk, while the new path shall name a folder that Spex will create and initialize as a Git repository;
 - adding an existing repository and creating a new one shall keep their distinct core actions [[projects-1](#projects-1)] [[projects-3](#projects-3)].
 

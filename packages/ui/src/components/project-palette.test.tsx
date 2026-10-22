@@ -212,9 +212,18 @@ describe("projects-22: with no project, the palette is an add flow", () => {
     expect(screen.queryByTestId("palette-path")).toBeNull();
     expect(screen.getByText("New project folder path (not created yet)")).toBeTruthy();
     expect(screen.getByText("Spex will create this folder and initialize a Git repository.")).toBeTruthy();
-    fireEvent.click(screen.getByTestId("palette-create-back"));
+    expect(screen.queryByTestId("palette-create-back")).toBeNull();
+    expect(screen.getByTestId("palette-open-folder")).toBeTruthy();
+    expect(screen.queryByTestId("palette-manual-path-start")).toBeNull();
+  });
+
+  test("without a native picker, the existing path remains reachable above creation", () => {
+    renderPalette({ ...EMPTY, ownProjectOnly: true });
+    fireEvent.click(screen.getByTestId("palette-create-start"));
+    expect(screen.queryByTestId("palette-path")).toBeNull();
+    fireEvent.click(screen.getByTestId("palette-manual-path-start"));
     expect(screen.queryByTestId("palette-new-path")).toBeNull();
-    expect(document.activeElement).toBe(screen.getByTestId("palette-open-folder"));
+    expect(document.activeElement).toBe(screen.getByTestId("palette-path"));
   });
 
   test("new project expands its own path and keeps existing-path Add separate", async () => {

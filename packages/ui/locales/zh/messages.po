@@ -649,6 +649,14 @@ msgstr "← 返回"
 msgid "← Back to {surface}"
 msgstr "← 返回{surface}"
 
+#: src/components/CaptainHome.tsx
+msgid "→ Compiles natural-language playbooks into executable workflows"
+msgstr "→ 将自然语言规程编译为可执行流程"
+
+#: src/components/CaptainHome.tsx
+msgid "→ Coordinates AI implementation and review, leaving traceable changes"
+msgstr "→ 编排 AI 实现与复核，留下可追溯的改动"
+
 #. act: jump to the end of the transcript; ↓ stays as it is
 #. act: jump to the end of the transcript; ↓ stays as it is
 #. jump to the newest entry; the arrow is part of the pill
@@ -890,10 +898,6 @@ msgstr "添加规约包"
 #: src/components/ProjectPalette.tsx
 msgid "Add an existing Git repository or create a new project."
 msgstr "添加已有 Git 仓库，或创建全新项目。"
-
-#: src/components/ProjectPalette.tsx
-msgid "Add an existing repository instead"
-msgstr "改为添加已有仓库"
 
 #: src/components/ProjectGroup.tsx
 msgid "Add an intent to {project}"
@@ -5601,10 +5605,6 @@ msgstr "规约包需求"
 msgid "Specs"
 msgstr "规约"
 
-#: src/components/CaptainHome.tsx
-msgid "Specs clarify goals and acceptance criteria. Spex compiles natural-language playbooks into workflows that coordinate AI implementation and review, leaving traceable changes."
-msgstr "用规约明确目标与验收标准；Spex 将自然语言规程编译为执行流程，编排 AI 实现与复核，并留下可追溯的改动。"
-
 #: src/components/SpecView.tsx
 msgid "specs/ is present but holds no spec files yet."
 msgstr "specs/ 已存在，但还没有规约文件。"
@@ -5644,6 +5644,10 @@ msgstr "Spex 导航"
 #: src/components/LibrarySurface.tsx
 msgid "Spex repository shown"
 msgstr "显示的 spex 仓库"
+
+#: src/components/CaptainHome.tsx
+msgid "Spex uses specs to define goals and acceptance criteria"
+msgstr "Spex 用规约明确目标与验收标准"
 
 #: src/components/ProjectPalette.tsx
 msgid "Spex will create this folder and initialize a Git repository."

@@ -409,7 +409,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
                   {i18n._("Choose a project folder…")}
                 </button>
               ) : null}
-              {props.onPickFolder && !manualPath && !creating ? (
+              {!manualPath && (props.onPickFolder ? !creating : creating) ? (
                 <button
                   type="button"
                   data-testid="palette-manual-path-start"
@@ -509,17 +509,6 @@ export function ProjectPalette(props: ProjectPaletteProps) {
                     className="self-start rounded-md border border-neutral-300 px-3 py-2 text-sm font-medium hover:bg-neutral-100 disabled:opacity-40 dark:border-neutral-700 dark:hover:bg-neutral-800"
                   >
                     {i18n._("Create project")}
-                  </button>
-                  <button
-                    type="button"
-                    data-testid="palette-create-back"
-                    onClick={() => {
-                      setError(undefined);
-                      setCreating(false);
-                    }}
-                    className="self-start text-xs font-medium text-neutral-600 hover:text-brand-700 hover:underline dark:text-neutral-300"
-                  >
-                    {i18n._("Add an existing repository instead")}
                   </button>
                 </div>
               )}

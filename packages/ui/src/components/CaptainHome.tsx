@@ -277,11 +277,11 @@ export function CaptainHome(props: CaptainHomeProps) {
             {i18n._("Define checkable specs. Deliver through playbooks.")}
           </h1>
           <p className="mt-4 max-w-lg text-base leading-relaxed text-neutral-600 dark:text-neutral-300">
-            {i18n._(
-              "Specs clarify goals and acceptance criteria. Spex compiles natural-language playbooks into workflows that coordinate AI implementation and review, leaving traceable changes.",
-            )}
+            <span className="block">{i18n._("Spex uses specs to define goals and acceptance criteria")}</span>
+            <span className="block">{i18n._("→ Compiles natural-language playbooks into executable workflows")}</span>
+            <span className="block">{i18n._("→ Coordinates AI implementation and review, leaving traceable changes")}</span>
           </p>
-          <div className="mt-9 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
+          <div className="mt-9 flex flex-col items-start gap-3 sm:flex-row sm:items-start">
             <button
               type="button"
               data-testid="home-add-project"
@@ -290,23 +290,25 @@ export function CaptainHome(props: CaptainHomeProps) {
             >
               {i18n._("Add a local project")}
             </button>
-            <button
-              type="button"
-              data-testid="home-academy"
-              disabled={seeding || !connected}
-              onClick={() => void runAcademy()}
-              className="rounded-lg border border-neutral-300 px-5 py-3 text-sm font-medium text-neutral-700 hover:bg-neutral-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500 disabled:opacity-40 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800"
-            >
-              {seeding
-                ? i18n._("Seeding…")
-                : i18n._("Open the Academy example project")}
-            </button>
+            <div className="flex flex-col items-start gap-2">
+              <button
+                type="button"
+                data-testid="home-academy"
+                disabled={seeding || !connected}
+                onClick={() => void runAcademy()}
+                className="rounded-lg border border-neutral-300 px-5 py-3 text-sm font-medium text-neutral-700 hover:bg-neutral-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500 disabled:opacity-40 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800"
+              >
+                {seeding
+                  ? i18n._("Seeding…")
+                  : i18n._("Open the Academy example project")}
+              </button>
+              <p className="max-w-xs text-xs leading-relaxed text-neutral-500 dark:text-neutral-400">
+                {i18n._(
+                  "The Academy example creates a local project with specs to explore. It does not play a recorded task yet.",
+                )}
+              </p>
+            </div>
           </div>
-          <p className="mt-4 text-xs leading-relaxed text-neutral-500 dark:text-neutral-400">
-            {i18n._(
-              "The Academy example creates a local project with specs to explore. It does not play a recorded task yet.",
-            )}
-          </p>
           {configBroken ? (
             <div
               role="alert"

@@ -301,9 +301,10 @@ Where a project is registered and no session tab is active, when the Projects su
 
 #### run-view-168
 
-While no project is registered, the Projects surface shall show a welcome page naming checkable specs as the leading value and compiled playbooks as the way AI implementation and review are coordinated, with one primary "Add a local project" action [[projects-42](projects.md#projects-42)] and one secondary action to open the current Academy specs example [[projects-27](projects.md#projects-27)] ([DR-132](../decisions/132-a-welcome-page-before-the-first-project.md), [DR-133](../decisions/133-the-first-project-picker-leads-with-a-folder.md), [DR-134](../decisions/134-specs-first-welcome-and-distinct-project-paths.md)):
+While no project is registered, the Projects surface shall show a welcome page naming checkable specs as the leading value and compiled playbooks as the way AI implementation and review are coordinated, with one primary "Add a local project" action [[projects-42](projects.md#projects-42)] and one secondary action to open the current Academy specs example [[projects-27](projects.md#projects-27)] ([DR-132](../decisions/132-a-welcome-page-before-the-first-project.md), [DR-133](../decisions/133-the-first-project-picker-leads-with-a-folder.md), [DR-134](../decisions/134-specs-first-welcome-and-distinct-project-paths.md), [DR-135](../decisions/135-welcome-flow-copy-and-scoped-academy-note.md)):
 
 - the Academy action shall acknowledge seeding and report a refusal in place, and its copy shall not promise a recorded replay before one exists;
+- the value explanation shall use Spex as its common actor and three stacked, arrow-linked stages to show the path from specs through compiled playbooks to coordinated implementation and review; the Academy explanation shall sit with the Academy action, not below both actions;
 - the page shall hide the Captain chat, composer, agent identity, quick-start playbooks, and adapter-readiness warning;
 - the sidebar shall retain its compact project-palette control without a second prominent add control;
 - shared config errors shall remain visible with a Settings action [[run-view-44](#run-view-44)], and connection failures shall remain visible [[run-view-50](#run-view-50)].

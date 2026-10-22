@@ -649,6 +649,14 @@ msgstr "← Back"
 msgid "← Back to {surface}"
 msgstr "← Back to {surface}"
 
+#: src/components/CaptainHome.tsx
+msgid "→ Compiles natural-language playbooks into executable workflows"
+msgstr "→ Compiles natural-language playbooks into executable workflows"
+
+#: src/components/CaptainHome.tsx
+msgid "→ Coordinates AI implementation and review, leaving traceable changes"
+msgstr "→ Coordinates AI implementation and review, leaving traceable changes"
+
 #. act: jump to the end of the transcript; ↓ stays as it is
 #. act: jump to the end of the transcript; ↓ stays as it is
 #. jump to the newest entry; the arrow is part of the pill
@@ -890,10 +898,6 @@ msgstr "Add a spec package"
 #: src/components/ProjectPalette.tsx
 msgid "Add an existing Git repository or create a new project."
 msgstr "Add an existing Git repository or create a new project."
-
-#: src/components/ProjectPalette.tsx
-msgid "Add an existing repository instead"
-msgstr "Add an existing repository instead"
 
 #: src/components/ProjectGroup.tsx
 msgid "Add an intent to {project}"
@@ -5601,10 +5605,6 @@ msgstr "spec package requests"
 msgid "Specs"
 msgstr "Specs"
 
-#: src/components/CaptainHome.tsx
-msgid "Specs clarify goals and acceptance criteria. Spex compiles natural-language playbooks into workflows that coordinate AI implementation and review, leaving traceable changes."
-msgstr "Specs clarify goals and acceptance criteria. Spex compiles natural-language playbooks into workflows that coordinate AI implementation and review, leaving traceable changes."
-
 #: src/components/SpecView.tsx
 msgid "specs/ is present but holds no spec files yet."
 msgstr "specs/ is present but holds no spec files yet."
@@ -5644,6 +5644,10 @@ msgstr "Spex navigation"
 #: src/components/LibrarySurface.tsx
 msgid "Spex repository shown"
 msgstr "Spex repository shown"
+
+#: src/components/CaptainHome.tsx
+msgid "Spex uses specs to define goals and acceptance criteria"
+msgstr "Spex uses specs to define goals and acceptance criteria"
 
 #: src/components/ProjectPalette.tsx
 msgid "Spex will create this folder and initialize a Git repository."

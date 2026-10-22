@@ -7,6 +7,7 @@
 
 Accepted (2026-10-22) for the owner's P0-0 revision.
 Amends [DR-132](132-a-welcome-page-before-the-first-project.md) in the welcome copy and action order, and [DR-133](133-the-first-project-picker-leads-with-a-folder.md) in the first-project palette.
+The value explanation, Academy caption placement, and creation form's redundant link are amended by [DR-135](135-welcome-flow-copy-and-scoped-academy-note.md).
 
 ## Context
 
