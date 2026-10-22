@@ -1066,6 +1066,11 @@ msgstr "damaged transcript after record {seq}; the draft refuses everything but 
 msgid "deleted"
 msgstr "deleted"
 
+#. Storage diagnostic: a placement file under placements/ holds something other than its three lines, so it names no placement
+#: src/placements.ts
+msgid "does not read as format: 1, instance and id, one line each"
+msgstr "does not read as format: 1, instance and id, one line each"
+
 #. Refusal: a draft with that id is already on this device
 #: src/authoring.ts
 msgid "draft {id} already exists; open it"
@@ -1531,6 +1536,11 @@ msgstr "item-ID prefix \"{prefix}\" disagrees with basename \"{basename}\""
 msgid "items under unexpected section \"{section}\""
 msgstr "items under unexpected section \"{section}\""
 
+#. Storage diagnostic: a placement file under placements/ is named for another instance than the one it records, so it names no placement
+#: src/placements.ts
+msgid "its name is not the folder of the instance it names"
+msgstr "its name is not the folder of the instance it names"
+
 #. Why a state-root lock cannot be verified; the path stays as it is
 #: src/root-lease.ts
 msgid "its retired path {retired} is already occupied"
@@ -1751,6 +1761,11 @@ msgstr "no spex repository {key} on this device"
 #: src/authoring.ts
 msgid "Normalize"
 msgstr "Normalize"
+
+#. Storage diagnostic: the clone's placements/ is a file or a link, so no placement file in it is read
+#: src/placements.ts
+msgid "not a folder of placement files"
+msgstr "not a folder of placement files"
 
 #. The Git host found nothing a write named, and gave no words of its own; {host} is its display name
 #: src/space-groups.ts

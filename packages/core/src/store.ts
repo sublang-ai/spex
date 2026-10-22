@@ -36,7 +36,7 @@ import {
 import { occupied } from "./clone-moves.js";
 import { readJsonFile, StorageFormatError, VersionConflictError, writeApplicationFile } from "./files.js";
 import { defaultOwnName, Home, repositoryNameFor, splitKey, WORKSPACE_DEPTH } from "./home.js";
-import { readPlacements } from "./placements.js";
+import { filedIn, readPlacementFiles, readPlacements } from "./placements.js";
 import { folderRemote, needsGroupsMigration, migrateFormerHome } from "./migrate-home.js";
 import { deferredMoves, migrateInstances, needsInstancesMigration, settleDeferred, type DeferredMove } from "./migrate-instances.js";
 import { gitEnvironment, initializeClone } from "./storage-git.js";
@@ -658,7 +658,7 @@ export class Store {
     const placements = readPlacements((args) => {
       const run = spawnSync("git", ["-C", dir, ...args], { env: gitEnvironment(this.env), stdio: ["ignore", "pipe", "ignore"], timeout: 10_000 });
       return { ok: !run.error && run.status === 0, stdout: run.stdout?.toString("utf8") ?? "" };
-    }, key, this.homeFile, this.deferred);
+    }, key, this.homeFile, this.deferred, filedIn(dir));
     return placements[0]?.name ?? null;
   }
 
@@ -1650,6 +1650,9 @@ export class Store {
       ...(this.homeProblem ? [this.homeProblem] : []),
       ...this.readIntents().problems,
       ...repositories.flatMap((repository) => this.readProjectFile(repository).problem ?? []),
+      // A placement file that will not read names no placement, blocking
+      // nothing (storage-12, storage-41).
+      ...repositories.flatMap((repository) => readPlacementFiles(repository.dir).problems.map((problem) => ({ file: join(repository.dir, problem.file), reason: problem.reason, blocking: false }))),
       ...(this.prefsProblem ? [this.prefsProblem] : []),
       ...(this.cacheProblem ? [this.cacheProblem] : []),
     ];

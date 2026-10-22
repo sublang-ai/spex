@@ -439,6 +439,44 @@ test("storage-16: real Git branches forced to track a meta.yaml under packages/,
   } finally { dispose(); }
 });
 
+test("storage-11, storage-12, storage-41: a placement file is one unit chosen whole and a meta.yaml under placements/ forms no unit; the validator reports a placement file not of its encoding, one named for another instance and a placements that is no folder, each blocking nothing", async () => {
+  const { home, key, clone, commit, dispose } = setup();
+  const write = (path: string, text: string): void => { mkdirSync(dirname(join(clone, path)), { recursive: true }); writeFileSync(join(clone, path), text); };
+  const placed = (origin: string, id: string): string => `format: 1\ninstance: "${origin}"\nid: "${id}"\n`;
+  const file = "placements/@a.example.yaml";
+  try {
+    write(file, placed("https://a.example", "1")); write("placements/kit/meta.yaml", "base"); write("placements/kit/x.md", "base"); commit("base");
+    git(clone, "branch", "other");
+    write(file, placed("https://a.example", "2")); write("placements/kit/meta.yaml", "ours"); commit("ours");
+    git(clone, "checkout", "-q", "other");
+    write(file, placed("https://a.example", "3")); write("placements/kit/x.md", "theirs"); commit("theirs");
+    git(clone, "checkout", "-q", "spex");
+    const plan = planStorageMerge(clone, "HEAD", "other");
+    const unit = plan.units.find((u) => u.name === file);
+    assert.deepEqual([unit?.choice, unit?.paths], ["conflict", [file]], "each placement file its own unit");
+    assert.ok(!plan.units.some((u) => u.name === "placements/kit/"), "a meta.yaml under placements/ forms no unit");
+    assert.deepEqual(plan.units.filter((u) => u.name.startsWith("placements/kit/")).map((u) => [u.name, u.choice]),
+      [["placements/kit/meta.yaml", "ours"], ["placements/kit/x.md", "theirs"]], "each file there is its own unit");
+    merge(clone);
+    await selectStorageMerge(home, key, { [file]: "theirs" });
+    assert.equal(readFileSync(join(clone, file), "utf8"), placed("https://a.example", "3"));
+    assert.equal(git(clone, "diff", "--name-only", "--diff-filter=U"), "");
+
+    // A file not of its encoding, and one named for another instance than
+    // the one it names, name no placement and block nothing (storage-12).
+    write("placements/@b.example.yaml", placed("https://c.example", "4"));
+    write("placements/@d.example.yaml", "format: 1\n");
+    const reported = async (): Promise<unknown[]> => (await validateStorageTree(clone)).filter((d) => d.file.startsWith("placements")).map((d) => [d.file, d.reason, d.blocking]);
+    assert.deepEqual(await reported(), [
+      ["placements/@b.example.yaml", "its name is not the folder of the instance it names", false],
+      ["placements/@d.example.yaml", "does not read as format: 1, instance and id, one line each", false],
+    ]);
+    rmSync(join(clone, "placements"), { recursive: true });
+    writeFileSync(join(clone, "placements"), "not a folder");
+    assert.deepEqual(await reported(), [["placements", "not a folder of placement files", false]]);
+  } finally { dispose(); }
+});
+
 test("storage-16: through the apply seam, a file added under a spec package folder since the Save refuses the folder's replacement, that file kept", async () => {
   const { clone, commit, dispose } = setup();
   const skill = join(clone, "mine", "notes", "skills", "en", "notes", "SKILL.md");

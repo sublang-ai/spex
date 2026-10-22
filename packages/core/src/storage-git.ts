@@ -17,6 +17,7 @@ import { parseIntentFile, parsePrefs, parseProjectFile, type IntentFile, type St
 import { assertPlainDirectory, readJsonFile, StorageFormatError, UUID, writeApplicationFile } from "./files.js";
 import { Home } from "./home.js";
 import { i18n } from "./i18n.js";
+import { readPlacementFiles } from "./placements.js";
 import { acquireRootLease } from "./root-lease.js";
 
 export type StorageChoice = "ours" | "theirs";
@@ -55,9 +56,9 @@ export const portable = (file: string): boolean =>
 /** No spec package folder: what a caller naming none passes. */
 const NO_PACKAGES: ReadonlySet<string> = new Set();
 
-/** The record and settings paths, and the folders the catalog ignores,
- * no spec package folder lies in (storage-11). */
-export const NOT_PACKAGES = /^(?:config|sessions|intents|authoring|packages|skills|local|\.spex-uploads)\//;
+/** The record, settings and placement paths, and the folders the
+ * catalog ignores, no spec package folder lies in (storage-11). */
+export const NOT_PACKAGES = /^(?:config|sessions|intents|authoring|placements|packages|skills|local|\.spex-uploads)\//;
 
 /** The folders below a clone's root, outside its record and settings
  * paths and the folders the catalog ignores, that hold a spec package's
@@ -226,6 +227,9 @@ export async function validateStorageTree(dir_: string, options: ValidateStorage
   const diagnostics: StorageDiagnostic[] = [];
   const projectFile = join(dir, "project.json");
   if (validationPath(dir, "project.json", "file")) parseProjectFile(readJsonFile(projectFile), projectFile);
+  // A placement file that will not read names no placement and blocks
+  // nothing else (storage-12, storage-41).
+  for (const problem of readPlacementFiles(dir).problems) diagnostics.push({ file: problem.file, reason: problem.reason, blocking: false });
 
   const { createAssetStore } = await import("@sublang/playbook/session-assets");
   const intentsDir = join(dir, "intents");

@@ -1745,7 +1745,7 @@ test("git-host-24, space-83, git-host-5, space-61, space-30, space-63, space-1: 
   assert.deepEqual(rowsOf(after).filter((repository) => repository.id === team.id && repository.instance === first.url).map((repository) => [repository.key, repository.state]), [[`${hostFolder(first)}/${LOGIN}/team-spex@${team.id}`, "unreachable"]]);
 });
 
-test("git-host-25, space-84, space-60, git-host-22, git-host-9, space-5, space-11, space-12, space-32, space-61: two instances over one Git backend, the first signed out — a namespace repository both list reads reachable through the second, a Check host of it refused until it follows; its next Sync moves its clone under the second's folder with its remote renamed, its pair, session and sync preferences re-keyed and its last sync kept, then reads the second's catalog and pushes with a credential the second issued, its Save commit bearing the account there; your own group's own repository follows by its remote's rename alone; the repository the first lists alone reads unreachable, no transport running for it through the second's credential", async (t) => {
+test("git-host-25, space-84, space-60, storage-36, git-host-22, git-host-9, space-5, space-11, space-12, space-32, space-61: two instances over one Git backend, the first signed out — a namespace repository both list reads reachable through the second, a Check host of it refused until it follows; its next Sync moves its clone under the second's folder with its remote renamed, its placement file rewritten to the second and the first's deleted, its pair, session and sync preferences re-keyed and its last sync kept, then reads the second's catalog and pushes with a credential the second issued, its Save commit bearing the account there; your own group's own repository follows by its remote's rename alone; the repository the first lists alone reads unreachable, no transport running for it through the second's credential", async (t) => {
   const first = await startHost();
   const second = await startHost({ gitBackend: first, displayName: "Second stand-in" });
   // Both list the person's namespace there under one id; the first alone
@@ -1775,6 +1775,11 @@ test("git-host-25, space-84, space-60, git-host-22, git-host-9, space-5, space-1
   await home.client.waitRepository(mark, soloKey, (repository) => repository.state === "reachable" && repository.sync.phase === "idle", 30_000);
   const once = await home.client.settle("space.sync", { repository: aKey, noticed: true }, 30_000);
   assert.deepEqual([once.sync.phase, once.state], ["done", "reachable"], JSON.stringify(once.sync));
+  // The join named its placement at the first in a tracked file
+  // (storage-36).
+  const placed = (origin: string, id: string | null): string => `format: 1\ninstance: "${origin}"\nid: "${id ?? ""}"\n`;
+  assert.deepEqual(readdirSync(join(clonePath(home.dataDir, aKey), "placements")), [`${hostFolder(first)}.yaml`]);
+  assert.equal(readFileSync(join(clonePath(home.dataDir, aKey), "placements", `${hostFolder(first)}.yaml`), "utf8"), placed(first.url, a.id));
   const last = prefsOf(home.dataDir)[`sync:${aKey}:last`];
   assert.equal(typeof (last as { at?: unknown } | undefined)?.at, "number", "its last sync is recorded");
   const sessionId = await runTurn(home, aKey, "Before the follow");
@@ -1828,6 +1833,10 @@ test("git-host-25, space-84, space-60, git-host-22, git-host-9, space-5, space-1
   assert.deepEqual(git(clone, "remote").split("\n"), [hostFolder(second)]);
   assert.equal(git(clone, "config", "--get", "branch.spex.remote"), hostFolder(second), "its upstream follows");
   assert.equal(git(clone, "config", "--get", `remote.${hostFolder(second)}.spexId`), a.id);
+  // Its placement file follows the remote in that step: the second's
+  // naming the same id, the first's deleted (storage-36).
+  assert.deepEqual(readdirSync(join(clone, "placements")), [`${hostFolder(second)}.yaml`]);
+  assert.equal(readFileSync(join(clone, "placements", `${hostFolder(second)}.yaml`), "utf8"), placed(second.url, a.id));
   assert.deepEqual(atCompare, { last, former: [], remotes: [hostFolder(second)], spex: true }, "its last sync and fetched spex kept, re-keyed");
   assert.equal(Home.load(home.dataDir).keyForFolder(code), followedKey, "its pair follows it");
   assert.ok((await home.client.expectOk("session.list", {})).some((session) => session.id === sessionId && session.projectId === followedKey), "its session follows it");
@@ -1851,6 +1860,8 @@ test("git-host-25, space-84, space-60, git-host-22, git-host-9, space-5, space-1
   const ownSynced = await home.client.settle("space.sync", { repository: HOST_OWN }, 30_000);
   assert.deepEqual([ownSynced.sync.phase, ownSynced.state, ownSynced.instance, ownSynced.key], ["done", "reachable", second.url, HOST_OWN], JSON.stringify(ownSynced.sync));
   assert.deepEqual(git(ownClone(home.dataDir), "remote").split("\n"), [hostFolder(second)]);
+  assert.deepEqual(readdirSync(join(ownClone(home.dataDir), "placements")), [`${hostFolder(second)}.yaml`]);
+  assert.equal(readFileSync(join(ownClone(home.dataDir), "placements", `${hostFolder(second)}.yaml`), "utf8"), placed(second.url, ownSynced.id));
   const ownTransports = first.script.transportCredentials.slice(ownFrom).filter((entry) => entry.path.includes(`/${HOST_OWN}.git/`));
   assert.ok(ownTransports.length > 0, "its sync reaches the shared transport");
   assert.deepEqual([...new Set(ownTransports.map((entry) => entry.instance))], [second.url], "with credentials the second issued");

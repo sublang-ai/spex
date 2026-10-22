@@ -28,7 +28,7 @@ import { InstanceRefused, kebab, REMOTE_URL_KEYS, remoteNamesIn, splitKey, type 
 import { i18n } from "./i18n.js";
 import { canonicalOrigin, instanceFolder, instanceSegmentOf, isInstanceFolder, OriginRefused, parseOrigin, type OriginRefusal } from "./instance.js";
 import { isDeferredClone } from "./migrate-instances.js";
-import { keyPlacement, LEGACY_CREATED_KEY, LEGACY_ID_KEY, moveLegacyIds, PATH_PLACEMENT, PLACEMENT_CONFIG_KEYS, placementCreatedKey, placementIdKey, placementsIn, readPlacements, type Placement } from "./placements.js";
+import { deletePlacementFile, filedIn, keyPlacement, LEGACY_CREATED_KEY, LEGACY_ID_KEY, moveLegacyIds, PATH_PLACEMENT, PLACEMENT_CONFIG_KEYS, PLACEMENTS_DIR, placementCreatedKey, placementIdKey, placementsIn, readPlacements, writePlacementFile, type Placement } from "./placements.js";
 import type {
   GroupsState,
   InstanceGroupState,
@@ -586,6 +586,7 @@ export function spaceFamily(rel: string, isDirectory: boolean): string {
   if (parts[0] === UPLOAD_STAGING) return "upload staging";
   if (rel === "config" || rel === "config/playbook.config.yaml") return "Settings";
   if (rel === "project.json") return "code remote";
+  if (parts[0] === PLACEMENTS_DIR && (parts.length === 1 ? isDirectory : parts.length === 2 && !isDirectory && /\.yaml$/.test(base))) return "placement";
   if (rel === ".gitignore" || rel === ".gitattributes") return "sync rules";
   return isDirectory ? "Not a Spex folder" : "Not a Spex file";
 }
@@ -999,7 +1000,7 @@ class RepositorySync {
     return readPlacements((args) => {
       const run = this.git.runSync(args);
       return { ok: run.code === 0, stdout: run.stdout.toString("utf8") };
-    }, this.key, store.home, store.deferredMoves());
+    }, this.key, store.home, store.deferredMoves(), filedIn(this.dir));
   }
 
   /** The placements and the first one's facts, read again after a write
@@ -1203,6 +1204,26 @@ class RepositorySync {
     }
     if (this.upstreamName === from) this.upstreamName = folder;
     this.settleFacts();
+    // The placement's file follows its remote in the same step
+    // (storage-36, space-60): the followed instance's written, the
+    // former instance's deleted.
+    const followed = this.placements.find((placement) => placement.name === folder);
+    if (followed?.instance && followed.id !== null) {
+      this.writePlacement(followed.instance, followed.id);
+      if (isInstanceFolder(from)) {
+        try { deletePlacementFile(this.dir, from); }
+        catch (error) { console.error(`spex: the former placement file of ${this.key} stays: ${error instanceof Error ? error.message : String(error)}`); }
+      }
+    }
+  }
+
+  /** The clone's placement file at an instance (storage-36), written by
+   * the act that creates, joins or follows that placement: a write
+   * refused — a link or a file at `placements`, the clone gone — leaves
+   * the clone without it, reported. */
+  writePlacement(origin: string, id: string): void {
+    try { writePlacementFile(this.dir, origin, id); }
+    catch (error) { console.error(`spex: the placement file of ${this.key} at ${origin} is not written: ${error instanceof Error ? error.message : String(error)}`); }
   }
 
   /** This clone's own diagnostics: a pending merge, a refresh's finding,
@@ -1230,7 +1251,7 @@ class RepositorySync {
     // read.
     const store = this.host.store;
     const configured = await this.git.run(["config", "-z", "--get-regexp", PLACEMENT_CONFIG_KEYS]);
-    const placements = configured.code === 0 ? placementsIn(configured.stdout.toString("utf8"), this.key, store.home, store.deferredMoves()) : [];
+    const placements = configured.code === 0 ? placementsIn(configured.stdout.toString("utf8"), this.key, store.home, store.deferredMoves(), filedIn(this.dir)) : [];
     const upstreamRead = await this.git.run(["config", "--get", `branch.${SPEX_BRANCH}.remote`]);
     const upstreamName = upstreamRead.code === 0 ? upstreamRead.stdout.toString("utf8").trim() || null : null;
     this.placements = placements;
@@ -2145,8 +2166,10 @@ class RepositorySync {
   }
 
   /** Whether the saved clone still holds its exact generated bootstrap
-   * (space-59). Missing proof asks choices; commit subjects and Saves
-   * cannot prove that configuration or environment bytes are unowned. */
+   * (space-59), beside the placement files the core writes as it places
+   * the clone (storage-36), which hold nothing of the reader's own.
+   * Missing proof asks choices; commit subjects and Saves cannot prove
+   * that configuration or environment bytes are unowned. */
   private async holdsNothingOfItsOwn(head: string, saved: StorageTree, saves: ReadonlySet<string>): Promise<boolean> {
     const records = /^(?:sessions|intents|authoring)\//;
     if ([...saved.keys()].some((path) => records.test(path))) return false;
@@ -2168,8 +2191,10 @@ class RepositorySync {
     const limit = saves.size + 1;
     const log = (await this.git.ok(["log", "--no-show-signature", "-n", String(limit + 1), "--format=%H", head])).split("\n").filter(Boolean);
     if (log.length > limit || log.at(-1) !== bootstrap || !log.slice(0, -1).every((commit) => saves.has(commit))) return false;
-    const trees = (await this.git.ok(["rev-parse", `${head}^{tree}`, `${bootstrap}^{tree}`])).split("\n");
-    return trees.length === 2 && trees[0] === trees[1];
+    const entries = async (commit: string): Promise<string[]> => (await this.git.ok(["ls-tree", "-r", "-z", "--full-tree", commit]))
+      .split("\0").filter((line) => line !== "" && !line.slice(line.indexOf("\t") + 1).startsWith(`${PLACEMENTS_DIR}/`));
+    const [kept, generated] = [await entries(head), await entries(bootstrap)];
+    return kept.length === generated.length && kept.every((line, index) => line === generated[index]);
   }
 
   private markerPath(): string { return join(this.dir, APPLY_MARKER); }
@@ -3956,6 +3981,9 @@ export class SpaceManager {
       instance.attached.delete(repository.id);
       throw error;
     }
+    // The act names its placement in a tracked file, which its sync's
+    // Save commits (storage-36).
+    machine.writePlacement(instance.origin, repository.id);
     this.waiting.delete(machine.key);
     const picked = this.localOnly(machine.key);
     await this.moveAtPick(instance, machine, repository);
@@ -4310,6 +4338,11 @@ export class SpaceManager {
         return;
       }
       renameSync(dir, dest);
+      // The join names its placement in a tracked file: the bytes every
+      // device holding it writes, the clone's own where one pushed it
+      // (storage-36).
+      try { writePlacementFile(dest, instance.origin, id); }
+      catch (error) { console.error(`spex: the placement file of ${key} at ${instance.origin} is not written: ${error instanceof Error ? error.message : String(error)}`); }
       store.adoptRepositories();
       this.host.repositoriesChanged();
       const machine = this.machine(key);

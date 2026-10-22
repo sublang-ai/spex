@@ -1066,6 +1066,11 @@ msgstr "记录 {seq} 之后的对话记录已损坏；该草稿除“删除”�
 msgid "deleted"
 msgstr "已删除"
 
+#. Storage diagnostic: a placement file under placements/ holds something other than its three lines, so it names no placement
+#: src/placements.ts
+msgid "does not read as format: 1, instance and id, one line each"
+msgstr "无法按 format: 1、instance 与 id 各占一行读取"
+
 #. Refusal: a draft with that id is already on this device
 #: src/authoring.ts
 msgid "draft {id} already exists; open it"
@@ -1531,6 +1536,11 @@ msgstr "条目 ID 前缀“{prefix}”与文件名“{basename}”不一致"
 msgid "items under unexpected section \"{section}\""
 msgstr "规约条目位于非预期的章节“{section}”下"
 
+#. Storage diagnostic: a placement file under placements/ is named for another instance than the one it records, so it names no placement
+#: src/placements.ts
+msgid "its name is not the folder of the instance it names"
+msgstr "文件名不是其所记实例的文件夹名"
+
 #. Why a state-root lock cannot be verified; the path stays as it is
 #: src/root-lease.ts
 msgid "its retired path {retired} is already occupied"
@@ -1751,6 +1761,11 @@ msgstr "本设备上没有 spex 仓库 {key}"
 #: src/authoring.ts
 msgid "Normalize"
 msgstr "规范化"
+
+#. Storage diagnostic: the clone's placements/ is a file or a link, so no placement file in it is read
+#: src/placements.ts
+msgid "not a folder of placement files"
+msgstr "不是存放放置文件的文件夹"
 
 #. The Git host found nothing a write named, and gave no words of its own; {host} is its display name
 #: src/space-groups.ts
