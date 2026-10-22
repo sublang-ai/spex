@@ -132,7 +132,7 @@ The credential store shall encode `local/credentials.yaml` as exactly `{format: 
 - a write names the pair its writer read, or none; in one step, the file is read, that instance's pair compared with the named one in every field, and the file replaced only where they are equal, every other instance's pair kept and the file removed with the last pair;
 - where the pairs differ, nothing is written and the writer is told the pair changed meanwhile;
 - a malformed entry for that instance is refused by every read and write, except that a sign-out which could not read it removes it in one step, every other instance's pair kept, unless a well-formed pair stands there by then, which stays;
-- a file of another format, or with no hosts map, is refused and left as it is;
+- a file of another format, or with no hosts map, is refused and left as it is, no refusal, diagnostic or warning repeating the file's content and the format named only where it is a number;
 - no credential is written anywhere else but the member's own on a seat [[storage-44](#storage-44)] and the seats a desktop opened [[storage-45](#storage-45)], and no credential enters a tracked file or a remote URL [[space-5](space.md#space-5)].
 
 ### storage-44
