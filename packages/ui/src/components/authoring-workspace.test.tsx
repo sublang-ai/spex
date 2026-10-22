@@ -12,9 +12,11 @@
 // (playbook-library-57/58, playbook-library-30), the Enable tab's
 // prefill precedence, mismatch and spex repository
 // (playbook-library-61) and its role defaults (playbook-library-88),
-// Publish beneath it (playbook-library-93), Delete's confirm
-// (playbook-library-63), the example prefill (playbook-library-35),
-// and the 14-character budget on every workspace control (DR-041).
+// Publish beneath it (playbook-library-93) or "Sign in to publish at
+// <name>" by the project's instance and the home's
+// (playbook-library-111), Delete's confirm (playbook-library-63), the
+// example prefill (playbook-library-35), and the 14-character budget on
+// every workspace control (DR-041).
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
@@ -22,9 +24,11 @@ import type {
   CommandResults,
   ConfigState,
   DraftInfo,
+  GroupsState,
   ReadinessEntry,
   TmuxPlayRecord,
 } from "@sublang/spex-core/protocol";
+import { groupsState, instanceState, namespace, repositoryRow } from "../fixtures/groups-state.js";
 import { OWN_KEY, available, home } from "../fixtures/playbooks.js";
 
 afterEach(cleanup);
@@ -1719,12 +1723,67 @@ describe("playbook-library-93: Publish beneath the Enable form", () => {
     });
     expect(screen.getByTestId("publish-error").textContent).toBe("the registry refused me/triage 0.1.0: that version exists");
   });
+});
 
-  test("a signed-out home shows Sign in to publish in the control's place", async () => {
-    useAppStore.setState({ space: home({ account: null }) });
+describe("playbook-library-111: what stands beneath the Enable form by the project's instance and the home's", () => {
+  const ONE = "https://one.test";
+  const TWO = "https://two.test";
+
+  /** The Groups state the core would send: the home's instances in its
+   * list's order, the first its default, else the origin it was created
+   * with; the session's project in your namespace at Two, or local-only
+   * under your own group. */
+  function groups(project: "two" | "local", instances: { origin: string; name: string; signedIn: boolean }[], created = ONE): GroupsState {
+    const row = repositoryRow(PROJECT_ID, project === "two" ? { instance: TWO, state: "reachable" } : {});
+    const own = repositoryRow(OWN_KEY, { own: true, instance: instances[0]?.origin ?? null });
+    return groupsState({
+      defaultInstance: instances[0]?.origin ?? created,
+      own: { name: "me", named: instances.length === 0, repositories: project === "local" ? [own, row] : [own] },
+      instances: instances.map(({ origin, name, signedIn }) =>
+        instanceState(origin, {
+          displayName: name,
+          signedIn,
+          groups: [namespace("me", project === "two" && origin === TWO ? [row] : [])],
+        }),
+      ),
+    });
+  }
+
+  test.each([
+    {
+      project: "at Two",
+      instances: "One and Two, both signed in",
+      space: groups("two", [{ origin: ONE, name: "One", signedIn: true }, { origin: TWO, name: "Two", signedIn: true }]),
+      beneath: "Publish",
+    },
+    {
+      project: "at Two",
+      instances: "One signed in, Two signed out",
+      space: groups("two", [{ origin: ONE, name: "One", signedIn: true }, { origin: TWO, name: "Two", signedIn: false }]),
+      beneath: "Sign in to publish at Two",
+    },
+    {
+      project: "local-only",
+      instances: "One signed in, Two signed out",
+      space: groups("local", [{ origin: ONE, name: "One", signedIn: true }, { origin: TWO, name: "Two", signedIn: false }]),
+      beneath: "Publish",
+    },
+    {
+      project: "local-only",
+      instances: "One signed out, Two signed in",
+      space: groups("local", [{ origin: ONE, name: "One", signedIn: false }, { origin: TWO, name: "Two", signedIn: true }]),
+      beneath: "Sign in to publish at One",
+    },
+    {
+      project: "local-only",
+      instances: "none, the home created with https://spex.pub",
+      space: groups("local", [], "https://spex.pub"),
+      beneath: "Sign in to publish at spex.pub",
+    },
+  ])("the session's project $project, the home's instances $instances: $beneath", async ({ space, beneath }) => {
     const onNavigate = vi.fn();
     seed({
-      space: home({ account: null }),
+      space,
       drafts: { triage: COMPILED },
       openDraftId: "triage",
       draftViews: { triage: foldView(THREAD) },
@@ -1733,9 +1792,20 @@ describe("playbook-library-93: Publish beneath the Enable form", () => {
     render(<LibrarySurface onNavigate={onNavigate} />);
     await vi.waitFor(() => expect(tab("Enable").disabled).toBe(false));
     fireEvent.click(tab("Enable"));
-    expect(screen.queryByTestId("publish-button")).toBeNull();
-    const signIn = screen.getByTestId("publish-signin");
-    expect(signIn.textContent).toBe("Sign in to publish");
+    const publish = screen.getByTestId("publish");
+    // Beneath the form.
+    expect(
+      screen.getByTestId("register-submit").compareDocumentPosition(publish) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    if (beneath === "Publish") {
+      expect(within(publish).getByTestId("publish-button").textContent).toBe("Publish");
+      expect(within(publish).queryByTestId("publish-signin")).toBeNull();
+      return;
+    }
+    // In the control's place, opening Groups to sign in.
+    expect(within(publish).queryByTestId("publish-button")).toBeNull();
+    const signIn = within(publish).getByTestId("publish-signin");
+    expect(signIn.textContent).toBe(beneath);
     fireEvent.click(signIn);
     expect(onNavigate).toHaveBeenCalledWith("Space");
   });
