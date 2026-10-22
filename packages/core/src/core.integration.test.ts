@@ -4077,8 +4077,8 @@ export default { id:'probe',command:'probe',intent:'exercise classified continua
   assert.ok(classificationPrompts[1]!.includes("Boss message:\n```\n" + oldAnswer + "\n```"), "the Boss answer reaches classification verbatim");
   assert.ok(playerPrompts[1]!.includes(`Boss ⟶\n${oldAnswer}`), "the resumed worker receives the actual Boss reply");
   assert.ok(harness.stats.runs.some((run) => run.prompt === playerPrompts[1] && run.resume), "the asking worker resumes its existing provider conversation");
-  const stream = join(projectSessions(harness.dataDir, project.id), `${session.id}.records.jsonl`);
-  const before = readFileSync(stream);
+  const shared = createSessionStore({ sessionsDir: projectSessions(harness.dataDir, project.id) });
+  const before = Buffer.from((await shared.exportBundle(session.id)).replay);
   await client.expectOk("turn.submit", { sessionId: session.id, text: nextBoss });
   const restarted = await settledSession(client, session.id, 3);
   assert.equal(restarted.live, false);
@@ -4092,7 +4092,7 @@ export default { id:'probe',command:'probe',intent:'exercise classified continua
   assert.ok(classificationPrompts.at(-1)!.includes("Boss message:\n```\n" + nextTask + "\n```"), "the classifier sees the selected standalone request without trimming");
   assert.ok(playerPrompts[2]!.includes(`Task from classified fixture: ${nextTask}`), "current-run text keeps its whitespace and newline");
   assert.ok(!playerPrompts[2]!.includes(oldQuestion) && !playerPrompts[2]!.includes(oldAnswer), "no prior-run exchange leaks into the second run");
-  const after = readFileSync(stream);
+  const after = Buffer.from((await shared.exportBundle(session.id)).replay);
   assert.deepEqual(after.subarray(0, before.length), before, "the recorded first run is retained byte for byte");
   const records = after.toString("utf8").trim().split("\n").map((line) => JSON.parse(line));
   assert.deepEqual(records.filter(({record}) => record.type === "turn_started").map(({record}) => record.turn.prompt), [firstTask, oldAnswer, nextBoss]);
@@ -4163,7 +4163,7 @@ test("core-service-77: the real shell continues from its token-free snapshot, le
   // no longer live, and the provider hints written at settlement stay
   // bound to the untouched manifest.
   await client.waitFor((m) => m.type === "session.state" && m.session.id === session.id && m.session.live === false);
-  const hints = (await readSessionManifest(join(projectSessions(join(dir, "state"), project.id), `${session.id}.hints.json`))) as { checkpointSha256: string; captain?: { kind: string } };
+  const hints = JSON.parse(readFileSync(join(projectSessions(join(dir, "state"), project.id), `${session.id}.hints.json`), "utf8")) as { checkpointSha256: string; captain?: { kind: string } };
   assert.equal(hints.checkpointSha256, createHash("sha256").update(readFileSync(manifest)).digest("hex"), "hints bound to the settled manifest");
   assert.equal(hints.captain?.kind, "pinned");
 
