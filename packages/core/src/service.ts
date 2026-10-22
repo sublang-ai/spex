@@ -70,9 +70,9 @@ import {
 } from "./protocol.js";
 import { resolveLanguage, type Language } from "./language.js";
 import { i18n, speak } from "./i18n.js";
-import { CoreError, SessionManager, currentSession, executionConfig, storedMembers, type CaptainFactory, type RecordEnvelope } from "./session.js";
+import { CoreError, SessionManager, assertRunsHere, currentSession, executionConfig, runsElsewhereRefusal, storedMembers, type CaptainFactory, type RecordEnvelope } from "./session.js";
 import { closedStats, foldConditions, foldLedger, intentTitle, queueSchedule, wasWorked } from "./ledger.js";
-import type { TurnControlKind } from "./control-record.js";
+import { runsElsewhere, type TurnControlKind } from "./control-record.js";
 import { readStoredLanguage, Store, type SpexRepository } from "./store.js";
 import { UPLOAD_STAGING } from "./storage-git.js";
 import { foldDiagnostics, StorageFormatError, type RepairChecked, type StorageDiagnostic } from "./app-storage.js";
@@ -247,7 +247,7 @@ export interface CoreServiceOptions {
   /** The registry's fetch (environments-12); a test seam. */
   registryFetch?: typeof fetch;
   /** This runtime's label, stored beside the home's device at assignment
-   * for display alone (DR-131): the server's name on a seat, the host
+   * for display alone (DR-134): the server's name on a seat, the host
    * name by default. */
   runtimeLabel?: string;
 }
@@ -441,7 +441,7 @@ export class CoreService {
   private configPath: string;
   /** The runtime the Git credential helper runs on (git-host-9). */
   private readonly hostRuntime: { execPath: string; electron: boolean };
-  /** This runtime's label for display (DR-131); its name is the home's
+  /** This runtime's label for display (DR-134); its name is the home's
    * device, read when a record is assigned. */
   private readonly runtimeLabel: string;
   private readonly env: NodeJS.ProcessEnv;
@@ -542,6 +542,7 @@ export class CoreService {
       adapterImports: options.adapterImports,
       captainFactory: options.captainFactory,
       env: this.env,
+      runtime: () => this.assignableRuntime(),
     });
     this.sessions.onRecord = (envelope) => {
       this.dispatchRecord(envelope);
@@ -781,13 +782,31 @@ export class CoreService {
     return null;
   }
 
-  /** This runtime (DR-131): one core on one home, named by the home's
+  /** This runtime (DR-134): one core on one home, named by the home's
    * `device` as `home.yaml` reads now, with its label. A caller reads it
    * once the home reads, in the step that writes the assignment, so a
    * device minted for one run while `home.yaml` does not read assigns
    * nothing: that write is refused (storage-2). */
   private runtime(): AssignedRuntime {
     return { device: this.store.home.device, label: this.runtimeLabel };
+  }
+
+  /** This runtime as a new session is assigned to it (core-service-4,
+   * DR-134): none while `home.yaml` does not read, as its device may be
+   * one minted for this run alone, which assigns nothing. */
+  private assignableRuntime(): AssignedRuntime | undefined {
+    try { this.store.assertProjectsWritable(); }
+    catch { return undefined; }
+    return this.runtime();
+  }
+
+  /** An intent assigned to another runtime runs there alone: its turn,
+   * edit and close are refused `conflict` here, read against this home's
+   * device now, so no sync choice can drop the stamp of work that ran
+   * there (core-service-43, core-service-46, core-service-47, DR-134). */
+  private requireOwnIntent(intent: IntentInfo): void {
+    const runsOn = intent.runtime ? runsElsewhere(intent.runtime, this.store.home.device) : undefined;
+    if (runsOn !== undefined) throw runsElsewhereRefusal("conflict", runsOn);
   }
 
   /** A client of the instance at an origin (git-host-1..11, DR-127),
@@ -1057,6 +1076,9 @@ export class CoreService {
     return foldLedger({
       store: this.store,
       lanes: this.ledgerLanes(),
+      // This runtime's: another's records summon nothing here, and run
+      // nowhere but there (DR-134).
+      device: this.store.home.device,
       now: Date.now,
     });
   }
@@ -2446,6 +2468,9 @@ export class CoreService {
       case "session.restore": {
         const session = this.store.describeSession(command.sessionId);
         if (!session) throw noSession(command.sessionId);
+        // Another runtime's session is refused first, whatever its
+        // checkpoint holds (core-service-82, DR-134).
+        assertRunsHere(session);
         const project = this.store.getProject(session.projectId);
         if (!project) throw new CoreError("invalid_request", i18n._({
           id: "bind the existing project before restoring",
@@ -2458,6 +2483,8 @@ export class CoreService {
       case "session.discard": {
         const session = this.store.describeSession(command.sessionId);
         if (!session) throw noSession(command.sessionId);
+        // Refused before anything is retired (core-service-83, DR-134).
+        assertRunsHere(session);
         const result = await this.media.retireOwner({kind: "session", id: session.id}, () => this.sessions.discardSession(session.id));
         if (result.removed) this.broadcast({type:"session.removed", sessionId:session.id, projectId:session.projectId});
         return result;
@@ -2892,7 +2919,7 @@ export class CoreService {
           // intent another queue or a sync wrote meanwhile holds it.
           refuseHeldSource();
           // Its runtime is this one, read once the home reads, in the
-          // step that writes it (core-service-42, DR-131).
+          // step that writes it (core-service-42, DR-134).
           this.store.assertWritable({ projectId: project.id });
           this.store.addIntent({ ...intent, runtime: this.runtime() });
         } catch (error) {
@@ -2905,6 +2932,7 @@ export class CoreService {
       }
       case "intent.edit": {
         const intent = this.requireOpenIntent(command.intentId);
+        this.requireOwnIntent(intent);
         if (this.deriveIntentState(intent.id) !== "queued") {
           throw new CoreError(
             "conflict",
@@ -2928,6 +2956,7 @@ export class CoreService {
       }
       case "intent.close": {
         let intent = this.requireOpenIntent(command.intentId);
+        this.requireOwnIntent(intent);
         if (
           command.as === "done" &&
           this.deriveIntentState(intent.id) !== "finished"
@@ -3769,8 +3798,11 @@ export class CoreService {
     const owner = this.store.getIntent(intentId);
     if (owner && owner.closedAt === undefined &&
         ledger.intents.find((entry) => entry.intent.id === intentId)?.state !== "finished") return;
+    // The successor is the project's next: its oldest queued intent this
+    // runtime may run, never one assigned to another (core-service-94,
+    // DR-134).
     const next = ledger.intents.find((entry) =>
-      entry.intent.projectId === session.projectId && entry.state === "queued"
+      entry.intent.projectId === session.projectId && entry.next !== undefined
     )?.intent;
     if (!next) return;
     return {
@@ -3881,6 +3913,8 @@ export class CoreService {
 
   private validateIntentDispatch(sessionId: string, intentId: string): void {
     const intent = this.requireOpenIntent(intentId);
+    // Another runtime's intent runs there alone (core-service-47, DR-134).
+    this.requireOwnIntent(intent);
     const session = this.store.describeSession(sessionId);
     if (!session || session.projectId !== intent.projectId) {
       throw new CoreError("invalid_request", i18n._({
@@ -3888,12 +3922,17 @@ export class CoreService {
         comment: "Refusal: the work named is not this session's project's",
       }));
     }
-    if (this.deriveIntentState(intent.id) !== "queued") {
+    const row = this.ledger().intents.find((entry) => entry.intent.id === intent.id);
+    if (row?.state !== "queued") {
       throw new CoreError("conflict", i18n._({
         id: "the intent is already dispatched",
         comment: "Refusal: this work was already sent to a turn",
       }));
     }
+    // One naming no runtime whose dispatch another runtime's session
+    // holds is never released here: that runtime reads its stop
+    // (core-service-47, DR-134).
+    if (row.runsOn !== undefined) throw runsElsewhereRefusal("conflict", row.runsOn);
     // An answer is a turn of the work that asked (DR-119): a dispatch is
     // new work, so it waits while a run of this session stands parked on
     // a Boss question — the fact the fold reads for an interrupted
@@ -3910,6 +3949,10 @@ export class CoreService {
   private async continueSession(sessionId: string): Promise<void> {
     const session = this.store.describeSession(sessionId);
     if (!session) throw noSession(sessionId);
+    // A session assigned to another runtime continues there alone, the
+    // folder rule standing beneath: refused first, with its label as a
+    // detail, whatever its checkpoint holds (core-service-73, DR-134).
+    assertRunsHere(session);
     // The summary's current-config refusal is advisory. Check admission
     // again below, so a stale reading neither admits nor blocks a turn.
     if (!this.store.hasContinuableCheckpoint(sessionId)) {

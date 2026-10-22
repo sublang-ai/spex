@@ -2,17 +2,19 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { hostname } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { test, type TestContext } from "node:test";
-import { parse as parseYaml } from "yaml";
+import { isDeepStrictEqual } from "node:util";
+import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import { executionConfigFromPlan, loadLaunchPlan, openSessionHost } from "@sublang/playbook/session-host";
 import { composeConfig } from "./config.js";
 import { SessionManager, CoreError } from "./session.js";
 import { Store } from "./store.js";
+import { parkingScript } from "./testing/demo.js";
 import { fakeAdapterImports } from "./testing/fake-adapter.js";
 import { scratchDir } from "./testing/scratch.js";
 import { builtinLaunchModules } from "./testing/launch-modules.js";
@@ -240,4 +242,101 @@ test("core-service-84: refusing the same live session preserves its local owners
   }
   assert.deepEqual(paths.map((path) => readFileSync(path)), before);
   assert.equal(f.stats.runs.length, 0);
+});
+
+/** The stopped writer (core-service-84) as another runtime: a CLI host
+ * that assigns its new session to `runtime`, as that runtime's core
+ * assigns its own (storage-43), then dies mid-step, its step's start
+ * saved and its coder's commit made — the session left uncertain. */
+async function stopWriterOn(runtime: { device: string; label: string }, sessionsDir: string, projectPath: string, configPath: string, input: string): Promise<string> {
+  const writer = join(dirname(new URL(import.meta.url).pathname), "testing", "stopped-writer.js");
+  const child = spawn(process.execPath, [writer, sessionsDir, projectPath, configPath, input, `--runtime=${runtime.device}:${runtime.label}`], { stdio: ["ignore", "pipe", "inherit"] });
+  const sessionId = await new Promise<string>((resolveReady, reject) => {
+    let out = "";
+    child.stdout.on("data", (chunk) => {
+      out += String(chunk);
+      const ready = /READY (\S+)/.exec(out);
+      if (ready) resolveReady(ready[1]!);
+    });
+    child.once("exit", (code) => reject(new Error(`the stopped writer exited early (${code}): ${out}`)));
+  });
+  const exited = new Promise((resolveExit) => child.once("exit", resolveExit));
+  child.kill("SIGKILL");
+  await exited;
+  return sessionId;
+}
+
+/** This home as another device pairing the same folder at the same
+ * path: `home.yaml`'s `device` rewritten, which the store reads as the
+ * file stands (storage-2). */
+function setDevice(stateDir: string, device: string): void {
+  const file = join(stateDir, "home.yaml");
+  const home = parseYaml(readFileSync(file, "utf8")) as Record<string, unknown>;
+  writeFileSync(file, stringifyYaml({ ...home, device }));
+}
+
+test("core-service-124: an uncertain session offers Restore on its own runtime alone", { timeout: 120_000 }, async (t) => {
+  const dir = scratchDir("spex-recovery-runtime-");
+  const projectPath = join(dir, "project"); mkdirSync(projectPath);
+  execFileSync("git", ["init", "-q", projectPath]);
+  writeFileSync(join(projectPath, "work.txt"), "baseline\n");
+  execFileSync("git", ["-C", projectPath, "add", "-A"]);
+  execFileSync("git", ["-C", projectPath, "-c", "user.name=Spex Test", "-c", "user.email=spex@example.test", "-c", "commit.gpgsign=false", "commit", "-q", "-m", "baseline"]);
+  const configPath = join(dir, "config.yaml"); writeFileSync(configPath, CONFIG);
+  const stateDir = join(dir, "state");
+  const store = new Store({ machineIdentity, dir: stateDir, own: "tester" });
+  const project = store.registerProject(projectPath, "recovery runtime fixture", 1);
+  const shared = store.sessionStore(project.id);
+  const here = store.home.device;
+  const there = { device: randomUUID(), label: "build-server" };
+  const id = await stopWriterOn(there, shared.sessionsDir, projectPath, configPath, "Add a line to work.txt");
+  await store.adoptForeignSessions(project.id);
+  const { imports, stats } = fakeAdapterImports(parkingScript());
+  const manager = new SessionManager({ store, adapterImports: imports, env: {} });
+  t.after(async () => { await manager.disposeAll(); store.close(); rmSync(dir, { recursive: true, force: true }); });
+  const manifest = join(shared.sessionsDir, `${id}.json`);
+  const stream = join(shared.sessionsDir, `${id}.records.jsonl`);
+  const lanes = () => manager.listLanes().filter((lane) => lane.projectId === project.id).map((lane) => lane.sessionId);
+
+  // Another runtime offers nothing on it: no recovery and no
+  // continuation, the phrase as its reason (core-service-32), and it is
+  // never this runtime's lane (core-service-93).
+  const elsewhere = store.describeSession(id);
+  assert.equal(elsewhere?.runsOn, "build-server");
+  assert.equal(elsewhere?.recovery, undefined);
+  assert.equal(elsewhere?.continuable, undefined);
+  assert.equal(elsewhere?.continuationReason, "Runs on build-server");
+  assert.equal(store.hasContinuableCheckpoint(id), false);
+  assert.deepEqual(lanes(), []);
+  // Restore and Discard are refused with the phrase and the label before
+  // anything opens, writing nothing (core-service-82, core-service-83).
+  const before = [readFileSync(manifest), readFileSync(stream)];
+  for (const request of [() => manager.restoreSession(project, id), () => manager.discardSession(id)]) {
+    await assert.rejects(request(), (error: unknown) => error instanceof CoreError && error.code === "invalid_request" &&
+      error.message === "Runs on build-server" && isDeepStrictEqual(error.details, { runsOn: "build-server" }));
+  }
+  assert.deepEqual([readFileSync(manifest), readFileSync(stream)], before);
+  assert.equal(await shared.readLeaseState(id), "idle");
+
+  // On its own runtime — the same folder at the same path — the stopped
+  // step is offered for Restore, Discard withheld as recorded work's is,
+  // and the conversation is the lane (core-service-32, core-service-93).
+  setDevice(stateDir, there.device);
+  const own = store.describeSession(id);
+  assert.equal(own?.runsOn, undefined);
+  assert.deepEqual(own?.recovery, { state: "uncertain", input: "Add a line to work.txt", discardable: false });
+  assert.deepEqual(lanes(), [id]);
+  await manager.restoreSession(project, id);
+  await manager.getLive(id)?.operation;
+  await manager.settled(id);
+  assert.equal((await shared.readManifest(id))?.state, "settled");
+  assert.equal(stats.runs.length, 0, "Restore reports without calling an agent");
+
+  // Restored there, it still runs there alone.
+  setDevice(stateDir, here);
+  const restored = store.describeSession(id);
+  assert.equal(restored?.runsOn, "build-server");
+  assert.equal(restored?.continuable, undefined);
+  assert.equal(restored?.recovery, undefined);
+  assert.equal(store.hasContinuableCheckpoint(id), false);
 });
