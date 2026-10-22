@@ -9,10 +9,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
+import { inspect } from "node:util";
 import { parse as parseYaml } from "yaml";
 import {
   CredentialChanged,
@@ -351,6 +352,84 @@ test("git-host-28: a seat's device request carries the server and the person; a 
     assert.equal((await admitted.done).id, "1001");
     assert.ok(await store.read(), "the person's sign-in is stored");
     assert.deepEqual(t.host.script.deviceRequests.slice(2).map((request) => [request.serverId, request.personId]), [["srv_42", "1001"], ["srv_42", "1001"]]);
+  } finally {
+    await t.dispose();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// git-host-29, git-host-30: the servers listing and the tickets
+
+/** Every file under a directory, at any depth. */
+function filesUnder(dir: string): string[] {
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir, { recursive: true, withFileTypes: true })
+    .filter((entry) => entry.isFile())
+    .map((entry) => join(entry.parentPath, entry.name));
+}
+
+/** The failure a call ends with. */
+async function failureOf(call: Promise<unknown>): Promise<unknown> {
+  try {
+    await call;
+  } catch (error) {
+    return error;
+  }
+  return assert.fail("the call must fail");
+}
+
+test("git-host-30: the servers listing and a ticket carry the instance's app token and come back as answered, held nowhere; host_refused, not_found and 429 are relayed as git-host-11 states", async () => {
+  // The 30 s the rate limit asks for hold the next call 0.2 s at most
+  // here, a test-shortened bound (git-host-21).
+  const t = await setup({ holdMaxMs: 200 });
+  try {
+    await browserSignIn(t.client);
+    const stored = await fileCredentialStore(t.home, t.host.url).read();
+    assert.ok(stored);
+    const s = t.host.script;
+    s.servers.push({ id: "srv_lab1", name: "lab-1", group: "acme", address: "https://lab-1.example.test" });
+
+    // The listing and the ticket as the instance answers them (git-host-29).
+    assert.deepEqual(await t.client.servers(), [
+      { id: "srv_lab1", name: "lab-1", group: { id: "2002", fullPath: "acme", name: "Acme", kind: "group" }, address: "https://lab-1.example.test" },
+    ]);
+    const ticket = await t.client.ticket("srv_lab1");
+    const minted = s.tickets.at(-1);
+    assert.ok(minted);
+    assert.deepEqual(ticket, { ticket: minted.ticket, expiresIn: 120, server: { id: "srv_lab1", name: "lab-1", address: "https://lab-1.example.test" } });
+    // Each call carried that instance's app token (git-host-4).
+    assert.deepEqual(s.serverCalls, [
+      { method: "GET", path: "/api/v1/host/servers", bearer: stored.access },
+      { method: "POST", path: "/api/v1/host/servers/srv_lab1/tickets", bearer: stored.access },
+    ]);
+    // Held nowhere after the reply: neither in the client nor in any file
+    // of the home.
+    const client = inspect(t.client, { depth: 10, showHidden: true });
+    assert.ok(!client.includes(minted.ticket), "the client holds no ticket");
+    assert.ok(!client.includes("srv_lab1") && !client.includes("lab-1.example.test"), "the client holds no listing");
+    for (const file of filesUnder(t.home)) {
+      const text = readFileSync(file, "utf8");
+      assert.ok(!text.includes(minted.ticket) && !text.includes("srv_lab1"), `${file} holds nothing of the listing or the ticket`);
+    }
+
+    // Any other answer is relayed as git-host-11 states it.
+    s.refuseHost(1, "a seat on this server needs the Developer role or above in its group");
+    const refused = await failureOf(t.client.ticket("srv_lab1"));
+    assert.ok(hostError("host_refused", { words: "a seat on this server needs the Developer role or above in its group" })(refused));
+    assert.equal(relayHostError(refused, "Stand-in Git host"), "Stand-in Git host refused: a seat on this server needs the Developer role or above in its group");
+    const gone = await failureOf(t.client.ticket("srv_gone"));
+    assert.ok(hostError("not_found", { words: "no server has this id" })(gone));
+    assert.equal(relayHostError(gone, "Stand-in Git host"), "No longer shared with you");
+    s.rateLimit(1, "30");
+    const limited = await failureOf(t.client.servers());
+    assert.ok(hostError("rate_limited", { retryAfter: "30" })(limited));
+    assert.equal(relayHostError(limited, "Stand-in Git host"), "Stand-in Git host asks to wait 30 seconds");
+    await sleep(300);
+    // Every call carried the token; none signed the device out.
+    assert.ok(s.serverCalls.every((call) => call.bearer === stored.access));
+    assert.equal(s.serverCalls.length, 5);
+    assert.equal(t.signedOut.length, 0);
+    assert.equal((await t.client.servers()).length, 1, "a refusal leaves the device signed in");
   } finally {
     await t.dispose();
   }

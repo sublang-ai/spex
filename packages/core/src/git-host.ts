@@ -8,9 +8,11 @@
 // the host's JSON routes under `/api/v1`: groups, spex repositories and
 // members, with what the host says the person may do and the roles it
 // grants, and the undo writes — a group renamed or deleted, a spex
-// repository moved. A rate limit the host answers holds a sync step's
-// calls and the host read until the instant it asked for, and refuses
-// every other call meanwhile with the seconds that remain (git-host-21).
+// repository moved — and the team servers a person may open a seat on
+// with the tickets that open one (git-host-29). A rate limit the host
+// answers holds a sync step's calls and the host read until the instant
+// it asked for, and refuses every other call meanwhile with the seconds
+// that remain (git-host-21).
 // It composes no reader-facing prose: a failure is a `HostError` carrying
 // its kind and the host's own words, which the core phrases where it
 // speaks (git-host-11). No secret ever enters an error message or a log
@@ -153,6 +155,23 @@ export interface HostRepositoryDetail extends HostRepository {
  * membership is the group's or repository's own, else `via` the path in
  * the instance of the group it comes through. */
 export interface HostMember { id: string; login: string; displayName: string | null; role: string; direct: boolean; via: string | null }
+
+/** A team server the person may open a seat on, as the instance lists it
+ * (git-host-29, DR-133): its id, name and address — the https origin it
+ * listens at — and its group by the instance's id, path, name and kind,
+ * with no abilities. */
+export interface HostServer {
+  id: string;
+  name: string;
+  group: { id: string | null; fullPath: string; name: string; kind: "user" | "group" };
+  address: string;
+}
+
+/** A ticket the instance minted for a seat on one of its servers
+ * (git-host-29): single use and short-lived — `expiresIn` its seconds —
+ * presented to the server at its address. A secret: never held after the
+ * caller presents it, never in a log or a message. */
+export interface HostTicket { ticket: string; expiresIn: number; server: { id: string; name: string; address: string } }
 
 export type HostErrorKind =
   | "pending"
@@ -938,6 +957,33 @@ export class GitHostClient {
     return { status: "ready" };
   }
 
+  /**
+   * `GET /api/v1/host/servers` (git-host-29): the servers the person may
+   * open a seat on, as the instance answers them, in its order. The
+   * client keeps nothing of the answer.
+   */
+  async servers(options: HostCallOptions = {}): Promise<HostServer[]> {
+    const body = record((await this.call("GET", "/api/v1/host/servers", undefined, options)).json);
+    return list(body.servers).map(serverFrom);
+  }
+
+  /**
+   * `POST /api/v1/host/servers/:id/tickets` (git-host-29): a ticket for a
+   * seat on the server `id`, as the instance answers it; the client keeps
+   * nothing of it. A server the instance does not list for the person
+   * throws `not_found`, a membership below the role it needs
+   * `host_refused`, each with the instance's words.
+   */
+  async ticket(id: string, options: HostCallOptions = {}): Promise<HostTicket> {
+    const body = record((await this.call("POST", `/api/v1/host/servers/${encodeURIComponent(id)}/tickets`, {}, options)).json);
+    const server = record(body.server);
+    return {
+      ticket: text(body.ticket),
+      expiresIn: positive(body.expires_in, 0),
+      server: { id: text(server.id), name: text(server.name), address: text(server.address) },
+    };
+  }
+
   /** `POST /api/v1/host/credential` (git-host-9): the Git credential for
    * the host's Git origin, with its expiry in Unix milliseconds. */
   async credential(origin: string, options: HostCallOptions = {}): Promise<{ username: string; secret: string; expiresAt: number }> {
@@ -1239,6 +1285,12 @@ function groupFrom(value: unknown): HostGroup {
     kind: body.kind === "user" ? "user" : "group",
     can: { createSubgroup: flag(can.create_subgroup), manageMembers: flag(can.manage_members), rename: flag(can.rename), delete: flag(can.delete) },
   };
+}
+
+function serverFrom(value: unknown): HostServer {
+  const body = record(value);
+  const { can: _can, ...group } = groupFrom(body.group);
+  return { id: text(body.id), name: text(body.name), group, address: text(body.address) };
 }
 
 function roleFrom(value: unknown): HostRole {
