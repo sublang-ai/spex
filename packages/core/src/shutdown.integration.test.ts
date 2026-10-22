@@ -7,16 +7,18 @@
 //
 // The failure is real rather than stubbed: the captain's dispose
 // rejects, and cligent's own runtime disposal surfaces it, so the
-// path under test is the one a broken SDK teardown takes.
+// path under test is the one a broken SDK teardown takes. The bounded
+// stop (DR-134) is driven against real processes that ignore SIGTERM.
 
-import { test } from "node:test";
+import { test, type TestContext } from "node:test";
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { execFileSync, spawn, type ChildProcess } from "node:child_process";
+import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { join, relative } from "node:path";
 import { WebSocket } from "ws";
 
-import { CoreService } from "./service.js";
+import { CoreService, type CoreServiceOptions } from "./service.js";
+import { descendantProcesses, processAlive } from "./process-tree.js";
 import { fakeAdapterImports } from "./testing/fake-adapter.js";
 import { createScriptedCaptain } from "./testing/scripted-captain.js";
 import type { Captain } from "@sublang/cligent/tmux-play";
@@ -142,10 +144,11 @@ class Client {
 interface Harness {
   service: CoreService;
   projectDirs: string[];
+  options: CoreServiceOptions;
 }
 
 /** Start a core whose captains are handed out in creation order. */
-async function startHarness(captains: Captain[]): Promise<Harness> {
+async function startHarness(captains: Captain[], extra: Partial<CoreServiceOptions> = {}): Promise<Harness> {
   const dir = scratchDir("spex-shutdown-it-");
   const configPath = join(dir, "playbook.config.yaml");
   writeFileSync(configPath, CONFIG);
@@ -160,7 +163,7 @@ async function startHarness(captains: Captain[]): Promise<Harness> {
     fallback: { result: "ok" },
   });
   let handed = 0;
-  const service = await CoreService.start({
+  const options: CoreServiceOptions = {
     token: "test",
     configPath,
     dataDir: join(dir, "state"),
@@ -175,8 +178,10 @@ async function startHarness(captains: Captain[]): Promise<Harness> {
     env: {},
     home: join(dir, "home"),
     watchConfig: false,
-  });
-  return { service, projectDirs };
+    ...extra,
+  };
+  const service = await CoreService.start(options);
+  return { service, projectDirs, options };
 }
 
 test("CORE-40: a failed disposal keeps the session live and its project reserved", async (t) => {
@@ -491,6 +496,202 @@ for (const failure of ["initialization", "aggregate initialization", "prepare", 
   }
 });
 
+/** An agent that ignores SIGTERM and holds a child of its own that
+ * ignores it too, each logging the SIGTERM it receives. Run as
+ * `node agent.cjs <log> agent`; it prints its child's pid once that
+ * child is listening for SIGTERM. */
+const STUBBORN_AGENT = `
+const { spawn } = require("node:child_process");
+const { appendFileSync } = require("node:fs");
+const [log, role] = process.argv.slice(2);
+process.on("SIGTERM", () => appendFileSync(log, role + " SIGTERM " + Date.now() + "\\n"));
+setInterval(() => {}, 1000);
+if (role === "agent") {
+  const child = spawn(process.execPath, [__filename, log, "child"], { stdio: ["ignore", "pipe", "ignore"] });
+  child.stdout.once("data", () => process.stdout.write(child.pid + "\\n"));
+} else {
+  process.stdout.write("ready\\n");
+}
+`;
+
+interface StubbornAgent {
+  agent: ChildProcess;
+  child: number;
+}
+
+/** A Captain whose turn starts the stubborn agent. A wedged one then
+ * waits on it the way a stuck adapter does — no abort reaches it, so
+ * the turn never settles and only the stop's bound ends it; otherwise
+ * the turn ends at the abort, leaving the agent running. */
+function stubbornCaptain(script: string, log: string, wedged: boolean): { captain: Captain; started: Promise<StubbornAgent> } {
+  let started!: (agent: StubbornAgent) => void;
+  const running = new Promise<StubbornAgent>((resolve) => { started = resolve; });
+  const captain = createScriptedCaptain(async (_turn, context) => {
+    const agent = spawn(process.execPath, [script, log, "agent"], { stdio: ["ignore", "pipe", "ignore"] });
+    const child = await new Promise<number>((resolve, reject) => {
+      agent.stdout?.once("data", (data: Buffer) => resolve(Number(String(data).trim())));
+      agent.once("error", reject);
+    });
+    started({ agent, child });
+    if (wedged) await new Promise<never>(() => {});
+    await new Promise<void>((resolve) => {
+      if (context.signal.aborted) resolve();
+      else context.signal.addEventListener("abort", () => resolve(), { once: true });
+    });
+  });
+  return { captain, started: running };
+}
+
+/** The roles that logged a SIGTERM, each with when it arrived. */
+function sigterms(log: string): Map<string, number> {
+  return new Map(readFileSync(log, "utf8").trim().split("\n").filter(Boolean).map((line) => {
+    const [role, , at] = line.split(" ");
+    return [role as string, Number(at)];
+  }));
+}
+
+/** A core over a fresh home whose one session's turn starts the
+ * stubborn agent, with the stop's bounds shortened through the seams
+ * and the real walk of this process's descendants recorded. */
+async function stubbornTurn(t: TestContext, wedged: boolean, stop: { settleMs: number; killMs: number }) {
+  const fixture = scratchDir("spex-stubborn-agent-");
+  const script = join(fixture, "agent.cjs");
+  writeFileSync(script, STUBBORN_AGENT);
+  const log = join(fixture, "signals.log");
+  writeFileSync(log, "");
+  const stubborn = stubbornCaptain(script, log, wedged);
+  const walks: number[][] = [];
+  const harness = await startHarness([stubborn.captain], {
+    stop,
+    agentProcesses: () => {
+      const pids = descendantProcesses();
+      walks.push(pids);
+      return pids;
+    },
+  });
+  const client = new Client(harness.service.port());
+  await client.open();
+  const workingFolder = harness.projectDirs[0] as string;
+  const project = await client.expectOk("project.register", { path: workingFolder });
+  const session = await client.expectOk("session.create", { projectId: project.id });
+  await client.expectOk("turn.submit", { sessionId: session.id, text: "start the stubborn agent" });
+  const { agent, child } = await stubborn.started;
+  const killed = new Promise<{ signal: NodeJS.Signals | null; at: number }>((resolve) => {
+    agent.once("exit", (_code, signal) => resolve({ signal, at: Date.now() }));
+  });
+  // A failed assertion leaves no fixture process behind.
+  t.after(() => {
+    for (const pid of [agent.pid as number, child]) if (processAlive(pid)) process.kill(pid, "SIGKILL");
+  });
+  client.close();
+  return { harness, log, walks, workingFolder, session, agent, child, killed };
+}
+
+/** Every path under `dir` with its size and modification time. */
+function snapshot(dir: string): string[] {
+  const entries: string[] = [];
+  const walk = (path: string): void => {
+    for (const entry of readdirSync(path, { withFileTypes: true })) {
+      const full = join(path, entry.name);
+      const stats = statSync(full);
+      entries.push(`${relative(dir, full)} ${stats.size} ${stats.mtimeMs}`);
+      if (entry.isDirectory()) walk(full);
+    }
+  };
+  walk(dir);
+  return entries.sort();
+}
+
+async function gone(pid: number, withinMs: number): Promise<boolean> {
+  const deadline = Date.now() + withinMs;
+  while (processAlive(pid)) {
+    if (Date.now() > deadline) return false;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  return true;
+}
+
+test("CORE-41: a stop bounded by its seams kills an agent ignoring SIGTERM and leaves its turn uncertain", { timeout: 60_000 }, async (t) => {
+  const SETTLE_MS = 1_000;
+  const KILL_MS = 1_000;
+  const { harness, log, walks, workingFolder, session, agent, child, killed } =
+    await stubbornTurn(t, true, { settleMs: SETTLE_MS, killMs: KILL_MS });
+  const before = snapshot(workingFolder);
+
+  const began = Date.now();
+  await assert.rejects(harness.service.stop(), (error: unknown) => {
+    assert.ok(error instanceof AggregateError, "the unconfirmed disposal is reported to the host");
+    assert.equal(error.message, "session cleanup was not confirmed");
+    assert.ok(
+      error.errors.some((cause) => String(cause).includes(`session ${session.id} cleanup was not confirmed within the stop's bounds`)),
+      String(error.errors),
+    );
+    return true;
+  });
+  const returned = Date.now();
+
+  // The turn never settled, so SIGTERM waited out the first bound and
+  // reached the agent and its child; SIGKILL followed at the second.
+  const terms = sigterms(log);
+  const agentTerm = terms.get("agent");
+  assert.ok(agentTerm !== undefined, "the agent received SIGTERM");
+  assert.ok(terms.has("child"), "the agent's own child received SIGTERM");
+  assert.ok(agentTerm >= began + SETTLE_MS, `SIGTERM ${agentTerm - began} ms after the stop began`);
+  const exit = await killed;
+  assert.equal(exit.signal, "SIGKILL");
+  assert.ok(exit.at >= agentTerm + KILL_MS - 50, `SIGKILL ${exit.at - agentTerm} ms after SIGTERM`);
+  assert.ok(returned - began < SETTLE_MS + KILL_MS + 5_000, `the stop returned ${returned - began} ms after it began`);
+  assert.ok(walks.some((pids) => pids.includes(agent.pid as number) && pids.includes(child)), "the walk found the agent and its child");
+  assert.ok(await gone(child, 5_000), "the agent's child is gone");
+
+  // The stop wrote nothing into the working folder and reverted nothing.
+  assert.deepEqual(snapshot(workingFolder), before);
+
+  // The home's next core reads the cut turn as uncertain, for Restore.
+  const next = await CoreService.start({ ...harness.options, captainFactory: undefined, stop: undefined, agentProcesses: undefined });
+  try {
+    const reader = new Client(next.port());
+    await reader.open();
+    try {
+      const listed = (await reader.expectOk("session.list", {})).find((entry) => entry.id === session.id);
+      assert.equal(listed?.recovery?.state, "uncertain");
+      assert.equal(listed?.externalWriter, undefined, "the stop released the session's lease");
+    } finally {
+      reader.close();
+    }
+  } finally {
+    await next.stop();
+  }
+});
+
+test("CORE-41: once the turns settle, an agent left alive receives SIGTERM at once and SIGKILL at the second bound", { timeout: 60_000 }, async (t) => {
+  // A first bound the stop never reaches: only the settled turn can
+  // have begun the signals.
+  const SETTLE_MS = 30_000;
+  const KILL_MS = 1_000;
+  const { harness, log, walks, workingFolder, agent, child, killed } =
+    await stubbornTurn(t, false, { settleMs: SETTLE_MS, killMs: KILL_MS });
+  const before = snapshot(workingFolder);
+
+  const began = Date.now();
+  // The turn settled at its abort and its runtime was released, so the
+  // disposal is confirmed.
+  await harness.service.stop();
+  const returned = Date.now();
+
+  const terms = sigterms(log);
+  const agentTerm = terms.get("agent");
+  assert.ok(agentTerm !== undefined, "the agent received SIGTERM");
+  assert.ok(terms.has("child"), "the agent's own child received SIGTERM");
+  assert.ok(agentTerm < began + SETTLE_MS / 3, `SIGTERM ${agentTerm - began} ms after the stop began`);
+  const exit = await killed;
+  assert.equal(exit.signal, "SIGKILL");
+  assert.ok(exit.at >= agentTerm + KILL_MS - 50, `SIGKILL ${exit.at - agentTerm} ms after SIGTERM`);
+  assert.ok(returned >= agentTerm + KILL_MS - 50, "the stop waited for the agent SIGTERM reached");
+  assert.ok(walks.some((pids) => pids.includes(agent.pid as number) && pids.includes(child)), "the walk found the agent and its child");
+  assert.ok(await gone(child, 5_000), "the agent's child is gone");
+  assert.deepEqual(snapshot(workingFolder), before);
+});
 
 async function releaseFixtureLeases(service: CoreService): Promise<void> {
   // The intentionally broken captains above have no external work. After

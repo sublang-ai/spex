@@ -384,6 +384,9 @@ export class SessionManager {
   private readonly openingOperations = new Set<Promise<void>>();
   private readonly failedOpenings = new Map<string, unknown>();
   private stopping = false;
+  /** Set once a bounded stop gives up on unconfirmed cleanup: a turn
+   * settling after that writes nothing (core-service-39). */
+  private abandoned = false;
   private shutdownOpenings?: Promise<void[]>;
   private readonly recovering = new Map<string, string>();
   /** Sessions whose active turn is being stopped intentionally. */
@@ -1054,6 +1057,10 @@ export class SessionManager {
         // Register before cleanup starts, including the failed/aborted
         // path, and keep the barrier after cleanup removes the runtime.
         const done = Promise.resolve().then(async () => {
+          // A stop that gave up on this turn released its lease and is
+          // closing the store: the turn stands as it was cut
+          // (core-service-39).
+          if (this.abandoned) return;
           // A turn that stopped after saving progress — an abort or a
           // failure — settles at that position (DR-088), where its run
           // may stand parked: it is released as a settled turn is, its
@@ -1085,7 +1092,7 @@ export class SessionManager {
         }
         // A restore only reports: what runs next is the Boss's choice,
         // so it hands no queued intent on (core-service-82, DR-088).
-        if (!failed && !restore && turnId !== undefined) {
+        if (!failed && !restore && turnId !== undefined && !this.abandoned) {
           this.onTurnSettled(entry.info.id, turnId, intentId, control?.kind);
         }
       }
@@ -1121,8 +1128,9 @@ export class SessionManager {
     }
     this.options.cancelApprovals?.(sessionId);
     await entry.operation;
-    // The turn's own settlement may have released the runtime already.
-    if (!this.live.has(sessionId)) return;
+    // The turn's own settlement may have released the runtime already;
+    // a stop that gave up on it has released its lease.
+    if (!this.live.has(sessionId) || this.abandoned) return;
     await entry.controller.dispose();
     this.failedOpenings.delete(sessionId);
     this.opening.delete(entry.info.projectId);
@@ -1132,12 +1140,49 @@ export class SessionManager {
     await this.publish(sessionId);
     this.onLedgerChange(entry.info.projectId);
   }
-  async disposeAll(): Promise<void> {
-    await (this.shutdownOpenings ?? Promise.all([...this.openingOperations]));
+  /** Abort every active turn with `reason` as a stop closes admission
+   * (core-service-39, DR-134). Resolves once those turns, and any
+   * release already in flight, have settled; undefined when there are
+   * none. */
+  abortAll(reason: string): Promise<void> | undefined {
+    const active = [...this.live.values()].filter((entry) => entry.turnActive);
+    for (const entry of active) {
+      try { this.stopActiveTurn(entry, reason); }
+      catch (error) { console.error(`spex: turn not aborted at stop: ${String(error)}`); }
+    }
+    const settling = [...this.settling.values()].map(({done}) => done);
+    if (!active.length && !settling.length) return undefined;
+    return Promise.allSettled([...active.map((entry) => entry.operation), ...settling]).then(() => {});
+  }
+
+  /** Dispose every runtime (core-service-39). With a `deadline`, the
+   * cleanup still unconfirmed when it passes is reported as such and
+   * its lease released — the stop has killed the agents — and a turn
+   * settling afterwards writes nothing. */
+  async disposeAll(deadline?: Promise<void>): Promise<void> {
+    let expired = false;
+    const cut = deadline?.then(() => { expired = true; });
+    const within = (work: Promise<unknown>): Promise<unknown> => cut ? Promise.race([work, cut]) : work;
+    let opened = false;
+    await within((this.shutdownOpenings ?? Promise.all([...this.openingOperations])).then(() => { opened = true; }));
     const ids = new Set([...this.live.keys(), ...this.settling.keys()]);
-    const results = await Promise.allSettled([...ids].map((id) => this.disposeSession(id)));
+    const settled = new Map<string, PromiseSettledResult<void>>();
+    if (!expired) await within(Promise.all([...ids].map((id) => this.disposeSession(id).then(
+      () => { settled.set(id, {status: "fulfilled", value: undefined}); },
+      (reason: unknown) => { settled.set(id, {status: "rejected", reason}); },
+    ))));
     const failures = [...this.failedOpenings.values()];
-    failures.push(...results.flatMap((result) => result.status === "rejected" ? [result.reason] : []));
+    failures.push(...[...settled.values()].flatMap((result) => result.status === "rejected" ? [result.reason] : []));
+    if (expired) {
+      this.abandoned = true;
+      if (!opened) failures.push(new Error("a session opening was not confirmed within the stop's bounds"));
+      const unconfirmed = [...new Set([...ids, ...this.live.keys(), ...this.settling.keys()])].filter((id) => !settled.has(id));
+      for (const id of unconfirmed) failures.push(new Error(`session ${id} cleanup was not confirmed within the stop's bounds`));
+      await Promise.all(unconfirmed.map(async (id) => {
+        try { await this.live.get(id)?.controller.lease.release(); }
+        catch (error) { console.error(`spex: session lease not released at stop: ${String(error)}`); }
+      }));
+    }
     if (failures.length) throw new AggregateError([...new Set(failures)], "session cleanup was not confirmed");
   }
   private async publish(sessionId: string): Promise<void> {
