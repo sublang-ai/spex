@@ -15,6 +15,7 @@ import {
   existsSync,
   lstatSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   statSync,
@@ -403,6 +404,9 @@ test("a socket whose probe fails other than by a refusal is no stale one: it is 
 });
 
 test("a socket that cannot be bound refuses startup naming the cause in one line, as a flag mistake does (SERVER-SHELL-26)", { skip: process.platform === "win32" }, async () => {
+  // A Unix socket's path fits its address's sun_path, whose size the
+  // platform sets.
+  const pathMax = process.platform === "linux" ? 108 : 104;
   const cases = [
     {
       name: "a directory that does not exist",
@@ -410,17 +414,20 @@ test("a socket that cannot be bound refuses startup naming the cause in one line
       cause: /: its directory .*missing does not exist \(E[A-Z]+\)$/,
     },
     {
+      // Refused before anything starts, on every Node version: none
+      // binds a socket at the path cut short.
       name: "a path too long",
       socket: (dir: string) => join(dir, `${"x".repeat(120)}.sock`),
-      cause: /: the path is longer than a Unix socket's \d+ bytes \((EINVAL|ENAMETOOLONG)\)$/,
+      cause: new RegExp(`: the path is longer than a Unix socket's ${pathMax} bytes \\(ENAMETOOLONG\\)$`),
+      unstarted: true,
     },
   ];
-  for (const { name, socket, cause } of cases) {
+  for (const { name, socket, cause, unstarted } of cases) {
     const scratch = seatScratch();
     const path = socket(scratch.dir);
     const args = [...seatArgs(scratch).filter((arg) => !arg.startsWith("--socket")), `--socket=${path}`];
     const run = await runShell(args);
-    // The bind fails after the core booted: the core is stopped and the
+    // A bind that fails after the core booted stops the core, and the
     // shell exits on its own, its refusal the bind's cause and no stack
     // trace — a failed stop would name its own cause instead.
     assert.equal(run.code, 1, `${name}: exits non-zero; stderr: ${run.err}`);
@@ -429,5 +436,9 @@ test("a socket that cannot be bound refuses startup naming the cause in one line
     assert.ok(lines[0].startsWith(`--socket ${path} cannot be bound`), `${name}: ${lines[0]}`);
     assert.match(lines[0], cause, name);
     assert.equal(`${run.out}${run.err}`.includes(TOKEN), false, `${name}: no token in the output`);
+    if (unstarted) {
+      assert.equal(existsSync(scratch.dataDir), false, `${name}: nothing started`);
+      assert.deepEqual(readdirSync(scratch.dir), ["token"], `${name}: no socket is left`);
+    }
   }
 });
