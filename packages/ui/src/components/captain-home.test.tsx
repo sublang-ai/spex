@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// RUN-29/31/35: the Captain home greets, starts in one motion, filters
-// the slash menu, keeps the quick start dismissed, and tunes the
-// Captain's inline agent block in place (DR-019).
+// RUN-29/31/35: the project start explains its scope, discovers
+// playbooks through slash, and tunes the Captain in place (DR-138).
 
 import { afterEach, describe, expect, test, vi } from "vitest";
 import {
@@ -17,7 +16,7 @@ import {
 
 afterEach(cleanup);
 
-import { CaptainHome, QUICK_START_KEY, popoverRoom } from "./CaptainHome.js";
+import { CaptainHome, popoverRoom } from "./CaptainHome.js";
 
 const PROJECT = { id: "p1", path: "/tmp/demo", name: "demo", registeredAt: 0 };
 
@@ -73,14 +72,6 @@ const PLAYBOOKS: PlaybookSummary[] = [
   },
 ];
 
-function memoryStorage(): Pick<Storage, "getItem" | "setItem"> {
-  const data = new Map<string, string>();
-  return {
-    getItem: (key) => data.get(key) ?? null,
-    setItem: (key, value) => void data.set(key, value),
-  };
-}
-
 function renderHome({
   attachments = undefined as ComposerAttachmentControls | undefined,
   onStart = vi.fn(async () => {}),
@@ -97,7 +88,6 @@ function renderHome({
   readiness = READY,
   configStatus = undefined as "valid" | "invalid" | "missing" | undefined,
   configErrors = undefined as string[] | undefined,
-  storage = memoryStorage(),
   next = undefined as
     | { intent: IntentInfo; schedule: QueueSchedule; more: number }
     | undefined,
@@ -126,7 +116,6 @@ function renderHome({
       onSaveCaptain={onSaveCaptain}
       onStart={onStart}
       attachments={attachments}
-      storage={storage}
       next={next}
       onStartIntent={onStartIntent}
       staged={staged}
@@ -140,23 +129,17 @@ function renderHome({
     onNavigate,
     onOpenPalette,
     onOpenOwnProject,
-    storage,
     view,
   };
 }
 
 describe("RUN-29: captain home structure and one-motion start", () => {
-  test("greeting, composer, and captain identity render", () => {
+  test("project task framing, composer, and Captain role render", () => {
     renderHome();
-    expect(screen.getByText(/Hello! This is demo/).textContent).toBeTruthy();
+    expect(screen.getByText("Start a checkable change in demo")).toBeTruthy();
     expect(screen.getByTestId("start-composer")).toBeTruthy();
-    // The Captain shows as the one agent chip (DR-019): adapter ·
-    // model @ effort, with the adapter's readiness dot.
-    const chip = screen.getByTestId("agent-chip");
-    expect(chip.textContent).toContain("claude · claude-opus-4-8 @ high");
-    expect(chip.getAttribute("aria-label")).toBe(
-      "Captain: claude · claude-opus-4-8 @ high (ready)",
-    );
+    expect(screen.getByText(/Task coordinator · chooses a playbook/)).toBeTruthy();
+    expect(screen.queryByTestId("agent-chip")).toBeNull();
     expect(screen.getByTestId("captain-settings")).toBeTruthy();
   });
 
@@ -204,11 +187,16 @@ describe("RUN-29: captain home structure and one-motion start", () => {
     expect(onOpenOwnProject).toHaveBeenCalledOnce();
   });
 
-  test("the greeting says what a playbook is, and Send says how", () => {
+  test("task scope and slash discovery sit outside the input", () => {
     renderHome();
-    expect(
-      screen.getByText(/a scripted workflow the AI players run/),
-    ).toBeTruthy();
+    expect(screen.getByText(/Describe what should change and how to know it is done/)).toBeTruthy();
+    expect(screen.getByText("Type / in the field to see all 2 available playbooks")).toBeTruthy();
+    const field = screen.getByLabelText("Describe a project task");
+    expect(field).toBe(screen.getByTestId("start-composer"));
+    expect(field.getAttribute("aria-describedby")).toBe("start-playbook-hint");
+    expect(screen.queryByTestId("quick-start")).toBeNull();
+    expect(screen.queryByText("/ for playbooks · Enter sends")).toBeNull();
+    expect(screen.getByTestId("start-send").textContent).toBe("Submit task");
     expect(screen.getByTestId("start-send").title).toBe(
       "Enter to send · Shift+Enter for a new line",
     );
@@ -257,7 +245,7 @@ describe("run-view-168: with nothing registered, the welcome page carries the wa
   });
 });
 
-describe("RUN-31: slash menu and quick start dismissal", () => {
+describe("RUN-31: slash menu discovery", () => {
   test("typing / lists playbooks with intents and filters by prefix", () => {
     renderHome();
     const composer = screen.getByTestId("start-composer");
@@ -283,16 +271,13 @@ describe("RUN-31: slash menu and quick start dismissal", () => {
     expect(onStart).not.toHaveBeenCalled();
   });
 
-  test("dismissing the quick start persists across remounts", () => {
-    const storage = memoryStorage();
-    const first = renderHome({ storage });
-    expect(screen.getByTestId("quick-start")).toBeTruthy();
-    fireEvent.click(screen.getByTestId("quick-start-dismiss"));
-    expect(screen.queryByTestId("quick-start")).toBeNull();
-    expect(storage.getItem(QUICK_START_KEY)).toBe("1");
-    first.view.unmount();
-    renderHome({ storage });
-    expect(screen.queryByTestId("quick-start")).toBeNull();
+  test("no command list at rest; slash shows every configured playbook", () => {
+    renderHome();
+    expect(screen.queryByTestId("slash-menu")).toBeNull();
+    fireEvent.change(screen.getByTestId("start-composer"), { target: { value: "/" } });
+    const menu = screen.getByTestId("slash-menu");
+    expect(menu.textContent).toContain("/code");
+    expect(menu.textContent).toContain("/review");
   });
 });
 
@@ -510,8 +495,7 @@ describe("run-view-88: the Captain home names the queue's head", () => {
       expect(Boolean(screen.queryByTestId("next-start"))).toBe(
         schedule.manualStart,
       );
-      // Coexists with the quick start card (run-view-88).
-      expect(screen.getByTestId("quick-start")).toBeTruthy();
+      expect(screen.getByTestId("project-task-start")).toBeTruthy();
     },
   );
 
@@ -532,10 +516,10 @@ describe("run-view-88: the Captain home names the queue's head", () => {
     );
   });
 
-  test("no queued intent, no card — the quick start stands alone", () => {
+  test("no queued intent, no card — task start stands alone", () => {
     renderHome();
     expect(screen.queryByTestId("next-card")).toBeNull();
-    expect(screen.getByTestId("quick-start")).toBeTruthy();
+    expect(screen.getByTestId("project-task-start")).toBeTruthy();
   });
 
   test("Remove closes the head dropped on the click; Undo re-queues the same text and provenance (run-view-114)", async () => {
@@ -557,7 +541,6 @@ describe("run-view-88: the Captain home names the queue's head", () => {
       onNavigate: vi.fn(),
       onSaveCaptain: vi.fn(async () => {}),
       onStart: vi.fn(async () => {}),
-      storage: memoryStorage(),
     };
     const view = render(
       <CaptainHome {...props} next={nextCard()} />,
@@ -641,7 +624,6 @@ describe("run-view-88: the Captain home names the queue's head", () => {
       onNavigate: vi.fn(),
       onSaveCaptain: vi.fn(async () => {}),
       onStart: vi.fn(async () => {}),
-      storage: memoryStorage(),
     };
     const view = render(<CaptainHome {...props} next={nextCard(waiting)} />);
     expect(screen.queryByTestId("next-start")).toBeNull();
@@ -781,19 +763,18 @@ describe("run-view-85: queue instead of send, from the home", () => {
   });
 });
 
-describe("run-view-25, DR-038: the Captain chip wears the fast-mode mark", () => {
-  test("a captain in fast mode shows the lightning with its tooltip", () => {
+describe("run-view-25: Captain tuning remains in the secondary editor", () => {
+  test("a captain in fast mode keeps that setting in the editor", () => {
     renderHome({ captain: { ...CAPTAIN, fastMode: true } });
-    const chip = screen.getByTestId("agent-chip");
-    expect(within(chip).getByTitle("fast mode").textContent).toBe("⚡");
-    expect(chip.getAttribute("aria-label")).toContain("fast mode");
+    expect(screen.queryByTestId("agent-chip")).toBeNull();
+    fireEvent.click(screen.getByTestId("captain-settings"));
+    expect((screen.getByTestId("agent-fast-mode") as HTMLInputElement).checked).toBe(true);
   });
 
-  test("without fast mode there is no mark", () => {
+  test("without fast mode the editor leaves it off", () => {
     renderHome();
-    expect(
-      within(screen.getByTestId("agent-chip")).queryByTitle("fast mode"),
-    ).toBeNull();
+    fireEvent.click(screen.getByTestId("captain-settings"));
+    expect((screen.getByTestId("agent-fast-mode") as HTMLInputElement).checked).toBe(false);
   });
 });
 

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The Captain home (DR-007, DR-132): a welcome page until a project
-// exists, then an IM-style thread with playbooks in the composer.
+// The Captain home (DR-007, DR-132, DR-138): a welcome page until a
+// project exists, then a scoped task start with slash discovery.
 // Props-driven so RUN-29/31 exercise it without a live core.
 
 import { useEffect, useRef, useState } from "react";
@@ -16,12 +16,9 @@ import type {
 import { i18n } from "../i18n.js";
 import { canSubmitContent, type ComposerAttachmentControls } from "./ComposerAttachments.js";
 import type { AgentPatch } from "../lib/config-ops.js";
-import { playbookIntent } from "../lib/playbook-intent.js";
 import { keyLabel } from "../lib/shortcuts.js";
 import { useAppStore, type StagedIntent } from "../state/store.js";
-import { Rich } from "./Rich.js";
 import { SlashMenuList, slashMatches } from "./SlashMenu.js";
-import { AgentChip } from "./AgentChip.js";
 import { AgentEditorPopover } from "./AgentEditor.js";
 import { Icon } from "./Icon.js";
 import { NextCard, type NextCardIntent } from "./NextCard.js";
@@ -31,33 +28,6 @@ import {
   ComposerField,
   sendKeys,
 } from "./Composer.js";
-
-export const QUICK_START_KEY = "spex.quickStartDismissed";
-
-/** Storage access that tolerates a browser that has none (private
- * mode, file://, a headless test): the home must render regardless. */
-function safeRead(
-  storage: Pick<Storage, "getItem" | "setItem">,
-  key: string,
-): string | null {
-  try {
-    return storage.getItem(key);
-  } catch {
-    return null;
-  }
-}
-
-function safeWrite(
-  storage: Pick<Storage, "getItem" | "setItem">,
-  key: string,
-  value: string,
-): void {
-  try {
-    storage.setItem(key, value);
-  } catch {
-    // Dismissal is best-effort.
-  }
-}
 
 export interface CaptainHomeProps {
   /** The workspace's project context (DR-011); the bar owns choice. */
@@ -104,8 +74,6 @@ export interface CaptainHomeProps {
    * (DR-035); absent while no project is current — the control hides. */
   onQueueInstead?: (text: string) => Promise<void>;
   attachments?: ComposerAttachmentControls;
-  /** Storage for the quick-start dismissal (tests inject a stub). */
-  storage?: Pick<Storage, "getItem" | "setItem">;
 }
 
 /** Breathing room the popover leaves against the window's edge. */
@@ -135,13 +103,7 @@ export function popoverRoom(
     : { direction: "down", room: Math.max(below, 0) };
 }
 
-function CaptainBubble({
-  children,
-  tone = "neutral",
-}: {
-  children: React.ReactNode;
-  tone?: "neutral" | "error";
-}) {
+function CaptainBubble({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex items-start gap-2">
       <span className="mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-600 text-xs font-bold text-white">
@@ -151,11 +113,7 @@ function CaptainBubble({
         })}
       </span>
       <div
-        className={`max-w-[85%] rounded-2xl rounded-bl-md px-3 py-2 text-sm ${
-          tone === "error"
-            ? "border border-red-300 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200"
-            : "bg-neutral-200/60 dark:bg-neutral-800"
-        }`}
+        className="max-w-[85%] rounded-2xl rounded-bl-md bg-neutral-200/60 px-3 py-2 text-sm dark:bg-neutral-800"
       >
         {children}
       </div>
@@ -165,8 +123,6 @@ function CaptainBubble({
 
 export function CaptainHome(props: CaptainHomeProps) {
   const { playbooks, captain, readiness, connected } = props;
-  const storage = props.storage ?? window.localStorage;
-
   const [localText, setLocalText] = useState("");
   // Draft lives in the store when the host wires it (DR-010: surface
   // switches never eat text); local state covers standalone renders.
@@ -175,9 +131,6 @@ export function CaptainHome(props: CaptainHomeProps) {
   const [slashIndex, setSlashIndex] = useState(0);
   const [slashDismissed, setSlashDismissed] = useState(false);
   const [rechecking, setRechecking] = useState(false);
-  const [quickStartHidden, setQuickStartHidden] = useState(
-    () => safeRead(storage, QUICK_START_KEY) === "1",
-  );
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
   const [queueing, setQueueing] = useState(false);
@@ -257,10 +210,8 @@ export function CaptainHome(props: CaptainHomeProps) {
     }
   }
 
-  // A fresh Captain canvas centers the cluster — greeting, quick start,
-  // project chip, composer — instead of hugging the bottom fifth of
-  // an empty window (DR-010 §8). Any real content reverts to the IM
-  // bottom-docked layout.
+  // A fresh Captain canvas centers the task guidance and composer.
+  // Any real content reverts to the IM bottom-docked layout (DR-010 §8).
   const emptyCanvas = !configBroken && !error;
 
   if (!props.hasProject && !props.hasProjects) {
@@ -363,28 +314,29 @@ export function CaptainHome(props: CaptainHomeProps) {
           emptyCanvas ? "" : "flex-1 justify-end"
         }`}
       >
-        <CaptainBubble>
-          <p>
-            {props.hasProject
-              ? i18n._(
-                  "Hello! This is {project} — tell me what to do with it and I'll route it to a playbook, a scripted workflow the AI players run.",
-                  {
-                    project:
-                      props.projectName ??
-                      i18n._({
-                        id: "your project",
-                        comment: "stands in for a project with no name yet",
-                      }),
-                  },
-                )
-              : i18n._(
-                  "Hello! I'm your Captain. Pick a project in the sidebar, then tell me what to do with it and I'll route it to a playbook, a scripted workflow the AI players run.",
-                )}
-          </p>
-        </CaptainBubble>
+        {props.hasProject ? (
+          <div data-testid="project-task-start" className="max-w-xl">
+            <h1 className="text-2xl font-semibold leading-tight tracking-tight text-neutral-900 dark:text-neutral-100">
+              {i18n._("Start a checkable change in {project}", {
+                project: props.projectName ?? i18n._("your project"),
+              })}
+            </h1>
+            <p className="mt-3 max-w-lg text-sm leading-6 text-neutral-600 dark:text-neutral-300">
+              {i18n._("Describe what should change and how to know it is done. Spex uses available playbooks to turn that request into steps for AI implementation and review.")}
+            </p>
+          </div>
+        ) : (
+          <CaptainBubble>
+            <p>
+              {i18n._(
+                "Hello! I'm your Captain. Pick a project in the sidebar, then tell me what to do with it and I'll route it to a playbook, a scripted workflow the AI players run.",
+              )}
+            </p>
+          </CaptainBubble>
+        )}
 
         {configBroken ? (
-          <CaptainBubble tone="error">
+          <div className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200">
             <p className="text-xs font-semibold">
               {props.configStatus === "missing"
                 ? i18n._("Spex has no config file yet — playbooks are unavailable.")
@@ -413,13 +365,11 @@ export function CaptainHome(props: CaptainHomeProps) {
             >
               {i18n._("Open Settings →")}
             </button>
-          </CaptainBubble>
+          </div>
         ) : null}
 
-
         {/* The project's plan (run-view-88): the core-published next
-         * intent with its standing and available actions, beside the
-         * quick start card. */}
+         * intent with its standing and available actions. */}
         <NextCard
           next={props.next}
           connected={connected}
@@ -427,63 +377,8 @@ export function CaptainHome(props: CaptainHomeProps) {
           onStartIntent={props.onStartIntent}
         />
 
-        {!quickStartHidden && playbooks.length > 0 ? (
-          <div
-            data-testid="quick-start"
-            className="ml-8 flex max-w-[85%] flex-col gap-1 rounded-xl border border-neutral-200 bg-white p-3 dark:border-neutral-800 dark:bg-neutral-900"
-          >
-            <div className="flex items-center">
-              <span className="text-xs font-semibold text-neutral-500">
-                {i18n._("Quick start")}
-              </span>
-              <button
-                type="button"
-                data-testid="quick-start-dismiss"
-                title={i18n._("Hide quick start (playbooks stay under / in the composer)")}
-                aria-label={i18n._("Hide the quick-start card")}
-                onClick={() => {
-                  safeWrite(storage, QUICK_START_KEY, "1");
-                  setQuickStartHidden(true);
-                }}
-                className="ml-auto flex h-6 w-6 items-center justify-center rounded text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
-              >
-                <Icon name="close" className="h-3.5 w-3.5" />
-              </button>
-            </div>
-            {playbooks.slice(0, 4).map((playbook) => (
-              <button
-                key={playbook.id}
-                type="button"
-                data-testid={`playbook-chip-${playbook.id}`}
-                onClick={() => insertCommand(playbook)}
-                className="flex items-baseline gap-2 rounded-md px-2 py-1 text-left text-sm hover:bg-neutral-50 dark:hover:bg-neutral-800"
-              >
-                <span className="font-mono font-semibold">
-                  /{playbook.command}
-                </span>
-                <span className="truncate text-xs text-neutral-500">
-                  {playbookIntent(playbook.intent)}
-                </span>
-              </button>
-            ))}
-            {playbooks.length > 4 ? (
-              <span className="px-2 text-xs text-neutral-500">
-                <Rich
-                  text={i18n._({
-                    id: "+{count} more under <0>/</0>",
-                    values: { count: playbooks.length - 4 },
-                    comment:
-                      "the playbooks the card does not list; <0> holds the slash key",
-                  })}
-                  components={[<span key="slash" className="font-mono" />]}
-                />
-              </span>
-            ) : null}
-          </div>
-        ) : null}
-
         {error ? (
-          <div className="ml-8 max-w-[85%] rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
+          <div className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
             {error}
           </div>
         ) : null}
@@ -536,7 +431,10 @@ export function CaptainHome(props: CaptainHomeProps) {
             ) : null}
           </div>
         ) : null}
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-neutral-600 dark:text-neutral-300">
+          <span className="font-semibold text-neutral-900 dark:text-neutral-100">Captain</span>
+          <span>{i18n._("Task coordinator · chooses a playbook and arranges AI work")}</span>
+          {!captain ? <span>{i18n._("not set")}</span> : null}
           {/* The anchor grants the popover its room (run-view-32):
               the dialog it holds is capped to what the window can
               show on the side it opened, and scrolls inside that. */}
@@ -548,29 +446,8 @@ export function CaptainHome(props: CaptainHomeProps) {
                   } as React.CSSProperties)
                 : undefined
             }
-            className="relative ml-auto flex min-w-0 items-center gap-1 text-xs text-neutral-500 [&>[data-testid=agent-popover]]:max-h-(--popover-room) [&>[data-testid=agent-popover]]:overflow-y-auto"
+            className="relative ml-auto flex min-w-0 items-center gap-1 [&>[data-testid=agent-popover]]:max-h-(--popover-room) [&>[data-testid=agent-popover]]:overflow-y-auto"
           >
-            {i18n._({
-              id: "Captain:",
-              comment: "label before the Captain agent's own chip",
-            })}{" "}
-            {captain ? (
-              <AgentChip
-                agent={captain}
-                readiness={captainReadiness}
-                label={i18n._({
-                  id: "Captain",
-                  comment: "the agent that routes the Boss's message to a playbook",
-                })}
-              />
-            ) : (
-              <span className="font-mono">
-                {i18n._({
-                  id: "not set",
-                  comment: "stands where the Captain agent is not configured",
-                })}
-              </span>
-            )}
             <button
               ref={gearRef}
               type="button"
@@ -608,6 +485,23 @@ export function CaptainHome(props: CaptainHomeProps) {
           </span>
         </div>
 
+        {props.hasProject ? (
+          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-xs">
+            <label htmlFor="start-composer" className="font-semibold text-neutral-800 dark:text-neutral-200">
+              {i18n._("Describe a project task")}
+            </label>
+            {playbooks.length > 0 ? (
+              <span id="start-playbook-hint" className="text-neutral-600 dark:text-neutral-300">
+                {i18n._("Type / in the field to see all {count} available playbooks", { count: playbooks.length })}
+              </span>
+            ) : (
+              <button type="button" onClick={() => props.onNavigate("Playbooks")} className="font-medium text-brand-700 hover:underline dark:text-brand-300">
+                {i18n._("No playbooks available — open Playbooks")}
+              </button>
+            )}
+          </div>
+        ) : null}
+
         <div className="relative">
           {slash ? (
             <SlashMenuList
@@ -629,7 +523,9 @@ export function CaptainHome(props: CaptainHomeProps) {
             field={
               <ComposerField
                 fieldRef={composerRef}
+                id="start-composer"
                 data-testid="start-composer"
+                aria-describedby={props.hasProject && playbooks.length > 0 ? "start-playbook-hint" : undefined}
                 autoFocus
                 value={text}
                 onChange={(event) => {
@@ -677,12 +573,16 @@ export function CaptainHome(props: CaptainHomeProps) {
                   }
                 }}
                 placeholder={
-                  connected ? i18n._("Message the Captain…") : i18n._("Connecting…")
+                  connected
+                    ? props.hasProject
+                      ? i18n._("What should change?")
+                      : i18n._("Message the Captain…")
+                    : i18n._("Connecting…")
                 }
                 disabled={!connected}
               />
             }
-            caption={
+            caption={props.hasProject && !props.staged && !queueNote ? null :
               <ComposerCaption
                 staged={props.staged}
                 onDetachStaged={props.onDetachStaged}
@@ -742,7 +642,9 @@ export function CaptainHome(props: CaptainHomeProps) {
               >
                 {busy
                   ? i18n._("Starting…")
-                  : i18n._({ id: "Send", comment: "act: send the typed message" })}
+                  : props.hasProject
+                    ? i18n._("Submit task")
+                    : i18n._({ id: "Send", comment: "act: send the typed message" })}
               </button>
             }
           />

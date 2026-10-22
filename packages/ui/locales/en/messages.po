@@ -662,11 +662,6 @@ msgstr "↓ Latest"
 msgid "+{count} more queued"
 msgstr "+{count} more queued"
 
-#. the playbooks the card does not list; <0> holds the slash key
-#: src/components/CaptainHome.tsx
-msgid "+{count} more under <0>/</0>"
-msgstr "+{count} more under <0>/</0>"
-
 #: src/components/CitationPreview.tsx
 msgid "<0>{id}</0> — not in the tree"
 msgstr "<0>{id}</0> — not in the tree"
@@ -859,6 +854,7 @@ msgid "Add {id} with the neutral agent, then tune it here"
 msgstr "Add {id} with the neutral agent, then tune it here"
 
 #: src/components/CaptainHome.tsx
+#: src/components/NavRail.tsx
 #: src/components/ProjectPalette.tsx
 msgid "Add a local project"
 msgstr "Add a local project"
@@ -1430,13 +1426,11 @@ msgid "Cancelling browser setup…"
 msgstr "Cancelling browser setup…"
 
 #. the agent that routes the Boss's message to a playbook
-#. the agent that routes the Boss's message to a playbook
 #. the session's controlling agent, by name
 #. the session's controlling agent, by name
 #. the session's controlling agent, by name
 #. the session's controlling agent, by name
 #. the session's controlling agent, by name
-#: src/components/CaptainHome.tsx
 #: src/components/CaptainPane.tsx
 #: src/components/DraftConversation.tsx
 #: src/components/SettingsSurface.tsx
@@ -1459,11 +1453,6 @@ msgstr "Captain is working. Wait for the turn to finish."
 #: src/components/Composer.tsx
 msgid "Captain is working…"
 msgstr "Captain is working…"
-
-#. label before the Captain agent's own chip
-#: src/components/CaptainHome.tsx
-msgid "Captain:"
-msgstr "Captain:"
 
 #. draft state chip, at most 14 characters: the source changed after the last compile
 #: src/lib/drafts.ts
@@ -2237,9 +2226,17 @@ msgstr "denied"
 msgid "Deny"
 msgstr "Deny"
 
+#: src/components/CaptainHome.tsx
+msgid "Describe a project task"
+msgstr "Describe a project task"
+
 #: src/components/DraftConversation.tsx
 msgid "Describe the playbook…"
 msgstr "Describe the playbook…"
+
+#: src/components/CaptainHome.tsx
+msgid "Describe what should change and how to know it is done. Spex uses available playbooks to turn that request into steps for AI implementation and review."
+msgstr "Describe what should change and how to know it is done. Spex uses available playbooks to turn that request into steps for AI implementation and review."
 
 #. notification sink: an OS notification
 #: src/components/SettingsSurface.tsx
@@ -2992,10 +2989,6 @@ msgstr "Groups are made by the people who run {name}"
 msgid "Hello! I'm your Captain. Pick a project in the sidebar, then tell me what to do with it and I'll route it to a playbook, a scripted workflow the AI players run."
 msgstr "Hello! I'm your Captain. Pick a project in the sidebar, then tell me what to do with it and I'll route it to a playbook, a scripted workflow the AI players run."
 
-#: src/components/CaptainHome.tsx
-msgid "Hello! This is {project} — tell me what to do with it and I'll route it to a playbook, a scripted workflow the AI players run."
-msgstr "Hello! This is {project} — tell me what to do with it and I'll route it to a playbook, a scripted workflow the AI players run."
-
 #: src/components/SpecView.tsx
 msgid "Hide {group} items"
 msgstr "Hide {group} items"
@@ -3004,17 +2997,9 @@ msgstr "Hide {group} items"
 msgid "Hide diff"
 msgstr "Hide diff"
 
-#: src/components/CaptainHome.tsx
-msgid "Hide quick start (playbooks stay under / in the composer)"
-msgstr "Hide quick start (playbooks stay under / in the composer)"
-
 #: src/components/NavRail.tsx
 msgid "Hide sessions in {project}"
 msgstr "Hide sessions in {project}"
-
-#: src/components/CaptainHome.tsx
-msgid "Hide the quick-start card"
-msgstr "Hide the quick-start card"
 
 #. tab note: a conversation this core cannot continue
 #. tab note: a conversation this core cannot continue
@@ -3753,6 +3738,10 @@ msgstr "No open issues."
 msgid "No open pull requests."
 msgstr "No open pull requests."
 
+#: src/components/CaptainHome.tsx
+msgid "No playbooks available — open Playbooks"
+msgstr "No playbooks available — open Playbooks"
+
 #: src/components/LibrarySurface.tsx
 msgid "No playbooks enabled yet — enable a built-in below, or make your own with New playbook."
 msgstr "No playbooks enabled yet — enable a built-in below, or make your own with New playbook."
@@ -3928,7 +3917,6 @@ msgstr "not ready"
 msgid "not resolved"
 msgstr "not resolved"
 
-#. stands where the Captain agent is not configured
 #: src/components/CaptainHome.tsx
 msgid "not set"
 msgstr "not set"
@@ -4568,10 +4556,6 @@ msgstr "queued submission failed: {reason}"
 #: src/components/ForgeItemRow.tsx
 msgid "Queuing…"
 msgstr "Queuing…"
-
-#: src/components/CaptainHome.tsx
-msgid "Quick start"
-msgstr "Quick start"
 
 #. act: ask the agents whether they are ready now
 #: src/components/CaptainHome.tsx
@@ -5686,6 +5670,10 @@ msgstr "Start {title}"
 msgid "Start {title} in {project}"
 msgstr "Start {title} in {project}"
 
+#: src/components/CaptainHome.tsx
+msgid "Start a checkable change in {project}"
+msgstr "Start a checkable change in {project}"
+
 #: src/lib/shortcuts.ts
 msgid "Start a new session in the current project"
 msgstr "Start a new session in the current project"
@@ -5813,6 +5801,10 @@ msgstr "subagent model"
 msgid "Subagent model"
 msgstr "Subagent model"
 
+#: src/components/CaptainHome.tsx
+msgid "Submit task"
+msgstr "Submit task"
+
 #. history row tag: a later record replaced this one
 #. history row tag: a later record replaced this one
 #: src/components/ProjectGroup.tsx
@@ -5823,7 +5815,6 @@ msgstr "superseded"
 msgid "Supported by this model"
 msgstr "Supported by this model"
 
-#: src/components/NavRail.tsx
 #: src/lib/shortcuts.ts
 msgid "Switch or add a project"
 msgstr "Switch or add a project"
@@ -5909,6 +5900,10 @@ msgstr "Take the task out of the message"
 #: src/components/NextCard.tsx
 msgid "Take this task out of the queue — Undo puts it back"
 msgstr "Take this task out of the queue — Undo puts it back"
+
+#: src/components/CaptainHome.tsx
+msgid "Task coordinator · chooses a playbook and arranges AI work"
+msgstr "Task coordinator · chooses a playbook and arranges AI work"
 
 #: src/components/DraftConversation.tsx
 msgid "Tell the agent what the playbook does, who does what, and when it is done"
@@ -6339,6 +6334,10 @@ msgstr "Tweak the {name} agent in place"
 msgid "Tweak the Captain agent in place"
 msgstr "Tweak the Captain agent in place"
 
+#: src/components/CaptainHome.tsx
+msgid "Type / in the field to see all {count} available playbooks"
+msgstr "Type / in the field to see all {count} available playbooks"
+
 #. a required role no player answers yet
 #: src/components/LibrarySurface.tsx
 msgid "unbound"
@@ -6575,6 +6574,10 @@ msgstr "waiting for your reply"
 msgid "waiting for your verdict"
 msgstr "waiting for your verdict"
 
+#: src/components/CaptainHome.tsx
+msgid "What should change?"
+msgstr "What should change?"
+
 #: src/components/SpaceSync.tsx
 msgid "Where a project lives is recorded on this device only; this never syncs."
 msgstr "Where a project lives is recorded on this device only; this never syncs."
@@ -6690,7 +6693,6 @@ msgstr "Your own group"
 msgid "Your own group's config, in {repository}"
 msgstr "Your own group's config, in {repository}"
 
-#. stands in for a project with no name yet
 #: src/components/CaptainHome.tsx
 msgid "your project"
 msgstr "your project"

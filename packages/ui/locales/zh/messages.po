@@ -662,11 +662,6 @@ msgstr "↓ 最新"
 msgid "+{count} more queued"
 msgstr "+{count} 项已排队"
 
-#. the playbooks the card does not list; <0> holds the slash key
-#: src/components/CaptainHome.tsx
-msgid "+{count} more under <0>/</0>"
-msgstr "+{count} 个在 <0>/</0> 下"
-
 #: src/components/CitationPreview.tsx
 msgid "<0>{id}</0> — not in the tree"
 msgstr "<0>{id}</0> — 不在规约树中"
@@ -859,6 +854,7 @@ msgid "Add {id} with the neutral agent, then tune it here"
 msgstr "以中性智能体添加 {id}，再在此调整"
 
 #: src/components/CaptainHome.tsx
+#: src/components/NavRail.tsx
 #: src/components/ProjectPalette.tsx
 msgid "Add a local project"
 msgstr "添加本地项目"
@@ -1430,13 +1426,11 @@ msgid "Cancelling browser setup…"
 msgstr "正在取消浏览器设置…"
 
 #. the agent that routes the Boss's message to a playbook
-#. the agent that routes the Boss's message to a playbook
 #. the session's controlling agent, by name
 #. the session's controlling agent, by name
 #. the session's controlling agent, by name
 #. the session's controlling agent, by name
 #. the session's controlling agent, by name
-#: src/components/CaptainHome.tsx
 #: src/components/CaptainPane.tsx
 #: src/components/DraftConversation.tsx
 #: src/components/SettingsSurface.tsx
@@ -1459,11 +1453,6 @@ msgstr "Captain 正在工作。请等待本轮结束。"
 #: src/components/Composer.tsx
 msgid "Captain is working…"
 msgstr "Captain 工作中…"
-
-#. label before the Captain agent's own chip
-#: src/components/CaptainHome.tsx
-msgid "Captain:"
-msgstr "Captain："
 
 #. draft state chip, at most 14 characters: the source changed after the last compile
 #: src/lib/drafts.ts
@@ -2237,9 +2226,17 @@ msgstr "已拒绝"
 msgid "Deny"
 msgstr "拒绝"
 
+#: src/components/CaptainHome.tsx
+msgid "Describe a project task"
+msgstr "描述项目任务"
+
 #: src/components/DraftConversation.tsx
 msgid "Describe the playbook…"
 msgstr "描述这个规程…"
+
+#: src/components/CaptainHome.tsx
+msgid "Describe what should change and how to know it is done. Spex uses available playbooks to turn that request into steps for AI implementation and review."
+msgstr "说明想改什么、怎样算完成。Spex 通过可用规程把任务组织成步骤，编排 AI 实现与复核。"
 
 #. notification sink: an OS notification
 #: src/components/SettingsSurface.tsx
@@ -2992,10 +2989,6 @@ msgstr "群组由运营 {name} 的人创建"
 msgid "Hello! I'm your Captain. Pick a project in the sidebar, then tell me what to do with it and I'll route it to a playbook, a scripted workflow the AI players run."
 msgstr "你好！我是你的 Captain。在侧栏选择一个项目，再告诉我要做什么，我会把它交给某个规程，也就是由 AI Player 执行的脚本化工作流。"
 
-#: src/components/CaptainHome.tsx
-msgid "Hello! This is {project} — tell me what to do with it and I'll route it to a playbook, a scripted workflow the AI players run."
-msgstr "你好！这里是 {project} — 告诉我要做什么，我会把它交给某个规程，也就是由 AI Player 执行的脚本化工作流。"
-
 #: src/components/SpecView.tsx
 msgid "Hide {group} items"
 msgstr "隐藏{group}条目"
@@ -3004,17 +2997,9 @@ msgstr "隐藏{group}条目"
 msgid "Hide diff"
 msgstr "隐藏差异"
 
-#: src/components/CaptainHome.tsx
-msgid "Hide quick start (playbooks stay under / in the composer)"
-msgstr "隐藏快速开始（规程仍在输入框的 / 菜单中）"
-
 #: src/components/NavRail.tsx
 msgid "Hide sessions in {project}"
 msgstr "隐藏 {project} 中的会话"
-
-#: src/components/CaptainHome.tsx
-msgid "Hide the quick-start card"
-msgstr "隐藏快速开始卡片"
 
 #. tab note: a conversation this core cannot continue
 #. tab note: a conversation this core cannot continue
@@ -3753,6 +3738,10 @@ msgstr "没有未关闭的 Issue。"
 msgid "No open pull requests."
 msgstr "没有未关闭的 PR。"
 
+#: src/components/CaptainHome.tsx
+msgid "No playbooks available — open Playbooks"
+msgstr "暂无可用规程，打开“规程”"
+
 #: src/components/LibrarySurface.tsx
 msgid "No playbooks enabled yet — enable a built-in below, or make your own with New playbook."
 msgstr "尚未启用任何规程 — 在下方启用内置规程，或用“新建规程”自己创建。"
@@ -3928,7 +3917,6 @@ msgstr "未就绪"
 msgid "not resolved"
 msgstr "未解析"
 
-#. stands where the Captain agent is not configured
 #: src/components/CaptainHome.tsx
 msgid "not set"
 msgstr "未设置"
@@ -4568,10 +4556,6 @@ msgstr "排队提交失败：{reason}"
 #: src/components/ForgeItemRow.tsx
 msgid "Queuing…"
 msgstr "排队中…"
-
-#: src/components/CaptainHome.tsx
-msgid "Quick start"
-msgstr "快速开始"
 
 #. act: ask the agents whether they are ready now
 #: src/components/CaptainHome.tsx
@@ -5686,6 +5670,10 @@ msgstr "开始 {title}"
 msgid "Start {title} in {project}"
 msgstr "在 {project} 中开始 {title}"
 
+#: src/components/CaptainHome.tsx
+msgid "Start a checkable change in {project}"
+msgstr "在 {project} 中开始一项可验收的改动"
+
 #: src/lib/shortcuts.ts
 msgid "Start a new session in the current project"
 msgstr "在当前项目中开始新会话"
@@ -5813,6 +5801,10 @@ msgstr "子代理模型"
 msgid "Subagent model"
 msgstr "子代理模型"
 
+#: src/components/CaptainHome.tsx
+msgid "Submit task"
+msgstr "提交任务"
+
 #. history row tag: a later record replaced this one
 #. history row tag: a later record replaced this one
 #: src/components/ProjectGroup.tsx
@@ -5823,7 +5815,6 @@ msgstr "已被取代"
 msgid "Supported by this model"
 msgstr "此模型支持"
 
-#: src/components/NavRail.tsx
 #: src/lib/shortcuts.ts
 msgid "Switch or add a project"
 msgstr "切换或添加项目"
@@ -5909,6 +5900,10 @@ msgstr "从消息中移除该任务"
 #: src/components/NextCard.tsx
 msgid "Take this task out of the queue — Undo puts it back"
 msgstr "将此任务移出队列 — 撤销可放回"
+
+#: src/components/CaptainHome.tsx
+msgid "Task coordinator · chooses a playbook and arranges AI work"
+msgstr "任务协调助手 · 选择规程并安排 AI 执行"
 
 #: src/components/DraftConversation.tsx
 msgid "Tell the agent what the playbook does, who does what, and when it is done"
@@ -6339,6 +6334,10 @@ msgstr "就地调整 {name} 智能体"
 msgid "Tweak the Captain agent in place"
 msgstr "就地调整 Captain 智能体"
 
+#: src/components/CaptainHome.tsx
+msgid "Type / in the field to see all {count} available playbooks"
+msgstr "在输入框输入 /，查看全部 {count} 个可用规程"
+
 #. a required role no player answers yet
 #: src/components/LibrarySurface.tsx
 msgid "unbound"
@@ -6575,6 +6574,10 @@ msgstr "等待你的回复"
 msgid "waiting for your verdict"
 msgstr "等待你的裁定"
 
+#: src/components/CaptainHome.tsx
+msgid "What should change?"
+msgstr "想改什么、怎样算完成？"
+
 #: src/components/SpaceSync.tsx
 msgid "Where a project lives is recorded on this device only; this never syncs."
 msgstr "项目所在位置只记录在本设备；从不同步。"
@@ -6690,7 +6693,6 @@ msgstr "你自己的群组"
 msgid "Your own group's config, in {repository}"
 msgstr "你自己的群组的配置，位于 {repository}"
 
-#. stands in for a project with no name yet
 #: src/components/CaptainHome.tsx
 msgid "your project"
 msgstr "你的项目"

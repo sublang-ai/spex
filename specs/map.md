@@ -160,6 +160,7 @@ meta.md       The spec of specs
 | [DR-135](decisions/135-welcome-flow-copy-and-scoped-academy-note.md) | 135-welcome-flow-copy-and-scoped-academy-note.md | Arrow-separated specs-to-delivery explanation, Academy-only caption and no redundant creation-form back link; amends DR-134 |
 | [DR-136](decisions/136-quieter-welcome-flow-and-academy-choice.md) | 136-quieter-welcome-flow-and-academy-choice.md | Compact connected specs-to-delivery steps and no Academy caption on the welcome page; amends DR-135 |
 | [DR-137](decisions/137-reopen-the-removed-academy-example.md) | 137-reopen-the-removed-academy-example.md | Reopen a removed Academy example from its preserved Git working folder without overwriting it; amends DR-015 |
+| [DR-138](decisions/138-project-start-explains-the-task-and-slash-discovery.md) | 138-project-start-explains-the-task-and-slash-discovery.md | Project task start: scoped work, Captain's role, slash discovery, and one clear input; amends DR-007, DR-019, and DR-041 |
 
 ## Packages
 

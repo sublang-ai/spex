@@ -235,7 +235,7 @@ The Boss composer — on the Captain home and in a session alike — shall take 
 | Part | Form |
 | --- | --- |
 | Field | on top at full width, one row when empty and never shorter whatever height the viewport reports, growing with its text to eight lines or two fifths of the viewport, shrinking toward that one-row floor when the Captain column has less room so its caption and actions remain inside the column, and scrolling excess text, refitted whenever the viewport or the field's own box resizes — a divider dragged or a sidebar folded rewraps the draft with no window resize behind it — with no native resize grip |
-| Caption | one line under the field reading "/ for playbooks · Enter sends", which an acknowledgment or the staged intent chip occupies instead of stacking above the box |
+| Caption | one line under the field reading "/ for playbooks · Enter sends" in a session or while no project is chosen; the project home's resting composer omits it because its slash guidance sits outside the box [[run-view-25](#run-view-25)]; an acknowledgment or staged intent chip occupies that line when present |
 | Action row | beneath, wrapping: the secondary action at the left, then Abort while a turn runs, and the primary control last at the right |
 | Placeholder | at most 24 characters — "Message the Captain…", "Reply to ⟨player⟩…" for a waiting question, "Captain is working…" while a turn runs, "Connecting…" without the core |
 | Queued indicator | above the field, the queued submissions [[run-view-8](#run-view-8)] in their own positioned scrolling frame a few entries tall, kept at its end so the newest shows; the composer yields around it, so the field, the caption, and the action row keep their place at any queue length and the pane the composer sits in is never pushed out of the window |
@@ -293,9 +293,11 @@ The app shell shall fill the window at every size, giving the surface it shows a
 
 #### run-view-25
 
-Where a project is registered and no session tab is active, when the Projects surface is shown, the run view shall present the Captain home: a chat thread opened by a Captain greeting, a chat composer, and the captain's adapter, model, and effort — with a lightning mark after them while the captain runs in fast mode, "fast mode" in its tooltip, as every agent chip wears it ([DR-038](../decisions/038-history-is-done-work.md)) — with a gear control opening the in-place agent editor, per [DR-007](../decisions/007-conversational-session-start.md) and [DR-011](../decisions/011-project-workspace.md):
+Where a project is registered and no session tab is active, when the Projects surface is shown, the run view shall present a project task start with one composer and secondary Captain settings ([DR-007](../decisions/007-conversational-session-start.md), [DR-011](../decisions/011-project-workspace.md), [DR-138](../decisions/138-project-start-explains-the-task-and-slash-discovery.md)):
 
-- the greeting names the current project and asks what to do with it, since the reader is already inside one and the question is the work, not the place, and says in one clause what a playbook is — a scripted workflow the AI players run — so the first sentence needs no glossary;
+- the heading names the current project and asks for a change and its acceptance criteria, explaining that Spex works through available playbooks rather than presenting an unrestricted chat;
+- Captain is named as the task coordinator who selects a suitable playbook and arranges execution and review, while its adapter, model, and effort stay in its in-place editor [[run-view-32](#run-view-32)] and blocking readiness remains at the composer;
+- the sole task field has a visible label, and a hint outside the composer says to type `/` in that field to inspect the configured playbooks [[run-view-27](#run-view-27)]; its idle inside-caption is absent while staged-intent and acknowledgment captions still appear [[run-view-106](#run-view-106)];
 - with no project current, the greeting directs the reader to pick one where projects exist;
 - Project choice lives in the sidebar and palette, not in the composer row.
 
@@ -319,10 +321,10 @@ While the Captain home is shown, when the user submits composer text, the run vi
 
 #### run-view-27
 
-The run view shall make configured playbooks discoverable at the composer:
+The run view shall make configured playbooks discoverable at the composer ([DR-138](../decisions/138-project-start-explains-the-task-and-slash-discovery.md)):
 
 - when the user types `/` at the start of a composer, the run view shows the configured playbooks filtered by the typed prefix, each with its intent — a built-in's in the interface language [[localization-4](localization.md#localization-4)] — as the hint, and inserts the selected command into the composer without dispatching it;
-- once a project is registered, the Captain home shows highlighted playbooks, each with its command and that intent, as a quick start card that the user can dismiss, with the dismissal persisting across launches.
+- at the project task start, an outside-the-field hint tells the reader to type `/` to inspect the complete configured list; no selected-command quick-start card or separate playbook-preview control is required.
 
 #### run-view-30
 
@@ -741,7 +743,7 @@ The app shall fail loudly and stay accessible:
 
 #### run-view-51
 
-Where the Captain home has nothing to report (no warnings or errors), it shall center its whole cluster — greeting, quick start, and composer — on the canvas, reverting to the bottom-docked chat layout once real content exists; session history lives in the sidebar [[run-view-67](#run-view-67)], never on the home.
+Where the Captain home has nothing to report (no warnings or errors), it shall center its whole cluster — project task guidance, Captain role, and composer — on the canvas, reverting to the bottom-docked layout once real content exists; session history lives in the sidebar [[run-view-67](#run-view-67)], never on the home ([DR-138](../decisions/138-project-start-explains-the-task-and-slash-discovery.md)).
 
 ### Project Workspace (DR-011)
 
@@ -801,7 +803,7 @@ When a dispatched intent's final turn ends finished, the run view shall render t
 
 #### run-view-88
 
-While the Captain home is shown and the current project's queue holds an unblocked intent, the Captain home shall present a next card naming the core-published next intent and standing [[core-service-49](core-service.md#core-service-49)], with its `Queued` mark and, from the published standing, the exact scheduling phrase where one applies and Start exactly when manual start is available [[dashboard-59](dashboard.md#dashboard-59)], Remove beside it [[run-view-114](#run-view-114)], and a count of the remaining queued intents, coexisting with the quick start card [[run-view-27](#run-view-27)] ([DR-035](../decisions/035-intent-ledger.md), [DR-077](../decisions/077-up-next-is-a-committed-queue.md)):
+While the Captain home is shown and the current project's queue holds an unblocked intent, the Captain home shall present a next card naming the core-published next intent and standing [[core-service-49](core-service.md#core-service-49)], with its `Queued` mark and, from the published standing, the exact scheduling phrase where one applies and Start exactly when manual start is available [[dashboard-59](dashboard.md#dashboard-59)], Remove beside it [[run-view-114](#run-view-114)], and a count of the remaining queued intents alongside the project task guidance [[run-view-25](#run-view-25)] ([DR-035](../decisions/035-intent-ledger.md), [DR-077](../decisions/077-up-next-is-a-committed-queue.md)):
 
 - the queued-intent title, standing, and remaining count occupy the card row's sole shrinkable text region; the title and standing share one line at and above the `@md` container step, each truncating with its full text in its title, while below `@md` the standing takes its own line and the count keeps its own line within that region; the `Queued` mark, available Start, and Remove remain visible ([DR-041](../decisions/041-chrome-that-fits.md));
 - the visible Start label stays short while its accessible name identifies the queued intent ([DR-041](../decisions/041-chrome-that-fits.md));
@@ -1020,7 +1022,7 @@ When fixture turn and question states, real record-folded turns and deferred sub
 
 Where no session is live, when the Projects surface renders with a fixture config of one project and one playbook, the test suite shall assert the Captain home's one-motion start:
 
-- the Captain home shows the greeting naming the current project, the chat composer, and the captain identity [[run-view-25](#run-view-25)];
+- the Captain home names the current project, presents one task composer, and explains Captain's coordinator role [[run-view-25](#run-view-25)];
 - with no project current but projects registered, the greeting offers picking one [[run-view-25](#run-view-25)]; with none registered, the welcome page offers the Academy example and own-project paths without a composer [[run-view-168](#run-view-168)];
 - when text is submitted with a current project, a session is created for that project and the text is dispatched as its first Boss turn [[run-view-26](#run-view-26)];
 - when text is submitted with no project chosen, the palette opens and the draft survives [[run-view-26](#run-view-26)].
@@ -1030,7 +1032,7 @@ Where no session is live, when the Projects surface renders with a fixture confi
 When the Captain home composer and thread render against the fixture playbook, the test suite shall assert playbook discovery and IM presentation:
 
 - when `/` is typed at the start of the composer, the slash menu lists the fixture playbook with its intent, filters as more is typed, and inserts the command without dispatching on selection [[run-view-27](#run-view-27)];
-- when the quick start card is dismissed and the view is remounted, the card stays dismissed [[run-view-27](#run-view-27)];
+- the project task start keeps slash discovery outside the sole task field and shows the complete configured playbook list when `/` is typed [[run-view-25](#run-view-25)] [[run-view-27](#run-view-27)];
 - when a fixture stream containing a boss turn is replayed, the submitted text renders as a user bubble in the Captain thread [[run-view-30](#run-view-30)].
 
 #### run-view-35
@@ -1158,7 +1160,7 @@ Where a replayed fixture stream dispatches a queued intent whose turn then ends 
 
 Where fixture projects hold queues whose next intents span the published scheduling standings, when the Captain home renders, the test suite shall assert the next card case by case [[run-view-88](#run-view-88)]:
 
-- every next card names its intent with `Queued` and counts the rest while the quick start card stands beside it [[run-view-88](#run-view-88)];
+- every next card names its intent with `Queued` and counts the rest beside the task-start guidance [[run-view-88](#run-view-88)];
 - a manual-ready next carries Start whose accessible name identifies that intent, and activation stages the intent under its chip into the current conversation's composer when one exists and otherwise into the home composer [[run-view-88](#run-view-88)] [[run-view-86](#run-view-86)];
 - a next behind active work reads `after current work`, one behind a question park reads `waiting — your reply`, and one behind a parked failure reads `waiting — current work failed` with its catalogue phrase, each with no Start [[run-view-88](#run-view-88)];
 - an unparked failure reads `waiting — previous work failed` and a stopped turn reads `waiting — previous work stopped`, each with Start [[run-view-88](#run-view-88)];
@@ -1229,9 +1231,8 @@ When the integration suite reveals earlier entries of a long player transcript t
 
 Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell on an empty state root with no config and opens its token URL, the test suite shall assert the first run through the page alone:
 
-- the Captain home greets and offers adding a project, with the quick start listing the seeded playbooks [[run-view-25](#run-view-25)] [[run-view-27](#run-view-27)];
-- submitting composer text with no project opens the palette and keeps the draft [[run-view-26](#run-view-26)];
-- once the Academy example seeds from the palette, the greeting names the project and the sidebar lists it [[run-view-25](#run-view-25)] [[run-view-67](#run-view-67)];
+- the welcome page offers adding a local project and opening the Academy example without a composer [[run-view-168](#run-view-168)];
+- once the Academy example seeds, the project task start names that project and the sidebar lists it [[run-view-25](#run-view-25)] [[run-view-67](#run-view-67)];
 - typing `/` lists the configured playbooks, Escape hides the menu with the draft intact, and typing reopens it [[run-view-27](#run-view-27)] [[run-view-43](#run-view-43)].
 
 #### run-view-98
