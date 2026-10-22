@@ -159,6 +159,7 @@ meta.md       The spec of specs
 | [DR-134](decisions/134-specs-first-welcome-and-distinct-project-paths.md) | 134-specs-first-welcome-and-distinct-project-paths.md | Specs-first welcome copy, local-project primary action, neutral folder picker and distinct existing/new paths; amends DR-132 and DR-133 |
 | [DR-135](decisions/135-welcome-flow-copy-and-scoped-academy-note.md) | 135-welcome-flow-copy-and-scoped-academy-note.md | Arrow-separated specs-to-delivery explanation, Academy-only caption and no redundant creation-form back link; amends DR-134 |
 | [DR-136](decisions/136-quieter-welcome-flow-and-academy-choice.md) | 136-quieter-welcome-flow-and-academy-choice.md | Compact connected specs-to-delivery steps and no Academy caption on the welcome page; amends DR-135 |
+| [DR-137](decisions/137-reopen-the-removed-academy-example.md) | 137-reopen-the-removed-academy-example.md | Reopen a removed Academy example from its preserved Git working folder without overwriting it; amends DR-015 |
 
 ## Packages
 

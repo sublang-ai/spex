@@ -60,9 +60,10 @@ When the create flow's initial commit fails [[projects-3](#projects-3)], the pal
 
 #### projects-27
 
-When the user picks the palette's Academy-example action ([DR-015](../decisions/015-reference-content.md)), the palette shall create the project from the bundled Academy corpus — into a new or empty directory only — initialize a git repository with one seed commit of the corpus, and register the project and make it the workspace's current project:
+When the user invokes an Academy-example action ([DR-015](../decisions/015-reference-content.md), [DR-137](../decisions/137-reopen-the-removed-academy-example.md)), Spex shall make that project current, seeding the bundled corpus into a new or empty directory with one Git commit, or registering the unregistered existing repository if its root history identifies a prior Spex Academy seed:
 
-- Target directory not empty: the palette reports the refusal and registers nothing.
+- Existing seeded Academy: no corpus is copied over its current files or Git history.
+- Other nonempty target: the action reports the refusal and registers nothing.
 - Target already registered: the core's `conflict` names the registered path as a detail of the refusal, apart from its words, and the palette makes that project current.
 
 ### The Code's Clone
