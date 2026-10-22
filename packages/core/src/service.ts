@@ -262,13 +262,8 @@ export interface CoreServiceOptions {
    * A shell that bounds its own exit — Electron's — passes none. */
   agentProcesses?: () => number[];
   /** This runtime's label, stored beside the home's device at assignment
-<<<<<<< HEAD
-   * for display alone (DR-134): the server's name on a seat, the host
-   * name by default. */
-=======
    * for display alone (DR-134): the server's name on a seat, else this
    * label, else the host name. */
->>>>>>> origin/main
   runtimeLabel?: string;
   /**
    * Seat mode (core-service-125, DR-132): this core runs on a team
