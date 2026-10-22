@@ -169,12 +169,14 @@ export interface AppOptions {
    * origin of its own that the home reaches only by a sign-in naming it:
    * on a Git backend of its own (`separate`, the default) or over the
    * first's (`shared`), with its own display name, the person it signs
-   * in and whether that person may make a root group.
+   * in and whether that person may make a root group; its `registry`
+   * starts a stand-in registry of its own that the second fronts at its
+   * origin, as each instance serves its own (environments-18).
    */
   host?: boolean | {
     registry?: boolean;
     share?: { host: StandinHost; registry?: StandinRegistry };
-    second?: { backend?: "separate" | "shared"; displayName?: string; person?: StandinPerson; canCreateGroup?: boolean };
+    second?: { backend?: "separate" | "shared"; displayName?: string; person?: StandinPerson; canCreateGroup?: boolean; registry?: boolean };
   };
   /** Signed in at the stand-in before the page opens: the device flow
    * started over the protocol, its code approved through the script,
@@ -603,8 +605,13 @@ export interface App {
   /** Every stand-in instance of the journey, the first being `host` and
    * the second `host.second`'s (DR-127); empty without `host`. */
   hosts: StandinHost[];
-  /** The stand-in registry the host fronts (with `host.registry`). */
+  /** The stand-in registry the host fronts (with `host.registry`):
+   * `registries[0]`. */
   registry?: StandinRegistry;
+  /** The stand-in registry each of `hosts` fronts, index for index,
+   * undefined where that instance fronts none (`host.registry`,
+   * `host.second.registry`, environments-18). */
+  registries: (StandinRegistry | undefined)[];
   /** Your own group's spex repository's key, as `home.yaml` now names
    * it (storage-1). */
   readonly ownKey: string;
@@ -724,6 +731,7 @@ async function arrangeApp(
   let host: StandinHost | undefined;
   let registry: StandinRegistry | undefined;
   const hosts: StandinHost[] = [];
+  const registries: (StandinRegistry | undefined)[] = [];
   const owned: { close(): Promise<void> }[] = [];
   if (hostMode) {
     const spec = typeof options.host === "object" ? options.host : {};
@@ -739,18 +747,28 @@ async function arrangeApp(
       owned.push(host);
     }
     hosts.push(host);
+    registries.push(registry);
     // The second instance, after the first and closed before it: over
-    // the first's Git backend or on one of its own (git-host-12).
+    // the first's Git backend or on one of its own (git-host-12),
+    // fronting a registry of its own where asked, started before it and
+    // closed after it (environments-18).
     if (spec.second) {
       const { backend, displayName, person, canCreateGroup } = spec.second;
+      let fronted: StandinRegistry | undefined;
+      if (spec.second.registry) {
+        fronted = await startStandinRegistry({ dir: join(scratch, "registry-2") });
+        owned.push(fronted);
+      }
       const second = await startStandinHost({
         ...(backend === "shared" ? { gitBackend: host } : { dir: join(scratch, "host-2") }),
         displayName: displayName ?? SECOND_HOST_NAME,
         ...(person ? { person } : {}),
+        ...(fronted ? { registry: fronted.url } : {}),
       });
       owned.push(second);
       if (canCreateGroup !== undefined) second.script.canCreateGroup = canCreateGroup;
       hosts.push(second);
+      registries.push(fronted);
     }
   }
   const closeOwned = async (): Promise<void> => {
@@ -886,6 +904,7 @@ async function arrangeApp(
     host,
     hosts,
     registry,
+    registries,
     get ownKey() {
       return ownKey(dataDir);
     },
@@ -1153,21 +1172,25 @@ export function ownSetUp(state: GroupsState, origin: string = state.defaultInsta
 }
 
 /** Pick a group for the demo project's local-only spex repository over
- * the protocol (arrange only): `<name>-spex` created in that group and
- * pushed, its clone moving under the stand-in's folder (space-58,
- * DR-127); the project's key and remote follow it. */
+ * the protocol (arrange only), at the stand-in instance named — the
+ * home's default instance unless another of `app.hosts` is — in its
+ * team group, another group, or with `namespace` the account's
+ * namespace there: `<name>-spex` created there and pushed, its clone
+ * moving under that instance's folder (space-58, DR-127); the
+ * project's key and remote follow it. */
 export async function pickGroup(
   app: App,
-  options: { name?: string; groupId?: string; groupPath?: string } = {},
+  options: { host?: StandinHost; namespace?: boolean; name?: string; groupId?: string; groupPath?: string } = {},
 ): Promise<RepositoryState> {
-  const host = app.host;
+  const host = options.host ?? app.host;
   if (!host || !app.projectId) throw new Error("a pick needs a host and the project");
   const name = options.name ?? "demo-project";
-  const key = hostKey(host, `${options.groupPath ?? HOST_GROUP}/${name}-spex`);
+  const path = options.namespace ? host.script.person.login : options.groupPath ?? HOST_GROUP;
+  const key = hostKey(host, `${path}/${name}-spex`);
   const from = app.core.mark();
   await app.core.command("space.pick", {
     repository: app.projectId,
-    choice: { kind: "create", instance: host.url, groupId: options.groupId ?? HOST_GROUP_ID, name },
+    choice: { kind: "create", instance: host.url, groupId: options.namespace ? null : options.groupId ?? HOST_GROUP_ID, name },
   });
   const state = await app.core.waitSpace(from, (candidate) => {
     try { return repositoryOf(candidate, key).sync.phase === "done"; } catch { return false; }
