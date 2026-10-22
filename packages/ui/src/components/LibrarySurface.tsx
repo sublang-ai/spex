@@ -29,10 +29,9 @@ import {
 
 import {
   draftNeedsProject,
-  getClient,
-  useAppStore,
   type PlaybooksSide,
 } from "../state/store.js";
+import { usePlaceStore } from "../state/place-context.js";
 import { SLC_DEMO } from "../examples/slc-demo.js";
 import {
   NEUTRAL_BLOCK,
@@ -91,6 +90,7 @@ const GEAR =
  * row is permanent, and the artifacts arrive on the card's first open
  * — one request, held for every later open. */
 function PlaybookPipeline({ playbookId, repository }: { playbookId: string; repository: string }) {
+  const store = usePlaceStore();
   const [artifacts, setArtifacts] = useState<PlaybookArtifacts>();
   const [error, setError] = useState<string>();
   const [loading, setLoading] = useState(false);
@@ -103,7 +103,7 @@ function PlaybookPipeline({ playbookId, repository }: { playbookId: string; repo
     if (artifacts || loading) return;
     setLoading(true);
     setError(undefined);
-    getClient()
+    store.getClient()
       .command("playbook.artifacts", { playbookId, repository })
       .then((loaded) => setArtifacts(loaded))
       .catch((cause: Error) => setError(cause.message))
@@ -221,6 +221,7 @@ function BoundRole({
   side: PlaybooksSide;
   repository: string;
 }) {
+  const store = usePlaceStore();
   const [open, setOpen] = useState(false);
   const gearRef = useRef<HTMLButtonElement>(null);
   const lane = binding ? roster.find((player) => player.id === binding.playerId) : undefined;
@@ -283,7 +284,7 @@ function BoundRole({
           playerOnly={side === "project"}
           anchorRef={gearRef}
           onSave={(next) =>
-            bindRole(entry.id, role, next, repository).then((result) => {
+            bindRole(entry.id, role, next, repository, store.getClient()).then((result) => {
               setOpen(false);
               return result;
             })
@@ -430,6 +431,7 @@ function PlaybookRow({
   hints: ReactNode;
   onChanged: () => void;
 }) {
+  const store = usePlaceStore();
   const enabledHere = entry.enabled.includes(side);
   const [players, setPlayers] = useState<Record<string, string>>({});
   const [blocks, setBlocks] = useState<Record<string, AgentBlockInput>>({});
@@ -456,11 +458,11 @@ function PlaybookRow({
       .filter(([id]) => !existing.has(id));
     try {
       for (const [playerId, role] of mint) {
-        await getClient().command("config.edit", {
+        await store.getClient().command("config.edit", {
           op: { kind: "player.set", playerId, patch: blocks[role] ?? NEUTRAL_BLOCK },
         });
       }
-      await getClient().command("config.edit", {
+      await store.getClient().command("config.edit", {
         repository,
         op: {
           kind: "playbook.add",
@@ -480,7 +482,7 @@ function PlaybookRow({
     setBusy(true);
     setError(undefined);
     try {
-      await getClient().command("config.edit", {
+      await store.getClient().command("config.edit", {
         repository,
         op: { kind: "playbook.delete", playbookId: entry.id },
       });
@@ -618,6 +620,7 @@ function InvalidEntryRow({
   repository: string;
   onChanged: () => void;
 }) {
+  const store = usePlaceStore();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   return (
@@ -636,7 +639,7 @@ function InvalidEntryRow({
           onClick={() => {
             setBusy(true);
             setError(undefined);
-            void getClient()
+            void store.getClient()
               .command("config.edit", { repository, op: { kind: "playbook.delete", playbookId: entry.playbook } })
               .then(onChanged)
               .catch((cause: Error) => setError(cause.message))
@@ -1125,32 +1128,33 @@ export function LibrarySurface({
 }: {
   onNavigate?: (surface: "Settings" | "Space") => void;
 }) {
-  const configState = useAppStore((state) => state.configState);
-  const readiness = useAppStore((state) => state.readiness);
-  const connection = useAppStore((state) => state.connection);
-  const drafts = useAppStore((state) => state.drafts);
-  const draftsLoaded = useAppStore((state) => state.draftsLoaded);
-  const openDraftId = useAppStore((state) => state.openDraftId);
-  const listDrafts = useAppStore((state) => state.listDrafts);
-  const createDraft = useAppStore((state) => state.createDraft);
-  const loadDraftDefaults = useAppStore((state) => state.loadDraftDefaults);
-  const openDraft = useAppStore((state) => state.openDraft);
-  const closeDraft = useAppStore((state) => state.closeDraft);
-  const projects = useAppStore((state) => state.projects);
-  const currentProjectId = useAppStore((state) => state.currentProjectId);
-  const deleteDraft = useAppStore((state) => state.deleteDraft);
-  const setDraftSourceMode = useAppStore((state) => state.setDraftSourceMode);
-  const consumeNewPlaybookRequest = useAppStore((state) => state.consumeNewPlaybookRequest);
-  const consumeRevealPlaybook = useAppStore((state) => state.consumeRevealPlaybook);
-  const newPlaybookRequested = useAppStore((state) => state.newPlaybookRequested);
-  const revealPlaybook = useAppStore((state) => state.revealPlaybook);
-  const space = useAppStore((state) => state.space);
-  const loadSpace = useAppStore((state) => state.loadSpace);
-  const lists = useAppStore((state) => state.playbookLists);
-  const loadPlaybookLists = useAppStore((state) => state.loadPlaybookLists);
-  const loadEnvironment = useAppStore((state) => state.loadEnvironment);
-  const storedSide = useAppStore((state) => state.playbooksSide);
-  const setSide = useAppStore((state) => state.setPlaybooksSide);
+  const store = usePlaceStore();
+  const configState = store((state) => state.configState);
+  const readiness = store((state) => state.readiness);
+  const connection = store((state) => state.connection);
+  const drafts = store((state) => state.drafts);
+  const draftsLoaded = store((state) => state.draftsLoaded);
+  const openDraftId = store((state) => state.openDraftId);
+  const listDrafts = store((state) => state.listDrafts);
+  const createDraft = store((state) => state.createDraft);
+  const loadDraftDefaults = store((state) => state.loadDraftDefaults);
+  const openDraft = store((state) => state.openDraft);
+  const closeDraft = store((state) => state.closeDraft);
+  const projects = store((state) => state.projects);
+  const currentProjectId = store((state) => state.currentProjectId);
+  const deleteDraft = store((state) => state.deleteDraft);
+  const setDraftSourceMode = store((state) => state.setDraftSourceMode);
+  const consumeNewPlaybookRequest = store((state) => state.consumeNewPlaybookRequest);
+  const consumeRevealPlaybook = store((state) => state.consumeRevealPlaybook);
+  const newPlaybookRequested = store((state) => state.newPlaybookRequested);
+  const revealPlaybook = store((state) => state.revealPlaybook);
+  const space = store((state) => state.space);
+  const loadSpace = store((state) => state.loadSpace);
+  const lists = store((state) => state.playbookLists);
+  const loadPlaybookLists = store((state) => state.loadPlaybookLists);
+  const loadEnvironment = store((state) => state.loadEnvironment);
+  const storedSide = store((state) => state.playbooksSide);
+  const setSide = store((state) => state.setPlaybooksSide);
 
   const [listError, setListError] = useState<string>();
   const [exampleError, setExampleError] = useState<string>();
@@ -1188,7 +1192,7 @@ export function LibrarySurface({
     // (playbook-library-1) and, for the sync and the account, Space.
     void listDrafts().catch(() => {});
     reloadLists();
-    if (!useAppStore.getState().space) void loadSpace().catch(() => {});
+    if (!store.getState().space) void loadSpace().catch(() => {});
   }, [connected, listDrafts, reloadLists, loadSpace]);
 
   useEffect(() => {
@@ -1281,7 +1285,7 @@ export function LibrarySurface({
       pastePath: "",
     });
     try {
-      if (useAppStore.getState().drafts[id]) await openDraft(id);
+      if (store.getState().drafts[id]) await openDraft(id);
       // A new session takes New playbook's org and license
       // (playbook-library-35).
       else await createDraft(id, { org: newOrg.trim(), license: newLicense.trim() });

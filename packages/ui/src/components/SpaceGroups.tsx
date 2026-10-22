@@ -30,9 +30,15 @@
 // Every act is a command whose outcome arrives as state (space-29).
 
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
-import type { GroupsState, InstanceGroupState, InstanceState, RepositoryState } from "@sublang/spex-core/protocol";
+import type {
+  GroupsState,
+  InstanceGroupState,
+  InstanceState,
+  RepositoryState,
+  ServerListing,
+} from "@sublang/spex-core/protocol";
 
-import { useAppStore } from "../state/store.js";
+import { usePlaceStore } from "../state/place-context.js";
 import { i18n } from "../i18n.js";
 import {
   anySignedIn,
@@ -62,6 +68,7 @@ import {
 import { Icon } from "./Icon.js";
 import { InlineConfirm } from "./InlineConfirm.js";
 import { AddInstance, InstanceSection } from "./SpaceInstance.js";
+import { InstanceServers } from "./SpaceServers.js";
 import { GroupNameEditor, MembersPanel } from "./SpaceMembers.js";
 import type { SignInFlow } from "./SpaceSignIn.js";
 import { SECONDARY, syncRefusal, type Note } from "./SpaceSurface.js";
@@ -204,7 +211,8 @@ function rowControl(
 /** The groups list (space-1): your own group first, then each instance
  * the home lists under its heading in the home's order, its entries in
  * the order the heading lists them, under each one row per spex
- * repository in the core's order; while it lists any instance, "Add
+ * repository in the core's order, and under a signed-in one's the
+ * servers it lists (run-view-170); while it lists any instance, "Add
  * instance…" at its foot. */
 export function GroupsList({
   groups,
@@ -213,6 +221,8 @@ export function GroupsList({
   connected,
   refreshes,
   signIn,
+  servers,
+  onServersChanged,
   onSelect,
   onNote,
 }: {
@@ -223,6 +233,10 @@ export function GroupsList({
   /** How many times the reader's own Refresh has re-read the state. */
   refreshes: number;
   signIn: SignInFlow;
+  /** The servers listing, read at this computer alone (run-view-170). */
+  servers?: ServerListing;
+  /** An open or a close landed: the servers listing is read again. */
+  onServersChanged?: () => void;
   onSelect(key: string): void;
   onNote: Note;
 }) {
@@ -257,6 +271,15 @@ export function GroupsList({
           onNote={onNote}
         >
           {entriesOf(instance).map((group) => section(group, instance))}
+          {instance.signedIn && servers ? (
+            <InstanceServers
+              instance={instance}
+              listing={servers}
+              connected={connected}
+              onChanged={() => onServersChanged?.()}
+              onNote={onNote}
+            />
+          ) : null}
         </InstanceSection>
       ))}
       {groups.instances.length > 0 ? (
@@ -366,7 +389,8 @@ function GroupSection({
   onSelect(key: string): void;
   onNote: Note;
 }) {
-  const spaceGroupDelete = useAppStore((state) => state.spaceGroupDelete);
+  const store = usePlaceStore();
+  const spaceGroupDelete = store((state) => state.spaceGroupDelete);
   const [opened, setOpened] = useState<"members" | "subgroup" | "rename" | "delete">();
   const [deleting, setDeleting] = useState(false);
   const [refusal, setRefusal] = useState<string>();
@@ -626,11 +650,12 @@ function RepositoryRow({
   onSelect(): void;
   onNote: Note;
 }) {
-  const spaceSync = useAppStore((state) => state.spaceSync);
-  const spaceJoin = useAppStore((state) => state.spaceJoin);
-  const spaceRefresh = useAppStore((state) => state.spaceRefresh);
-  const rebindProject = useAppStore((state) => state.rebindProject);
-  const spaceRepositoryMove = useAppStore((state) => state.spaceRepositoryMove);
+  const store = usePlaceStore();
+  const spaceSync = store((state) => state.spaceSync);
+  const spaceJoin = store((state) => state.spaceJoin);
+  const spaceRefresh = store((state) => state.spaceRefresh);
+  const rebindProject = store((state) => state.rebindProject);
+  const spaceRepositoryMove = store((state) => state.spaceRepositoryMove);
   const [opened, setOpened] = useState<Opened>();
   const [moving, setMoving] = useState(false);
   const [busy, setBusy] = useState<"sync" | "join" | "retry">();
@@ -1386,7 +1411,8 @@ export function GroupPicker({
   onClose(): void;
   onNote: Note;
 }) {
-  const spacePick = useAppStore((state) => state.spacePick);
+  const store = usePlaceStore();
+  const spacePick = store((state) => state.spacePick);
   const code = repo.code;
   const sections: PickSection[] = pickInstances(groups, repo).map((instance) => {
     const mine = namespaceOf(instance);
