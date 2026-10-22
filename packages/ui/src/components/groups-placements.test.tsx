@@ -18,7 +18,9 @@
 // instance; the row's Sync says it first only where no other placement
 // can run (space-57); an unrelated placement joins from its line
 // (space-13), a Retry joining only the placement this page joined; a
-// stopped one retries from its line (space-15); and the
+// stopped one retries from its line (space-15); focus after a line's
+// act goes to the control that asked, or the row's name while it is
+// busy (DR-010 §6); and the
 // row's sign-in refusal and Retry follow every placement (space-11,
 // space-61). The Sync tab lists each placement's incoming units under
 // its instance's display name (space-8); choices stand for one
@@ -39,8 +41,9 @@
 // placement at an instance asks about the one it holds, or the one
 // chosen, inline — again, naming the count or what may be left behind,
 // where that Leave stopped short, its Remove then confirmed — and reads
-// "Leaving…" until the Leave has run; the live note says what was left,
-// the opened row followed by its folder where the clone moved; the
+// "Leaving…" until the Leave has run; the live note says what was left
+// — nothing where the placement only followed another instance — the
+// opened row followed by its folder where the clone moved; the
 // stopped card's Retry sends the Leave again as this page asked it
 // (space-89, space-98, storage-38, space-15, space-28).
 
@@ -1088,6 +1091,55 @@ describe("GROUPS: a placement's notice, join and retry (space-57, space-13, spac
     fireEvent.click(screen.getByTestId("space-retry"));
     await waitFor(() => expect(calls("space.sync")[5]).toEqual({ repository: KEY }));
     expect(calls("space.sync")).toHaveLength(6);
+  });
+
+  test("space-57, space-13, space-90: after a line's Continue, Join or Attach, and a row notice's Continue, focus goes to the row's name while the control that asked is busy (DR-010 §6)", async () => {
+    const rowName = (key = KEY): HTMLElement => screen.getByTestId(`space-repo-${key}`);
+    // A line's notice continued: its Continue busy until the machine
+    // moves.
+    const waiting = { ...OWING, outcome: { kind: "waiting" as const, sent: 0, received: 0 } };
+    await renderGroups(placedAtTwo({ second: waiting }), { open: false });
+    const go = within(lineOf(KEY, SECOND)).getByTestId("space-line-continue") as HTMLButtonElement;
+    fireEvent.click(go);
+    fireEvent.click(within(within(lineOf(KEY, SECOND)).getByTestId("space-line-notice")).getByRole("button", { name: "Continue" }));
+    await waitFor(() => expect(calls("space.sync")).toEqual([{ repository: KEY, placement: SECOND, noticed: true }]));
+    await waitFor(() => expect(document.activeElement).toBe(rowName()));
+    expect(go.disabled).toBe(true);
+    cleanup();
+
+    // A Join confirmed: Joining… until the machine moves.
+    installClient();
+    const unrelated = {
+      outcome: { kind: "unrelated" as const, sent: 0, received: 0 },
+      branch: { ...BRANCH, unrelated: true, ahead: null, behind: null },
+    };
+    await renderGroups(placedAtTwo({ second: unrelated }, { sync: { phase: "unrelated", placement: SECOND } }), { open: false });
+    const join = within(lineOf(KEY, SECOND)).getByTestId("space-line-join") as HTMLButtonElement;
+    fireEvent.click(join);
+    fireEvent.click(within(within(lineOf(KEY, SECOND)).getByTestId("space-line-join-confirm")).getByRole("button", { name: "Join" }));
+    await waitFor(() => expect(join.textContent).toBe("Joining…"));
+    await waitFor(() => expect(document.activeElement).toBe(rowName()));
+    cleanup();
+
+    // An Attach continued: Attaching… until its attach has run.
+    installClient();
+    await renderGroups(twoPlacementsHome(), { open: false });
+    const attach = within(lineOf(BETA, SECOND)).getByTestId("space-line-attach") as HTMLButtonElement;
+    fireEvent.click(attach);
+    fireEvent.click(within(within(lineOf(BETA, SECOND)).getByTestId("space-line-notice")).getByRole("button", { name: "Continue" }));
+    await waitFor(() => expect(calls("space.attach")).toEqual([{ repository: BETA, instance: SECOND, noticed: true }]));
+    await waitFor(() => expect(document.activeElement).toBe(rowName(BETA)));
+    expect(attach.disabled).toBe(true);
+    cleanup();
+
+    // The row's notice continued: its Sync busy until the machine moves.
+    installClient();
+    await renderGroups(base({}, [repo({ members: 3, noticed: false })]), { open: false });
+    fireEvent.click(rowSync());
+    fireEvent.click(within(screen.getByTestId("space-notice-confirm")).getByRole("button", { name: "Continue" }));
+    await waitFor(() => expect(calls("space.sync")).toEqual([{ repository: KEY, placement: ORIGIN, noticed: true }]));
+    await waitFor(() => expect(document.activeElement).toBe(rowName()));
+    expect(rowSync().disabled).toBe(true);
   });
 
   test("space-15: a stopped placement's Retry runs the sync again, and a stopped check runs the check again", async () => {
@@ -2631,6 +2683,62 @@ describe("GROUPS: leaving one placement (space-89, space-98, storage-38, space-2
     expect(screen.getByTestId("space-repo-state-jane/academy-spex").textContent).toBe("On this device only");
     expect(screen.queryByTestId("space-row-leave-jane/academy-spex")).toBeNull();
     await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId("space-row-pick-jane/academy-spex")));
+  });
+
+  test("space-98, space-89: a Leave that only followed its placement to another signed-in instance listing it says nothing was removed, focus going back to Leave…; a Leave dropping it says so", async () => {
+    // The second signed out; the third, signed in, lists the placement's
+    // host repository in its workshop.
+    const third = instance({
+      origin: THIRD,
+      host: "third.example",
+      displayName: "Third Example",
+      account: { id: "80", login: "tess", displayName: null, canCreateGroup: false },
+      groups: [
+        namespace("tess"),
+        { id: "93", login: null, mine: false, fullPath: "workshop", name: "workshop", can: NO_CAN, placed: [{ key: KEY, name: "academy-spex" }], repositories: [] },
+      ],
+    });
+    const withThird = (state: GroupsState): GroupsState => ({ ...state, instances: [...state.instances, third] });
+    await renderGroups(withThird(signedOutAt(SECOND, {}, placedAtTwo())));
+    fireEvent.click(leaveControl());
+    fireEvent.click(screen.getByRole("button", { name: "Remove from Second Example" }));
+    fireEvent.click(within(leaveConfirm()).getByRole("button", { name: "Remove" }));
+    await waitFor(() => expect(calls("space.leave")).toEqual([{ repository: KEY, instance: SECOND }]));
+    deliver(withThird(signedOutAt(SECOND, {}, placedAtTwo({}, { sync: leaveRunning(SECOND) }))));
+    await waitFor(() => expect(live()).toBe("Checking host…"));
+    // Followed: the remote renamed to the third's, its file rewritten —
+    // the same host repository, now on the third's line (space-98).
+    const followed = repo({
+      placedAt: [ORIGIN, THIRD],
+      lastSync: { at: NOW - 5 * MIN, sent: 1, received: 0 },
+      placements: [
+        placement({ lastSync: { at: NOW - 5 * MIN, sent: 1, received: 0 } }),
+        placementState({
+          instance: THIRD,
+          path: "workshop/academy-spex",
+          id: "52",
+          members: 2,
+          visibility: "private",
+          noticed: true,
+          branch: { ...BRANCH, ahead: 0, behind: 0 },
+          lastSync: { at: NOW - HOUR, sent: 0, received: 1 },
+        }),
+      ],
+    });
+    deliver(withThird(signedOutAt(SECOND, {}, twoInstances({}, [followed]))));
+    await waitFor(() => expect(reading(lineOf(KEY, THIRD)).name).toBe("Third Example"));
+    expect(screen.queryByTestId(`space-line-${SECOND}`)).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(leaveControl()));
+    expect(live()).not.toContain("Removed from");
+
+    // Leaving the third drops it: the note says so.
+    fireEvent.click(leaveControl());
+    fireEvent.click(screen.getByRole("button", { name: "Remove from Third Example" }));
+    fireEvent.click(within(leaveConfirm()).getByRole("button", { name: "Remove" }));
+    await waitFor(() => expect(calls("space.leave")[1]).toEqual({ repository: KEY, instance: THIRD }));
+    deliver(withThird(signedOutAt(SECOND, {}, twoInstances({}, [{ ...followed, sync: leaveRunning(THIRD) }]))));
+    deliver(withThird(signedOutAt(SECOND, {}, twoInstances({}, [repo({ placedAt: [ORIGIN], lastSync: { at: NOW - 5 * MIN, sent: 1, received: 0 } })]))));
+    await waitFor(() => expect(live()).toBe("Removed from Third Example"));
   });
 
   test.each(["en", "zh"] as const)("space-28: Leave… and Leaving… within 14 characters (%s)", async (language) => {

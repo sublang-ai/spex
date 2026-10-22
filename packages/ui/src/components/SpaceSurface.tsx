@@ -332,7 +332,9 @@ export function SpaceSurface({ onOpenSession, onOpenProject }: SpaceSurfaceProps
   // The state before this one: a row a first placement's Leave moved
   // (storage-38) is the one new row holding its folder, and stays open
   // as it was; a Leave that has run and left its placement is said in
-  // the live note, focus that stayed with its row moving to its Leave…,
+  // the live note — not one that only followed it to another signed-in
+  // instance listing its host repository, which still holds it there
+  // (space-98) — focus that stayed with its row moving to its Leave…,
   // or to its Sync where none is left (space-89, DR-010 §6, §7).
   const previous = useRef<GroupsState | undefined>(undefined);
   useEffect(() => {
@@ -356,7 +358,13 @@ export function SpaceSurface({ onOpenSession, onOpenProject }: SpaceSurfaceProps
       if (typeof left !== "string") continue;
       if (now.sync.phase === "running" && now.sync.op === "leave") continue;
       if (placementAt(now, left)?.attached === true) continue;
-      setNote(removedFrom(instanceNameAt(groups, left)));
+      const id = placementAt(old, left)?.id ?? null;
+      const followed =
+        id !== null &&
+        now.placements.some(
+          (line) => line.id === id && line.instance !== left && placementAt(old, line.instance)?.attached !== true,
+        );
+      if (!followed) setNote(removedFrom(instanceNameAt(groups, left)));
       focusAfterLeave(now.key);
     }
   }, [groups]);

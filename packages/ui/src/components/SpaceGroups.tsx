@@ -704,12 +704,12 @@ function RepositoryRow({
   const close = (focus: "control" | "folder" | "place" | "leave" | "pick" = "control") => {
     setOpened(undefined);
     const ref = { control: controlRef, folder: folderRef, place: placeRef, leave: leaveRef, pick: pickRef }[focus];
-    // Closing never strands focus (DR-010 §6): a Place picked or a
-    // Remove answered leaves its control busy, or gone, and focus on the
-    // row.
+    // Closing never strands focus (DR-010 §6): a Place picked, a Remove
+    // answered or a notice continued leaves its control busy, or gone,
+    // and focus on the row.
     setTimeout(() => {
       const target = ref.current;
-      ((focus === "place" || focus === "leave") && (!target || target.disabled) ? rowRef.current : target)?.focus();
+      (!target || target.disabled ? rowRef.current : target)?.focus();
     }, 0);
   };
 
@@ -1376,7 +1376,7 @@ function RepositoryRow({
             line={noticeLine}
             disabled={disabled}
             onContinue={() => {
-              setOpened(undefined);
+              close();
               void start({ placement: noticeLine.instance, noticed: true });
             }}
             onCancel={() => close()}

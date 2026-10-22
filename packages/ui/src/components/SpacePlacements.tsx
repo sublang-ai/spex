@@ -24,7 +24,9 @@
 // holds — another device's or another member's proposal — reads "Not on
 // this device" with Attach, which says the sharing notice beneath the
 // line whatever its members and attaches only on Continue, reading
-// "Attaching…" until the attach that follows has run (space-90). Each
+// "Attaching…" until the attach that follows has run (space-90). An act
+// confirmed beneath the line hands focus back to the control that asked,
+// or to the row's name while that control is busy (DR-010 §6). Each
 // control is described by the line's instance name, so two lines' alike
 // controls are told apart. The instance's name owns the slack, the path
 // yields below @md, the phrase truncates with its title, Members shows
@@ -284,6 +286,24 @@ function PlacementLine({
     setTimeout(() => ref.current?.focus(), 0);
   };
 
+  /** Close what an act was confirmed in, its focus going to the line's
+   * control that asked, or to the row's name where that control is
+   * gone or disabled — busy until the machine moves — as a row's panel
+   * hands it back (DR-010 §6); focus another part took meanwhile, such
+   * as the notice a refusal says, stays there. */
+  const settle = (ref: { current: HTMLButtonElement | null }) => {
+    setOpened(undefined);
+    setTimeout(() => {
+      const active = document.activeElement;
+      if (active && active !== document.body && active.isConnected) return;
+      const target = ref.current;
+      const name = document.querySelector<HTMLElement>(
+        `[data-testid="space-row-${repo.key}"] [data-testid="space-repo-${repo.key}"]`,
+      );
+      (target && target.isConnected && !target.disabled ? target : name)?.focus();
+    }, 0);
+  };
+
   /** Say the sharing notice beneath the line, answering `from`, its
    * Continue sending what `answer` holds beside `noticed` (space-57). */
   const askNotice = (from: HTMLButtonElement | null, answer: { join?: true } = {}) => {
@@ -335,7 +355,7 @@ function PlacementLine({
   /** Sync this placement with its notice seen (space-57), and its join
    * where the notice held one back (space-13). */
   const continueSync = () => {
-    setOpened(undefined);
+    settle(askedRef);
     void send("continue", () => spaceSync(repo.key, { placement: line.instance, ...carried, noticed: true }));
   };
 
@@ -344,14 +364,14 @@ function PlacementLine({
   const attach = () => {
     const instance = line.instance;
     if (instance === null) return;
-    setOpened(undefined);
+    settle(attachRef);
     setAttachAsked(true);
     void send("attach", () => spaceAttach(repo.key, instance));
   };
 
   /** Join this placement's history with the clone's (space-13). */
   const join = () => {
-    setOpened(undefined);
+    settle(joinRef);
     void send("join", () => spaceSync(repo.key, { placement: line.instance, join: true }), {
       answer: { join: true },
       from: joinRef.current,
