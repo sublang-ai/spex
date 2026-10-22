@@ -59,6 +59,16 @@ export function runsElsewhereRefusal(code: "invalid_request" | "conflict", runsO
   return new CoreError(code, runsOnPhrase(runsOn), { runsOn });
 }
 
+/** The refusal on a seat of a turn naming an intent that holds no
+ * runtime (core-service-47, core-service-125, DR-132): `conflict`, its
+ * phrase alone — no runtime to name as a detail. */
+export function runsNowhereRefusal(): CoreError {
+  return new CoreError("conflict", i18n._({
+    id: "Runs nowhere yet",
+    comment: "Why an intent cannot run on a team server's seat: it names no runtime, captured before runtimes were recorded or by the Playbook CLI, and a seat runs only what is assigned to it",
+  }));
+}
+
 /** A session assigned to another runtime runs there alone: refused
  * before anything opens, whatever its checkpoint holds (DR-134). */
 export function assertRunsHere(session: SessionInfo | undefined): void {

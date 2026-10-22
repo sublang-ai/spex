@@ -2124,6 +2124,11 @@ msgstr "请重试；若再次失败，在终端中执行该步骤查看详情。
 msgid "Retry; if it fails again, the host's error stands for now."
 msgstr "请重试；若再次失败，说明托管平台的错误暂时仍在。"
 
+#. Why an intent cannot run on a team server's seat: it names no runtime, captured before runtimes were recorded or by the Playbook CLI, and a seat runs only what is assigned to it
+#: src/session.ts
+msgid "Runs nowhere yet"
+msgstr "暂无处运行"
+
 #. Why a session or an intent does not run here: it is assigned to another runtime, named by its label — the server's name on a seat, else the host name
 #: src/control-record.ts
 msgid "Runs on {label}"

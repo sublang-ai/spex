@@ -631,6 +631,9 @@ export interface LedgerSources {
    * another runtime summons nothing here and runs nowhere but there.
    * The home's device as `home.yaml` reads now, where none is given. */
   device?: string;
+  /** Whether this core runs as a team server's seat (core-service-125,
+   * DR-132): there an intent holding no runtime runs nowhere. */
+  seat?: boolean;
   now: () => number;
 }
 
@@ -1063,14 +1066,23 @@ export function foldLedger(sources: LedgerSources): LedgerState {
   // Presence of `next` is the project-local next marker: the oldest
   // queued row this runtime may run, by capture time then id — never one
   // of another runtime's, which keeps its place by age and offers no
-  // manual start (core-service-107, DR-134).
+  // manual start (core-service-107, DR-134). On a seat an intent holding
+  // no runtime — a format 1 file, written before runtimes, by the
+  // Playbook CLI or by a runtime that assigns nothing — runs nowhere
+  // (core-service-125, DR-132): it keeps its place by age and its derived
+  // state, and is never next. Its row carries no marker of its own: it
+  // reads queued as any later row does, the specs giving a client
+  // nothing more to read.
+  const runsNowhere = (entry: DerivedIntent): boolean =>
+    sources.seat === true && entry.intent.runtime === undefined;
   const lanesByProject = new Map(lanes.map((lane) => [lane.projectId, lane]));
   for (const projectId of new Set(derived.map((entry) => entry.intent.projectId))) {
     const lane = lanesByProject.get(projectId);
     const eligible = derived.filter((entry) =>
       entry.intent.projectId === projectId &&
       entry.state === "queued" &&
-      entry.runsOn === undefined
+      entry.runsOn === undefined &&
+      !runsNowhere(entry)
     );
     const next = eligible[0];
     if (next) next.next = queueSchedule(store, lane);

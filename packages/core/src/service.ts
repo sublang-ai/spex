@@ -70,7 +70,7 @@ import {
 } from "./protocol.js";
 import { resolveLanguage, type Language } from "./language.js";
 import { i18n, speak } from "./i18n.js";
-import { CoreError, SessionManager, assertRunsHere, currentSession, executionConfig, runsElsewhereRefusal, storedMembers, type CaptainFactory, type RecordEnvelope } from "./session.js";
+import { CoreError, SessionManager, assertRunsHere, currentSession, executionConfig, runsElsewhereRefusal, runsNowhereRefusal, storedMembers, type CaptainFactory, type RecordEnvelope } from "./session.js";
 import { closedStats, foldConditions, foldLedger, intentTitle, queueSchedule, wasWorked } from "./ledger.js";
 import { runsElsewhere, type TurnControlKind } from "./control-record.js";
 import { readStoredLanguage, Store, type SpexRepository } from "./store.js";
@@ -1118,8 +1118,10 @@ export class CoreService {
       store: this.store,
       lanes: this.ledgerLanes(),
       // This runtime's: another's records summon nothing here, and run
-      // nowhere but there (DR-134).
+      // nowhere but there (DR-134); on a seat an intent holding no
+      // runtime runs nowhere (core-service-125).
       device: this.store.home.device,
+      seat: !!this.seat,
       now: Date.now,
     });
   }
@@ -3965,8 +3967,12 @@ export class CoreService {
 
   private validateIntentDispatch(sessionId: string, intentId: string): void {
     const intent = this.requireOpenIntent(intentId);
-    // Another runtime's intent runs there alone (core-service-47, DR-134).
+    // Another runtime's intent runs there alone (core-service-47, DR-134),
+    // and on a seat one holding no runtime runs nowhere (core-service-125,
+    // DR-132); its edit and close stay allowed (core-service-43,
+    // core-service-46).
     this.requireOwnIntent(intent);
+    if (this.seat && intent.runtime === undefined) throw runsNowhereRefusal();
     const session = this.store.describeSession(sessionId);
     if (!session || session.projectId !== intent.projectId) {
       throw new CoreError("invalid_request", i18n._({
