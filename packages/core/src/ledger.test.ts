@@ -12,8 +12,10 @@ import assert from "node:assert/strict";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { hostname } from "node:os";
 import { dirname, join } from "node:path";
 import { WebSocket } from "ws";
+import { parse as parseYaml } from "yaml";
 
 import { prefsFileOf, Store } from "./store.js";
 import { foldLedger, type LiveLane } from "./ledger.js";
@@ -1734,7 +1736,7 @@ function queueIds(ledger: LedgerState, projectId: string): string[] {
 
 /** The storage-4 field set an intent file may hold, and nothing else. */
 const INTENT_FILE_FIELDS = new Set([
-  "format", "id", "text", "attachments", "source", "author", "createdAt", "dispatched", "closed",
+  "format", "id", "text", "attachments", "source", "author", "runtime", "createdAt", "dispatched", "closed",
 ]);
 
 function readIntentFile(intentsDir: string, id: string): Record<string, unknown> {
@@ -2284,8 +2286,12 @@ test("core-service-53: an intent lives as one file of its spex repository throug
   };
 
   // Two intents captured a moment apart: each is one file holding
-  // exactly storage-4's fields, and the queue reads them oldest first
-  // with the oldest next (core-service-42, core-service-49, core-service-52).
+  // exactly storage-4's fields at format 2, assigned to this runtime —
+  // the home's device with the host name as its label — and the queue
+  // reads them oldest first with the oldest next (core-service-42,
+  // core-service-49, core-service-52).
+  const { device } = parseYaml(readFileSync(join(harness.dataDir, "home.yaml"), "utf8")) as { device: string };
+  const runtime = { device, label: hostname() };
   const first = await announced(() => client.queue({
     projectId: project.id,
     text: "Ship the ledger\nwith its fold",
@@ -2297,10 +2303,12 @@ test("core-service-53: an intent lives as one file of its spex repository throug
   assert.ok(first.createdAt < second.createdAt);
   for (const intent of [first, second]) {
     assert.match(intent.id, UUID_PATTERN);
+    assert.deepEqual(intent.runtime, runtime);
     assert.deepEqual(readIntentFile(intentsDir, intent.id), {
-      format: 1,
+      format: 2,
       id: intent.id,
       text: intent.text,
+      runtime,
       createdAt: intent.createdAt,
     });
   }
@@ -2309,17 +2317,18 @@ test("core-service-53: an intent lives as one file of its spex repository throug
   assert.deepEqual(queueIds(ledger, project.id), [first.id, second.id]);
   assert.equal(nextOf(ledger, project.id).intent.id, first.id);
 
-  // An edit lands while the intent is queued, rewriting its file whole
-  // (core-service-43).
+  // An edit lands while the intent is queued, rewriting its file whole,
+  // its format and runtime kept (core-service-43, core-service-52).
   const edited = await announced(() => client.expectOk("intent.edit", {
     intentId: first.id,
     text: "Ship the ledger\nwith its fold, sharpened",
   }));
   assert.equal(edited.text, "Ship the ledger\nwith its fold, sharpened");
   assert.deepEqual(readIntentFile(intentsDir, first.id), {
-    format: 1,
+    format: 2,
     id: first.id,
     text: edited.text,
+    runtime,
     createdAt: first.createdAt,
   });
 
@@ -2360,6 +2369,8 @@ test("core-service-53: an intent lives as one file of its spex repository throug
   assert.equal(stamped?.sessionId, session.id);
   assert.equal(stamped?.turnId, startedTurnId);
   assert.equal(typeof stamped?.at, "number");
+  assert.equal(readIntentFile(intentsDir, first.id).format, 2);
+  assert.deepEqual(readIntentFile(intentsDir, first.id).runtime, runtime);
   ledger = await client.expectOk("ledger.get", {});
   assert.equal(stateOf(ledger, first.id).state, "working");
 
@@ -2405,6 +2416,8 @@ test("core-service-53: an intent lives as one file of its spex repository throug
   assert.equal(done.closedAs, "done");
   const closedFile = readIntentFile(intentsDir, first.id);
   assert.deepEqual(closedFile.closed, { as: "done", at: done.closedAt });
+  assert.equal(closedFile.format, 2);
+  assert.deepEqual(closedFile.runtime, runtime);
   for (const key of Object.keys(closedFile)) assert.ok(INTENT_FILE_FIELDS.has(key), key);
   let history = await client.expectOk("ledger.history", { projectId: project.id });
   assert.deepEqual(
@@ -3079,13 +3092,16 @@ test("core-service-54: ledger.get replies identically after a service restart, a
   assert.deepEqual(await client.expectOk("ledger.history", { projectId: project.id }), history);
 
   // Each intent is one file of provenance and stamps only: exactly
-  // storage-4's fields, no state or status anywhere (core-service-52).
+  // storage-4's fields at format 2, naming the runtime that captured it,
+  // no state or status anywhere (core-service-52).
   const intentsDir = harness.service["store"].repository(project.id)!.intentsDir;
   const files = readdirSync(intentsDir).filter((name) => name.endsWith(".json")).sort();
   assert.deepEqual(files, [confirmed.id, delivered.id, kept.id].map((id) => `${id}.json`).sort());
+  const { device } = parseYaml(readFileSync(join(harness.dataDir, "home.yaml"), "utf8")) as { device: string };
   for (const name of files) {
     const file = JSON.parse(readFileSync(join(intentsDir, name), "utf8")) as Record<string, unknown>;
-    assert.equal(file.format, 1);
+    assert.equal(file.format, 2);
+    assert.deepEqual(file.runtime, { device, label: hostname() });
     for (const key of Object.keys(file)) assert.ok(INTENT_FILE_FIELDS.has(key), `${name} holds ${key}`);
     for (const part of [file, file.dispatched, file.closed]) {
       if (part && typeof part === "object") {
