@@ -11,7 +11,16 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { IntentInfo, SessionInfo } from "@sublang/spex-core/protocol";
 
 import type { ProjectInfo } from "@sublang/spex-core/protocol";
-import { safeStorageGet, safeStorageSet, SURFACE_KEY, useAppStore } from "./state/store.js";
+import {
+  isLocalPlace,
+  placeLabel,
+  safeStorageGet,
+  safeStorageSet,
+  SURFACE_KEY,
+  useAppStore,
+  type AppStore,
+} from "./state/store.js";
+import { usePlaces } from "./state/places.js";
 import {
   ATTENTION_MARK_CLASS,
   ATTENTION_RANK,
@@ -150,10 +159,22 @@ function useLedgerAttention(): Map<string, AttentionItem> {
  * needs longer than a flap (run-view-50). */
 export const NEVER_CONNECTED_GRACE_MS = 8_000;
 
-function ConnectionBanner() {
-  const connection = useAppStore((state) => state.connection);
-  const everConnected = useAppStore((state) => state.everConnected);
-  const coreUrl = useAppStore((state) => state.coreUrl);
+/** Redial one place alone (run-view-50): its connection is let go and
+ * dialed afresh, every other place's untouched. */
+function redial(store: AppStore): void {
+  store.close();
+  store.getState().connect();
+}
+
+/** One place's connection banner (run-view-50, run-view-168): the
+ * local core's names its endpoint, a seat's names its server; each
+ * reads its own store's connection alone. */
+function ConnectionBanner({ store }: { store: AppStore }) {
+  const connection = store((state) => state.connection);
+  const everConnected = store((state) => state.everConnected);
+  const coreUrl = store((state) => state.coreUrl);
+  const local = isLocalPlace(store.place);
+  const server = placeLabel(store.place);
   // A boot that never connects must say so (run-view-50): after a
   // grace period the page names the endpoint it keeps dialing.
   // The clock runs from mount, untouched by the dial-close-dial flaps
@@ -173,15 +194,22 @@ function ConnectionBanner() {
     return (
       <div
         role="alert"
+        data-place={store.place.key}
         className="flex items-center justify-center gap-2 border-b border-amber-300 bg-amber-50 px-4 py-1.5 text-center text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200"
       >
-        {i18n._(
-          "Can't reach the Spex core at {endpoint} — retrying every second. On a served page, check the link's token; on the desktop, restart the app.",
-          { endpoint: scrubbed ?? i18n._("its endpoint") },
-        )}
+        {local
+          ? i18n._(
+              "Can't reach the Spex core at {endpoint} — retrying every second. On a served page, check the link's token; on the desktop, restart the app.",
+              { endpoint: scrubbed ?? i18n._("its endpoint") },
+            )
+          : i18n._({
+              id: "Can't reach {server} — retrying every second.",
+              comment: "banner: a team server's seat never answered; {server} is the server's name",
+              values: { server },
+            })}
         <button
           type="button"
-          onClick={() => window.location.reload()}
+          onClick={() => (local ? window.location.reload() : redial(store))}
           className="font-medium text-brand-700 hover:underline dark:text-brand-300"
         >
           {i18n._({ id: "Retry", comment: "take the failed read again" })}
@@ -191,40 +219,68 @@ function ConnectionBanner() {
   }
   if (connection === "mismatch") {
     return (
-      <div className="border-b border-red-300 bg-red-50 px-4 py-1.5 text-center text-xs text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200">
-        {i18n._(
-          "The Spex window and its core speak different protocol versions — restart the app (or update Spex) to fix this.",
-        )}
+      <div
+        data-place={store.place.key}
+        className="border-b border-red-300 bg-red-50 px-4 py-1.5 text-center text-xs text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200"
+      >
+        {local
+          ? i18n._(
+              "The Spex window and its core speak different protocol versions — restart the app (or update Spex) to fix this.",
+            )
+          : i18n._({
+              id: "{server} speaks a different protocol version than this window — it needs the same Spex release as this app.",
+              comment: "banner: a team server's seat runs another protocol version; {server} is the server's name",
+              values: { server },
+            })}
       </div>
     );
   }
   return (
-    <div className="border-b border-amber-300 bg-amber-50 px-4 py-1.5 text-center text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
-      {i18n._(
-        "Reconnecting to the Spex core… actions are paused until the connection returns.",
-      )}
+    <div
+      data-place={store.place.key}
+      className="border-b border-amber-300 bg-amber-50 px-4 py-1.5 text-center text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200"
+    >
+      {local
+        ? i18n._(
+            "Reconnecting to the Spex core… actions are paused until the connection returns.",
+          )
+        : i18n._({
+            id: "Reconnecting to {server}… actions there are paused until the connection returns.",
+            comment: "banner: the connection to a team server's seat dropped; {server} is the server's name",
+            values: { server },
+          })}
     </div>
   );
 }
 
-/** Connected-but-blank is never presented as normal (DR-010 §5). */
-function RefreshErrorBanner() {
-  const refreshError = useAppStore((state) => state.refreshError);
-  const refresh = useAppStore((state) => state.refresh);
-  const connection = useAppStore((state) => state.connection);
+/** Connected-but-blank is never presented as normal (DR-010 §5), at
+ * any place (run-view-168). */
+function RefreshErrorBanner({ store }: { store: AppStore }) {
+  const refreshError = store((state) => state.refreshError);
+  const refresh = store((state) => state.refresh);
+  const connection = store((state) => state.connection);
   if (!refreshError || connection !== "open") return null;
   return (
-    <div className="flex items-center justify-center gap-2 border-b border-amber-300 bg-amber-50 px-4 py-1.5 text-center text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
+    <div
+      data-place={store.place.key}
+      className="flex items-center justify-center gap-2 border-b border-amber-300 bg-amber-50 px-4 py-1.5 text-center text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200"
+    >
       {/* The core's own words for what failed ride as data inside the
           one sentence the page owns (localization-4). */}
-      {i18n._("Connected, but {reason}", { reason: refreshError })}
+      {isLocalPlace(store.place)
+        ? i18n._("Connected, but {reason}", { reason: refreshError })
+        : i18n._({
+            id: "Connected to {server}, but {reason}",
+            comment: "banner: a team server's seat answered but its state failed to load; {server} is the server's name",
+            values: { server: placeLabel(store.place), reason: refreshError },
+          })}
       <button
         type="button"
         onClick={() =>
           void refresh()
-            .then(() => useAppStore.setState({ refreshError: undefined }))
+            .then(() => store.setState({ refreshError: undefined }))
             .catch((cause: Error) =>
-              useAppStore.setState({
+              store.setState({
                 refreshError: i18n._("app state failed to load: {reason}", {
                   reason: cause.message,
                 }),
@@ -236,6 +292,19 @@ function RefreshErrorBanner() {
         {i18n._({ id: "Retry", comment: "take the failed read again" })}
       </button>
     </div>
+  );
+}
+
+/** Each seat's banners, beside the local core's (run-view-168): a
+ * connection, its banner and a protocol mismatch are per place. */
+function SeatBanners({ banner }: { banner: "connection" | "refresh" }) {
+  const seats = usePlaces((state) => state.seats);
+  return seats.map(({ store }) =>
+    banner === "connection" ? (
+      <ConnectionBanner key={store.place.key} store={store} />
+    ) : (
+      <RefreshErrorBanner key={store.place.key} store={store} />
+    ),
   );
 }
 
@@ -1314,10 +1383,12 @@ export function App() {
 
   return (
     <div className="flex h-full flex-col">
-      <ConnectionBanner />
+      <ConnectionBanner store={useAppStore} />
+      <SeatBanners banner="connection" />
       <ApprovalInbox />
       <ApprovalFeedback />
-      <RefreshErrorBanner />
+      <RefreshErrorBanner store={useAppStore} />
+      <SeatBanners banner="refresh" />
       <Announcer />
       {paletteOpen ? (
         <ProjectPalette

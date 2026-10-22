@@ -500,6 +500,11 @@ msgstr "{role} 的 Player"
 msgid "{seconds}s"
 msgstr "{seconds} 秒"
 
+#. banner: a team server's seat runs another protocol version; {server} is the server's name
+#: src/App.tsx
+msgid "{server} speaks a different protocol version than this window — it needs the same Spex release as this app."
+msgstr "{server} 与此窗口的协议版本不一致 — 它需要运行与本应用相同的 Spex 版本。"
+
 #: src/components/SpaceInstance.tsx
 msgid "{site} signed this device out. Sign in again to continue as @{login}."
 msgstr "{site} 已让此设备退出登录。重新登录即可以 @{login} 继续。"
@@ -1367,6 +1372,11 @@ msgstr "C"
 msgid "call /{playbookId}"
 msgstr "调用 /{playbookId}"
 
+#. banner: a team server's seat never answered; {server} is the server's name
+#: src/App.tsx
+msgid "Can't reach {server} — retrying every second."
+msgstr "无法连接 {server} — 每秒重试中。"
+
 #: src/App.tsx
 msgid "Can't reach the Spex core at {endpoint} — retrying every second. On a served page, check the link's token; on the desktop, restart the app."
 msgstr "无法连接 {endpoint} 上的 Spex 核心 — 每秒重试中。网页端请检查链接中的令牌；桌面端请重启应用。"
@@ -1868,6 +1878,11 @@ msgstr "确认命令、意图、Player 以及启用位置"
 #: src/components/DeliveryCard.tsx
 msgid "Confirming…"
 msgstr "确认中…"
+
+#. banner: a team server's seat answered but its state failed to load; {server} is the server's name
+#: src/App.tsx
+msgid "Connected to {server}, but {reason}"
+msgstr "已连接 {server}，但{reason}"
 
 #: src/App.tsx
 msgid "Connected, but {reason}"
@@ -4600,6 +4615,11 @@ msgstr "推理强度"
 #: src/components/ApprovalInbox.tsx
 msgid "Reconnect to answer these requests."
 msgstr "重新连接后可答复这些请求。"
+
+#. banner: the connection to a team server's seat dropped; {server} is the server's name
+#: src/App.tsx
+msgid "Reconnecting to {server}… actions there are paused until the connection returns."
+msgstr "正在重新连接 {server}…连接恢复前该处的操作暂停。"
 
 #: src/App.tsx
 msgid "Reconnecting to the Spex core… actions are paused until the connection returns."
