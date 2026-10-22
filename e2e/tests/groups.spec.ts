@@ -310,7 +310,7 @@ test.describe("first start", () => {
     await expect(panel.getByTestId("space-sync-tab")).toContainText("Nothing to send from this device");
     const tracked = git(bareOf(host, TEAM_KEY), "ls-tree", "-r", "--name-only", "spex").split("\n");
     expect(tracked).toContain(`sessions/${sessionId}.json`);
-    expect(tracked).toContain(`sessions/${sessionId}.records.jsonl`);
+    expect(tracked).toContain(`sessions/${sessionId}.replay.json`);
     expect(tracked.some((path) => path.endsWith(".hints.json") || path.startsWith("local/"))).toBe(false);
 
     // An intent queued while Groups is shown lists under local changes
@@ -1088,7 +1088,7 @@ test.describe("exploring", () => {
     await expect(sessionNode).toContainText(SESSION_TITLE);
     await sessionNode.click();
     const manifest = tree.getByTestId(`space-node-sessions/${session.id}.json`);
-    const records = tree.getByTestId(`space-node-sessions/${session.id}.records.jsonl`);
+    const records = tree.getByTestId(`space-node-sessions/${session.id}.replay.json`);
     const hints = tree.getByTestId(`space-node-sessions/${session.id}.hints.json`);
     await expect(manifest).toContainText("manifest");
     await expect(manifest).toContainText("Shared");

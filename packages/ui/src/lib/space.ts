@@ -260,6 +260,7 @@ export const FAMILY_LABELS: Record<string, () => string> = {
   "session bundles": () => i18n._({ id: "session bundles", comment: "catalog family: the folder holding every session's files" }),
   "session manifest": () => i18n._({ id: "session manifest", comment: "catalog family: one session's manifest file" }),
   "session records": () => i18n._({ id: "session records", comment: "catalog family: one session's record stream" }),
+  "session chunks": () => i18n._({ id: "session chunks", comment: "catalog family: immutable pieces of one session's state and replay" }),
   "session attachments": () => i18n._({ id: "session attachments", comment: "catalog family: the files attached to one session's turns" }),
   "provider hints": () => i18n._({ id: "provider hints", comment: "a file family that stays on this device" }),
   "legacy session sidecar": () => i18n._({ id: "legacy session sidecar", comment: "catalog family: a session file an earlier release wrote" }),

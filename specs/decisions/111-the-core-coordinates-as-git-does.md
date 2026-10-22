@@ -5,6 +5,8 @@
 
 ## Status
 
+Amended by [DR-132](132-bounded-session-storage.md) for bounded session roots, replay descriptors and session-owned chunks selected and published as one unit.
+
 Accepted (2026-10-10).
 Amends [DR-045](045-unified-session-storage.md) §Git synchronization in one rule: the app's sync no longer stops local writers during commit, checkout and merge; every write is versioned or appended, and the sync refuses a replacement its pre-write check finds changed since Save; the command line's stopped writers stand.
 Amends [DR-057](057-space-surface.md) in its admission: a sync is no longer admitted only between turns and while nothing runs, and no gate is set before its checks; a sync refuses no command and reports its progress.

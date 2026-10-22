@@ -48,6 +48,7 @@ import type {
   TmuxPlayRecord,
 } from "./protocol.js";
 import { scratchDir } from "./testing/scratch.js";
+import { readSessionManifest, writeSessionManifest, readSessionReplay, writeSessionReplay } from "./testing/session-storage.js";
 import { builtinLaunchModules } from "./testing/launch-modules.js";
 
 const machineIdentity = "machine-id:v1:00000000-0000-4000-8000-0000000000aa";
@@ -393,7 +394,7 @@ test("core-service-121: paired project options validate before reads, writes and
     assert.equal((await client.expectOk("config.get", { projectId: project.id })).status, "valid");
     assert.deepEqual(parseYaml(readFileSync(config, "utf8")).playbooks.code, { roles: { coder: "dev.coder" }, marker: "ready" });
     const session = await client.expectOk("session.create", { projectId: project.id });
-    const manifest = JSON.parse(readFileSync(join(projectSessions(harness.dataDir, project.id), session.id + ".json"), "utf8"));
+    const manifest = (await readSessionManifest(join(projectSessions(harness.dataDir, project.id), session.id + ".json")));
     assert.equal(manifest.lastAppliedExecutionProjection.catalog.code.options.cwd, expectedCwd);
     assert.equal(manifest.lastAppliedExecutionProjection.catalog.code.options.normalizedDefault, undefined, "the authored slice is retained; shell normalization is not persisted as configuration");
     await client.expectOk("session.dispose", { sessionId: session.id });
@@ -426,7 +427,7 @@ test("core-service-121: paired project options validate before reads, writes and
     mode = "optional";
     assert.equal((await set("cwd", explicitCwd)).ok, true);
     const session = await client.expectOk("session.create", { projectId: project.id });
-    const manifest = JSON.parse(readFileSync(join(projectSessions(harness.dataDir, project.id), session.id + ".json"), "utf8"));
+    const manifest = (await readSessionManifest(join(projectSessions(harness.dataDir, project.id), session.id + ".json")));
     assert.equal(manifest.lastAppliedExecutionProjection.catalog.code.options.cwd, explicitCwd);
     await client.expectOk("session.dispose", { sessionId: session.id });
   });
@@ -787,7 +788,7 @@ test("core-service-122: a session from a valid file records its agents with no s
   try {
     const project = await client.expectOk("project.register", { path: harness.projectDir });
     const session = await client.expectOk("session.create", { projectId: project.id });
-    const manifest = JSON.parse(readFileSync(join(projectSessions(harness.dataDir, project.id), session.id + ".json"), "utf8")) as {
+    const manifest = (await readSessionManifest(join(projectSessions(harness.dataDir, project.id), session.id + ".json"))) as {
       lastAppliedExecutionProjection: { captain: Record<string, unknown>; players: Record<string, unknown>[] };
     };
     const { captain, players } = manifest.lastAppliedExecutionProjection;
@@ -964,9 +965,9 @@ test("core-service-32: a session's last activity is its last record, not a later
   // Playbook rewrites the manifest's updatedAt when it releases the
   // runtime, which can be long after the last turn: here, an hour.
   const manifestPath = join(sessionsDir, `${session.id}.json`);
-  const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as { updatedAt: string };
+  const manifest = (await readSessionManifest(manifestPath)) as { updatedAt: string };
   manifest.updatedAt = new Date(lastActivity + 3_600_000).toISOString();
-  writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, { mode: 0o600 });
+  await writeSessionManifest(manifestPath, manifest);
   // Registering the project again rescans its session store.
   await client.expectOk("project.register", { path: harness.projectDir });
   const listed = (await client.expectOk("session.list", {})).find((item) => item.id === session.id);
@@ -2040,9 +2041,7 @@ test(
     const released = await settledSession(client, session.id, 1);
 
     // The evidence really stands in the checkpoint.
-    const manifest = JSON.parse(
-      readFileSync(join(projectSessions(harness.dataDir), `${session.id}.json`), "utf8"),
-    ) as { state: string; unresolvedEffects: unknown[] };
+    const manifest = (await readSessionManifest(join(projectSessions(harness.dataDir), `${session.id}.json`))) as { state: string; unresolvedEffects: unknown[] };
     assert.equal(manifest.state, "settled");
     assert.equal(manifest.unresolvedEffects.length, 1);
     // The failure the stream reports carries the runtime's own
@@ -2341,9 +2340,7 @@ test(
     assert.equal(running?.turnActive, true);
     // The checkpoint written ahead of the turn really reads uncertain
     // now — the evidence a turn cut off would leave ...
-    const manifest = JSON.parse(
-      readFileSync(join(projectSessions(harness.dataDir), `${session.id}.json`), "utf8"),
-    ) as { state: string };
+    const manifest = (await readSessionManifest(join(projectSessions(harness.dataDir), `${session.id}.json`))) as { state: string };
     assert.equal(manifest.state, "uncertain");
     // ... yet the summary reads the turn the core holds, listed and in
     // every state reported since it was accepted: no interrupted turn,
@@ -3239,10 +3236,10 @@ test("core-service-62: CLI stream changes refresh history and subscribers withou
   assert.deepEqual(replacedHistory.records.map((entry) => entry.seq), [1, 2, 4, 6, 7]);
   assert.deepEqual(client.records("session").map((entry) => entry.seq), [2, 4, 6, 7, 8, 9, 10]);
 
-  const streamAfterExternalWrites = readFileSync(stream, "utf8");
+  const streamAfterExternalWrites = (await readSessionReplay(stream)).toString("utf8");
   client.close();
   await service.stop();
-  assert.equal(readFileSync(stream, "utf8"), streamAfterExternalWrites);
+  assert.equal((await readSessionReplay(stream)).toString("utf8"), streamAfterExternalWrites);
   assert.equal(readFileSync(manifest, "utf8"), manifestBefore);
   assert.equal(readFileSync(malformed, "utf8"), malformedBefore);
   assert.equal(readFileSync(invalidStream, "utf8"), invalidStreamBefore);
@@ -3265,7 +3262,7 @@ test("core-service-85: a rebind keeps the clone's sessions listed, and a recorde
     await client.expectOk("turn.submit", { sessionId: session.id, text: "first" });
     await settledSession(client, session.id, 1);
     const history = await client.expectOk("history.get", { sessionId: session.id });
-    const paths = ["json", "records.jsonl", "hints.json"].map((suffix) => join(projectSessions(harness.dataDir), `${session.id}.${suffix}`));
+    const paths = ["json", "replay.json", "hints.json"].map((suffix) => join(projectSessions(harness.dataDir), `${session.id}.${suffix}`));
     const before = paths.map((path) => existsSync(path) ? readFileSync(path) : undefined);
     const relocated = join(harness.dir, "relocated-project");
     mkdirSync(relocated);
@@ -3366,7 +3363,7 @@ test("core-service-71: session.delete removes an ended session and its traces, r
   const live = await client.expectOk("session.create", { projectId: project.id });
 
   const sidecar = join(sessionsDir, `${ended.id}.json`);
-  const stream = join(sessionsDir, `${ended.id}.records.jsonl`);
+  const stream = join(sessionsDir, `${ended.id}.replay.json`);
   const prefsFile = join(harness.dataDir, "local", "prefs.json");
   assert.ok(existsSync(sidecar) && existsSync(stream), "the ended session's files exist");
   assert.ok(readFileSync(prefsFile, "utf8").includes(`viewed:${ended.id}`));
@@ -3574,7 +3571,7 @@ test("core-service-22/62: opaque v1 records survive native restart and CLI repla
 
   const sessionsDir = projectSessions(harness.dataDir);
   const nativeStream = join(sessionsDir, `${native.id}.records.jsonl`);
-  const original = readFileSync(nativeStream, "utf8").trimEnd().split("\n").map((line) => JSON.parse(line));
+  const original = (await readSessionReplay(nativeStream)).toString("utf8").trimEnd().split("\n").map((line) => JSON.parse(line));
   const opaque = [
     {},
     { type: "future_context", playerId: "not-a-player", timestamp: 1700 },
@@ -3586,7 +3583,7 @@ test("core-service-22/62: opaque v1 records survive native restart and CLI repla
   ];
   const nativeEntries = [...original, ...opaque.map((record, index) => ({v:1,seq:original.length + index + 1,record}))];
   const nativeBytes = nativeEntries.map((entry) => JSON.stringify(entry)).join("\n") + "\n";
-  writeFileSync(nativeStream, nativeBytes);
+  await writeSessionReplay(nativeStream, nativeBytes);
 
   const foreignId = "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa";
   const foreignRecords = [
@@ -3602,7 +3599,7 @@ test("core-service-22/62: opaque v1 records survive native restart and CLI repla
   const playbook = openSessionStore(sessionsDir);
   const expectedForeign = (await playbook.readStream(foreignId)).entries;
   assert.equal(expectedForeign.length, foreignRecords.length);
-  const foreignBytes = readFileSync(foreignStream, "utf8");
+  const foreignBytes = (await readSessionReplay(foreignStream)).toString("utf8");
   const opaqueId = "bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb";
   writeForeignSession(sessionsDir, opaqueId, harness.projectDir, [{}, { type: "future" }]);
   const createdAt = "2026-09-01T01:00:00.000Z";
@@ -3627,7 +3624,7 @@ test("core-service-22/62: opaque v1 records survive native restart and CLI repla
   assert.equal(nativeInfo?.continuable, true);
   assert.deepEqual(nativeInfo?.agentActiveMs, nativeActive);
   assert.ok(!Object.hasOwn(nativeInfo?.agentActiveMs ?? {}, "not-a-player"));
-  assert.equal(JSON.parse(readFileSync(join(sessionsDir, `${native.id}.json`), "utf8")).replay.incomplete, false);
+  assert.equal((await readSessionManifest(join(sessionsDir, `${native.id}.json`))).replay.incomplete, false);
   assert.deepEqual(await client.expectOk("usage.get", { sessionId: native.id }), nativeUsage);
   const withoutEnvelopeVersion = ({ v: _v, ...entry }: { v: number }) => entry;
   const visible = (entry: { record: object }) => (entry.record as { visibility?: unknown }).visibility !== "hidden";
@@ -3656,8 +3653,8 @@ test("core-service-22/62: opaque v1 records survive native restart and CLI repla
   await client.waitFor((message) => message.type === "record" && message.sessionId === foreignId && message.seq === foreignRecords.length + 2);
   assert.deepEqual(client.records("session").map((message) => message.record), appended);
   assert.equal((await client.expectOk("history.get", { sessionId: foreignId })).records.at(-1)?.seq, foreignRecords.length + 2);
-  assert.equal(readFileSync(nativeStream, "utf8"), nativeBytes);
-  assert.ok(readFileSync(foreignStream, "utf8").startsWith(foreignBytes));
+  assert.equal((await readSessionReplay(nativeStream)).toString("utf8"), nativeBytes);
+  assert.ok((await readSessionReplay(foreignStream)).toString("utf8").startsWith(foreignBytes));
   assert.ok(!existsSync(join(sessionsDir, `${foreignId}.spex.json`)));
 });
 
@@ -3703,7 +3700,7 @@ test("core-service-22: damaged native streams remain readable but cannot continu
     await client.waitFor((message) => message.type === "record" && message.sessionId === session.id && message.record.type === "turn_finished");
     await client.waitFor((m) => m.type === "session.state" && m.session.id === session.id && m.session.turns === 1 && !m.session.turnActive && !m.session.live);
     const stream = join(projectSessions(harness.dataDir), `${session.id}.records.jsonl`);
-    const before = readFileSync(stream, "utf8");
+    const before = (await readSessionReplay(stream)).toString("utf8");
     const records = before.trimEnd().split("\n").map((line) => JSON.parse(line) as StoredRecord);
     const lastSeq = records.at(-1)?.seq ?? 0;
     const history = await client.expectOk("history.get", { sessionId: session.id });
@@ -3713,7 +3710,7 @@ test("core-service-22: damaged native streams remain readable but cannot continu
       stream,
       sidecar: join(projectSessions(harness.dataDir), `${session.id}.json`),
       bytes: before + example.suffix(lastSeq + 1),
-      boundary: JSON.parse(readFileSync(join(projectSessions(harness.dataDir), `${session.id}.json`), "utf8")).replay.seq,
+      boundary: (await readSessionManifest(join(projectSessions(harness.dataDir), `${session.id}.json`))).replay.seq,
       history,
       earlier: example.earlier,
     });
@@ -3721,11 +3718,11 @@ test("core-service-22: damaged native streams remain readable but cannot continu
   client.close();
   await service.stop();
   for (const example of damaged) {
-    writeFileSync(example.stream, example.bytes);
+    await writeSessionReplay(example.stream, example.bytes);
     if (example.earlier) {
-      const meta = JSON.parse(readFileSync(example.sidecar, "utf8"));
+      const meta = (await readSessionManifest(example.sidecar));
       meta.replay.incomplete = true;
-      writeFileSync(example.sidecar, JSON.stringify(meta));
+      await writeSessionManifest(example.sidecar, meta);
     }
   }
   service = await CoreService.start({
@@ -3751,7 +3748,7 @@ test("core-service-22: damaged native streams remain readable but cannot continu
     const refused = await client.command("turn.submit", { sessionId: example.id, text: "continue damaged history" });
     assert.ok(!refused.ok, example.name);
     assert.ok(!refused.ok && /incomplete|replay|checkpoint|damage/i.test(refused.error.message), example.name);
-    assert.equal(readFileSync(example.stream, "utf8"), example.bytes, example.name);
+    assert.equal((await readSessionReplay(example.stream)).toString("utf8"), example.bytes, example.name);
     assert.ok(!existsSync(example.sidecar.replace(/\.json$/, ".spex.json")), "no desktop authority file");
   }
 });
@@ -3768,7 +3765,7 @@ test("core-service-77: a real session continues after restart and respects anoth
   // Settlement releases the runtime (core-service-91).
   await client.waitFor((m) => m.type === "session.state" && m.session.id === session.id && !m.session.live && m.session.turns === 1);
   const stream = join(projectSessions(harness.dataDir),`${session.id}.records.jsonl`);
-  const before = readFileSync(stream,"utf8");
+  const before = (await readSessionReplay(stream)).toString("utf8");
   client.close(); await service.stop();
   service = await CoreService.start({token:"test",configPath:join(harness.dir,"playbook.config.yaml"),dataDir:harness.dataDir,adapterImports:fakeAdapterImports({fallback:{result:"continued answer"}}).imports,env:{},watchConfig:false});
   client = new Client(service.port()); await client.open();
@@ -3783,7 +3780,7 @@ test("core-service-77: a real session continues after restart and respects anoth
   await client.expectOk("turn.submit",{sessionId:session.id,text:"second"});
   await client.waitFor((m) => m.type === "session.state" && m.session.id === session.id && !m.session.live && m.session.turns === 2);
   assert.deepEqual(turnIds((await client.expectOk("history.get",{sessionId:session.id})).records),[1,2]);
-  assert.ok(readFileSync(stream,"utf8").startsWith(before),"continue appends to the same replay");
+  assert.ok((await readSessionReplay(stream)).toString("utf8").startsWith(before),"continue appends to the same replay");
 });
 
 test("core-service-77: continuation summaries follow current configuration without opening or changing a session", async (t) => {
@@ -3987,7 +3984,7 @@ test("core-service-77: the real shell continues from its token-free snapshot, le
   // (core-service-72).
   const manifest = join(projectSessions(join(dir, "state"), project.id), `${session.id}.json`);
   await client.waitFor((m) => m.type === "session.state" && m.session.id === session.id && m.session.turns === 1 && m.session.turnActive === false);
-  const text = readFileSync(manifest, "utf8");
+  const text = JSON.stringify(await readSessionManifest(manifest));
   assert.ok(!text.includes("resumeToken"), "no token key in the manifest");
   assert.ok(!text.includes("fake-resume-"), "no token value in the manifest");
   const snapshot = (JSON.parse(text) as {
@@ -4008,7 +4005,7 @@ test("core-service-77: the real shell continues from its token-free snapshot, le
   // no longer live, and the provider hints written at settlement stay
   // bound to the untouched manifest.
   await client.waitFor((m) => m.type === "session.state" && m.session.id === session.id && m.session.live === false);
-  const hints = JSON.parse(readFileSync(join(projectSessions(join(dir, "state"), project.id), `${session.id}.hints.json`), "utf8")) as { checkpointSha256: string; captain?: { kind: string } };
+  const hints = (await readSessionManifest(join(projectSessions(join(dir, "state"), project.id), `${session.id}.hints.json`))) as { checkpointSha256: string; captain?: { kind: string } };
   assert.equal(hints.checkpointSha256, createHash("sha256").update(readFileSync(manifest)).digest("hex"), "hints bound to the settled manifest");
   assert.equal(hints.captain?.kind, "pinned");
 
@@ -4025,7 +4022,7 @@ test("core-service-77: the real shell continues from its token-free snapshot, le
   const transcript = JSON.stringify(client.records("session").filter((m) => m.record.turnId === 2));
   assert.ok(transcript.includes("not json on purpose"), "the Captain replied on the continued turn");
   await client.waitFor((m) => m.type === "session.state" && m.session.id === session.id && m.session.turns === 2 && m.session.turnActive === false);
-  const after = JSON.parse(readFileSync(manifest, "utf8")) as {
+  const after = (await readSessionManifest(manifest)) as {
     snapshot: { effectLedger: unknown; sequences: { turn: number } };
   };
   assert.equal(JSON.stringify(after.snapshot.effectLedger), ledgerBefore, "ledger intact");
@@ -4043,7 +4040,7 @@ test("core-service-77: the real shell continues from its token-free snapshot, le
   await service.reloadConfig();
   await client.expectOk("turn.submit", { sessionId: session.id, text: "and again" });
   await client.waitFor((m) => m.type === "session.state" && m.session.id === session.id && m.session.turns === 3 && m.session.live === false);
-  const narrowed = JSON.parse(readFileSync(manifest, "utf8")) as { structuralProjection: { catalog: Record<string, unknown>; players: { id: string }[] } };
+  const narrowed = (await readSessionManifest(manifest)) as { structuralProjection: { catalog: Record<string, unknown>; players: { id: string }[] } };
   assert.deepEqual(Object.keys(narrowed.structuralProjection.catalog), ["code"], "the stored catalog is the session's own");
   assert.deepEqual(narrowed.structuralProjection.players.map((player) => player.id), ["dev.coder"]);
 
@@ -4377,7 +4374,7 @@ for (const selection of ["default", "home override", "sessions override"] as con
     assert.equal(JSON.parse(original).schemaVersion,6,"the public lifecycle exports the released legacy recovery projection");
     await seed.dispose();
     writeFileSync(source,original,{mode:0o600});
-    writeFileSync(join(legacyDir,`${sessionId}.records.jsonl`),readFileSync(join(seedDir,`${sessionId}.records.jsonl`)),{mode:0o600});
+    writeFileSync(join(legacyDir,`${sessionId}.records.jsonl`),await readSessionReplay(join(seedDir,`${sessionId}.records.jsonl`)),{mode:0o600});
     const service = await CoreService.start({token:"test",configPath,dataDir,home,own:OWN,watchConfig:false,
       env:{HOME:home,XDG_STATE_HOME:join(home,"old-state"),...(selection === "home override" ? {SPEX_HOME:dataDir} : {})}});
     t.after(async () => {await service.stop();rmSync(home,{recursive:true,force:true});});
@@ -4493,7 +4490,7 @@ for (const action of ["restore", "discard", "restore after recorded work"] as co
       const restored = validateSessionManifest(await shared.readManifest(sessionId));
       assert.equal(restored.state, "settled", "restore the initialized turn-zero checkpoint");
       assert.equal(restored.snapshot.sequences.turn, 0);
-      assert.ok(existsSync(join(sessionsDir, `${sessionId}.records.jsonl`)));
+      assert.ok(existsSync(join(sessionsDir, `${sessionId}.replay.json`)));
       assert.equal((await client.expectOk("session.list", {}))[0]?.recovery, undefined);
     }
   });
@@ -4767,8 +4764,8 @@ test("core-service-86: damaged sessions refuse only their own execution and rema
   const damaged = await client.expectOk("session.create", {projectId:project.id});
   await client.expectOk("session.dispose", {sessionId:damaged.id});
   const manifestFile = join(projectSessions(harness.dataDir),`${damaged.id}.json`);
-  const manifest = JSON.parse(readFileSync(manifestFile,"utf8"));
-  manifest.replay.sha256 = "0".repeat(64); writeFileSync(manifestFile,JSON.stringify(manifest));
+  const manifest = (await readSessionManifest(manifestFile));
+  manifest.replay.sha256 = "0".repeat(64); await writeSessionManifest(manifestFile, manifest);
   await harness.service["syncForeignSessions"]();
   const reports = await client.expectOk("storage.diagnostics", {});
   assert.ok(reports.some((report) => report.blocking && report.file.endsWith(`${damaged.id}.json`)));
@@ -4919,7 +4916,7 @@ test("core-service-32/39: shutdown waits for a paused durable settlement after r
   await client.expectOk("turn.submit",{sessionId:session.id,text:"Settle exactly once"});
   await entered;
   const manifestFile=join(projectSessions(harness.dataDir),`${session.id}.json`);
-  assert.equal(JSON.parse(readFileSync(manifestFile,"utf8")).state,"uncertain");
+  assert.equal((await readSessionManifest(manifestFile)).state,"uncertain");
   await client.waitFor((message)=>message.type==="record"&&message.record.type==="turn_finished");
   const listed=(await client.expectOk("session.list",{})).find((item)=>item.id===session.id)!;
   assert.equal(listed.turnActive,true,"durable settlement is still pending");
@@ -5021,7 +5018,7 @@ test("storage-15: repeated default-home startup does not grow leases for a refus
   writeFileSync(sidecar,JSON.stringify(valid));
   service=await CoreService.start(options);client=new Client(service.port());await client.open();
   assert.equal(existsSync(sidecar),false);
-  assert.equal(JSON.parse(readFileSync(join(sessionsDir,`${id}.json`),"utf8")).state,"history-only");
+  assert.equal((await readSessionManifest(join(sessionsDir,`${id}.json`))).state,"history-only");
   assert.ok((await client.expectOk("session.list",{})).some((session)=>session.id===id));
   const migratedGuards=guards();assert.equal(migratedGuards.length,1);
   client.close();await service.stop();
@@ -5078,7 +5075,7 @@ test("core-service-101: a session's own tuning reaches its runtime, its config f
   await client.expectOk("turn.submit", { sessionId: tuned.id, text: "hello again" });
   await client.waitFor((m) => m.type === "session.state" && m.session.id === tuned.id && m.session.turns === 2 && m.session.live === false);
   const manifest = join(projectSessions(join(dir, "state"), project.id), `${tuned.id}.json`);
-  const applied = (JSON.parse(readFileSync(manifest, "utf8")) as {
+  const applied = ((await readSessionManifest(manifest)) as {
     lastAppliedExecutionProjection: {
       captain: { model: { value?: string }; subagentModel?: string };
       players: { id: string; model: { value?: string }; effort: { value?: string }; subagentModel?: string; subagentEffort?: string }[];
@@ -5116,7 +5113,7 @@ test("core-service-101: a session's own tuning reaches its runtime, its config f
   const plain = await client.expectOk("session.create", { projectId: project.id });
   await client.expectOk("turn.submit", { sessionId: plain.id, text: "hello" });
   await client.waitFor((m) => m.type === "session.state" && m.session.id === plain.id && m.session.live === false);
-  const other = (JSON.parse(readFileSync(join(projectSessions(join(dir, "state"), project.id), `${plain.id}.json`), "utf8")) as {
+  const other = ((await readSessionManifest(join(projectSessions(join(dir, "state"), project.id), `${plain.id}.json`))) as {
     lastAppliedExecutionProjection: {
       captain: { model: { value?: string }; subagentModel?: string };
       players: { id: string; subagentModel?: string; subagentEffort?: string }[];
@@ -5188,7 +5185,7 @@ test("core-service-101: a session's own tuning reaches its runtime, its config f
   await client.expectOk("session.agent.set", { sessionId: tuned.id, agentId: "captain", subagentModel: null, subagentEffort: "low" });
   await client.expectOk("turn.submit", { sessionId: tuned.id, text: "at low" });
   await client.waitFor((m) => m.type === "session.state" && m.session.id === tuned.id && m.session.turns === 3 && m.session.live === false);
-  const own = (JSON.parse(readFileSync(manifest, "utf8")) as {
+  const own = ((await readSessionManifest(manifest)) as {
     lastAppliedExecutionProjection: { captain: { subagentModel?: string; subagentEffort?: string } };
   }).lastAppliedExecutionProjection;
   assert.deepEqual(
@@ -5763,4 +5760,49 @@ test("storage-29: session.create makes a paired clone's missing sessions/ privat
   const lateRefused = await pending;
   assert.ok(!lateRefused.ok && lateRefused.error.code === "not_found", JSON.stringify(lateRefused));
   assert.equal(existsSync(cloneOf(late.id)), false);
+});
+
+test("core-service-60: a bounded external replay append is announced without rewriting its session root", async (t) => {
+  const dir = scratchDir("spex-bounded-foreign-");
+  const projectDir = join(dir, "project"); mkdirSync(projectDir);
+  execFileSync("git", ["init", "-q", projectDir]);
+  const { sessionsDir } = pairedHome(join(dir, "state"), projectDir);
+  const configPath = join(dir, "playbook.config.yaml"); writeFileSync(configPath, VALID_CONFIG);
+  const service = await CoreService.start({ token: "test", configPath, dataDir: join(dir, "state"), env: {}, home: join(dir, "home"), watchConfig: true });
+  const client = new Client(service.port()); await client.open();
+  t.after(async () => { client.close(); await service.stop(); rmSync(dir, { recursive: true, force: true }); });
+  await client.expectOk("project.register", { path: projectDir });
+  const shared = createSessionStore({ sessionsDir });
+  const plan = await loadLaunchPlan({ userConfigPath: configPath, modules: builtinLaunchModules(configPath) });
+  const external = await openSessionHost({ store: shared, mode: "new", cwd: projectDir,
+    config: executionConfigFromPlan(plan), adapterImports: fakeAdapterImports({ fallback: { result: "unused" } }).imports });
+  t.after(() => external.dispose());
+  const id = external.sessionId;
+  await client.waitFor((m) => m.type === "session.state" && m.session.id === id);
+  await client.expectOk("subscribe", { channel: { kind: "session", sessionId: id } });
+  const root = join(sessionsDir, `${id}.json`);
+  const before = readFileSync(root);
+  assert.equal(JSON.parse(before.toString()).schemaVersion, 8);
+  assert.equal(existsSync(join(sessionsDir, `${id}.records.jsonl`)), false);
+  const start = { type: "turn_started", turnId: 1, timestamp: 1000, turn: { id: 1, prompt: "Published through a replay descriptor" } };
+  const finish = { type: "turn_finished", turnId: 1, timestamp: 1001 };
+  await external.lease.append(start);
+  await external.lease.append(finish);
+  await client.waitFor((m) => m.type === "record" && m.sessionId === id && m.record.type === "turn_finished");
+  assert.deepEqual(readFileSync(root), before, "the descriptor alone announces newly readable records");
+  assert.equal(client.records("session").filter((entry) => entry.sessionId === id && entry.record.type === "turn_started").length, 1);
+  const listed = (await client.expectOk("session.list", {})).find((entry) => entry.id === id);
+  assert.equal(listed?.title, start.turn.prompt);
+  assert.equal(listed?.turns, 1);
+  await external.dispose();
+  const physical = JSON.parse(readFileSync(root, "utf8"));
+  rmSync(join(sessionsDir, `${id}.chunks`, physical.root.sha256));
+  await service["syncForeignSessions"]();
+  const damaged = (await client.expectOk("session.list", {})).find((entry) => entry.id === id);
+  assert.ok(damaged, "a readable root still associates damaged recovery with its session");
+  assert.equal(damaged.continuable, undefined);
+  const diagnostics = await client.expectOk("storage.diagnostics", {});
+  assert.ok(diagnostics.some((entry) => entry.file.endsWith(`${id}.json`) && entry.blocking));
+  await client.expectOk("session.delete", { sessionId: id });
+  assert.equal(existsSync(root), false, "damaged recovery stays deletable through the shared lifecycle");
 });

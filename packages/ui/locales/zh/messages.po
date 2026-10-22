@@ -5197,6 +5197,11 @@ msgstr "会话附件"
 msgid "session bundles"
 msgstr "会话包"
 
+#. catalog family: immutable pieces of one session's state and replay
+#: src/lib/space.ts
+msgid "session chunks"
+msgstr "会话分块"
+
 #: src/components/RunView.tsx
 msgid "Session is in use elsewhere"
 msgstr "会话正在别处使用"

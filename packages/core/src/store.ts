@@ -35,6 +35,7 @@ import {
 import { readJsonFile, StorageFormatError, VersionConflictError, writeApplicationFile } from "./files.js";
 import { Home, repositoryNameFor, splitKey } from "./home.js";
 import { folderRemote, needsGroupsMigration, migrateFormerHome } from "./migrate-home.js";
+import { needsBoundedSessionImport, stageBoundedHomeSessions, finishBoundedHomeSessions } from "./migrate-bounded-sessions.js";
 import { initializeClone } from "./storage-git.js";
 import { seedConfig } from "./config.js";
 import { createRequire } from "node:module";
@@ -465,7 +466,7 @@ export class Store {
       const imported = this.importLegacy(options.legacyDbPath);
       this.meta.version = META_VERSION;
       writeAtomic(this.metaFile(), JSON.stringify(this.meta));
-      if (imported || needsGroupsMigration(this.dir)) {
+      if (imported || needsGroupsMigration(this.dir) || needsBoundedSessionImport(this.dir)) {
         // English, deliberately: a caller's programming failure.
         if (!options.deferMigration) throw new Error(`${this.dir} holds the former layout; open it with Store.open to migrate`);
         this.migrationPending = true;
@@ -485,7 +486,8 @@ export class Store {
     const store = new Store({ ...options, deferMigration: true });
     if (store.migrationPending) {
       try {
-        await migrateFormerHome(store.dir, {
+        await stageBoundedHomeSessions(store.dir);
+        if (needsGroupsMigration(store.dir)) await migrateFormerHome(store.dir, {
           env: store.env,
           ...(options.own ? { own: options.own } : {}),
           libraryDir: options.libraryDir ?? join(store.dir, "playbooks"),
@@ -493,6 +495,7 @@ export class Store {
         });
         store.migrationPending = false;
         store.openHome();
+        await finishBoundedHomeSessions(store.dir, store.homeFile);
       } catch (error) {
         store.close();
         throw error;
@@ -864,8 +867,9 @@ export class Store {
         const id = filename.slice(0, -(sidecar ? ".spex.json" : ".json").length);
         const sourcePath = join(sessionsDir, filename);
         try {
+          if (!sidecar && (await shared.readManifest(id)).schemaVersion === 7) continue;
           const source = readJson<Record<string, unknown>>(sourcePath);
-          if (!source || (!sidecar && source.schemaVersion === 7)) continue;
+          if (!source) continue;
           if (sidecar) this.loadSidecar(repository, id, source);
           await shared.migrate(id, { sourcePath, ...(cwd ? { cwd } : {}) });
         } catch (error) {
@@ -960,6 +964,9 @@ export class Store {
       // Unknown versions remain opaque and readable; these fields only
       // associate history, never authorize recovery or rewrite the file.
       let raw: Record<string, unknown> | undefined;
+      // A bounded root keeps association fields readable even when a
+      // referenced recovery chunk is damaged. These fields associate
+      // history only; shared validation remains execution authority.
       try { raw = readJson<Record<string, unknown>>(join(shared.sessionsDir, `${id}.json`)); } catch { return; }
       if (!raw || raw.sessionId !== id || typeof raw.cwd !== "string") return;
       manifest = raw as unknown as SessionManifest;
@@ -1059,7 +1066,7 @@ export class Store {
     if (!problem || existsSync(problem.file)) return problem;
     this.sessionProblems.delete(id);
     const dir = dirname(problem.file);
-    if (!this.sessions.has(id) && !existsSync(join(dir, `${id}.json`)) && !existsSync(join(dir, `${id}.records.jsonl`))) this.untrackedSessions.delete(id);
+    if (!this.sessions.has(id) && !existsSync(join(dir, `${id}.json`)) && !existsSync(join(dir, `${id}.records.jsonl`)) && !existsSync(join(dir, `${id}.replay.json`)) && !existsSync(join(dir, `${id}.chunks`))) this.untrackedSessions.delete(id);
     return undefined;
   }
 
@@ -1072,7 +1079,7 @@ export class Store {
     if (directory.startsWith("..") || isAbsolute(directory)) return [];
     return [...this.untrackedSessions]
       .filter((id) => this.sessionLocations.get(id) === key)
-      .flatMap((id) => [join(directory, `${id}.json`), join(directory, `${id}.records.jsonl`)]);
+      .flatMap((id) => [join(directory, `${id}.json`), join(directory, `${id}.records.jsonl`), ...[`${id}.replay.json`, `${id}.chunks`].filter((name) => existsSync(join(repository.sessionsDir, name))).map((name) => join(directory, name))]);
   }
 
   /** Reserve local admission before any asynchronous host/scan work; a

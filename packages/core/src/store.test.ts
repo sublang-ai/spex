@@ -2,6 +2,7 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 import { test } from "node:test";
+import { readSessionReplay, writeSessionReplay } from "./testing/session-storage.js";
 import assert from "node:assert/strict";
 import { appendFileSync, chmodSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
@@ -856,7 +857,7 @@ test("shared replay remains token-free in memory and across restart", async () =
 
   const reopened = new Store({ machineIdentity, dir, own: "tester" });
   await reopened.initializeSessions();
-  const text = readFileSync(join(sessionsOf(dir), "71000000-0000-4000-8000-000000000001.records.jsonl"), "utf8");
+  const text = (await readSessionReplay(join(sessionsOf(dir), "71000000-0000-4000-8000-000000000001.records.jsonl"))).toString("utf8");
   assert.ok(!text.includes("sess-abc") && !text.includes("sess-def"));
   const serialized = JSON.stringify(reopened.getRecords("71000000-0000-4000-8000-000000000001"));
   assert.ok(!serialized.includes("resumeToken") && !serialized.includes("sess-abc"));
@@ -883,8 +884,8 @@ test("a lease-free shared read serves only the complete prefix and mutates nothi
 
   // A torn tail, as a crashed writer leaves it.
   const file = join(sessionsOf(dir), "71000000-0000-4000-8000-000000000001.records.jsonl");
-  const damaged = readFileSync(file, "utf8") + '{"v":1,"seq":2,"rec';
-  writeFileSync(file, damaged);
+  const damaged = (await readSessionReplay(file)).toString("utf8") + '{"v":1,"seq":2,"rec';
+  await writeSessionReplay(file, damaged);
 
   const reopened = new Store({ machineIdentity, dir, own: "tester" });
   await reopened.initializeSessions();
@@ -892,7 +893,7 @@ test("a lease-free shared read serves only the complete prefix and mutates nothi
     reopened.getRecords("71000000-0000-4000-8000-000000000001").map((r) => r.seq),
     [1, 2],
   );
-  assert.equal(readFileSync(file, "utf8"), damaged, "the reader rewrites nothing");
+  assert.equal((await readSessionReplay(file)).toString("utf8"), damaged, "the reader rewrites nothing");
   reopened.close();
 });
 
@@ -900,7 +901,7 @@ test("shared stream failure preserves the incomplete marker across Store restart
   const dir = tempRoot(); const store = new Store({ machineIdentity, dir, own: "tester" });
   const lease = await sharedSession(store);
   await lease.append({ type: "player_prompt", turnId: 1, timestamp: 10, playerId: "dev.coder", prompt: "measure" });
-  const file = join(sessionsOf(dir), `${SESSION}.records.jsonl`);
+  const file = join(sessionsOf(dir), `${SESSION}.replay.json`);
   const prefix = readFileSync(file);
   chmodSync(file, 0o644);
   await assert.rejects(() => lease.append({ type: "player_finished", turnId: 1, timestamp: 11, playerId: "dev.coder", result: { status: "ok", playerId: "dev.coder", turnId: 1 } }));

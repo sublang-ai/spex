@@ -63,7 +63,7 @@ async function interrupted(t: TestContext) {
   manager.onSessionState = (state) => states.push(state);
   t.after(async () => { await manager.disposeAll(); await cli.dispose(); store.close(); rmSync(dir, { recursive: true, force: true }); });
   const manifest = join(shared.sessionsDir, `${id}.json`);
-  const stream = join(shared.sessionsDir, `${id}.records.jsonl`);
+  const stream = join(shared.sessionsDir, `${id}.replay.json`);
   return { store, shared, project, manager, stats, id, manifest, stream, states, composed: await composeConfig(parseYaml(CONFIG), undefined, undefined, { modules: { repository: "tester/tester-spex", find: (id) => (modules[id] ? { module: modules[id], builtin: true } : undefined) } }) };
 }
 
@@ -229,7 +229,7 @@ test("core-service-84: a local live runtime still refuses Restore after foreign 
 test("core-service-84: refusing the same live session preserves its local ownership marker", async (t) => {
   const f = await interrupted(t);
   const local = await f.manager.createSession(f.project, f.composed);
-  const paths = [join(f.shared.sessionsDir, `${local.id}.json`), join(f.shared.sessionsDir, `${local.id}.records.jsonl`)];
+  const paths = [join(f.shared.sessionsDir, `${local.id}.json`), join(f.shared.sessionsDir, `${local.id}.replay.json`)];
   const before = paths.map((path) => readFileSync(path));
   for (const request of [() => f.manager.restoreSession(f.project, local.id), () => f.manager.continueSession(f.project, f.composed, local)]) {
     await assert.rejects(request(), (error: unknown) => error instanceof CoreError && error.code === "busy");
