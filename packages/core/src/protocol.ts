@@ -639,6 +639,29 @@ export interface ReadinessEntry {
   fastModeSupported: boolean;
   /** Whether cligent serves a subagent model for this adapter (DR-093). */
   subagentModelSupported: boolean;
+  /** On a team server's seat alone (settings-49): the adapter's
+   * credential class and its phrase. */
+  credential?: AdapterCredential;
+}
+
+/** A seat's credential classes (settings-49): the member's own, the
+ * administrator's shared sign-in, a shared file that cannot be read, a
+ * credential the agent's status command reports expired or refused, or
+ * no form set. */
+export type CredentialClass = "own" | "shared" | "unreadable" | "expired" | "none";
+
+export interface AdapterCredential {
+  class: CredentialClass;
+  /** The class in the reader's words; for `none`, how to set one. */
+  phrase: string;
+}
+
+/** The credentials a seat's member placed (settings-48), no secret
+ * among them: each code host with its username, if any, and each agent
+ * with the names of the forms set. */
+export interface CredentialList {
+  hosts: { name: string; username?: string }[];
+  agents: { name: AdapterName; names: string[] }[];
 }
 
 /** What a run reported spending. `costSources` names every provenance
@@ -1031,6 +1054,14 @@ export const commandSchema = z.discriminatedUnion("type", [
    * environment's playbooks first (core-service-2, environments-9). */
   z.object({ type: z.literal("config.get"), id, projectId: repositoryKeySchema.optional() }),
   z.object({ type: z.literal("readiness.get"), id }),
+  // A seat member's own credentials (settings-48, storage-44): a code
+  // host's token, `values` {token, username?}, or an agent's, `values`
+  // {<NAME>: value} over its forms; the core checks each field and
+  // refuses `invalid_request` before anything is written.
+  z.object({ type: z.literal("credential.set"), id, kind: z.enum(["host", "agent"]), name: z.string(),
+    values: z.record(z.string(), z.string()) }).strict(),
+  z.object({ type: z.literal("credential.remove"), id, kind: z.enum(["host", "agent"]), name: z.string() }).strict(),
+  z.object({ type: z.literal("credential.list"), id }).strict(),
   z.object({ type: z.literal("agent.options"), id, adapter: adapterNameSchema }),
   z.object({ type: z.literal("project.list"), id }),
   z.object({ type: z.literal("project.register"), id, path: z.string().min(1) }),
@@ -1465,6 +1496,10 @@ export interface CommandResults {
   "media.read": {asset: MediaAsset; offset: number; data: string; eof: boolean};
   "config.get": ConfigState;
   "readiness.get": ReadinessEntry[];
+  /** The credentials after the write, as `credential.list` lists them. */
+  "credential.set": CredentialList;
+  "credential.remove": CredentialList;
+  "credential.list": CredentialList;
   "agent.options": AgentOptions;
   "project.list": ProjectInfo[];
   "project.rebind": ProjectInfo;
@@ -1953,6 +1988,12 @@ export type SpaceSyncPhase =
       message: string;
       guidance: string;
       retry: boolean;
+      /** On a seat, the https code host a join's failed code clone
+       * needs a credential of the member's for, or whose credential of
+       * theirs cannot be read, by the name the Credentials section
+       * takes it (space-103, settings-48); absent for any other
+       * failure. */
+      credential?: string;
     }
   | { phase: "done"; at: number; sent: number; received: number; pushed: boolean };
 

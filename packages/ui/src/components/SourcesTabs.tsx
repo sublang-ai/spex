@@ -19,7 +19,8 @@ import type {
   SpecTreeState,
 } from "@sublang/spex-core/protocol";
 
-import { useAppStore, type ProjectMeta } from "../state/store.js";
+import type { ProjectMeta } from "../state/store.js";
+import { usePlaceStore } from "../state/place-context.js";
 import { absoluteTitle, relativeAge } from "../lib/time.js";
 import { i18n } from "../i18n.js";
 import { Icon } from "./Icon.js";
@@ -123,11 +124,12 @@ export function SourcesBand({
    * GitHub binding (dashboard-8); absent on the Overview itself. */
   onOpenOverview?: () => void;
 }) {
+  const store = usePlaceStore();
   // Open by default (dashboard-20): the fold is the project's, held
   // in the store so the Dashboard's group and the Overview show the
   // same band, and only for this launch.
-  const expanded = !useAppStore((state) => state.foldedSources[project.id]);
-  const setSourcesFolded = useAppStore((state) => state.setSourcesFolded);
+  const expanded = !store((state) => state.foldedSources[project.id]);
+  const setSourcesFolded = store((state) => state.setSourcesFolded);
   const [tab, setTab] = useState<SourceTab>("issues");
   const [pages, setPages] = useState<Record<SourceTab, number>>({
     issues: 0,

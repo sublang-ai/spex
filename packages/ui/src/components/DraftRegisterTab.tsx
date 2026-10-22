@@ -23,7 +23,8 @@ import type {
   SessionPlayerSummary,
 } from "@sublang/spex-core/protocol";
 
-import { useAppStore, type DraftRegisterForm, type DraftSourceState } from "../state/store.js";
+import { type DraftRegisterForm, type DraftSourceState } from "../state/store.js";
+import { usePlaceStore } from "../state/place-context.js";
 import { applyLocalPatch } from "../lib/config-ops.js";
 import {
   agentBlockOf,
@@ -33,8 +34,7 @@ import {
   existingRolePlayerId,
   newPlayerId,
 } from "../lib/drafts.js";
-import { ownRepositoryKey } from "../lib/environments.js";
-import { defaultSignedIn } from "../lib/instances.js";
+import { ownRepositoryKey, publishTargetOf, type PublishTarget } from "../lib/environments.js";
 import { i18n } from "../i18n.js";
 import { AgentChip } from "./AgentChip.js";
 import { AgentEditorPopover } from "./AgentEditor.js";
@@ -187,13 +187,14 @@ export function DraftRegisterTab({
   onRegister: (input: RegisterInput) => Promise<void>;
   onNavigate?: (surface: "Settings" | "Space") => void;
 }) {
+  const store = usePlaceStore();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const [openRole, setOpenRole] = useState<string>();
   const gearRef = useRef<HTMLButtonElement>(null);
-  const project = useAppStore((state) => state.projects.find((entry) => entry.id === draft.projectId));
-  const space = useAppStore((state) => state.space);
-  const ownListed = useAppStore((state) => state.playbookLists?.own);
+  const project = store((state) => state.projects.find((entry) => entry.id === draft.projectId));
+  const space = store((state) => state.space);
+  const ownListed = store((state) => state.playbookLists?.own);
   const ownKey = ownRepositoryKey(space, ownListed);
   const readinessByAdapter = new Map(readiness.map((entry) => [entry.adapter as string, entry]));
   const resolved = resolveRegisterForm(draft, source, players, form);
@@ -437,7 +438,7 @@ export function DraftRegisterTab({
             : i18n._({ id: "Enable", comment: "enable this playbook in this config" })}
         </button>
       </div>
-      <PublishControl draft={draft} signedIn={defaultSignedIn(space)} onNavigate={onNavigate} />
+      <PublishControl draft={draft} target={publishTargetOf(space, draft.projectId)} onNavigate={onNavigate} />
     </div>
   );
 }
@@ -446,19 +447,22 @@ export function DraftRegisterTab({
  * of what would upload — name, version, files — confirmed with Publish
  * or left with Cancel; the outcome reads from the environment's state,
  * the published version with its page at the registry or the issues in
- * place. A signed-out home reads "Sign in to publish" instead. */
+ * place. A home not signed in to the instance the publish goes to reads
+ * "Sign in to publish at <name>" instead; nothing stands until the
+ * Groups state says which instance that is. */
 function PublishControl({
   draft,
-  signedIn,
+  target,
   onNavigate,
 }: {
   draft: DraftInfo;
-  signedIn: boolean;
+  target: PublishTarget | undefined;
   onNavigate?: (surface: "Settings" | "Space") => void;
 }) {
-  const environment = useAppStore((state) => state.environments[draft.projectId]);
-  const previewPublish = useAppStore((state) => state.previewPublish);
-  const publish = useAppStore((state) => state.publishSpecPackage);
+  const store = usePlaceStore();
+  const environment = store((state) => state.environments[draft.projectId]);
+  const previewPublish = store((state) => state.previewPublish);
+  const publish = store((state) => state.publishSpecPackage);
   const [preview, setPreview] = useState<PublishPreview>();
   const [pending, setPending] = useState<"preview" | "publish">();
   const [error, setError] = useState<string>();
@@ -467,7 +471,13 @@ function PublishControl({
   const [sent, setSent] = useState<{ name: string; version: string; error: string | null }>();
   const path = draftPackagePath(draft);
 
-  if (!signedIn) {
+  if (!target) return null;
+  if (!target.signedIn) {
+    const label = i18n._({
+      id: "Sign in to publish at {name}",
+      comment: "in Publish's place: the home is not signed in to the instance a publish from this project goes to; {name} is that instance's display name as last read, else its host name",
+      values: { name: target.name },
+    });
     return (
       <div data-testid="publish" className="flex flex-wrap items-center gap-2 border-t border-neutral-200 pt-3 dark:border-neutral-800">
         {onNavigate ? (
@@ -477,11 +487,11 @@ function PublishControl({
             onClick={() => onNavigate("Space")}
             className="rounded-md border border-neutral-300 px-2.5 py-1 text-xs text-neutral-700 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800"
           >
-            {i18n._("Sign in to publish")}
+            {label}
           </button>
         ) : (
           <span data-testid="publish-signin" className="text-xs text-neutral-500">
-            {i18n._("Sign in to publish")}
+            {label}
           </span>
         )}
       </div>
