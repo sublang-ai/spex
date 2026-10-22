@@ -910,7 +910,7 @@ test("git-host-24, git-host-2, git-host-3: a sign-in at the second instance, the
   assert.deepEqual(entries(), [[second.url, bob.login, false], [first.url, LOGIN, false]]);
 });
 
-test("space-83, space-4, space-59, storage-2: a sign-in at the first, then one naming the second's origin, lists both in that order with their accounts; your own group's folder bears the first's login and its own repository is created in the first's namespace alone, its remote named by the first's folder; the second's sign-in creates and renames nothing", async (t) => {
+test("space-83, space-4, space-59, space-65, space-5, space-57, storage-2, storage-36: a sign-in at the first, then one naming the second's origin, lists both in that order with their accounts; your own group's folder bears the first's login and its own repository is created in the first's namespace, its remote named by the first's folder; the second's sign-in renames nothing and places it as bob-spex in the second's namespace, its remote named by the second's folder after the first's, its file written, its push there waiting for Continue", async (t) => {
   const bob = { id: "1002", login: "bob", displayName: "Bob" };
   const first = await startHost();
   const second = await startHost({ displayName: "Second stand-in", person: bob });
@@ -924,8 +924,12 @@ test("space-83, space-4, space-59, storage-2: a sign-in at the first, then one n
   // The entry keeps the display name the read named (storage-2).
   assert.equal(Home.load(home.dataDir).instance(first.url)?.displayName, HOST_NAME);
 
+  const placing = home.client.mark();
   const signed = await signIn(home, second);
   assert.deepEqual(signed.instances.map((instance) => [instance.origin, instance.account.login, instance.signedIn]), [[first.url, LOGIN, true], [second.url, bob.login, true]]);
+  // Your own group is placed at the second too, its first push there
+  // waiting for Continue while the first syncs (space-4, space-57).
+  await home.client.waitRepository(placing, HOST_OWN, (repository) => repository.sync.phase !== "running" && repository.placements[1]?.outcome?.kind === "waiting", 30_000);
   const state = await home.client.expectOk("space.get", {});
   assert.equal(state.defaultInstance, first.url);
   assert.deepEqual(state.instances.map((instance) => instance.origin), [first.url, second.url]);
@@ -940,22 +944,36 @@ test("space-83, space-4, space-59, storage-2: a sign-in at the first, then one n
   assert.equal(Home.load(home.dataDir).instance(second.url)?.displayName, "Second stand-in");
   // Your own group's folder bears the first's login, no later sign-in
   // renaming it; its own repository is the first's, in your namespace
-  // there, its one remote named by the first's folder (space-4, space-59,
-  // space-5).
+  // there, its first remote named by the first's folder, the instance
+  // its row reads (space-4, space-59, space-5, storage-31).
   assert.equal(state.own.name, LOGIN);
   assert.equal(Home.load(home.dataDir).ownName, LOGIN);
   const own = state.own.repositories.find((repository) => repository.own);
   assert.deepEqual([own?.key, own?.instance, own?.state], [HOST_OWN, first.url, "reachable"]);
-  assert.deepEqual(git(clonePath(home.dataDir, HOST_OWN), "remote").split("\n"), [hostFolder(first)]);
+  const ownDir = clonePath(home.dataDir, HOST_OWN);
   assert.deepEqual(first.script.creations.map((body) => (body as { name?: unknown }).name), [`${LOGIN}-spex`]);
-  assert.deepEqual(second.script.creations, [], "nothing is created at the second");
+  // The second's sign-in places it there as bob-spex in your namespace,
+  // its remote named by the second's folder after the first's, its id
+  // in its own section and its file written; its first push there waits
+  // for Continue, nothing pushed (space-4, space-65, space-5, space-57,
+  // storage-34, storage-36).
+  assert.deepEqual(second.script.creations.map((body) => [(body as { name?: unknown }).name, (body as { group_id?: unknown }).group_id ?? null]), [[`${bob.login}-spex`, null]]);
+  assert.deepEqual(git(ownDir, "remote").split("\n"), [hostFolder(first), hostFolder(second)]);
+  const placedThere = second.script.repositories.find((repository) => repository.path === `${bob.login}-spex`);
+  assert.ok(placedThere, "bob-spex stands at the second");
+  assert.equal(git(ownDir, "config", "--get", `remote.${hostFolder(second)}.spexId`), placedThere.id);
+  assert.equal(readFileSync(join(ownDir, "placements", `${hostFolder(second)}.yaml`), "utf8"), `format: 1\ninstance: "${second.url}"\nid: "${placedThere.id}"\n`);
+  assert.deepEqual(own?.placements.map((line) => [line.instance, line.path, line.attached, line.outcome?.kind ?? null]), [[first.url, HOST_OWN, true, "synced"], [second.url, `${bob.login}/${bob.login}-spex`, true, "waiting"]]);
+  assert.equal(git(second.bareOf(`${bob.login}/${bob.login}-spex`), "for-each-ref", "--format=%(refname)", "refs/heads/spex"), "", "nothing is pushed to the second before Continue");
   assert.equal(existsSync(join(home.dataDir, "workspace", bob.login)), false, "no folder bears the second's login");
   assert.deepEqual(readdirSync(join(home.dataDir, "workspace")).sort(), [LOGIN], "nothing moved under an instance's folder");
 });
 
 /** Two stand-in instances on Git backends of their own, each holding a
  * group `acme` with a spex repository, and a home signed in at the
- * first as `ada`, then at the second as `bob` (git-host-24, space-83). */
+ * first as `ada`, then at the second as `bob` (git-host-24, space-83),
+ * your own group's own repository placed at both, its push at the
+ * second waiting for Continue once its sync has ended (space-4). */
 async function twoInstances(name: string) {
   const bob = { id: "1002", login: "bob", displayName: "Bob" };
   const first = await startHost();
@@ -967,6 +985,7 @@ async function twoInstances(name: string) {
   await signIn(home, first);
   await home.client.waitRepository(from, HOST_OWN, (repository) => repository.sync.phase === "done", 30_000);
   await signIn(home, second);
+  await home.client.waitRepository(from, HOST_OWN, (repository) => repository.sync.phase !== "running" && repository.placements[1]?.outcome?.kind === "waiting", 30_000);
   return { bob, first, second, alpha, beta, home, alphaKey: hostKey(first, "acme/alpha-spex"), betaKey: hostKey(second, "acme/beta-spex") };
 }
 
@@ -982,35 +1001,48 @@ function meReads(host: StandinHost): number {
   return host.script.requests.filter((request) => request.path === "/api/v1/host/me").length;
 }
 
-test("space-4, space-83, space-65: with both instances signed in and your own group's own repository holding no remote, a Refresh brings it to the first, the earliest in the home's list, though the second answers first; nothing is created at the second", async (t) => {
-  const { first, second, home } = await twoInstances("own-at-the-first");
+test("space-4, space-83, space-65, space-57, storage-31: with both instances signed in and your own group's own repository holding no remote, a Refresh places it at the first, the earliest in the home's list, though the second answers first, then at the second, joining the bob-spex there, its push there waiting for Continue", async (t) => {
+  const { bob, first, second, home } = await twoInstances("own-at-the-first");
   t.after(() => home.stop());
-  const before = await refreshed(home);
-  const ownId = repositoryOf(before, HOST_OWN).id;
+  const ownDir = clonePath(home.dataDir, HOST_OWN);
+  const placed = await home.client.waitRepository(0, HOST_OWN, (repository) => repository.sync.phase !== "running" && repository.placements[1]?.outcome?.kind === "waiting", 30_000);
+  const ownId = placed.id;
   assert.ok(ownId);
-  // Its remote taken away from a terminal and the first listing nothing
-  // under its name any more, a set-up there creates it (space-4); the
-  // first answers its listing slower than the second.
-  git(clonePath(home.dataDir, HOST_OWN), "config", "--remove-section", `remote.${hostFolder(first)}`);
+  const bobSpex = placed.placements[1].id;
+  assert.ok(bobSpex);
+  const before = await refreshed(home);
+  // Its remotes taken away from a terminal and the first listing nothing
+  // under its name any more, a set-up there creates it, the second's
+  // still listing bob-spex (space-4); the first answers its listing
+  // slower than the second.
+  git(ownDir, "config", "--remove-section", `remote.${hostFolder(first)}`);
+  git(ownDir, "config", "--remove-section", `remote.${hostFolder(second)}`);
   const removedAt = Date.now();
   first.script.rename(ownId, { name: "former-spex" });
   first.script.sleepListing(1_500);
   t.after(() => first.script.sleepListing(0));
   const createdAtFirst = first.script.creations.length;
+  const createdAtSecond = second.script.creations.length;
   const mark = home.client.mark();
   await home.client.expectOk("space.refresh", {});
   // The second's read is held while the first's still runs.
   await home.client.waitSpace(mark, (state) => instanceOf(state, first.url)?.read.phase === "running" && instanceOf(state, second.url)?.read.phase === "idle"
     && (instanceOf(state, second.url)?.readAt ?? 0) > (instanceOf(before, second.url)?.readAt ?? 0), 30_000);
-  // The first, the earliest signed in, brings it: `ada-spex` created in
-  // its namespace and pushed, the clone's one remote named by the
-  // first's folder; the second creates nothing (space-4, space-65).
-  const own = await home.client.waitRepository(mark, HOST_OWN, (repository) => repository.instance === first.url && repository.sync.phase === "done" && repository.sync.at > removedAt, 30_000);
+  // The first, the earliest signed in, places it first: `ada-spex`
+  // created in its namespace and pushed, the clone's first remote named
+  // by the first's folder, the instance its row reads; then the second,
+  // its bob-spex joined as the second placement, nothing created there,
+  // its first push there waiting for Continue (space-4, space-65,
+  // space-57, storage-31).
+  const own = await home.client.waitRepository(mark, HOST_OWN, (repository) => repository.instance === first.url && repository.sync.phase === "done" && repository.sync.at > removedAt
+    && repository.placements.length === 2 && repository.placements[1].outcome?.kind === "waiting", 30_000);
   assert.equal(own.state, "reachable");
   assert.deepEqual(first.script.creations.slice(createdAtFirst).map((body) => (body as { name?: unknown }).name), [`${LOGIN}-spex`]);
-  assert.deepEqual(second.script.creations, [], "nothing is created at the second");
-  const ownDir = clonePath(home.dataDir, HOST_OWN);
-  assert.deepEqual(git(ownDir, "remote").split("\n"), [hostFolder(first)]);
+  assert.equal(second.script.creations.length, createdAtSecond, "nothing is created at the second");
+  assert.deepEqual(git(ownDir, "remote").split("\n"), [hostFolder(first), hostFolder(second)]);
+  assert.deepEqual(own.placements.map((line) => [line.instance, line.path, line.attached, line.outcome?.kind ?? null]), [[first.url, HOST_OWN, true, "synced"], [second.url, `${bob.login}/${bob.login}-spex`, true, "waiting"]]);
+  assert.notEqual(own.id, ownId, "a repository created anew at the first");
+  assert.equal(own.placements[1].id, bobSpex, "the second's bob-spex joined");
   assert.equal(git(bareOf(first, HOST_OWN), "rev-parse", "spex"), git(ownDir, "rev-parse", "spex"));
 });
 
@@ -1021,15 +1053,18 @@ test("storage-34, storage-31: a clone's placements are its remotes in the order 
   const [atFirst, atSecond] = [hostFolder(first), hostFolder(second)];
   const firstUrl = git(own, "remote", "get-url", atFirst);
   const firstId = git(own, "config", "--get", `remote.${atFirst}.spexId`);
-  // Your own group's records at the second too, in its acme group there,
-  // its `spex` pushed from here, and the stand-ins' lists read.
-  const notes = second.script.addRepository({ group: "acme", name: "ada-notes-spex" });
-  const secondUrl = `${second.gitOrigin}/${second.storage}/acme/ada-notes-spex.git`;
-  git(own, "push", "-q", second.bareOf("acme/ada-notes-spex"), "spex:spex");
+  // Your own group's records at the second too, placed there as bob-spex
+  // by its sign-in (space-4), its `spex` pushed from here.
+  await home.client.waitRepository(0, HOST_OWN, (repository) => repository.sync.phase !== "running" && repository.placements[1]?.outcome?.kind === "waiting", 30_000);
+  const notesPath = "bob/bob-spex";
+  const secondUrl = git(own, "remote", "get-url", atSecond);
+  const notes = { id: git(own, "config", "--get", `remote.${atSecond}.spexId`) };
+  git(own, "push", "-q", second.bareOf(notesPath), "spex:spex");
   // The first's remote set aside under a name no instance's folder bears,
   // a path remote and the second's remote added after it, then the first's
   // named back: its rename keeps its place.
   git(own, "remote", "rename", atFirst, "parked");
+  git(own, "config", "--remove-section", `remote.${atSecond}`);
   git(own, "remote", "add", "origin", bareRepo());
   const path = git(own, "remote", "get-url", "origin");
   git(own, "remote", "add", atSecond, secondUrl);
@@ -1044,7 +1079,7 @@ test("storage-34, storage-31: a clone's placements are its remotes in the order 
   const firstFirst = repositoryOf(await refreshed(home), HOST_OWN);
   assert.deepEqual(firstFirst.placements.map((line) => [line.instance, line.path, line.id, line.attached]), [
     [first.url, HOST_OWN, firstId, true],
-    [second.url, "acme/ada-notes-spex", notes.id, true],
+    [second.url, notesPath, notes.id, true],
     [null, path, null, true],
   ]);
   assert.deepEqual([firstFirst.instance, firstFirst.governing, firstFirst.id, firstFirst.state], [first.url, first.url, firstId, "reachable"]);
@@ -1066,7 +1101,7 @@ test("storage-34, storage-31: a clone's placements are its remotes in the order 
   const synced = await home.client.settle("space.sync", { repository: HOST_OWN }, 30_000);
   assert.equal(synced.sync.phase, "done", JSON.stringify(synced.sync));
   assert.equal(git(own, "log", "-1", "--format=%an <%ae>"), "Bob <bob@users.noreply.127.0.0.1>");
-  assert.equal(git(second.bareOf("acme/ada-notes-spex"), "rev-parse", "spex"), git(own, "rev-parse", "spex"));
+  assert.equal(git(second.bareOf(notesPath), "rev-parse", "spex"), git(own, "rev-parse", "spex"));
   assert.ok(existsSync(join(own, ".git")), "its folder is kept");
 });
 
@@ -1144,7 +1179,7 @@ test("git-host-24, space-83, git-host-5, git-host-21: Refresh reads each instanc
   assert.deepEqual(rowsUnder(waited, second.url, "acme"), [[betaKey, "absent", second.url]]);
 });
 
-test("git-host-24, git-host-4, git-host-10, space-6: a refresh the first refuses signs that instance out alone, its entry kept marked signed out and its rows unreachable with Sign in again, the second's token, view and rows kept, and Refresh then reading the second alone; a sign-out of one keeps the other signed in", async (t) => {
+test("git-host-24, git-host-4, git-host-10, space-6, space-61: a refresh the first refuses signs that instance out alone, its entry kept marked signed out and its rows unreachable with Sign in again — your own group's own repository, placed at the second too, reachable by that placement, its first placement's line reading Sign in again — the second's token, view and rows kept, and Refresh then reading the second alone; a sign-out of one keeps the other signed in", async (t) => {
   const { bob, first, second, alpha, home, alphaKey, betaKey } = await twoInstances("signed-out-alone");
   t.after(() => home.stop());
   let mark = home.client.mark();
@@ -1173,14 +1208,18 @@ test("git-host-24, git-host-4, git-host-10, space-6: a refresh the first refuses
   assert.deepEqual([atFirst?.signedIn, atFirst?.hostSignedOut, atFirst?.read, atFirst?.readAt], [false, true, { phase: "idle" }, null]);
   // Its rows turn unreachable with "Sign in again", their clones kept,
   // each under its key's group at its heading, your own group's own
-  // repository under your own group (git-host-4, space-6, space-1).
+  // repository under your own group (git-host-4, space-6, space-1). Your
+  // own group's own repository, placed at the second too, stays
+  // reachable by that placement, its first placement's line reading
+  // "Sign in again" (space-61, space-4).
   assert.deepEqual(atFirst?.groups.map((group) => [group.fullPath, group.repositories.map((repository) => repository.key)]), [["acme", [alphaKey]]]);
   assert.ok(out.own.repositories.some((repository) => repository.key === HOST_OWN));
-  for (const key of [HOST_OWN, alphaKey]) {
-    const row = repositoryOf(out, key);
-    assert.deepEqual([row.state, row.reason, row.instance], ["unreachable", "Sign in again", first.url], key);
-    assert.ok(existsSync(join(clonePath(home.dataDir, key), ".git")), key);
-  }
+  const alphaRow = repositoryOf(out, alphaKey);
+  assert.deepEqual([alphaRow.state, alphaRow.reason, alphaRow.instance], ["unreachable", "Sign in again", first.url]);
+  const ownRow = repositoryOf(out, HOST_OWN);
+  assert.deepEqual([ownRow.state, ownRow.reason, ownRow.instance], ["reachable", null, first.url]);
+  assert.deepEqual(ownRow.placements.map((line) => [line.instance, line.state, line.reason]), [[first.url, "unreachable", "Sign in again"], [second.url, "reachable", null]]);
+  for (const key of [HOST_OWN, alphaKey]) assert.ok(existsSync(join(clonePath(home.dataDir, key), ".git")), key);
   // The second stands as it stood: signed in, its view and read time
   // kept, nothing read of it, its rows listed (git-host-4).
   const atSecond = instanceOf(out, second.url);
@@ -1343,11 +1382,12 @@ test("git-host-24, space-83, git-host-6, git-host-9, git-host-15, git-host-16, g
   const sessionId = await runTurn(home, local, "Before the pick");
   const gammaKey = hostKey(second, "acme/gamma-spex");
   const createdAtFirst = first.script.creations.length;
+  const createdAtSecond = second.script.creations.length;
   mark = home.client.mark();
   await home.client.expectOk("space.pick", { repository: local, choice: { kind: "create", instance: second.url, groupId: "2002", name: "gamma" } });
   const gamma = await home.client.waitRepository(mark, gammaKey, (repository) => repository.sync.phase !== "idle" && repository.sync.phase !== "running", 30_000);
   assert.deepEqual([gamma.sync.phase, gamma.state, gamma.instance], ["done", "reachable", second.url], JSON.stringify(gamma.sync));
-  assert.deepEqual(second.script.creations.map((body) => (body as { name?: unknown; group_id?: unknown })).map((body) => [body.name, body.group_id]), [["gamma-spex", "2002"]]);
+  assert.deepEqual(second.script.creations.slice(createdAtSecond).map((body) => (body as { name?: unknown; group_id?: unknown })).map((body) => [body.name, body.group_id]), [["gamma-spex", "2002"]]);
   assert.equal(first.script.creations.length, createdAtFirst, "nothing is created at the first");
   const gammaClone = clonePath(home.dataDir, gammaKey);
   assert.ok(existsSync(join(gammaClone, ".git")) && !existsSync(clonePath(home.dataDir, local)), "moved under the second's folder");
@@ -1441,9 +1481,9 @@ test("git-host-24, space-83, git-host-6, git-host-9, git-host-15, git-host-16, g
   // refused, nothing created there (space-29, space-58), its remote taken
   // away from a terminal.
   git(clonePath(home.dataDir, alphaKey), "config", "--remove-section", `remote.${hostFolder(first)}`);
-  const createdAtSecond = second.script.creations.length;
+  const createdThere = second.script.creations.length;
   await home.client.expectError("space.pick", { repository: alphaKey, choice: { kind: "create", instance: second.url, groupId: "2002", name: "alpha" } }, "invalid_request", new RegExp(`^alpha-spex is kept under ${HOST_NAME}; pick a group there$`));
-  assert.equal(second.script.creations.length, createdAtSecond);
+  assert.equal(second.script.creations.length, createdThere);
 
   // No reply or broadcast holds a string under either stand-in's URL but
   // that URL itself, or one naming the Git system (space-30, space-1).
@@ -1505,7 +1545,7 @@ test("core-service-123, core-service-42: signed in at the first as ada and at th
   assert.equal(await authorOf(local, "Still here alone"), undefined);
 });
 
-test("space-83, git-host-24, git-host-9, git-host-4, space-11, space-6: a credential the second refuses to a transport signs the second out alone before Git runs; space.signout of the first lists it signed out, its rows unreachable and their Sync refused naming the first's display name, while the second's stay reachable and sync with the second's credential", async (t) => {
+test("space-83, git-host-24, git-host-9, git-host-4, space-11, space-6, space-61, space-57: a credential the second refuses to a transport signs the second out alone before Git runs; space.signout of the first lists it signed out, its rows unreachable and their Sync refused naming the first's display name — your own group's own repository, placed at the second too, reachable by that placement, its Sync asking for the second's notice — while the second's stay reachable and sync with the second's credential", async (t) => {
   const { first, second, alpha, beta, home, alphaKey, betaKey } = await twoInstances("signed-out-transport");
   t.after(() => home.stop());
   let mark = home.client.mark();
@@ -1554,11 +1594,17 @@ test("space-83, git-host-24, git-host-9, git-host-4, space-11, space-6: a creden
   await home.client.waitRepository(mark, betaKey, (repository) => repository.state === "reachable", 30_000);
   const signedOut = await signOut(home, first);
   assert.deepEqual(signedOut.instances.map((instance) => [instance.origin, instance.signedIn]), [[first.url, false], [second.url, true]]);
-  for (const key of [HOST_OWN, alphaKey]) {
-    const row = repositoryOf(signedOut, key);
-    assert.deepEqual([row.state, row.reason, row.instance], ["unreachable", "Sign in again", first.url], key);
-    await home.client.expectError("space.sync", { repository: key }, "invalid_request", new RegExp(`^Sign in to ${HOST_NAME} first$`));
-  }
+  const alphaRow = repositoryOf(signedOut, alphaKey);
+  assert.deepEqual([alphaRow.state, alphaRow.reason, alphaRow.instance], ["unreachable", "Sign in again", first.url]);
+  await home.client.expectError("space.sync", { repository: alphaKey }, "invalid_request", new RegExp(`^Sign in to ${HOST_NAME} first$`));
+  // Your own group's own repository, placed at the second too, stays
+  // reachable by that placement, its first placement's line reading
+  // "Sign in again"; its Sync, the second's notice never continued, asks
+  // for it (space-61, space-57, space-4).
+  const ownRow = repositoryOf(signedOut, HOST_OWN);
+  assert.deepEqual([ownRow.state, ownRow.reason, ownRow.instance], ["reachable", null, first.url]);
+  assert.deepEqual(ownRow.placements.map((line) => [line.instance, line.state, line.reason]), [[first.url, "unreachable", "Sign in again"], [second.url, "reachable", null]]);
+  await home.client.expectError("space.sync", { repository: HOST_OWN }, "invalid_request", /^Read the sharing notice before the first sync of ada-spex$/);
   assert.deepEqual([repositoryOf(signedOut, betaKey).state, repositoryOf(signedOut, betaKey).instance], ["reachable", second.url]);
   const fetchedFirst = first.script.transportCredentials.length;
   const fetchedSecond = second.script.transportCredentials.length;
@@ -1952,14 +1998,14 @@ test("space-83, space-82, space-29, git-host-10: space.forget of a signed-out in
   // The first's acme clones are listed by no signed-in instance — the
   // second is another Git system — so Forget is refused naming each,
   // its clones still keyed under it with their remotes, your own
-  // group's own repository's remote there untouched, its entry kept
-  // signed out (space-82, git-host-10).
+  // group's own repository's remotes there and at the second untouched,
+  // its entry kept signed out (space-82, git-host-10).
   await home.client.expectError("space.forget", { instance: first.url }, "invalid_request", new RegExp(`^Still kept under ${HOST_NAME}: (alpha-spex, delta-spex|delta-spex, alpha-spex)$`));
   for (const key of [alphaKey, deltaKey]) {
     assert.ok(existsSync(join(clonePath(home.dataDir, key), ".git")), key);
     assert.deepEqual(remotes(key), [hostFolder(first)], key);
   }
-  assert.deepEqual(remotes(HOST_OWN), [hostFolder(first)]);
+  assert.deepEqual(remotes(HOST_OWN), [hostFolder(first), hostFolder(second)]);
   assert.deepEqual(entries(), [[first.url, LOGIN, true], [second.url, bob.login, false]]);
   const kept = await home.client.expectOk("space.get", {});
   assert.deepEqual(kept.instances.map((instance) => [instance.origin, instance.signedIn]), [[first.url, false], [second.url, true]]);

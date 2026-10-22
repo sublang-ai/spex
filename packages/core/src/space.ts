@@ -682,6 +682,16 @@ class NoticeOwed extends SpaceStopped {
   }
 }
 
+/** Your own group's own repository found placed at an instance, or
+ * waiting there, once the operation placing it there began (space-4):
+ * nothing to add, the clone and its lines left as they were. */
+class OwnPlacedMeanwhile extends Error {
+  constructor() {
+    super("placed meanwhile");
+    this.name = "OwnPlacedMeanwhile";
+  }
+}
+
 /** What a sync's admission found of one placement it read (space-57,
  * git-host-22): its notice owed, or its first-notice read failed, either
  * stopping that placement alone at its turn, no step run there. */
@@ -1076,6 +1086,10 @@ class RepositorySync {
   private local: SpaceUnit[] = [];
   /** The operation running on this clone: its kind and its promise. */
   private current?: { op: SpaceOp; work: Promise<void> };
+  /** The last sync asked while its admission runs, settling once it runs
+   * or joins one running: a Place or an Attach asked meanwhile follows it
+   * (space-21). */
+  private asked?: Promise<void>;
   /** The renames of the clone's placements' remotes since this sync
    * last read its placements — a follow's (space-60) and a reconcile's
    * (space-91) — by the name each bore: a placement read before is found
@@ -2586,7 +2600,15 @@ class RepositorySync {
    * (space-59). A Sync asked while a sync runs joins it; one asked while
    * a check runs follows that check. Nothing beneath the clone is refused
    * meanwhile (space-21). */
-  async sync(input: { placement?: string | null; choices?: Record<string, SpaceChoice>; join?: boolean; noticed?: boolean; internal?: boolean; setUp?: boolean }): Promise<{ accepted: true }> {
+  sync(input: { placement?: string | null; choices?: Record<string, SpaceChoice>; join?: boolean; noticed?: boolean; internal?: boolean; setUp?: boolean }): Promise<{ accepted: true }> {
+    const asked = this.askSync(input);
+    const settled = asked.then(() => undefined, () => undefined);
+    this.asked = settled;
+    void settled.then(() => { if (this.asked === settled) this.asked = undefined; });
+    return asked;
+  }
+
+  private async askSync(input: { placement?: string | null; choices?: Record<string, SpaceChoice>; join?: boolean; noticed?: boolean; internal?: boolean; setUp?: boolean }): Promise<{ accepted: true }> {
     if (this.current?.op === "sync") return { accepted: true };
     const choices: Record<string, StorageChoice> = {};
     const repo = await this.requireReady();
@@ -2648,16 +2670,17 @@ class RepositorySync {
   }
 
   /**
-   * Place the clone at another instance (space-97, space-31): an
-   * operation of its machine, following one running (space-21), whose
-   * first step, `act`, asks that instance — `origin` — to create or
-   * join the placement and adds it as the host answered (placeAdd). The
-   * reply waits for that step: a refusal there is the reply's, the
-   * operation ending with the clone and its lines as they were. Then the
-   * clone syncs as a Sync does, that placement among its placements — or,
-   * its creation left waiting at the host, its others (space-64) — the
-   * sync's notices owed as at any Check, with no reader to refuse
-   * (space-57).
+   * Place the clone at another instance (space-97, space-31) — a
+   * Place's, or a sign-in's placing your own group's own repository
+   * there (space-4): an operation of its machine, following one running
+   * (space-21), whose first step, `act`, asks that instance — `origin` —
+   * to create or join the placement and adds it as the host answered
+   * (placeAdd). The reply waits for that step: a refusal there is the
+   * reply's, the operation ending with the clone and its lines as they
+   * were. Then the clone syncs as a Sync does, that placement among its
+   * placements — or, its creation left waiting at the host, its others
+   * (space-64) — the sync's notices owed as at any Check, with no reader
+   * to refuse (space-57).
    */
   place(origin: string, act: () => Promise<void>): Promise<{ accepted: true }> {
     return this.addThenSync("place", origin, act);
@@ -2681,10 +2704,20 @@ class RepositorySync {
    * there ending the operation with the clone and its lines as they
    * were — then the sync, every line's former outcome cleared, the
    * sync's notices owed as at any Check, with no reader to refuse
-   * (space-57). */
+   * (space-57). A sync asked before it and still in its admission runs
+   * first, this one following it (space-21). */
   private addThenSync(op: "place" | "attach", origin: string, act: () => Promise<void>): Promise<{ accepted: true }> {
     let answer!: { resolve: (value: { accepted: true }) => void; reject: (error: unknown) => void };
     const reply = new Promise<{ accepted: true }>((resolve, reject) => { answer = { resolve, reject }; });
+    if (this.asked) {
+      void this.asked.then(() => this.queueAddThenSync(op, origin, act, answer));
+      return reply;
+    }
+    this.queueAddThenSync(op, origin, act, answer);
+    return reply;
+  }
+
+  private queueAddThenSync(op: "place" | "attach", origin: string, act: () => Promise<void>, answer: { resolve: (value: { accepted: true }) => void; reject: (error: unknown) => void }): void {
     void this.runOperation(op, async () => {
       let answered = false;
       try {
@@ -2715,7 +2748,6 @@ class RepositorySync {
         throw error;
       }
     }, this.current?.work, { keep: true });
-    return reply;
   }
 
   /**
@@ -4064,10 +4096,10 @@ export class SpaceManager {
    * systems mint one id: each join's own entry, which only it replaces
    * or removes; no join is refused because another runs. */
   private readonly joining = new Map<string, SpaceSyncPhase>();
-  /** The set-up step bringing your own group's own repository to an
-   * instance (space-4), one at a time across instances, only the earliest
-   * signed-in instance in the home's list bringing it: the last begun,
-   * which the next waits for. */
+  /** The set-up step placing your own group's own repository at an
+   * instance (space-4), one at a time across instances, its first
+   * placement brought by the earliest signed-in instance in the home's
+   * list: the last begun, which the next waits for. */
   private owning?: Promise<void>;
   /** Set once the core stops: nothing is read or announced after. */
   private stopping = false;
@@ -5314,33 +5346,66 @@ export class SpaceManager {
 
   /** Step 3 of the set-up at an instance (space-4), after any other
    * instance's set-up begun before it has taken it: your own group's own
-   * repository with no remote is brought by the earliest signed-in
-   * instance in the home's list, whichever instance's read answers
-   * first (space-83), and every other instance's set-up leaves it. */
+   * repository placed at every instance the home signs in to. Its first
+   * placement, which its instance and its commits' identity follow
+   * (storage-31, space-32), is the earliest signed-in instance's in the
+   * home's list, whichever instance's read answers first (space-83):
+   * while it holds no placement with an instance, every other instance's
+   * set-up leaves it, and the earliest's places it there, then at each
+   * other signed-in instance in the home's list by the view held of it;
+   * once it holds one, each instance's set-up places it there. */
   private ensureOwn(instance: HostInstance, view: HostView, generation: number): Promise<void> {
     const previous = this.owning;
     const work = (async () => {
       await previous?.catch(() => undefined);
       if (generation !== instance.accountGeneration || !this.signedInAt(instance)) return;
-      if (this.listedInstances().find((entry) => this.signedInAt(entry)) !== instance) return;
+      const store = this.host.store;
+      const key = store.home.own();
+      if (!store.repository(key)) return;
+      const machine = this.machine(key);
+      await machine.readFacts();
+      if (keyPlacement(machine.placements) !== undefined) {
+        await this.ensureOwnOnHost(instance, view);
+        return;
+      }
+      const signedIn = this.listedInstances().filter((entry) => this.signedInAt(entry));
+      if (signedIn[0] !== instance) return;
       await this.ensureOwnOnHost(instance, view);
+      for (const other of signedIn.slice(1)) {
+        const held = this.viewOf(other);
+        if (!held) continue;
+        // Its first placement left waiting at the host, none other is
+        // made before it (space-64).
+        await machine.readFacts();
+        if (keyPlacement(machine.placements) === undefined) return;
+        await this.ensureOwnOnHost(other, held);
+      }
     })();
     this.owning = work;
     return work;
   }
 
-  /** Your own group's spex repository at an instance while it has no
-   * remote (space-4, space-65): joined where that instance lists one,
-   * else created there as `<login there>-spex` in your namespace and
-   * pushed — at the home's first sign-in, or once its remote was dropped
-   * (space-82), its folder keeping its name. */
+  /** Your own group's spex repository at an instance where it holds no
+   * placement there and none whose host repository that instance lists
+   * (space-4, space-65, git-host-5): joined where that instance lists
+   * `<login there>-spex` in your namespace, else created there as that
+   * and pushed — at the home's first sign-in, once its remote was dropped
+   * (space-82), and at every instance signed in after — its folder
+   * keeping its name. Holding no placement with an instance, it takes
+   * this one as its first, as the sign-in's join takes the host's side
+   * of an unchanged bootstrap (space-59); holding one, it is placed here
+   * beside the others (ensureOwnLater). */
   private async ensureOwnOnHost(instance: HostInstance, view: HostView): Promise<void> {
     const store = this.host.store;
     const key = store.home.own();
-    if (!store.repository(key) || this.waitsOf(key).length > 0) return;
+    if (!store.repository(key)) return;
     const machine = this.machine(key);
     const facts = await machine.readFacts();
-    if (facts.remote !== null) return;
+    if (keyPlacement(machine.placements) !== undefined) {
+      await this.ensureOwnLater(instance, view, machine);
+      return;
+    }
+    if (this.waitsOf(key).length > 0) return;
     // Your own group is named to the host by none, never by its id,
     // which names no group of the instance there (git-host-6).
     const group = { id: null, fullPath: userGroup(view)?.fullPath ?? store.home.ownName };
@@ -5352,6 +5417,40 @@ export class SpaceManager {
       return;
     }
     await this.create(instance, machine, group, name, repositoryDescription({ kind: "group", group: group.fullPath }), "quiet", expected);
+  }
+
+  /** Your own group's own repository placed at an instance beside the
+   * placements it holds (space-4, space-65): as an operation of its
+   * machine, following one running (space-21, space-31), `<login
+   * there>-spex` in your namespace there joined as a placement, its
+   * history joined with the clone's as any two (space-13), or created
+   * there — a creation the host leaves pending or refuses waiting on that
+   * instance's line, asked again at its next read (space-64) — its
+   * placement file written (storage-36), then the clone synced, its first
+   * push there waiting for Continue as the sharing notice does
+   * (space-57). Placed there meanwhile, or no longer holding a placement
+   * with an instance, it does nothing. A refusal stays on the console:
+   * the set-up stands, and the next read asks again (space-4). */
+  private async ensureOwnLater(instance: HostInstance, view: HostView, machine: RepositorySync): Promise<void> {
+    const key = machine.key;
+    const placedOrWaiting = (placements: readonly Placement[]): boolean => keyPlacement(placements) === undefined
+      || this.placedAt(placements, instance) || this.waitingAt(key, instance.origin) !== undefined;
+    if (placedOrWaiting(machine.placements)) return;
+    const login = view.account.login;
+    const group = { id: null, fullPath: userGroup(view)?.fullPath ?? login };
+    const listed = this.ownNamespaceListing(view);
+    try {
+      await machine.place(instance.origin, async () => {
+        const placements = machine.placementsNow();
+        if (placedOrWaiting(placements)) throw new OwnPlacedMeanwhile();
+        const expected = remotesRead(placements);
+        if (listed) this.placeAdd(instance, machine, listed, { join: true, expected });
+        else await this.create(instance, machine, group, `${ownNameFor(login)}-spex`, repositoryDescription({ kind: "group", group: group.fullPath }), "quiet", expected, { noticed: false });
+      });
+    } catch (error) {
+      if (error instanceof OwnPlacedMeanwhile) return;
+      console.error(`spex: your own group is not placed at ${instance.origin} yet: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
   /**

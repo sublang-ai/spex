@@ -406,7 +406,7 @@ test("storage-38, space-91: a first placement's drop a merge brings is refused, 
   assert.equal(git(firstBare, "rev-parse", "spex"), atFirst);
 });
 
-test("storage-38, space-91, storage-31, space-57: your own group's own repository placed at two instances on separate Git backends, owing its notice at the second until continued, a peer's commit at the second removing the first's placement file drops the first's remote alone at that merge, the clone keeping its folder, the second synced and the row then at the second", async (t) => {
+test("storage-38, space-91, storage-31, space-57, space-4: your own group's own repository placed at two instances on separate Git backends by their sign-ins, owing its notice at the second until continued, a peer's commit at the second removing the first's placement file drops the first's remote alone at that merge, the clone keeping its folder, the second synced and the row then at the second", async (t) => {
   const first = await startHost();
   const second = await startHost({ displayName: SECOND_NAME, person: { id: "1002", login: "bob", displayName: "Bob" } });
   const firstFolder = hostFolder(first);
@@ -419,17 +419,18 @@ test("storage-38, space-91, storage-31, space-57: your own group's own repositor
   await home.client.waitRepository(mark, HOST_OWN, (repository) => repository.sync.phase === "done", 30_000);
   await signIn(home, second);
   const own = clonePath(home.dataDir, HOST_OWN);
-  attachByHand(home, HOST_OWN, second, "bob");
-  // Your own group's own repository owes its notice at the second, its
-  // only member the account there: that line waits for Continue while
-  // the first syncs; continued, both sync (space-57).
+  // The second's sign-in places your own group's own repository there as
+  // bob-spex (space-4), which owes its notice, its only member the
+  // account there: that line waits for Continue while the first syncs;
+  // continued, both sync (space-57).
+  await home.client.waitRepository(mark, HOST_OWN, (repository) => repository.sync.phase !== "running" && repository.placements[1]?.outcome?.kind === "waiting", 30_000);
   const owed = await home.client.settle("space.sync", { repository: HOST_OWN }, 30_000);
   assert.deepEqual(owed.placements.map((line) => [line.instance, line.outcome?.kind]), [[first.url, "synced"], [second.url, "waiting"]], JSON.stringify(owed.sync));
   const both = await home.client.settle("space.sync", { repository: HOST_OWN, placement: second.url, noticed: true }, 30_000);
   assert.equal(both.sync.phase, "done", JSON.stringify(both.sync));
   assert.deepEqual(both.placements.map((line) => [line.instance, line.outcome?.kind]), [[first.url, "synced"], [second.url, "synced"]]);
   const firstBare = bareOf(first, HOST_OWN);
-  const secondBare = second.bareOf("bob/ada-spex");
+  const secondBare = second.bareOf("bob/bob-spex");
   const atFirst = git(firstBare, "rev-parse", "spex");
 
   // A peer at the second removes the first's file: at the second's merge
