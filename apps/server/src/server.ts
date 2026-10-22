@@ -6,15 +6,20 @@
 // behind the core's token handshake, with optional TLS
 // (SERVER-SHELL-1..4, 16). A non-loopback bind without TLS is refused
 // unless --insecure makes the plaintext choice explicit
-// (SERVER-SHELL-2).
+// (SERVER-SHELL-2). As a seat of a team server, the same shell listens
+// on a Unix socket the hub alone reaches instead, its token read from a
+// file and printed nowhere (SERVER-SHELL-25, DR-132).
 
 import { randomUUID } from "node:crypto";
 import {
+  chmodSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   readFileSync,
   realpathSync,
   statSync,
+  unlinkSync,
   type Stats,
 } from "node:fs";
 import {
@@ -28,7 +33,7 @@ import {
   createServer as createHttpsServer,
   type Server as HttpsServer,
 } from "node:https";
-import type { AddressInfo } from "node:net";
+import { connect, type AddressInfo } from "node:net";
 import { homedir } from "node:os";
 import { dirname, extname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -38,7 +43,18 @@ import {
   gzipSync,
 } from "node:zlib";
 
-import { CoreService, moduleDirectoriesAbove, suppliedScaffold, type CoreServiceOptions } from "@sublang/spex-core";
+import { CoreService, moduleDirectoriesAbove, suppliedScaffold, type CoreServiceOptions, type SeatOptions } from "@sublang/spex-core";
+
+/**
+ * A seat of a team server (server-shell-25, DR-132): the core's seat
+ * facts — the server's id and name, the admitted person's permanent
+ * account id and, optionally, the administrator's shared credential
+ * file — and the Unix socket the shell listens on in place of a host
+ * and port, which the hub alone reaches (hub-3).
+ */
+export interface ShellSeat extends SeatOptions {
+  socket: string;
+}
 
 export interface ServerShellOptions {
   host: string;
@@ -52,6 +68,9 @@ export interface ServerShellOptions {
   tlsKey?: string;
   insecure: boolean;
   uiDist: string;
+  /** Seat mode (server-shell-25): set, `token` is the one read from the
+   * token file, and the shell starts with `startSeat`. */
+  seat?: ShellSeat;
   /**
    * Core service overrides for a harness starting the shell from code
    * (server-shell-20, DR-039): the core's agent seams and its
@@ -81,6 +100,16 @@ export interface RunningServer {
   /** The one access URL: scheme, bound host, port, and token. */
   url: string;
   port: number;
+  close(): Promise<void>;
+}
+
+/** A seat listening on its Unix socket (server-shell-25): no access
+ * URL, since the token appears in no output. */
+export interface RunningSeat {
+  service: CoreService;
+  server: HttpServer;
+  /** The socket's absolute path. */
+  socket: string;
   close(): Promise<void>;
 }
 
@@ -132,26 +161,75 @@ export function stampVersion(page: string, version: string): string {
   );
 }
 
+/** The flags taking no value. */
+const SWITCHES = new Set(["insecure", "seat"]);
+
+/** A seat's flags (server-shell-25), each refused without `--seat`. */
+const SEAT_FLAGS = ["server-id", "server-name", "person-id", "token-file", "socket", "shared-env"] as const;
+
+/** The flags taking a value, as `--flag=value` or `--flag value`. */
+const VALUED = new Set<string>([
+  "host",
+  "port",
+  "token",
+  "config",
+  "data-dir",
+  "tls-cert",
+  "tls-key",
+  ...SEAT_FLAGS,
+]);
+
+/** The seat's flags it cannot start without, with what each names. */
+const SEAT_REQUIRED = [
+  ["server-id", "the server's id at the instance"],
+  ["server-name", "the server's name"],
+  ["person-id", "the admitted person's permanent account id"],
+  ["token-file", "the file holding the handshake token"],
+  ["socket", "the Unix socket to listen on"],
+] as const;
+
+/** What `--socket` stands in for: the hub alone reaches a seat (hub-3). */
+const SOCKET_EXCLUDES = ["host", "port", "tls-cert", "tls-key"] as const;
+
 export function parseArgs(
   argv: string[],
   env: NodeJS.ProcessEnv,
 ): ServerShellOptions {
+  const values = new Map<string, string>();
+  const switches = new Set<string>();
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+    const match = /^--([a-z-]+)(?:=(.*))?$/s.exec(arg);
+    const key = match?.[1];
+    let value = match?.[2];
+    if (key !== undefined && value === undefined && SWITCHES.has(key)) {
+      switches.add(key);
+      continue;
+    }
+    if (key === undefined || !VALUED.has(key)) {
+      throw new Error(`unknown argument: ${arg}`);
+    }
+    if (value === undefined) {
+      const next = argv[index + 1];
+      if (next === undefined || next.startsWith("--")) {
+        throw new Error(`--${key} needs a value`);
+      }
+      value = next;
+      index += 1;
+    }
+    values.set(key, value);
+  }
+
   const options: ServerShellOptions = {
     host: "127.0.0.1",
     port: 8137,
     token: env.SPEX_TOKEN ?? randomUUID(),
     dataDir: defaultDataDir(env),
     legacyDb: legacyDbPath(env),
-    insecure: false,
+    insecure: switches.has("insecure"),
     uiDist: defaultUiDist(),
   };
-  for (const arg of argv) {
-    if (arg === "--insecure") {
-      options.insecure = true;
-      continue;
-    }
-    const match = /^--([a-z-]+)=(.*)$/.exec(arg);
-    const [, key, value] = match ?? [];
+  for (const [key, value] of values) {
     switch (key) {
       case "host":
         options.host = value;
@@ -179,11 +257,74 @@ export function parseArgs(
       case "tls-key":
         options.tlsKey = value;
         break;
-      default:
-        throw new Error(`unknown argument: ${arg}`);
     }
   }
+
+  if (!switches.has("seat")) {
+    const stray = SEAT_FLAGS.find((flag) => values.has(flag));
+    if (stray) throw new Error(`--${stray} is a seat's flag: it needs --seat`);
+    return options;
+  }
+  options.seat = parseSeat(values, switches);
+  options.token = readTokenFile(values.get("token-file") as string);
   return options;
+}
+
+/** A seat's facts from its flags (server-shell-25), every refusal
+ * naming the mistake before anything starts. */
+function parseSeat(values: Map<string, string>, switches: Set<string>): ShellSeat {
+  if (values.has("token") && values.has("token-file")) {
+    throw new Error(
+      "--token cannot stand beside --token-file: a seat reads its handshake token from the file alone",
+    );
+  }
+  if (values.has("socket")) {
+    const beside = [
+      ...SOCKET_EXCLUDES.filter((flag) => values.has(flag)),
+      ...(switches.has("insecure") ? ["insecure"] : []),
+    ];
+    if (beside.length > 0) {
+      throw new Error(
+        `${beside.map((flag) => `--${flag}`).join(", ")} cannot stand beside --socket: ` +
+          "a seat listens on its Unix socket alone, which the hub alone reaches",
+      );
+    }
+  }
+  for (const [flag, what] of SEAT_REQUIRED) {
+    if (!values.get(flag)?.trim()) {
+      throw new Error(`--seat needs --${flag}, ${what}: it is missing or empty`);
+    }
+  }
+  const shared = values.get("shared-env");
+  if (shared !== undefined && !shared.trim()) {
+    throw new Error("--shared-env names no file");
+  }
+  return {
+    serverId: values.get("server-id") as string,
+    serverName: values.get("server-name") as string,
+    personId: values.get("person-id") as string,
+    socket: resolve(values.get("socket") as string),
+    ...(shared !== undefined ? { sharedCredentialFile: resolve(shared) } : {}),
+  };
+}
+
+/** A seat's handshake token, read from its file and trimmed; an
+ * unreadable file or an empty token refuses startup, naming the file and
+ * never what it holds (server-shell-25). */
+function readTokenFile(path: string): string {
+  let token: string;
+  try {
+    token = readFileSync(path, "utf8").trim();
+  } catch (error) {
+    const cause = (error as NodeJS.ErrnoException).code ?? "unreadable";
+    throw new Error(`cannot read the token file ${path} (${cause})`);
+  }
+  if (token === "") {
+    throw new Error(
+      `the token file ${path} holds no token — a blank secret would disable the handshake`,
+    );
+  }
+  return token;
 }
 
 export function isLoopback(host: string): boolean {
@@ -430,7 +571,9 @@ function serveBundle(
  * Git credential helper, and the device sign-in flow, since the browser
  * reading the page may sit on another machine than the core's loopback.
  * A harness's core overrides come last; none of them names the flow or
- * the helper's runtime.
+ * the helper's runtime. On a seat the core runs in seat mode with the
+ * seat's facts (server-shell-25, core-service-125), and the shell sets
+ * no label of its own: the core labels the device by the server's name.
  */
 export function serverCoreOptions(
   options: ServerShellOptions,
@@ -459,19 +602,92 @@ export function serverCoreOptions(
     // (server-shell-1, git-host-3, git-host-9).
     signIn: "device",
     hostRuntime: { execPath: process.execPath, electron: false },
+    ...(options.seat ? { seat: coreSeat(options.seat) } : {}),
     ...(options.core ?? {}),
+  };
+}
+
+/** The core's seat facts: the shell's seat without its socket. */
+function coreSeat(seat: ShellSeat): SeatOptions {
+  return {
+    serverId: seat.serverId,
+    serverName: seat.serverName,
+    personId: seat.personId,
+    ...(seat.sharedCredentialFile !== undefined
+      ? { sharedCredentialFile: seat.sharedCredentialFile }
+      : {}),
+  };
+}
+
+function checkToken(token: string): void {
+  if (token === "") {
+    throw new Error(
+      "the token must not be empty — a blank secret would disable the " +
+        "handshake; unset SPEX_TOKEN/--token for a random one, or pass a secret",
+    );
+  }
+}
+
+/** The shell's own HTTP(S) server, serving the staged bundle. */
+function createShellServer(
+  options: ServerShellOptions,
+  tls: boolean,
+): HttpServer | HttpsServer {
+  const bundleDir = realpathSync(options.uiDist);
+  const encodedBodyCache: EncodedBodyCache = new Map();
+  const handler = (req: IncomingMessage, res: ServerResponse) =>
+    serveBundle(bundleDir, encodedBodyCache, req, res);
+  return tls
+    ? createHttpsServer(
+        {
+          cert: readFileSync(options.tlsCert as string),
+          key: readFileSync(options.tlsKey as string),
+        },
+        handler,
+      )
+    : createHttpServer(handler);
+}
+
+/** Boot the core attached to the shell's server, then listen; a failed
+ * listen stops the core again. */
+async function bootCore(
+  options: ServerShellOptions,
+  server: HttpServer | HttpsServer,
+  listen: () => Promise<void>,
+): Promise<CoreService> {
+  mkdirSync(options.dataDir, { recursive: true });
+  const service = await CoreService.start(serverCoreOptions(options, server));
+  try {
+    await listen();
+  } catch (error) {
+    await service.stop();
+    throw error;
+  }
+  return service;
+}
+
+function stopper(
+  server: HttpServer | HttpsServer,
+  service: CoreService,
+): () => Promise<void> {
+  return async () => {
+    // Sever transports first: a vanished peer's WebSocket would
+    // otherwise hold the graceful stop until ws's close timeout.
+    server.closeAllConnections();
+    await service.stop();
+    await new Promise<void>((resolveClose) =>
+      server.close(() => resolveClose()),
+    );
   };
 }
 
 export async function startServer(
   options: ServerShellOptions,
 ): Promise<RunningServer> {
-  if (options.token === "") {
-    throw new Error(
-      "the token must not be empty — a blank secret would disable the " +
-        "handshake; unset SPEX_TOKEN/--token for a random one, or pass a secret",
-    );
+  if (options.seat) {
+    throw new Error("a seat listens on its Unix socket: start it with startSeat");
   }
+  checkToken(options.token);
   if ((options.tlsCert === undefined) !== (options.tlsKey === undefined)) {
     const missing = options.tlsCert === undefined ? "--tls-cert" : "--tls-key";
     throw new Error(`TLS needs both halves: ${missing} is missing`);
@@ -483,46 +699,95 @@ export async function startServer(
         `--tls-cert/--tls-key, or --insecure to accept a plaintext public bind`,
     );
   }
-  const bundleDir = realpathSync(options.uiDist);
-  const encodedBodyCache: EncodedBodyCache = new Map();
-  const handler = (req: IncomingMessage, res: ServerResponse) =>
-    serveBundle(bundleDir, encodedBodyCache, req, res);
-  const server = tls
-    ? createHttpsServer(
-        {
-          cert: readFileSync(options.tlsCert as string),
-          key: readFileSync(options.tlsKey as string),
-        },
-        handler,
-      )
-    : createHttpServer(handler);
-  mkdirSync(options.dataDir, { recursive: true });
-  const service = await CoreService.start(serverCoreOptions(options, server));
-  try {
-    await new Promise<void>((resolveListen, rejectListen) => {
-      server.once("error", rejectListen);
-      server.listen(options.port, options.host, resolveListen);
-    });
-  } catch (error) {
-    await service.stop();
-    throw error;
-  }
+  const server = createShellServer(options, tls);
+  const service = await bootCore(
+    options,
+    server,
+    () =>
+      new Promise<void>((resolveListen, rejectListen) => {
+        server.once("error", rejectListen);
+        server.listen(options.port, options.host, resolveListen);
+      }),
+  );
   const port = (server.address() as AddressInfo).port;
   const scheme = tls ? "https" : "http";
   const url = `${scheme}://${formatHost(options.host)}:${port}/?token=${encodeURIComponent(options.token)}`;
-  return {
-    service,
+  return { service, server, url, port, close: stopper(server, service) };
+}
+
+/** Whether something accepts connections on a Unix socket. */
+function socketAnswers(path: string): Promise<boolean> {
+  return new Promise((resolveProbe) => {
+    const probe = connect(path);
+    probe.once("connect", () => {
+      probe.destroy();
+      resolveProbe(true);
+    });
+    probe.once("error", () => resolveProbe(false));
+  });
+}
+
+/** Remove a stale socket at a seat's path before listening
+ * (server-shell-25): only a socket nothing listens on, never another
+ * kind of file and never a live one, each refused naming the path. */
+async function clearStaleSocket(path: string): Promise<void> {
+  let stats: Stats;
+  try {
+    stats = lstatSync(path);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
+    throw error;
+  }
+  if (!stats.isSocket()) {
+    throw new Error(`--socket ${path} names a file that is not a socket; it is left as it is`);
+  }
+  if (await socketAnswers(path)) {
+    throw new Error(`--socket ${path} is in use: something listens on it`);
+  }
+  unlinkSync(path);
+}
+
+/**
+ * Start the shell as a seat (server-shell-25, DR-132): the core in seat
+ * mode, attached to an HTTP server listening on the seat's Unix socket
+ * in the directory whoever starts the shell made (hub-4), after a stale
+ * socket there is removed. The socket is made readable and writable by
+ * its owner and its group alone — the directory's group, the hub's — so
+ * the hub reaches it and nobody else does.
+ */
+export async function startSeat(options: ServerShellOptions): Promise<RunningSeat> {
+  const seat = options.seat;
+  if (!seat) throw new Error("startSeat needs a seat");
+  checkToken(options.token);
+  const beside = [
+    ...(options.tlsCert !== undefined ? ["--tls-cert"] : []),
+    ...(options.tlsKey !== undefined ? ["--tls-key"] : []),
+    ...(options.insecure ? ["--insecure"] : []),
+  ];
+  if (beside.length > 0) {
+    throw new Error(
+      `${beside.join(", ")} cannot stand beside --socket: ` +
+        "a seat listens on its Unix socket alone, which the hub alone reaches",
+    );
+  }
+  await clearStaleSocket(seat.socket);
+  const server = createShellServer(options, false) as HttpServer;
+  const service = await bootCore(
+    options,
     server,
-    url,
-    port,
-    close: async () => {
-      // Sever transports first: a vanished peer's WebSocket would
-      // otherwise hold the graceful stop until ws's close timeout.
-      server.closeAllConnections();
-      await service.stop();
-      await new Promise<void>((resolveClose) =>
-        server.close(() => resolveClose()),
-      );
-    },
-  };
+    () =>
+      new Promise<void>((resolveListen, rejectListen) => {
+        server.once("error", rejectListen);
+        server.listen({ path: seat.socket }, () => {
+          try {
+            chmodSync(seat.socket, 0o660);
+            resolveListen();
+          } catch (error) {
+            server.close();
+            rejectListen(error);
+          }
+        });
+      }),
+  );
+  return { service, server, socket: seat.socket, close: stopper(server, service) };
 }
