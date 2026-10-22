@@ -22,6 +22,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import { dirname, join } from "node:path";
 import { createSessionStore } from "@sublang/playbook/session-store";
 import { Home } from "./home.js";
+import { canonicalOrigin } from "./instance.js";
 import type { GroupsState, SpaceUnit } from "./protocol.js";
 import { bareOf, clonePath, createSpaceHarness, hostFolder, hostKey, instanceOf, placementOf, syncRecordsOf } from "./testing/space-harness.js";
 
@@ -300,6 +301,42 @@ test("space-60, space-61, space-5: a placement beside the first follows a signed
   assert.ok(syncRecordsOf(home.dataDir, key)[`sync:${key}:${thirdFolder}:last`], "its last sync recorded under its remote");
   const issued = second.script.transportCredentials.slice(transports);
   assert.ok(issued.length > 0 && issued.every((entry) => entry.instance === third.url), JSON.stringify(issued));
+});
+
+test("git-host-21, space-16, space-15, space-60: a placement beside the first whose own instance is signed out, governed by a signed-in instance over its Git backend that lists its host repository, waits at its Check for that instance's rate limit alone, its step offering Stop, which ends the wait naming that instance", async (t) => {
+  const first = await startHost();
+  const second = await startHost({ displayName: SECOND_NAME });
+  const third = await startHost({ gitBackend: second, displayName: THIRD_NAME });
+  const { home, key } = await projectAt("hold-governing", [first, second, third]);
+  t.after(() => home.stop());
+  // Placed in the person's namespace at the second, which the third, over
+  // its Git backend, lists too.
+  attachByHand(home, key, second, LOGIN);
+  await refreshed(home);
+  const both = await home.client.settle("space.sync", { repository: key }, 30_000);
+  assert.deepEqual(both.placements.map((line) => [line.instance, line.outcome?.kind]), [[first.url, "synced"], [second.url, "synced"]], JSON.stringify(both.sync));
+  await signOut(home, second);
+
+  // The third asks to wait as long as a hold lasts: its read fails and
+  // its calls are held, its view kept (git-host-21, git-host-5).
+  third.script.rateLimit(1, "120");
+  let mark = home.client.mark();
+  await home.client.expectOk("space.refresh", {});
+  await home.client.waitSpace(mark, (state) => instanceOf(state, third.url)?.read.phase === "failed", 30_000);
+
+  // The second's Check reads the third, which governs it: that call
+  // waits out the third's hold, the step offering Stop; Stop ends the
+  // wait, naming the third, and the sync with it, the first synced
+  // (git-host-21, space-16, space-15).
+  mark = home.client.mark();
+  await home.client.expectOk("space.sync", { repository: key });
+  await home.client.waitRepository(mark, key, (row) => row.sync.phase === "running" && row.sync.step === "check" && row.sync.placement === canonicalOrigin(second.url) && row.sync.cancelable, 20_000);
+  assert.deepEqual(await home.client.expectOk("space.cancel", { repository: key }), { stopped: true });
+  const stopped = await home.client.waitRepository(mark, key, (row) => row.sync.phase !== "running", 20_000);
+  const waited = `Stopped while waiting for ${THIRD_NAME}`;
+  assert.ok(stopped.sync.phase === "stopped" && stopped.sync.step === "check" && stopped.sync.cause === "stopped" && stopped.sync.message === waited, JSON.stringify(stopped.sync));
+  assert.deepEqual(placementOf(stopped, second.url).outcome, { kind: "stopped", step: "check", cause: "stopped", message: waited, guidance: "Retry waits, then runs the step.", retry: true });
+  assert.equal(placementOf(stopped, first.url).outcome?.kind, "synced");
 });
 
 test("storage-38, space-91: a first placement's drop a merge brings is refused, nothing dropped or moved, while something else takes its next placement's path, naming that path, and in a restarted core that has not read the next placement's instance, naming that instance, the next placement syncing each time; the sync after drops it and moves the clone there", async (t) => {

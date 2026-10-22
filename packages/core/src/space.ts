@@ -408,12 +408,16 @@ function stoppable<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
   });
 }
 
-/** A failure of a call to the host as the stopped state of space-15; a
- * stop already phrased passes as it is. */
+/** A failure of a call to the host as the stopped state of space-15,
+ * stopping its placement alone — the host's answer, the sign-in changed
+ * meanwhile at that instance (git-host-22, git-host-4), and anything else
+ * a call to it throws, none of which is Git's own error; a stop already
+ * phrased passes as it is. */
 function hostStop(step: SyncStep, error: unknown, host: string): SpaceStopped {
   if (error instanceof SpaceStopped) return error;
   const message = relayHostError(error, host);
-  if (!(error instanceof HostError)) return new SpaceStopped(step, { cause: "git", message: lastLines(message), guidance: retryGuidance(), retry: true });
+  if (error instanceof CredentialChanged) return new SpaceStopped(step, { cause: "reauth", message, guidance: signInThenRetry(), retry: true }, false);
+  if (!(error instanceof HostError)) return new SpaceStopped(step, { cause: "git", message: lastLines(message), guidance: retryGuidance(), retry: true }, false);
   switch (error.kind) {
     case "reauth":
       return new SpaceStopped(step, { cause: "reauth", message, guidance: signInThenRetry(), retry: true });
@@ -547,14 +551,15 @@ class SpaceStopped extends Error {
   /** Whether the stop ends the whole sync, no later placement running
    * (space-15): a Save's, an Apply's or a Refresh's stop, Stop, and Git's
    * own error; any other Check, Compare or Push cause stops its placement
-   * alone. The host answering its transport with an HTTP status, and a
-   * clone changed meanwhile at a Check's move, are Check causes, named so
-   * where they are made. */
+   * alone. Git's own error is named so only where it is classified — a
+   * transport no rule reads, or a step's error no rule phrases — never
+   * read from its cause, which a clone changed meanwhile at a Check's
+   * move and a host's answer with an HTTP status share. */
   readonly whole: boolean;
   constructor(readonly step: SyncStep, readonly failure: GitFailure, whole?: boolean) {
     super(failure.message);
     this.name = "SpaceStopped";
-    this.whole = whole ?? (!PLACEMENT_STEPS.has(step) || failure.cause === "stopped" || failure.cause === "git");
+    this.whole = whole ?? (!PLACEMENT_STEPS.has(step) || failure.cause === "stopped");
   }
 }
 
@@ -980,9 +985,10 @@ class RepositorySync {
    * that ends its wait for the host's rate limit (git-host-21). */
   private readonly hostCalls = new Set<AbortController>();
 
-  /** The origin of the instance of the placement whose turn runs, where
-   * it is not the clone's first (space-12): its step's calls to the host
-   * go there, held by that instance's rate limit (git-host-21). */
+  /** The origin of the instance a placement's turn goes to, where it is
+   * not the clone's first (space-12) — its own, or the instance governing
+   * it once its Check reads that one (git-host-22): its step's calls to
+   * the host go there, held by that instance's rate limit (git-host-21). */
   turnAt?: string;
 
   /**
@@ -2798,7 +2804,8 @@ class RepositorySync {
         const placement = turn.first ? undefined : standing;
         const ref = await this.git.run(["rev-parse", "-q", "--verify", `${this.refOf(turn.name)}^{commit}`]);
         if (ref.code === 0 && ref.stdout.toString("utf8").trim() === head) continue;
-        this.turnAt = placement?.instance ?? undefined;
+        // The instance its turn's check read takes its push (git-host-21).
+        this.turnAt = placement ? turn.at?.origin ?? placement.instance ?? undefined : undefined;
         let pushed: "ok" | "nothing" | "rejected";
         try {
           await this.enter(op, "push", true, turn.origin, "catch-up");
@@ -2994,7 +3001,7 @@ class RepositorySync {
    * where Git's own error ends the whole sync — the host's answer with an
    * HTTP status no row reads being the host's error, its placement's. */
   private transportStop(step: SyncStep, run: GitRun, remote: string, atHost: boolean, placement?: Placement, failure: GitFailure = this.classify(run, remote, atHost, placement)): SpaceStopped {
-    return new SpaceStopped(step, failure, failure.cause === "git" && atHost && hostErrorStatus(run.stderr) !== undefined ? false : undefined);
+    return new SpaceStopped(step, failure, failure.cause === "git" ? !(atHost && hostErrorStatus(run.stderr) !== undefined) : undefined);
   }
 
   /** Give the host's empty repository the default branch it never
@@ -5827,8 +5834,9 @@ export class SpaceManager {
       catch (error) {
         const name = this.nameOf(entry.at);
         refusal ??= new CoreError(error instanceof CredentialChanged ? "conflict" : "invalid_request", relayHostError(error, name));
-        // Stopped alone, as unreachable (git-host-22).
-        admitted.set(entry.name, { kind: "stopped", stop: new SpaceStopped("check", hostStop("check", error, name).failure, false) });
+        // Stopped alone, as unreachable, in the words of what failed
+        // (git-host-22).
+        admitted.set(entry.name, { kind: "stopped", stop: new SpaceStopped("check", { ...hostStop("check", error, name).failure, cause: "unreachable" }, false) });
         continue;
       }
       const notice = this.sharingNotice(machine, entry.name, entry.origin, listing, own && entry.later);
@@ -5998,6 +6006,10 @@ export class SpaceManager {
     const own = this.instanceAt(placement.instance);
     const instance = this.signedInAt(own) ? own : op === "sync" ? this.governingOfPlacement(machine, placement) : undefined;
     if (!instance) throw new SpaceStopped("check", { cause: "reauth", message: signInAgain(), guidance: signInThenRetry(), retry: true });
+    // Its turn's calls go to the instance read — through its credential's
+    // fetch too — held by that instance's rate limit alone, its Stop and
+    // the hold's name that instance's (git-host-21, space-16).
+    machine.turnAt = instance.origin;
     const facts: CloneFacts = { remote: placement.url, id: placement.id, remoteName: placement.name };
     let target: TargetReading;
     try {
