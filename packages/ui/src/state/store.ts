@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// App store: wires the protocol client into view state. Composer
+// App store: wires the protocol client into view state, one store per
+// core, each at its place (run-view-168). Composer
 // submissions queue client-side while a turn is active and dispatch
 // when it ends (RUN-8); the core enforces one turn at a time.
 // Reconnects re-subscribe every live session and backfill missed
 // records via history afterSeq, so panes never silently freeze.
 
-import { create } from "zustand";
+import { create, type StateCreator, type StoreApi, type UseBoundStore } from "zustand";
 import { hasPresentationHeader } from "@sublang/spex-core/protocol";
 import { isLanguage, resolveLanguage, type Language } from "@sublang/spex-core/language";
 import type {
@@ -643,7 +644,41 @@ export interface AppState extends AttachmentState {
   }): Promise<void>;
 }
 
-let client: SpexClient | undefined;
+/** The local core's place key (run-view-168). */
+export const LOCAL_PLACE_KEY = "local";
+
+/** Where a core runs (run-view-168, DR-133): the local core's place,
+ * keyed "local", or a seat's, keyed by its `<instance origin>#<server
+ * id>` as `server.state` names it and shown by its server's name. Each
+ * place keeps its core's state in a store of its own, holding every
+ * protocol id as its core sent it. */
+export interface Place {
+  key: string;
+  /** A seat's server name; the local place has none. */
+  name?: string;
+}
+
+export const LOCAL_PLACE: Place = { key: LOCAL_PLACE_KEY };
+
+export function isLocalPlace(place: Place): boolean {
+  return place.key === LOCAL_PLACE_KEY;
+}
+
+/** What a place is shown by (run-view-168): "This computer", or the
+ * server's name. */
+export function placeLabel(place: Place): string {
+  return isLocalPlace(place)
+    ? i18n._({ id: "This computer", comment: "the place of the local core, beside each team server's name" })
+    : (place.name ?? place.key);
+}
+
+/** The key a place keeps a preference under in this page's storage
+ * (run-view-168): the local place's is today's key, so an existing
+ * home's preferences stand; a seat's is that key qualified by its
+ * place, so a project held at two places keeps two sets. */
+export function placeKey(place: Place, key: string): string {
+  return isLocalPlace(place) ? key : `${key}@${place.key}`;
+}
 
 /** Where a stored intent's attachments live: the intent's own
  * directory beside its file (media-4). */
@@ -687,13 +722,6 @@ export const CAPTAIN_SPLIT_DEFAULT = 45;
 export const CAPTAIN_SPLIT_MIN = 22;
 export const CAPTAIN_SPLIT_MAX = 70;
 
-function readCaptainSplit(): number {
-  const stored = Number(safeStorageGet(CAPTAIN_SPLIT_KEY));
-  return Number.isFinite(stored) && stored >= CAPTAIN_SPLIT_MIN && stored <= CAPTAIN_SPLIT_MAX
-    ? stored
-    : CAPTAIN_SPLIT_DEFAULT;
-}
-
 /** The explorer's split (space-28, DR-030): the tree's share, bounded
  * so neither the tree nor the preview is squeezed past reading. */
 const SPACE_SPLIT_KEY = "spex.spaceSplit";
@@ -701,13 +729,6 @@ const SPACE_PRIVACY_KEY = "spex.spacePrivacyCollapsed";
 export const SPACE_SPLIT_DEFAULT = 40;
 export const SPACE_SPLIT_MIN = 25;
 export const SPACE_SPLIT_MAX = 70;
-
-function readSpaceSplit(): number {
-  const stored = Number(safeStorageGet(SPACE_SPLIT_KEY));
-  return Number.isFinite(stored) && stored >= SPACE_SPLIT_MIN && stored <= SPACE_SPLIT_MAX
-    ? stored
-    : SPACE_SPLIT_DEFAULT;
-}
 
 /** The authoring workspace's two splits (playbook-library-52): the
  * conversation pane's width share beside the artifacts, and its height
@@ -771,15 +792,17 @@ function permissionAsFailure(record: FoldedRecord): FoldedRecord {
  * its own identity beside the other chrome preferences (DR-030). */
 export const frameKey = (frameId: string): string => `spex.frame:${frameId}`;
 
-function readFrameHeights(): Record<string, number> {
+/** The frame heights kept under `prefix`: the local place's
+ * `spex.frame:`, a seat's qualified by its place (run-view-168). */
+function readFrameHeights(prefix: string): Record<string, number> {
   const heights: Record<string, number> = {};
   try {
     const store = window.localStorage;
     for (let index = 0; index < store.length; index += 1) {
       const key = store.key(index);
-      if (!key?.startsWith("spex.frame:")) continue;
+      if (!key?.startsWith(prefix)) continue;
       const steps = Number(store.getItem(key));
-      if (Number.isFinite(steps)) heights[key.slice("spex.frame:".length)] = steps;
+      if (Number.isFinite(steps)) heights[key.slice(prefix.length)] = steps;
     }
   } catch {
     // A frame falls back to its default height.
@@ -834,110 +857,25 @@ function readLanguageChoice(): Language | null {
 }
 
 /** The language this page paints in, settled before the first render
- * (localization-3) — the store initializer runs on import. */
-const initialLanguage = (() => {
+ * (localization-3) — the local store's initializer runs on import. The
+ * local store's alone: a seat's choice activates nothing here
+ * (localization-11). */
+function pageLanguage(): { choice: Language | null; resolved: Language } {
   const choice = readLanguageChoice();
   const resolved = resolveLanguage(choice, preferredLanguages());
   activateLanguage(resolved);
   return { choice, resolved };
-})();
+}
 
-function readExpandedProjects(): Record<string, boolean> {
+/** A per-project flag map kept under `key` (run-view-67, dashboard-45). */
+function readFlags(key: string): Record<string, boolean> {
   try {
-    const raw = safeStorageGet(EXPANDED_PROJECTS_KEY);
+    const raw = safeStorageGet(key);
     return raw ? (JSON.parse(raw) as Record<string, boolean>) : {};
   } catch {
     return {};
   }
 }
-
-function readDashboardGroupsCollapsed(): Record<string, boolean> {
-  try {
-    const raw = safeStorageGet(DASHBOARD_GROUPS_COLLAPSED_KEY);
-    return raw ? (JSON.parse(raw) as Record<string, boolean>) : {};
-  } catch {
-    return {};
-  }
-}
-
-/** Sessions with a history backfill in flight: live records buffer
- * here so a race can never skip the gap (they apply after the
- * backfill in seq order). */
-const backfilling = new Map<
-  string,
-  {
-    seq: number;
-    record: import("@sublang/spex-core/protocol").TmuxPlayRecord;
-    role?: string;
-  }[]
->();
-
-/** Live records a session received while its view was being folded
- * again for a change of language (localization-11): they were applied
- * to the view shown, with their effects, as they arrived, and reach
- * the replacement view once more without them. */
-const refolding = new Map<
-  string,
-  { seq: number; record: TmuxPlayRecord; role?: string }[]
->();
-/** Sessions whose re-fold met a backfill in flight: the backfill owns
- * the records until it settles, and the re-fold runs then, so a change
- * of language never goes unread for a view (localization-11). */
-const refoldPending = new Set<string>();
-
-/** Drafts with a draft.open replay in flight: live draft.record
- * messages buffer here, with the instance each names, and apply after
- * the replay, in seq order. */
-const draftBackfilling = new Map<string, (DraftRecord & { instance: string })[]>();
-/** The draft events heard per draft — a state or a removal — against
- * one running count, so a list read in flight never overrides what
- * was heard after it was asked (playbook-library-62). */
-let draftEvents = 0;
-const draftHeard = new Map<string, number>();
-
-export function getClient(): SpexClient {
-  if (!client) throw new Error(i18n._("client not connected"));
-  return client;
-}
-
-/** Test seam: store actions resolve the module-local client, which
- * module mocks cannot reach — vitest injects a fake through here. */
-export function setClientForTests(fake: SpexClient | undefined): void {
-  client = fake;
-}
-
-let deliver: ((message: ServerMessage) => void) | undefined;
-
-/** Test seam: hand the store a server message as the client would,
- * without a socket. */
-export function deliverServerMessageForTests(message: ServerMessage): void {
-  deliver?.(message);
-}
-
-/** The newest ledger read's number: only its reply applies. */
-let ledgerReads = 0;
-
-/** The newest playbook-list read's number: an older reply that a newer
- * read overtook is discarded (playbook-library-1). */
-let playbookListReads = 0;
-
-/** Markers already sent, by session: the standing condition
- * (run-view-134) re-asserts on every fold push, and this keeps that
- * from re-sending the same marker while the fold catches up. A refused
- * write drops its entry so the next push takes the act again. */
-const sentMarkers = new Map<string, number>();
-
-/** The newest Space read's number (space-2): a `space.get` reply older
- * than a `space.state` broadcast or a newer read is discarded. */
-let spaceReads = 0;
-
-/** The newest config announcement's number: a project's `config.get`
- * reply older than a `config.state` broadcast is discarded. */
-let configReads = 0;
-
-/** The newest re-read of the projects a Groups state set off: an older
- * reply is discarded. */
-let projectReads = 0;
 
 /** Whether a Groups state pairs other spex repositories with working
  * folders than the page lists as projects (space-59, space-60,
@@ -959,7 +897,108 @@ export function draftShown(draftId: string, instance: string | undefined): boole
   return instance !== undefined && useAppStore.getState().drafts[draftId]?.instance === instance;
 }
 
-export const useAppStore = create<AppState>((set, get) => {
+type SetState = Parameters<StateCreator<AppState>>[0];
+type GetState = Parameters<StateCreator<AppState>>[1];
+
+/** What a store offers beside its state: its client, and a message
+ * handed to it as its client would. */
+interface PlaceSeams {
+  /** The store's client; throws while none is connected. */
+  getClient(): SpexClient;
+  /** Put a client in place without dialing — a fake in tests. */
+  setClient(client: SpexClient | undefined): void;
+  /** Hand the store a server message as its client would. */
+  deliver(message: ServerMessage): void;
+}
+
+/** One core's store (run-view-168): its state, its seams, and the
+ * place it keeps. */
+export type AppStore = UseBoundStore<StoreApi<AppState>> & PlaceSeams & { readonly place: Place };
+
+/** One core's state and acts (run-view-168, DR-133). Everything the
+ * store keeps of its core — the client, the reads in flight and their
+ * counts, the backfills and their buffers — lives in this call, so no
+ * two places share any of it, and every id stays as its core sent it. */
+function placeState(
+  place: Place,
+  initialClient: SpexClient | undefined,
+  endpoint: string | undefined,
+  seams: PlaceSeams,
+  set: SetState,
+  get: GetState,
+): AppState {
+  const local = isLocalPlace(place);
+  /** This place's key for a preference this page keeps (run-view-168). */
+  const prefKey = (key: string): string => placeKey(place, key);
+  const framePrefix = `${prefKey("spex.frame")}:`;
+
+  let client = initialClient;
+
+  function getClient(): SpexClient {
+    if (!client) throw new Error(i18n._("client not connected"));
+    return client;
+  }
+
+  /** Sessions with a history backfill in flight: live records buffer
+   * here so a race can never skip the gap (they apply after the
+   * backfill in seq order). */
+  const backfilling = new Map<
+    string,
+    {
+      seq: number;
+      record: TmuxPlayRecord;
+      role?: string;
+    }[]
+  >();
+
+  /** Live records a session received while its view was being folded
+   * again for a change of language (localization-11): they were applied
+   * to the view shown, with their effects, as they arrived, and reach
+   * the replacement view once more without them. */
+  const refolding = new Map<
+    string,
+    { seq: number; record: TmuxPlayRecord; role?: string }[]
+  >();
+  /** Sessions whose re-fold met a backfill in flight: the backfill owns
+   * the records until it settles, and the re-fold runs then, so a change
+   * of language never goes unread for a view (localization-11). */
+  const refoldPending = new Set<string>();
+
+  /** Drafts with a draft.open replay in flight: live draft.record
+   * messages buffer here, with the instance each names, and apply after
+   * the replay, in seq order. */
+  const draftBackfilling = new Map<string, (DraftRecord & { instance: string })[]>();
+  /** The draft events heard per draft — a state or a removal — against
+   * one running count, so a list read in flight never overrides what
+   * was heard after it was asked (playbook-library-62). */
+  let draftEvents = 0;
+  const draftHeard = new Map<string, number>();
+
+  /** The newest ledger read's number: only its reply applies. */
+  let ledgerReads = 0;
+
+  /** The newest playbook-list read's number: an older reply that a newer
+   * read overtook is discarded (playbook-library-1). */
+  let playbookListReads = 0;
+
+  /** Markers already sent, by session: the standing condition
+   * (run-view-134) re-asserts on every fold push, and this keeps that
+   * from re-sending the same marker while the fold catches up. A refused
+   * write drops its entry so the next push takes the act again. */
+  const sentMarkers = new Map<string, number>();
+
+  /** The newest Space read's number (space-2): a `space.get` reply older
+   * than a `space.state` broadcast or a newer read is discarded. */
+  let spaceReads = 0;
+
+  /** The newest config announcement's number: a project's `config.get`
+   * reply older than a `config.state` broadcast is discarded. */
+  let configReads = 0;
+
+  /** The newest re-read of the projects a Groups state set off: an older
+   * reply is discarded. */
+  let projectReads = 0;
+
   /** Records describe the conversation; the listing owns activity,
    * including settlement after the final reply and stopped history. */
   function sessionActivity(view: SessionView, session?: SessionInfo): SessionView {
@@ -1048,7 +1087,7 @@ export const useAppStore = create<AppState>((set, get) => {
       workspaceTabs: follow(get().workspaceTabs),
       expandedProjects,
     });
-    if (moved.size > 0) safeStorageSet(EXPANDED_PROJECTS_KEY, JSON.stringify(expandedProjects));
+    if (moved.size > 0) safeStorageSet(prefKey(EXPANDED_PROJECTS_KEY), JSON.stringify(expandedProjects));
     if (current) get().setCurrentProject(current);
     for (const project of projects) {
       if (!get().projectMeta[project.id]) void get().loadProjectMeta(project.id);
@@ -1068,8 +1107,13 @@ export const useAppStore = create<AppState>((set, get) => {
     options: { saved?: boolean; reread?: boolean } = {},
   ): void {
     const stored = isLanguage(choice) ? choice : null;
-    if (stored) safeStorageSet(LANGUAGE_KEY, stored);
-    else safeStorageRemove(LANGUAGE_KEY);
+    // The page's mirror is the local home's (localization-11): a seat's
+    // choice is that seat's state, kept in its own store and written
+    // nowhere here.
+    if (local) {
+      if (stored) safeStorageSet(LANGUAGE_KEY, stored);
+      else safeStorageRemove(LANGUAGE_KEY);
+    }
     const resolved = resolveLanguage(stored, preferredLanguages());
     const current = get().language;
     // The mark of a landed write outlives the re-rendering it causes:
@@ -1083,7 +1127,8 @@ export const useAppStore = create<AppState>((set, get) => {
     // off the resolved language, so nothing else need subscribe.
     const changed = current.resolved !== resolved;
     const choiceChanged = current.choice !== stored;
-    if (changed) activateLanguage(resolved);
+    // The page's language is the local home's: a seat's activates none.
+    if (changed && local) activateLanguage(resolved);
     set({ language: { choice: stored, resolved, savedAt } });
     // The core composes prose in the home's language (localization-11),
     // which is the home's choice, not this page's resolution: a choice
@@ -1313,8 +1358,10 @@ export const useAppStore = create<AppState>((set, get) => {
   }
 
   /** Whether a message naming `instance` is the shown session's: one
-   * naming a former instance changes nothing. */
-  const isShown = draftShown;
+   * naming a former instance changes nothing. This store's own drafts
+   * alone, as `draftShown` reads the local store's. */
+  const isShown = (draftId: string, instance: string | undefined): boolean =>
+    instance !== undefined && get().drafts[draftId]?.instance === instance;
 
   function noteDraftHeard(draftId: string): void {
     draftEvents += 1;
@@ -1677,7 +1724,11 @@ export const useAppStore = create<AppState>((set, get) => {
     }
   }
 
-  deliver = handleMessage;
+  seams.getClient = getClient;
+  seams.setClient = (next) => {
+    client = next;
+  };
+  seams.deliver = handleMessage;
 
   return {
     ...createAttachmentState(set, get, getClient),
@@ -1705,11 +1756,18 @@ export const useAppStore = create<AppState>((set, get) => {
     runErrors: {},
     workspaceTabs: {},
     openTabs: {},
-    railCollapsed: safeStorageGet(RAIL_COLLAPSED_KEY) === "1",
-    language: initialLanguage,
-    captainSplit: readCaptainSplit(),
-    frameHeights: readFrameHeights(),
-    expandedProjects: readExpandedProjects(),
+    railCollapsed: safeStorageGet(prefKey(RAIL_COLLAPSED_KEY)) === "1",
+    // A seat's choice is unknown until its core answers, and resolving
+    // it here activates nothing (localization-11).
+    language: local ? pageLanguage() : { choice: null, resolved: resolveLanguage(null, preferredLanguages()) },
+    captainSplit: readPercent(
+      prefKey(CAPTAIN_SPLIT_KEY),
+      CAPTAIN_SPLIT_MIN,
+      CAPTAIN_SPLIT_MAX,
+      CAPTAIN_SPLIT_DEFAULT,
+    ),
+    frameHeights: readFrameHeights(framePrefix),
+    expandedProjects: readFlags(prefKey(EXPANDED_PROJECTS_KEY)),
     specTrees: {},
     specErrors: {},
     homeDraft: "",
@@ -1717,7 +1775,7 @@ export const useAppStore = create<AppState>((set, get) => {
     stagedIntents: {},
     collapsedLanes: {},
     foldedSources: {},
-    dashboardGroupsCollapsed: readDashboardGroupsCollapsed(),
+    dashboardGroupsCollapsed: readFlags(prefKey(DASHBOARD_GROUPS_COLLAPSED_KEY)),
     drafts: {},
     draftsLoaded: false,
     draftViews: {},
@@ -1729,13 +1787,13 @@ export const useAppStore = create<AppState>((set, get) => {
     draftForms: {},
     draftErrors: {},
     draftSplit: readPercent(
-      DRAFT_SPLIT_KEY,
+      prefKey(DRAFT_SPLIT_KEY),
       DRAFT_SPLIT_MIN,
       DRAFT_SPLIT_MAX,
       DRAFT_SPLIT_DEFAULT,
     ),
     draftStackSplit: readPercent(
-      DRAFT_STACK_SPLIT_KEY,
+      prefKey(DRAFT_STACK_SPLIT_KEY),
       DRAFT_STACK_MIN,
       DRAFT_STACK_MAX,
       DRAFT_STACK_DEFAULT,
@@ -1746,8 +1804,13 @@ export const useAppStore = create<AppState>((set, get) => {
     environmentErrors: {},
     playbooksSide: "project",
     spaceChangeSeq: 0,
-    spaceSplit: readSpaceSplit(),
-    spacePrivacyCollapsed: safeStorageGet(SPACE_PRIVACY_KEY) !== "0",
+    spaceSplit: readPercent(
+      prefKey(SPACE_SPLIT_KEY),
+      SPACE_SPLIT_MIN,
+      SPACE_SPLIT_MAX,
+      SPACE_SPLIT_DEFAULT,
+    ),
+    spacePrivacyCollapsed: safeStorageGet(prefKey(SPACE_PRIVACY_KEY)) !== "0",
 
     async loadSpace(): Promise<void> {
       // Replies apply in request order (space-2): a read that a newer
@@ -1769,12 +1832,12 @@ export const useAppStore = create<AppState>((set, get) => {
         Math.max(SPACE_SPLIT_MIN, Math.round(percent)),
       );
       set({ spaceSplit: clamped });
-      safeStorageSet(SPACE_SPLIT_KEY, String(clamped));
+      safeStorageSet(prefKey(SPACE_SPLIT_KEY), String(clamped));
     },
 
     setSpacePrivacyCollapsed(collapsed: boolean): void {
       set({ spacePrivacyCollapsed: collapsed });
-      safeStorageSet(SPACE_PRIVACY_KEY, collapsed ? "1" : "0");
+      safeStorageSet(prefKey(SPACE_PRIVACY_KEY), collapsed ? "1" : "0");
     },
 
     async spaceRefresh(): Promise<void> {
@@ -1881,7 +1944,10 @@ export const useAppStore = create<AppState>((set, get) => {
     spaceRead: (repository, path) => getClient().command("space.read", { repository, path }),
 
     connect(url?: string): void {
-      const target = url ?? defaultCoreUrl();
+      // A seat is dialed at its relay path (core-service-129), never at
+      // the local core's endpoint.
+      const target = url ?? endpoint ?? (local ? defaultCoreUrl() : undefined);
+      if (target === undefined) throw new Error(i18n._("client not connected"));
       set({ coreUrl: target });
       client = new SpexClient({
         url: target,
@@ -1985,7 +2051,7 @@ export const useAppStore = create<AppState>((set, get) => {
       // asking which one (run-view-57).
       let current = get().currentProjectId;
       if (!current) {
-        const persisted = safeStorageGet(CURRENT_PROJECT_KEY);
+        const persisted = safeStorageGet(prefKey(CURRENT_PROJECT_KEY));
         if (persisted && projects.some((p) => p.id === persisted)) {
           current = persisted;
         } else if (live.length > 0) {
@@ -2011,7 +2077,7 @@ export const useAppStore = create<AppState>((set, get) => {
 
     setCurrentProject(projectId: string | undefined): void {
       set({ currentProjectId: projectId });
-      if (projectId) safeStorageSet(CURRENT_PROJECT_KEY, projectId);
+      if (projectId) safeStorageSet(prefKey(CURRENT_PROJECT_KEY), projectId);
     },
 
     setWorkspaceTab(projectId: string, tab: string): void {
@@ -2050,7 +2116,7 @@ export const useAppStore = create<AppState>((set, get) => {
 
     setRailCollapsed(collapsed: boolean): void {
       set({ railCollapsed: collapsed });
-      safeStorageSet(RAIL_COLLAPSED_KEY, collapsed ? "1" : "0");
+      safeStorageSet(prefKey(RAIL_COLLAPSED_KEY), collapsed ? "1" : "0");
     },
 
     async setLanguage(choice: Language | null): Promise<void> {
@@ -2066,20 +2132,20 @@ export const useAppStore = create<AppState>((set, get) => {
         Math.max(CAPTAIN_SPLIT_MIN, Math.round(percent)),
       );
       set({ captainSplit: clamped });
-      safeStorageSet(CAPTAIN_SPLIT_KEY, String(clamped));
+      safeStorageSet(prefKey(CAPTAIN_SPLIT_KEY), String(clamped));
     },
 
     setFrameHeight(frameId: string, steps: number): void {
       // The frame owns its bounds and its unit; the store keeps what
       // the reader set and hands it back on the next launch.
       set({ frameHeights: { ...get().frameHeights, [frameId]: steps } });
-      safeStorageSet(frameKey(frameId), String(steps));
+      safeStorageSet(`${framePrefix}${frameId}`, String(steps));
     },
 
     toggleProjectExpanded(projectId: string, expanded: boolean): void {
       const next = { ...get().expandedProjects, [projectId]: expanded };
       set({ expandedProjects: next });
-      safeStorageSet(EXPANDED_PROJECTS_KEY, JSON.stringify(next));
+      safeStorageSet(prefKey(EXPANDED_PROJECTS_KEY), JSON.stringify(next));
     },
 
     setLaneCollapsed(sessionId: string, playerId: string, collapsed: boolean): void {
@@ -2105,7 +2171,7 @@ export const useAppStore = create<AppState>((set, get) => {
         [projectId]: collapsed,
       };
       set({ dashboardGroupsCollapsed: next });
-      safeStorageSet(DASHBOARD_GROUPS_COLLAPSED_KEY, JSON.stringify(next));
+      safeStorageSet(prefKey(DASHBOARD_GROUPS_COLLAPSED_KEY), JSON.stringify(next));
     },
 
     async addProjectByPath(path: string): Promise<ProjectInfo> {
@@ -2968,7 +3034,7 @@ export const useAppStore = create<AppState>((set, get) => {
         Math.max(DRAFT_SPLIT_MIN, Math.round(percent)),
       );
       set({ draftSplit: clamped });
-      safeStorageSet(DRAFT_SPLIT_KEY, String(clamped));
+      safeStorageSet(prefKey(DRAFT_SPLIT_KEY), String(clamped));
     },
 
     setDraftStackSplit(percent: number): void {
@@ -2977,7 +3043,7 @@ export const useAppStore = create<AppState>((set, get) => {
         Math.max(DRAFT_STACK_MIN, Math.round(percent)),
       );
       set({ draftStackSplit: clamped });
-      safeStorageSet(DRAFT_STACK_SPLIT_KEY, String(clamped));
+      safeStorageSet(prefKey(DRAFT_STACK_SPLIT_KEY), String(clamped));
     },
 
     requestNewPlaybook(): void {
@@ -3110,4 +3176,41 @@ export const useAppStore = create<AppState>((set, get) => {
       }
     },
   };
-});
+}
+
+/** Make the store of one core (run-view-168): `client` a client already
+ * in place, `endpoint` what `connect()` dials when it names none — a
+ * seat's relay path (core-service-129), the local core's by default. */
+export function createAppStore(
+  place: Place,
+  client?: SpexClient,
+  options: { endpoint?: string } = {},
+): AppStore {
+  const seams = {} as PlaceSeams;
+  const store = create<AppState>((set, get) =>
+    placeState(place, client, options.endpoint, seams, set, get),
+  );
+  return Object.assign(store, seams, { place });
+}
+
+/** The local place's store (run-view-168): the one every surface reads,
+ * made on import so the page's language is settled before the first
+ * render (localization-3). */
+export const useAppStore = createAppStore(LOCAL_PLACE);
+
+/** The local store's client. */
+export function getClient(): SpexClient {
+  return useAppStore.getClient();
+}
+
+/** Test seam: store actions resolve the local store's client, which
+ * module mocks cannot reach — vitest injects a fake through here. */
+export function setClientForTests(fake: SpexClient | undefined): void {
+  useAppStore.setClient(fake);
+}
+
+/** Test seam: hand the local store a server message as the client
+ * would, without a socket. */
+export function deliverServerMessageForTests(message: ServerMessage): void {
+  useAppStore.deliver(message);
+}

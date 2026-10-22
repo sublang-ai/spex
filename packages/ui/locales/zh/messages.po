@@ -6111,6 +6111,11 @@ msgstr "此智能体不支持浏览器工具"
 msgid "This command refreshes the spec law and prints a migration prompt for an AI agent to apply:"
 msgstr "此命令会刷新规约规则并打印迁移提示词，由 AI 智能体执行迁移："
 
+#. the place of the local core, beside each team server's name
+#: src/state/store.ts
+msgid "This computer"
+msgstr "本机"
+
 #: src/components/AgentSettings.tsx
 msgid "This conversation is in use elsewhere — its settings read only."
 msgstr "该对话正在别处使用 — 其设置为只读。"
