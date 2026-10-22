@@ -11,7 +11,8 @@
 // credential class and its phrase, a fake status command answering valid
 // and expired; and `credential.set`, `credential.list` and
 // `credential.remove` keep the member's credentials owner-only under
-// `local/`, listing no secret, and are refused off a seat.
+// `local/`, listing no secret, refuse a Kimi credential without its key,
+// and are refused off a seat.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -458,6 +459,40 @@ test("settings-50, storage-44: credential.set, credential.list and credential.re
   assert.equal(existsSync(file), false, "the file is removed with its last entry");
   assert.deepEqual(await home.client.expectOk("credential.remove", { kind: "agent", name: "kimi" }), empty, "removing what is not set changes nothing");
   assert.equal(existsSync(file), false);
+});
+
+test("settings-50, settings-48: a Kimi credential without KIMI_MODEL_API_KEY is refused whatever companions it carries, nothing written; with the key it is set", async (t) => {
+  const { home } = await startSeat("seat-kimi-key");
+  t.after(() => home.stop());
+  const file = codeCredentialsPath(home.dataDir);
+  const empty: CredentialList = { hosts: [], agents: [] };
+  const companions = { KIMI_MODEL_NAME: "kimi-k2", KIMI_MODEL_BASE_URL: "https://models.example.com/v1", KIMI_MODEL_PROVIDER_TYPE: "openai" };
+  const NEEDS_KEY = /^A kimi credential needs KIMI_MODEL_API_KEY$/;
+  const withoutKey: Record<string, string>[] = [{ KIMI_MODEL_NAME: "kimi-k2" }, { KIMI_MODEL_BASE_URL: "https://models.example.com/v1" }, { KIMI_MODEL_PROVIDER_TYPE: "openai" }, companions];
+
+  // No key form, refused before anything is written (settings-48).
+  for (const values of withoutKey) {
+    await home.client.expectError("credential.set", { kind: "agent", name: "kimi", values }, "invalid_request", NEEDS_KEY);
+  }
+  assert.equal(existsSync(file), false, "nothing was written");
+  assert.deepEqual(await home.client.expectOk("credential.list", {}), empty, "the list stays as it was");
+
+  // With the key, the companions are set beside it.
+  const set = await home.client.expectOk("credential.set", { kind: "agent", name: "kimi", values: { KIMI_MODEL_API_KEY: "tok-kimi-secret", ...companions } });
+  const listed: CredentialList = { hosts: [], agents: [{ name: "kimi", names: ["KIMI_MODEL_API_KEY", "KIMI_MODEL_BASE_URL", "KIMI_MODEL_NAME", "KIMI_MODEL_PROVIDER_TYPE"] }] };
+  assert.deepEqual(set, listed);
+  assert.deepEqual(parseYaml(readFileSync(file, "utf8")), { format: 1, hosts: {}, agents: { kimi: { KIMI_MODEL_API_KEY: "tok-kimi-secret", ...companions } } });
+
+  // Nor does a set without the key, or with a blank one, replace the
+  // credential standing (settings-48).
+  const before = readFileSync(file);
+  for (const values of withoutKey) {
+    const message = await home.client.expectError("credential.set", { kind: "agent", name: "kimi", values }, "invalid_request", NEEDS_KEY);
+    assert.ok(!message.includes("tok-"), `no secret in “${message}”`);
+  }
+  await home.client.expectError("credential.set", { kind: "agent", name: "kimi", values: { KIMI_MODEL_API_KEY: "  ", ...companions } }, "invalid_request", /^A credential's value cannot be blank$/);
+  assert.deepEqual(readFileSync(file), before, "nothing was written");
+  assert.deepEqual(await home.client.expectOk("credential.list", {}), listed, "the list stays as it was");
 });
 
 test("storage-44: a file of another format is refused and left as it is; a malformed entry is refused by every read and write of it and reported, others kept", async (t) => {

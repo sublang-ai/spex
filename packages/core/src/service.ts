@@ -385,6 +385,16 @@ function agentCredentialOf(adapter: AdapterName, values: Record<string, string>)
       }));
     }
   }
+  // A credential holds the agent's key form: Kimi's model name, base URL
+  // and provider type only accompany its key (settings-48, settings-49).
+  const keys = AGENT_CREDENTIAL_FORMS[adapter].keys;
+  if (!names.some((name) => keys.includes(name))) {
+    throw new CoreError("invalid_request", i18n._({
+      id: "A {adapter} credential needs {keys}",
+      comment: "Refusal of an agent's credential on a team server's seat: it carries only names that accompany the agent's key, such as Kimi's model name, and not the key; `adapter` is the agent's name and `keys` lists the key's variable names, any one of which will do, both as they are",
+      values: { adapter, keys: listed(keys) },
+    }));
+  }
   return { ...values };
 }
 

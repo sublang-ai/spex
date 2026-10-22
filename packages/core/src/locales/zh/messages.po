@@ -733,6 +733,11 @@ msgstr "◇ 现在由 Captain 作答 — 此前的对话已重放给它"
 msgid "◇ The provider rejected the resumed conversation — replaying it"
 msgstr "◇ 服务商拒绝了续接的对话 — 正在重放"
 
+#. Refusal of an agent's credential on a team server's seat: it carries only names that accompany the agent's key, such as Kimi's model name, and not the key; `adapter` is the agent's name and `keys` lists the key's variable names, any one of which will do, both as they are
+#: src/service.ts
+msgid "A {adapter} credential needs {keys}"
+msgstr "{adapter} 的凭据需要 {keys}"
+
 #. Refusal of a code host's credential on a team server's seat: it names a field other than the token and the username
 #: src/service.ts
 msgid "A code host's credential is a token and, where the host asks for one, a username"
