@@ -790,13 +790,16 @@ playbooks:
    * clone's `spex` pushed there as a peer pushes, a remote named by that
    * instance's folder with the host's id in its own section, and the
    * placement's file written in the clone, uncommitted; its host id, its
-   * remote URL and that folder. */
+   * remote URL and that folder. `group` may name an account's namespace,
+   * which every instance over that Git backend lists (DR-127). */
   function attachByHand(home: Home, key: string, host: StandinHost, group = "acme"): { id: string; url: string; folder: string } {
     const clone = clonePath(home.dataDir, key);
     const name = key.slice(key.lastIndexOf("/") + 1);
     const repository = host.script.addRepository({ group, name });
-    const url = `${host.gitOrigin}/${host.storage}/${group}/${name}.git`;
-    git(clone, "push", "-q", host.bareOf(`${group}/${name}`), "spex:spex");
+    // A namespace stands at its login on the Git system, a group inside
+    // its instance's container.
+    const url = `${host.gitOrigin}/${repository.group.kind === "user" ? "" : `${host.storage}/`}${group}/${name}.git`;
+    git(clone, "push", "-q", repository.bare, "spex:spex");
     const folder = hostFolder(host);
     git(clone, "remote", "add", folder, url);
     git(clone, "config", `remote.${folder}.spexId`, repository.id);

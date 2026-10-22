@@ -13,8 +13,10 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, relative } from "node:path";
+import { createSessionStore } from "@sublang/playbook/session-store";
 import { stringify as stringifyYaml } from "yaml";
 import { Home } from "./home.js";
 import type { GroupsState } from "./protocol.js";
@@ -425,7 +427,7 @@ test("storage-37, storage-34: two signed-in format-1 homes, each holding a clone
   assert.equal(git(cloneB, "status", "--porcelain"), "");
 });
 
-test("storage-37: a placement file a commit once held, removed by a peer's commit the sync merges, is not written again by the next Save", async (t) => {
+test("storage-37, storage-38, space-91: a placement file a commit once held, removed by a peer's commit the sync merges, is not written again by the next Save while that placement's drop waits on a session's lease beneath the clone, which syncs nothing with it; the sync after the release drops it, moving the clone, its last placement gone, under your own group's folder, local only, its pair following", async (t) => {
   const host = await startHost();
   const folder = hostFolder(host);
   const file = `placements/${folder}.yaml`;
@@ -434,7 +436,8 @@ test("storage-37: a placement file a commit once held, removed by a peer's commi
   let from = home.client.mark();
   await signIn(home, host);
   await home.client.waitRepository(from, HOST_OWN, (repository) => repository.sync.phase === "done", 30_000);
-  const local = await addFolder(home, gitFolder("held"));
+  const code = gitFolder("held");
+  const local = await addFolder(home, code);
   from = home.client.mark();
   await home.client.expectOk("space.pick", { repository: local.key, choice: { kind: "create", instance: host.url, groupId: "2002", name: "held" } });
   const key = hostKey(host, "acme/held-spex");
@@ -443,18 +446,56 @@ test("storage-37: a placement file a commit once held, removed by a peer's commi
   const bare = bareOf(host, key);
   assert.equal(committed(bare, file), placementBytes(host.url, created.id));
 
-  // A peer removes the file; the sync merges that removal.
-  const peer = peerClone(bare);
-  await peerPush(peer, (dir) => rmSync(join(dir, file)));
-  const merged = await home.client.settle("space.sync", { repository: key }, 30_000);
-  assert.equal(merged.sync.phase, "done", JSON.stringify(merged.sync));
-  assert.equal(existsSync(join(clone, file)), false, "the removal the merge brought stands");
+  // A writer of another process holds the clone where it is.
+  const sessions = createSessionStore({ sessionsDir: join(clone, "sessions") });
+  await sessions.prepare();
+  const lease = randomUUID();
+  const live = await sessions.acquireManagement(lease);
+  let released = false;
+  try {
+    // A peer removes the file; the sync merges that removal, and the drop
+    // it brings — the clone's first placement's, which moves the clone —
+    // waits on the lease, the placement's line naming the session; the
+    // clone and its remote stand (space-91, storage-38).
+    const peer = peerClone(bare);
+    const removed = await peerPush(peer, (dir) => rmSync(join(dir, file)));
+    const merged = await home.client.settle("space.sync", { repository: key }, 30_000);
+    assert.ok(merged.sync.phase === "stopped" && merged.sync.cause === "lease" && merged.sync.message.includes(lease.slice(0, 8)), JSON.stringify(merged.sync));
+    const line = merged.placements[0];
+    assert.ok(line?.outcome?.kind === "stopped" && line.outcome.cause === "lease", JSON.stringify(line?.outcome));
+    assert.equal(git(clone, "rev-parse", "HEAD"), removed, "the merge stands");
+    assert.equal(existsSync(join(clone, file)), false, "the removal the merge brought stands");
+    assert.deepEqual(git(clone, "remote").split("\n"), [folder]);
 
-  // The next Save finds that a commit held the file, and writes nothing.
-  const again = await home.client.settle("space.sync", { repository: key }, 30_000);
-  assert.equal(again.sync.phase, "done", JSON.stringify(again.sync));
-  assert.equal(existsSync(join(clone, file)), false);
-  assert.throws(() => git(clone, "cat-file", "-e", `HEAD:${file}`));
-  assert.throws(() => git(bare, "cat-file", "-e", `spex:${file}`));
-  assert.deepEqual(git(clone, "remote").split("\n"), [folder]);
+    // The next Save finds that a commit held the file, and writes nothing;
+    // the drop waits still, and nothing is synced with the placement
+    // (storage-37, space-91).
+    const transports = host.script.transportCredentials.length;
+    const again = await home.client.settle("space.sync", { repository: key }, 30_000);
+    assert.ok(again.sync.phase === "stopped" && again.sync.cause === "lease", JSON.stringify(again.sync));
+    assert.equal(existsSync(join(clone, file)), false);
+    assert.throws(() => git(clone, "cat-file", "-e", `HEAD:${file}`));
+    assert.throws(() => git(bare, "cat-file", "-e", `spex:${file}`));
+    assert.equal(host.script.transportCredentials.length, transports, "nothing fetched from or pushed to the placement");
+    assert.deepEqual(git(clone, "remote").split("\n"), [folder]);
+
+    // Released, the next sync drops the placement before its turn: the
+    // clone, its last placement gone, moves under your own group's folder,
+    // local only, its pair following and this device's records of the
+    // placement leaving with it (storage-38, storage-5).
+    await live.release();
+    released = true;
+    const ownKey = `${LOGIN}/held-spex`;
+    from = home.client.mark();
+    await home.client.expectOk("space.sync", { repository: key });
+    const dropped = await home.client.waitRepository(from, ownKey, (repository) => repository.sync.phase !== "running" && repository.sync.phase !== "idle", 30_000);
+    assert.deepEqual([dropped.sync.phase, dropped.state, dropped.placements, dropped.id], ["done", "local-only", [], null], JSON.stringify(dropped.sync));
+    const ownClone = clonePath(home.dataDir, ownKey);
+    assert.ok(existsSync(join(ownClone, ".git")) && !existsSync(clone), "moved under your own group's folder");
+    assert.equal(git(ownClone, "remote"), "");
+    assert.equal(git(ownClone, "rev-parse", "HEAD"), removed, "its records kept");
+    assert.equal(Home.load(home.dataDir).keyForFolder(code), ownKey);
+    assert.deepEqual({ ...syncRecordsOf(home.dataDir, key), ...syncRecordsOf(home.dataDir, ownKey) }, {});
+    assert.equal(git(bare, "rev-parse", "spex"), removed, "the host's repository is left as it stands");
+  } finally { if (!released) await live.release(); }
 });

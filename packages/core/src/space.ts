@@ -28,7 +28,7 @@ import { InstanceRefused, kebab, REMOTE_URL_KEYS, remoteNamesIn, splitKey, type 
 import { i18n } from "./i18n.js";
 import { canonicalOrigin, instanceFolder, instanceSegmentOf, isInstanceFolder, OriginRefused, parseOrigin, type OriginRefusal } from "./instance.js";
 import { isDeferredClone } from "./migrate-instances.js";
-import { deletePlacementFile, filedIn, keyPlacement, LEGACY_CREATED_KEY, LEGACY_ID_KEY, moveLegacyIds, PATH_PLACEMENT, PLACEMENT_CONFIG_KEYS, PLACEMENTS_DIR, placementCreatedKey, placementFileEverHeld, placementIdKey, placementsIn, readPlacements, writePlacementFile, type HistoryRun, type Placement, type PlacementPrefKind } from "./placements.js";
+import { deletePlacementFile, filedIn, keyPlacement, LEGACY_CREATED_KEY, LEGACY_ID_KEY, moveLegacyIds, PATH_PLACEMENT, PLACEMENT_CONFIG_KEYS, PLACEMENTS_DIR, placementCreatedKey, placementFileEverHeld, placementFilePath, placementIdKey, placementsIn, readPlacementFiles, readPlacements, writePlacementFile, type HistoryRun, type Placement, type PlacementFile, type PlacementPrefKind } from "./placements.js";
 import type {
   GroupsState,
   InstanceGroupState,
@@ -441,6 +441,23 @@ function movedMeanwhile(key: string): SpaceStopped {
   return new SpaceStopped("check", { cause: "git", message: changedMeanwhile(`workspace/${key}`), guidance: retryGuidance(), retry: true }, false);
 }
 
+/** A first placement's drop refused, the clone neither dropped nor
+ * moved, where no read of the core's run has placed its next placement
+ * (storage-38): naming that placement's instance, its drop waiting for
+ * the next sync (space-91). */
+function nextUnread(host: string): SpaceStopped {
+  return new SpaceStopped("check", {
+    cause: "unreachable",
+    message: i18n._({
+      id: "{host} is not read yet, so the clone cannot move to its path there",
+      values: { host },
+      comment: "A stopped sync: a placement of a spex repository is dropped, which moves its clone to the path of its next placement, at the instance {host} (its display name), which the core has not read since it started",
+    }),
+    guidance: i18n._({ id: "Refresh, then Retry.", comment: "Guidance where the core must read an instance before a spex repository's clone can move to its path there" }),
+    retry: true,
+  }, false);
+}
+
 /** A unit's write refused, or a move stopped, for a session's lease or an
  * authoring session's running turn, naming the session (space-15). */
 function inUseStop(step: SyncStep, unit: string, store: Store): SpaceStopped {
@@ -621,7 +638,18 @@ interface Turn {
   /** For a turn waiting for its notice's Continue, the stop the sync
    * reads where no placement went (space-57). */
   notice?: GitFailure;
+  /** Its placement dropped by a merge of this sync (space-91): its line
+   * gone, nothing is pushed to it. */
+  dropped?: boolean;
 }
+/** What reconciling a clone's placements with their files did to one
+ * placement it could not keep (space-91, storage-38): followed to
+ * another instance, its remote renamed; dropped; or its drop or follow
+ * waiting, refused with the stop its line reads. */
+type PlacementFate =
+  | { kind: "followed"; name: string }
+  | { kind: "dropped" }
+  | { kind: "withheld"; stop: SpaceStopped };
 /** A turn whose Apply met a unit changed since its base (space-19): the
  * sync runs again from Save; the placement's remote's name, and the
  * placement for a later one. */
@@ -893,6 +921,15 @@ class RepositorySync {
   private local: SpaceUnit[] = [];
   /** The operation running on this clone: its kind and its promise. */
   private current?: { op: SpaceOp; work: Promise<void> };
+  /** The renames of the clone's placements' remotes since this sync
+   * last read its placements — a follow's (space-60) and a reconcile's
+   * (space-91) — by the name each bore: a placement read before is found
+   * again by the name it bears now. */
+  private readonly renamed = new Map<string, string>();
+  /** What this sync's reconciles left of the placements they could not
+   * keep (space-91, storage-38), by the name each bore then: dropped, or
+   * its drop or follow waiting, with the stop its line reads. */
+  private readonly swept = new Map<string, "dropped" | SpaceStopped>();
   /** How the running operation ended, shown once its lists are read. */
   private ended?: SpaceSyncPhase;
 
@@ -1387,16 +1424,21 @@ class RepositorySync {
    * move re-keyed the clone; nothing is renamed where a remote bears the
    * folder's name already. Read and written in one synchronous step; a
    * rename Git refuses leaves the remote as it stood, the clone still
-   * reading it as its placement until its next sync renames it. */
-  renameRemote(from: string | null, folder: string): void {
-    if (from === null || from === folder || (from !== "origin" && !isInstanceFolder(from))) return;
+   * reading it as its placement until its next sync renames it. Returns
+   * whether it renamed the remote. */
+  renameRemote(from: string | null, folder: string): boolean {
+    if (from === null || from === folder || (from !== "origin" && !isInstanceFolder(from))) return false;
     const names = remoteNames(this.git.runSync(["config", "-z", "--get-regexp", REMOTE_URL_KEYS]));
-    if (!names.includes(from) || names.includes(folder)) return;
+    if (!names.includes(from) || names.includes(folder)) return false;
     const run = this.git.runSync(["remote", "rename", from, folder]);
     if (run.code !== 0) {
       console.error(`spex: the remote of ${this.key} keeps its name: ${lastLines(run.stderr)}`);
-      return;
+      return false;
     }
+    // A placement read before under its former name is found under this
+    // one (space-12).
+    for (const [before, after] of this.renamed) if (after === from) this.renamed.set(before, folder);
+    this.renamed.set(from, folder);
     if (this.upstreamName === from) this.upstreamName = folder;
     // What this core learnt of the placement follows its remote
     // (space-31), as this device's last sync and notice of it do, in the
@@ -1419,6 +1461,99 @@ class RepositorySync {
         catch (error) { console.error(`spex: the former placement file of ${this.key} stays: ${error instanceof Error ? error.message : String(error)}`); }
       }
     }
+    return true;
+  }
+
+  /** The name the remote of a placement read under `name` bears now,
+   * after the renames this sync made (space-60, space-91). */
+  nameNow(name: string): string {
+    return this.renamed.get(name) ?? name;
+  }
+
+  /** Whether a placement still stands in the clone's Git configuration
+   * as it was read — its remote's name, URL, id and instance (space-21):
+   * a write after awaiting anything checks it in the step that writes. */
+  stillReads(placement: Placement): boolean {
+    return this.placementsNow().some((candidate) => candidate.name === placement.name && candidate.url === placement.url && candidate.id === placement.id && candidate.instance === placement.instance);
+  }
+
+  /** Whether the instances migration's receipt names this clone
+   * deferred (storage-34): its move at its next sync's Check renames its
+   * remote, and nothing reconciles it before. */
+  isDeferred(): boolean {
+    return this.deferred();
+  }
+
+  /** Whether a commit reachable from the clone's `spex` has held its
+   * placement file under an instance's folder (storage-37). */
+  placementFileHeld(folder: string): Promise<boolean> {
+    return placementFileEverHeld(async (args) => {
+      const run = await this.git.run(args);
+      return { ok: run.code === 0, stdout: run.stdout.toString("utf8") };
+    }, folder);
+  }
+
+  /**
+   * A placement follows another instance (space-60, space-91): its
+   * remote renamed to that instance's folder, its placement file
+   * rewritten to that instance and the former instance's deleted, this
+   * device's records of it re-keyed and what this core learnt of it
+   * moved, in one synchronous step (renameRemote) — only while it still
+   * reads as it was read (space-21). The placement as it stands renamed,
+   * or none where the rename was not made.
+   */
+  followRemote(placement: Placement, folder: string): Placement | undefined {
+    if (!this.stillReads(placement) || !this.renameRemote(placement.name, folder)) return undefined;
+    return this.placements.find((candidate) => candidate.name === folder);
+  }
+
+  /** The URL the host hands over for a placement after its rename or
+   * transfer at its instance (space-60), written to its remote only while
+   * it still reads as it was read; the placement as it then stands, or
+   * none where it changed meanwhile. */
+  setPlacementUrl(placement: Placement, url: string): Placement | undefined {
+    if (!this.stillReads(placement)) return undefined;
+    this.gitStep(["remote", "set-url", placement.name, url]);
+    this.settleFacts();
+    return this.placements.find((candidate) => candidate.name === placement.name);
+  }
+
+  /** The host's id recorded beside a placement its instance matched by
+   * its remote URL (git-host-5, storage-34), only while it still reads as
+   * it was read; the placement as it then stands. */
+  recordPlacementId(placement: Placement, id: string): Placement {
+    if (!this.stillReads(placement)) return placement;
+    this.gitStep(["config", placementIdKey(placement.name), id]);
+    this.settleFacts();
+    return this.placements.find((candidate) => candidate.name === placement.name) ?? placement;
+  }
+
+  /**
+   * Drop a placement (space-91, storage-38, space-5): its remote removed
+   * with its section — its id and creation mark — every ref the clone
+   * fetched under its name and the upstream naming it, this device's last
+   * sync and notice of it, and what this core learnt of it, in one
+   * synchronous step; the clone's records are kept, and its placement
+   * file is left as it stands. Written only while it still reads as it
+   * was read; whether it was dropped.
+   */
+  dropPlacement(placement: Placement): boolean {
+    if (!this.stillReads(placement)) return false;
+    const first = this.placementsNow()[0]?.name === placement.name;
+    // Git removes the section, the refs fetched under the remote's name
+    // and the upstream configuration naming it; a removal Git refuses
+    // leaves the placement as it stood.
+    const run = this.git.runSync(["remote", "remove", placement.name]);
+    if (run.code !== 0) {
+      console.error(`spex: the remote ${placement.name} of ${this.key} stands: ${lastLines(run.stderr)}`);
+      return false;
+    }
+    if (this.upstreamName === placement.name) this.upstreamName = null;
+    this.host.store.dropPlacementPrefs(this.key, placement.name, first);
+    this.runs.delete(placement.name);
+    this.agreedRead.delete(placement.name);
+    this.settleFacts();
+    return true;
   }
 
   /** The clone's placement file at an instance (storage-36), written by
@@ -2310,19 +2445,34 @@ class RepositorySync {
       if (saved !== null) saves.add(saved);
       savedCommit = saved ?? savedCommit;
       // The placements, read once after Save (space-12): each later one
-      // found again by its remote's name at its turn — a placement taken
-      // away meanwhile is not run — the first by the clone's facts, which
-      // its Check's follow renames (space-60).
+      // found again by the name its remote bears at its turn — a
+      // placement dropped meanwhile is not run — the first by the clone's
+      // facts, which its Check's follow renames (space-60).
+      this.renamed.clear();
+      this.swept.clear();
       const order = this.placementsNow();
       const names = order.length > 0 ? order.map((placement) => placement.name) : [this.firstName()];
       const turns: Turn[] = [];
       let restart: Restart | undefined;
       for (const [index, name] of names.entries()) {
-        const placement = index === 0 ? undefined : this.placementsNow().find((candidate) => candidate.name === name);
-        if (index > 0 && placement === undefined) continue;
         const tally = tallyOf(index === 0 ? "" : name);
+        // A placement whose file a merge removed, or changed to name
+        // another host repository, syncs nothing until its drop — or its
+        // follow to the instance another file names — is made, which is
+        // tried again before its turn (space-91, storage-38).
+        const standing = this.placementsNow().find((candidate) => candidate.name === this.nameNow(name));
+        if (standing?.instance) {
+          const settled = (await this.owner.reconcilePlacements(this, standing.name)).get(standing.name);
+          if (settled?.kind === "dropped") continue;
+          if (settled?.kind === "withheld") {
+            turns.push(this.admittedTurn(index === 0 ? undefined : standing, standing.name, { kind: "stopped", stop: settled.stop }, tally));
+            continue;
+          }
+        }
+        const placement = index === 0 ? undefined : this.placementsNow().find((candidate) => candidate.name === this.nameNow(name));
+        if (index > 0 && placement === undefined) continue;
         const admitted = input.admission.get(name);
-        if (admitted) { turns.push(this.admittedTurn(placement, name, admitted, tally)); continue; }
+        if (admitted) { turns.push(this.admittedTurn(placement, this.nameNow(name), admitted, tally)); continue; }
         const forTarget = index === 0 ? input.target.first : input.target.name === name;
         const turned = await this.turn(op, placement, {
           choices: forTarget ? input.choices : {},
@@ -2331,6 +2481,9 @@ class RepositorySync {
         }, upstream, tally);
         if ("restart" in turned) { restart = turned; break; }
         turns.push(turned);
+        // What this turn's merge did to the placements before it stands
+        // on their turns (space-91).
+        this.refreshTurns(turns);
       }
       if (!restart) {
         const caught = await this.catchUp(op, turns, upstream);
@@ -2403,36 +2556,52 @@ class RepositorySync {
    * rejected runs it once more from Check, and rejected again stops it;
    * a turn run again for its catch-up ends behind instead. A stop of
    * this placement alone ends its turn on its line; any other ends the
-   * sync, its line saying so too (space-15).
+   * sync, its line saying so too (space-15). Its merge's reconcile may
+   * make it follow another instance, from where its turn goes on, drop
+   * it, its turn then ending at Refresh with nothing pushed, or find its
+   * drop waiting, its line then reading why (space-91).
    */
   private async turn(op: SpaceOp, placement: Placement | undefined, input: TurnInput, upstream: { set: boolean }, tally: { sent: number; received: number }): Promise<Turn | Restart> {
     const first = placement === undefined;
+    // A later placement as it stands, after a follow renamed it
+    // (space-60, space-91).
+    let held = placement;
     // The placement's remote's name as it stands, the first's after its
     // follow (space-60).
-    const nameNow = (): string => placement?.name ?? this.facts.remoteName ?? this.firstName();
-    let remote = placement?.url ?? this.facts.remote ?? "";
+    const nameNow = (): string => held ? this.nameNow(held.name) : this.facts.remoteName ?? this.firstName();
+    let remote = held?.url ?? this.facts.remote ?? "";
     let readOnly = false;
     let at: HostInstance | undefined;
     let rechecks = 0;
     let pending: Pending | undefined;
     let counts = { sent: 0, received: 0 };
+    // What its own merge's reconcile did to it, and its name and origin
+    // before (space-91).
+    let fate: PlacementFate | undefined;
+    let before = { name: "", origin: null as string | null };
     const ended = (outcome: PlacementOutcome, extra: { syncedAt?: number; pushed?: boolean; notice?: GitFailure } = {}): Turn => {
       const name = nameNow();
       this.runOf(name).outcome = outcome;
       return {
-        first, name, origin: this.originOf(placement), remote, at, readOnly, outcome, pushed: extra.pushed ?? false, tally,
+        first, name, origin: this.originOf(held), remote, at, readOnly, outcome, pushed: extra.pushed ?? false, tally,
         ...(extra.syncedAt !== undefined ? { syncedAt: extra.syncedAt } : {}),
         ...(extra.notice !== undefined ? { notice: extra.notice } : {}),
       };
     };
-    this.turnAt = placement?.instance ?? undefined;
+    this.turnAt = held?.instance ?? undefined;
     try {
       let next: "check" | "compare" | "apply" | "refresh" | "push" = "check";
       for (;;) {
         switch (next) {
           case "check": {
-            await this.enter(op, "check", false, this.originOf(placement));
-            const checked = await this.check(remote, op, placement);
+            await this.enter(op, "check", false, this.originOf(held));
+            const checked = await this.check(remote, op, held);
+            // A later placement's Check may make it follow another
+            // instance, from which its turn goes on (space-60).
+            if (held && checked.placement) {
+              held = checked.placement;
+              this.turnAt = held.instance ?? undefined;
+            }
             // The host may hand over another URL, after a rename or a
             // transfer, and may answer that this account only reads
             // (space-60, space-61); the push goes to the instance the
@@ -2447,7 +2616,7 @@ class RepositorySync {
             break;
           }
           case "compare": {
-            await this.enter(op, "compare", false, this.originOf(placement));
+            await this.enter(op, "compare", false, this.originOf(held));
             const result = await this.compare(nameNow(), input.choices, input.join, input.setUpSaves);
             if (result.outcome === "unrelated") return ended({ kind: "unrelated", sent: tally.sent, received: tally.received });
             if (result.outcome === "choices") return ended({ kind: "choices", sent: tally.sent, received: tally.received });
@@ -2458,14 +2627,40 @@ class RepositorySync {
             break;
           }
           case "apply": {
-            await this.enter(op, "apply", false, this.originOf(placement));
-            if (await this.apply(pending as Pending) === "restart") return { restart: nameNow(), placement };
+            await this.enter(op, "apply", false, this.originOf(held));
+            if (await this.apply(pending as Pending) === "restart") return { restart: nameNow(), placement: held };
+            // The merge made, the clone's placements are reconciled with
+            // the files it left, before the next placement's turn
+            // (space-12, space-91).
+            before = { name: nameNow(), origin: this.originOf(held) };
+            fate = (await this.reconcileMerge()).get(before.name);
+            if (fate?.kind === "followed") {
+              // It goes on with the instance it follows: its catalog was
+              // read, and its credential takes the push (space-60).
+              const to = fate.name;
+              held &&= this.placementsNow().find((candidate) => candidate.name === to) ?? held;
+              const followed = held ?? this.placements[0];
+              if (followed?.instance) {
+                at = this.owner.hostAt(followed.instance);
+                if (held) this.turnAt = followed.instance;
+              }
+              remote = followed?.url ?? remote;
+            }
             next = "refresh";
             break;
           }
           case "refresh": {
-            await this.enter(op, "refresh", false, this.originOf(placement));
-            await this.refresh(nameNow());
+            const dropped = fate?.kind === "dropped";
+            await this.enter(op, "refresh", false, dropped ? before.origin : this.originOf(held));
+            await this.refresh(dropped ? before.name : nameNow());
+            if (fate?.kind === "dropped") {
+              // Dropped by its own merge: nothing is pushed to it, and it
+              // has no line (space-91).
+              tally.received += counts.received;
+              return { first, name: before.name, origin: before.origin, remote, at, readOnly, outcome: { kind: "synced", sent: tally.sent, received: tally.received }, pushed: false, tally, dropped: true };
+            }
+            // Its drop or follow waiting, it syncs nothing more (space-91).
+            if (fate?.kind === "withheld") return ended(this.runOf(nameNow()).outcome as PlacementOutcome);
             next = "push";
             break;
           }
@@ -2479,9 +2674,9 @@ class RepositorySync {
               this.recordPlacement(nameNow(), "last", { at: time, sent: 0, received: tally.received });
               return ended({ kind: "synced", sent: 0, received: tally.received }, { syncedAt: time });
             }
-            await this.enter(op, "push", true, this.originOf(placement));
+            await this.enter(op, "push", true, this.originOf(held));
             // The upstream is set once, at the first placement (space-12).
-            const pushed = await this.push(first ? this.remoteNamed("push") : nameNow(), remote, first && !upstream.set, at, placement);
+            const pushed = await this.push(first ? this.remoteNamed("push") : nameNow(), remote, first && !upstream.set, at, held);
             if (pushed === "rejected") {
               if (input.catchUp) return ended({ kind: "behind", sent: tally.sent, received: tally.received });
               if (rechecks >= 1) {
@@ -2518,9 +2713,9 @@ class RepositorySync {
       // Its notice owed at its Check: its line waits for Continue, before
       // any branch or transport effect (space-57, git-host-22).
       if (error instanceof NoticeOwed) {
-        return ended({ kind: "waiting", sent: tally.sent, received: tally.received }, { notice: this.owner.placementFailure(this, error.failure, placement) });
+        return ended({ kind: "waiting", sent: tally.sent, received: tally.received }, { notice: this.owner.placementFailure(this, error.failure, held) });
       }
-      const stop = this.stopOn(nameNow(), placement, error);
+      const stop = this.stopOn(nameNow(), held, error);
       if (stop.whole) throw stop;
       return ended(this.runOf(nameNow()).outcome as PlacementOutcome);
     } finally { this.turnAt = undefined; }
@@ -2540,22 +2735,67 @@ class RepositorySync {
     return { ...turn, outcome: this.runOf(name).outcome as PlacementOutcome };
   }
 
+  /** After a placement's merge, the clone's placements reconciled with
+   * the files it left, where it changed them (space-91): what that did
+   * to each placement it could not keep, by the name each bore, each
+   * dropped or waiting placement's line saying so. */
+  private async reconcileMerge(): Promise<Map<string, PlacementFate>> {
+    const applied = this.applied as Applied;
+    const same = await this.git.run(["diff", "--quiet", applied.headBefore, applied.headAfter, "--", PLACEMENTS_DIR]);
+    if (same.code === 0) return new Map();
+    const fates = await this.owner.reconcilePlacements(this);
+    for (const [name, fate] of fates) {
+      if (fate.kind === "dropped") this.swept.set(name, "dropped");
+      else if (fate.kind === "withheld") {
+        const placements = this.placementsNow();
+        const standing = placements.find((candidate) => candidate.name === name);
+        this.swept.set(name, this.stopOn(name, standing === placements[0] ? undefined : standing, fate.stop));
+      }
+    }
+    return fates;
+  }
+
+  /** The turns a sync ran, as the reconciles since left their
+   * placements (space-91): one followed under the name, at the instance
+   * and with the URL it now bears; one dropped marked so; one whose drop
+   * waits reading its stop. */
+  private refreshTurns(turns: Turn[]): void {
+    for (const [index, turn] of turns.entries()) {
+      const name = this.nameNow(turn.name);
+      const fate = this.swept.get(name);
+      if (fate === "dropped") { turns[index] = { ...turn, name, dropped: true }; continue; }
+      if (fate) { turns[index] = { ...turn, name, outcome: this.runOf(name).outcome ?? turn.outcome }; continue; }
+      if (name === turn.name) continue;
+      const standing = this.placementsNow().find((candidate) => candidate.name === name);
+      turns[index] = {
+        ...turn,
+        name,
+        origin: standing?.instance ?? turn.origin,
+        remote: standing?.url ?? turn.remote,
+        at: standing?.instance ? this.owner.hostAt(standing.instance) : turn.at,
+      };
+    }
+  }
+
   /**
    * The catch-up (space-12): `spex` pushed once more, a fast-forward, to
    * each placement whose turn synced it and a later merge left behind,
    * in the order added. A push rejected runs that placement once more
    * from Check, after which the others are caught up again; rejected
-   * again, it ends behind. A read-only placement receives nothing.
+   * again, it ends behind. A read-only placement receives nothing, nor
+   * does one a merge dropped or whose drop waits (space-91).
    */
   private async catchUp(op: SpaceOp, turns: Turn[], upstream: { set: boolean }): Promise<Restart | undefined> {
     const rerun = new Set<Turn["tally"]>();
     for (let again = true; again;) {
       again = false;
+      this.refreshTurns(turns);
       const head = await this.git.ok(["rev-parse", "HEAD"]);
       for (const [index, turn] of turns.entries()) {
-        if (turn.readOnly || turn.outcome.kind !== "synced") continue;
-        const placement = turn.first ? undefined : this.placementsNow().find((candidate) => candidate.name === turn.name);
-        if (!turn.first && placement === undefined) continue;
+        if (turn.readOnly || turn.dropped || turn.outcome.kind !== "synced") continue;
+        const standing = this.placementsNow().find((candidate) => candidate.name === turn.name);
+        if (standing === undefined) continue;
+        const placement = turn.first ? undefined : standing;
         const ref = await this.git.run(["rev-parse", "-q", "--verify", `${this.refOf(turn.name)}^{commit}`]);
         if (ref.code === 0 && ref.stdout.toString("utf8").trim() === head) continue;
         this.turnAt = placement?.instance ?? undefined;
@@ -2694,22 +2934,27 @@ class RepositorySync {
    * host's `spex` without merging with the brokered credential;
    * `empty` where the host holds no `spex` (space-8, space-12). The first
    * placement's check reads the host for the clone, following it
-   * (space-60); a later placement's, given, reads its own instance alone
-   * and follows nothing (git-host-9). What it learns is that placement's
-   * (space-31). */
-  private async check(remote: string, op: SpaceOp, placement?: Placement): Promise<{ empty: boolean; readOnly: boolean; at: HostInstance | undefined; remote: string }> {
-    const host = placement === undefined ? await this.owner.hostCheck(this, op) : await this.owner.hostCheckPlacement(this, placement, op);
+   * (space-60); a later placement's, given, reads the instance governing
+   * it alone, which a sync follows where it is not its own, its remote
+   * renamed (space-60); a check follows nothing (git-host-9). What it
+   * learns is that placement's (space-31), which comes back as it then
+   * stands where a follow renamed it. */
+  private async check(remote: string, op: SpaceOp, placement?: Placement): Promise<{ empty: boolean; readOnly: boolean; at: HostInstance | undefined; remote: string; placement?: Placement }> {
+    const later = placement === undefined ? undefined : await this.owner.hostCheckPlacement(this, placement, op);
+    const host = placement === undefined ? await this.owner.hostCheck(this, op) : later;
     const target = host?.remote ?? remote;
+    // A later placement as its host's read left it, a follow renaming it.
+    const held = later?.placement ?? placement;
     // The remote by its name in the clone, as the host's read left it.
-    const name = placement === undefined ? this.remoteNamed("check") : placement.name;
-    const ref = placement === undefined ? this.remoteRef() : this.refOf(name);
+    const name = held === undefined ? this.remoteNamed("check") : held.name;
+    const ref = held === undefined ? this.remoteRef() : this.refOf(name);
     // The instance the check read brokers its transport — the clone's,
     // or the one it followed there (git-host-9, space-60).
     const credential = host ? await this.owner.credentialFor(host.instance, target, "check", this) : null;
     const options = { transport: true, ...(credential ? { credential } : {}) };
     try {
       const heads = await this.git.run(["ls-remote", "--exit-code", "--heads", name, `refs/heads/${SPEX_BRANCH}`], options);
-      const outcome = { readOnly: host?.readOnly ?? false, at: host?.instance, remote: target };
+      const outcome = { readOnly: host?.readOnly ?? false, at: host?.instance, remote: target, ...(held !== placement && held ? { placement: held } : {}) };
       const run = this.runOf(name);
       if (heads.code === 2) {
         run.remoteEmpty = true;
@@ -2717,9 +2962,9 @@ class RepositorySync {
         run.checkedAt = Date.now();
         return { empty: true, ...outcome };
       }
-      if (heads.code !== 0) throw this.transportStop("check", heads, target, host !== undefined, placement);
+      if (heads.code !== 0) throw this.transportStop("check", heads, target, host !== undefined, held);
       const fetched = await this.git.run(["fetch", "-q", "--no-tags", name, `+refs/heads/${SPEX_BRANCH}:${ref}`], options);
-      if (fetched.code !== 0) throw this.transportStop("check", fetched, target, host !== undefined, placement);
+      if (fetched.code !== 0) throw this.transportStop("check", fetched, target, host !== undefined, held);
       run.remoteEmpty = false;
       run.checkedAt = Date.now();
       return { empty: false, ...outcome };
@@ -2945,7 +3190,9 @@ class RepositorySync {
   private async refresh(name: string): Promise<void> {
     const applied = this.applied as Applied;
     await this.reindex(!(await this.git.succeeds(["diff", "--quiet", applied.headBefore, applied.headAfter, "--", "config/playbook.config.yaml"])));
-    this.runOf(name).unrelated = false;
+    // A placement its own merge dropped has nothing left to mark.
+    const run = this.runs.get(name);
+    if (run) run.unrelated = false;
     this.applied = undefined;
     // The lists are recomputed at Refresh (space-29): the working tree
     // now holds the selected state.
@@ -3567,13 +3814,43 @@ export class SpaceManager {
    * lists it; while its own is signed out, or it has none, the earliest
    * signed-in instance in the home's list whose view lists the same host
    * repository by its Git origin and id, which its next sync follows
-   * (space-60); undefined where none does. */
+   * (space-60), but one at which the clone holds another placement, onto
+   * which no follow is made; undefined where none does. */
   governingOf(machine: RepositorySync): HostInstance | undefined {
     const own = this.instanceOfClone(machine);
     if (own && this.signedInAt(own)) return own;
     const facts = machine.facts;
     if (facts.remote === null) return undefined;
-    return this.listedInstances().find((instance) => instance !== own && this.signedInAt(instance) && this.listingOf(instance, facts) !== undefined);
+    const first = machine.placements[0];
+    return this.listedInstances().find((instance) => instance !== own && this.signedInAt(instance) && !this.holdsAt(machine, instance, first?.name) && this.listingOf(instance, facts) !== undefined);
+  }
+
+  /** The instance governing one placement of a clone (git-host-5,
+   * space-60): its own — the one its remote is named by — while signed in
+   * there; while that is signed out, the earliest signed-in instance in
+   * the home's list whose view lists its host repository by its Git
+   * origin and id, which its next sync follows, but one at which the
+   * clone holds another placement, onto which no follow is made;
+   * undefined for the path placement, or where none does. */
+  governingOfPlacement(machine: RepositorySync, placement: Placement): HostInstance | undefined {
+    if (placement.instance === null) return undefined;
+    const own = this.instanceAt(placement.instance);
+    if (this.signedInAt(own)) return own;
+    const facts = { remote: placement.url, id: placement.id };
+    return this.listedInstances().find((instance) => instance !== own && this.signedInAt(instance) && !this.holdsAt(machine, instance, placement.name) && this.listingOf(instance, facts) !== undefined);
+  }
+
+  /** Whether a clone holds a placement at an instance other than the
+   * one whose remote bears `except` (storage-34: at most one per
+   * instance). */
+  private holdsAt(machine: RepositorySync, instance: HostInstance, except: string | undefined): boolean {
+    return machine.placements.some((placement) => placement.name !== except && placement.instance !== null && canonicalOrigin(placement.instance) === instance.origin);
+  }
+
+  /** The instance at an origin, as a placement's turn takes its
+   * credential there (git-host-9, space-60). */
+  hostAt(origin: string): HostInstance {
+    return this.instanceAt(origin);
   }
 
   /** The instance a clone's row and commands read (space-61, space-29):
@@ -3956,13 +4233,16 @@ export class SpaceManager {
   }
 
   /** A placement's path as its line and a report read it (space-87,
-   * space-15): as its instance's listing names it, else its URL's last
-   * segment; the path placement's remote as itself with any embedded
-   * user removed. */
+   * space-15): as its instance's listing names it — while that is signed
+   * out, a signed-in instance's that lists it (git-host-5) — else its
+   * URL's last segment; the path placement's remote as itself with any
+   * embedded user removed. */
   private placementPath(placement: Placement): string {
     if (placement.instance === null) return displayRemote(placement.url);
-    const instance = this.instanceAt(placement.instance);
-    const listing = this.signedInAt(instance) ? this.listingOf(instance, { remote: placement.url, id: placement.id, remoteName: placement.name }) : undefined;
+    const own = this.instanceAt(placement.instance);
+    const facts = { remote: placement.url, id: placement.id, remoteName: placement.name };
+    const instance = this.signedInAt(own) ? own : this.listedInstances().find((candidate) => this.signedInAt(candidate) && this.listingOf(candidate, facts) !== undefined);
+    const listing = instance ? this.listingOf(instance, facts) : undefined;
     return listing ? `${listing.repository.group.fullPath}/${listing.repository.path}` : remoteSegment(placement.url);
   }
 
@@ -5530,8 +5810,10 @@ export class SpaceManager {
     for (const placement of placements.slice(1)) {
       const facts: CloneFacts = { remote: placement.url, id: placement.id, remoteName: placement.name };
       if (placement.instance === null) { runnable.push({ name: placement.name, origin: null, later: true, facts }); continue; }
-      const at = this.instanceAt(placement.instance);
-      if (this.signedInAt(at)) runnable.push({ name: placement.name, origin: placement.instance, later: true, at, facts });
+      // Its own instance signed in, or a signed-in one its sync follows
+      // there (space-60), whose read its notice takes.
+      const at = input.push ? this.governingOfPlacement(machine, placement) : this.signedInAt(this.instanceAt(placement.instance)) ? this.instanceAt(placement.instance) : undefined;
+      if (at) runnable.push({ name: placement.name, origin: placement.instance, later: true, at, facts });
     }
     if (runnable.length === 0) throw new CoreError("invalid_request", signInTo(this.nameOf(serving)));
     if (!input.push || input.internal) return admitted;
@@ -5693,19 +5975,29 @@ export class SpaceManager {
   }
 
   /** The Check step's read of the host for a placement of a clone beside
-   * its first (space-8, space-12, git-host-22): its own instance's fresh
-   * catalog and its repository there alone, following nothing
-   * (git-host-9) — its remote's name and URL used as they stand; a
-   * repository the read lists no more, or one in a group named like a
-   * login, stops that placement unreachable (space-15, space-61); on a
-   * sync, its notice owed by that fresh read ends its turn waiting
-   * before any transport (space-57, git-host-22). The instance comes
-   * back with the URL; undefined for the path placement, fetched with no
+   * its first (space-8, space-12, git-host-22): the fresh catalog of the
+   * instance governing it and its repository there alone — its own
+   * instance's while signed in there; while that is signed out, on a
+   * sync, another signed-in instance's that lists its host repository
+   * and at which the clone holds no other placement, a check following
+   * nothing (git-host-9); a repository the read lists no more, or one in
+   * a group named like a login, stops that placement unreachable
+   * (space-15, space-61); on a sync, its notice owed by that fresh read
+   * ends its turn waiting before any transport (space-57, git-host-22).
+   * Then, on a sync, before any fetch or push, the placement follows the
+   * instance that read it — its remote renamed to that instance's folder,
+   * its file rewritten, the clone moved nowhere — and takes the URL that
+   * instance hands over after a rename or a transfer there, its path
+   * alone changing (space-60), and a missing id is recorded (git-host-5),
+   * each in one step only while it still reads as the check read it
+   * (space-21). The instance comes back with the URL, and the placement
+   * as it then stands; undefined for the path placement, fetched with no
    * read. */
-  async hostCheckPlacement(machine: RepositorySync, placement: Placement, op: SpaceOp): Promise<{ remote: string; readOnly: boolean; instance: HostInstance } | undefined> {
+  async hostCheckPlacement(machine: RepositorySync, placement: Placement, op: SpaceOp): Promise<{ remote: string; readOnly: boolean; instance: HostInstance; placement: Placement } | undefined> {
     if (placement.instance === null) return undefined;
-    const instance = this.instanceAt(placement.instance);
-    if (!this.signedInAt(instance)) throw new SpaceStopped("check", { cause: "reauth", message: signInAgain(), guidance: signInThenRetry(), retry: true });
+    const own = this.instanceAt(placement.instance);
+    const instance = this.signedInAt(own) ? own : op === "sync" ? this.governingOfPlacement(machine, placement) : undefined;
+    if (!instance) throw new SpaceStopped("check", { cause: "reauth", message: signInAgain(), guidance: signInThenRetry(), retry: true });
     const facts: CloneFacts = { remote: placement.url, id: placement.id, remoteName: placement.name };
     let target: TargetReading;
     try {
@@ -5722,13 +6014,30 @@ export class SpaceManager {
       machine.setOverride(placement.name, { state: "unreachable", reason: namedLikeYourLogin() });
       throw new SpaceStopped("check", { cause: "gone", message: groupNamedLikeYourLogin(listing.repository.group.fullPath), guidance: nothingDeleted(), retry: true });
     }
-    if (op === "sync") {
-      // Your own group's own repository owes it at every instance after
-      // its first placement's (space-57, space-4).
-      const notice = this.sharingNotice(machine, placement.name, placement.instance, listing, machine.key === this.host.store.home.own());
-      if (notice) throw new NoticeOwed(notice.message);
+    if (op !== "sync") return { remote: placement.url, readOnly: listing.readOnly !== null, instance, placement };
+    // Your own group's own repository owes it at every instance after
+    // its first placement's (space-57, space-4).
+    const notice = this.sharingNotice(machine, placement.name, placement.instance, listing, machine.key === this.host.store.home.own());
+    if (notice) throw new NoticeOwed(notice.message);
+    const changed = (): SpaceStopped => new SpaceStopped("check", { cause: "git", message: changedMeanwhile(splitKey(machine.key).name), guidance: retryGuidance(), retry: true }, false);
+    let held = placement;
+    if (instance !== own) {
+      // Nothing is awaited from the account's check to the rename.
+      try { this.assertTargetAccount(instance, target.accountGeneration); }
+      catch (error) { throw hostStop("check", error, this.nameOf(instance)); }
+      const folder = instance.folder();
+      const followed = folder === null ? undefined : machine.followRemote(held, folder);
+      if (!followed) throw changed();
+      held = followed;
     }
-    return { remote: placement.url, readOnly: listing.readOnly !== null, instance };
+    const repository = listing.repository;
+    if (held.id === null) held = machine.recordPlacementId(held, repository.id);
+    if (held.url !== repository.remoteUrl) {
+      const renamed = machine.setPlacementUrl(held, repository.remoteUrl);
+      if (!renamed) throw changed();
+      held = renamed;
+    }
+    return { remote: repository.remoteUrl, readOnly: listing.readOnly !== null, instance, placement: held };
   }
 
   /** Whether a repository the core created, which the host
@@ -5847,6 +6156,198 @@ export class SpaceManager {
       if (folder !== null) machine.renameRemote(named, folder);
     }
     await this.afterMove([{ from, to: move.to }]);
+  }
+
+  // -- placements and their files (space-91, storage-38) ----------------------
+
+  /**
+   * Reconcile a clone's placements with its placement files as they
+   * stand (space-91, storage-41): after a placement's merge changed them,
+   * every placement it holds at an instance; before a placement's turn,
+   * that one alone (`only`), a drop or follow a refusal left waiting
+   * being tried again there. A placement whose file no longer names its
+   * host repository — removed, or changed to name another, where a commit
+   * of the clone's `spex` once held that file (storage-37) — follows the
+   * instance whose file names that host repository, where that instance
+   * is signed in here, lists it and holds no other placement of the
+   * clone, its remote renamed and, for the key placement, the clone moved
+   * to its path there as a follow moves it (space-60), and is dropped
+   * otherwise, the clone's records kept, the first placement moving the
+   * clone with its drop (storage-38); a placement with no such file, or
+   * whose file does not read as its encoding, is kept. After a merge, two
+   * files naming one host repository by the Git origins and ids the core
+   * read are one: every such file is deleted but that of the instance the
+   * clone holds it under, else of the instance governing it, a local
+   * change the next sync carries. A follow or a drop refused — a session's
+   * lease beneath, a destination taken, a next placement no read of this
+   * run placed — is that placement's stop, waiting for the next sync. What
+   * it did to each placement it could not keep, by the name each bore.
+   */
+  async reconcilePlacements(machine: RepositorySync, only?: string): Promise<Map<string, PlacementFate>> {
+    const fates = new Map<string, PlacementFate>();
+    // A clone the instances migration deferred moves at its sync's Check
+    // first, renaming its remote then (storage-34).
+    if (machine.isDeferred()) return fates;
+    const names = machine.placementsNow().filter((placement) => placement.instance !== null && (only === undefined || placement.name === only)).map((placement) => placement.name);
+    let identity: string | undefined;
+    let identityRead = false;
+    for (const name of names) {
+      const read = machine.placementsNow().find((candidate) => candidate.name === name);
+      if (!read?.instance || this.fileNames(machine, read)) continue;
+      // A file no commit held is no removal, and a placement whose file
+      // was never written drops nothing (storage-37).
+      if (!(await machine.placementFileHeld(read.name))) continue;
+      if (!identityRead) { identity = await this.machineIdentity(); identityRead = true; }
+      // Read again at its step's instant: nothing is awaited from here to
+      // its writes.
+      const placement = machine.placementsNow().find((candidate) => candidate.name === name);
+      if (!placement?.instance || this.fileNames(machine, placement)) continue;
+      const follows = this.followedByFile(machine, placement);
+      try {
+        if (follows) fates.set(name, { kind: "followed", name: await this.followByFile(machine, placement, follows.to, follows.listing, identity) });
+        else {
+          await this.dropByFile(machine, placement, identity);
+          fates.set(name, { kind: "dropped" });
+        }
+      } catch (error) {
+        if (!(error instanceof SpaceStopped)) throw error;
+        fates.set(name, { kind: "withheld", stop: error });
+      }
+    }
+    if (only === undefined) this.dedupePlacementFiles(machine);
+    return fates;
+  }
+
+  /** Whether the clone's placement file under a placement's folder still
+   * leaves it standing (space-91, storage-41): naming its host repository,
+   * or not reading as its encoding — which drops and offers nothing — or
+   * the placement recording no id any file could name. */
+  private fileNames(machine: RepositorySync, placement: Placement): boolean {
+    if (placement.id === null) return true;
+    const { files, problems } = readPlacementFiles(machine.repository.dir);
+    if (problems.some((problem) => problem.file === PLACEMENTS_DIR || problem.file === placementFilePath(placement.name))) return true;
+    return files.some((file) => file.folder === placement.name && file.id === placement.id);
+  }
+
+  /** The instance a placement whose file was removed follows by the
+   * clone's files (space-91, space-60): one whose file names the same
+   * host repository — that id, its remote under that instance's Git
+   * origin, as that instance's listing of it reads (git-host-5) — signed
+   * in here, listing it, and holding no other placement of the clone;
+   * with that listing. None where its file was changed to name another
+   * host repository, which drops it, or where no such instance stands. */
+  private followedByFile(machine: RepositorySync, placement: Placement): { to: HostInstance; listing: HostListing } | undefined {
+    const facts = { remote: placement.url, id: placement.id };
+    const { files } = readPlacementFiles(machine.repository.dir);
+    if (files.some((file) => file.folder === placement.name)) return undefined;
+    for (const file of files) {
+      if (file.folder === placement.name || file.id !== placement.id || !this.host.store.home.instance(file.origin)) continue;
+      const to = this.instanceAt(file.origin);
+      if (to.folder() === null || !this.signedInAt(to) || this.holdsAt(machine, to, placement.name)) continue;
+      const listing = this.listingOf(to, facts);
+      if (listing) return { to, listing };
+    }
+    return undefined;
+  }
+
+  /**
+   * A placement follows the instance whose file names its host
+   * repository (space-91, space-60): one step at its instant, once it
+   * still reads as it was read and its clone lies where the home says —
+   * the key placement, but your own group's own repository's, moving the
+   * clone to its path at that instance as that instance's listing names
+   * it (renameClone, whose refusal refuses the follow whole), then its
+   * remote renamed to that instance's folder with its file rewritten and
+   * this device's records re-keyed (followRemote). The name its remote
+   * then bears.
+   */
+  private async followByFile(machine: RepositorySync, placement: Placement, to: HostInstance, listing: HostListing, identity: string | undefined): Promise<string> {
+    const store = this.host.store;
+    const from = machine.key;
+    const folder = to.folder() as string;
+    const moves = from !== store.home.own() && keyPlacement(machine.placementsNow())?.name === placement.name;
+    const key = moves ? this.keyAtHost(listing.repository, to) : from;
+    if (key === null || store.repository(from)?.dir !== machine.repository.dir || !machine.stillReads(placement)) throw movedMeanwhile(from);
+    if (key !== from) this.renameClone(machine, key, identity);
+    const followed = machine.followRemote(placement, folder);
+    if (!followed) console.error(`spex: the remote of ${machine.key} keeps its name until its next sync`);
+    if (key !== from) await this.afterMove([{ from, to: key }]);
+    return followed?.name ?? placement.name;
+  }
+
+  /**
+   * Drop a placement whose file a merge removed, or changed to name
+   * another host repository (space-91): one step at its instant, once it
+   * still reads as it was read and its clone lies where the home says. A
+   * placement after the first, or your own group's own repository's
+   * first, is dropped alone; a first placement's drop moves the clone, in
+   * the same step, to the path of its next placement with an instance at
+   * that instance, as a read of this run placed it, or under your own
+   * group's folder where none is left — refused, nothing dropped or
+   * moved, while a session's lease beneath holds the clone, where no read
+   * of this run placed that next placement, naming its instance, and
+   * where the destination is taken, as a sync's move is (storage-38).
+   */
+  private async dropByFile(machine: RepositorySync, placement: Placement, identity: string | undefined): Promise<void> {
+    const store = this.host.store;
+    const from = machine.key;
+    const placements = machine.placementsNow();
+    if (store.repository(from)?.dir !== machine.repository.dir || !machine.stillReads(placement)) throw movedMeanwhile(from);
+    if (placements[0]?.name !== placement.name || from === store.home.own()) {
+      if (!machine.dropPlacement(placement)) throw movedMeanwhile(from);
+      return;
+    }
+    const leased = heldSessionLease(machine.repository.dir, identity);
+    if (leased !== undefined) throw inUseStop("check", `sessions/${leased}`, store);
+    const next = placements.find((candidate) => candidate.name !== placement.name && candidate.instance !== null);
+    let to = `${store.home.ownName}/${splitKey(from).name}`;
+    if (next?.instance) {
+      const at = this.instanceAt(next.instance);
+      const listing = this.listingOf(at, { remote: next.url, id: next.id });
+      const key = listing ? this.keyAtHost(listing.repository, at) : null;
+      if (key === null) throw nextUnread(this.nameOf(at));
+      to = key;
+    }
+    if (to !== from) this.renameClone(machine, to, identity);
+    if (!machine.dropPlacement(placement)) console.error(`spex: the remote of ${machine.key} stands until its next sync`);
+    if (to !== from) await this.afterMove([{ from, to }]);
+  }
+
+  /** After a merge, two placement files of a clone naming one host
+   * repository, by the Git origins and ids the core read, are one
+   * (space-91): every such file deleted but that of the instance the
+   * clone holds it under, else that of the instance governing it
+   * (git-host-5), a local change the next sync carries; nothing deleted
+   * where neither has a file. */
+  private dedupePlacementFiles(machine: RepositorySync): void {
+    const dir = machine.repository.dir;
+    const held = machine.placementsNow();
+    const repositories = new Map<string, { gitOrigin: string; files: PlacementFile[] }>();
+    for (const file of readPlacementFiles(dir).files) {
+      if (!this.host.store.home.instance(file.origin)) continue;
+      const gitOrigin = this.instanceAt(file.origin).knownOrigin();
+      if (!gitOrigin) continue;
+      const key = `${gitOrigin.replace(/\/+$/, "")} ${file.id}`;
+      const same = repositories.get(key) ?? { gitOrigin, files: [] };
+      same.files.push(file);
+      repositories.set(key, same);
+    }
+    for (const { gitOrigin, files } of repositories.values()) {
+      if (files.length < 2) continue;
+      const id = files[0].id;
+      let kept = files.find((file) => held.some((placement) => placement.name === file.folder && placement.id === file.id));
+      if (!kept) {
+        const governing = this.listedInstances().find((instance) => this.signedInAt(instance) && sameOrigin(instance.knownOrigin(), gitOrigin)
+          && (instance.view?.listings.some((listing) => listing.repository.id === id) === true || instance.attached.has(id)));
+        kept = governing ? files.find((file) => canonicalOrigin(file.origin) === governing.origin) : undefined;
+      }
+      if (!kept) continue;
+      for (const file of files) {
+        if (file === kept) continue;
+        try { deletePlacementFile(dir, file.folder); }
+        catch (error) { console.error(`spex: the placement file ${placementFilePath(file.folder)} of ${machine.key} stays: ${error instanceof Error ? error.message : String(error)}`); }
+      }
+    }
   }
 
   /** One clone moved to `to` by one rename at its instant (space-60,
@@ -6267,22 +6768,24 @@ export class SpaceManager {
    * space-61), `line` carrying what this device holds of it: its path in
    * its instance as that instance's listing names it, else its URL's last
    * segment, the path placement's as a report reads it (space-15); its
-   * state from its own instance's last answer, as the first placement's
-   * is read from the instance governing it — signed out, unreachable;
-   * a group named like a login, unreachable; what its last transport
+   * state from the last answer of the instance governing it — its own,
+   * or, while that is signed out, the one its next sync follows
+   * (git-host-5, space-60) — as the first placement's is: none
+   * governing, unreachable; a group named like a login, unreachable; what its last transport
    * learnt of the host, or the instance's failed read, until its next
    * read; listed, reachable or read-only with the listing's members and
    * rights; not listed by a read, unreachable — the path placement
    * reachable. */
   private overlayPlacement(machine: RepositorySync, placement: Placement, line: PlacementState): PlacementState {
     if (placement.instance === null) return { ...line, path: displayRemote(placement.url), state: "reachable", reason: null };
-    const instance = this.instanceAt(placement.instance);
+    // Read from the instance governing it — its own, or, while that is
+    // signed out, the one its next sync follows (git-host-5, space-60).
+    const instance = this.governingOfPlacement(machine, placement);
     const facts = { remote: placement.url, id: placement.id, remoteName: placement.name };
-    const signedIn = this.signedInAt(instance);
-    const target = signedIn ? this.targetOf(instance, facts) : undefined;
-    const listing = signedIn ? this.listingOf(instance, facts) : undefined;
+    const target = instance ? this.targetOf(instance, facts) : undefined;
+    const listing = instance ? this.listingOf(instance, facts) : undefined;
     const own: PlacementState = { ...line, path: listing ? `${listing.repository.group.fullPath}/${listing.repository.path}` : remoteSegment(placement.url), state: "reachable", reason: null };
-    if (!signedIn) return { ...own, state: "unreachable", reason: signInAgain() };
+    if (!instance) return { ...own, state: "unreachable", reason: signInAgain() };
     const listed: PlacementState = listing
       ? { ...own, members: listing.members, visibility: listing.repository.visibility, can: { manageMembers: listing.repository.can.manageMembers, transfer: listing.repository.can.transfer } }
       : own;

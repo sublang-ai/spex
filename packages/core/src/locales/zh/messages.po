@@ -193,6 +193,11 @@ msgstr "{host} 要求稍候片刻"
 msgid "{host} holds no default branch for it yet"
 msgstr "{host} 上它还没有默认分支"
 
+#. A stopped sync: a placement of a spex repository is dropped, which moves its clone to the path of its next placement, at the instance {host} (its display name), which the core has not read since it started
+#: src/space.ts
+msgid "{host} is not read yet, so the clone cannot move to its path there"
+msgstr "尚未读取 {host}，克隆无法移到它在那里的路径"
+
 #. Refusal naming a group the Git host's last read did not list; {group} is the group's id as sent, {host} the host's display name
 #: src/space-groups.ts
 msgid "{host} listed no group {group}"
@@ -2068,6 +2073,11 @@ msgstr "加入 {name} 之前，请先阅读共享说明"
 #: src/space.ts
 msgid "Read the sharing notice before the first sync of {name}"
 msgstr "首次同步 {name} 之前，请先阅读共享说明"
+
+#. Guidance where the core must read an instance before a spex repository's clone can move to its path there
+#: src/space.ts
+msgid "Refresh, then Retry."
+msgstr "请刷新，然后重试。"
 
 #. A stopped save's message: a staged file belongs to a family the home never shares; {leak} is its path
 #: src/space.ts
