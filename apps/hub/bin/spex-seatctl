@@ -1,0 +1,130 @@
+#!/bin/bash
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
+
+# spex-seatctl: the one program the hub's account may run as root, by
+# the sudoers fragment beside the units (hub-4). Exactly one of
+#
+#   create <id>  make the account spex-<id>, in the group spex-seats,
+#                its home readable by that account alone
+#   start <id>   write the handshake token read from standard input
+#                where the hub and the seat alone read it, then start
+#                the unit spex-seat@<id>
+#   stop <id>    stop that unit; the seat's files stand
+#   wipe <id>    delete the seat's app token and code-credentials files
+#                and nothing else
+#
+# with <id> the person's permanent account id at the instance: 1 to 20
+# ASCII digits, the hub's PERSON_ID (apps/hub/src/state.ts). Every other
+# invocation is refused with exit 64 and the usage line before anything
+# is read or touched; a caller that is not root is refused with exit 77.
+#
+# The paths and modes, shared with deploy/install.sh (which installs
+# this file as <prefix>/libexec/spex-seatctl, root:root 0755, and the
+# tmpfiles fragment making the runtime base), deploy/spex-seat@.service
+# and the hub's DEFAULT_RUN_DIR (apps/hub/src/seat.ts):
+#
+#   /run/spex, /run/spex/seats   root:root 0711, listed by nobody
+#   /run/spex/seats/<id>         spex-<id>:spex-hub 2750, the seat's
+#                                runtime directory: the seat as owner,
+#                                the hub as group, nobody else
+#   /run/spex/seats/<id>/token   spex-<id>:spex-hub 0640, written by the
+#                                seat's own account, so root follows no
+#                                path the seat controls
+#   /run/spex/seats/<id>/core.sock  made by the seat, group spex-hub
+#   /home/spex-<id>              spex-<id> 0700, the seat's home
+
+set -euo pipefail
+umask 077
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+LC_ALL=C
+export PATH LC_ALL
+
+readonly SEATS_GROUP=spex-seats
+readonly HUB_GROUP=spex-hub
+readonly RUN_BASE=/run/spex
+readonly RUN_DIR=/run/spex/seats
+readonly HOME_BASE=/home
+readonly USAGE="usage: spex-seatctl create|start|stop|wipe <id>"
+
+refuse() {
+  echo "spex-seatctl: $1" >&2
+  echo "$USAGE" >&2
+  exit 64
+}
+
+[ "$#" -eq 2 ] || refuse "takes exactly two arguments, a command and a seat id; got $#"
+command=$1
+seat_id=$2
+case "$command" in
+  create | start | stop | wipe) ;;
+  *) refuse "unknown command" ;;
+esac
+[[ "$seat_id" =~ ^[0-9]{1,20}$ ]] || refuse "a seat id is the person's numeric account id, 1 to 20 digits"
+
+if [ "$(id -u)" -ne 0 ]; then
+  echo "spex-seatctl: run as root, through sudo" >&2
+  exit 77
+fi
+cd /
+
+account="spex-$seat_id"
+unit="spex-seat@$seat_id.service"
+seat_dir="$RUN_DIR/$seat_id"
+
+case "$command" in
+  create)
+    if getent passwd "$account" >/dev/null; then
+      exit 0
+    fi
+    useradd --create-home --home-dir "$HOME_BASE/$account" --user-group \
+      --groups "$SEATS_GROUP" --shell /bin/bash --comment "Spex seat $seat_id" "$account"
+    chmod 0700 "$HOME_BASE/$account"
+    ;;
+  start)
+    if ! getent passwd "$account" >/dev/null; then
+      echo "spex-seatctl: no account $account: create it first" >&2
+      exit 67
+    fi
+    # A running unit keeps the token it read at its start.
+    if systemctl is-active --quiet "$unit"; then
+      exit 0
+    fi
+    token=""
+    IFS= read -r token || true
+    if ! [[ "$token" =~ ^[A-Za-z0-9_-]{43}$ ]]; then
+      echo "spex-seatctl: no handshake token on standard input" >&2
+      exit 65
+    fi
+    # The runtime directory: listed by no seat, entered by the seat as
+    # its owner and by the hub as its group, nobody else; the setgid bit
+    # gives the token and the socket the hub's group.
+    install -d -m 0711 -o root -g root "$RUN_BASE" "$RUN_DIR"
+    install -d -m 2750 -o "$account" -g "$HUB_GROUP" "$seat_dir"
+    # Written by the seat's own account, which owns the directory, so
+    # no link the seat placed there leads root anywhere.
+    printf '%s\n' "$token" | runuser -u "$account" -- /bin/sh -c '
+      umask 027
+      staged=$(mktemp "$1/.token.XXXXXX") || exit 1
+      chmod 0640 "$staged" && cat >"$staged" && mv -f "$staged" "$1/token" || {
+        rm -f "$staged"
+        exit 1
+      }' spex-seatctl "$seat_dir"
+    systemctl start "$unit"
+    ;;
+  stop)
+    systemctl stop "$unit"
+    rm -f "$seat_dir/token"
+    ;;
+  wipe)
+    if ! getent passwd "$account" >/dev/null; then
+      exit 0
+    fi
+    home=$(getent passwd "$account" | cut -d: -f6)
+    # Removed as the seat's own account, so no link the seat placed
+    # reaches past its own files.
+    runuser -u "$account" -- rm -f -- \
+      "$home/.spex/local/credentials.yaml" \
+      "$home/.spex/local/code-credentials.yaml"
+    ;;
+esac
