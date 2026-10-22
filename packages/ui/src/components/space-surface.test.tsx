@@ -674,7 +674,9 @@ describe("GROUPS: syncing from the row (space-11, space-12, space-15, space-16, 
     act(() => useAppStore.setState({ connection: "closed" }));
     expect(syncControl().disabled).toBe(true);
     expect((screen.getByTestId("space-check") as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByTestId(`space-row-members-${KEY}`) as HTMLButtonElement).disabled).toBe(true);
+    // The placement line's Members too (space-87).
+    const line = within(screen.getByTestId(`space-row-${KEY}`)).getByTestId(`space-line-${ORIGIN}`);
+    expect((within(line).getByTestId("space-line-members") as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByTestId("space-refresh") as HTMLButtonElement).disabled).toBe(true);
   });
 });

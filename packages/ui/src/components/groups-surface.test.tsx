@@ -54,6 +54,9 @@ import {
 
 beforeEach(installClient);
 
+/** A row's placement line at the fixtures' instance (space-87). */
+const lineAt = (key: string): HTMLElement => within(screen.getByTestId(`space-row-${key}`)).getByTestId(`space-line-${ORIGIN}`);
+
 afterEach(() => {
   cleanup();
   activateLanguage("en");
@@ -741,7 +744,7 @@ describe("GROUPS: the groups list and its rows (space-1, space-61, space-64)", (
     expect(screen.queryByTestId("space-repository")).toBeNull();
   });
 
-  test("each state reads its phrase and offers its control; Members stands on a reachable row alone", async () => {
+  test("each state reads its phrase and offers its control; Members stands on a reachable row's placement line alone", async () => {
     const cases: [RowOver, string, string | null, boolean][] = [
       [{ state: "reachable", lastSync: null }, "Never synced", "Sync", true],
       [{ state: "reachable", lastSync: { at: NOW - 5 * MIN, sent: 1, received: 1 } }, "Synced 5m ago", "Sync", true],
@@ -758,7 +761,9 @@ describe("GROUPS: the groups list and its rows (space-1, space-61, space-64)", (
         .getAllByRole("button")
         .filter((button) => !button.dataset.testid?.startsWith("space-repo-"))
         .map((button) => button.getAttribute("aria-label") ?? button.textContent);
-      expect(controls, phrase).toEqual([...(members ? ["Members"] : []), ...(controlName ? [controlName] : [])]);
+      // The row's control, then the Members its placement's line carries
+      // (space-87).
+      expect(controls, phrase).toEqual([...(controlName ? [controlName] : []), ...(members ? ["Members"] : [])]);
       cleanup();
     }
   });
@@ -1179,7 +1184,7 @@ describe("GROUPS: the instance's entries (space-1, space-58, space-61, DR-120)",
     );
   }
 
-  test("another login's entry carries no control on its heading, its row its own Members; a group named like your login stands apart, unreachable with no Join and no Sync", async () => {
+  test("another login's entry carries no control on its heading, its row's placement line its own Members; a group named like your login stands apart, unreachable with no Join and no Sync", async () => {
     await renderGroups(instanceHome(), { open: false });
     const own = screen.getByRole("group", { name: "Your own group" });
     expect(within(own).getByRole("heading", { level: 2 }).textContent).toBe("Your own group · jane");
@@ -1198,11 +1203,12 @@ describe("GROUPS: the instance's entries (space-1, space-58, space-61, DR-120)",
     expect(within(bob).getByRole("heading", { level: 3 }).textContent).toBe("bob");
     expect(screen.queryByTestId("space-group-members-bob")).toBeNull();
     expect(screen.queryByTestId("space-group-subgroup-bob")).toBeNull();
-    // Its row carries its own Members, Share where the host says so (space-62).
-    fireEvent.click(screen.getByTestId("space-row-members-@spex.example/bob/notes-spex"));
-    const members = await screen.findByTestId("space-members-@spex.example/bob/notes-spex");
+    // Its placement's line carries its own Members, Share where the host
+    // says so (space-62, space-87).
+    fireEvent.click(within(lineAt("@spex.example/bob/notes-spex")).getByTestId("space-line-members"));
+    const members = await screen.findByTestId(`space-members-@spex.example/bob/notes-spex@${ORIGIN}`);
     await within(members).findByTestId("space-member-jane");
-    expect(within(members).getByTestId("space-share-@spex.example/bob/notes-spex").textContent).toBe("Share");
+    expect(within(members).getByTestId(`space-share-@spex.example/bob/notes-spex@${ORIGIN}`).textContent).toBe("Share");
     // The group named like your login: its own entry, its row
     // unreachable with the cause, Retry its one control (space-61).
     const apart = screen.getByTestId("space-group-jane");
@@ -1243,12 +1249,12 @@ describe("GROUPS: the instance's entries (space-1, space-58, space-61, DR-120)",
 });
 
 describe("GROUPS: Members (space-62)", () => {
-  test("Members lists the host's members with their role names and no page of the host, read on every opening and Refresh", async () => {
+  test("Members on the placement's line lists the host's members with their role names and no page of the host, read on every opening and Refresh", async () => {
     await renderGroups(base(), { open: false });
-    const control = screen.getByTestId(`space-row-members-${KEY}`);
+    const control = within(lineAt(KEY)).getByTestId("space-line-members");
     expect(control.getAttribute("aria-label")).toBe("Members");
     fireEvent.click(control);
-    await waitFor(() => expect(calls("space.members")).toEqual([{ repository: KEY }]));
+    await waitFor(() => expect(calls("space.members")).toEqual([{ repository: KEY, instance: ORIGIN }]));
     const list = await screen.findByRole("region", { name: "Members of academy-spex" });
     await waitFor(() => expect(within(list).getAllByRole("listitem")).toHaveLength(2));
     expect(screen.getByTestId("space-member-jane").textContent).toContain("Jane");
@@ -1273,7 +1279,7 @@ describe("GROUPS: Members (space-62)", () => {
       return answer(type, fields);
     });
     await renderGroups(base(), { open: false });
-    fireEvent.click(screen.getByTestId(`space-row-members-${KEY}`));
+    fireEvent.click(within(lineAt(KEY)).getByTestId("space-line-members"));
     expect((await screen.findByRole("alert")).textContent).toBe("Spex Example refused: 404 Project Not Found");
   });
 });
@@ -1298,7 +1304,8 @@ describe("GROUPS: copy and fit (space-27, space-28)", () => {
       // What a row opens counts too.
       const pick = screen.queryByTestId(`space-row-pick-${KEY}`);
       if (pick) fireEvent.click(pick);
-      const members = screen.queryByTestId(`space-row-members-${KEY}`);
+      const line = within(screen.getByTestId(`space-row-${KEY}`)).queryByTestId(`space-line-${ORIGIN}`);
+      const members = line ? within(line).queryByTestId("space-line-members") : null;
       if (members) {
         fireEvent.click(members);
         await screen.findByTestId("space-member-jane");
@@ -1363,8 +1370,8 @@ describe("GROUPS: copy and fit (space-27, space-28)", () => {
     const changes = screen.getByTestId(`space-repo-changes-${KEY}`);
     expect(changes.textContent).toContain("1");
     expect(changes.querySelector(".hidden")?.className).toContain("@md:inline");
-    // Members keeps its name in its icon form.
-    const members = screen.getByTestId(`space-row-members-${KEY}`);
+    // Members on the placement's line keeps its name in its icon form.
+    const members = within(lineAt(KEY)).getByTestId("space-line-members");
     expect(members.getAttribute("aria-label")).toBe("Members");
     expect(members.querySelector("svg")?.getAttribute("class")).toContain("@md:hidden");
     // The header's fields stack below @xs.

@@ -4,8 +4,10 @@
 // Groups and sharing on the Groups surface (DR-114, DR-127): a group
 // created on an instance's heading or a subgroup on a group's heading
 // (space-68), or renamed there (space-76, DR-120), and a group's or a
-// spex repository's members panel (space-62) with Share (space-69) and
-// Remove (space-72), each at the instance that lists it.
+// spex repository placement's members panel (space-62) with Share
+// (space-69) and Remove (space-72), each at the instance that lists it
+// or governs the placement (DR-128); a placement's panel names the other
+// instances its records are kept at.
 // An act stands exactly where the
 // host's last read says the person may take it; the host is asked
 // whatever the view said, and its refusal stands in place with its
@@ -17,6 +19,7 @@ import type { HostMemberInfo, InstanceState } from "@sublang/spex-core/protocol"
 
 import { useAppStore, type SpaceMembersReply, type SpaceMembersTarget } from "../state/store.js";
 import { i18n } from "../i18n.js";
+import { nameList } from "../lib/placements.js";
 import { InlineConfirm } from "./InlineConfirm.js";
 import { SECONDARY, type Note } from "./SpaceSurface.js";
 
@@ -202,36 +205,41 @@ export function GroupNameEditor({
   );
 }
 
-/** A group's or a spex repository's members as the host lists them
- * (space-62): read when the panel opens and on each Refresh, and as
- * each share and removal answers, held nowhere else. Each member reads
- * its name, the host's own role name and, where the membership comes
- * through a group, "via <group>"; where the host's last read says the
- * person may manage the members, Share stands in the panel and Remove
- * on each member held directly. */
+/** A group's or a spex repository placement's members as its instance
+ * lists them (space-62): read when the panel opens and on each Refresh,
+ * and as each share and removal answers, held nowhere else. Each member
+ * reads its name, the host's own role name and, where the membership
+ * comes through a group, "via <group>"; where the host's last read says
+ * the person may manage the members, Share stands in the panel and
+ * Remove on each member held directly. A placement's panel says which
+ * other instances the records are also placed at, linking none. */
 export function MembersPanel({
   instance,
   target,
   id,
   name,
   canManage,
+  alsoPlacedAt = [],
   connected,
   refreshes,
   onClose,
   onNote,
 }: {
-  /** The instance that lists the group or governs the repository: its
+  /** The instance that lists the group or governs the placement: its
    * roles and its host name (space-69). */
   instance: InstanceState;
   target: SpaceMembersTarget;
-  /** What the panel's test ids carry: a repository's key, or
-   * `group:<full path>`. */
+  /** What the panel's test ids carry: a placement's
+   * `<key>@<instance origin>`, or `group:<full path>`. */
   id: string;
   /** The group's full path or the repository's name. */
   name: string;
   /** What the host's last read says: the person may manage these
    * members. */
   canManage: boolean;
+  /** The display names of the other instances the clone's placement
+   * files name (space-62); none for a group or a lone placement. */
+  alsoPlacedAt?: string[];
   connected: boolean;
   refreshes: number;
   onClose(): void;
@@ -246,7 +254,8 @@ export function MembersPanel({
   // A read a share or a removal overtook is discarded: the reply after
   // the act is the newer list.
   const reads = useRef(0);
-  const targetKey = "group" in target ? `group:${target.instance} ${target.group}` : `repository:${target.repository}`;
+  const targetKey =
+    "group" in target ? `group:${target.instance} ${target.group}` : `repository:${target.repository}@${target.instance ?? ""}`;
 
   useEffect(() => {
     const read = (reads.current += 1);
@@ -289,6 +298,17 @@ export function MembersPanel({
         }
       }}
     >
+      {alsoPlacedAt.length > 0 ? (
+        // Every placement's members see that the records are kept
+        // elsewhere too (DR-128); the instances are named, never linked.
+        <p data-testid="space-members-also" className="min-w-0 text-xs text-neutral-500">
+          {i18n._({
+            id: "These records are also placed at {names}",
+            comment: "a placement's members panel; {names} lists the other instances the records are kept at, by display name",
+            values: { names: nameList(alsoPlacedAt) },
+          })}
+        </p>
+      ) : null}
       {error ? (
         <p role="alert" className={REFUSAL}>
           {error}

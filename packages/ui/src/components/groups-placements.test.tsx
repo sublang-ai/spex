@@ -8,10 +8,13 @@
 // sync left, its own state and last sync — on its line, Dismiss putting
 // away what needs nothing of the reader (space-12, space-15, space-61);
 // the row reading the core's aggregate and its key placement's last
-// sync (space-61); and the line's fit (space-28).
+// sync (space-61); and the line's fit (space-28). Members, Share, Remove
+// and "Move…" act on one placement from its line, naming its instance,
+// its members panel naming the other instances the records are placed
+// at (space-62, space-69, space-72, space-78).
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { cleanup, fireEvent, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import type { GroupsState, PlacementState, RepositoryState } from "@sublang/spex-core/protocol";
 
 import { activateLanguage } from "../i18n.js";
@@ -29,6 +32,10 @@ import {
   ORIGIN,
   OWN,
   SECOND,
+  answer,
+  base,
+  calls,
+  commandMock,
   deliver,
   installClient,
   instance,
@@ -453,5 +460,199 @@ describe("GROUPS: a line per placement (space-87, space-61, space-12, space-15, 
     const controls = screen.getByTestId(`space-row-sync-${KEY}`).parentElement!;
     expect(controls.lastElementChild).toBe(screen.getByTestId(`space-row-sync-${KEY}`));
     expect(controls.className.split(/\s+/)).toContain("flex-wrap");
+  });
+});
+
+/** The name a line's control is described by: its line's instance
+ * (space-87). */
+const describedAs = (control: HTMLElement): string =>
+  document.getElementById(control.getAttribute("aria-describedby") ?? "")?.textContent ?? "";
+
+/** The placements of a row, as a test says otherwise of each, by its
+ * instance's origin. */
+function withLines(row: RepositoryState, over: Partial<PlacementState>): RepositoryState {
+  return { ...row, placements: row.placements.map((line) => ({ ...line, ...over })) };
+}
+
+describe("GROUPS: a placement's members and move (space-62, space-69, space-72, space-78)", () => {
+  test.each(["en", "zh"] as const)(
+    "space-62: Members on each reachable placement line reads that placement's members, sending {repository, instance}; its panel says the records are also placed at every other instance the clone's files name, by display name, else host name; one placement says nothing more (%s)",
+    async (language) => {
+      activateLanguage(language);
+      const words =
+        language === "en"
+          ? { members: "Members", also: (names: string) => `These records are also placed at ${names}`, and: " and " }
+          : { members: "成员", also: (names: string) => `这些记录也放在 ${names}`, and: "和" };
+      // The files name a third instance this home does not list.
+      await renderGroups(placedAtTwo({}, { placedAt: [ORIGIN, SECOND, THIRD] }), { open: false });
+      const first = within(lineOf(KEY, ORIGIN)).getByTestId("space-line-members");
+      const second = within(lineOf(KEY, SECOND)).getByTestId("space-line-members");
+      // One name for the act on every line, each described by its line's
+      // instance, so the two are told apart.
+      expect(first.getAttribute("aria-label")).toBe(words.members);
+      expect(second.getAttribute("aria-label")).toBe(words.members);
+      expect(describedAs(first)).toBe("Spex Example");
+      expect(describedAs(second)).toBe("Second Example");
+
+      // The second placement's members, read at its instance, its panel
+      // beneath its line naming the others.
+      fireEvent.click(second);
+      expect(second.getAttribute("aria-expanded")).toBe("true");
+      const panel = await screen.findByTestId(`space-members-${KEY}@${SECOND}`);
+      expect(lineOf(KEY, SECOND).contains(panel)).toBe(true);
+      await within(panel).findAllByTestId(/^space-member-/);
+      expect(calls("space.members")).toEqual([{ repository: KEY, instance: SECOND }]);
+      expect(within(panel).getByTestId("space-members-also").textContent).toBe(words.also(`Spex Example${words.and}third.example`));
+      // It names the instances and links none (space-62, DR-120).
+      expect(panel.querySelector("a")).toBeNull();
+
+      // The key placement's, likewise.
+      fireEvent.click(first);
+      const keyPanel = await screen.findByTestId(`space-members-${KEY}@${ORIGIN}`);
+      expect(lineOf(KEY, ORIGIN).contains(keyPanel)).toBe(true);
+      await within(keyPanel).findAllByTestId(/^space-member-/);
+      expect(calls("space.members")[1]).toEqual({ repository: KEY, instance: ORIGIN });
+      expect(within(keyPanel).getByTestId("space-members-also").textContent).toBe(words.also(`Second Example${words.and}third.example`));
+      // Escape closes it, focus back on its line's Members.
+      fireEvent.keyDown(within(keyPanel).getByTestId("space-member-jane"), { key: "Escape" });
+      expect(screen.queryByTestId(`space-members-${KEY}@${ORIGIN}`)).toBeNull();
+      await waitFor(() => expect(document.activeElement).toBe(first));
+      cleanup();
+
+      // No Members on a placement unreachable, not on this device, or
+      // with no instance (space-87).
+      const pathRow = repo({
+        placements: [placement(), placementState({ instance: null, path: "/srv/academy-spex.git", branch: { ...BRANCH, agreed: null } })],
+      });
+      await renderGroups(twoInstances({}, [withLines(pathRow, {})]), { open: false });
+      expect(within(lineOf(KEY, null)).queryByTestId("space-line-members")).toBeNull();
+      cleanup();
+      await renderGroups(placedAtTwo({ second: { state: "unreachable", reason: "the device is offline" } }), { open: false });
+      expect(within(lineOf(KEY, ORIGIN)).getByTestId("space-line-members")).toBeTruthy();
+      expect(within(lineOf(KEY, SECOND)).queryByTestId("space-line-members")).toBeNull();
+      cleanup();
+      await renderGroups(twoPlacementsHome(), { open: false });
+      expect(within(lineOf(BETA, SECOND)).queryByTestId("space-line-members")).toBeNull();
+      cleanup();
+
+      // One placement, or files naming only its own instance: nothing
+      // more is said.
+      for (const placedAt of [[], [ORIGIN]]) {
+        await renderGroups(base({}, [repo({ placedAt })]), { open: false });
+        fireEvent.click(within(lineOf(KEY, ORIGIN)).getByTestId("space-line-members"));
+        const lone = await screen.findByTestId(`space-members-${KEY}@${ORIGIN}`);
+        await within(lone).findAllByTestId(/^space-member-/);
+        expect(within(lone).queryByTestId("space-members-also")).toBeNull();
+        cleanup();
+      }
+    },
+  );
+
+  test("space-69, space-72: Share and Remove in a placement's panel name its instance", async () => {
+    await renderGroups(placedAtTwo({ second: { can: { manageMembers: true, transfer: false } } }), { open: false });
+    fireEvent.click(within(lineOf(KEY, SECOND)).getByTestId("space-line-members"));
+    const panel = await screen.findByTestId(`space-members-${KEY}@${SECOND}`);
+    await within(panel).findAllByTestId(/^space-member-/);
+    // Share asks for a login at the placement's instance, among its
+    // roles, and names the spex repository with that instance (space-69).
+    fireEvent.click(within(panel).getByTestId(`space-share-${KEY}@${SECOND}`));
+    const editor = within(panel).getByTestId(`space-share-${KEY}@${SECOND}-editor`);
+    fireEvent.change(within(editor).getByLabelText("Login at second.example"), { target: { value: "dave" } });
+    fireEvent.click(within(editor).getByRole("button", { name: "Add" }));
+    await waitFor(() => expect(calls("space.share")).toEqual([{ repository: KEY, instance: SECOND, login: "dave", role: "30" }]));
+    await waitFor(() => expect(within(panel).getByTestId(`space-members-outcome-${KEY}@${SECOND}`).textContent).toBe("@dave added as Developer"));
+    // Remove names it likewise (space-72).
+    fireEvent.click(within(panel).getByRole("button", { name: "Remove @bob" }));
+    fireEvent.click(within(within(panel).getByTestId("space-member-confirm-bob")).getByRole("button", { name: "Remove" }));
+    await waitFor(() => expect(calls("space.unshare")).toEqual([{ repository: KEY, instance: SECOND, login: "bob" }]));
+    // The key placement's panel, whose members the view says the person
+    // may not manage, offers neither (space-62).
+    fireEvent.click(within(lineOf(KEY, ORIGIN)).getByTestId("space-line-members"));
+    const keyPanel = await screen.findByTestId(`space-members-${KEY}@${ORIGIN}`);
+    await within(keyPanel).findAllByTestId(/^space-member-/);
+    expect(within(keyPanel).queryByRole("button", { name: "Share" })).toBeNull();
+    expect(within(keyPanel).queryByRole("button", { name: /^Remove @/ })).toBeNull();
+  });
+
+  test("space-78: Move… on a placement's line offers that placement's instance alone, your login first, the entry it stands in left out — the row's for the key placement, the one whose placed line names the row otherwise — and sends {repository, instance, groupId}", async () => {
+    let settle: ((value: unknown) => void) | undefined;
+    commandMock.mockImplementation(async (type: string, fields?: Record<string, unknown>) => {
+      if (type !== "space.repository.move") return answer(type, fields);
+      return new Promise((resolve) => {
+        settle = resolve;
+      });
+    });
+    // Your own group's own repository and a group's own, which the host
+    // lets the person move, stay where they are (space-87, DR-103).
+    const may = { manageMembers: true, transfer: true };
+    const home = twoPlacementsHome();
+    const [first] = home.instances;
+    const placed: GroupsState = {
+      ...home,
+      own: { ...home.own, repositories: home.own.repositories.map((row) => withLines(row, { can: may })) },
+      instances: [
+        {
+          ...first!,
+          // acme's own records, named after its path as the core names
+          // a group's own.
+          groups: first!.groups.map((group) =>
+            group.id === "3" ? { ...group, name: "acme", repositories: group.repositories.map((row) => withLines(row, { can: may })) } : group,
+          ),
+        },
+        home.instances[1]!,
+      ],
+    };
+    await renderGroups(placed, { open: false });
+    const moveOn = (key: string, origin: string): HTMLElement | null => within(lineOf(key, origin)).queryByTestId("space-line-move");
+    expect(moveOn(OWN, ORIGIN)).toBeNull();
+    expect(moveOn(OWN, SECOND)).toBeNull();
+    expect(moveOn(ACME, ORIGIN)).toBeNull();
+    // A placement not on this device moves nothing.
+    expect(moveOn(BETA, SECOND)).toBeNull();
+    expect(moveOn(BETA, ORIGIN)).toBeTruthy();
+
+    // The key placement, standing in your namespace at the first: that
+    // instance's groups alone, your namespace left out.
+    const keyMove = moveOn(KEY, ORIGIN)!;
+    expect(keyMove.getAttribute("aria-label")).toBe("Move to another group");
+    expect(describedAs(keyMove)).toBe("Spex Example");
+    fireEvent.click(keyMove);
+    const keyPicker = screen.getByTestId(`space-move-${KEY}@${ORIGIN}`);
+    expect(lineOf(KEY, ORIGIN).contains(keyPicker)).toBe(true);
+    expect(within(keyPicker).getAllByTestId(/^space-move-group-/).map((option) => [option.dataset.testid, option.textContent])).toEqual([
+      ["space-move-group-acme", "acme"],
+    ]);
+    // Escape closes it, focus back on its line's Move.
+    fireEvent.keyDown(within(keyPicker).getByTestId("space-move-group-acme"), { key: "Escape" });
+    expect(screen.queryByTestId(`space-move-${KEY}@${ORIGIN}`)).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(keyMove));
+
+    // The second placement, which the second's workshop lists as placed
+    // there: your login there first, workshop left out, nothing of the
+    // first.
+    const secondMove = moveOn(KEY, SECOND)!;
+    expect(describedAs(secondMove)).toBe("Second Example");
+    fireEvent.click(secondMove);
+    const picker = screen.getByTestId(`space-move-${KEY}@${SECOND}`);
+    expect(lineOf(KEY, SECOND).contains(picker)).toBe(true);
+    expect(within(picker).getAllByTestId(/^space-move-group-/).map((option) => [option.dataset.testid, option.textContent])).toEqual([
+      ["space-move-group-@jada", "jada"],
+    ]);
+    expect(document.activeElement).toBe(within(picker).getByTestId("space-move-group-@jada"));
+    fireEvent.click(within(picker).getByTestId("space-move-group-@jada"));
+    // It names the placement's instance, your namespace by none, and
+    // reads "Moving…" until the reply.
+    await waitFor(() => expect(calls("space.repository.move")).toEqual([{ repository: KEY, instance: SECOND, groupId: null }]));
+    await waitFor(() => expect(moveOn(KEY, SECOND)!.textContent).toBe("Moving…"));
+    expect(moveOn(KEY, ORIGIN)!.textContent).toBe("Move…");
+    settle!({ repository: { id: "52", fullPath: "jada/academy-spex" } });
+    await waitFor(() => expect(screen.queryByTestId(`space-move-${KEY}@${SECOND}`)).toBeNull());
+    await waitFor(() => expect(document.activeElement).toBe(moveOn(KEY, SECOND)));
+    expect(moveOn(KEY, SECOND)!.textContent).toBe("Move…");
+
+    // The key placement into acme names the first.
+    fireEvent.click(moveOn(KEY, ORIGIN)!);
+    fireEvent.click(within(screen.getByTestId(`space-move-${KEY}@${ORIGIN}`)).getByTestId("space-move-group-acme"));
+    await waitFor(() => expect(calls("space.repository.move")[1]).toEqual({ repository: KEY, instance: ORIGIN, groupId: "3" }));
   });
 });

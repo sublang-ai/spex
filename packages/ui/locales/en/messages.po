@@ -3454,9 +3454,8 @@ msgstr "Media unavailable"
 
 #. list the people the host lets read a spex repository
 #. list the people the host lets read a spex repository
-#. list the people the host lets read a spex repository
-#. list the people the host lets read a spex repository
 #: src/components/SpaceGroups.tsx
+#: src/components/SpacePlacements.tsx
 msgid "Members"
 msgstr "Members"
 
@@ -3518,17 +3517,17 @@ msgid "Move the focused Up next row"
 msgstr "Move the focused Up next row"
 
 #. move a spex repository into another group of the instance, or your own
-#: src/components/SpaceGroups.tsx
+#: src/components/SpacePlacements.tsx
 msgid "Move to another group"
 msgstr "Move to another group"
 
 #. open the groups a spex repository may move to; its full name is 'Move to another group'
-#: src/components/SpaceGroups.tsx
+#: src/components/SpacePlacements.tsx
 msgid "Move…"
 msgstr "Move…"
 
 #. the Move control, while the host moves the spex repository
-#: src/components/SpaceGroups.tsx
+#: src/components/SpacePlacements.tsx
 msgid "Moving…"
 msgstr "Moving…"
 
@@ -6096,6 +6095,11 @@ msgstr "The workflow is waiting for your answer."
 #: src/components/PlaybookStages.tsx
 msgid "The workflow markdown the playbook was compiled from"
 msgstr "The workflow markdown the playbook was compiled from"
+
+#. a placement's members panel; {names} lists the other instances the records are kept at, by display name
+#: src/components/SpaceMembers.tsx
+msgid "These records are also placed at {names}"
+msgstr "These records are also placed at {names}"
 
 #. stands where a project name would, for sessions with no folder
 #: src/components/SpaceSync.tsx

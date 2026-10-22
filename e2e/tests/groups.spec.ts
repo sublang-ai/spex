@@ -778,9 +778,11 @@ test.describe("the instance alone", () => {
       await expect(bob.getByTestId(`space-row-${hostKey(host, "bob/notes-spex")}`)).toBeVisible();
       await expect(bob.getByTestId("space-group-members-bob")).toHaveCount(0);
       await expect(bob.getByTestId("space-group-subgroup-bob")).toHaveCount(0);
-      // The project's members panel, open, links no page (space-62).
-      const members = surface.getByTestId(`space-members-${TEAM_KEY}`);
-      if (!(await members.isVisible())) await surface.getByTestId(`space-row-members-${TEAM_KEY}`).click();
+      // The project's placement's members panel, opened from its line,
+      // links no page (space-62, space-87).
+      const line = surface.getByTestId(`space-row-${TEAM_KEY}`).getByTestId(`space-line-${host.url}`);
+      const members = line.getByTestId(`space-members-${TEAM_KEY}@${host.url}`);
+      if (!(await members.isVisible())) await line.getByTestId("space-line-members").click();
       await expect(members.getByTestId(`space-member-${HOST_LOGIN}`)).toBeVisible();
       await expect(surface.locator("a")).toHaveCount(0);
       expect(await leaks(), where).toEqual([]);
@@ -902,17 +904,18 @@ test.describe("undo", () => {
     await expect(renamed).toHaveCount(0);
     expect(standinGroup("core-platform")).toBeUndefined();
 
-    // The project's Move… offers your login and every group but acme,
-    // each read as the pick reads it; a move the stand-in refuses
-    // stands in the picker, and a move into acme/research lists the row
-    // there at once, its key unchanged (space-78).
+    // Move… on the project's placement line offers your login and every
+    // group but acme, each read as the pick reads it; a move the
+    // stand-in refuses stands in the picker, and a move into
+    // acme/research lists the row there at once, its key unchanged
+    // (space-78, space-87).
     const RESEARCH = `${HOST_GROUP}/research`;
     host.script.refuseTransfer("Moves are paused for this project.");
-    const move = list.getByTestId(`space-row-move-${TEAM_KEY}`);
+    const move = list.getByTestId(`space-row-${TEAM_KEY}`).getByTestId(`space-line-${host.url}`).getByTestId("space-line-move");
     await expect(move).toHaveText("Move…");
     await expect(move).toHaveAttribute("aria-label", "Move to another group");
     await move.click();
-    const picker = list.getByTestId(`space-move-${TEAM_KEY}`);
+    const picker = list.getByTestId(`space-move-${TEAM_KEY}@${host.url}`);
     await expect(picker.locator('[data-testid^="space-move-group-"]')).toHaveText([PICKED_AS[HOST_LOGIN]!, PICKED_AS[RESEARCH]!]);
     await clean("the move picker");
     await picker.getByTestId(`space-move-group-${RESEARCH}`).click();
@@ -941,8 +944,9 @@ test.describe("undo", () => {
     await page.setViewportSize({ width: 320, height: TALL });
     await research.getByTestId(`space-group-rename-${RESEARCH}`).click();
     await expect(research.getByTestId(`space-rename-${RESEARCH}`)).toBeVisible();
-    await research.getByTestId(`space-row-move-${MOVED}`).click();
-    await expect(research.getByTestId(`space-move-${MOVED}`)).toBeVisible();
+    const movedLine = research.getByTestId(`space-row-${MOVED}`).getByTestId(`space-line-${host.url}`);
+    await movedLine.getByTestId("space-line-move").click();
+    await expect(movedLine.getByTestId(`space-move-${MOVED}@${host.url}`)).toBeVisible();
     const defects: string[] = [];
     record(
       "Groups undo · 320",
@@ -950,7 +954,7 @@ test.describe("undo", () => {
       defects,
     );
     expect(defects, defects.join("\n")).toEqual([]);
-    await research.getByTestId(`space-move-cancel-${MOVED}`).click();
+    await movedLine.getByTestId(`space-move-cancel-${MOVED}@${host.url}`).click();
     await research.getByTestId(`space-rename-${RESEARCH}-cancel`).click();
     await page.setViewportSize({ width: 1280, height: TALL });
 
@@ -961,8 +965,8 @@ test.describe("undo", () => {
     await expect(page.locator("html")).toHaveAttribute("lang", "zh");
     await surfaceEntry(page, "Space").click();
     await expect(page.getByTestId("space-surface")).toBeVisible();
-    await page.getByTestId(`space-row-move-${MOVED}`).click();
-    const zhPicker = page.getByTestId(`space-move-${MOVED}`);
+    await page.getByTestId(`space-row-${MOVED}`).getByTestId(`space-line-${host.url}`).getByTestId("space-line-move").click();
+    const zhPicker = page.getByTestId(`space-move-${MOVED}@${host.url}`);
     await expect(zhPicker).toHaveAttribute("aria-label", "将 demo-project-spex 移到另一个群组");
     await expect(zhPicker.getByTestId(`space-move-group-${entryKey(HOST_LOGIN)}`)).toHaveText(HOST_LOGIN);
     await clean("the move picker in Chinese");
@@ -1163,16 +1167,18 @@ test.describe("a second instance", () => {
     await page.getByTestId(`space-repo-${SECOND_KEY}`).click();
     await expect(page.getByTestId("space-repository")).toHaveCount(0);
 
-    // "Move…" on that row offers the second's groups alone: your
-    // namespace there, then every group but the row's own (space-78).
-    await secondRow.getByTestId(`space-row-move-${SECOND_KEY}`).click();
-    const mover = secondRow.getByTestId(`space-move-${SECOND_KEY}`);
+    // "Move…" on that row's placement line offers the second's groups
+    // alone: your namespace there, then every group but the row's own
+    // (space-78, space-87).
+    const secondLine = secondRow.getByTestId(`space-line-${second.url}`);
+    await secondLine.getByTestId("space-line-move").click();
+    const mover = secondLine.getByTestId(`space-move-${SECOND_KEY}@${second.url}`);
     await expect(mover.locator('[data-testid^="space-move-group-"]')).toHaveText([
       SECOND_PERSON.login,
       PICKED_AS[`${HOST_GROUP}/research`]!,
     ]);
     await expect(mover.getByTestId(`space-move-group-${entryKey(HOST_LOGIN)}`)).toHaveCount(0);
-    await mover.getByTestId(`space-move-cancel-${SECOND_KEY}`).click();
+    await mover.getByTestId(`space-move-cancel-${SECOND_KEY}@${second.url}`).click();
     await expect(mover).toHaveCount(0);
 
     // Sign out on the first's heading keeps it, signed out, with Forget
@@ -1411,12 +1417,14 @@ test.describe("daily sync", () => {
     host.script.sleepTransport(0);
     await scanVocabulary(page, "check stopped", words);
 
-    // Members lists the stand-in's members with the host's role names
-    // and links no page of the host (space-62).
+    // Members on the placement's line lists the stand-in's members with
+    // the host's role names and links no page of the host (space-62,
+    // space-87).
     const listed = host.script.repositories.find((repo) => `${repo.group.fullPath}/${repo.path}` === TEAM_PATH)!;
     listed.members.push(PEER_MEMBER);
-    await page.getByTestId(`space-row-members-${TEAM_KEY}`).click();
-    const members = page.getByTestId(`space-members-${TEAM_KEY}`);
+    const line = page.getByTestId(`space-row-${TEAM_KEY}`).getByTestId(`space-line-${host.url}`);
+    await line.getByTestId("space-line-members").click();
+    const members = line.getByTestId(`space-members-${TEAM_KEY}@${host.url}`);
     await expect(members.getByTestId(`space-member-${HOST_LOGIN}`)).toContainText("Ada Lovelace");
     await expect(members.getByTestId(`space-member-${HOST_LOGIN}`)).toContainText("Owner");
     await expect(members.getByTestId(`space-member-${PEER_MEMBER.login}`)).toContainText(PEER_MEMBER.displayName);

@@ -127,10 +127,11 @@ export type PlaybookLists = CommandResults["environment.playbooks"] & {
 /** One spec package the registry's search found (playbook-library-92). */
 export type RegistryResult = CommandResults["environment.search"]["packages"][number];
 
-/** Whose members a Groups command names (space-62, space-29, DR-114):
- * a group by its host id at its instance, by its origin, or a spex
- * repository by its key. */
-export type SpaceMembersTarget = { instance: string; group: string } | { repository: string };
+/** Whose members a Groups command names (space-62, space-29, DR-114,
+ * DR-128): a group by its host id at its instance, by its origin, or a
+ * spex repository by its key — one placement of it by its instance's
+ * origin, its key placement where none is named. */
+export type SpaceMembersTarget = { instance: string; group: string } | { repository: string; instance?: string };
 
 /** The members of a group or a spex repository as the host lists them
  * (space-62): no page of the host (DR-120). */
@@ -325,8 +326,9 @@ export interface AppState extends AttachmentState {
    * (space-63), `instance` the one its row stands under, pairing it with
    * a folder. Accepted at once. */
   spaceJoin(instance: string, hostId: string, folder?: string): Promise<void>;
-  /** A group's or a spex repository's members as the host reports
-   * them, read on every call and held nowhere (space-62). */
+  /** A group's or a spex repository placement's members as its
+   * instance reports them, read on every call and held nowhere
+   * (space-62). */
   spaceMembers(target: SpaceMembersTarget): Promise<SpaceMembersReply>;
   /** Create a group at the instance `instance` at the path `path`, at
    * its root or inside the group whose host id is `parent` (space-68);
@@ -339,16 +341,18 @@ export interface AppState extends AttachmentState {
   /** Delete a group of the instance by its host id (space-77); the state
    * without it arrives before the reply. */
   spaceGroupDelete(instance: string, group: string): Promise<CommandResults["space.group.delete"]>;
-  /** Move a spex repository, by its key, into a group by its host id, or
-   * your own group where `groupId` is null (space-78); the state holding
-   * it in its new group arrives before the reply. */
-  spaceRepositoryMove(repository: string, groupId: string | null): Promise<CommandResults["space.repository.move"]>;
-  /** Add the account of `login` to a group or a spex repository at one
-   * of the host's roles, by its id (space-69); the reply lists the
-   * members after the addition. */
+  /** Move one placement of a spex repository — by its key, and the
+   * placement by its instance's origin — into a group of that instance by
+   * its host id, or your namespace there where `groupId` is null
+   * (space-78); the state holding it in its new group arrives before the
+   * reply. */
+  spaceRepositoryMove(repository: string, instance: string, groupId: string | null): Promise<CommandResults["space.repository.move"]>;
+  /** Add the account of `login` to a group or a spex repository's
+   * placement at one of its instance's roles, by its id (space-69); the
+   * reply lists the members after the addition. */
   spaceShare(target: SpaceMembersTarget, login: string, role: string): Promise<SpaceMembersReply>;
-  /** Remove a member the group or spex repository holds of its own
-   * (space-72); the reply lists the members afterwards. */
+  /** Remove a member the group or the spex repository's placement holds
+   * of its own (space-72); the reply lists the members afterwards. */
   spaceUnshare(target: SpaceMembersTarget, login: string): Promise<SpaceMembersReply>;
   /** Decline a repair, or undo that (space-54): the reader's own act,
    * never rendering; the reply is the new state. */
@@ -1824,7 +1828,7 @@ export const useAppStore = create<AppState>((set, get) => {
 
     spaceGroupDelete: (instance, group) => getClient().command("space.group.delete", { instance, group }),
 
-    spaceRepositoryMove: (repository, groupId) => getClient().command("space.repository.move", { repository, groupId }),
+    spaceRepositoryMove: (repository, instance, groupId) => getClient().command("space.repository.move", { repository, instance, groupId }),
 
     spaceShare: (target, login, role) => getClient().command("space.share", { ...target, login, role }),
 

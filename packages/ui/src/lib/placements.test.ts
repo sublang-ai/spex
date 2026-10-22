@@ -98,19 +98,32 @@ describe("placements", () => {
     expect(lastSyncOf(repositoryRow(KEY, { state: "reachable", placements: [held, second] }))).toBeNull();
   });
 
-  test("space-61, space-60: a placement is governed by its own instance where signed in, by a signed-in one it follows where it reads reachable or read-only, else by its own, signed out; the path placement by none", () => {
+  test("space-61, space-60: a placement is governed by its own instance where signed in, by a signed-in one it follows where it reads reachable or read-only, else by its own, signed out; the key placement by the one the core names; the path placement by none", () => {
     const home = groupsState({
       instances: [instanceState(FIRST, { signedIn: false }), instanceState(SECOND), instanceState(THIRD)],
     });
     const at = (origin: string, over: Parameters<typeof placementState>[0] = {}) =>
       placementState({ instance: origin, path: "acme/academy-spex", ...over });
-    expect(governingOfPlacement(home, at(SECOND))?.origin).toBe(SECOND);
-    expect(governingOfPlacement(home, at(THIRD, { state: "unreachable" }))?.origin).toBe(THIRD);
+    // A row whose key placement stands at `key`, holding `line` beside it.
+    const beside = (key: string, line: ReturnType<typeof placementState>) =>
+      repositoryRow(KEY, { instance: key, governing: key, state: "reachable", placements: [at(key), line] });
+    expect(governingOfPlacement(home, beside(THIRD, at(SECOND)), at(SECOND))?.origin).toBe(SECOND);
+    expect(governingOfPlacement(home, beside(SECOND, at(THIRD, { state: "unreachable" })), at(THIRD, { state: "unreachable" }))?.origin).toBe(THIRD);
     // Its own signed out, a placement still read through a signed-in
     // instance follows it; one read through none stays with its own.
-    expect(governingOfPlacement(home, at(FIRST))?.origin).toBe(SECOND);
-    expect(governingOfPlacement(home, at(FIRST, { state: "read-only" }))?.origin).toBe(SECOND);
-    expect(governingOfPlacement(home, at(FIRST, { state: "unreachable" }))?.origin).toBe(FIRST);
-    expect(governingOfPlacement(home, placementState({ path: "/srv/academy-spex.git" }))).toBeUndefined();
+    expect(governingOfPlacement(home, beside(THIRD, at(FIRST)), at(FIRST))?.origin).toBe(SECOND);
+    expect(governingOfPlacement(home, beside(THIRD, at(FIRST, { state: "read-only" })), at(FIRST, { state: "read-only" }))?.origin).toBe(SECOND);
+    expect(governingOfPlacement(home, beside(THIRD, at(FIRST, { state: "unreachable" })), at(FIRST, { state: "unreachable" }))?.origin).toBe(FIRST);
+    // No follow is made onto an instance at which the clone holds
+    // another placement (git-host-5).
+    expect(governingOfPlacement(home, beside(SECOND, at(FIRST)), at(FIRST))?.origin).toBe(THIRD);
+    const path = placementState({ path: "/srv/academy-spex.git" });
+    expect(governingOfPlacement(home, beside(SECOND, path), path)).toBeUndefined();
+    // The key placement is governed by the instance the core names for
+    // the row, not the first signed in; with none named, by its own.
+    const keyed = repositoryRow(KEY, { instance: FIRST, governing: THIRD, state: "reachable", placements: [at(FIRST)] });
+    expect(governingOfPlacement(home, keyed, at(FIRST))?.origin).toBe(THIRD);
+    const ungoverned = repositoryRow(KEY, { instance: FIRST, governing: null, state: "reachable", placements: [at(FIRST)] });
+    expect(governingOfPlacement(home, ungoverned, at(FIRST))?.origin).toBe(FIRST);
   });
 });

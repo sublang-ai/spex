@@ -3454,9 +3454,8 @@ msgstr "媒体不可用"
 
 #. list the people the host lets read a spex repository
 #. list the people the host lets read a spex repository
-#. list the people the host lets read a spex repository
-#. list the people the host lets read a spex repository
 #: src/components/SpaceGroups.tsx
+#: src/components/SpacePlacements.tsx
 msgid "Members"
 msgstr "成员"
 
@@ -3518,17 +3517,17 @@ msgid "Move the focused Up next row"
 msgstr "移动“接下来”中选中的行"
 
 #. move a spex repository into another group of the instance, or your own
-#: src/components/SpaceGroups.tsx
+#: src/components/SpacePlacements.tsx
 msgid "Move to another group"
 msgstr "移到另一个群组"
 
 #. open the groups a spex repository may move to; its full name is 'Move to another group'
-#: src/components/SpaceGroups.tsx
+#: src/components/SpacePlacements.tsx
 msgid "Move…"
 msgstr "移动…"
 
 #. the Move control, while the host moves the spex repository
-#: src/components/SpaceGroups.tsx
+#: src/components/SpacePlacements.tsx
 msgid "Moving…"
 msgstr "移动中…"
 
@@ -6096,6 +6095,11 @@ msgstr "工作流正在等待你的答复。"
 #: src/components/PlaybookStages.tsx
 msgid "The workflow markdown the playbook was compiled from"
 msgstr "规程编译所用的工作流 markdown"
+
+#. a placement's members panel; {names} lists the other instances the records are kept at, by display name
+#: src/components/SpaceMembers.tsx
+msgid "These records are also placed at {names}"
+msgstr "这些记录也放在 {names}"
 
 #. stands where a project name would, for sessions with no folder
 #: src/components/SpaceSync.tsx

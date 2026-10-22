@@ -8,9 +8,10 @@
 // creation waits at. Pure functions over the state the core sends; the
 // surfaces render them.
 
-import type { GroupsState, InstanceState, PlacementState, RepositoryState } from "@sublang/spex-core/protocol";
+import type { GroupsState, InstanceGroupState, InstanceState, PlacementState, RepositoryState } from "@sublang/spex-core/protocol";
 
-import { hostNameOf, instanceName, instanceOf, signedInInstances } from "./instances.js";
+import { currentLocale } from "../i18n.js";
+import { governingOf, hostNameOf, instanceName, instanceOf, signedInInstances, standingOf } from "./instances.js";
 
 /** The placements the clone holds (space-87, storage-34): its remotes
  * in the order added, the path placement last. */
@@ -82,14 +83,47 @@ export function placementLastSync(line: PlacementState | undefined): { at: numbe
   return line?.branch?.agreed ?? null;
 }
 
-/** The instance governing a placement (space-61, space-60): its own
- * where signed in; where it reads reachable or read-only through a
- * signed-in instance it follows, the first signed-in one; else its own,
- * signed out. None for the path placement, which no instance governs. */
-export function governingOfPlacement(state: GroupsState, line: PlacementState): InstanceState | undefined {
+/** The instance governing a placement (git-host-5, space-61, space-60):
+ * for its key placement, the one the core names as governing the row;
+ * for any other, its own where signed in; where it reads reachable or
+ * read-only through a signed-in instance it follows, the first signed-in
+ * one at which the clone holds no other placement; else its own, signed
+ * out. None for the path placement, which no instance governs. */
+export function governingOfPlacement(state: GroupsState, repo: RepositoryState, line: PlacementState): InstanceState | undefined {
   if (line.instance === null) return undefined;
+  if (keyPlacement(repo)?.instance === line.instance) return governingOf(state, repo);
   const own = instanceOf(state, line.instance);
   if (own?.signedIn) return own;
-  if (line.state === "reachable" || line.state === "read-only") return signedInInstances(state)[0] ?? own;
+  if (line.state === "reachable" || line.state === "read-only") {
+    const held = new Set(instancePlacements(repo).map((placement) => placement.instance));
+    return signedInInstances(state).find((instance) => !held.has(instance.origin)) ?? own;
+  }
   return own;
+}
+
+/** The entry a placement stands in at the instance governing it
+ * (space-78): the group the row stands under for its key placement —
+ * none under your own group — and for any other, the group or namespace
+ * whose listing names the row as placed there (space-1). */
+export function standingEntry(state: GroupsState, repo: RepositoryState, line: PlacementState): InstanceGroupState | undefined {
+  if (line.instance === null) return undefined;
+  if (keyPlacement(repo)?.instance === line.instance) {
+    const stands = standingOf(state, repo.key);
+    return stands && !stands.own ? stands.group : undefined;
+  }
+  return governingOfPlacement(state, repo, line)?.groups.find((entry) => entry.placed.some((placed) => placed.key === repo.key));
+}
+
+/** The other instances a placement's members panel names (space-62):
+ * every one the clone's placement files name but the line's own, each by
+ * its display name as the home last read it, else its origin's host
+ * name. */
+export function alsoPlacedAt(state: GroupsState, repo: RepositoryState, line: PlacementState): string[] {
+  return repo.placedAt.filter((origin) => origin !== line.instance).map((origin) => instanceNameAt(state, origin));
+}
+
+/** Names joined as the interface language joins a list (localization-5):
+ * "A and B", "A、B和C". */
+export function nameList(names: string[]): string {
+  return new Intl.ListFormat(currentLocale(), { type: "conjunction" }).format(names);
 }
