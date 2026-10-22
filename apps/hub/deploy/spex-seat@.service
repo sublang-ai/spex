@@ -1,0 +1,28 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
+
+# One member's seat (hub-4): the server shell as a seat, run as the
+# account spex-<person id>, reached by the hub alone on its socket. At a
+# stop the core's graceful stop runs first; what remains of the seat's
+# control group is killed at the timeout, above the core's own bounds.
+# The server's environment file names SPEX_HOST_URL, SPEX_SERVER_ID and
+# SPEX_SERVER_NAME.
+
+[Unit]
+Description=Spex seat of person %i
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=spex-%i
+EnvironmentFile=/etc/spex/server.env
+WorkingDirectory=~
+ExecStart=/usr/bin/node /opt/spex/app/apps/server/dist/main.js --seat --server-id=${SPEX_SERVER_ID} --server-name=${SPEX_SERVER_NAME} --person-id=%i --socket=/run/spex/seats/%i/core.sock --token-file=/run/spex/seats/%i/token --shared-env=/etc/spex/agents.env
+KillMode=mixed
+TimeoutStopSec=30
+UMask=0077
+NoNewPrivileges=yes
+PrivateTmp=yes
+Restart=on-failure
+RestartSec=5
