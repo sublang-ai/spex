@@ -6741,6 +6741,11 @@ msgstr "你自己的群组"
 msgid "Your own group's config, in {repository}"
 msgstr "你自己的群组的配置，位于 {repository}"
 
+#. the sign-in card opened from "Add instance…": your own group's records are kept at every instance the home signs in to, this one included
+#: src/components/SpaceInstance.tsx
+msgid "Your own group's records will be kept there too."
+msgstr "你自己的群组的记录也会保存在那里。"
+
 #. stands in for a project with no name yet
 #: src/components/CaptainHome.tsx
 msgid "your project"

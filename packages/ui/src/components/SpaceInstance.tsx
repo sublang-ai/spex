@@ -420,7 +420,9 @@ const anotherInstance = (): string =>
  * space-3): "Add instance…", disabled while any sign-in starts or runs,
  * which opens the sign-in card in its place — its field captioned
  * "Instance" holding the default instance's origin, focused and
- * selected, with Sign in and Cancel. The card's flow reads in it, as do
+ * selected, with Sign in and Cancel, and saying that your own group's
+ * records will be kept there too, as the sign-in places your own group
+ * at every instance (space-4). The card's flow reads in it, as do
  * a start the core refuses, the field keeping its text, and a flow that
  * ended without an account, with "Sign in again"; a flow another client
  * runs at an instance the home does not list opens it too. Escape or
@@ -459,6 +461,7 @@ export function AddInstance({
   const focusField = useRef(false);
   const focusAdd = useRef(false);
   const titleId = useId();
+  const ownId = useId();
 
   // At most one sign-in runs, whichever instance it names (git-host-2).
   const flowing = signIn.running !== null || signIn.starting;
@@ -617,6 +620,7 @@ export function AddInstance({
     <div
       role="group"
       aria-labelledby={titleId}
+      aria-describedby={ownId}
       data-testid="space-add-card"
       className="flex min-w-0 flex-col gap-2"
       onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
@@ -629,6 +633,20 @@ export function AddInstance({
       <h2 id={titleId} className="text-sm font-medium">
         {anotherInstance()}
       </h2>
+      {/* Your own group is placed at every instance the home signs in
+          to (space-4, DR-128): the card for another instance says so
+          before its sign-in, whatever its flow reads (space-3). The
+          header's card, the first sign-in, does not. */}
+      <p
+        id={ownId}
+        data-testid="space-add-own"
+        className="min-w-0 break-words text-sm text-neutral-600 dark:text-neutral-300"
+      >
+        {i18n._({
+          id: "Your own group's records will be kept there too.",
+          comment: "the sign-in card opened from \"Add instance…\": your own group's records are kept at every instance the home signs in to, this one included",
+        })}
+      </p>
       {lines ? (
         <div
           data-testid="space-signin-body"

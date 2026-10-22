@@ -13,10 +13,12 @@
 // Move… on a placement's line offers the groups of its instance alone
 // (space-78, space-87); Join
 // names the instance its row stands under (space-63, space-29);
-// "Add instance…" at the list's foot opens the sign-in card in its place
-// (space-1, space-3, space-28); Forget on a signed-out heading removes
-// the instance from the home, a refusal standing beneath it (space-82,
-// space-29). Each act is checked by the command it sends.
+// "Add instance…" at the list's foot opens the sign-in card in its place,
+// saying your own group's records will be kept there too (space-1,
+// space-3, space-28); Forget on a signed-out heading removes the
+// instance from the home, a refusal standing beneath it, and with none
+// left your own group reads as the core names it (space-82, space-29,
+// space-1). Each act is checked by the command it sends.
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
@@ -33,6 +35,7 @@ import {
   NOW,
   NO_CAN,
   ORIGIN,
+  OWN,
   OWN_REPO,
   SECOND,
   answer,
@@ -924,6 +927,41 @@ describe("GROUPS: Add instance… at the list's foot (space-1, space-3, space-28
     expect(calls("space.signin.cancel")).toEqual([]);
   });
 
+  test.each(["en", "zh"] as const)("space-3: the card opened from Add instance… reads 'Your own group's records will be kept there too.', its flow running or not; the header card does not (%s)", async (language) => {
+    activateLanguage(language);
+    startsAtSecond();
+    const zh = language === "zh";
+    const own = zh ? "你自己的群组的记录也会保存在那里。" : "Your own group's records will be kept there too.";
+    await renderGroups(base(), { open: false });
+    // Nothing says it until the card opens.
+    expect(screen.queryByTestId("space-add-own")).toBeNull();
+    expect(document.body.textContent).not.toContain(own);
+    fireEvent.click(add());
+    // The card says it beneath its name, before its field, and it
+    // describes the card for assistive technology (space-3).
+    const sentence = within(card()).getByTestId("space-add-own");
+    expect(sentence.textContent).toBe(own);
+    expect(sentence.id).not.toBe("");
+    expect(card().getAttribute("aria-describedby")).toBe(sentence.id);
+    const textbox = within(card()).getByRole("textbox", { name: zh ? "实例" : "Instance" });
+    expect(sentence.compareDocumentPosition(textbox) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(within(card()).getByRole("heading", { level: 2 }).compareDocumentPosition(sentence) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // While the card's flow runs, it still says it, once.
+    fireEvent.change(textbox, { target: { value: SECOND } });
+    fireEvent.click(within(card()).getByTestId("space-signin"));
+    await within(card()).findByTestId("space-signin-link");
+    expect(within(card()).getAllByTestId("space-add-own").map((line) => line.textContent)).toEqual([own]);
+    expect(within(card()).getByTestId("space-signin-body").textContent).not.toContain(own);
+    cleanup();
+
+    // The header's card, the first sign-in while the home lists no
+    // instance, does not say it (space-3).
+    await renderGroups(noInstance(), { open: false });
+    expect(screen.getByTestId("space-signin-card")).toBeTruthy();
+    expect(screen.queryByTestId("space-add-own")).toBeNull();
+    expect(document.body.textContent).not.toContain(own);
+  });
+
   test.each(["en", "zh"] as const)("space-28, space-1: Add instance… and its card read the catalog's words, every control at most 14 characters, busy forms included, the card stacking below 20rem (%s)", async (language) => {
     activateLanguage(language);
     startsAtSecond();
@@ -963,7 +1001,7 @@ describe("GROUPS: Add instance… at the list's foot (space-1, space-3, space-28
   });
 });
 
-describe("GROUPS: Forget a signed-out instance (space-82, space-29, space-66)", () => {
+describe("GROUPS: Forget a signed-out instance (space-82, space-29, space-66, space-1)", () => {
   /** The core's refusal while a clone is still kept under the second
    * instance (space-82), in its own words. */
   const KEPT = "Still kept under Second Example: a-spex";
@@ -1082,6 +1120,27 @@ describe("GROUPS: Forget a signed-out instance (space-82, space-29, space-66)", 
     const card = within(screen.getByTestId("space-signin-card"));
     expect((card.getByTestId("space-signin-instance") as HTMLInputElement).value).toBe(ORIGIN);
     await waitFor(() => expect(document.activeElement).toBe(card.getByTestId("space-signin-instance")));
+  });
+
+  test("space-1: with no instance left after a Forget, your own group's heading reads its path while its own repository's placement file stands", async () => {
+    // The last instance forgotten: your own group's folder bears the
+    // login a sign-in named it after, its own repository's remote and id
+    // dropped while its placement files stand (space-82, storage-36).
+    const forgotten = ownRepo({ state: "local-only", remote: null, id: null, lastSync: null, placedAt: [ORIGIN, SECOND] });
+    const home = noInstance({ own: { name: "jane", named: false, repositories: [forgotten] } });
+    await renderGroups(home, { open: false });
+    const heading = () => within(screen.getByTestId("space-own")).getByRole("heading", { level: 2 });
+    // The heading reads its path, as the core says the folder no longer
+    // bears this device's user name — the files standing or not (space-1,
+    // space-30).
+    expect(heading().textContent).toBe("Your own group · jane");
+    expect(screen.queryByText(/named after your login at sign-in/)).toBeNull();
+    expect(screen.getByTestId(`space-repo-state-${OWN}`).textContent).toBe("On this device only — shared once you sign in");
+    // Where the core says the folder still bears it — an account named
+    // like this device's user, which names nothing — the key phrase
+    // stands, those files standing too (space-1, space-30).
+    deliver({ ...home, own: { ...home.own, named: true } });
+    expect(heading().textContent).toBe("Your own group · named after your login at sign-in");
   });
 
   test("space-82: a refusal speaks of the sign-out it met: signed in again it goes, and a later sign-out reads none", async () => {

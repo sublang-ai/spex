@@ -6741,6 +6741,11 @@ msgstr "Your own group"
 msgid "Your own group's config, in {repository}"
 msgstr "Your own group's config, in {repository}"
 
+#. the sign-in card opened from "Add instance…": your own group's records are kept at every instance the home signs in to, this one included
+#: src/components/SpaceInstance.tsx
+msgid "Your own group's records will be kept there too."
+msgstr "Your own group's records will be kept there too."
+
 #. stands in for a project with no name yet
 #: src/components/CaptainHome.tsx
 msgid "your project"
