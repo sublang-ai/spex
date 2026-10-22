@@ -201,7 +201,7 @@ describe("RUN-29: captain home structure and one-motion start", () => {
 
   test("task scope and slash discovery sit outside the input", () => {
     renderHome();
-    expect(screen.getByText(/Specs clarify goals and acceptance criteria/)).toBeTruthy();
+    expect(screen.getByText(/Spex helps you turn goals and acceptance criteria into specs/)).toBeTruthy();
     const hint = document.getElementById("start-playbook-hint")!;
     expect(hint.textContent).toBe("Type / in the task box to see all 2 playbooks");
     expect(hint.querySelector("code")?.textContent).toBe("/");

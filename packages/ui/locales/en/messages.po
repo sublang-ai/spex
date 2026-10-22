@@ -5649,8 +5649,8 @@ msgid "Specs"
 msgstr "Specs"
 
 #: src/components/CaptainHome.tsx
-msgid "Specs clarify goals and acceptance criteria; Captain uses playbooks to coordinate AI implementation and review."
-msgstr "Specs clarify goals and acceptance criteria; Captain uses playbooks to coordinate AI implementation and review."
+msgid "Spex helps you turn goals and acceptance criteria into specs, then uses playbooks to coordinate AI implementation and review."
+msgstr "Spex helps you turn goals and acceptance criteria into specs, then uses playbooks to coordinate AI implementation and review."
 
 #: src/components/CaptainHome.tsx
 msgid "Specs directory exists, but no packages yet"

@@ -369,10 +369,10 @@ export function CaptainHome(props: CaptainHomeProps) {
               })}
             </h1>
             <p className="mt-3 text-sm leading-6 text-neutral-600 dark:text-neutral-300">
-              {i18n._("Specs clarify goals and acceptance criteria; Captain uses playbooks to coordinate AI implementation and review.")}
+              {i18n._("Spex helps you turn goals and acceptance criteria into specs, then uses playbooks to coordinate AI implementation and review.")}
             </p>
             {props.onOpenSpecs ? (
-              <div data-testid="project-spec-status" className="mt-4 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs leading-5 text-neutral-500 dark:text-neutral-400">
+              <div data-testid="project-spec-status" className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs leading-5 text-neutral-500 dark:text-neutral-400">
                 <span>
                   {specState === "ready" && specCounts
                     ? i18n._("Existing specs: {packages, plural, one {# package} other {# packages}} · {items, plural, one {# item} other {# items}}", { packages: specCounts.packages, items: specCounts.items })
@@ -461,7 +461,7 @@ export function CaptainHome(props: CaptainHomeProps) {
         ) : null}
       </div>
 
-      <div className="mt-8 flex flex-col gap-2">
+      <div className="mt-6 flex flex-col gap-2">
         {props.hasProject && captainUnavailable ? (
           <div
             role="status"
@@ -538,10 +538,10 @@ export function CaptainHome(props: CaptainHomeProps) {
                 const placed = popoverRoom(chipRef.current);
                 setCaptainPopover((open) => (open ? undefined : placed));
               }}
-              className="flex min-h-7 min-w-0 max-w-full items-center gap-1 rounded-md px-1 py-0.5 hover:bg-neutral-200 focus-visible:outline-2 focus-visible:outline-brand-500 disabled:opacity-60 dark:hover:bg-neutral-800"
+              className="group flex min-h-7 min-w-0 max-w-full items-center gap-1 rounded-md px-1 py-0.5 hover:ring-1 hover:ring-neutral-300 focus-visible:outline-2 focus-visible:outline-brand-500 disabled:opacity-60 dark:hover:ring-neutral-700"
             >
               {captain ? <AgentChip agent={captain} readiness={captainReadiness} label="Captain" /> : <span className="text-xs text-neutral-500">{i18n._("not set")}</span>}
-              <Icon name="caretDown" className="h-3 w-3 shrink-0 text-neutral-500" />
+              <Icon name="caretDown" className="h-3 w-3 shrink-0 text-neutral-500 group-hover:text-brand-700 dark:group-hover:text-brand-300" />
             </button>
             {captainPopover && captain ? (
               <AgentEditorPopover
@@ -714,35 +714,37 @@ export function CaptainHome(props: CaptainHomeProps) {
             }
           />
         </div>
-        {props.hasProject && !configBroken && !props.next && previewPlaybooks.length > 0 ? (
-          <div data-testid="playbook-preview" className="mt-1 text-xs leading-5 text-neutral-500 dark:text-neutral-400">
-            <p>
-              {i18n._("A playbook is like a Skill compiled into an executable workflow: it coordinates AI through predefined steps.")}{" "}
-              {i18n._("For example:")}{" "}
-              {previewPlaybooks.map((playbook, index) => (
-                <span key={playbook.id}>
-                  {index > 0 ? " · " : null}
-                  <code className="font-mono">/{playbook.command}</code>{" "}
-                  <span className="inline-block max-w-44 truncate align-bottom" title={playbookIntent(playbook.intent)}>{previewIntent(playbook)}</span>
-                </span>
-              ))}
-            </p>
-          </div>
-        ) : null}
         {props.hasProject ? (
-          <div className="mt-1 min-h-5 text-xs text-neutral-500 dark:text-neutral-400">
-            {playbooks.length > 0 ? (
-              <span id="start-playbook-hint">
-                <Rich
-                  text={i18n._("Type <0>/</0> in the task box to see all {count} playbooks", { count: playbooks.length })}
-                  components={[<code key="slash" className="font-mono" />]}
-                />
-              </span>
-            ) : (
-              <button type="button" onClick={() => props.onNavigate("Playbooks")} className="font-medium text-brand-700 hover:underline dark:text-brand-300">
-                {i18n._("No playbooks available — open Playbooks")}
-              </button>
-            )}
+          <div className="mt-1 space-y-1 text-xs leading-5 text-neutral-500 dark:text-neutral-400">
+            {!configBroken && !props.next && previewPlaybooks.length > 0 ? (
+              <div data-testid="playbook-preview">
+                <p>
+                  {i18n._("A playbook is like a Skill compiled into an executable workflow: it coordinates AI through predefined steps.")}{" "}
+                  {i18n._("For example:")}{" "}
+                  {previewPlaybooks.map((playbook, index) => (
+                    <span key={playbook.id}>
+                      {index > 0 ? " · " : null}
+                      <code className="font-mono">/{playbook.command}</code>{" "}
+                      <span className="inline-block max-w-44 truncate align-bottom" title={playbookIntent(playbook.intent)}>{previewIntent(playbook)}</span>
+                    </span>
+                  ))}
+                </p>
+              </div>
+            ) : null}
+            <div className="min-h-5">
+              {playbooks.length > 0 ? (
+                <span id="start-playbook-hint">
+                  <Rich
+                    text={i18n._("Type <0>/</0> in the task box to see all {count} playbooks", { count: playbooks.length })}
+                    components={[<code key="slash" className="font-mono" />]}
+                  />
+                </span>
+              ) : (
+                <button type="button" onClick={() => props.onNavigate("Playbooks")} className="font-medium text-brand-700 hover:underline dark:text-brand-300">
+                  {i18n._("No playbooks available — open Playbooks")}
+                </button>
+              )}
+            </div>
           </div>
         ) : null}
       </div>
