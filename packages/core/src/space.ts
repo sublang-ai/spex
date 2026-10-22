@@ -5576,17 +5576,16 @@ export class SpaceManager {
     return { deleted: true };
   }
 
-  /** Move a spex repository, by its key, into a group of the instance its
-   * row stands under or, where none is named, your namespace there
-   * (git-host-20) — a group of another instance found in none, refused
-   * before the host is asked — holding it as the host answered until a
-   * read begun after the move is held (git-host-5), announced before the
-   * reply; its clone moves on its next sync (space-60). */
+  /** Move a spex repository's placement, by its key and the placement's
+   * instance — its first where none is named — into a group of the
+   * instance governing that placement or, where none is named, your
+   * namespace there (git-host-20) — a group of another instance found in
+   * none, refused before the host is asked — holding it as the host
+   * answered until a read begun after the move is held (git-host-5),
+   * announced before the reply; its clone moves on its next sync where
+   * it is the key placement's (space-60). */
   async moveRepository(key: string, groupId: string | null, named?: string): Promise<{ repository: { id: string; fullPath: string } }> {
-    // The placement's instance, as Members names it (space-29): a clone
-    // holds one remote yet, so its row's instance acts.
-    const instance = await this.targetInstance({ repository: key, ...(named === undefined ? {} : { instance: named }) });
-    const target = await this.membersTarget(instance, { repository: key }, "invalid_request");
+    const { instance, target } = await this.placementTarget(key, named);
     let into: HostGroup | null = null;
     if (groupId !== null) {
       into = this.instanceGroup(instance, groupId);
@@ -5707,6 +5706,40 @@ export class SpaceManager {
     } catch (error) {
       throw new CoreError(error instanceof HostError && error.kind === "not_found" ? "not_found" : "invalid_request", relayHostError(error, this.nameOf(instance)));
     }
+  }
+
+  /**
+   * The instance a move acts at and the host's id of the spex repository
+   * there (space-29): the placement at the instance the command names, at
+   * the instance governing it (git-host-5) — its own while signed in, else
+   * the earliest signed-in one listing its host repository — matched as
+   * that instance lists it; the key placement's, and a clone's first where
+   * none is named, as Members reads them. One at which the clone holds no
+   * placement is refused, a clone holding none read as local only, and a
+   * spex repository not on this device holds its one listed placement at
+   * the instance its key lies under.
+   */
+  private async placementTarget(key: string, named: string | undefined): Promise<{ instance: HostInstance; target: MembersTarget }> {
+    const at = named === undefined ? undefined : this.namedInstance(named);
+    if (at !== undefined && this.host.store.repository(key)) {
+      const machine = this.machine(key);
+      await machine.readFacts();
+      const placements = machine.placements;
+      const placement = placements.find((candidate) => candidate.instance !== null && canonicalOrigin(candidate.instance) === at);
+      if (placement === undefined && placements.length > 0) throw new CoreError("invalid_request", noSuchPlacement(splitKey(key).name));
+      if (placement !== undefined && placement !== keyPlacement(placements)) {
+        const instance = this.governingOfPlacement(machine, placement);
+        if (!instance) throw new CoreError("invalid_request", signInFirst());
+        const listing = this.listingOf(instance, { remote: placement.url, id: placement.id });
+        const id = listing?.repository.id ?? (instance.view ? null : placement.id);
+        if (id === null) throw new CoreError("not_found", noLongerShared());
+        return { instance, target: { kind: "repository", id } };
+      }
+    } else if (at !== undefined && (this.instanceOfKey(key) ?? this.defaultInstance()).origin !== at) {
+      throw new CoreError("invalid_request", noSuchPlacement(splitKey(key).name));
+    }
+    const instance = await this.targetInstance({ repository: key });
+    return { instance, target: await this.membersTarget(instance, { repository: key }, "invalid_request") };
   }
 
   /**

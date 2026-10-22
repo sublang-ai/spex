@@ -193,6 +193,50 @@ test("space-61, space-87: with the first instance signed out, the first placemen
   assert.ok(instanceOf(out, first.url)?.groups.some((group) => group.repositories.some((repository) => repository.key === key)));
 });
 
+test("space-29, git-host-20, space-60, space-61: space.repository.move naming the second's instance moves the second placement's host repository there alone, its line reading its new path and its next Sync taking the URL the second hands over, the clone and the first's repository staying; naming the first's moves the first's; naming an instance at which the clone holds no placement is refused, and one the home does not list is not found", async (t) => {
+  const { first, second, home, key, clone, placed } = await placedAtBoth("move-each");
+  t.after(() => home.stop());
+  await refreshed(home);
+  const firstId = (await home.client.repository(key)).id as string;
+  const firstUrl = git(clone, "config", "--get", `remote.${hostFolder(first)}.url`);
+
+  // The second's placement moves at the second, into its acme/research;
+  // the first's host repository and the clone stand (space-29,
+  // git-host-20).
+  const moved = await home.client.expectOk("space.repository.move", { repository: key, instance: second.url, groupId: "2003" });
+  assert.deepEqual(moved, { repository: { id: placed.id, fullPath: "acme/research/atlas-spex" } });
+  assert.equal(second.script.repositories.find((repository) => repository.id === placed.id)?.group.fullPath, "acme/research");
+  assert.equal(first.script.repositories.find((repository) => repository.id === firstId)?.group.fullPath, "acme");
+  const after = await home.client.repository(key);
+  assert.deepEqual(after.placements.map((line) => [line.instance, line.path]), [[first.url, "acme/atlas-spex"], [second.url, "acme/research/atlas-spex"]]);
+  assert.equal(after.key, key);
+
+  // Its next Sync takes the URL the second hands over for it, the clone
+  // moved nowhere, each placement synced (space-60).
+  const synced = await home.client.settle("space.sync", { repository: key }, 30_000);
+  assert.equal(synced.sync.phase, "done", JSON.stringify(synced.sync));
+  assert.deepEqual(synced.placements.map((line) => line.outcome?.kind), ["synced", "synced"]);
+  assert.match(git(clone, "config", "--get", `remote.${hostFolder(second)}.url`), /\/acme\/research\/atlas-spex\.git$/);
+  assert.equal(git(clone, "config", "--get", `remote.${hostFolder(first)}.url`), firstUrl);
+  assert.equal(git(second.bareOf("acme/research/atlas-spex"), "rev-parse", "spex"), git(clone, "rev-parse", "HEAD"));
+
+  // Naming the first's instance moves the first's placement there.
+  const atFirst = await home.client.expectOk("space.repository.move", { repository: key, instance: first.url, groupId: "2003" });
+  assert.deepEqual(atFirst, { repository: { id: firstId, fullPath: "acme/research/atlas-spex" } });
+  assert.equal(first.script.repositories.find((repository) => repository.id === firstId)?.group.fullPath, "acme/research");
+
+  // A clone holding only the path placement holds none at either
+  // instance; an instance the home does not list is not found
+  // (space-29).
+  const { key: solo } = await addFolder(home, gitFolder("solo"));
+  await home.client.expectOk("space.remote.set", { repository: solo, url: bareRepo() });
+  for (const host of [first, second]) {
+    await home.client.expectError("space.repository.move", { repository: solo, instance: host.url, groupId: "2003" }, "invalid_request", /^solo-spex holds no such placement$/);
+  }
+  await home.client.expectError("space.repository.move", { repository: key, instance: "http://127.0.0.1:9", groupId: "2003" }, "not_found");
+  assert.equal(second.script.repositories.find((repository) => repository.id === placed.id)?.group.fullPath, "acme/research", "nothing more moved");
+});
+
 /** A placed clone settled by one Sync: the second's placement file
  * committed, and each placement holding what the clone holds. */
 async function settledAtBoth(name: string) {
