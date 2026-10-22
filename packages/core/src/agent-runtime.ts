@@ -5,7 +5,7 @@ import type { AgentAdapter } from "@sublang/cligent";
 import type { PlayerAdapterImports } from "@sublang/cligent/tmux-play";
 import type { AdapterName } from "./protocol.js";
 
-const DEFAULT_ADAPTER_IMPORTS: PlayerAdapterImports = {
+export const DEFAULT_ADAPTER_IMPORTS: PlayerAdapterImports = {
   claude: async () => (await import("@sublang/cligent/adapters/claude-code")).ClaudeCodeAdapter,
   codex: async () => (await import("@sublang/cligent/adapters/codex")).CodexAdapter,
   gemini: async () => (await import("@sublang/cligent/adapters/gemini")).GeminiAdapter,
