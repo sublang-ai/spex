@@ -268,6 +268,11 @@ msgstr "{name} changed in {path}; resolve again to install"
 msgid "{name} has no folder on this device"
 msgstr "{name} has no folder on this device"
 
+#. Refusal of Place: the spex repository is a group's own or your own group's, which Place does not place; {name} is the repository's name
+#: src/space.ts
+msgid "{name} holds a group's records; only a project's are placed at another instance"
+msgstr "{name} holds a group's records; only a project's are placed at another instance"
+
 #. Refusal: the command names a placement — an instance, or the remote the reader named — that the spex repository {name} does not hold
 #: src/space.ts
 msgid "{name} holds no such placement"
@@ -303,6 +308,11 @@ msgstr "{name} is on the host already"
 #: src/space.ts
 msgid "{name} is on this device already"
 msgstr "{name} is on this device already"
+
+#. Refusal of Place: the spex repository already has a placement at that instance; {name} is the repository's name, {host} the instance's display name
+#: src/space.ts
+msgid "{name} is placed at {host} already"
+msgstr "{name} is placed at {host} already"
 
 #. Refusal: a request by path needs the repository's working folder here
 #: src/environments.ts
@@ -1895,6 +1905,11 @@ msgstr "path resolves outside the project"
 #: src/space.ts
 msgid "Pick a group first"
 msgstr "Pick a group first"
+
+#. Refusal of Place: the person may not manage the members of every placement the spex repository holds, and placing it shares its records with more people; {name} is the repository's name
+#: src/space.ts
+msgid "Placing {name} elsewhere needs the right to manage the members of each of its placements"
+msgstr "Placing {name} elsewhere needs the right to manage the members of each of its placements"
 
 #. One settings drift: a stored playbook left the config
 #: src/session.ts

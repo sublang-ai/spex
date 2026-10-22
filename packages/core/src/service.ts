@@ -3086,6 +3086,10 @@ export class CoreService {
         return this.requireSpace().forget(command.instance);
       case "space.pick":
         return this.requireSpace().pick(command.repository, command.choice, command.noticed === true);
+      // A placement at another instance, an operation of the clone's
+      // machine (space-97, DR-128).
+      case "space.place":
+        return this.requireSpace().place(command.repository, command.choice, command.noticed === true);
       case "space.join":
         return this.requireSpace().join(command.instance, command.hostId, command.folder === undefined ? undefined : expandPath(command.folder, this.home));
       case "space.members":

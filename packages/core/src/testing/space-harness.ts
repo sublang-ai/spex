@@ -150,14 +150,14 @@ class Client {
     }, timeoutMs);
     return repositoryOf(state, key);
   }
-  /** Run a long command on one repository — it replies accepted at once
-   * (space-29) — and wait until that repository's machine leaves
-   * running. Broadcasts coalesce, and one assembled before the command
+  /** Run a long command on one repository — it replies accepted at once,
+   * or, a Place, once the host accepted its step (space-29) — and wait
+   * until that repository's machine leaves running. Broadcasts coalesce, and one assembled before the command
    * took effect can arrive after it still reading the previous phase: a
    * reading that is not running settles the command only after one of
    * its own running readings, or where a read made after the reply
    * agrees the machine no longer runs. */
-  async settle<T extends "space.sync" | "space.fetch">(type: T, fields: Omit<Extract<Command, { type: T }>, "type" | "id">, timeoutMs = 20_000): Promise<RepositoryState> {
+  async settle<T extends "space.sync" | "space.fetch" | "space.place">(type: T, fields: Omit<Extract<Command, { type: T }>, "type" | "id">, timeoutMs = 20_000): Promise<RepositoryState> {
     const key = (fields as { repository: string }).repository;
     const from = this.messages.length;
     // The core runs in this process: its steps' `since` reads this clock.
@@ -420,11 +420,14 @@ function assertPlacements(row: RepositoryState): void {
   if (sync.phase === "choices" || sync.phase === "unrelated") {
     assert.ok(row.placements.some((line) => line.attached && line.instance === sync.placement), `${row.key}: ${JSON.stringify(sync)} names a placement it holds`);
   }
-  // A step waiting at the host shows on one line, its placement's or
-  // its instance's (space-87), which the row's `waiting` mirrors.
+  // A step waiting at the host shows on one line per instance, its
+  // placement's or its instance's (space-87); transitional, the row's
+  // `waiting` mirrors its key placement's line where it holds one, else
+  // the first line a wait shows on.
   const waits = row.placements.filter((line) => line.waiting !== null);
-  assert.ok(waits.length <= 1, `${row.key}: one line waits`);
-  assert.deepEqual(row.waiting, waits[0]?.waiting ?? null, `${row.key}: waiting mirrors the line it shows on`);
+  assert.equal(new Set(waits.map((line) => line.instance)).size, waits.length, `${row.key}: one wait per instance`);
+  const keyLine = row.placements[0]?.attached && row.placements[0].instance !== null ? row.placements[0] : undefined;
+  assert.deepEqual(row.waiting, keyLine ? keyLine.waiting : waits[0]?.waiting ?? null, `${row.key}: waiting mirrors the line it shows on`);
   const key = row.placements[0];
   if (!key) return;
   // Transitional: the row's mirrors are its key placement's line's.

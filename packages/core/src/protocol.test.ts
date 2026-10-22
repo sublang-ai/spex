@@ -95,6 +95,8 @@ test("space-29, space-82: a space command names the instance it acts at by its o
     { type: "space.unshare", id: "i11", instance, group: "7", login: "bob" },
     { type: "space.members", id: "i12", repository },
     { type: "space.forget", id: "i13", instance },
+    { type: "space.place", id: "i14", repository, choice: { kind: "join", instance: "https://second.example", hostId: "7" }, noticed: true },
+    { type: "space.place", id: "i15", repository, choice: { kind: "create", instance: "https://second.example", groupId: null, name: "a" } },
   ];
   for (const command of named) {
     const parsed = parseCommand(command);
@@ -108,6 +110,8 @@ test("space-29, space-82: a space command names the instance it acts at by its o
     { type: "space.signout", id: "d3" },
     { type: "space.pick", id: "d4", repository: "ada/a-spex", choice: { kind: "join", hostId: "42" } },
     { type: "space.pick", id: "d5", repository: "ada/a-spex", choice: { kind: "create", groupId: null, name: "a" } },
+    { type: "space.place", id: "d10", repository, choice: { kind: "join", hostId: "42" } },
+    { type: "space.place", id: "d11", repository, choice: { kind: "create", groupId: null, name: "a" } },
     { type: "space.join", id: "d6", hostId: "42" },
     { type: "space.group.create", id: "d7", name: "Acme", path: "acme", parent: null },
     { type: "space.group.rename", id: "d8", group: "7", name: "Acme Corp" },

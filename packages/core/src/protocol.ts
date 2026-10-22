@@ -74,6 +74,14 @@ export const repositoryKeySchema = z.string().regex(REPOSITORY_KEY_PATTERN);
  * carries it (space-29, DR-127): the core reads it in any spelling and
  * refuses one the home does not list. */
 const instanceOriginSchema = z.string().min(1);
+/** What a pick or a Place chooses at an instance (space-29): a spex
+ * repository it lists, to join, or a group there by its host id — your
+ * namespace there by none — to create `<name>-spex` in, `name` given
+ * without its `-spex` suffix. */
+const groupChoiceSchema = z.union([
+  z.object({ kind: z.literal("join"), instance: instanceOriginSchema, hostId: z.string().min(1) }).strict(),
+  z.object({ kind: z.literal("create"), instance: instanceOriginSchema, groupId: z.string().min(1).nullable(), name: z.string().min(1) }).strict(),
+]);
 
 /** A request in `spex.yaml` (environments-2): exactly one source. */
 export const environmentRequestSchema = z.union([
@@ -1251,11 +1259,19 @@ export const commandSchema = z.discriminatedUnion("type", [
     id,
     repository: repositoryKeySchema,
     /** `instance`: the one the choice is at. */
-    choice: z.union([
-      z.object({ kind: z.literal("join"), instance: instanceOriginSchema, hostId: z.string().min(1) }).strict(),
-      z.object({ kind: z.literal("create"), instance: instanceOriginSchema, groupId: z.string().min(1).nullable(), name: z.string().min(1) }).strict(),
-    ]),
+    choice: groupChoiceSchema,
     /** The privacy notice was shown for a join into a repository with other members (space-57). */
+    noticed: z.boolean().optional(),
+  }).strict(),
+  /** A placement added at an instance the clone holds none at
+   * (space-97, DR-128), its choice as a pick's. */
+  z.object({
+    type: z.literal("space.place"),
+    id,
+    repository: repositoryKeySchema,
+    /** `instance`: the one the choice is at. */
+    choice: groupChoiceSchema,
+    /** The privacy notice was shown for that placement (space-57). */
     noticed: z.boolean().optional(),
   }).strict(),
   /** `instance`: the one the row stands under (space-1). */
@@ -1517,6 +1533,9 @@ export interface CommandResults {
   "space.signout": GroupsState;
   "space.forget": GroupsState;
   "space.pick": { accepted: true };
+  /** Once the creation or the join is accepted at the host, the sync
+   * following as state (space-29). */
+  "space.place": { accepted: true };
   "space.join": { accepted: true };
   "space.members": { members: HostMemberInfo[] };
   "space.group.create": { group: { id: string; fullPath: string; name: string } };
