@@ -5474,12 +5474,14 @@ export class SpaceManager {
   // a blank name or login, a role or a place the view does not list — is
   // refused before it is.
 
-  /** The members of a spex repository by its key, or of a group by its
-   * host id, as the host reports them (space-62, git-host-8), read on
-   * each ask and held nowhere. */
+  /** The members of a spex repository's placement — the one at the
+   * instance the command names, its key placement where none is named —
+   * by the repository's key, or of a group by its host id, as the
+   * instance governing that placement, or listing that group, reports
+   * them (space-62, git-host-8), read on each ask and held nowhere. */
   async members(input: { instance?: string; repository?: string; group?: string }): Promise<{ members: HostMember[] }> {
-    const instance = await this.targetInstance(input);
-    const target = await this.membersTarget(instance, input, "invalid_request");
+    const { instance, placement } = await this.commandTarget(input);
+    const target = await this.membersTarget(instance, input, "invalid_request", placement);
     return this.listMembers(instance, target);
   }
 
@@ -5598,7 +5600,8 @@ export class SpaceManager {
    * announced before the reply; its clone moves on its next sync where
    * it is the key placement's (space-60). */
   async moveRepository(key: string, groupId: string | null, named?: string): Promise<{ repository: { id: string; fullPath: string } }> {
-    const { instance, target } = await this.placementTarget(key, named);
+    const { instance, placement } = await this.commandTarget({ repository: key, ...(named !== undefined ? { instance: named } : {}) });
+    const target = await this.membersTarget(instance, { repository: key }, "invalid_request", placement);
     let into: HostGroup | null = null;
     if (groupId !== null) {
       into = this.instanceGroup(instance, groupId);
@@ -5609,7 +5612,10 @@ export class SpaceManager {
       moved = await instance.client.transferRepository(target.id, groupId);
     } catch (error) {
       if (error instanceof HostError && error.kind === "name_taken") {
-        throw new CoreError("invalid_request", takenIn(splitKey(key).name, into?.fullPath ?? userGroup(instance.view)?.fullPath ?? this.host.store.home.ownName));
+        // The host repository's own name there: a placement beside the
+        // key placement may bear another than the key's (git-host-20).
+        const name = (placement && this.listingOf(instance, { remote: placement.url, id: placement.id })?.repository.path) ?? splitKey(key).name;
+        throw new CoreError("invalid_request", takenIn(name, into?.fullPath ?? userGroup(instance.view)?.fullPath ?? this.host.store.home.ownName));
       }
       throw this.hostWriteRefusal(instance, error);
     }
@@ -5675,17 +5681,18 @@ export class SpaceManager {
     }
   }
 
-  /** Add the account of a login to a group or spex repository at one of
-   * the host's roles, and list the members the host holds afterwards
-   * (git-host-16). `role` is a role's id from the view. */
+  /** Add the account of a login to a group, or to a spex repository's
+   * placement the command names, at one of the roles of the instance it
+   * acts at, and list the members that instance holds afterwards
+   * (git-host-16). `role` is a role's id from that instance's view. */
   async share(input: { instance?: string; repository?: string; group?: string; login: string; role: string }): Promise<{ members: HostMember[] }> {
-    const instance = await this.targetInstance(input);
+    const { instance, placement } = await this.commandTarget(input);
     const login = input.login.trim();
     if (login.length === 0) throw new CoreError("invalid_request", nameTheLogin(this.nameOf(instance)));
     // A role that instance grants (git-host-16).
     const roles = this.viewOf(instance)?.roles ?? [];
     if (!roles.some((role) => role.id === input.role)) throw new CoreError("invalid_request", notARole(input.role, this.nameOf(instance)));
-    const target = await this.membersTarget(instance, input, "not_found");
+    const target = await this.membersTarget(instance, input, "not_found", placement);
     try {
       await instance.client.addMember(target, { login, role: input.role });
     } catch (error) {
@@ -5694,14 +5701,14 @@ export class SpaceManager {
     return this.listMembers(instance, target);
   }
 
-  /** Remove the account of a login from a group's or spex repository's
-   * own members, and list the members the host holds afterwards
-   * (git-host-17). */
+  /** Remove the account of a login from a group's own members, or from
+   * those of a spex repository's placement the command names, and list
+   * the members the instance it acts at holds afterwards (git-host-17). */
   async unshare(input: { instance?: string; repository?: string; group?: string; login: string }): Promise<{ members: HostMember[] }> {
-    const instance = await this.targetInstance(input);
+    const { instance, placement } = await this.commandTarget(input);
     const login = input.login.trim();
     if (login.length === 0) throw new CoreError("invalid_request", nameTheLogin(this.nameOf(instance)));
-    const target = await this.membersTarget(instance, input, "not_found");
+    const target = await this.membersTarget(instance, input, "not_found", placement);
     try {
       await instance.client.removeMember(target, login);
     } catch (error) {
@@ -5722,78 +5729,64 @@ export class SpaceManager {
   }
 
   /**
-   * The instance a move acts at and the host's id of the spex repository
-   * there (space-29): the placement at the instance the command names, at
-   * the instance governing it (git-host-5) — its own while signed in, else
-   * the earliest signed-in one listing its host repository — matched as
-   * that instance lists it; the key placement's, and a clone's first where
-   * none is named, as Members reads them. One at which the clone holds no
-   * placement is refused, a clone holding none read as local only, and a
-   * spex repository not on this device holds its one listed placement at
-   * the instance its key lies under.
-   */
-  private async placementTarget(key: string, named: string | undefined): Promise<{ instance: HostInstance; target: MembersTarget }> {
-    const at = named === undefined ? undefined : this.namedInstance(named);
-    if (at !== undefined && this.host.store.repository(key)) {
-      const machine = this.machine(key);
-      await machine.readFacts();
-      const placements = machine.placements;
-      const placement = placements.find((candidate) => candidate.instance !== null && canonicalOrigin(candidate.instance) === at);
-      if (placement === undefined && placements.length > 0) throw new CoreError("invalid_request", noSuchPlacement(splitKey(key).name));
-      if (placement !== undefined && placement !== keyPlacement(placements)) {
-        const instance = this.governingOfPlacement(machine, placement);
-        if (!instance) throw new CoreError("invalid_request", signInFirst());
-        const listing = this.listingOf(instance, { remote: placement.url, id: placement.id });
-        const id = listing?.repository.id ?? (instance.view ? null : placement.id);
-        if (id === null) throw new CoreError("not_found", noLongerShared());
-        return { instance, target: { kind: "repository", id } };
-      }
-    } else if (at !== undefined && (this.instanceOfKey(key) ?? this.defaultInstance()).origin !== at) {
-      throw new CoreError("invalid_request", noSuchPlacement(splitKey(key).name));
-    }
-    const instance = await this.targetInstance({ repository: key });
-    return { instance, target: await this.membersTarget(instance, { repository: key }, "invalid_request") };
-  }
-
-  /**
-   * The instance a members, share or move command acts at (space-29),
-   * signed in there: for a group, the one the command names with it, one
-   * the home does not list refused `not_found`; for a spex repository,
-   * the instance governing it (git-host-5) — its clone's own while signed
-   * in, else the earliest signed-in one listing it — or, for one not on
-   * this device, the instance its key lies under, where its row stands. A
-   * command names exactly one group or one spex repository, and an
+   * What a members, share, unshare or move command acts on (space-29):
+   * the instance it acts at, signed in there, and the placement it names
+   * where that is not the key placement.
+   * - A group: the instance the command names with it, which the
+   *   protocol requires.
+   * - A spex repository on this device: its placement at the instance
+   *   the command names — its key placement, which its row reads, where
+   *   none is named — at the instance governing that placement
+   *   (git-host-5): its own while signed in, else the earliest signed-in
+   *   one listing its host repository, but none at which the clone holds
+   *   another placement. An instance at which the clone holds no
+   *   placement is refused; a clone holding none reads as local only
+   *   (membersTarget).
+   * - One not on this device: its one listed placement, at the instance
+   *   its key lies under, where its row stands.
+   * A command names exactly one group or one spex repository, and an
    * instance it names the home lists.
    */
-  private async targetInstance(input: { instance?: string; repository?: string; group?: string }): Promise<HostInstance> {
+  private async commandTarget(input: { instance?: string; repository?: string; group?: string }): Promise<{ instance: HostInstance; placement?: Placement }> {
     if ((input.group === undefined) === (input.repository === undefined)) throw new CoreError("invalid_request", nameOneTarget());
-    const named = input.instance === undefined ? undefined : this.namedInstance(input.instance);
+    const named = input.instance === undefined ? undefined : canonicalOrigin(this.namedInstance(input.instance));
     let instance: HostInstance;
+    let placement: Placement | undefined;
     if (input.repository === undefined) {
-      // A group is a host id at the instance named with it, which the
-      // protocol requires (space-29).
       if (named === undefined) throw new CoreError("invalid_request", nameOneTarget());
       instance = this.instanceAt(named);
     } else if (this.host.store.repository(input.repository)) {
       const machine = this.machine(input.repository);
       await machine.readFacts();
-      instance = this.rowInstance(machine) ?? this.servingOf(machine);
-    } else instance = this.instanceOfKey(input.repository) ?? this.defaultInstance();
+      const placements = machine.placements;
+      const at = named === undefined ? undefined : placements.find((candidate) => candidate.instance !== null && canonicalOrigin(candidate.instance) === named);
+      if (named !== undefined && at === undefined && placements.length > 0) throw new CoreError("invalid_request", noSuchPlacement(splitKey(input.repository).name));
+      if (at !== undefined && at !== keyPlacement(placements)) {
+        const governing = this.governingOfPlacement(machine, at);
+        if (!governing) throw new CoreError("invalid_request", signInFirst());
+        instance = governing;
+        placement = at;
+      } else instance = this.rowInstance(machine) ?? this.servingOf(machine);
+    } else {
+      instance = this.instanceOfKey(input.repository) ?? this.defaultInstance();
+      if (named !== undefined && instance.origin !== named) throw new CoreError("invalid_request", noSuchPlacement(splitKey(input.repository).name));
+    }
     if (!this.signedInAt(instance)) throw new CoreError("invalid_request", signInFirst());
-    return instance;
+    return { instance, placement };
   }
 
   /**
    * The host's id of the group or spex repository a command names, as
    * the current view of the instance it acts at lists it (git-host-8,
-   * git-host-16, git-host-17): a group by its host id; a repository by
-   * its key — its clone's listing, or, before any read is held, the id
-   * its clone records — or the instance's listing under that key where
-   * this device lacks it. A clone on this device alone is refused
-   * `localOnly`; a place the view does not list `not_found`, the host
-   * not asked.
+   * git-host-16, git-host-17, git-host-20): a group by its host id; a
+   * repository by its key — its key placement's listing, or `placement`'s
+   * where the command names one beside it (commandTarget), or, before
+   * any read of that instance is held, the id its remote records — or
+   * the instance's listing under that key where this device lacks it. A
+   * clone on this device alone is refused `localOnly`; a place the view
+   * does not list `not_found`, the host not asked.
    */
-  private async membersTarget(instance: HostInstance, input: { repository?: string; group?: string }, localOnly: "invalid_request" | "not_found"): Promise<MembersTarget> {
+  private async membersTarget(instance: HostInstance, input: { repository?: string; group?: string }, localOnly: "invalid_request" | "not_found", placement?: Placement): Promise<MembersTarget> {
     const view = instance.view;
     if (input.group !== undefined) {
       const group = input.group;
@@ -5801,6 +5794,14 @@ export class SpaceManager {
       return { kind: "group", id: group };
     }
     const key = input.repository as string;
+    if (placement) {
+      // A placement beside the key placement, as the instance governing
+      // it lists it (git-host-5).
+      const listing = this.listingOf(instance, { remote: placement.url, id: placement.id });
+      const id = listing?.repository.id ?? (view ? null : placement.id);
+      if (id === null) throw new CoreError("not_found", noLongerShared());
+      return { kind: "repository", id };
+    }
     if (this.host.store.repository(key)) {
       const facts = await this.machine(key).readFacts();
       if (facts.remote === null) {

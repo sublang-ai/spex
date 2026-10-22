@@ -1260,9 +1260,10 @@ export const commandSchema = z.discriminatedUnion("type", [
   }).strict(),
   /** `instance`: the one the row stands under (space-1). */
   z.object({ type: z.literal("space.join"), id, instance: instanceOriginSchema, hostId: z.string().min(1), folder: z.string().min(1).optional() }).strict(),
-  // Members of a spex repository by key, or of a group by its host id
-  // at its instance; exactly one (space-29), a group with its instance
-  // (parseCommand).
+  // Members of a spex repository's placement by its key — `instance` the
+  // placement's, its first where omitted — or of a group by its host id
+  // at its instance; exactly one (space-29, DR-128), a group with its
+  // instance (parseCommand). Share and unshare name theirs alike.
   z.object({ type: z.literal("space.members"), id, instance: instanceOriginSchema.optional(), repository: repositoryKeySchema.optional(), group: z.string().min(1).optional() }).strict(),
   // Groups and sharing (DR-114, space-29), a group at the instance named.
   z.object({ type: z.literal("space.group.create"), id, instance: instanceOriginSchema, name: z.string().min(1), path: z.string().min(1), parent: z.string().min(1).nullable() }).strict(),
