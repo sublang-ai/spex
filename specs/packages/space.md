@@ -287,7 +287,7 @@ When a client sends `space.leave` [[space-29](#space-29)], the core shall, as an
 | Case | Outcome |
 | --- | --- |
 | its instance signed out, another signed-in instance listing its host repository [[git-host-5](git-host.md#git-host-5)], and the clone holding no placement at that instance | nothing fetched or dropped: its remote renamed to the folder of the instance it follows [[space-60](#space-60)] and its file rewritten to that instance [[storage-36](storage.md#storage-36)] |
-| a unit that placement's `spex` or the clone holds is held by no remaining placement's `spex` as the clone last fetched or pushed it — every unit, where none remains — and the leave is not `confirmed` | nothing dropped; the leave stopped `unreceived`, naming the count |
+| a unit that placement's `spex` or the clone holds is held by no remaining placement's `spex`, as the clone last fetched or pushed it or at their last shared commit — every unit, where none remains — and the leave is not `confirmed` | nothing dropped; the leave stopped `unreceived`, naming the count |
 | the placement cannot be read, and the leave is not `confirmed` | nothing dropped; the leave stopped, saying that records pushed there since the last sync may be left behind |
 | it is the first placement | the clone moved with the drop [[storage-38](storage.md#storage-38)], a refusal of that move refusing the leave whole, naming the session or the instance, with Retry |
 

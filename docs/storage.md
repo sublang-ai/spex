@@ -143,7 +143,7 @@ Deletion fails if another writer is active or exclusive ownership cannot be prov
 Retired lease directories remain so delayed stale-lock recovery cannot affect a new owner.
 If one side deletes a session and another modifies it, synchronization requires an explicit choice between deletion and the complete modified bundle.
 
-Removing a project forgets its pair and deletes its clone, asking a second confirmation while the clone holds records that no placement holds as the clone last fetched or pushed it; the working folder is left untouched.
+Removing a project forgets its pair and deletes its clone, asking a second confirmation while the clone holds records that no placement holds, as the clone last fetched or pushed it or at their last shared commit; the working folder is left untouched.
 Replacing session history resets its last-viewed turn.
 Local preferences and migration records never leave the device; caches are rebuildable.
 

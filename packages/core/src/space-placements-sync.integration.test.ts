@@ -931,3 +931,27 @@ test("space-21, space-98, space-31, space-57, space-93: a Leave sent while a Syn
   assert.equal(existsSync(join(clone, "placements", `${placed.folder}.yaml`)), false, "its file deleted");
   assert.equal(git(firstBare, "cat-file", "-p", "spex:later.md"), "sent by the sync the leave follows");
 });
+
+test("space-98, space-12, space-29: a Leave not confirmed counts a unit changed here that no remaining placement holds, and not one this device holds unchanged since its last shared commit with the first while a peer rewrote it there; stopped, it keeps the placement", async (t) => {
+  const { first, second, home, key, clone, placed, firstBare } = await settledAtBoth("leave-count");
+  t.after(() => home.stop());
+  writeFileSync(join(clone, "shared.md"), "as both placements hold it\n");
+  assert.equal((await home.client.settle("space.sync", { repository: key }, 30_000)).sync.phase, "done");
+
+  // A peer at the first rewrites the unit, which this device fetches
+  // without merging; another unit is changed here and sent nowhere.
+  await peerPush(peerClone(firstBare), (dir) => { writeFileSync(join(dir, "shared.md"), "as a peer at the first rewrote it\n"); });
+  writeFileSync(join(clone, "mine.md"), "changed here, sent nowhere\n");
+  const fetched = await home.client.settle("space.fetch", { repository: key }, 30_000);
+  assert.deepEqual(units(placementOf(fetched, first.url).incoming), ["shared.md"]);
+
+  // The Leave of the second counts the unit changed here alone: the
+  // first holds the other at its last shared commit with the clone
+  // (space-98).
+  const from = home.client.mark();
+  assert.deepEqual(await home.client.expectOk("space.leave", { repository: key, instance: second.url }), { accepted: true });
+  const stopped = await home.client.waitRepository(from, key, (row) => row.sync.phase === "stopped", 30_000);
+  assert.ok(stopped.sync.phase === "stopped" && stopped.sync.op === "leave" && stopped.sync.cause === "unreceived" && stopped.sync.count === 1, JSON.stringify(stopped.sync));
+  assert.deepEqual(stopped.placements.map((line) => [line.instance, line.attached]), [[canonicalOrigin(first.url), true], [canonicalOrigin(second.url), true]]);
+  assert.deepEqual(git(clone, "remote").split("\n").sort(), [hostFolder(first), placed.folder].sort());
+});

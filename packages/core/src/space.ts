@@ -1045,7 +1045,8 @@ const RECORD_KINDS = new Set<SpaceUnitKind>(["session", "intent", "authoring", "
  * tree of `others` holds identically — every one where none is given
  * (space-98, projects-9): each unit grouped across every tree as a sync
  * plans it (storage-11), the placement files, which name placements
- * rather than hold records, left out. */
+ * rather than hold records, left out. A placement stands in `others` by
+ * each tree that reached it (reachedTrees). */
 function unitsHeldByNone(held: readonly StorageTree[], others: readonly StorageTree[]): string[] {
   const files = new Set<string>();
   for (const tree of [...held, ...others]) for (const file of tree.keys()) files.add(file);
@@ -2162,10 +2163,11 @@ class RepositorySync {
 
   /** What a removal of this clone would lose (projects-9): the record
    * units of its working tree that no placement's `spex` holds
-   * identically, each as the clone last fetched or pushed it (space-12)
-   * — the path placement's among them — every unit where it holds none,
-   * counted without touching the clone's own lists. A placement whose
-   * host its last check found holding no `spex` holds none. */
+   * identically, as the clone last fetched or pushed it or at their last
+   * shared commit (space-12, reachedTrees) — the path placement's among
+   * them — every unit where it holds none, counted without touching the
+   * clone's own lists. A placement whose host its last check found
+   * holding no `spex` holds none. */
   async pendingUnits(): Promise<number> {
     const repo = await this.readRepository();
     if (!repo.root || repo.head === null) return 0;
@@ -2173,9 +2175,23 @@ class RepositorySync {
     for (const placement of repo.placements) {
       const spex = repo.spex.get(placement.name) ?? null;
       if (spex === null || this.runs.get(placement.name)?.remoteEmpty === true) continue;
-      placed.push(readStorageTree(this.dir, spex));
+      placed.push(...await this.reachedTrees(repo.head, spex));
     }
     return unitsHeldByNone([readStorageTree(this.dir, await this.workingTree())], placed).length;
+  }
+
+  /** The trees in which a placement holds a unit as reached (projects-9,
+   * space-98): its `spex` as the clone last fetched or pushed it, `spex`,
+   * and the last commit it shared with the clone's `head` — their merge
+   * base — so that a unit the clone holds unchanged since then counts as
+   * reached, whatever a peer did to it there since. */
+  private async reachedTrees(head: string | null, spex: string): Promise<StorageTree[]> {
+    const trees = [readStorageTree(this.dir, spex)];
+    if (head === null || head === spex) return trees;
+    const base = await this.git.run(["merge-base", head, spex]);
+    const shared = base.code === 0 ? base.stdout.toString("utf8").trim() : "";
+    if (shared !== "" && shared !== spex) trees.push(readStorageTree(this.dir, shared));
+    return trees;
   }
 
   /** A Leave's read of the placement it leaves (space-98): that
@@ -2213,23 +2229,25 @@ class RepositorySync {
 
   /** How many record units the placement whose remote bears `name`, or
    * the clone, holds that no other placement's `spex` holds identically,
-   * each as the clone last fetched or pushed it — every unit where none
-   * remains (space-98): the units a Leave of it, unconfirmed, stops for.
-   * The clone's are its working tree's; a placement whose host its last
-   * check found holding no `spex` holds none. */
+   * as the clone last fetched or pushed it or at their last shared commit
+   * (reachedTrees) — every unit where none remains (space-98): the units
+   * a Leave of it, unconfirmed, stops for. The clone's are its working
+   * tree's; a placement whose host its last check found holding no
+   * `spex` holds none. */
   async unreceivedUnits(name: string): Promise<number> {
-    const spexOf = async (remote: string): Promise<string | null> => {
-      const read = await this.git.run(["rev-parse", "-q", "--verify", `${this.refOf(remote)}^{commit}`]);
+    const commitOf = async (ref: string): Promise<string | null> => {
+      const read = await this.git.run(["rev-parse", "-q", "--verify", `${ref}^{commit}`]);
       return read.code === 0 ? read.stdout.toString("utf8").trim() : null;
     };
+    const head = await commitOf("HEAD");
     const held = [readStorageTree(this.dir, await this.workingTree())];
-    const leaving = this.runs.get(name)?.remoteEmpty === true ? null : await spexOf(name);
+    const leaving = this.runs.get(name)?.remoteEmpty === true ? null : await commitOf(this.refOf(name));
     if (leaving !== null) held.push(readStorageTree(this.dir, leaving));
     const others: StorageTree[] = [];
     for (const placement of this.placementsNow()) {
       if (placement.name === name) continue;
-      const spex = await spexOf(placement.name);
-      if (spex !== null) others.push(readStorageTree(this.dir, spex));
+      const spex = await commitOf(this.refOf(placement.name));
+      if (spex !== null) others.push(...await this.reachedTrees(head, spex));
     }
     return unitsHeldByNone(held, others).length;
   }
