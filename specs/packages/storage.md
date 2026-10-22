@@ -83,7 +83,7 @@ The project file shall encode `<clone>/project.json` as exactly `{format: 1, nam
 
 ### storage-4
 
-The intent store shall encode each `<clone>/intents/<id>.json` as a closed JSON object with `format: 2` and exactly these fields — a file of `format: 1` reading the same without `runtime` — the file's name being the intent's canonical lowercase UUID `id` ([DR-103](../decisions/103-the-home-and-its-groups.md), [DR-131](../decisions/131-execution-ownership.md)):
+The intent store shall encode each `<clone>/intents/<id>.json` as a closed JSON object with `format: 2` and exactly these fields — a file of `format: 1` reading the same without `runtime` — the file's name being the intent's canonical lowercase UUID `id` ([DR-103](../decisions/103-the-home-and-its-groups.md), [DR-134](../decisions/134-execution-ownership.md)):
 
 | Field | Content |
 | --- | --- |
@@ -105,7 +105,7 @@ The intent store shall encode each `<clone>/intents/<id>.json` as a closed JSON 
 
 ### storage-43
 
-When a session is created, the session store shall append to its replay stream, under the session's lease and before its first turn, one hidden `captain_telemetry` record with topic `spex.session.runtime`, no turn id, and payload `{device, label}` — the `device` of the home whose core created it [[storage-2](#storage-2)] and a label for display — never rewritten, so that the assignment rides the session bundle as one unit [[storage-11](#storage-11)] ([DR-131](../decisions/131-execution-ownership.md)):
+When a session is created, the session store shall append to its replay stream, under the session's lease and before its first turn, one hidden `captain_telemetry` record with topic `spex.session.runtime`, no turn id, and payload `{device, label}` — the `device` of the home whose core created it [[storage-2](#storage-2)] and a label for display — never rewritten, so that the assignment rides the session bundle as one unit [[storage-11](#storage-11)] ([DR-134](../decisions/134-execution-ownership.md)):
 
 - the first such record in the stream names the session's runtime; a stream with none names no runtime, and one whose first such record cannot be read names an unknown runtime, never this home's;
 - the record is hidden, so no session channel carries it [[core-service-8](core-service.md#core-service-8)].

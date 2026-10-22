@@ -109,7 +109,7 @@ When the served page resolves its core endpoint, the UI shall connect to the pag
 
 #### server-shell-6
 
-When the server shell receives SIGINT or SIGTERM, it shall stop the core service — disposing every live session runtime within the core's bounds [[core-service-39](core-service.md#core-service-39)] — and exit once the stop completes, within twenty seconds of the signal at the latest, leaving no agent process the core started ([DR-131](../decisions/131-execution-ownership.md)).
+When the server shell receives SIGINT or SIGTERM, it shall stop the core service — disposing every live session runtime within the core's bounds [[core-service-39](core-service.md#core-service-39)] — and exit once the stop completes, within twenty seconds of the signal at the latest, leaving no agent process the core started ([DR-134](../decisions/134-execution-ownership.md)).
 
 ### Source Development
 

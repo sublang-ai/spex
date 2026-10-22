@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
 
-# IR-112: One Desktop Over Several Cores
+# IR-115: One Desktop Over Several Cores
 
 ## Status
 

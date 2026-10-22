@@ -5,7 +5,7 @@
 
 ## Status
 
-Accepted (2026-10-21) on the owner's direction: a group shares a Linux server that runs Spex for its members, each in an OS account of their own, admitted by the group's live membership through the instance (spex.pub DR-029 [[1]]), with the administrator's agent sign-ins shared across the server; one desktop controls projects there and here at once ([DR-133](133-one-desktop-over-several-cores.md)); execution is owned per runtime ([DR-131](131-execution-ownership.md)).
+Accepted (2026-10-21) on the owner's direction: a group shares a Linux server that runs Spex for its members, each in an OS account of their own, admitted by the group's live membership through the instance (spex.pub DR-029 [[1]]), with the administrator's agent sign-ins shared across the server; one desktop controls projects there and here at once ([DR-133](133-one-desktop-over-several-cores.md)); execution is owned per runtime ([DR-134](134-execution-ownership.md)).
 Amends, under [DR-046](046-decision-record-evolution.md):
 
 - [DR-033](033-remote-gui-serving.md) in "a single-user deployment" and "one token, in the URL": a server is N single-user shells, one per member's OS account, behind one hub that admits a bearer in a header and no token in a URL; the single-user shell on a machine of one's own stands.
@@ -61,12 +61,12 @@ Amends, under [DR-046](046-decision-record-evolution.md):
 ### Boundaries
 
 - The group governs: admission by spex.pub DR-029 [[1]]; who sees a project's records and sessions by the members of its records, as [DR-103](103-the-home-and-its-groups.md) has it; no member list of the server's own.
-- Each seat is a runtime of [DR-131](131-execution-ownership.md): a session created or an intent captured there runs there.
+- Each seat is a runtime of [DR-134](134-execution-ownership.md): a session created or an intent captured there runs there.
 
 ### Lifecycle
 
 - The hub renews each seat's lease at the instance with the server token every 30 minutes while a client is connected to the seat or a turn runs on it, the desktop connected or not, the seat telling the hub only whether a turn runs; a refusal ends the lease at once, and 60 minutes without a successful read ends it.
-- At the lease's end, on `evict`, on `retire` and on the server's shutdown, the hub stops the seat's unit: the service manager signals the core, whose graceful stop of [DR-131](131-execution-ownership.md) runs within the unit's stop timeout, and then kills what remains of the seat's control group; the seat's files stand.
+- At the lease's end, on `evict`, on `retire` and on the server's shutdown, the hub stops the seat's unit: the service manager signals the core, whose graceful stop of [DR-134](134-execution-ownership.md) runs within the unit's stop timeout, and then kills what remains of the seat's control group; the seat's files stand.
 - A member removed from the group loses the seat at its next renewal; their account and files stand until the administrator removes them.
 - `retire` stops every seat, deletes the app token and the code-host tokens under each seat's `local/`, and forgets the server token; the server's record and its seat devices are revoked by an Owner of its group with Retire at the instance [[1]]; homes stand otherwise.
 - A seat's Playbook machine identity lives under its own state folder, so a seat stopped mid-turn restores its own session at its next start.

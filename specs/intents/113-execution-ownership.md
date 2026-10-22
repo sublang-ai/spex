@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
 
-# IR-110: Execution Ownership
+# IR-113: Execution Ownership
 
 ## Status
 
@@ -9,7 +9,7 @@ In progress (2026-10-21), before any shared execution ships.
 
 ## Intent
 
-Implement [DR-131](../decisions/131-execution-ownership.md): every session and every new intent assigned to one runtime, another runtime's readings and refusals, the phrase, and the bounded stop.
+Implement [DR-134](../decisions/134-execution-ownership.md): every session and every new intent assigned to one runtime, another runtime's readings and refusals, the phrase, and the bounded stop.
 
 ## Deliverables
 

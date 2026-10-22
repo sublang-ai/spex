@@ -12,7 +12,7 @@ Amends [DR-051](051-runtime-held-for-a-turn.md) in scope: the latest owned conve
 Applies [DR-069](069-key-phrases-not-sentences.md) to the next row's standing and [DR-075](075-a-failure-says-what-and-what-now.md) to any failure cause it carries.
 Amended by [DR-088](088-playbook-17-slc-0-12-cligent-0-27-adoption.md) in its advancement gate alone: a restore's report settles clean yet hands no queued intent on, being the account of a stop; the gate for every other settled turn stands.
 Amended by [DR-103](103-the-home-and-its-groups.md): intents have no rank and no link; the next to run is the oldest one waiting, and the queue reads in that order.
-Amended by [DR-131](131-execution-ownership.md) in which intent is next and in the project's lane: only the runtime's own records count.
+Amended by [DR-134](134-execution-ownership.md) in which intent is next and in the project's lane: only the runtime's own records count.
 
 ## Context
 
