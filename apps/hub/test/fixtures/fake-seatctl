@@ -1,0 +1,7 @@
+#!/bin/sh
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
+
+# The tests' stand-in for spex-seatctl: the same four forms, acting as
+# the current user on scratch homes (fake-seatctl.mjs).
+exec "${FAKE_NODE:-node}" "$(dirname "$0")/fake-seatctl.mjs" "$@"
