@@ -295,9 +295,9 @@ The app shell shall fill the window at every size, giving the surface it shows a
 
 Where a project is registered and no session tab is active, when the Projects surface is shown, the run view shall present a project task start with one composer and secondary Captain settings ([DR-007](../decisions/007-conversational-session-start.md), [DR-011](../decisions/011-project-workspace.md), [DR-138](../decisions/138-project-start-explains-the-task-and-slash-discovery.md)):
 
-- the heading names the current project and asks for a change and its acceptance criteria, explaining that Spex works through available playbooks rather than presenting an unrestricted chat;
-- Captain is named as the task coordinator who selects a suitable playbook and arranges execution and review, while its adapter, model, and effort stay in its in-place editor [[run-view-32](#run-view-32)] and blocking readiness remains at the composer;
-- the sole task field has a visible label, and a hint outside the composer says to type `/` in that field to inspect the configured playbooks [[run-view-27](#run-view-27)]; its idle inside-caption is absent while staged-intent and acknowledgment captions still appear [[run-view-106](#run-view-106)];
+- the heading names the current project; guidance aligned to the composer's width asks for a change and its acceptance criteria, explaining that Captain chooses a suitable playbook and arranges AI implementation and review rather than presenting an unrestricted chat;
+- immediately above the composer, Captain wears the same avatar and name as the running Captain pane, beside a clickable chip showing its current adapter, model, effort, fast-mode mark, and readiness; that chip opens the in-place editor [[run-view-32](#run-view-32)], while blocking readiness remains at the composer;
+- the sole task field has an accessible label without a visible label, and a stable hint below the composer says to type `/` in that field to inspect the configured playbooks [[run-view-27](#run-view-27)]; its idle inside-caption is absent while staged-intent and acknowledgment captions still appear [[run-view-106](#run-view-106)];
 - with no project current, the greeting directs the reader to pick one where projects exist;
 - Project choice lives in the sidebar and palette, not in the composer row.
 
@@ -324,7 +324,7 @@ While the Captain home is shown, when the user submits composer text, the run vi
 The run view shall make configured playbooks discoverable at the composer ([DR-138](../decisions/138-project-start-explains-the-task-and-slash-discovery.md)):
 
 - when the user types `/` at the start of a composer, the run view shows the configured playbooks filtered by the typed prefix, each with its intent — a built-in's in the interface language [[localization-4](localization.md#localization-4)] — as the hint, and inserts the selected command into the composer without dispatching it;
-- at the project task start, an outside-the-field hint tells the reader to type `/` to inspect the complete configured list; no selected-command quick-start card or separate playbook-preview control is required.
+- at the project task start, a stable hint below the composer tells the reader to type `/` to inspect the complete configured list; no selected-command quick-start card or separate playbook-preview control is required.
 
 #### run-view-30
 
@@ -1032,12 +1032,12 @@ Where no session is live, when the Projects surface renders with a fixture confi
 When the Captain home composer and thread render against the fixture playbook, the test suite shall assert playbook discovery and IM presentation:
 
 - when `/` is typed at the start of the composer, the slash menu lists the fixture playbook with its intent, filters as more is typed, and inserts the command without dispatching on selection [[run-view-27](#run-view-27)];
-- the project task start keeps slash discovery outside the sole task field and shows the complete configured playbook list when `/` is typed [[run-view-25](#run-view-25)] [[run-view-27](#run-view-27)];
+- the project task start aligns its guidance with the composer, shows Captain's avatar and configured agent chip immediately above it, keeps slash discovery below its sole task field, and shows the complete configured playbook list when `/` is typed [[run-view-25](#run-view-25)] [[run-view-27](#run-view-27)];
 - when a fixture stream containing a boss turn is replayed, the submitted text renders as a user bubble in the Captain thread [[run-view-30](#run-view-30)].
 
 #### run-view-35
 
-When the captain editor popover is opened from the Captain home with a fixture captain block, the test suite shall assert it offers the runtime's adapters with their readiness, that changing the adapter or model issues a captain merge patch through the configuration edit path, that the patch carries the editor's surfaced fields and never a hand-written one, and that the popover opens on the roomier side of its gear under a cap of the room the window can show there — all without a surface change [[run-view-32](#run-view-32)].
+When the captain editor popover is opened from the Captain home's agent chip with a fixture captain block, the test suite shall assert it offers the runtime's adapters with their readiness, that changing the adapter or model issues a captain merge patch through the configuration edit path, that the patch carries the editor's surfaced fields and never a hand-written one, and that the popover opens on the roomier side of its chip under a cap of the room the window can show there — all without a surface change [[run-view-32](#run-view-32)].
 
 #### run-view-36
 

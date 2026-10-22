@@ -102,7 +102,7 @@ describe("localization-4: slash menu discovery", () => {
     renderHome();
 
     expect(screen.queryByTestId("quick-start")).toBeNull();
-    expect(screen.getByText("在输入框输入 /，查看全部 8 个可用规程")).toBeTruthy();
+    expect(screen.getByText("输入 / 查看规程")).toBeTruthy();
 
     // The slash menu offers every playbook, each intent its hint.
     fireEvent.change(screen.getByTestId("start-composer"), { target: { value: "/" } });

@@ -19,6 +19,7 @@ import type { AgentPatch } from "../lib/config-ops.js";
 import { keyLabel } from "../lib/shortcuts.js";
 import { useAppStore, type StagedIntent } from "../state/store.js";
 import { SlashMenuList, slashMatches } from "./SlashMenu.js";
+import { AgentChip, agentChipText, fastModeWord, readinessWord } from "./AgentChip.js";
 import { AgentEditorPopover } from "./AgentEditor.js";
 import { Icon } from "./Icon.js";
 import { NextCard, type NextCardIntent } from "./NextCard.js";
@@ -80,7 +81,7 @@ export interface CaptainHomeProps {
 const POPOVER_MARGIN = 8;
 
 /** Where an anchored popover opens and how tall it may be (DR-009,
- * DR-041 §9). The gear that opens the Captain editor sits at the foot
+ * DR-041 §9). The chip that opens the Captain editor sits at the foot
  * of the home, so a dialog that always opened upward ran off the top
  * of a short window with nothing able to scroll it back. The anchor
  * grants the room instead: the roomier side wins, and the popover
@@ -142,14 +143,14 @@ export function CaptainHome(props: CaptainHomeProps) {
   const openAcademyExample = useAppStore((state) => state.openAcademyExample);
   const [seeding, setSeeding] = useState(false);
   const composerRef = useRef<HTMLTextAreaElement>(null);
-  const gearRef = useRef<HTMLButtonElement>(null);
+  const chipRef = useRef<HTMLButtonElement>(null);
 
   // A window resized under an open popover re-decides its side and
   // its room, so it never ends up outside a window it once fitted.
   const popoverOpen = captainPopover !== undefined;
   useEffect(() => {
     if (!popoverOpen) return;
-    const remeasure = (): void => setCaptainPopover(popoverRoom(gearRef.current));
+    const remeasure = (): void => setCaptainPopover(popoverRoom(chipRef.current));
     window.addEventListener("resize", remeasure);
     return () => window.removeEventListener("resize", remeasure);
   }, [popoverOpen]);
@@ -157,6 +158,14 @@ export function CaptainHome(props: CaptainHomeProps) {
   const captainReadiness = captain
     ? readiness.find((entry) => entry.adapter === captain.adapter)
     : undefined;
+  const captainControlName = captain
+    ? [
+        i18n._("Configure the Captain agent"),
+        agentChipText({ ...captain, fastMode: false }),
+        captain.fastMode ? fastModeWord() : undefined,
+        captainReadiness ? readinessWord(captainReadiness.ready) : undefined,
+      ].filter(Boolean).join(", ")
+    : i18n._("Configure the Captain agent");
   const captainUnavailable = captainReadiness?.ready === false;
   const readyAlternative = captainUnavailable && readiness.some(
     (entry) => entry.ready && entry.adapter !== captain?.adapter,
@@ -315,14 +324,14 @@ export function CaptainHome(props: CaptainHomeProps) {
         }`}
       >
         {props.hasProject ? (
-          <div data-testid="project-task-start" className="max-w-xl">
+          <div data-testid="project-task-start" className="w-full">
             <h1 className="text-2xl font-semibold leading-tight tracking-tight text-neutral-900 dark:text-neutral-100">
               {i18n._("Start a checkable change in {project}", {
                 project: props.projectName ?? i18n._("your project"),
               })}
             </h1>
-            <p className="mt-3 max-w-lg text-sm leading-6 text-neutral-600 dark:text-neutral-300">
-              {i18n._("Describe what should change and how to know it is done. Spex uses available playbooks to turn that request into steps for AI implementation and review.")}
+            <p className="mt-3 text-sm leading-6 text-neutral-600 dark:text-neutral-300">
+              {i18n._("Tell Captain what should change and how to know it is done. It will choose a suitable playbook and coordinate AI implementation and review.")}
             </p>
           </div>
         ) : (
@@ -404,7 +413,7 @@ export function CaptainHome(props: CaptainHomeProps) {
             {readyAlternative ? (
               <button
                 type="button"
-                onClick={() => setCaptainPopover(popoverRoom(gearRef.current))}
+                onClick={() => setCaptainPopover(popoverRoom(chipRef.current))}
                 className="ml-3 font-medium underline"
               >
                 {i18n._("Switch to a ready agent")}
@@ -431,10 +440,11 @@ export function CaptainHome(props: CaptainHomeProps) {
             ) : null}
           </div>
         ) : null}
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-neutral-600 dark:text-neutral-300">
-          <span className="font-semibold text-neutral-900 dark:text-neutral-100">Captain</span>
-          <span>{i18n._("Task coordinator · chooses a playbook and arranges AI work")}</span>
-          {!captain ? <span>{i18n._("not set")}</span> : null}
+        <div className="flex flex-wrap items-center gap-2">
+          <span aria-hidden="true" className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-600 text-xs font-bold text-white">
+            {i18n._({ id: "C", comment: "the Captain's avatar: one letter standing for Captain" })}
+          </span>
+          <span className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">Captain</span>
           {/* The anchor grants the popover its room (run-view-32):
               the dialog it holds is capped to what the window can
               show on the side it opened, and scrolls inside that. */}
@@ -449,24 +459,26 @@ export function CaptainHome(props: CaptainHomeProps) {
             className="relative ml-auto flex min-w-0 items-center gap-1 [&>[data-testid=agent-popover]]:max-h-(--popover-room) [&>[data-testid=agent-popover]]:overflow-y-auto"
           >
             <button
-              ref={gearRef}
+              ref={chipRef}
               type="button"
               data-testid="captain-settings"
               title={i18n._("Tweak the Captain agent in place")}
-              aria-label={i18n._("Configure the Captain agent")}
+              aria-label={captainControlName}
+              aria-expanded={captainPopover !== undefined}
               disabled={!captain}
               onClick={() => {
-                const placed = popoverRoom(gearRef.current);
+                const placed = popoverRoom(chipRef.current);
                 setCaptainPopover((open) => (open ? undefined : placed));
               }}
-              className="flex h-6 w-6 items-center justify-center rounded text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 disabled:opacity-40 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
+              className="flex min-h-7 min-w-0 max-w-full items-center gap-1 rounded-md px-1 py-0.5 hover:bg-neutral-200 focus-visible:outline-2 focus-visible:outline-brand-500 disabled:opacity-60 dark:hover:bg-neutral-800"
             >
-              <Icon name="edit" className="h-3.5 w-3.5" />
+              {captain ? <AgentChip agent={captain} readiness={captainReadiness} label="Captain" /> : <span className="text-xs text-neutral-500">{i18n._("not set")}</span>}
+              <Icon name="caretDown" className="h-3 w-3 shrink-0 text-neutral-500" />
             </button>
             {captainPopover && captain ? (
               <AgentEditorPopover
                 title={i18n._("Captain agent")}
-                anchorRef={gearRef}
+                anchorRef={chipRef}
                 direction={captainPopover.direction}
                 initial={captain}
                 context={props.projectId ? { kind: "project", id: props.projectId } : undefined}
@@ -485,22 +497,7 @@ export function CaptainHome(props: CaptainHomeProps) {
           </span>
         </div>
 
-        {props.hasProject ? (
-          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-xs">
-            <label htmlFor="start-composer" className="font-semibold text-neutral-800 dark:text-neutral-200">
-              {i18n._("Describe a project task")}
-            </label>
-            {playbooks.length > 0 ? (
-              <span id="start-playbook-hint" className="text-neutral-600 dark:text-neutral-300">
-                {i18n._("Type / in the field to see all {count} available playbooks", { count: playbooks.length })}
-              </span>
-            ) : (
-              <button type="button" onClick={() => props.onNavigate("Playbooks")} className="font-medium text-brand-700 hover:underline dark:text-brand-300">
-                {i18n._("No playbooks available — open Playbooks")}
-              </button>
-            )}
-          </div>
-        ) : null}
+        {props.hasProject ? <label htmlFor="start-composer" className="sr-only">{i18n._("Describe a project task")}</label> : null}
 
         <div className="relative">
           {slash ? (
@@ -643,12 +640,23 @@ export function CaptainHome(props: CaptainHomeProps) {
                 {busy
                   ? i18n._("Starting…")
                   : props.hasProject
-                    ? i18n._("Submit task")
+                    ? i18n._("Start task")
                     : i18n._({ id: "Send", comment: "act: send the typed message" })}
               </button>
             }
           />
         </div>
+        {props.hasProject ? (
+          <div className="min-h-5 text-xs text-neutral-600 dark:text-neutral-300">
+            {playbooks.length > 0 ? (
+              <span id="start-playbook-hint">{i18n._("Type / to view playbooks")}</span>
+            ) : (
+              <button type="button" onClick={() => props.onNavigate("Playbooks")} className="font-medium text-brand-700 hover:underline dark:text-brand-300">
+                {i18n._("No playbooks available — open Playbooks")}
+              </button>
+            )}
+          </div>
+        ) : null}
       </div>
     </div>
   );

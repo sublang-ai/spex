@@ -6,6 +6,7 @@
 ## Status
 
 Accepted (2026-10-22) for the owner's P0-0 project-empty-state iteration.
+Amended (2026-10-22) after the owner's review of the project start: the Captain identity and model control sit together immediately above the composer, and the slash hint moves below it.
 Amends [DR-007](007-conversational-session-start.md) in the project home before a session starts, [DR-019](019-inline-agent-configuration.md) and [DR-038](038-history-is-done-work.md) in that home's Captain identity, and [DR-041](041-chrome-that-fits.md) in that home's composer hint.
 
 ## Context
@@ -16,10 +17,10 @@ Amends [DR-007](007-conversational-session-start.md) in the project home before 
 
 ## Decision
 
-- Before a session starts, the project home leads with a project-specific task heading and concise guidance to describe a change and its acceptance criteria; it explains that Spex works through available playbooks, without claiming unrestricted agent capabilities.
-- The home names Captain as the task coordinator who chooses a suitable playbook and arranges execution and review; its model settings remain available through a secondary control, with blocking readiness still visible at the composer.
-- The home does not preselect or prominently list playbook commands. It teaches the single discovery gesture beside the input: type `/` in that input to see every configured playbook and its intent. Slash selection remains optional, and an ordinary task can be sent without a command.
-- The resting slash/Enter caption is absent inside the project's empty composer. Its task field is the only text-entry affordance; submission keys remain in the submit control's tooltip, while staged-intent and acknowledgment captions still appear when needed.
+- Before a session starts, the project home leads with a project-specific task heading and concise guidance to tell Captain what should change and how to judge completion; it explains that Captain selects a suitable playbook and arranges AI implementation and review, without claiming unrestricted agent capabilities. The guidance aligns with the full width of the composer.
+- Immediately above the composer, a compact Captain identity uses the same avatar and name as the running Captain pane. Its current adapter, model, effort, fast-mode mark, and readiness appear in one clickable chip that opens the in-place editor; a missing Captain reads as unconfigured. Blocking readiness remains visible at the composer.
+- The home does not preselect or prominently list playbook commands. A stable hint below the composer teaches the single discovery gesture: type `/` in the task field to see every configured playbook and its intent. Slash selection remains optional, and an ordinary task can be sent without a command.
+- The project's task field has an accessible label but no separate visible label. The resting slash/Enter caption is absent inside the empty composer; submission keys remain in the primary control's tooltip, while staged-intent and acknowledgment captions still appear when needed.
 - Once a task starts, the existing Captain conversation and runtime routing behavior take over; this decision changes no runtime routing or refusal contract.
 
 ## Consequences

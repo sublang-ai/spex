@@ -1361,6 +1361,7 @@ msgstr "bypass: no permission prompts — sandboxed repos only"
 
 #. the Captain's avatar: one letter standing for Captain
 #. the Captain's avatar: one letter standing for Captain
+#. the Captain's avatar: one letter standing for Captain
 #: src/components/CaptainHome.tsx
 #: src/components/CaptainPane.tsx
 msgid "C"
@@ -2233,10 +2234,6 @@ msgstr "Describe a project task"
 #: src/components/DraftConversation.tsx
 msgid "Describe the playbook…"
 msgstr "Describe the playbook…"
-
-#: src/components/CaptainHome.tsx
-msgid "Describe what should change and how to know it is done. Spex uses available playbooks to turn that request into steps for AI implementation and review."
-msgstr "Describe what should change and how to know it is done. Spex uses available playbooks to turn that request into steps for AI implementation and review."
 
 #. notification sink: an OS notification
 #: src/components/SettingsSurface.tsx
@@ -5690,6 +5687,10 @@ msgstr "Start another session"
 msgid "Start another session ({keys})"
 msgstr "Start another session ({keys})"
 
+#: src/components/CaptainHome.tsx
+msgid "Start task"
+msgstr "Start task"
+
 #: src/lib/shortcuts.ts
 msgid "Start typing in the composer from anywhere in Projects"
 msgstr "Start typing in the composer from anywhere in Projects"
@@ -5801,10 +5802,6 @@ msgstr "subagent model"
 msgid "Subagent model"
 msgstr "Subagent model"
 
-#: src/components/CaptainHome.tsx
-msgid "Submit task"
-msgstr "Submit task"
-
 #. history row tag: a later record replaced this one
 #. history row tag: a later record replaced this one
 #: src/components/ProjectGroup.tsx
@@ -5902,8 +5899,8 @@ msgid "Take this task out of the queue — Undo puts it back"
 msgstr "Take this task out of the queue — Undo puts it back"
 
 #: src/components/CaptainHome.tsx
-msgid "Task coordinator · chooses a playbook and arranges AI work"
-msgstr "Task coordinator · chooses a playbook and arranges AI work"
+msgid "Tell Captain what should change and how to know it is done. It will choose a suitable playbook and coordinate AI implementation and review."
+msgstr "Tell Captain what should change and how to know it is done. It will choose a suitable playbook and coordinate AI implementation and review."
 
 #: src/components/DraftConversation.tsx
 msgid "Tell the agent what the playbook does, who does what, and when it is done"
@@ -6335,8 +6332,8 @@ msgid "Tweak the Captain agent in place"
 msgstr "Tweak the Captain agent in place"
 
 #: src/components/CaptainHome.tsx
-msgid "Type / in the field to see all {count} available playbooks"
-msgstr "Type / in the field to see all {count} available playbooks"
+msgid "Type / to view playbooks"
+msgstr "Type / to view playbooks"
 
 #. a required role no player answers yet
 #: src/components/LibrarySurface.tsx

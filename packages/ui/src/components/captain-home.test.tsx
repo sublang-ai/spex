@@ -138,12 +138,16 @@ describe("RUN-29: captain home structure and one-motion start", () => {
     renderHome();
     expect(screen.getByText("Start a checkable change in demo")).toBeTruthy();
     expect(screen.getByTestId("start-composer")).toBeTruthy();
-    expect(screen.getByText(/Task coordinator · chooses a playbook/)).toBeTruthy();
-    expect(screen.queryByTestId("agent-chip")).toBeNull();
-    expect(screen.getByTestId("captain-settings")).toBeTruthy();
+    const chip = screen.getByTestId("agent-chip");
+    expect(chip.textContent).toContain("claude · claude-opus-4-8 @ high");
+    expect(chip.getAttribute("aria-label")).toBe("Captain: claude · claude-opus-4-8 @ high (ready)");
+    const settings = screen.getByTestId("captain-settings");
+    expect(settings.contains(chip)).toBe(true);
+    expect(settings.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.getByTestId("project-task-start").className).toContain("w-full");
   });
 
-  test("a config with no captain reads as not set, gear inert", () => {
+  test("a config with no captain reads as not set, model control inert", () => {
     renderHome({ captain: null, configStatus: "invalid" });
     expect(screen.queryByTestId("agent-chip")).toBeNull();
     expect(screen.getByText("not set")).toBeTruthy();
@@ -189,14 +193,16 @@ describe("RUN-29: captain home structure and one-motion start", () => {
 
   test("task scope and slash discovery sit outside the input", () => {
     renderHome();
-    expect(screen.getByText(/Describe what should change and how to know it is done/)).toBeTruthy();
-    expect(screen.getByText("Type / in the field to see all 2 available playbooks")).toBeTruthy();
+    expect(screen.getByText(/Tell Captain what should change and how to know it is done/)).toBeTruthy();
+    const hint = screen.getByText("Type / to view playbooks");
+    expect(hint.compareDocumentPosition(screen.getByTestId("composer-box")) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
     const field = screen.getByLabelText("Describe a project task");
     expect(field).toBe(screen.getByTestId("start-composer"));
     expect(field.getAttribute("aria-describedby")).toBe("start-playbook-hint");
+    expect(screen.getByText("Describe a project task").className).toContain("sr-only");
     expect(screen.queryByTestId("quick-start")).toBeNull();
     expect(screen.queryByText("/ for playbooks · Enter sends")).toBeNull();
-    expect(screen.getByTestId("start-send").textContent).toBe("Submit task");
+    expect(screen.getByTestId("start-send").textContent).toBe("Start task");
     expect(screen.getByTestId("start-send").title).toBe(
       "Enter to send · Shift+Enter for a new line",
     );
@@ -763,10 +769,10 @@ describe("run-view-85: queue instead of send, from the home", () => {
   });
 });
 
-describe("run-view-25: Captain tuning remains in the secondary editor", () => {
-  test("a captain in fast mode keeps that setting in the editor", () => {
+describe("run-view-25: Captain chip carries current tuning and opens the editor", () => {
+  test("a captain in fast mode shows the mark and keeps the setting in the editor", () => {
     renderHome({ captain: { ...CAPTAIN, fastMode: true } });
-    expect(screen.queryByTestId("agent-chip")).toBeNull();
+    expect(screen.getByTestId("fast-mode-mark")).toBeTruthy();
     fireEvent.click(screen.getByTestId("captain-settings"));
     expect((screen.getByTestId("agent-fast-mode") as HTMLInputElement).checked).toBe(true);
   });

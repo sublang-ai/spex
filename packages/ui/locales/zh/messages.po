@@ -1361,6 +1361,7 @@ msgstr "绕过：不弹出任何权限提示 — 仅限沙箱仓库"
 
 #. the Captain's avatar: one letter standing for Captain
 #. the Captain's avatar: one letter standing for Captain
+#. the Captain's avatar: one letter standing for Captain
 #: src/components/CaptainHome.tsx
 #: src/components/CaptainPane.tsx
 msgid "C"
@@ -2233,10 +2234,6 @@ msgstr "描述项目任务"
 #: src/components/DraftConversation.tsx
 msgid "Describe the playbook…"
 msgstr "描述这个规程…"
-
-#: src/components/CaptainHome.tsx
-msgid "Describe what should change and how to know it is done. Spex uses available playbooks to turn that request into steps for AI implementation and review."
-msgstr "说明想改什么、怎样算完成。Spex 通过可用规程把任务组织成步骤，编排 AI 实现与复核。"
 
 #. notification sink: an OS notification
 #: src/components/SettingsSurface.tsx
@@ -5690,6 +5687,10 @@ msgstr "再开一个会话"
 msgid "Start another session ({keys})"
 msgstr "再开一个会话（{keys}）"
 
+#: src/components/CaptainHome.tsx
+msgid "Start task"
+msgstr "开始任务"
+
 #: src/lib/shortcuts.ts
 msgid "Start typing in the composer from anywhere in Projects"
 msgstr "在项目界面任意位置输入，文字直接进入输入框"
@@ -5801,10 +5802,6 @@ msgstr "子代理模型"
 msgid "Subagent model"
 msgstr "子代理模型"
 
-#: src/components/CaptainHome.tsx
-msgid "Submit task"
-msgstr "提交任务"
-
 #. history row tag: a later record replaced this one
 #. history row tag: a later record replaced this one
 #: src/components/ProjectGroup.tsx
@@ -5902,8 +5899,8 @@ msgid "Take this task out of the queue — Undo puts it back"
 msgstr "将此任务移出队列 — 撤销可放回"
 
 #: src/components/CaptainHome.tsx
-msgid "Task coordinator · chooses a playbook and arranges AI work"
-msgstr "任务协调助手 · 选择规程并安排 AI 执行"
+msgid "Tell Captain what should change and how to know it is done. It will choose a suitable playbook and coordinate AI implementation and review."
+msgstr "告诉 Captain 想改什么、怎样算完成。它会选用合适规程，安排 AI 实现与复核。"
 
 #: src/components/DraftConversation.tsx
 msgid "Tell the agent what the playbook does, who does what, and when it is done"
@@ -6335,8 +6332,8 @@ msgid "Tweak the Captain agent in place"
 msgstr "就地调整 Captain 智能体"
 
 #: src/components/CaptainHome.tsx
-msgid "Type / in the field to see all {count} available playbooks"
-msgstr "在输入框输入 /，查看全部 {count} 个可用规程"
+msgid "Type / to view playbooks"
+msgstr "输入 / 查看规程"
 
 #. a required role no player answers yet
 #: src/components/LibrarySurface.tsx
