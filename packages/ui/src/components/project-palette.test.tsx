@@ -196,18 +196,15 @@ describe("projects-22: with no project, the palette is an add flow", () => {
     expect(folder.className).toContain("border-neutral-300");
     expect(folder.className).not.toContain("bg-brand-600");
     expect(screen.queryByTestId("palette-path")).toBeNull();
-    expect(screen.getByTestId("palette-manual-path-start")).toBeTruthy();
+    expect(screen.queryByTestId("palette-manual-path-start")).toBeNull();
     expect(screen.queryByTestId("palette-create")).toBeNull();
     fireEvent.click(folder);
     await vi.waitFor(() => expect(onAddPath).toHaveBeenCalledWith("/tmp/existing"));
     expect(onPick).toHaveBeenCalledWith(PROJECTS[0].id);
   });
 
-  test("manual existing path and new-folder path are separate choices", () => {
+  test("desktop folder selection remains available while the new-project path is open", () => {
     renderPalette({ ...EMPTY, addProjectOnly: true, onPickFolder: vi.fn(async () => null) });
-    fireEvent.click(screen.getByTestId("palette-manual-path-start"));
-    expect(document.activeElement).toBe(screen.getByTestId("palette-path"));
-    expect(screen.getByText("Path to an existing Git repository")).toBeTruthy();
     fireEvent.click(screen.getByTestId("palette-create-start"));
     expect(screen.queryByTestId("palette-path")).toBeNull();
     expect(screen.getByText("New project folder path (not created yet)")).toBeTruthy();
@@ -215,6 +212,20 @@ describe("projects-22: with no project, the palette is an add flow", () => {
     expect(screen.queryByTestId("palette-create-back")).toBeNull();
     expect(screen.getByTestId("palette-open-folder")).toBeTruthy();
     expect(screen.queryByTestId("palette-manual-path-start")).toBeNull();
+  });
+
+  test("the desktop project switcher adds existing projects through its folder action", () => {
+    renderPalette({ onPickFolder: vi.fn(async () => null) });
+    expect(screen.getByTestId("palette-open-folder")).toBeTruthy();
+    expect(screen.queryByTestId("palette-path")).toBeNull();
+    expect(screen.queryByTestId("palette-add")).toBeNull();
+    expect(screen.queryByTestId("palette-create")).toBeNull();
+  });
+
+  test("an empty desktop switcher starts at the folder action", () => {
+    renderPalette({ ...EMPTY, onPickFolder: vi.fn(async () => null) });
+    expect(document.activeElement).toBe(screen.getByTestId("palette-open-folder"));
+    expect(screen.queryByTestId("palette-path")).toBeNull();
   });
 
   test("without a native picker, the existing path remains reachable above creation", () => {

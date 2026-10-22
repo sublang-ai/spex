@@ -161,6 +161,7 @@ meta.md       The spec of specs
 | [DR-136](decisions/136-quieter-welcome-flow-and-academy-choice.md) | 136-quieter-welcome-flow-and-academy-choice.md | Compact connected specs-to-delivery steps and no Academy caption on the welcome page; amends DR-135 |
 | [DR-137](decisions/137-reopen-the-removed-academy-example.md) | 137-reopen-the-removed-academy-example.md | Reopen a removed Academy example from its preserved Git working folder without overwriting it; amends DR-015 |
 | [DR-138](decisions/138-project-start-explains-the-task-and-slash-discovery.md) | 138-project-start-explains-the-task-and-slash-discovery.md | Project task start: scoped work, Captain's role, slash discovery, and one clear input; amends DR-007, DR-019, and DR-041 |
+| [DR-139](decisions/139-desktop-existing-projects-use-folder-picker.md) | 139-desktop-existing-projects-use-folder-picker.md | Desktop project add uses the native folder picker for existing repositories; browser keeps path fallback; amends DR-133 and DR-134 |
 
 ## Packages
 

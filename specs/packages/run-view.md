@@ -684,7 +684,7 @@ While a session's tab is shown, the run view shall lay the Captain column and th
 The project palette shall be fully keyboard-operable ([DR-011](../decisions/011-project-workspace.md)):
 
 - its searchable switcher opens from Cmd/Ctrl+P or submitting a composer with no project chosen, while the sidebar's Projects plus — in the expanded tree and the collapsed rail alike [[run-view-71](#run-view-71)] — and the welcome page's local-project action [[run-view-168](#run-view-168)] open its add form [[projects-42](projects.md#projects-42)];
-- the switcher's filter input holds focus — the path field where no project is registered, the ordinary palette then being an add flow [[projects-22](projects.md#projects-22)] — while the add form focuses the folder choice or its existing-path fallback [[projects-42](projects.md#projects-42)];
+- the switcher's filter input holds focus — or, where no project is registered, the folder choice when a native picker exists and the path field otherwise [[projects-22](projects.md#projects-22)] — while the add form focuses the folder choice or its existing-path fallback [[projects-42](projects.md#projects-42)];
 - arrow keys move the highlight over the Academy row where it leads the list, the project rows, and "Open folder…";
 - Enter picks, in an empty path field too, while a typed path adds;
 - the palette announces itself modal, and Tab and Shift+Tab wrap inside it;

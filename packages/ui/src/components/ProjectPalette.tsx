@@ -77,7 +77,6 @@ export function ProjectPalette(props: ProjectPaletteProps) {
   const [pathDraft, setPathDraft] = useState("");
   const [newPathDraft, setNewPathDraft] = useState("");
   const [creating, setCreating] = useState(false);
-  const [manualPath, setManualPath] = useState(false);
   const [scaffold, setScaffold] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<Refusal>();
@@ -115,7 +114,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
   // The palette owns focus while open and hands it back on close.
   useEffect(() => {
     openerRef.current = document.activeElement;
-    (addProjectOnly && hasFolderPicker
+    ((addProjectOnly || empty) && hasFolderPicker
       ? folderRef.current
       : empty
         ? pathRef.current
@@ -130,10 +129,9 @@ export function ProjectPalette(props: ProjectPaletteProps) {
 
   useEffect(() => {
     if (creating) newPathRef.current?.focus();
-    else if (manualPath) pathRef.current?.focus();
     else if (addProjectOnly && hasFolderPicker) folderRef.current?.focus();
     else if (addProjectOnly) pathRef.current?.focus();
-  }, [creating, manualPath, addProjectOnly, hasFolderPicker]);
+  }, [creating, addProjectOnly, hasFolderPicker]);
 
   const rowState = useMemo(() => {
     const attention = [...props.attention.values()];
@@ -409,21 +407,20 @@ export function ProjectPalette(props: ProjectPaletteProps) {
                   {i18n._("Choose a project folder…")}
                 </button>
               ) : null}
-              {!manualPath && (props.onPickFolder ? !creating : creating) ? (
+              {!props.onPickFolder && creating ? (
                 <button
                   type="button"
                   data-testid="palette-manual-path-start"
                   onClick={() => {
                     setCreating(false);
                     setError(undefined);
-                    setManualPath(true);
                   }}
                   className="mt-3 text-left text-xs font-medium text-neutral-600 hover:text-brand-700 hover:underline dark:text-neutral-300"
                 >
                   {i18n._("Or enter an existing Git repository path")}
                 </button>
               ) : null}
-              {(!props.onPickFolder || manualPath) && !creating ? (
+              {!props.onPickFolder && !creating ? (
                 <div className="mt-3">
                   <label className="block text-xs text-neutral-500 dark:text-neutral-400" htmlFor="palette-own-path">
                     {i18n._("Path to an existing Git repository")}
@@ -464,7 +461,6 @@ export function ProjectPalette(props: ProjectPaletteProps) {
                   type="button"
                   data-testid="palette-create-start"
                   onClick={() => {
-                    setManualPath(false);
                     setError(undefined);
                     setCreating(true);
                   }}
@@ -630,6 +626,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
             <button
               type="button"
               data-testid="palette-open-folder"
+              ref={folderRef}
               onClick={openFolder}
               disabled={busy}
               className={`flex w-full items-center gap-2 border-t border-neutral-100 px-4 py-2 text-left text-sm text-neutral-600 hover:bg-neutral-50 dark:border-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-800 ${
@@ -641,6 +638,8 @@ export function ProjectPalette(props: ProjectPaletteProps) {
           ) : null}
         </div>
         <div className="flex flex-col gap-1.5 border-t border-neutral-200 p-2 dark:border-neutral-800">
+          {!hasFolderPicker ? (
+          <>
           <div className="flex gap-1.5">
             <input
               ref={pathRef}
@@ -692,6 +691,8 @@ export function ProjectPalette(props: ProjectPaletteProps) {
               />
               {i18n._("Scaffold specs when creating")}
             </label>
+          ) : null}
+          </>
           ) : null}
           {empty ? null : (
             <button
