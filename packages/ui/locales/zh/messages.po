@@ -742,6 +742,11 @@ msgstr "终端中有合并正在进行，请在那里完成或中止。"
 msgid "A nested workflow failed"
 msgstr "嵌套工作流失败"
 
+#. project palette: where a project added or created by path lands; {place} is the place's name, "This computer"
+#: src/components/ProjectPalette.tsx
+msgid "A new project is added on {place}."
+msgstr "新项目添加在{place}。"
+
 #: src/lib/failure-catalogue.ts
 msgid "A Playbook defect"
 msgstr "Playbook 缺陷"
