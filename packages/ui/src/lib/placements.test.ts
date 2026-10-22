@@ -7,7 +7,7 @@
 
 import { describe, expect, test } from "vitest";
 
-import { groupsState, instanceState, placementState, repositoryRow } from "../fixtures/groups-state.js";
+import { groupsState, instanceState, namespace, placementState, repositoryRow } from "../fixtures/groups-state.js";
 import {
   governingOfPlacement,
   heldPlacements,
@@ -98,9 +98,13 @@ describe("placements", () => {
     expect(lastSyncOf(repositoryRow(KEY, { state: "reachable", placements: [held, second] }))).toBeNull();
   });
 
-  test("space-61, space-60: a placement is governed by its own instance where signed in, by a signed-in one it follows where it reads reachable or read-only, else by its own, signed out; the key placement by the one the core names; the path placement by none", () => {
+  test("space-61, space-60, git-host-5: a placement is governed by its own instance where signed in, by a signed-in one listing its row it follows where it reads reachable or read-only, else by its own, signed out; the key placement by the one the core names; the path placement by none", () => {
+    // Each signed-in instance lists the row: its namespace holds one of
+    // its placements.
+    const listing = (origin: string) =>
+      instanceState(origin, { groups: [{ ...namespace("me"), placed: [{ key: KEY, name: "academy-spex" }] }] });
     const home = groupsState({
-      instances: [instanceState(FIRST, { signedIn: false }), instanceState(SECOND), instanceState(THIRD)],
+      instances: [instanceState(FIRST, { signedIn: false }), listing(SECOND), listing(THIRD)],
     });
     const at = (origin: string, over: Parameters<typeof placementState>[0] = {}) =>
       placementState({ instance: origin, path: "acme/academy-spex", ...over });
@@ -117,6 +121,14 @@ describe("placements", () => {
     // No follow is made onto an instance at which the clone holds
     // another placement (git-host-5).
     expect(governingOfPlacement(home, beside(SECOND, at(FIRST)), at(FIRST))?.origin).toBe(THIRD);
+    // Nor onto one listing nothing of the row, however early (git-host-5).
+    const unlisted = groupsState({
+      instances: [instanceState(FIRST, { signedIn: false }), instanceState(SECOND), listing(THIRD), listing(FOURTH)],
+    });
+    expect(governingOfPlacement(unlisted, beside(THIRD, at(FIRST)), at(FIRST))?.origin).toBe(FOURTH);
+    expect(governingOfPlacement(unlisted, beside(FOURTH, at(FIRST)), at(FIRST))?.origin).toBe(THIRD);
+    const none = groupsState({ instances: [instanceState(FIRST, { signedIn: false }), instanceState(SECOND), instanceState(THIRD)] });
+    expect(governingOfPlacement(none, beside(THIRD, at(FIRST)), at(FIRST))?.origin).toBe(FIRST);
     const path = placementState({ path: "/srv/academy-spex.git" });
     expect(governingOfPlacement(home, beside(SECOND, path), path)).toBeUndefined();
     // The key placement is governed by the instance the core names for

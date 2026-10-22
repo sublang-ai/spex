@@ -11,7 +11,9 @@
 // sync (space-61); and the line's fit (space-28). Members, Share, Remove
 // and "Move…" act on one placement from its line, naming its instance,
 // its members panel naming the other instances the records are placed
-// at (space-62, space-69, space-72, space-78). A placement owing its
+// at, each read at the instance governing it — the earliest signed-in
+// one listing its row while its own is signed out (space-62, space-69,
+// space-72, space-78, git-host-5). A placement owing its
 // sharing notice waits with Continue, the notice naming its path at its
 // instance; the row's Sync says it first only where no other placement
 // can run (space-57); an unrelated placement joins from its line
@@ -694,6 +696,73 @@ describe("GROUPS: a placement's members and move (space-62, space-69, space-72, 
     fireEvent.click(moveOn(KEY, ORIGIN)!);
     fireEvent.click(within(screen.getByTestId(`space-move-${KEY}@${ORIGIN}`)).getByTestId("space-move-group-acme"));
     await waitFor(() => expect(calls("space.repository.move")[1]).toEqual({ repository: KEY, instance: ORIGIN, groupId: "3" }));
+  });
+  test("space-62, space-78, git-host-5: a placement whose instance is signed out acts at the earliest signed-in instance listing its row, never at an earlier one that lists nothing of it", async () => {
+    // Listed first, second, third, fourth: the second, where the
+    // placement is, signed out; the third, signed in, lists nothing of
+    // the row; the fourth's workshop lists it as placed there.
+    const FOURTH = "https://fourth.example";
+    const may = { manageMembers: true, transfer: true };
+    const out = signedOutAt(SECOND, {}, placedAtTwo({ second: { can: may } }));
+    const group = (id: string, path: string, placed: { key: string; name: string }[] = []) => ({
+      id,
+      login: null,
+      mine: false,
+      fullPath: path,
+      name: path,
+      can: NO_CAN,
+      placed,
+      repositories: [],
+    });
+    const home: GroupsState = {
+      ...out,
+      instances: [
+        ...out.instances,
+        instance({
+          origin: THIRD,
+          host: "third.example",
+          displayName: "Third Example",
+          account: { id: "80", login: "tess", displayName: null, canCreateGroup: false },
+          groups: [namespace("tess"), group("90", "labs")],
+        }),
+        instance({
+          origin: FOURTH,
+          host: "fourth.example",
+          displayName: "Fourth Example",
+          account: { id: "81", login: "finn", displayName: null, canCreateGroup: false },
+          groups: [namespace("finn"), group("91", "workshop", [{ key: KEY, name: "academy-spex" }]), group("92", "studio")],
+        }),
+      ],
+    };
+    await renderGroups(home, { open: false });
+
+    // Members reads at the placement's own instance, its Share asking
+    // for a login at the fourth (space-62, space-69).
+    fireEvent.click(within(lineOf(KEY, SECOND)).getByTestId("space-line-members"));
+    const panel = await screen.findByTestId(`space-members-${KEY}@${SECOND}`);
+    await within(panel).findAllByTestId(/^space-member-/);
+    expect(calls("space.members")).toEqual([{ repository: KEY, instance: SECOND }]);
+    fireEvent.click(within(panel).getByTestId(`space-share-${KEY}@${SECOND}`));
+    expect(within(within(panel).getByTestId(`space-share-${KEY}@${SECOND}-editor`)).getByLabelText("Login at fourth.example")).toBeTruthy();
+
+    // Move… lists the fourth's entries — your login there first, the
+    // workshop it stands in left out — and names the placement's
+    // instance (space-78).
+    fireEvent.click(within(lineOf(KEY, SECOND)).getByTestId("space-line-move"));
+    const picker = screen.getByTestId(`space-move-${KEY}@${SECOND}`);
+    expect(within(picker).getAllByTestId(/^space-move-group-/).map((option) => option.dataset.testid)).toEqual([
+      "space-move-group-@finn",
+      "space-move-group-studio",
+    ]);
+    fireEvent.click(within(picker).getByTestId("space-move-group-studio"));
+    await waitFor(() => expect(calls("space.repository.move")).toEqual([{ repository: KEY, instance: SECOND, groupId: "92" }]));
+    cleanup();
+
+    // Where no signed-in instance lists the row, the placement's own
+    // instance governs it, signed out: neither Members nor Move.
+    await renderGroups({ ...home, instances: home.instances.slice(0, 3) }, { open: false });
+    expect(within(lineOf(KEY, SECOND)).queryByTestId("space-line-members")).toBeNull();
+    expect(within(lineOf(KEY, SECOND)).queryByTestId("space-line-move")).toBeNull();
   });
 });
 

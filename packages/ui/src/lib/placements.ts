@@ -84,12 +84,22 @@ export function placementLastSync(line: PlacementState | undefined): { at: numbe
   return line?.branch?.agreed ?? null;
 }
 
+/** Whether an instance's last read lists a row (space-1, git-host-5): a
+ * group or namespace there holding one of its placements, or the row
+ * standing there. */
+export function listsRow(instance: InstanceState, key: string): boolean {
+  return instance.groups.some(
+    (entry) => entry.placed.some((placed) => placed.key === key) || entry.repositories.some((row) => row.key === key),
+  );
+}
+
 /** The instance governing a placement (git-host-5, space-61, space-60):
  * for its key placement, the one the core names as governing the row;
  * for any other, its own where signed in; where it reads reachable or
- * read-only through a signed-in instance it follows, the first signed-in
- * one at which the clone holds no other placement; else its own, signed
- * out. None for the path placement, which no instance governs. */
+ * read-only through a signed-in instance it follows, the earliest
+ * signed-in one in the home's list that lists the row and at which the
+ * clone holds no other placement, as the core picks it; else its own,
+ * signed out. None for the path placement, which no instance governs. */
 export function governingOfPlacement(state: GroupsState, repo: RepositoryState, line: PlacementState): InstanceState | undefined {
   if (line.instance === null) return undefined;
   if (keyPlacement(repo)?.instance === line.instance) return governingOf(state, repo);
@@ -97,7 +107,7 @@ export function governingOfPlacement(state: GroupsState, repo: RepositoryState, 
   if (own?.signedIn) return own;
   if (line.state === "reachable" || line.state === "read-only") {
     const held = new Set(instancePlacements(repo).map((placement) => placement.instance));
-    return signedInInstances(state).find((instance) => !held.has(instance.origin)) ?? own;
+    return signedInInstances(state).find((instance) => !held.has(instance.origin) && listsRow(instance, repo.key)) ?? own;
   }
   return own;
 }
