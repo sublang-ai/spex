@@ -28,7 +28,7 @@ import { InstanceRefused, kebab, REMOTE_URL_KEYS, remoteNamesIn, splitKey, type 
 import { i18n } from "./i18n.js";
 import { canonicalOrigin, instanceFolder, instanceSegmentOf, isInstanceFolder, OriginRefused, parseOrigin, type OriginRefusal } from "./instance.js";
 import { isDeferredClone } from "./migrate-instances.js";
-import { deletePlacementFile, filedIn, keyPlacement, LEGACY_CREATED_KEY, LEGACY_ID_KEY, moveLegacyIds, PATH_PLACEMENT, PLACEMENT_CONFIG_KEYS, PLACEMENTS_DIR, placementCreatedKey, placementIdKey, placementsIn, readPlacements, writePlacementFile, type Placement, type PlacementPrefKind } from "./placements.js";
+import { deletePlacementFile, filedIn, keyPlacement, LEGACY_CREATED_KEY, LEGACY_ID_KEY, moveLegacyIds, PATH_PLACEMENT, PLACEMENT_CONFIG_KEYS, PLACEMENTS_DIR, placementCreatedKey, placementFileEverHeld, placementIdKey, placementsIn, readPlacements, writePlacementFile, type HistoryRun, type Placement, type PlacementPrefKind } from "./placements.js";
 import type {
   GroupsState,
   InstanceGroupState,
@@ -2055,6 +2055,7 @@ class RepositorySync {
       id: "Nothing was saved. Fix the sync rules file, then sync again.",
       comment: "Guidance where the sync rules file could not be refreshed",
     })); }
+    await this.writeUnheldPlacements();
     await this.git.ok(["add", "-A", "--", "."]);
     const staged = (await this.git.ok(["diff", "--cached", "--name-only", "-z"])).split("\0").filter(Boolean);
     const leak = staged.find((p) => !portable(p));
@@ -2110,6 +2111,29 @@ class RepositorySync {
     const moved = await this.git.run(["update-ref", `refs/heads/${SPEX_BRANCH}`, saved, head]);
     if (moved.code !== 0) throw new SpaceStopped("save", { cause: "git", message: lastLines(moved.stderr), guidance: retryGuidance(), retry: true });
     return saved;
+  }
+
+  /** Before Save stages, the file of each placement with an instance
+   * that no commit reachable from `spex` has held — each placement of a
+   * clone the instances migration moved, at its first sync — is written
+   * as the act placing it would have written it, so this Save commits it
+   * and every device holding that placement commits the same bytes; a
+   * file a commit once held is never written again here, so a removal a
+   * merge brought stands (storage-37). A placement whose remote records
+   * no host id has no file to write, and a write refused is reported and
+   * refuses no Save (storage-12). */
+  private async writeUnheldPlacements(): Promise<void> {
+    const history: HistoryRun = async (args) => {
+      const run = await this.git.run(args);
+      return { ok: run.code === 0, stdout: run.stdout.toString("utf8") };
+    };
+    for (const placement of this.placementsNow()) {
+      if (placement.instance === null || placement.id === null) continue;
+      let folder: string;
+      try { folder = instanceFolder(placement.instance); } catch { continue; }
+      if (await placementFileEverHeld(history, folder)) continue;
+      this.writePlacement(placement.instance, placement.id);
+    }
   }
 
   private validation(): { own: boolean; libraryDir: string } {

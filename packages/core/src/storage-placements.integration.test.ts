@@ -5,20 +5,23 @@
 // (storage-36, storage-41, DR-128): real cores on scratch homes against
 // the stand-in Git host, each act that creates or joins a placement
 // writing its file as its three lines, the same bytes on every home, a
-// file that does not read naming no placement and blocking nothing; and
-// this device's last sync and notice recorded per placement, following
-// its remote (storage-5) — hermetic, on loopback alone, in a file budget
-// of its own.
+// file that does not read naming no placement and blocking nothing, and
+// a migrated clone's first sync writing each placement's file no commit
+// held (storage-37); and this device's last sync and notice recorded per
+// placement, following its remote (storage-5) — hermetic, on loopback
+// alone, in a file budget of its own.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
-import { join, relative } from "node:path";
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { basename, dirname, join, relative } from "node:path";
+import { stringify as stringifyYaml } from "yaml";
+import { Home } from "./home.js";
 import type { GroupsState } from "./protocol.js";
 import { bareOf, clonePath, createSpaceHarness, hostFolder, hostKey, instanceOf, prefsOf, repositoryOf, syncRecordsOf } from "./testing/space-harness.js";
 
 const fixture = createSpaceHarness();
-const { git, gitFolder, bareRepo, addFolder, startHome, startHost, signIn, signOut } = fixture;
+const { git, gitFolder, bareRepo, addFolder, otherDevice, peerClone, peerPush, startHome, startHost, signIn, signOut } = fixture;
 test.after(() => fixture.dispose());
 
 /** The stand-in's person, and your own group's repository once signed in. */
@@ -322,4 +325,126 @@ test("storage-42, storage-36, storage-34, storage-5, space-57, space-60: two ins
   assert.ok(moved.lastSync && once.lastSync && moved.lastSync.at >= once.lastSync.at, JSON.stringify(moved.lastSync));
   assert.deepEqual({ ...syncRecordsOf(home.dataDir, key), ...syncRecordsOf(home.dataDir, followed) }, { [`sync:${followed}:${secondFolder}:last`]: moved.lastSync, [`sync:${followed}:${secondFolder}:noticed`]: true });
   assert.deepEqual(readdirSync(join(clone, "placements")), [`${secondFolder}.yaml`]);
+});
+
+/** A clone's remote and host id as a Spex before DR-127 kept them: the
+ * remote named `origin`, the id at the top level of its Git
+ * configuration. */
+function asFormerRemote(clone: string, folder: string): void {
+  git(clone, "remote", "rename", folder, "origin");
+  const id = git(clone, "config", "--get", "remote.origin.spexId");
+  git(clone, "config", "--unset", "remote.origin.spexId");
+  git(clone, "config", "spex.repositoryId", id);
+}
+
+test("storage-37, storage-34: two signed-in format-1 homes, each holding a clone of one spex repository at the stand-in recording the host's id, migrate with that id in each renamed remote's section; each first sync's Save writes placements/<folder>.yaml, which no commit had held, as its three lines, the same bytes on both homes, and the second's merge asks no choice", async (t) => {
+  const host = await startHost();
+  const folder = hostFolder(host);
+  const file = `placements/${folder}.yaml`;
+  // A spex repository a Spex before DR-128 made: no commit of its
+  // history holds a placement file.
+  const shared = host.script.addRepository({ group: "acme", name: "shared-spex", project: { format: 1, name: "Shared", remote: null } });
+  const url = `${host.gitOrigin}/${host.storage}/acme/shared-spex.git`;
+  const legacy = "acme/shared-spex";
+  const key = hostKey(host, legacy);
+  const bytes = placementBytes(host.url, shared.id);
+
+  const homes: Awaited<ReturnType<typeof startHome>>[] = [];
+  for (const name of ["migrated-a", "migrated-b"]) {
+    // Each home a device of its own, committing as itself.
+    const env = otherDevice(name);
+    const home = await startHome(name, { host, project: false, env, extra: { signIn: "browser" } });
+    const from = home.client.mark();
+    await signIn(home, host);
+    await home.client.waitRepository(from, HOST_OWN, (repository) => repository.sync.phase === "done", 30_000);
+    await home.stop();
+    // The home as a Spex before DR-127 left it: `home.yaml` in format 1,
+    // the clone keyed by its path in the instance with its remote
+    // `origin` and the host's id at the top level, your own group's
+    // likewise.
+    const clone = clonePath(home.dataDir, legacy);
+    mkdirSync(dirname(clone), { recursive: true });
+    git(dirname(clone), "clone", "-q", "--branch", "spex", "--single-branch", shared.bare, basename(clone));
+    git(clone, "remote", "set-url", "origin", url);
+    git(clone, "config", "spex.repositoryId", shared.id);
+    asFormerRemote(clonePath(home.dataDir, HOST_OWN), folder);
+    const current = Home.load(home.dataDir).file;
+    writeFileSync(join(home.dataDir, "home.yaml"), stringifyYaml({
+      format: 1, device: current.device,
+      host: { url: current.origin, clientId: "spex", account: current.instances[0].account },
+      own: current.own, folders: current.folders,
+    }));
+    const again = await startHome(`${name}-again`, { dataDir: home.dataDir, project: false, env, extra: { signIn: "browser" } });
+    t.after(() => again.stop());
+    // Migrated: the clone under the stand-in's folder, its remote named
+    // by that folder with the host's id in its section, and no placement
+    // file yet (storage-30, storage-34).
+    const moved = clonePath(home.dataDir, key);
+    assert.ok(existsSync(join(moved, ".git")) && !existsSync(clone), "moved under the instance's folder");
+    assert.deepEqual(git(moved, "remote").split("\n"), [folder]);
+    assert.equal(git(moved, "config", "--get", `remote.${folder}.spexId`), shared.id);
+    assert.throws(() => git(moved, "config", "--get", "spex.repositoryId"));
+    assert.equal(existsSync(join(moved, "placements")), false);
+    homes.push(again);
+  }
+  const [a, b] = homes;
+  const cloneA = clonePath(a.dataDir, key);
+  const cloneB = clonePath(b.dataDir, key);
+
+  // The first home's first sync: its Save writes the file no commit held
+  // and commits it, and its push carries it to the host (storage-37).
+  const syncedA = await a.client.settle("space.sync", { repository: key }, 30_000);
+  assert.equal(syncedA.sync.phase, "done", JSON.stringify(syncedA.sync));
+  assert.equal(readFileSync(join(cloneA, file), "utf8"), bytes);
+  assert.equal(`${git(cloneA, "show", `HEAD:${file}`)}\n`, bytes);
+  assert.equal(committed(shared.bare, file), bytes);
+  const pushedA = git(shared.bare, "rev-parse", "spex");
+
+  // The second home's first sync: its own Save writes and commits the
+  // same bytes before it reads the host, and its merge with the first's
+  // asks no choice, both sides holding that file alike.
+  const syncedB = await b.client.settle("space.sync", { repository: key }, 30_000);
+  assert.equal(syncedB.sync.phase, "done", JSON.stringify(syncedB.sync));
+  assert.deepEqual(syncedB.conflicts, []);
+  const [merge, ownSave, theirs] = git(cloneB, "rev-list", "--parents", "-n", "1", "HEAD").split(" ");
+  assert.equal(theirs, pushedA, "a merge with the first home's sync");
+  assert.equal(`${git(cloneB, "show", `${ownSave}:${file}`)}\n`, bytes, "the second home's Save committed the file itself");
+  assert.notEqual(git(cloneB, "rev-parse", `${ownSave}^`), pushedA);
+  assert.equal(readFileSync(join(cloneB, file), "utf8"), readFileSync(join(cloneA, file), "utf8"));
+  assert.equal(git(shared.bare, "rev-parse", "spex"), merge);
+  assert.equal(git(cloneB, "status", "--porcelain"), "");
+});
+
+test("storage-37: a placement file a commit once held, removed by a peer's commit the sync merges, is not written again by the next Save", async (t) => {
+  const host = await startHost();
+  const folder = hostFolder(host);
+  const file = `placements/${folder}.yaml`;
+  const home = await startHome("held-once", { host, project: false, extra: { signIn: "browser" } });
+  t.after(() => home.stop());
+  let from = home.client.mark();
+  await signIn(home, host);
+  await home.client.waitRepository(from, HOST_OWN, (repository) => repository.sync.phase === "done", 30_000);
+  const local = await addFolder(home, gitFolder("held"));
+  from = home.client.mark();
+  await home.client.expectOk("space.pick", { repository: local.key, choice: { kind: "create", instance: host.url, groupId: "2002", name: "held" } });
+  const key = hostKey(host, "acme/held-spex");
+  const created = await home.client.waitRepository(from, key, (repository) => repository.sync.phase === "done", 30_000);
+  const clone = clonePath(home.dataDir, key);
+  const bare = bareOf(host, key);
+  assert.equal(committed(bare, file), placementBytes(host.url, created.id));
+
+  // A peer removes the file; the sync merges that removal.
+  const peer = peerClone(bare);
+  await peerPush(peer, (dir) => rmSync(join(dir, file)));
+  const merged = await home.client.settle("space.sync", { repository: key }, 30_000);
+  assert.equal(merged.sync.phase, "done", JSON.stringify(merged.sync));
+  assert.equal(existsSync(join(clone, file)), false, "the removal the merge brought stands");
+
+  // The next Save finds that a commit held the file, and writes nothing.
+  const again = await home.client.settle("space.sync", { repository: key }, 30_000);
+  assert.equal(again.sync.phase, "done", JSON.stringify(again.sync));
+  assert.equal(existsSync(join(clone, file)), false);
+  assert.throws(() => git(clone, "cat-file", "-e", `HEAD:${file}`));
+  assert.throws(() => git(bare, "cat-file", "-e", `spex:${file}`));
+  assert.deepEqual(git(clone, "remote").split("\n"), [folder]);
 });

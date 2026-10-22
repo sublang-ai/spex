@@ -395,10 +395,20 @@ export function deletePlacementFile(dir: string, folder: string): void {
   rmSync(path, { force: true });
 }
 
-/** Whether any commit reachable from the clone's `spex` has held its
- * placement file under an instance's folder (storage-37), by one
- * synchronous local Git read. */
-export function placementFileEverHeld(run: ConfigRun, folder: string): boolean {
-  const read = run(["log", "-1", "--format=%H", "refs/heads/spex", "--", placementFilePath(folder)]);
+/** One local Git read in a clone, awaited, by its exit and its output. */
+export type HistoryRun = (args: string[]) => Promise<{ ok: boolean; stdout: string }>;
+
+/**
+ * Whether any commit reachable from the clone's `spex` has held its
+ * placement file under an instance's folder (storage-37), by local Git
+ * reads: its tip holding the file, else its history — every parent of a
+ * merge followed, so a file one side brought and the merge left out
+ * still counts as held, and the path matched as it is spelled. A `spex`
+ * with no commit has held none.
+ */
+export async function placementFileEverHeld(run: HistoryRun, folder: string): Promise<boolean> {
+  const path = placementFilePath(folder);
+  if ((await run(["cat-file", "-e", `refs/heads/spex:${path}`])).ok) return true;
+  const read = await run(["log", "-1", "--format=%H", "--full-history", "refs/heads/spex", "--", `:(literal)${path}`]);
   return read.ok && read.stdout.trim() !== "";
 }
