@@ -14,12 +14,12 @@ Implement [DR-133](../decisions/133-one-desktop-over-several-cores.md): the serv
 ## Deliverables
 
 - [x] The `app-shell`, `dashboard`, `core-service`, `storage`, `run-view`, `approvals`, `localization` and `git-host` packages state DR-133, the place selector stated once in `run-view`, and DR-133 reads Accepted.
-- [ ] The core's servers and ticket calls, the seats kept under `local/`, the three server commands with their state message, and the protocol bumped.
-- [ ] The relay: a loopback endpoint per seat admitted as the core's own, the bearer in a header with no `Origin`, the watch with hello, mismatch and reopening at start, and the attention count the shell's badge reads.
-- [ ] A store per core with the singletons inside, per-place preferences, the local store's exports kept for the tests, and a connection and banner per place.
-- [ ] The sidebar, the attention queue and the approvals inbox joined; the place selector on Settings, Playbooks, Groups and Environments; servers listed and opened with the contract.
-- [ ] Remote projects opened among the member's groups with no picker, reveal or path entry.
-- [ ] Browser journeys over a stand-in hub and two seats.
+- [x] The core's servers and ticket calls, the seats kept under `local/`, the three server commands with their state message, and the protocol bumped.
+- [x] The relay: a loopback endpoint per seat admitted as the core's own, the bearer in a header with no `Origin`, the watch with hello, mismatch and reopening at start, and the attention count the shell's badge reads.
+- [x] A store per core with the singletons inside, per-place preferences, the local store's exports kept for the tests, and a connection and banner per place.
+- [x] The sidebar, the attention queue and the approvals inbox joined; the place selector on Settings, Playbooks, Groups and Environments; servers listed and opened with the contract.
+- [x] Remote projects opened among the member's groups with no picker, reveal or path entry.
+- [x] Browser journeys over a stand-in hub and two seats.
 
 ## Tasks
 
