@@ -28,13 +28,14 @@ The store shall persist core-owned data in Spex home using these locations:
 | `workspace/@<host>/<group>/`, `workspace/@<host>/<login>/` | a plain folder per group at that instance, a subgroup's inside its parent's, named by the group's path in the instance ([DR-120](../decisions/120-the-instance-is-the-space.md)), and per account whose namespace there holds a spex repository — yours or another's — named by its login there | — |
 | `workspace/@<host>/<path>/<name>-spex/` | the clone of one spex repository keyed under that instance by its first placement [[storage-31](#storage-31)], `<path>` being that placement's group's path or its namespace's login there, on its `spex` branch | the clone |
 | `workspace/<own>/` | your own group's folder, the home's own and outside every instance's folder [[storage-2](#storage-2)] | — |
+| `projects/@<host>/<group path>/<name>/` | on a seat, the working folder the core allocates for a project [[space-103](space.md#space-103)], a clone of its code | the code's own work tree |
 | `workspace/<own>/<own>-spex/`, `workspace/<own>/<name>-spex/` | the clone of your own group's own repository, and of each local-only spex repository [[storage-6](#storage-6)], on its `spex` branch | the clone |
 | `<clone>/project.json` | the code's remote [[storage-3](#storage-3)], present when the spex repository is a project's | Tracked |
 | `<clone>/placements/<folder>.yaml` | the spex repository's placement at the instance whose folder `<folder>` is [[storage-36](#storage-36)] | Tracked, one unit each |
 | `<clone>/config/playbook.config.yaml` | the spex repository's launcher configuration [[core-service-2](core-service.md#core-service-2)] | Tracked |
 | `<clone>/spex.yaml`, `<clone>/spex.lock` | the requests and lock of a group's own environment [[environments-2](environments.md#environments-2)] [[environments-3](environments.md#environments-3)]; a project's are at its working folder's root [[environments-26](environments.md#environments-26)], a clone of the former placement holding them until the migration moves them [[storage-24](#storage-24)] | Tracked, one unit |
 | `<clone>/intents/<id>.json`, optional `<clone>/intents/<id>.assets/` | one intent [[storage-4](#storage-4)] and its retained attachments [[media-4](media.md#media-4)] | Tracked, one unit |
-| `<clone>/sessions/<id>.json`, `<clone>/sessions/<id>.replay.json`, `<clone>/sessions/<id>.chunks/`, legacy `<clone>/sessions/<id>.records.jsonl`, optional `<clone>/sessions/<id>.assets/` | a Playbook session bundle, read and validated through its hydrated API [[1]] ([DR-132](../decisions/132-bounded-session-storage.md)) | Tracked, one unit |
+| `<clone>/sessions/<id>.json`, `<clone>/sessions/<id>.replay.json`, `<clone>/sessions/<id>.chunks/`, legacy `<clone>/sessions/<id>.records.jsonl`, optional `<clone>/sessions/<id>.assets/` | a Playbook session bundle, read and validated through its hydrated API [[1]] ([DR-135](../decisions/135-bounded-session-storage.md)) | Tracked, one unit |
 | `<clone>/authoring/<id>.json`, `<clone>/authoring/<id>.records.jsonl`, optional `<clone>/authoring/<id>.assets/` | an authoring session [[storage-23](#storage-23)] | Tracked, one unit |
 | `<clone>/<folder>/` holding `meta.yaml`, below the root and outside every other path of this table | a spec package's folder, such as one your own group's environment requests by path [[environments-32](environments.md#environments-32)] ([DR-125](../decisions/125-your-own-groups-path-sources-live-in-its-clone.md)) | Tracked, one unit |
 | `<clone>/packages/`, `<clone>/skills/` | installed spec packages and exported skills [[environments-8](environments.md#environments-8)] | Ignored |
@@ -44,6 +45,8 @@ The store shall persist core-owned data in Spex home using these locations:
 | `store/`, `cache/` | spec package bytes and caches [[environments-7](environments.md#environments-7)] | — |
 | `local/prefs.json` | core preferences and viewed markers [[storage-5](#storage-5)] | — |
 | `local/credentials.yaml` | each instance's app token [[storage-19](#storage-19)] | — |
+| `local/code-credentials.yaml` | on a seat, the code-host tokens and agent credentials the member placed [[storage-44](#storage-44)] | — |
+| `local/seats.yaml` | the seats this desktop opened on team servers [[storage-45](#storage-45)] | — |
 | `local/migrations/` | migration receipts and retained inputs [[storage-9](#storage-9)] [[storage-30](#storage-30)] | — |
 | `local/former-home.git`, `local/forge-cache.json` | the former home's Git history kept aside [[storage-9](#storage-9)]; the rebuildable forge cache | — |
 | `.lease/`, `.lease.stage.<token>/`, `.lease.retired/<token>/` | the root lease held by the one process serving this home [[storage-14](#storage-14)], its staging and its permanent retirement records [[storage-26](#storage-26)] | — |
@@ -80,7 +83,7 @@ The project file shall encode `<clone>/project.json` as exactly `{format: 1, nam
 
 ### storage-4
 
-The intent store shall encode each `<clone>/intents/<id>.json` as a closed JSON object with `format: 1` and exactly these fields, the file's name being the intent's canonical lowercase UUID `id` ([DR-103](../decisions/103-the-home-and-its-groups.md)):
+The intent store shall encode each `<clone>/intents/<id>.json` as a closed JSON object with `format: 2` and exactly these fields — a file of `format: 1` reading the same without `runtime` — the file's name being the intent's canonical lowercase UUID `id` ([DR-103](../decisions/103-the-home-and-its-groups.md), [DR-134](../decisions/134-execution-ownership.md)):
 
 | Field | Content |
 | --- | --- |
@@ -88,15 +91,24 @@ The intent store shall encode each `<clone>/intents/<id>.json` as a closed JSON 
 | `attachments` | optional ordered references into `intents/<id>.assets/` [[media-5](media.md#media-5)] |
 | `source` | optional `{kind, ref, url, labels?}` provenance — issue, PR, record, or chat |
 | `author` | optional `{login, displayName}` of the account at the project's instance that captured it [[core-service-42](core-service.md#core-service-42)] |
+| `runtime` | `{device, label}` in a format 2 file, required there and forbidden in a format 1 file: the `device` of the home whose core captured it [[storage-2](#storage-2)] and a label for display, written once at capture and never rewritten [[core-service-42](core-service.md#core-service-42)] |
 | `dispatched` | optional `{sessionId, turnId, at}`, re-written by a later dispatch |
 | `closed` | optional `{as: 'done' \| 'dropped', at}` |
 
 - an intent holds no rank and no link to another intent: the next to run is the oldest queued one by `createdAt`, then by `id`;
 - the store reads every intent file as it stands when a command needs it, with no reload ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md));
-- an edit, a dispatch and a close rewrite the file whole as it reads at that instant, in one step with that read; an edit whose intent changed since its command read it, across the command's own wait, is refused as changed meanwhile; a remove deletes the file and its asset directory;
+- an edit, a dispatch and a close rewrite the file whole as it reads at that instant, in one step with that read, keeping its format and its `runtime` as they were; an edit whose intent changed since its command read it, across the command's own wait, is refused as changed meanwhile; a remove deletes the file and its asset directory;
+- a capture writes format 2 with the runtime of the home that captures it; a file of a format above 2 is malformed;
 - a capture writes a new file only where no clone holds an intent of its id and no file holds its name, never replacing one;
 - no write recreates the clone holding `intents/` where it moved or was removed;
 - a malformed file is reported without deletion, and its intent is listed nowhere; a linked or non-directory intent folder is reported without reading its contents.
+
+### storage-43
+
+When a session is created, the session store shall append to its replay stream, under the session's lease and before its first turn, one hidden `captain_telemetry` record with topic `spex.session.runtime`, no turn id, and payload `{device, label}` — the `device` of the home whose core created it [[storage-2](#storage-2)] and a label for display — never rewritten, so that the assignment rides the session bundle as one unit [[storage-11](#storage-11)] ([DR-134](../decisions/134-execution-ownership.md)):
+
+- the first such record in the stream names the session's runtime; a stream with none names no runtime, and one whose first such record cannot be read names an unknown runtime, never this home's;
+- the record is hidden, so no session channel carries it [[core-service-8](core-service.md#core-service-8)].
 
 ### storage-5
 
@@ -121,7 +133,18 @@ The credential store shall encode `local/credentials.yaml` as exactly `{format: 
 - where the pairs differ, nothing is written and the writer is told the pair changed meanwhile;
 - a malformed entry for that instance is refused by every read and write, except that a sign-out which could not read it removes it in one step, every other instance's pair kept, unless a well-formed pair stands there by then, which stays;
 - a file of another format, or with no hosts map, is refused and left as it is;
-- no credential is written anywhere else, and no credential enters a tracked file or a remote URL [[space-5](space.md#space-5)].
+- no credential is written anywhere else but the member's own on a seat [[storage-44](#storage-44)] and the seats a desktop opened [[storage-45](#storage-45)], and no credential enters a tracked file or a remote URL [[space-5](space.md#space-5)].
+
+### storage-44
+
+Where the core runs as a seat [[core-service-125](core-service.md#core-service-125)], the credential store shall encode `local/code-credentials.yaml` as exactly `{format: 1, hosts: {<host>: {token, username?}}, agents: {<adapter>: {<NAME>: value}}}` with owner-only permissions — a code host's token and each agent credential the member placed [[settings-48](settings.md#settings-48)] — written and removed as versioned writes as the app token's file is [[storage-19](#storage-19)], read before each transport and each agent run, and never entering a tracked file, a remote URL or a log ([DR-132](../decisions/132-team-servers.md)):
+
+- a file of another format is refused and left as it is; a malformed entry is refused by every read and write and reported;
+- the file is removed with its last entry.
+
+### storage-45
+
+The seats store shall encode `local/seats.yaml` as exactly `{format: 1, seats: {<instance origin>#<server id>: {name, group, endpoint, bearer, leaseExpiresAt}}}` with owner-only permissions — each seat the desktop opened [[core-service-128](core-service.md#core-service-128)], its server's name and group, the endpoint and bearer the server's admission answered and the lease expiry in Unix milliseconds — written at an open and removed at a close or a refusal as versioned writes, as the app token's file is [[storage-19](#storage-19)], the file removed with its last entry, and never entering a tracked file, a remote URL or a log ([DR-133](../decisions/133-one-desktop-over-several-cores.md)).
 
 ### storage-6
 
@@ -218,9 +241,9 @@ Before admitting writers to the groups layout, when the core finds the former la
 - no Git history is written before validation confirms session recovery fields contain no provider tokens;
 - `meta.json` remains `{version: 1, importedLegacy?: string[]}` for completed legacy database imports.
 
-### storage-43
+### storage-46
 
-While source writers are stopped, before admitting writers, when the home holds bounded Playbook sessions in its root `sessions/` or an incomplete bounded-session import receipt, a separate import stage shall preserve and move those complete families into the groups layout under the home lease [[storage-14](#storage-14)] without changing a released migration ([DR-132](../decisions/132-bounded-session-storage.md)):
+While source writers are stopped, before admitting writers, when the home holds bounded Playbook sessions in its root `sessions/` or an incomplete bounded-session import receipt, a separate import stage shall preserve and move those complete families into the groups layout under the home lease [[storage-14](#storage-14)] without changing a released migration ([DR-135](../decisions/135-bounded-session-storage.md)):
 
 1. Under each source session's management lease, validate its whole bundle through Playbook, retain every root, replay descriptor, chunk, asset and local hint byte under `local/migrations/<id>/inputs/<sessionId>/`, and record `{format: 1, id, kind: 'bounded-sessions', sessions: [{id, cwd, files: [{path, sha256}], retained, staged, repository?, complete}], complete}` in `receipt.json` before removing the source's files.
 2. Verify the receipt's state transitions, every retained file's digest, its unchanged `cwd` and shared bundle validation before retiring source files; a changed source member or a file added since retention refuses without deleting that change, and a retry accepts only remaining source members whose bytes still equal the retained ones.
@@ -317,7 +340,7 @@ When invoked as `validate`, the storage Git tool shall reserve the home and vali
 When selecting stored data during a Git merge of a spex repository's `spex` branch, the validator shall compare both pre-merge revisions with their common ancestor:
 
 - compare complete file bytes and existence;
-- treat the root, replay descriptor, every file under its session-owned chunk directory, legacy replay where present, and owned assets as one session bundle [[1]] ([DR-132](../decisions/132-bounded-session-storage.md)); each `intents/<id>.json` with its `intents/<id>.assets/` as one unit; each `authoring/<id>.json` with its records and assets as one unit; `spex.yaml` with `spex.lock`, where the spex repository holds them [[storage-1](#storage-1)], as one unit; each folder below the root holding `meta.yaml` in either revision or their common ancestor, outside `config/`, `sessions/`, `intents/`, `authoring/`, `placements/` and the folders the catalog ignores, `packages/`, `skills/`, `local/` and `.spex-uploads/`, with every file under it on every side, as one unit, the outermost where two nest [[storage-1](#storage-1)] ([DR-125](../decisions/125-your-own-groups-path-sources-live-in-its-clone.md), [DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md)); and `config/playbook.config.yaml`, `project.json`, each placement file [[storage-36](#storage-36)] and each other tracked file as a separate unit.
+- treat the root, replay descriptor, every file under its session-owned chunk directory, legacy replay where present, and owned assets as one session bundle [[1]] ([DR-135](../decisions/135-bounded-session-storage.md)); each `intents/<id>.json` with its `intents/<id>.assets/` as one unit; each `authoring/<id>.json` with its records and assets as one unit; `spex.yaml` with `spex.lock`, where the spex repository holds them [[storage-1](#storage-1)], as one unit; each folder below the root holding `meta.yaml` in either revision or their common ancestor, outside `config/`, `sessions/`, `intents/`, `authoring/`, `placements/` and the folders the catalog ignores, `packages/`, `skills/`, `local/` and `.spex-uploads/`, with every file under it on every side, as one unit, the outermost where two nest [[storage-1](#storage-1)] ([DR-125](../decisions/125-your-own-groups-path-sources-live-in-its-clone.md), [DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md)); and `config/playbook.config.yaml`, `project.json`, each placement file [[storage-36](#storage-36)] and each other tracked file as a separate unit.
 
 | Comparison | Selection |
 | --- | --- |
@@ -336,7 +359,7 @@ When selecting stored data during a Git merge of a spex repository's `spex` bran
 Before reopening selected state, the validator shall validate the complete selected tree of a clone without modifying file contents, after Playbook's preparation removes excess permissions from verified user-owned session entries and refuses unsafe paths [[1]]:
 
 - before each Spex-owned project, intent, authoring or configuration read, inspect the clone-relative parents and leaf without following links: existing parents must be directories and an existing leaf must have its expected regular-file or directory kind; missing optional paths remain absent, and unsafe paths refuse before reading their contents; repeat these checks at the actual read boundary after awaited work, including before handing session or attachment paths to Playbook, whose validation remains authoritative [[1]];
-- file formats and closed encodings are valid [[storage-2](#storage-2)] [[storage-3](#storage-3)] [[storage-4](#storage-4)] [[storage-5](#storage-5)] [[storage-23](#storage-23)] [[storage-36](#storage-36)] [[1]];
+- file formats and closed encodings are valid [[storage-2](#storage-2)] [[storage-3](#storage-3)] [[storage-4](#storage-4)] [[storage-5](#storage-5)] [[storage-23](#storage-23)] [[storage-36](#storage-36)] [[storage-43](#storage-43)] [[storage-46](#storage-46)] [[1]];
 - open artifact-source identities are unique within a spex repository [[core-service-42](core-service.md#core-service-42)], and dispatch targets still present belong to the same spex repository with valid turn boundaries;
 - deleted session targets retain the existing ledger re-derivation behavior [[core-service-70](core-service.md#core-service-70)]; a missing session alone is not permission to discard a verdict or repeat work;
 - a clone no folder pairs, and a folder whose clone is missing, are reported with their records unlisted, without blocking unrelated valid spex repositories or automatically pairing anything;
@@ -459,6 +482,7 @@ When an integration suite merges two real Git branches of a group's own spex rep
 - through the real validator over a Git clone, linked parents or leaves, non-directory parents and special-file leaves in the project, intent, authoring and configuration paths refuse before their external contents are parsed, with original bytes, modes and index unchanged; replacing an intent parent while the validator awaits its first import also refuses, while absent optional paths and ordinary malformed-file diagnostics retain their behavior [[storage-12](#storage-12)];
 - a selected bounded replay descriptor or chunk directory without its root refused by snapshot validation before Save can commit or push [[storage-12](#storage-12)];
 - new-format sessions selected whole through the real shared store, their hydrated state and history preserved, a missing or corrupt chunk refused before live writes, a chunk added while a session lease is awaited refusing the unit in both Save-version and merge-output selection, its bytes kept and a preexisting untracked chunk retained by merge-output selection, and dependencies published before the root [[storage-11](#storage-11)] [[storage-12](#storage-12)] [[storage-21](#storage-21)];
+- a format-2 intent and its dispatch selected alongside a bounded session, with its captured runtime preserved through later edit, dispatch and close [[storage-4](#storage-4)] [[storage-11](#storage-11)];
 - no repetition of actions omitted from selected history [[storage-13](#storage-13)];
 - through the apply seam, a versioned replacement refused where a file changed while its session's lease was awaited — against the Save commit, against an earlier placement's merge commit as a later placement's base, and under `select` against Git's merge output as it stood when the selection began — the change kept and the index unchanged, a session's lease free once its write lands, and the index holding the validated tree [[storage-14](#storage-14)] [[storage-21](#storage-21)];
 - through the apply seam, a clone moved or removed while a lease is awaited refusing the write with no folder made at its former path, a held session lease refusing before any other unit is written, and a Git-checked-out CRLF file under `core.autocrlf` read as unchanged [[storage-14](#storage-14)];
@@ -466,9 +490,9 @@ When an integration suite merges two real Git branches of a group's own spex rep
 - an untracked attachment in a unit neither side changed surviving selection [[storage-21](#storage-21)];
 - the home lease refusing every mutating command, a held session lease refusing selection of that session's unit with the index unchanged and a retry after its release completing it, and a lease in another spex repository's store refusing nothing [[storage-14](#storage-14)] [[storage-21](#storage-21)].
 
-### storage-44
+### storage-47
 
-When integration tests import bounded CLI sessions through a real home open and shared store, they shall verify a former home and an established home receiving a later default-location session, complete root/replay/chunk/asset transfer with unchanged semantic recovery and hints retained locally, held source and destination leases leaving their families unchanged, retry after interrupted destination publication, and refusal of inconsistent receipts, divergent destination bytes and unsafe parents without overwriting them [[storage-43](#storage-43)].
+When integration tests import bounded CLI sessions through a real home open and shared store, they shall verify a former home and an established home receiving a later default-location session, complete root/replay/chunk/asset transfer with unchanged semantic recovery and hints retained locally, held source and destination leases leaving their families unchanged, retry after interrupted destination publication, and refusal of inconsistent receipts, divergent destination bytes and unsafe parents without overwriting them [[storage-46](#storage-46)].
 
 ### storage-28
 
@@ -483,11 +507,14 @@ When an integration suite changes the files of a running real store from outside
 - a clone removed from outside absent from every read with its pair reported as a repair, its session store refused, your own group's clone refused once removed, and neither made again [[storage-2](#storage-2)];
 - intent files added, closed, dispatched, repaired and removed from outside read by the queue, History, source, dispatch and asset reads, and an edit applied to the file as it stands [[storage-4](#storage-4)];
 - a damaged intent file listed nowhere, reported without blocking, refused with its cause, and its bytes left by an edit and by a capture of its id, while a capture of an id another clone holds writes nothing [[storage-4](#storage-4)] [[storage-12](#storage-12)];
+- a capture written at format 2 with this home's runtime, a format 1 file read without one and kept at format 1 by its edit, dispatch and close, a format 2 file kept at format 2 with its runtime unchanged by them, and a format 3 file reported as malformed [[storage-4](#storage-4)];
+- a created session's stream holding one hidden runtime record naming this home before its first turn, read as the session's runtime, a stream without one reading as none, and one whose record is unreadable reading as unknown [[storage-43](#storage-43)];
 - a damaged `home.yaml` answering no pairs, by id or by path, its device unchanged, and refusing a registration with its bytes kept while preferences stay writable, its repair restoring its pairs and admitting the next registration, a deleted one answering no pairs, refused as changed meanwhile and not written again, and one damaged when the store opens recovering its pairs once repaired [[storage-2](#storage-2)];
 - through a real core, a `home.yaml` damaged after a project was paired refusing `specs.write`, `draft.create` and `compile.run` naming that project as no project of this device, with nothing written in its working folder or its clone [[storage-2](#storage-2)];
 - through a real core, a compile admitted before `home.yaml` is damaged settling as this device's while the file does not read, its outcome recorded and never left running, and the file not written [[storage-2](#storage-2)];
 - through a real core, a session created in a paired clone with no `sessions/` — one another process added, one whose `sessions/` was removed, and one a rebind paired — making that folder and succeeding, while one whose clone was removed from outside is refused `not_found` alike before its open and while the open prepares, the clone not made again [[storage-2](#storage-2)];
-- a damaged session file and a damaged forge cache reported, each report gone once its file is removed, another damaged session's report standing, and the forge cache reported again once damaged again and gone once repaired [[storage-12](#storage-12)].
+- a damaged session file and a damaged forge cache reported, each report gone once its file is removed, another damaged session's report standing, and the forge cache reported again once damaged again and gone once repaired [[storage-12](#storage-12)];
+- on a seat, the member's credentials written owner-only, a replaced entry refused where the pair named differs, a malformed entry refused and reported, and the file removed with its last entry [[storage-44](#storage-44)].
 
 ### storage-27
 

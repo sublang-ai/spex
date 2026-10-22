@@ -1097,19 +1097,37 @@ async function boundedFixture(sessionsDir: string, sessionId: string): Promise<R
 test("storage-16: bounded session roots, replay and immutable chunks are selected whole through the shared store", async () => {
   const { home, clone, sessionId, bundle, commit, dispose } = setup();
   const sessionsDir = join(clone, "sessions");
+  const intentId = randomUUID();
+  const runtime = { device: Home.load(home).device, label: "Captured runtime" };
+  const intentPath = join(clone, "intents", `${intentId}.json`);
+  const dispatchedBundle = (label: string, text: string): void => {
+    bundle(label);
+    const replayPath = join(sessionsDir, `${sessionId}.records.jsonl`);
+    const replay = readFileSync(replayPath, "utf8") + [
+      { v: 1, seq: 2, record: { type: "turn_started", turnId: 1, timestamp: 1, turn: { id: 1, prompt: text } } },
+      { v: 1, seq: 3, record: { type: "turn_finished", turnId: 1, timestamp: 2 } },
+    ].map((entry) => `${JSON.stringify(entry)}\n`).join("");
+    writeFileSync(replayPath, replay, { mode: 0o600 });
+    const manifestPath = join(sessionsDir, `${sessionId}.json`);
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+    writeFileSync(manifestPath, JSON.stringify({ ...manifest, replay: { seq: 3, sha256: sha256(replay), incomplete: false } }), { mode: 0o600 });
+    writeIntent(clone, intentId, text, { format: 2, runtime, dispatched: { sessionId, turnId: 1, at: 1 } });
+  };
   try {
+    writeIntent(clone, intentId, "Captured intent", { format: 2, runtime });
     await boundedFixture(sessionsDir, sessionId); commit("bounded base");
     git(clone, "branch", "bounded-peer");
-    bundle("ours"); await boundedFixture(sessionsDir, sessionId); commit("ours");
+    dispatchedBundle("ours", "Our dispatched intent"); await boundedFixture(sessionsDir, sessionId); commit("ours");
     const ours = git(clone, "rev-parse", "HEAD");
     git(clone, "checkout", "-q", "bounded-peer");
     // Both recovery data and one replay record cross the physical-file
     // bound; the real migrator must preserve their complete values.
     const large = `incoming:${"x".repeat(9 * 1024 * 1024)}`;
-    bundle(large);
+    dispatchedBundle(large, "Peer's dispatched intent");
     const peer = await boundedFixture(sessionsDir, sessionId);
     commit("bounded peer");
     const incoming = git(clone, "rev-parse", "HEAD");
+    const incomingIntent = readFileSync(intentPath);
     const exported = await peer.exportBundle(sessionId);
     const files = (exported as typeof exported & { files: readonly { path: string; byteLength: number }[] }).files;
     assert.ok(files.some((file) => file.path === `${sessionId}.replay.json`));
@@ -1121,14 +1139,17 @@ test("storage-16: bounded session roots, replay and immutable chunks are selecte
     const plan = planStorageMerge(clone, ours, incoming);
     const unit = plan.units.find((unit) => unit.name === `sessions/${sessionId}`)!;
     assert.equal(unit.choice, "conflict");
+    assert.equal(plan.units.find((unit) => unit.name === `intents/${intentId}`)?.choice, "conflict");
     assert.ok(unit.paths.includes(`sessions/${sessionId}.replay.json`));
     assert.ok(unit.paths.some((path) => path.startsWith(`sessions/${sessionId}.chunks/`)));
     assert.equal(plan.units.some((unit) => unit.name.includes(".chunks/")), false, "a chunk is never a choice of its own");
     writeFileSync(join(sessionsDir, `${sessionId}.hints.json`), "synthetic stale hint\n", { mode: 0o600 });
     const release = reserveStorageHome(home, machineIdentity);
-    try { await applyStorageSelection(clone, plan, { [`sessions/${sessionId}`]: "theirs" }); }
+    try { await applyStorageSelection(clone, plan, { [`sessions/${sessionId}`]: "theirs", [`intents/${intentId}`]: "theirs" }); }
     finally { release(); }
     for (const [path, bytes] of incomingFiles) assert.deepEqual(readFileSync(join(sessionsDir, path)), bytes);
+    assert.deepEqual(readFileSync(intentPath), incomingIntent, "selection preserves the format-2 intent and its frozen runtime byte for byte");
+    assert.deepEqual(JSON.parse(incomingIntent.toString()).dispatched, { sessionId, turnId: 1, at: 1 });
     assert.equal(existsSync(join(sessionsDir, `${sessionId}.hints.json`)), false);
     const selected = createSessionStore({ sessionsDir });
     assert.equal((await selected.readManifest(sessionId) as { reason?: string }).reason, large);
@@ -1137,6 +1158,16 @@ test("storage-16: bounded session roots, replay and immutable chunks are selecte
     assert.equal(statSync(join(sessionsDir, `${sessionId}.chunks`)).mode & 0o777, 0o700);
     for (const file of files) assert.equal(statSync(join(sessionsDir, file.path)).mode & 0o777, 0o600);
     assert.equal(git(clone, "write-tree"), git(clone, "rev-parse", `${incoming}^{tree}`));
+    const reopened = new Store({ machineIdentity, dir: home, own: "tester", env: gitEnv });
+    try {
+      assert.deepEqual(reopened.getIntent(intentId)?.runtime, runtime);
+      reopened.editIntent(intentId, "Edited after selection");
+      reopened.stampIntentDispatch(intentId, sessionId, 1, 3);
+      reopened.closeIntent(intentId, "done", 4);
+      const rewritten = JSON.parse(readFileSync(intentPath, "utf8"));
+      assert.equal(rewritten.format, 2);
+      assert.deepEqual(rewritten.runtime, runtime, "edit, dispatch and close preserve the runtime captured before Sync");
+    } finally { reopened.close(); }
   } finally { dispose(); }
 });
 

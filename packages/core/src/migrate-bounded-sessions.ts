@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// A new import stage (storage-43), around the released groups migration:
+// A new import stage (storage-46), around the released groups migration:
 // retain bounded CLI families before that migration sees root session files,
 // then publish them into the home it established, without changing its code.
 import { randomUUID } from "node:crypto";

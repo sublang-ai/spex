@@ -1,15 +1,16 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
 
-# IR-113: Bounded Session Storage
+# IR-116: Bounded Session Storage
 
 ## Status
 
 In progress (2026-10-22).
+Renumbered before integration to avoid main's record-ID collision.
 
 ## Intent
 
-Implement [DR-132](../decisions/132-bounded-session-storage.md) across session discovery, whole-session synchronization, historical choice summaries and the explorer.
+Implement [DR-135](../decisions/135-bounded-session-storage.md) across session discovery, whole-session synchronization, historical choice summaries and the explorer.
 
 ## Deliverables
 

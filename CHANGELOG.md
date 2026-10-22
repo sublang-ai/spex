@@ -288,7 +288,7 @@ and `npm start` (desktop) or `npm run start:server` (server).
 - Playbook 18 shared session persistence now uses bounded files and
   deduplicated immutable chunks, with Sync selecting each complete session
   family together
-  ([DR-132](specs/decisions/132-bounded-session-storage.md)). Legacy sessions
+  ([DR-135](specs/decisions/135-bounded-session-storage.md)). Legacy sessions
   remain readable and require explicit Playbook migration before continuation.
   Stop older Playbook CLIs and Spex shells sharing a home before any upgraded
   writer starts.

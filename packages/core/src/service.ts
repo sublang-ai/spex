@@ -117,7 +117,7 @@ import {
   type BuiltinPackage,
 } from "./environment/index.js";
 import { splitKey } from "./home.js";
-import type { CommandResults, IntentInfo, InvalidPlaybookEntry, PlaybookAvailability, ProjectInfo, PublishPreview, RoleBindingSummary } from "./protocol.js";
+import type { AssignedRuntime, CommandResults, IntentInfo, InvalidPlaybookEntry, PlaybookAvailability, ProjectInfo, PublishPreview, RoleBindingSummary } from "./protocol.js";
 import {
   parseSpecTree,
   readRecordCommitTimes,
@@ -246,6 +246,10 @@ export interface CoreServiceOptions {
   userHome?: string | null;
   /** The registry's fetch (environments-12); a test seam. */
   registryFetch?: typeof fetch;
+  /** This runtime's label, stored beside the home's device at assignment
+   * for display alone (DR-134): the server's name on a seat, the host
+   * name by default. */
+  runtimeLabel?: string;
 }
 
 // The Sources cache ages out at ten minutes (dashboard-14).
@@ -437,6 +441,9 @@ export class CoreService {
   private configPath: string;
   /** The runtime the Git credential helper runs on (git-host-9). */
   private readonly hostRuntime: { execPath: string; electron: boolean };
+  /** This runtime's label for display (DR-134); its name is the home's
+   * device, read when a record is assigned. */
+  private readonly runtimeLabel: string;
   private readonly env: NodeJS.ProcessEnv;
   private readonly home: string;
   private readonly store: Store;
@@ -522,6 +529,7 @@ export class CoreService {
       options.forgeAdapter ?? new GitHubForgeAdapter(this.runCommand);
     this.configState = { status: "missing", path: this.configPath };
     this.hostRuntime = options.hostRuntime ?? currentRuntime();
+    this.runtimeLabel = options.runtimeLabel || hostname();
     this.sessions = new SessionManager({
       approvalHandler: (sessionId) => this.approvals.handler({kind: "session", id: sessionId}, () => {
         const session = this.store.describeSession(sessionId);
@@ -771,6 +779,15 @@ export class CoreService {
     if (options.home !== undefined) return options.home;
     if (options.dataDir && resolve(options.dataDir) === resolve(home, ".spex") && !env.SPEX_HOME?.trim()) return home;
     return null;
+  }
+
+  /** This runtime (DR-134): one core on one home, named by the home's
+   * `device` as `home.yaml` reads now, with its label. A caller reads it
+   * once the home reads, in the step that writes the assignment, so a
+   * device minted for one run while `home.yaml` does not read assigns
+   * nothing: that write is refused (storage-2). */
+  private runtime(): AssignedRuntime {
+    return { device: this.store.home.device, label: this.runtimeLabel };
   }
 
   /** A client of the instance at an origin (git-host-1..11, DR-127),
@@ -2874,7 +2891,10 @@ export class CoreService {
           // Read again after the await, in the step that writes: an
           // intent another queue or a sync wrote meanwhile holds it.
           refuseHeldSource();
-          this.store.addIntent(intent);
+          // Its runtime is this one, read once the home reads, in the
+          // step that writes it (core-service-42, DR-134).
+          this.store.assertWritable({ projectId: project.id });
+          this.store.addIntent({ ...intent, runtime: this.runtime() });
         } catch (error) {
           // The project may have left meanwhile: only its own folder goes.
           if (this.store.repository(project.id)) rmSync(this.store.intentAssetsDir(id, project.id), { recursive: true, force: true });

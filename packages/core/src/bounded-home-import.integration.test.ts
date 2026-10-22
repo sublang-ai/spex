@@ -58,7 +58,7 @@ function established(home: string, cwd: string): string {
   try { return store.registerProject(cwd, "Project").id; } finally { store.close(); }
 }
 
-test("storage-44: a bounded family is retained before the released former-home migration, then imported whole", async (t) => {
+test("storage-47: a bounded family is retained before the released former-home migration, then imported whole", async (t) => {
   const f = fixture(); t.after(() => rmSync(f.root, { recursive: true, force: true }));
   const project = randomUUID(); const alias = join(f.root, "former-project");
   mkdirSync(join(f.home, "local"), { mode: 0o700 });
@@ -86,7 +86,7 @@ test("storage-44: a bounded family is retained before the released former-home m
   assert.equal(execFileSync("git", ["-C", dirname(destination.sessionsDir), "check-ignore", `${`sessions/${seeded.id}.hints.json`}`], { env, encoding: "utf8" }).trim(), `sessions/${seeded.id}.hints.json`);
 });
 
-test("storage-44: a later default-location bounded session respects a held source lease and resumes identical partial publication", async (t) => {
+test("storage-47: a later default-location bounded session respects a held source lease and resumes identical partial publication", async (t) => {
   const f = fixture(); t.after(() => rmSync(f.root, { recursive: true, force: true }));
   const key = established(f.home, f.cwd); const seeded = await source(f.home, f.cwd);
   const held = await seeded.shared.acquireManagement(seeded.id);
@@ -110,7 +110,7 @@ test("storage-44: a later default-location bounded session respects a held sourc
   assert.equal(receipt(f.home).value.complete, true);
 });
 
-test("storage-44: bounded CLI import follows the instances migration of a one-instance home", async (t) => {
+test("storage-47: bounded CLI import follows the instances migration of a one-instance home", async (t) => {
   const f = fixture(); t.after(() => rmSync(f.root, { recursive: true, force: true }));
   const key = established(f.home, f.cwd);
   const file = join(f.home, "home.yaml"); const prior = parseYaml(readFileSync(file, "utf8"));
@@ -124,7 +124,7 @@ test("storage-44: bounded CLI import follows the instances migration of a one-in
   assert.equal(receipt(f.home).value.complete, true);
 });
 
-test("storage-44: divergent destination bytes and an unsafe destination parent stay unchanged with retained inputs", async (t) => {
+test("storage-47: divergent destination bytes and an unsafe destination parent stay unchanged with retained inputs", async (t) => {
   for (const defect of ["diverged", "linked"] as const) await t.test(defect, async () => {
     const f = fixture(); t.after(() => rmSync(f.root, { recursive: true, force: true }));
     const key = established(f.home, f.cwd); const seeded = await source(f.home, f.cwd);
@@ -146,7 +146,7 @@ test("storage-44: divergent destination bytes and an unsafe destination parent s
   });
 });
 
-test("storage-44: an inconsistent receipt refuses before bounded session publication", async (t) => {
+test("storage-47: an inconsistent receipt refuses before bounded session publication", async (t) => {
   for (const defect of ["staged-without-retained", "complete-without-destination", "changed-cwd"] as const) await t.test(defect, async () => {
     const f = fixture(); t.after(() => rmSync(f.root, { recursive: true, force: true }));
     const key = established(f.home, f.cwd); const seeded = await source(f.home, f.cwd);
@@ -168,7 +168,7 @@ test("storage-44: an inconsistent receipt refuses before bounded session publica
   });
 });
 
-test("storage-44: a held destination lease refuses publication and a later open completes the retained import", async (t) => {
+test("storage-47: a held destination lease refuses publication and a later open completes the retained import", async (t) => {
   const f = fixture(); t.after(() => rmSync(f.root, { recursive: true, force: true }));
   const key = established(f.home, f.cwd); const seeded = await source(f.home, f.cwd);
   const release = reserveStorageHome(f.home, machineIdentity);

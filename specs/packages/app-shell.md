@@ -13,7 +13,7 @@ This spec covers the Spex desktop shell (`apps/desktop`) — the single-window E
 
 #### app-shell-1
 
-Where the host platform is supported [[core-service-89](core-service.md#core-service-89)], when the user launches Spex, the app shall open a single main window whose UI is connected to the in-app core service, without requiring the user to start any separate server or open a browser.
+Where the host platform is supported [[core-service-89](core-service.md#core-service-89)], when the user launches Spex, the app shall open a single main window whose UI is connected to the in-app core service — and, through its relay paths, to each seat the person opens on a team server [[core-service-129](core-service.md#core-service-129)] ([DR-133](../decisions/133-one-desktop-over-several-cores.md)) — without requiring the user to start any separate server or open a browser.
 
 #### app-shell-2
 
@@ -35,7 +35,7 @@ When the app composes text of its own — a notification's title and body [[app-
 
 #### app-shell-4
 
-While the attention count published by the Dashboard [[dashboard-9](dashboard.md#dashboard-9)] is non-zero, the app shall display that count as the dock or taskbar badge:
+While the attention count published by the Dashboard [[dashboard-9](dashboard.md#dashboard-9)] is non-zero — the count the core reads over its own badge and each open seat's [[core-service-129](core-service.md#core-service-129)] — the app shall display that count as the dock or taskbar badge:
 
 - When the attention count becomes zero, the app removes the badge.
 

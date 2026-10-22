@@ -8,6 +8,7 @@
 This spec covers the Spex core service — the headless Node service in `packages/core` (the private workspace package `@sublang/spex-core`): its observable behavior, its implementation requirements, and its end-to-end integration coverage.
 The service owns config, project sessions, the intent ledger, the embedded playbook runtime, and persistence behind one WebSocket API: it embeds the headless cligent runtime and the playbook captain shell, and it shares the playbook launcher's config file, its session store ([DR-036](../decisions/036-file-state-store.md)), and its adapter readiness rules.
 Every behavior in this package is observable over the WebSocket protocol; the service serves no HTML, and integration coverage runs end to end against a scripted fake adapter.
+A **runtime** is one core on one home, named by the home's `device` [[storage-2](storage.md#storage-2)], with a label for display; a session or an intent **assigned** to a runtime is executed by that runtime alone ([DR-134](../decisions/134-execution-ownership.md)).
 
 ## External Behavior
 
@@ -21,7 +22,7 @@ When started on a native platform other than macOS or Linux, the core service sh
 
 #### core-service-1
 
-Where the core service is started by a host shell, when startup completes, the core service shall accept WebSocket connections on its endpoint — a loopback-only socket the service binds itself by default, or a shell-supplied HTTP server the service attaches to, leaving binding and transport security to that shell ([DR-033](../decisions/033-remote-gui-serving.md)) — and report the endpoint address to the host:
+Where the core service is started by a host shell, when startup completes, the core service shall accept WebSocket connections on its endpoint — a loopback-only socket the service binds itself by default, or a shell-supplied HTTP server the service attaches to, leaving binding and transport security to that shell ([DR-033](../decisions/033-remote-gui-serving.md)) — at the path `/`, and on the relay paths of its open seats [[core-service-129](#core-service-129)], refusing any other path, and report the endpoint address to the host:
 
 - When a client connects, the core service sends a hello message carrying the protocol version before any other message, so clients can detect a protocol mismatch before issuing commands.
 
@@ -37,6 +38,8 @@ An Origin is not foreign only in these cases:
 | `null`, or a `file://` origin | the packaged renderer |
 | `http(s)://localhost` or `http(s)://127.0.0.1`, any port | a local dev page |
 | the host the handshake request itself addressed | a page the embedding shell serves ([DR-033](../decisions/033-remote-gui-serving.md)) |
+
+- A relay path of an open seat [[core-service-129](#core-service-129)] admits exactly as the path `/` does: the same token, the same origins ([DR-133](../decisions/133-one-desktop-over-several-cores.md)).
 
 ### Configuration
 
@@ -83,6 +86,7 @@ Where a project is registered ([DR-006](../decisions/006-projects-and-forge.md))
 - Local admission and recovery reservations keep the project exclusive while ownership is revalidated [[core-service-73](#core-service-73)] or a recovery's released ownership is published [[core-service-83](#core-service-83)]; a refused request releases only its own reservation.
 - A Space operation running on the project's spex repository refuses no request [[space-21](space.md#space-21)].
 - Live sessions for distinct projects run concurrently.
+- A session is assigned to this runtime at creation: the core appends its runtime record [[storage-43](storage.md#storage-43)] before its first turn is admitted, with this runtime's label — the server's name on a seat, else the host name ([DR-134](../decisions/134-execution-ownership.md)).
 - While a session is live, a client's disposal request aborts its turn, persists the session's Captain snapshot [[core-service-72](#core-service-72)], disposes the session's runtime, and reports the session as no longer live; a Boss message continues it [[core-service-73](#core-service-73)].
 - Where disposal fails, the core reports the error and retains the session's lease and project reservation until cleanup is confirmed; stopping the owning process allows later recovery through the shared lease checks ([DR-048](../decisions/048-failed-session-cleanup.md)).
 
@@ -131,7 +135,8 @@ When a client sends `session.agent.set` naming a session, one of its agents — 
 
 When a client requests the session list or the ledger, the core service shall derive each project's current conversation from stored state — its live session, else its most recently active session that continues [[core-service-32](#core-service-32)] or still carries a recovery boundary, and that no other host owns — and shall fold that conversation as the project's lane: its standing conditions and stand-ins [[core-service-49](#core-service-49)] ([DR-051](../decisions/051-runtime-held-for-a-turn.md), [DR-077](../decisions/077-up-next-is-a-committed-queue.md)):
 
-- a disposal trace the runtime emits outside a turn — carrying no turn id — is a pause, never the Captain dismissing a parked run, so a question parked at that moment stands until the runtime reports it gone ([DR-085](../decisions/085-boss-talks-through-captain.md)).
+- a disposal trace the runtime emits outside a turn — carrying no turn id — is a pause, never the Captain dismissing a parked run, so a question parked at that moment stands until the runtime reports it gone ([DR-085](../decisions/085-boss-talks-through-captain.md));
+- a session assigned to another runtime [[storage-43](storage.md#storage-43)] is never the project's lane here and never holds the project, so this runtime may start a session of its own beside it ([DR-134](../decisions/134-execution-ownership.md)).
 
 #### core-service-72
 
@@ -163,6 +168,7 @@ When a client requests the session list, the core service shall reply with every
 - each entry carries the session's resolved project, its creation time, its last activity — the wire field `endedAt`, null while live and otherwise the latest time its own records carry, its manifest's last update only where none carries one — liveness and `turnActive`, which stays true until the turn transaction settles or fails; host of origin is not an admission condition;
 - a non-live session has no active turn; historical records alone never establish liveness, and a session acquired by this core is never reported as externally owned;
 - each entry says whether a Boss message continues it, using the shared checkpoint, replay and execution checks [[core-service-73](#core-service-73)], with a reason when history-only;
+- an entry whose session is assigned to another runtime [[storage-43](storage.md#storage-43)] carries `runsOn` with that runtime's label, is not continuable, with the reason "Runs on <label>", and carries no `recovery`, whatever its checkpoint holds ([DR-134](../decisions/134-execution-ownership.md));
 - a settled checkpoint whose current working-folder binding or stored-member configuration refuses continuation is history-only with that refusal's reason; listing and reporting this reading open no runtime, acquire no session lease, consume no provider hints and change no session files;
 - this reading follows current bindings and configuration, including changes since the preceding listing or report; unprovable current inputs produce no positive reading, compatible tuning changes and unrelated enabled playbooks remain continuable [[core-service-92](#core-service-92)], and submission still checks admission afresh [[core-service-73](#core-service-73)];
 - each uncertain entry carries `recovery: {state: "uncertain", input, discardable}` with the exact saved input and whether Playbook's shared discard predicate [[2]] allows Discard — no recorded step, no abandonment, unchanged repository evidence ([DR-088](../decisions/088-playbook-17-slc-0-12-cligent-0-27-adoption.md)); uncertainty is never reported as normal continuability;
@@ -238,6 +244,7 @@ While a session is not live, when a client submits Boss text for it, the core se
 | Another session of the project is live, or a session lease is active | `busy`, naming the session working or the holder |
 | Unsupported recovery, no checkpoint, incomplete stream or digest mismatch | `invalid_request`, history-only with the failing condition |
 | Uncertain work | `invalid_request`, restore it first [[core-service-82](#core-service-82)] |
+| The session is assigned to another runtime [[storage-43](storage.md#storage-43)] | `invalid_request`, "Runs on <label>", with `runsOn` in its details, so a client acts without parsing the words ([DR-134](../decisions/134-execution-ownership.md)) |
 | The spex repository's working folder is not paired on this device, or the session's recorded working directory is not that folder [[storage-6](storage.md#storage-6)] — an alias keeps the session's history readable, while Playbook's relocation rule refuses to continue it until the folder is the recorded one | `invalid_request`, continue it on the device whose folder it ran in ([DR-103](../decisions/103-the-home-and-its-groups.md)) |
 | Changed checkpoint repository/module paths | `invalid_request`, relocation unsupported; history remains readable |
 | Missing or invalid config | `invalid_config`, as for creation |
@@ -256,7 +263,7 @@ While a boss turn is active on a session, when a client requests an abort for th
 
 When a client sends `session.restore` with only a `sessionId`, the core shall restore that session's uncertain turn through Playbook's shared recovery [[2]] under the same project and session admission checks as continuation [[core-service-73](#core-service-73)], as one turn that reports what was recorded and repeats nothing ([DR-047](../decisions/047-explicit-session-recovery.md), [DR-088](../decisions/088-playbook-17-slc-0-12-cligent-0-27-adoption.md)):
 
-- refuse a session whose summary holds no interrupted turn with `invalid_request` and its cause before opening anything, writing no record;
+- refuse a session whose summary holds no interrupted turn with `invalid_request` and its cause before opening anything, writing no record, and one assigned to another runtime [[storage-43](storage.md#storage-43)] with `invalid_request`, "Runs on <label>", whatever its checkpoint holds ([DR-134](../decisions/134-execution-ownership.md));
 - acquire the exclusive session lease and re-read the saved uncertainty before any effects, releasing the session with the same refusal where it no longer stands;
 - open the session in Playbook's recover mode [[2]] on the exact attempted configuration, then append one visible `captain_telemetry` record with topic `spex.session.restoring` and no turn id, carrying the saved input, which names the next turn to start with that input as the report — unless a failure is recorded first;
 - reconcile repository evidence and restore the saved position — the pre-turn checkpoint where nothing was recorded — reporting it through the Captain without re-running the recorded input or calling an agent;
@@ -284,7 +291,7 @@ When a client sends `session.control` with a `sessionId`, a control kind and opt
 
 When a client sends `session.discard` with only a `sessionId`, the core shall discard that session's uncertain attempt through Playbook's shared lifecycle [[1]] under its exclusive lease, without loading configuration, modules or agents ([DR-047](../decisions/047-explicit-session-recovery.md), [DR-088](../decisions/088-playbook-17-slc-0-12-cligent-0-27-adoption.md)):
 
-- refuse live or unprovably owned sessions, and any attempt Playbook's shared discard predicate [[2]] refuses — a recorded step, an abandonment, or changed repository evidence — with Playbook's cause;
+- refuse live or unprovably owned sessions, a session assigned to another runtime [[storage-43](storage.md#storage-43)] with `invalid_request`, "Runs on <label>" ([DR-134](../decisions/134-execution-ownership.md)), and any attempt Playbook's shared discard predicate [[2]] refuses — a recorded step, an abandonment, or changed repository evidence — with Playbook's cause;
 - restore the exact preceding settled checkpoint, or remove a never-settled fresh session when Playbook authorizes removal;
 - publish the restored summary or session removal and refreshed intent state; a refusal preserves evidence and reports its cause;
 - after success or refusal, refresh and publish the shared ownership reading before releasing the local recovery reservation, without consuming unannounced foreign replay records; a refresh failure preserves the original refusal and its evidence.
@@ -325,6 +332,7 @@ When the core follows a spex repository's clone to a new address, the core shall
 When a client sends `intent.queue` for a registered project ([DR-006](../decisions/006-projects-and-forge.md)), the core service shall store a new open intent as one file of its project's spex repository [[storage-4](storage.md#storage-4)] — the request's exact text and optional ordered attachment references [[media-5](media.md#media-5)], its optional source (kind, reference, URL, and labels), its optional author, and its capture time — reply with the stored intent, and announce the write [[core-service-51](#core-service-51)] ([DR-035](../decisions/035-intent-ledger.md), [DR-103](../decisions/103-the-home-and-its-groups.md)):
 
 - its author is the account the home is signed in as [[storage-2](storage.md#storage-2)] at the instance of its project's spex repository [[storage-31](storage.md#storage-31)], and none where that repository has no instance or the home is not signed in there ([DR-127](../decisions/127-a-home-signed-in-to-several-instances.md));
+- its runtime is this one, written at capture [[storage-4](storage.md#storage-4)] with this runtime's label, so the intent runs here and nowhere else ([DR-134](../decisions/134-execution-ownership.md));
 - an intent holds no place of its own: the project's queue is its queued intents oldest first, and the next to run is the oldest;
 - where the source kind is issue, PR, or record and the project already holds an open intent with the same source kind and reference, the request is rejected with a `conflict` error naming that intent and stores nothing — at most one open intent per source artifact per project;
 - a chat-sourced or unsourced intent is never deduplicated.
@@ -333,7 +341,8 @@ When a client sends `intent.queue` for a registered project ([DR-006](../decisio
 
 While an intent is queued [[core-service-47](#core-service-47)], when a client sends `intent.edit` for it, the core service shall replace the intent's text and any supplied attachment list, preserving omitted attachments [[media-5](media.md#media-5)], and announce the write [[core-service-51](#core-service-51)]:
 
-- an edit of a dispatched or closed intent is rejected: from its dispatch binding on, the text is history ([DR-035](../decisions/035-intent-ledger.md)).
+- an edit of a dispatched or closed intent is rejected: from its dispatch binding on, the text is history ([DR-035](../decisions/035-intent-ledger.md));
+- an edit of an intent assigned to another runtime [[storage-4](storage.md#storage-4)] is rejected `conflict`, "Runs on <label>", so no sync choice can drop the stamp of work that ran there ([DR-134](../decisions/134-execution-ownership.md)).
 
 #### core-service-46
 
@@ -342,7 +351,8 @@ When a client sends `intent.close` for an open intent with a verdict of `done` o
 - `done` is accepted only while a turn the intent attributes [[core-service-47](#core-service-47)] ended finished with none later active, and is otherwise rejected — confirming work that never ran would falsify the ledger ([DR-035](../decisions/035-intent-ledger.md));
 - `dropped` is legal on any open intent; dropped before any turn the intent attributes [[core-service-47](#core-service-47)] ended finished, the intent is removed — the history read excludes it [[core-service-50](#core-service-50)] and no verdict shows anywhere ([DR-038](../decisions/038-history-is-done-work.md));
 - `dropped` while a run of the intent's session stands parked on the Boss within the turns it attributes [[core-service-47](#core-service-47)] — on a question, or in its recoverable failure state — first ends that run as the session's next turn, as an ending control does [[core-service-98](#core-service-98)], and records the verdict only once that turn has settled with no run of the session still parked, the two announced together; an ending refused, or one settling with the run still parked, refuses the close with that cause and leaves the intent open ([DR-073](../decisions/073-letting-go-ends-the-parked-run.md));
-- a close of an already-closed intent is rejected.
+- a close of an already-closed intent is rejected;
+- a close, `done` or `dropped`, of an intent assigned to another runtime [[storage-4](storage.md#storage-4)] is rejected `conflict`, "Runs on <label>", while a remove of a closed one stays allowed ([DR-134](../decisions/134-execution-ownership.md)).
 
 #### core-service-79
 
@@ -356,12 +366,13 @@ While an intent is closed [[core-service-46](#core-service-46)], when a client s
 
 While a session is live, when a Boss submission for it — from a client [[core-service-5](#core-service-5)] or automatic advancement [[core-service-94](#core-service-94)] — carries an intent id, the core service shall validate the intent at submission — open, of the session's project, and queued — and stamp the dispatch (session, turn, and time) onto the intent when and only when the submitted turn starts, announcing the write [[core-service-51](#core-service-51)] ([DR-035](../decisions/035-intent-ledger.md)):
 
-- a submission whose intent fails validation is rejected and starts no turn;
+- a submission whose intent fails validation is rejected and starts no turn; one whose intent is assigned to another runtime [[storage-4](storage.md#storage-4)], or holds no runtime while this core runs as a seat ([DR-132](../decisions/132-team-servers.md)), is rejected `conflict`, "Runs on <label>", or "Runs nowhere yet" for the latter ([DR-134](../decisions/134-execution-ownership.md));
 - while a run of the session stands parked on a Boss question [[core-service-107](#core-service-107)], a submission carrying an intent id is rejected `conflict`, the intent staying queued: a dispatch is new work, never an answer ([DR-119](../decisions/119-an-answer-continues-its-intent.md));
 - a submission that never starts a turn stamps nothing, and the intent stays queued;
 - a later dispatch of the same intent re-writes the stamps;
 - the stamp attributes turns: an intent's turns run from its dispatch turn up to, not including, the next turn in the session that is another intent's dispatch turn, so the newest dispatched open intent owns follow-up turns;
-- an intent is queued while it is open and holds no standing dispatch — never dispatched, its dispatch turn ended aborted, or its dispatching session stopped before that turn finished — the release derived, never written: the stamps remain and the intent keeps its place by age.
+- an intent is queued while it is open and holds no standing dispatch — never dispatched, its dispatch turn ended aborted, or its dispatching session stopped before that turn finished — the release derived, never written: the stamps remain and the intent keeps its place by age;
+- a dispatch whose session is assigned to another runtime [[storage-43](storage.md#storage-43)] is never derived as released here: that runtime's stop or abort is its to read ([DR-134](../decisions/134-execution-ownership.md)).
 
 #### core-service-94
 
@@ -372,6 +383,7 @@ When a locally owned intent-attributed turn completes full settlement [[core-ser
 - an aborted follow-up starts no successor even where an older finished turn leaves the intent's derived state Finished; a later clean attributed follow-up — one recovering a failure among them — may qualify, while an ending control never does;
 - a permission record and absent, unsupported, child, failed, or non-terminal playbook trace evidence add no gate of their own;
 - a Done or Drop verdict accepted before or during the eligible settlement, and a later removal of that settled owner, neither authorizes nor cancels that settlement's successor; no verdict or removal initiates advancement;
+- the successor is chosen among the intents this runtime may run [[core-service-107](#core-service-107)]; an intent assigned to another runtime arriving through a sync neither becomes the successor nor cancels the handoff ([DR-134](../decisions/134-execution-ownership.md));
 - selection snapshots the successor's then-current identity before release can expose a manual Start and submits its latest text only while it remains the first eligible row; a later arrival of an older intent through a sync, or the closing of that successor, that changes the next row cancels the handoff rather than substituting another intent; normal admission [[core-service-5](#core-service-5)], and actual-start dispatch stamping and attribution [[core-service-47](#core-service-47)] stand, a competing manual submission wins normal admission, and a refused admission causes no automatic retry;
 - the settled intent remains finished and awaiting its human verdict unless that verdict already landed [[core-service-46](#core-service-46)] [[core-service-49](#core-service-49)];
 - no next eligible intent starts nothing, and queue capture or edits, ledger reads, verdicts after settlement, adoption and restart initiate no advancement or retained runner state.
@@ -395,12 +407,14 @@ When a client sends `ledger.get`, the core service shall reply with the cross-pr
 | Project groups | per project: the current conversation's state [[core-service-93](#core-service-93)], the queue oldest first, its oldest queued intent as next with the scheduling standing, manual-start availability, and structured cause [[core-service-107](#core-service-107)], and the open intents' source-artifact references [[core-service-42](#core-service-42)] ([DR-077](../decisions/077-up-next-is-a-committed-queue.md)) |
 | Badge | the count of all attention entries |
 
+- an intent assigned to another runtime [[storage-4](storage.md#storage-4)], and a session assigned to one [[storage-43](storage.md#storage-43)], enter no band and no count: that runtime's ledger carries them ([DR-134](../decisions/134-execution-ownership.md));
+
 - a failure entry or queue standing carries the structured cause the runtime attached to that failure — the `{ code, evidence }` the stream reports beside the failure it decided — read defensively, so a shape that is not a code with an optional evidence object is dropped rather than half-read and the entry or standing states no reason the runtime did not state ([DR-075](../decisions/075-a-failure-says-what-and-what-now.md));
 - the core neither interprets nor completes that cause: the words are the client's to give it [[run-view-147](run-view.md#run-view-147)].
 
 #### core-service-107
 
-When the core service derives a project's queue reading, it shall choose the oldest queued intent — by capture time, then by id — as next and publish exactly one scheduling standing with its manual-start availability by the first matching row of this ordered table, attaching the standing failure's structured cause where one is known ([DR-077](../decisions/077-up-next-is-a-committed-queue.md)):
+When the core service derives a project's queue reading, it shall choose the oldest queued intent this runtime may run — assigned to it, or to none where this core does not run as a seat ([DR-132](../decisions/132-team-servers.md)) [[storage-4](storage.md#storage-4)] — by capture time, then by id, as next and publish exactly one scheduling standing with its manual-start availability by the first matching row of this ordered table, attaching the standing failure's structured cause where one is known ([DR-077](../decisions/077-up-next-is-a-committed-queue.md)):
 
 | First matching lane condition | Standing | Manual start |
 | --- | --- | --- |
@@ -414,7 +428,8 @@ When the core service derives a project's queue reading, it shall choose the old
 - a run is a playbook run: the Captain shell's own machine — which an abort taken during the Captain's call moves to its failure state — parks nothing;
 - a restore's report reuses the id of the turn it reports, so only a failure recorded after the report began is that turn ending failed;
 - an eligible automatic handoff [[core-service-94](#core-service-94)] is selected before publication can expose `manual-ready`, so clean settlement never flickers a Start; age still chooses next while admission is pending, and a non-verdict queue change that changes that next cancels the handoff;
-- the standing and availability are derived from the lane and intent records, never stored on an intent.
+- the standing and availability are derived from the lane and intent records, never stored on an intent;
+- a queued intent assigned to another runtime keeps its place in the queue by age, carries `runsOn` with that runtime's label, is never next here and offers no manual start ([DR-134](../decisions/134-execution-ownership.md)).
 
 #### core-service-50
 
@@ -441,6 +456,7 @@ The core package shall hold each intent as one file of its project's spex reposi
 | `attachments` | optional ordered project-owned immutable file references [[media-4](media.md#media-4)] |
 | `source` (`kind`, `ref`, `url`) | provenance — issue, PR, record, or chat, with reference and URL — absent when unsourced |
 | `author` | optional: the account that captured it at its project's instance [[core-service-42](#core-service-42)] |
+| `runtime` | the runtime that captured it and alone runs it [[core-service-42](#core-service-42)], absent in a file written before runtimes were recorded |
 | `createdAt` | the capture time, which orders the queue |
 | `dispatched` (`sessionId`, `turnId`, `at`) | the dispatch stamp, re-written by a later dispatch |
 | `closedAt`, `closedAs` | the close time and verdict — `done` or `dropped` |
@@ -493,13 +509,13 @@ When a client requests adapter readiness, the core service shall report one dedu
 
 #### core-service-10
 
-The core service shall persist and replay sessions through Playbook's hydrated manifest and replay API over its versioned physical session files [[1]] ([DR-132](../decisions/132-bounded-session-storage.md)), using the shared root and explicit overrides [[storage-1](storage.md#storage-1)] ([DR-045](../decisions/045-unified-session-storage.md)):
+The core service shall persist and replay sessions through Playbook's hydrated manifest and replay API over its versioned physical session files [[1]] ([DR-135](../decisions/135-bounded-session-storage.md)), using the shared root and explicit overrides [[storage-1](storage.md#storage-1)] ([DR-045](../decisions/045-unified-session-storage.md)):
 
 - restart serves the same records and visibility filtering [[core-service-8](#core-service-8)], deriving turns, summaries, usage, and per-agent active time [[core-service-102](#core-service-102)]; liveness comes from runtime/leases rather than stored flags;
 - valid opaque v1 records, including unknown/headerless objects, remain in sequence/digest accounting; unsupported presentation is skipped without damage;
 - record-write failure preserves live presentation and durable recovery, marks the manifest's replay incomplete and refuses later continuation [[core-service-73](#core-service-73)]; a restart cannot clear the marker merely because the retained bytes parse;
 - a reader serves the valid complete prefix with the damaged boundary reported, without altering files during a read;
-- a monolithic schema-7 session remains readable without implicit conversion; continuation follows Playbook's explicit migration requirement ([DR-132](../decisions/132-bounded-session-storage.md));
+- a monolithic schema-7 session remains readable without implicit conversion; continuation follows Playbook's explicit migration requirement ([DR-135](../decisions/135-bounded-session-storage.md));
 - token-free presentation includes synthesized visible failures [[core-service-30](#core-service-30)]; provider hints never enter the portable stream or manifest;
 - historical participants, settings, bindings and graphs come from stored context [[core-service-80](#core-service-80)], not today's installed modules.
 
@@ -554,6 +570,7 @@ When a host shell stops the core service, the core service shall persist every l
 - Successful cleanup reports the session as no longer live; failed or unconfirmed cleanup retains its ownership evidence [[core-service-4](#core-service-4)].
 - Shutdown waits for settlement bookkeeping already in progress before closing the store.
 - Shutdown closes session and turn admission before waiting, drains session openings already admitted (including their pre-open waits), and attempts disposal of any runtime they create before closing the store; an opening or disposal failure does not skip the remaining cleanup.
+- Shutdown is bounded: every active turn is aborted with the core-stop reason as admission closes; when every turn has settled, or ten seconds after the stop began, every agent process the core started that is still alive receives SIGTERM, and SIGKILL five seconds later; the stop then stops waiting for disposals not yet confirmed, reports them unconfirmed, releases its leases and closes the store, having written nothing into any working folder and reverted no file, so a turn cut before settlement stands `uncertain` for Restore on this runtime ([DR-134](../decisions/134-execution-ownership.md)).
 - An observed Captain cleanup-hook rejection or an ambiguous compound construction failure is reported as cleanup unconfirmed, including one whose opening settled before shutdown; a lease released during failed construction alone does not confirm runtime cleanup ([DR-048](../decisions/048-failed-session-cleanup.md)).
 
 ### Interface Language
@@ -576,6 +593,52 @@ When the core service composes text for the reader — a refusal's message, a co
 - a record already written keeps the language it was written in;
 - what a finished operation composed — a storage diagnostic its store raised at load, a Space stop's message and guidance — keeps its language until that operation runs again, and a start speaks the stored choice, read from the preference file, before the store loads, so nothing it composes begins in another language than the home's ([DR-083](../decisions/083-a-finished-operations-words-keep-their-language.md));
 - a fact a page acts on travels beside the words, never in them: a refusal carries it as a detail of its reply, a state as a field of its own.
+
+### Seat Mode
+
+#### core-service-125
+
+Where the core runs as a seat — started with a server's id and name, the admitted person's permanent account id at the instance and, optionally, a shared credential file ([DR-132](../decisions/132-team-servers.md)) — the core service shall run for that person alone:
+
+- its sign-in is the device flow with the request naming the server and the person [[git-host-27](git-host.md#git-host-27)], and a sign-in whose account bears another permanent id than the person's ends `failed`, storing nothing;
+- your own group is placed at no instance [[space-102](space.md#space-102)];
+- every command naming a working folder path — `project.register`, `project.rebind`, `project.create`, and a join naming a folder — is refused `invalid_request`, "Projects on a server are opened from their group"; a join names no folder, the core allocating it [[space-103](space.md#space-103)];
+- intents without a runtime are run nowhere here [[core-service-107](#core-service-107)];
+- the runtime's label is the server's name [[core-service-4](#core-service-4)].
+
+#### core-service-126
+
+Where the core runs as a seat with a shared credential file [[core-service-125](#core-service-125)], when it starts and before each agent run, the core service shall read the file — `NAME=value` lines, the names of each agent's shared forms among them [[settings-49](settings.md#settings-49)] — into the environment its adapters inherit, so that a replaced value reaches the next run without a restart while a running agent process keeps the environment it started with ([DR-132](../decisions/132-team-servers.md)):
+
+- for an agent the member set a credential of their own for [[settings-48](settings.md#settings-48)], the file's names for that agent are left out of the run's environment and the member's own put in, so the member's own wins whatever the agent's precedence;
+- an unreadable file leaves the environment as it was and is reported through readiness [[settings-49](settings.md#settings-49)], blocking nothing else;
+- no value of the file is written anywhere or logged.
+
+### Places
+
+#### core-service-128
+
+When a client sends `server.list`, `server.open` or `server.close`, the core service shall act on the seats the person holds on team servers ([DR-133](../decisions/133-one-desktop-over-several-cores.md)):
+
+| Command | Effect |
+| --- | --- |
+| `server.list` | reads each signed-in instance's servers listing [[git-host-29](git-host.md#git-host-29)] and replies with every server — its id, name, group and instance — and whether a seat is open at it, each instance's read standing or failing on its own [[git-host-11](git-host.md#git-host-11)] |
+| `server.open {instance, serverId, consented}` | with `consented` true — the client having shown the contract of the instance's record in its own words — asks the instance for a ticket [[git-host-29](git-host.md#git-host-29)], presents it at the server's address for the admission, keeps the seat's endpoint, bearer and lease expiry under `local/` [[storage-45](storage.md#storage-45)], starts its relay [[core-service-129](#core-service-129)], and replies with the place and the expiry, never the bearer or the endpoint; `consented` absent or false is `invalid_request` and asks nothing |
+| `server.close {instance, serverId}` | ends the seat's relay and removes its entry; the seat's lease continues at the server while work runs there |
+
+- a refusal of the ticket or the admission is relayed with its cause [[git-host-11](git-host.md#git-host-11)], the instance's `host_refused` as refused and its `not_found` as no longer shared;
+- every change of the open seats is announced to every client as `server.state`, each seat by its instance, server, name, group, place, lease expiry and relay state — connecting, open, closed or mismatched;
+- at start the core reopens every seat its file holds, a refusal removing the entry as a close does.
+
+#### core-service-129
+
+While a seat is open [[core-service-128](#core-service-128)], the core service shall expose a relay path for it on its own endpoint, `/seats/<place>`, admitted as the path `/` is [[core-service-24](#core-service-24)], and shall pipe each client connection there, frames unread both ways, through a connection of its own to the seat's endpoint over TLS presenting the bearer in the `Authorization` header and no `Origin` ([DR-133](../decisions/133-one-desktop-over-several-cores.md)):
+
+- one connection to the seat per client connection, so request ids and subscriptions stay the client's own; either side closing closes the other;
+- beside them one watch connection per seat, which relays nothing, reconnects every second as a client does, reads the seat's hello — a protocol version other than this core's marks the place mismatched and stops its reconnecting — and reads the seat's ledger badge on every `intents.changed` there;
+- a close with the lease-end code, or the seat refusing the bearer, removes the seat as a close does and announces it;
+- the shell reads one attention count from the core: this core's badge [[core-service-49](#core-service-49)] plus each open seat's last read badge;
+- the bearer and the endpoint reach no client and no log.
 
 ## Internal Behavior
 
@@ -779,6 +842,8 @@ Where two sessions are live and the first one's runtime fails its disposal, the 
 Where session creation or continuation is held after acquiring its shared lease but before publishing its runtime, the integration suite shall stop the core, release that initialization, and assert that shutdown waits for the admitted opening and disposes its runtime before closing the store, later session or turn admission creates no work, and the shared session lease is idle after successful cleanup [[core-service-39](#core-service-39)].
 
 Where admitted initialization fails, the integration suite shall distinguish an ordinary initialization error with successful cleanup from a cleanup-hook rejection or ambiguous compound construction error: the ordinary error does not fail shutdown; the latter outcomes report cleanup unconfirmed and retain ownership even when no controller was returned or the opening settled before shutdown; every outcome still permits shutdown to attempt the other runtimes [[core-service-39](#core-service-39)].
+
+Where a fixture agent ignores SIGTERM and holds a child of its own, and the stop's bounds are shortened through the seams, the integration suite shall stop the core mid-turn and assert that the agent receives SIGTERM once turns settle or the first bound passes and SIGKILL at the second, that the stop returns reporting the disposal unconfirmed, that nothing was written into the working folder, and that the session reads `uncertain` on this runtime afterwards [[core-service-39](#core-service-39)].
 
 ### Record Visibility Coverage
 
@@ -1096,6 +1161,26 @@ When a real-core integration suite composes a paired project's custom options, i
 - an optional cwd accepted by the capability probe but rejected for the actual folder is refused, with no raw-default fallback [[core-service-16](#core-service-16)];
 - an entry rejecting cwd validates its raw options, while global composition without a working folder defers context-dependent validation [[core-service-16](#core-service-16)];
 - a pairing changed while a module imports is re-read before publishing a config state, and a config write or new-session request holding the previous pairing is refused without changing config bytes or opening a session [[core-service-2](#core-service-2)].
+
+### Ownership Coverage
+
+#### core-service-124
+
+Where two homes pair one project at the same working-folder path and sync its records, the integration suite shall assert execution ownership across them:
+
+- a session created on the first home carries its runtime record before its first turn [[core-service-4](#core-service-4)], and on the second reads `runsOn` with the first's label, not continuable, with no `recovery` [[core-service-32](#core-service-32)], refuses continuation, `session.control`, Restore and Discard with `invalid_request` and the phrase [[core-service-73](#core-service-73)] [[core-service-82](#core-service-82)] [[core-service-83](#core-service-83)], is never the second's lane [[core-service-93](#core-service-93)], and raises no attention there [[core-service-49](#core-service-49)];
+- an intent captured on the first home carries the first's runtime [[core-service-42](#core-service-42)], and on the second is listed in its queue with `runsOn`, never next [[core-service-107](#core-service-107)], never advanced into [[core-service-94](#core-service-94)], and refused `conflict` on a turn, an edit and a close [[core-service-47](#core-service-47)] [[core-service-43](#core-service-43)] [[core-service-46](#core-service-46)], while a remove of it once closed on the first succeeds;
+- an open dispatch of the first's session is not derived as released on the second [[core-service-47](#core-service-47)];
+- a session and an intent carrying no runtime keep today's readings on both homes, and an intent without a runtime is next on either [[core-service-107](#core-service-107)];
+- deleting the first's session from the second succeeds as any deletion does.
+
+#### core-service-127
+
+Where the core runs as a seat against a stand-in instance with a fixture adapter recording its environment, the integration suite shall assert seat mode [[core-service-125](#core-service-125)]: the device request names the server and the person and a sign-in as another account stores nothing; your own group gains no placement; the path-naming commands are refused with the phrase; a join names no folder; and the shared credential file [[core-service-126](#core-service-126)]: its values reach a run's environment, a value replaced between runs reaches the next run while the running one keeps its own, a member's own credential displaces the shared names of its agent, and an unreadable file is reported without blocking.
+
+#### core-service-130
+
+Where a stand-in instance answers the servers routes and a stand-in hub admits a ticket and relays to a second core as a seat, the integration suite shall assert the places [[core-service-128](#core-service-128)] [[core-service-129](#core-service-129)]: `server.list` names the server; `server.open` without consent asks nothing; with it, the seat's entry is written owner-only and the reply carries no bearer; the relay path admits the local token and refuses a wrong one and a foreign origin; the relayed hello is the seat's and a `project.list` round-trips; a seat whose hello carries another version reads mismatched alone; the attention count includes the seat's badge; a lease-end close and `server.close` each remove the path and the entry and announce `server.state`; no frame to the client carries the bearer; a restarted core reopens the seat.
 
 ## References
 

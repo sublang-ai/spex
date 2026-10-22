@@ -716,6 +716,14 @@ export interface IntentAuthor {
   displayName: string | null;
 }
 
+/** The runtime a record is assigned to (DR-134): one core on one home,
+ * named by the home's `device`, with a label for display alone — the
+ * server's name on a seat, the host name elsewhere. */
+export interface AssignedRuntime {
+  device: string;
+  label: string;
+}
+
 /** One stored intent: a staged Boss turn, one file of its project's
  * spex repository (DR-035, DR-103). There is no stored state, no rank
  * and no link — everything visible derives, and the queue is ordered
@@ -731,6 +739,10 @@ export interface IntentInfo {
    * the project has no instance or the home is not signed in there
    * (core-service-42, core-service-52). */
   author?: IntentAuthor;
+  /** The runtime that captured it and alone runs it; absent in a file
+   * written before runtimes were recorded (core-service-42,
+   * core-service-52). */
+  runtime?: AssignedRuntime;
   /** The capture time, which orders the queue (core-service-107). */
   createdAt: number;
   /** Stamped when the dispatched turn starts; re-written by a later
