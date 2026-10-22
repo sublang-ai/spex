@@ -6303,15 +6303,16 @@ export class SpaceManager {
 
   /** The joined clone's working folder (space-63): the code cloned from
    * the remote its `project.json` names with this device's own Git — with
-   * the credential the project's instance brokers only where that remote
-   * lies under that instance's Git origin, and none of the app's at any
-   * other, another instance's included (projects-37) — or a folder
-   * already holding it, paired with the clone; a group's own spex
-   * repository pairs the folder its sessions run in. The join's Code step
-   * runs while the code clones (space-63), shown through `step`; a
-   * failure comes back as the row's stopped state, the host's failure
-   * classified at the project's instance's Git origin and Git's words at
-   * any other, with no URL under any instance's Git origin. */
+   * the credential a signed-in instance of one of its placements brokers
+   * only where that remote lies under that instance's Git origin, and
+   * none of the app's at any other, one under the Git origin of an
+   * instance no placement is at included (projects-37, codeBroker) — or
+   * a folder already holding it, paired with the clone; a group's own
+   * spex repository pairs the folder its sessions run in. The join's
+   * Code step runs while the code clones (space-63), shown through
+   * `step`; a failure comes back as the row's stopped state, the host's
+   * failure classified at the brokering instance's Git origin and Git's
+   * words at any other, with no URL under any instance's Git origin. */
   private async pairJoined(machine: RepositorySync, folder: string, step: (phase: SpaceSyncPhase) => void): Promise<SpaceSyncPhase | undefined> {
     const project = this.projectFile(machine.repository);
     const root = existsSync(folder) && await this.workTreeRoot(folder);
@@ -6319,9 +6320,9 @@ export class SpaceManager {
     const at: SyncStep = remote ? "code" : "check";
     step({ phase: "running", op: "join", step: at, since: Date.now(), cancelable: false });
     await this.publish();
-    // The project's instance is its spex repository's (projects-37,
-    // storage-31): never one chosen by the code's Git origin alone.
-    const instance = this.instanceOfClone(machine);
+    // An instance of one of the project's placements, never one chosen
+    // by the code's Git origin alone (projects-37).
+    const instance = remote ? this.codeBroker(machine, remote) : undefined;
     const stopped = (failure: GitFailure): SpaceSyncPhase => ({
       phase: "stopped", op: "join", step: at,
       ...this.withoutHostUrls(failure, { remote: null, id: null, remoteName: machine.facts.remoteName }, machine.key),
@@ -6359,6 +6360,28 @@ export class SpaceManager {
       if (error instanceof SpaceStopped) return stopped({ ...error.failure, guidance: chooseFolder(), retry: false });
       return stopped({ cause: "git", message: lastLines(error instanceof Error ? error.message : String(error)), guidance: retryGuidance(), retry: false });
     }
+  }
+
+  /** The instance whose broker a project's code clone asks (projects-37):
+   * among the instances of its spex repository's placements — the
+   * project's own (storage-31) first, then each its clone holds in their
+   * order (storage-34), then each its placement files name (storage-36),
+   * an instance the home lists — the first signed in whose reported Git
+   * origin the code's remote lies under (git-host-5); else the project's
+   * own, whose broker names no helper for a remote outside its Git
+   * origin and, signed out, stops one under it as a sign-in to make
+   * again (credentialFor); undefined for a clone at no instance. No
+   * other instance is asked, whatever Git origin it reports. */
+  private codeBroker(machine: RepositorySync, remote: string): HostInstance | undefined {
+    const own = this.instanceOfClone(machine);
+    const home = this.host.store.home;
+    const origins = [
+      ...machine.placementsNow().flatMap((placement) => placement.instance === null ? [] : [placement.instance]),
+      ...readPlacementFiles(machine.repository.dir).files.map((file) => file.origin),
+    ];
+    const placed = origins.filter((origin) => home.instance(origin) !== undefined).map((origin) => this.instanceAt(origin));
+    const brokers = own ? [own, ...placed] : placed;
+    return brokers.find((instance) => this.signedInAt(instance) && underOrigin(remote, instance.knownOrigin())) ?? own;
   }
 
   private async workTreeRoot(folder: string): Promise<boolean> {
@@ -7038,8 +7061,9 @@ export class SpaceManager {
   }
 
   /** The credential an instance brokers for a transport on its behalf
-   * to its Git origin (git-host-9) — a clone's instance's, or the one it
-   * is joined at — never another's chosen by the Git origin alone; none
+   * to its Git origin (git-host-9) — a clone's instance's, the one it is
+   * joined at, or the one of a placement a project's code clone asks
+   * (codeBroker) — never another's chosen by the Git origin alone; none
    * for any other origin, which the device's own Git serves. Asked for a
    * sync's step, it waits out that instance's rate limit, which that
    * step's Stop ends; asked otherwise, the limit refuses it
