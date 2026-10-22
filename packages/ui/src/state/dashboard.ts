@@ -69,9 +69,10 @@ const BANDS: readonly AttentionEntry["band"][] = ["interrupted", "finished"];
 
 /** Join each place's ledger fold into one queue (dashboard-9, DR-133):
  * band by band, each band interleaved by onset — the place whose next
- * entry began first goes next, the earlier place on a tie — so each
- * core's own order stands; the count sums the cores' badges. A place
- * whose fold is not read yet adds nothing. */
+ * entry began first goes next, the earlier place in `places` on a tie,
+ * this computer's where the caller lists it first — so each core's own
+ * order stands. The count sums the badges of the folds read; a place
+ * whose fold is not read, or not given, adds nothing. */
 export function joinAttention<P>(
   places: readonly { place: P; ledger?: LedgerState | null }[],
 ): JoinedAttention<P> {

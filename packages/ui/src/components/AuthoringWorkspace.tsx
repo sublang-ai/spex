@@ -26,6 +26,7 @@ import {
   DRAFT_STACK_DEFAULT,
   DRAFT_STACK_MAX,
   DRAFT_STACK_MIN,
+  isLocalPlace,
   type DraftRegisterForm,
   type DraftSourceMode,
 } from "../state/store.js";
@@ -261,7 +262,11 @@ export function AuthoringWorkspace({
     enable: compiledOk,
   };
   const mode = sourceMode ?? { mode: "view" as const, pasteText: "", pastePath: "" };
-  const pickFile = window.spexNative?.pickFile
+  // A picked file and a pasted path name this computer's disk: a remote
+  // place's draft is on its server, so neither is offered there
+  // (run-view-169).
+  const local = isLocalPlace(store.place);
+  const pickFile = local && window.spexNative?.pickFile
     ? () => window.spexNative!.pickFile!()
     : undefined;
 
@@ -520,6 +525,7 @@ export function AuthoringWorkspace({
                   editor={editor}
                   connected={connected}
                   pickFile={pickFile}
+                  pathEntry={local}
                   onMode={forShown((next: Partial<DraftSourceMode>) => setDraftSourceMode(draftId, next))}
                   onEditor={forShown((next: SpecEditorState | undefined) => setDraftEditor(draftId, next))}
                   onWrite={(input) => writeDraftSource(draftId, input)}

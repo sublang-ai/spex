@@ -860,7 +860,9 @@ function RepairRow({
         </span>
       </div>
       {!declined && evidence ? <p className="text-xs text-neutral-500">{evidence}</p> : null}
-      {editing && local ? editor : controls}
+      {/* The editor opens from "Choose folder…" alone, which a remote
+          place never offers. */}
+      {editing ? editor : controls}
     </li>
   );
 
