@@ -1279,6 +1279,11 @@ export const commandSchema = z.discriminatedUnion("type", [
    * records no remaining placement received or for a placement it could
    * not read. */
   z.object({ type: z.literal("space.leave"), id, repository: repositoryKeySchema, instance: instanceOriginSchema, confirmed: z.boolean().optional() }).strict(),
+  /** A placement a placement file of the clone names, attached
+   * (space-99, DR-128): `instance` the one the file names; `noticed` the
+   * reader's Continue past that placement's sharing notice, which Attach
+   * is (space-90). */
+  z.object({ type: z.literal("space.attach"), id, repository: repositoryKeySchema, instance: instanceOriginSchema, noticed: z.boolean() }).strict(),
   /** `instance`: the one the row stands under (space-1). */
   z.object({ type: z.literal("space.join"), id, instance: instanceOriginSchema, hostId: z.string().min(1), folder: z.string().min(1).optional() }).strict(),
   // Members of a spex repository's placement by its key — `instance` the
@@ -1543,6 +1548,8 @@ export interface CommandResults {
   "space.place": { accepted: true };
   /** At once, its outcome as state (space-29). */
   "space.leave": { accepted: true };
+  /** Once its remote is added, the sync following as state (space-29). */
+  "space.attach": { accepted: true };
   "space.join": { accepted: true };
   "space.members": { members: HostMemberInfo[] };
   "space.group.create": { group: { id: string; fullPath: string; name: string } };

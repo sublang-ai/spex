@@ -3094,6 +3094,10 @@ export class CoreService {
       // DR-128).
       case "space.leave":
         return this.requireSpace().leave(command.repository, command.instance, command.confirmed === true);
+      // A placement a file names, attached as an operation of the clone's
+      // machine (space-99, DR-128).
+      case "space.attach":
+        return this.requireSpace().attach(command.repository, command.instance, command.noticed);
       case "space.join":
         return this.requireSpace().join(command.instance, command.hostId, command.folder === undefined ? undefined : expandPath(command.folder, this.home));
       case "space.members":

@@ -319,7 +319,12 @@ msgstr "{name} 已在托管平台上"
 msgid "{name} is on this device already"
 msgstr "{name} 已在本设备上"
 
-#. Refusal of Place: the spex repository already has a placement at that instance; {name} is the repository's name, {host} the instance's display name
+#. Refusal of Attach: the spex repository {name} listed at an instance is already held on this device by the spex repository {repository}, which syncs with it
+#: src/space.ts
+msgid "{name} is on this device already, as a placement of {repository}"
+msgstr "{name} 已作为 {repository} 的放置在本设备上"
+
+#. Refusal of Place or Attach: the spex repository already has a placement at that instance; {name} is the repository's name, {host} the instance's display name
 #: src/space.ts
 msgid "{name} is placed at {host} already"
 msgstr "{name} 已放置在 {host}"
@@ -1743,6 +1748,11 @@ msgstr "已不再与你共享"
 msgid "no one"
 msgstr "无人"
 
+#. Refusal of Attach: none of the spex repository's placement files names a spex repository that the instance lists for this account; {name} is the repository's name, {host} the instance's display name
+#: src/space.ts
+msgid "No placement file of {name} names a spex repository {host} lists"
+msgstr "{name} 的放置文件中没有 {host} 列出的 spex 仓库"
+
 #. Refusal: no project of this id is registered
 #. Refusal: no project of this id is registered
 #: src/service.ts
@@ -2098,6 +2108,11 @@ msgstr "已保存文件的长度与上传声明不符。"
 #: src/environments.ts
 msgid "Publishing stopped: {cause}"
 msgstr "发布已停止：{cause}"
+
+#. Refusal of Attach until the reader has seen the privacy notice for that placement: every record reaches its members; {name} is the spex repository's name at that instance
+#: src/space.ts
+msgid "Read the sharing notice before attaching {name}"
+msgstr "关联 {name} 之前，请先阅读共享说明"
 
 #. Refusal of a pick joining a spex repository with other members until the reader has seen the privacy notice
 #: src/space.ts

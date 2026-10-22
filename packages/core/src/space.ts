@@ -336,12 +336,36 @@ const groupRecordsStay = (name: string): string => i18n._({
   comment: "Refusal of Place: the spex repository is a group's own or your own group's, which Place does not place; {name} is the repository's name",
 });
 
-/** The refusal of a Place at an instance the clone holds a placement at
- * already (space-29). */
+/** The refusal of a Place or an Attach at an instance the clone holds a
+ * placement at already (space-29). */
 const placedAlready = (name: string, host: string): string => i18n._({
   id: "{name} is placed at {host} already",
   values: { name, host },
-  comment: "Refusal of Place: the spex repository already has a placement at that instance; {name} is the repository's name, {host} the instance's display name",
+  comment: "Refusal of Place or Attach: the spex repository already has a placement at that instance; {name} is the repository's name, {host} the instance's display name",
+});
+
+/** The refusal of an Attach at an instance no placement file of the
+ * clone names a listed host repository at (space-29). */
+const noFiledPlacement = (name: string, host: string): string => i18n._({
+  id: "No placement file of {name} names a spex repository {host} lists",
+  values: { name, host },
+  comment: "Refusal of Attach: none of the spex repository's placement files names a spex repository that the instance lists for this account; {name} is the repository's name, {host} the instance's display name",
+});
+
+/** The refusal of an Attach sent before the reader saw its sharing
+ * notice, which Attach is (space-90, space-29). */
+const readNoticeBeforeAttaching = (name: string): string => i18n._({
+  id: "Read the sharing notice before attaching {name}",
+  values: { name },
+  comment: "Refusal of Attach until the reader has seen the privacy notice for that placement: every record reaches its members; {name} is the spex repository's name at that instance",
+});
+
+/** The refusal of an Attach of a host repository another clone here
+ * holds as a placement (git-host-5). */
+const heldByAnother = (name: string, repository: string): string => i18n._({
+  id: "{name} is on this device already, as a placement of {repository}",
+  values: { name, repository },
+  comment: "Refusal of Attach: the spex repository {name} listed at an instance is already held on this device by the spex repository {repository}, which syncs with it",
 });
 
 /** The refusal of a Place while the view does not say the person may
@@ -691,9 +715,10 @@ interface PlacementRun {
   /** What the last operation left on its line (space-87, space-12):
    * cleared as the next operation on the clone begins. */
   outcome?: PlacementOutcome;
-  /** A Place joined its host repository (space-97): its next Compare
-   * joins the two histories as any two, with no second confirmation,
-   * should the Place's own sync stop before it (space-13). */
+  /** A Place joined its host repository (space-97), or an Attach added
+   * it (space-99): its next Compare joins the two histories as any two,
+   * with no second confirmation, should that act's own sync stop before
+   * it (space-13). */
   joinOwed?: boolean;
 }
 /** What a sync or check left on a placement's line (space-30). */
@@ -1282,7 +1307,8 @@ class RepositorySync {
   }
 
   /** The placement whose remote bears `name` owes its next Compare a
-   * join (space-13): a Place joined its host repository (space-97). */
+   * join (space-13): a Place joined its host repository (space-97), or
+   * an Attach added it (space-99). */
   oweJoin(name: string): void {
     this.runOf(name).joinOwed = true;
   }
@@ -2634,14 +2660,37 @@ class RepositorySync {
    * (space-57).
    */
   place(origin: string, act: () => Promise<void>): Promise<{ accepted: true }> {
+    return this.addThenSync("place", origin, act);
+  }
+
+  /**
+   * Attach a placement a placement file of the clone names (space-99,
+   * space-31): an operation of its machine, following one running
+   * (space-21), whose first step, `act`, adds that placement's remote at
+   * the instance at `origin` — and, for a clone holding none with an
+   * instance, moves it as a pick does (storage-35). The reply waits for
+   * that step, a refusal there being the reply's; then the clone syncs as
+   * a Sync does, that placement among its placements (space-12).
+   */
+  attach(origin: string, act: () => Promise<void>): Promise<{ accepted: true }> {
+    return this.addThenSync("attach", origin, act);
+  }
+
+  /** A Place's or an Attach's operation (space-31): its first step,
+   * `act`, at the placement at `origin`, answering the reply — a refusal
+   * there ending the operation with the clone and its lines as they
+   * were — then the sync, every line's former outcome cleared, the
+   * sync's notices owed as at any Check, with no reader to refuse
+   * (space-57). */
+  private addThenSync(op: "place" | "attach", origin: string, act: () => Promise<void>): Promise<{ accepted: true }> {
     let answer!: { resolve: (value: { accepted: true }) => void; reject: (error: unknown) => void };
     const reply = new Promise<{ accepted: true }>((resolve, reject) => { answer = { resolve, reject }; });
-    void this.runOperation("place", async () => {
+    void this.runOperation(op, async () => {
       let answered = false;
       try {
-        // What the last operation left stands until the host accepts.
+        // What the last operation left stands until its step is done.
         const before = this.phase;
-        await this.enter("place", "check", false, origin);
+        await this.enter(op, "check", false, origin);
         try { await act(); }
         catch (error) {
           answered = true;
@@ -2660,7 +2709,7 @@ class RepositorySync {
           if (error instanceof CoreError) throw new SpaceStopped("check", { cause: "reauth", message: error.message, guidance: signInThenRetry(), retry: true });
           throw error;
         }
-        await this.syncNow(repo, { op: "place", choices: {}, join: false, setUp: false, admission, target: this.syncTarget(undefined, repo.placements) });
+        await this.syncNow(repo, { op, choices: {}, join: false, setUp: false, admission, target: this.syncTarget(undefined, repo.placements) });
       } catch (error) {
         if (!answered) answer.reject(error);
         throw error;
@@ -2945,8 +2994,8 @@ class RepositorySync {
           }
           case "compare": {
             await this.enter(op, "compare", false, this.originOf(held));
-            // A join a Place owes it joins here, as the Place said
-            // (space-13, space-97).
+            // A join a Place or an Attach owes it joins here, as that
+            // act said (space-13, space-97, space-99).
             const owed = this.runs.get(nameNow())?.joinOwed === true;
             const result = await this.compare(nameNow(), input.choices, input.join || owed, input.setUpSaves);
             const run = this.runs.get(nameNow());
@@ -5828,6 +5877,101 @@ export class SpaceManager {
     await this.dropByFile(machine, placement, await this.machineIdentity(), true);
     this.endWaiting(machine.key, origin);
     return undefined;
+  }
+
+  /**
+   * Attach a placement a placement file of the clone names (space-99,
+   * space-90, space-29): the host repository that file names, as the
+   * signed-in instance it names lists it (git-host-5), added as a remote
+   * named by that instance's folder with the host's id in its own
+   * section (storage-34), then the clone synced, that placement among its
+   * placements (space-12). Refused before anything runs: an instance the
+   * home does not list, or a key naming no clone, `not_found`; that
+   * instance signed out; no file of the clone naming a host repository it
+   * lists; the clone holding a placement there already, or another clone
+   * here holding that repository; and the notice not seen, Attach being
+   * that placement's notice (space-90). The add is the first step of an
+   * operation of the clone's machine (space-31), checked again once any
+   * operation it followed has ended, the reply answering once it is done.
+   */
+  async attach(key: string, named: string, noticed: boolean): Promise<{ accepted: true }> {
+    const instance = this.instanceAt(this.namedInstance(named));
+    const machine = this.machine(key);
+    await machine.readFacts();
+    if (this.signedInAt(instance) && !instance.view) await this.readHost(instance).catch((error: unknown) => { throw new CoreError("invalid_request", relayHostError(error, this.nameOf(instance))); });
+    const { listing, gitOrigin } = this.attachable(machine, machine.placements, instance);
+    const path = listing.repository.path;
+    // One clone per host repository: another clone here holding it holds
+    // it as its own placement (git-host-5).
+    const store = this.host.store;
+    const others = await Promise.all(store.listRepositories().filter((repository) => repository.key !== machine.key).map(async (repository) => {
+      try {
+        const other = this.machine(repository.key);
+        await other.readFacts();
+        return { name: splitKey(repository.key).name, held: other.placements };
+      } catch { return { name: splitKey(repository.key).name, held: [] as Placement[] }; }
+    }));
+    const holder = others.find(({ held }) => held.some((placement) => repositoryFor([listing], (entry) => entry.repository, gitOrigin, placement.id, placement.url) !== undefined));
+    if (holder) throw new CoreError("invalid_request", heldByAnother(path, holder.name));
+    // Attach is that placement's notice, whatever its members (space-90).
+    if (!noticed) throw new CoreError("invalid_request", readNoticeBeforeAttaching(path), { notice: true, members: listing.members, visibility: listing.repository.visibility, placement: instance.origin });
+    return machine.attach(instance.origin, async () => {
+      const placements = machine.placementsNow();
+      const again = this.attachable(machine, placements, instance);
+      await this.attachAdd(instance, machine, again.listing, placements, remotesRead(placements));
+    });
+  }
+
+  /** The host repository an Attach at `instance` adds (space-29,
+   * git-host-5): one a placement file of the clone names that the
+   * instance, signed in, lists; refused where it is signed out, where no
+   * file names one it lists, and where the clone holds a placement there
+   * already — by the instance's folder, or one whose host repository it
+   * lists (storage-34). */
+  private attachable(machine: RepositorySync, placements: readonly Placement[], instance: HostInstance): { listing: HostListing; gitOrigin: string } {
+    const name = splitKey(machine.key).name;
+    if (!this.signedInAt(instance)) throw new CoreError("invalid_request", signInFirst());
+    const filed = readPlacementFiles(machine.repository.dir).files.map((file) => this.fileListing(file)).find((found) => found?.instance === instance);
+    if (!filed) throw new CoreError("invalid_request", noFiledPlacement(name, this.nameOf(instance)));
+    if (this.placedAt(placements, instance)) throw new CoreError("invalid_request", placedAlready(name, this.nameOf(instance)));
+    return { listing: filed.listing, gitOrigin: filed.gitOrigin };
+  }
+
+  /**
+   * An Attach's add (space-99): beside the clone's placements as a
+   * Place's join adds one (placeAdd), the notice seen recorded for it and
+   * its first Compare owing a join (space-13); or, for a clone holding no
+   * placement with an instance, as a pick's join does (adopt): its first
+   * placement, ending every creation it waited for, and a clone under
+   * your own group's folder moving under that instance's folder at the
+   * repository's path there, its built-in spec package's lock taking
+   * that instance's registry (storage-35, environments-11). Written only
+   * while the clone's remotes still read `expected`, else refused
+   * `conflict` (space-21).
+   */
+  private async attachAdd(instance: HostInstance, machine: RepositorySync, listing: HostListing, placements: readonly Placement[], expected: string): Promise<void> {
+    if (keyPlacement(placements) !== undefined) {
+      this.placeAdd(instance, machine, listing, { join: true, noticed: true, expected });
+      return;
+    }
+    const { repository } = listing;
+    instance.changedAfter = instance.readsBegun;
+    instance.targets.delete(machine);
+    instance.attached.set(repository.id, listing);
+    try { await machine.attachHost(repository.remoteUrl, repository.id, expected, false, instance.folder()); }
+    catch (error) {
+      instance.attached.delete(repository.id);
+      throw error;
+    }
+    const name = machine.facts.remoteName ?? placementName(instance.folder());
+    try { this.host.store.setPlacementPref(machine.key, name, "noticed", true, true); }
+    catch (error) { console.error(`spex: the notice seen for ${machine.key} at ${instance.origin} is not recorded: ${error instanceof Error ? error.message : String(error)}`); }
+    this.endWaiting(machine.key);
+    machine.oweJoin(name);
+    const picked = this.localOnly(machine.key);
+    try { await this.moveAtPick(instance, machine, repository); }
+    catch (error) { console.error(`spex: ${machine.key} stays where it lies until its next sync: ${error instanceof Error ? error.message : String(error)}`); }
+    if (picked) this.host.environmentPlaced?.(machine.key);
   }
 
   private projectFile(repository: SpexRepository): { name: string; remote: string | null } | undefined {

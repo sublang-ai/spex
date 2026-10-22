@@ -151,13 +151,13 @@ class Client {
     return repositoryOf(state, key);
   }
   /** Run a long command on one repository — it replies accepted at once,
-   * or, a Place, once the host accepted its step (space-29) — and wait
+   * or, a Place or an Attach, once its first step is done (space-29) — and wait
    * until that repository's machine leaves running. Broadcasts coalesce, and one assembled before the command
    * took effect can arrive after it still reading the previous phase: a
    * reading that is not running settles the command only after one of
    * its own running readings, or where a read made after the reply
    * agrees the machine no longer runs. */
-  async settle<T extends "space.sync" | "space.fetch" | "space.place" | "space.leave">(type: T, fields: Omit<Extract<Command, { type: T }>, "type" | "id">, timeoutMs = 20_000): Promise<RepositoryState> {
+  async settle<T extends "space.sync" | "space.fetch" | "space.place" | "space.leave" | "space.attach">(type: T, fields: Omit<Extract<Command, { type: T }>, "type" | "id">, timeoutMs = 20_000): Promise<RepositoryState> {
     const key = (fields as { repository: string }).repository;
     const from = this.messages.length;
     // The core runs in this process: its steps' `since` reads this clock.
