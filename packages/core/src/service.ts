@@ -847,6 +847,15 @@ export class CoreService {
       // A seat signs in through the device flow alone (core-service-125).
       signInFlow: options.seat ? "device" : options.signIn ?? "device",
       seat: options.seat !== undefined,
+      // On a seat, the member's own token for a code host, read from
+      // its file before each transport to that host; an entry that will
+      // not read serves none, the storage diagnostics reporting it
+      // (git-host-9, storage-44).
+      ...(this.codeCredentials ? {
+        hostToken: (host: string) => {
+          try { return this.codeCredentials?.readHost(host) ?? null; } catch { return null; }
+        },
+      } : {}),
       hostRuntime: this.hostRuntime,
       repositoriesChanged: () => this.afterRepositoriesChanged(),
       repositoriesMoved: (moves) => this.repositoriesMoved(moves),

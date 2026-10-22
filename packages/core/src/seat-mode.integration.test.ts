@@ -82,7 +82,7 @@ test("core-service-127, git-host-27: on a seat a sign-in as another account, and
   assert.deepEqual(host.script.deviceRequests.map((request) => [request.serverId, request.personId]), [[SEAT.serverId, SEAT.personId], [SEAT.serverId, SEAT.personId]]);
 });
 
-test("core-service-127, space-102: on a seat your own group gains no placement at sign-in — nothing created or joined, its namespace's own repository left there — and takes no pick or remote", async (t) => {
+test("core-service-127, space-102, space-104: on a seat your own group gains no placement at sign-in — nothing created or joined, its namespace's own repository left there — and takes no pick or remote", async (t) => {
   const host = await startHost();
   // The member's own records at the instance, from a device of their own.
   host.script.addRepository({ group: LOGIN, name: `${LOGIN}-spex` });

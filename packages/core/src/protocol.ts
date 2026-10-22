@@ -1963,6 +1963,10 @@ export type SpaceSyncPhase =
       message: string;
       guidance: string;
       retry: boolean;
+      /** On a seat, the code host a join's failed code clone needs a
+       * credential of the member's for, by the name the Credentials
+       * section takes it (space-103, settings-48). */
+      credential?: string;
     }
   | { phase: "done"; at: number; sent: number; received: number; pushed: boolean };
 
