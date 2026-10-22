@@ -271,9 +271,6 @@ export class Home {
   get device(): string { return this.data.device; }
   /** The origin the home was created with. */
   get origin(): string { return this.data.origin; }
-  /** The default instance, as the one host the core still serves until
-   * it keeps a client per instance. */
-  get host(): HomeInstance { return this.defaultInstance(); }
   get workspace(): string { return join(this.root, WORKSPACE); }
   /** Your own group's folder name under `workspace/`. */
   get ownName(): string { return this.data.own; }

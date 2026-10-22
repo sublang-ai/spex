@@ -2139,7 +2139,8 @@ export class Store {
     return undefined;
   }
 
-  /** Rewrite one intent's file whole (storage-4). */
+  /** Rewrite one intent's file whole (storage-4), as the intent read:
+   * its format and runtime kept as they were. */
   private writeIntent(repository: SpexRepository, intent: IntentInfo): void {
     this.assertWritable({ projectId: intent.projectId });
     writeIntentFile(repository.intentsDir, intentFileOf(intent));

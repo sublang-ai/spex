@@ -5412,9 +5412,10 @@ msgstr "Sign in to {host} first"
 msgid "Sign in to {who} again"
 msgstr "Sign in to {who} again"
 
+#. in Publish's place: the home is not signed in to the instance a publish from this project goes to; {name} is that instance's display name as last read, else its host name
 #: src/components/DraftRegisterTab.tsx
-msgid "Sign in to publish"
-msgstr "Sign in to publish"
+msgid "Sign in to publish at {name}"
+msgstr "Sign in to publish at {name}"
 
 #: src/components/SpaceSignIn.tsx
 msgid "Sign in to see your groups and share each project's records with the people in them."

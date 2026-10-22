@@ -1500,6 +1500,11 @@ msgstr "排队消息无效"
 msgid "invalid queued intent"
 msgstr "排队意图无效"
 
+#. Storage diagnostic: the runtime an intent is assigned to names no device UUID and label
+#: src/app-storage.ts
+msgid "invalid runtime"
+msgstr "运行时无效"
+
 #. Storage diagnostic: the issue or pull request an intent came from is malformed
 #: src/app-storage.ts
 msgid "invalid source"

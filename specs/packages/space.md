@@ -136,7 +136,7 @@ While a placement's host repository has other members, or the placement is your 
 
 When a working folder is added while any instance is signed in [[storage-6](storage.md#storage-6)], or the reader activates "Pick a group" on a spex repository whose clone holds no placement with an instance [[space-61](#space-61)], the surface shall offer, in one picker, under each signed-in instance's display name — its clone's instance alone where its key lies under one [[storage-31](storage.md#storage-31)] — the spex repositories that instance lists whose `project.json` names the folder's remote, each with its group, read as the list reads it [[space-1](#space-1)], and its members' count, and, below them, your namespace there and each group it lists, since only the host knows where the account may create, the folder's name as the new repository's name in an editable field followed by `-spex` ([DR-103](../decisions/103-the-home-and-its-groups.md), [DR-127](../decisions/127-a-home-signed-in-to-several-instances.md), [DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md)):
 
-- picking a listed spex repository clones it and pairs it with the folder, or, for a local-only one, joins its history with the clone's as any two [[space-13](#space-13)], once the sharing notice is seen where that repository may have other members [[space-57](#space-57)];
+- picking a listed spex repository clones it and pairs it with the folder — on a seat, the folder the core allocates [[space-103](#space-103)] — or, for a local-only one, joins its history with the clone's as any two [[space-13](#space-13)], once the sharing notice is seen where that repository may have other members [[space-57](#space-57)];
 - picking a group or your namespace creates `<name>-spex` there, at that instance [[git-host-6](git-host.md#git-host-6)], the pick naming a group by its host id and your namespace by none, and pushes the local branch; a name the host reports taken is refused in place and the field asks for another;
 - a pick of a clone under your own group's folder moves it under that instance's folder at the repository's path there as the creation or the join lands [[storage-35](storage.md#storage-35)];
 - a creation the host refuses for the account's rights leaves the repository local only, where its clone lies, with "Waiting for a member who can create it in <group>" on that instance's line [[space-64](#space-64)];
@@ -240,7 +240,7 @@ When the reader activates "Move to another group" on a placement's line of a pro
 
 #### space-63
 
-When the reader activates Join on a spex repository an instance lists and this device lacks, the core shall clone it under the folder of the instance its row stands under [[space-1](#space-1)], at its path there [[storage-1](storage.md#storage-1)], its remote named by that folder [[space-5](#space-5)], then, where its `project.json` names a remote, clone the code from that remote with this device's own Git into a folder the reader picks — with the credential a signed-in instance of one of its placements brokers at that instance's Git origin, and none of the app's at any other [[projects-37](projects.md#projects-37)] — or take a working folder the reader already has, and pair the two [[storage-6](storage.md#storage-6)] ([DR-103](../decisions/103-the-home-and-its-groups.md), [DR-127](../decisions/127-a-home-signed-in-to-several-instances.md), [DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md)):
+When the reader activates Join on a spex repository an instance lists and this device lacks, the core shall clone it under the folder of the instance its row stands under [[space-1](#space-1)], at its path there [[storage-1](storage.md#storage-1)], its remote named by that folder [[space-5](#space-5)], then, where its `project.json` names a remote, clone the code from that remote with this device's own Git into a folder the reader picks — on a seat, the folder the core allocates [[space-103](#space-103)] — with the credential a signed-in instance of one of its placements brokers at that instance's Git origin, and none of the app's at any other [[projects-37](projects.md#projects-37)] — or take a working folder the reader already has, and pair the two [[storage-6](storage.md#storage-6)] ([DR-103](../decisions/103-the-home-and-its-groups.md), [DR-127](../decisions/127-a-home-signed-in-to-several-instances.md), [DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md)):
 
 - a group's own spex repository, holding no `project.json`, asks for the working folder its sessions run in on this device; the folder is paired through the same command a repair uses [[space-47](#space-47)];
 - the join runs at its Check step while the spex repository clones and at its Code step, its line reading "Cloning code…", while the code clones, offering Stop at neither, and ends only once the code is cloned and paired or its clone has failed [[space-61](#space-61)];
@@ -687,6 +687,20 @@ The Groups surface shall fit its pane at every width down to the 320-pixel floor
 - the tree and preview stand side by side from 42rem and stack below it, the preview under the tree; the preview's box scrolls inside itself and the diff box scrolls sideways as a canvas;
 - every control reads at most 14 characters, its busy form included: Sign in, Sign in again, Signing in…, Sign out, Signing out…, Sync, Syncing…, Check host, Checking…, Stop, Join, Joining…, Pick a group, Members, Retry, Retrying…, Apply, Applying…, Cancel, Continue, Save, Saving…, Add project, Adding…, Choose folder…, Don't add, Open folder…, Open project, View diff, Hide diff, Keep mine, Take host's, All mine, All host's, Open session, Show in Finder, Show in folder, Copy path, Refresh, Dismiss, New group, New subgroup, Share, Create, Creating…, Add, Rename, Delete, Deleting…, Keep, Move…, Moving…, Forget, Add instance…, Place at…, Placing…, Leave…, Leaving…, Attach, Attaching…, "Move…" bearing "Move to another group", "Add instance…" bearing "Another instance", and "Place at…" bearing "Also place at <display name>" and "Leave…" bearing "Remove from <display name>" where one instance is offered, each as its title and accessible name;
 - the surface scrolls inside its own box and the page never scrolls.
+
+### On a Seat
+
+#### space-102
+
+Where the core runs as a seat [[core-service-125](core-service.md#core-service-125)], when a sign-in completes [[space-4](#space-4)], the core shall skip your own group's placement — creating and joining nothing for it at the instance, its clone staying local with the seat's settings — and offer "Pick a group" on it nowhere, so that the member's own records never land on the server ([DR-132](../decisions/132-team-servers.md)).
+
+#### space-103
+
+Where the core runs as a seat [[core-service-125](core-service.md#core-service-125)], when the reader activates Join on a spex repository [[space-63](#space-63)] or picks one for a project [[space-58](#space-58)], the core shall allocate the working folder itself at `projects/@<host>/<group path>/<name>/` under the Spex home [[storage-1](storage.md#storage-1)], `<name>` the repository's name without `-spex`, clone the records there and the code into that folder [[projects-37](projects.md#projects-37)], and pair the two ([DR-132](../decisions/132-team-servers.md)):
+
+- a code clone that fails leaves the records cloned and their sessions and intents readable, the row showing the failure, and, where the remote's host has no token of the member's [[storage-44](storage.md#storage-44)] and is at no signed-in instance's Git origin, "Code not cloned: <host> needs a credential of yours. Add one under Settings." with the host in the reply's `credential`, so a client opens the Credentials section [[settings-48](settings.md#settings-48)];
+- a retry after the credential is placed clones into the same folder;
+- a folder already allocated for that repository is reused, never a second one made.
 
 ## Internal Behavior
 
@@ -1292,3 +1306,7 @@ Where the harness boots the served shell on an empty home against a stand-in hol
 - after sign-in the group's row lists the project as "Not on this device" with Join [[space-61](#space-61)];
 - Join clones the spex repository and, the code remote being a path the harness serves, the code into the folder the page names, the row reading reachable once the code is in that folder and the project listed in the sidebar with the peer's session and intent [[space-63](#space-63)] [[space-61](#space-61)] [[space-20](#space-20)];
 - a session run here and synced lands on the stand-in's `spex` branch beside the peer's [[space-12](#space-12)].
+
+#### space-104
+
+Where the core runs as a seat against the stand-in instance and the Git HTTP host, the test suite shall assert that a sign-in places your own group nowhere and offers no pick on it [[space-102](#space-102)], that a join allocates the folder at its path and pairs it, that a code clone failing for want of a credential leaves the records readable with the phrase and the host in the reply, and that a retry after `credential.set` clones into the same folder [[space-103](#space-103)].

@@ -98,7 +98,7 @@ test("instances migration: home.yaml takes format 2 with its host as the recorde
   // The store opens the migrated home signed in at its one instance.
   const store = await Store.open({ machineIdentity, dir: root });
   try {
-    assert.equal(store.home.host.origin, "https://spex.pub");
+    assert.equal(store.home.defaultInstance().origin, "https://spex.pub");
     assert.deepEqual(store.home.account(), ADA);
     assert.deepEqual(store.storageDiagnostics().filter((entry) => entry.blocking), []);
   } finally { store.close(); }
