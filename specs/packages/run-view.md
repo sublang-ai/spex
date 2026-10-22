@@ -446,7 +446,7 @@ When a player's records carry historical permission telemetry, that player's pan
 
 The run view shall keep cross-project attention and playbook creation at hand:
 
-- while the Dashboard's published attention count [[dashboard-9](dashboard.md#dashboard-9)] is non-zero, the sidebar's Dashboard entry shows a badge with that count across all projects ([DR-029](../decisions/029-session-history-home.md)), surviving the sidebar's collapse [[run-view-71](#run-view-71)];
+- while the Dashboard's published attention count [[dashboard-9](dashboard.md#dashboard-9)] is non-zero, the sidebar's Dashboard entry shows a badge with that count across all projects and every place [[run-view-168](#run-view-168)] ([DR-029](../decisions/029-session-history-home.md)), surviving the sidebar's collapse [[run-view-71](#run-view-71)];
 - while a non-current project needs a human, that project's sidebar row carries a dot in the most severe color [[run-view-67](#run-view-67)];
 - the project palette's rows carry each project's count of sessions summoning a human, read from that one published fold [[dashboard-9](dashboard.md#dashboard-9)] and never derived again here, with the most severe of a session's entries naming its mark ([DR-066](../decisions/066-every-summons-has-a-door.md));
 - the slash menu ends with a compile-a-new-playbook entry that opens the Playbooks surface's compile flow.
@@ -595,7 +595,7 @@ When the session record stream delivers a captain turn result reporting an error
 
 While the app is connected, the sidebar shall present navigation as surface entries around a Projects section listing every registered project ([DR-029](../decisions/029-session-history-home.md)) [[core-service-32](core-service.md#core-service-32)]:
 
-- Dashboard stands first, then the Projects section, then Playbooks, Groups and Settings;
+- Dashboard stands first, then the Projects section — its projects under a heading per place where any seat is open [[run-view-168](#run-view-168)] — then Playbooks, Groups and Settings;
 - each project node discloses its sessions on a control of its own, an axis independent of which project is current ([DR-027](../decisions/027-linked-views-contract.md)) — the current project starts disclosed, and thereafter the reader's arrangement stands;
 - activating a project row makes it the current project and changes no disclosure;
 - a disclosed project lists its sessions by last activity, a working one first, the five most recent shown with one control revealing the rest in place and one control opening that project's start tab — a project holds at most one turn in flight [[core-service-4](core-service.md#core-service-4)], so starting a session is a composer away, never a conflict away ([DR-051](../decisions/051-runtime-held-for-a-turn.md));
@@ -721,7 +721,7 @@ The not-ready heads-up shall offer an in-place re-check, with copy that is hones
 The app shall fail loudly and stay accessible:
 
 - when the app is connected but its initial state failed to load, a banner says so and offers retry — never a silently empty app;
-- when the page has never reached its core, a banner names the endpoint it keeps dialing with a Retry once eight seconds have passed since the page opened — a first connect is "Connecting", never "Reconnecting", and a slow core gets that long before the alarm;
+- when the page has never reached its core, a banner names the endpoint it keeps dialing with a Retry once eight seconds have passed since the page opened — a first connect is "Connecting", never "Reconnecting", and a slow core gets that long before the alarm; a remote place's banner names the server, not an endpoint, and its Retry redials that place alone [[run-view-168](#run-view-168)];
 - one persistent polite live region announces a player waiting for a reply, connection loss and restoration, and attention-count increases to assistive technology;
 - icon-only controls carry accessible names and at-least-24px hit targets, and the navigation exposes the current surface and badge meaning to assistive technology;
 - one glyph carries one meaning across the app ([DR-010](../decisions/010-interface-craft.md) §8): the gear names the Settings surface, and an in-place editor wears the pencil;
@@ -843,6 +843,31 @@ While the next card names the queue's head [[run-view-88](#run-view-88)], the Ca
 
 - a pointer removal leaves the pointer where it is, so the line lapses on schedule and never stands as a prompt;
 - the card stays while the Undo line stands, even once no queued intent is left behind it, and a restored intent's Start takes focus where available, otherwise its Remove does.
+
+### Places
+
+#### run-view-168
+
+While the app is connected, the window shall hold one connection per core — the local core and each seat the person has open [[core-service-128](core-service.md#core-service-128)], reached at its relay path [[core-service-129](core-service.md#core-service-129)] — each a **place**, "This computer" or the server's name, and shall keep each core's state in a store of that core's own ([DR-133](../decisions/133-one-desktop-over-several-cores.md)):
+
+- no protocol id is re-keyed; per-project preferences are kept by place and project, the local place's under today's keys;
+- the sidebar's Projects section lists each place's projects under a heading naming the place [[run-view-67](#run-view-67)], and the project palette names the place of each project and of a new one;
+- Settings, Playbooks, Groups and Environments show one place at a time, named by a selector that reads "This computer" or the server's name, a seat's being the seat's own;
+- a connection, its banner and a protocol mismatch are per place [[run-view-50](#run-view-50)]: one core failing leaves the others;
+- the page's language stays the local home's, a remote place's phrases arriving as its core composed them.
+
+#### run-view-169
+
+While a project stands at a remote place [[run-view-168](#run-view-168)], the app shall offer for it no folder picker, no reveal and no path entry, and shall open a project on a seat by naming it among the projects of the member's groups, sending that place's core a join with no folder ([DR-133](../decisions/133-one-desktop-over-several-cores.md)):
+
+- one spex repository cloned here and on a seat is one project shown under each place, its sessions and intents reading "Runs on <label>" at the place that does not hold them [[core-service-107](core-service.md#core-service-107)].
+
+#### run-view-170
+
+While the Groups surface shows an instance that lists servers [[core-service-128](core-service.md#core-service-128)], the surface shall list each server under that instance's heading by its name and group, with "Open" where no seat is open at it and "Close" where one is ([DR-133](../decisions/133-one-desktop-over-several-cores.md)):
+
+- the first Open for a server on this device shows the instance's contract in the words its record fixes, rendered in the page's language, with "I understand" as the control that sends `server.open` with consent, and a later Open sends it at once;
+- a refusal reads the core's relayed cause in place.
 
 ## Internal Behavior
 
@@ -1378,3 +1403,7 @@ Where the live journey lane runs with the machine's signed-in agents ([DR-089](.
 - the composer refuses input while each turn runs [[run-view-8](#run-view-8)];
 - a player's question, where a run asks one, stands as the Captain's bubble with the banner naming the asking player, the journey's answer through the composer goes to the Captain, and the wait clears only once the runtime reports the question gone [[run-view-9](#run-view-9)];
 - after the second settlement the session reads idle with its composer ready [[run-view-69](#run-view-69)].
+
+#### run-view-171
+
+Where the UI holds the local store and two seat stores with fake clients, the test suite shall assert the places [[run-view-168](#run-view-168)]: an approval snapshot, a ledger reply and a backfill in one store leave the others untouched; a seat's language state activates no language and writes none; the sidebar shows a heading per place with the local rows' test ids unchanged; one place's banner and one place's mismatch show alone; the selector switches Settings, Playbooks, Groups and Environments; and the remote rules [[run-view-169](#run-view-169)] [[run-view-170](#run-view-170)]: a remote place offers no picker, reveal or path entry, opening a group's project sends `space.join` with no folder to that place's client, and the first Open shows the contract and sends `server.open` with consent only on "I understand".
