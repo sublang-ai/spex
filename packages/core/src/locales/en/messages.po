@@ -630,6 +630,41 @@ msgstr "{projectId} has no working folder on this device"
 msgid "{role} is not one of the roles {host} grants"
 msgstr "{role} is not one of the roles {host} grants"
 
+#. A seat's opening failed: the team server answered its admission with nothing that opens a seat; {server} is the server's name
+#: src/places.ts
+msgid "{server} answered no seat"
+msgstr "{server} answered no seat"
+
+#. A seat's opening failed: the team server could not reach the instance to redeem the ticket; {server} is the server's name, {host} the instance's display name
+#: src/places.ts
+msgid "{server} could not reach {host}"
+msgstr "{server} could not reach {host}"
+
+#. A seat's opening failed: the team server did not start the person's seat and said no more; {server} is the server's name
+#: src/places.ts
+msgid "{server} could not start your seat"
+msgstr "{server} could not start your seat"
+
+#. A seat's opening failed: the team server did not start the person's seat; {server} is the server's name, {words} its own words, kept whole
+#: src/places.ts
+msgid "{server} could not start your seat: {words}"
+msgstr "{server} could not start your seat: {words}"
+
+#. A seat's opening refused by the team server with no words of its own; {server} is the server's name
+#: src/places.ts
+msgid "{server} refused the seat"
+msgstr "{server} refused the seat"
+
+#. A seat's opening refused by the team server, its refusal relayed from it or from the instance; {server} is the server's name, {words} its own words, kept whole
+#: src/places.ts
+msgid "{server} refused the seat: {words}"
+msgstr "{server} refused the seat: {words}"
+
+#. A seat's opening failed: the team server's TLS certificate did not verify against the trusted certificate authorities, so nothing was sent to it; {server} is the server's name
+#: src/places.ts
+msgid "{server}'s certificate could not be verified"
+msgstr "{server}'s certificate could not be verified"
+
 #. Refusal where the folder chosen for the example already holds files
 #: src/forge.ts
 msgid "{target} is not empty; the example seeds only a new or empty directory"
@@ -733,6 +768,11 @@ msgstr "◇ Now answering: Captain — the conversation so far was replayed to i
 msgid "◇ The provider rejected the resumed conversation — replaying it"
 msgstr "◇ The provider rejected the resumed conversation — replaying it"
 
+#. Refusal of an agent's credential on a team server's seat: it carries only names that accompany the agent's key, such as Kimi's model name, and not the key; `adapter` is the agent's name and `keys` lists the key's variable names, any one of which will do, both as they are
+#: src/service.ts
+msgid "A {adapter} credential needs {keys}"
+msgstr "A {adapter} credential needs {keys}"
+
 #. Refusal of a code host's credential on a team server's seat: it names a field other than the token and the username
 #: src/service.ts
 msgid "A code host's credential is a token and, where the host asks for one, a username"
@@ -797,6 +837,11 @@ msgstr "a project's settings name only the playbooks they enable and the player 
 #: src/media-transfers.ts
 msgid "A retried upload chunk contains different bytes."
 msgstr "A retried upload chunk contains different bytes."
+
+#. Refusal on a team server's seat of opening a seat on a team server: a team server's seat holds no seats of its own
+#: src/service.ts
+msgid "A seat opens no server"
+msgstr "A seat opens no server"
 
 #. Stands in for the title of a session that has none
 #: src/session.ts
@@ -1773,6 +1818,11 @@ msgstr "No repository this machine can see at {target}"
 msgid "no roster player {playerId}"
 msgstr "no roster player {playerId}"
 
+#. Refusal of a seat's closing: this device holds no seat on the server named
+#: src/places.ts
+msgid "No seat is open on this server"
+msgstr "No seat is open on this server"
+
 #. Refusal: no session of this id is known
 #. Refusal: no session of this id is known
 #: src/service.ts
@@ -2106,6 +2156,11 @@ msgstr "Published upload has a different byte length."
 #: src/environments.ts
 msgid "Publishing stopped: {cause}"
 msgstr "Publishing stopped: {cause}"
+
+#. Refusal of a seat's opening sent without the person's consent to the contract the instance's record fixes for team servers
+#: src/places.ts
+msgid "Read and accept the server's contract before opening a seat"
+msgstr "Read and accept the server's contract before opening a seat"
 
 #. Refusal of a pick joining a spex repository with other members until the reader has seen the privacy notice
 #: src/space.ts
@@ -2523,8 +2578,10 @@ msgstr "the config is not valid; fix it in Settings before the agent can answer"
 #. Refusal during attachment admission
 #. Refusal during core shutdown
 #. Refusal during core shutdown
+#. Refusal during core shutdown
 #. Refusal: environment work asked once the core stops
 #: src/environments.ts
+#: src/places.ts
 #: src/service.ts
 #: src/session.ts
 msgid "The core is stopping."
@@ -2668,6 +2725,11 @@ msgstr "The repository holds no commit yet; initialize it again"
 #: src/service.ts
 msgid "the run is still parked, so the intent stays open"
 msgstr "the run is still parked, so the intent stays open"
+
+#. Refusal of a seat's opening or closing: the seats file changed between the core's read and its write
+#: src/places.ts
+msgid "The seats changed meanwhile; try again"
+msgstr "The seats changed meanwhile; try again"
 
 #. Refusal: the session is held, so it cannot be discarded now
 #. Refusal: the session is held, so it cannot be discarded now
