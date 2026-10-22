@@ -541,6 +541,22 @@ class SpaceStopped extends Error {
   }
 }
 
+/** A placement whose sharing notice is owed and not yet continued
+ * (space-57, git-host-22): its turn ends waiting for Continue before any
+ * branch or transport effect, its line reading so, and the next
+ * placement runs; a sync none of whose placements went stops with it. */
+class NoticeOwed extends SpaceStopped {
+  constructor(message: string) {
+    super("check", { cause: "refused", message, guidance: retryGuidance(), retry: true }, false);
+    this.name = "NoticeOwed";
+  }
+}
+
+/** What a sync's admission found of one placement it read (space-57,
+ * git-host-22): its notice owed, or its first-notice read failed, either
+ * stopping that placement alone at its turn, no step run there. */
+type PlacementAdmission = { kind: "waiting"; stop: NoticeOwed } | { kind: "stopped"; stop: SpaceStopped };
+
 interface PlanRevisions { ours: string | null; theirs: string; base: string }
 /** The last plan's revisions and units; `oursTree` is the tree object
  * mine was read from — the working tree's temporary-index tree outside
@@ -582,7 +598,6 @@ interface TurnInput {
   join: boolean;
   /** A set-up join's own Saves (space-59), for the placement it joins. */
   setUpSaves?: ReadonlySet<string>;
-  internal: boolean;
   /** A turn run again after its catch-up push was rejected: a push
    * rejected once more leaves it behind (space-12). */
   catchUp?: boolean;
@@ -603,6 +618,9 @@ interface Turn {
   syncedAt?: number;
   pushed: boolean;
   tally: { sent: number; received: number };
+  /** For a turn waiting for its notice's Continue, the stop the sync
+   * reads where no placement went (space-57). */
+  notice?: GitFailure;
 }
 /** A turn whose Apply met a unit changed since its base (space-19): the
  * sync runs again from Save; the placement's remote's name, and the
@@ -2108,7 +2126,7 @@ class RepositorySync {
   async fetch(): Promise<{ accepted: true }> {
     if (this.current) return { accepted: true };
     const repo = await this.requireReady();
-    await this.owner.admit(this, { push: false, noticed: true });
+    await this.owner.admit(this, { push: false });
     if (this.current) return { accepted: true };
     void this.runOperation("check", async () => {
       // The placements as read before the check, each later one read
@@ -2122,7 +2140,7 @@ class RepositorySync {
         this.turnAt = placement?.instance ?? undefined;
         try {
           await this.enter("check", "check", false, this.originOf(placement));
-          await this.check(placement?.url ?? repo.remote, "check", false, placement);
+          await this.check(placement?.url ?? repo.remote, "check", placement);
           checked = true;
         } catch (error) {
           // Its stop stands on its line; Stop and Git's own error end the
@@ -2140,11 +2158,14 @@ class RepositorySync {
 
   /** `internal` marks a sync the core starts itself — after a sign-in, a
    * pick or a creation (space-4, space-58) — whose act already said what
-   * a join does (space-13). `setUp` marks the account's set-up joining
-   * your own group's spex repository, which takes the host's side where
-   * the clone holds nothing of its own (space-59). A Sync asked while a
-   * sync runs joins it; one asked while a check runs follows that check.
-   * Nothing beneath the clone is refused meanwhile (space-21). */
+   * a join does (space-13); its notices are owed as any sync's, rechecked
+   * at each placement's Check, a placement owing one waiting for Continue
+   * on its line, with no reader asking to refuse (space-57). `setUp`
+   * marks the account's set-up joining your own group's spex repository,
+   * which takes the host's side where the clone holds nothing of its own
+   * (space-59). A Sync asked while a sync runs joins it; one asked while
+   * a check runs follows that check. Nothing beneath the clone is refused
+   * meanwhile (space-21). */
   async sync(input: { placement?: string | null; choices?: Record<string, SpaceChoice>; join?: boolean; noticed?: boolean; internal?: boolean; setUp?: boolean }): Promise<{ accepted: true }> {
     if (this.current?.op === "sync") return { accepted: true };
     const choices: Record<string, StorageChoice> = {};
@@ -2177,7 +2198,7 @@ class RepositorySync {
     }
     // The notice is seen for that placement (space-57, storage-5).
     if (input.noticed === true) this.recordPlacement(target.name, "noticed", true);
-    await this.owner.admit(this, { push: true, noticed: input.noticed === true || input.internal === true });
+    const admission = await this.owner.admit(this, { push: true, internal: input.internal === true });
     // A sync begun while this one was admitted is the one it joins.
     if (this.runningOp() === "sync") return { accepted: true };
     void this.runOperation("sync", async () => {
@@ -2197,7 +2218,7 @@ class RepositorySync {
           retry: false,
         });
       }
-      await this.syncBody(repo, { choices, join: input.join === true, setUp: input.join === true && input.setUp === true, internal: input.internal === true, target });
+      await this.syncBody(repo, { choices, join: input.join === true, setUp: input.join === true && input.setUp === true, admission, target });
     }, this.current?.work);
     return { accepted: true };
   }
@@ -2262,8 +2283,10 @@ class RepositorySync {
    * Refresh and Push against that placement — then the catch-up. A stop
    * of one placement stands on its line and the next runs; a stop of the
    * whole sync ends it (space-15). An Apply whose unit changed since its
-   * base runs the sync again from Save, once (space-19). */
-  private async syncBody(repo: ReadyRepository, input: { choices: Record<string, StorageChoice>; join: boolean; setUp: boolean; internal: boolean; target: SyncTarget }): Promise<void> {
+   * base runs the sync again from Save, once (space-19). A placement its
+   * admission stopped — its notice owed, or its first-notice read failed
+   * — runs no step, its line saying so (space-57). */
+  private async syncBody(repo: ReadyRepository, input: { choices: Record<string, StorageChoice>; join: boolean; setUp: boolean; admission: ReadonlyMap<string, PlacementAdmission>; target: SyncTarget }): Promise<void> {
     const op: SpaceOp = "sync";
     let restarts = 0;
     let savedCommit: string | null = null;
@@ -2297,18 +2320,20 @@ class RepositorySync {
       for (const [index, name] of names.entries()) {
         const placement = index === 0 ? undefined : this.placementsNow().find((candidate) => candidate.name === name);
         if (index > 0 && placement === undefined) continue;
+        const tally = tallyOf(index === 0 ? "" : name);
+        const admitted = input.admission.get(name);
+        if (admitted) { turns.push(this.admittedTurn(placement, name, admitted, tally)); continue; }
         const forTarget = index === 0 ? input.target.first : input.target.name === name;
         const turned = await this.turn(op, placement, {
           choices: forTarget ? input.choices : {},
           join: forTarget && input.join,
           ...(forTarget && input.setUp ? { setUpSaves: saves } : {}),
-          internal: input.internal,
-        }, upstream, tallyOf(index === 0 ? "" : name));
+        }, upstream, tally);
         if ("restart" in turned) { restart = turned; break; }
         turns.push(turned);
       }
       if (!restart) {
-        const caught = await this.catchUp(op, turns, input.internal, upstream);
+        const caught = await this.catchUp(op, turns, upstream);
         if (caught) restart = caught;
       }
       if (restart) {
@@ -2341,18 +2366,23 @@ class RepositorySync {
   /** How a sync ends, from its placements' turns in their order
    * (space-12, space-30): in choices at the first placement so ended,
    * else with an unrelated history at the first so ended; else stopped
-   * as the first stop, where no placement synced, ended behind or waits;
-   * else done with every placement's counts, pushed where any was. */
+   * as the first stop, where no placement synced or ended behind — a
+   * placement waiting for its notice's Continue stopping as its notice
+   * says (space-57, git-host-22); else done with every placement's
+   * counts, pushed where any was. */
   private endedBy(turns: Turn[], savedCommit: string | null): SpaceSyncPhase {
     const choices = turns.find((turn) => turn.outcome.kind === "choices");
     if (choices) return { phase: "choices", placement: choices.origin, savedCommit };
     const unrelated = turns.find((turn) => turn.outcome.kind === "unrelated");
     if (unrelated) return { phase: "unrelated", placement: unrelated.origin };
-    const went = turns.filter((turn) => turn.outcome.kind === "synced" || turn.outcome.kind === "behind" || turn.outcome.kind === "waiting");
-    const stopped = turns.find((turn) => turn.outcome.kind === "stopped");
-    if (went.length === 0 && stopped?.outcome.kind === "stopped") {
-      const { kind: _, ...stop } = stopped.outcome;
-      return { phase: "stopped", op: "sync", ...stop };
+    const went = turns.filter((turn) => turn.outcome.kind === "synced" || turn.outcome.kind === "behind");
+    const stopped = turns.find((turn) => turn.outcome.kind === "stopped" || turn.notice !== undefined);
+    if (went.length === 0 && stopped) {
+      if (stopped.outcome.kind === "stopped") {
+        const { kind: _, ...stop } = stopped.outcome;
+        return { phase: "stopped", op: "sync", ...stop };
+      }
+      if (stopped.notice) return { phase: "stopped", op: "sync", step: "check", ...stopped.notice };
     }
     const times = went.flatMap((turn) => (turn.syncedAt === undefined ? [] : [turn.syncedAt]));
     return {
@@ -2386,10 +2416,14 @@ class RepositorySync {
     let rechecks = 0;
     let pending: Pending | undefined;
     let counts = { sent: 0, received: 0 };
-    const ended = (outcome: PlacementOutcome, extra: { syncedAt?: number; pushed?: boolean } = {}): Turn => {
+    const ended = (outcome: PlacementOutcome, extra: { syncedAt?: number; pushed?: boolean; notice?: GitFailure } = {}): Turn => {
       const name = nameNow();
       this.runOf(name).outcome = outcome;
-      return { first, name, origin: this.originOf(placement), remote, at, readOnly, outcome, pushed: extra.pushed ?? false, tally, ...(extra.syncedAt !== undefined ? { syncedAt: extra.syncedAt } : {}) };
+      return {
+        first, name, origin: this.originOf(placement), remote, at, readOnly, outcome, pushed: extra.pushed ?? false, tally,
+        ...(extra.syncedAt !== undefined ? { syncedAt: extra.syncedAt } : {}),
+        ...(extra.notice !== undefined ? { notice: extra.notice } : {}),
+      };
     };
     this.turnAt = placement?.instance ?? undefined;
     try {
@@ -2398,7 +2432,7 @@ class RepositorySync {
         switch (next) {
           case "check": {
             await this.enter(op, "check", false, this.originOf(placement));
-            const checked = await this.check(remote, op, input.internal, placement);
+            const checked = await this.check(remote, op, placement);
             // The host may hand over another URL, after a rename or a
             // transfer, and may answer that this account only reads
             // (space-60, space-61); the push goes to the instance the
@@ -2481,10 +2515,29 @@ class RepositorySync {
         }
       }
     } catch (error) {
+      // Its notice owed at its Check: its line waits for Continue, before
+      // any branch or transport effect (space-57, git-host-22).
+      if (error instanceof NoticeOwed) {
+        return ended({ kind: "waiting", sent: tally.sent, received: tally.received }, { notice: this.owner.placementFailure(this, error.failure, placement) });
+      }
       const stop = this.stopOn(nameNow(), placement, error);
       if (stop.whole) throw stop;
       return ended(this.runOf(nameNow()).outcome as PlacementOutcome);
     } finally { this.turnAt = undefined; }
+  }
+
+  /** The turn of a placement its admission stopped (space-57,
+   * git-host-22): no step runs there; its line waits for its notice's
+   * Continue, or reads its first-notice read's stop. */
+  private admittedTurn(placement: Placement | undefined, name: string, admitted: PlacementAdmission, tally: { sent: number; received: number }): Turn {
+    const turn = { first: placement === undefined, name, origin: this.originOf(placement), remote: placement?.url ?? this.facts.remote ?? "", at: undefined, readOnly: false, pushed: false, tally };
+    if (admitted.kind === "waiting") {
+      const outcome: PlacementOutcome = { kind: "waiting", sent: tally.sent, received: tally.received };
+      this.runOf(name).outcome = outcome;
+      return { ...turn, outcome, notice: this.owner.placementFailure(this, admitted.stop.failure, placement) };
+    }
+    this.stopOn(name, placement, admitted.stop);
+    return { ...turn, outcome: this.runOf(name).outcome as PlacementOutcome };
   }
 
   /**
@@ -2494,7 +2547,7 @@ class RepositorySync {
    * from Check, after which the others are caught up again; rejected
    * again, it ends behind. A read-only placement receives nothing.
    */
-  private async catchUp(op: SpaceOp, turns: Turn[], internal: boolean, upstream: { set: boolean }): Promise<Restart | undefined> {
+  private async catchUp(op: SpaceOp, turns: Turn[], upstream: { set: boolean }): Promise<Restart | undefined> {
     const rerun = new Set<Turn["tally"]>();
     for (let again = true; again;) {
       again = false;
@@ -2524,7 +2577,7 @@ class RepositorySync {
           continue;
         }
         rerun.add(turn.tally);
-        const ranAgain = await this.turn(op, placement, { choices: {}, join: false, internal, catchUp: true }, upstream, turn.tally);
+        const ranAgain = await this.turn(op, placement, { choices: {}, join: false, catchUp: true }, upstream, turn.tally);
         if ("restart" in ranAgain) return ranAgain;
         turns[index] = { ...ranAgain, pushed: ranAgain.pushed || turn.pushed };
         // `HEAD` moved: every other placement is caught up again.
@@ -2644,8 +2697,8 @@ class RepositorySync {
    * (space-60); a later placement's, given, reads its own instance alone
    * and follows nothing (git-host-9). What it learns is that placement's
    * (space-31). */
-  private async check(remote: string, op: SpaceOp, internal = false, placement?: Placement): Promise<{ empty: boolean; readOnly: boolean; at: HostInstance | undefined; remote: string }> {
-    const host = placement === undefined ? await this.owner.hostCheck(this, op, internal) : await this.owner.hostCheckPlacement(this, placement);
+  private async check(remote: string, op: SpaceOp, placement?: Placement): Promise<{ empty: boolean; readOnly: boolean; at: HostInstance | undefined; remote: string }> {
+    const host = placement === undefined ? await this.owner.hostCheck(this, op) : await this.owner.hostCheckPlacement(this, placement, op);
     const target = host?.remote ?? remote;
     // The remote by its name in the clone, as the host's read left it.
     const name = placement === undefined ? this.remoteNamed("check") : placement.name;
@@ -4851,7 +4904,7 @@ export class SpaceManager {
             id: "Read the sharing notice before joining {name}",
             values: { name: listing.repository.path },
             comment: "Refusal of a pick joining a spex repository with other members until the reader has seen the privacy notice",
-          }), { notice: true, members: listing.members, visibility: listing.repository.visibility });
+          }), { notice: true, members: listing.members, visibility: listing.repository.visibility, placement: instance.origin });
         }
         await this.adopt(instance, machine, listing, true, expected !== undefined ? { expected } : {});
         return { accepted: true };
@@ -5444,47 +5497,91 @@ export class SpaceManager {
 
   // -- the sync against the host (space-11, space-12, space-60) ---------------
 
-  /** The admission of space-11 an instance decides: a clone at its
-   * instance needs a sign-in there, or, for a sync, a signed-in instance
-   * listing the host repository it records, which the sync then follows
-   * (space-60) — refused naming its own instance — and its first push
-   * into a repository with other members needs the notice seen, read at
-   * the instance governing it (space-57, git-host-22). A Check host
-   * (`push` false) follows no other instance (git-host-9). */
-  async admit(machine: RepositorySync, input: { push: boolean; noticed: boolean }): Promise<void> {
+  /** The admission of space-11 the instances decide, placement by
+   * placement, a sync refused only where no placement could run:
+   * - a placement can run where its instance is signed in — the first,
+   *   for a sync, also where a signed-in instance lists the host
+   *   repository it records, which the sync then follows (space-60) —
+   *   and the path placement always; a Check host (`push` false) follows
+   *   no other instance (git-host-9); none able to run is refused naming
+   *   the first placement's instance;
+   * - a sync the reader asks reads afresh, at the instance governing
+   *   each placement, only the placements whose notice may be owed —
+   *   never pushed from this device, its notice never seen — and one
+   *   whose notice is owed, or whose read fails, stops alone at its turn,
+   *   no step run there, a sync refused with the first such refusal where
+   *   every placement able to run is so stopped (space-57, git-host-22);
+   * - a sync the core starts itself reads nothing here, each placement's
+   *   notice rechecked at its Check.
+   * What admission stopped comes back by each placement's remote's name. */
+  async admit(machine: RepositorySync, input: { push: boolean; internal?: boolean }): Promise<Map<string, PlacementAdmission>> {
+    const admitted = new Map<string, PlacementAdmission>();
     const facts = machine.facts;
     const serving = this.servingOf(machine);
-    const instance = this.syncsWith(machine, input.push);
-    if (!this.atHost(facts, instance ?? serving)) return;
-    if (!instance) throw new CoreError("invalid_request", signInTo(this.nameOf(serving)));
-    if (!input.push || input.noticed) return;
-    if (this.noticeSeen(machine)) return;
-    let listing: HostListing | undefined;
-    try { listing = (await this.readTarget(instance, machine, facts)).listing; }
-    catch (error) {
-      throw new CoreError(error instanceof CredentialChanged ? "conflict" : "invalid_request", relayHostError(error, this.nameOf(instance)));
+    const placements = machine.placements;
+    // Each placement able to run, with the instance whose read its notice
+    // takes — none for one at no instance, which owes none (space-5).
+    const runnable: { name: string; origin: string | null; later: boolean; at?: HostInstance; facts: CloneFacts }[] = [];
+    const firstAt = this.syncsWith(machine, input.push);
+    const firstName = facts.remoteName ?? placements[0]?.name ?? "";
+    const firstOrigin = placements[0]?.instance ?? null;
+    if (!this.atHost(facts, firstAt ?? serving)) runnable.push({ name: firstName, origin: firstOrigin, later: false, facts });
+    else if (firstAt) runnable.push({ name: firstName, origin: firstOrigin, later: false, at: firstAt, facts });
+    for (const placement of placements.slice(1)) {
+      const facts: CloneFacts = { remote: placement.url, id: placement.id, remoteName: placement.name };
+      if (placement.instance === null) { runnable.push({ name: placement.name, origin: null, later: true, facts }); continue; }
+      const at = this.instanceAt(placement.instance);
+      if (this.signedInAt(at)) runnable.push({ name: placement.name, origin: placement.instance, later: true, at, facts });
     }
-    const notice = this.sharingNotice(machine, listing);
-    if (notice) throw notice;
+    if (runnable.length === 0) throw new CoreError("invalid_request", signInTo(this.nameOf(serving)));
+    if (!input.push || input.internal) return admitted;
+    const own = machine.key === this.host.store.home.own();
+    let refusal: CoreError | undefined;
+    let open = 0;
+    for (const entry of runnable) {
+      if (!entry.at || this.noticeSeen(machine, entry.name)) { open += 1; continue; }
+      let listing: HostListing | undefined;
+      try { listing = (await this.readTarget(entry.at, machine, entry.facts)).listing; }
+      catch (error) {
+        const name = this.nameOf(entry.at);
+        refusal ??= new CoreError(error instanceof CredentialChanged ? "conflict" : "invalid_request", relayHostError(error, name));
+        // Stopped alone, as unreachable (git-host-22).
+        admitted.set(entry.name, { kind: "stopped", stop: new SpaceStopped("check", hostStop("check", error, name).failure, false) });
+        continue;
+      }
+      const notice = this.sharingNotice(machine, entry.name, entry.origin, listing, own && entry.later);
+      if (notice) {
+        refusal ??= notice;
+        admitted.set(entry.name, { kind: "waiting", stop: new NoticeOwed(notice.message) });
+        continue;
+      }
+      open += 1;
+    }
+    if (open === 0 && refusal) throw refusal;
+    return admitted;
   }
 
-  /** Whether the clone's first placement owes no notice for its pushes
-   * on this device's record (space-57, storage-5): its notice seen, or a
-   * sync with it recorded. */
-  private noticeSeen(machine: RepositorySync): boolean {
-    const name = machine.facts.remoteName;
+  /** Whether a placement of a clone, by its remote's name, owes no
+   * notice for its pushes on this device's record (space-57, storage-5):
+   * its notice seen, or a sync with it recorded. */
+  private noticeSeen(machine: RepositorySync, name: string | null): boolean {
     return machine.noticedOf(name) || machine.placementRecord(name, "last") !== undefined;
   }
 
-  /** The same first-push condition at admission and at fresh Check. */
-  private sharingNotice(machine: RepositorySync, listing: HostListing | undefined): CoreError | undefined {
-    if (this.noticeSeen(machine)) return undefined;
-    if (!listing || listing.readOnly || !mayHaveOthers(listing)) return undefined;
+  /** The same first-push condition at admission and at fresh Check, for
+   * one placement, by its remote's name and its instance's origin
+   * (space-57): never pushed from this device and its notice never seen,
+   * and its repository there, which takes pushes, with other members —
+   * an unknown count among them — or your own group's own repository at
+   * an instance other than its first placement's (`ownLater`). */
+  private sharingNotice(machine: RepositorySync, name: string | null, origin: string | null, listing: HostListing | undefined, ownLater: boolean): CoreError | undefined {
+    if (this.noticeSeen(machine, name)) return undefined;
+    if (!listing || listing.readOnly || (!ownLater && !mayHaveOthers(listing))) return undefined;
     return new CoreError("invalid_request", i18n._({
       id: "Read the sharing notice before the first sync of {name}",
       values: { name: splitKey(machine.key).name },
       comment: "Refusal of a first push into a spex repository with other members until the reader has seen the privacy notice",
-    }), { notice: true, members: listing.members, visibility: listing.repository.visibility });
+    }), { notice: true, members: listing.members, visibility: listing.repository.visibility, placement: origin });
   }
 
   /** The Check step's read of the host for one clone (space-12): follow
@@ -5498,9 +5595,12 @@ export class SpaceManager {
    * signed-in instance listing it — a sync follows it there before any
    * transport, the clone re-keyed under its folder with its remote
    * renamed, your own group's own repository renaming its remote alone
-   * (space-60). The instance it answered at comes back with the URL;
-   * undefined for a clone whose remote is not at an instance. */
-  async hostCheck(machine: RepositorySync, op: SpaceOp, internal = false): Promise<{ remote: string; readOnly: boolean; instance: HostInstance } | undefined> {
+   * (space-60). On a sync, the first placement's notice owed by that
+   * fresh read ends its turn waiting before any branch or transport
+   * effect (space-57, git-host-22). The instance it answered at comes
+   * back with the URL; undefined for a clone whose remote is not at an
+   * instance. */
+  async hostCheck(machine: RepositorySync, op: SpaceOp): Promise<{ remote: string; readOnly: boolean; instance: HostInstance } | undefined> {
     if (op === "sync") await this.moveDeferred(machine);
     const facts = await machine.readFacts();
     const serving = this.servingOf(machine);
@@ -5524,9 +5624,9 @@ export class SpaceManager {
       machine.hostOverride = { state: "unreachable", reason: noLongerShared() };
       throw new SpaceStopped("check", { cause: "gone", message: noLongerShared(), guidance: nothingDeleted(), retry: true });
     }
-    if (op === "sync" && !internal) {
-      const notice = this.sharingNotice(machine, listing);
-      if (notice) throw new SpaceStopped("check", { cause: "refused", message: notice.message, guidance: retryGuidance(), retry: true });
+    if (op === "sync") {
+      const notice = this.sharingNotice(machine, facts.remoteName, this.placementOf(machine), listing, false);
+      if (notice) throw new NoticeOwed(notice.message);
     }
     const repository = listing.repository;
     if (facts.id === null && facts.remote !== null) machine.recordId(repository.id, facts.remote);
@@ -5597,10 +5697,12 @@ export class SpaceManager {
    * catalog and its repository there alone, following nothing
    * (git-host-9) — its remote's name and URL used as they stand; a
    * repository the read lists no more, or one in a group named like a
-   * login, stops that placement unreachable (space-15, space-61). The
-   * instance comes back with the URL; undefined for the path placement,
-   * fetched with no read. */
-  async hostCheckPlacement(machine: RepositorySync, placement: Placement): Promise<{ remote: string; readOnly: boolean; instance: HostInstance } | undefined> {
+   * login, stops that placement unreachable (space-15, space-61); on a
+   * sync, its notice owed by that fresh read ends its turn waiting
+   * before any transport (space-57, git-host-22). The instance comes
+   * back with the URL; undefined for the path placement, fetched with no
+   * read. */
+  async hostCheckPlacement(machine: RepositorySync, placement: Placement, op: SpaceOp): Promise<{ remote: string; readOnly: boolean; instance: HostInstance } | undefined> {
     if (placement.instance === null) return undefined;
     const instance = this.instanceAt(placement.instance);
     if (!this.signedInAt(instance)) throw new SpaceStopped("check", { cause: "reauth", message: signInAgain(), guidance: signInThenRetry(), retry: true });
@@ -5619,6 +5721,12 @@ export class SpaceManager {
     if (this.collides(listing.repository.group, catalog)) {
       machine.setOverride(placement.name, { state: "unreachable", reason: namedLikeYourLogin() });
       throw new SpaceStopped("check", { cause: "gone", message: groupNamedLikeYourLogin(listing.repository.group.fullPath), guidance: nothingDeleted(), retry: true });
+    }
+    if (op === "sync") {
+      // Your own group's own repository owes it at every instance after
+      // its first placement's (space-57, space-4).
+      const notice = this.sharingNotice(machine, placement.name, placement.instance, listing, machine.key === this.host.store.home.own());
+      if (notice) throw new NoticeOwed(notice.message);
     }
     return { remote: placement.url, readOnly: listing.readOnly !== null, instance };
   }
