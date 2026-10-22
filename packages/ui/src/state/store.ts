@@ -133,6 +133,14 @@ export type RegistryResult = CommandResults["environment.search"]["packages"][nu
  * origin, its key placement where none is named. */
 export type SpaceMembersTarget = { instance: string; group: string } | { repository: string; instance?: string };
 
+/** Where a pick or a Place puts a spex repository at an instance
+ * (space-58, space-88, space-29): a spex repository that instance lists,
+ * by its host id, or a new `<name>-spex` in a group there by its host
+ * id, your namespace there by none. */
+export type SpaceGroupChoice =
+  | { kind: "join"; instance: string; hostId: string }
+  | { kind: "create"; instance: string; groupId: string | null; name: string };
+
 /** The members of a group or a spex repository as the host lists them
  * (space-62): no page of the host (DR-120). */
 export type SpaceMembersReply = { members: HostMemberInfo[] };
@@ -315,13 +323,14 @@ export interface AppState extends AttachmentState {
    * the choice naming the instance it is at (space-29). `noticed` once
    * the sharing notice was seen for a join (space-57). Accepted at
    * once, outcome as state. */
-  spacePick(
-    repository: string,
-    choice:
-      | { kind: "join"; instance: string; hostId: string }
-      | { kind: "create"; instance: string; groupId: string | null; name: string },
-    noticed?: boolean,
-  ): Promise<void>;
+  spacePick(repository: string, choice: SpaceGroupChoice, noticed?: boolean): Promise<void>;
+  /** Place a project's spex repository at another instance (space-88,
+   * space-97): a spex repository that instance lists by its host id, or
+   * a new one in a group there, the choice naming the instance it is at
+   * (space-29); `noticed` once the sharing notice was seen for a join
+   * (space-57). Accepted once the host's step and the placement's add
+   * are done, its sync then running as state. */
+  spacePlace(repository: string, choice: SpaceGroupChoice, noticed?: boolean): Promise<void>;
   /** Clone a spex repository an instance lists and this device lacks
    * (space-63), `instance` the one its row stands under, pairing it with
    * a folder. Accepted at once. */
@@ -950,9 +959,10 @@ const sentMarkers = new Map<string, number>();
 
 /** What the page last asked of a clone's machine beyond a sync, by the
  * spex repository's key: a stopped phase names no placement (space-30),
- * so this remembers the instance an Attach named, to send it again. It
- * outlives a row remounting and not a reload. */
-const lastActs = new Map<string, { op: "attach"; instance: string }>();
+ * so this remembers the instance an Attach or a Place named, and a
+ * Place's choice, to send it again. It outlives a row remounting and not
+ * a reload. */
+const lastActs = new Map<string, { op: "attach"; instance: string } | { op: "place"; instance: string; choice: SpaceGroupChoice }>();
 
 /** The newest Space read's number (space-2): a `space.get` reply older
  * than a `space.state` broadcast or a newer read is discarded. */
@@ -1833,6 +1843,11 @@ export const useAppStore = create<AppState>((set, get) => {
 
     async spacePick(repository, choice, noticed): Promise<void> {
       await getClient().command("space.pick", { repository, choice, ...(noticed ? { noticed: true } : {}) });
+    },
+
+    async spacePlace(repository, choice, noticed): Promise<void> {
+      lastActs.set(repository, { op: "place", instance: choice.instance, choice });
+      await getClient().command("space.place", { repository, choice, ...(noticed ? { noticed: true } : {}) });
     },
 
     async spaceJoin(instance: string, hostId: string, folder?: string): Promise<void> {

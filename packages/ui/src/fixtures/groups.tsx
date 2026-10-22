@@ -573,6 +573,7 @@ export async function answer(type: string, fields: Record<string, unknown> = {})
     case "space.fetch":
     case "space.sync":
     case "space.pick":
+    case "space.place":
     case "space.join":
     case "space.attach":
       return { accepted: true };

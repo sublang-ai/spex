@@ -25,7 +25,14 @@
 // and the rail names the placement in flight (space-12). A placement a
 // file of the clone names, not yet on this device, offers Attach on its
 // line: the sharing notice whatever its members, then space.attach with
-// the notice seen, a refusal standing on that line (space-90).
+// the notice seen, a refusal standing on that line (space-90). A
+// project's row whose members the person may manage at every placement
+// offers "Place at…" for each signed-in instance it holds none at:
+// that instance's picker, or the choice of them first, a pick sent as
+// space.place, its notice in the picker, "Placing…" until the Place has
+// run; a clone holding only its path placement picks a group beside its
+// Sync instead (space-88, space-97, space-57, space-58, space-61,
+// storage-35, space-28).
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
@@ -38,6 +45,7 @@ import { setClientForTests } from "../state/store.js";
 import {
   ACME,
   BETA,
+  NO_CAN,
   BRANCH,
   CONFLICTS,
   GAMMA,
@@ -59,6 +67,7 @@ import {
   installClient,
   instance,
   live,
+  namespace,
   ownRepo,
   placement,
   placementState,
@@ -67,6 +76,7 @@ import {
   signedOutAt,
   twoInstances,
   twoPlacementsHome,
+  type RowOver,
 } from "../fixtures/groups.js";
 
 beforeEach(installClient);
@@ -1491,5 +1501,543 @@ describe("GROUPS: attaching a placement another device named (space-90, space-99
     const row = within(line).getByTestId("space-line-instance").parentElement!;
     for (const token of ["flex-wrap", "@xs:flex-nowrap"]) expect(row.className.split(/\s+/)).toContain(token);
     expect(attach.className.split(/\s+/)).toContain("whitespace-nowrap");
+  });
+});
+
+/** What the person may do with a placement the view lists: manage its
+ * members and move it. */
+const MAY = { manageMembers: true, transfer: true };
+/** The opened project's code as another spex repository for it names
+ * it, without the user part the folder's remote carries. */
+const ACADEMY_CODE = "https://github.com/jane/academy.git";
+/** The spex repository the second's `workshop` lists for the opened
+ * project's code, whose members the person may manage. */
+const LISTED = "@second.example/workshop/academy-spex";
+
+/** The opened project at the first alone, the person managing its
+ * members there, as a test says otherwise of its row; the second's
+ * `lab` listing a spex repository for the same code whose members the
+ * person may not manage, its `workshop` one with two members whose
+ * members the person may, as a test says otherwise of it, and another
+ * for other code (space-88). */
+function placeHome(row: RowOver = {}, listed: RowOver = {}): GroupsState {
+  const home = twoInstances({}, [repo({ can: MAY, ...row })]);
+  const [first, second] = home.instances;
+  const at = (key: string, group: string, id: string, over: RowOver = {}): RepositoryState =>
+    repo({
+      key,
+      name: key.split("/").pop()!,
+      id,
+      instance: SECOND,
+      governing: SECOND,
+      remote: `${group}/${key.split("/").pop()!}`,
+      code: ACADEMY_CODE,
+      folder: null,
+      state: "absent",
+      branch: null,
+      members: 2,
+      noticed: false,
+      can: MAY,
+      ...over,
+    });
+  return {
+    ...home,
+    instances: [
+      first!,
+      {
+        ...second!,
+        groups: [
+          {
+            id: "82",
+            login: null,
+            mine: false,
+            fullPath: "lab",
+            name: "lab",
+            can: NO_CAN,
+            placed: [],
+            repositories: [at("@second.example/lab/academy-spex", "lab", "92", { can: { manageMembers: false, transfer: false } })],
+          },
+          {
+            id: "81",
+            login: null,
+            mine: false,
+            fullPath: "workshop",
+            name: "workshop",
+            can: NO_CAN,
+            placed: [],
+            repositories: [
+              at(LISTED, "workshop", "91", listed),
+              at("@second.example/workshop/notes-spex", "workshop", "93", { code: "https://github.com/jane/notes.git" }),
+            ],
+          },
+          namespace("jada"),
+        ],
+      },
+    ],
+  };
+}
+
+/** A home as placeHome's with a third instance after the second, no
+ * read naming its display name yet, where you are signed in as jo. */
+function withThird(home: GroupsState): GroupsState {
+  return {
+    ...home,
+    instances: [
+      ...home.instances,
+      instance({
+        origin: THIRD,
+        host: "third.example",
+        displayName: null,
+        account: { id: "90", login: "jo", displayName: null, canCreateGroup: false },
+        groups: [namespace("jo")],
+      }),
+    ],
+  };
+}
+
+/** The Place's sync running its step at a placement (space-97,
+ * space-12). */
+const placeRunning = (placement: string, step: "check" | "push"): RepositoryState["sync"] => ({
+  phase: "running",
+  op: "place",
+  placement,
+  step,
+  since: NOW,
+  cancelable: step === "push",
+});
+
+const placeControl = (key = KEY): HTMLButtonElement => screen.getByTestId(`space-row-place-${key}`) as HTMLButtonElement;
+
+describe("GROUPS: placing a project at another instance (space-88, space-97, space-57, space-58, space-61, storage-35, space-28)", () => {
+  test("space-88: Place at… stands on the project at one instance, titled and named 'Also place at Second Example', opening that instance's picker — the spex repositories there for the same code whose members the person may manage, then your login and each group; a pick sends space.place with its choice; a join into one with other members says the notice in the picker first and sends noticed; a taken name is refused in the picker; Cancel changes nothing", async () => {
+    let settle: ((value: unknown) => void) | undefined;
+    commandMock.mockImplementation(async (type: string, fields?: Record<string, unknown>) => {
+      if (type !== "space.place") return answer(type, fields);
+      return new Promise((resolve) => {
+        settle = resolve;
+      });
+    });
+    await renderGroups(placeHome(), { open: false });
+    const row = screen.getByTestId(`space-row-${KEY}`);
+    const control = placeControl();
+    // One instance offered: the control names it in full, as its title
+    // and accessible name, its label within the row's budget (space-88).
+    expect(control.textContent).toBe("Place at…");
+    expect(control.getAttribute("title")).toBe("Also place at Second Example");
+    expect(within(row).getByRole("button", { name: "Also place at Second Example" })).toBe(control);
+    // On the row, never a line, before the state's control (DR-041).
+    expect(within(screen.getByTestId(`space-lines-${KEY}`)).queryByTestId(`space-row-place-${KEY}`)).toBeNull();
+    expect(control.compareDocumentPosition(rowSync()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    // It opens that instance's picker beneath the row: the spex
+    // repositories there for the same code whose members the person may
+    // manage, each with its members, then your login there and each
+    // group, the folder's name to create (space-88, space-58).
+    fireEvent.click(control);
+    expect(control.getAttribute("aria-expanded")).toBe("true");
+    let picker = screen.getByRole("group", { name: "Also place at Second Example" });
+    expect(picker.dataset.testid).toBe(`space-place-${KEY}`);
+    expect(row.contains(picker)).toBe(true);
+    const sections = within(picker).getAllByTestId(/^space-pick-instance-/);
+    expect(sections.map((section) => section.dataset.testid)).toEqual([`space-pick-instance-${SECOND}`]);
+    expect(within(sections[0]!).getByRole("heading", { level: 3 }).textContent).toBe("Second Example");
+    const listed = within(picker).getAllByTestId(/^space-pick-repo-/);
+    expect(listed.map((option) => option.dataset.testid)).toEqual([`space-pick-repo-${LISTED}`]);
+    expect(listed[0]!.textContent).toContain("2 members");
+    expect(document.activeElement).toBe(listed[0]);
+    expect(within(picker).getAllByTestId(/^space-pick-group-/).map((option) => option.textContent)).toEqual(["jada", "lab", "workshop"]);
+    expect((within(picker).getByTestId(`space-pick-name-${KEY}`) as HTMLInputElement).value).toBe("academy");
+
+    // Cancel and Escape change nothing, focus back on Place at…
+    // (DR-010 §6).
+    fireEvent.click(within(picker).getByTestId(`space-pick-cancel-${KEY}`));
+    expect(screen.queryByTestId(`space-place-${KEY}`)).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(control));
+    expect(control.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(control);
+    fireEvent.keyDown(screen.getByTestId(`space-place-${KEY}`), { key: "Escape" });
+    expect(screen.queryByTestId(`space-place-${KEY}`)).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(control));
+    expect(calls("space.place")).toHaveLength(0);
+
+    // A group creates there: space.place names the choice at the second,
+    // and Place at… reads "Placing…" from the pick, Sync keeping its
+    // word, waiting (space-97, space-29).
+    fireEvent.click(control);
+    fireEvent.click(within(screen.getByTestId(`space-place-${KEY}`)).getByTestId("space-pick-group-workshop"));
+    await waitFor(() =>
+      expect(calls("space.place")).toEqual([{ repository: KEY, choice: { kind: "create", instance: SECOND, groupId: "81", name: "academy" } }]),
+    );
+    expect(calls("space.pick")).toHaveLength(0);
+    expect(control.textContent).toBe("Placing…");
+    expect(control.disabled).toBe(true);
+    expect(control.getAttribute("aria-label")).toBeNull();
+    expect(rowSync().textContent).toBe("Sync");
+    expect(rowSync().disabled).toBe(true);
+    settle!({ accepted: true });
+    await waitFor(() => expect(screen.queryByTestId(`space-place-${KEY}`)).toBeNull());
+    expect(control.textContent).toBe("Placing…");
+    // Closing never strands focus: Place at… busy, it lands on the row
+    // (DR-010 §6).
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId(`space-repo-${KEY}`)));
+
+    // The placement added, the Place syncs the clone, its new line among
+    // its placements: Place at… stays busy though no instance is left to
+    // offer, and is gone once the Place has run (space-97, space-12).
+    const placed = (sync: RepositoryState["sync"], second: Partial<PlacementState> = {}): GroupsState =>
+      placeHome({
+        placedAt: [ORIGIN, SECOND],
+        sync,
+        placements: [
+          placement({ can: MAY }),
+          placementState({
+            instance: SECOND,
+            path: "workshop/academy-spex",
+            id: "94",
+            members: 2,
+            visibility: "private",
+            can: MAY,
+            branch: { ...BRANCH, ahead: 0, behind: 0 },
+            ...second,
+          }),
+        ],
+      });
+    deliver(placed(placeRunning(SECOND, "push")));
+    await waitFor(() => expect(reading(lineOf(KEY, SECOND)).state).toBe("Pushing…"));
+    expect(placeControl().textContent).toBe("Placing…");
+    expect(placeControl().disabled).toBe(true);
+    expect(rowSync().textContent).toBe("Sync");
+    deliver(
+      placed(
+        { phase: "done", at: NOW, sent: 1, received: 0, pushed: true },
+        { lastSync: { at: NOW, sent: 1, received: 0 }, outcome: { kind: "synced", sent: 1, received: 0 } },
+      ),
+    );
+    await waitFor(() => expect(screen.queryByTestId(`space-row-place-${KEY}`)).toBeNull());
+    expect(rowSync().disabled).toBe(false);
+    cleanup();
+
+    // A join into a repository with other members says the notice in the
+    // picker first, beneath the repository picked, naming where the
+    // records go, Cancel focused and Escape keeping; Continue sends the
+    // Place with noticed (space-57, space-88).
+    commandMock.mockClear();
+    commandMock.mockImplementation(answer);
+    await renderGroups(placeHome(), { open: false });
+    fireEvent.click(placeControl());
+    const option = () => screen.getByTestId(`space-pick-repo-${LISTED}`);
+    const notice = () => screen.getByTestId(`space-pick-notice-${KEY}`);
+    fireEvent.click(option());
+    picker = screen.getByTestId(`space-place-${KEY}`);
+    expect(picker.contains(notice())).toBe(true);
+    expect(option().closest("li")!.contains(notice())).toBe(true);
+    expect(notice().textContent).toContain("Records go to workshop/academy-spex at Second Example.");
+    expect(notice().textContent).toContain("Every session goes there whole — hidden parts and attachments included");
+    expect(notice().textContent).not.toContain("public");
+    expect(document.activeElement).toBe(within(notice()).getByRole("button", { name: "Cancel" }));
+    fireEvent.keyDown(document.activeElement!, { key: "Escape" });
+    expect(screen.queryByTestId(`space-pick-notice-${KEY}`)).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(option()));
+    expect(calls("space.place")).toHaveLength(0);
+    fireEvent.click(option());
+    fireEvent.click(within(notice()).getByRole("button", { name: "Continue" }));
+    await waitFor(() =>
+      expect(calls("space.place")).toEqual([{ repository: KEY, choice: { kind: "join", instance: SECOND, hostId: "91" }, noticed: true }]),
+    );
+    await waitFor(() => expect(screen.queryByTestId(`space-place-${KEY}`)).toBeNull());
+    cleanup();
+
+    // One whose only member is the account joins at once; where the core
+    // still owes the notice, its refusal says it beneath the repository
+    // picked instead of a refusal, and Continue sends noticed (space-57).
+    commandMock.mockClear();
+    commandMock.mockImplementation(async (type: string, fields?: Record<string, unknown>) => {
+      if (type === "space.place" && fields?.noticed !== true) {
+        throw new SpexCommandError("invalid_request", "Read the sharing notice before joining academy-spex", {
+          notice: true,
+          members: 1,
+          visibility: "private",
+          placement: SECOND,
+        });
+      }
+      return answer(type, fields);
+    });
+    await renderGroups(placeHome({}, { members: 1 }), { open: false });
+    fireEvent.click(placeControl());
+    fireEvent.click(option());
+    await waitFor(() => expect(calls("space.place")).toEqual([{ repository: KEY, choice: { kind: "join", instance: SECOND, hostId: "91" } }]));
+    await screen.findByTestId(`space-pick-notice-${KEY}`);
+    expect(within(screen.getByTestId(`space-place-${KEY}`)).queryByRole("alert")).toBeNull();
+    expect(notice().textContent).toContain("Records go to workshop/academy-spex at Second Example.");
+    fireEvent.click(within(notice()).getByRole("button", { name: "Continue" }));
+    await waitFor(() =>
+      expect(calls("space.place")[1]).toEqual({ repository: KEY, choice: { kind: "join", instance: SECOND, hostId: "91" }, noticed: true }),
+    );
+    await waitFor(() => expect(screen.queryByTestId(`space-place-${KEY}`)).toBeNull());
+    cleanup();
+
+    // A name the host reports taken is refused in the picker, the field
+    // asking for another; Place at… stands again, ready (space-88).
+    commandMock.mockClear();
+    commandMock.mockImplementation(async (type: string, fields?: Record<string, unknown>) => {
+      if (type === "space.place") throw new SpexCommandError("invalid_request", "academy-spex is taken in workshop; name another");
+      return answer(type, fields);
+    });
+    await renderGroups(placeHome(), { open: false });
+    fireEvent.click(placeControl());
+    fireEvent.click(screen.getByTestId("space-pick-group-workshop"));
+    await waitFor(() =>
+      expect(within(screen.getByTestId(`space-place-${KEY}`)).getByRole("alert").textContent).toBe("academy-spex is taken in workshop; name another"),
+    );
+    expect(document.activeElement).toBe(screen.getByTestId(`space-pick-name-${KEY}`));
+    expect(live()).toContain("academy-spex is taken in workshop");
+    expect(placeControl().textContent).toBe("Place at…");
+    expect(placeControl().disabled).toBe(false);
+    cleanup();
+
+    // A Place asked while a sync runs follows it (space-21): Place at…
+    // stands ready beside "Syncing…"; another operation holds it.
+    commandMock.mockImplementation(answer);
+    await renderGroups(placeHome({ sync: { phase: "running", op: "sync", placement: ORIGIN, step: "push", since: NOW, cancelable: true } }), { open: false });
+    expect(rowSync().textContent).toBe("Syncing…");
+    expect(placeControl().textContent).toBe("Place at…");
+    expect(placeControl().disabled).toBe(false);
+    cleanup();
+    await renderGroups(placeHome({ sync: { phase: "running", op: "check", placement: ORIGIN, step: "check", since: NOW, cancelable: true } }), { open: false });
+    expect(placeControl().textContent).toBe("Place at…");
+    expect(placeControl().disabled).toBe(true);
+  });
+
+  test("space-88: with two instances to offer it opens the choice, each named 'Also place at <display name>'", async () => {
+    await renderGroups(withThird(placeHome()), { open: false });
+    const control = placeControl();
+    // Several offered: the control's words are its name.
+    expect(control.textContent).toBe("Place at…");
+    expect(control.getAttribute("aria-label")).toBeNull();
+    expect(control.getAttribute("title")).toBeNull();
+    fireEvent.click(control);
+    expect(control.getAttribute("aria-expanded")).toBe("true");
+    // The choice stands beneath the row, named by its control, each
+    // instance by its display name — its host name before any read —
+    // named "Also place at <display name>", focus on the first.
+    const choice = screen.getByRole("group", { name: "Place at…" });
+    expect(choice.dataset.testid).toBe(`space-place-choice-${KEY}`);
+    expect(screen.getByTestId(`space-row-${KEY}`).contains(choice)).toBe(true);
+    expect(screen.queryByTestId(`space-place-${KEY}`)).toBeNull();
+    const options = within(choice).getAllByTestId(/^space-place-instance-/);
+    expect(options.map((option) => option.dataset.testid)).toEqual([`space-place-instance-${SECOND}`, `space-place-instance-${THIRD}`]);
+    expect(options.map((option) => option.textContent)).toEqual(["Second Example", "third.example"]);
+    for (const attribute of ["aria-label", "title"]) {
+      expect(options.map((option) => option.getAttribute(attribute))).toEqual(["Also place at Second Example", "Also place at third.example"]);
+    }
+    expect(document.activeElement).toBe(options[0]);
+    // Escape and Cancel close it, focus back on Place at… (DR-010 §6).
+    fireEvent.keyDown(options[0]!, { key: "Escape" });
+    expect(screen.queryByTestId(`space-place-choice-${KEY}`)).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(control));
+    fireEvent.click(control);
+    fireEvent.click(screen.getByTestId(`space-place-cancel-${KEY}`));
+    expect(screen.queryByTestId(`space-place-choice-${KEY}`)).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(control));
+
+    // The instance chosen opens its picker alone, in the choice's place
+    // (space-88, space-58).
+    fireEvent.click(control);
+    fireEvent.click(screen.getByRole("button", { name: "Also place at third.example" }));
+    expect(screen.queryByTestId(`space-place-choice-${KEY}`)).toBeNull();
+    const picker = screen.getByRole("group", { name: "Also place at third.example" });
+    expect(picker.dataset.testid).toBe(`space-place-${KEY}`);
+    expect(within(picker).getAllByTestId(/^space-pick-instance-/).map((section) => section.dataset.testid)).toEqual([`space-pick-instance-${THIRD}`]);
+    expect(within(picker).queryAllByTestId(/^space-pick-repo-/)).toHaveLength(0);
+    expect(within(picker).getAllByTestId(/^space-pick-group-/).map((option) => option.textContent)).toEqual(["jo"]);
+    fireEvent.click(within(picker).getByTestId("space-pick-group-@jo"));
+    await waitFor(() =>
+      expect(calls("space.place")).toEqual([{ repository: KEY, choice: { kind: "create", instance: THIRD, groupId: null, name: "academy" } }]),
+    );
+    expect(calls("space.sync")).toHaveLength(0);
+  });
+
+  test("space-88: none on your own group's own repository, a group's own, a local-only project (Pick a group), a clone holding only its path placement (Pick a group beside Sync, space-61, storage-35), where any held placement's members the person may not manage, nor at an instance listing a held placement's repository", async () => {
+    // Your own group's own repository, a group's own, a local-only
+    // project and a clone holding only its path placement, beside the
+    // project, at the first alone (space-88, space-4).
+    const DELTA = "jane/delta-spex";
+    const home = placeHome();
+    const [first, second] = home.instances;
+    const delta = repo({
+      key: DELTA,
+      name: "delta-spex",
+      instance: null,
+      governing: null,
+      id: null,
+      remote: "/Users/jane/backup/delta-spex.git",
+      code: "https://github.com/jane/delta.git",
+      folder: "/Users/jane/code/delta",
+      branch: BRANCH,
+      can: MAY,
+    });
+    const gamma = repo({
+      key: GAMMA,
+      name: "gamma-spex",
+      instance: null,
+      id: null,
+      remote: null,
+      code: "https://github.com/jane/gamma.git",
+      folder: "/Users/jane/code/gamma",
+      state: "local-only",
+      branch: null,
+      members: null,
+      visibility: null,
+    });
+    const acme = repo({ key: ACME, name: "acme-spex", id: "60", remote: "acme/acme-spex", code: null, folder: null, members: 3, can: MAY });
+    await renderGroups(
+      {
+        ...home,
+        own: { ...home.own, repositories: [ownRepo({ can: MAY, branch: BRANCH }), gamma, delta] },
+        instances: [
+          {
+            ...first!,
+            groups: [{ id: "3", login: null, mine: false, fullPath: "acme", name: "acme", can: NO_CAN, placed: [], repositories: [acme] }, ...first!.groups],
+          },
+          second!,
+        ],
+      },
+      { open: false },
+    );
+    expect(placeControl().getAttribute("aria-label")).toBe("Also place at Second Example");
+    for (const key of [OWN, ACME, GAMMA, DELTA]) expect(screen.queryByTestId(`space-row-place-${key}`), key).toBeNull();
+    // The local-only project picks a group (space-61).
+    expect(screen.getByTestId(`space-row-pick-${GAMMA}`).textContent).toBe("Pick a group");
+    expect(screen.queryByTestId(`space-row-sync-${GAMMA}`)).toBeNull();
+    // The clone holding only its path placement syncs it, and picks a
+    // group beside its Sync, the state's control last (space-61,
+    // storage-35); its pick offers every signed-in instance, and adds its
+    // first placement with an instance.
+    const pick = screen.getByTestId(`space-row-pick-${DELTA}`) as HTMLButtonElement;
+    expect(pick.textContent).toBe("Pick a group");
+    expect(rowSync(DELTA).textContent).toBe("Sync");
+    expect(rowSync(DELTA).disabled).toBe(false);
+    expect(pick.compareDocumentPosition(rowSync(DELTA)) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    fireEvent.click(pick);
+    expect(pick.getAttribute("aria-expanded")).toBe("true");
+    let picker = screen.getByTestId(`space-picker-${DELTA}`);
+    expect(within(picker).getAllByTestId(/^space-pick-instance-/).map((section) => section.dataset.testid)).toEqual([
+      `space-pick-instance-${ORIGIN}`,
+      `space-pick-instance-${SECOND}`,
+    ]);
+    fireEvent.keyDown(picker, { key: "Escape" });
+    expect(screen.queryByTestId(`space-picker-${DELTA}`)).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(pick));
+    fireEvent.click(pick);
+    picker = screen.getByTestId(`space-picker-${DELTA}`);
+    fireEvent.click(within(within(picker).getByTestId(`space-pick-instance-${SECOND}`)).getByTestId("space-pick-group-workshop"));
+    await waitFor(() =>
+      expect(calls("space.pick")).toEqual([{ repository: DELTA, choice: { kind: "create", instance: SECOND, groupId: "81", name: "delta" } }]),
+    );
+    expect(calls("space.place")).toHaveLength(0);
+    cleanup();
+
+    // Members the person may not manage at a placement it holds — its
+    // only one, or any one of several — offer none, whatever instance
+    // stands free (space-88, git-host-5).
+    await renderGroups(placeHome({ can: { manageMembers: false, transfer: true } }), { open: false });
+    expect(screen.queryByTestId(`space-row-place-${KEY}`)).toBeNull();
+    cleanup();
+    await renderGroups(
+      withThird(
+        placeHome({
+          placedAt: [ORIGIN, SECOND],
+          placements: [
+            placement({ can: MAY }),
+            placementState({ instance: SECOND, path: "workshop/academy-spex", id: "94", members: 2, branch: BRANCH, can: { manageMembers: false, transfer: false } }),
+          ],
+        }),
+      ),
+      { open: false },
+    );
+    expect(screen.queryByTestId(`space-row-place-${KEY}`)).toBeNull();
+    cleanup();
+
+    // An instance whose listing names the row as placed there while the
+    // row carries no line there lists a placement the clone holds — one
+    // placement both list — and is not offered (space-1, DR-128).
+    const shared = (state: GroupsState): GroupsState => ({
+      ...state,
+      instances: state.instances.map((at) =>
+        at.origin !== SECOND
+          ? at
+          : { ...at, groups: at.groups.map((group) => (group.fullPath === "workshop" ? { ...group, placed: [{ key: KEY, name: "academy-spex" }] } : group)) },
+      ),
+    });
+    await renderGroups(shared(placeHome()), { open: false });
+    expect(screen.queryByTestId(`space-row-place-${KEY}`)).toBeNull();
+    cleanup();
+    await renderGroups(shared(withThird(placeHome())), { open: false });
+    expect(placeControl().getAttribute("aria-label")).toBe("Also place at third.example");
+    cleanup();
+
+    // A placement a file names, not on this device, is no placement the
+    // clone holds there: its instance is offered beside Attach (space-88,
+    // space-87); a project placed at every signed-in instance offers none.
+    await renderGroups(twoPlacementsHome(), { open: false });
+    expect(placeControl(BETA).getAttribute("aria-label")).toBe("Also place at Second Example");
+    expect(within(lineOf(BETA, SECOND)).getByTestId("space-line-attach")).toBeTruthy();
+    expect(screen.queryByTestId(`space-row-place-${KEY}`)).toBeNull();
+  });
+
+  test("space-97, space-64: a creation the host leaves pending reads its waiting phrase on that instance's line", async () => {
+    const waiting = { step: "create" as const, group: "workshop", message: "403 Forbidden: you need at least the Maintainer role" };
+    const pending = (sync: RepositoryState["sync"]): GroupsState =>
+      placeHome({
+        sync,
+        placements: [
+          placement({ can: MAY }),
+          placementState({ instance: SECOND, path: "workshop/academy-spex", attached: false, state: "absent", waiting }),
+        ],
+      });
+    // The Place syncs the clone's other placements while its creation
+    // waits at the second, its phrase on that line with the host's words
+    // in its title, no Attach offered (space-97, space-64, space-87).
+    await renderGroups(pending(placeRunning(ORIGIN, "push")), { open: false });
+    const line = lineOf(KEY, SECOND);
+    expect(line.dataset.attached).toBe("false");
+    expect(reading(line)).toEqual({ name: "Second Example", at: "workshop/academy-spex", state: "Waiting for a member who can create it in workshop" });
+    expect(phraseOf(KEY, SECOND).getAttribute("title")).toBe(waiting.message);
+    expect(within(line).queryByTestId("space-line-attach")).toBeNull();
+    expect(reading(lineOf(KEY, ORIGIN)).state).toBe("Pushing…");
+    expect(placeControl().textContent).toBe("Placing…");
+    // The Place has run: the wait stands on its line, the clone holding
+    // no placement there, so Place at… offers the second again.
+    deliver(pending({ phase: "done", at: NOW, sent: 1, received: 0, pushed: true }));
+    await waitFor(() => expect(placeControl().textContent).toBe("Place at…"));
+    expect(reading(lineOf(KEY, SECOND)).state).toBe("Waiting for a member who can create it in workshop");
+    expect(placeControl().getAttribute("aria-label")).toBe("Also place at Second Example");
+  });
+
+  test.each(["en", "zh"] as const)("space-28: Place at… and Placing… within 14 characters (%s)", async (language) => {
+    activateLanguage(language);
+    commandMock.mockImplementation(async (type: string, fields?: Record<string, unknown>) =>
+      type === "space.place" ? new Promise(() => {}) : answer(type, fields),
+    );
+    await renderGroups(placeHome(), { open: false });
+    const control = placeControl();
+    const idle = control.textContent ?? "";
+    expect(idle).toBe(language === "en" ? "Place at…" : "放到…");
+    // Its long name is its title and accessible name (space-28).
+    const long = language === "en" ? "Also place at Second Example" : "同时放到 Second Example";
+    expect(control.getAttribute("aria-label")).toBe(long);
+    expect(control.getAttribute("title")).toBe(long);
+    fireEvent.click(control);
+    expect(screen.getByTestId(`space-place-${KEY}`).getAttribute("aria-label")).toBe(long);
+    fireEvent.click(screen.getByTestId("space-pick-group-workshop"));
+    await waitFor(() => expect(control.textContent).toBe(language === "en" ? "Placing…" : "放置中…"));
+    for (const label of [idle, control.textContent ?? ""]) expect(label.length, `"${label}"`).toBeLessThanOrEqual(14);
+    // Busy, its words are its name.
+    expect(control.getAttribute("aria-label")).toBeNull();
+    expect(control.className.split(/\s+/)).toContain("whitespace-nowrap");
+    // Below @xs the row's controls wrap beneath its name (space-28,
+    // DR-041).
+    const top = screen.getByTestId(`space-repo-${KEY}`).parentElement!;
+    for (const token of ["flex-wrap", "@xs:flex-nowrap"]) expect(top.className.split(/\s+/)).toContain(token);
   });
 });

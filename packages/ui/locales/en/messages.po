@@ -1055,6 +1055,11 @@ msgstr "also {position}"
 msgid "Also answers {positions}"
 msgstr "Also answers {positions}"
 
+#. the title and accessible name of Place at… where one instance is offered, and of each instance in its choice; {name} is the instance's display name, or its host name before any read
+#: src/components/SpacePlacementActs.tsx
+msgid "Also place at {name}"
+msgstr "Also place at {name}"
+
 #: src/components/AgentSettings.tsx
 msgid "Also sets {positions}"
 msgstr "Also sets {positions}"
@@ -1407,6 +1412,7 @@ msgstr "Can't reach the Spex core at {endpoint} — retrying every second. On a 
 #. leave the editor without changing anything
 #. leave the editor without changing anything
 #. leave the editor without changing anything
+#. leave the editor without changing anything
 #. stop the running compile
 #: src/components/AgentEditor.tsx
 #: src/components/AgentSettings.tsx
@@ -1419,6 +1425,7 @@ msgstr "Can't reach the Spex core at {endpoint} — retrying every second. On a 
 #: src/components/SpaceGroups.tsx
 #: src/components/SpaceInstance.tsx
 #: src/components/SpaceMembers.tsx
+#: src/components/SpacePlacementActs.tsx
 #: src/components/SpaceSignIn.tsx
 #: src/components/SpaceSync.tsx
 #: src/components/SpecEditor.tsx
@@ -4267,6 +4274,7 @@ msgid "Pick a folder inside {folder}"
 msgstr "Pick a folder inside {folder}"
 
 #. choose where on the Git host a project's records go
+#. choose where on the Git host a project's records go
 #: src/components/SpaceGroups.tsx
 msgid "Pick a group"
 msgstr "Pick a group"
@@ -4294,9 +4302,19 @@ msgstr "Pick folder"
 msgid "pin a value…"
 msgstr "pin a value…"
 
+#. on a project's row: opens another instance's picker to keep its records there too; its title and accessible name are "Also place at <display name>" where one instance is offered
+#: src/components/SpacePlacementActs.tsx
+msgid "Place at…"
+msgstr "Place at…"
+
 #: src/components/DraftConversation.tsx
 msgid "Places the six-line example as your first message"
 msgstr "Places the six-line example as your first message"
+
+#. the Place at… control while the placement is made and synced
+#: src/components/SpacePlacementActs.tsx
+msgid "Placing…"
+msgstr "Placing…"
 
 #. the built-in /dev playbook's intent, as its registry entry states it
 #: src/lib/playbook-intent.ts

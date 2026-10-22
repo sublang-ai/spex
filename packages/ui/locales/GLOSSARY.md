@@ -105,5 +105,6 @@ Product names and the role names Playbook defines stay as authored; everything e
 | Pick a group / Members | 选择群组 / 成员 | a spex repository's row controls |
 | Waiting for you to continue | 等待你继续 | a placement's first push waiting on the sharing notice |
 | Attach / Attaching… | 接入 / 接入中… | bring a placement another device named to this device; not 附加 or 附件, which are attachments |
+| Place at… / Also place at <instance> / Placing… | 放到… / 同时放到 <实例> / 放置中… | a project's row: keep its records at another instance too |
 | authoring (session) | 编写（会话） | a playbook being written in a draft |
 | Queue (the capture control) | 加入队列 | |

@@ -130,6 +130,28 @@ export function owesNotice(repo: RepositoryState, line: PlacementState): boolean
   return repo.own && line.lastSync === null && instancePlacements(repo)[0]?.instance !== line.instance;
 }
 
+/** The instances "Place at…" offers a row (space-88): where its clone
+ * holds a placement with an instance and the view says the person may
+ * manage the members of every one it holds with an instance
+ * (git-host-5), every signed-in instance it holds none at — a line a
+ * placement file names, not on this device, or a creation waiting there
+ * being no placement held — but one whose listing names the row as
+ * placed there while the row carries no line there: a placement it
+ * holds that instance lists too, one placement both list (space-1,
+ * DR-128). None otherwise; whether the row is a project's is the row's
+ * to say. */
+export function placeInstances(state: GroupsState, repo: RepositoryState): InstanceState[] {
+  const held = instancePlacements(repo);
+  if (held.length === 0 || !held.every((line) => line.can.manageMembers)) return [];
+  const at = new Set(held.map((line) => line.instance));
+  return signedInInstances(state).filter(
+    (instance) =>
+      !at.has(instance.origin) &&
+      (placementAt(repo, instance.origin) !== undefined ||
+        !instance.groups.some((entry) => entry.placed.some((placed) => placed.key === repo.key))),
+  );
+}
+
 /** The entry a placement stands in at the instance governing it
  * (space-78): the group the row stands under for its key placement —
  * none under your own group — and for any other, the group or namespace

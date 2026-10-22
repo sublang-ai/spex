@@ -11,13 +11,17 @@
 // ahead and behind and its last sync — its key placement's — with a line
 // per placement beneath it saying what that placement did (space-87,
 // DR-128), and carries the one control its
-// state offers — Sync, Join, Pick a group, Retry. What a control opens
-// stands in place beneath its row: the group picker, one section per
-// instance it offers (space-58), the folder a Join clones into
+// state offers — Sync, Join, Pick a group, Retry — with, on a project's,
+// "Place at…" where another signed-in instance may take its records too
+// (space-88), and "Pick a group" beside Sync where its clone holds only
+// the path placement (space-61). What a control opens stands in place
+// beneath its row: the group picker, one section per instance it offers
+// (space-58) — Place's of the instance chosen alone, after the choice of
+// them where it offers several — the folder a Join clones into
 // (space-63), and the first-push notice of a placement, where every
-// placement the sync would run owes it (space-57); a pick joining a
-// repository others may share says the same notice in the picker
-// first. Members, "Move to another group", and the way forward an
+// placement the sync would run owes it (space-57); a pick or a Place
+// joining a repository others may share says the same notice in the
+// picker first. Members, "Move to another group", and the way forward an
 // outcome leaves — Continue, the join of an unrelated history, Retry —
 // stand on each placement's line, acting on that placement at its
 // instance (space-62, space-78, space-57, space-13, space-15, DR-128).
@@ -31,10 +35,10 @@
 // page of the host, or names what stands behind the instance (space-1).
 // Every act is a command whose outcome arrives as state (space-29).
 
-import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import type { GroupsState, InstanceGroupState, InstanceState, PlacementState, RepositoryState } from "@sublang/spex-core/protocol";
 
-import { useAppStore } from "../state/store.js";
+import { useAppStore, type SpaceGroupChoice } from "../state/store.js";
 import { i18n } from "../i18n.js";
 import {
   anySignedIn,
@@ -45,6 +49,7 @@ import {
   namespaceOf,
   ownBeside,
   pickInstances,
+  signedInInstances,
 } from "../lib/instances.js";
 import type { SpexCommandError } from "../lib/client.js";
 import {
@@ -52,8 +57,10 @@ import {
   governingOfPlacement,
   heldPlacements,
   instanceNameAt,
+  instancePlacements,
   keyPlacement,
   owesNotice,
+  placeInstances,
   placementAt,
   rowPlacement,
   runnable,
@@ -77,6 +84,7 @@ import { Icon } from "./Icon.js";
 import { InlineConfirm } from "./InlineConfirm.js";
 import { AddInstance, InstanceSection } from "./SpaceInstance.js";
 import { GroupNameEditor, MembersPanel } from "./SpaceMembers.js";
+import { PlaceChoice, PlaceControl, alsoPlaceAt } from "./SpacePlacementActs.js";
 import { PlacementLines, PlacementNotice, continueLabel, sharingNotice } from "./SpacePlacements.js";
 import type { SignInFlow } from "./SpaceSignIn.js";
 import { SECONDARY, syncRefusal, type Note } from "./SpaceSurface.js";
@@ -609,7 +617,7 @@ function GroupSection({
   );
 }
 
-type Opened = "pick" | "join" | "folder" | "notice";
+type Opened = "pick" | "join" | "folder" | "notice" | "place-choice" | "place";
 
 /** One spex repository's row (space-1, space-61): the name owns the
  * slack, the code and the counts hide below @md (space-28), and the
@@ -645,19 +653,26 @@ function RepositoryRow({
   const spaceSync = useAppStore((state) => state.spaceSync);
   const spaceJoin = useAppStore((state) => state.spaceJoin);
   const spaceRefresh = useAppStore((state) => state.spaceRefresh);
+  const spacePlace = useAppStore((state) => state.spacePlace);
   const rebindProject = useAppStore((state) => state.rebindProject);
   const [opened, setOpened] = useState<Opened>();
-  const [busy, setBusy] = useState<"sync" | "join" | "retry">();
+  const [busy, setBusy] = useState<"sync" | "join" | "retry" | "place">();
   // A long command's reply is only "accepted": its control stays busy
   // until the machine's state moves, so nothing re-enables between the
   // reply and the state (DR-010 §3, space-29).
-  const [accepted, setAccepted] = useState<{ op: "sync" | "join"; key: string }>();
+  const [accepted, setAccepted] = useState<{ op: "sync" | "join" | "place"; key: string }>();
   const [error, setError] = useState<string>();
   // The placement the row's notice names, by its instance's origin
   // (space-57).
   const [noticeAt, setNoticeAt] = useState<string | null>();
+  // The instance a Place's picker is for, by its origin (space-88).
+  const [placeAt, setPlaceAt] = useState<string>();
   const controlRef = useRef<HTMLButtonElement>(null);
   const folderRef = useRef<HTMLButtonElement>(null);
+  const placeRef = useRef<HTMLButtonElement>(null);
+  const pickRef = useRef<HTMLButtonElement>(null);
+  const rowRef = useRef<HTMLButtonElement>(null);
+  const placeId = useId();
 
   const sync = repo.sync;
   const running = sync.phase === "running";
@@ -671,11 +686,15 @@ function RepositoryRow({
   const governing = governingOf(groups, repo);
   const control = rowControl(groups, group, repo, governing);
   const groupRepository = isGroupRepository(group, repo);
-  const close = (focus: "control" | "folder" = "control") => {
+  const close = (focus: "control" | "folder" | "place" | "pick" = "control") => {
     setOpened(undefined);
-    const ref = focus === "folder" ? folderRef : controlRef;
-    // Closing never strands focus (DR-010 §6).
-    setTimeout(() => ref.current?.focus(), 0);
+    const ref = { control: controlRef, folder: folderRef, place: placeRef, pick: pickRef }[focus];
+    // Closing never strands focus (DR-010 §6): a Place picked leaves
+    // "Place at…" busy, or gone, and focus on the row.
+    setTimeout(() => {
+      const target = ref.current;
+      (focus === "place" && (!target || target.disabled) ? rowRef.current : target)?.focus();
+    }, 0);
   };
 
   /** Say the sharing notice of the placement at `origin` beneath the
@@ -772,6 +791,22 @@ function RepositoryRow({
     }
   };
 
+  /** Place the project at another instance as its picker chose
+   * (space-88, space-97): accepted once the host's step and the
+   * placement's add are done, "Place at…" busy until the operation it
+   * starts has run; a refusal is the picker's to show. */
+  const place = async (choice: SpaceGroupChoice, noticed?: boolean): Promise<void> => {
+    const key = machineKey;
+    setBusy("place");
+    setError(undefined);
+    try {
+      await spacePlace(repo.key, choice, noticed);
+      setAccepted({ op: "place", key });
+    } finally {
+      setBusy(undefined);
+    }
+  };
+
   const retry = async () => {
     setBusy("retry");
     setError(undefined);
@@ -798,13 +833,33 @@ function RepositoryRow({
   const noticeFirst = runs.length > 0 && owing.length === runs.length ? owing[0] : undefined;
   const noticeLine = opened === "notice" && noticeAt !== undefined ? placementAt(repo, noticeAt) : undefined;
   const joining = busy === "join" || accepted?.op === "join" || (running && sync.op === "join");
-  // An Attach's own control reads its busy form while the sync it starts
-  // runs; Sync keeps its word, waiting (space-90).
+  // A Place's or an Attach's own control reads its busy form while the
+  // sync it starts runs; Sync keeps its word, waiting (space-88,
+  // space-90).
   const syncing =
     busy === "sync" ||
     accepted?.op === "sync" ||
-    (running && sync.op !== "join" && sync.op !== "check" && sync.op !== "attach");
+    (running && sync.op !== "join" && sync.op !== "check" && sync.op !== "attach" && sync.op !== "place");
   const readOnly = repo.state === "read-only";
+  // "Place at…" on a project's row (space-88): busy from the pick until
+  // the operation it starts has run, standing through it even once the
+  // placement it adds leaves no instance to offer; a Place asked while a
+  // sync runs follows that sync (space-21), so only another operation
+  // holds it.
+  const offered = groupRepository ? [] : placeInstances(groups, repo);
+  const placing = busy === "place" || accepted?.op === "place" || (running && sync.op === "place");
+  const showPlace = !groupRepository && (offered.length > 0 || placing);
+  const placeTo = opened === "place" ? signedInInstances(groups).find((entry) => entry.origin === placeAt) : undefined;
+  const placeOpened = (opened === "place-choice" && showPlace) || placeTo !== undefined;
+  // A clone holding only its path placement picks a group beside its
+  // Sync, the pick adding its first placement with an instance (space-61,
+  // space-88, storage-35).
+  const pickBeside =
+    control !== "pick" &&
+    !groupRepository &&
+    heldPlacements(repo).length > 0 &&
+    instancePlacements(repo).length === 0 &&
+    pickInstances(groups, repo).length > 0;
 
   let controlButton: ReactNode = null;
   const button = (
@@ -949,6 +1004,7 @@ function RepositoryRow({
           beneath it, the state's control last (space-28, DR-041). */}
       <div className="flex min-w-0 flex-wrap items-center gap-1 @xs:flex-nowrap">
         <button
+          ref={rowRef}
           type="button"
           data-testid={`space-repo-${repo.key}`}
           data-state={repo.state}
@@ -1033,7 +1089,7 @@ function RepositoryRow({
             {state}
           </span>
         </button>
-        {needsFolder || controlButton ? (
+        {needsFolder || showPlace || pickBeside || controlButton ? (
           <div className="ml-auto flex max-w-full flex-wrap items-center justify-end gap-1 @xs:shrink-0">
             {needsFolder ? (
               <button
@@ -1046,6 +1102,44 @@ function RepositoryRow({
                 onClick={() => void askFolder("folder")}
               >
                 {i18n._("Choose folder…")}
+              </button>
+            ) : null}
+            {showPlace ? (
+              <PlaceControl
+                repoKey={repo.key}
+                id={placeId}
+                buttonRef={placeRef}
+                offered={offered}
+                placing={placing}
+                expanded={placeOpened}
+                disabled={disabled || placing || (running && sync.op !== "sync")}
+                onClick={() => {
+                  if (placeOpened) {
+                    setOpened(undefined);
+                    return;
+                  }
+                  // One instance offered opens its picker; several, the
+                  // choice of them (space-88).
+                  if (offered.length === 1) {
+                    setPlaceAt(offered[0]!.origin);
+                    setOpened("place");
+                  } else {
+                    setOpened("place-choice");
+                  }
+                }}
+              />
+            ) : null}
+            {pickBeside ? (
+              <button
+                ref={pickRef}
+                type="button"
+                data-testid={`space-row-pick-${repo.key}`}
+                className={`${SECONDARY} shrink-0 whitespace-nowrap`}
+                aria-expanded={opened === "pick"}
+                disabled={disabled}
+                onClick={() => setOpened((was) => (was === "pick" ? undefined : "pick"))}
+              >
+                {i18n._({ id: "Pick a group", comment: "choose where on the Git host a project's records go" })}
               </button>
             ) : null}
             {controlButton}
@@ -1072,7 +1166,37 @@ function RepositoryRow({
         onNote={onNote}
       />
       {opened === "pick" ? (
-        <GroupPicker groups={groups} repo={repo} connected={connected} onClose={() => close()} onNote={onNote} />
+        <GroupPicker
+          groups={groups}
+          repo={repo}
+          connected={connected}
+          onClose={() => close(pickBeside ? "pick" : "control")}
+          onNote={onNote}
+        />
+      ) : null}
+      {opened === "place-choice" && showPlace ? (
+        <PlaceChoice
+          repoKey={repo.key}
+          labelledBy={placeId}
+          offered={offered}
+          connected={connected}
+          onChoose={(chosen) => {
+            setPlaceAt(chosen.origin);
+            setOpened("place");
+          }}
+          onCancel={() => close("place")}
+        />
+      ) : null}
+      {placeTo ? (
+        <GroupPicker
+          key={placeTo.origin}
+          groups={groups}
+          repo={repo}
+          place={{ instance: placeTo, send: place }}
+          connected={connected}
+          onClose={() => close("place")}
+          onNote={onNote}
+        />
       ) : null}
       {opened === "join" ? (
         <FolderEditor
@@ -1329,23 +1453,31 @@ interface PickSection {
  * shares. Picking a listed one that may have other members says the
  * sharing notice beneath it first, and joins with `noticed` only on
  * Continue (space-57). A choice names the instance of its section
- * (space-29). */
+ * (space-29). With `place`, it is "Place at…"'s picker for one instance
+ * (space-88): that instance's section alone, listing only the spex
+ * repositories whose members the view lets the person manage, its
+ * notice naming where the records go, and a pick sent as a Place — a
+ * refusal for the notice the page's read missed saying it beneath the
+ * repository picked (space-57). */
 export function GroupPicker({
   groups,
   repo,
+  place,
   connected,
   onClose,
   onNote,
 }: {
   groups: GroupsState;
   repo: RepositoryState;
+  /** The instance a Place is for, and how its pick is sent. */
+  place?: { instance: InstanceState; send(choice: SpaceGroupChoice, noticed?: boolean): Promise<void> };
   connected: boolean;
   onClose(): void;
   onNote: Note;
 }) {
   const spacePick = useAppStore((state) => state.spacePick);
   const code = repo.code;
-  const sections: PickSection[] = pickInstances(groups, repo).map((instance) => {
+  const sections: PickSection[] = (place ? [place.instance] : pickInstances(groups, repo)).map((instance) => {
     const mine = namespaceOf(instance);
     return {
       instance,
@@ -1361,9 +1493,12 @@ export function GroupPicker({
               other.code !== null &&
               sameRemote(other.code, code),
           )
-          // Its members and visibility are its placement's there
+          // Its members, visibility and rights are its placement's there
           // (space-30).
-          .map((other) => ({ group, repo: other, placement: rowPlacement(other) })),
+          .map((other) => ({ group, repo: other, placement: placementAt(other, instance.origin) ?? rowPlacement(other) }))
+          // A Place offers only those whose members the view lets the
+          // person manage (space-88).
+          .filter((listed) => !place || listed.placement?.can.manageMembers === true),
       ),
       // GroupsState names no right to create a repository, so every
       // group is offered and a refusal waits on the row (space-64).
@@ -1381,39 +1516,52 @@ export function GroupPicker({
   const pickerRef = useRef<HTMLDivElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
   const firstRef = useRef<HTMLButtonElement>(null);
+  // Where focus goes once a refused pick re-enables the picker: its
+  // controls are disabled while the pick is asked (DR-010 §6).
+  const refocus = useRef<() => void>(undefined);
   useEffect(() => {
     firstRef.current?.focus();
   }, []);
+  useLayoutEffect(() => {
+    if (busy !== undefined || !refocus.current) return;
+    const focus = refocus.current;
+    refocus.current = undefined;
+    focus();
+  }, [busy]);
+
+  const optionOf = (key: string) =>
+    pickerRef.current?.querySelector<HTMLButtonElement>(`[data-testid="space-pick-repo-${key}"]`);
 
   /** Cancel starts nothing; focus returns to the option (DR-010 §6). */
   const closeNotice = (key: string) => {
     setNotice(undefined);
-    setTimeout(() => {
-      const option = pickerRef.current?.querySelector<HTMLButtonElement>(`[data-testid="space-pick-repo-${key}"]`);
-      option?.focus();
-    }, 0);
+    setTimeout(() => optionOf(key)?.focus(), 0);
   };
 
-  const pick = async (
-    id: string,
-    choice:
-      | { kind: "join"; instance: string; hostId: string }
-      | { kind: "create"; instance: string; groupId: string | null; name: string },
-    noticed = false,
-  ) => {
+  const pick = async (id: string, choice: SpaceGroupChoice, noticed = false) => {
     setBusy(id);
     setRefusal(undefined);
     try {
-      await (noticed ? spacePick(repo.key, choice, true) : spacePick(repo.key, choice));
+      if (place) await (noticed ? place.send(choice, true) : place.send(choice));
+      else await (noticed ? spacePick(repo.key, choice, true) : spacePick(repo.key, choice));
       onClose();
     } catch (cause) {
+      // A Place refused for the notice the page's read missed says it
+      // beneath the repository picked (space-57).
+      if (place && choice.kind === "join" && !noticed && (cause as SpexCommandError).details?.notice === true) {
+        setNotice(id);
+        return;
+      }
       const message = (cause as Error).message;
       setRefusal(message);
       onNote(message);
       // A name the host refuses asks for another in place (space-58); a
       // refused join hands focus back to its option, its notice closed.
-      if (choice.kind === "create") nameRef.current?.focus();
-      else closeNotice(id);
+      if (choice.kind === "create") refocus.current = () => nameRef.current?.focus();
+      else {
+        setNotice(undefined);
+        refocus.current = () => optionOf(id)?.focus();
+      }
     } finally {
       setBusy(undefined);
     }
@@ -1425,7 +1573,7 @@ export function GroupPicker({
    * unless this device's reader has seen it for that placement
    * (space-57). */
   const join = (instance: InstanceState, other: RepositoryState) => {
-    const listed = rowPlacement(other);
+    const listed = placementAt(other, instance.origin) ?? rowPlacement(other);
     const members = listed?.members ?? null;
     if (!listed?.noticed && (members === null || members > 1)) {
       setRefusal(undefined);
@@ -1467,8 +1615,8 @@ export function GroupPicker({
     <div
       ref={pickerRef}
       role="group"
-      aria-label={i18n._("Pick a group for {name}", { name: repo.name })}
-      data-testid={`space-picker-${repo.key}`}
+      aria-label={place ? alsoPlaceAt(place.instance) : i18n._("Pick a group for {name}", { name: repo.name })}
+      data-testid={place ? `space-place-${repo.key}` : `space-picker-${repo.key}`}
       className="ml-6 flex min-w-0 flex-col gap-2 rounded border border-neutral-300 p-2 dark:border-neutral-700"
       onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
         if (event.key === "Escape") {
@@ -1530,15 +1678,29 @@ export function GroupPicker({
                       </button>
                       {notice === other.key ? (
                         <div data-testid={`space-pick-notice-${repo.key}`} className="mt-1 pl-2">
-                          <InlineConfirm
-                            question={sharingNotice(placement?.visibility ?? null)}
-                            confirmLabel={continueLabel()}
-                            disabled={disabled}
-                            onConfirm={() =>
-                              void pick(other.key, { kind: "join", instance: instance.origin, hostId: other.id! }, true)
-                            }
-                            onCancel={() => closeNotice(other.key)}
-                          />
+                          {place && placement ? (
+                            // A Place's notice names where the records go
+                            // (space-57, space-88).
+                            <PlacementNotice
+                              groups={groups}
+                              line={placement}
+                              disabled={disabled}
+                              onContinue={() =>
+                                void pick(other.key, { kind: "join", instance: instance.origin, hostId: other.id! }, true)
+                              }
+                              onCancel={() => closeNotice(other.key)}
+                            />
+                          ) : (
+                            <InlineConfirm
+                              question={sharingNotice(placement?.visibility ?? null)}
+                              confirmLabel={continueLabel()}
+                              disabled={disabled}
+                              onConfirm={() =>
+                                void pick(other.key, { kind: "join", instance: instance.origin, hostId: other.id! }, true)
+                              }
+                              onCancel={() => closeNotice(other.key)}
+                            />
+                          )}
                         </div>
                       ) : null}
                     </li>
