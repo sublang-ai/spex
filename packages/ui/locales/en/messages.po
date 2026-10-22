@@ -887,6 +887,14 @@ msgstr "Add a project first ({keys})"
 msgid "Add a spec package"
 msgstr "Add a spec package"
 
+#: src/components/ProjectPalette.tsx
+msgid "Add an existing Git repository or create a new project."
+msgstr "Add an existing Git repository or create a new project."
+
+#: src/components/ProjectPalette.tsx
+msgid "Add an existing repository instead"
+msgstr "Add an existing repository instead"
+
 #: src/components/ProjectGroup.tsx
 msgid "Add an intent to {project}"
 msgstr "Add an intent to {project}"
@@ -1570,10 +1578,6 @@ msgstr "Choose a project"
 msgid "Choose a project folder…"
 msgstr "Choose a project folder…"
 
-#: src/components/ProjectPalette.tsx
-msgid "Choose an existing Git repository, or create a new one."
-msgstr "Choose an existing Git repository, or create a new one."
-
 #. empty choice of the reasoning-effort select
 #: src/components/TuningField.tsx
 msgid "Choose effort…"
@@ -2136,6 +2140,10 @@ msgstr "decisions"
 msgid "Decisions, {count} records"
 msgstr "Decisions, {count} records"
 
+#: src/components/CaptainHome.tsx
+msgid "Define checkable specs. Deliver through playbooks."
+msgstr "Define checkable specs. Deliver through playbooks."
+
 #. confirm: delete the group on the Git host
 #. confirm: delete this session for good
 #. confirm: remove the authoring session for good
@@ -2549,10 +2557,6 @@ msgstr "Enter a model ID, take the configured value, or use the provider default
 #: src/components/DraftConversation.tsx
 msgid "Enter sends"
 msgstr "Enter sends"
-
-#: src/components/ProjectPalette.tsx
-msgid "Enter the path to an existing project"
-msgstr "Enter the path to an existing project"
 
 #: src/components/Composer.tsx
 msgid "Enter to send · Shift+Enter for a new line"
@@ -3645,6 +3649,10 @@ msgid "New project"
 msgstr "New project"
 
 #: src/components/ProjectPalette.tsx
+msgid "New project folder path (not created yet)"
+msgstr "New project folder path (not created yet)"
+
+#: src/components/ProjectPalette.tsx
 msgid "New project path"
 msgstr "New project path"
 
@@ -4192,8 +4200,8 @@ msgid "Optimize"
 msgstr "Optimize"
 
 #: src/components/ProjectPalette.tsx
-msgid "Or enter its path"
-msgstr "Or enter its path"
+msgid "Or enter an existing Git repository path"
+msgstr "Or enter an existing Git repository path"
 
 #. field of New playbook: the registry org its spec package is published under
 #: src/components/LibrarySurface.tsx
@@ -4274,6 +4282,10 @@ msgstr "Path"
 #: src/lib/environments.ts
 msgid "path {path}"
 msgstr "path {path}"
+
+#: src/components/ProjectPalette.tsx
+msgid "Path to an existing Git repository"
+msgstr "Path to an existing Git repository"
 
 #: src/components/AgentEditor.tsx
 msgid "Permission mode"
@@ -5589,6 +5601,10 @@ msgstr "spec package requests"
 msgid "Specs"
 msgstr "Specs"
 
+#: src/components/CaptainHome.tsx
+msgid "Specs clarify goals and acceptance criteria. Spex compiles natural-language playbooks into workflows that coordinate AI implementation and review, leaving traceable changes."
+msgstr "Specs clarify goals and acceptance criteria. Spex compiles natural-language playbooks into workflows that coordinate AI implementation and review, leaving traceable changes."
+
 #: src/components/SpecView.tsx
 msgid "specs/ is present but holds no spec files yet."
 msgstr "specs/ is present but holds no spec files yet."
@@ -5625,13 +5641,13 @@ msgstr "Spex keeps this device's files in {path}"
 msgid "Spex navigation"
 msgstr "Spex navigation"
 
-#: src/components/CaptainHome.tsx
-msgid "Spex organizes AI work into clear steps, review, and a traceable result."
-msgstr "Spex organizes AI work into clear steps, review, and a traceable result."
-
 #: src/components/LibrarySurface.tsx
 msgid "Spex repository shown"
 msgstr "Spex repository shown"
+
+#: src/components/ProjectPalette.tsx
+msgid "Spex will create this folder and initialize a Git repository."
+msgstr "Spex will create this folder and initialize a Git repository."
 
 #: src/lib/failure-catalogue.ts
 msgid "Squash or reset them yourself"
@@ -6303,10 +6319,6 @@ msgstr "Tuning is personal — set it in Settings"
 msgid "Turn {turn}"
 msgstr "Turn {turn}"
 
-#: src/components/CaptainHome.tsx
-msgid "Turn development tasks into reviewable changes"
-msgstr "Turn development tasks into reviewable changes"
-
 #: src/components/AgentSettings.tsx
 #: src/components/BindingEditor.tsx
 msgid "Turn off fast mode for this model."
@@ -6569,10 +6581,6 @@ msgstr "Where a project lives is recorded on this device only; this never syncs.
 #: src/lib/space.ts
 msgid "where projects live"
 msgstr "where projects live"
-
-#: src/components/ProjectPalette.tsx
-msgid "Where should the new project live?"
-msgstr "Where should the new project live?"
 
 #: src/lib/space.ts
 msgid "where you last stopped reading in each session"

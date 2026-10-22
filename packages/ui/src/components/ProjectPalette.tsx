@@ -77,6 +77,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
   const [pathDraft, setPathDraft] = useState("");
   const [newPathDraft, setNewPathDraft] = useState("");
   const [creating, setCreating] = useState(false);
+  const [manualPath, setManualPath] = useState(false);
   const [scaffold, setScaffold] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<Refusal>();
@@ -109,11 +110,12 @@ export function ProjectPalette(props: ProjectPaletteProps) {
   // goes and the add flow takes the front (projects-22).
   const empty = props.projects.length === 0;
   const welcomeAdd = empty && props.ownProjectOnly === true;
+  const hasFolderPicker = Boolean(props.onPickFolder);
 
   // The palette owns focus while open and hands it back on close.
   useEffect(() => {
     openerRef.current = document.activeElement;
-    (welcomeAdd && props.onPickFolder
+    (welcomeAdd && hasFolderPicker
       ? folderRef.current
       : empty
         ? pathRef.current
@@ -128,7 +130,10 @@ export function ProjectPalette(props: ProjectPaletteProps) {
 
   useEffect(() => {
     if (creating) newPathRef.current?.focus();
-  }, [creating]);
+    else if (manualPath) pathRef.current?.focus();
+    else if (welcomeAdd && hasFolderPicker) folderRef.current?.focus();
+    else if (welcomeAdd) pathRef.current?.focus();
+  }, [creating, manualPath, welcomeAdd, hasFolderPicker]);
 
   const rowState = useMemo(() => {
     const attention = [...props.attention.values()];
@@ -384,7 +389,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
               {i18n._("Add a local project")}
             </h2>
             <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
-              {i18n._("Choose an existing Git repository, or create a new one.")}
+              {i18n._("Add an existing Git repository or create a new project.")}
             </p>
 
             <div className="mt-5">
@@ -398,40 +403,56 @@ export function ProjectPalette(props: ProjectPaletteProps) {
                   data-testid="palette-open-folder"
                   disabled={busy}
                   onClick={openFolder}
-                  className="mt-2 flex w-full items-center gap-2 rounded-lg bg-brand-600 px-4 py-3 text-left text-sm font-medium text-white hover:bg-brand-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500 disabled:opacity-40"
+                  className="mt-2 flex w-full items-center gap-2 rounded-lg border border-neutral-300 bg-neutral-50 px-4 py-3 text-left text-sm font-medium text-neutral-900 hover:border-brand-400 hover:bg-neutral-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500 disabled:opacity-40 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100 dark:hover:bg-neutral-700"
                 >
                   <Icon name="folder" className="h-4 w-4" />
                   {i18n._("Choose a project folder…")}
                 </button>
               ) : null}
-              <label className="mt-4 block text-xs text-neutral-500 dark:text-neutral-400" htmlFor="palette-own-path">
-                {props.onPickFolder
-                  ? i18n._("Or enter its path")
-                  : i18n._("Enter the path to an existing project")}
-              </label>
-              <div className="mt-1.5 flex gap-2">
-                <input
-                  id="palette-own-path"
-                  ref={pathRef}
-                  data-testid="palette-path"
-                  aria-label={i18n._("Project path")}
-                  value={pathDraft}
-                  onChange={(event) => setPathDraft(event.target.value)}
-                  onKeyDown={pathKeydown}
-                  placeholder={i18n._("/path/to/existing-project")}
-                  className="min-w-0 flex-1 rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-brand-500 dark:border-neutral-700 dark:bg-neutral-950"
-                />
+              {props.onPickFolder && !manualPath && !creating ? (
                 <button
                   type="button"
-                  data-testid="palette-add"
-                  disabled={!pathDraft.trim() || busy}
-                  onClick={() => void runAdd(false)}
-                  title={i18n._("Register this existing repository")}
-                  className="rounded-md border border-brand-300 px-3 py-2 text-sm font-medium text-brand-700 hover:bg-brand-50 disabled:opacity-40 dark:border-brand-800 dark:text-brand-300 dark:hover:bg-brand-950"
+                  data-testid="palette-manual-path-start"
+                  onClick={() => {
+                    setCreating(false);
+                    setError(undefined);
+                    setManualPath(true);
+                  }}
+                  className="mt-3 text-left text-xs font-medium text-neutral-600 hover:text-brand-700 hover:underline dark:text-neutral-300"
                 >
-                  {i18n._({ id: "Add", comment: "register the typed path as an existing repository" })}
+                  {i18n._("Or enter an existing Git repository path")}
                 </button>
-              </div>
+              ) : null}
+              {(!props.onPickFolder || manualPath) && !creating ? (
+                <div className="mt-3">
+                  <label className="block text-xs text-neutral-500 dark:text-neutral-400" htmlFor="palette-own-path">
+                    {i18n._("Path to an existing Git repository")}
+                  </label>
+                  <div className="mt-1.5 flex gap-2">
+                    <input
+                      id="palette-own-path"
+                      ref={pathRef}
+                      data-testid="palette-path"
+                      aria-label={i18n._("Project path")}
+                      value={pathDraft}
+                      onChange={(event) => setPathDraft(event.target.value)}
+                      onKeyDown={pathKeydown}
+                      placeholder={i18n._("/path/to/existing-project")}
+                      className="min-w-0 flex-1 rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-brand-500 dark:border-neutral-700 dark:bg-neutral-950"
+                    />
+                    <button
+                      type="button"
+                      data-testid="palette-add"
+                      disabled={!pathDraft.trim() || busy}
+                      onClick={() => void runAdd(false)}
+                      title={i18n._("Register this existing repository")}
+                      className="rounded-md border border-brand-300 px-3 py-2 text-sm font-medium text-brand-700 hover:bg-brand-50 disabled:opacity-40 dark:border-brand-800 dark:text-brand-300 dark:hover:bg-brand-950"
+                    >
+                      {i18n._({ id: "Add", comment: "register the typed path as an existing repository" })}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
             </div>
 
             <div className="mt-5 border-t border-neutral-200 pt-4 dark:border-neutral-800">
@@ -442,7 +463,11 @@ export function ProjectPalette(props: ProjectPaletteProps) {
                 <button
                   type="button"
                   data-testid="palette-create-start"
-                  onClick={() => setCreating(true)}
+                  onClick={() => {
+                    setManualPath(false);
+                    setError(undefined);
+                    setCreating(true);
+                  }}
                   className="mt-2 text-left text-sm font-medium text-brand-700 hover:underline dark:text-brand-300"
                 >
                   {i18n._("Create a new project…")}
@@ -450,7 +475,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
               ) : (
                 <div className="mt-2 flex flex-col gap-2">
                   <label className="text-xs text-neutral-500 dark:text-neutral-400" htmlFor="palette-new-path">
-                    {i18n._("Where should the new project live?")}
+                    {i18n._("New project folder path (not created yet)")}
                   </label>
                   <input
                     id="palette-new-path"
@@ -468,6 +493,9 @@ export function ProjectPalette(props: ProjectPaletteProps) {
                     placeholder={i18n._("/path/to/new-project")}
                     className="rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-brand-500 dark:border-neutral-700 dark:bg-neutral-950"
                   />
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                    {i18n._("Spex will create this folder and initialize a Git repository.")}
+                  </p>
                   <label className="flex items-center gap-1.5 text-xs text-neutral-500">
                     <input type="checkbox" checked={scaffold} onChange={(event) => setScaffold(event.target.checked)} />
                     {i18n._("Scaffold specs when creating")}
@@ -481,6 +509,17 @@ export function ProjectPalette(props: ProjectPaletteProps) {
                     className="self-start rounded-md border border-neutral-300 px-3 py-2 text-sm font-medium hover:bg-neutral-100 disabled:opacity-40 dark:border-neutral-700 dark:hover:bg-neutral-800"
                   >
                     {i18n._("Create project")}
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="palette-create-back"
+                    onClick={() => {
+                      setError(undefined);
+                      setCreating(false);
+                    }}
+                    className="self-start text-xs font-medium text-neutral-600 hover:text-brand-700 hover:underline dark:text-neutral-300"
+                  >
+                    {i18n._("Add an existing repository instead")}
                   </button>
                 </div>
               )}

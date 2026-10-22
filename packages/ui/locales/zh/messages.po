@@ -887,6 +887,14 @@ msgstr "请先添加项目（{keys}）"
 msgid "Add a spec package"
 msgstr "添加规约包"
 
+#: src/components/ProjectPalette.tsx
+msgid "Add an existing Git repository or create a new project."
+msgstr "添加已有 Git 仓库，或创建全新项目。"
+
+#: src/components/ProjectPalette.tsx
+msgid "Add an existing repository instead"
+msgstr "改为添加已有仓库"
+
 #: src/components/ProjectGroup.tsx
 msgid "Add an intent to {project}"
 msgstr "向 {project} 添加意图"
@@ -1570,10 +1578,6 @@ msgstr "选择项目"
 msgid "Choose a project folder…"
 msgstr "选择项目文件夹…"
 
-#: src/components/ProjectPalette.tsx
-msgid "Choose an existing Git repository, or create a new one."
-msgstr "选择已有 Git 仓库，或创建一个新项目。"
-
 #. empty choice of the reasoning-effort select
 #: src/components/TuningField.tsx
 msgid "Choose effort…"
@@ -2136,6 +2140,10 @@ msgstr "决策记录"
 msgid "Decisions, {count} records"
 msgstr "决策记录，共 {count} 条"
 
+#: src/components/CaptainHome.tsx
+msgid "Define checkable specs. Deliver through playbooks."
+msgstr "写清规约，让 AI 按规程交付"
+
 #. confirm: delete the group on the Git host
 #. confirm: delete this session for good
 #. confirm: remove the authoring session for good
@@ -2549,10 +2557,6 @@ msgstr "输入模型 ID、采用已配置的值，或使用服务商默认值。
 #: src/components/DraftConversation.tsx
 msgid "Enter sends"
 msgstr "Enter 发送"
-
-#: src/components/ProjectPalette.tsx
-msgid "Enter the path to an existing project"
-msgstr "输入已有项目的路径"
 
 #: src/components/Composer.tsx
 msgid "Enter to send · Shift+Enter for a new line"
@@ -3645,6 +3649,10 @@ msgid "New project"
 msgstr "新项目"
 
 #: src/components/ProjectPalette.tsx
+msgid "New project folder path (not created yet)"
+msgstr "新项目文件夹路径（尚不存在）"
+
+#: src/components/ProjectPalette.tsx
 msgid "New project path"
 msgstr "新项目路径"
 
@@ -4192,8 +4200,8 @@ msgid "Optimize"
 msgstr "优化"
 
 #: src/components/ProjectPalette.tsx
-msgid "Or enter its path"
-msgstr "或输入项目路径"
+msgid "Or enter an existing Git repository path"
+msgstr "或手动输入已有 Git 仓库路径"
 
 #. field of New playbook: the registry org its spec package is published under
 #: src/components/LibrarySurface.tsx
@@ -4274,6 +4282,10 @@ msgstr "路径"
 #: src/lib/environments.ts
 msgid "path {path}"
 msgstr "路径 {path}"
+
+#: src/components/ProjectPalette.tsx
+msgid "Path to an existing Git repository"
+msgstr "已有 Git 仓库路径"
 
 #: src/components/AgentEditor.tsx
 msgid "Permission mode"
@@ -5589,6 +5601,10 @@ msgstr "规约包需求"
 msgid "Specs"
 msgstr "规约"
 
+#: src/components/CaptainHome.tsx
+msgid "Specs clarify goals and acceptance criteria. Spex compiles natural-language playbooks into workflows that coordinate AI implementation and review, leaving traceable changes."
+msgstr "用规约明确目标与验收标准；Spex 将自然语言规程编译为执行流程，编排 AI 实现与复核，并留下可追溯的改动。"
+
 #: src/components/SpecView.tsx
 msgid "specs/ is present but holds no spec files yet."
 msgstr "specs/ 已存在，但还没有规约文件。"
@@ -5625,13 +5641,13 @@ msgstr "Spex 将此设备的文件保存在 {path}"
 msgid "Spex navigation"
 msgstr "Spex 导航"
 
-#: src/components/CaptainHome.tsx
-msgid "Spex organizes AI work into clear steps, review, and a traceable result."
-msgstr "Spex 用明确步骤组织 AI 执行与复核，并留下可追溯的结果。"
-
 #: src/components/LibrarySurface.tsx
 msgid "Spex repository shown"
 msgstr "显示的 spex 仓库"
+
+#: src/components/ProjectPalette.tsx
+msgid "Spex will create this folder and initialize a Git repository."
+msgstr "Spex 会创建此文件夹并初始化 Git 仓库。"
 
 #: src/lib/failure-catalogue.ts
 msgid "Squash or reset them yourself"
@@ -6303,10 +6319,6 @@ msgstr "调优属于个人设置 — 请在“设置”中调整"
 msgid "Turn {turn}"
 msgstr "第 {turn} 轮"
 
-#: src/components/CaptainHome.tsx
-msgid "Turn development tasks into reviewable changes"
-msgstr "把开发任务变成可检查的改动"
-
 #: src/components/AgentSettings.tsx
 #: src/components/BindingEditor.tsx
 msgid "Turn off fast mode for this model."
@@ -6569,10 +6581,6 @@ msgstr "项目所在位置只记录在本设备；从不同步。"
 #: src/lib/space.ts
 msgid "where projects live"
 msgstr "项目所在位置"
-
-#: src/components/ProjectPalette.tsx
-msgid "Where should the new project live?"
-msgstr "新项目要创建在哪里？"
 
 #: src/lib/space.ts
 msgid "where you last stopped reading in each session"

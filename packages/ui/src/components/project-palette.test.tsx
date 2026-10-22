@@ -185,7 +185,7 @@ describe("projects-22: with no project, the palette is an add flow", () => {
     expect(screen.queryByTestId("palette-academy")).toBeNull();
   });
 
-  test("desktop own-project entry makes folder choice primary and focuses it", async () => {
+  test("desktop own-project entry exposes a neutral folder button and hides manual path", async () => {
     useAppStore.setState({ space: undefined });
     const onPickFolder = vi.fn(async () => "/tmp/existing");
     const onAddPath = vi.fn(async () => PROJECTS[0]);
@@ -193,11 +193,28 @@ describe("projects-22: with no project, the palette is an add flow", () => {
     const folder = screen.getByTestId("palette-open-folder");
     expect(document.activeElement).toBe(folder);
     expect(folder.textContent).toContain("Choose a project folder");
-    expect(screen.getByText("Or enter its path")).toBeTruthy();
+    expect(folder.className).toContain("border-neutral-300");
+    expect(folder.className).not.toContain("bg-brand-600");
+    expect(screen.queryByTestId("palette-path")).toBeNull();
+    expect(screen.getByTestId("palette-manual-path-start")).toBeTruthy();
     expect(screen.queryByTestId("palette-create")).toBeNull();
     fireEvent.click(folder);
     await vi.waitFor(() => expect(onAddPath).toHaveBeenCalledWith("/tmp/existing"));
     expect(onPick).toHaveBeenCalledWith(PROJECTS[0].id);
+  });
+
+  test("manual existing path and new-folder path are separate choices", () => {
+    renderPalette({ ...EMPTY, ownProjectOnly: true, onPickFolder: vi.fn(async () => null) });
+    fireEvent.click(screen.getByTestId("palette-manual-path-start"));
+    expect(document.activeElement).toBe(screen.getByTestId("palette-path"));
+    expect(screen.getByText("Path to an existing Git repository")).toBeTruthy();
+    fireEvent.click(screen.getByTestId("palette-create-start"));
+    expect(screen.queryByTestId("palette-path")).toBeNull();
+    expect(screen.getByText("New project folder path (not created yet)")).toBeTruthy();
+    expect(screen.getByText("Spex will create this folder and initialize a Git repository.")).toBeTruthy();
+    fireEvent.click(screen.getByTestId("palette-create-back"));
+    expect(screen.queryByTestId("palette-new-path")).toBeNull();
+    expect(document.activeElement).toBe(screen.getByTestId("palette-open-folder"));
   });
 
   test("new project expands its own path and keeps existing-path Add separate", async () => {

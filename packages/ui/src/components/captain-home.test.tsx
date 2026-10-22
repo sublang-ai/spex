@@ -183,7 +183,13 @@ describe("RUN-29: captain home structure and one-motion start", () => {
       readiness: [{ adapter: "claude", ready: false, requirement: "sign in", usedBy: ["captain"], fastModeSupported: true, subagentModelSupported: true }],
     });
     expect(screen.getByTestId("welcome-home")).toBeTruthy();
-    expect(screen.getByText("Turn development tasks into reviewable changes")).toBeTruthy();
+    expect(screen.getByText("Define checkable specs. Deliver through playbooks.")).toBeTruthy();
+    expect(screen.getByText(/Specs clarify goals and acceptance criteria/)).toBeTruthy();
+    const primary = screen.getByTestId("home-add-project");
+    const academy = screen.getByTestId("home-academy");
+    expect(primary.className).toContain("bg-brand-600");
+    expect(academy.className).toContain("border-neutral-300");
+    expect(primary.compareDocumentPosition(academy) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.getByTestId("home-academy").textContent).toContain("Academy example project");
     expect(screen.getByText(/does not play a recorded task yet/)).toBeTruthy();
     expect(screen.queryByTestId("start-composer")).toBeNull();

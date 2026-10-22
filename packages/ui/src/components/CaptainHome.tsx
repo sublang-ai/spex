@@ -274,32 +274,32 @@ export function CaptainHome(props: CaptainHomeProps) {
             Spex
           </span>
           <h1 className="text-3xl font-semibold leading-tight tracking-tight text-neutral-900 dark:text-neutral-100 sm:text-4xl">
-            {i18n._("Turn development tasks into reviewable changes")}
+            {i18n._("Define checkable specs. Deliver through playbooks.")}
           </h1>
           <p className="mt-4 max-w-lg text-base leading-relaxed text-neutral-600 dark:text-neutral-300">
             {i18n._(
-              "Spex organizes AI work into clear steps, review, and a traceable result.",
+              "Specs clarify goals and acceptance criteria. Spex compiles natural-language playbooks into workflows that coordinate AI implementation and review, leaving traceable changes.",
             )}
           </p>
           <div className="mt-9 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
             <button
               type="button"
+              data-testid="home-add-project"
+              onClick={props.onOpenOwnProject ?? props.onOpenPalette}
+              className="rounded-lg bg-brand-600 px-5 py-3 text-sm font-semibold text-white hover:bg-brand-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500"
+            >
+              {i18n._("Add a local project")}
+            </button>
+            <button
+              type="button"
               data-testid="home-academy"
               disabled={seeding || !connected}
               onClick={() => void runAcademy()}
-              className="rounded-lg bg-brand-600 px-5 py-3 text-sm font-semibold text-white hover:bg-brand-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500 disabled:opacity-40"
+              className="rounded-lg border border-neutral-300 px-5 py-3 text-sm font-medium text-neutral-700 hover:bg-neutral-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500 disabled:opacity-40 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800"
             >
               {seeding
                 ? i18n._("Seeding…")
                 : i18n._("Open the Academy example project")}
-            </button>
-            <button
-              type="button"
-              data-testid="home-add-project"
-              onClick={props.onOpenOwnProject ?? props.onOpenPalette}
-              className="rounded-lg border border-neutral-300 px-5 py-3 text-sm font-medium text-neutral-700 hover:bg-neutral-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800"
-            >
-              {i18n._("Add a local project")}
             </button>
           </div>
           <p className="mt-4 text-xs leading-relaxed text-neutral-500 dark:text-neutral-400">
