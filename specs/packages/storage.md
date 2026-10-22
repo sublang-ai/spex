@@ -397,7 +397,15 @@ When a home writer — the core or a mutating storage Git command — takes the 
 - A writer whose identity is unavailable refuses before inspecting the lease, naming the identity file and the reason, and never publishes `os.hostname()`.
 - The core, once published, reads a `.lock/owner.json` of the former layout [[storage-9](#storage-9)] by steps 3 and 4: an owner of another machine, an unverifiable one, a live one, or one whose probe answers neither way refuses and retires this writer's lease; a dead owner of this machine, or a record naming no `pid` and `hostname`, is left for the migration.
 
+### storage-48
+
+When a session read completes after its clone's location has changed [[storage-35](#storage-35)] [[space-60](space.md#space-60)], the store shall discard the retired location's result without changing the session's current association, indexed history, diagnostics or exclusion from Sync [[storage-17](#storage-17)].
+
 ## Verification
+
+### storage-49
+
+When the storage integration suite moves a real clone while its session reads are suspended, it shall verify that delayed successes and old-path failures leave every session associated with the moved clone, preserve the stored bytes, and leave valid session families eligible for the next Save [[storage-48](#storage-48)].
 
 ### storage-15
 

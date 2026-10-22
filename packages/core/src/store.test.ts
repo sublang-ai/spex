@@ -4,16 +4,17 @@
 import { test } from "node:test";
 import { readSessionReplay, writeSessionReplay } from "./testing/session-storage.js";
 import assert from "node:assert/strict";
-import { appendFileSync, chmodSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { hostname, tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 
 import Database from "better-sqlite3";
 import { projectCaptainSessionStructure, type SessionExecutionProjection, type SessionFreshBoundary } from "@sublang/playbook/session-store";
 
 import { StateRootHeldError, Store } from "./store.js";
+import { prepareStorageGitFiles } from "./storage-git.js";
 import { DraftChangedError, DraftStore, legacyInstance, type StoredDraft } from "./drafts.js";
 import { StorageFormatError } from "./app-storage.js";
 import { ownConfigPath } from "./config.js";
@@ -59,10 +60,10 @@ const execution: SessionExecutionProjection = {
   players: [{ id: "dev.coder", adapter: "codex", model: { kind: "provider-default" }, effort: { kind: "provider-default" }, permissions: {} }],
   catalog: { code: { id: "code", from: "@sublang/playbook/code/registry", manifestCommand: "code", command: "code", intent: "Implement a change", artifactSchema: 3, requiredRoleIds: ["coder"], concurrentRoleSets: [], roles: { coder: { playerId: "dev.coder", model: { kind: "provider-default" }, effort: { kind: "provider-default" } } }, options: {} } },
 };
-async function sharedSession(store: Store) {
+async function sharedSession(store: Store, sessionId = SESSION) {
   const project = store.registerProject(PROJECT_PATH, "proj", 1000);
   const shared = store.sessionStore(project.id); await shared.prepare();
-  const lease = await shared.acquire(SESSION);
+  const lease = await shared.acquire(sessionId);
   const structure = projectCaptainSessionStructure(execution);
   const captainId = "71000000-0000-4000-8000-000000000007";
   const ledger = { schemaVersion: 1, revision: 0, boundaries: [], logicalOperations: [] };
@@ -152,6 +153,141 @@ test("liveness comes from the host while shared recovery survives restart", asyn
   await reopened.refreshSession(SESSION);
   assert.deepEqual(readFileSync(join(sessionsOf(dir), `${SESSION}.json`)), before);
   reopened.close();
+});
+
+for (const scenario of ["old-path failure", "delayed success", "old directory scan"] as const) {
+  test(`storage-48: relocation fences a session refresh after ${scenario}`, async (t) => {
+    const dir = tempRoot();
+    const store = new Store({ machineIdentity, dir, own: "tester" });
+    t.after(() => store.close());
+    const ids = [SESSION, "71000000-0000-4000-8000-000000000002"];
+    for (const id of ids) {
+      const lease = await sharedSession(store, id);
+      await lease.release();
+    }
+    await store.initializeSessions();
+    const from = store.sessionRepository(SESSION)!;
+    const repository = store.repository(from)!;
+    const oldDirectory = repository.dir;
+    const real = repository.store;
+    const saved = new Map<string, Buffer>();
+    const collect = (directory: string, prefix = "") => {
+      for (const entry of readdirSync(directory, { withFileTypes: true })) {
+        const path = prefix ? `${prefix}/${entry.name}` : entry.name;
+        if (entry.isDirectory()) {
+          if (ids.some((id) => path === `${id}.chunks`)) collect(join(directory, entry.name), path);
+        } else if (ids.some((id) => path === `${id}.json` || path === `${id}.replay.json` || path.startsWith(`${id}.chunks/`))) {
+          saved.set(path, readFileSync(join(directory, entry.name)));
+        }
+      }
+    };
+    collect(repository.sessionsDir);
+    let resume!: () => void;
+    let entered!: () => void;
+    const gate = new Promise<void>((resolve) => { resume = resolve; });
+    const waiting = new Promise<void>((resolve) => { entered = resolve; });
+    let oldPathFailed = false;
+    repository.store = {
+      ...real,
+      async validate(id: string) {
+        if (id !== SESSION) return real.validate(id);
+        if (scenario === "delayed success") {
+          const result = await real.validate(id);
+          entered();
+          await gate;
+          return result;
+        }
+        entered();
+        await gate;
+        try { return await real.validate(id); }
+        catch (error) {
+          oldPathFailed = true;
+          throw error;
+        }
+      },
+    };
+    const pending = scenario === "old directory scan"
+      ? store.adoptForeignSessions(from) : store.refreshSession(SESSION, false);
+    await waiting;
+    const to = "@spex.pub/acme/proj-spex";
+    const destination = join(dir, "workspace", ...to.split("/"));
+    try {
+      mkdirSync(dirname(destination), { recursive: true });
+      renameSync(oldDirectory, destination);
+      store.moveRepositories([{ from, to }]);
+    } finally { resume(); }
+    await pending;
+    if (scenario !== "delayed success") assert.equal(oldPathFailed, true, "the suspended real reader fails at its retired path");
+    assert.equal(existsSync(oldDirectory), false);
+    for (const [path, bytes] of saved) assert.deepEqual(readFileSync(join(destination, "sessions", path)), bytes, `relocation preserves ${path}`);
+    const diagnostics = store.sessionDiagnostics();
+    const excluded = store.untrackedSessionPaths(to);
+    prepareStorageGitFiles(destination, excluded);
+    execFileSync("git", ["-C", destination, "add", "-A", "--", "."]);
+    const staged = execFileSync("git", ["-C", destination, "ls-files", "-z", "--", "sessions"], { encoding: "utf8" }).split("\0").filter(Boolean);
+    assert.deepEqual({
+      diagnostics,
+      locations: ids.map((id) => store.sessionRepository(id)),
+      projects: ids.map((id) => store.describeSession(id)?.projectId),
+      excluded,
+      portableFiles: [...saved.keys()].filter((path) => !staged.includes(`sessions/${path}`)),
+    }, {
+      diagnostics: [],
+      locations: ids.map(() => to),
+      projects: ids.map(() => to),
+      excluded: [],
+      portableFiles: [],
+    }, "an old read cannot reassign sessions or hide their valid families from Save");
+    for (const id of ids) assert.equal((await store.sessionStore(to).validate(id)).integrityValid, true);
+  });
+}
+
+test("storage-48: relocation fences a delayed old lease observation", async (t) => {
+  const dir = tempRoot();
+  const store = new Store({ machineIdentity, dir, own: "tester" });
+  t.after(() => store.close());
+  const initial = await sharedSession(store);
+  await initial.release();
+  await store.initializeSessions();
+  const from = store.sessionRepository(SESSION)!;
+  const repository = store.repository(from)!;
+  const real = repository.store;
+  const root = readFileSync(join(repository.sessionsDir, `${SESSION}.json`));
+  const holder = await real.acquireManagement(SESSION);
+  t.after(() => holder.release());
+  let resume!: () => void;
+  let entered!: () => void;
+  const gate = new Promise<void>((resolve) => { resume = resolve; });
+  const waiting = new Promise<void>((resolve) => { entered = resolve; });
+  let observed: string | undefined;
+  repository.store = {
+    ...real,
+    async readLeaseState(id: string) {
+      const result = await real.readLeaseState(id);
+      observed = result;
+      entered();
+      await gate;
+      return result;
+    },
+  };
+  const pending = store.refreshSessionOwnership(SESSION);
+  await waiting;
+  const to = "@spex.pub/acme/proj-spex";
+  const destination = join(dir, "workspace", ...to.split("/"));
+  try {
+    await holder.release();
+    mkdirSync(dirname(destination), { recursive: true });
+    renameSync(repository.dir, destination);
+    store.moveRepositories([{ from, to }]);
+  } finally { resume(); }
+  await pending;
+  assert.equal(observed, "active", "the delayed result really observed the former owner");
+  assert.equal(await store.sessionStore(to).readLeaseState(SESSION), "idle");
+  assert.equal(store.sessionRepository(SESSION), to);
+  assert.equal(store.describeSession(SESSION)?.projectId, to);
+  assert.equal(store.describeSession(SESSION)?.externalWriter, undefined, "retired ownership cannot replace the current idle observation");
+  assert.deepEqual(store.sessionDiagnostics(), []);
+  assert.deepEqual(readFileSync(join(destination, "sessions", `${SESSION}.json`)), root);
 });
 
 test("usage totals aggregate per session", () => {
