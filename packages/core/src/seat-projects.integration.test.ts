@@ -10,17 +10,22 @@
 // credential leaves the records readable, naming the host, one whose
 // token will not read says so, and an ssh remote's failure shows as it
 // is; a join again after `credential.set` clones into the same folder,
-// and a folder allocated before is reused.
+// and a folder allocated before is reused. The seat account's own Git
+// configuration names the app's helper in its member mode, so a push an
+// agent makes from the work tree outside the app carries the member's
+// token to its host and none to any other (core-service-125).
 
 import { test, type TestContext } from "node:test";
 import assert from "node:assert/strict";
+import { execFile, execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { isAbsolute, join, relative } from "node:path";
 import { codeCredentialsPath } from "./code-credentials.js";
-import { GIT_CREDENTIAL_FILE_ENV } from "./git-credential.js";
+import { GIT_CREDENTIAL_FILE_ENV, gitCredentialHelperPath } from "./git-credential.js";
 import { Home } from "./home.js";
+import { seatGitConfigPath } from "./seat-git.js";
 import { SpaceGit, type GitRunOptions } from "./space-git.js";
-import { startGitHttpHost } from "./testing/git-http-host.js";
+import { startGitHttpHost, type GitHttpHost } from "./testing/git-http-host.js";
 import { createSpaceHarness, hostFolder, hostKey, repositoryOf, stringsOf, OWN } from "./testing/space-harness.js";
 
 const fixture = createSpaceHarness();
@@ -33,7 +38,7 @@ const TOKEN = "glpat-member-own-token-5e1f";
 
 /** A code host that is no instance: Git's smart-HTTP backend serving one
  * repository of one commit to the member's username with their token. */
-async function codeHost(t: TestContext): Promise<{ url: string; root: string; remote: string; host: string; bare: string; head: string }> {
+async function codeHost(t: TestContext): Promise<{ url: string; root: string; remote: string; host: string; bare: string; head: string; server: GitHttpHost }> {
   const root = mkdtempSync(join(scratch, "code-host-"));
   const work = gitFolder("code-work");
   writeFileSync(join(work, "README.md"), "the project's code\n");
@@ -43,7 +48,7 @@ async function codeHost(t: TestContext): Promise<{ url: string; root: string; re
   git(root, "clone", "-q", "--bare", work, bare);
   const server = await startGitHttpHost({ root, username: USERNAME, password: TOKEN });
   t.after(() => server.close());
-  return { url: server.url, root, remote: `${server.url}/code.git`, host: new URL(server.url).host, bare, head: git(bare, "rev-parse", "HEAD") };
+  return { url: server.url, root, remote: `${server.url}/code.git`, host: new URL(server.url).host, bare, head: git(bare, "rev-parse", "HEAD"), server };
 }
 
 /** The credential handed to a Git child, observed without replacing its
@@ -327,4 +332,158 @@ test("git-host-9, storage-44: on a seat a spex repository's remote the reader na
   assert.equal(git(join(code.root, "records.git"), "rev-parse", "spex"), git(clone, "rev-parse", "spex"));
   assert.ok(!readFileSync(join(clone, ".git", "config"), "utf8").includes(TOKEN));
   assert.deepEqual(home.client.messages.flatMap(stringsOf).filter((text) => text.includes(TOKEN)), [], "no message carries the token");
+});
+
+/** The core's environment on a seat account's home: Git configured
+ * through the account's own global file alone, no identity by default
+ * (space-32), the device's system file left out. */
+function accountCoreEnv(account: string, host: { url: string }): NodeJS.ProcessEnv {
+  return {
+    PATH: process.env.PATH ?? "",
+    HOME: account,
+    GIT_CONFIG_NOSYSTEM: "1",
+    GIT_CONFIG_COUNT: "1",
+    GIT_CONFIG_KEY_0: "user.useConfigOnly",
+    GIT_CONFIG_VALUE_0: "true",
+    SPEX_HOST_URL: host.url,
+  };
+}
+
+/** Git as an agent on the seat runs it, outside the app: the account's
+ * HOME, no helper or setting in the environment, never a prompt. A child
+ * awaited, never a synchronous one, so the Git HTTP host in this process
+ * answers it. */
+function asAccount(account: string, cwd: string, ...args: string[]): Promise<{ status: number | null; stdout: string; stderr: string }> {
+  return new Promise((resolve, reject) => {
+    execFile("git", ["-C", cwd, ...args], {
+      encoding: "utf8",
+      env: { PATH: process.env.PATH ?? "", HOME: account, GIT_CONFIG_NOSYSTEM: "1", GIT_TERMINAL_PROMPT: "0", LC_ALL: "C" },
+    }, (error, stdout, stderr) => {
+      if (error && typeof error.code !== "number") return reject(error);
+      resolve({ status: error ? error.code as number : 0, stdout, stderr });
+    });
+  });
+}
+
+/** Every file under `dir` but those `skipped` and Git's object store. */
+function filesUnder(dir: string, skipped: readonly string[]): string[] {
+  const files: string[] = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const path = join(dir, entry.name);
+    if (skipped.includes(path) || entry.name === "objects" && dir.endsWith(".git")) continue;
+    if (entry.isDirectory()) files.push(...filesUnder(path, skipped));
+    else if (entry.isFile()) files.push(path);
+  }
+  return files;
+}
+
+test("core-service-127, core-service-125, git-host-9, storage-44: on a seat the account's own Git configuration names the app's helper in its member mode, included once across restarts; a push outside the app from the project's work tree carries the member's token to its host and none to a host without one", async (t) => {
+  const code = await codeHost(t);
+  // A host taking the same credential, for which the member placed none.
+  const elsewhere = await codeHost(t);
+  const host = await startHost();
+  const records = host.script.addRepository({ group: "acme", name: "alpha-spex", project: { format: 1, name: "alpha", remote: code.remote } });
+  const key = hostKey(host, "acme/alpha-spex");
+  const account = mkdtempSync(join(scratch, "seat-account-"));
+  const seat = { host, project: false, extra: { seat: SEAT, env: accountCoreEnv(account, host), home: account } } as const;
+  // Every line the core logs, kept to look for the token in.
+  const logged: string[] = [];
+  for (const name of ["log", "info", "warn", "error"] as const) {
+    const original = console[name].bind(console);
+    t.mock.method(console, name, (...args: unknown[]) => {
+      logged.push(args.map(String).join(" "));
+      original(...args);
+    });
+  }
+
+  const first = await startHome("seat-pushes", seat);
+  t.after(() => first.stop());
+  // The account's global configuration includes the core's own file,
+  // owner-only, naming the helper in its member mode over the member's
+  // store on the app's runtime (core-service-125, git-host-9).
+  const include = seatGitConfigPath(account);
+  const includes = async (): Promise<string[]> => (await asAccount(account, account, "config", "--global", "--get-all", "include.path")).stdout.split("\n").filter(Boolean);
+  const helpers = async (): Promise<string[]> => (await asAccount(account, account, "config", "--file", include, "--get-all", "credential.helper")).stdout.split("\n").filter(Boolean);
+  const helper = `!"${process.execPath}" "${gitCredentialHelperPath()}" --member "${codeCredentialsPath(first.dataDir)}"`;
+  assert.deepEqual(await includes(), [include]);
+  assert.equal(statSync(include).mode & 0o777, 0o600);
+  assert.deepEqual(await helpers(), [helper]);
+
+  // The member's token, then the project the seat allocates and clones.
+  await signIn(first, host);
+  await first.client.expectOk("credential.set", { kind: "host", name: code.host, values: { token: TOKEN, username: USERNAME } });
+  const from = first.client.mark();
+  await first.client.expectOk("space.join", { instance: host.url, hostId: records.id });
+  const joined = await first.client.waitRepository(from, key, (repository) => repository.folder !== null || repository.sync.phase === "stopped", 30_000);
+  const folder = allocated(first.dataDir, host, "acme", "alpha-spex");
+  assert.equal(joined.folder, folder, JSON.stringify(joined.sync));
+
+  // An agent's commit, pushed outside the app: the one helper Git asks
+  // is the include's, and the host takes the member's token through it.
+  writeFileSync(join(folder, "CHANGE.md"), "an agent's change\n");
+  git(folder, "add", "CHANGE.md");
+  git(folder, "-c", "commit.gpgsign=false", "commit", "-q", "-m", "an agent's change");
+  const head = git(folder, "rev-parse", "HEAD");
+  assert.equal((await asAccount(account, folder, "config", "--show-origin", "--get-all", "credential.helper")).stdout.trim(), `file:${include}\t${helper}`);
+  const pushed = await asAccount(account, folder, "push", "origin", "HEAD");
+  assert.equal(pushed.status, 0, pushed.stderr);
+  assert.equal(git(code.bare, "rev-parse", "HEAD"), head, "the push reached the member's host");
+
+  // The same push to a host without the member's token takes no
+  // credential from the helper, and the host refuses it.
+  const denied = await asAccount(account, folder, "push", elsewhere.remote, "HEAD:refs/heads/pushed");
+  assert.notEqual(denied.status, 0, denied.stderr);
+  assert.ok(elsewhere.server.refused > 0, "the host was asked");
+  assert.equal(elsewhere.server.credentialed, 0, "no request to the host carried a credential");
+  assert.equal(git(elsewhere.bare, "for-each-ref", "refs/heads/pushed"), "", "nothing reached the other host");
+
+  // The helper itself: the member's token for an http(s) host they placed
+  // it for, the host's default port as the store leaves it out; nothing
+  // for another host or protocol, for `store` and `erase`, or from a store
+  // that will not read or an entry that is malformed (storage-44).
+  await first.client.expectOk("credential.set", { kind: "host", name: "code.example.test", values: { token: TOKEN } });
+  const ask = (request: string, operation = "get", store = codeCredentialsPath(first.dataDir)): string =>
+    execFileSync(process.execPath, [gitCredentialHelperPath(), "--member", store, operation], { input: `${request}\n\n`, encoding: "utf8", env: { PATH: process.env.PATH ?? "", HOME: account } });
+  assert.equal(ask(`protocol=http\nhost=${code.host}`), `username=${USERNAME}\npassword=${TOKEN}\n\n`);
+  assert.equal(ask("protocol=https\nhost=Code.Example.Test:443\npath=acme/code.git"), `username=token\npassword=${TOKEN}\n\n`);
+  assert.equal(ask("protocol=http\nhost=code.example.test:443"), "");
+  assert.equal(ask(`protocol=http\nhost=${elsewhere.host}`), "");
+  assert.equal(ask(`protocol=ssh\nhost=${code.host}`), "");
+  assert.equal(ask(`protocol=http\nhost=${code.host}`, "store"), "");
+  assert.equal(ask(`protocol=http\nhost=${code.host}`, "erase"), "");
+  const malformed = join(account, "malformed.yaml");
+  writeFileSync(malformed, `format: 1\nhosts:\n  "${code.host}":\n    token: 5\nagents: {}\n`, { mode: 0o600 });
+  assert.equal(ask(`protocol=http\nhost=${code.host}`, "get", malformed), "");
+  writeFileSync(malformed, `format: 2\nhosts:\n  "${code.host}":\n    token: ${TOKEN}\nagents: {}\n`, { mode: 0o600 });
+  assert.equal(ask(`protocol=http\nhost=${code.host}`, "get", malformed), "");
+  assert.equal(ask(`protocol=http\nhost=${code.host}`, "get", join(account, "absent.yaml")), "");
+
+  // A restart includes the file still once, naming the same helper.
+  await first.stop();
+  const second = await startHome("seat-pushes-again", { ...seat, dataDir: first.dataDir });
+  t.after(() => second.stop());
+  assert.deepEqual(await includes(), [include], "a restart adds no second include");
+  assert.deepEqual(await helpers(), [helper]);
+
+  // The token enters no Git configuration, no remote URL, no other file
+  // of the account or the home, no log and no message (git-host-9,
+  // storage-44).
+  assert.equal(git(folder, "remote", "get-url", "origin"), code.remote);
+  const written = [...filesUnder(account, [malformed]), ...filesUnder(first.dataDir, [codeCredentialsPath(first.dataDir)])];
+  assert.ok(written.includes(join(account, ".gitconfig")) && written.includes(include) && written.includes(join(folder, ".git", "config")));
+  assert.deepEqual(written.filter((file) => readFileSync(file).includes(TOKEN)), [], "no file but the member's store holds the token");
+  assert.deepEqual([pushed, denied].flatMap((run) => [run.stdout, run.stderr]).filter((text) => text.includes(TOKEN)), []);
+  assert.deepEqual(logged.filter((line) => line.includes(TOKEN)), [], "no log line carries the token");
+  assert.deepEqual([...first.client.messages, ...second.client.messages].flatMap(stringsOf).filter((text) => text.includes(TOKEN)), [], "no message carries the token");
+});
+
+test("core-service-125: off a seat the core writes no Git configuration of the account's", async (t) => {
+  const host = await startHost();
+  const account = mkdtempSync(join(scratch, "own-account-"));
+  const home = await startHome("own-pushes", { host, project: false, extra: { env: accountCoreEnv(account, host), home: account } });
+  t.after(() => home.stop());
+  await signIn(home, host);
+  assert.equal(existsSync(join(account, ".gitconfig")), false, "no global configuration is written");
+  assert.equal(existsSync(seatGitConfigPath(account)), false, "no include file is written");
+  assert.equal((await asAccount(account, account, "config", "--global", "--get-all", "include.path")).stdout, "");
 });
