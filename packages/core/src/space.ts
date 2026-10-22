@@ -1807,7 +1807,14 @@ class RepositorySync {
    * was read; whether it was dropped.
    */
   dropPlacement(placement: Placement): boolean {
-    if (!this.stillReads(placement)) return false;
+    return this.dropOrStop(placement) === undefined;
+  }
+
+  /** Drop a placement as `dropPlacement` does, or say why it was not
+   * dropped, as its Check's stop (space-15): changed since it was read,
+   * or Git's own refusal in its words; nothing written either way. */
+  dropOrStop(placement: Placement): SpaceStopped | undefined {
+    if (!this.stillReads(placement)) return movedMeanwhile(this.key);
     const first = this.placementsNow()[0]?.name === placement.name;
     // Git removes the section, the refs fetched under the remote's name
     // and the upstream configuration naming it; a removal Git refuses
@@ -1815,14 +1822,14 @@ class RepositorySync {
     const run = this.git.runSync(["remote", "remove", placement.name]);
     if (run.code !== 0) {
       console.error(`spex: the remote ${placement.name} of ${this.key} stands: ${lastLines(run.stderr)}`);
-      return false;
+      return new SpaceStopped("check", { cause: "git", message: lastLines(run.stderr), guidance: retryGuidance(), retry: true }, false);
     }
     if (this.upstreamName === placement.name) this.upstreamName = null;
     this.host.store.dropPlacementPrefs(this.key, placement.name, first);
     this.runs.delete(placement.name);
     this.agreedRead.delete(placement.name);
     this.settleFacts();
-    return true;
+    return undefined;
   }
 
   /** The clone's placement file at an instance (storage-36), written by
@@ -2787,13 +2794,19 @@ class RepositorySync {
    * instance; `body` follows, fetches and drops it, and gives back the
    * stop a leave not confirmed ends in, else none, the operation then
    * ending idle: a leave syncs nothing. A refusal of its move, thrown,
-   * stops it whole with Retry.
+   * stops it whole with Retry. A sync asked before it and still in its
+   * admission runs first, this one following it, as a Place and an
+   * Attach do (space-21).
    */
   leave(origin: string, body: () => Promise<SpaceSyncPhase | undefined>): { accepted: true } {
-    void this.runOperation("leave", async () => {
-      await this.enter("leave", "check", false, origin);
-      this.ended = (await body()) ?? { phase: "idle" };
-    }, this.current?.work);
+    const queue = (): void => {
+      void this.runOperation("leave", async () => {
+        await this.enter("leave", "check", false, origin);
+        this.ended = (await body()) ?? { phase: "idle" };
+      }, this.current?.work);
+    };
+    if (this.asked) void this.asked.then(queue);
+    else queue();
     return { accepted: true };
   }
 
@@ -7334,8 +7347,12 @@ export class SpaceManager {
    * moved, while a session's lease beneath holds the clone, where no read
    * of this run placed that next placement, naming its instance, and
    * where the destination is taken, as a sync's move is (storage-38).
-   * A Leave's drop, `leaves`, deletes that placement's file in the same
-   * step (space-98), a local change the clone's next sync carries.
+   * The move's refusals are read first, then the remote is removed, then
+   * the clone moved, nothing awaited between: a removal Git refuses
+   * stops the act in Git's words with the clone where it was, its
+   * placement standing. A Leave's drop, `leaves`, deletes that
+   * placement's file in the same step (space-98), a local change the
+   * clone's next sync carries.
    */
   private async dropByFile(machine: RepositorySync, placement: Placement, identity: string | undefined, leaves = false): Promise<void> {
     const store = this.host.store;
@@ -7351,7 +7368,8 @@ export class SpaceManager {
       catch (error) { console.error(`spex: the placement file ${placementFilePath(folder)} of ${machine.key} stays: ${error instanceof Error ? error.message : String(error)}`); }
     };
     if (placements[0]?.name !== placement.name || from === store.home.own()) {
-      if (!machine.dropPlacement(placement)) throw movedMeanwhile(from);
+      const refused = machine.dropOrStop(placement);
+      if (refused) throw refused;
       deleteFile();
       return;
     }
@@ -7366,9 +7384,11 @@ export class SpaceManager {
       if (key === null) throw nextUnread(this.nameOf(at));
       to = key;
     }
+    if (to !== from) this.refuseMove(machine, to, identity);
+    const refused = machine.dropOrStop(placement);
+    if (refused) throw refused;
     if (to !== from) this.renameClone(machine, to, identity);
-    if (!machine.dropPlacement(placement)) console.error(`spex: the remote of ${machine.key} stands until its next sync`);
-    else deleteFile();
+    deleteFile();
     if (to !== from) await this.afterMove([{ from, to }]);
   }
 
@@ -7421,7 +7441,21 @@ export class SpaceManager {
     const from = machine.key;
     const source = machine.repository.dir;
     const target = store.home.clonePath(to);
-    const held = heldSessionLease(source, identity);
+    this.refuseMove(machine, to, identity);
+    mkdirSync(dirname(target), { recursive: true, mode: 0o700 });
+    renameSync(source, target);
+    pruneEmptyFolders(dirname(source), store.home.workspace);
+    this.relocate([{ from, to }]);
+  }
+
+  /** What refuses a clone's move to `to` (renameClone), thrown as its
+   * Check's stop before anything is written: a session's lease beneath
+   * it, or a destination taken by anything but the clone itself
+   * (space-60, storage-38). */
+  private refuseMove(machine: RepositorySync, to: string, identity: string | undefined): void {
+    const store = this.host.store;
+    const from = machine.key;
+    const held = heldSessionLease(machine.repository.dir, identity);
     if (held !== undefined) throw inUseStop("check", `sessions/${held}`, store);
     const taken = this.destinationTaken(from, to);
     if (taken === "disk") {
@@ -7441,10 +7475,6 @@ export class SpaceManager {
         retry: true,
       }, false);
     }
-    mkdirSync(dirname(target), { recursive: true, mode: 0o700 });
-    renameSync(source, target);
-    pruneEmptyFolders(dirname(source), store.home.workspace);
-    this.relocate([{ from, to }]);
   }
 
   /** What takes a clone's destination `to`, if anything: something on

@@ -881,3 +881,53 @@ test("git-host-26, git-host-22, space-57, space-15: a first-notice read failing 
   assert.equal(git(firstBare, "rev-parse", "spex"), git(clone, "rev-parse", "HEAD"));
   assert.notEqual(git(secondBare, "rev-parse", "spex"), git(clone, "rev-parse", "HEAD"));
 });
+
+test("space-21, space-98, space-31, space-57, space-93: a Leave sent while a Sync still awaits its admission's read of the second enters no step until that Sync has run, then follows it, dropping the second's remote and deleting its file", async (t) => {
+  // The second placement in a group whose other member makes its notice
+  // owed, so the Sync's admission reads the second (space-57).
+  const workshop: StandinGroup = { id: "2900", fullPath: "workshop", name: "Workshop", kind: "group", members: [{ id: "1002", login: "bob", displayName: "Bob", role: "Owner" }, { id: "1003", login: "carol", displayName: "Carol", role: "Developer" }] };
+  const { first, second, home, key, clone, placed, firstBare } = await placedAtBoth("leave-follows", workshop);
+  t.after(() => home.stop());
+  const client = clientAt(home, second.url);
+  const inner = client.fetchImpl;
+  const holds = holdingFetch(inner);
+  client.fetchImpl = holds.fetch;
+  const gate = holds.hold((path, status) => path === `/api/v1/host/repositories/${placed.id}` && status === 200);
+  t.after(() => { client.fetchImpl = inner; gate.release(); });
+  // Every step either operation enters, as `<op>:<placement>:<step>`.
+  const steps: string[] = [];
+  const name = (placement: string | null | undefined): string => placement === undefined ? "" : placement === null ? "path:"
+    : canonicalOrigin(placement) === canonicalOrigin(first.url) ? "first:" : canonicalOrigin(placement) === canonicalOrigin(second.url) ? "second:" : `${placement}:`;
+  home.hooks.beforeStep = (event) => {
+    if (event.repository !== key || event.at === "commit") return;
+    steps.push(`${event.op}:${name(event.placement)}${event.at === "catch-up" ? "catch-up" : event.step}`);
+  };
+  writeFileSync(join(clone, "later.md"), "sent by the sync the leave follows\n");
+
+  // The Sync's admission waits on the second's answer; the Leave sent
+  // meanwhile is accepted and runs nothing (space-21, space-31).
+  const syncing = home.client.expectOk("space.sync", { repository: key });
+  await gate.reached;
+  assert.deepEqual(await home.client.expectOk("space.leave", { repository: key, instance: second.url, confirmed: true }), { accepted: true });
+  await sleep(1_000);
+  assert.deepEqual([...steps], [], "nothing runs while the Sync is in its admission");
+  client.fetchImpl = inner;
+  const from = home.client.mark();
+  gate.release();
+  assert.deepEqual(await syncing, { accepted: true });
+
+  // The Sync runs its turns, the second waiting for its notice, and the
+  // Leave follows it: its one step comes last, after the first's push
+  // (space-21, space-98).
+  const left = await home.client.waitRepository(from, key, (row) => row.sync.phase === "idle" && row.placements.length === 1, 30_000);
+  home.hooks.beforeStep = undefined;
+  const leaving = steps.indexOf("leave:second:check");
+  assert.equal(leaving, steps.length - 1, steps.join(" "));
+  const before = steps.slice(0, leaving);
+  assert.ok(before.length > 0 && before.every((step) => step.startsWith("sync:")) && before.includes("sync:save") && before.includes("sync:first:push"), steps.join(" "));
+  assert.ok(!before.some((step) => step.startsWith("sync:second:")), steps.join(" "));
+  assert.deepEqual(left.placements.map((line) => line.instance), [canonicalOrigin(first.url)]);
+  assert.deepEqual(git(clone, "remote").split("\n"), [hostFolder(first)]);
+  assert.equal(existsSync(join(clone, "placements", `${placed.folder}.yaml`)), false, "its file deleted");
+  assert.equal(git(firstBare, "cat-file", "-p", "spex:later.md"), "sent by the sync the leave follows");
+});

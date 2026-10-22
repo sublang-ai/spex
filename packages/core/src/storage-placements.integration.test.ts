@@ -947,3 +947,52 @@ test("storage-39, storage-36, storage-34, storage-1, storage-31, storage-6, stor
   assert.equal(readFileSync(join(attachedClone, firstFile), "utf8"), firstBytes);
   assert.equal(git(firstBare, "rev-parse", "spex"), git(attachedClone, "rev-parse", "HEAD"));
 });
+
+test("storage-38, space-98, space-15: a Leave of the first placement whose remote Git refuses to remove — the clone's configuration locked — stops at Check in Git's words, the clone, its remote, its file and its pair where they were; once Git can, the same Leave drops it and moves the clone under your own group's folder, local only", async (t) => {
+  const host = await startHost();
+  const folder = hostFolder(host);
+  const file = `placements/${folder}.yaml`;
+  const home = await startHome("drop-refused", { host, project: false });
+  t.after(() => home.stop());
+  let from = home.client.mark();
+  await signIn(home, host);
+  await home.client.waitRepository(from, HOST_OWN, (repository) => repository.sync.phase === "done", 30_000);
+  const code = gitFolder("locked");
+  const local = await addFolder(home, code);
+  from = home.client.mark();
+  await home.client.expectOk("space.pick", { repository: local.key, choice: { kind: "create", instance: host.url, groupId: "2002", name: "locked" } });
+  const key = hostKey(host, "acme/locked-spex");
+  await home.client.waitRepository(from, key, (repository) => repository.sync.phase === "done", 30_000);
+  const clone = clonePath(home.dataDir, key);
+  const ownKey = `${LOGIN}/locked-spex`;
+  const ownClone = clonePath(home.dataDir, ownKey);
+
+  // Git cannot write the clone's configuration while its lock stands:
+  // the removal is refused, the Leave stops in Git's words with Retry,
+  // and the clone is neither dropped nor moved (storage-38, space-15).
+  const lock = join(clone, ".git", "config.lock");
+  writeFileSync(lock, "");
+  from = home.client.mark();
+  assert.deepEqual(await home.client.expectOk("space.leave", { repository: key, instance: host.url, confirmed: true }), { accepted: true });
+  const stopped = await home.client.waitRepository(from, key, (repository) => repository.sync.phase === "stopped", 30_000);
+  assert.ok(stopped.sync.phase === "stopped" && stopped.sync.op === "leave" && stopped.sync.step === "check" && stopped.sync.cause === "git" && stopped.sync.retry, JSON.stringify(stopped.sync));
+  assert.match(stopped.sync.message, /lock/i);
+  assert.deepEqual([stopped.placements.length, placementOf(stopped, host.url).attached], [1, true]);
+  assert.ok(existsSync(join(clone, ".git")) && !existsSync(ownClone), "the clone stays where it was");
+  assert.deepEqual(remotesOf(clone), [folder]);
+  assert.ok(existsSync(join(clone, file)), "its file kept");
+  assert.equal(Home.load(home.dataDir).keyForFolder(code), key, "its pair kept");
+
+  // The lock gone, the same Leave drops the placement and moves the
+  // clone, its last placement gone, under your own group's folder, local
+  // only, its pair following (storage-38, space-98).
+  rmSync(lock);
+  from = home.client.mark();
+  assert.deepEqual(await home.client.expectOk("space.leave", { repository: key, instance: host.url, confirmed: true }), { accepted: true });
+  const left = await home.client.waitRepository(from, ownKey, (repository) => repository.sync.phase !== "running", 30_000);
+  assert.deepEqual([left.state, left.placements, left.sync.phase], ["local-only", [], "idle"], JSON.stringify(left.sync));
+  assert.ok(existsSync(join(ownClone, ".git")) && !existsSync(clone), "moved under your own group's folder");
+  assert.equal(git(ownClone, "remote"), "");
+  assert.equal(existsSync(join(ownClone, file)), false, "its file deleted");
+  assert.equal(Home.load(home.dataDir).keyForFolder(code), ownKey);
+});
