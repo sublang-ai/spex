@@ -780,24 +780,38 @@ async function clearStaleSocket(path: string): Promise<void> {
   unlinkSync(path);
 }
 
-/** The longest Unix socket path the platforms bind, in bytes. */
-const SOCKET_PATH_MAX = process.platform === "linux" ? 107 : 103;
+/** The longest path a Unix socket binds, in bytes: the size of its
+ * address's sun_path, 108 on Linux and 104 on macOS and the BSDs. */
+const SOCKET_PATH_MAX = process.platform === "linux" ? 108 : 104;
 
 /** A seat's socket that cannot be bound, refused naming the cause as a
- * flag mistake is (server-shell-25). The bind reports a missing
- * directory as EACCES on some platforms, so the directory is checked. */
+ * flag mistake is (server-shell-25). */
+function unbindable(path: string, reason: string, code: string): Error {
+  return new Error(`--socket ${path} cannot be bound: ${reason} (${code})`);
+}
+
+/** A failed bind's refusal. The bind reports a missing directory as
+ * EACCES, so the directory is checked. */
 function bindRefusal(path: string, error: unknown): Error {
   const code = (error as NodeJS.ErrnoException).code ?? "an unknown error";
   const reason = !existsSync(dirname(path))
     ? `its directory ${dirname(path)} does not exist`
-    : (code === "EINVAL" || code === "ENAMETOOLONG") && Buffer.byteLength(path) > SOCKET_PATH_MAX
-      ? `the path is longer than a Unix socket's ${SOCKET_PATH_MAX} bytes`
-      : code === "EADDRINUSE"
-        ? "another socket took the path"
-        : code === "EACCES" || code === "EPERM"
-          ? "permission denied"
-          : "the bind failed";
-  return new Error(`--socket ${path} cannot be bound: ${reason} (${code})`);
+    : code === "EADDRINUSE"
+      ? "another socket took the path"
+      : code === "EACCES" || code === "EPERM"
+        ? "permission denied"
+        : "the bind failed";
+  return unbindable(path, reason, code);
+}
+
+/** Refuse a path longer than a Unix socket binds before anything
+ * starts: Node 22 and 24 bind such a path cut short, a socket at
+ * another path, where Node 25 refuses it, so the length is checked
+ * alike on every version. */
+function checkSocketPath(path: string): void {
+  if (process.platform !== "win32" && Buffer.byteLength(path) > SOCKET_PATH_MAX) {
+    throw unbindable(path, `the path is longer than a Unix socket's ${SOCKET_PATH_MAX} bytes`, "ENAMETOOLONG");
+  }
 }
 
 /**
@@ -823,6 +837,7 @@ export async function startSeat(options: ServerShellOptions): Promise<RunningSea
         "a seat listens on its Unix socket alone, which the hub alone reaches",
     );
   }
+  checkSocketPath(seat.socket);
   await clearStaleSocket(seat.socket);
   const server = createShellServer(options, false) as HttpServer;
   const service = await bootCore(
@@ -838,9 +853,12 @@ export async function startSeat(options: ServerShellOptions): Promise<RunningSea
             chmodSync(seat.socket, 0o660);
             resolveListen();
           } catch (error) {
-            server.close();
+            // A socket the hub cannot reach is one that cannot be
+            // bound: closing the server removes the file it made.
             const code = (error as NodeJS.ErrnoException).code ?? "an unknown error";
-            rejectListen(new Error(`--socket ${seat.socket} cannot be made group-accessible (${code})`));
+            server.close(() =>
+              rejectListen(unbindable(seat.socket, "it cannot be made group-accessible", code)),
+            );
           }
         });
       }),
