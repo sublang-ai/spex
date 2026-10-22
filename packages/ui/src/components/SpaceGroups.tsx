@@ -27,6 +27,10 @@
 // instance, "Add instance…" at the list's foot opens the sign-in card in
 // its place (space-1, space-3). No part of the list links a
 // page of the host, or names what stands behind the instance (space-1).
+// At a remote place a Join names no folder, its core allocating one, and
+// a clone whose code clone failed offers "Join again" in place of
+// "Choose folder…", with "Add a credential" where the failure names a
+// code host wanting the member's credential (space-103, run-view-169).
 // Every act is a command whose outcome arrives as state (space-29).
 
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
@@ -39,6 +43,7 @@ import type {
 } from "@sublang/spex-core/protocol";
 
 import { usePlaceStore } from "../state/place-context.js";
+import { isLocalPlace, placeLabel } from "../state/store.js";
 import { i18n } from "../i18n.js";
 import {
   anySignedIn,
@@ -223,6 +228,7 @@ export function GroupsList({
   signIn,
   servers,
   onServersChanged,
+  onAddCredential,
   onSelect,
   onNote,
 }: {
@@ -237,6 +243,9 @@ export function GroupsList({
   servers?: ServerListing;
   /** An open or a close landed: the servers listing is read again. */
   onServersChanged?: () => void;
+  /** Open this place's Credentials section at a code host (space-103,
+   * settings-48). */
+  onAddCredential?: (host: string) => void;
   onSelect(key: string): void;
   onNote: Note;
 }) {
@@ -250,6 +259,7 @@ export function GroupsList({
       selected={selected}
       connected={connected}
       refreshes={refreshes}
+      onAddCredential={onAddCredential}
       onSelect={onSelect}
       onNote={onNote}
     />
@@ -374,6 +384,7 @@ function GroupSection({
   selected,
   connected,
   refreshes,
+  onAddCredential,
   onSelect,
   onNote,
 }: {
@@ -386,6 +397,7 @@ function GroupSection({
   selected?: string;
   connected: boolean;
   refreshes: number;
+  onAddCredential?: (host: string) => void;
   onSelect(key: string): void;
   onNote: Note;
 }) {
@@ -610,6 +622,7 @@ function GroupSection({
               selected={repo.key === selected}
               connected={connected}
               refreshes={refreshes}
+              onAddCredential={onAddCredential}
               onSelect={() => onSelect(repo.key)}
               onNote={onNote}
             />
@@ -634,6 +647,7 @@ function RepositoryRow({
   selected,
   connected,
   refreshes,
+  onAddCredential,
   onSelect,
   onNote,
 }: {
@@ -647,10 +661,15 @@ function RepositoryRow({
   selected: boolean;
   connected: boolean;
   refreshes: number;
+  onAddCredential?: (host: string) => void;
   onSelect(): void;
   onNote: Note;
 }) {
   const store = usePlaceStore();
+  // A remote place's core allocates every project's folder (space-103,
+  // run-view-169): its rows offer no folder picker and no path entry,
+  // and a join there names no folder.
+  const remote = !isLocalPlace(store.place);
   const spaceSync = store((state) => state.spaceSync);
   const spaceJoin = store((state) => state.spaceJoin);
   const spaceRefresh = store((state) => state.spaceRefresh);
@@ -709,8 +728,9 @@ function RepositoryRow({
   /** Join a repository an instance lists into a folder (space-63), at
    * the instance whose heading the row stands under (space-29), else
    * the one the row names: a row not on this device stands under the
-   * instance whose read lists it. */
-  const join = async (folder: string): Promise<void> => {
+   * instance whose read lists it. At a remote place no folder is named:
+   * its core allocates one (space-103). */
+  const join = async (folder?: string): Promise<void> => {
     const at = instance?.origin ?? repo.instance;
     if (!repo.id || !at) return;
     const key = machineKey;
@@ -740,6 +760,18 @@ function RepositoryRow({
       const message = (cause as Error).message;
       onNote(message);
       throw cause;
+    }
+  };
+
+  /** Join at a remote place (space-103, run-view-169): `space.join`
+   * with no folder — again, after a code clone that failed, cloning its
+   * code into the folder that place allocated — the refusal standing
+   * beside the row. */
+  const joinRemote = async (): Promise<void> => {
+    try {
+      await join();
+    } catch (cause) {
+      setError((cause as Error).message);
     }
   };
 
@@ -891,11 +923,17 @@ function RepositoryRow({
           ? i18n._({ id: "Joining…", comment: "the Join control, while the join runs" })
           : i18n._({ id: "Join", comment: "confirm: join both histories into one" }),
         {
-          title: i18n._("Brings it to this device"),
+          title: remote
+            ? i18n._({
+                id: "Brings it to {place}",
+                values: { place: placeLabel(store.place) },
+                comment: "the Join control's title at a team server's seat: {place} is the server's name, which allocates the project's folder itself",
+              })
+            : i18n._("Brings it to this device"),
           disabled: !repo.id || joining,
-          expanded: pickDirectoryBridge() ? undefined : opened === "join",
+          expanded: remote || pickDirectoryBridge() ? undefined : opened === "join",
           describedBy: error ? captionId : undefined,
-          onClick: () => void askFolder("join"),
+          onClick: () => void (remote ? joinRemote() : askFolder("join")),
         },
       );
       break;
@@ -904,8 +942,14 @@ function RepositoryRow({
   }
 
   // A clone whose code found no folder here is paired later (space-63);
-  // a row with no clone here has nothing to pair (space-61).
+  // a row with no clone here has nothing to pair (space-61). At a remote
+  // place it is joined again instead, its core cloning the code into the
+  // folder it allocated (space-103).
   const needsFolder = cloneHere(repo) && !groupRepository && repo.folder === null && repo.state !== "local-only";
+  // A code clone at a remote place that failed for want of the
+  // member's credential names its host (space-103): the row opens that
+  // place's Credentials section at it (settings-48).
+  const credentialHost = remote && sync.phase === "stopped" ? sync.credential : undefined;
   // Members while the instance governing it is signed in (space-62).
   const showMembers = repo.state === "reachable" && governing?.signedIn === true;
   // On a project's under a signed-in instance's heading, where its last
@@ -1045,7 +1089,46 @@ function RepositoryRow({
             {state}
           </span>
         </button>
-        {needsFolder ? (
+        {credentialHost !== undefined && onAddCredential ? (
+          <button
+            type="button"
+            data-testid={`space-row-credential-${repo.key}`}
+            className={`${SECONDARY} shrink-0 whitespace-nowrap`}
+            title={i18n._({
+              id: "Opens Credentials in this server's Settings at {host}",
+              values: { host: credentialHost },
+              comment: "the title of 'Add a credential' on a team server's project whose code could not be cloned: {host} is the code host needing the member's credential",
+            })}
+            onClick={() => onAddCredential(credentialHost)}
+          >
+            {i18n._({
+              id: "Add a credential",
+              comment: "on a team server's project whose code could not be cloned for want of the member's credential: open the server's Credentials settings",
+            })}
+          </button>
+        ) : null}
+        {needsFolder && remote ? (
+          <button
+            ref={folderRef}
+            type="button"
+            data-testid={`space-row-join-again-${repo.key}`}
+            className={`${SECONDARY} shrink-0 whitespace-nowrap`}
+            title={i18n._({
+              id: "Clones its code again into its folder on {place}",
+              values: { place: placeLabel(store.place) },
+              comment: "the title of 'Join again' on a team server's project whose code clone failed: {place} is the server's name",
+            })}
+            disabled={disabled || running || !repo.id || joining}
+            onClick={() => void joinRemote()}
+          >
+            {joining
+              ? i18n._({ id: "Joining…", comment: "the Join control, while the join runs" })
+              : i18n._({
+                  id: "Join again",
+                  comment: "on a team server's project whose code clone failed: join it again, cloning its code into the folder the server allocated",
+                })}
+          </button>
+        ) : needsFolder ? (
           <button
             ref={folderRef}
             type="button"

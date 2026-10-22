@@ -1062,6 +1062,10 @@ export function App() {
   useEffect(() => {
     if (configured.place.key !== configuredPlace) setConfiguredPlace(LOCAL_PLACE_KEY);
   }, [configured, configuredPlace]);
+  // The code host a place's Groups row asked its Settings to take a
+  // credential for (space-103, settings-48), until that place's
+  // Credentials section has opened at it.
+  const [credentialAsk, setCredentialAsk] = useState<{ place: string; host: string }>();
   /** Go to a surface on behalf of `store`'s place: Settings, Playbooks
    * and Groups open at that place (run-view-168). */
   const navigateFrom = (store: AppStore) => (next: Surface) => {
@@ -1083,6 +1087,9 @@ export function App() {
     currentProjectId: state.currentProjectId,
     expandedProjects: state.expandedProjects,
     workspaceTabs: state.workspaceTabs,
+    // A seat's groups name the projects the palette opens there
+    // (run-view-169).
+    space: state.space,
   }));
   const local = placeStates[0]!.value;
   // The badge and every dot re-source from the one core-side ledger
@@ -1514,6 +1521,15 @@ export function App() {
             sessions: value.sessions,
             attention: attentionAt(store.place.key),
             currentProjectId: store === shown ? value.currentProjectId : undefined,
+            // A seat's project is opened among the member's groups there,
+            // with no folder (run-view-169, space-103).
+            groups: value.space,
+            onJoin: (instance, hostId) => store.getState().spaceJoin(instance, hostId),
+            onReadGroups: () => {
+              if (store.getState().connection === "open") {
+                void store.getState().loadSpace().catch(() => {});
+              }
+            },
           }))}
           onPickFolder={
             window.spexNative
@@ -1562,7 +1578,13 @@ export function App() {
               {surface === "Playbooks" ? (
                 <LibrarySurface key={configured.place.key} onNavigate={setSurface} />
               ) : surface === "Settings" ? (
-                <SettingsSurface key={configured.place.key} />
+                <SettingsSurface
+                  key={configured.place.key}
+                  credentialHost={
+                    credentialAsk?.place === configured.place.key ? credentialAsk.host : undefined
+                  }
+                  onCredentialHostShown={() => setCredentialAsk(undefined)}
+                />
               ) : (
                 <SpaceSurface
                   key={configured.place.key}
@@ -1570,6 +1592,12 @@ export function App() {
                     openSessionAndShow(sessionId, undefined, configured.place.key)
                   }
                   onOpenProject={(projectId) => pickProject(projectId, configured.place.key)}
+                  // A failed code clone's host opens this place's
+                  // Credentials section at it (space-103, settings-48).
+                  onAddCredential={(host) => {
+                    setCredentialAsk({ place: configured.place.key, host });
+                    setSurface("Settings");
+                  }}
                 />
               )}
             </PlaceStoreContext.Provider>

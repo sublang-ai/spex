@@ -326,6 +326,11 @@ msgstr "{head} — {said}"
 msgid "{head} is no longer an ancestor"
 msgstr "{head} is no longer an ancestor"
 
+#. Credentials section on a team server: a project's code could not be cloned from {host}, a code host, for want of the member's credential
+#: src/components/SettingsSurface.tsx
+msgid "{host} needs a credential of yours to clone a project's code"
+msgstr "{host} needs a credential of yours to clone a project's code"
+
 #: src/lib/time.ts
 msgid "{hours}h"
 msgstr "{hours}h"
@@ -726,6 +731,10 @@ msgstr "✗ failed"
 msgid "A command the run needs is not installed"
 msgstr "A command the run needs is not installed"
 
+#: src/components/SettingsSurface.tsx
+msgid "A credential you place here stays on this server until you remove it."
+msgstr "A credential you place here stays on this server until you remove it."
+
 #: src/components/DeliveryCard.tsx
 msgid "A follow-up message continues this intent."
 msgstr "A follow-up message continues this intent."
@@ -864,6 +873,11 @@ msgstr "Add"
 msgid "Add {id} with the neutral agent, then tune it here"
 msgstr "Add {id} with the neutral agent, then tune it here"
 
+#. on a team server's project whose code could not be cloned for want of the member's credential: open the server's Credentials settings
+#: src/components/SpaceGroups.tsx
+msgid "Add a credential"
+msgstr "Add a credential"
+
 #: src/components/SettingsSurface.tsx
 msgid "Add a player"
 msgstr "Add a player"
@@ -989,6 +1003,11 @@ msgstr "now"
 #: src/lib/time.ts
 msgid "age.weeks"
 msgstr "{weeks}w"
+
+#. Credentials section: the agent a credential of the member's is for
+#: src/components/SettingsSurface.tsx
+msgid "Agent"
+msgstr "Agent"
 
 #. subagent-effort choice: the agent picks each subagent's effort per task
 #: src/lib/agent-options.ts
@@ -1291,6 +1310,11 @@ msgstr "Brings back anything new; sends nothing"
 #: src/components/SpaceGroups.tsx
 msgid "Brings both histories into one and asks about anything that differs"
 msgstr "Brings both histories into one and asks about anything that differs"
+
+#. the Join control's title at a team server's seat: {place} is the server's name, which allocates the project's folder itself
+#: src/components/SpaceGroups.tsx
+msgid "Brings it to {place}"
+msgstr "Brings it to {place}"
 
 #: src/components/SpaceGroups.tsx
 msgid "Brings it to this device"
@@ -1655,6 +1679,11 @@ msgstr "click opens · drag moves · scroll zooms"
 msgid "client not connected"
 msgstr "client not connected"
 
+#. the title of 'Join again' on a team server's project whose code clone failed: {place} is the server's name
+#: src/components/SpaceGroups.tsx
+msgid "Clones its code again into its folder on {place}"
+msgstr "Clones its code again into its folder on {place}"
+
 #. join step running: cloning the project's code into its folder
 #: src/lib/space.ts
 msgid "Cloning code…"
@@ -1690,6 +1719,11 @@ msgstr "Close this tab — the session stays in the sidebar"
 #: src/lib/space.ts
 msgid "Code"
 msgstr "Code"
+
+#. Credentials section: the code hosts the member placed a token for
+#: src/components/SettingsSurface.tsx
+msgid "Code hosts"
+msgstr "Code hosts"
 
 #. a project's spex repository whose records name no code remote
 #: src/components/SpaceGroups.tsx
@@ -2109,6 +2143,11 @@ msgstr "Creating…"
 #: src/lib/space.ts
 msgid "credentials"
 msgstr "credentials"
+
+#. Settings section on a team server: the member's own code-host tokens and agent credentials
+#: src/components/SettingsSurface.tsx
+msgid "Credentials"
+msgstr "Credentials"
 
 #. tag on the project row the workspace is on
 #: src/components/ProjectPalette.tsx
@@ -2890,6 +2929,11 @@ msgstr "from the compile before this change"
 msgid "From the host ({count})"
 msgstr "From the host ({count})"
 
+#. project palette: heading over the spex repositories of the member's groups a team server can open; {place} is the server's name
+#: src/components/ProjectPalette.tsx
+msgid "From your groups on {place}"
+msgstr "From your groups on {place}"
+
 #. pipeline stage: the compiled spec items
 #. pipeline stage: the compiler's normative spec items (a proper name)
 #. pipeline stage: the compiler's normative spec items (a proper name)
@@ -3027,6 +3071,11 @@ msgstr "History — this session can't be continued"
 #: src/components/NavRail.tsx
 msgid "history, can't be continued"
 msgstr "history, can't be continued"
+
+#. Credentials section: the code host a token is for, such as git.example.com
+#: src/components/SettingsSurface.tsx
+msgid "Host name"
+msgstr "Host name"
 
 #. accepting a team server's contract, which opens the seat
 #: src/components/SpaceServers.tsx
@@ -3266,6 +3315,11 @@ msgstr "Its spex repository is not on this device."
 msgid "Join"
 msgstr "Join"
 
+#. on a team server's project whose code clone failed: join it again, cloning its code into the folder the server allocated
+#: src/components/SpaceGroups.tsx
+msgid "Join again"
+msgstr "Join again"
+
 #: src/components/SpaceSync.tsx
 msgid "Join both histories into one to sync."
 msgstr "Join both histories into one to sync."
@@ -3277,6 +3331,9 @@ msgstr "Join both histories into one? Anything that differs will ask you to choo
 #. the Join control, while the join runs
 #. the Join control, while the join runs
 #. the Join control, while the join runs
+#. the Join control, while the join runs
+#. the Join control, while the join runs
+#: src/components/ProjectPalette.tsx
 #: src/components/SpaceGroups.tsx
 msgid "Joining…"
 msgstr "Joining…"
@@ -3811,6 +3868,11 @@ msgstr "No working folder on this device"
 msgid "none (adapter default)"
 msgstr "none (adapter default)"
 
+#. a list of the member's credentials on a team server, while it holds none
+#: src/components/SettingsSurface.tsx
+msgid "None placed yet"
+msgstr "None placed yet"
+
 #: src/components/AgentEditor.tsx
 msgid "none: the adapter's own default posture"
 msgstr "none: the adapter's own default posture"
@@ -3957,6 +4019,11 @@ msgstr "Nothing in {project} needs attention."
 #: src/components/SessionRecovery.tsx
 msgid "Nothing is repeated"
 msgstr "Nothing is repeated"
+
+#. project palette: a team server's groups list no spex repository it lacks
+#: src/components/ProjectPalette.tsx
+msgid "Nothing more to open from your groups"
+msgstr "Nothing more to open from your groups"
 
 #: src/components/SpaceSync.tsx
 msgid "Nothing new on the host"
@@ -4193,6 +4260,11 @@ msgstr "Opening…"
 #: src/components/LibrarySurface.tsx
 msgid "Opens a playbook named {id} with the normalized text ready to paste — nothing is written or compiled"
 msgstr "Opens a playbook named {id} with the normalized text ready to paste — nothing is written or compiled"
+
+#. the title of 'Add a credential' on a team server's project whose code could not be cloned: {host} is the code host needing the member's credential
+#: src/components/SpaceGroups.tsx
+msgid "Opens Credentials in this server's Settings at {host}"
+msgstr "Opens Credentials in this server's Settings at {host}"
 
 #. compile phase: slc optimizes the spec items
 #: src/lib/compile-log.ts
@@ -4609,6 +4681,7 @@ msgstr "Reading members…"
 msgid "reading specs…"
 msgstr "reading specs…"
 
+#: src/components/ProjectPalette.tsx
 #: src/components/SpaceSurface.tsx
 msgid "Reading your groups…"
 msgstr "Reading your groups…"
@@ -4745,6 +4818,7 @@ msgstr "Reload the page"
 #. queue row control: take this row out of the queue
 #. row menu item: take this row out of the queue
 #. take a member out of a group or a spex repository on the Git host
+#. take the member's credential for a code host or an agent off the team server
 #. take this spec package out of the requests
 #: src/components/EnvironmentSection.tsx
 #: src/components/NextCard.tsx
@@ -4799,6 +4873,11 @@ msgstr "Remove from Spex? The repo stays on disk."
 #: src/components/ProjectsSurface.tsx
 msgid "Remove project"
 msgstr "Remove project"
+
+#. accessible name of the control taking the member's credential for a code host or an agent off the team server
+#: src/components/SettingsSurface.tsx
+msgid "Remove the credential for {name}"
+msgstr "Remove the credential for {name}"
 
 #: src/components/LibrarySurface.tsx
 msgid "Remove the session and its conversation; the spec package folder stays"
@@ -5104,6 +5183,8 @@ msgstr "Same as agent"
 msgid "Same as Captain"
 msgstr "Same as Captain"
 
+#. Credentials section: place the credential on the team server
+#. Credentials section: place the credential on the team server
 #. commit the edits in this editor
 #. commit the edits in this editor
 #. commit the edits in this editor
@@ -5114,6 +5195,7 @@ msgstr "Same as Captain"
 #: src/components/AgentSettings.tsx
 #: src/components/BindingEditor.tsx
 #: src/components/ProjectGroup.tsx
+#: src/components/SettingsSurface.tsx
 #: src/components/SpaceMembers.tsx
 #: src/components/SpecEditor.tsx
 #: src/lib/space.ts
@@ -6243,6 +6325,11 @@ msgstr "three in a row — tell the agent how to proceed"
 #: src/components/SpecView.tsx
 msgid "Toggle {name}"
 msgstr "Toggle {name}"
+
+#. Credentials section: the member's access token for a code host
+#: src/components/SettingsSurface.tsx
+msgid "Token"
+msgstr "Token"
 
 #: src/lib/media.ts
 msgid "Tool {tool}"
