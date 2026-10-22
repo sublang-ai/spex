@@ -35,7 +35,8 @@ import {
 } from "./app-storage.js";
 import { occupied } from "./clone-moves.js";
 import { readJsonFile, StorageFormatError, VersionConflictError, writeApplicationFile } from "./files.js";
-import { cloneRemoteName, defaultOwnName, Home, REMOTE_URL_KEYS, remoteNamesIn, repositoryNameFor, splitKey, WORKSPACE_DEPTH } from "./home.js";
+import { defaultOwnName, Home, repositoryNameFor, splitKey, WORKSPACE_DEPTH } from "./home.js";
+import { readPlacements } from "./placements.js";
 import { folderRemote, needsGroupsMigration, migrateFormerHome } from "./migrate-home.js";
 import { deferredMoves, migrateInstances, needsInstancesMigration, settleDeferred, type DeferredMove } from "./migrate-instances.js";
 import { gitEnvironment, initializeClone } from "./storage-git.js";
@@ -648,14 +649,17 @@ export class Store {
     catch (error) { console.error(`spex: ${key} was not prepared: ${error instanceof Error ? error.message : String(error)}`); return false; }
   }
 
-  /** The name of the remote a clone syncs with (DR-127), as its Git
-   * configuration holds it now; none for a folder that is no repository
-   * of its own yet, or whose configuration Git cannot read. */
+  /** The name of a clone's first placement's remote (storage-34,
+   * storage-31), as its Git configuration holds it now; none for a
+   * folder that is no repository of its own yet, or whose configuration
+   * Git cannot read. */
   private remoteNameOf(dir: string, key: string): string | null {
     if (!existsSync(join(dir, ".git"))) return null;
-    const run = spawnSync("git", ["-C", dir, "config", "-z", "--get-regexp", REMOTE_URL_KEYS], { env: gitEnvironment(this.env), stdio: ["ignore", "pipe", "ignore"], timeout: 10_000 });
-    if (run.error || run.status !== 0) return null;
-    return cloneRemoteName(key, remoteNamesIn(run.stdout.toString("utf8")));
+    const placements = readPlacements((args) => {
+      const run = spawnSync("git", ["-C", dir, ...args], { env: gitEnvironment(this.env), stdio: ["ignore", "pipe", "ignore"], timeout: 10_000 });
+      return { ok: !run.error && run.status === 0, stdout: run.stdout?.toString("utf8") ?? "" };
+    }, key, this.homeFile, this.deferred);
+    return placements[0]?.name ?? null;
   }
 
   /** A clone's instance (storage-31), its remote's name as `remoteName`

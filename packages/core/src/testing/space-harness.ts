@@ -379,8 +379,9 @@ export function assertGroupsState(state: GroupsState): void {
 /** A row's lines in their shape (space-30), and, while the interface
  * reads the row's transitional mirrors, those mirrors equal to its key
  * placement's line — its first — wherever a remote here holds it or no
- * clone is here; a local-only clone holds no line but a creation's
- * waiting at an instance (space-87). */
+ * clone is here, `waiting` to the one line a wait shows on; a local-only
+ * clone holds no line but a creation's waiting at an instance
+ * (space-87). */
 function assertPlacements(row: RepositoryState): void {
   assert.equal(typeof row.mergePending, "boolean", JSON.stringify(row.mergePending));
   assert.equal(row.mergePending, row.branch?.mergePending ?? false, `${row.key}: the row's pending merge is its branch's`);
@@ -403,10 +404,14 @@ function assertPlacements(row: RepositoryState): void {
   if (sync.phase === "choices" || sync.phase === "unrelated") {
     assert.ok(row.placements.some((line) => line.attached && line.instance === sync.placement), `${row.key}: ${JSON.stringify(sync)} names a placement it holds`);
   }
+  // A step waiting at the host shows on one line, its placement's or
+  // its instance's (space-87), which the row's `waiting` mirrors.
+  const waits = row.placements.filter((line) => line.waiting !== null);
+  assert.ok(waits.length <= 1, `${row.key}: one line waits`);
+  assert.deepEqual(row.waiting, waits[0]?.waiting ?? null, `${row.key}: waiting mirrors the line it shows on`);
   const key = row.placements[0];
   if (!key) return;
   // Transitional: the row's mirrors are its key placement's line's.
-  assert.deepEqual(row.waiting, key.waiting, `${row.key}: waiting mirrors its key placement`);
   if (!key.attached && row.branch !== null) return;
   const { mergePending: _, ...branch } = row.branch ?? { mergePending: false };
   assert.deepEqual(

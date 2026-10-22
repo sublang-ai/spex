@@ -74,6 +74,16 @@ function remotesOf(clone: string): string[] {
   return listed.stdout.split("\n").filter((name) => name !== "");
 }
 
+/** A clone's remotes by name and URL in the order its Git configuration
+ * holds them (storage-34). */
+function remoteUrls(clone: string): [string, string][] {
+  const listed = spawnSync("git", ["-C", clone, "config", "--get-regexp", "^remote\\..*\\.url$"], { encoding: "utf8" });
+  return listed.stdout.split("\n").filter((line) => line !== "").map((line) => {
+    const at = line.indexOf(" ");
+    return [line.slice("remote.".length, at - ".url".length), line.slice(at + 1)];
+  });
+}
+
 /** The host's id of the repository whose creation by the core a clone's
  * own Git configuration records in its remote's section (git-host-7,
  * storage-34), if any; never at its top level. */
@@ -252,7 +262,7 @@ test("space-37: a fresh core with no sync of a clone recorded reads the last syn
   assert.deepEqual(ahead.branch?.agreed, { at, current: false });
 });
 
-test("space-5, space-12, storage-34: your own group's clone syncs through a remote still named origin and through one a terminal adds as @127.0.0.1_4100, a remote removed taking its id; a remote the reader sets is origin", async (t) => {
+test("space-5, space-12, storage-34: your own group's clone syncs through a remote still named origin and through one a terminal adds again under its instance's folder, a remote removed taking its id and one under a folder no instance resolves being none; a remote the reader sets is origin beside the placement", async (t) => {
   const host = await startHost();
   const home = await startHome("remote-names", { host, project: false });
   t.after(() => home.stop());
@@ -289,30 +299,43 @@ test("space-5, space-12, storage-34: your own group's clone syncs through a remo
   assert.equal(away.state, "local-only");
   assert.equal(away.id, null);
 
-  // Added again under an instance's folder — a name Git admits for a
-  // remote and its refs — it is the clone's one remote named so, which a
-  // Sync fetches and pushes through and makes the upstream.
-  git(clone, "remote", "add", "@127.0.0.1_4100", url);
+  // Added under a folder that names no instance of the home — a name Git
+  // admits for a remote and its refs — it is no placement, and the clone
+  // stays on this device only (storage-34).
+  git(clone, "remote", "add", "@unlisted.example", url);
+  const unlisted = await home.client.repository(HOST_OWN);
+  assert.equal(unlisted.state, "local-only");
+  assert.deepEqual(unlisted.placements, []);
+  git(clone, "remote", "remove", "@unlisted.example");
+
+  // Added again under its instance's folder, it is the clone's placement
+  // there, which a Sync fetches and pushes through, records the host's id
+  // beside and makes the upstream.
+  git(clone, "remote", "add", folder, url);
   const added = await home.client.repository(HOST_OWN);
   assert.equal(added.state, "reachable");
   assert.equal(added.remote, HOST_OWN);
-  commit("Through @127.0.0.1_4100");
+  commit("Through its folder");
   const throughFolder = await home.client.settle("space.sync", { repository: HOST_OWN }, 30_000);
   assert.equal(throughFolder.sync.phase, "done", JSON.stringify(throughFolder.sync));
   assert.equal(git(bare, "rev-parse", "spex"), git(clone, "rev-parse", "spex"));
-  assert.deepEqual(remotesOf(clone), ["@127.0.0.1_4100"]);
-  assert.equal(git(clone, "config", "--get", "branch.spex.remote"), "@127.0.0.1_4100");
-  assert.equal(git(clone, "rev-parse", "@127.0.0.1_4100/spex"), git(clone, "rev-parse", "spex"));
+  assert.deepEqual(remotesOf(clone), [folder]);
+  assert.equal(git(clone, "config", "--get", "branch.spex.remote"), folder);
+  assert.equal(git(clone, "rev-parse", `${folder}/spex`), git(clone, "rev-parse", "spex"));
+  assert.equal(git(clone, "config", "--get", `remote.${folder}.spexId`), synced.id);
 
-  // A remote the reader sets is `origin`, replacing the one named by an
-  // instance's folder with what the clone held of it (space-5).
+  // A remote the reader sets is `origin`, the clone's path placement,
+  // beside the one named by its instance's folder, which keeps its id,
+  // what the clone holds of it and the upstream (space-5).
   const other = bareRepo();
   const set = repositoryOf(await home.client.expectOk("space.remote.set", { repository: HOST_OWN, url: other }), HOST_OWN);
-  assert.equal(set.id, null);
-  assert.deepEqual(remotesOf(clone), ["origin"]);
+  assert.equal(set.id, synced.id);
+  assert.deepEqual(remotesOf(clone), [folder, "origin"]);
   assert.equal(git(clone, "remote", "get-url", "origin"), other);
-  assert.equal(spawnSync("git", ["-C", clone, "rev-parse", "-q", "--verify", "refs/remotes/@127.0.0.1_4100/spex"]).status, 1);
-  assert.equal(spawnSync("git", ["-C", clone, "config", "--get", "branch.spex.remote"]).status, 1);
+  assert.equal(git(clone, "config", "--get", `remote.${folder}.spexId`), synced.id);
+  assert.equal(git(clone, "rev-parse", `refs/remotes/${folder}/spex`), git(clone, "rev-parse", "spex"));
+  assert.equal(git(clone, "config", "--get", "branch.spex.remote"), folder);
+  assert.deepEqual(set.placements.map((line) => [line.instance, line.path]), [[host.url, HOST_OWN], [null, other]]);
 });
 
 test("space-37: the device sign-in links the stand-in's code, names the host, and completes on approval; a denied code ends failed", async (t) => {
@@ -1419,7 +1442,7 @@ test("space-60: a remote changed while the Check step reads the host stands; the
   assert.equal(git(clone, "config", "--get-all", remoteUrlKey), "/elsewhere/terminal.git", "the terminal's remote stands alone");
 });
 
-test("space-60: a remote set while a sync's Check step reads a renamed repository stops the move; the new remote stands", async (t) => {
+test("space-60, space-21: a remote set while a sync's Check step reads a renamed repository stops the move; the new remote stands", async (t) => {
   const host = await startHost();
   const home = await startHome("move-origin", { host, project: false, extra: { signIn: "browser" } });
   t.after(() => home.stop());
@@ -1439,12 +1462,13 @@ test("space-60: a remote set while a sync's Check step reads a renamed repositor
   const fromSync = home.client.mark();
   assert.deepEqual(await home.client.expectOk("space.sync", { repository: key }), { accepted: true });
   for (let i = 0; i < 400 && !host.script.requests.slice(requests).some((request) => request.path.includes("/repositories")); i += 1) await sleep(25);
-  // The core's own command gives the clone another remote, clearing its
-  // recorded id, while the host's read is in flight.
+  // The core's own command gives the clone another remote while the
+  // host's read is in flight: its remotes no longer read what the check
+  // read (space-21). The host's remote is named by the instance's folder
+  // (DR-127); the reader's, set by the command beside it, is `origin`
+  // (space-5).
   const remote = bareRepo();
   const set = home.client.command("space.remote.set", { repository: key, url: remote });
-  // The host's remote is named by the instance's folder (DR-127); the
-  // reader's, set by the command, is `origin`.
   const originUrl = (): string | null => {
     const read = spawnSync("git", ["-C", clone, "config", "--get-all", "remote.origin.url"], { encoding: "utf8" });
     return read.status === 0 ? read.stdout.trim() : null;
@@ -1512,7 +1536,47 @@ test("space-58: a remote set while a pick asked the host is refused, never repla
   assert.equal(git(clone, "config", "--get-all", "remote.origin.url"), "/elsewhere/terminal.git");
 });
 
-test("space-73: a repository the host moved keeps the clone's sync and this device's record through its next Sync; another repository's remote clears them", async (t) => {
+test("space-58, storage-35: a clone under your own group's folder holding only the path placement origin is picked into a group, moving under the instance's folder at its path there with origin kept beside its new placement", async (t) => {
+  const host = await startHost();
+  const home = await startHome("path-only-pick", { host, project: false, extra: { signIn: "browser" } });
+  t.after(() => home.stop());
+  const signedIn = home.client.mark();
+  await signIn(home, host);
+  await home.client.waitRepository(signedIn, HOST_OWN, (repository) => repository.sync.phase === "done" || repository.sync.phase === "stopped", 30_000);
+  const code = gitFolder("path-only");
+  await addFolder(home, code);
+  const local = `${LOGIN}/path-only-spex`;
+  // Reachable through its path placement alone, at no instance: the row
+  // a pick is offered on (space-61).
+  const path = bareRepo();
+  const named = repositoryOf(await home.client.expectOk("space.remote.set", { repository: local, url: path }), local);
+  assert.deepEqual([named.state, named.instance, named.governing, named.id, named.placements.map((line) => line.instance)], ["reachable", null, null, null, [null]]);
+  const from = home.client.mark();
+  assert.deepEqual(await home.client.expectOk("space.pick", { repository: local, choice: { kind: "create", instance: host.url, groupId: "2002", name: "path-only" } }), { accepted: true });
+  assert.deepEqual(creationsAsked(host).at(-1), ["path-only-spex", "2002"]);
+  const key = hostKey(host, "acme/path-only-spex");
+  const picked = await home.client.waitRepository(from, key, (repository) => repository.sync.phase === "done", 30_000);
+  // Moved under the instance's folder at its path there, its pair
+  // following (storage-35); its placement there beside `origin`, which
+  // keeps its URL and records no id (storage-34).
+  const clone = clonePath(home.dataDir, key);
+  const folder = hostFolder(host);
+  assert.ok(existsSync(join(clone, ".git")) && !existsSync(clonePath(home.dataDir, local)), "the clone moved under the instance's folder");
+  assert.equal(Home.load(home.dataDir).keyForFolder(code), key, "its pair follows it");
+  assert.deepEqual(remoteUrls(clone).map(([name]) => name), ["origin", folder]);
+  assert.equal(git(clone, "remote", "get-url", "origin"), path);
+  assert.equal(spawnSync("git", ["-C", clone, "config", "--get", "remote.origin.spexId"]).status, 1);
+  assert.equal(git(clone, "config", "--get", `remote.${folder}.spexId`), picked.id);
+  assert.equal(git(clone, "config", "--get", "branch.spex.remote"), folder);
+  assert.equal(git(bareOf(host, key), "rev-parse", "spex"), git(clone, "rev-parse", "spex"));
+  assert.deepEqual([picked.state, picked.instance, picked.remote], ["reachable", host.url, "acme/path-only-spex"]);
+  assert.deepEqual(picked.placements.map((line) => [line.instance, line.path, line.attached]), [[host.url, "acme/path-only-spex", true], [null, path, true]]);
+  // Holding a placement with an instance now, it is picked no more
+  // (space-29).
+  await home.client.expectError("space.pick", { repository: key, choice: { kind: "create", instance: host.url, groupId: "2002", name: "again" } }, "invalid_request", /is on the host already$/);
+});
+
+test("space-73: a path remote named through space.remote.set stands as origin beside the placement's remote, which keeps its id, its spex and this device's record, and goes alone; a repository the host moved keeps them through its next Sync, which moves the clone", async (t) => {
   const host = await startHost();
   const home = await startHome("moved-pick", { host, project: false, extra: { signIn: "browser" } });
   t.after(() => home.stop());
@@ -1540,6 +1604,32 @@ test("space-73: a repository the host moved keeps the clone's sync and this devi
   const id = synced.id ?? "";
   assert.ok(synced.lastSync && id, JSON.stringify(synced));
   assert.deepEqual(synced.branch?.agreed, { at, current: true });
+  const url = git(clone, "remote", "get-url", folder);
+
+  // A path remote the reader names stands as `origin` beside the
+  // placement's remote, after it in the clone's Git configuration and
+  // last among its placements; the placement keeps its id, the `spex`
+  // the clone holds of it, the upstream and this device's recorded last
+  // sync (space-5, space-29).
+  const path = bareRepo();
+  const named = repositoryOf(await home.client.expectOk("space.remote.set", { repository: key, url: path }), key);
+  assert.deepEqual(remoteUrls(clone), [[folder, url], ["origin", path]]);
+  const kept = (row: RepositoryState, what: string): void => {
+    assert.equal(git(clone, "config", "--get", `remote.${folder}.spexId`), id, `${what}: its id`);
+    assert.equal(git(clone, "rev-parse", `refs/remotes/${folder}/spex`), pushed, `${what}: the spex the clone holds of it`);
+    assert.equal(git(clone, "config", "--get", "branch.spex.remote"), folder, `${what}: the upstream`);
+    assert.deepEqual(prefsOf(home.dataDir)[`sync:${key}:last`], synced.lastSync, `${what}: this device's record`);
+    assert.deepEqual([row.state, row.instance, row.id, row.remote, row.lastSync, row.branch?.agreed], ["reachable", host.url, id, local, synced.lastSync, { at, current: true }], `${what}: ${JSON.stringify(row)}`);
+  };
+  kept(named, "a path remote named");
+  assert.deepEqual(named.placements.map((line) => [line.instance, line.path, line.id, line.attached, line.state]), [[host.url, local, id, true, "reachable"], [null, path, null, true, "reachable"]]);
+  assert.equal(spawnSync("git", ["-C", clone, "config", "--get", "remote.origin.spexId"]).status, 1, "the path placement records no id");
+  // Removing it removes `origin` alone.
+  const removed = repositoryOf(await home.client.expectOk("space.remote.set", { repository: key, url: null }), key);
+  assert.deepEqual(remoteUrls(clone), [[folder, url]]);
+  assert.equal(spawnSync("git", ["-C", clone, "config", "--get-regexp", "^remote\\.origin\\."]).status, 1, "nothing of origin stays");
+  kept(removed, "the path remote removed");
+  assert.deepEqual(removed.placements.map((line) => line.instance), [host.url]);
 
   // The host moves it into acme, its id kept, and a Refresh reads it
   // there.
@@ -1568,34 +1658,6 @@ test("space-73: a repository the host moved keeps the clone's sync and this devi
   const followed = await home.client.waitRepository(fromSync, moved, (repository) => repository.sync.phase === "done", 30_000);
   assert.ok(followed.lastSync && followed.lastSync.at >= (synced.lastSync?.at ?? 0), JSON.stringify(followed.lastSync));
   assert.deepEqual(followed.branch?.agreed, { at, current: true });
-
-  // Taken away again and a group picked to create another repository: the
-  // host's remote for another id clears them (space-5).
-  const movedClone = clonePath(home.dataDir, moved);
-  await home.client.expectOk("space.remote.set", { repository: moved, url: null });
-  host.script.sleepListing(2_000);
-  const fromOther = home.client.mark();
-  await home.client.expectOk("space.pick", { repository: moved, choice: { kind: "create", instance: host.url, groupId: "2003", name: "invites" } });
-  assert.deepEqual(creationsAsked(host).at(-1), ["invites-spex", "2003"]);
-  const other = await home.client.repository(moved);
-  assert.equal(other.remote, "acme/research/invites-spex");
-  assert.ok(other.id && other.id !== id, JSON.stringify(other.id));
-  assert.equal(other.lastSync, null);
-  assert.equal(other.branch?.agreed, null);
-  assert.equal(prefsOf(home.dataDir)[`sync:${moved}:last`], undefined);
-  assert.throws(() => git(movedClone, "rev-parse", "-q", "--verify", `refs/remotes/${folder}/spex`));
-  host.script.sleepListing(0);
-  const research = hostKey(host, "acme/research/invites-spex");
-  const created = await home.client.waitRepository(fromOther, research, (repository) => repository.sync.phase === "done", 30_000);
-  assert.ok(created.lastSync, "its own sync is recorded");
-
-  // A remote the reader names is another repository too (space-5).
-  const named = repositoryOf(await home.client.expectOk("space.remote.set", { repository: research, url: bareRepo() }), research);
-  assert.equal(named.lastSync, null);
-  assert.equal(named.branch?.agreed, null);
-  assert.equal(named.branch?.checkedAt, null);
-  assert.equal(named.id, null);
-  assert.equal(prefsOf(home.dataDir)[`sync:${research}:last`], undefined);
 });
 
 /** A Playbook session lease `sessions/.<id>.lock` planted in a clone as
@@ -2196,7 +2258,8 @@ test("git-host-5: full reads expose running and failure with only local rows, pr
   const signed = home.client.mark();
   await signIn(home, host);
   await home.client.waitRepository(signed, HOST_OWN, (row) => row.sync.phase === "done");
-  await home.client.expectOk("space.remote.set", { repository: HOST_OWN, url: null });
+  // Its remote taken away from a terminal: only local rows stand.
+  git(clonePath(home.dataDir, HOST_OWN), "config", "--remove-section", `remote.${hostFolder(host)}`);
   const before = await home.client.expectOk("space.get", {});
   const beforeAt = instanceOf(before, host.url);
   assert.deepEqual(beforeAt?.read, { phase: "idle" });
@@ -2233,7 +2296,8 @@ test("git-host-5: signed-in startup publishes a failed first read even with only
   const signed = first.client.mark();
   await signIn(first, host);
   await first.client.waitRepository(signed, HOST_OWN, (row) => row.sync.phase === "done");
-  await first.client.expectOk("space.remote.set", { repository: HOST_OWN, url: null });
+  // Its remote taken away from a terminal: only local rows stand.
+  git(clonePath(first.dataDir, HOST_OWN), "config", "--remove-section", `remote.${hostFolder(host)}`);
   await first.stop();
   const home = await startHome("startup-read-outcome", { host, dataDir: first.dataDir, project: false });
   t.after(() => home.stop());

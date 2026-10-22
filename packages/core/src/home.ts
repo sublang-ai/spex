@@ -16,7 +16,7 @@ import {
   StorageFormatError, writeApplicationBytes,
 } from "./files.js";
 import { i18n } from "./i18n.js";
-import { canonicalOrigin, hostUrlFor, instanceFolder, instanceSegmentOf, isInstanceFolder, OriginRefused } from "./instance.js";
+import { canonicalOrigin, hostUrlFor, instanceFolder, instanceSegmentOf, OriginRefused } from "./instance.js";
 import { REPOSITORY_KEY_PATTERN } from "./protocol.js";
 
 export { hostUrlFor };
@@ -115,24 +115,6 @@ export function remoteNamesIn(output: string): string[] {
     if (name !== "" && !names.includes(name)) names.push(name);
   }
   return names;
-}
-
-/** The remote a clone syncs with, among the names its remotes bear
- * (DR-127): its key's instance folder where a remote of that name
- * stands; else `origin` — a remote the reader named, or one a clone
- * made before its remote took its instance's name; else the one remote
- * named by an instance's folder — for a clone keyed in your own group's
- * folder, which names no instance, your own group's own repository's or
- * that of a clone a pick left there (storage-35, storage-31); for one
- * keyed under an instance, the remote a follow half made left named by
- * another instance's folder, which its next sync renames (space-60);
- * none otherwise. */
-export function cloneRemoteName(key: string, names: readonly string[]): string | null {
-  const instance = splitKey(key).instance;
-  if (instance !== null && names.includes(instance)) return instance;
-  if (names.includes("origin")) return "origin";
-  const folders = names.filter(isInstanceFolder);
-  return folders.length === 1 ? folders[0] : null;
 }
 
 export const invalidHome = (): string =>

@@ -988,10 +988,11 @@ test("space-4, space-83, space-65: with both instances signed in and your own gr
   const before = await refreshed(home);
   const ownId = repositoryOf(before, HOST_OWN).id;
   assert.ok(ownId);
-  // Its remote taken away and the first listing nothing under its name
-  // any more, a set-up there creates it (space-4); the first answers its
-  // listing slower than the second.
-  await home.client.expectOk("space.remote.set", { repository: HOST_OWN, url: null });
+  // Its remote taken away from a terminal and the first listing nothing
+  // under its name any more, a set-up there creates it (space-4); the
+  // first answers its listing slower than the second.
+  git(clonePath(home.dataDir, HOST_OWN), "config", "--remove-section", `remote.${hostFolder(first)}`);
+  const removedAt = Date.now();
   first.script.rename(ownId, { name: "former-spex" });
   first.script.sleepListing(1_500);
   t.after(() => first.script.sleepListing(0));
@@ -1004,13 +1005,69 @@ test("space-4, space-83, space-65: with both instances signed in and your own gr
   // The first, the earliest signed in, brings it: `ada-spex` created in
   // its namespace and pushed, the clone's one remote named by the
   // first's folder; the second creates nothing (space-4, space-65).
-  const own = await home.client.waitRepository(mark, HOST_OWN, (repository) => repository.instance === first.url && repository.sync.phase === "done", 30_000);
+  const own = await home.client.waitRepository(mark, HOST_OWN, (repository) => repository.instance === first.url && repository.sync.phase === "done" && repository.sync.at > removedAt, 30_000);
   assert.equal(own.state, "reachable");
   assert.deepEqual(first.script.creations.slice(createdAtFirst).map((body) => (body as { name?: unknown }).name), [`${LOGIN}-spex`]);
   assert.deepEqual(second.script.creations, [], "nothing is created at the second");
   const ownDir = clonePath(home.dataDir, HOST_OWN);
   assert.deepEqual(git(ownDir, "remote").split("\n"), [hostFolder(first)]);
   assert.equal(git(bareOf(first, HOST_OWN), "rev-parse", "spex"), git(ownDir, "rev-parse", "spex"));
+});
+
+test("storage-34, storage-31: a clone's placements are its remotes in the order its Git configuration holds them, a rename keeping its place and origin last; your own group's own repository is at its first placement's instance, its row's, its environment's and its commits' identity's", async (t) => {
+  const { first, second, home } = await twoInstances("placements-in-order");
+  t.after(() => home.stop());
+  const own = clonePath(home.dataDir, HOST_OWN);
+  const [atFirst, atSecond] = [hostFolder(first), hostFolder(second)];
+  const firstUrl = git(own, "remote", "get-url", atFirst);
+  const firstId = git(own, "config", "--get", `remote.${atFirst}.spexId`);
+  // Your own group's records at the second too, in its acme group there,
+  // its `spex` pushed from here, and the stand-ins' lists read.
+  const notes = second.script.addRepository({ group: "acme", name: "ada-notes-spex" });
+  const secondUrl = `${second.gitOrigin}/${second.storage}/acme/ada-notes-spex.git`;
+  git(own, "push", "-q", second.bareOf("acme/ada-notes-spex"), "spex:spex");
+  // The first's remote set aside under a name no instance's folder bears,
+  // a path remote and the second's remote added after it, then the first's
+  // named back: its rename keeps its place.
+  git(own, "remote", "rename", atFirst, "parked");
+  git(own, "remote", "add", "origin", bareRepo());
+  const path = git(own, "remote", "get-url", "origin");
+  git(own, "remote", "add", atSecond, secondUrl);
+  git(own, "config", `remote.${atSecond}.spexId`, notes.id);
+  git(own, "remote", "rename", "parked", atFirst);
+  const configured = (): string[] => git(own, "config", "--get-regexp", "^remote\\..*\\.url$").split("\n").map((line) => line.split(" ")[0]);
+  assert.deepEqual(configured(), [`remote.${atFirst}.url`, "remote.origin.url", `remote.${atSecond}.url`]);
+  const instanceOrigin = (): string | null => (home.service as unknown as { space: { instanceOriginOf(key: string): string | null } }).space.instanceOriginOf(HOST_OWN);
+  // Its placements in that order, the path placement last whatever its
+  // place: the first, the clone's instance and the row's id (storage-34,
+  // storage-31).
+  const firstFirst = repositoryOf(await refreshed(home), HOST_OWN);
+  assert.deepEqual(firstFirst.placements.map((line) => [line.instance, line.path, line.id, line.attached]), [
+    [first.url, HOST_OWN, firstId, true],
+    [second.url, "acme/ada-notes-spex", notes.id, true],
+    [null, path, null, true],
+  ]);
+  assert.deepEqual([firstFirst.instance, firstFirst.governing, firstFirst.id, firstFirst.state], [first.url, first.url, firstId, "reachable"]);
+  assert.equal(git(own, "config", "--get", `remote.${atFirst}.url`), firstUrl);
+  assert.equal(instanceOrigin(), first.url);
+
+  // Its first placement dropped and added again, it stands after the
+  // second's: your own group's own repository is now at the second, its
+  // folder kept, its commits made as the account there (space-32).
+  git(own, "config", "--remove-section", `remote.${atFirst}`);
+  git(own, "remote", "add", atFirst, firstUrl);
+  git(own, "config", `remote.${atFirst}.spexId`, firstId);
+  assert.deepEqual(configured(), ["remote.origin.url", `remote.${atSecond}.url`, `remote.${atFirst}.url`]);
+  const secondFirst = repositoryOf(await refreshed(home), HOST_OWN);
+  assert.deepEqual(secondFirst.placements.map((line) => [line.instance, line.id]), [[second.url, notes.id], [first.url, firstId], [null, null]]);
+  assert.deepEqual([secondFirst.instance, secondFirst.governing, secondFirst.id, secondFirst.state], [second.url, second.url, notes.id, "reachable"]);
+  assert.equal(instanceOrigin(), second.url);
+  writeFileSync(join(own, "notes.txt"), "kept at the second\n");
+  const synced = await home.client.settle("space.sync", { repository: HOST_OWN }, 30_000);
+  assert.equal(synced.sync.phase, "done", JSON.stringify(synced.sync));
+  assert.equal(git(own, "log", "-1", "--format=%an <%ae>"), "Bob <bob@users.noreply.127.0.0.1>");
+  assert.equal(git(second.bareOf("acme/ada-notes-spex"), "rev-parse", "spex"), git(own, "rev-parse", "spex"));
+  assert.ok(existsSync(join(own, ".git")), "its folder is kept");
 });
 
 test("git-host-24, space-83, git-host-5, git-host-21: Refresh reads each instance on its own, its acme repository under a key in its own folder; a core restarted signed in to both begins one read of each at its first space.get, the second answering 503 leaving the first's view and read time while the second reports its failure; after a 429 from the first, a read of the second reaches it at once while the first's waits out its hold", async (t) => {
@@ -1381,8 +1438,9 @@ test("git-host-24, space-83, git-host-6, git-host-9, git-host-15, git-host-16, g
   assert.deepEqual(git(clonePath(home.dataDir, alphaKey), "remote").split("\n"), [hostFolder(first)]);
 
   // A pick of a clone keyed under the first that names the second is
-  // refused, nothing created there (space-29, space-58).
-  await home.client.expectOk("space.remote.set", { repository: alphaKey, url: null });
+  // refused, nothing created there (space-29, space-58), its remote taken
+  // away from a terminal.
+  git(clonePath(home.dataDir, alphaKey), "config", "--remove-section", `remote.${hostFolder(first)}`);
   const createdAtSecond = second.script.creations.length;
   await home.client.expectError("space.pick", { repository: alphaKey, choice: { kind: "create", instance: second.url, groupId: "2002", name: "alpha" } }, "invalid_request", new RegExp(`^alpha-spex is kept under ${HOST_NAME}; pick a group there$`));
   assert.equal(second.script.creations.length, createdAtSecond);
