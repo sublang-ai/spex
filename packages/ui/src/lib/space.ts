@@ -174,8 +174,9 @@ export function lineOutcome(
  * outcome the last sync left there until the next operation, the ones
  * that need nothing of the reader put away by Dismiss — `dismissed`
  * being the sync phase the reader dismissed (space-12, space-15); else
- * its state, a reachable one reading its last sync (space-61), one a
- * placement file names "Not on this device". Where its last check
+ * its state, a reachable one reading its last sync (space-61) and a
+ * read-only one carrying it beside the host's reason, one a placement
+ * file names "Not on this device". Where its last check
  * counted them, its own ahead and behind ride the title of a sync's
  * outcome and of its state (space-8). */
 export function placementPhrase(
@@ -249,10 +250,21 @@ export function placementPhrase(
     }
     case "read-only":
     case "unreachable": {
-      const text = hostStatePhrase(line.state, line.reason);
+      const state = hostStatePhrase(line.state, line.reason);
+      // A read-only line carries its last sync as a reachable one does —
+      // its age while the clone's `spex` is still the one it shared, the
+      // moment they last agreed otherwise — and an unreachable one in its
+      // title alone (space-87, space-61).
+      const text =
+        line.state === "read-only" && last
+          ? i18n._("{state} · last synced {at}", {
+              state,
+              at: last.current ? relativeAge(last.at, now) : shortMoment(last.at),
+            })
+          : state;
       return {
         text,
-        title: counted(last ? i18n._("{state} · last synced {at}", { state: text, at: absoluteTitle(last.at) }) : text),
+        title: counted(last ? i18n._("{state} · last synced {at}", { state, at: absoluteTitle(last.at) }) : state),
         tone: "idle",
       };
     }

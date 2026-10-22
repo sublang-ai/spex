@@ -53,7 +53,7 @@ import type { GroupsState, PlacementState, RepositoryState, SpaceOp } from "@sub
 
 import { activateLanguage } from "../i18n.js";
 import { SpexCommandError } from "../lib/client.js";
-import { absoluteTitle } from "../lib/time.js";
+import { absoluteTitle, shortMoment } from "../lib/time.js";
 import { setClientForTests } from "../state/store.js";
 import {
   ACME,
@@ -440,7 +440,7 @@ describe("GROUPS: a line per placement (space-87, space-61, space-12, space-15, 
     // A read-only placement reads so on its line alone.
     await renderGroups(placedAtTwo({ second: { state: "read-only", reason: "archived" } }), { open: false });
     expect(screen.getByTestId(`space-repo-state-${KEY}`).textContent).toBe("Synced 5m ago");
-    expect(phraseOf(KEY, SECOND).textContent).toBe("Read-only: archived");
+    expect(phraseOf(KEY, SECOND).textContent).toBe("Read-only: archived · last synced 1h ago");
     cleanup();
 
     // Every placement unreachable: the core reads the row unreachable,
@@ -472,6 +472,58 @@ describe("GROUPS: a line per placement (space-87, space-61, space-12, space-15, 
     expect(screen.getByTestId(`space-repo-counts-${KEY}`).getAttribute("title")).toBe(countsOf(2, 1));
     expect(phraseOf(KEY, SECOND).getAttribute("title")).toBe(`${absoluteTitle(NOW - MIN)} · ${countsOf(7, 9)}`);
   });
+
+  test.each(["en", "zh"] as const)(
+    "space-87, space-61: a read-only line carries its last sync beside the host's reason — its age, or the moment the clone last agreed with it — truncating with its title; with none, the reason alone; an unreachable line carries it in its title alone (%s)",
+    async (language) => {
+      activateLanguage(language);
+      const words =
+        language === "en"
+          ? {
+              state: "Read-only: archived",
+              last: (at: string) => ` · last synced ${at}`,
+              hour: "1h ago",
+              counts: countsOf(0, 0),
+              gone: "Unreachable: the device is offline",
+            }
+          : {
+              state: "只读：archived",
+              last: (at: string) => ` · 上次同步于 ${at}`,
+              hour: "1 小时前",
+              counts: `领先 0 个提交，落后 0 个提交 · ${absoluteTitle(BRANCH.checkedAt!)} 检查过`,
+              gone: "无法连接：the device is offline",
+            };
+      // This device's last sync with it, an hour ago.
+      await renderGroups(placedAtTwo({ second: { state: "read-only", reason: "archived" } }), { open: false });
+      const phrase = phraseOf(KEY, SECOND);
+      expect(phrase.textContent).toBe(`${words.state}${words.last(words.hour)}`);
+      // It truncates, its title holding the whole with the moment and
+      // the counts (space-28, space-8).
+      expect(phrase.className).toContain("truncate");
+      expect(phrase.getAttribute("title")).toBe(`${words.state}${words.last(absoluteTitle(NOW - HOUR))} · ${words.counts}`);
+      cleanup();
+
+      // None recorded: the moment the clone last agreed with it.
+      const agreedAt = NOW - 3 * HOUR;
+      await renderGroups(
+        placedAtTwo({ second: { state: "read-only", reason: "archived", lastSync: null, branch: { ...BRANCH, agreed: { at: agreedAt, current: false } } } }),
+        { open: false },
+      );
+      expect(phraseOf(KEY, SECOND).textContent).toBe(`${words.state}${words.last(shortMoment(agreedAt))}`);
+      cleanup();
+
+      // None held: the reason alone.
+      await renderGroups(placedAtTwo({ second: { state: "read-only", reason: "archived", lastSync: null, branch: null } }), { open: false });
+      expect(phraseOf(KEY, SECOND).textContent).toBe(words.state);
+      expect(phraseOf(KEY, SECOND).getAttribute("title")).toBe(words.state);
+      cleanup();
+
+      // An unreachable line keeps it to its title.
+      await renderGroups(placedAtTwo({ second: { state: "unreachable", reason: "the device is offline" } }), { open: false });
+      expect(phraseOf(KEY, SECOND).textContent).toBe(words.gone);
+      expect(phraseOf(KEY, SECOND).getAttribute("title")).toContain(words.last(absoluteTitle(NOW - HOUR)));
+    },
+  );
 
   test("space-28: a line's name owns the slack and truncates with its title; its path hides below 28rem", async () => {
     await renderGroups(twoPlacementsHome(), { open: false });

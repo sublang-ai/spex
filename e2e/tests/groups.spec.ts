@@ -17,7 +17,8 @@
 // undo in Spex — a group renamed and deleted, a project moved, each
 // refusal in place (space-80); a second instance signed in from the
 // list's foot, a project picked into it and pushed there, the first
-// signed out, refused Forget and signed in again (space-85); and a
+// signed out, refused Forget and signed in again, "Place at…" and
+// "Leave…" open at the floor (space-85); and a
 // folder added while signed in at two instances, paired at the second
 // (projects-17).
 // Every host is the in-process stand-in on
@@ -994,6 +995,17 @@ const INSTANCE_ROWS = [
   '[data-testid="space-add-card"] label',
 ];
 
+/** A project's rows and lines with what its "Place at…" and "Leave…"
+ * open beneath it — the picker, the choice, the confirm — measured at
+ * the floor (space-28, space-43, space-88, space-89). */
+const PLACEMENT_ROWS = [
+  ...INSTANCE_ROWS,
+  '[data-testid^="space-row-"]',
+  '[data-testid^="space-line-"]',
+  '[data-testid^="space-place-"]',
+  '[data-testid^="space-leave-"]',
+];
+
 test.describe("a second instance", () => {
   // Signed in at the first stand-in with the demo project registered; a
   // second stand-in on a Git backend of its own, holding its own `acme`,
@@ -1025,12 +1037,12 @@ test.describe("a second instance", () => {
       await expect(page.getByTestId("space-surface").locator("a")).toHaveCount(0);
       expect(await surfaceLeaks(page, app.hosts), where).toEqual([]);
     };
-    const fit = async (where: string, show?: () => Promise<void>): Promise<void> => {
+    const fit = async (where: string, show?: () => Promise<void>, containers: string[] = INSTANCE_ROWS): Promise<void> => {
       await setRail(page, false);
       await page.setViewportSize({ width: 320, height: TALL });
       await show?.();
       const defects: string[] = [];
-      record(where, await measure(page, INSTANCE_ROWS), defects);
+      record(where, await measure(page, containers), defects);
       expect(defects, defects.join("\n")).toEqual([]);
       await page.setViewportSize({ width: 1280, height: TALL });
     };
@@ -1223,6 +1235,37 @@ test.describe("a second instance", () => {
     });
     await page.keyboard.press("Escape");
     await expect(card).toHaveCount(0);
+
+    // "Place at…" on the first's project opens the second's picker
+    // beneath the row, and "Leave…" its inline confirm: each fits at the
+    // floor, measured with the rows and lines (space-88, space-89,
+    // space-28).
+    const placeControl = firstRow.getByTestId(`space-row-place-${FIRST_KEY}`);
+    await expect(placeControl).toHaveAccessibleName(`Also place at ${SECOND_HOST_NAME}`);
+    const placePicker = firstRow.getByTestId(`space-place-${FIRST_KEY}`);
+    await fit(
+      "Groups · Place at… open · 320",
+      async () => {
+        await placeControl.click();
+        await expect(placePicker).toBeVisible();
+      },
+      PLACEMENT_ROWS,
+    );
+    await placePicker.getByTestId(`space-pick-cancel-${FIRST_KEY}`).click();
+    await expect(placePicker).toHaveCount(0);
+    const leaveControl = firstRow.getByTestId(`space-row-leave-${FIRST_KEY}`);
+    await expect(leaveControl).toHaveAccessibleName("Remove from Stand-in Git host");
+    const leaveConfirm = firstRow.getByTestId(`space-leave-confirm-${FIRST_KEY}`);
+    await fit(
+      "Groups · Leave… asking · 320",
+      async () => {
+        await leaveControl.click();
+        await expect(leaveConfirm).toBeVisible();
+      },
+      PLACEMENT_ROWS,
+    );
+    await leaveConfirm.getByRole("button", { name: "Keep" }).click();
+    await expect(leaveConfirm).toHaveCount(0);
 
     // In English and in Chinese, the surface holds no link and nothing
     // under either stand-in's URL but its origin, nor the Git system's
@@ -1644,6 +1687,8 @@ test.describe("fit", () => {
       '[data-testid="space-groups"] h3',
       '[data-testid^="space-row-"]',
       '[data-testid^="space-line-"]',
+      '[data-testid^="space-place-"]',
+      '[data-testid^="space-leave-"]',
       '[data-testid^="space-incoming-"]',
       '[data-testid^="space-unit-"]',
       '[data-testid="space-picker"]',
@@ -1696,6 +1741,16 @@ test.describe("fit", () => {
         }
       }
     }
+    // "Leave…" asking beneath the row fits at the floor too (space-89,
+    // space-28).
+    await setRail(page, false);
+    await page.setViewportSize({ width: 320, height: TALL });
+    await page.getByTestId(`space-row-leave-${TEAM_KEY}`).click();
+    const leaveConfirm = page.getByTestId(`space-leave-confirm-${TEAM_KEY}`);
+    await expect(leaveConfirm).toBeVisible();
+    record(`Groups · Leave… asking · sidebar collapsed · 320×${TALL}`, await measure(page, containers), defects);
+    await leaveConfirm.getByRole("button", { name: "Keep" }).click();
+    await expect(leaveConfirm).toHaveCount(0);
     expect(defects, defects.join("\n")).toEqual([]);
   });
 });
