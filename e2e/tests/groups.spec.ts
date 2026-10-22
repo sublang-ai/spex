@@ -1825,6 +1825,11 @@ test.describe("second device", () => {
     const ownSession = (await sessionRow.getAttribute("data-testid"))!.replace("space-unit-mine-sessions/", "");
     await page.getByTestId(`space-row-sync-${key}`).click();
     const notice = page.getByTestId("space-notice-confirm");
+    // It leads with where the records go: the placement's path at its
+    // instance, as its line names them (space-57, space-87).
+    const placed = page.getByTestId(`space-row-${key}`).getByTestId(`space-line-${host.url}`);
+    const at = await placed.getByTestId("space-line-at").textContent();
+    await expect(notice).toContainText(`Records go to ${at} at Stand-in Git host.`);
     await expect(notice).toContainText("Every session goes there whole — hidden parts and attachments included");
     await notice.getByRole("button", { name: "Continue" }).click();
     await expect(page.getByTestId("space-done-line")).toHaveText(/^Synced just now · [1-9]\d* sent · 0 received$/);

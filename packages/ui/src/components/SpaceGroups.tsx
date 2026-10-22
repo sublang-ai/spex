@@ -14,11 +14,13 @@
 // state offers — Sync, Join, Pick a group, Retry. What a control opens
 // stands in place beneath its row: the group picker, one section per
 // instance it offers (space-58), the folder a Join clones into
-// (space-63), the first-push notice (space-57) and the joining of
-// unrelated histories (space-13); a pick joining a repository others
-// may share says the same notice in the picker first. Members and
-// "Move to another group" stand on each placement's line, acting on
-// that placement at its instance (space-62, space-78, DR-128).
+// (space-63), and the first-push notice of a placement, where every
+// placement the sync would run owes it (space-57); a pick joining a
+// repository others may share says the same notice in the picker
+// first. Members, "Move to another group", and the way forward an
+// outcome leaves — Continue, the join of an unrelated history, Retry —
+// stand on each placement's line, acting on that placement at its
+// instance (space-62, space-78, space-57, space-13, space-15, DR-128).
 // A group an instance lists carries, while signed in there, Members and,
 // where its read lets the person, "New subgroup", "Rename" and — while
 // the list holds nothing under it — "Delete" on its heading (space-68,
@@ -44,7 +46,19 @@ import {
   ownBeside,
   pickInstances,
 } from "../lib/instances.js";
-import { governingOfPlacement, keyPlacement, rowPlacement, standingEntry } from "../lib/placements.js";
+import type { SpexCommandError } from "../lib/client.js";
+import {
+  canRun,
+  governingOfPlacement,
+  heldPlacements,
+  instanceNameAt,
+  keyPlacement,
+  owesNotice,
+  placementAt,
+  rowPlacement,
+  runnable,
+  standingEntry,
+} from "../lib/placements.js";
 import { absoluteTitle } from "../lib/time.js";
 import {
   STEP_LINES,
@@ -63,7 +77,7 @@ import { Icon } from "./Icon.js";
 import { InlineConfirm } from "./InlineConfirm.js";
 import { AddInstance, InstanceSection } from "./SpaceInstance.js";
 import { GroupNameEditor, MembersPanel } from "./SpaceMembers.js";
-import { PlacementLines } from "./SpacePlacements.js";
+import { PlacementLines, PlacementNotice, continueLabel, sharingNotice } from "./SpacePlacements.js";
 import type { SignInFlow } from "./SpaceSignIn.js";
 import { SECONDARY, syncRefusal, type Note } from "./SpaceSurface.js";
 
@@ -125,54 +139,43 @@ export function statusDot(repo: RepositoryState): { className: string; tone: str
   };
 }
 
-/** A remote a path names: reached on this device without the host
- * (space-11). */
-const isPathRemote = (url: string | null): boolean => url !== null && url.startsWith("/");
-
-/** Whether the instance governing a row is signed out (space-61): a
- * path remote is reached without one, and a row no instance governs
- * waits while the home is signed in nowhere. */
+/** Whether a row waits for a sign-in (space-11, space-61): a clone
+ * holding placements can run none of them — no path placement, which
+ * this device reaches without an instance, and no instance governing
+ * one signed in; a row holding none, while the instance governing it is
+ * signed out, or while the home is signed in nowhere where none does. */
 function signedOutFor(groups: GroupsState, repo: RepositoryState, governing: InstanceState | undefined): boolean {
-  if (isPathRemote(rowPlacement(repo)?.path ?? null)) return false;
+  const held = heldPlacements(repo);
+  if (held.length > 0) return !held.some((line) => canRun(groups, repo, line));
   return governing ? !governing.signedIn : !anySignedIn(groups);
 }
 
 /** Why Sync is refused before its first step on this row (space-11):
- * the surface's own reasons, its instance's sign-in first, named by its
- * display name as last read, else its host name. */
+ * the surface's own reasons, the sign-in first where no placement can
+ * run, naming the first placement's instance by its display name as
+ * last read, else its host name. */
 export function rowSyncRefusal(
   groups: GroupsState,
   repo: RepositoryState,
   governing: InstanceState | undefined,
 ): string | undefined {
-  if (governing && signedOutFor(groups, repo, governing)) {
-    return i18n._({
-      id: "Sign in to {host} first",
-      values: { host: instanceName(governing) },
-      comment: "beside a disabled Sync: the row's instance is signed out; {host} its display name, or its host name before any read",
-    });
+  if (signedOutFor(groups, repo, governing)) {
+    const first = keyPlacement(repo)?.instance ?? governing?.origin;
+    if (first) {
+      return i18n._({
+        id: "Sign in to {host} first",
+        values: { host: instanceNameAt(groups, first) },
+        comment: "beside a disabled Sync: the row's instance is signed out; {host} its display name, or its host name before any read",
+      });
+    }
   }
   return syncRefusal(groups, repo);
 }
 
-/** The sharing notice's words (space-57): what goes to a repository
- * others share, and that a public one's records are public. */
-function sharingNotice(visibility: PlacementState["visibility"]): string {
-  return visibility === "public"
-    ? i18n._(
-        "Every session goes there whole — hidden parts and attachments included — and nothing recalls what others downloaded. This repository is public, so its records are public.",
-      )
-    : i18n._(
-        "Every session goes there whole — hidden parts and attachments included — and nothing recalls what others downloaded.",
-      );
-}
-
-/** The notice's acknowledging control (space-57). */
-const continueLabel = (): string =>
-  i18n._({ id: "Continue", comment: "confirm: go on with the first sync, or the pick joining a repository others share" });
-
-/** The control a row's state offers (space-61). */
-type RowControl = "sync" | "unrelated" | "pick" | "retry" | "join" | "none";
+/** The control a row's state offers (space-61): one Sync for every
+ * placement, an unrelated placement's Join standing on its line
+ * (space-13, DR-128). */
+type RowControl = "sync" | "pick" | "retry" | "join" | "none";
 
 function rowControl(
   groups: GroupsState,
@@ -197,7 +200,7 @@ function rowControl(
       return signedOutFor(groups, repo, governing) ? "none" : "retry";
     case "reachable":
     case "read-only":
-      return repo.sync.phase === "unrelated" || rowPlacement(repo)?.branch?.unrelated === true ? "unrelated" : "sync";
+      return "sync";
     default:
       return "none";
   }
@@ -606,7 +609,7 @@ function GroupSection({
   );
 }
 
-type Opened = "pick" | "join" | "folder" | "notice" | "unrelated";
+type Opened = "pick" | "join" | "folder" | "notice";
 
 /** One spex repository's row (space-1, space-61): the name owns the
  * slack, the code and the counts hide below @md (space-28), and the
@@ -650,6 +653,9 @@ function RepositoryRow({
   // reply and the state (DR-010 §3, space-29).
   const [accepted, setAccepted] = useState<{ op: "sync" | "join"; key: string }>();
   const [error, setError] = useState<string>();
+  // The placement the row's notice names, by its instance's origin
+  // (space-57).
+  const [noticeAt, setNoticeAt] = useState<string | null>();
   const controlRef = useRef<HTMLButtonElement>(null);
   const folderRef = useRef<HTMLButtonElement>(null);
 
@@ -665,9 +671,6 @@ function RepositoryRow({
   const governing = governingOf(groups, repo);
   const control = rowControl(groups, group, repo, governing);
   const groupRepository = isGroupRepository(group, repo);
-  // The placement the row reads as its own: its key placement, or the
-  // one it lists with no clone here (space-30).
-  const placement = rowPlacement(repo);
   const close = (focus: "control" | "folder" = "control") => {
     setOpened(undefined);
     const ref = focus === "folder" ? folderRef : controlRef;
@@ -675,16 +678,37 @@ function RepositoryRow({
     setTimeout(() => ref.current?.focus(), 0);
   };
 
-  const start = async (input: { join?: boolean; noticed?: boolean }) => {
+  /** Say the sharing notice of the placement at `origin` beneath the
+   * row before its sync (space-57). */
+  const askNotice = (origin: string | null) => {
+    setNoticeAt(origin);
+    setOpened("notice");
+  };
+
+  /** Sync every placement (space-12), with the notice of the one
+   * `placement` names seen (space-57). A refusal for want of a notice
+   * the page's read missed says it for the placement the core names,
+   * else the first that owes it; any other stands beside the control. */
+  const start = async (input: { placement?: string | null; noticed?: boolean }) => {
     const key = machineKey;
-    // Joining two histories is a sync started as a join (space-13).
-    const op = input.join ? "join" : "sync";
-    setBusy(op);
+    setBusy("sync");
     setError(undefined);
     try {
       await spaceSync(repo.key, input);
-      setAccepted({ op, key });
+      setAccepted({ op: "sync", key });
     } catch (cause) {
+      const details = (cause as SpexCommandError).details;
+      if (!input.noticed && details?.notice === true) {
+        const named = details.placement;
+        const owing =
+          (typeof named === "string" || named === null ? placementAt(repo, named) : undefined) ??
+          heldPlacements(repo).find((line) => owesNotice(repo, line)) ??
+          keyPlacement(repo);
+        if (owing) {
+          askNotice(owing.instance);
+          return;
+        }
+      }
       const message = (cause as Error).message;
       setError(message);
       onNote(message);
@@ -764,13 +788,15 @@ function RepositoryRow({
 
   const disabled = !connected;
   const pending = busy !== undefined || accepted !== undefined || running;
-  const refusal = control === "sync" || control === "unrelated" ? rowSyncRefusal(groups, repo, governing) : undefined;
-  // The first push into a repository others share says once what goes
-  // there (space-57); one whose only member is the account says nothing,
-  // and one whose count the host's read lacks, never synced from here,
-  // may have others.
-  const members = placement?.members ?? null;
-  const needsNotice = !placement?.noticed && (members === null ? !placement?.lastSync : members > 1);
+  const refusal = control === "sync" ? rowSyncRefusal(groups, repo, governing) : undefined;
+  // The first push to a placement others share says once what goes there
+  // (space-57): where every placement this sync would run owes it, the
+  // first owing one's notice comes first; where any other can run, the
+  // sync goes and each owing one waits on its line for its Continue.
+  const runs = heldPlacements(repo).filter((line) => runnable(groups, repo, line));
+  const owing = runs.filter((line) => owesNotice(repo, line));
+  const noticeFirst = runs.length > 0 && owing.length === runs.length ? owing[0] : undefined;
+  const noticeLine = opened === "notice" && noticeAt !== undefined ? placementAt(repo, noticeAt) : undefined;
   const joining = busy === "join" || accepted?.op === "join" || (running && sync.op === "join");
   const syncing =
     busy === "sync" || accepted?.op === "sync" || (running && sync.op !== "join" && sync.op !== "check");
@@ -799,31 +825,23 @@ function RepositoryRow({
   const captionId = `space-row-caption-${repo.key}`;
   switch (control) {
     case "sync":
-    case "unrelated":
       controlButton = button(
         `space-row-sync-${repo.key}`,
-        control === "unrelated"
-          ? joining
-            ? i18n._({ id: "Joining…", comment: "the Join control, while the join runs" })
-            : i18n._({ id: "Join", comment: "confirm: join both histories into one" })
-          : syncing
-            ? i18n._({ id: "Syncing…", comment: "the Sync control, while the sync runs" })
-            : i18n._({ id: "Sync", comment: "tab and control: send and bring back changes" }),
+        syncing
+          ? i18n._({ id: "Syncing…", comment: "the Sync control, while the sync runs" })
+          : i18n._({ id: "Sync", comment: "tab and control: send and bring back changes" }),
         {
           // What the control does is its own to say (DR-069); a running
           // control's word says it already.
           title: pending
             ? undefined
-            : control === "unrelated"
-              ? i18n._("Brings both histories into one and asks about anything that differs")
-              : readOnly
-                ? i18n._("Brings back anything new; sends nothing")
-                : i18n._("Sends what is here and brings back anything new"),
+            : readOnly
+              ? i18n._("Brings back anything new; sends nothing")
+              : i18n._("Sends what is here and brings back anything new"),
           disabled: refusal !== undefined || pending,
           describedBy: refusal || error ? captionId : undefined,
           onClick: () => {
-            if (control === "unrelated") setOpened("unrelated");
-            else if (needsNotice && !readOnly) setOpened("notice");
+            if (noticeFirst) askNotice(noticeFirst.instance);
             else void start({});
           },
         },
@@ -1078,27 +1096,15 @@ function RepositoryRow({
           onCancel={() => close("folder")}
         />
       ) : null}
-      {opened === "notice" ? (
+      {noticeLine ? (
         <div data-testid="space-notice-confirm" className="pl-6">
-          <InlineConfirm
-            question={sharingNotice(placement?.visibility ?? null)}
-            confirmLabel={continueLabel()}
-            onConfirm={() => {
+          <PlacementNotice
+            groups={groups}
+            line={noticeLine}
+            disabled={disabled}
+            onContinue={() => {
               setOpened(undefined);
-              void start({ noticed: true });
-            }}
-            onCancel={() => close()}
-          />
-        </div>
-      ) : null}
-      {opened === "unrelated" ? (
-        <div data-testid="space-join-confirm" className="pl-6">
-          <InlineConfirm
-            question={i18n._("Join both histories into one? Anything that differs will ask you to choose.")}
-            confirmLabel={i18n._({ id: "Join", comment: "confirm: join both histories into one" })}
-            onConfirm={() => {
-              setOpened(undefined);
-              void start({ join: true });
+              void start({ placement: noticeLine.instance, noticed: true });
             }}
             onCancel={() => close()}
           />

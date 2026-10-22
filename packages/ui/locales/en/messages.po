@@ -1286,7 +1286,7 @@ msgstr "Brings a file in as the source, then asks to adapt it"
 msgid "Brings back anything new; sends nothing"
 msgstr "Brings back anything new; sends nothing"
 
-#: src/components/SpaceGroups.tsx
+#: src/components/SpacePlacements.tsx
 msgid "Brings both histories into one and asks about anything that differs"
 msgstr "Brings both histories into one and asks about anything that differs"
 
@@ -1901,8 +1901,8 @@ msgstr "Connection restored."
 msgid "Connection to the Spex core lost — reconnecting."
 msgstr "Connection to the Spex core lost — reconnecting."
 
-#. confirm: go on with the first sync, or the pick joining a repository others share
-#: src/components/SpaceGroups.tsx
+#. confirm: go on with the first sync, or the pick joining a repository others share; on a placement's line waiting for the sharing notice, opens that notice
+#: src/components/SpacePlacements.tsx
 msgid "Continue"
 msgstr "Continue"
 
@@ -2555,11 +2555,11 @@ msgstr "error"
 msgid "Every role needs a player, and the command and intent their words"
 msgstr "Every role needs a player, and the command and intent their words"
 
-#: src/components/SpaceGroups.tsx
+#: src/components/SpacePlacements.tsx
 msgid "Every session goes there whole — hidden parts and attachments included — and nothing recalls what others downloaded."
 msgstr "Every session goes there whole — hidden parts and attachments included — and nothing recalls what others downloaded."
 
-#: src/components/SpaceGroups.tsx
+#: src/components/SpacePlacements.tsx
 msgid "Every session goes there whole — hidden parts and attachments included — and nothing recalls what others downloaded. This repository is public, so its records are public."
 msgstr "Every session goes there whole — hidden parts and attachments included — and nothing recalls what others downloaded. This repository is public, so its records are public."
 
@@ -3236,6 +3236,7 @@ msgstr "Its spex repository is not on this device."
 #. confirm: join both histories into one
 #. confirm: join both histories into one
 #: src/components/SpaceGroups.tsx
+#: src/components/SpacePlacements.tsx
 msgid "Join"
 msgstr "Join"
 
@@ -3243,7 +3244,7 @@ msgstr "Join"
 msgid "Join both histories into one to sync."
 msgstr "Join both histories into one to sync."
 
-#: src/components/SpaceGroups.tsx
+#: src/components/SpacePlacements.tsx
 msgid "Join both histories into one? Anything that differs will ask you to choose."
 msgstr "Join both histories into one? Anything that differs will ask you to choose."
 
@@ -3251,6 +3252,7 @@ msgstr "Join both histories into one? Anything that differs will ask you to choo
 #. the Join control, while the join runs
 #. the Join control, while the join runs
 #: src/components/SpaceGroups.tsx
+#: src/components/SpacePlacements.tsx
 msgid "Joining…"
 msgstr "Joining…"
 
@@ -4588,6 +4590,7 @@ msgstr "Reading…"
 
 #. Refresh's title: it reads every instance the home is signed in to
 #: src/components/SpaceGroups.tsx
+#: src/components/SpacePlacements.tsx
 #: src/components/SpaceSurface.tsx
 msgid "Reads each signed-in instance again"
 msgstr "Reads each signed-in instance again"
@@ -4623,6 +4626,11 @@ msgstr "Reconnecting…"
 #: src/lib/space.ts
 msgid "records"
 msgstr "records"
+
+#. the sharing notice's first sentence: {path} is the placement's path at the instance, {name} the instance's display name
+#: src/components/SpacePlacements.tsx
+msgid "Records go to {path} at {name}."
+msgstr "Records go to {path} at {name}."
 
 #: src/lib/failure-catalogue.ts
 msgid "Recover them from your editor's history, if it keeps one"
@@ -4955,6 +4963,7 @@ msgstr "resume tokens for this machine's agent conversations; they work nowhere 
 #. read the specs tree again
 #. run the stopped step again
 #. run the stopped step again
+#. run the stopped step again
 #. take the failed read again
 #. take the failed read again
 #. take the failed read again
@@ -4966,6 +4975,7 @@ msgstr "resume tokens for this machine's agent conversations; they work nowhere 
 #: src/components/RunView.tsx
 #: src/components/SettingsSurface.tsx
 #: src/components/SpaceGroups.tsx
+#: src/components/SpacePlacements.tsx
 #: src/components/SpaceSync.tsx
 #: src/components/SpecEditor.tsx
 #: src/components/SpecView.tsx
@@ -4992,8 +5002,10 @@ msgstr "Retry browser support check"
 #. a retry is in flight
 #. the Retry control, while the retry is in flight
 #. the Retry control, while the retry is in flight
+#. the Retry control, while the retry is in flight
 #: src/components/SettingsSurface.tsx
 #: src/components/SpaceGroups.tsx
+#: src/components/SpacePlacements.tsx
 #: src/components/SpaceSync.tsx
 msgid "Retrying…"
 msgstr "Retrying…"

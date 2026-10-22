@@ -1286,7 +1286,7 @@ msgstr "把文件引入为源文，再请求改编它"
 msgid "Brings back anything new; sends nothing"
 msgstr "只取回新的内容，不发出任何内容"
 
-#: src/components/SpaceGroups.tsx
+#: src/components/SpacePlacements.tsx
 msgid "Brings both histories into one and asks about anything that differs"
 msgstr "把两段历史合为一段，并就有差异之处询问你"
 
@@ -1901,8 +1901,8 @@ msgstr "连接已恢复。"
 msgid "Connection to the Spex core lost — reconnecting."
 msgstr "与 Spex 核心的连接已断开 — 正在重连。"
 
-#. confirm: go on with the first sync, or the pick joining a repository others share
-#: src/components/SpaceGroups.tsx
+#. confirm: go on with the first sync, or the pick joining a repository others share; on a placement's line waiting for the sharing notice, opens that notice
+#: src/components/SpacePlacements.tsx
 msgid "Continue"
 msgstr "继续"
 
@@ -2555,11 +2555,11 @@ msgstr "错误"
 msgid "Every role needs a player, and the command and intent their words"
 msgstr "每个角色都要有 Player，命令与意图都要填写"
 
-#: src/components/SpaceGroups.tsx
+#: src/components/SpacePlacements.tsx
 msgid "Every session goes there whole — hidden parts and attachments included — and nothing recalls what others downloaded."
 msgstr "每个会话都会完整地发往那里——包括隐藏部分和附件——他人已下载的内容无法收回。"
 
-#: src/components/SpaceGroups.tsx
+#: src/components/SpacePlacements.tsx
 msgid "Every session goes there whole — hidden parts and attachments included — and nothing recalls what others downloaded. This repository is public, so its records are public."
 msgstr "每个会话都会完整地发往那里——包括隐藏部分和附件——他人已下载的内容无法收回。此仓库是公开的，因此其中的记录也是公开的。"
 
@@ -3236,6 +3236,7 @@ msgstr "它的 spex 仓库不在此设备上。"
 #. confirm: join both histories into one
 #. confirm: join both histories into one
 #: src/components/SpaceGroups.tsx
+#: src/components/SpacePlacements.tsx
 msgid "Join"
 msgstr "加入"
 
@@ -3243,7 +3244,7 @@ msgstr "加入"
 msgid "Join both histories into one to sync."
 msgstr "将两段历史合并为一段后即可同步。"
 
-#: src/components/SpaceGroups.tsx
+#: src/components/SpacePlacements.tsx
 msgid "Join both histories into one? Anything that differs will ask you to choose."
 msgstr "将两段历史合并为一段？有差异的内容会让你选择。"
 
@@ -3251,6 +3252,7 @@ msgstr "将两段历史合并为一段？有差异的内容会让你选择。"
 #. the Join control, while the join runs
 #. the Join control, while the join runs
 #: src/components/SpaceGroups.tsx
+#: src/components/SpacePlacements.tsx
 msgid "Joining…"
 msgstr "加入中…"
 
@@ -4588,6 +4590,7 @@ msgstr "读取中…"
 
 #. Refresh's title: it reads every instance the home is signed in to
 #: src/components/SpaceGroups.tsx
+#: src/components/SpacePlacements.tsx
 #: src/components/SpaceSurface.tsx
 msgid "Reads each signed-in instance again"
 msgstr "重新读取每个已登录的实例"
@@ -4623,6 +4626,11 @@ msgstr "重新连接中…"
 #: src/lib/space.ts
 msgid "records"
 msgstr "记录"
+
+#. the sharing notice's first sentence: {path} is the placement's path at the instance, {name} the instance's display name
+#: src/components/SpacePlacements.tsx
+msgid "Records go to {path} at {name}."
+msgstr "记录将发往 {name} 上的 {path}。"
 
 #: src/lib/failure-catalogue.ts
 msgid "Recover them from your editor's history, if it keeps one"
@@ -4955,6 +4963,7 @@ msgstr "本机智能体对话的续接令牌；在别处无效"
 #. read the specs tree again
 #. run the stopped step again
 #. run the stopped step again
+#. run the stopped step again
 #. take the failed read again
 #. take the failed read again
 #. take the failed read again
@@ -4966,6 +4975,7 @@ msgstr "本机智能体对话的续接令牌；在别处无效"
 #: src/components/RunView.tsx
 #: src/components/SettingsSurface.tsx
 #: src/components/SpaceGroups.tsx
+#: src/components/SpacePlacements.tsx
 #: src/components/SpaceSync.tsx
 #: src/components/SpecEditor.tsx
 #: src/components/SpecView.tsx
@@ -4992,8 +5002,10 @@ msgstr "重试浏览器支持检查"
 #. a retry is in flight
 #. the Retry control, while the retry is in flight
 #. the Retry control, while the retry is in flight
+#. the Retry control, while the retry is in flight
 #: src/components/SettingsSurface.tsx
 #: src/components/SpaceGroups.tsx
+#: src/components/SpacePlacements.tsx
 #: src/components/SpaceSync.tsx
 msgid "Retrying…"
 msgstr "重试中…"

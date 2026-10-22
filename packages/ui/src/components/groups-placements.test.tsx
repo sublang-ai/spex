@@ -11,13 +11,20 @@
 // sync (space-61); and the line's fit (space-28). Members, Share, Remove
 // and "Move…" act on one placement from its line, naming its instance,
 // its members panel naming the other instances the records are placed
-// at (space-62, space-69, space-72, space-78).
+// at (space-62, space-69, space-72, space-78). A placement owing its
+// sharing notice waits with Continue, the notice naming its path at its
+// instance; the row's Sync says it first only where no other placement
+// can run (space-57); an unrelated placement joins from its line
+// (space-13); a stopped one retries from its line (space-15); and the
+// row's sign-in refusal and Retry follow every placement (space-11,
+// space-61).
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import type { GroupsState, PlacementState, RepositoryState } from "@sublang/spex-core/protocol";
 
 import { activateLanguage } from "../i18n.js";
+import { SpexCommandError } from "../lib/client.js";
 import { absoluteTitle } from "../lib/time.js";
 import { setClientForTests } from "../state/store.js";
 import {
@@ -39,10 +46,12 @@ import {
   deliver,
   installClient,
   instance,
+  ownRepo,
   placement,
   placementState,
   renderGroups,
   repo,
+  signedOutAt,
   twoInstances,
   twoPlacementsHome,
 } from "../fixtures/groups.js";
@@ -654,5 +663,363 @@ describe("GROUPS: a placement's members and move (space-62, space-69, space-72, 
     fireEvent.click(moveOn(KEY, ORIGIN)!);
     fireEvent.click(within(screen.getByTestId(`space-move-${KEY}@${ORIGIN}`)).getByTestId("space-move-group-acme"));
     await waitFor(() => expect(calls("space.repository.move")[1]).toEqual({ repository: KEY, instance: ORIGIN, groupId: "3" }));
+  });
+});
+
+/** What the core says when a placement's first push owes the notice
+ * this device's reader has not seen (space-57): the refusal's facts
+ * name that placement. */
+const noticeRefusal = (placement: string): SpexCommandError =>
+  new SpexCommandError("invalid_request", "Read the sharing notice before the first sync of academy-spex", {
+    notice: true,
+    members: 2,
+    visibility: "private",
+    placement,
+  });
+
+/** A placement the device is offline from. */
+const OFFLINE = { state: "unreachable" as const, reason: "the device is offline" };
+/** A placement whose repository has other members, never pushed from
+ * this device, its notice unseen (space-57). */
+const OWING = { members: 2, noticed: false, lastSync: null };
+const DONE: RepositoryState["sync"] = { phase: "done", at: NOW, sent: 1, received: 0, pushed: true };
+const rowSync = (key = KEY): HTMLButtonElement => screen.getByTestId(`space-row-sync-${key}`) as HTMLButtonElement;
+
+describe("GROUPS: a placement's notice, join and retry (space-57, space-13, space-15, space-11, space-61)", () => {
+  test("space-57: a placement owing its notice reads 'Waiting for you to continue' with Continue; Continue shows the notice naming its instance and path, Cancel focused, Escape keeping; Continue sends space.sync {repository, placement, noticed: true}", async () => {
+    const waiting = { ...OWING, outcome: { kind: "waiting" as const, sent: 0, received: 0 } };
+    await renderGroups(placedAtTwo({ second: waiting }, { sync: DONE }), { open: false });
+    const line = lineOf(KEY, SECOND);
+    expect(reading(line).state).toBe("Waiting for you to continue");
+    const go = within(line).getByTestId("space-line-continue") as HTMLButtonElement;
+    expect(go.textContent).toBe("Continue");
+    // Described by its line's instance, so it reads apart from any other
+    // line's (space-87).
+    expect(describedAs(go)).toBe("Second Example");
+    // The placement that synced carries none.
+    expect(within(lineOf(KEY, ORIGIN)).queryByTestId("space-line-continue")).toBeNull();
+
+    // The notice stands beneath the line, leading with where the records
+    // go, Cancel focused; Escape keeps the line waiting, focus back on
+    // Continue (DR-010 §4, §6).
+    fireEvent.click(go);
+    let notice = within(line).getByTestId("space-line-notice");
+    expect(notice.textContent).toContain("Records go to workshop/academy-spex at Second Example.");
+    expect(notice.textContent).toContain("Every session goes there whole — hidden parts and attachments included");
+    expect(notice.textContent).toContain("nothing recalls what others downloaded");
+    expect(notice.textContent).not.toContain("public");
+    expect(document.activeElement).toBe(within(notice).getByRole("button", { name: "Cancel" }));
+    fireEvent.keyDown(document.activeElement!, { key: "Escape" });
+    expect(within(line).queryByTestId("space-line-notice")).toBeNull();
+    expect(calls("space.sync")).toHaveLength(0);
+    await waitFor(() => expect(document.activeElement).toBe(go));
+    expect(reading(line).state).toBe("Waiting for you to continue");
+    // Cancel starts nothing either.
+    fireEvent.click(go);
+    fireEvent.click(within(within(line).getByTestId("space-line-notice")).getByRole("button", { name: "Cancel" }));
+    expect(calls("space.sync")).toHaveLength(0);
+
+    // Continue syncs with that placement's notice seen, and the line's
+    // Continue waits for the machine.
+    fireEvent.click(go);
+    notice = within(line).getByTestId("space-line-notice");
+    fireEvent.click(within(notice).getByRole("button", { name: "Continue" }));
+    await waitFor(() => expect(calls("space.sync")).toEqual([{ repository: KEY, placement: SECOND, noticed: true }]));
+    expect(within(line).queryByTestId("space-line-notice")).toBeNull();
+    await waitFor(() => expect(go.disabled).toBe(true));
+    cleanup();
+
+    // A public repository says its records are public.
+    await renderGroups(placedAtTwo({ second: { ...waiting, visibility: "public" } }, { sync: DONE }), { open: false });
+    fireEvent.click(within(lineOf(KEY, SECOND)).getByTestId("space-line-continue"));
+    expect(within(lineOf(KEY, SECOND)).getByTestId("space-line-notice").textContent).toContain("its records are public");
+    cleanup();
+
+    // In the reader's language.
+    activateLanguage("zh");
+    await renderGroups(placedAtTwo({ second: waiting }, { sync: DONE }), { open: false });
+    expect(reading(lineOf(KEY, SECOND)).state).toBe("等待你继续");
+    fireEvent.click(within(lineOf(KEY, SECOND)).getByTestId("space-line-continue"));
+    expect(within(lineOf(KEY, SECOND)).getByTestId("space-line-notice").textContent).toContain(
+      "记录将发往 Second Example 上的 workshop/academy-spex。",
+    );
+  });
+
+  test("space-57: Sync where the only runnable placement owes the notice says it first and sends that placement's noticed; where another can run, Sync says nothing and the owing line waits; a read-only or path placement owes none", async () => {
+    // The first placement offline, the second owing: the row's Sync says
+    // the second's notice first, beneath the row.
+    await renderGroups(placedAtTwo({ first: OFFLINE, second: OWING }), { open: false });
+    fireEvent.click(rowSync());
+    const notice = screen.getByTestId("space-notice-confirm");
+    expect(notice.textContent).toContain("Records go to workshop/academy-spex at Second Example.");
+    expect(notice.textContent).toContain("Every session goes there whole");
+    expect(document.activeElement).toBe(within(notice).getByRole("button", { name: "Cancel" }));
+    fireEvent.click(within(notice).getByRole("button", { name: "Continue" }));
+    await waitFor(() => expect(calls("space.sync")).toEqual([{ repository: KEY, placement: SECOND, noticed: true }]));
+    cleanup();
+
+    // The first can run: Sync says nothing and goes; the owing placement
+    // then waits on its line with Continue while the first synced.
+    commandMock.mockClear();
+    await renderGroups(placedAtTwo({ second: OWING }), { open: false });
+    fireEvent.click(rowSync());
+    expect(screen.queryByTestId("space-notice-confirm")).toBeNull();
+    await waitFor(() => expect(calls("space.sync")).toEqual([{ repository: KEY }]));
+    deliver(
+      placedAtTwo(
+        {
+          first: { outcome: { kind: "synced", sent: 1, received: 0 }, lastSync: { at: NOW, sent: 1, received: 0 } },
+          second: { ...OWING, outcome: { kind: "waiting", sent: 0, received: 0 } },
+        },
+        { sync: DONE },
+      ),
+    );
+    expect(reading(lineOf(KEY, ORIGIN)).state).toBe("Synced just now · 1 sent · 0 received");
+    expect(reading(lineOf(KEY, SECOND)).state).toBe("Waiting for you to continue");
+    expect(within(lineOf(KEY, SECOND)).getByTestId("space-line-continue")).toBeTruthy();
+    cleanup();
+
+    // A read-only placement never pushes, so it owes none: the sync goes.
+    commandMock.mockClear();
+    await renderGroups(placedAtTwo({ first: OFFLINE, second: { ...OWING, state: "read-only", reason: "archived" } }), { open: false });
+    fireEvent.click(rowSync());
+    expect(screen.queryByTestId("space-notice-confirm")).toBeNull();
+    await waitFor(() => expect(calls("space.sync")).toEqual([{ repository: KEY }]));
+    cleanup();
+
+    // The path placement owes none and can run beside an owing one.
+    commandMock.mockClear();
+    const withPath = repo({
+      placements: [
+        placement({ ...OWING, members: 3 }),
+        placementState({ instance: null, path: "/srv/academy-spex.git", branch: { ...BRANCH, agreed: null } }),
+      ],
+    });
+    await renderGroups(twoInstances({}, [withPath]), { open: false });
+    fireEvent.click(rowSync());
+    expect(screen.queryByTestId("space-notice-confirm")).toBeNull();
+    await waitFor(() => expect(calls("space.sync")).toEqual([{ repository: KEY }]));
+    cleanup();
+
+    // Your own group's own repository owes it at an instance after its
+    // first placement's even where the account is its only member
+    // (space-4); its first placement says nothing.
+    commandMock.mockClear();
+    const ownAt = (placements: PlacementState[]): GroupsState => {
+      const home = twoInstances({}, []);
+      return { ...home, own: { ...home.own, repositories: [ownRepo({ placedAt: [ORIGIN, SECOND], placements })] } };
+    };
+    const ownFirst = placement({ path: OWN, id: "7", branch: null, members: 1, noticed: false, lastSync: { at: NOW - HOUR, sent: 1, received: 0 } });
+    const ownSecond = placementState({ instance: SECOND, path: "jada/jada-spex", id: "71", members: 1, visibility: "private", branch: BRANCH });
+    await renderGroups(ownAt([{ ...ownFirst, ...OFFLINE }, ownSecond]), { open: false });
+    fireEvent.click(rowSync(OWN));
+    expect(screen.getByTestId("space-notice-confirm").textContent).toContain("Records go to jada/jada-spex at Second Example.");
+    fireEvent.click(within(screen.getByTestId("space-notice-confirm")).getByRole("button", { name: "Continue" }));
+    await waitFor(() => expect(calls("space.sync")).toEqual([{ repository: OWN, placement: SECOND, noticed: true }]));
+    cleanup();
+    commandMock.mockClear();
+    await renderGroups(ownAt([{ ...ownFirst, lastSync: null }]), { open: false });
+    fireEvent.click(rowSync(OWN));
+    expect(screen.queryByTestId("space-notice-confirm")).toBeNull();
+    await waitFor(() => expect(calls("space.sync")).toEqual([{ repository: OWN }]));
+  });
+
+  test("space-57: a refusal carrying the notice opens it for the placement it names", async () => {
+    // The page's read says the second's only member is the account; the
+    // core's fresh read finds others, and no other placement can run.
+    commandMock.mockImplementation(async (type: string, fields?: Record<string, unknown>) => {
+      if (type === "space.sync" && fields?.noticed === undefined) throw noticeRefusal(SECOND);
+      return answer(type, fields);
+    });
+    await renderGroups(placedAtTwo({ first: OFFLINE, second: { members: 1, noticed: false, lastSync: null } }), { open: false });
+    fireEvent.click(rowSync());
+    const notice = await screen.findByTestId("space-notice-confirm");
+    expect(notice.textContent).toContain("Records go to workshop/academy-spex at Second Example.");
+    // The notice stands in place of the refusal's words.
+    expect(screen.queryByTestId(`space-row-caption-${KEY}`)).toBeNull();
+    expect(document.activeElement).toBe(within(notice).getByRole("button", { name: "Cancel" }));
+    fireEvent.click(within(notice).getByRole("button", { name: "Continue" }));
+    await waitFor(() =>
+      expect(calls("space.sync")).toEqual([{ repository: KEY }, { repository: KEY, placement: SECOND, noticed: true }]),
+    );
+    cleanup();
+
+    // A placement's Join refused for its notice says it on that line, its
+    // Continue carrying the join.
+    commandMock.mockClear();
+    const unrelated = { outcome: { kind: "unrelated" as const, sent: 0, received: 0 }, branch: { ...BRANCH, unrelated: true } };
+    await renderGroups(placedAtTwo({ first: OFFLINE, second: { members: 1, noticed: false, lastSync: null, ...unrelated } }, { sync: { phase: "unrelated", placement: SECOND } }), { open: false });
+    const line = lineOf(KEY, SECOND);
+    const join = within(line).getByTestId("space-line-join");
+    fireEvent.click(join);
+    fireEvent.click(within(within(line).getByTestId("space-line-join-confirm")).getByRole("button", { name: "Join" }));
+    const lineNotice = await within(line).findByTestId("space-line-notice");
+    expect(lineNotice.textContent).toContain("Records go to workshop/academy-spex at Second Example.");
+    expect(within(line).queryByTestId("space-line-error")).toBeNull();
+    // Cancel hands focus back to the Join that asked.
+    fireEvent.click(within(lineNotice).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(document.activeElement).toBe(join));
+    fireEvent.click(join);
+    fireEvent.click(within(within(line).getByTestId("space-line-join-confirm")).getByRole("button", { name: "Join" }));
+    fireEvent.click(within(await within(line).findByTestId("space-line-notice")).getByRole("button", { name: "Continue" }));
+    await waitFor(() =>
+      expect(calls("space.sync")).toEqual([
+        { repository: KEY, placement: SECOND, join: true },
+        { repository: KEY, placement: SECOND, join: true },
+        { repository: KEY, placement: SECOND, join: true, noticed: true },
+      ]),
+    );
+  });
+
+  test("space-13: an unrelated placement's line offers Join, confirmed inline with Cancel focused, sending {repository, placement, join: true}; the row keeps Sync", async () => {
+    let settle: ((value: unknown) => void) | undefined;
+    commandMock.mockImplementation(async (type: string, fields?: Record<string, unknown>) => {
+      if (type !== "space.sync") return answer(type, fields);
+      return new Promise((resolve) => {
+        settle = resolve;
+      });
+    });
+    const unrelated = {
+      outcome: { kind: "unrelated" as const, sent: 0, received: 0 },
+      branch: { ...BRANCH, unrelated: true, ahead: null, behind: null },
+    };
+    await renderGroups(placedAtTwo({ second: unrelated }, { sync: { phase: "unrelated", placement: SECOND } }), { open: false });
+    // The row's one Sync stands for every placement (DR-128).
+    expect(rowSync().textContent).toBe("Sync");
+    expect(rowSync().disabled).toBe(false);
+    expect(rowSync().title).toBe("Sends what is here and brings back anything new");
+    // Join on the unrelated placement's line alone.
+    expect(within(lineOf(KEY, ORIGIN)).queryByTestId("space-line-join")).toBeNull();
+    const line = lineOf(KEY, SECOND);
+    expect(reading(line).state).toBe("Unrelated history");
+    const join = within(line).getByTestId("space-line-join") as HTMLButtonElement;
+    expect(join.textContent).toBe("Join");
+    expect(join.title).toBe("Brings both histories into one and asks about anything that differs");
+    expect(describedAs(join)).toBe("Second Example");
+
+    // Confirmed inline beneath the line, Cancel focused, Escape keeping.
+    fireEvent.click(join);
+    const confirm = within(line).getByTestId("space-line-join-confirm");
+    expect(confirm.textContent).toContain("Join both histories into one? Anything that differs will ask you to choose.");
+    expect(document.activeElement).toBe(within(confirm).getByRole("button", { name: "Cancel" }));
+    fireEvent.keyDown(document.activeElement!, { key: "Escape" });
+    expect(within(line).queryByTestId("space-line-join-confirm")).toBeNull();
+    expect(calls("space.sync")).toHaveLength(0);
+    await waitFor(() => expect(document.activeElement).toBe(join));
+
+    // Join names its placement and reads "Joining…" until the reply.
+    fireEvent.click(join);
+    fireEvent.click(within(within(line).getByTestId("space-line-join-confirm")).getByRole("button", { name: "Join" }));
+    await waitFor(() => expect(calls("space.sync")).toEqual([{ repository: KEY, placement: SECOND, join: true }]));
+    await waitFor(() => expect(join.textContent).toBe("Joining…"));
+    expect(join.disabled).toBe(true);
+    settle!({ accepted: true });
+    // The machine runs: the line names its step, its Join waits.
+    deliver(
+      placedAtTwo(
+        { second: { branch: unrelated.branch } },
+        { sync: { phase: "running", op: "sync", placement: SECOND, step: "compare", since: NOW, cancelable: false } },
+      ),
+    );
+    expect(reading(lineOf(KEY, SECOND)).state).toBe("Comparing…");
+    expect((within(lineOf(KEY, SECOND)).getByTestId("space-line-join") as HTMLButtonElement).disabled).toBe(true);
+    cleanup();
+
+    // A history the last check found unrelated offers Join with no
+    // outcome on the line.
+    commandMock.mockImplementation(answer);
+    await renderGroups(placedAtTwo({ second: { branch: unrelated.branch } }), { open: false });
+    expect(within(lineOf(KEY, SECOND)).getByTestId("space-line-join")).toBeTruthy();
+    expect(within(lineOf(KEY, ORIGIN)).queryByTestId("space-line-join")).toBeNull();
+  });
+
+  test("space-15: a stopped placement's Retry runs the sync again, and a stopped check runs the check again", async () => {
+    const stoppedAt = (step: "check" | "push", retry = true): Partial<PlacementState> => ({
+      outcome: { kind: "stopped", step, cause: "unreachable", message: "Could not reach Second Example", guidance: "Check the network, then Retry.", retry },
+    });
+    // The first placement synced, the second stopped at its push.
+    await renderGroups(placedAtTwo({ second: stoppedAt("push") }, { sync: DONE }), { open: false });
+    expect(within(lineOf(KEY, ORIGIN)).queryByTestId("space-line-retry")).toBeNull();
+    const retry = within(lineOf(KEY, SECOND)).getByTestId("space-line-retry") as HTMLButtonElement;
+    expect(retry.textContent).toBe("Retry");
+    expect(describedAs(retry)).toBe("Second Example");
+    fireEvent.click(retry);
+    await waitFor(() => expect(calls("space.sync")).toEqual([{ repository: KEY }]));
+    // It waits for the machine to move.
+    await waitFor(() => expect(retry.textContent).toBe("Retrying…"));
+    expect(retry.disabled).toBe(true);
+    cleanup();
+
+    // A stopped check checks again.
+    commandMock.mockClear();
+    const check: RepositoryState["sync"] = {
+      phase: "stopped",
+      op: "check",
+      step: "check",
+      cause: "unreachable",
+      message: "Could not reach Second Example",
+      guidance: "Check the network, then Retry.",
+      retry: true,
+    };
+    await renderGroups(placedAtTwo({ second: stoppedAt("check") }, { sync: check }), { open: false });
+    fireEvent.click(within(lineOf(KEY, SECOND)).getByTestId("space-line-retry"));
+    await waitFor(() => expect(calls("space.fetch")).toEqual([{ repository: KEY }]));
+    expect(calls("space.sync")).toHaveLength(0);
+    cleanup();
+
+    // A stop retrying cannot help offers none.
+    await renderGroups(placedAtTwo({ second: stoppedAt("push", false) }, { sync: DONE }), { open: false });
+    expect(within(lineOf(KEY, SECOND)).queryByTestId("space-line-retry")).toBeNull();
+    cleanup();
+
+    // Dismiss puts the stop away, its Retry with it.
+    await renderGroups(placedAtTwo({ second: stoppedAt("push") }, { sync: DONE }));
+    fireEvent.click(screen.getByTestId("space-dismiss"));
+    expect(reading(lineOf(KEY, SECOND)).state).toBe("Synced 1h ago");
+    expect(within(lineOf(KEY, SECOND)).queryByTestId("space-line-retry")).toBeNull();
+  });
+
+  test("space-11, space-61: a row whose every placement's instance is signed out reads 'Sign in to <first placement's display name> first'; an unreachable line offers Retry only while its instance is signed in and the row offers none", async () => {
+    // Both instances signed out: no placement can run, and the refusal
+    // names the first placement's instance.
+    await renderGroups(signedOutAt(SECOND, {}, signedOutAt(ORIGIN, {}, placedAtTwo())), { open: false });
+    expect(rowSync().disabled).toBe(true);
+    expect(screen.getByTestId(`space-row-caption-${KEY}`).textContent).toBe("Sign in to Spex Example first");
+    expect(rowSync().getAttribute("aria-describedby")).toBe(`space-row-caption-${KEY}`);
+    cleanup();
+
+    // The first signed out alone: the second placement can run, so the
+    // sync is admitted.
+    await renderGroups(signedOutAt(ORIGIN, {}, placedAtTwo()), { open: false });
+    expect(rowSync().disabled).toBe(false);
+    expect(screen.queryByTestId(`space-row-caption-${KEY}`)).toBeNull();
+    fireEvent.click(rowSync());
+    await waitFor(() => expect(calls("space.sync")).toEqual([{ repository: KEY }]));
+    cleanup();
+
+    // A placement unreachable while the row reads reachable retries from
+    // its line, reading every signed-in instance again (space-2).
+    commandMock.mockClear();
+    await renderGroups(placedAtTwo({ second: OFFLINE }), { open: false });
+    expect(within(lineOf(KEY, ORIGIN)).queryByTestId("space-line-retry")).toBeNull();
+    const retry = within(lineOf(KEY, SECOND)).getByTestId("space-line-retry");
+    expect(retry.title).toBe("Reads each signed-in instance again");
+    expect(describedAs(retry)).toBe("Second Example");
+    fireEvent.click(retry);
+    await waitFor(() => expect(calls("space.refresh")).toHaveLength(1));
+    await waitFor(() => expect(retry.textContent).toBe("Retry"));
+    cleanup();
+
+    // None while its instance is signed out: that heading's Sign in again
+    // is the way (space-3).
+    await renderGroups(signedOutAt(SECOND, {}, placedAtTwo({ second: { state: "unreachable", reason: "Sign in again" } })), { open: false });
+    expect(within(lineOf(KEY, SECOND)).queryByTestId("space-line-retry")).toBeNull();
+    cleanup();
+
+    // Every placement unreachable: the row offers Retry, its lines none.
+    await renderGroups(placedAtTwo({ first: OFFLINE, second: OFFLINE }, { state: "unreachable", reason: "the device is offline" }), { open: false });
+    expect(screen.getByTestId(`space-row-retry-${KEY}`)).toBeTruthy();
+    expect(within(lineOf(KEY, ORIGIN)).queryByTestId("space-line-retry")).toBeNull();
+    expect(within(lineOf(KEY, SECOND)).queryByTestId("space-line-retry")).toBeNull();
   });
 });

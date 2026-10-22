@@ -366,10 +366,12 @@ export interface AppState extends AttachmentState {
   spaceFetch(repository: string): Promise<void>;
   /** Sync one spex repository (space-11, space-12), with choices
    * (space-18), as a join (space-13), or with its first-push notice
-   * seen (space-57): accepted at once, outcome as state. */
+   * seen (space-57), each for the placement `placement` names — its
+   * instance's origin, null for the path placement (space-29): accepted
+   * at once, outcome as state. */
   spaceSync(
     repository: string,
-    input: { choices?: Record<string, SpaceChoice>; join?: boolean; noticed?: boolean },
+    input: { placement?: string | null; choices?: Record<string, SpaceChoice>; join?: boolean; noticed?: boolean },
   ): Promise<void>;
   /** Stop the running transport step (space-16). */
   spaceCancel(repository: string): Promise<boolean>;
@@ -1862,6 +1864,7 @@ export const useAppStore = create<AppState>((set, get) => {
     async spaceSync(repository, input): Promise<void> {
       await getClient().command("space.sync", {
         repository,
+        ...(input.placement !== undefined ? { placement: input.placement } : {}),
         ...(input.choices !== undefined ? { choices: input.choices } : {}),
         ...(input.join !== undefined ? { join: input.join } : {}),
         ...(input.noticed !== undefined ? { noticed: input.noticed } : {}),

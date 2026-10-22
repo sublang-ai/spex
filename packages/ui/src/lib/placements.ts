@@ -101,6 +101,35 @@ export function governingOfPlacement(state: GroupsState, repo: RepositoryState, 
   return own;
 }
 
+/** Whether a sync can run a held placement (space-11): the path
+ * placement, which this device reaches without an instance, or one
+ * whose governing instance is signed in — its own, or one a signed-in
+ * instance listing its host repository makes it follow (space-60). */
+export function canRun(state: GroupsState, repo: RepositoryState, line: PlacementState): boolean {
+  if (!line.attached) return false;
+  return line.instance === null || governingOfPlacement(state, repo, line)?.signedIn === true;
+}
+
+/** Whether a sync admitted now takes a held placement's turn (space-11,
+ * space-57): one it can run that reads reachable or read-only, or the
+ * path placement. */
+export function runnable(state: GroupsState, repo: RepositoryState, line: PlacementState): boolean {
+  return canRun(state, repo, line) && (line.instance === null || line.state === "reachable" || line.state === "read-only");
+}
+
+/** Whether a placement's first push owes the sharing notice (space-57):
+ * a held placement at an instance that takes pushes — a read-only one
+ * never pushes, and the path placement owes none — whose notice this
+ * device's reader has not seen, and whose repository has other members,
+ * or a count the host's last read lacks with nothing synced with it from
+ * here; or your own group's own repository's at an instance other than
+ * its first placement's, never synced from here (space-4). */
+export function owesNotice(repo: RepositoryState, line: PlacementState): boolean {
+  if (!line.attached || line.instance === null || line.state !== "reachable" || line.noticed) return false;
+  if (line.members === null ? line.lastSync === null : line.members > 1) return true;
+  return repo.own && line.lastSync === null && instancePlacements(repo)[0]?.instance !== line.instance;
+}
+
 /** The entry a placement stands in at the instance governing it
  * (space-78): the group the row stands under for its key placement —
  * none under your own group — and for any other, the group or namespace

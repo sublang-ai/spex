@@ -154,6 +154,21 @@ export interface LinePhrase {
   tone: "idle" | "running" | "attention" | "stopped";
 }
 
+/** The outcome a placement's line carries (space-87, space-12): the one
+ * the last sync left there, until the next operation; those that need
+ * nothing of the reader — synced, behind, stopped — put away while
+ * `dismissed` is the sync phase the reader dismissed on the Sync tab. */
+export function lineOutcome(
+  repo: RepositoryState,
+  line: PlacementState,
+  dismissed?: string,
+): PlacementState["outcome"] {
+  const outcome = line.outcome;
+  if (!outcome) return null;
+  const putAway = dismissed !== undefined && dismissed === JSON.stringify(repo.sync);
+  return putAway && (outcome.kind === "synced" || outcome.kind === "behind" || outcome.kind === "stopped") ? null : outcome;
+}
+
 /** A placement's line (space-87), the first that applies: the step in
  * flight at it (space-12); a waiting step at the host (space-64); the
  * outcome the last sync left there until the next operation, the ones
@@ -177,9 +192,8 @@ export function placementPhrase(
     return { text, title: text, tone: "running" };
   }
   if (line.waiting) return { text: waitingPhrase(line.waiting), title: line.waiting.message, tone: "attention" };
-  const outcome = line.outcome;
-  const putAway = dismissed !== undefined && dismissed === JSON.stringify(sync);
-  if (outcome && !(putAway && (outcome.kind === "synced" || outcome.kind === "behind" || outcome.kind === "stopped"))) {
+  const outcome = lineOutcome(repo, line, dismissed);
+  if (outcome) {
     switch (outcome.kind) {
       case "synced": {
         const at = line.lastSync?.at ?? (sync.phase === "done" ? sync.at : now);
