@@ -14,15 +14,24 @@
 // configuration (core-service-125), it needs no running core: it answers
 // `get` for an http or https host the member placed a token for in the
 // store, `local/code-credentials.yaml` (storage-44), with the entry's
-// username, else `token`, and its token. For any other protocol or host,
-// a store that will not read or an entry that is malformed, it answers
-// nothing, so the account's other helpers serve the request.
+// username, else the one Git's request names, else `token`, and its
+// token. For any other protocol or host, a username in the request
+// other than the entry's, a store that will not read or an entry that
+// is malformed, it answers nothing, so the account's other helpers serve
+// the request.
 //
 // Either mode ignores `store` and `erase`, so no secret reaches another
-// helper's store from here, and writes a secret nowhere but Git's reply.
+// helper's store from here, and writes a secret nowhere but Git's reply:
+// a store that will not read is never quoted, the YAML parser's warnings
+// and errors, which quote the file, reaching no output.
 // Git's request arrives on stdin and is read to its end first.
 
 import { readFileSync } from "node:fs";
+
+// The YAML parser's own debugging switches print the text it parses to
+// stdout, Git's reply: never here, whatever the agent's environment.
+delete process.env.LOG_TOKENS;
+delete process.env.LOG_STREAM;
 
 const MEMBER_MODE_ARG = "--member";
 const args = process.argv.slice(2);
@@ -75,9 +84,15 @@ async function answerMember(path, text) {
   if (protocol !== "http" && protocol !== "https") return;
   const host = hostOf(fields.get("host") ?? "", DEFAULT_PORT[protocol]);
   if (host === null) return;
+  // A username the remote's URL names is matched as Git's own helpers
+  // match it: the entry's own, or any for an entry naming none, which
+  // its host takes with the token.
+  const asked = fields.get("username");
+  if (asked !== undefined && !isLine(asked)) return;
   const entry = await entryOf(path, host);
   if (entry === null) return;
-  process.stdout.write(`username=${entry.username ?? TOKEN_USERNAME}\npassword=${entry.token}\n\n`);
+  if (asked !== undefined && entry.username !== undefined && asked !== entry.username) return;
+  process.stdout.write(`username=${entry.username ?? asked ?? TOKEN_USERNAME}\npassword=${entry.token}\n\n`);
 }
 
 /** A host as the store keys it: lowercase, a DNS name with an optional
@@ -121,8 +136,11 @@ async function entryOf(path, host) {
   }
   let doc;
   try {
-    doc = parse(text);
+    // At "error" the parser emits no warning, each quoting the file, yet
+    // still throws where the YAML will not read; "silent" would read it.
+    doc = parse(text, { logLevel: "error" });
   } catch {
+    // The parser's words quote the file: none is repeated.
     return null;
   }
   if (!isObject(doc) || doc.format !== 1 || !isObject(doc.hosts) || !isObject(doc.agents)) return null;

@@ -13,11 +13,13 @@
 // and a folder allocated before is reused. The seat account's own Git
 // configuration names the app's helper in its member mode, so a push an
 // agent makes from the work tree outside the app carries the member's
-// token to its host and none to any other (core-service-125).
+// token to its host and none to any other (core-service-125); a store
+// that will not read is refused by its path alone, its token reaching
+// no output of the helper's or the core's (storage-44).
 
 import { test, type TestContext } from "node:test";
 import assert from "node:assert/strict";
-import { execFile, execFileSync } from "node:child_process";
+import { execFile, execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { isAbsolute, join, relative } from "node:path";
 import { codeCredentialsPath } from "./code-credentials.js";
@@ -66,6 +68,19 @@ function allocated(dataDir: string, host: { url: string }, group: string, reposi
   return join(dataDir, "projects", hostFolder(host), ...group.split("/"), repository);
 }
 
+/** Every line the core logs from here on, each still printed. */
+function captureConsole(t: TestContext): string[] {
+  const logged: string[] = [];
+  for (const name of ["log", "info", "warn", "error"] as const) {
+    const original = console[name].bind(console);
+    t.mock.method(console, name, (...args: unknown[]) => {
+      logged.push(args.map(String).join(" "));
+      original(...args);
+    });
+  }
+  return logged;
+}
+
 /** Whether `folder` is `outer` or lies inside it. */
 function within(folder: string, outer: string): boolean {
   const rest = relative(outer, folder);
@@ -80,8 +95,12 @@ test("space-104, space-103, projects-37, git-host-9: a seat's join allocates the
   // A repository x-spex in the subgroup acme/alpha, beside it.
   host.script.groups.push({ id: "2011", fullPath: "acme/alpha", name: "Alpha", kind: "group" });
   const nested = host.script.addRepository({ group: "acme/alpha", name: "x-spex", project: { format: 1, name: "x" } });
+  const logged = captureConsole(t);
   const home = await startHome("seat-allocate", { host, project: false, extra: { seat: SEAT } });
   t.after(() => home.stop());
+  // The harness's Git takes no global file (GIT_CONFIG_GLOBAL=/dev/null):
+  // the seat's include is left out without a word (core-service-125).
+  assert.deepEqual(logged.filter((line) => line.includes("Git configuration")), [], "no line says the seat's Git configuration was not written");
   await signIn(home, host);
   await home.client.expectOk("credential.set", { kind: "host", name: code.host, values: { token: TOKEN, username: USERNAME } });
 
@@ -387,14 +406,7 @@ test("core-service-127, core-service-125, git-host-9, storage-44: on a seat the 
   const account = mkdtempSync(join(scratch, "seat-account-"));
   const seat = { host, project: false, extra: { seat: SEAT, env: accountCoreEnv(account, host), home: account } } as const;
   // Every line the core logs, kept to look for the token in.
-  const logged: string[] = [];
-  for (const name of ["log", "info", "warn", "error"] as const) {
-    const original = console[name].bind(console);
-    t.mock.method(console, name, (...args: unknown[]) => {
-      logged.push(args.map(String).join(" "));
-      original(...args);
-    });
-  }
+  const logged = captureConsole(t);
 
   const first = await startHome("seat-pushes", seat);
   t.after(() => first.stop());
@@ -445,6 +457,12 @@ test("core-service-127, core-service-125, git-host-9, storage-44: on a seat the 
   const ask = (request: string, operation = "get", store = codeCredentialsPath(first.dataDir)): string =>
     execFileSync(process.execPath, [gitCredentialHelperPath(), "--member", store, operation], { input: `${request}\n\n`, encoding: "utf8", env: { PATH: process.env.PATH ?? "", HOME: account } });
   assert.equal(ask(`protocol=http\nhost=${code.host}`), `username=${USERNAME}\npassword=${TOKEN}\n\n`);
+  // A username in the remote's URL is matched as Git's own helpers match
+  // it: the entry's own, or any for an entry naming none; another
+  // answers nothing.
+  assert.equal(ask(`protocol=http\nhost=${code.host}\nusername=${USERNAME}`), `username=${USERNAME}\npassword=${TOKEN}\n\n`);
+  assert.equal(ask(`protocol=http\nhost=${code.host}\nusername=grace`), "", "another username than the entry's is declined");
+  assert.equal(ask("protocol=https\nhost=code.example.test\nusername=oauth2"), `username=oauth2\npassword=${TOKEN}\n\n`);
   assert.equal(ask("protocol=https\nhost=Code.Example.Test:443\npath=acme/code.git"), `username=token\npassword=${TOKEN}\n\n`);
   assert.equal(ask("protocol=http\nhost=code.example.test:443"), "");
   assert.equal(ask(`protocol=http\nhost=${elsewhere.host}`), "");
@@ -486,4 +504,51 @@ test("core-service-125: off a seat the core writes no Git configuration of the a
   assert.equal(existsSync(join(account, ".gitconfig")), false, "no global configuration is written");
   assert.equal(existsSync(seatGitConfigPath(account)), false, "no include file is written");
   assert.equal((await asAccount(account, account, "config", "--global", "--get-all", "include.path")).stdout, "");
+});
+
+test("storage-44, git-host-9: a store the YAML parser warns about, quoting its token, or naming it as its format, is refused by its path alone: the helper prints nothing, no warning, log line, reply or diagnostic carries the token", async (t) => {
+  const host = await startHost();
+  const home = await startHome("seat-quiet-store", { host, project: false, extra: { seat: SEAT } });
+  t.after(() => home.stop());
+  // Every warning the process emits and every line the core logs.
+  const warnings: string[] = [];
+  const onWarning = (warning: Error): void => { warnings.push(`${warning.name}: ${warning.message}`); };
+  process.on("warning", onWarning);
+  t.after(() => { process.off("warning", onWarning); });
+  const logged = captureConsole(t);
+  const file = codeCredentialsPath(home.dataDir);
+  mkdirSync(join(home.dataDir, "local"), { recursive: true, mode: 0o700 });
+  const named = "code.example.test";
+
+  // Each store but the last makes the parser warn with the token in its
+  // words — a tagged token in a store of another format, the token as a
+  // collection key in the host's entry, a directive carrying it before a
+  // second document — and the last names it as its format; each is
+  // refused, the file or the entry.
+  const stores: [string, RegExp][] = [
+    [`format: 2\nhosts:\n  ${named}:\n    token: !secret ${TOKEN}\nagents: {}\n`, /^unsupported format 2; preserved unchanged$/],
+    [`format: 1\nhosts:\n  ${named}:\n    ? [${TOKEN}]\n    : token\nagents: {}\n`, new RegExp(`^the host entry ${named.replace(/\./g, "\\.")} is malformed; preserved unchanged$`)],
+    [`%SECRET ${TOKEN}\n---\nformat: 1\nhosts: {}\nagents: {}\n---\n${TOKEN}\n`, /^not valid YAML; preserved unchanged$/],
+    [`format: ${TOKEN}\nhosts: {}\nagents: {}\n`, /^unsupported format; preserved unchanged$/],
+  ];
+  for (const [text, reason] of stores) {
+    writeFileSync(file, text, { mode: 0o600 });
+    // The helper in its member mode, as Git runs it: an empty answer and
+    // not a word on stderr (git-host-9).
+    const asked = spawnSync(process.execPath, [gitCredentialHelperPath(), "--member", file, "get"], {
+      input: `protocol=https\nhost=${named}\n\n`, encoding: "utf8", env: { PATH: process.env.PATH ?? "", HOME: home.dataDir },
+    });
+    assert.deepEqual([asked.status, asked.stdout, asked.stderr], [0, "", ""], text);
+    // The core reports the file by its path, the reason naming no
+    // secret (storage-44).
+    const reports = (await home.client.expectOk("storage.diagnostics", {})).filter((report) => report.file === file);
+    assert.equal(reports.length, 1, JSON.stringify(reports));
+    assert.match(reports[0]?.reason ?? "", reason);
+    assert.ok(!JSON.stringify(reports).includes(TOKEN), "no diagnostic carries the token");
+    const listed = await home.client.command("credential.list", {});
+    assert.ok(!JSON.stringify(listed).includes(TOKEN), "no reply carries the token");
+  }
+  assert.deepEqual(warnings.filter((warning) => warning.includes(TOKEN) || warning.startsWith("YAMLWarning")), [], "the parser warns nowhere");
+  assert.deepEqual(logged.filter((line) => line.includes(TOKEN)), [], "no log line carries the token");
+  assert.deepEqual(home.client.messages.flatMap(stringsOf).filter((text) => text.includes(TOKEN)), [], "no message carries the token");
 });
