@@ -12,6 +12,8 @@ Amended by [DR-045](045-unified-session-storage.md): storage ownership, default 
 Amended by [DR-103](103-the-home-and-its-groups.md): the records move into spex repositories, one per project and one per group, cloned under `workspace/`; file state, the lease and the shared session store stand.
 Amended by [DR-104](104-spec-package-format-and-client-environments.md): the compiled playbook library gives way to installed spec packages.
 Extended by [DR-108](108-the-root-lease-names-the-machine.md): the root lease's owner names its machine by Playbook's machine identity, and its retirement keeps a permanent record; one core per state root stands.
+Amended by [DR-131](131-execution-ownership.md) in "resumability stays machine-local": it stays with the assigned runtime, named in the records.
+Amended by [DR-132](132-team-servers.md) in "forge auth stay with their own tools": a member's code-host token on a seat is kept under `local/`.
 
 ## Context
 

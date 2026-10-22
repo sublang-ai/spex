@@ -5,8 +5,8 @@
 
 ## Status
 
-Proposed (2026-10-21) on the owner's direction: a group shares a Linux server that runs Spex for its members, each in an OS account of their own, admitted by the group's live membership through the instance (spex.pub DR-029 [[1]]), with the administrator's agent sign-ins shared across the server; one desktop controls projects there and here at once ([DR-133](133-one-desktop-over-several-cores.md)); execution is owned per runtime ([DR-131](131-execution-ownership.md)).
-Proposes to amend, under [DR-046](046-decision-record-evolution.md):
+Accepted (2026-10-21) on the owner's direction: a group shares a Linux server that runs Spex for its members, each in an OS account of their own, admitted by the group's live membership through the instance (spex.pub DR-029 [[1]]), with the administrator's agent sign-ins shared across the server; one desktop controls projects there and here at once ([DR-133](133-one-desktop-over-several-cores.md)); execution is owned per runtime ([DR-131](131-execution-ownership.md)).
+Amends, under [DR-046](046-decision-record-evolution.md):
 
 - [DR-033](033-remote-gui-serving.md) in "a single-user deployment" and "one token, in the URL": a server is N single-user shells, one per member's OS account, behind one hub that admits a bearer in a header and no token in a URL; the single-user shell on a machine of one's own stands.
 - [DR-103](103-the-home-and-its-groups.md) in "Spex adds no access control", in your own group's sign-in and in "What lives where": a seat holds one piece of access state, the execution lease the instance granted; a seat's own group is server-local and joins no repository at the instance; a seat's home holds a `projects/` tree.

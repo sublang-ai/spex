@@ -7,6 +7,7 @@
 
 Accepted; the config schema's `profiles` map is retired upstream and amended by [DR-019](019-inline-agent-configuration.md) — every agent carries its settings inline, and profiles-era files migrate in place at load.
 Amended by [DR-036](036-file-state-store.md): the app-local SQLite store gives way to plain files under one shared state root, and session persistence moves to the shared playbook session store; the config-ownership, no-secrets, and credential rules stand.
+Amended by [DR-132](132-team-servers.md) in its credentials and readiness: on a seat the core reads a shared credential file before each run, readiness recognizes the injected forms, and a member's code-host token is kept under `local/`.
 
 ## Context
 

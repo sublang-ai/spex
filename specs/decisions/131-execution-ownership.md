@@ -5,8 +5,8 @@
 
 ## Status
 
-Proposed (2026-10-21) on the owner's direction: before a project's records run on more than one runtime at once — a laptop and a seat on a team server ([DR-132](132-team-servers.md)) — each session, and each intent captured from this change on, is assigned to one runtime, and only that runtime executes it.
-Proposes to amend, under [DR-046](046-decision-record-evolution.md):
+Accepted (2026-10-21) on the owner's direction: before a project's records run on more than one runtime at once — a laptop and a seat on a team server ([DR-132](132-team-servers.md)) — each session, and each intent captured from this change on, is assigned to one runtime, and only that runtime executes it.
+Amends, under [DR-046](046-decision-record-evolution.md):
 
 - [DR-103](103-the-home-and-its-groups.md) in "you can continue it only on a device where the project's working folder is the one it ran in": a session continues only on the runtime it is assigned to, the folder rule standing beneath.
 - [DR-047](047-explicit-session-recovery.md) in "regardless of their originating host": Restore and Discard are offered on the assigned runtime alone.
@@ -64,5 +64,5 @@ Proposes to amend, under [DR-046](046-decision-record-evolution.md):
 
 - An upgrade is coordinated: an older Spex refuses a records tree holding an intent of format 2, so its sync of that repository stops until it is upgraded, and every member's device of a project moves together.
 - Two runtimes each capturing the same forge issue still produce two intents; that stands as today and is not this record's.
-- These specs change: `storage` for the intent file's format 2 and the hidden runtime record; `core-service` for assignment at creation and capture, the readings of another runtime's records, the refusals and the bounded stop; `dashboard` for the queue row's phrase, the queue's selection by runtime and the attention of the runtime's own records.
+- These specs change: `storage` for the intent file's format 2 and the hidden runtime record; `core-service` for assignment at creation and capture, the readings of another runtime's records, the refusals and the bounded stop; `dashboard` for the queue row's phrase, the queue's selection by runtime and the attention of the runtime's own records; `server-shell` for the bounded exit.
 - Acceptance checks: a session created on one home refuses continuation, Restore and Discard on a second home with the folder at the same path, with the phrase, and appears in no attention there; an intent captured on one home is neither offered nor advanced into on the second, and a turn naming it there is refused; a record without a runtime behaves as before; a stop with a turn running ends every agent process within fifteen seconds and leaves the session restorable on its own runtime.

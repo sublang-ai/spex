@@ -6,7 +6,7 @@
 ## Intent
 
 This spec covers the Spex server shell — the headless CLI in `apps/server` that serves the Spex GUI to a remote browser: one TCP port carrying both the built UI bundle and the core service's WebSocket endpoint, guarded by the core's handshake token, with optional TLS ([DR-033](../decisions/033-remote-gui-serving.md)) — including its source-development launch.
-It is a single-user deployment of the same core and UI the desktop app embeds ([DR-002](../decisions/002-desktop-app-architecture.md)), not a hosted multi-tenant service.
+It is a single-user deployment of the same core and UI the desktop app embeds ([DR-002](../decisions/002-desktop-app-architecture.md)), one per person: a team server runs one such shell per member, a seat behind a hub ([DR-132](../decisions/132-team-servers.md)) [[hub-4](hub.md#hub-4)].
 
 ## External Behavior
 
@@ -43,6 +43,14 @@ Where the requested bind host is not a loopback address and no TLS material is c
 Where TLS certificate and key files are both configured, the server shell shall serve HTTPS on its port and accept `wss:` WebSocket handshakes on the same port:
 
 - Exactly one of the pair configured is refused at startup, naming the missing half.
+
+#### server-shell-25
+
+Where the server shell starts as a seat — `--seat` with `--server-id`, `--server-name`, `--person-id`, `--token-file` and `--socket`, and optionally `--shared-env` — when it starts, it shall boot the core in seat mode [[core-service-125](core-service.md#core-service-125)] listening on the Unix socket named, the handshake token read from the file, and print no access URL, the token appearing in no output ([DR-132](../decisions/132-team-servers.md)):
+
+- `--token` beside `--token-file`, a missing id or name, an unreadable token file or an empty token refuses startup naming the mistake; `--host`, `--port`, the TLS pair and `--insecure` are refused beside `--socket`, since the hub alone reaches the socket [[hub-3](hub.md#hub-3)];
+- the device label is "Spex on <server name>";
+- the socket's directory is made by whoever starts the shell, the hub's helper [[hub-4](hub.md#hub-4)], and the shell removes a stale socket file there before listening.
 
 ### Serving
 
@@ -101,7 +109,7 @@ When the served page resolves its core endpoint, the UI shall connect to the pag
 
 #### server-shell-6
 
-When the server shell receives SIGINT or SIGTERM, it shall stop the core service — disposing every live session runtime [[core-service-39](core-service.md#core-service-39)] — and exit only after the stop completes, leaving no orphan agent process.
+When the server shell receives SIGINT or SIGTERM, it shall stop the core service — disposing every live session runtime within the core's bounds [[core-service-39](core-service.md#core-service-39)] — and exit once the stop completes, within twenty seconds of the signal at the latest, leaving no agent process the core started ([DR-131](../decisions/131-execution-ownership.md)).
 
 ### Source Development
 
@@ -129,6 +137,7 @@ The server shell build shall stage the built UI bundle into the shell package, s
 
 Where the server shell is started from code with core service overrides — the agent seams of the core: adapter imports, the adapter runtime check, the Captain factory, environment, and home ([DR-039](../decisions/039-browser-acceptance-journeys.md)) — the server shell shall pass them to the core service it boots [[server-shell-1](#server-shell-1)] unchanged:
 
+- the stop's bounds and the agent-process walk are among the seams [[core-service-39](core-service.md#core-service-39)];
 - the overrides have no command-line form, so a served deployment never carries them;
 - absent overrides leave the boot exactly as the command line configures it.
 
@@ -171,7 +180,7 @@ Where a startup precondition is violated, the test suite shall assert each refus
 
 #### server-shell-12
 
-Where the server shell runs as a real child process, the test suite shall assert that the access URL it prints matches its bound endpoint [[server-shell-1](#server-shell-1)] and that on SIGTERM the process exits cleanly with its port closed [[server-shell-6](#server-shell-6)].
+Where the server shell runs as a real child process, the test suite shall assert that the access URL it prints matches its bound endpoint [[server-shell-1](#server-shell-1)] and that on SIGTERM the process exits cleanly with its port closed [[server-shell-6](#server-shell-6)]; where its fixture agent ignores SIGTERM mid-turn and the bounds are shortened through the seams [[server-shell-20](#server-shell-20)], that the process exits within the bound with the agent's processes gone and the session restorable on the same home afterwards [[server-shell-6](#server-shell-6)].
 
 ### Page Connection Coverage
 
@@ -230,3 +239,7 @@ When the server's test suite reads the package manifest and resolves the compile
 #### server-shell-21
 
 Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) starts the server shell from code with core overrides naming the fake adapter, a ready adapter runtime, and the scripted Captain, when a browser opens the shell's token URL, the test suite shall assert that the page connects to its own origin and drops the token from the address bar, that a reload reconnects without the token [[server-shell-5](#server-shell-5)], and that the served core answers through the overrides — readiness reporting the fake environment ready and a turn running the scripted narration [[server-shell-20](#server-shell-20)].
+
+#### server-shell-26
+
+Where the server shell is started as a seat from code and as a real child against a stand-in instance, the test suite shall assert that the token is read from the file and absent from the output, that the socket admits a handshake with the token and refuses one without, that the device request names the server and the person, and each startup refusal [[server-shell-25](#server-shell-25)].
