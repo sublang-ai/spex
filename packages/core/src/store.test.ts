@@ -16,7 +16,7 @@ import { StateRootHeldError, Store } from "./store.js";
 import { DraftChangedError, DraftStore, legacyInstance, type StoredDraft } from "./drafts.js";
 import { StorageFormatError } from "./app-storage.js";
 import { ownConfigPath } from "./config.js";
-import { Home, InstanceRefused } from "./home.js";
+import { Home, InstanceRefused, remoteNamesIn, remoteSectionOrder } from "./home.js";
 import type { SessionInfo, TmuxPlayRecord } from "./protocol.js";
 import { scratchDir } from "./testing/scratch.js";
 
@@ -1215,4 +1215,22 @@ test("storage-23: authoring session encodings are written and read back exactly"
   assert.ok(existsSync(source));
   assert.ok(existsSync(join(packageDir, "meta.yaml")));
   rmSync(dir, { recursive: true, force: true });
+});
+
+test("storage-34: a clone's remotes stand in the order of their sections in its Git configuration, whatever order Git lists their keys", () => {
+  const config = [
+    "[core]", "\trepositoryformatversion = 0",
+    "[remote \"@127.0.0.1_39003\"]", "\turl = http://127.0.0.1:39003/git/a-spex.git", "\tspexId = 3001",
+    "[branch \"spex\"]", "\tremote = @127.0.0.1_39003",
+    "[remote \"@127.0.0.1_34023\"]", "\turl = http://127.0.0.1:34023/git/a-spex.git",
+    "[remote \"origin\"]", "\turl = /tmp/bare.git",
+    "[remote \"with \\\"quote\\\"\"]", "\turl = /tmp/q.git",
+  ].join("\n");
+  assert.deepEqual(remoteSectionOrder(config), ["@127.0.0.1_39003", "@127.0.0.1_34023", "origin", 'with "quote"']);
+  // Git's listing sorted by key, as some versions give it, is put back in the file's order.
+  const sorted = ["remote.@127.0.0.1_34023.url\nhttp://127.0.0.1:34023/git/a-spex.git", "remote.@127.0.0.1_39003.url\nhttp://127.0.0.1:39003/git/a-spex.git", "remote.origin.url\n/tmp/bare.git"].join("\0");
+  assert.deepEqual(remoteNamesIn(sorted, remoteSectionOrder(config)), ["@127.0.0.1_39003", "@127.0.0.1_34023", "origin"]);
+  // A name the file does not list keeps its place after the listed ones, and no order leaves the listing as it is.
+  assert.deepEqual(remoteNamesIn(sorted + "\0remote.extra.url\n/tmp/x.git", ["origin"]), ["origin", "@127.0.0.1_34023", "@127.0.0.1_39003", "extra"]);
+  assert.deepEqual(remoteNamesIn(sorted), ["@127.0.0.1_34023", "@127.0.0.1_39003", "origin"]);
 });

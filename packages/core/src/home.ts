@@ -106,7 +106,7 @@ export const REMOTE_URL_KEYS = "^remote\\..+\\.url$";
  * from the output of `git config -z --get-regexp` over REMOTE_URL_KEYS.
  * A name may hold dots, as an instance's folder does, so it is what
  * lies between `remote.` and `.url`. */
-export function remoteNamesIn(output: string): string[] {
+export function remoteNamesIn(output: string, order: readonly string[] = []): string[] {
   const names: string[] = [];
   for (const entry of output.split("\0")) {
     const key = entry.split("\n", 1)[0];
@@ -114,7 +114,35 @@ export function remoteNamesIn(output: string): string[] {
     const name = key.slice("remote.".length, -".url".length);
     if (name !== "" && !names.includes(name)) names.push(name);
   }
-  return names;
+  return orderRemotes(names, (name) => name, order);
+}
+
+/** The remotes in the order a clone's Git configuration holds them
+ * (storage-34): the order of their `[remote "<name>"]` sections in the
+ * file, which `git remote add` appends to and a rename keeps — read from
+ * the file itself, since Git's own listing of the keys sorts them in
+ * some versions. A name Git unescapes as the file wrote it. */
+export function remoteSectionOrder(configText: string): string[] {
+  const order: string[] = [];
+  for (const match of configText.matchAll(/^[ \t]*\[remote[ \t]+"((?:[^"\\]|\\.)*)"[ \t]*\]/gm)) {
+    const name = match[1].replace(/\\(.)/g, "$1");
+    if (!order.includes(name)) order.push(name);
+  }
+  return order;
+}
+
+/** The order of a clone's remote sections, read from its `.git/config`;
+ * none where the file cannot be read, the listing's order standing. */
+export function remoteOrderOf(dir: string): string[] {
+  try { return remoteSectionOrder(readFileSync(join(dir, ".git", "config"), "utf8")); } catch { return []; }
+}
+
+/** Items named by remotes, in the configuration's section order where
+ * it names them, the rest after in the order given. */
+export function orderRemotes<T>(items: readonly T[], nameOf: (item: T) => string, order: readonly string[]): T[] {
+  if (order.length === 0) return [...items];
+  const rank = (item: T): number => { const at = order.indexOf(nameOf(item)); return at < 0 ? order.length : at; };
+  return [...items].map((item, index) => ({ item, index })).sort((a, b) => rank(a.item) - rank(b.item) || a.index - b.index).map(({ item }) => item);
 }
 
 export const invalidHome = (): string =>
