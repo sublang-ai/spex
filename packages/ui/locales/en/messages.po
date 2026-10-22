@@ -6111,6 +6111,11 @@ msgstr "This agent does not support browser tools"
 msgid "This command refreshes the spec law and prints a migration prompt for an AI agent to apply:"
 msgstr "This command refreshes the spec law and prints a migration prompt for an AI agent to apply:"
 
+#. the place of the local core, beside each team server's name
+#: src/state/store.ts
+msgid "This computer"
+msgstr "This computer"
+
 #: src/components/AgentSettings.tsx
 msgid "This conversation is in use elsewhere — its settings read only."
 msgstr "This conversation is in use elsewhere — its settings read only."
