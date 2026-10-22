@@ -35,6 +35,7 @@ import type {
   ProjectInfo,
   ReadinessEntry,
   RepoStatusInfo,
+  SeatState,
   ServerMessage,
   SessionInfo,
   SpaceChoice,
@@ -186,6 +187,10 @@ export interface AppState extends AttachmentState {
   hideApprovals(): void;
   /** True once a connection has ever opened (first-paint banner). */
   everConnected: boolean;
+  /** The seats this core holds open, as its last `server.state` named
+   * them (core-service-128): the local core's are the page's remote
+   * places (run-view-168). */
+  seats: SeatState[];
   /** The core endpoint the client dials, named when it cannot be
    * reached (run-view-50). */
   coreUrl?: string;
@@ -909,6 +914,9 @@ interface PlaceSeams {
   setClient(client: SpexClient | undefined): void;
   /** Hand the store a server message as its client would. */
   deliver(message: ServerMessage): void;
+  /** End the store's connection for good, dialing no more; a later
+   * `connect()` dials afresh (run-view-50). */
+  close(): void;
 }
 
 /** One core's store (run-view-168): its state, its seams, and the
@@ -1510,6 +1518,11 @@ function placeState(
       case "browser.progress":
         deliverBrowserProgress(message);
         break;
+      case "server.state":
+        // The open seats, whole (core-service-128), sent on every change
+        // and as the connection opens.
+        set({ seats: message.seats });
+        break;
       case "space.state":
         // The core's state replaces the last one wholesale (space-29),
         // and a read still in flight is older than this broadcast.
@@ -1729,6 +1742,12 @@ function placeState(
     client = next;
   };
   seams.deliver = handleMessage;
+  seams.close = () => {
+    // The client is let go first, so its closing reports nothing here.
+    const closing = client;
+    client = undefined;
+    closing?.close();
+  };
 
   return {
     ...createAttachmentState(set, get, getClient),
@@ -1737,6 +1756,7 @@ function placeState(
     showApprovals: (approvalFocusId) => set({approvalInboxOpen: true, approvalFocusId}),
     hideApprovals: () => set({approvalInboxOpen: false, approvalFocusId: undefined}),
     everConnected: false,
+    seats: [],
     readiness: [],
     projects: [],
     projectMeta: {},
@@ -1949,10 +1969,15 @@ function placeState(
       const target = url ?? endpoint ?? (local ? defaultCoreUrl() : undefined);
       if (target === undefined) throw new Error(i18n._("client not connected"));
       set({ coreUrl: target });
-      client = new SpexClient({
+      // Only the client in place speaks for this store: one let go by a
+      // redial or a close reports nothing more (run-view-50).
+      const dialing: SpexClient = new SpexClient({
         url: target,
-        onMessage: handleMessage,
+        onMessage: (message) => {
+          if (client === dialing) handleMessage(message);
+        },
         onStatus: (connection) => {
+          if (client !== dialing) return;
           if (connection !== "open") {
             sessionConnection += 1;
             sessionReads += 1;
@@ -1977,7 +2002,8 @@ function placeState(
           }
         },
       });
-      client.connect();
+      client = dialing;
+      dialing.connect();
     },
 
     async rereadProse(): Promise<void> {

@@ -500,6 +500,11 @@ msgstr "{role} runs as"
 msgid "{seconds}s"
 msgstr "{seconds}s"
 
+#. banner: a team server's seat runs another protocol version; {server} is the server's name
+#: src/App.tsx
+msgid "{server} speaks a different protocol version than this window — it needs the same Spex release as this app."
+msgstr "{server} speaks a different protocol version than this window — it needs the same Spex release as this app."
+
 #: src/components/SpaceInstance.tsx
 msgid "{site} signed this device out. Sign in again to continue as @{login}."
 msgstr "{site} signed this device out. Sign in again to continue as @{login}."
@@ -1367,6 +1372,11 @@ msgstr "C"
 msgid "call /{playbookId}"
 msgstr "call /{playbookId}"
 
+#. banner: a team server's seat never answered; {server} is the server's name
+#: src/App.tsx
+msgid "Can't reach {server} — retrying every second."
+msgstr "Can't reach {server} — retrying every second."
+
 #: src/App.tsx
 msgid "Can't reach the Spex core at {endpoint} — retrying every second. On a served page, check the link's token; on the desktop, restart the app."
 msgstr "Can't reach the Spex core at {endpoint} — retrying every second. On a served page, check the link's token; on the desktop, restart the app."
@@ -1868,6 +1878,11 @@ msgstr "Confirm the command, intent, players and where to enable it"
 #: src/components/DeliveryCard.tsx
 msgid "Confirming…"
 msgstr "Confirming…"
+
+#. banner: a team server's seat answered but its state failed to load; {server} is the server's name
+#: src/App.tsx
+msgid "Connected to {server}, but {reason}"
+msgstr "Connected to {server}, but {reason}"
 
 #: src/App.tsx
 msgid "Connected, but {reason}"
@@ -4600,6 +4615,11 @@ msgstr "Reasoning effort"
 #: src/components/ApprovalInbox.tsx
 msgid "Reconnect to answer these requests."
 msgstr "Reconnect to answer these requests."
+
+#. banner: the connection to a team server's seat dropped; {server} is the server's name
+#: src/App.tsx
+msgid "Reconnecting to {server}… actions there are paused until the connection returns."
+msgstr "Reconnecting to {server}… actions there are paused until the connection returns."
 
 #: src/App.tsx
 msgid "Reconnecting to the Spex core… actions are paused until the connection returns."
