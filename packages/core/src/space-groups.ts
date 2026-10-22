@@ -450,6 +450,9 @@ export function signInFailure(error: unknown, host: string): { cause: "denied" |
     case "account":
       return { cause: "refused", message: i18n._({ id: "{host} signed you in as another account; this device uses @{login} there", values: { host, login: words ?? "" },
         comment: "A sign-in refused, nothing stored: the person signed in at an instance the home lists as another account than the one it lists there; {host} is the instance's display name, {login} the listed account's login" }) };
+    case "person":
+      return { cause: "refused", message: i18n._({ id: "{host} signed you in as @{login}; this seat is another member's", values: { host, login: words ?? "" },
+        comment: "A sign-in on a team server's seat refused, nothing stored: the account approved at the instance is not the member the seat was opened for; {host} is the instance's display name, {login} the login of the account that signed in" }) };
     case "state":
     case "refused":
     default:
