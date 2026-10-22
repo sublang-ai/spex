@@ -8,7 +8,13 @@
 // sudoers fragment names the helper alone; the units and the
 // administrator's command carry the flags and paths the hub and the
 // server shell expect. What needs root, systemd and sudo is the
-// privileged lane's (hub-10).
+// privileged lane's (hub-10). The refusal of an /etc/sudoers that does
+// not read /etc/sudoers.d is not run here: it reads the fixed
+// /etc/sudoers, which only root may read, past the root refusal and the
+// fixed /run/systemd/system check, and no seam points the script at
+// another file (none is wanted in a script run as root); its place
+// before the first change and its pattern, under the real grep, are
+// checked instead.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -344,6 +350,71 @@ test("the install script refuses a prefix that is, holds or lies inside its chec
   assert.deepEqual(readdirSync(home), []);
   assert.deepEqual(readdirSync(folder).sort(), ["apps", "package-lock.json", "package.json"], "the checkout is as it was");
   assert.deepEqual(readdirSync(join(folder, "apps", "hub")).sort(), ["bin", "deploy", "package.json"]);
+});
+
+test("the install script refuses, before its first change, an /etc/sudoers that does not read /etc/sudoers.d (hub-7)", () => {
+  const text = readFileSync(INSTALL, "utf8");
+  assert.equal(constant(INSTALL, "SUDOERS"), "/etc/sudoers");
+  assert.equal(constant(INSTALL, "SUDOERS_DIR"), "/etc/sudoers.d");
+  const check = /^grep -Eq -- "\$SUDOERS_READS_DIR" "\$SUDOERS" \|\|\n\s+refuse 69 "\$SUDOERS does not read \$SUDOERS_DIR, /m.exec(text);
+  assert.ok(check, "the check refuses with 69, naming the mistake");
+  const firstChange = text.indexOf('install -d -m 0700 -o root -g root "$NPM_CACHE"');
+  assert.ok(firstChange > 0, "the build's npm cache is the first thing made");
+  assert.ok(check.index < firstChange, "the check comes before the first change");
+  assert.ok(check.index < text.indexOf("sudo -n -l -U"), "the check comes before the installed fragment is confirmed");
+
+  const pattern = constant(INSTALL, "SUDOERS_READS_DIR").replace(/^'(.*)'$/, "$1");
+  const root = scratch();
+  const cases: [string, string, boolean][] = [
+    ["@includedir", "Defaults env_reset\nroot ALL=(ALL:ALL) ALL\n@includedir /etc/sudoers.d\n", true],
+    ["#includedir", "Defaults env_reset\n#includedir /etc/sudoers.d\n", true],
+    ["no includedir", "Defaults env_reset\nroot ALL=(ALL:ALL) ALL\n", false],
+    ["a commented includedir", "# includedir /etc/sudoers.d\n", false],
+    ["another directory", "@includedir /etc/sudoers.local\n", false],
+  ];
+  for (const [label, content, reads] of cases) {
+    const file = join(root, label.replace(/\W+/g, "-"));
+    writeFileSync(file, content);
+    const result = spawnSync("grep", ["-Eq", "--", pattern, file], {
+      env: { PATH: "/usr/bin:/bin" },
+      encoding: "utf8",
+    });
+    assert.equal(result.status, reads ? 0 : 1, `${label}: ${result.stderr}`);
+  }
+});
+
+test("the attach command the install script prints is one the hub takes, its token read from /etc/spex/server.token (hub-1, hub-7)", () => {
+  const text = readFileSync(INSTALL, "utf8");
+  const etc = constant(INSTALL, "ETC_DIR");
+  const tokenFile = constant(INSTALL, "TOKEN_FILE");
+  assert.equal(tokenFile, `${etc}/server.token`);
+  const lines = text.split("\n");
+  const start = lines.findIndex((line) => line.trim().startsWith("$hub attach "));
+  assert.ok(start > 0, "the script prints an attach command");
+  let end = start;
+  while (lines[end].endsWith("\\\\")) end++;
+  const words = lines
+    .slice(start, end + 1)
+    .join(" ")
+    .replaceAll("\\\\", " ")
+    .replace(/<[^>]+>/g, "x")
+    .replaceAll("$STATE_DIR", constant(INSTALL, "STATE_DIR"))
+    .replaceAll("$TOKEN_FILE", tokenFile)
+    .trim()
+    .split(/\s+/);
+  assert.equal(words[0], "$hub");
+  const { command, flags } = parseCommandLine(words.slice(1));
+  assert.equal(command, "attach");
+  assert.deepEqual(
+    [...flags.keys()].sort(),
+    ["address", "instance", "server-id", "state-dir", "tls-cert", "tls-key", "token-file"],
+  );
+  assert.equal(flags.get("token-file"), "/etc/spex/server.token");
+  assert.equal(flags.get("state-dir"), DEFAULT_STATE_DIR);
+  assert.ok(
+    text.includes('$TOKEN_FILE ($(written "$TOKEN_FILE")), root:$HUB_GROUP 0640'),
+    "the token file is listed with the others, marked present or not",
+  );
 });
 
 test("the administrator's command hands the hub the installed helper, a later --helper winning (hub-6)", () => {

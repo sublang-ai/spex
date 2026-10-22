@@ -15,11 +15,15 @@
 #     lies in no release checkout, the prefix and the checkout overlap,
 #     it runs as another user than root, or the host lacks Linux,
 #     systemd as its init, sudo, visudo, /etc/systemd/system,
-#     /etc/sudoers.d, /etc/tmpfiles.d, npm, or a node of 22.19 or later
-#     every account may run and root alone may replace;
+#     /etc/sudoers.d, an /etc/sudoers that reads /etc/sudoers.d
+#     (@includedir or #includedir), /etc/tmpfiles.d, npm, or a node of
+#     22.19 or later every account may run and root alone may replace;
+#     it warns, and goes on, when a seat runs;
 #  2. builds the server shell and the hub from the checkout (`npm ci`,
-#     then `npm run build`, with no Electron download), installing no
-#     binary the release does not build from source;
+#     then `npm run build`, with no Electron download, as root with
+#     HOME=/root and npm's cache in /var/cache/spex-hub-npm, so nothing
+#     lands in the invoking user's home), installing no binary the
+#     release does not build from source;
 #  3. creates the seats' group spex-seats, the hub's group spex-hub and
 #     its system account spex-hub with no login shell, its home the
 #     hub's state directory /var/lib/spex-hub, spex-hub 0700 (hub-8),
@@ -38,15 +42,20 @@
 #     `systemctl daemon-reload` and checks that sudo lets spex-hub run
 #     the helper;
 #  5. makes /etc/spex/agents.env empty, root:spex-seats 0640, where it is
-#     absent, since every seat's unit names it, and prints the three
+#     absent, since every seat's unit names it, and prints the four
 #     files the administrator writes before `spex-hub attach` —
-#     /etc/spex/server.env, /etc/spex/agents.env and the TLS material —
-#     and the attach and enable commands.
+#     /etc/spex/server.env, /etc/spex/agents.env, the TLS material and
+#     /etc/spex/server.token, which attach reads with --token-file — and
+#     the attach and enable commands.
 #
 # Run again, it updates the installed files and leaves the accounts, the
-# groups and the administrator's three files as they are; running seats
-# keep the version before until they stop. It reads no secret and prints
-# none.
+# groups and the administrator's four files as they are. A running seat
+# loads Spex's modules from <prefix>/app as it needs them, so a seat
+# running while <prefix>/app is replaced may load modules of the new
+# version from then on, beside the old ones already loaded: run the
+# install while no seat runs, or evict the running seats first. The hub
+# keeps the version it started with until it restarts. It reads no
+# secret and prints none.
 #
 # The prefix is /opt/spex unless --prefix or SPEX_PREFIX names another:
 # an absolute path under directories root alone may write. The units,
@@ -67,6 +76,9 @@
 #   /etc/spex                       root:root 0755
 #   /etc/spex/server.env            root:root 0644, the administrator's
 #   /etc/spex/agents.env            root:spex-seats 0640, the administrator's
+#   /etc/spex/server.token          root:spex-hub 0640, the administrator's,
+#                                   read by attach
+#   /var/cache/spex-hub-npm         root:root 0700, the build's npm cache
 #
 # Exit status: 0 installed; 64 a usage mistake; 66 no release checkout;
 # 77 not root; 69 a requirement missing; 78 an unsafe prefix or node;
@@ -87,7 +99,11 @@ readonly STATE_DIR=/var/lib/spex-hub
 readonly ETC_DIR=/etc/spex
 readonly UNIT_DIR=/etc/systemd/system
 readonly SUDOERS_DIR=/etc/sudoers.d
+readonly SUDOERS=/etc/sudoers
+readonly SUDOERS_READS_DIR='^[@#]includedir[[:space:]]+/etc/sudoers\.d'
 readonly TMPFILES_FILE=/etc/tmpfiles.d/spex-hub.conf
+readonly TOKEN_FILE=/etc/spex/server.token
+readonly NPM_CACHE=/var/cache/spex-hub-npm
 readonly NODE_MAJOR=22
 readonly NODE_MINOR=19
 
@@ -147,6 +163,16 @@ real_path() {
   done
   dir=$(cd -P -- "$dir" && pwd) || return 1
   echo "${dir%/}$rest"
+}
+
+# The seats' units active now, by name, on one line; empty when none is.
+active_seats() {
+  local units unit names=""
+  units=$(systemctl list-units --plain --no-legend --state=active 'spex-seat@*' 2>/dev/null) || return 0
+  while read -r unit _; do
+    if [ -n "$unit" ]; then names="${names:+$names }$unit"; fi
+  done <<<"$units"
+  echo "$names"
 }
 
 # --- Refusals: nothing is changed before each of them has passed.
@@ -225,6 +251,11 @@ for dir in "$UNIT_DIR" "$SUDOERS_DIR" "${TMPFILES_FILE%/*}"; do
   [ -d "$dir" ] ||
     refuse 69 "$dir is missing: the units, the sudoers fragment and the tmpfiles fragment go under $UNIT_DIR, $SUDOERS_DIR and ${TMPFILES_FILE%/*}"
 done
+# sudo reads the fragment only where its policy includes the directory.
+[ -f "$SUDOERS" ] ||
+  refuse 69 "$SUDOERS is missing: sudo reads its policy there, and the hub runs the seat helper through sudo; reinstall sudo"
+grep -Eq -- "$SUDOERS_READS_DIR" "$SUDOERS" ||
+  refuse 69 "$SUDOERS does not read $SUDOERS_DIR, so sudo would never let $HUB_USER run the seat helper: add the line '@includedir $SUDOERS_DIR' to $SUDOERS with visudo, then run install.sh again"
 
 node=$(command -v node 2>/dev/null) && [[ "$node" == /* ]] ||
   refuse 69 "node is missing: install Node.js $NODE_MAJOR.$NODE_MINOR or later where every account may run it, e.g. under /usr"
@@ -250,10 +281,25 @@ if unsafe=$(writable_ancestor "$real_prefix"); then
   refuse 78 "the prefix $prefix lies under $unsafe, which an account other than root may write, and sudo would run the helper from there as root; choose a prefix under root's own directories"
 fi
 
-# --- Build, from this checkout alone.
+hub="sudo -u $HUB_USER $prefix/bin/spex-hub"
 
-echo "install.sh: building Spex in $checkout (npm ci, npm run build)"
+# A warning, not a refusal: a seat running while <prefix>/app is
+# replaced may load modules of the new version beside the old ones.
+seats=""
+[ ! -e "$prefix/app" ] || seats=$(active_seats)
+if [ -n "$seats" ]; then
+  echo "install.sh: warning: seats run ($seats) and may load modules of the new version once $prefix/app is replaced; to keep them whole, interrupt the build now (Ctrl-C), evict them ($hub evict <person id>) and run install.sh again" >&2
+fi
+
+# --- Build, from this checkout alone, as root in root's own home and
+# cache, so nothing lands in the invoking user's home.
+
+install -d -m 0700 -o root -g root "$NPM_CACHE" ||
+  refuse 70 "could not make the build's npm cache $NPM_CACHE; nothing is installed"
+echo "install.sh: building Spex in $checkout (npm ci, npm run build; npm's cache $NPM_CACHE)"
 if ! (cd -- "$checkout" &&
+  unset XDG_CACHE_HOME XDG_CONFIG_HOME &&
+  export HOME=/root npm_config_cache="$NPM_CACHE" &&
   ELECTRON_SKIP_BINARY_DOWNLOAD=1 "$npm" ci --no-audit --no-fund &&
   "$npm" run build); then
   refuse 70 "the build in $checkout failed (above); nothing is installed"
@@ -275,6 +321,7 @@ on_error() { # <status>
 }
 staged=""
 previous=""
+replaced=""
 rendered=""
 cleanup() {
   trap - ERR
@@ -322,6 +369,7 @@ chmod -R u+rwX,go+rX,go-w "$staged"
 if [ -e "$prefix/app" ]; then
   previous="$prefix/.app.previous.$$"
   mv -- "$prefix/app" "$previous"
+  replaced=yes
 fi
 mv -- "$staged" "$prefix/app"
 staged=""
@@ -387,10 +435,9 @@ trap - ERR
 written() {
   if [ -e "$1" ]; then echo "present"; else echo "not written yet"; fi
 }
-hub="sudo -u $HUB_USER $prefix/bin/spex-hub"
 cat <<NEXT
 
-Spex is installed under $prefix. Before attaching, write these three as root:
+Spex is installed under $prefix. Before attaching, write these four as root:
 
   $ETC_DIR/server.env ($(written "$ETC_DIR/server.env")), root:root 0644, the server as the
   instance registered it, as NAME=value lines:
@@ -405,13 +452,20 @@ Spex is installed under $prefix. Before attaching, write these three as root:
   the TLS certificate and key of the server's address, readable by $HUB_USER, e.g.
       chgrp $HUB_GROUP <key file> && chmod 0640 <key file>
 
-Then attach the server, pasting its token when asked (never on the command line),
-and start the hub:
+  $TOKEN_FILE ($(written "$TOKEN_FILE")), root:$HUB_GROUP 0640, the server's token
+  as the servers page showed it, on one line; e.g. made empty with
+      install -m 0640 -o root -g $HUB_GROUP /dev/null $TOKEN_FILE
+  and the token pasted into it with an editor, so that it stays out of the
+  shell's history and the terminal's scrollback
+
+Then attach the server, which reads its token from $TOKEN_FILE, and start
+the hub:
 
   $hub attach \\
       --state-dir=$STATE_DIR --instance=<the instance's URL> \\
       --server-id=<the server's id> --address=<the server's https origin> \\
-      --tls-cert=<the certificate's absolute path> --tls-key=<the key's absolute path>
+      --tls-cert=<the certificate's absolute path> --tls-key=<the key's absolute path> \\
+      --token-file=$TOKEN_FILE
   systemctl enable --now spex-hub
 
 The seats are then administered as $HUB_USER:
@@ -419,16 +473,21 @@ The seats are then administered as $HUB_USER:
   $hub status
   $hub evict <person id>
   $hub retire
+
+A seat loads Spex's modules from $prefix/app as it needs them, so a seat that
+runs while install.sh replaces $prefix/app may load modules of the new version
+from then on: run install.sh while no seat runs, or evict the running seats first.
 NEXT
 if systemctl is-active --quiet spex-hub; then
   echo
   echo "The hub runs the version before this one: systemctl restart spex-hub"
 fi
-running_seats=$(systemctl list-units --plain --no-legend --state=active 'spex-seat@*.service' 2>/dev/null) ||
-  running_seats=""
-if [ -n "$running_seats" ]; then
+seats=""
+[ -z "$replaced" ] || seats=$(active_seats)
+if [ -n "$seats" ]; then
   echo
-  echo "Running seats keep the version before this one until they stop; $hub evict <person id> stops one now."
+  echo "warning: seats run ($seats) and may load modules of the new version from now on:"
+  echo "evict each ($hub evict <person id>); it starts afresh at its member's next admission"
 fi
 if read -r checkout_uid checkout_user < <(stat -c '%u %U' -- "$checkout") && [ "$checkout_uid" -ne 0 ]; then
   echo
