@@ -46,7 +46,7 @@ import {
 /** A record another surface asked the spec view to open, with where
  * it was asked from (spec-view-57). */
 type PendingRecord = { projectId: string; path: string; origin: RecordOrigin };
-import { editorDirty } from "./lib/spec-view-model.js";
+import { editorDirty, treeCounts } from "./lib/spec-view-model.js";
 import { isHistory } from "./lib/sessions.js";
 import { Icon } from "./components/Icon.js";
 import { homeAttachmentKey, sessionAttachmentKey, useComposerAttachments } from "./lib/useComposerAttachments.js";
@@ -431,6 +431,19 @@ function WorkspaceSurface({
       : (open.find((session) => session.id === activeSessionId)?.id ??
         open[0]?.id ??
         "start"));
+  const projectSpecTree = currentProjectId ? specTrees[currentProjectId] : undefined;
+  const projectSpecError = currentProjectId ? specErrors[currentProjectId] : undefined;
+  const projectSpecPackageCount = projectSpecTree?.present && !projectSpecTree.legacy && !projectSpecError
+    ? treeCounts(projectSpecTree.files).packages
+    : 0;
+
+  // The task start and pinned Specs tab need the project's real state
+  // before anyone opens the reader. The Specs tab itself still re-reads
+  // on activation and focus (DR-011).
+  useEffect(() => {
+    if (connection !== "open" || !currentProjectId || tab === "specs" || projectSpecTree || projectSpecError) return;
+    void loadSpecs(currentProjectId);
+  }, [connection, currentProjectId, tab, projectSpecTree, projectSpecError, loadSpecs]);
 
   // The last-viewed marker is a standing condition, not an event
   // (run-view-134): while the workspace shows a session with its
@@ -521,6 +534,9 @@ function WorkspaceSurface({
       hasProjects={projects.length > 0}
       projectName={project?.name}
       projectId={project?.id}
+      specTree={projectSpecTree}
+      specError={projectSpecError}
+      onOpenSpecs={() => pickTab("specs")}
       playbooks={playbooksOf(project?.id)}
       captain={summary?.captain}
       readiness={readiness}
@@ -824,6 +840,14 @@ function WorkspaceSurface({
                 id: "Specs",
                 comment: "tab name: the project's spec packages",
               })}
+              {projectSpecPackageCount > 0 ? (
+                <>
+                  <span aria-hidden="true" className="ml-1 text-xs text-neutral-500 dark:text-neutral-400">({projectSpecPackageCount})</span>
+                  <span className="sr-only">
+                    {i18n._(", {count, plural, one {# spec package} other {# spec packages}}", { count: projectSpecPackageCount })}
+                  </span>
+                </>
+              ) : null}
               {project && editorDirty(specViewStates[project.id]) ? (
                 <>
                   <span className="sr-only">

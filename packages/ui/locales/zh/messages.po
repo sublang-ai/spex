@@ -70,6 +70,10 @@ msgstr "— 在 {path} 生成"
 msgid "— seeds a sample project"
 msgstr "— 生成一个示例项目"
 
+#: src/App.tsx
+msgid ", {count, plural, one {# spec package} other {# spec packages}}"
+msgstr "，{count} 个规约包"
+
 #. tail of a run's one-line strip: the state that called it
 #: src/components/MachineCard.tsx
 msgid ", called from {state}"
@@ -1883,6 +1887,10 @@ msgstr "确认中…"
 msgid "Connect an agent"
 msgstr "连接智能体"
 
+#: src/components/CaptainHome.tsx
+msgid "Connect to read project specs"
+msgstr "连接后可查看项目规约"
+
 #: src/App.tsx
 msgid "Connected, but {reason}"
 msgstr "已连接，但{reason}"
@@ -2031,6 +2039,10 @@ msgstr "无法标记为已审阅：{reason}"
 #: src/components/SpaceExplorer.tsx
 msgid "Couldn't read it: {reason}"
 msgstr "无法读取：{reason}"
+
+#: src/components/CaptainHome.tsx
+msgid "Couldn't read project specs"
+msgstr "暂时无法读取项目规约"
 
 #: src/components/SpaceExplorer.tsx
 msgid "Couldn't read the files: {reason}"
@@ -2234,10 +2246,6 @@ msgstr "拒绝"
 #: src/components/CaptainHome.tsx
 msgid "Describe a project task"
 msgstr "描述项目任务"
-
-#: src/components/CaptainHome.tsx
-msgid "Describe the goal and how to know it is done. Captain will choose a suitable playbook and coordinate AI implementation and review."
-msgstr "说明目标和怎样算完成。Captain 会选择合适的规程，安排 AI 实现与复核。"
 
 #: src/components/DraftConversation.tsx
 msgid "Describe the playbook…"
@@ -2617,6 +2625,10 @@ msgstr "示例：{title}"
 #: src/components/ProjectPalette.tsx
 msgid "Existing project"
 msgstr "已有项目"
+
+#: src/components/CaptainHome.tsx
+msgid "Existing specs: {packages, plural, one {# package} other {# packages}} · {items, plural, one {# item} other {# items}}"
+msgstr "已有规约：{packages} 个规约包 · {items} 个条目"
 
 #: src/components/PlayerPane.tsx
 msgid "Expand {player}"
@@ -3779,6 +3791,10 @@ msgstr "此文件无法预览。"
 msgid "No project matches \"{query}\""
 msgstr "没有匹配“{query}”的项目"
 
+#: src/components/CaptainHome.tsx
+msgid "No project specs yet"
+msgstr "尚无项目规约"
+
 #: src/components/DashboardSurface.tsx
 msgid "No projects yet — register a repository in the <0>Projects</0> to put its work here."
 msgstr "还没有项目 — 在<0>项目</0>中注册一个仓库，其工作就会出现在这里。"
@@ -4618,6 +4634,10 @@ msgstr "正在读取 {id}…"
 msgid "Reading members…"
 msgstr "正在读取成员…"
 
+#: src/components/CaptainHome.tsx
+msgid "Reading project specs…"
+msgstr "正在读取项目规约…"
+
 #: src/components/SpecView.tsx
 msgid "reading specs…"
 msgstr "正在读取规约…"
@@ -5187,6 +5207,10 @@ msgstr "搜索注册表并请求某个版本"
 msgid "Searching…"
 msgstr "搜索中…"
 
+#: src/components/CaptainHome.tsx
+msgid "See how to start"
+msgstr "查看如何开始"
+
 #: src/App.tsx
 msgid "seeding the example failed"
 msgstr "生成示例失败"
@@ -5616,6 +5640,14 @@ msgstr "规约包需求"
 msgid "Specs"
 msgstr "规约"
 
+#: src/components/CaptainHome.tsx
+msgid "Specs directory exists, but no packages yet"
+msgstr "规约目录已建立，尚无规约包"
+
+#: src/components/CaptainHome.tsx
+msgid "Specs need migration"
+msgstr "规约需要迁移"
+
 #: src/components/SpecView.tsx
 msgid "specs/ is present but holds no spec files yet."
 msgstr "specs/ 已存在，但还没有规约文件。"
@@ -5913,6 +5945,10 @@ msgstr "从消息中移除该任务"
 #: src/components/NextCard.tsx
 msgid "Take this task out of the queue — Undo puts it back"
 msgstr "将此任务移出队列 — 撤销可放回"
+
+#: src/components/CaptainHome.tsx
+msgid "Tell Captain what should change and how to know it is done. Specs clarify goals and acceptance criteria; Captain chooses a playbook to coordinate AI implementation and review."
+msgstr "告诉 Captain 想改什么、怎样算完成。规约明确目标与验收标准，Captain 选择规程安排 AI 实现与复核。"
 
 #: src/components/DraftConversation.tsx
 msgid "Tell the agent what the playbook does, who does what, and when it is done"
@@ -6513,9 +6549,21 @@ msgstr "{name} 的版本"
 msgid "via {group}"
 msgstr "通过 {group}"
 
+#: src/components/CaptainHome.tsx
+msgid "View details"
+msgstr "查看详情"
+
 #: src/components/SpaceSync.tsx
 msgid "View diff"
 msgstr "查看差异"
+
+#: src/components/CaptainHome.tsx
+msgid "View migration guidance"
+msgstr "查看迁移说明"
+
+#: src/components/CaptainHome.tsx
+msgid "View specs"
+msgstr "查看规约"
 
 #: src/components/SpaceSurface.tsx
 msgid "Views of {name}"

@@ -11,6 +11,7 @@ import type {
   IntentInfo,
   PlaybookSummary,
   ReadinessEntry,
+  SpecTreeState,
 } from "@sublang/spex-core/protocol";
 
 import { i18n } from "../i18n.js";
@@ -18,6 +19,7 @@ import { canSubmitContent, type ComposerAttachmentControls } from "./ComposerAtt
 import type { AgentPatch } from "../lib/config-ops.js";
 import { keyLabel } from "../lib/shortcuts.js";
 import { playbookIntent } from "../lib/playbook-intent.js";
+import { treeCounts } from "../lib/spec-view-model.js";
 import { useAppStore, type StagedIntent } from "../state/store.js";
 import { SlashMenuList, slashMatches } from "./SlashMenu.js";
 import { AgentChip, agentChipText, fastModeWord, readinessWord } from "./AgentChip.js";
@@ -40,6 +42,10 @@ export interface CaptainHomeProps {
   hasProjects?: boolean;
   projectName?: string;
   projectId?: string;
+  /** The current project's parsed specs tree; absent until read. */
+  specTree?: SpecTreeState;
+  specError?: string;
+  onOpenSpecs?: () => void;
   playbooks: PlaybookSummary[];
   /** The Captain's inline agent block (DR-019); absent while the
    * config is broken. */
@@ -192,6 +198,20 @@ export function CaptainHome(props: CaptainHomeProps) {
   ].filter((entry, index, entries): entry is PlaybookSummary =>
     entry !== undefined && entries.findIndex((candidate) => candidate?.id === entry.id) === index,
   ).slice(0, 2);
+  const specCounts = props.specTree?.present && !props.specTree.legacy
+    ? treeCounts(props.specTree.files)
+    : undefined;
+  const specState = props.specError
+    ? "error"
+    : !props.specTree
+      ? connected ? "loading" : "disconnected"
+      : props.specTree.legacy
+        ? "legacy"
+        : !props.specTree.present
+          ? "missing"
+          : specCounts?.packages
+            ? "ready"
+            : "empty";
 
   async function start(): Promise<void> {
     if (!canSubmitContent(text, props.attachments?.files) || busy || !connected) {
@@ -348,9 +368,39 @@ export function CaptainHome(props: CaptainHomeProps) {
                 project: props.projectName ?? i18n._("your project"),
               })}
             </h1>
-            <p className="mt-3 text-sm leading-6 text-neutral-600 dark:text-neutral-300">
-              {i18n._("Describe the goal and how to know it is done. Captain will choose a suitable playbook and coordinate AI implementation and review.")}
+            <p className="mt-3 text-balance text-sm leading-6 text-neutral-600 dark:text-neutral-300">
+              {i18n._("Tell Captain what should change and how to know it is done. Specs clarify goals and acceptance criteria; Captain chooses a playbook to coordinate AI implementation and review.")}
             </p>
+            {props.onOpenSpecs ? (
+              <div data-testid="project-spec-status" className="mt-4 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs leading-5 text-neutral-500 dark:text-neutral-400">
+                <span>
+                  {specState === "ready" && specCounts
+                    ? i18n._("Existing specs: {packages, plural, one {# package} other {# packages}} · {items, plural, one {# item} other {# items}}", { packages: specCounts.packages, items: specCounts.items })
+                    : specState === "missing"
+                      ? i18n._("No project specs yet")
+                      : specState === "empty"
+                        ? i18n._("Specs directory exists, but no packages yet")
+                        : specState === "legacy"
+                          ? i18n._("Specs need migration")
+                          : specState === "error"
+                            ? i18n._("Couldn't read project specs")
+                            : specState === "disconnected"
+                              ? i18n._("Connect to read project specs")
+                              : i18n._("Reading project specs…")}
+                </span>
+                {specState !== "loading" && specState !== "disconnected" ? (
+                  <button type="button" onClick={props.onOpenSpecs} className="font-medium text-brand-700 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500 dark:text-brand-300">
+                    {specState === "missing"
+                      ? i18n._("See how to start")
+                      : specState === "legacy"
+                        ? i18n._("View migration guidance")
+                        : specState === "error"
+                          ? i18n._("View details")
+                          : i18n._("View specs")}
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
           </div>
         ) : (
           <CaptainBubble>

@@ -26,6 +26,7 @@ import type {
   PlaybookSummary,
   QueueSchedule,
   ReadinessEntry,
+  SpecTreeState,
 } from "@sublang/spex-core/protocol";
 import type { ComposerAttachmentControls } from "./ComposerAttachments.js";
 import type { AgentPatch } from "../lib/config-ops.js";
@@ -82,6 +83,9 @@ function renderHome({
   hasProject = true,
   hasProjects = true,
   playbooks = PLAYBOOKS as PlaybookSummary[],
+  specTree = undefined as SpecTreeState | undefined,
+  specError = undefined as string | undefined,
+  onOpenSpecs = undefined as (() => void) | undefined,
   // null renders the no-captain state; undefined would fall back to
   // this default the way an omitted option does.
   captain = CAPTAIN as AgentSummary | null,
@@ -104,6 +108,9 @@ function renderHome({
       hasProject={hasProject}
       hasProjects={hasProjects}
       projectName={hasProject ? PROJECT.name : undefined}
+      specTree={specTree}
+      specError={specError}
+      onOpenSpecs={onOpenSpecs}
       playbooks={playbooks}
       captain={captain ?? undefined}
       readiness={readiness}
@@ -194,7 +201,7 @@ describe("RUN-29: captain home structure and one-motion start", () => {
 
   test("task scope and slash discovery sit outside the input", () => {
     renderHome();
-    expect(screen.getByText(/Describe the goal and how to know it is done/)).toBeTruthy();
+    expect(screen.getByText(/Specs clarify goals and acceptance criteria/)).toBeTruthy();
     const hint = document.getElementById("start-playbook-hint")!;
     expect(hint.textContent).toBe("Type / in the task box to see all 2 playbooks");
     expect(hint.querySelector("code")?.textContent).toBe("/");
@@ -240,6 +247,39 @@ describe("RUN-29: captain home structure and one-motion start", () => {
   test("no playbook preview appears without configured playbooks", () => {
     renderHome({ playbooks: [] });
     expect(screen.queryByTestId("playbook-preview")).toBeNull();
+  });
+
+  test("existing project specs are counted and open the pinned Specs tab", () => {
+    const onOpenSpecs = vi.fn();
+    const specTree: SpecTreeState = {
+      present: true, legacy: false, decisions: [], intents: [], notices: [], readAt: 1,
+      files: [
+        { path: "specs/packages/design.md", key: "design", dir: "", basename: "design", notices: [], items: [
+          { id: "design-1", group: "external", section: "External Behavior", firstLine: "A checkable goal", text: "A checkable goal", cites: [] },
+        ] },
+        { path: "specs/packages/git.md", key: "git", dir: "", basename: "git", notices: [], items: [] },
+      ],
+    };
+    renderHome({ specTree, onOpenSpecs });
+    const status = screen.getByTestId("project-spec-status");
+    expect(status.textContent).toContain("2 packages · 1 item");
+    fireEvent.click(within(status).getByRole("button", { name: "View specs" }));
+    expect(onOpenSpecs).toHaveBeenCalledOnce();
+  });
+
+  test("a missing specs tree offers guidance without presenting a false count", () => {
+    const onOpenSpecs = vi.fn();
+    const view = renderHome({ onOpenSpecs });
+    const status = screen.getByTestId("project-spec-status");
+    expect(status.textContent).toBe("Reading project specs…");
+    expect(status.querySelector("button")).toBeNull();
+    view.view.rerender(<CaptainHome hasProject hasProjects projectName="demo" playbooks={PLAYBOOKS} readiness={READY} connected
+      onOpenPalette={vi.fn()} onNavigate={vi.fn()} onSaveCaptain={vi.fn(async () => {})} onStart={vi.fn(async () => {})}
+      specTree={{ present: false, legacy: false, files: [], decisions: [], intents: [], notices: [], readAt: 1 }}
+      onOpenSpecs={onOpenSpecs} />);
+    expect(status.textContent).toContain("No project specs yet");
+    fireEvent.click(within(status).getByRole("button", { name: "See how to start" }));
+    expect(onOpenSpecs).toHaveBeenCalledOnce();
   });
 
   test("submitting without a project opens the palette, draft intact", () => {

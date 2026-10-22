@@ -1361,6 +1361,29 @@ describe("run-view-88: Captain Home consumes the published next standing", () =>
 });
 
 describe("spec-view-58: the Specs tab on a project with no specs/", () => {
+  test("the project start links to existing specs and the pinned tab shows package count", async () => {
+    useAppStore.setState({
+      workspaceTabs: { p1: "start" },
+      specTrees: { p1: {
+        present: true, legacy: false, decisions: [], intents: [], notices: [], readAt: 1,
+        files: [
+          { path: "specs/packages/design.md", key: "design", dir: "", basename: "design", notices: [], items: [
+            { id: "design-1", group: "external", section: "External Behavior", firstLine: "A goal", text: "A goal", cites: [] },
+          ] },
+          { path: "specs/packages/git.md", key: "git", dir: "", basename: "git", notices: [], items: [] },
+        ],
+      } },
+    });
+    render(<App />);
+    const tab = screen.getByTestId("workspace-tab-specs");
+    expect(tab.querySelector('[aria-hidden="true"]')?.textContent).toBe("(2)");
+    expect(screen.getByRole("tab", { name: "Specs, 2 spec packages" })).toBe(tab);
+    expect(tab.getAttribute("aria-selected")).toBe("false");
+    expect(screen.getByTestId("project-spec-status").textContent).toContain("2 packages · 1 item");
+    fireEvent.click(within(screen.getByTestId("project-spec-status")).getByRole("button", { name: "View specs" }));
+    expect(tab.getAttribute("aria-selected")).toBe("true");
+  });
+
   // The tree the core replies with when a project has no `specs/`
   // directory: absence stated with empty lists, never a failure and
   // never a reply missing them (spec-view-10). The view reads those

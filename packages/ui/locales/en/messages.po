@@ -70,6 +70,10 @@ msgstr "— seeds {path}"
 msgid "— seeds a sample project"
 msgstr "— seeds a sample project"
 
+#: src/App.tsx
+msgid ", {count, plural, one {# spec package} other {# spec packages}}"
+msgstr ", {count, plural, one {# spec package} other {# spec packages}}"
+
 #. tail of a run's one-line strip: the state that called it
 #: src/components/MachineCard.tsx
 msgid ", called from {state}"
@@ -1883,6 +1887,10 @@ msgstr "Confirming…"
 msgid "Connect an agent"
 msgstr "Connect an agent"
 
+#: src/components/CaptainHome.tsx
+msgid "Connect to read project specs"
+msgstr "Connect to read project specs"
+
 #: src/App.tsx
 msgid "Connected, but {reason}"
 msgstr "Connected, but {reason}"
@@ -2031,6 +2039,10 @@ msgstr "Couldn't mark it reviewed: {reason}"
 #: src/components/SpaceExplorer.tsx
 msgid "Couldn't read it: {reason}"
 msgstr "Couldn't read it: {reason}"
+
+#: src/components/CaptainHome.tsx
+msgid "Couldn't read project specs"
+msgstr "Couldn't read project specs"
 
 #: src/components/SpaceExplorer.tsx
 msgid "Couldn't read the files: {reason}"
@@ -2234,10 +2246,6 @@ msgstr "Deny"
 #: src/components/CaptainHome.tsx
 msgid "Describe a project task"
 msgstr "Describe a project task"
-
-#: src/components/CaptainHome.tsx
-msgid "Describe the goal and how to know it is done. Captain will choose a suitable playbook and coordinate AI implementation and review."
-msgstr "Describe the goal and how to know it is done. Captain will choose a suitable playbook and coordinate AI implementation and review."
 
 #: src/components/DraftConversation.tsx
 msgid "Describe the playbook…"
@@ -2617,6 +2625,10 @@ msgstr "Example: {title}"
 #: src/components/ProjectPalette.tsx
 msgid "Existing project"
 msgstr "Existing project"
+
+#: src/components/CaptainHome.tsx
+msgid "Existing specs: {packages, plural, one {# package} other {# packages}} · {items, plural, one {# item} other {# items}}"
+msgstr "Existing specs: {packages, plural, one {# package} other {# packages}} · {items, plural, one {# item} other {# items}}"
 
 #: src/components/PlayerPane.tsx
 msgid "Expand {player}"
@@ -3779,6 +3791,10 @@ msgstr "No preview for this file."
 msgid "No project matches \"{query}\""
 msgstr "No project matches \"{query}\""
 
+#: src/components/CaptainHome.tsx
+msgid "No project specs yet"
+msgstr "No project specs yet"
+
 #: src/components/DashboardSurface.tsx
 msgid "No projects yet — register a repository in the <0>Projects</0> to put its work here."
 msgstr "No projects yet — register a repository in the <0>Projects</0> to put its work here."
@@ -4618,6 +4634,10 @@ msgstr "reading {id}…"
 msgid "Reading members…"
 msgstr "Reading members…"
 
+#: src/components/CaptainHome.tsx
+msgid "Reading project specs…"
+msgstr "Reading project specs…"
+
 #: src/components/SpecView.tsx
 msgid "reading specs…"
 msgstr "reading specs…"
@@ -5187,6 +5207,10 @@ msgstr "Search the registry and request a version"
 msgid "Searching…"
 msgstr "Searching…"
 
+#: src/components/CaptainHome.tsx
+msgid "See how to start"
+msgstr "See how to start"
+
 #: src/App.tsx
 msgid "seeding the example failed"
 msgstr "seeding the example failed"
@@ -5616,6 +5640,14 @@ msgstr "spec package requests"
 msgid "Specs"
 msgstr "Specs"
 
+#: src/components/CaptainHome.tsx
+msgid "Specs directory exists, but no packages yet"
+msgstr "Specs directory exists, but no packages yet"
+
+#: src/components/CaptainHome.tsx
+msgid "Specs need migration"
+msgstr "Specs need migration"
+
 #: src/components/SpecView.tsx
 msgid "specs/ is present but holds no spec files yet."
 msgstr "specs/ is present but holds no spec files yet."
@@ -5913,6 +5945,10 @@ msgstr "Take the task out of the message"
 #: src/components/NextCard.tsx
 msgid "Take this task out of the queue — Undo puts it back"
 msgstr "Take this task out of the queue — Undo puts it back"
+
+#: src/components/CaptainHome.tsx
+msgid "Tell Captain what should change and how to know it is done. Specs clarify goals and acceptance criteria; Captain chooses a playbook to coordinate AI implementation and review."
+msgstr "Tell Captain what should change and how to know it is done. Specs clarify goals and acceptance criteria; Captain chooses a playbook to coordinate AI implementation and review."
 
 #: src/components/DraftConversation.tsx
 msgid "Tell the agent what the playbook does, who does what, and when it is done"
@@ -6513,9 +6549,21 @@ msgstr "Version of {name}"
 msgid "via {group}"
 msgstr "via {group}"
 
+#: src/components/CaptainHome.tsx
+msgid "View details"
+msgstr "View details"
+
 #: src/components/SpaceSync.tsx
 msgid "View diff"
 msgstr "View diff"
+
+#: src/components/CaptainHome.tsx
+msgid "View migration guidance"
+msgstr "View migration guidance"
+
+#: src/components/CaptainHome.tsx
+msgid "View specs"
+msgstr "View specs"
 
 #: src/components/SpaceSurface.tsx
 msgid "Views of {name}"
