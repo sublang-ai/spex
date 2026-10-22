@@ -14,10 +14,10 @@ Implement [DR-134](../decisions/134-execution-ownership.md): every session and e
 ## Deliverables
 
 - [x] The `storage`, `core-service`, `dashboard` and `server-shell` packages state DR-131, and DR-131 reads Accepted.
-- [ ] The runtime named by the home's device with a stored label; the hidden session record before the first turn; intent files at format 2 with a runtime, format 1 files kept.
-- [ ] Another runtime's readings: not continuable with the phrase, no Restore, Discard or control, no lane or holder, no attention or badge, no released dispatch, no Start, advance or turn, and close, edit and drop refused.
-- [ ] The bounded stop in the core and the server shell, within fifteen seconds.
-- [ ] Integration tests over two homes and UI tests for the phrase.
+- [x] The runtime named by the home's device with a stored label; the hidden session record before the first turn; intent files at format 2 with a runtime, format 1 files kept.
+- [x] Another runtime's readings: not continuable with the phrase, no Restore, Discard or control, no lane or holder, no attention or badge, no released dispatch, no Start, advance or turn, and close, edit and drop refused.
+- [x] The bounded stop in the core and the server shell, within fifteen seconds.
+- [x] Integration tests over two homes and UI tests for the phrase.
 
 ## Tasks
 
