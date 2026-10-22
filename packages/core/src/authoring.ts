@@ -103,6 +103,10 @@ export interface AuthorManagerOptions {
   drafts: DraftStore;
   configPath: string;
   env: NodeJS.ProcessEnv;
+  /** The environment a compile's agent run inherits, read as each
+   * compile is asked for: on a seat, its credentials as they stand then
+   * (core-service-126); `env` where absent. */
+  agentEnv?: () => NodeJS.ProcessEnv;
   adapterImports?: PlayerAdapterImports;
   compileSpawner?: LineSpawner;
   compileRuntime?: ToolchainRuntime;
@@ -1805,7 +1809,8 @@ export class AuthorManager {
         command: id,
         intent: "(draft)",
         libraryDir: join(packageDir, "playbooks", this.drafts.language(id)),
-        env: this.options.env,
+        // The compile's agent is an agent run (core-service-126).
+        env: this.options.agentEnv?.() ?? this.options.env,
         // Once admitted: the marker, the config as its files stand, and
         // the block that answers the draft as the compile's agent
         // (playbook-library-42).

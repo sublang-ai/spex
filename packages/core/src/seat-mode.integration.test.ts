@@ -6,8 +6,9 @@
 // request names the server and the person under the server's name; a
 // sign-in as another account, or a denied code, stores nothing; your own
 // group is placed at no instance and offered no pick or remote; every
-// command naming a working folder is refused; and an intent holding no
-// runtime runs nowhere there.
+// command naming a working folder is refused; a seat opens no seat on a
+// team server, asking nothing; and an intent holding no runtime runs
+// nowhere there.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -16,6 +17,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { credentialsPath } from "./git-host.js";
 import { Home } from "./home.js";
+import { seatsPath } from "./seats.js";
 import { clonePath, createSpaceHarness, hostKey, instanceOf, OWN_KEY } from "./testing/space-harness.js";
 import type { GroupsState } from "./protocol.js";
 
@@ -27,6 +29,7 @@ const SEAT = { serverId: "srv_7f3a", serverName: "lab-1", personId: "1001" };
 const LOGIN = "ada";
 const HOST_OWN = `${LOGIN}/${LOGIN}-spex`;
 const PATH_REFUSAL = /^Projects on a server are opened from their group$/;
+const OPEN_REFUSAL = /^A seat opens no server$/;
 const OWN_REFUSAL = /^Your own group stays on this server$/;
 
 /** Your own group's own row in a state. */
@@ -130,6 +133,24 @@ test("core-service-127: on a seat every command naming a working folder is refus
   assert.deepEqual(await home.client.expectOk("project.list", {}), [], "no project is registered");
   assert.equal(existsSync(fresh), false, "no folder is created");
   assert.equal(existsSync(clonePath(home.dataDir, hostKey(host, "acme/alpha-spex"))), false, "nothing is cloned");
+});
+
+test("core-service-125: on a seat server.open is refused with the phrase before anything is asked, while server.list and server.close answer as on any core", async (t) => {
+  const host = await startHost();
+  host.script.servers.push({ id: "srv_lab9", name: "lab-9", group: "acme", address: "https://127.0.0.1:1" });
+  const home = await startHome("seat-open", { host, project: false, extra: { seat: SEAT } });
+  t.after(() => home.stop());
+  await signIn(home, host);
+  // Refused with consent and without it: a seat holds no seats of its
+  // own, and nothing is asked of the instance (core-service-125).
+  await home.client.expectError("server.open", { instance: host.url, serverId: "srv_lab9", consented: true }, "invalid_request", OPEN_REFUSAL);
+  await home.client.expectError("server.open", { instance: host.url, serverId: "srv_lab9" }, "invalid_request", OPEN_REFUSAL);
+  assert.deepEqual(host.script.serverCalls, [], "no listing and no ticket was asked");
+  assert.deepEqual(host.script.tickets, []);
+  assert.equal(existsSync(seatsPath(home.dataDir)), false, "no seat is written");
+  // server.list and server.close stay as they are.
+  assert.deepEqual(await home.client.expectOk("server.list", {}), { servers: [{ instance: host.url, id: "srv_lab9", name: "lab-9", group: "acme", open: false }], failures: [] });
+  await home.client.expectError("server.close", { instance: host.url, serverId: "srv_lab9" }, "not_found", /^No seat is open on this server$/);
 });
 
 test("core-service-125: a core without a seat names neither a server nor a person, under this machine's name", async (t) => {

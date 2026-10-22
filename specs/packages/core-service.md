@@ -603,6 +603,7 @@ Where the core runs as a seat — started with a server's id and name, the admit
 - your own group is placed at no instance [[space-102](space.md#space-102)];
 - every command naming a working folder path — `project.register`, `project.rebind`, `project.create`, and a join naming a folder — is refused `invalid_request`, "Projects on a server are opened from their group"; a join names no folder, the core allocating it [[space-103](space.md#space-103)];
 - intents without a runtime are run nowhere here [[core-service-107](#core-service-107)];
+- `server.open` is refused `invalid_request`, "A seat opens no server": a seat holds no seats of its own [[core-service-128](#core-service-128)];
 - the runtime's label is the server's name [[core-service-4](#core-service-4)].
 
 #### core-service-126
@@ -621,22 +622,22 @@ When a client sends `server.list`, `server.open` or `server.close`, the core ser
 
 | Command | Effect |
 | --- | --- |
-| `server.list` | reads each signed-in instance's servers listing [[git-host-29](git-host.md#git-host-29)] and replies with every server — its id, name, group and instance — and whether a seat is open at it, each instance's read standing or failing on its own [[git-host-11](git-host.md#git-host-11)] |
-| `server.open {instance, serverId, consented}` | with `consented` true — the client having shown the contract of the instance's record in its own words — asks the instance for a ticket [[git-host-29](git-host.md#git-host-29)], presents it at the server's address for the admission, keeps the seat's endpoint, bearer and lease expiry under `local/` [[storage-45](storage.md#storage-45)], starts its relay [[core-service-129](#core-service-129)], and replies with the place and the expiry, never the bearer or the endpoint; `consented` absent or false is `invalid_request` and asks nothing |
-| `server.close {instance, serverId}` | ends the seat's relay and removes its entry; the seat's lease continues at the server while work runs there |
+| `server.list` | reads each signed-in instance's servers listing [[git-host-29](git-host.md#git-host-29)] and replies `{servers, failures}` — every server by its `instance`, `id`, `name`, `group` (the group's full path) and `open`, whether a seat is open at it, and each instance whose read failed by its `instance` and `message`, so one instance's failure hides no other's servers [[git-host-11](git-host.md#git-host-11)] |
+| `server.open {instance, serverId, consented}` | with `consented` true — the client having shown the contract of the instance's record in its own words — reads the instance's servers listing for the server's name, group and address [[git-host-29](git-host.md#git-host-29)], a server the listing does not name being `not_found`, "No longer shared with you", with no ticket asked, then asks the instance for a ticket [[git-host-29](git-host.md#git-host-29)], presents it at the server's address for the admission, keeps the seat's endpoint, bearer and lease expiry under `local/` [[storage-45](storage.md#storage-45)], starts its relay [[core-service-129](#core-service-129)], and replies `{place, leaseExpiresAt}`, never the bearer or the endpoint; `consented` absent or false is `invalid_request` and asks nothing; a place already holding a seat is admitted again, the new seat replacing the old |
+| `server.close {instance, serverId}` | ends the seat's relay and removes its entry, replying `{closed: true}`, `not_found` where no seat is open there; the seat's lease continues at the server while work runs there |
 
 - a refusal of the ticket or the admission is relayed with its cause [[git-host-11](git-host.md#git-host-11)], the instance's `host_refused` as refused and its `not_found` as no longer shared;
-- every change of the open seats is announced to every client as `server.state`, each seat by its instance, server, name, group, place, lease expiry and relay state — connecting, open, closed or mismatched;
+- every change of the open seats is announced to every client as `server.state` — and the same message sent to a client as it connects — each seat by its `instance`, `serverId`, `name`, `group`, `place`, `leaseExpiresAt` and `relay` state — connecting until the watch's first hello, open after it, closed while the watch is down and reconnecting, or mismatched as an end state [[core-service-129](#core-service-129)]; the place is the seat's key, `<instance origin>#<server id>` [[storage-45](storage.md#storage-45)], shown by the server's name;
 - at start the core reopens every seat its file holds, a refusal removing the entry as a close does.
 
 #### core-service-129
 
-While a seat is open [[core-service-128](#core-service-128)], the core service shall expose a relay path for it on its own endpoint, `/seats/<place>`, admitted as the path `/` is [[core-service-24](#core-service-24)], and shall pipe each client connection there, frames unread both ways, through a connection of its own to the seat's endpoint over TLS presenting the bearer in the `Authorization` header and no `Origin` ([DR-133](../decisions/133-one-desktop-over-several-cores.md)):
+While a seat is open [[core-service-128](#core-service-128)], the core service shall expose a relay path for it on its own endpoint, `/seats/<place>` with the place percent-encoded, admitted as the path `/` is [[core-service-24](#core-service-24)], and shall pipe each client connection there, frames unread both ways, through a connection of its own to the seat's endpoint over TLS presenting the bearer in the `Authorization` header and no `Origin` ([DR-133](../decisions/133-one-desktop-over-several-cores.md)):
 
 - one connection to the seat per client connection, so request ids and subscriptions stay the client's own; either side closing closes the other;
-- beside them one watch connection per seat, which relays nothing, reconnects every second as a client does, reads the seat's hello — a protocol version other than this core's marks the place mismatched and stops its reconnecting — and reads the seat's ledger badge on every `intents.changed` there;
-- a close with the lease-end code, or the seat refusing the bearer, removes the seat as a close does and announces it;
-- the shell reads one attention count from the core: this core's badge [[core-service-49](#core-service-49)] plus each open seat's last read badge;
+- beside them one watch connection per seat, which relays nothing, reconnects every second as a client does, reads the seat's hello — a protocol version other than this core's marks the place mismatched and stops its reconnecting — and reads the seat's ledger badge on every `intents.changed` there; the watch stands as a connection at the hub, so the seat's lease renews while the desktop holds the seat open;
+- a close with the lease-end code `4401`, or the seat refusing the bearer at an upgrade, removes the seat as a close does and announces it, its relayed clients closed with `4401`; a relayed client is closed with `1000` at `server.close` or a re-admission, `1001` at the core's stop, and `1011` where the seat cannot be reached;
+- the shell reads one attention count from the core: this core's badge [[core-service-49](#core-service-49)] plus each seat's last read badge while its relay stands open or closed, none for a mismatched seat;
 - the bearer and the endpoint reach no client and no log.
 
 ## Internal Behavior
@@ -1174,7 +1175,7 @@ Where two homes pair one project at the same working-folder path and sync its re
 
 #### core-service-127
 
-Where the core runs as a seat against a stand-in instance with a fixture adapter recording its environment, the integration suite shall assert seat mode [[core-service-125](#core-service-125)]: the device request names the server and the person and a sign-in as another account stores nothing; your own group gains no placement; the path-naming commands are refused with the phrase; a join names no folder; an intent holding no runtime is listed queued, never next while a newer intent the seat captured is, and refused `conflict`, "Runs nowhere yet", on a turn while its edit and close succeed; and the shared credential file [[core-service-126](#core-service-126)]: its values reach a run's environment, a value replaced between runs reaches the next run while the running one keeps its own, a member's own credential displaces the shared names of its agent, and an unreadable file is reported without blocking.
+Where the core runs as a seat against a stand-in instance with a fixture adapter recording its environment, the integration suite shall assert seat mode [[core-service-125](#core-service-125)]: the device request names the server and the person and a sign-in as another account stores nothing; your own group gains no placement; the path-naming commands are refused with the phrase; `server.open` is refused before anything is asked; a join names no folder; an intent holding no runtime is listed queued, never next while a newer intent the seat captured is, and refused `conflict`, "Runs nowhere yet", on a turn while its edit and close succeed; and the shared credential file [[core-service-126](#core-service-126)]: its values reach a run's environment, a value replaced between runs reaches the next run while the running one keeps its own, a member's own credential displaces the shared names of its agent, and an unreadable file is reported without blocking.
 
 #### core-service-130
 
