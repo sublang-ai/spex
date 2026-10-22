@@ -118,6 +118,25 @@ export async function seedDemoHistory(
 export const demoHistoryIntentId = (index: number): string =>
   `72000000-0000-4000-8000-${String(index).padStart(12, "0")}`;
 
+async function appendFixtureRecords(shared: ReturnType<typeof createSessionStore>, sessionId: string, records: Record<string, unknown>[]): Promise<void> {
+  const path = join(shared.sessionsDir, `${sessionId}.json`);
+  if (JSON.parse(readFileSync(path, "utf8")).schemaVersion === 7) {
+    // Stopped synthetic legacy history stays legacy. Runtime admission now
+    // requires explicit migration before a writer can append to this format.
+    const lease = await shared.acquireManagement(sessionId);
+    try {
+      const history = await shared.readHistory(sessionId);
+      const replay = join(shared.sessionsDir, `${sessionId}.records.jsonl`);
+      const suffix = records.map((record, index) => JSON.stringify({ v: 1, seq: history.lastReadableSeq + index + 1, record }) + "\n").join("");
+      writeFileSync(replay, Buffer.concat([readFileSync(replay), Buffer.from(suffix)]), { mode: 0o600 });
+    } finally { await lease.release(); }
+    return;
+  }
+  const writer = await shared.acquire(sessionId);
+  try { for (const record of records) await writer.append(record); }
+  finally { await writer.release(); }
+}
+
 /** Historical fixtures have no runtime checkpoint and never claim to resume. */
 export async function seedHistorySession(
   sessionsDir: string,
@@ -140,9 +159,7 @@ export async function seedHistorySession(
     }));
     writeFileSync(join(sessionsDir, `${sessionId}.records.jsonl`), "", { mode: 0o600 });
   }
-  const writer = await shared.acquire(sessionId);
-  try { for (const record of records) await writer.append(record); }
-  finally { await writer.release(); }
+  await appendFixtureRecords(shared, sessionId, records);
   const history = await shared.readHistory(sessionId);
   const bytes = await readSessionReplay(join(sessionsDir, `${sessionId}.records.jsonl`));
   const lease = await shared.acquireManagement(sessionId);
@@ -176,9 +193,7 @@ export async function appendHistorySession(
   const shared = createSessionStore({ sessionsDir }); await shared.prepare();
   const manifestPath = join(sessionsDir, `${sessionId}.json`);
   const prior = await shared.readManifest(sessionId);
-  const writer = await shared.acquire(sessionId);
-  try { for (const record of records) await writer.append(record); }
-  finally { await writer.release(); }
+  await appendFixtureRecords(shared, sessionId, records);
   const history = await shared.readHistory(sessionId);
   const bytes = await readSessionReplay(join(sessionsDir, `${sessionId}.records.jsonl`));
   const times = records.map((record) => record.timestamp).filter((at): at is number => typeof at === "number" && Number.isFinite(at));

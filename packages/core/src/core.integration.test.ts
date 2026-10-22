@@ -5936,7 +5936,9 @@ test("core-service-60: a bounded external replay append is announced without rew
     config: executionConfigFromPlan(plan), adapterImports: fakeAdapterImports({ fallback: { result: "unused" } }).imports });
   t.after(() => external.dispose());
   const id = external.sessionId;
-  await client.waitFor((m) => m.type === "session.state" && m.session.id === id);
+  const discovered = await client.waitFor((m) => m.type === "session.state" && m.session.id === id);
+  assert.ok(discovered.type === "session.state");
+  assert.equal(discovered.session.externalWriter, "active");
   await client.expectOk("subscribe", { channel: { kind: "session", sessionId: id } });
   const root = join(sessionsDir, `${id}.json`);
   const before = readFileSync(root);
@@ -5946,6 +5948,7 @@ test("core-service-60: a bounded external replay append is announced without rew
   const finish = { type: "turn_finished", turnId: 1, timestamp: 1001 };
   await external.lease.append(start);
   await external.lease.append(finish);
+  assert.ok((await shared.readHistory(id)).entries.some((entry) => (entry.record as { type?: string }).type === "turn_finished"));
   await client.waitFor((m) => m.type === "record" && m.sessionId === id && m.record.type === "turn_finished");
   assert.deepEqual(readFileSync(root), before, "the descriptor alone announces newly readable records");
   assert.equal(client.records("session").filter((entry) => entry.sessionId === id && entry.record.type === "turn_started").length, 1);

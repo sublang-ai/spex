@@ -17,7 +17,7 @@ Implement [DR-132](../decisions/132-bounded-session-storage.md) across session d
 - [x] Spex discovers and serves new sessions through Playbook's hydrated API.
 - [x] Sync selects and publishes the complete session unit with its lease, version and privacy guarantees.
 - [x] Real-store integration verifies bounded files, conflict selection, missing chunks and late writes.
-- [ ] A separate retryable import stage transfers bounded CLI sessions from the former root directory.
+- [x] A separate retryable import stage transfers bounded CLI sessions from the former root directory.
 - [ ] The published compatible Playbook dependency is adopted after its release.
 
 ## Tasks

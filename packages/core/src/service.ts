@@ -1263,7 +1263,7 @@ export class CoreService {
         }
         if (filename?.endsWith(".records.jsonl") || filename?.endsWith(".replay.json")) {
           const session = this.store.describeSession(filename.replace(/\.(?:records\.jsonl|replay\.json)$/, ""));
-          if (session?.live) return;
+          if (session?.live && !session.externalWriter) return;
         }
         // Bound the wait even while a CLI keeps writing: later events
         // join this scan instead of postponing it until the writer stops.

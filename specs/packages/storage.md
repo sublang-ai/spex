@@ -223,7 +223,7 @@ Before admitting writers to the groups layout, when the core finds the former la
 While source writers are stopped, before admitting writers, when the home holds bounded Playbook sessions in its root `sessions/` or an incomplete bounded-session import receipt, a separate import stage shall preserve and move those complete families into the groups layout under the home lease [[storage-14](#storage-14)] without changing a released migration ([DR-132](../decisions/132-bounded-session-storage.md)):
 
 1. Under each source session's management lease, validate its whole bundle through Playbook, retain every root, replay descriptor, chunk, asset and local hint byte under `local/migrations/<id>/inputs/<sessionId>/`, and record `{format: 1, id, kind: 'bounded-sessions', sessions: [{id, cwd, files: [{path, sha256}], retained, staged, repository?, complete}], complete}` in `receipt.json` before removing the source's files.
-2. Verify every retained file's digest and shared bundle validation before retiring source files; a changed source member or a file added since retention refuses without deleting that change, and a retry accepts only remaining source members whose bytes still equal the retained ones.
+2. Verify the receipt's state transitions, every retained file's digest, its unchanged `cwd` and shared bundle validation before retiring source files; a changed source member or a file added since retention refuses without deleting that change, and a retry accepts only remaining source members whose bytes still equal the retained ones.
 3. Run the existing groups migration [[storage-9](#storage-9)] over the remaining inputs, then select the clone whose working-folder path or recorded alias equals the session's unchanged `cwd`, or your own group's clone where no pair matches [[storage-2](#storage-2)].
 4. Under the destination session's management lease, refuse a missing clone, unsafe parent or divergent existing family; otherwise copy the retained dependencies before the replay descriptor and root, keeping hints local and all directories and files private [[storage-1](#storage-1)].
 5. Validate the destination through Playbook before marking that session and then the receipt complete; a restart verifies retained bytes and resumes identical partial output without overwriting a divergent destination [[storage-12](#storage-12)].
@@ -468,7 +468,7 @@ When an integration suite merges two real Git branches of a group's own spex rep
 
 ### storage-44
 
-When integration tests import bounded CLI sessions through a real home open and shared store, they shall verify a former home and an established home receiving a later default-location session, complete root/replay/chunk/asset transfer with unchanged semantic recovery and hints retained locally, a held source lease leaving its family unchanged, retry after interrupted destination publication, and refusal of divergent destination bytes and unsafe parents without overwriting them [[storage-43](#storage-43)].
+When integration tests import bounded CLI sessions through a real home open and shared store, they shall verify a former home and an established home receiving a later default-location session, complete root/replay/chunk/asset transfer with unchanged semantic recovery and hints retained locally, held source and destination leases leaving their families unchanged, retry after interrupted destination publication, and refusal of inconsistent receipts, divergent destination bytes and unsafe parents without overwriting them [[storage-43](#storage-43)].
 
 ### storage-28
 

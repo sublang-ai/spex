@@ -136,12 +136,13 @@ function copy(directory: string, files: ReadonlyMap<string, Buffer>, id: string)
     writeApplicationBytes(join(directory, path), bytes);
   }
 }
-async function validate(directory: string, id: string): Promise<void> {
+async function validate(directory: string, id: string, cwd?: string): Promise<void> {
   const shared = createSessionStore({ sessionsDir: directory, createSessionsDir: false });
   await shared.prepare();
   const checked = await shared.validate(id);
   if (!checked.integrityValid) fail(join(directory, `${id}.json`), checked.reasons.join("; "));
   await shared.exportBundle(id);
+  if (cwd !== undefined && (await shared.readManifest(id)).cwd !== cwd) fail(directory, "bounded session working directory differs from its receipt");
 }
 function retire(directory: string, entry: ImportedSession, expected: ReadonlyMap<string, Buffer>): void {
   const current = checkSubset(directory, entry.id, expected);
@@ -198,11 +199,11 @@ export async function stageBoundedHomeSessions(root: string): Promise<void> {
           privateDirectory(item.dir, `inputs/${entry.id}`);
           checkSubset(inputsDir(item, entry.id), entry.id, files);
           copy(inputsDir(item, entry.id), files, entry.id);
-          await validate(inputsDir(item, entry.id), entry.id);
+          await validate(inputsDir(item, entry.id), entry.id, entry.cwd);
           entry.retained = true; save(item);
         }
         const retained = verifyInputs(item, entry);
-        await validate(inputsDir(item, entry.id), entry.id);
+        await validate(inputsDir(item, entry.id), entry.id, entry.cwd);
         await lease.assertOwner();
         retire(source, entry, retained);
         entry.staged = true; save(item);
@@ -219,7 +220,7 @@ export async function finishBoundedHomeSessions(root: string, home: Home): Promi
       if (entry.complete) continue;
       if (!entry.retained || !entry.staged) fail(item.dir, "bounded session import was not staged");
       const files = verifyInputs(item, entry);
-      await validate(inputsDir(item, entry.id), entry.id);
+      await validate(inputsDir(item, entry.id), entry.id, entry.cwd);
       const key = entry.repository ?? home.keyForFolder(entry.cwd) ?? home.own();
       if (entry.repository === undefined) { entry.repository = key; save(item); }
       const clonePath = `workspace/${key}`;
@@ -234,8 +235,9 @@ export async function finishBoundedHomeSessions(root: string, home: Home): Promi
         checkSubset(destination, entry.id, files);
         copy(destination, files, entry.id);
         checkExact(destination, entry.id, files);
-        await validate(destination, entry.id);
+        await validate(destination, entry.id, entry.cwd);
         checkExact(destination, entry.id, files);
+        await lease.assertOwner();
         entry.complete = true; save(item);
       } finally { await lease.release(); }
     }

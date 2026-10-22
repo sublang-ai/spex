@@ -7,6 +7,7 @@ import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
+import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import { createSessionStore } from "@sublang/playbook/session-store";
 import { createAssetStore } from "@sublang/playbook/session-assets";
 import { Store } from "./store.js";
@@ -57,7 +58,7 @@ function established(home: string, cwd: string): string {
   try { return store.registerProject(cwd, "Project").id; } finally { store.close(); }
 }
 
-test("storage-37: a bounded family is retained before the released former-home migration, then imported whole", async (t) => {
+test("storage-44: a bounded family is retained before the released former-home migration, then imported whole", async (t) => {
   const f = fixture(); t.after(() => rmSync(f.root, { recursive: true, force: true }));
   const project = randomUUID(); const alias = join(f.root, "former-project");
   mkdirSync(join(f.home, "local"), { mode: 0o700 });
@@ -85,7 +86,7 @@ test("storage-37: a bounded family is retained before the released former-home m
   assert.equal(execFileSync("git", ["-C", dirname(destination.sessionsDir), "check-ignore", `${`sessions/${seeded.id}.hints.json`}`], { env, encoding: "utf8" }).trim(), `sessions/${seeded.id}.hints.json`);
 });
 
-test("storage-37: a later default-location bounded session respects a held source lease and resumes identical partial publication", async (t) => {
+test("storage-44: a later default-location bounded session respects a held source lease and resumes identical partial publication", async (t) => {
   const f = fixture(); t.after(() => rmSync(f.root, { recursive: true, force: true }));
   const key = established(f.home, f.cwd); const seeded = await source(f.home, f.cwd);
   const held = await seeded.shared.acquireManagement(seeded.id);
@@ -109,7 +110,21 @@ test("storage-37: a later default-location bounded session respects a held sourc
   assert.equal(receipt(f.home).value.complete, true);
 });
 
-test("storage-37: divergent destination bytes and an unsafe destination parent stay unchanged with retained inputs", async (t) => {
+test("storage-44: bounded CLI import follows the instances migration of a one-instance home", async (t) => {
+  const f = fixture(); t.after(() => rmSync(f.root, { recursive: true, force: true }));
+  const key = established(f.home, f.cwd);
+  const file = join(f.home, "home.yaml"); const prior = parseYaml(readFileSync(file, "utf8"));
+  writeFileSync(file, stringifyYaml({ format: 1, device: prior.device, host: { url: "https://spex.pub", clientId: "spex" }, own: prior.own, folders: prior.folders }), { mode: 0o600 });
+  const seeded = await source(f.home, f.cwd);
+  const store = await Store.open({ dir: f.home, own: "tester", machineIdentity, env });
+  t.after(() => store.close()); await store.initializeSessions();
+  assert.equal(parseYaml(readFileSync(file, "utf8")).format, 2);
+  assert.equal(store.sessionRepository(seeded.id), key);
+  assert.deepEqual(await store.sessionStore(key).readManifest(seeded.id), seeded.semantic);
+  assert.equal(receipt(f.home).value.complete, true);
+});
+
+test("storage-44: divergent destination bytes and an unsafe destination parent stay unchanged with retained inputs", async (t) => {
   for (const defect of ["diverged", "linked"] as const) await t.test(defect, async () => {
     const f = fixture(); t.after(() => rmSync(f.root, { recursive: true, force: true }));
     const key = established(f.home, f.cwd); const seeded = await source(f.home, f.cwd);
@@ -129,4 +144,45 @@ test("storage-37: divergent destination bytes and an unsafe destination parent s
       assert.deepEqual(readFileSync(join(imported.dir, "inputs", seeded.id, `${seeded.id}.json`)), seeded.physical);
     } finally { release(); }
   });
+});
+
+test("storage-44: an inconsistent receipt refuses before bounded session publication", async (t) => {
+  for (const defect of ["staged-without-retained", "complete-without-destination", "changed-cwd"] as const) await t.test(defect, async () => {
+    const f = fixture(); t.after(() => rmSync(f.root, { recursive: true, force: true }));
+    const key = established(f.home, f.cwd); const seeded = await source(f.home, f.cwd);
+    const release = reserveStorageHome(f.home, machineIdentity);
+    try {
+      await stageBoundedHomeSessions(f.home);
+      const imported = receipt(f.home); const entry = imported.value.sessions[0];
+      if (defect === "staged-without-retained") entry.retained = false;
+      else if (defect === "complete-without-destination") entry.complete = true;
+      else entry.cwd = join(f.root, "different-working-folder");
+      const file = join(imported.dir, "receipt.json");
+      writeFileSync(file, JSON.stringify(imported.value), { mode: 0o600 });
+      const before = readFileSync(file);
+      await assert.rejects(() => finishBoundedHomeSessions(f.home, Home.load(f.home)), /state|receipt|working directory/i);
+      assert.deepEqual(readFileSync(file), before);
+      assert.equal(existsSync(join(Home.load(f.home).clonePath(key), "sessions", `${seeded.id}.json`)), false);
+      assert.deepEqual(readFileSync(join(imported.dir, "inputs", seeded.id, `${seeded.id}.json`)), seeded.physical);
+    } finally { release(); }
+  });
+});
+
+test("storage-44: a held destination lease refuses publication and a later open completes the retained import", async (t) => {
+  const f = fixture(); t.after(() => rmSync(f.root, { recursive: true, force: true }));
+  const key = established(f.home, f.cwd); const seeded = await source(f.home, f.cwd);
+  const release = reserveStorageHome(f.home, machineIdentity);
+  try {
+    await stageBoundedHomeSessions(f.home);
+    const home = Home.load(f.home); const sessions = join(home.clonePath(key), "sessions");
+    const shared = createSessionStore({ sessionsDir: sessions }); await shared.prepare();
+    const held = await shared.acquireManagement(seeded.id);
+    try { await assert.rejects(() => finishBoundedHomeSessions(f.home, home), /lease|owner|active|held/i); }
+    finally { await held.release(); }
+    assert.equal(existsSync(join(sessions, `${seeded.id}.json`)), false);
+    assert.equal(receipt(f.home).value.complete, false);
+    await finishBoundedHomeSessions(f.home, home);
+    assert.deepEqual(await shared.readManifest(seeded.id), seeded.semantic);
+    assert.equal(receipt(f.home).value.complete, true);
+  } finally { release(); }
 });
