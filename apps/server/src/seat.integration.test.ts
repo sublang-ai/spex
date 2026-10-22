@@ -11,6 +11,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import {
+  chmodSync,
   existsSync,
   lstatSync,
   mkdtempSync,
@@ -20,6 +21,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { createServer as createHttpServer } from "node:http";
+import { createServer as createNetServer } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -371,4 +373,61 @@ test("each seat startup refusal exits non-zero naming the mistake before anythin
   writeFileSync(kept.socket, "kept");
   assert.notEqual((await runShell(seatArgs(kept))).code, 0);
   assert.equal(readFileSync(kept.socket, "utf8"), "kept");
+});
+
+test("a socket whose probe fails other than by a refusal is no stale one: it is left and startup refused, in use, naming the path and the code (SERVER-SHELL-26)", { skip: process.platform === "win32" || process.getuid?.() === 0 }, async () => {
+  // A live socket of mode 0000 fails the probe with EACCES, not a
+  // refusal; the superuser would reach it, so the case runs as another.
+  const scratch = seatScratch();
+  const listener = createNetServer();
+  await new Promise<void>((resolveListen) => listener.listen(scratch.socket, resolveListen));
+  try {
+    chmodSync(scratch.socket, 0o000);
+    // A seat that wrongly starts is stopped again, so the case fails
+    // rather than hangs.
+    const started = startSeat(parseArgs(seatArgs(scratch), {})).then(async (running) => {
+      await running.close();
+      return running;
+    });
+    await assert.rejects(started, (error: Error) => {
+      assert.ok(error.message.startsWith(`--socket ${scratch.socket} is in use: `), error.message);
+      assert.match(error.message, /failed with EACCES, not a refusal/);
+      assert.equal(error.message.includes(TOKEN), false, "the refusal carries no token");
+      return true;
+    });
+    assert.ok(lstatSync(scratch.socket).isSocket(), "the socket is left");
+    assert.equal(existsSync(scratch.dataDir), false, "nothing started");
+  } finally {
+    await new Promise<void>((resolveClose) => listener.close(() => resolveClose()));
+  }
+});
+
+test("a socket that cannot be bound refuses startup naming the cause in one line, as a flag mistake does (SERVER-SHELL-26)", { skip: process.platform === "win32" }, async () => {
+  const cases = [
+    {
+      name: "a directory that does not exist",
+      socket: (dir: string) => join(dir, "missing", "core.sock"),
+      cause: /: its directory .*missing does not exist \(E[A-Z]+\)$/,
+    },
+    {
+      name: "a path too long",
+      socket: (dir: string) => join(dir, `${"x".repeat(120)}.sock`),
+      cause: /: the path is longer than a Unix socket's \d+ bytes \((EINVAL|ENAMETOOLONG)\)$/,
+    },
+  ];
+  for (const { name, socket, cause } of cases) {
+    const scratch = seatScratch();
+    const path = socket(scratch.dir);
+    const args = [...seatArgs(scratch).filter((arg) => !arg.startsWith("--socket")), `--socket=${path}`];
+    const run = await runShell(args);
+    // The bind fails after the core booted: the core is stopped and the
+    // shell exits on its own, its refusal the bind's cause and no stack
+    // trace — a failed stop would name its own cause instead.
+    assert.equal(run.code, 1, `${name}: exits non-zero; stderr: ${run.err}`);
+    const lines = run.err.trim().split("\n");
+    assert.equal(lines.length, 1, `${name}: one line; stderr: ${run.err}`);
+    assert.ok(lines[0].startsWith(`--socket ${path} cannot be bound`), `${name}: ${lines[0]}`);
+    assert.match(lines[0], cause, name);
+    assert.equal(`${run.out}${run.err}`.includes(TOKEN), false, `${name}: no token in the output`);
+  }
 });

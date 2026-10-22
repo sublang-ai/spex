@@ -649,7 +649,10 @@ function createShellServer(
 }
 
 /** Boot the core attached to the shell's server, then listen; a failed
- * listen stops the core again. */
+ * listen stops the core again and refuses startup with its cause. While
+ * the server binds, the shell's listener alone hears its errors: the
+ * core's WebSocket server forwards the server's errors and, having no
+ * listener of its own, would throw a bind failure past that refusal. */
 async function bootCore(
   options: ServerShellOptions,
   server: HttpServer | HttpsServer,
@@ -657,12 +660,19 @@ async function bootCore(
 ): Promise<CoreService> {
   mkdirSync(options.dataDir, { recursive: true });
   const service = await CoreService.start(serverCoreOptions(options, server));
+  const forwarded = server.rawListeners("error") as ((error: Error) => void)[];
+  server.removeAllListeners("error");
+  const restore = () => {
+    for (const listener of forwarded) server.on("error", listener);
+  };
   try {
     await listen();
   } catch (error) {
+    restore();
     await service.stop();
     throw error;
   }
+  restore();
   return service;
 }
 
@@ -715,36 +725,79 @@ export async function startServer(
   return { service, server, url, port, close: stopper(server, service) };
 }
 
-/** Whether something accepts connections on a Unix socket. */
-function socketAnswers(path: string): Promise<boolean> {
+/** How long a probe of a socket file waits before calling it hung. */
+const SOCKET_PROBE_MS = 2_000;
+
+/** What a connection to a Unix socket meets: an answer, a refusal, or
+ * another failure named by its code — a hung probe's ETIMEDOUT. */
+function probeSocket(path: string): Promise<"answers" | "refused" | { failed: string }> {
   return new Promise((resolveProbe) => {
     const probe = connect(path);
-    probe.once("connect", () => {
+    const timer = setTimeout(() => {
       probe.destroy();
-      resolveProbe(true);
+      resolveProbe({ failed: "ETIMEDOUT" });
+    }, SOCKET_PROBE_MS);
+    probe.once("connect", () => {
+      clearTimeout(timer);
+      probe.destroy();
+      resolveProbe("answers");
     });
-    probe.once("error", () => resolveProbe(false));
+    probe.once("error", (error: NodeJS.ErrnoException) => {
+      clearTimeout(timer);
+      resolveProbe(
+        error.code === "ECONNREFUSED" ? "refused" : { failed: error.code ?? "an unknown error" },
+      );
+    });
   });
 }
 
 /** Remove a stale socket at a seat's path before listening
- * (server-shell-25): only a socket nothing listens on, never another
- * kind of file and never a live one, each refused naming the path. */
+ * (server-shell-25): only a socket that refuses a connection. A socket
+ * that answers, or whose probe fails any other way — EACCES, EAGAIN, a
+ * hung probe — is in use, and another kind of file is never a socket;
+ * each is left as it is and refused, naming the path. */
 async function clearStaleSocket(path: string): Promise<void> {
   let stats: Stats;
   try {
     stats = lstatSync(path);
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
-    throw error;
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "ENOENT") return;
+    throw new Error(`cannot inspect --socket ${path} (${code ?? "unreadable"})`);
   }
   if (!stats.isSocket()) {
     throw new Error(`--socket ${path} names a file that is not a socket; it is left as it is`);
   }
-  if (await socketAnswers(path)) {
+  const probe = await probeSocket(path);
+  if (probe === "answers") {
     throw new Error(`--socket ${path} is in use: something listens on it`);
   }
+  if (probe !== "refused") {
+    throw new Error(
+      `--socket ${path} is in use: a connection to it failed with ${probe.failed}, not a refusal; it is left as it is`,
+    );
+  }
   unlinkSync(path);
+}
+
+/** The longest Unix socket path the platforms bind, in bytes. */
+const SOCKET_PATH_MAX = process.platform === "linux" ? 107 : 103;
+
+/** A seat's socket that cannot be bound, refused naming the cause as a
+ * flag mistake is (server-shell-25). The bind reports a missing
+ * directory as EACCES on some platforms, so the directory is checked. */
+function bindRefusal(path: string, error: unknown): Error {
+  const code = (error as NodeJS.ErrnoException).code ?? "an unknown error";
+  const reason = !existsSync(dirname(path))
+    ? `its directory ${dirname(path)} does not exist`
+    : (code === "EINVAL" || code === "ENAMETOOLONG") && Buffer.byteLength(path) > SOCKET_PATH_MAX
+      ? `the path is longer than a Unix socket's ${SOCKET_PATH_MAX} bytes`
+      : code === "EADDRINUSE"
+        ? "another socket took the path"
+        : code === "EACCES" || code === "EPERM"
+          ? "permission denied"
+          : "the bind failed";
+  return new Error(`--socket ${path} cannot be bound: ${reason} (${code})`);
 }
 
 /**
@@ -777,14 +830,17 @@ export async function startSeat(options: ServerShellOptions): Promise<RunningSea
     server,
     () =>
       new Promise<void>((resolveListen, rejectListen) => {
-        server.once("error", rejectListen);
+        const refuse = (error: unknown) => rejectListen(bindRefusal(seat.socket, error));
+        server.once("error", refuse);
         server.listen({ path: seat.socket }, () => {
+          server.removeListener("error", refuse);
           try {
             chmodSync(seat.socket, 0o660);
             resolveListen();
           } catch (error) {
             server.close();
-            rejectListen(error);
+            const code = (error as NodeJS.ErrnoException).code ?? "an unknown error";
+            rejectListen(new Error(`--socket ${seat.socket} cannot be made group-accessible (${code})`));
           }
         });
       }),
