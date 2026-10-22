@@ -14,9 +14,9 @@ Implement [DR-128](../decisions/128-a-spex-repository-placed-at-several-instance
 ## Deliverables
 
 - [x] The `storage`, `space`, `git-host`, `environments` and `projects` packages state DR-128, and DR-128 reads Accepted.
-- [ ] Placements in the clone's configuration and the placement files as units, `placements/` among Spex's own paths, the first sync after the migration writing them.
-- [ ] The sync over placements with its catch-up, choices and notice per placement, Stop, the apply's version per placement, and the storage Git tool with the remote named.
-- [ ] Members, Share, removing a member and Move per placement; Place, Leave and Attach as operations; your own group placed at every instance; Forget and Leave on shared placements.
+- [x] Placements in the clone's configuration and the placement files as units, `placements/` among Spex's own paths, the first sync after the migration writing them.
+- [x] The sync over placements with its catch-up, choices and notice per placement, Stop, the apply's version per placement, and the storage Git tool with the remote named.
+- [x] Members, Share, removing a member and Move per placement; Place, Leave and Attach as operations; your own group placed at every instance; Forget and Leave on shared placements.
 - [ ] The surface's rows with a line per placement, the controls within their label budget, and the browser journeys over two stand-ins.
 
 ## Tasks
