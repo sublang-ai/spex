@@ -121,6 +121,7 @@ const ACME = (repositories: RepositoryState[]): InstanceGroupState => ({
   id: "7",
   login: null,
   mine: false,
+  placed: [],
   fullPath: "acme",
   name: "acme",
   can: NO_CAN,
