@@ -35,7 +35,7 @@ node /path/to/spex/scripts/storage-git.mjs --repository @spex.pub/acme/a-spex pl
 git merge --no-commit --no-ff @spex.pub/spex
 ```
 
-The plan compares both revisions with their common ancestor. Each `sessions/<id>` entry is one manifest/replay/assets bundle; each `intents/<id>` is one intent file with its attachments; each `authoring/<id>` is one authoring session; `environment` is `spex.yaml` with `spex.lock`; the configuration, `project.json` and each `placements/<folder>.yaml` are separate entries. A `conflict` requires an explicit choice even if Git reports a clean text merge. An intent added on either side is never a conflict.
+The plan compares both revisions with their common ancestor. Each `sessions/<id>` entry is one complete root/replay-descriptor/chunks/assets bundle, or a legacy manifest/replay/assets bundle; each `intents/<id>` is one intent file with its attachments; each `authoring/<id>` is one authoring session; `environment` is `spex.yaml` with `spex.lock`; the configuration, `project.json` and each `placements/<folder>.yaml` are separate entries. A `conflict` requires an explicit choice even if Git reports a clean text merge. An intent added on either side is never a conflict.
 
 While the merge is pending, choose each conflicting entry, apply the validated selection, commit and push to that placement:
 
@@ -50,6 +50,8 @@ git push @spex.pub spex
 ```
 
 Omit choices for entries that changed on only one side or agree. `select` applies those entries automatically, validates the complete candidate, takes the home and session leases, then stages each selected file. A session, intent or authoring bundle is selected or deleted whole, including its owned assets. Replaced sessions lose local hints and viewed markers. No history is combined or discarded outside Git; the unselected revision remains available there.
+For bounded sessions, dependencies precede the replay descriptor and replacement root; obsolete dependencies leave after that root is published, while deletion removes the manifest last.
+A chunk added while selection waits for its lease counts as a changed session and refuses replacement.
 
 Where Git answers that the branch is already up to date, there is nothing to select or commit; push and go on.
 
@@ -85,7 +87,7 @@ After an ordinary checkout or fast-forward, validate before reopening:
 node /path/to/spex/scripts/storage-git.mjs --repository alice/alice-spex validate
 ```
 
-Validation tightens safe session and asset permissions and rejects malformed data, mismatched replay bytes, missing referenced assets or corrupt content, duplicate open sources and invalid dispatches. With the core stopped, pair a spex repository with its working folder on this device:
+Validation tightens safe session, chunk and asset permissions and rejects malformed data, mismatched replay bytes, missing chunks or assets, corrupt content, duplicate open sources and invalid dispatches. With the core stopped, pair a spex repository with its working folder on this device:
 
 ```sh
 node /path/to/spex/scripts/storage-git.mjs --repository alice/a-spex rebind alice/a-spex /local/repository \

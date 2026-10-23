@@ -895,6 +895,20 @@ describe("GROUPS: the explorer (space-23, space-24, space-25)", () => {
     expect(text).toContain("Stays on this device (8 kinds)");
   });
 
+  test("a session's chunk directory stays under its one session node", async () => {
+    await openExplore();
+    fireEvent.click(screen.getByTestId("space-node-sessions"));
+    const session = await screen.findByTestId("space-node-session:s1");
+    fireEvent.click(session);
+    const chunks = screen.getByTestId("space-node-sessions/s1.chunks");
+    expect(chunks.getAttribute("aria-level")).toBe("3");
+    expect(chunks.textContent).toContain("session chunks");
+    fireEvent.click(chunks);
+    const chunk = await screen.findByTestId(`space-node-sessions/s1.chunks/${"a".repeat(64)}`);
+    expect(chunk.getAttribute("aria-level")).toBe("4");
+    expect(screen.getAllByTestId("space-node-session:s1")).toHaveLength(1);
+  });
+
   test("arrow keys move, disclose and collapse; a session's files group under one node titled by the session", async () => {
     const { onOpenSession } = await openExplore();
     const tree = screen.getByRole("tree", { name: "Files in academy-spex" });

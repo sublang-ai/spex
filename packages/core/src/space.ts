@@ -13,7 +13,7 @@
 
 import { randomUUID } from "node:crypto";
 import { resolveMachineIdentity } from "@sublang/playbook/machine-identity";
-import { closeSync, existsSync, lstatSync, mkdirSync, mkdtempSync, openSync, readSync, readdirSync, realpathSync, renameSync, rmSync, statSync, type Dirent } from "node:fs";
+import { closeSync, existsSync, lstatSync, mkdirSync, mkdtempSync, openSync, readSync, readdirSync, realpathSync, renameSync, rmSync, statSync, writeFileSync, type Dirent } from "node:fs";
 import { homedir, hostname, tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { type StorageDiagnostic } from "./app-storage.js";
@@ -929,10 +929,12 @@ export function spaceFamily(rel: string, isDirectory: boolean): string {
     if (parts.length === 1) return "session bundles";
     const assets = /^([0-9a-f-]{36})\.assets$/.exec(parts[1]);
     if (assets && UUID.test(assets[1])) return "session attachments";
+    const chunks = /^([0-9a-f-]{36})\.chunks$/.exec(parts[1]);
+    if (chunks && UUID.test(chunks[1])) return "session chunks";
     if (parts.length === 2) {
       const manifest = /^([0-9a-f-]{36})\.json$/.exec(base);
       if (manifest && UUID.test(manifest[1])) return "session manifest";
-      const records = /^([0-9a-f-]{36})\.records\.jsonl$/.exec(base);
+      const records = /^([0-9a-f-]{36})\.(?:records\.jsonl|replay\.json)$/.exec(base);
       if (records && UUID.test(records[1])) return "session records";
       const hints = /^([0-9a-f-]{36})\.hints\.json$/.exec(base);
       if (hints && UUID.test(hints[1])) return "provider hints";
@@ -1020,15 +1022,33 @@ function capText(text: string, maxBytes: number, maxLines: number): { text: stri
   return { text: out, lines: count, truncated };
 }
 
-function sessionSummary(records: Buffer | undefined): { title?: string; turns: number; at?: number } {
-  if (!records) return { turns: 0 };
+type SessionChangeSummary = { title?: string; turns: number; at?: number };
+
+/** Read the selected revision through the shared reader in a private
+ * directory; the live session may already be on a different generation. */
+async function sessionSummary(unit: StorageMergeUnit, tree: StorageTree, blob: (oid: string | undefined) => Promise<Buffer | undefined>): Promise<SessionChangeSummary> {
+  const stage = mkdtempSync(join(tmpdir(), "spex-session-summary-"));
+  try {
+    for (const [file, oid] of tree) {
+      if (storageUnitName(file) !== unit.name || file.startsWith(`${unit.name}.assets/`)) continue;
+      if (file.split("/").some((part) => !part || part === "." || part === "..")) throw new StorageFormatError(file, "unsafe session summary path");
+      const bytes = await blob(oid);
+      if (!bytes) continue;
+      const target = join(stage, file);
+      mkdirSync(dirname(target), { recursive: true, mode: 0o700 });
+      writeFileSync(target, bytes, { mode: 0o600 });
+    }
+    const { createSessionStore } = await import("@sublang/playbook/session-store");
+    const history = await createSessionStore({ sessionsDir: join(stage, "sessions"), createSessionsDir: false }).readHistory(unit.name.slice("sessions/".length));
+    return summarizeSessionRecords(history.entries);
+  } finally { rmSync(stage, { recursive: true, force: true }); }
+}
+
+function summarizeSessionRecords(entries: readonly { record: unknown }[]): SessionChangeSummary {
   let title: string | undefined;
   let turns = 0;
   let at: number | undefined;
-  for (const line of records.toString("utf8").split("\n")) {
-    if (!line.trim()) continue;
-    let entry: { record?: unknown };
-    try { entry = JSON.parse(line) as { record?: unknown }; } catch { break; }
+  for (const entry of entries) {
     const record = entry?.record as import("./protocol.js").TmuxPlayRecord | undefined;
     if (!record || typeof record !== "object") continue;
     const event = foldTurnEvent(record);
@@ -2387,7 +2407,15 @@ class RepositorySync {
       if (!pending) { pending = this.blob(oid); blobs.set(oid, pending); }
       return pending;
     };
-    const context = { trees, revs, blob };
+    const summaries = new Map<StorageTree, Map<string, Promise<SessionChangeSummary>>>();
+    const summary = (unit: StorageMergeUnit, tree: StorageTree): Promise<SessionChangeSummary> => {
+      let byUnit = summaries.get(tree);
+      if (!byUnit) { byUnit = new Map(); summaries.set(tree, byUnit); }
+      let pending = byUnit.get(unit.name);
+      if (!pending) { pending = sessionSummary(unit, tree, blob); byUnit.set(unit.name, pending); }
+      return pending;
+    };
+    const context = { trees, revs, blob, summary };
     const local: SpaceUnit[] = [];
     const incoming: SpaceUnit[] = [];
     const conflicts: SpaceConflict[] = [];
@@ -2415,7 +2443,7 @@ class RepositorySync {
   private async describeUnit(
     unit: StorageMergeUnit,
     side: "ours" | "theirs",
-    context: { trees: StorageTrees; revs: PlanRevisions; blob: (oid: string | undefined) => Promise<Buffer | undefined> },
+    context: { trees: StorageTrees; revs: PlanRevisions; blob: (oid: string | undefined) => Promise<Buffer | undefined>; summary: (unit: StorageMergeUnit, tree: StorageTree) => Promise<SessionChangeSummary> },
   ): Promise<SpaceUnit> {
     const { trees, blob } = context;
     const kind = spaceUnitKind(unit.name);
@@ -2426,7 +2454,7 @@ class RepositorySync {
     switch (kind) {
       case "session": {
         const id = unit.name.slice("sessions/".length);
-        const summary = sessionSummary(await blob(source.get(`${unit.name}.records.jsonl`)));
+        const summary = await context.summary(unit, source);
         const untitled = i18n._({ id: "untitled session", comment: "A session unit's label where the session carries no title" });
         return { ...common, label: summary.title ?? untitled, detail: turnCount(summary.turns), sessionId: id, diff: false };
       }
@@ -2457,7 +2485,7 @@ class RepositorySync {
   private async describeSide(
     unit: StorageMergeUnit,
     side: "ours" | "theirs",
-    context: { trees: StorageTrees; revs: PlanRevisions; blob: (oid: string | undefined) => Promise<Buffer | undefined> },
+    context: { trees: StorageTrees; revs: PlanRevisions; blob: (oid: string | undefined) => Promise<Buffer | undefined>; summary: (unit: StorageMergeUnit, tree: StorageTree) => Promise<SessionChangeSummary> },
   ): Promise<SpaceSide> {
     const { trees, revs, blob } = context;
     const kind = spaceUnitKind(unit.name);
@@ -2465,7 +2493,7 @@ class RepositorySync {
     if (change === "deleted") return { change, detail: deletedDetail(), diff: false };
     switch (kind) {
       case "session": {
-        const summary = sessionSummary(await blob(trees[side].get(`${unit.name}.records.jsonl`)));
+        const summary = await context.summary(unit, trees[side]);
         return { change, ...(summary.at !== undefined ? { at: summary.at } : {}), detail: turnCount(summary.turns), diff: false };
       }
       case "intent":
@@ -4102,7 +4130,7 @@ class RepositorySync {
   }
 
   private ownerOf(rel: string): SpaceEntry["owner"] | undefined {
-    const session = /^sessions\/([0-9a-f-]{36})\.(?:json|records\.jsonl|hints\.json|spex\.json|assets)$/.exec(rel);
+    const session = /^sessions\/([0-9a-f-]{36})\.(?:json|records\.jsonl|replay\.json|hints\.json|spex\.json|assets(?:\/.*)?|chunks(?:\/.*)?)$/.exec(rel);
     if (session && UUID.test(session[1])) {
       const info = this.host.store.describeSession(session[1]);
       return { sessionId: session[1], ...(info?.title ? { title: info.title } : {}) };

@@ -5,6 +5,8 @@
 
 ## Status
 
+Amended by [DR-144](144-bounded-session-storage.md) for bounded session roots, replay descriptors and session-owned chunks selected and published as one unit.
+
 Accepted (2026-10-04); revised in place through 2026-10-06 while still being worked on, by the owner's direction.
 Spec packages are decided by [DR-104](104-spec-package-format-and-client-environments.md); this decision only places their files.
 The first Git host is spex.pub, which wraps GitLab.com and maps this decision onto it in its own decision records [[3]].

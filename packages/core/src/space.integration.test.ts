@@ -97,7 +97,7 @@ test("space-37: a working folder added pairs with a local-only spex repository w
   const done = await home.client.settle("space.sync", { repository: key });
   assert.equal(done.sync.phase, "done", JSON.stringify(done.sync));
   const tracked = git(clone, "ls-files").split("\n");
-  assert.ok(tracked.includes(`sessions/${sessionId}.json`) && tracked.includes(`sessions/${sessionId}.records.jsonl`));
+  assert.ok(tracked.includes(`sessions/${sessionId}.json`) && tracked.includes(`sessions/${sessionId}.replay.json`));
   // The environment's lock is the one tracked `.lock` (storage-1).
   for (const file of tracked.filter((path) => path !== "spex.lock")) assert.doesNotMatch(file, /\.hints\.json$|\.lock|^\.spex-/, `must not track ${file}`);
   assert.equal(prefsOf(home.dataDir)[`viewed:${sessionId}`], 1, "the viewed marker stays in this device's preferences");
@@ -621,8 +621,14 @@ test("space-39: local changes of every unit kind list in order, incoming units a
   assert.equal(hints?.family, "provider hints");
   assert.equal(hints?.sync, "local");
   assert.equal(hints?.preview, "withheld");
-  const records = sessions.entries.find((e) => e.name === `${sessionId}.records.jsonl`);
+  const records = sessions.entries.find((e) => e.name === `${sessionId}.replay.json`);
   assert.equal(records?.family, "session records");
+  const chunks = sessions.entries.find((e) => e.name === `${sessionId}.chunks`);
+  assert.equal(chunks?.family, "session chunks");
+  assert.deepEqual(chunks?.owner, { sessionId, title: "Fix the login redirect" });
+  const chunkFiles = await home.client.expectOk("space.tree", { repository: key, path: `sessions/${sessionId}.chunks` });
+  assert.ok(chunkFiles.entries.length > 0);
+  assert.ok(chunkFiles.entries.every((entry) => entry.family === "session chunks" && entry.owner?.sessionId === sessionId));
   assert.ok((records?.size ?? 0) > 0 && typeof records?.mtime === "number");
   const intents = await home.client.expectOk("space.tree", { repository: key, path: "intents" });
   const intentEntry = intents.entries.find((e) => e.name === `${intent.id}.json`);
@@ -644,7 +650,7 @@ test("space-39: local changes of every unit kind list in order, incoming units a
   assert.ok(yaml.kind === "text" && yaml.text === PROJECT_CONFIG);
   const markdown = await home.client.expectOk("space.read", { repository: key, path: "README.md" });
   assert.ok(markdown.kind === "text" && markdown.text === "# Demo\n" && markdown.lines === 1);
-  const stream = await home.client.expectOk("space.read", { repository: key, path: `sessions/${sessionId}.records.jsonl` });
+  const stream = await home.client.expectOk("space.read", { repository: key, path: `sessions/${sessionId}.replay.json` });
   assert.ok(stream.kind === "text" && stream.lines >= 2 && stream.text.split("\n")[0].startsWith("{"));
   const cut = await home.client.expectOk("space.read", { repository: key, path: "big.log" });
   assert.ok(cut.kind === "text" && cut.truncated && cut.lines <= 2_000 && cut.text.endsWith("\n") && Buffer.byteLength(cut.text) <= 256 * 1024);

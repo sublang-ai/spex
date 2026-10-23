@@ -77,7 +77,7 @@ function nodesOf(entries: SpaceEntry[]): Node[] {
   const groups = new Map<string, Extract<Node, { kind: "session" }>>();
   for (const entry of entries) {
     const sessionId = entry.owner?.sessionId;
-    if (sessionId && entry.kind === "file") {
+    if (sessionId && /^sessions\/[^/]+$/.test(entry.path)) {
       let group = groups.get(sessionId);
       if (!group) {
         group = {
