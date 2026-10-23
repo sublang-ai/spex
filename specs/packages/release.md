@@ -178,6 +178,41 @@ When a beta app release tag is pushed ([DR-087](../decisions/087-beta-app-releas
 - a tag whose pre-release identifier is not `beta.N` is refused without a release;
 - the changelog gains no section for a beta [[release-3](#release-3)]: the regular release that follows moves `[Unreleased]` into its version section [[release-5](#release-5)], folding the betas' notes into it.
 
+### Merging into Main
+
+#### release-29
+
+When a pull request into `main` is ready, the maintainer shall ask GitHub to merge it on green, and the repository shall merge it with a merge commit once every job of the CI workflow has passed on the pull request's head, requiring no job to be re-run for a later move of `main` ([DR-145](../decisions/145-merge-on-green.md)):
+
+- `main` is a protected branch whose required status checks are exactly the jobs a pull request's run holds [[release-34](#release-34)], with the branch not required to be up to date;
+- a base branch is never deleted while a pull request still targets it.
+- a conflicting pull request merges only once the branch merges `main` and its checks pass again on that head.
+
+#### release-30
+
+When a push reaches a pull request's branch, the CI workflow shall cancel the run of the head that push supersedes and run the new head once, cancelling no run of a push to `main` ([DR-145](../decisions/145-merge-on-green.md)).
+
+#### release-34
+
+When the CI workflow runs for a pull request, it shall run the `test` jobs on Linux and Windows and one macOS smoke `test` job, with `journeys` and `desktop-browser` on Linux alone, and when it runs for a push to `main` or on its nightly schedule, every job of the full matrix ([DR-145](../decisions/145-merge-on-green.md)).
+
+#### release-35
+
+When the developer/agent is about to push, they shall run `npm run prepush`, which refuses a tree holding a conflict marker and then runs `spex lint`, the catalogs' check and the type check, pushing only once it passes ([DR-145](../decisions/145-merge-on-green.md)).
+
+#### release-31
+
+A suite shall be deterministic by construction ([DR-145](../decisions/145-merge-on-green.md)):
+
+- an order it reads from Git's listings or from a directory listing is sorted on both sides of the comparison, or read from the source whose order its subject promises;
+- a step is bounded by the event the behavior names, never by wall-clock time;
+- a tool's calls are asserted by where they went, never by their exact count;
+- a scripted fault outlasts every call that may consume it before the call under test.
+
+#### release-32
+
+When the developer/agent runs `npm run test:linux`, optionally naming a workspace and the test command's arguments, the repository shall run that workspace's tests in a Linux container holding the CI runners' Node and Git versions over a copy of the working tree, so a difference between the developer's platform and the CI platform shows before a push ([DR-145](../decisions/145-merge-on-green.md)).
+
 ## Verification
 
 ### Release Checks
@@ -197,6 +232,12 @@ When the app release workflow's tag check and notes assembly run, as the workflo
 - `beta.0`, `beta.01`, `rc.1`, build metadata, a leading zero, a two-part version or another channel's prefix is refused without outputs or notes [[release-19](#release-19)] [[release-27](#release-27)];
 - a beta tag over manifests off its pre-release version refuses the release [[release-27](#release-27)];
 - a beta's `[Unreleased]` holding only headings and blank lines, its lines ending in LF or CRLF, is refused as empty notes [[release-27](#release-27)].
+
+### Merge Gate
+
+#### release-33
+
+When the repository-system audit reads the CI workflow and the Linux parity script, it shall assert that the workflow's concurrency groups a pull request's runs by its number and cancels the run in progress for a pull request and not for a push to `main` [[release-30](#release-30)], that the required checks the repository's merge rule names are exactly the jobs a pull request's run holds [[release-29](#release-29)] [[release-34](#release-34)], that the matrix narrows for a pull request and is whole for a push to `main` and for the nightly schedule [[release-34](#release-34)], that `npm run prepush` refuses a conflict marker [[release-35](#release-35)], and that `npm run test:linux` names the runners' Node and Git versions [[release-32](#release-32)].
 
 ## References
 
