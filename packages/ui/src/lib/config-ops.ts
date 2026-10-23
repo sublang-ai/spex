@@ -8,6 +8,7 @@
 
 import type { AgentBlockInput } from "@sublang/spex-core/protocol";
 
+import type { SpexClient } from "./client.js";
 import { getClient } from "../state/store.js";
 
 /** A merge patch over an existing agent block (DR-019): provided
@@ -29,8 +30,10 @@ export type AgentPatch = {
   permissions?: AgentBlockInput["permissions"] | null;
 };
 
-export function setCaptain(patch: AgentPatch): Promise<unknown> {
-  return getClient().command("config.edit", {
+/** Set the Captain's block at a core: the local core's unless `client`
+ * names the core of the place shown (run-view-168). */
+export function setCaptain(patch: AgentPatch, client: SpexClient = getClient()): Promise<unknown> {
+  return client.command("config.edit", {
     op: { kind: "captain.set", patch },
   });
 }

@@ -696,10 +696,10 @@ Where the core runs as a seat [[core-service-125](core-service.md#core-service-1
 
 #### space-103
 
-Where the core runs as a seat [[core-service-125](core-service.md#core-service-125)], when the reader activates Join on a spex repository [[space-63](#space-63)] or picks one for a project [[space-58](#space-58)], the core shall allocate the working folder itself at `projects/@<host>/<group path>/<name>/` under the Spex home [[storage-1](storage.md#storage-1)], `<name>` the repository's name without `-spex`, clone the records there and the code into that folder [[projects-37](projects.md#projects-37)], and pair the two ([DR-132](../decisions/132-team-servers.md)):
+Where the core runs as a seat [[core-service-125](core-service.md#core-service-125)], when the reader activates Join on a spex repository [[space-63](#space-63)] or picks one for a project [[space-58](#space-58)], the core shall allocate the working folder itself at `projects/@<host>/<group path>/<repository>/` under the Spex home [[storage-1](storage.md#storage-1)], `<repository>` the repository's own path name with its `-spex` kept, so that no project's folder lies inside another's, clone the records there and the code into that folder [[projects-37](projects.md#projects-37)], and pair the two ([DR-132](../decisions/132-team-servers.md)):
 
-- a code clone that fails leaves the records cloned and their sessions and intents readable, the row showing the failure, and, where the remote's host has no token of the member's [[storage-44](storage.md#storage-44)] and is at no signed-in instance's Git origin, "Code not cloned: <host> needs a credential of yours. Add one under Settings." with the host in the reply's `credential`, so a client opens the Credentials section [[settings-48](settings.md#settings-48)];
-- a retry after the credential is placed clones into the same folder;
+- a code clone that fails leaves the records cloned and their sessions and intents readable, the row showing the failure, and, where the remote is an `https` remote whose host has no token of the member's [[storage-44](storage.md#storage-44)] and is at no signed-in instance's Git origin, "Code not cloned: <host> needs a credential of yours. Add one under Settings." with the host in the row's `credential`, so a client opens the Credentials section [[settings-48](settings.md#settings-48)]; where the member's token for that host cannot be read [[storage-44](storage.md#storage-44)], "Code not cloned: your credential for <host> cannot be read" with the host in `credential` likewise; any other failure shows as it is;
+- a retry — a join of the same repository again — after the credential is placed runs the code clone alone, into the same folder;
 - a folder already allocated for that repository is reused, never a second one made.
 
 ## Internal Behavior
@@ -795,7 +795,7 @@ interface RepositoryState {
     | { phase: "running"; op: "sync" | "check" | "join" | "move" | "place" | "leave" | "attach"; placement?: string | null; step: SyncStep; since: number; cancelable: boolean }   // placement: the one in flight, its instance's origin or null for the path placement
     | { phase: "choices"; placement: string | null; savedCommit: string | null }
     | { phase: "unrelated"; placement: string | null }
-    | { phase: "stopped"; op: "sync" | "check" | "join" | "move" | "place" | "leave" | "attach"; step: SyncStep; cause: SyncCause; message: string; guidance: string; retry: boolean; count?: number }   // count: a leave's units no remaining placement received (space-98)
+    | { phase: "stopped"; op: "sync" | "check" | "join" | "move" | "place" | "leave" | "attach"; step: SyncStep; cause: SyncCause; message: string; guidance: string; retry: boolean; count?: number; credential?: string }   // count: a leave's units no remaining placement received (space-98); credential: on a seat, the code host a join's failed code clone needs a credential of the member's for (space-103)
     | { phase: "done"; at: number; sent: number; received: number; pushed: boolean };
 }
 interface PlacementState {

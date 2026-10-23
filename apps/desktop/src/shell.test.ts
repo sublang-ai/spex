@@ -167,3 +167,12 @@ test("main process installs external-navigation guards", () => {
   assert.match(source, /setWindowOpenHandler/);
   assert.match(source, /will-navigate/);
 });
+
+test("the dock badge reads the core's one attention count, re-read whenever it moves (app-shell-4)", () => {
+  const source = readFileSync(new URL("../src/main.ts", import.meta.url), "utf8");
+  // The count the core reads over its own badge and each open seat's
+  // (core-service-129), re-read on every move the core reports — this
+  // core's ledger or a seat's badge — never this core's badge alone.
+  assert.match(source, /service\.events\.onLedgerChange = \(\) => \{[^}]*app\.setBadgeCount\(service\?\.attentionCount\(\) \?\? 0\)/);
+  assert.doesNotMatch(source, /ledger\(\)\.badge/);
+});

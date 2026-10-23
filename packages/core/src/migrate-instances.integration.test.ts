@@ -24,7 +24,7 @@ import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 
 import { StorageFormatError, sha256 } from "./files.js";
 import { fileCredentialStore } from "./git-host.js";
-import { Home } from "./home.js";
+import { Home, orderRemotes, remoteOrderOf } from "./home.js";
 import { migrateInstances, needsInstancesMigration } from "./migrate-instances.js";
 import { initializeClone } from "./storage-git.js";
 import { Store } from "./store.js";
@@ -182,7 +182,7 @@ const git = (cwd: string, ...args: string[]): string =>
 const FOLDER = "@spex.pub";
 const GIT_ORIGIN = "https://git.spex.example";
 const workspace = (root: string, key: string): string => join(root, "workspace", ...key.split("/"));
-const remotesOf = (dir: string): string[] => git(dir, "remote").split("\n").filter(Boolean);
+const remotesOf = (dir: string): string[] => orderRemotes(git(dir, "remote").split("\n").filter(Boolean), (name) => name, remoteOrderOf(dir));
 const prefsIn = (root: string): Record<string, unknown> =>
   (JSON.parse(readFileSync(join(root, "local", "prefs.json"), "utf8")) as { prefs: Record<string, unknown> }).prefs;
 const receiptsOf = (root: string): string[] => readdirSync(join(root, "local", "migrations"));

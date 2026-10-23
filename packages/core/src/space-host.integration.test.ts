@@ -21,7 +21,7 @@ import { basename, join } from "node:path";
 import { resolveMachineIdentity } from "@sublang/playbook/machine-identity";
 import { createSessionStore } from "@sublang/playbook/session-store";
 import { CredentialChanged, HostError, GitHostClient, fileCredentialStore, type CredentialStore, type HostAccount, type StoredCredential } from "./git-host.js";
-import { Home } from "./home.js";
+import { Home, orderRemotes, remoteOrderOf } from "./home.js";
 import { seedHistorySession } from "./testing/demo.js";
 import { holdingFetch, samePair, settled } from "./testing/holding-fetch.js";
 import { bareOf, clonePath, createSpaceHarness, hostFolder, hostKey, instanceOf, OWN, OWN_KEY, ownClone, placementOf, prefsOf, repositoryOf, rowsOf } from "./testing/space-harness.js";
@@ -71,7 +71,8 @@ function clientAt(home: { service: unknown }, host: Pick<StandinHost, "url">): {
 
 function remotesOf(clone: string): string[] {
   const listed = spawnSync("git", ["-C", clone, "remote"], { encoding: "utf8" });
-  return listed.stdout.split("\n").filter((name) => name !== "");
+  // Git's listing sorts in some versions; the order is the file's (storage-34).
+  return orderRemotes(listed.stdout.split("\n").filter((name) => name !== ""), (name) => name, remoteOrderOf(clone));
 }
 
 /** A clone's remotes by name and URL in the order its Git configuration

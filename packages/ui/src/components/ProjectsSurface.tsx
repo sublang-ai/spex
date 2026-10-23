@@ -10,7 +10,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { IntentInfo, ProjectInfo } from "@sublang/spex-core/protocol";
 
-import { useAppStore, type ProjectMeta } from "../state/store.js";
+import type { ProjectMeta } from "../state/store.js";
+import { usePlaceStore } from "../state/place-context.js";
 import { i18n } from "../i18n.js";
 import { recordsStatePhrase } from "../lib/space.js";
 import { allRepositories } from "../lib/instances.js";
@@ -69,7 +70,8 @@ function StatusBadges({ meta }: { meta?: ProjectMeta }) {
  * only while that band is folded, since an open band says it itself
  * (DR-069: a surface explains nothing its controls show). */
 function GitHubLine({ meta, projectId }: { meta?: ProjectMeta; projectId: string }) {
-  const folded = useAppStore((state) => state.foldedSources[projectId] ?? false);
+  const store = usePlaceStore();
+  const folded = store((state) => state.foldedSources[projectId] ?? false);
   const forge = meta?.forge;
   if (!folded) return null;
   const ready =
@@ -101,11 +103,12 @@ function GitHubLine({ meta, projectId }: { meta?: ProjectMeta; projectId: string
  * waits (space-64) — read from the Groups state, which this line asks
  * for when nothing has read it yet. */
 function RecordsLine({ project, now }: { project: ProjectInfo; now: number }) {
-  const space = useAppStore((state) => state.space);
-  const loadSpace = useAppStore((state) => state.loadSpace);
-  const connected = useAppStore((state) => state.connection === "open");
+  const store = usePlaceStore();
+  const space = store((state) => state.space);
+  const loadSpace = store((state) => state.loadSpace);
+  const connected = store((state) => state.connection === "open");
   useEffect(() => {
-    if (connected && !useAppStore.getState().space) void loadSpace().catch(() => {});
+    if (connected && !store.getState().space) void loadSpace().catch(() => {});
   }, [connected, loadSpace]);
   const { key, name, group } = project.repository;
   const row = space ? allRepositories(space).find((repository) => repository.key === key) : undefined;
@@ -158,11 +161,12 @@ export function OverviewTab({
   /** Stage an intent's dispatch (run-view-86). */
   onStartIntent: (intent: IntentInfo) => Promise<void> | void;
 }) {
-  const projects = useAppStore((state) => state.projects);
-  const projectMeta = useAppStore((state) => state.projectMeta);
-  const sessions = useAppStore((state) => state.sessions);
-  const loadProjectMeta = useAppStore((state) => state.loadProjectMeta);
-  const removeProject = useAppStore((state) => state.removeProject);
+  const store = usePlaceStore();
+  const projects = store((state) => state.projects);
+  const projectMeta = store((state) => state.projectMeta);
+  const sessions = store((state) => state.sessions);
+  const loadProjectMeta = store((state) => state.loadProjectMeta);
+  const removeProject = store((state) => state.removeProject);
 
   const [error, setError] = useState<string>();
   const [confirmRemove, setConfirmRemove] = useState(false);

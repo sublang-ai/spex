@@ -4,7 +4,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import type { MediaAsset, MediaOwner } from "@sublang/spex-core/protocol";
 
-import { getClient } from "../state/store.js";
+import { usePlaceStore } from "../state/place-context.js";
 import { readMediaAsset } from "../lib/media-client.js";
 import { i18n } from "../i18n.js";
 import { TrustedMedia, type TrustedMediaContent } from "./TrustedMedia.js";
@@ -26,6 +26,7 @@ export function assetReference(value: unknown): MediaAsset | undefined {
 }
 
 function useStoredAsset(asset: Pick<MediaAsset, "assetId"> & Partial<MediaAsset> | undefined, enabled = true) {
+  const store = usePlaceStore();
   const owner = useContext(OwnerContext);
   const [attempt, setAttempt] = useState(0);
   const [loaded, setLoaded] = useState<{ key: string; content: TrustedMediaContent }>();
@@ -42,7 +43,7 @@ function useStoredAsset(asset: Pick<MediaAsset, "assetId"> & Partial<MediaAsset>
     const setContent = (content: TrustedMediaContent) => setLoaded({ key, content });
     setContent({ state: "loading" });
     if (!owner) { setContent({ state: "unavailable", reason: i18n._("The file's conversation is unavailable.") }); return; }
-    void Promise.resolve().then(() => readMediaAsset(getClient(), owner, { assetId, byteLength, mimeType }, abort.signal))
+    void Promise.resolve().then(() => readMediaAsset(store.getClient(), owner, { assetId, byteLength, mimeType }, abort.signal))
       .then((blob) => { if (!abort.signal.aborted) setContent({ state: "ready", blob }); })
       .catch((error: Error) => { if (!abort.signal.aborted) setContent({ state: "unavailable", reason: error.message }); });
     return () => abort.abort();
