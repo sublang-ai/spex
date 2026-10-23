@@ -19,7 +19,7 @@ import { canSubmitContent, type ComposerAttachmentControls } from "./ComposerAtt
 import type { AgentPatch } from "../lib/config-ops.js";
 import { playbookIntent } from "../lib/playbook-intent.js";
 import { keyLabel } from "../lib/shortcuts.js";
-import type { StagedIntent } from "../state/store.js";
+import { isLocalPlace, type StagedIntent } from "../state/store.js";
 import { usePlaceStore } from "../state/place-context.js";
 import { Rich } from "./Rich.js";
 import { SlashMenuList, slashMatches } from "./SlashMenu.js";
@@ -186,8 +186,12 @@ export function CaptainHome(props: CaptainHomeProps) {
   const [captainPopover, setCaptainPopover] =
     useState<ReturnType<typeof popoverRoom>>();
   // With nothing registered the greeting itself carries the ways in
-  // (run-view-25); seeding is the store action the palette uses.
+  // (run-view-25); seeding is the store action the palette uses. The
+  // example is seeded at a folder this page names, so it is this
+  // computer's alone: a seat's projects are opened among the member's
+  // groups, its core allocating every folder (run-view-169).
   const openAcademyExample = store((state) => state.openAcademyExample);
+  const seedable = isLocalPlace(store.place);
   const [seeding, setSeeding] = useState(false);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const gearRef = useRef<HTMLButtonElement>(null);
@@ -307,16 +311,18 @@ export function CaptainHome(props: CaptainHomeProps) {
               >
                 {i18n._("Add a project…")}
               </button>
-              <button
-                type="button"
-                data-testid="home-academy"
-                disabled={seeding || !connected}
-                title={i18n._("Seeds a sample project with specs, ready to run")}
-                onClick={() => void runAcademy()}
-                className="rounded-md border border-brand-300 px-3 py-1 text-xs font-medium text-brand-700 hover:bg-brand-50 disabled:opacity-40 dark:border-brand-700 dark:text-brand-300 dark:hover:bg-brand-950"
-              >
-                {seeding ? i18n._("Seeding…") : i18n._("Try the Academy example")}
-              </button>
+              {seedable ? (
+                <button
+                  type="button"
+                  data-testid="home-academy"
+                  disabled={seeding || !connected}
+                  title={i18n._("Seeds a sample project with specs, ready to run")}
+                  onClick={() => void runAcademy()}
+                  className="rounded-md border border-brand-300 px-3 py-1 text-xs font-medium text-brand-700 hover:bg-brand-50 disabled:opacity-40 dark:border-brand-700 dark:text-brand-300 dark:hover:bg-brand-950"
+                >
+                  {seeding ? i18n._("Seeding…") : i18n._("Try the Academy example")}
+                </button>
+              ) : null}
             </div>
           ) : null}
         </CaptainBubble>
@@ -561,7 +567,9 @@ export function CaptainHome(props: CaptainHomeProps) {
               activeIndex={Math.min(slashIndex, slash.length - 1)}
               onPick={insertCommand}
               onCompileNew={() => {
-                // The Library lands on its id field (playbook-library-51).
+                // The Library lands on its id field (playbook-library-51),
+                // at the place shown here: the navigation opens Playbooks
+                // there (run-view-168).
                 store.getState().requestNewPlaybook();
                 props.onNavigate("Playbooks");
               }}

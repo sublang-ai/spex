@@ -39,12 +39,14 @@ export function setCaptain(patch: AgentPatch, client: SpexClient = getClient()):
 }
 
 /** Edit a session player's envelope — identity and defaults. Settings
- * owns this; a role binding cannot reach it (DR-032). */
+ * owns this; a role binding cannot reach it (DR-032). The local core's
+ * unless `client` names the core of the place shown (run-view-168). */
 export function patchPlayer(
   playerId: string,
   patch: AgentPatch,
+  client: SpexClient = getClient(),
 ): Promise<unknown> {
-  return getClient().command("config.edit", {
+  return client.command("config.edit", {
     op: { kind: "player.set", playerId, patch },
   });
 }
@@ -53,7 +55,8 @@ export function patchPlayer(
  * the provider default; null clears the override so the role inherits
  * the player's (DR-032). `repository` names whose config the entry is
  * in — a project's takes the player alone (playbook-library-4); absent,
- * your own group's. */
+ * your own group's. The local core's unless `client` names the core of
+ * the place shown (run-view-168). */
 export function bindRole(
   playbookId: string,
   role: string,
@@ -66,6 +69,7 @@ export function bindRole(
     fastMode?: boolean | null;
   },
   repository?: string,
+  client: SpexClient = getClient(),
 ): Promise<unknown> {
   // An untouched tuning is absent, not `undefined`: the op means
   // "preserve the existing value" when a key does not appear; null clears it.
@@ -74,7 +78,7 @@ export function bindRole(
       ([, value]) => value !== undefined,
     ),
   );
-  return getClient().command("config.edit", {
+  return client.command("config.edit", {
     op: {
       kind: "playbook.role.bind",
       playbookId,

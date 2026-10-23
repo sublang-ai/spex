@@ -30,6 +30,20 @@ interface Pending {
   reject: (error: Error) => void;
 }
 
+/** How long a command's reply is awaited where no caller names a wait:
+ * the default suits a reply the core composes itself (DR-010 §5). */
+const DEFAULT_TIMEOUT_MS = 30_000;
+
+/** The commands whose reply waits on more than the core. A seat's open
+ * reads the instance's listing, asks it for a ticket and waits for the
+ * server's admission, which may start the seat for thirty seconds; its
+ * close ends that relay. The page waits for either as long as the
+ * admission may take (run-view-170, core-service-128). */
+const COMMAND_TIMEOUT_MS: Partial<Record<Command["type"], number>> = {
+  "server.open": 90_000,
+  "server.close": 90_000,
+};
+
 export class SpexCommandError extends Error {
   constructor(
     readonly code: string,
@@ -142,7 +156,7 @@ export class SpexClient {
     // must surface as an error, but a long-running command (compile)
     // must never falsely fail — 0 disables the timer, and the close
     // handler still rejects every pending call if the socket drops.
-    const timeoutMs = options?.timeoutMs ?? 30_000;
+    const timeoutMs = options?.timeoutMs ?? COMMAND_TIMEOUT_MS[type] ?? DEFAULT_TIMEOUT_MS;
     const promise = new Promise<unknown>((resolve, reject) => {
       this.pending.set(id, { resolve, reject });
       if (timeoutMs > 0) {

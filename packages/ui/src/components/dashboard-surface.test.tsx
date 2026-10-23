@@ -37,7 +37,7 @@ import type {
 
 import { DashboardSurface } from "./DashboardSurface.js";
 import { OverviewTab } from "./ProjectsSurface.js";
-import { setClientForTests, useAppStore } from "../state/store.js";
+import { setClientForTests, useAppStore, type AppStore } from "../state/store.js";
 import { initialSessionView } from "../state/reducer.js";
 import { SpexCommandError } from "../lib/client.js";
 import { currentLocale } from "../i18n.js";
@@ -139,7 +139,7 @@ function renderSurface(over: {
   onOpenSession?: Mock<(sessionId: string, turnId?: number) => void>;
   onOpenIntent?: Mock<(projectId: string, path: string, anchor: string) => void>;
   onStartIntent?: Mock<(intent: IntentInfo) => void>;
-  onNavigate?: Mock<(surface: "Workspace") => void>;
+  onNavigate?: Mock<(surface: "Workspace", place: AppStore) => void>;
 } = {}) {
   const onOpenSession =
     over.onOpenSession ?? vi.fn<(sessionId: string, turnId?: number) => void>();
@@ -148,7 +148,7 @@ function renderSurface(over: {
     vi.fn<(projectId: string, path: string, anchor: string) => void>();
   const onStartIntent =
     over.onStartIntent ?? vi.fn<(intent: IntentInfo) => void>();
-  const onNavigate = over.onNavigate ?? vi.fn<(surface: "Workspace") => void>();
+  const onNavigate = over.onNavigate ?? vi.fn<(surface: "Workspace", place: AppStore) => void>();
   render(
     <DashboardSurface
       onOpenSession={onOpenSession}
@@ -2956,7 +2956,8 @@ describe("dashboard-8/21/22/32: empty states, no takeover, the filter", () => {
     const empty = screen.getByTestId("projects-empty");
     expect(empty.textContent).toContain("register");
     fireEvent.click(within(empty).getByRole("button", { name: "Projects" }));
-    expect(onNavigate).toHaveBeenCalledWith("Workspace");
+    // This computer's place, whose projects the band lists (run-view-168).
+    expect(onNavigate).toHaveBeenCalledWith("Workspace", useAppStore);
   });
 
   test("a registered project with an empty ledger keeps every band instructive", () => {

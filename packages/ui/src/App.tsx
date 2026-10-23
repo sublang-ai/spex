@@ -46,6 +46,7 @@ import { DashboardSurface } from "./components/DashboardSurface.js";
 import { LibrarySurface } from "./components/LibrarySurface.js";
 import { SettingsSurface } from "./components/SettingsSurface.js";
 import { SpaceSurface } from "./components/SpaceSurface.js";
+import { PlaceSelector } from "./components/PlaceSelector.js";
 import { OverviewTab } from "./components/ProjectsSurface.js";
 import { ProjectPalette } from "./components/ProjectPalette.js";
 import {
@@ -945,16 +946,24 @@ function WorkspaceSurface({
           onWriteSpec={(path, content, baseVersion) =>
             writeSpec(project.id, path, content, baseVersion)
           }
-          onSeedExample={() => {
-            setSeedErrors((current) => ({ ...current, [project.id]: undefined }));
-            void openAcademyExample().catch((cause: Error) => {
-              setSeedErrors((current) => ({
-                ...current,
-                [project.id]:
-                  cause.message || i18n._("seeding the example failed"),
-              }));
-            });
-          }}
+          // The example is seeded at a folder this page names, so it is
+          // this computer's alone: a seat's projects are opened among
+          // the member's groups, its core allocating every folder
+          // (run-view-169).
+          onSeedExample={
+            isLocalPlace(store.place)
+              ? () => {
+                  setSeedErrors((current) => ({ ...current, [project.id]: undefined }));
+                  void openAcademyExample().catch((cause: Error) => {
+                    setSeedErrors((current) => ({
+                      ...current,
+                      [project.id]:
+                        cause.message || i18n._("seeding the example failed"),
+                    }));
+                  });
+                }
+              : undefined
+          }
           seedError={seedErrors[project.id]}
           viewState={specViewStates[placeKey(store.place, project.id)] ?? initialSpecViewState}
           onViewState={(next) => onSpecViewState(placeKey(store.place, project.id), next)}
@@ -1053,6 +1062,26 @@ export function App() {
   useEffect(() => {
     if (shown.place.key !== shownPlace) setShownPlace(LOCAL_PLACE_KEY);
   }, [shown, shownPlace]);
+  // The place Settings, Playbooks, Groups and Environments show, as the
+  // place selector names it (run-view-168): this computer's until the
+  // reader picks a seat, and again once a seat it showed is closed.
+  const [configuredPlace, setConfiguredPlace] = useState<string>(LOCAL_PLACE_KEY);
+  const configured = storeAt(configuredPlace);
+  useEffect(() => {
+    if (configured.place.key !== configuredPlace) setConfiguredPlace(LOCAL_PLACE_KEY);
+  }, [configured, configuredPlace]);
+  // The code host a place's Groups row asked its Settings to take a
+  // credential for (space-103, settings-48), until that place's
+  // Credentials section has opened at it.
+  const [credentialAsk, setCredentialAsk] = useState<{ place: string; host: string }>();
+  /** Go to a surface on behalf of `store`'s place: Settings, Playbooks
+   * and Groups open at that place (run-view-168). */
+  const navigateFrom = (store: AppStore) => (next: Surface) => {
+    if (next === "Settings" || next === "Playbooks" || next === "Space") {
+      setConfiguredPlace(store.place.key);
+    }
+    setSurface(next);
+  };
   // Each place's sidebar inputs, read from its own store.
   const placeStates = useEachPlace((state) => ({
     projects: state.projects,
@@ -1066,17 +1095,27 @@ export function App() {
     currentProjectId: state.currentProjectId,
     expandedProjects: state.expandedProjects,
     workspaceTabs: state.workspaceTabs,
+    // A seat's groups name the projects the palette opens there
+    // (run-view-169), read once it is connected.
+    space: state.space,
+    connection: state.connection,
   }));
   const local = placeStates[0]!.value;
   // The badge and every dot re-source from the one core-side ledger
   // fold (DR-035, dashboard-9/10): each place's dots from its own, the
-  // badge summing every place's (dashboard-9).
+  // badge summing every place's (dashboard-9). A place speaking another
+  // protocol version is no connected core: it marks nothing, as it adds
+  // nothing to the queue and the badge (run-view-168).
   const attentionByPlace = useMemo(
     () =>
       new Map(
         placeStates.map(({ store, value }) => [
           store.place.key,
-          attentionOf(value.ledger, value.sessions, value.views),
+          attentionOf(
+            value.connection === "mismatch" ? undefined : value.ledger,
+            value.sessions,
+            value.views,
+          ),
         ]),
       ),
     [placeStates],
@@ -1444,7 +1483,7 @@ export function App() {
       <button
         type="button"
         data-testid="config-status"
-        onClick={() => setSurface("Settings")}
+        onClick={() => navigateFrom(useAppStore)("Settings")}
         title={i18n._("Open Settings to see what's wrong")}
         // The status is the core's own enum: a machine word travels as
         // it is in every language (localization-1).
@@ -1497,6 +1536,16 @@ export function App() {
             sessions: value.sessions,
             attention: attentionAt(store.place.key),
             currentProjectId: store === shown ? value.currentProjectId : undefined,
+            // A seat's project is opened among the member's groups there,
+            // with no folder (run-view-169, space-103).
+            groups: value.space,
+            connected: value.connection === "open",
+            onJoin: (instance, hostId) => store.getState().spaceJoin(instance, hostId),
+            onReadGroups: () => {
+              if (store.getState().connection === "open") {
+                void store.getState().loadSpace().catch(() => {});
+              }
+            },
           }))}
           onPickFolder={
             window.spexNative
@@ -1530,28 +1579,59 @@ export function App() {
           aria-label={SURFACE_LABELS[surface]()}
           className="flex min-h-0 min-w-0 flex-1 flex-col outline-none"
         >
-          {surface === "Playbooks" ? (
-            <LibrarySurface onNavigate={setSurface} />
-          ) : surface === "Settings" ? (
-            <SettingsSurface />
-          ) : surface === "Space" ? (
-            <SpaceSurface
-              onOpenSession={(sessionId) => openSessionAndShow(sessionId)}
-              onOpenProject={(projectId) => pickProject(projectId)}
-            />
+          {surface === "Playbooks" || surface === "Settings" || surface === "Space" ? (
+            // Settings, Playbooks — with its Environments — and Groups
+            // show one place at a time, the one the selector names
+            // (run-view-168); with no seat open there is none to pick.
+            <PlaceStoreContext.Provider value={configured}>
+              {stores.length > 1 ? (
+                <PlaceSelector
+                  stores={stores}
+                  shown={configured}
+                  onShow={(store) => setConfiguredPlace(store.place.key)}
+                />
+              ) : null}
+              {surface === "Playbooks" ? (
+                <LibrarySurface key={configured.place.key} onNavigate={setSurface} />
+              ) : surface === "Settings" ? (
+                <SettingsSurface
+                  key={configured.place.key}
+                  credentialHost={
+                    credentialAsk?.place === configured.place.key ? credentialAsk.host : undefined
+                  }
+                  onCredentialHostShown={() => setCredentialAsk(undefined)}
+                />
+              ) : (
+                <SpaceSurface
+                  key={configured.place.key}
+                  onOpenSession={(sessionId) =>
+                    openSessionAndShow(sessionId, undefined, configured.place.key)
+                  }
+                  onOpenProject={(projectId) => pickProject(projectId, configured.place.key)}
+                  // A failed code clone's host opens this place's
+                  // Credentials section at it (space-103, settings-48).
+                  onAddCredential={(host) => {
+                    setCredentialAsk({ place: configured.place.key, host });
+                    setSurface("Settings");
+                  }}
+                />
+              )}
+            </PlaceStoreContext.Provider>
           ) : surface === "Dashboard" ? (
             <DashboardSurface
               onOpenSession={openSessionAndShow}
               onOpenIntent={openIntentFrom("dashboard")}
               onStartIntent={startIntentAt(useAppStore)}
-              onNavigate={setSurface}
+              // A link to a project opens it at the project's place,
+              // the Projects surface showing that place (run-view-168).
+              onNavigate={(_surface, place) => showPlace(place)}
             />
           ) : (
             // The Projects surface reads the place it shows (run-view-168).
             <PlaceStoreContext.Provider value={shown}>
               <WorkspaceSurface
                 key={shown.place.key}
-                onNavigate={setSurface}
+                onNavigate={navigateFrom(shown)}
                 onOpenPalette={() => setPaletteOpen(true)}
                 attentionBySession={attentionBySession}
                 pendingFocus={pendingFocus}
