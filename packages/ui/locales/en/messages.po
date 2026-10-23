@@ -3086,30 +3086,6 @@ msgstr "Groups"
 msgid "Groups are made by the people who run {name}"
 msgstr "Groups are made by the people who run {name}"
 
-<<<<<<< HEAD
-#: src/components/CaptainHome.tsx
-msgid "Heads up — some agents aren't ready yet:"
-msgstr "Heads up — some agents aren't ready yet:"
-
-#: src/components/CaptainHome.tsx
-msgid "Hello! I'm your Captain. Add a project — any local git repo — and tell me what to do with it; I'll route it to a playbook, a scripted workflow the AI players run."
-msgstr "Hello! I'm your Captain. Add a project — any local git repo — and tell me what to do with it; I'll route it to a playbook, a scripted workflow the AI players run."
-
-#. the Captain's greeting at a team server's seat holding no project; {server} is the server's name
-#: src/components/CaptainHome.tsx
-msgid "Hello! I'm your Captain. Open a project from your groups on {server} and tell me what to do with it; I'll route it to a playbook, a scripted workflow the AI players run."
-msgstr "Hello! I'm your Captain. Open a project from your groups on {server} and tell me what to do with it; I'll route it to a playbook, a scripted workflow the AI players run."
-
-#: src/components/CaptainHome.tsx
-msgid "Hello! I'm your Captain. Pick a project in the sidebar, then tell me what to do with it and I'll route it to a playbook, a scripted workflow the AI players run."
-msgstr "Hello! I'm your Captain. Pick a project in the sidebar, then tell me what to do with it and I'll route it to a playbook, a scripted workflow the AI players run."
-
-#: src/components/CaptainHome.tsx
-msgid "Hello! This is {project} — tell me what to do with it and I'll route it to a playbook, a scripted workflow the AI players run."
-msgstr "Hello! This is {project} — tell me what to do with it and I'll route it to a playbook, a scripted workflow the AI players run."
-
-=======
->>>>>>> origin/main
 #: src/components/SpecView.tsx
 msgid "Hide {group} items"
 msgstr "Hide {group} items"

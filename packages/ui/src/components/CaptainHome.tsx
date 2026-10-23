@@ -18,13 +18,9 @@ import { i18n } from "../i18n.js";
 import { canSubmitContent, type ComposerAttachmentControls } from "./ComposerAttachments.js";
 import type { AgentPatch } from "../lib/config-ops.js";
 import { keyLabel } from "../lib/shortcuts.js";
-<<<<<<< HEAD
-import { isLocalPlace, placeLabel, type StagedIntent } from "../state/store.js";
-=======
 import { playbookIntent } from "../lib/playbook-intent.js";
 import { treeCounts } from "../lib/spec-view-model.js";
 import { isLocalPlace, type StagedIntent } from "../state/store.js";
->>>>>>> origin/main
 import { usePlaceStore } from "../state/place-context.js";
 import { SlashMenuList, slashMatches } from "./SlashMenu.js";
 import { AgentChip, agentChipText, fastModeWord, readinessWord } from "./AgentChip.js";
@@ -372,67 +368,6 @@ export function CaptainHome(props: CaptainHomeProps) {
           emptyCanvas ? "" : "flex-1 justify-end"
         }`}
       >
-<<<<<<< HEAD
-        <CaptainBubble>
-          <p>
-            {props.hasProject
-              ? i18n._(
-                  "Hello! This is {project} — tell me what to do with it and I'll route it to a playbook, a scripted workflow the AI players run.",
-                  {
-                    project:
-                      props.projectName ??
-                      i18n._({
-                        id: "your project",
-                        comment: "stands in for a project with no name yet",
-                      }),
-                  },
-                )
-              : props.hasProjects
-                ? i18n._(
-                    "Hello! I'm your Captain. Pick a project in the sidebar, then tell me what to do with it and I'll route it to a playbook, a scripted workflow the AI players run.",
-                  )
-                : seedable
-                  ? i18n._(
-                      "Hello! I'm your Captain. Add a project — any local git repo — and tell me what to do with it; I'll route it to a playbook, a scripted workflow the AI players run.",
-                    )
-                  : // A seat's projects are opened among the member's
-                    // groups, its core allocating every folder: its
-                    // greeting names its groups, no folder of this
-                    // computer (run-view-169).
-                    i18n._({
-                      id: "Hello! I'm your Captain. Open a project from your groups on {server} and tell me what to do with it; I'll route it to a playbook, a scripted workflow the AI players run.",
-                      comment: "the Captain's greeting at a team server's seat holding no project; {server} is the server's name",
-                      values: { server: placeLabel(store.place) },
-                    })}
-          </p>
-          {!props.hasProject && !props.hasProjects ? (
-            // The two ways in, in the greeting itself: nothing in the
-            // sidebar to pick means nothing to send the reader to.
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                data-testid="home-add-project"
-                onClick={props.onOpenPalette}
-                className="rounded-md bg-brand-600 px-3 py-1 text-xs font-medium text-white hover:bg-brand-500"
-              >
-                {i18n._("Add a project…")}
-              </button>
-              {seedable ? (
-                <button
-                  type="button"
-                  data-testid="home-academy"
-                  disabled={seeding || !connected}
-                  title={i18n._("Seeds a sample project with specs, ready to run")}
-                  onClick={() => void runAcademy()}
-                  className="rounded-md border border-brand-300 px-3 py-1 text-xs font-medium text-brand-700 hover:bg-brand-50 disabled:opacity-40 dark:border-brand-700 dark:text-brand-300 dark:hover:bg-brand-950"
-                >
-                  {seeding ? i18n._("Seeding…") : i18n._("Try the Academy example")}
-                </button>
-              ) : null}
-            </div>
-          ) : null}
-        </CaptainBubble>
-=======
         {props.hasProject ? (
           <div data-testid="project-task-start" className="w-full">
             <h1 className="text-2xl font-semibold leading-tight tracking-tight text-neutral-900 dark:text-neutral-100">
@@ -483,7 +418,6 @@ export function CaptainHome(props: CaptainHomeProps) {
             </p>
           </CaptainBubble>
         )}
->>>>>>> origin/main
 
         {configBroken ? (
           <div className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200">

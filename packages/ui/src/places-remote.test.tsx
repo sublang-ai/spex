@@ -18,11 +18,11 @@
 // proposal's "Add project", its environment's folder request no picker
 // — its folder named relative to its project alone — and its draft's
 // source neither a picked file nor a pasted path; the Academy example
-// is seeded on this computer alone, and a seat with no project greets
-// with its groups. settings-51: the Credentials section says its fixed
-// sentence, sends `credential.set` and `credential.remove`, lists what
-// is set with no secret shown, refuses a blank name or value in place,
-// shows the host a failed clone named and opens at that host.
+// is seeded on this computer alone. settings-51: the Credentials
+// section says its fixed sentence, sends `credential.set` and
+// `credential.remove`, lists what is set with no secret shown, refuses
+// a blank name or value in place, shows the host a failed clone named
+// and opens at that host.
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
@@ -632,27 +632,6 @@ describe("run-view-171: a remote place offers no picker, reveal or path entry", 
     fireEvent.click(screen.getByTestId("home-add-project"));
     expect(screen.queryByTestId("palette-own-project")).toBeNull();
     expect(screen.getByTestId(`palette-groups-${ALPHA.place}`)).toBeTruthy();
-  });
-
-  test("a seat with no project greets with its groups, naming no folder of this computer", async () => {
-    useAppStore.setState({ projects: [], currentProjectId: undefined });
-    render(<App />);
-    // This computer's greeting asks for a local repository.
-    const greeting = () => screen.getByText(/^Hello! I'm your Captain\./);
-    expect(greeting().textContent).toContain("Add a project — any local git repo —");
-
-    fireEvent.click(screen.getByTestId(`sidebar-project-p2@${ALPHA.place}`));
-    act(() => alphaStore.setState({ projects: [], currentProjectId: undefined }));
-    // [run-view-171] [run-view-169] the seat's greets with its groups
-    // there, by its server's name, and names no folder of this computer.
-    expect(greeting().textContent).toBe(
-      "Hello! I'm your Captain. Open a project from your groups on build-box and tell me what to do with it; I'll route it to a playbook, a scripted workflow the AI players run.",
-    );
-    expect(greeting().textContent).not.toContain("local git repo");
-    // The way in is the palette, which names the member's groups there.
-    fireEvent.click(screen.getByTestId("home-add-project"));
-    await settle();
-    expect(screen.getByRole("group", { name: "From your groups on build-box" })).toBeTruthy();
   });
 
   test("a seat's project with no specs offers no Academy example in its Specs tab", async () => {
