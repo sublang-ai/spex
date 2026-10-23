@@ -76,7 +76,7 @@ export function specPackageFolders(paths: Iterable<string>): Set<string> {
  * a file under one of `packages`, the spec package folders of the trees
  * compared, is the outermost one's, named with a trailing `/`. */
 export function storageUnitName(file: string, packages: ReadonlySet<string> = NO_PACKAGES): string {
-  const session = /^sessions\/([^/]+?)(?:\.records\.jsonl$|\.json$|\.assets\/)/.exec(file);
+  const session = /^sessions\/([^/]+?)(?:\.records\.jsonl$|\.replay\.json$|\.json$|\.(?:assets|chunks)\/)/.exec(file);
   if (session && UUID.test(session[1])) return `sessions/${session[1]}`;
   const intent = /^intents\/([^/]+?)(?:\.json$|\.assets\/)/.exec(file);
   if (intent && UUID.test(intent[1])) return `intents/${intent[1]}`;
@@ -306,12 +306,24 @@ export async function validateStorageTree(dir_: string, options: ValidateStorage
   if (validationPath(dir, "sessions", "directory")) {
     const store = createSessionStore({ sessionsDir }); await store.prepare();
     validationPath(dir, "sessions", "directory");
-    for (const file of readdirSync(sessionsDir)) {
+    const names = readdirSync(sessionsDir);
+    const bounded = names.flatMap((name) => {
+      const match = /^([0-9a-f-]{36})\.(?:replay\.json|chunks)$/.exec(name);
+      return match && UUID.test(match[1]) ? [match[1]] : [];
+    });
+    for (const id of new Set([...bounded, ...(options.selectedSessionIds ?? [])])) {
+      if (!names.includes(`${id}.json`) && names.some((name) => storageUnitName(`sessions/${name}/`) === `sessions/${id}` || storageUnitName(`sessions/${name}`) === `sessions/${id}`)) {
+        throw new StorageFormatError(`sessions/${id}.json`, "selected session bundle root is missing");
+      }
+    }
+    for (const file of names) {
       if (!file.endsWith(".json") || !UUID.test(file.slice(0, -5))) continue;
       const id = file.slice(0, -5);
       const checkBundle = () => {
         validationPath(dir, `sessions/${id}.json`, "file");
         validationPath(dir, `sessions/${id}.records.jsonl`, "file");
+        validationPath(dir, `sessions/${id}.replay.json`, "file");
+        validationPath(dir, `sessions/${id}.chunks`, "directory");
         validationPath(dir, `sessions/${id}.assets`, "directory");
       };
       checkBundle();
@@ -434,7 +446,12 @@ export interface AppliedStorageSelection {
 }
 
 type TreeEntries = Map<string, { mode: string; oid: string }>;
-const publicationOrder = (path: string): number => path.includes(".assets/") ? 0 : path.endsWith(".records.jsonl") ? 1 : 2;
+const publicationOrder = (path: string, retained: boolean, replacingRoot: boolean): number => {
+  // Keep an old root's dependencies until the new root stands. A
+  // deletion keeps the shared lifecycle's manifest-last order.
+  if (replacingRoot && !retained && (/\.(assets|chunks)\//.test(path) || /\.(records\.jsonl|replay\.json)$/.test(path))) return 4;
+  return /\.(assets|chunks)\//.test(path) ? 0 : path.endsWith(".records.jsonl") ? 1 : path.endsWith(".replay.json") ? 2 : 3;
+};
 
 /** Inspect each existing parent without following it, including when the
  * leaf or a later directory is missing. These synchronous boundary checks
@@ -461,6 +478,7 @@ function assertDestinationParents(dir: string, file: string): void {
  * since the plan's trees among them (space-19). */
 function unitOnDisk(dir: string, unit: StorageMergeUnit, members: boolean): Map<string, string> {
   const paths = new Set([...unit.paths, ...bundleFiles(unit.name)]);
+  if (SESSION_UNIT.test(unit.name)) paths.add(`${unit.name}.replay.json`);
   const walk = (rel: string): void => {
     assertDestinationParents(dir, `${rel}/.member`);
     const full = join(dir, rel);
@@ -474,6 +492,9 @@ function unitOnDisk(dir: string, unit: StorageMergeUnit, members: boolean): Map<
     }
   };
   if (members && /^(sessions|intents|authoring)\//.test(unit.name)) walk(`${unit.name}.assets`);
+  // Even select's merge-output version must include chunks published
+  // while acquisition waits; a session's immutable namespace is owned.
+  if (SESSION_UNIT.test(unit.name)) walk(`${unit.name}.chunks`);
   // A spec package folder's members are every file under it Git would
   // carry, one added since the plan's trees among them.
   if (members && isPackageUnit(unit.name)) {
@@ -532,8 +553,9 @@ export async function applyStorageSelection(dir_: string, plan: StorageMergePlan
     const assets = unit.paths.some((path) => path.startsWith(`${unit.name}.assets/`) && present(path));
     if (SESSION_UNIT.test(unit.name)) {
       const manifest = present(`${unit.name}.json`);
-      const replay = present(`${unit.name}.records.jsonl`);
-      if (manifest !== replay || (assets && !manifest)) throw new StorageFormatError(unit.name, "selected session requires its complete manifest, replay and asset bundle");
+      const replay = present(`${unit.name}.records.jsonl`) || present(`${unit.name}.replay.json`);
+      const chunks = unit.paths.some((path) => path.startsWith(`${unit.name}.chunks/`) && present(path));
+      if (manifest !== replay || ((assets || chunks) && !manifest)) throw new StorageFormatError(unit.name, "selected session requires its complete root, replay, chunks and asset bundle");
     } else if (/^(intents|authoring)\//.test(unit.name)) {
       const record = present(`${unit.name}.json`);
       const replay = present(`${unit.name}.records.jsonl`);
@@ -624,7 +646,8 @@ export async function applyStorageSelection(dir_: string, plan: StorageMergePlan
           // authoring check, then its files, with nothing awaited between.
           if (!stands()) throw moved();
           const disk = unitOnDisk(dir, unit, versioned);
-          const paths = [...new Set([...disk.keys(), ...wanted.keys(), ...version.keys()])].sort((a, b) => publicationOrder(a) - publicationOrder(b) || a.localeCompare(b));
+          const replacingRoot = wanted.has(`${unit.name}.json`);
+          const paths = [...new Set([...disk.keys(), ...wanted.keys(), ...version.keys()])].sort((a, b) => publicationOrder(a, wanted.has(a), replacingRoot) - publicationOrder(b, wanted.has(b), replacingRoot) || a.localeCompare(b));
           const changed = paths.find((path) => disk.get(path) !== version.get(path) && disk.get(path) !== wanted.get(path));
           if (changed) throw new StorageWriteRefused(unit.name, "changed", [...written], `${changed} changed since it was read`);
           if (AUTHORING_UNIT.test(unit.name)) {
@@ -632,6 +655,9 @@ export async function applyStorageSelection(dir_: string, plan: StorageMergePlan
             catch (error) { throw new StorageWriteRefused(unit.name, "lease", [...written], error instanceof Error ? error.message : String(error)); }
           }
           for (const file of paths) {
+            // A chunk already untracked when select read Git's merge
+            // output stays local, as any path in neither side's tree.
+            if (!versioned && !unit.paths.includes(file) && version.has(file)) continue;
             assertDestinationParents(dir, file);
             const target = join(dir, file); const oid = wanted.get(file);
             if (oid) {
@@ -647,7 +673,7 @@ export async function applyStorageSelection(dir_: string, plan: StorageMergePlan
           // Attachments stay owner-only whoever made their folder — Git's
           // merge makes it under the process umask; only a differing mode
           // changes, since a mode change moves the ctime readers pin.
-          for (const [file, mode] of [[`${unit.name}.assets`, 0o700], ...[...wanted.keys()].filter((path) => path.includes(".assets/")).map((path) => [path, 0o600] as const)] as const) {
+          for (const [file, mode] of [[`${unit.name}.assets`, 0o700], ...(SESSION_UNIT.test(unit.name) ? [[`${unit.name}.chunks`, 0o700] as const] : []), ...[...wanted.keys()].filter((path) => /\.(assets|chunks)\//.test(path)).map((path) => [path, 0o600] as const)] as const) {
             assertDestinationParents(dir, file);
             const stat = lstatSync(join(dir, file), { throwIfNoEntry: false });
             if (stat && !stat.isSymbolicLink() && (stat.mode & 0o777) !== mode) chmodSync(join(dir, file), mode);
@@ -728,7 +754,7 @@ export function prepareStorageGitFiles(dir: string, unsupportedPaths: string[] =
     if (file.startsWith("/") || file.split("/").includes("..") || /[\r\n\0*?\[\]\\]/.test(file)) throw new Error(`unsafe ignore path ${file}`);
     return `/${file}`;
   });
-  const attributes = ["*.json -text", "*.jsonl -text", "/intents/*.assets/** -text", "/sessions/*.assets/** -text", "/authoring/*.assets/** -text"];
+  const attributes = ["*.json -text", "*.jsonl -text", "/intents/*.assets/** -text", "/sessions/*.assets/** -text", "/sessions/*.chunks/** -text", "/authoring/*.assets/** -text"];
   const begin = "# BEGIN Spex managed storage rules";
   const end = "# END Spex managed storage rules";
   for (const [name, generated] of [[".gitignore", ignores], [".gitattributes", attributes]] as const) {

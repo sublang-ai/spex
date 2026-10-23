@@ -8,7 +8,8 @@ import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { readSessionManifest } from "./testing/session-storage.js";
 import { createSessionStore } from "@sublang/playbook/session-store";
 import { executionConfigFromPlan, loadLaunchPlan, openSessionHost } from "@sublang/playbook/session-host";
 import { createTmuxPlayRuntime } from "@sublang/cligent/tmux-play";
@@ -70,7 +71,6 @@ playbooks:
   const id = host.sessionId;
   try { await host.handleBossTurn("Establish the session"); } finally { await host.dispose(); }
   const manifest = join(sessionsDir, `${id}.json`);
-  const replay = join(sessionsDir, `${id}.records.jsonl`);
   const commit = (message: string) => { git(clone, "add", "."); git(clone, "commit", "-q", "-m", message); };
   commit("base");
   git(clone, "branch", "other");
@@ -106,12 +106,14 @@ playbooks:
       attemptedExecutionProjection: checkpoint.lastAppliedExecutionProjection });
   } finally { await lease.release(); }
   const selectedManifest = readFileSync(manifest);
-  const selectedReplay = readFileSync(replay);
+  const selectedFiles = new Map((await store.exportBundle(id)).files.map((file) => [file.path, readFileSync(join(sessionsDir, file.path))]));
   commit("retain an incomplete effect boundary");
 
   git(clone, "checkout", "-q", "other");
-  writeFileSync(manifest, selectedManifest);
-  writeFileSync(replay, selectedReplay);
+  for (const [path, bytes] of selectedFiles) {
+    mkdirSync(dirname(join(sessionsDir, path)), { recursive: true, mode: 0o700 });
+    writeFileSync(join(sessionsDir, path), bytes, { mode: 0o600 });
+  }
   await store.prepare();
   const completion = await store.acquire(id);
   try {
@@ -149,7 +151,7 @@ playbooks:
   try { git(clone, "merge", "--no-commit", "--no-ff", "other"); } catch { /* explicit selection follows */ }
   await selectStorageMerge(home, key, { [`sessions/${id}`]: "ours" });
   assert.deepEqual(readFileSync(manifest), selectedManifest);
-  assert.equal(JSON.parse(readFileSync(manifest, "utf8")).effectLedger.boundaries[0].physicalReceipt, undefined);
+  assert.equal((await readSessionManifest(manifest)).effectLedger.boundaries[0].physicalReceipt, undefined);
   // Playbook 17 restores and reports the interrupted turn rather than
   // repeating it (DR-088): reconciliation recovers the omitted action's
   // receipt before the host starts, and the report calls no agent.
@@ -158,15 +160,15 @@ playbooks:
   const restored = await openSessionHost({ store, sessionId: id, mode: "recover", cwd: project, config,
     adapterImports: restoreImports,
     createHostRuntime: async (input: Parameters<typeof createTmuxPlayRuntime>[0]) => {
-      receiptAtHostStart = JSON.parse(readFileSync(manifest, "utf8")).effectLedger.boundaries[0].physicalReceipt;
+      receiptAtHostStart = (await readSessionManifest(manifest)).effectLedger.boundaries[0].physicalReceipt;
       return createTmuxPlayRuntime(input);
     },
   });
   try { await restored.recover(); } finally { await restored.dispose(); }
   assert.equal(receiptAtHostStart?.classification, "one-descendant-commit", "reconciliation precedes the host");
   assert.equal(stats.runs.length, 0, "restoring runs no agent");
-  assert.equal(JSON.parse(readFileSync(manifest, "utf8")).state, "settled");
-  const recovered = JSON.parse(readFileSync(manifest, "utf8")).effectLedger.boundaries[0].physicalReceipt;
+  assert.equal((await readSessionManifest(manifest)).state, "settled");
+  const recovered = (await readSessionManifest(manifest)).effectLedger.boundaries[0].physicalReceipt;
   assert.equal(recovered.classification, "one-descendant-commit");
   assert.equal(recovered.commitOid, completedHead, "the selected manifest now retains evidence of the omitted action");
   assert.equal(git(project, "rev-parse", "HEAD"), completedHead);

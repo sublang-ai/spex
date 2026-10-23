@@ -37,6 +37,7 @@ import { occupied } from "./clone-moves.js";
 import { readJsonFile, StorageFormatError, VersionConflictError, writeApplicationFile } from "./files.js";
 import { cloneRemoteName, defaultOwnName, Home, REMOTE_URL_KEYS, remoteNamesIn, repositoryNameFor, splitKey, WORKSPACE_DEPTH } from "./home.js";
 import { folderRemote, needsGroupsMigration, migrateFormerHome } from "./migrate-home.js";
+import { needsBoundedSessionImport, stageBoundedHomeSessions, finishBoundedHomeSessions } from "./migrate-bounded-sessions.js";
 import { deferredMoves, migrateInstances, needsInstancesMigration, settleDeferred, type DeferredMove } from "./migrate-instances.js";
 import { gitEnvironment, initializeClone } from "./storage-git.js";
 import { instanceFolder, isInstanceFolder } from "./instance.js";
@@ -511,7 +512,7 @@ export class Store {
       this.legacyImported = imported;
       this.meta.version = META_VERSION;
       writeAtomic(this.metaFile(), JSON.stringify(this.meta));
-      if (imported || needsGroupsMigration(this.dir) || needsInstancesMigration(this.dir)) {
+      if (imported || needsGroupsMigration(this.dir) || needsInstancesMigration(this.dir) || needsBoundedSessionImport(this.dir)) {
         // English, deliberately: a caller's programming failure.
         if (!options.deferMigration) throw new Error(`${this.dir} holds the former layout; open it with Store.open to migrate`);
         this.migrationPending = true;
@@ -532,6 +533,7 @@ export class Store {
     const store = new Store({ ...options, deferMigration: true });
     if (store.migrationPending) {
       try {
+        await stageBoundedHomeSessions(store.dir);
         // A `home.yaml` in format 1 takes format 2 before the groups
         // migration, which merges a late legacy import into the home as
         // it reads it; the home that migration writes for a former
@@ -550,6 +552,7 @@ export class Store {
         });
         store.migrationPending = false;
         store.openHome();
+        await finishBoundedHomeSessions(store.dir, store.homeFile);
       } catch (error) {
         store.close();
         throw error;
@@ -962,8 +965,9 @@ export class Store {
         const id = filename.slice(0, -(sidecar ? ".spex.json" : ".json").length);
         const sourcePath = join(sessionsDir, filename);
         try {
+          if (!sidecar && (await shared.readManifest(id)).schemaVersion === 7) continue;
           const source = readJson<Record<string, unknown>>(sourcePath);
-          if (!source || (!sidecar && source.schemaVersion === 7)) continue;
+          if (!source) continue;
           if (sidecar) this.loadSidecar(repository, id, source);
           await shared.migrate(id, { sourcePath, ...(cwd ? { cwd } : {}) });
         } catch (error) {
@@ -1002,6 +1006,7 @@ export class Store {
     for (const repository of key ? [this.requireRepository(key)] : this.repositories.values()) {
       if (!existsSync(repository.sessionsDir)) continue;
       for (const filename of readdirSync(repository.sessionsDir)) {
+        if (this.repositories.get(repository.key) !== repository) break;
         if (!/^[0-9a-f-]{36}\.json$/.test(filename)) continue;
         const id = filename.slice(0, -5);
         if (this.localSessions.has(id) || this.sessions.get(id)?.live) continue;
@@ -1019,6 +1024,9 @@ export class Store {
     const repository = this.repositories.get(key);
     if (!repository) return;
     const shared = repository.store;
+    const currentLocation = (): boolean => this.repositories.get(key) === repository &&
+      (this.sessionLocations.get(id) ?? this.homeFile.own()) === key;
+    const currentRead = (): boolean => currentLocation() && !(live === false && this.localSessions.has(id));
     let manifest: SessionManifest;
     let stored: StoredRecord[];
     let continuable = false;
@@ -1027,9 +1035,20 @@ export class Store {
     let recoveryReason = false;
     let incompleteAfterSeq: number | undefined;
     let problem: StorageDiagnostic | undefined;
+    let excludeFromSync: boolean | undefined;
+    // Publish one observation only while it still describes this location
+    // (storage-48), including failures whose fallback could not be read.
+    const publishReadStatus = (): boolean => {
+      if (!currentRead()) return false;
+      if (excludeFromSync === true) this.untrackedSessions.add(id);
+      else if (excludeFromSync === false) this.untrackedSessions.delete(id);
+      if (problem) this.sessionProblems.set(id, problem);
+      else this.sessionProblems.delete(id);
+      return true;
+    };
     try {
       const checked = await shared.validate(id);
-      if (live === false && this.localSessions.has(id)) return;
+      if (!currentRead()) return;
       manifest = checked.manifest as SessionManifest;
       if (manifest.schemaVersion === 7 && !checked.integrityValid) problem = {file:join(shared.sessionsDir, `${id}.json`), reason:checked.reasons.join(
         i18n._({ id: "; ", comment: "Separates reasons listed in one message" }),
@@ -1050,30 +1069,35 @@ export class Store {
         incompleteAfterSeq = Math.min(checked.history.lastReadableSeq, manifest.schemaVersion === 7 ? manifest.replay.seq : checked.history.lastReadableSeq);
       }
     } catch (error) {
-      if (live === false && this.localSessions.has(id)) return;
+      if (!currentRead()) return;
       reason = error instanceof Error ? error.message : String(error);
-      this.untrackedSessions.add(id);
+      excludeFromSync = true;
       problem = {file:join(shared.sessionsDir, `${id}.json`), reason, blocking: !/unsupported.*version|version.*unsupported/i.test(reason)};
-      this.sessionProblems.set(id, problem);
       // Unknown versions remain opaque and readable; these fields only
       // associate history, never authorize recovery or rewrite the file.
       let raw: Record<string, unknown> | undefined;
-      try { raw = readJson<Record<string, unknown>>(join(shared.sessionsDir, `${id}.json`)); } catch { return; }
-      if (!raw || raw.sessionId !== id || typeof raw.cwd !== "string") return;
+      // A bounded root keeps association fields readable even when a
+      // referenced recovery chunk is damaged. These fields associate
+      // history only; shared validation remains execution authority.
+      try { raw = readJson<Record<string, unknown>>(join(shared.sessionsDir, `${id}.json`)); }
+      catch { publishReadStatus(); return; }
+      if (!raw || raw.sessionId !== id || typeof raw.cwd !== "string") { publishReadStatus(); return; }
       manifest = raw as unknown as SessionManifest;
       try {
         const history = await shared.readHistory(id);
+        if (!currentRead()) return;
         stored = history.entries.map(({ v: _v, ...entry }) => entry as unknown as StoredRecord);
         if (history.incomplete) incompleteAfterSeq = history.lastReadableSeq;
-      } catch { return; }
+      } catch { publishReadStatus(); return; }
     }
-    if (live === false && this.localSessions.has(id)) return;
-    if (manifest.schemaVersion === 7 && !problem) this.untrackedSessions.delete(id);
+    if (!currentRead()) return;
+    if (manifest.schemaVersion === 7 && !problem) excludeFromSync = false;
     if (typeof manifest.cwd !== "string") {
-      this.sessionProblems.set(id, {file:join(shared.sessionsDir, `${id}.json`),reason:i18n._({
+      problem = {file:join(shared.sessionsDir, `${id}.json`),reason:i18n._({
         id: "session working directory is missing or invalid",
         comment: "Session diagnostic: the session names no readable project folder",
-      }),blocking:manifest.schemaVersion === 7});
+      }),blocking:manifest.schemaVersion === 7};
+      publishReadStatus();
       return;
     }
     let players: SessionInfo["players"] = [];
@@ -1101,8 +1125,11 @@ export class Store {
       initialVisible = [...ids];
     }
     const prior = this.sessions.get(id);
-    const writer = live ? "idle" : await shared.readLeaseState(id);
-    if (live === false && this.localSessions.has(id)) return;
+    const writer = live ? "idle" : await shared.readLeaseState(id).catch((error: unknown) => {
+      if (!currentRead()) return undefined;
+      throw error;
+    });
+    if (!publishReadStatus()) return;
     // A session's last activity is the latest its own history records
     // (core-service-32): Playbook rewrites the manifest's updatedAt
     // whenever it releases the runtime, which need not be near the last
@@ -1122,8 +1149,6 @@ export class Store {
         ? { recovery: {state: "uncertain", input: manifest.uncertain.input, discardable: discardable(manifest)} as const } : {}),
       ...(incompleteAfterSeq !== undefined ? { streamIncompleteAfterSeq: incompleteAfterSeq } : {}),
     };
-    if (problem) this.sessionProblems.set(id, problem);
-    else this.sessionProblems.delete(id);
     const previous = this.records.get(id) ?? [];
     const prefix = previous.every((entry,index) => isDeepStrictEqual(entry, stored[index]));
     if (prefix && previous.length === stored.length && JSON.stringify(prior) === JSON.stringify(meta)) return;
@@ -1140,9 +1165,17 @@ export class Store {
    * the service's scanner still owes its subscribers (core-service-73). */
   async refreshSessionOwnership(id: string): Promise<void> {
     if (this.localSessions.has(id)) return;
-    const writer = await this.sessionStoreFor(id).readLeaseState(id);
+    const shared = this.sessionStoreFor(id);
+    const key = this.sessionLocations.get(id) ?? this.homeFile.own();
+    const repository = this.repositories.get(key);
+    const currentLocation = (): boolean => this.repositories.get(key) === repository &&
+      (this.sessionLocations.get(id) ?? this.homeFile.own()) === key;
+    const writer = await shared.readLeaseState(id).catch((error: unknown) => {
+      if (!currentLocation() || this.localSessions.has(id)) return undefined;
+      throw error;
+    });
     const current = this.sessions.get(id);
-    if (!current || current.live || this.localSessions.has(id)) return;
+    if (!currentLocation() || !current || current.live || this.localSessions.has(id)) return;
     const { externalWriter: _priorWriter, ...unchanged } = current;
     this.sessions.set(id, { ...unchanged, ...(writer === "idle" ? {} : { externalWriter: writer }) });
   }
@@ -1161,7 +1194,7 @@ export class Store {
     if (!problem || existsSync(problem.file)) return problem;
     this.sessionProblems.delete(id);
     const dir = dirname(problem.file);
-    if (!this.sessions.has(id) && !existsSync(join(dir, `${id}.json`)) && !existsSync(join(dir, `${id}.records.jsonl`))) this.untrackedSessions.delete(id);
+    if (!this.sessions.has(id) && !existsSync(join(dir, `${id}.json`)) && !existsSync(join(dir, `${id}.records.jsonl`)) && !existsSync(join(dir, `${id}.replay.json`)) && !existsSync(join(dir, `${id}.chunks`))) this.untrackedSessions.delete(id);
     return undefined;
   }
 
@@ -1174,7 +1207,7 @@ export class Store {
     if (directory.startsWith("..") || isAbsolute(directory)) return [];
     return [...this.untrackedSessions]
       .filter((id) => this.sessionLocations.get(id) === key)
-      .flatMap((id) => [join(directory, `${id}.json`), join(directory, `${id}.records.jsonl`)]);
+      .flatMap((id) => [join(directory, `${id}.json`), join(directory, `${id}.records.jsonl`), ...[`${id}.replay.json`, `${id}.chunks`].filter((name) => existsSync(join(repository.sessionsDir, name))).map((name) => join(directory, name))]);
   }
 
   /** Reserve local admission before any asynchronous host/scan work; a

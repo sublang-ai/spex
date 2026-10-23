@@ -5480,6 +5480,11 @@ msgstr "session attachments"
 msgid "session bundles"
 msgstr "session bundles"
 
+#. catalog family: immutable pieces of one session's state and replay
+#: src/lib/space.ts
+msgid "session chunks"
+msgstr "session chunks"
+
 #: src/components/RunView.tsx
 msgid "Session is in use elsewhere"
 msgstr "Session is in use elsewhere"

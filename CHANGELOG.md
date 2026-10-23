@@ -292,10 +292,50 @@ and `npm start` (desktop) or `npm run start:server` (server).
   bearer to the server itself; it reconnects to each seat every second,
   reads a seat speaking another protocol as mismatched, removes a seat
   whose lease ended, and adds each seat's badge to the dock's count.
+  The place selector switches Settings, Playbooks, Groups and environments
+  between this computer and an open seat, keeping their state separate.
+  Projects appear under their place; attention and approvals span the
+  connected places, and a disconnected place leaves the others usable.
+  A seat with no projects offers its groups; remote project and environment
+  forms offer no folder picker or path on this computer.
 
 ### Changed
 
-- The app requires Playbook 17.11.0, Cligent 0.36.0 and slc 0.19.0, keeping the locked agent SDKs ([DR-130](specs/decisions/130-playbook-17-11-0-cligent-0-36-0-slc-0-19-0-adoption.md)). Captain decision, Judge and reporting calls, and every compiler call, turn off, as far as each agent allows, the skills the agent finds by itself in its project and user skill folders, so the skills and specs Spex exports reach working players and authoring sessions but no longer steer routing, adjudication or compilation; a Kimi Code Captain still reads them, and a session whose Captain conversation began earlier keeps the listings already in it. A Captain or compile whose agent offers the switch but cannot apply it where it runs, such as Gemini CLI under its native sandbox, now fails with an error. The folders Spex exports into now come from Cligent's published table.
+- First-run guidance now explains specs and playbooks in plain language,
+  invites a goal, and makes local project setup and task start clearer in
+  English and Chinese ([DR-143](specs/decisions/143-start-with-a-goal-and-explain-specs-plainly.md)).
+  Desktop project selection leads with the native folder picker.
+
+- New sessions and intents belong to the runtime that creates them
+  ([DR-134](specs/decisions/134-execution-ownership.md)). Another runtime
+  shows their history with `Runs on <label>` but cannot continue or recover
+  the session, start or change its open intent, or advance its queue into it.
+  The history notice retains that reason without a composer or recovery
+  controls, and foreign queued rows offer only their provenance action.
+  Foreign work does not occupy the local execution lane or attention queue.
+  Intent files now use format 2; upgrade every member's devices together
+  before syncing those records. Older records retain their existing rules.
+
+- Playbook 18 shared session persistence now uses bounded files and
+  deduplicated immutable chunks, with Sync selecting each complete session
+  family together
+  ([DR-144](specs/decisions/144-bounded-session-storage.md)). Legacy sessions
+  remain readable and require explicit Playbook migration before continuation.
+  Stop older Playbook CLIs and Spex shells sharing a home before any upgraded
+  writer starts.
+
+- The app requires Cligent 0.36.0 and slc 0.19.0, keeping the locked agent
+  SDKs ([DR-130](specs/decisions/130-playbook-17-11-0-cligent-0-36-0-slc-0-19-0-adoption.md)).
+  Captain decision, Judge and reporting calls, and every compiler call, turn
+  off, as far as each agent allows, the skills the agent finds by itself in
+  its project and user skill folders, so the skills and specs Spex exports
+  reach working players and authoring sessions but no longer steer routing,
+  adjudication or compilation; a Kimi Code Captain still reads them, and a
+  session whose Captain conversation began earlier keeps the listings already
+  in it. A Captain or compile whose agent offers the switch but cannot apply
+  it where it runs, such as Gemini CLI under its native sandbox, now fails
+  with an error. The folders Spex exports into now come from Cligent's
+  published table.
 
 - A home can sign in to several instances, with each instance's account,
   Groups listing and repository operations kept separate ([DR-127](specs/decisions/127-a-home-signed-in-to-several-instances.md)).
@@ -308,9 +348,9 @@ and `npm start` (desktop) or `npm run start:server` (server).
   and built-ins use the local seed when its files match the lock.
   Protocol 27 requires `repository` on `environment.search`.
 
-- The app requires Cligent 0.34.1 and slc 0.18.1, keeping Playbook 17.10.1 and the locked agent SDKs ([DR-126](specs/decisions/126-cligent-0-34-1-slc-0-18-1-adoption.md)). On POSIX, Codex retains Unicode line and paragraph separators in valid JSON output; the compiler verifies JSON renderings of typed arrays and records without changing their input shapes.
+- The app previously adopted Cligent 0.34.1 and slc 0.18.1, keeping Playbook 17.10.1 and the locked agent SDKs ([DR-126](specs/decisions/126-cligent-0-34-1-slc-0-18-1-adoption.md)). On POSIX, Codex retains Unicode line and paragraph separators in valid JSON output; the compiler verifies JSON renderings of typed arrays and records without changing their input shapes.
 
-- The app requires Playbook 17.8.0 and slc 0.16.1 ([DR-116](specs/decisions/116-playbook-17-8-0-slc-0-16-1-adoption.md)).
+- The app previously adopted Playbook 17.8.0 and slc 0.16.1 ([DR-116](specs/decisions/116-playbook-17-8-0-slc-0-16-1-adoption.md)).
   A judge's reply is fitted to the machine and a parked judge is a
   failure the catalogue phrases, every commit of a step is taken, a
   role is one word, and the relay marker is language-neutral.
@@ -384,7 +424,7 @@ and `npm start` (desktop) or `npm run start:server` (server).
   asking again while it holds records the host has not received, and never
   touches the working folder. Groups syncs each spex repository on its own,
   and `scripts/storage-git.mjs` takes `--repository <key>`.
-- The app requires Playbook 17.9.0, slc 0.16.1 and Cligent 0.33.5 ([DR-121](specs/decisions/121-playbook-17-9-0-cligent-0-33-5-adoption.md), [DR-116](specs/decisions/116-playbook-17-8-0-slc-0-16-1-adoption.md), [DR-111](specs/decisions/111-the-core-coordinates-as-git-does.md), [DR-108](specs/decisions/108-the-root-lease-names-the-machine.md), [DR-105](specs/decisions/105-playbook-17-5-0-adoption.md), [DR-088](specs/decisions/088-playbook-17-slc-0-12-cligent-0-27-adoption.md),
+- The app previously adopted Playbook 17.9.0, slc 0.16.1 and Cligent 0.33.5 ([DR-121](specs/decisions/121-playbook-17-9-0-cligent-0-33-5-adoption.md), [DR-116](specs/decisions/116-playbook-17-8-0-slc-0-16-1-adoption.md), [DR-111](specs/decisions/111-the-core-coordinates-as-git-does.md), [DR-108](specs/decisions/108-the-root-lease-names-the-machine.md), [DR-105](specs/decisions/105-playbook-17-5-0-adoption.md), [DR-088](specs/decisions/088-playbook-17-slc-0-12-cligent-0-27-adoption.md),
   [DR-092](specs/decisions/092-playbook-17-1-slc-0-13-cligent-0-28-adoption.md),
   [DR-093](specs/decisions/093-a-players-subagent-model.md),
   [DR-094](specs/decisions/094-the-compiler-adopts-the-apps-cligent.md),
@@ -394,8 +434,10 @@ and `npm start` (desktop) or `npm run start:server` (server).
   [DR-102](specs/decisions/102-playbook-17-4-1-adoption.md)),
   and locks the agent SDKs at the releases Cligent 0.33.1 tests: Claude
   Agent SDK 0.3.284, Codex SDK 0.159.0 and OpenCode SDK 1.18.33. The
-  compiler runs on the app's own Playbook and Cligent, which slc 0.15.1
-  declares. Cligent refuses an agent runtime older than the
+  compiler shares the app's Cligent; slc 0.19.0 retains a compiler-only
+  nested Playbook 17.11.1, while the core and root acceptance tooling
+  use Playbook 18 ([DR-144](specs/decisions/144-bounded-session-storage.md)).
+  Cligent refuses an agent runtime older than the
   oldest release that serves its provider's latest models, so an older
   runtime on your `PATH`, such as an OpenCode CLI before 1.18.29, reads
   not ready with the command that upgrades it.
@@ -663,15 +705,23 @@ and `npm start` (desktop) or `npm run start:server` (server).
   leave; and a draft's `malformedDirectives` entries carry `text` and
   `reason`. The protocol is 28.
 
-- The dependency lock takes Playbook 17.8.1 — the Captain ends a relayed question with the question's own words and reports a step's ending with the facts the step gave — and cligent 0.33.4 — the Claude Code adapter withholds the structured-question tool it cannot serve, so no refused call shows in the Captain's pane. The floors of DR-116 are unchanged.
-- The app requires Playbook 17.9.0 and Cligent 0.33.5 ([DR-121](specs/decisions/121-playbook-17-9-0-cligent-0-33-5-adoption.md)). Claude Code runs with its own commit and pull-request attribution off, so a player's commits carry only the trailers the project asks for, and every player prompt opens with `Role: <role> · Model: <model>`, so such a trailer can name both. Every role after a Boss answer hears the run's questions and answers, whatever the playbook retains; a question and a reply reach a player behind `? ⟶` and `Boss ⟶` lines, and the lines the Captain appends to a reply read as marks — `✓`, `✕ <code>`, `▸ <label>` — not English sentences. The closing reply names each commit's hash and branch, and a judge's reply the machine admits is no longer forced into a string where the runtime could not read the field's shape. **Upgrade together:** stop every Playbook CLI and Spex shell sharing the home before the first new writer runs; an earlier Playbook rejects the run snapshots and ledgers this one writes.
-- The app requires Playbook 17.10.1, Cligent 0.34.0 and slc 0.18.0 ([DR-123](specs/decisions/123-playbook-17-10-1-cligent-0-34-0-slc-0-18-0-adoption.md)). A judge sees a field whose shape nobody recorded as `<value>`, not `<string>`, the published CODE GEARS carry no framework-owned Boss-question result, and a playbook compiled by slc 0.16.4 or later validates the options the Captain hands it; recompile a playbook slc 0.16.1 built whose options are required. Skills reach agents from the spec packages your environments install: a `skills` list in your configuration, which Playbook's own launcher now accepts, is refused with its entry named.
+- The dependency lock previously took Playbook 17.8.1 — the Captain ends a relayed question with the question's own words and reports a step's ending with the facts the step gave — and cligent 0.33.4 — the Claude Code adapter withholds the structured-question tool it cannot serve, so no refused call shows in the Captain's pane. That adoption left the floors of DR-116 unchanged.
+- The app previously adopted Playbook 17.9.0 and Cligent 0.33.5 ([DR-121](specs/decisions/121-playbook-17-9-0-cligent-0-33-5-adoption.md)). Claude Code runs with its own commit and pull-request attribution off, so a player's commits carry only the trailers the project asks for, and every player prompt opens with `Role: <role> · Model: <model>`, so such a trailer can name both. Every role after a Boss answer hears the run's questions and answers, whatever the playbook retains; a question and a reply reach a player behind `? ⟶` and `Boss ⟶` lines, and the lines the Captain appends to a reply read as marks — `✓`, `✕ <code>`, `▸ <label>` — not English sentences. The closing reply names each commit's hash and branch, and a judge's reply the machine admits is no longer forced into a string where the runtime could not read the field's shape. **Upgrade together:** stop every Playbook CLI and Spex shell sharing the home before the first new writer runs; an earlier Playbook rejects the run snapshots and ledgers this one writes.
+- The app previously adopted Playbook 17.10.1, Cligent 0.34.0 and slc 0.18.0 ([DR-123](specs/decisions/123-playbook-17-10-1-cligent-0-34-0-slc-0-18-0-adoption.md)). A judge sees a field whose shape nobody recorded as `<value>`, not `<string>`, the published CODE GEARS carry no framework-owned Boss-question result, and a playbook compiled by slc 0.16.4 or later validates the options the Captain hands it; recompile a playbook slc 0.16.1 built whose options are required. Skills reach agents from the spec packages your environments install: a `skills` list in your configuration, which Playbook's own launcher now accepts, is refused with its entry named.
 - Skills and specs your environments install reach every agent Spex drives ([DR-124](specs/decisions/124-skills-reach-every-agent.md)): beside Claude Code's `.claude/skills`, each working folder's `.agents/skills` holds them for Codex, Gemini CLI, Kimi Code and OpenCode, kept out of Git like the other, and your own group's go to `~/.agents/skills` where one of those agents is installed. A playbook's generated skill stays in Claude Code's folders. A re-export leaves an unchanged skill as it stands and swaps a changed one in whole, and generated and aliased names are written as YAML strings.
 - A working folder paired with a project whose environment is already installed gets its skills, specs and playbooks at once, not at the next start, sync or environment command. The Playbooks surface lists what the last export left out under "Not exported": a skill kept out of an agent folder that already holds a folder of yours by that name, named with that folder, and a spec package whose files are not on this device; "Export again" exports once you have moved your folder or brought the files.
 - Your own group's environment requests a spec package by a path in its clone ([DR-125](specs/decisions/125-your-own-groups-path-sources-live-in-its-clone.md)): keep an unpublished skill, spec or playbook of your own in a folder of your own group's spex repository, request it by that path, and edit it in place; the sync carries the folder, as one unit, to every device, where it exports to your agents. A path under Spex's own folders, however it is cased, one the sync rules drop, one reached through a link, and a folder in or holding a Git repository of its own, or holding a link or a file the sync would drop or refuse to share, are refused before anything is written, and again at each resolution and install, so a file added later fails the next install on the device holding it, the last exports standing; a release holding a `uv.lock`, `Cargo.lock` or `*.tmp`, which the sync rules drop anywhere, cannot live there. Explore reads such a folder as a spec package. "Add from folder" on your own group's side asks for a folder inside its clone, and `environment.get` names that folder as `pathRoot`. A request your own group made by a path in a paired working folder reads as missing until its folder moves into the clone. A project's and another group's paths stay relative to the working folder.
 
 ### Fixed
 
+- Reopening a removed Academy example preserves its committed and
+  uncommitted edits and Git history; unrelated nonempty folders still
+  refuse example seeding ([DR-140](specs/decisions/140-reopen-the-removed-academy-example.md)).
+
+- A background session read finishing after its project clone moves no
+  longer hides the valid session from Sync or restores its old project
+  or ownership state. Delayed observations are discarded without
+  changing the preserved session files.
 - Require Playbook 17.11.1 for classified entry when a finished workflow
   starts again, preserving the Boss text and clearing prior run exchanges
   only after a valid new entry ([DR-131](specs/decisions/131-playbook-17-11-1-adoption.md)).
@@ -702,8 +752,11 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 - Stopping the core closes session admission immediately and waits for
   already-admitted opens before disposing runtimes and storage. New and
-  resumed turns cannot cross the shutdown fence; unconfirmed cleanup
-  retains ownership and remains reported.
+  resumed turns cannot cross the shutdown fence. Active turns are aborted
+  immediately; surviving agent processes receive SIGTERM when those turns
+  settle or after ten seconds, then SIGKILL five seconds later. Server
+  shutdown is bounded too; unconfirmed cleanup remains reported with its
+  ownership evidence.
 
 - A push rejected specifically for content size keeps saved commits and
   existing access, and reports instance-only guidance with the reported
@@ -736,6 +789,8 @@ and `npm start` (desktop) or `npm run start:server` (server).
 - Joining private code at the instance's reported Git origin now uses
   the app's brokered credential helper, as records do. Code at another
   origin continues to use the device's own credentials.
+  On a seat, Git pushes from an agent's working folder use the member's
+  saved token for that code host, without putting it in a remote or log.
 - Code addresses hosted by the instance no longer expose its backing
   host in Groups, project status or cached forge guidance. After a restart,
   a remote reads neutrally until the instance's description arrives; its

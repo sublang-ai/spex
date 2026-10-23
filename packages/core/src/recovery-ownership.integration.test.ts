@@ -21,6 +21,7 @@ import { parkingScript } from "./testing/demo.js";
 import { fakeAdapterImports } from "./testing/fake-adapter.js";
 import { scratchDir } from "./testing/scratch.js";
 import { builtinLaunchModules } from "./testing/launch-modules.js";
+import { readSessionReplay } from "./testing/session-storage.js";
 
 const machineIdentity = "machine-id:v1:00000000-0000-4000-8000-0000000000aa";
 
@@ -68,7 +69,7 @@ async function interrupted(t: TestContext) {
   manager.onSessionState = (state) => states.push(state);
   t.after(async () => { await manager.disposeAll(); await cli.dispose(); store.close(); rmSync(dir, { recursive: true, force: true }); });
   const manifest = join(shared.sessionsDir, `${id}.json`);
-  const stream = join(shared.sessionsDir, `${id}.records.jsonl`);
+  const stream = join(shared.sessionsDir, `${id}.replay.json`);
   return { store, shared, project, manager, stats, id, manifest, stream, states, composed: await composeConfig(parseYaml(CONFIG), undefined, undefined, { modules: { repository: "tester/tester-spex", find: (id) => (modules[id] ? { module: modules[id], builtin: true } : undefined) } }) };
 }
 
@@ -234,7 +235,7 @@ test("core-service-84: a local live runtime still refuses Restore after foreign 
 test("core-service-84: refusing the same live session preserves its local ownership marker", async (t) => {
   const f = await interrupted(t);
   const local = await f.manager.createSession(f.project, f.composed);
-  const paths = [join(f.shared.sessionsDir, `${local.id}.json`), join(f.shared.sessionsDir, `${local.id}.records.jsonl`)];
+  const paths = [join(f.shared.sessionsDir, `${local.id}.json`), join(f.shared.sessionsDir, `${local.id}.replay.json`)];
   const before = paths.map((path) => readFileSync(path));
   for (const request of [() => f.manager.restoreSession(f.project, local.id), () => f.manager.continueSession(f.project, f.composed, local)]) {
     await assert.rejects(request(), (error: unknown) => error instanceof CoreError && error.code === "busy");
@@ -313,12 +314,12 @@ test("core-service-124: an uncertain session offers Restore on its own runtime a
   assert.deepEqual(lanes(), []);
   // Restore and Discard are refused with the phrase and the label before
   // anything opens, writing nothing (core-service-82, core-service-83).
-  const before = [readFileSync(manifest), readFileSync(stream)];
+  const before = [readFileSync(manifest), await readSessionReplay(stream)];
   for (const request of [() => manager.restoreSession(project, id), () => manager.discardSession(id)]) {
     await assert.rejects(request(), (error: unknown) => error instanceof CoreError && error.code === "invalid_request" &&
       error.message === "Runs on build-server" && isDeepStrictEqual(error.details, { runsOn: "build-server" }));
   }
-  assert.deepEqual([readFileSync(manifest), readFileSync(stream)], before);
+  assert.deepEqual([readFileSync(manifest), await readSessionReplay(stream)], before);
   assert.equal(await shared.readLeaseState(id), "idle");
 
   // On its own runtime — the same folder at the same path — the stopped

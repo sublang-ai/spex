@@ -13,6 +13,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import type { Attachment, MediaPayload, ApprovalHandler, ApprovalDecision, ApprovalRequest } from "@sublang/cligent";
 import type { PlayerAdapterImports } from "@sublang/cligent/tmux-play";
 
@@ -302,7 +303,12 @@ export function fakeAdapterImports(
         };
       }
       if (response.delayMs) {
-        await new Promise((resolve) => setTimeout(resolve, response.delayMs));
+        try {
+          await delay(response.delayMs, undefined, { signal: options?.abortSignal });
+        } catch (error) {
+          if (options?.abortSignal?.aborted) return;
+          throw error;
+        }
       }
       if (response.untilAborted) {
         // cligent drains the run on abort and synthesizes the

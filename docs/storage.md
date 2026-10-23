@@ -14,7 +14,7 @@ The home itself is not a Git repository; only clones are.
 
 ## File catalog
 
-A **session bundle** is one session's manifest, matching replay stream, and referenced immutable assets.
+A **session bundle** is one session's physical manifest root, replay descriptor, immutable chunks and owned assets, or its legacy manifest and replay stream with assets.
 Synchronization selects that complete bundle from the same revision or deletes it; it never merges its parts independently.
 Git does not enforce this relationship.
 
@@ -28,8 +28,9 @@ Ignored files can contain durable local state.
 | `<clone>/spex.yaml`, `<clone>/spex.lock` | The environment's requests and lock. | Tracked, one unit |
 | `<clone>/intents/<id>.json` | One intent: text, capture time, attachments, source, dispatch and close. | Tracked |
 | `<clone>/intents/<id>.assets/` | Immutable uploaded files retained by that intent. | Tracked with its intent |
-| `<clone>/sessions/<id>.json` | Schema-7 manifest: identity, `cwd`, checkpoint and recovery evidence. | Tracked |
-| `<clone>/sessions/<id>.records.jsonl` | Captain/player records, historical settings, role bindings, graphs and media references. | Tracked |
+| `<clone>/sessions/<id>.json` | Schema-8 storage root with identity, `cwd`, state, timestamps and a reference to the logical schema-7 manifest. | Tracked |
+| `<clone>/sessions/<id>.replay.json`, `<clone>/sessions/<id>.chunks/` | Bounded replay descriptor and immutable recovery/replay chunks. | Tracked with the complete session bundle |
+| `<clone>/sessions/<id>.records.jsonl` | Legacy monolithic replay, retained until explicit session migration. | Tracked in a legacy bundle |
 | `<clone>/sessions/<id>.assets/` | Immutable accepted input, observed media and deferred tool details. | Tracked with its session bundle |
 | `<clone>/authoring/<id>.json`, `.records.jsonl`, `.assets/` | An authoring session: its queue, compile state, transcript and owned files. | Tracked, one unit |
 | `<clone>/sessions/<id>.hints.json` | Provider resume tokens for the current checkpoint. | Ignored |
@@ -52,7 +53,10 @@ Writes require the corresponding lease.
 
 ## Session contents
 
-The **manifest** stores recovery state: the checkpoint, journal, unresolved work and effect ledger used to reconcile external actions.
+The logical **manifest** stores recovery state: the checkpoint, journal, unresolved work and effect ledger used to reconcile external actions.
+Playbook 18 hydrates it through the shared API from a small versioned root and immutable chunks; each newly written root, replay descriptor and chunk is at most 8 MiB, without truncating history or recovery evidence.
+Asset files keep their separate attachment limits.
+This bounds individual runtime files, not total retained disk space or the memory required to hydrate a session.
 Recovery evidence is durable before external actions run, independently of transcript writes.
 The checkpoint identifies an exact replay prefix by sequence and digest.
 Its state is `settled`, `uncertain` or `history-only`; transcript completeness alone does not establish safe continuation.
@@ -96,7 +100,7 @@ Agent-written Markdown paths and remote URLs are not imported as assets.
 ## Git synchronization
 
 Each clone tracks portable files only; provider tokens never enter recovery fields that Git sees.
-Tracked `.gitignore` rules exclude local data; `.gitattributes` disables line-ending conversion for JSON/JSONL files and asset directories.
+Tracked `.gitignore` rules exclude local data; `.gitattributes` disables line-ending conversion for JSON/JSONL files, chunk directories and asset directories.
 
 The app's Groups surface syncs each spex repository's `spex` branch with its host remote, one spex repository at a time, without stopping the core, and never text-merges a file.
 Signed in, Spex asks the Git host for a short-lived Git credential before each transport to the host's Git origin and hands it to Git through its own credential helper, run on the app's runtime, in a file only you can read that is removed when Git ends; it never enters a remote URL.
@@ -136,7 +140,7 @@ Matching paths still require compatible runtimes and repository/effect reconcili
 
 ## Deletion
 
-With the session lease held, delete replay, hints, assets, any active legacy sidecar and derived session state, then the manifest last.
+With the session lease held, delete replay, its descriptor and chunks, hints, assets, any active legacy sidecar and derived session state, then the manifest last.
 Interrupted cleanup is retryable; incomplete bundles cannot continue.
 Deletion fails if another writer is active or exclusive ownership cannot be proven.
 Retired lease directories remain so delayed stale-lock recovery cannot affect a new owner.
@@ -155,11 +159,18 @@ Unsaved drafts and access tokens are not portable session state.
 ## Migration and definitions
 
 Before upgrading, stop legacy writers and snapshot both `~/.spex` and `$XDG_STATE_HOME/playbook` (or `~/.local/state/playbook` when XDG is unset).
+Upgrade every desktop, server and CLI writer sharing a store to the Playbook 18 format together before any upgraded writer saves.
+Monolithic schema-7 sessions remain readable without automatic conversion, but require explicit `playbook migrate-session <id>` before continuation.
+Use configuration selecting the clone's actual `sessions/` directory; `--with <path>` supplies a configuration overlay.
+Migration holds the session lease, retains the exact source bytes under the clone's ignored `local/migrations/` directory, validates the complete new bundle before retiring active legacy replay, and preserves the recorded working directory.
+It does not rewrite old Git commits or remove oversized blobs from prior history.
+
 A home in the former layout — `projects.json` at its root and no `home.yaml` — migrates once at startup under the home lease:
 each project becomes `workspace/<own>/<name>-spex/` with one file per open or finished intent, its intent attachments and the sessions that ran in its folder;
 your own group's spex repository receives the settings, with every `playbooks.<id>.from` dropped, and the remaining sessions;
 preferences move to `local/prefs.json`, and the former home's `.git` moves to `local/former-home.git`, keeping the old remote aside.
 Original bytes stay under `local/migrations/<id>/inputs/` with a receipt; an interrupted migration resumes on the next start.
+Bounded CLI sessions arriving in the home's root `sessions/` are retained by a separate receipt-backed stage and transferred whole into the matching clone, or your own group's clone when no working folder matches, before writers are admitted.
 A home whose `home.yaml` names one instance in format 1 takes format 2 once at startup under the home lease, its instance written as its origin and its app token re-keyed to that origin in the same step, with a receipt beside the groups migration's; an older Spex refuses the migrated home.
 In the same migration every clone at that instance moves under its folder, each by one rename with its pair, sync preferences and forge cache entry following: one recording the host's id at its path there with its remote renamed to the folder, any other outside your own group's folder at its key keeping its remote; your own group's spex repository renames its remote and keeps its folder, and the projects never shared stay.
 A clone a live session's lease holds keeps its key and remote, named in the receipt, until its next sync or the next start moves it.
