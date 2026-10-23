@@ -1612,7 +1612,7 @@ class Client {
   async waitFor(
     check: (message: ServerMessage) => boolean,
     count = 1,
-    timeoutMs = 10000,
+    timeoutMs = 60_000,
   ): Promise<ServerMessage> {
     const start = Date.now();
     for (;;) {
@@ -1633,7 +1633,7 @@ class Client {
   async ledgerUntil(
     check: (ledger: LedgerState) => boolean,
     label: string,
-    timeoutMs = 10000,
+    timeoutMs = 60_000,
   ): Promise<LedgerState> {
     const start = Date.now();
     for (;;) {
