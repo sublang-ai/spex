@@ -355,10 +355,11 @@ function GroupOptionLabel({ entry }: { entry: InstanceGroupState }) {
 }
 
 /** Whether the list holds a spex repository or a placement of one under
- * a group, or a group inside it, at its instance (space-1, DR-128): only
- * an empty group offers Delete. */
-function holdsAnything(instance: InstanceState, group: InstanceGroupState): boolean {
-  if (group.repositories.length > 0 || group.placed.length > 0) return true;
+ * a group — `placed` the lines it shows for placements — or a group
+ * inside it, at its instance (space-1, DR-128): only an empty group
+ * offers Delete. */
+function holdsAnything(instance: InstanceState, group: InstanceGroupState, placed: number): boolean {
+  if (group.repositories.length > 0 || placed > 0) return true;
   const inside = `${group.fullPath}/`.toLowerCase();
   return instance.groups.some((other) => other !== group && other.fullPath.toLowerCase().startsWith(inside));
 }
@@ -435,8 +436,9 @@ function GroupSection({
     return reading === undefined ? [] : [{ key: line.key, reading }];
   });
   // Delete stands only where the instance lets the person and the list
-  // holds nothing under the group there, not even a placement (space-1).
-  const deletable = hostGroup !== null && instance !== undefined && group.can.delete && !holdsAnything(instance, group);
+  // holds nothing under the group there, not even a placement's line —
+  // the lines shown, as the empty phrase reads them (space-1).
+  const deletable = hostGroup !== null && instance !== undefined && group.can.delete && !holdsAnything(instance, group, placed.length);
 
   /** Delete the group (space-77): the heading's control reads
    * "Deleting…" until the reply; the group leaves the list as the core

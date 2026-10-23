@@ -1433,8 +1433,9 @@ test.describe("placed at two instances", () => {
     // Continue pushes there with the second's credential, the line then
     // reading what went, the notice recorded for that placement; the
     // second's `workshop`, whose listing holds the placement, shows one
-    // line naming the row and the group it stands under, with no
-    // control, and no Delete (space-57, space-12, space-1, space-77).
+    // line naming the row and the group it stands under — its name, its
+    // path beside it, as the list heads it — with no control, and no
+    // Delete (space-57, space-12, space-1, space-77).
     const pushes = second.script.transportCredentials.length;
     await notice.getByRole("button", { name: "Continue" }).click();
     await expect(notice).toHaveCount(0);
@@ -1447,7 +1448,7 @@ test.describe("placed at two instances", () => {
     expect(placementOf(repositoryOf(await app.core.command("space.get", {}), KEY), second.url).noticed).toBe(true);
     const workshop = instanceSection(page, second).getByTestId(`space-group-${WORKSHOP}`);
     const placed = workshop.getByTestId(`space-placed-${KEY}`);
-    await expect(placed).toHaveText("demo-project-spex stands under Acme at Stand-in Git host");
+    await expect(placed).toHaveText(`demo-project-spex stands under Acme · ${HOST_GROUP} at Stand-in Git host`);
     await expect(placed.getByRole("button")).toHaveCount(0);
     await expect(workshop.locator('[data-testid^="space-row-"]')).toHaveCount(0);
     await expect(workshop.getByTestId(`space-group-delete-${WORKSHOP}`)).toHaveCount(0);
@@ -1793,11 +1794,11 @@ test.describe("three instances", () => {
     await expect.poll(() => headOf(thirdBare, "spex"), { timeout: 30_000 }).toBe(git(clone, "rev-parse", "spex"));
 
     // Your namespace at the third, whose listing holds the placement,
-    // shows one line naming the row and the group it stands under, with
-    // no control (space-1).
+    // shows one line naming the row and the group it stands under, as
+    // the list heads it, with no control (space-1).
     const thirdNamespace = instanceSection(page, third).getByTestId(`space-group-@${HOST_LOGIN}`);
     const placed = thirdNamespace.getByTestId(`space-placed-${KEY}`);
-    await expect(placed).toHaveText("demo-project-spex stands under Acme at Stand-in Git host");
+    await expect(placed).toHaveText(`demo-project-spex stands under Acme · ${HOST_GROUP} at Stand-in Git host`);
     await expect(placed.getByRole("button")).toHaveCount(0);
 
     // A session run on the page, not synced.

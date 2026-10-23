@@ -2896,10 +2896,11 @@ describe("GROUPS: a row's line in each group placing it (space-1, space-77)", ()
 
       // The second's workshop lists one line per row one of whose
       // placements it holds, naming the row and the group it stands
-      // under, as the list reads it — a group by its name, a login by
-      // itself — at that group's instance by its display name.
+      // under, as the list heads it — a group by its name, its path
+      // beside it where the two differ, a login by itself — at that
+      // group's instance by its display name.
       expect(itemsOf(workshop)).toEqual([`space-placed-${KEY}`, `space-placed-${BETA}`]);
-      expect(within(workshop).getByTestId(`space-placed-${KEY}`).textContent).toBe(words.under("academy-spex", "Acme", "Spex Example"));
+      expect(within(workshop).getByTestId(`space-placed-${KEY}`).textContent).toBe(words.under("academy-spex", "Acme · acme", "Spex Example"));
       expect(within(workshop).getByTestId(`space-placed-${BETA}`).textContent).toBe(words.under("beta-spex", "jane", "Spex Example"));
       // Each in the secondary tone, whole in its title, with no control
       // and no link (space-1, DR-120).
@@ -2944,6 +2945,40 @@ describe("GROUPS: a row's line in each group placing it (space-1, space-77)", ()
       expect(within(workshop).getByTestId("space-group-confirm-workshop").textContent).toContain(words.confirm);
     },
   );
+
+  test.each(["en", "zh"] as const)(
+    "space-1: a placed line reads the group a row stands under by its name, its path beside it only where the two differ, so two groups of one name read apart (%s)",
+    async (language) => {
+      activateLanguage(language);
+      const under =
+        language === "en"
+          ? (group: string) => `academy-spex stands under ${group} at Spex Example`
+          : (group: string) => `academy-spex 位于 Spex Example 的 ${group} 下`;
+      /** placingHome with the first's acme named `name`. */
+      const named = (name: string): GroupsState => {
+        const home = placingHome();
+        const [first, ...rest] = home.instances;
+        return { ...home, instances: [{ ...first!, groups: first!.groups.map((entry) => (entry.fullPath === "acme" ? { ...entry, name } : entry)) }, ...rest] };
+      };
+      await renderGroups(named("Research"), { open: false });
+      const line = () => within(screen.getByTestId(`space-instance-${SECOND}`)).getByTestId(`space-placed-${KEY}`);
+      // Named apart from its path, the group reads both, as its heading
+      // does.
+      expect(line().textContent).toBe(under("Research · acme"));
+      // Named as its path, it reads its name alone.
+      deliver(named("acme"));
+      await waitFor(() => expect(line().textContent).toBe(under("acme")));
+    },
+  );
+
+  test("space-1, space-77: a group whose listing names only rows the state stands nowhere reads empty and offers Delete, the empty phrase and Delete reading the lines it shows", async () => {
+    activateLanguage("en");
+    await renderGroups(placingHome([{ key: "@spex.example/nowhere/lost-spex", name: "lost-spex" }]), { open: false });
+    const workshop = within(screen.getByTestId(`space-instance-${SECOND}`)).getByTestId("space-group-workshop");
+    expect(within(workshop).queryAllByTestId(/^space-placed-/)).toEqual([]);
+    expect(within(workshop).getByText("No spex repositories here yet")).toBeTruthy();
+    expect(within(workshop).getByTestId("space-group-delete-workshop").textContent).toBe("Delete");
+  });
 });
 
 /**
