@@ -5,7 +5,7 @@
 
 ## Status
 
-In progress (2026-10-21), after execution ownership and beside spex.pub's servers.
+Done (2026-10-23), begun 2026-10-21, after execution ownership and beside spex.pub's servers.
 
 ## Intent
 
