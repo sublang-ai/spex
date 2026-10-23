@@ -1964,7 +1964,7 @@ test.describe("one Git backend", () => {
     },
   });
 
-  test("space-1, space-88: a host repository both of two instances over one Git backend list is one placement — your namespace at the second names the project's row and your own group's in one line each, with no control, and Place at… offers the third alone", async ({
+  test("space-1, space-88, space-89, storage-38: a host repository both of two instances over one Git backend list is one placement — your namespace at the second names the project's row and your own group's in one line each, with no control, and Place at… offers the third alone; placed there, leaving the first while it still lists that host repository keeps the opened row, its tabs and focus on the moved clone, not on the row of no clone standing under the former key", async ({
     page,
     app,
   }) => {
@@ -1973,6 +1973,7 @@ test.describe("one Git backend", () => {
     const second = app.hosts[1]!;
     const third = app.hosts[2]!;
     const KEY = hostKey(first, NAMESPACE_PATH);
+    const MOVED_KEY = hostKey(third, NAMESPACE_PATH);
     // The home signed in at the second and the third, and the project
     // synced in your namespace at the first, which the second lists too
     // (arrange only, space-4, space-58).
@@ -2021,6 +2022,39 @@ test.describe("one Git backend", () => {
     await picker.getByTestId(`space-pick-cancel-${KEY}`).click();
     await expect(picker).toHaveCount(0);
     expect(await testIds(row.getByTestId(`space-lines-${KEY}`).locator(":scope > li"))).toEqual([`space-line-${first.url}`]);
+
+    // Placed at the third in your namespace there — its only member the
+    // account, so no notice — the row holds both placements (space-88,
+    // space-97, space-87).
+    await place.click();
+    const section = await pickSection(picker, third, THIRD_HOST_NAME);
+    await section.getByTestId(`space-pick-group-${entryKey(HOST_LOGIN)}`).click();
+    await expect(picker).toHaveCount(0);
+    await expect(placementLine(page, KEY, third).getByTestId("space-line-state")).toHaveText(SENT_LINE, { timeout: 30_000 });
+
+    // Leaving the first with the row opened, the first still listing that
+    // host repository: the clone moves under the third, and the first's
+    // listing stands as a row of no clone under the former key, closed;
+    // the moved row stays open with its Sync tab, the live note says the
+    // placement left, and focus goes to the moved row's Leave… (space-89,
+    // space-98, storage-38).
+    await openRepository(page, KEY);
+    await row.getByTestId(`space-row-leave-${KEY}`).click();
+    await row.getByTestId(`space-leave-choice-${KEY}`).getByTestId(`space-leave-instance-${first.url}`).click();
+    const confirm = row.getByTestId(`space-leave-confirm-${KEY}`);
+    await expect(confirm).toHaveAttribute("data-stage", "first");
+    await confirm.getByRole("button", { name: "Remove" }).click();
+    const moved = instanceSection(page, third).getByTestId(`space-group-@${HOST_LOGIN}`).getByTestId(`space-row-${MOVED_KEY}`);
+    await expect(moved).toHaveAttribute("data-state", "reachable", { timeout: 30_000 });
+    const former = instanceSection(page, first).getByTestId(`space-group-@${HOST_LOGIN}`).getByTestId(`space-row-${KEY}`);
+    await expect(former).toHaveAttribute("data-state", "absent");
+    await expect(page.getByTestId(`space-repo-${KEY}`)).toHaveAttribute("aria-expanded", "false");
+    await expect(page.getByTestId(`space-repo-${MOVED_KEY}`)).toHaveAttribute("aria-expanded", "true");
+    await expect(page.getByTestId("space-repository")).toHaveAttribute("aria-label", "demo-project-spex");
+    await expect(page.getByTestId("space-tab-sync")).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByTestId("space-live")).toHaveText("Removed from Stand-in Git host");
+    await expect(moved.getByTestId(`space-row-leave-${MOVED_KEY}`)).toBeFocused();
+    expect(existsSync(clonePath(app.dataDir, MOVED_KEY))).toBe(true);
   });
 });
 

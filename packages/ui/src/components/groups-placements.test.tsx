@@ -2745,6 +2745,39 @@ describe("GROUPS: leaving one placement (space-89, space-98, storage-38, space-2
     await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId("space-row-pick-jane/academy-spex")));
   });
 
+  test("space-89, storage-38: a first placement's Leave while the left instance still lists that host repository keeps the opened row, its tabs and focus on the moved clone, not on the row of no clone the listing stands under the former key", async () => {
+    // The left instance's listing, read again: a row of no clone under
+    // the former key, in the namespace the clone stood in.
+    const former = repo({ folder: null, state: "absent", branch: null, placedAt: [] });
+    const withFormer = (home: GroupsState): GroupsState => ({
+      ...home,
+      instances: home.instances.map((at) =>
+        at.origin !== ORIGIN
+          ? at
+          : { ...at, groups: at.groups.map((group) => (group.mine ? { ...group, repositories: [...group.repositories, former] } : group)) },
+      ),
+    });
+    await renderGroups(placedAtTwo());
+    expect(screen.getByTestId(`space-repo-${KEY}`).getAttribute("aria-expanded")).toBe("true");
+    fireEvent.click(leaveControl());
+    fireEvent.click(screen.getByRole("button", { name: "Remove from Spex Example" }));
+    fireEvent.click(within(leaveConfirm()).getByRole("button", { name: "Remove" }));
+    await waitFor(() => expect(calls("space.leave")).toEqual([{ repository: KEY, instance: ORIGIN }]));
+    deliver(placedAtTwo({}, { sync: leaveRunning(ORIGIN) }));
+    deliver(withFormer(movedHome("second")));
+    await waitFor(() => expect(live()).toBe("Removed from Spex Example"));
+    // The former key's row stands, not on this device and closed; the
+    // moved clone's row is the one open, its tabs beneath the list
+    // reading its folder, and focus on its Leave… (storage-38, space-89).
+    await waitFor(() => expect(screen.getByTestId(`space-repo-${MOVED}`).getAttribute("aria-expanded")).toBe("true"));
+    expect(screen.getByTestId(`space-row-${KEY}`).dataset.state).toBe("absent");
+    expect(screen.getByTestId(`space-repo-${KEY}`).getAttribute("aria-expanded")).toBe("false");
+    expect(screen.getByTestId("space-repository").getAttribute("aria-label")).toBe("academy-spex");
+    expect(screen.getByTestId("space-repository-folder").textContent).toBe("~/code/academy");
+    expect(screen.getByTestId("space-tab-sync").getAttribute("aria-selected")).toBe("true");
+    await waitFor(() => expect(document.activeElement).toBe(leaveControl(MOVED)));
+  });
+
   test("space-98, space-89: a Leave that only followed its placement to another signed-in instance listing it says nothing was removed, focus going back to Leave…; a Leave dropping it says so", async () => {
     // The second signed out; the third, signed in, lists the placement's
     // host repository in its workshop.

@@ -89,16 +89,18 @@ export function syncRefusal(
 }
 
 /** Focus once a row's Leave has run (DR-010 §6): only focus the Leave
- * left with its row — on the row's name, where Remove parked it, or
- * nowhere, its row moved — goes to its Leave…, else its Sync, else its
- * "Pick a group" where the last Leave left it local only, else its
- * name. */
-function focusAfterLeave(key: string): void {
+ * left with its row — on the name of the row under `from`, its key when
+ * Remove was asked, where Remove parked it, which a row of no clone
+ * standing under that key since keeps, or nowhere, its row moved — goes
+ * to its Leave…, else its Sync, else its "Pick a group" where the last
+ * Leave left it local only, else its name. */
+function focusAfterLeave(key: string, from: string = key): void {
   const row = document.querySelector(`[data-testid="space-row-${key}"]`);
   const name = row?.querySelector<HTMLElement>(`[data-testid="space-repo-${key}"]`);
   if (!row || !name) return;
+  const parked = document.querySelector(`[data-testid="space-repo-${from}"]`);
   const active = document.activeElement;
-  if (active && active !== document.body && active !== name) return;
+  if (active && active !== document.body && active !== name && active !== parked) return;
   const target = [`space-row-leave-${key}`, `space-row-sync-${key}`, `space-row-pick-${key}`]
     .map((id) => row.querySelector<HTMLButtonElement>(`[data-testid="${id}"]`))
     .find((control) => control !== null && !control.disabled);
@@ -331,8 +333,10 @@ export function SpaceSurface({ onOpenSession, onOpenProject }: SpaceSurfaceProps
 
   // The state before this one: a row a first placement's Leave moved
   // (storage-38) is the one new row holding its folder, and stays open
-  // as it was; a Leave that has run and left its placement is said in
-  // the live note — not one that only followed it to another signed-in
+  // as it was, even where a row holding another folder or none stands
+  // under the former key — the left instance's listing, not on this
+  // device; a Leave that has run and left its placement is said in the
+  // live note — not one that only followed it to another signed-in
   // instance listing its host repository, which still holds it there
   // (space-98) — focus that stayed with its row moving to its Leave…,
   // or to its Sync where none is left (space-89, DR-010 §6, §7).
@@ -346,12 +350,15 @@ export function SpaceSurface({ onOpenSession, onOpenProject }: SpaceSurfaceProps
     const known = new Set(was.map((row) => row.key));
     for (const old of was) {
       let now = rows.find((row) => row.key === old.key);
-      if (!now && old.folder !== null) {
+      // The clone is known by its folder (storage-38): a row under its
+      // former key holding another folder, or none, is another row.
+      if (old.folder !== null && now?.folder !== old.folder) {
         const followers = rows.filter((row) => row.folder === old.folder && !known.has(row.key));
-        if (followers.length !== 1) continue;
-        now = followers[0]!;
-        const to = now.key;
-        setSelected((current) => (current === old.key ? to : current));
+        if (followers.length === 1) {
+          now = followers[0]!;
+          const to = now.key;
+          setSelected((current) => (current === old.key ? to : current));
+        }
       }
       if (!now) continue;
       const left = old.sync.phase === "running" && old.sync.op === "leave" ? old.sync.placement : undefined;
@@ -365,7 +372,7 @@ export function SpaceSurface({ onOpenSession, onOpenProject }: SpaceSurfaceProps
           (line) => line.id === id && line.instance !== left && placementAt(old, line.instance)?.attached !== true,
         );
       if (!followed) setNote(removedFrom(instanceNameAt(groups, left)));
-      focusAfterLeave(now.key);
+      focusAfterLeave(now.key, old.key);
     }
   }, [groups]);
 
