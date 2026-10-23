@@ -15,18 +15,31 @@
 // holds the Captain's decision call instead, so the lost message
 // records no step.
 //
-//   node dist/testing/stopped-writer.js <sessionsDir> <cwd> <configPath> <input> [sessionId]
+// With `--runtime=<device>:<label>`, a new session is first assigned to
+// that runtime as a core assigns its own (storage-43, DR-134), so the
+// session it leaves uncertain is that runtime's to restore.
+//
+//   node dist/testing/stopped-writer.js <sessionsDir> <cwd> <configPath> <input> [sessionId] [--runtime=<device>:<label>]
 
 import { createSessionStore } from "@sublang/playbook/session-store";
 import { executionConfigFromPlan, loadLaunchPlan, openSessionHost } from "@sublang/playbook/session-host";
+import { runtimeRecord } from "../control-record.js";
+import type { AssignedRuntime } from "../protocol.js";
 import { parkingScript } from "./demo.js";
 import { fakeAdapterImports, type FakeScript } from "./fake-adapter.js";
 import { builtinLaunchModules } from "./launch-modules.js";
 
-const [sessionsDir, cwd, configPath, input, continued] = process.argv.slice(2);
-if (!sessionsDir || !cwd || !configPath || !input) {
-  throw new Error("usage: stopped-writer <sessionsDir> <cwd> <configPath> <input> [sessionId]");
+const RUNTIME_OPTION = "--runtime=";
+const args = process.argv.slice(2);
+const runtimeArg = args.find((arg) => arg.startsWith(RUNTIME_OPTION))?.slice(RUNTIME_OPTION.length);
+const [sessionsDir, cwd, configPath, input, continued] = args.filter((arg) => !arg.startsWith(RUNTIME_OPTION));
+if (!sessionsDir || !cwd || !configPath || !input || (runtimeArg !== undefined && !/^[^:]+:./.test(runtimeArg))) {
+  throw new Error("usage: stopped-writer <sessionsDir> <cwd> <configPath> <input> [sessionId] [--runtime=<device>:<label>]");
 }
+const runtime: AssignedRuntime | undefined = runtimeArg === undefined ? undefined : {
+  device: runtimeArg.slice(0, runtimeArg.indexOf(":")),
+  label: runtimeArg.slice(runtimeArg.indexOf(":") + 1),
+};
 
 let host: Awaited<ReturnType<typeof openSessionHost>> | undefined;
 const ready = (): void => { process.stdout.write(`READY ${host?.sessionId ?? continued}\n`); };
@@ -80,6 +93,8 @@ host = await openSessionHost({
       }
     : {}),
 });
+// Assigned before its first turn, under its lease (storage-43).
+if (runtime && !continued) await host.lease.append(runtimeRecord(runtime, Date.now()));
 // The turn never ends: the process is killed while the call is held.
 void host.handleBossTurn(input).catch(() => {});
 setInterval(() => {}, 1 << 30);

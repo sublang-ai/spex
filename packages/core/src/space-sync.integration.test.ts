@@ -132,7 +132,11 @@ test("space-38: an intent added on each home lists on the other with no choice a
   await joinRemote(b, key);
   const older = await a.client.expectOk("intent.queue", { projectId: key, text: "Ship the parser" });
   await sleep(5);
-  const newer = await b.client.expectOk("intent.queue", { projectId: key, text: "Document the parser" });
+  // B's was captured by a Spex that recorded no runtime: a format 1 file
+  // naming none, so either home may run and edit it (storage-4, DR-134).
+  const newer = { id: randomUUID(), text: "Document the parser", createdAt: Date.now() };
+  mkdirSync(join(bClone, "intents"), { recursive: true });
+  writeFileSync(join(bClone, "intents", `${newer.id}.json`), `${JSON.stringify({ format: 1, ...newer }, null, 2)}\n`);
   assert.ok(older.createdAt < newer.createdAt);
   assert.equal((await a.client.settle("space.sync", { repository: key })).sync.phase, "done");
   const merged = await b.client.settle("space.sync", { repository: key });
@@ -143,7 +147,16 @@ test("space-38: an intent added on each home lists on the other with no choice a
   for (const home of [a, b]) {
     const queue = (await home.client.expectOk("ledger.get", {})).intents.filter((row) => row.intent.projectId === key && row.state === "queued");
     assert.deepEqual(queue.map((row) => row.intent.id), [older.id, newer.id], "the older reads first");
-    assert.ok(queue[0].next && !queue[1].next, "the oldest queued intent is next");
+    // A's capture runs on A alone: next there, while B's next is the
+    // oldest it may run, the one naming no runtime (core-service-107).
+    if (home === a) {
+      assert.ok(queue[0].next && !queue[1].next, "the oldest queued intent is next");
+      assert.equal(queue[0].runsOn, undefined);
+    } else {
+      assert.ok(!queue[0].next && queue[1].next, "B's next is its own to run");
+      assert.equal(queue[0].runsOn, older.runtime?.label);
+      assert.ok(older.runtime && queue[0].runsOn, "A's capture names A's runtime");
+    }
   }
   // The same intent edited on both homes is one choice, replaced whole.
   await a.client.expectOk("intent.edit", { intentId: newer.id, text: "Document the parser for users" });

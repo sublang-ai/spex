@@ -331,6 +331,7 @@ When the user pairs a repair's spex repository with the folder proposed [[space-
 - the editor says that where a project lives is recorded on this device alone and never syncs [[storage-1](storage.md#storage-1)];
 - a refusal shows in the row with the path kept and the control offered again: a folder inside another working folder, a folder already another spex repository's, and a spex repository whose turn is still running;
 - a sync of that spex repository running meanwhile disables no repair control and refuses no rebind [[space-21](#space-21)].
+- at a remote place [[run-view-169](run-view.md#run-view-169)] a repair offers neither a folder nor its proposal's "Add project": a seat's core allocates every folder itself [[space-103](#space-103)].
 
 #### space-48
 

@@ -406,6 +406,10 @@ Where the Settings surface renders against fixture state, the test suite shall a
 - the permission mode's description follows the selected mode, and the shortcut sheet lists the bindings with the platform's modifier [[settings-10](#settings-10)];
 - a missing config names the could-not-create remedy with a Retry that refreshes the app state, and never the fix-in-editor line [[settings-24](#settings-24)].
 
+#### settings-51
+
+Where the UI holds a seat's store over a fake client, the test suite shall assert the Credentials section [[settings-48](#settings-48)]: its fixed sentence; the host form sending `credential.set` with the host and the token and the agent forms sending it with the agent's names; the listing naming the hosts and agents set with no secret shown; a remove sending `credential.remove`; and the section opened at a host a failed clone named.
+
 ### Browser Journeys
 
 #### settings-47

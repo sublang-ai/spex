@@ -6,11 +6,15 @@
 // each over a fake client of its own: the sidebar lists each place's
 // projects under a heading naming the place, this computer's rows as
 // they always were; the attention queue joins every core's entries
-// band by band, interleaved by onset with each core's own order kept,
-// and the badge sums the cores' badges; the approvals inbox lists every
-// core's requests; and each entry is opened and answered at its own
-// core alone. Ids are the cores' own: one repository cloned at two
-// places is one project id at both.
+// band by band, interleaved by onset with each core's own order kept
+// and this computer's entry first on a tie, and the badge sums the
+// badges of the cores whose fold is read — a mismatched place adding
+// nothing, a reconnecting one keeping its last; the sidebar's marks
+// leave a mismatched place out; the approvals inbox lists every core's
+// requests; each entry is opened and answered at its own core alone;
+// and a Dashboard link to a project opens it at its place. Ids are the
+// cores' own: one repository cloned at two places is one project id at
+// both.
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
@@ -338,6 +342,7 @@ describe("dashboard-9: one attention queue across the places", () => {
     alphaStore.setState({
       sessions: [...alphaStore.getState().sessions, session("a1", "p1", "first at the box"), session("a2", "p1", "second at the box")],
     });
+    betaStore.setState({ sessions: [...betaStore.getState().sessions, session("b1", "p2", "a model to judge")] });
   });
 
   test("the queue interleaves each band by onset, each core's order standing, and the badge sums", () => {
@@ -370,6 +375,60 @@ describe("dashboard-9: one attention queue across the places", () => {
     expect(queue.querySelectorAll("[data-band]")).toHaveLength(5);
   });
 
+  test("on a tie in onset this computer's entry goes first, whichever place lists it", () => {
+    // Each core's first question began at the same moment.
+    const tied = (sessionId: string) => entry(sessionId, "p1", "interrupted", "question", 100);
+    alphaStore.setState({ ledger: ledger([tied("a1")], 1) });
+    useAppStore.setState({ ledger: ledger([tied("l1")], 1) });
+    betaStore.setState({ ledger: ledger([], 0) });
+    render(<App />);
+    fireEvent.click(document.querySelector<HTMLElement>('[data-surface="Dashboard"]')!);
+    const queue = screen.getByTestId("attention-queue");
+    // [dashboard-9] this computer's entry first where two share an onset.
+    expect([...queue.querySelectorAll<HTMLElement>("[data-band]")].map((row) => row.dataset.testid)).toEqual([
+      "attention-l1-question",
+      "attention-a1-question",
+    ]);
+    expect(screen.getByTestId("nav-attention-badge").textContent).toBe("2");
+  });
+
+  test("a reconnecting place keeps its last fold; a place not read yet adds nothing", () => {
+    render(<App />);
+    fireEvent.click(document.querySelector<HTMLElement>('[data-surface="Dashboard"]')!);
+    const rows = () =>
+      [...screen.getByTestId("attention-queue").querySelectorAll<HTMLElement>("[data-band]")].map(
+        (row) => row.dataset.testid,
+      );
+    const before = rows();
+    // [dashboard-9] a place reconnecting keeps its last read fold: its
+    // entries stand and its badge still counts.
+    act(() => alphaStore.setState({ connection: "closed" }));
+    expect(screen.getByTestId("nav-attention-badge").textContent).toBe("6");
+    expect(rows()).toEqual(before);
+    act(() => alphaStore.setState({ connection: "connecting" }));
+    expect(screen.getByTestId("nav-attention-badge").textContent).toBe("6");
+    expect(rows()).toEqual(before);
+    // [dashboard-9] the count sums the cores whose fold is read: a place
+    // whose fold is not read adds nothing.
+    act(() => betaStore.setState({ ledger: undefined }));
+    expect(screen.getByTestId("nav-attention-badge").textContent).toBe("5");
+    expect(screen.queryByTestId("attention-i-b1-finish")).toBeNull();
+  });
+
+  test("the sidebar's attention marks leave out a place speaking another protocol version", () => {
+    render(<App />);
+    const mark = (id: string) => screen.queryByTestId(id);
+    expect(mark(`sidebar-project-attention-p1@${ALPHA.place}`)).toBeTruthy();
+    expect(mark(`sidebar-project-attention-p2@${BETA.place}`)).toBeTruthy();
+    // [run-view-171] [run-view-168] a mismatched place marks nothing, as
+    // it adds nothing to the queue and the badge; the others' marks stand.
+    act(() => betaStore.setState({ connection: "mismatch" }));
+    expect(mark(`sidebar-project-attention-p2@${BETA.place}`)).toBeNull();
+    expect(screen.getByTestId(`sidebar-project-p2@${BETA.place}`)).toBeTruthy();
+    expect(mark(`sidebar-project-attention-p1@${ALPHA.place}`)).toBeTruthy();
+    expect(screen.getByTestId("nav-attention-badge").textContent).toBe("5");
+  });
+
   test("an entry is answered and opened at its own core alone", async () => {
     render(<App />);
     fireEvent.click(document.querySelector<HTMLElement>('[data-surface="Dashboard"]')!);
@@ -398,6 +457,50 @@ describe("dashboard-9: one attention queue across the places", () => {
     expect(beta.subscribe).not.toHaveBeenCalled();
     expect(alphaStore.getState().activeSessionId).toBe("a2");
     expect(screen.getByTestId(`sidebar-session-a2@${ALPHA.place}`).getAttribute("aria-selected")).toBe("true");
+  });
+});
+
+describe("run-view-168: a Dashboard link opens a project at its place", () => {
+  /** Show the first seat on the Projects surface, from its session. */
+  async function showSeat(): Promise<void> {
+    fireEvent.click(screen.getByTestId(`sidebar-session-s-alpha@${ALPHA.place}`));
+    await settle();
+    expect(screen.getByTestId(`sidebar-session-s-alpha@${ALPHA.place}`).getAttribute("aria-selected")).toBe("true");
+  }
+
+  test("the Sources guidance opens the project's Overview at its own place", async () => {
+    render(<App />);
+    await showSeat();
+    fireEvent.click(document.querySelector<HTMLElement>('[data-surface="Dashboard"]')!);
+    // The Dashboard's project groups are this computer's.
+    const guidance = screen.getByTestId("sources-guidance-p1");
+    fireEvent.click(within(guidance).getByRole("button", { name: "Open the project's Overview" }));
+    await settle();
+    // [run-view-168] the project opens at its place — this computer's,
+    // though the seat holds a project of the same id — and the Projects
+    // surface shows that place.
+    expect(useAppStore.getState().currentProjectId).toBe("p1");
+    expect(useAppStore.getState().workspaceTabs.p1).toBe("overview");
+    expect(alphaStore.getState().workspaceTabs.p1).not.toBe("overview");
+    expect(screen.getByTestId("overview-tab").textContent).toContain("home-project");
+    expect(screen.getByTestId("sidebar-project-p1").getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByTestId(`sidebar-project-p1@${ALPHA.place}`).getAttribute("aria-selected")).toBe("false");
+    expect(screen.getByTestId(`sidebar-session-s-alpha@${ALPHA.place}`).getAttribute("aria-selected")).toBe("false");
+  });
+
+  test("the empty state's Projects link shows this computer's place", async () => {
+    useAppStore.setState({ projects: [], sessions: [], currentProjectId: undefined });
+    render(<App />);
+    await showSeat();
+    fireEvent.click(document.querySelector<HTMLElement>('[data-surface="Dashboard"]')!);
+    const empty = screen.getByTestId("projects-empty");
+    fireEvent.click(within(empty).getByRole("button", { name: "Projects" }));
+    await settle();
+    // [run-view-168] the Projects surface shows the place whose
+    // projects the Dashboard lists: this computer's, with none yet.
+    expect(screen.getByTestId("home-add-project")).toBeTruthy();
+    expect(screen.getByTestId(`sidebar-session-s-alpha@${ALPHA.place}`).getAttribute("aria-selected")).toBe("false");
+    expect(screen.queryByRole("tab", { name: "profile the build box" })).toBeNull();
   });
 });
 

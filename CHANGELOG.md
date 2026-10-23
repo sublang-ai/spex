@@ -292,8 +292,20 @@ and `npm start` (desktop) or `npm run start:server` (server).
   bearer to the server itself; it reconnects to each seat every second,
   reads a seat speaking another protocol as mismatched, removes a seat
   whose lease ended, and adds each seat's badge to the dock's count.
+  The place selector switches Settings, Playbooks, Groups and environments
+  between this computer and an open seat, keeping their state separate.
+  Projects appear under their place; attention and approvals span the
+  connected places, and a disconnected place leaves the others usable.
 
 ### Changed
+
+- New sessions and intents belong to the runtime that creates them
+  ([DR-134](specs/decisions/134-execution-ownership.md)). Another runtime
+  shows their history with `Runs on <label>` but cannot continue or recover
+  the session, start or change its open intent, or advance its queue into it.
+  Foreign work does not occupy the local execution lane or attention queue.
+  Intent files now use format 2; upgrade every member's devices together
+  before syncing those records. Older records retain their existing rules.
 
 - Playbook 18 shared session persistence now uses bounded files and
   deduplicated immutable chunks, with Sync selecting each complete session

@@ -47,6 +47,7 @@ import { i18n } from "./i18n.js";
 import { isLanguage, type Language } from "./language.js";
 
 import type {
+  AssignedRuntime,
   ForgeState,
   IntentInfo,
   IntentSource,
@@ -72,6 +73,7 @@ import {
   type UsageTotals,
 } from "./stream-fold.js";
 import { answeringTurnIds, failureStands, openingTurn } from "./ledger.js";
+import { recordedRuntime, runsElsewhere, runsOnPhrase } from "./control-record.js";
 
 export type { UsageEntry, UsageTotals } from "./stream-fold.js";
 
@@ -143,6 +145,11 @@ interface SessionMeta {
   externalWriter?: "active" | "unknown";
   players: SessionInfo["players"];
   initialVisible: string[];
+  /** The runtime the session is assigned to (storage-43, DR-134): the
+   * first runtime record of its stream, null where that record cannot
+   * be read — an unknown runtime, never this home's — and absent where
+   * the stream holds none, the session keeping today's rules. */
+  runtime?: AssignedRuntime | null;
   /** Set when an append failed: the file is a complete prefix only up
    * to this sequence; later records lived in memory only (DR-036). */
   streamIncompleteAfterSeq?: number;
@@ -181,7 +188,10 @@ function isHidden(record: TmuxPlayRecord): boolean {
 }
 
 /** One session's listing row plus its folded summary, in the single
- * shape every listing and broadcast shares (core-service-32). */
+ * shape every listing and broadcast shares (core-service-32). A session
+ * assigned to another runtime — `runsOn`, its label — is not
+ * continuable here, whatever its checkpoint holds, with the phrase as
+ * its reason before any other and no recovery offered (DR-134). */
 function sessionInfo(
   meta: SessionMeta,
   path: string,
@@ -194,6 +204,7 @@ function sessionInfo(
   agentActiveMs: Record<string, number> | undefined,
   agentReportedModels: SessionInfo["agentReportedModels"],
   parked: ParkedRun | undefined,
+  runsOn: string | undefined,
 ): SessionInfo {
   return {
     id: meta.id,
@@ -216,11 +227,14 @@ function sessionInfo(
       ? { streamIncompleteAfterSeq: meta.streamIncompleteAfterSeq }
       : {}),
     ...(meta.foreign ? { foreign: true } : {}),
-    ...(!meta.live && !meta.externalWriter && meta.continuable ? { continuable: true } : {}),
+    ...(runsOn !== undefined ? { runsOn } : {}),
+    ...(!meta.live && !meta.externalWriter && meta.continuable && runsOn === undefined ? { continuable: true } : {}),
     // Phrased here, when the session is read (core-service-111): a
     // reason the core owns follows the home's language, while one the
     // shared store gave is that store's own words, kept as they are.
-    ...(meta.externalWriter
+    ...(runsOn !== undefined
+      ? { continuationReason: runsOnPhrase(runsOn) }
+      : meta.externalWriter
       ? {continuationReason: meta.externalWriter === "active"
           ? i18n._({
               id: "Session is active in another host",
@@ -236,7 +250,7 @@ function sessionInfo(
           comment: "Refusal; Restore is the control the interface offers for interrupted work",
         }) }
       : {}),
-    ...(meta.recovery && !meta.externalWriter ? { recovery: meta.recovery } : {}),
+    ...(meta.recovery && !meta.externalWriter && runsOn === undefined ? { recovery: meta.recovery } : {}),
     ...(agentSettings && Object.keys(agentSettings).length > 0 ? { agentSettings } : {}),
     ...(parked ? { parked } : {}),
   };
@@ -1089,7 +1103,10 @@ export class Store {
     let players: SessionInfo["players"] = [];
     let initialVisible: string[] = [];
     let hasContext = false;
+    // The first runtime record names the session's runtime (storage-43).
+    let runtime: AssignedRuntime | null | undefined;
     for (const entry of stored) {
+      if (runtime === undefined) runtime = recordedRuntime(entry.record as TmuxPlayRecord);
       if ((entry.record as {type?: unknown}).type !== "session_context") continue;
       try {
         const context = validateSessionContext(entry.record);
@@ -1125,6 +1142,7 @@ export class Store {
       live: live ?? prior?.live ?? false,
       ...(writer !== "idle" ? {externalWriter: writer} : {}),
       players, initialVisible, originDir: shared.sessionsDir,
+      ...(runtime !== undefined ? { runtime } : {}),
       ...(continuable ? { continuable: true } : {}),
       ...(reason ? { continuationReason: reason } : recoveryReason ? { continuationRecovery: true } : {}),
       ...(manifest.state === "uncertain" && manifest.uncertain
@@ -1244,7 +1262,24 @@ export class Store {
     return gone;
   }
 
-  foldStoredRecord(sessionId: string, record: TmuxPlayRecord): void { this.foldRecord(sessionId, record); }
+  /** Fold one record this core appended: its turn and usage, and the
+   * session's runtime where it is the stream's first runtime record
+   * (storage-43). */
+  foldStoredRecord(sessionId: string, record: TmuxPlayRecord): void {
+    const meta = this.sessions.get(sessionId);
+    if (meta && meta.runtime === undefined) {
+      const runtime = recordedRuntime(record);
+      if (runtime !== undefined) meta.runtime = runtime;
+    }
+    this.foldRecord(sessionId, record);
+  }
+
+  /** The runtime a session is assigned to (storage-43, DR-134): null
+   * where its record cannot be read, undefined where it names none or
+   * the session is unknown. */
+  sessionRuntime(id: string): AssignedRuntime | null | undefined {
+    return this.sessions.get(id)?.runtime;
+  }
 
   private foldRecord(sessionId: string, record: TmuxPlayRecord): void {
     this.applyRecordFold(sessionId, foldTurnEvent(record), foldUsage(sessionId, record));
@@ -1824,12 +1859,17 @@ export class Store {
     if (!meta) return undefined;
     const project = this.getProject(meta.projectId);
     if (!project) return undefined;
-    return this.summarize(meta, project.path);
+    // The project's read took `home.yaml` as it stands: its device is
+    // this runtime's (DR-134).
+    return this.summarize(meta, project.path, this.homeFile.device);
   }
 
+  /** A settled checkpoint this runtime may continue: never one of a
+   * session assigned to another runtime (core-service-32, DR-134). */
   hasContinuableCheckpoint(id: string): boolean {
     const meta = this.sessions.get(id);
-    return !!meta?.continuable && !meta.live && !meta.externalWriter;
+    return !!meta?.continuable && !meta.live && !meta.externalWriter &&
+      (meta.runtime === undefined || runsElsewhere(meta.runtime, this.home.device) === undefined);
   }
 
   setContinuationRefusal(id: string, reason: string | undefined): void {
@@ -1837,7 +1877,8 @@ export class Store {
     else this.continuationRefusals.set(id, reason);
   }
 
-  private summarize(meta: SessionMeta, path: string): SessionInfo {
+  /** `device` is this runtime's, read once per listing (DR-134). */
+  private summarize(meta: SessionMeta, path: string, device: string): SessionInfo {
     const turns = [...(this.turns.get(meta.id)?.values() ?? [])].sort(
       (a, b) => a.turnId - b.turnId,
     );
@@ -1881,6 +1922,9 @@ export class Store {
       agentActiveMs,
       agentReportedModels,
       this.parkedRun(meta.id),
+      // A session this core holds runs here; any other assigned to
+      // another runtime runs there alone (core-service-32, DR-134).
+      meta.live ? undefined : runsElsewhere(meta.runtime, device),
     );
     const refusal = this.continuationRefusals.get(meta.id);
     if (summary.continuable && refusal !== undefined) {
@@ -1893,6 +1937,8 @@ export class Store {
   listSessions(): SessionInfo[] {
     const out: SessionInfo[] = [];
     const projects = new Map(this.listProjects().map((project) => [project.id, project]));
+    // Read with the projects, once for the listing (DR-134).
+    const device = this.homeFile.device;
     for (const meta of [...this.sessions.values()].sort(
       (a, b) => a.createdAt - b.createdAt,
     )) {
@@ -1900,7 +1946,7 @@ export class Store {
       // A session whose project left the registry stays on disk but
       // out of the listing (DR-036).
       if (!project) continue;
-      out.push(this.summarize(meta, project.path));
+      out.push(this.summarize(meta, project.path, device));
     }
     return out;
   }
