@@ -169,9 +169,9 @@ default, and prints an SSH tunnel line; a public bind needs
 npm run start:server     # prints http://127.0.0.1:8137/?token=...
 ```
 
-Options take the `--name=value` form after `--` — `--host=`, `--port=`
-(default 8137), `--token=` or `SPEX_TOKEN`, `--data-dir=` or `SPEX_HOME`,
-`--tls-cert=`/`--tls-key=`, and `--insecure` — e.g.
+Options take the `--name=value` or `--name value` form after `--` —
+`--host`, `--port` (default 8137), `--token` or `SPEX_TOKEN`, `--data-dir`
+or `SPEX_HOME`, `--tls-cert`/`--tls-key`, and `--insecure` — e.g.
 `npm run start:server -- --port=0`.
 
 ## Files and browser tools
