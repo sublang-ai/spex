@@ -325,10 +325,11 @@ test("git-host-21, space-16, space-15, space-60: a placement beside the first wh
   await signOut(home, second);
 
   // The third asks to wait as long as a hold lasts: its read fails and
-  // its calls are held, its view kept (git-host-21, git-host-5).
-  // Two answers, so the Check's own call meets the limit even where a
-  // read made meanwhile took the first one.
-  third.script.rateLimit(2, "120");
+  // its calls are held, its view kept (git-host-21, git-host-5). It
+  // answers every call reaching it 429 — its read sends several at
+  // once — so no number of calls spends the limit, and the Check's call
+  // meets the hold however late it comes.
+  third.script.rateLimit(Infinity, "120");
   let mark = home.client.mark();
   await home.client.expectOk("space.refresh", {});
   await home.client.waitSpace(mark, (state) => instanceOf(state, third.url)?.read.phase === "failed", 30_000);
@@ -340,6 +341,10 @@ test("git-host-21, space-16, space-15, space-60: a placement beside the first wh
   mark = home.client.mark();
   await home.client.expectOk("space.sync", { repository: key });
   await home.client.waitRepository(mark, key, (row) => row.sync.phase === "running" && row.sync.step === "check" && row.sync.placement === canonicalOrigin(second.url) && row.sync.cancelable, 20_000);
+  // The sync's end is read only from states broadcast after its Check
+  // offered Stop: one broadcast before the sync began — the first's read
+  // of this Refresh landing late — still reads the previous sync's done.
+  mark = home.client.mark();
   assert.deepEqual(await home.client.expectOk("space.cancel", { repository: key }), { stopped: true });
   const stopped = await home.client.waitRepository(mark, key, (row) => row.sync.phase !== "running", 20_000);
   const waited = `Stopped while waiting for ${THIRD_NAME}`;
