@@ -66,7 +66,7 @@ import {
 /** A record another surface asked the spec view to open, with where
  * it was asked from (spec-view-57), at the place of its project. */
 type PendingRecord = { place: string; projectId: string; path: string; origin: RecordOrigin };
-import { editorDirty } from "./lib/spec-view-model.js";
+import { editorDirty, treeCounts } from "./lib/spec-view-model.js";
 import { isHistory } from "./lib/sessions.js";
 import { Icon } from "./components/Icon.js";
 import { homeAttachmentKey, sessionAttachmentKey, useComposerAttachments } from "./lib/useComposerAttachments.js";
@@ -402,6 +402,7 @@ function sessionTooltip(
 function WorkspaceSurface({
   onNavigate,
   onOpenPalette,
+  onOpenOwnProject,
   attentionBySession,
   pendingFocus,
   onFocusHandled,
@@ -416,6 +417,7 @@ function WorkspaceSurface({
 }: {
   onNavigate: (surface: Surface) => void;
   onOpenPalette: () => void;
+  onOpenOwnProject: () => void;
   /** Per-project spec view state, held above the workspace so a
    * draft under edit survives every surface (spec-view-51), keyed by
    * place and project (run-view-168). */
@@ -510,6 +512,19 @@ function WorkspaceSurface({
       : (open.find((session) => session.id === activeSessionId)?.id ??
         open[0]?.id ??
         "start"));
+  const projectSpecTree = currentProjectId ? specTrees[currentProjectId] : undefined;
+  const projectSpecError = currentProjectId ? specErrors[currentProjectId] : undefined;
+  const projectSpecItemCount = projectSpecTree?.present && !projectSpecTree.legacy && !projectSpecError
+    ? treeCounts(projectSpecTree.files).items
+    : 0;
+
+  // The task start and pinned Specs tab need the project's real state
+  // before anyone opens the reader. The Specs tab itself still re-reads
+  // on activation and focus (DR-011).
+  useEffect(() => {
+    if (connection !== "open" || !currentProjectId || tab === "specs" || projectSpecTree || projectSpecError) return;
+    void loadSpecs(currentProjectId);
+  }, [connection, currentProjectId, tab, projectSpecTree, projectSpecError, loadSpecs]);
 
   // The last-viewed marker is a standing condition, not an event
   // (run-view-134): while the workspace shows a session with its
@@ -600,6 +615,9 @@ function WorkspaceSurface({
       hasProjects={projects.length > 0}
       projectName={project?.name}
       projectId={project?.id}
+      specTree={projectSpecTree}
+      specError={projectSpecError}
+      onOpenSpecs={() => pickTab("specs")}
       playbooks={playbooksOf(project?.id)}
       captain={summary?.captain}
       readiness={readiness}
@@ -615,6 +633,7 @@ function WorkspaceSurface({
       onDraftChange={setHomeDraft}
       onRecheckReadiness={refreshReadiness}
       onOpenPalette={onOpenPalette}
+      onOpenOwnProject={onOpenOwnProject}
       onNavigate={(surface) => onNavigate(surface)}
       onSaveCaptain={(patch) => setCaptain(patch, store.getClient())}
       next={
@@ -852,19 +871,19 @@ function WorkspaceSurface({
             if (element) tabRefs.current.set("start", element);
             else tabRefs.current.delete("start");
           }}
-          title={i18n._("Start another session ({keys})", {
+          title={i18n._("New task ({keys})", {
             keys: keyLabel("N"),
           })}
-          aria-label={i18n._("Start another session")}
           onKeyDown={(event) => walkTabs(event, "start")}
           onClick={() => pickTab("start")}
-          className={`shrink-0 rounded-t-md px-3 py-1.5 text-sm ${
+          className={`inline-flex shrink-0 items-center gap-1.5 rounded-t-md px-3 py-1.5 text-sm ${
             tab === "start"
               ? "border border-b-0 border-neutral-200 bg-white font-medium dark:border-neutral-800 dark:bg-neutral-900"
               : "text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200"
           }`}
         >
           <Icon name="plus" className="h-4 w-4" />
+          <span>{i18n._("New task")}</span>
         </button>
       </div>
       {(["specs", "overview"] as const).map((pinned) => (
@@ -902,6 +921,14 @@ function WorkspaceSurface({
                 id: "Specs",
                 comment: "tab name: the project's spec packages",
               })}
+              {projectSpecItemCount > 0 ? (
+                <>
+                  <span aria-hidden="true" className="ml-1 text-xs text-neutral-500 dark:text-neutral-400">({projectSpecItemCount})</span>
+                  <span className="sr-only">
+                    {i18n._(", {count, plural, one {# spec item} other {# spec items}}", { count: projectSpecItemCount })}
+                  </span>
+                </>
+              ) : null}
               {project && editorDirty(specViewStates[placeKey(store.place, project.id)]) ? (
                 <>
                   <span className="sr-only">
@@ -1046,6 +1073,15 @@ export function App() {
     safeStorageSet(SURFACE_KEY, next);
   }, []);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [paletteAddProject, setPaletteAddProject] = useState(false);
+  const openPalette = () => {
+    setPaletteAddProject(false);
+    setPaletteOpen(true);
+  };
+  const openAddProject = () => {
+    setPaletteAddProject(true);
+    setPaletteOpen(true);
+  };
   const configState = useAppStore((state) => state.configState);
   const railCollapsed = useAppStore((state) => state.railCollapsed);
   const setRailCollapsed = useAppStore((state) => state.setRailCollapsed);
@@ -1334,6 +1370,7 @@ export function App() {
         }
         if (event.key.toLowerCase() === "p") {
           event.preventDefault();
+          setPaletteAddProject(false);
           setPaletteOpen((open) => !open);
           return;
         }
@@ -1343,7 +1380,7 @@ export function App() {
           if (projectId) {
             state.setWorkspaceTab(projectId, "start");
             setLanding({ on: "surface" });
-          } else setPaletteOpen(true);
+          } else openPalette();
           return;
         }
         if (event.key.toLowerCase() === "b") {
@@ -1524,6 +1561,7 @@ export function App() {
       <Announcer />
       {paletteOpen ? (
         <ProjectPalette
+          addProjectOnly={paletteAddProject}
           projects={local.projects}
           sessions={local.sessions}
           attention={attentionAt(LOCAL_PLACE_KEY)}
@@ -1556,7 +1594,10 @@ export function App() {
           onPickAt={(place, projectId) => pickProject(projectId, place)}
           onAddPath={addProjectByPath}
           onCreatePath={(path, scaffold) => createProject(path, scaffold)}
-          onClose={() => setPaletteOpen(false)}
+          onClose={() => {
+            setPaletteOpen(false);
+            setPaletteAddProject(false);
+          }}
         />
       ) : null}
       <div className="flex min-h-0 flex-1">
@@ -1567,7 +1608,7 @@ export function App() {
           collapsed={railCollapsed}
           onCollapsed={setRailCollapsed}
           places={navPlaces}
-          onOpenPalette={() => setPaletteOpen(true)}
+          onAddProject={openAddProject}
           foot={configFoot}
         />
         <main
@@ -1632,7 +1673,8 @@ export function App() {
               <WorkspaceSurface
                 key={shown.place.key}
                 onNavigate={navigateFrom(shown)}
-                onOpenPalette={() => setPaletteOpen(true)}
+                onOpenPalette={openPalette}
+                onOpenOwnProject={isLocalPlace(shown.place) ? openAddProject : openPalette}
                 attentionBySession={attentionBySession}
                 pendingFocus={pendingFocus}
                 onFocusHandled={() => setPendingFocus(undefined)}

@@ -121,7 +121,7 @@ export interface NavRailProps {
   onCollapsed(collapsed: boolean): void;
   /** Every place, this computer's first (run-view-168). */
   places: NavPlace[];
-  onOpenPalette(): void;
+  onAddProject(): void;
   /** Config status / playbook count, the foot's other tenant. */
   foot?: ReactNode;
 }
@@ -549,15 +549,15 @@ export function NavRail(props: NavRailProps) {
     }`;
   }
 
-  // The palette control keeps its icon-only form across the fold
-  // (DR-030): collapse never hides the way to add or switch a project.
+  // The add control keeps its icon-only form across the fold
+  // (DR-030): collapse never hides the way to add a project.
   const paletteControl = (
     <button
       type="button"
       data-testid="sidebar-palette"
-      onClick={props.onOpenPalette}
-      title={i18n._("Switch or add a project ({keys})", { keys: keyLabel("P") })}
-      aria-label={i18n._("Switch or add a project")}
+      onClick={props.onAddProject}
+      title={i18n._("Add a local project")}
+      aria-label={i18n._("Add a local project")}
       className={`flex h-6 w-6 shrink-0 items-center justify-center rounded text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-200 ${
         collapsed ? "self-center" : "-my-0.5"
       }`}
@@ -828,23 +828,9 @@ export function NavRail(props: NavRailProps) {
     );
   };
 
-  /** One place's part of the tree: an empty home's way to add a project
-   * first, then its projects. */
-  const placeNodes = (place: NavPlace) => (
-    <>
-      {place.key === LOCAL_PLACE_KEY && place.projects.length === 0 ? (
-        <button
-          type="button"
-          data-testid="sidebar-add-project"
-          onClick={props.onOpenPalette}
-          className="rounded-md border border-brand-300 px-2 py-1 text-left text-[13px] text-brand-600 hover:bg-brand-50 dark:border-brand-800 dark:text-brand-300 dark:hover:bg-brand-950"
-        >
-          {i18n._("Add a project…")}
-        </button>
-      ) : null}
-      {place.projects.map((project) => projectNode(place, project))}
-    </>
-  );
+  /** One place's project nodes. */
+  const placeNodes = (place: NavPlace) =>
+    place.projects.map((project) => projectNode(place, project));
 
   const tree = (
     <div

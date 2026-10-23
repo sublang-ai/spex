@@ -60,9 +60,10 @@ When the create flow's initial commit fails [[projects-3](#projects-3)], the pal
 
 #### projects-27
 
-When the user picks the palette's Academy-example action ([DR-015](../decisions/015-reference-content.md)), the palette shall create the project from the bundled Academy corpus — into a new or empty directory only — initialize a git repository with one seed commit of the corpus, and register the project and make it the workspace's current project:
+When the user invokes an Academy-example action ([DR-015](../decisions/015-reference-content.md), [DR-140](../decisions/140-reopen-the-removed-academy-example.md)), Spex shall make that project current, seeding the bundled corpus into a new or empty directory with one Git commit, or registering the unregistered existing repository if its root history identifies a prior Spex Academy seed:
 
-- Target directory not empty: the palette reports the refusal and registers nothing.
+- Existing seeded Academy: no corpus is copied over its current files or Git history.
+- Other nonempty target: the action reports the refusal and registers nothing.
 - Target already registered: the core's `conflict` names the registered path as a detail of the refusal, apart from its words, and the palette makes that project current.
 
 ### The Code's Clone
@@ -139,10 +140,22 @@ When the user confirms removal in the Overview tab, the workspace shall forget t
 
 #### projects-22
 
-The project palette's path row shall offer distinct "Add" (an existing repo) and "Create" (a new project) actions on the typed path, titled "Register this existing repository" and "Create a new repository at this path" and both disabled until a path is typed, and the palette shall list projects with filter-as-you-type matching on name and path:
+The local project palette shall distinguish adding an existing project from creating a new one, with tooltips explaining each action, and filter registered projects by name or path ([DR-142](../decisions/142-desktop-existing-projects-use-folder-picker.md)):
 
-- With no project registered there is nothing to filter: the palette drops its filter, names itself an add flow, opens with the path field focused and its placeholder saying a project is added by path, and leads its list with the Academy-example action [[projects-27](#projects-27)];
+- Without a native picker, the switcher offers Add and Create on the typed path, both disabled until a path is entered; with a native picker, it offers the folder action for adding and leaves creation to the add form.
+- With no project registered across any connected place there is nothing to filter: the palette drops its filter and names itself an add flow; its ordinary entry focuses the folder action where available, or the path field otherwise, and leads the list with the Academy-example action [[projects-27](#projects-27)], while the welcome page's "Add a local project" entry omits that repeated choice and separates an existing repository from creating a new one [[run-view-172](run-view.md#run-view-172)] ([DR-136](../decisions/136-the-first-project-picker-leads-with-a-folder.md));
 - the palette is where projects are browsed, chosen and created; it is not the only place one is added, a Space repair adding the project it already names from the folder it has checked ([DR-065](../decisions/065-repairs-the-reader-answers.md)).
+
+#### projects-42
+
+When the welcome page's local-project action [[run-view-172](run-view.md#run-view-172)] or the sidebar's Projects plus [[run-view-67](run-view.md#run-view-67)] opens the local-project add form, regardless of the selected place or whether projects are registered, the palette shall show a clearly clickable but neutral existing-folder choice where the native picker exists, or an existing-repository path where it does not, and a separate expandable new-project path with its specs-scaffold option ([DR-136](../decisions/136-the-first-project-picker-leads-with-a-folder.md), [DR-137](../decisions/137-specs-first-welcome-and-distinct-project-paths.md), [DR-138](../decisions/138-welcome-flow-copy-and-scoped-academy-note.md), [DR-139](../decisions/139-quieter-welcome-flow-and-academy-choice.md), [DR-142](../decisions/142-desktop-existing-projects-use-folder-picker.md)):
+
+- when the native folder picker is available, the folder choice shall receive initial focus;
+- without a native folder picker, the existing-path field shall receive initial focus;
+- where a folder picker is available, no manual existing-path control shall appear in either the add form or the switcher; opening the new-project path shall leave the folder action visible;
+- the creation form shall have no bottom link back to adding an existing repository; its existing-folder action shall remain available above the form, or where no native folder picker exists, an alternative above the form shall reopen the existing-path field;
+- the existing path shall name a Git repository already on disk, while the new path shall name a folder that Spex will create and initialize as a Git repository;
+- adding an existing repository and creating a new one shall keep their distinct core actions [[projects-1](#projects-1)] [[projects-3](#projects-3)].
 
 #### projects-23
 
@@ -241,6 +254,13 @@ Where a temporary parent directory exists, when the create-project flow complete
 - Commit signing required with no signing key configured, and again with a signing program that fails, each under an English and a Chinese core: the refusal reads, in that core's language, that Git could not make the first commit, the case's key phrase, and the terminal guidance, with Git's own line as its `output` detail [[projects-34](#projects-34)].
 - An existing repository, with or without an initial commit: Create refuses before mutation and names the applicable recovery, preserving the repository's files, index, and HEAD [[projects-3](#projects-3)].
 
+#### projects-43
+
+Where a real core serves a scratch home, when an integration flow seeds Academy, adds committed and uncommitted edits, removes the project and opens the example again, the test suite shall assert the reopening and refusal cases:
+
+- The same working folder is registered again with both edits and its Git HEAD unchanged [[projects-27](#projects-27)].
+- Opening an unrelated nonempty repository as Academy is refused, preserving its files and registering no project [[projects-27](#projects-27)].
+
 #### projects-32
 
 Where the core starts with a scaffold command and its variables under a command runner that records what it is asked to run, when the test suite creates a project with the scaffold option on, the test suite shall assert the scaffold command's cases below:
@@ -307,7 +327,13 @@ Where a project's session is held under a management lease taken out of band and
 
 #### projects-26
 
-Where the project palette renders with one project holding a live session and one without, the test suite shall assert that the path row offers "Add" titled "Register this existing repository" and "Create" titled "Create a new repository at this path" [[projects-22](#projects-22)] [[projects-25](#projects-25)], both disabled until a path is typed [[projects-22](#projects-22)], that the live project's row reads its running count beside a pulsing dot while the other's reads none [[projects-23](#projects-23)], and that no text, label or title on the surface contains the word "forge" [[projects-25](#projects-25)].
+Where the local project palette renders with a fixture client, the integration suite shall assert its add and switch cases:
+
+- With no native picker, Add and Create explain their distinct effects and stay disabled until a path is entered; with a native picker, the switcher offers a folder action and no existing-path entry [[projects-22](#projects-22)].
+- The add form focuses the folder choice where available, or the existing-path field otherwise; creation expands its own path and scaffold option while the existing-project route remains available above it [[projects-42](#projects-42)].
+- With or without registered projects, adding an existing project and creating a new one send their distinct actions; English and Chinese labels explain the two effects [[projects-42](#projects-42)] [[projects-25](#projects-25)].
+- With one project holding a live session and one without, only the live project's row shows its running count beside a pulsing dot [[projects-23](#projects-23)].
+- No text, label or title on the surface contains the word "forge" [[projects-25](#projects-25)].
 
 ### Refusal Coverage
 

@@ -4,107 +4,197 @@
 // The first run (run-view-97, projects-28): an empty machine, no
 // config, no project — what a new user sees and how they get going.
 
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
+import { join } from "node:path";
+import type { Page } from "@playwright/test";
 import { seedDemoProject } from "@sublang/spex-core/testing";
 
-import { test, expect, open, nav, git, clonePath } from "../src/harness";
+import { test, expect, open, openTranslated, nav, git, clonePath } from "../src/harness";
+import { measure, record } from "../src/fit";
 
 test.use({ appOptions: { config: "none" } });
 
-test("run-view-97: the first run greets, keeps the draft, seeds the Academy", async ({
+/** Keep the three PR screenshots optional, like the language journeys. */
+async function shoot(page: Page, name: string): Promise<void> {
+  const dir = process.env.SPEX_E2E_SHOTS;
+  if (!dir) return;
+  mkdirSync(dir, { recursive: true });
+  await page.screenshot({ path: join(dir, `${name}.png`) });
+}
+
+/** Both translations must fit the desktop and the 320px sidebar floor. */
+async function expectOnboardingFit(page: Page, stage: string): Promise<void> {
+  const defects: string[] = [];
+  record(`${stage} · desktop`, await measure(page), defects);
+  const collapse = page.getByTestId("sidebar-collapse");
+  await collapse.click();
+  await expect(collapse).toHaveAttribute("aria-expanded", "false");
+  await page.setViewportSize({ width: 320, height: 800 });
+  record(`${stage} · 320px`, await measure(page), defects);
+  await page.setViewportSize({ width: 1440, height: 838 });
+  await collapse.click();
+  await expect(collapse).toHaveAttribute("aria-expanded", "true");
+  expect(defects, defects.join("\n")).toEqual([]);
+}
+
+const ONBOARDING = [
+  {
+    locale: "en-US",
+    lang: "en",
+    headline: "Write clear specs. Build with playbooks.",
+    addProject: "Add a local project",
+    chooseFolder: "Choose a project folder…",
+    newFolder: "New folder path",
+    guidance: "Describe your goal. AI helps write specs for how the system should work and how to check it, then follows playbooks to build and review changes.",
+    playbook: "A playbook is a workflow written in plain language. Spex turns it into steps for AI to follow.",
+    task: "New task",
+    viewSpecs: "View specs",
+    specsTab: /Specs.*[1-9]\d* spec items?/,
+  },
+  {
+    locale: "zh-CN",
+    lang: "zh",
+    headline: "写清规约，按规程开发。",
+    addProject: "添加本地项目",
+    chooseFolder: "选择项目文件夹…",
+    newFolder: "新文件夹路径",
+    guidance: "说说你的目标。AI 帮你把系统该做什么、怎样检查结果写成规约，再按规程开发和审阅。",
+    playbook: "规程是用自然语言描述的工作流，Spex 将它转成 AI 可执行的步骤。",
+    task: "新任务",
+    viewSpecs: "查看规约",
+    specsTab: /规约.*[1-9]\d* 个规约条目/,
+  },
+] as const;
+
+for (const copy of ONBOARDING) {
+  test.describe(`first run in ${copy.lang}`, () => {
+    test.use({ locale: copy.locale, viewport: { width: 1440, height: 838 } });
+
+    test("run-view-97: welcome, local-project choice, Academy task and slash discovery", async ({
+      page,
+      app,
+    }) => {
+      // Supply only the native picker boundary. All project and specs
+      // operations still go through the real served shell and core.
+      await page.addInitScript(() => {
+        (window as unknown as { spexNative: unknown }).spexNative = {
+          pickDirectory: async () => null,
+        };
+      });
+      await openTranslated(page, app);
+      await expect(page.locator("html")).toHaveAttribute("lang", copy.lang);
+      const welcome = page.getByTestId("welcome-home");
+      await expect(welcome.getByRole("heading", { level: 1 })).toHaveText(copy.headline);
+      await expect(welcome.getByTestId("home-add-project")).toHaveText(copy.addProject);
+      await expect(welcome.getByTestId("home-academy")).toBeVisible();
+      await expect(page.getByTestId("start-composer")).toHaveCount(0);
+      await expect(page.getByTestId("captain-settings")).toHaveCount(0);
+      if (copy.lang === "zh") await shoot(page, "welcome");
+      await expectOnboardingFit(page, `welcome ${copy.lang}`);
+
+      await welcome.getByTestId("home-add-project").click();
+      const palette = page.getByRole("dialog");
+      await expect(palette).toHaveAttribute("aria-modal", "true");
+      const folder = palette.getByTestId("palette-open-folder");
+      await expect(folder).toHaveText(copy.chooseFolder);
+      await expect(folder).toBeFocused();
+      await expect(palette.getByTestId("palette-search")).toHaveCount(0);
+      await expect(palette.getByTestId("palette-path")).toHaveCount(0);
+      await expect(palette.getByTestId("palette-academy")).toHaveCount(0);
+      if (copy.lang === "zh") await shoot(page, "add-local-project");
+      // Canceling a native pick leaves the choice open and unchanged.
+      await folder.click();
+      await expect(palette).toBeVisible();
+      await palette.getByTestId("palette-create-start").click();
+      await expect(palette.getByTestId("palette-new-path")).toBeFocused();
+      await expect(palette).toContainText(copy.newFolder);
+      await expect(folder).toBeVisible();
+      await expect(palette.getByTestId("palette-path")).toHaveCount(0);
+      await page.keyboard.press("Escape");
+      await expect(palette).toBeHidden();
+      await expect(welcome.getByTestId("home-add-project")).toBeFocused();
+
+      // Academy opens the project task, without starting a conversation.
+      await welcome.getByTestId("home-academy").click();
+      const home = page.getByTestId("captain-home");
+      await expect(home.getByRole("heading", { level: 1 })).toContainText("spex-academy");
+      await expect(page.getByRole("tree")).toContainText("spex-academy");
+      await expect(home).toContainText(copy.guidance);
+      await expect(home.getByTestId("playbook-preview")).toContainText(copy.playbook);
+      await expect(home.getByTestId("playbook-preview")).toContainText("/code");
+      await expect(home.getByTestId("playbook-preview")).toContainText("/review");
+      await expect(home.getByTestId("project-spec-status")).toContainText(copy.viewSpecs);
+      await expect(page.getByRole("tab", { name: copy.specsTab })).toBeVisible();
+      await expect(page.getByTestId("captain-pane")).toHaveCount(0);
+      if (copy.lang === "zh") await shoot(page, "academy-project");
+      await expectOnboardingFit(page, `project task ${copy.lang}`);
+
+      // The specs link reaches the real reader and the named New task
+      // tab returns to the same draft, without submitting it.
+      const box = page.getByTestId("start-composer");
+      await box.fill("Fix the login bug");
+      await home.getByRole("button", { name: copy.viewSpecs, exact: true }).click();
+      await expect(page.getByTestId("specv-live")).toBeVisible();
+      await page.getByRole("tab", { name: copy.task, exact: true }).click();
+      await expect(box).toHaveValue("Fix the login bug");
+
+      // Slash discovery lists all seven installed playbooks; Escape
+      // keeps the draft, and typing filters it to the matching command.
+      await box.fill("/");
+      const menu = page.getByRole("listbox");
+      await expect(menu).toBeVisible();
+      await expect(menu.getByRole("option", { name: /^\// })).toHaveCount(7);
+      await expect(menu).toContainText("/code");
+      await expect(menu).toContainText("/review");
+      await box.press("Escape");
+      await expect(menu).toBeHidden();
+      await expect(box).toHaveValue("/");
+      await box.press("c");
+      await expect(menu).toBeVisible();
+      await expect(menu).toContainText("/code");
+      await expect(menu).not.toContainText("/review");
+    });
+  });
+}
+
+test("run-view-42, projects-42: the browser add form keeps paths distinct and owns its keys", async ({
   page,
   app,
 }) => {
   await open(page, app);
-
-  // The core seeded its installed template: the greeting offers a
-  // project, says what a playbook is, and the quick start names the
-  // built-ins.
-  const home = page.getByTestId("captain-home");
-  await expect(home).toContainText(/add a project/i);
-  await expect(home).toContainText("a scripted workflow the AI players run");
-  const quickStart = page.getByTestId("quick-start");
-  await expect(quickStart).toContainText("/code");
-  await expect(quickStart).toContainText("/review");
-
-  // Submitting with no project opens the palette as an add flow: no
-  // filter, the path field focused, the Academy row leading the list
-  // (projects-22); the draft survives.
-  const box = page.getByTestId("start-composer");
-  await box.fill("Fix the login bug");
-  await box.press("Enter");
-  const palette = page.getByRole("dialog", { name: "Add a project" });
-  await expect(palette).toBeVisible();
-  await expect(palette).toHaveAttribute("aria-modal", "true");
-  await expect(palette.getByTestId("palette-search")).toHaveCount(0);
-  const path = palette.getByTestId("palette-path");
-  await expect(path).toBeFocused();
-  await expect(path).toHaveAttribute("placeholder", "Add a project by path…");
-  await expect(palette.getByRole("button").first()).toContainText(
-    "Try the Academy example",
-  );
-
-  await palette.getByTestId("palette-academy").click();
-  await expect(palette).toBeHidden();
-  const tree = page.getByRole("tree", { name: "Projects and sessions" });
-  await expect(tree).toContainText("spex-academy");
-  await expect(home).toContainText("spex-academy");
-  await expect(box).toHaveValue("Fix the login bug");
-
-  // The slash menu: "/" lists playbooks, Escape hides it with the
-  // draft intact, typing reopens it.
-  await box.fill("/");
-  const menu = page.getByRole("listbox");
-  await expect(menu).toBeVisible();
-  await expect(menu.getByRole("option")).toHaveCount(await menu.getByRole("option").count());
-  await expect(menu).toContainText("/code");
-  await box.press("Escape");
-  await expect(menu).toBeHidden();
-  await expect(box).toHaveValue("/");
-  await box.press("c");
-  await expect(page.getByRole("listbox")).toBeVisible();
-  await expect(page.getByRole("listbox")).toContainText("/code");
-  await expect(page.getByRole("listbox")).not.toContainText("/review");
-});
-
-test("run-view-25, run-view-42: the greeting's own ways in; the palette owns its keys", async ({
-  page,
-  app,
-}) => {
-  await open(page, app);
-  const home = page.getByTestId("captain-home");
-  const addProject = home.getByTestId("home-add-project");
+  const welcome = page.getByTestId("welcome-home");
+  const addProject = welcome.getByTestId("home-add-project");
   const palette = page.getByRole("dialog", { name: "Add a project" });
 
-  // Add a project… opens the palette, focused on the path field.
+  // A browser without the native bridge offers an existing path.
   await addProject.click();
   await expect(palette).toBeVisible();
   const path = palette.getByTestId("palette-path");
   await expect(path).toBeFocused();
+  await expect(path).toHaveAttribute("placeholder", "/path/to/existing-project");
+  await expect(palette.getByTestId("palette-open-folder")).toHaveCount(0);
+  await expect(palette.getByTestId("palette-academy")).toHaveCount(0);
+  const create = palette.getByTestId("palette-create-start");
 
-  // Tab wraps inside the dialog: from its last control to its first
-  // and back again (run-view-42).
-  await page.keyboard.press("Tab");
-  await expect(palette.getByTestId("palette-academy")).toBeFocused();
-  await page.keyboard.press("Shift+Tab");
+  // Tab wraps between the last and first enabled controls.
+  await path.press("Shift+Tab");
+  await expect(create).toBeFocused();
+  await create.press("Tab");
   await expect(path).toBeFocused();
 
-  // Escape from a button inside the dialog closes it and hands focus
-  // back to the opener — never to the document body.
-  await palette.getByTestId("palette-academy").focus();
-  await page.keyboard.press("Escape");
+  await create.click();
+  const newPath = palette.getByTestId("palette-new-path");
+  await expect(newPath).toBeFocused();
+  await expect(newPath).toHaveAttribute("placeholder", "/path/to/new-project");
+  await expect(path).toHaveCount(0);
+  await newPath.fill(`${app.home}/new-project`);
+  await palette.getByTestId("palette-manual-path-start").click();
+  await expect(path).toBeFocused();
+  await expect(newPath).toHaveCount(0);
+
+  await path.press("Escape");
   await expect(palette).toBeHidden();
   await expect(addProject).toBeFocused();
-
-  // The greeting's own Academy control seeds through the same store
-  // action the palette uses; the greeting then names the project and
-  // its add controls are gone (run-view-25).
-  await home.getByTestId("home-academy").click();
-  const tree = page.getByRole("tree", { name: "Projects and sessions" });
-  await expect(tree).toContainText("spex-academy");
-  await expect(home).toContainText("spex-academy");
-  await expect(home.getByTestId("home-academy")).toHaveCount(0);
-  await expect(home.getByTestId("home-add-project")).toHaveCount(0);
 });
 
 test("projects-28: the palette adds, refuses, switches, and the Overview removes", async ({
@@ -112,8 +202,7 @@ test("projects-28: the palette adds, refuses, switches, and the Overview removes
   app,
 }) => {
   await open(page, app);
-  const openPalette = () =>
-    page.getByRole("button", { name: "Switch or add a project" }).click();
+  const openPalette = () => page.keyboard.press("ControlOrMeta+p");
 
   // A path that is no git work tree: guidance, nothing registered.
   await openPalette();

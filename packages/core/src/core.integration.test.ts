@@ -1509,6 +1509,45 @@ test("PROJ: the create flow scaffolds with the supplied command, else the regist
   await bare.service.stop();
 });
 
+test("projects-43: removed Academy reopens without replacing edits, other occupied paths refuse", async () => {
+  const harness = await startHarness(VALID_CONFIG);
+  const client = new Client(harness.service.port());
+  try {
+    await client.open();
+    const path = join(harness.dir, "academy");
+    const first = await client.expectOk("project.create", { path, example: true });
+    const readme = join(path, "README.md");
+    appendFileSync(readme, "\nMy committed Academy notes stay here.\n");
+    execFileSync("git", ["-C", path, "add", "README.md"]);
+    execFileSync("git", ["-C", path, "-c", "user.name=Test", "-c", "user.email=test@example.test", "-c", "commit.gpgsign=false", "commit", "-q", "-m", "academy notes"]);
+    appendFileSync(readme, "My uncommitted notes stay here.\n");
+    const head = execFileSync("git", ["-C", path, "rev-parse", "HEAD"], { encoding: "utf8" });
+
+    await client.expectOk("project.remove", { projectId: first.id, confirm: true });
+    assert.ok(existsSync(readme), "removal keeps the working folder");
+    const reopened = await client.expectOk("project.create", { path, example: true });
+    assert.equal(reopened.path, path);
+    assert.match(readFileSync(readme, "utf8"), /My committed Academy notes stay here\.\nMy uncommitted notes stay here/);
+    assert.equal(execFileSync("git", ["-C", path, "rev-parse", "HEAD"], { encoding: "utf8" }), head);
+
+    const unrelated = join(harness.dir, "unrelated");
+    mkdirSync(unrelated);
+    writeFileSync(join(unrelated, "keep.txt"), "keep this\n");
+    execFileSync("git", ["init", "-q", unrelated]);
+    execFileSync("git", ["-C", unrelated, "add", "keep.txt"]);
+    execFileSync("git", ["-C", unrelated, "-c", "user.name=Test", "-c", "user.email=test@example.test", "-c", "commit.gpgsign=false", "commit", "-q", "-m", "other project"]);
+    const refused = await client.command("project.create", { path: unrelated, example: true });
+    assert.ok(!refused.ok && refused.error.code === "invalid_request");
+    assert.match(refused.error.message, /not empty/);
+    const projects = await client.expectOk("project.list", {});
+    assert.ok(!projects.some((project) => project.path === unrelated));
+    assert.equal(readFileSync(join(unrelated, "keep.txt"), "utf8"), "keep this\n");
+  } finally {
+    client.close();
+    await harness.service.stop();
+  }
+});
+
 test("projects-18: real scaffolding uses the requested language or the core's language", async () => {
   const scaffoldCli = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "cli", "dist", "cli.js");
   const harness = await startHarness(VALID_CONFIG, {
