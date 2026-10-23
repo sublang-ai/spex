@@ -5,6 +5,16 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  schedule:
+    # The full matrix nightly, so a macOS-only difference is found on
+    # main within a day while pull requests run the reduced one (DR-145).
+    - cron: '17 3 * * *'
+
+# One run per pull-request head: a push cancels the run it supersedes;
+# a push to main cancels nothing (release-30).
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -22,13 +32,12 @@ jobs:
         # reached end of life in April 2026.
         os: [ubuntu-latest, macos-latest, windows-latest]
         node-version: [22, 24]
-        exclude:
-          # Windows keeps the single Node whose better-sqlite3 win32
-          # prebuild the lockfile is known to resolve: a source build
-          # there trips node-gyp's VS detection. The second version's
-          # coverage stays on ubuntu/macos.
-          - os: windows-latest
-            node-version: 24
+        # Windows keeps the single Node whose better-sqlite3 win32 prebuild
+        # the lockfile is known to resolve: a source build there trips
+        # node-gyp's VS detection. A pull request also keeps one macOS
+        # smoke job, Node 22; main and the nightly run take the full
+        # matrix (release-34, DR-145).
+        exclude: ${{ github.event_name == 'pull_request' && fromJSON('[{"os":"windows-latest","node-version":24},{"os":"macos-latest","node-version":24}]') || fromJSON('[{"os":"windows-latest","node-version":24}]') }}
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -70,7 +79,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        # Linux alone on a pull request; the full matrix on main and nightly (release-34).
+        os: ${{ github.event_name == 'pull_request' && fromJSON('["ubuntu-latest"]') || fromJSON('["ubuntu-latest", "macos-latest"]') }}
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -134,7 +144,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        # Linux alone on a pull request; the full matrix on main and nightly (release-34).
+        os: ${{ github.event_name == 'pull_request' && fromJSON('["ubuntu-latest"]') || fromJSON('["ubuntu-latest", "macos-latest"]') }}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
