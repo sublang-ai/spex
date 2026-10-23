@@ -49,12 +49,16 @@ export class SpexClient {
   private readonly pending = new Map<string, Pending>();
   private closedByUser = false;
   private mismatched = false;
+  /** The redial a dropped socket set off, while it waits. */
+  private reconnectTimer?: ReturnType<typeof setTimeout>;
 
   constructor(options: SpexClientOptions) {
     this.options = options;
   }
 
   connect(): void {
+    clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = undefined;
     this.closedByUser = false;
     this.options.onStatus("connecting");
     const factory =
@@ -106,7 +110,7 @@ export class SpexClient {
       if (!this.mismatched) this.options.onStatus("closed");
       const backoff = this.options.reconnectMs ?? 1000;
       if (!this.closedByUser && backoff > 0) {
-        setTimeout(() => this.connect(), backoff);
+        this.reconnectTimer = setTimeout(() => this.connect(), backoff);
       }
     });
     socket.addEventListener("error", () => {
@@ -114,8 +118,13 @@ export class SpexClient {
     });
   }
 
+  /** End the connection for good: a redial still waiting is called
+   * off, so a place dropped mid-backoff never dials again
+   * (run-view-168). */
   close(): void {
     this.closedByUser = true;
+    clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = undefined;
     this.socket?.close();
   }
 

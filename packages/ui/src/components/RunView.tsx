@@ -27,8 +27,8 @@ import {
   CAPTAIN_SPLIT_DEFAULT,
   CAPTAIN_SPLIT_MAX,
   CAPTAIN_SPLIT_MIN,
-  useAppStore,
 } from "../state/store.js";
+import { usePlaceStore } from "../state/place-context.js";
 import { SessionRecovery } from "./SessionRecovery.js";
 import { currentLocale, i18n } from "../i18n.js";
 import { ParkedRun } from "./ParkedRun.js";
@@ -257,6 +257,7 @@ export function RunView({
   focusTurn?: number;
   onFocusHandled?: () => void;
 }) {
+  const store = usePlaceStore();
   const externalWriter = session.externalWriter;
   const media = useComposerAttachments(sessionAttachmentKey(session.id), { kind: "project", id: session.projectId });
   readOnly ||= !!externalWriter;
@@ -272,29 +273,29 @@ export function RunView({
         : segment),
     }])),
   }, [view]);
-  const machineGraphs = useAppStore((state) => state.machineGraphs);
+  const machineGraphs = store((state) => state.machineGraphs);
   // The configured values this conversation's own settings are read
   // over (run-view-139): one source, so a chip and the editor it opens
   // never disagree about the same agent.
-  const configSummary = useAppStore((state) =>
+  const configSummary = store((state) =>
     state.configState?.status === "valid" ? state.configState.summary : undefined,
   );
-  const setAgentSettings = useAppStore((state) => state.setAgentSettings);
+  const setAgentSettings = store((state) => state.setAgentSettings);
   // One agent's editor, opened from that agent's own chip: the object
   // the reader touched is the object they get (run-view-138, DR-068).
   const [editingAgent, setEditingAgent] = useState<string | undefined>();
   const settingsAnchorRef = useRef<HTMLButtonElement>(null);
-  const captainSplit = useAppStore((state) => state.captainSplit);
-  const setCaptainSplit = useAppStore((state) => state.setCaptainSplit);
-  const ledger = useAppStore((state) => state.ledger);
-  const staged = useAppStore((state) => state.stagedIntents[session.id]);
-  const clearStagedIntent = useAppStore((state) => state.clearStagedIntent);
-  const submitSessionControl = useAppStore((state) => state.submitSessionControl);
-  const queueIntent = useAppStore((state) => state.queueIntent);
-  const closeIntent = useAppStore((state) => state.closeIntent);
-  const stageDispatch = useAppStore((state) => state.stageDispatch);
-  const collapsedLanes = useAppStore((state) => state.collapsedLanes[session.id]);
-  const setLaneCollapsed = useAppStore((state) => state.setLaneCollapsed);
+  const captainSplit = store((state) => state.captainSplit);
+  const setCaptainSplit = store((state) => state.setCaptainSplit);
+  const ledger = store((state) => state.ledger);
+  const staged = store((state) => state.stagedIntents[session.id]);
+  const clearStagedIntent = store((state) => state.clearStagedIntent);
+  const submitSessionControl = store((state) => state.submitSessionControl);
+  const queueIntent = store((state) => state.queueIntent);
+  const closeIntent = store((state) => state.closeIntent);
+  const stageDispatch = store((state) => state.stageDispatch);
+  const collapsedLanes = store((state) => state.collapsedLanes[session.id]);
+  const setLaneCollapsed = store((state) => state.setLaneCollapsed);
   const splitRef = useRef<HTMLDivElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
 

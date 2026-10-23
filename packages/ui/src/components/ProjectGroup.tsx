@@ -27,7 +27,8 @@ import type {
   SpecTreeState,
 } from "@sublang/spex-core/protocol";
 
-import { intentMediaOwner, useAppStore, type ProjectMeta } from "../state/store.js";
+import { intentMediaOwner, type ProjectMeta } from "../state/store.js";
+import { usePlaceStore } from "../state/place-context.js";
 import type { SessionView } from "../state/reducer.js";
 import {
   ATTENTION_MARK_CLASS,
@@ -190,11 +191,12 @@ const FORGE_STALE_CHECK_MS = 60_000;
  * first page — load on demand once connected; forge lists past the
  * cache window are asked for again while the groups stay on screen. */
 export function useGroupInputs(projects: readonly ProjectInfo[]): void {
-  const connection = useAppStore((state) => state.connection);
+  const store = usePlaceStore();
+  const connection = store((state) => state.connection);
   const key = projects.map((project) => project.id).join("\n");
   useEffect(() => {
     if (connection !== "open") return;
-    const state = useAppStore.getState();
+    const state = store.getState();
     if (!state.ledger && !state.ledgerError) void state.loadLedger();
     for (const project of projects) {
       if (!state.projectMeta[project.id]) void state.loadProjectMeta(project.id);
@@ -206,7 +208,7 @@ export function useGroupInputs(projects: readonly ProjectInfo[]): void {
   useEffect(() => {
     if (connection !== "open") return;
     const timer = setInterval(() => {
-      const state = useAppStore.getState();
+      const state = store.getState();
       const now = Date.now();
       for (const project of projects) {
         const meta = state.projectMeta[project.id];
@@ -228,7 +230,8 @@ export function useGroupInputs(projects: readonly ProjectInfo[]): void {
 export function useForgeAge(
   projects: readonly ProjectInfo[],
 ): (projectId: string) => number | undefined {
-  const projectMeta = useAppStore((state) => state.projectMeta);
+  const store = usePlaceStore();
+  const projectMeta = store((state) => state.projectMeta);
   const metaSeen = useRef(new Map<string, ProjectMeta>());
   const [fetchedAt, setFetchedAt] = useState<Record<string, number>>({});
   useEffect(() => {
@@ -253,7 +256,8 @@ export function useCaptureReveal(): {
   highlightId?: string;
   capture: (input: CaptureInput) => Promise<IntentInfo>;
 } {
-  const queueIntent = useAppStore((state) => state.queueIntent);
+  const store = usePlaceStore();
+  const queueIntent = store((state) => state.queueIntent);
   const [highlightId, setHighlightId] = useState<string>();
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(
@@ -554,9 +558,10 @@ function HistoryBand({
   now: number;
   onOpenIntent: (projectId: string, path: string, anchor: string) => void;
 }) {
-  const history = useAppStore((state) => state.history[project.id]);
-  const loadHistory = useAppStore((state) => state.loadHistory);
-  const removeIntent = useAppStore((state) => state.removeIntent);
+  const store = usePlaceStore();
+  const history = store((state) => state.history[project.id]);
+  const loadHistory = store((state) => state.loadHistory);
+  const removeIntent = store((state) => state.removeIntent);
   /** The one row asking to leave the record (DR-010 §4). */
   const [confirming, setConfirming] = useState<string>();
   /** Where focus lands once the confirm closes (DR-010 §6): the named
@@ -729,10 +734,11 @@ function NowBand({
   now: number;
   onOpenSession: (sessionId: string) => void;
 }) {
-  const view = useAppStore((state) =>
+  const store = usePlaceStore();
+  const view = store((state) =>
     session ? state.views[session.id] : undefined,
   );
-  const closeIntent = useAppStore((state) => state.closeIntent);
+  const closeIntent = store((state) => state.closeIntent);
   // Drop on the served intent (dashboard-41): behind the inline
   // confirm, since work is underway; the outcome line lasts six
   // seconds, and focus goes back to the control — or, once the
@@ -973,9 +979,10 @@ function ProvenanceAction({
   onOpenSession: (sessionId: string) => void;
   onDone: () => void;
 }) {
+  const store = usePlaceStore();
   // The record's title for its row (dashboard-40), from the tree the
   // path came from.
-  const record = useAppStore((state) =>
+  const record = store((state) =>
     intent.source?.kind === "record"
       ? state.specTrees[intent.projectId]?.intents.find(
           (entry) => entry.id === intent.source?.ref,
@@ -1088,6 +1095,7 @@ function QueueRow({
   onOpenIntent: (projectId: string, path: string, anchor: string) => void;
   onOpenSession: (sessionId: string) => void;
 }) {
+  const store = usePlaceStore();
   const [editing, setEditing] = useState<string>();
   const [saving, setSaving] = useState(false);
   const [editError, setEditError] = useState<string>();
@@ -1114,7 +1122,7 @@ function QueueRow({
   // row it replaced, never on the page body (DR-010 §6).
   const leaveEdit = () => {
     media.consume();
-    useAppStore.getState().setAttachmentDraftText(mediaKey, undefined);
+    store.getState().setAttachmentDraftText(mediaKey, undefined);
     setEditError(undefined);
     returnToRow.current = true;
     setEditing(undefined);
@@ -1146,7 +1154,7 @@ function QueueRow({
             disabled={saving}
             onChange={(event) => {
               setEditing(event.target.value);
-              useAppStore.getState().setAttachmentDraftText(mediaKey, event.target.value);
+              store.getState().setAttachmentDraftText(mediaKey, event.target.value);
             }}
             onKeyDown={(event) => {
               if (event.nativeEvent.isComposing || event.keyCode === 229) return;
@@ -1263,7 +1271,7 @@ function QueueRow({
             data-testid={`upnext-edit-action-${intent.id}`}
             onClick={() => {
               onMenuToggle(false);
-              const state = useAppStore.getState();
+              const state = store.getState();
               const retained = state.attachmentDraftTexts[mediaKey];
               if (retained === undefined) {
                 state.stageAttachmentAssets(mediaKey, intentMediaOwner(intent), intent.attachments ?? []);
@@ -1338,12 +1346,13 @@ function UpNextBand({
   onOpenSession: (sessionId: string) => void;
   onCapture: (input: CaptureInput) => Promise<IntentInfo>;
 }) {
-  const editIntent = useAppStore((state) => state.editIntent);
-  const closeIntent = useAppStore((state) => state.closeIntent);
-  const loadLedger = useAppStore((state) => state.loadLedger);
+  const store = usePlaceStore();
+  const editIntent = store((state) => state.editIntent);
+  const closeIntent = store((state) => state.closeIntent);
+  const loadLedger = store((state) => state.loadLedger);
   const draftKey = `queue:${project.id}`;
-  const draft = useAppStore((state) => state.attachmentDraftTexts[draftKey] ?? "");
-  const setDraft = (text: string) => useAppStore.getState().setAttachmentDraftText(draftKey, text);
+  const draft = store((state) => state.attachmentDraftTexts[draftKey] ?? "");
+  const setDraft = (text: string) => store.getState().setAttachmentDraftText(draftKey, text);
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState<string>();
   const media = useComposerAttachments(`queue:${project.id}`, { kind: "project", id: project.id });
@@ -1622,17 +1631,18 @@ export function ProjectGroup({
   onCapture,
   onOpenOverview,
 }: ProjectGroupProps) {
-  const projects = useAppStore((state) => state.projects);
-  const sessions = useAppStore((state) => state.sessions);
-  const ledger = useAppStore((state) => state.ledger);
-  const ledgerError = useAppStore((state) => state.ledgerError);
-  const meta = useAppStore((state) => state.projectMeta[project.id]);
-  const tree = useAppStore((state) => state.specTrees[project.id]);
-  const loadProjectMeta = useAppStore((state) => state.loadProjectMeta);
-  const collapsed = useAppStore(
+  const store = usePlaceStore();
+  const projects = store((state) => state.projects);
+  const sessions = store((state) => state.sessions);
+  const ledger = store((state) => state.ledger);
+  const ledgerError = store((state) => state.ledgerError);
+  const meta = store((state) => state.projectMeta[project.id]);
+  const tree = store((state) => state.specTrees[project.id]);
+  const loadProjectMeta = store((state) => state.loadProjectMeta);
+  const collapsed = store(
     (state) => state.dashboardGroupsCollapsed[project.id] ?? false,
   );
-  const setCollapsed = useAppStore(
+  const setCollapsed = store(
     (state) => state.setDashboardGroupCollapsed,
   );
   const intents = ledger?.intents ?? [];

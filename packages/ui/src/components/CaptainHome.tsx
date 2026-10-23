@@ -19,7 +19,8 @@ import { canSubmitContent, type ComposerAttachmentControls } from "./ComposerAtt
 import type { AgentPatch } from "../lib/config-ops.js";
 import { playbookIntent } from "../lib/playbook-intent.js";
 import { keyLabel } from "../lib/shortcuts.js";
-import { useAppStore, type StagedIntent } from "../state/store.js";
+import type { StagedIntent } from "../state/store.js";
+import { usePlaceStore } from "../state/place-context.js";
 import { Rich } from "./Rich.js";
 import { SlashMenuList, slashMatches } from "./SlashMenu.js";
 import { AgentChip } from "./AgentChip.js";
@@ -162,6 +163,7 @@ function CaptainBubble({
 }
 
 export function CaptainHome(props: CaptainHomeProps) {
+  const store = usePlaceStore();
   const { playbooks, captain, readiness, connected } = props;
   const storage = props.storage ?? window.localStorage;
 
@@ -185,7 +187,7 @@ export function CaptainHome(props: CaptainHomeProps) {
     useState<ReturnType<typeof popoverRoom>>();
   // With nothing registered the greeting itself carries the ways in
   // (run-view-25); seeding is the store action the palette uses.
-  const openAcademyExample = useAppStore((state) => state.openAcademyExample);
+  const openAcademyExample = store((state) => state.openAcademyExample);
   const [seeding, setSeeding] = useState(false);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const gearRef = useRef<HTMLButtonElement>(null);
@@ -560,7 +562,7 @@ export function CaptainHome(props: CaptainHomeProps) {
               onPick={insertCommand}
               onCompileNew={() => {
                 // The Library lands on its id field (playbook-library-51).
-                useAppStore.getState().requestNewPlaybook();
+                store.getState().requestNewPlaybook();
                 props.onNavigate("Playbooks");
               }}
             />
