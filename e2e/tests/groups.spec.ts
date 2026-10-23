@@ -93,7 +93,10 @@ import {
 const FORBIDDEN_WORDS = /\b(ours|theirs|HEAD|MERGE_HEAD)\b|origin\/spex|\b[Nn]amespace\b|\b[Ss]pace\b/;
 
 /** Note any forbidden word in the surface's visible text (space-27), or
- * any of the journey's own `words`. */
+ * any of the journey's own `words`. It reads the Groups surface alone:
+ * space-27 governs the copy on the surface, so the Projects tree, the
+ * Captain home and a session's transcript a journey also shows are
+ * other surfaces' words, which no space item governs. */
 async function scanVocabulary(page: Page, where: string, found: string[], words: RegExp = FORBIDDEN_WORDS): Promise<void> {
   const text = await page.getByTestId("space-surface").innerText();
   const hit = words.exec(text);
@@ -1353,6 +1356,10 @@ test.describe("placed at two instances", () => {
     // What every page passes: no forbidden word, and every row, line,
     // picker, notice and group line inside its box at the 320-pixel
     // floor (space-27, space-28), each finding named where it was met.
+    // "No visible text" is the surface's: the bullet verifies space-27,
+    // which governs the copy on the Groups surface, so each scan reads
+    // the surface, not the Projects tree or the Captain home the session
+    // steps pass through.
     const words: string[] = [];
     const scan = (on: Page, where: string): Promise<void> => scanVocabulary(on, where, words, PLACEMENT_WORDS);
     const defects: string[] = [];
