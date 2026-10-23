@@ -126,7 +126,7 @@ test("space-94, space-91, space-60, space-5: for a project placed at the first o
   assert.equal(pushed.sync.phase, "done", JSON.stringify(pushed.sync));
   assert.throws(() => git(bare, "cat-file", "-e", `spex:${secondFile}`));
   assert.doesNotThrow(() => git(bare, "cat-file", "-e", `spex:${firstFile}`));
-  const lastSync = pushed.lastSync;
+  const lastSync = placementOf(pushed, first.url).lastSync;
   assert.ok(lastSync, "its last sync recorded");
   assert.deepEqual(syncRecordsOf(home.dataDir, key), { [`sync:${key}:${firstFolder}:last`]: lastSync });
 

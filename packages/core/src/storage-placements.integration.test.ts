@@ -232,7 +232,7 @@ test("storage-5, space-22, space-5, space-15: this device's last sync and notice
   await home.client.expectOk("space.remote.set", { repository: local.key, url: pathBare });
   const viaPath = await home.client.settle("space.sync", { repository: local.key }, 30_000);
   assert.equal(viaPath.sync.phase, "done", JSON.stringify(viaPath.sync));
-  const former = viaPath.lastSync;
+  const former = placementOf(viaPath, null).lastSync;
   assert.ok(former);
   assert.deepEqual(syncRecordsOf(home.dataDir, local.key), { [`sync:${local.key}:origin:last`]: former });
   rewritePrefs(home.dataDir, (prefs) => {
@@ -240,7 +240,7 @@ test("storage-5, space-22, space-5, space-15: this device's last sync and notice
     prefs[`sync:${local.key}:last`] = former;
   });
   const pathOnly = await home.client.repository(local.key);
-  assert.deepEqual([pathOnly.lastSync, lines(pathOnly)], [former, [[null, former, false]]]);
+  assert.deepEqual(lines(pathOnly), [[null, former, false]]);
 
   // A pick places it at the stand-in, in front of its path placement:
   // the path placement keeps that record under its own name, following
@@ -257,10 +257,11 @@ test("storage-5, space-22, space-5, space-15: this device's last sync and notice
   const picked = await home.client.waitRepository(from, key, (repository) => repository.sync.phase === "done" && repository.sync.at > former.at, 30_000);
   renameSync(aside, pathBare);
   assert.deepEqual(picked.placements.map((line) => line.outcome?.kind), ["synced", "stopped"]);
-  assert.ok(picked.lastSync && picked.lastSync.at > former.at, JSON.stringify(picked.lastSync));
-  assert.deepEqual(syncRecordsOf(home.dataDir, key), { [`sync:${key}:${folder}:last`]: picked.lastSync, [`sync:${key}:origin:last`]: former });
+  const pickedLast = placementOf(picked, host.url).lastSync;
+  assert.ok(pickedLast && pickedLast.at > former.at, JSON.stringify(pickedLast));
+  assert.deepEqual(syncRecordsOf(home.dataDir, key), { [`sync:${key}:${folder}:last`]: pickedLast, [`sync:${key}:origin:last`]: former });
   assert.deepEqual(syncRecordsOf(home.dataDir, local.key), {});
-  assert.deepEqual(lines(picked), [[host.url, picked.lastSync, false], [null, former, false]]);
+  assert.deepEqual(lines(picked), [[host.url, pickedLast, false], [null, former, false]]);
 
   // A former record of the repository reads as its first placement's —
   // now its instance placement — the path placement reading its own,
@@ -274,23 +275,24 @@ test("storage-5, space-22, space-5, space-15: this device's last sync and notice
     prefs[`sync:${key}:noticed`] = true;
   });
   const reread = await home.client.repository(key);
-  assert.deepEqual([reread.lastSync, reread.noticed, lines(reread)], [earlier, true, [[host.url, earlier, true], [null, former, false]]]);
+  assert.deepEqual(lines(reread), [[host.url, earlier, true], [null, former, false]]);
   const synced = await home.client.settle("space.sync", { repository: key }, 30_000);
   assert.equal(synced.sync.phase, "done", JSON.stringify(synced.sync));
-  assert.ok(synced.lastSync && synced.lastSync.at > earlier.at, JSON.stringify(synced.lastSync));
-  const pathSynced = synced.placements[1].lastSync;
+  const syncedLast = placementOf(synced, host.url).lastSync;
+  assert.ok(syncedLast && syncedLast.at > earlier.at, JSON.stringify(syncedLast));
+  const pathSynced = placementOf(synced, null).lastSync;
   assert.ok(pathSynced && pathSynced.at > former.at, JSON.stringify(pathSynced));
   assert.deepEqual(syncRecordsOf(home.dataDir, key), {
-    [`sync:${key}:${folder}:last`]: synced.lastSync,
+    [`sync:${key}:${folder}:last`]: syncedLast,
     [`sync:${key}:${folder}:noticed`]: true,
     [`sync:${key}:origin:last`]: pathSynced,
   });
-  assert.deepEqual([synced.noticed, lines(synced)], [true, [[host.url, synced.lastSync, true], [null, pathSynced, false]]]);
+  assert.deepEqual(lines(synced), [[host.url, syncedLast, true], [null, pathSynced, false]]);
 
   // The path placement dropped takes its own record alone (space-5).
   const dropped = repositoryOf(await home.client.expectOk("space.remote.set", { repository: key, url: null }), key);
-  assert.deepEqual(syncRecordsOf(home.dataDir, key), { [`sync:${key}:${folder}:last`]: synced.lastSync, [`sync:${key}:${folder}:noticed`]: true });
-  assert.deepEqual(lines(dropped), [[host.url, synced.lastSync, true]]);
+  assert.deepEqual(syncRecordsOf(home.dataDir, key), { [`sync:${key}:${folder}:last`]: syncedLast, [`sync:${key}:${folder}:noticed`]: true });
+  assert.deepEqual(lines(dropped), [[host.url, syncedLast, true]]);
 });
 
 test("storage-42, storage-36, storage-34, storage-5, space-57, space-60: two instances over one Git backend, a project other members share placed at the first and synced after the notice; the first signed out, that project's sync follows the second, leaving placements/ holding the second's file, naming the same id, in place of the first's, its remote renamed to the second's folder with the id in its section, and its last sync and notice re-keyed to that remote in the same step", async (t) => {
@@ -319,9 +321,10 @@ test("storage-42, storage-36, storage-34, storage-5, space-57, space-60: two ins
   await home.client.expectOk("space.join", { instance: first.url, hostId: team.id });
   await home.client.waitRepository(from, key, (repository) => repository.state === "reachable" && repository.sync.phase === "idle", 30_000);
   await home.client.expectError("space.sync", { repository: key }, "invalid_request", /sharing notice/);
-  const once = await home.client.settle("space.sync", { repository: key, noticed: true }, 30_000);
-  assert.deepEqual([once.sync.phase, once.noticed], ["done", true], JSON.stringify(once.sync));
-  assert.deepEqual(syncRecordsOf(home.dataDir, key), { [`sync:${key}:${firstFolder}:last`]: once.lastSync, [`sync:${key}:${firstFolder}:noticed`]: true });
+  const once = await home.client.settle("space.sync", { repository: key, placement: first.url, noticed: true }, 30_000);
+  const onceLine = placementOf(once, first.url);
+  assert.deepEqual([once.sync.phase, onceLine.noticed], ["done", true], JSON.stringify(once.sync));
+  assert.deepEqual(syncRecordsOf(home.dataDir, key), { [`sync:${key}:${firstFolder}:last`]: onceLine.lastSync, [`sync:${key}:${firstFolder}:noticed`]: true });
   assert.deepEqual(readdirSync(join(clonePath(home.dataDir, key), "placements")), [`${firstFolder}.yaml`]);
 
   // The first signed out, its sync follows the second at Check: by its
@@ -343,29 +346,30 @@ test("storage-42, storage-36, storage-34, storage-5, space-57, space-60: two ins
     };
     atCompare = seen;
     const row = await home.client.repository(followed);
-    seen.read = [row.instance, row.lastSync, row.noticed, row.placements[0]?.instance, row.placements[0]?.lastSync, row.placements[0]?.noticed];
+    seen.read = [row.instance, row.placements[0]?.instance, row.placements[0]?.lastSync, row.placements[0]?.noticed];
   };
   from = home.client.mark();
   await home.client.expectOk("space.sync", { repository: key });
   const moved = await home.client.waitRepository(from, followed, (repository) => repository.sync.phase !== "running" && repository.sync.phase !== "idle", 30_000);
   home.hooks.beforeStep = undefined;
-  assert.deepEqual([moved.sync.phase, moved.id, moved.instance, moved.noticed], ["done", team.id, second.url, true], JSON.stringify(moved.sync));
+  const movedLine = placementOf(moved, second.url);
+  assert.deepEqual([moved.sync.phase, moved.id, moved.instance, movedLine.noticed], ["done", team.id, second.url, true], JSON.stringify(moved.sync));
   assert.deepEqual(atCompare, {
     files: [`${secondFolder}.yaml`],
     bytes: placementBytes(second.url, team.id),
     remotes: [secondFolder],
     id: team.id,
-    records: { [`sync:${followed}:${secondFolder}:last`]: once.lastSync, [`sync:${followed}:${secondFolder}:noticed`]: true },
-    read: [second.url, once.lastSync, true, second.url, once.lastSync, true],
+    records: { [`sync:${followed}:${secondFolder}:last`]: onceLine.lastSync, [`sync:${followed}:${secondFolder}:noticed`]: true },
+    read: [second.url, second.url, onceLine.lastSync, true],
   });
   // In one step with the remote's rename: no state the sync broadcast
   // reads the placement without its last sync and notice.
   for (const reading of home.client.readings(from, [key, followed]).filter((candidate) => candidate.sync.phase !== "done")) {
-    assert.deepEqual([reading.lastSync, reading.noticed, reading.placements[0]?.lastSync, reading.placements[0]?.noticed], [once.lastSync, true, once.lastSync, true], `${reading.key}: ${JSON.stringify(reading.sync)}`);
+    assert.deepEqual([reading.placements[0]?.lastSync, reading.placements[0]?.noticed], [onceLine.lastSync, true], `${reading.key}: ${JSON.stringify(reading.sync)}`);
   }
   // Its push to the second records its last sync there.
-  assert.ok(moved.lastSync && once.lastSync && moved.lastSync.at >= once.lastSync.at, JSON.stringify(moved.lastSync));
-  assert.deepEqual({ ...syncRecordsOf(home.dataDir, key), ...syncRecordsOf(home.dataDir, followed) }, { [`sync:${followed}:${secondFolder}:last`]: moved.lastSync, [`sync:${followed}:${secondFolder}:noticed`]: true });
+  assert.ok(movedLine.lastSync && onceLine.lastSync && movedLine.lastSync.at >= onceLine.lastSync.at, JSON.stringify(movedLine.lastSync));
+  assert.deepEqual({ ...syncRecordsOf(home.dataDir, key), ...syncRecordsOf(home.dataDir, followed) }, { [`sync:${followed}:${secondFolder}:last`]: movedLine.lastSync, [`sync:${followed}:${secondFolder}:noticed`]: true });
   assert.deepEqual(readdirSync(join(clone, "placements")).sort(), [`${secondFolder}.yaml`].sort());
 });
 

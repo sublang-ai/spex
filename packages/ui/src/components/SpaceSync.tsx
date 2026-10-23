@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// A spex repository's Sync tab (DR-057, DR-103): local and incoming
-// units by kind in human words (space-7, space-8), the running rail
-// with its step line and Stop (space-12, space-16), the choices picker
-// with its one inline confirm (space-9, space-17, space-18), the
-// stopped card with its cause, guidance and Retry (space-15), the
+// A spex repository's Sync tab (DR-057, DR-103, DR-128): local units
+// and each placement's incoming units by kind in human words (space-7,
+// space-8), the running rail with its step line, the placement in
+// flight and Stop (space-12, space-16), the choices picker for one
+// placement with its one inline confirm (space-9, space-17, space-18),
+// the stopped card with its cause, guidance and Retry (space-15) — a
+// stopped Leave's sending that Leave again (space-89), and a join only
+// where this page joined that placement (space-13) — the
 // unrelated-history card (space-13) and in-place line diffs
 // (space-10); and the home's issues list with its repairs (space-46..
 // space-55). Every side is "mine" or "the host's" (space-27); Git's
@@ -15,6 +18,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type 
 import type {
   DiagnosticRepair,
   GroupsState,
+  PlacementState,
   RepositoryState,
   SpaceChoice,
   SpaceConflict,
@@ -27,6 +31,7 @@ import type {
 import { usePlaceStore } from "../state/place-context.js";
 import { isLocalPlace } from "../state/store.js";
 import { i18n } from "../i18n.js";
+import { heldPlacements, instanceNameAt, keyPlacement, placementAt, placementName } from "../lib/placements.js";
 import { relativeAge } from "../lib/time.js";
 import {
   KIND_LABELS,
@@ -36,6 +41,7 @@ import {
   STEP_ORDER,
   cloneHere,
   groupUnits,
+  lineOutcome,
 } from "../lib/space.js";
 import { Icon } from "./Icon.js";
 import { LINK } from "./SpaceSurface.js";
@@ -43,6 +49,9 @@ import { InlineConfirm } from "./InlineConfirm.js";
 import { PRIMARY, SECONDARY, type Note } from "./SpaceSurface.js";
 
 type Side = SpaceChoice;
+/** What a sync the tab starts carries (space-18, space-29): the choices
+ * and the join, each for the placement `placement` names. */
+type SyncInput = { placement?: string | null; choices?: Record<string, Side>; join?: boolean };
 
 /** One unit's line diff in place (space-10): the ancestor against this
  * device's version or the host's, `+` and `−` marking every line in
@@ -51,12 +60,16 @@ function DiffBox({
   repository,
   unit,
   side,
+  placement,
   testId,
 }: {
   /** The spex repository's key every `space.*` call names. */
   repository: string;
   unit: SpaceUnit;
   side: Side;
+  /** The placement the host's side is of: its instance's origin, null
+   * for the path placement (space-10, space-29). */
+  placement?: string | null;
   testId: string;
 }) {
   const store = usePlaceStore();
@@ -69,8 +82,11 @@ function DiffBox({
     setPatches(undefined);
     setError(undefined);
     const paths = unit.paths.length > 0 ? unit.paths : [unit.unit];
+    // This device's side is the clone's own; the host's is one
+    // placement's (space-10).
+    const of = side === "remote" ? placement : undefined;
     Promise.all(
-      paths.map((path) => spaceDiff(repository, unit.unit, path, side).then((result) => ({ path, ...result }))),
+      paths.map((path) => spaceDiff(repository, unit.unit, path, side, of).then((result) => ({ path, ...result }))),
     )
       .then((results) => {
         if (!cancelled) setPatches(results);
@@ -81,7 +97,7 @@ function DiffBox({
     return () => {
       cancelled = true;
     };
-  }, [repository, unit.unit, unit.paths, side, spaceDiff]);
+  }, [repository, unit.unit, unit.paths, side, placement, spaceDiff]);
 
   if (error) {
     return (
@@ -160,12 +176,15 @@ function UnitRow({
   repository,
   unit,
   side,
+  placement,
   conflict,
   onOpenSession,
 }: {
   repository: string;
   unit: SpaceUnit;
   side: Side;
+  /** The placement an incoming row came from (space-8, space-10). */
+  placement?: string | null;
   conflict: boolean;
   onOpenSession(sessionId: string): void;
 }) {
@@ -253,7 +272,13 @@ function UnitRow({
         </ul>
       ) : null}
       {diffOpen ? (
-        <DiffBox repository={repository} unit={unit} side={side} testId={`space-diff-${side}-${unit.unit}`} />
+        <DiffBox
+          repository={repository}
+          unit={unit}
+          side={side}
+          placement={placement}
+          testId={`space-diff-${side}-${unit.unit}`}
+        />
       ) : null}
     </li>
   );
@@ -263,22 +288,30 @@ function UnitList({
   repository,
   units,
   side,
+  placement,
   conflicts,
+  level = 3,
   onOpenSession,
   testId,
 }: {
   repository: string;
   units: SpaceUnit[];
   side: Side;
+  /** The placement an incoming list is of (space-8, space-10). */
+  placement?: string | null;
   conflicts: Set<string>;
+  /** The kinds' heading level: beneath a placement's heading on the
+   * incoming side, one below it. */
+  level?: 3 | 4;
   onOpenSession(sessionId: string): void;
   testId: string;
 }) {
+  const Heading = level === 4 ? "h4" : "h3";
   return (
     <div data-testid={testId} className="flex flex-col gap-2">
       {groupUnits(units).map((group) => (
         <div key={group.kind} className="flex flex-col gap-1">
-          <h3 className="text-xs font-medium text-neutral-500">{KIND_LABELS[group.kind]()}</h3>
+          <Heading className="text-xs font-medium text-neutral-500">{KIND_LABELS[group.kind]()}</Heading>
           <ul className="flex flex-col gap-1 pl-2">
             {group.units.map((unit) => (
               <UnitRow
@@ -286,6 +319,7 @@ function UnitList({
                 repository={repository}
                 unit={unit}
                 side={side}
+                placement={placement}
                 // The incoming list marks the units this device changed
                 // too (space-8); the local list lists them plainly.
                 conflict={side === "remote" && conflicts.has(unit.unit)}
@@ -344,6 +378,8 @@ function ConflictRow({
   choice,
   marked,
   now,
+  placement,
+  hostName,
   disabled,
   onChoice,
 }: {
@@ -352,6 +388,11 @@ function ConflictRow({
   choice?: Side;
   marked: boolean;
   now: number;
+  /** The placement the choices are for (space-9, space-10). */
+  placement: string | null;
+  /** Its instance's display name, which the host's side names
+   * (space-17). */
+  hostName: string;
   disabled: boolean;
   onChoice(unit: string, side: Side): void;
 }) {
@@ -376,7 +417,7 @@ function ConflictRow({
   };
 
   const label = labelLines(unit.label);
-  const option = (side: Side, label: string, summary: SpaceSide) => {
+  const option = (side: Side, label: string, summary: SpaceSide, beside?: string) => {
     const id = `space-choice-${side}-${unit.unit}`;
     return (
       <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -395,7 +436,16 @@ function ConflictRow({
           {/* A spoken space: the radio's name reads "Keep mine updated…",
               never two words run together. */}
           {" "}
+          {beside !== undefined ? (
+            <>
+              <span className="min-w-0 truncate text-xs text-neutral-500" title={beside}>
+                {beside}
+              </span>
+              {" "}
+            </>
+          ) : null}
           <span className="min-w-0 truncate text-xs text-neutral-500" title={sideSummary(summary, now)}>
+            {beside !== undefined ? <span aria-hidden>· </span> : null}
             {sideSummary(summary, now)}
           </span>
         </label>
@@ -448,31 +498,50 @@ function ConflictRow({
         i18n._({ id: "Keep mine", comment: "conflict choice: keep this device's version" }),
         conflict.mine,
       )}
+      {/* The host's side names the instance the choices are for
+          (space-17). */}
       {option(
         "remote",
         i18n._({ id: "Take host's", comment: "conflict choice: take the host's version" }),
         conflict.remote,
+        hostName,
       )}
       {diffSide ? (
-        <DiffBox repository={repository} unit={unit} side={diffSide} testId={`space-diff-${diffSide}-${unit.unit}`} />
+        <DiffBox
+          repository={repository}
+          unit={unit}
+          side={diffSide}
+          placement={placement}
+          testId={`space-diff-${diffSide}-${unit.unit}`}
+        />
       ) : null}
     </div>
   );
 }
 
+/** The operations whose rail lists the steps (space-12): a sync, a
+ * join, a Place and an Attach run them; a check and a Leave read their
+ * step line alone. */
+const STEPPED_OPS: ReadonlySet<SpaceOp> = new Set(["sync", "join", "place", "attach"]);
+
 /** The six-step rail (space-12): done steps ticked, the current one
- * named by the step line, the upcoming muted; Stop stands only while a
- * transport step runs (space-16). */
+ * named by the step line, the upcoming muted, the placement in flight
+ * named beside the step line where the clone holds more than one; Stop
+ * stands only while a transport step runs (space-16). */
 function Rail({
   step,
   cancelable,
   op,
+  placement,
   onStop,
   stopping,
 }: {
   step: SyncStep;
   cancelable: boolean;
   op: SpaceOp;
+  /** The placement in flight, by its line's name; none where the clone
+   * holds one alone or the step is at none. */
+  placement?: string;
   onStop(): void;
   stopping: boolean;
 }) {
@@ -482,7 +551,7 @@ function Rail({
       data-testid="space-rail"
       className="flex flex-col gap-2 rounded-lg border border-emerald-300 bg-emerald-50 p-3 text-sm dark:border-emerald-800 dark:bg-emerald-950"
     >
-      {op !== "check" ? (
+      {STEPPED_OPS.has(op) ? (
         <ol
           className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs"
           aria-label={i18n._("Sync steps")}
@@ -522,6 +591,21 @@ function Rail({
         <span data-testid="space-step-line" className="font-medium">
           {STEP_LINES[step]()}
         </span>
+        {/* Apart from the step line, which reads the step alone. */}
+        {placement !== undefined ? (
+          <>
+            <span aria-hidden className="text-xs text-emerald-800 dark:text-emerald-200">
+              ·
+            </span>
+            <span
+              data-testid="space-step-placement"
+              className="min-w-0 truncate text-xs text-emerald-800 dark:text-emerald-200"
+              title={placement}
+            >
+              {placement}
+            </span>
+          </>
+        ) : null}
         {cancelable ? (
           <button
             type="button"
@@ -1115,6 +1199,8 @@ export function SyncTab({
   repo,
   now,
   connected,
+  dismissed,
+  onDismiss,
   onOpenSession,
   onNote,
 }: {
@@ -1122,17 +1208,24 @@ export function SyncTab({
   repo: RepositoryState;
   now: number;
   connected: boolean;
+  /** The sync phase whose outcome the reader dismissed: the surface
+   * holds it, so its row's placement lines put the same outcomes away
+   * (space-87). */
+  dismissed?: string;
+  onDismiss(phase: string): void;
   onOpenSession(sessionId: string): void;
   onNote: Note;
 }) {
   const store = usePlaceStore();
   const spaceFetch = store((state) => state.spaceFetch);
   const spaceSync = store((state) => state.spaceSync);
+  const spaceLeave = store((state) => state.spaceLeave);
+  const spaceLastAct = store((state) => state.spaceLastAct);
   const spaceCancel = store((state) => state.spaceCancel);
   const key = repo.key;
   const sync = repo.sync;
-  const branch = repo.branch;
   const running = sync.phase === "running";
+  const held = heldPlacements(repo);
 
   const [choices, setChoices] = useState<Record<string, Side>>({});
   const [confirming, setConfirming] = useState(false);
@@ -1142,24 +1235,30 @@ export function SyncTab({
   // outcome that landed first.
   const [accepted, setAccepted] = useState<{ where: "check" | "apply" | "retry" | "stop"; key: string }>();
   const [error, setError] = useState<{ where: "check" | "apply" | "retry"; message: string }>();
-  const [dismissed, setDismissed] = useState<string>();
-  const lastSyncInput = useRef<{ choices?: Record<string, Side>; join?: boolean }>({});
+  const lastSyncInput = useRef<SyncInput>({});
 
+  // The placement the picker is for (space-9, space-14): the one the
+  // sync ended in choices at, else — a stopped Apply names none — the
+  // first in order holding conflicts.
+  const firstWithConflicts = held.find((line) => line.conflicts.length > 0);
+  const choicesLine =
+    sync.phase === "choices"
+      ? (placementAt(repo, sync.placement) ?? firstWithConflicts)
+      : sync.phase === "stopped" && sync.step === "apply"
+        ? firstWithConflicts
+        : undefined;
+  const choicesName = choicesLine
+    ? placementName(groups, choicesLine)
+    : sync.phase === "choices" && sync.placement !== null
+      ? instanceNameAt(groups, sync.placement)
+      : "";
+  const conflicts = choicesLine?.conflicts ?? [];
   // The picker's choices outlive a stop and a re-plan: a choice for a
   // unit that is no longer a conflict is dropped, the rest stand.
-  const conflictUnits = new Set(repo.conflicts.map((conflict) => conflict.unit.unit));
-  // The incoming list carries the conflicts too (space-8): the core
-  // lists a unit changed on both sides under conflicts alone, and its
-  // row here reads the host's change beside the mark to choose.
-  const incomingUnits: SpaceUnit[] = [
-    ...repo.incoming,
-    ...repo.conflicts
-      .filter((conflict) => !repo.incoming.some((unit) => unit.unit === conflict.unit.unit))
-      .map((conflict) => ({ ...conflict.unit, change: conflict.remote.change })),
-  ];
+  const conflictUnits = new Set(conflicts.map((conflict) => conflict.unit.unit));
   const chosen = Object.entries(choices).filter(([unit]) => conflictUnits.has(unit));
   const chosenChoices = Object.fromEntries(chosen) as Record<string, Side>;
-  const total = repo.conflicts.length;
+  const total = conflicts.length;
   const remoteCount = chosen.filter(([, side]) => side === "remote").length;
 
   const phaseKey = JSON.stringify(sync);
@@ -1169,11 +1268,69 @@ export function SyncTab({
   const showStopped = sync.phase === "stopped" && dismissed !== phaseKey;
   const showDone = sync.phase === "done" && dismissed !== phaseKey;
   const pickerStands =
+    choicesLine !== undefined &&
     total > 0 &&
     (sync.phase === "choices" || (sync.phase === "stopped" && sync.step === "apply"));
   const marked =
     sync.phase === "stopped" && sync.step === "apply"
-      ? repo.conflicts.find((conflict) => sync.message.includes(conflict.unit.label))?.unit.unit
+      ? conflicts.find((conflict) => sync.message.includes(conflict.unit.label))?.unit.unit
+      : undefined;
+
+  /** One placement's incoming units (space-8): what the core lists as
+   * incoming, and the units changed on both sides, which it lists under
+   * conflicts alone — their rows read the host's change beside the mark
+   * to choose. */
+  const unitsOf = (line: PlacementState): SpaceUnit[] => [
+    ...line.incoming,
+    ...line.conflicts
+      .filter((conflict) => !line.incoming.some((unit) => unit.unit === conflict.unit.unit))
+      .map((conflict) => ({ ...conflict.unit, change: conflict.remote.change })),
+  ];
+  /** What one placement's section lists, or why it lists nothing
+   * (space-8): an unrelated history lists nothing — until a join of it
+   * compares against the empty tree and asks its choices (space-9) — a
+   * placement holding no records says Sync will send these, and one
+   * whose check stopped says so. */
+  const incomingOf = (line: PlacementState): { units: SpaceUnit[]; empty?: string } => {
+    const joining = sync.phase === "choices" && sync.placement === line.instance;
+    if ((sync.phase === "unrelated" && sync.placement === line.instance) || (line.branch?.unrelated && !joining)) {
+      return { units: [], empty: i18n._("Unrelated history") };
+    }
+    if (line.branch?.hostEmpty) {
+      return { units: [], empty: i18n._("The host holds no records yet; Sync will send these") };
+    }
+    const units = unitsOf(line);
+    const checked = line.branch != null && line.branch.checkedAt !== null;
+    if (checked && units.length > 0) return { units };
+    const outcome = lineOutcome(repo, line, dismissed);
+    if (outcome?.kind === "stopped" && outcome.step === "check") {
+      return {
+        units: [],
+        empty: i18n._({
+          id: "{step} stopped — {message}",
+          values: { step: STEP_NAMES[outcome.step](), message: outcome.message },
+          comment: "{step} is the sync step's name; {message} is the cause the host gave",
+        }),
+      };
+    }
+    return { units: [], empty: checked ? i18n._("Nothing new on the host") : i18n._("Not checked yet") };
+  };
+  // While choices stand, the incoming area lists that placement's units
+  // alone, above the picker (space-9); otherwise every placement the
+  // clone holds, in order (space-8).
+  const sections = (sync.phase === "choices" && choicesLine ? [choicesLine] : held).map((line) => ({
+    line,
+    ...incomingOf(line),
+  }));
+  const incomingCount = sections.reduce((sum, section) => sum + section.units.length, 0);
+
+  // The placement in flight, named beside the step line where the
+  // clone holds more than one (space-12).
+  const inFlight = running && sync.placement !== undefined && held.length > 1 ? placementAt(repo, sync.placement) : undefined;
+  const flightName = inFlight
+    ? placementName(groups, inFlight)
+    : running && sync.placement && held.length > 1
+      ? instanceNameAt(groups, sync.placement)
       : undefined;
 
   const run = async (
@@ -1195,23 +1352,56 @@ export function SyncTab({
     }
   };
 
-  // While the histories are still unrelated — a join's merge has not
-  // landed — every sync the tab starts is a join (space-13, space-18).
-  const joinNeeded = branch?.unrelated === true || sync.phase === "unrelated";
-
-  const apply = () =>
-    run("apply", () => {
-      const input = { choices: chosenChoices, ...(joinNeeded ? { join: true } : {}) };
+  const apply = () => {
+    if (!choicesLine) return;
+    const line = choicesLine;
+    // The choices are for one placement, and its join while its history
+    // is unrelated (space-18).
+    return run("apply", () => {
+      const input: SyncInput = {
+        placement: line.instance,
+        choices: chosenChoices,
+        ...(line.branch?.unrelated ? { join: true } : {}),
+      };
       lastSyncInput.current = input;
       return spaceSync(key, input);
     });
+  };
+
+  // A stopped Leave names no placement (space-30): its Retry sends again
+  // the Leave this page asked, confirmed as it was, and with no memory
+  // of one — another page's, or before a reload — none is offered, its
+  // row's Leave… still standing (space-89). A Place or an Attach stops
+  // only in the sync that follows its add — a refused add ends the
+  // operation where it stood — so its Retry syncs (space-97, space-99).
+  const lastAct = sync.phase === "stopped" && sync.op === "leave" ? spaceLastAct(key) : undefined;
+  const leaveAgain = lastAct?.op === "leave" ? lastAct : undefined;
+  const retryOffered = sync.phase === "stopped" && sync.retry && (sync.op !== "leave" || leaveAgain !== undefined);
 
   const retry = () => {
     if (sync.phase !== "stopped") return;
     if (sync.op === "check") return run("retry", () => spaceFetch(key));
-    const input = { ...lastSyncInput.current };
-    if (total > 0 && chosen.length === total) input.choices = chosenChoices;
-    if (joinNeeded || sync.op === "join") input.join = true;
+    if (sync.op === "leave") {
+      if (!leaveAgain) return;
+      return run("retry", () => spaceLeave(key, leaveAgain.instance, leaveAgain.confirmed));
+    }
+    const input: SyncInput = { ...lastSyncInput.current };
+    delete input.join;
+    if (choicesLine && total > 0 && chosen.length === total) {
+      input.placement = choicesLine.instance;
+      input.choices = chosenChoices;
+    }
+    // Only a join this page sent runs again as a join, of the placement
+    // it named, and a join stopped on its way as the join of its
+    // placement (space-13): an unrelated placement nobody here joined
+    // syncs plainly, stopping as "Unrelated history" again with Join on
+    // its line, the confirm still the reader's.
+    const act = spaceLastAct(key);
+    const joining = act?.op === "join" ? act : sync.op === "join" ? keyPlacement(repo) : undefined;
+    if (joining && (input.placement === undefined || input.placement === joining.instance)) {
+      input.placement = joining.instance;
+      input.join = true;
+    }
     return run("retry", () => spaceSync(key, input));
   };
 
@@ -1256,11 +1446,11 @@ export function SyncTab({
   // A repository only on this device has no host copy to check
   // (space-29: `space.fetch` refuses a local-only one).
   const checkDisabled =
-    disabled || running || pending || branch?.mergePending === true || repo.state === "local-only";
+    disabled || running || pending || repo.mergePending || repo.state === "local-only";
 
   return (
     <div data-testid="space-sync-tab" className="flex flex-col gap-3">
-      {branch?.mergePending ? (
+      {repo.mergePending ? (
         <Card testId="space-merge-note" tone="amber">
           {i18n._("A merge is in progress in your terminal. Finish or abort it there.")}
         </Card>
@@ -1271,6 +1461,7 @@ export function SyncTab({
           step={sync.step}
           cancelable={sync.cancelable}
           op={sync.op}
+          placement={flightName}
           onStop={() => void stop()}
           stopping={busy === "stop" || accepted?.where === "stop"}
         />
@@ -1281,7 +1472,11 @@ export function SyncTab({
             {i18n._("Needs your choice")}
           </span>
           <span className="text-xs">
-            {i18n._("Your changes are saved; nothing is pushed yet")}
+            {i18n._({
+              id: "Your changes are saved; nothing is pushed to {name} yet",
+              values: { name: choicesName },
+              comment: "the choices note; {name} is that placement's instance's display name, or the path placement's remote",
+            })}
           </span>
         </Card>
       ) : null}
@@ -1303,16 +1498,16 @@ export function SyncTab({
           {/* One block: the guidance names what the host said and the
               way forward (space-50). */}
           {sync.guidance ? <span className="text-xs">{sync.guidance}</span> : null}
-          {sync.step === "push" && (branch?.ahead ?? 0) > 0 ? (
+          {sync.step === "push" && (keyPlacement(repo)?.branch?.ahead ?? 0) > 0 ? (
             <span className="text-xs">
               {i18n._(
                 "Your changes are saved locally ({count, plural, one {# commit} other {# commits}} ahead).",
-                { count: branch?.ahead ?? 0 },
+                { count: keyPlacement(repo)?.branch?.ahead ?? 0 },
               )}
             </span>
           ) : null}
           <div className="flex flex-wrap items-center gap-2">
-            {sync.retry ? (
+            {retryOffered ? (
               <button
                 type="button"
                 data-testid="space-retry"
@@ -1329,7 +1524,7 @@ export function SyncTab({
               type="button"
               data-testid="space-dismiss"
               className={SECONDARY}
-              onClick={() => setDismissed(phaseKey)}
+              onClick={() => onDismiss(phaseKey)}
             >
               {i18n._({ id: "Dismiss", comment: "put this outcome card away" })}
             </button>
@@ -1360,7 +1555,7 @@ export function SyncTab({
               type="button"
               data-testid="space-dismiss"
               className={SECONDARY}
-              onClick={() => setDismissed(phaseKey)}
+              onClick={() => onDismiss(phaseKey)}
             >
               {i18n._({ id: "Dismiss", comment: "put this outcome card away" })}
             </button>
@@ -1391,13 +1586,7 @@ export function SyncTab({
       <section aria-labelledby="space-incoming-heading" className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <h2 id="space-incoming-heading" className="min-w-0 flex-1 text-sm font-medium">
-            {i18n._("From the host ({count})", { count: incomingUnits.length })}
-            {branch?.checkedAt != null ? (
-              <span className="hidden text-xs font-normal text-neutral-500 @2xl:inline">
-                {" "}
-                {i18n._("· checked {age}", { age: relativeAge(branch.checkedAt, now) })}
-              </span>
-            ) : null}
+            {i18n._("From the host ({count})", { count: incomingCount })}
           </h2>
           <button
             type="button"
@@ -1414,28 +1603,50 @@ export function SyncTab({
             </span>
           ) : null}
         </div>
-        {sync.phase === "unrelated" || (branch?.unrelated && sync.phase !== "choices") ? (
-          // Unrelated histories list nothing (space-8) — until a join has
-          // compared them against the empty tree and asks its choices,
-          // whereupon the incoming list stands above the picker (space-9).
-          <p className="text-sm text-neutral-500">{i18n._("Unrelated history")}</p>
-        ) : branch?.hostEmpty ? (
-          <p className="text-sm text-neutral-500">
-            {i18n._("The host holds no records yet; Sync will send these")}
-          </p>
-        ) : !branch || branch.checkedAt === null ? (
+        {sections.length === 0 ? (
+          // A clone holding no placement has no host to check (space-29).
           <p className="text-sm text-neutral-500">{i18n._("Not checked yet")}</p>
-        ) : incomingUnits.length === 0 ? (
-          <p className="text-sm text-neutral-500">{i18n._("Nothing new on the host")}</p>
         ) : (
-          <UnitList
-            repository={key}
-            units={incomingUnits}
-            side="remote"
-            conflicts={conflictUnits}
-            onOpenSession={onOpenSession}
-            testId="space-incoming-list"
-          />
+          // Each placement's units under its instance's display name, the
+          // path placement's under its remote (space-8).
+          sections.map(({ line, units, empty }) => {
+            const name = placementName(groups, line);
+            const checkedAt = line.branch?.checkedAt ?? null;
+            return (
+              <div
+                key={line.instance ?? "path"}
+                data-testid={`space-incoming-${line.instance ?? "path"}`}
+                className="flex min-w-0 flex-col gap-1"
+              >
+                <div className="flex min-w-0 items-baseline gap-2">
+                  <h3 className="min-w-0 truncate text-xs font-medium" title={name}>
+                    {name}
+                  </h3>
+                  {checkedAt !== null ? (
+                    <span className="hidden shrink-0 text-xs text-neutral-500 @2xl:inline">
+                      {i18n._("· checked {age}", { age: relativeAge(checkedAt, now) })}
+                    </span>
+                  ) : null}
+                </div>
+                {empty !== undefined ? (
+                  <p className="text-sm text-neutral-500">{empty}</p>
+                ) : (
+                  <UnitList
+                    repository={key}
+                    units={units}
+                    side="remote"
+                    placement={line.instance}
+                    // Marked to choose from this placement's own
+                    // conflicts (space-8).
+                    conflicts={new Set(line.conflicts.map((conflict) => conflict.unit.unit))}
+                    level={4}
+                    onOpenSession={onOpenSession}
+                    testId="space-incoming-list"
+                  />
+                )}
+              </div>
+            );
+          })
         )}
       </section>
 
@@ -1457,7 +1668,7 @@ export function SyncTab({
             </span>
           </div>
           <div className="flex flex-col gap-2">
-            {repo.conflicts.map((conflict) => (
+            {conflicts.map((conflict) => (
               <ConflictRow
                 key={conflict.unit.unit}
                 repository={key}
@@ -1465,6 +1676,8 @@ export function SyncTab({
                 choice={chosenChoices[conflict.unit.unit]}
                 marked={marked === conflict.unit.unit}
                 now={now}
+                placement={choicesLine!.instance}
+                hostName={choicesName}
                 disabled={disabled || busy === "apply" || accepted?.where === "apply"}
                 onChoice={(unit, side) => setChoices((current) => ({ ...current, [unit]: side }))}
               />
@@ -1477,7 +1690,7 @@ export function SyncTab({
               className={SECONDARY}
               disabled={disabled}
               onClick={() =>
-                setChoices(Object.fromEntries(repo.conflicts.map((c) => [c.unit.unit, "mine" as Side])))
+                setChoices(Object.fromEntries(conflicts.map((c) => [c.unit.unit, "mine" as Side])))
               }
             >
               {i18n._({ id: "All mine", comment: "choose this device's version for every conflict" })}
@@ -1488,7 +1701,7 @@ export function SyncTab({
               className={SECONDARY}
               disabled={disabled}
               onClick={() =>
-                setChoices(Object.fromEntries(repo.conflicts.map((c) => [c.unit.unit, "remote" as Side])))
+                setChoices(Object.fromEntries(conflicts.map((c) => [c.unit.unit, "remote" as Side])))
               }
             >
               {i18n._({ id: "All host's", comment: "choose the host's version for every conflict" })}
