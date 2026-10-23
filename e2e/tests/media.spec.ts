@@ -51,7 +51,7 @@ test.describe("session inputs and queued intent ownership", () => {
       record(`Attachment composer ${width}px`, await measure(page), defects);
     }
     expect(defects).toEqual([]);
-    await page.getByRole("button", { name: "Send", exact: true }).click();
+    await page.getByRole("button", { name: "Start task", exact: true }).click();
     const captain = page.getByTestId("captain-pane");
     await expect(captain).toContainText("What would you like me to do with the attached material?");
     for (const name of ["picked.png", "pasted.png", "dropped.png"]) await decoded(captain.getByRole("figure", { name, exact: true }));
@@ -142,7 +142,7 @@ test.describe("session inputs and queued intent ownership", () => {
     expect(dropped).toBe(true);
     expect(begins).toHaveLength(2);
     expect(begins[0]).toBe(begins[1]);
-    await page.getByRole("button", { name: "Send", exact: true }).click();
+    await page.getByRole("button", { name: "Start task", exact: true }).click();
     await decoded(page.getByTestId("captain-pane").getByRole("figure", { name: "retry.png", exact: true }));
     const session = (await app.core.command("session.list", {}))[0];
     const history = await app.core.command("history.get", { sessionId: session.id });

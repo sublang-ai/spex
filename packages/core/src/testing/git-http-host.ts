@@ -21,6 +21,8 @@ export interface GitHttpHost {
   url: string;
   /** Requests answered 401 for a missing or wrong credential. */
   readonly refused: number;
+  /** Requests that carried any credential, right or wrong. */
+  readonly credentialed: number;
   close(): Promise<void>;
 }
 
@@ -29,8 +31,10 @@ export interface GitHttpHost {
 export async function startGitHttpHost(options: { root: string; username: string; password: string }): Promise<GitHttpHost> {
   const expected = `Basic ${Buffer.from(`${options.username}:${options.password}`).toString("base64")}`;
   let refused = 0;
+  let credentialed = 0;
 
   async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    if (req.headers.authorization !== undefined) credentialed += 1;
     if (req.headers.authorization !== expected) {
       refused += 1;
       res.writeHead(401, { "www-authenticate": 'Basic realm="stand-in git host"', "content-type": "text/plain" });
@@ -98,6 +102,7 @@ export async function startGitHttpHost(options: { root: string; username: string
   return {
     url: `http://127.0.0.1:${port}`,
     get refused() { return refused; },
+    get credentialed() { return credentialed; },
     close: () => new Promise<void>((resolve) => {
       server.closeAllConnections();
       server.close(() => resolve());

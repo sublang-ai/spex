@@ -278,7 +278,7 @@ describe("run-view-171: the sidebar holds a heading per place", () => {
 
   test("the project palette names each project's place and the place of a new one", () => {
     render(<App />);
-    fireEvent.click(screen.getByTestId("sidebar-palette"));
+    fireEvent.keyDown(window, { key: "p", metaKey: true });
     const palette = screen.getByTestId("project-palette");
 
     // [run-view-168] every place's projects, each naming its place.

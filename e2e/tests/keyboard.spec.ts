@@ -106,7 +106,7 @@ test("run-view-101: palette, surfaces, sidebar, and composer by keyboard", async
   // tabs; Delete closes the focused tab and focus lands on a tab, never
   // on the body (run-view-48).
   const sessionTab = page.getByRole("tab", { name: /line one/i });
-  const plusTab = page.getByRole("tab", { name: "Start another session" });
+  const plusTab = page.getByRole("tab", { name: "New task" });
   await sessionTab.focus();
   await page.keyboard.press("ArrowRight");
   await expect(plusTab).toBeFocused();

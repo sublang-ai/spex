@@ -73,7 +73,8 @@ import { resolveLanguage, type Language } from "./language.js";
 import { i18n, speak } from "./i18n.js";
 import { CoreError, SessionManager, assertRunsHere, currentSession, executionConfig, runsElsewhereRefusal, runsNowhereRefusal, storedMembers, type CaptainFactory, type RecordEnvelope } from "./session.js";
 import { closedStats, foldConditions, foldLedger, intentTitle, queueSchedule, wasWorked } from "./ledger.js";
-import { runsElsewhere, type TurnControlKind } from "./control-record.js";
+import { CORE_STOP_REASON, runsElsewhere, type TurnControlKind } from "./control-record.js";
+import { StartedProcesses, StopBound } from "./process-tree.js";
 import { readStoredLanguage, Store, type SpexRepository } from "./store.js";
 import { UPLOAD_STAGING } from "./storage-git.js";
 import { foldDiagnostics, StorageFormatError, type RepairChecked, type StorageDiagnostic } from "./app-storage.js";
@@ -86,6 +87,7 @@ import {
   seedExampleProject,
   defaultRunCommand,
   isWorkTreeRoot,
+  isSeededAcademyProject,
   repoStatus,
   type ForgeAdapter,
   type RunCommand,
@@ -139,6 +141,7 @@ import { Places } from "./places.js";
 import { GitHostClient, SEAT_ID_MAX, fileCredentialStore } from "./git-host.js";
 import { relayHostError } from "./space-groups.js";
 import { currentRuntime, withGitCredential } from "./git-credential.js";
+import { configureSeatGit } from "./seat-git.js";
 import { displayRemote, validateRemoteUrl } from "./space-git.js";
 import type { SpaceOp, SyncStep } from "./protocol.js";
 import { isFastModeSupported, isSubagentModelSupported } from "@sublang/cligent";
@@ -251,6 +254,15 @@ export interface CoreServiceOptions {
   userHome?: string | null;
   /** The registry's fetch (environments-12); a test seam. */
   registryFetch?: typeof fetch;
+  /** The stop's bounds (core-service-39, DR-134): from the stop's start
+   * to SIGTERM unless every turn settles first, 10 s by default, and
+   * from SIGTERM to SIGKILL, 5 s by default. A test seam. */
+  stop?: { settleMs?: number; killMs?: number };
+  /** The agent processes the stop signals (core-service-39): by
+   * default the processes the core started — each child process created
+   * while its own work ran — with their descendants on macOS and Linux.
+   * A shell that bounds its own exit — Electron's — passes none. */
+  agentProcesses?: () => number[];
   /** This runtime's label, stored beside the home's device at assignment
    * for display alone (DR-134): the server's name on a seat, else this
    * label, else the host name. */
@@ -689,7 +701,12 @@ export class CoreService {
    * language re-derives nothing. */
   private spoken: Language = "en";
 
-  private constructor(options: CoreServiceOptions, store: Store) {
+  private constructor(
+    options: CoreServiceOptions,
+    store: Store,
+    /** The processes this core started (core-service-39). */
+    private readonly startedProcesses: StartedProcesses,
+  ) {
     this.options = options;
     if (options.seat) this.seat = options.seat;
     this.runtimeLabel = options.seat?.serverName ?? (options.runtimeLabel || hostname());
@@ -1001,6 +1018,20 @@ export class CoreService {
     if (!seat) return this.env;
     seat.prepare();
     return seat.envFor(this.env);
+  }
+
+  /** On a seat, write the seat account's own Git configuration naming
+   * the app's helper in its member mode (core-service-125, git-host-9):
+   * an agent's push from a project's work tree then carries the member's
+   * token. Nothing is written off a seat; a failure is logged, blocking
+   * nothing else, and no secret enters either file or the log. */
+  private async configureSeatGit(): Promise<void> {
+    if (!this.seat) return;
+    try {
+      await configureSeatGit({ home: this.home, env: this.env, runtime: this.hostRuntime, storePath: codeCredentialsPath(this.store.dir) });
+    } catch (error) {
+      console.error(`spex: the seat's Git configuration was not written: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
   /** On a seat, the member's credentials file refused or its malformed
@@ -1338,6 +1369,13 @@ export class CoreService {
   }
 
   static async start(options: CoreServiceOptions = {}): Promise<CoreService> {
+    // The core's work runs in an async context of its own, so the
+    // processes it starts are told from its host's (core-service-39).
+    const started = new StartedProcesses();
+    return started.run(() => CoreService.boot(options, started));
+  }
+
+  private static async boot(options: CoreServiceOptions, started: StartedProcesses): Promise<CoreService> {
     if (process.platform !== "darwin" && process.platform !== "linux") {
       throw new Error(i18n._({
         id: "Spex desktop and server require macOS or Linux with private POSIX file permissions. On Windows, use the scaffold CLI or connect to a Spex server in your browser.",
@@ -1401,12 +1439,15 @@ export class CoreService {
       ...(builtin ? { prepareRepository: (dir: string, _key: string, registryOrigin: string) => { prepareBuiltinEnvironment(dir, builtin, registryOrigin); } } : {}),
     });
     let service: CoreService;
-    try { service = new CoreService(options, store); }
+    try { service = new CoreService(options, store, started); }
     catch (error) { store.close(); throw error; }
     // A seat reads its credentials into the environment at start
     // (core-service-126).
     service.seatEnvironment?.prepare();
     try {
+    // A seat's account names the app's helper in its member mode, for
+    // the Git its agents run (core-service-125, git-host-9).
+    await service.configureSeatGit();
     // Store construction already holds the exclusive home lease. Never
     // reclaim another live core's incomplete uploads before that boundary.
     await service.media.prepare();
@@ -1721,53 +1762,74 @@ export class CoreService {
   async stop(): Promise<void> {
     this.stopping = true;
     this.sessions.beginShutdown();
-    this.approvals.stop();
-    // Every seat's relay ends; the seats stand in their file, reopened at
-    // the next start (DR-133).
-    this.places.stop();
-    for (const entry of this.browserPreparations.values()) entry.controller.abort();
-    await Promise.allSettled([...this.browserPreparations.values()].map(({done}) => done));
-    this.watcher?.close();
-    for (const watcher of this.sessionsWatchers.values()) watcher.close();
-    this.sessionsWatchers.clear();
-    for (const { watcher } of this.configWatchers.values()) watcher.close();
-    this.configWatchers.clear();
-    if (this.reloadTimer) clearTimeout(this.reloadTimer);
-    if (this.adoptTimer) clearTimeout(this.adoptTimer);
-    // A Space transport in flight is stopped; a local step finishes.
-    await this.space.stop();
-    // An environment's resolve or install finishes; nothing new starts.
-    await this.environments.stop();
-    await this.adoptScan;
-    if (this.ledgerTimer) clearTimeout(this.ledgerTimer);
-    // A draft compile cut here stays "running" on disk and reads as
-    // interrupted at the next start (playbook-library-59); its turns
-    // abort and are awaited so no Cligent outlives the core (DR-051).
-    this.authors.markStopping();
-    // Kill any in-flight compile child so shutdown never orphans slc.
-    for (const handles of this.standaloneCompiles.values()) for (const controller of handles) controller.abort();
-    // A disposal failure must not leave the endpoint or the store open
-    // (CORE-39): finish the shutdown, then report it to the host.
-    let failure: { error: unknown } | undefined;
+    // The stop is bounded (core-service-39, DR-134): every active turn
+    // is aborted as admission closes; once those turns have settled, or
+    // ten seconds after the stop began, the agent processes still alive
+    // receive SIGTERM, and SIGKILL five seconds later, after which the
+    // stop waits for nothing it has not confirmed.
+    const turnsSettled = this.sessions.abortAll(CORE_STOP_REASON);
+    const bound = new StopBound({
+      settleMs: this.options.stop?.settleMs ?? 10_000,
+      killMs: this.options.stop?.killMs ?? 5_000,
+      agentProcesses: this.options.agentProcesses ?? (() => this.startedProcesses.pids()),
+    });
     try {
-      await Promise.all(this.advancing);
-      await this.sessions.disposeAll();
-    } catch (error) {
-      failure = { error };
+      this.approvals.stop();
+      // Every seat's relay ends; the seats stand in their file, reopened at
+      // the next start (DR-133).
+      this.places.stop();
+      for (const entry of this.browserPreparations.values()) entry.controller.abort();
+      await bound.within(Promise.allSettled([...this.browserPreparations.values()].map(({done}) => done)));
+      this.watcher?.close();
+      for (const watcher of this.sessionsWatchers.values()) watcher.close();
+      this.sessionsWatchers.clear();
+      for (const { watcher } of this.configWatchers.values()) watcher.close();
+      this.configWatchers.clear();
+      if (this.reloadTimer) clearTimeout(this.reloadTimer);
+      if (this.adoptTimer) clearTimeout(this.adoptTimer);
+      // A Space transport in flight is stopped; a local step finishes.
+      await bound.within(this.space.stop());
+      // An environment's resolve or install finishes; nothing new starts.
+      await bound.within(this.environments.stop());
+      await bound.within(this.adoptScan);
+      if (this.ledgerTimer) clearTimeout(this.ledgerTimer);
+      // A draft compile cut here stays "running" on disk and reads as
+      // interrupted at the next start (playbook-library-59); its turns
+      // abort and are awaited so no Cligent outlives the core (DR-051).
+      this.authors.markStopping();
+      // Kill any in-flight compile child so shutdown never orphans slc.
+      for (const handles of this.standaloneCompiles.values()) for (const controller of handles) controller.abort();
+      // A disposal failure must not leave the endpoint or the store open
+      // (CORE-39): finish the shutdown, then report it to the host.
+      let failure: { error: unknown } | undefined;
+      try {
+        await bound.within(Promise.all(this.advancing));
+        // Settled turns hasten the signals only from here: nothing the
+        // stop still waited on above is an agent's.
+        if (turnsSettled) bound.whenSettled(turnsSettled);
+        await this.sessions.disposeAll(bound.expired);
+      } catch (error) {
+        failure = { error };
+      }
+      await bound.within(this.authors.stopAll());
+      await this.media.close();
+      for (const client of this.clients) client.socket.close();
+      await bound.within(new Promise<void>((resolveClose) =>
+        this.wss ? this.wss.close(() => resolveClose()) : resolveClose(),
+      ));
+      // An agent SIGTERM reached ends, or SIGKILL ends it, before the
+      // home's lease goes.
+      await bound.drain();
+      // No draft is written once the authors have stopped; a scratch
+      // home goes with its store, and the root lease is released.
+      this.store.close();
+      // No run of this seat remains: the forms go back as the process
+      // started with them.
+      this.seatEnvironment?.restore();
+      if (failure) throw failure.error;
+    } finally {
+      bound.clear();
     }
-    await this.authors.stopAll();
-    await this.media.close();
-    for (const client of this.clients) client.socket.close();
-    await new Promise<void>((resolveClose) =>
-      this.wss ? this.wss.close(() => resolveClose()) : resolveClose(),
-    );
-    // No draft is written once the authors have stopped; a scratch
-    // home goes with its store.
-    this.store.close();
-    // No run of this seat remains: the forms go back as the process
-    // started with them.
-    this.seatEnvironment?.restore();
-    if (failure) throw failure.error;
   }
 
   // -- config ---------------------------------------------------------------
@@ -2299,8 +2361,10 @@ export class CoreService {
           if (entry.client === client) entry.controller.abort();
         }
       });
+      // A shell's server delivers the message in the shell's context:
+      // the command runs as the core's (core-service-39).
       socket.on("message", (data) => {
-        void this.handleMessage(client, String(data));
+        this.startedProcesses.run(() => void this.handleMessage(client, String(data)));
       });
       this.send(socket, {
         type: "hello",
@@ -2625,7 +2689,12 @@ export class CoreService {
         }
         try {
           if (command.example) {
-            await seedExampleProject({ path, run: this.runCommand });
+            // Removing a project deliberately leaves its working folder.
+            // Reopen that same Academy repository without copying over
+            // any edits; every other occupied path remains a refusal.
+            if (!(await isSeededAcademyProject(path, this.runCommand))) {
+              await seedExampleProject({ path, run: this.runCommand });
+            }
           } else {
             await createProjectRepo({
               path,

@@ -8,7 +8,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import {
   chmodSync,
   mkdirSync,
@@ -33,7 +33,7 @@ import { fileURLToPath } from "node:url";
 import { brotliDecompressSync, gunzipSync } from "node:zlib";
 import { WebSocket } from "ws";
 import { moduleDirectoriesAbove } from "@sublang/spex-core";
-import { startStandinHost } from "@sublang/spex-core/testing";
+import { fakeAdapterImports, startStandinHost } from "@sublang/spex-core/testing";
 
 import {
   parseArgs,
@@ -890,5 +890,168 @@ test("the printed URL matches the endpoint and SIGTERM stops it (SERVER-SHELL-12
       child.kill("SIGKILL");
       await reaped;
     }
+  }
+});
+
+const STUBBORN_CONFIG = `
+captain:
+  adapter: claude
+  model: claude-test
+players:
+  dev.coder:
+    adapter: claude
+    model: claude-test
+playbooks:
+  code:
+    roles:
+      coder: dev.coder
+`;
+
+/** `found()`'s first defined value, polled until `withinMs` passes. */
+async function until<T>(found: () => T | undefined, withinMs: number, what: () => string): Promise<T> {
+  const deadline = Date.now() + withinMs;
+  for (;;) {
+    const value = found();
+    if (value !== undefined) return value;
+    if (Date.now() > deadline) throw new Error(`timed out: ${what()}`);
+    await new Promise((resolveWait) => setTimeout(resolveWait, 20));
+  }
+}
+
+function processAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === "EPERM";
+  }
+}
+
+/** A core endpoint's commands, each awaited to its reply. */
+async function coreClient(url: string): Promise<{
+  command(type: string, fields: Record<string, unknown>): Promise<Record<string, unknown>>;
+  close(): void;
+}> {
+  const origin = new URL(url).origin;
+  const socket = new WebSocket(url.replace(/^http/, "ws"), { origin });
+  const replies = new Map<string, (message: { ok: boolean; result?: unknown; error?: { message: string } }) => void>();
+  let ready!: () => void;
+  const hello = new Promise<void>((resolveHello) => { ready = resolveHello; });
+  socket.on("message", (data) => {
+    const message = JSON.parse(String(data)) as { type: string; id?: string; ok: boolean };
+    if (message.type === "hello") ready();
+    if (message.type === "reply" && message.id) replies.get(message.id)?.(message);
+  });
+  await new Promise<void>((resolveOpen, rejectOpen) => {
+    socket.once("open", () => resolveOpen());
+    socket.once("error", rejectOpen);
+  });
+  await hello;
+  let next = 0;
+  return {
+    async command(type, fields) {
+      const id = `c${(next += 1)}`;
+      const reply = new Promise<{ ok: boolean; result?: unknown; error?: { message: string } }>((resolveReply) => replies.set(id, resolveReply));
+      socket.send(JSON.stringify({ type, id, ...fields }));
+      const message = await reply;
+      if (!message.ok) throw new Error(`${type} failed: ${message.error?.message}`);
+      return message.result as Record<string, unknown>;
+    },
+    close: () => socket.close(),
+  };
+}
+
+test("SIGTERM mid-turn ends a stubborn agent within the bounds and leaves its session restorable (SERVER-SHELL-12)", { timeout: 120_000 }, async () => {
+  const SETTLE_MS = 1_000;
+  const KILL_MS = 1_000;
+  const dir = scratchDir("spex-server-stubborn-");
+  writeFileSync(join(dir, "playbook.config.yaml"), STUBBORN_CONFIG);
+  writeFileSync(join(dir, "signals.log"), "");
+  const workingFolder = join(dir, "project");
+  mkdirSync(workingFolder);
+  execFileSync("git", ["init", "-q", workingFolder]);
+  // The seams have no command-line form (SERVER-SHELL-20): a launcher
+  // starts the shell from code with them, under its own signal handling.
+  const child = spawn(
+    process.execPath,
+    [resolve(here, "..", "test", "fixtures", "stubborn-server.mjs"), dir, String(SETTLE_MS), String(KILL_MS)],
+    { stdio: ["ignore", "pipe", "pipe"] },
+  );
+  let out = "";
+  let err = "";
+  child.stdout.on("data", (data) => (out += data));
+  child.stderr.on("data", (data) => (err += data));
+  const exited = new Promise<number | null>((resolveExit) =>
+    child.once("exit", (code) => resolveExit(code)),
+  );
+  let agentPids: number[] = [];
+  try {
+    const url = await until(() => /serving at (\S+)/.exec(out)?.[1], 60_000, () => `no access URL printed; stderr: ${err}`);
+    const client = await coreClient(url);
+    let sessionId: string;
+    try {
+      const project = await client.command("project.register", { path: workingFolder });
+      const session = await client.command("session.create", { projectId: project.id });
+      sessionId = session.id as string;
+      await client.command("turn.submit", { sessionId, text: "start the stubborn agent" });
+    } finally {
+      client.close();
+    }
+    const [agent, agentChild] = await until(
+      () => /AGENT (\d+) (\d+)/.exec(out)?.slice(1).map(Number),
+      60_000,
+      () => `no agent started; stderr: ${err}`,
+    ) as [number, number];
+    agentPids = [agent, agentChild];
+
+    const began = Date.now();
+    child.kill("SIGTERM");
+    const exitCode = await exited;
+    const took = Date.now() - began;
+    // The core's bounds end the stop well inside the shell's twenty
+    // seconds; its unconfirmed disposal is reported and fails the exit.
+    assert.ok(took < SETTLE_MS + KILL_MS + 5_000, `exited ${took} ms after SIGTERM`);
+    assert.equal(exitCode, 1);
+    assert.match(err, /session cleanup was not confirmed/);
+    assert.match(readFileSync(join(dir, "signals.log"), "utf8"), /^agent SIGTERM \d+$/m);
+    assert.match(readFileSync(join(dir, "signals.log"), "utf8"), /^child SIGTERM \d+$/m);
+    await until(() => (processAlive(agent) || processAlive(agentChild) ? undefined : true), 5_000, () => "the agent's processes outlived the shell");
+    await assert.rejects(fetch(url));
+
+    // The same home serves the cut turn as uncertain, for Restore.
+    const again = await startServer({
+      ...parseArgs(
+        ["--port=0", "--token=t12", `--config=${join(dir, "playbook.config.yaml")}`, `--data-dir=${join(dir, "state")}`],
+        {},
+      ),
+      legacyDb: join(dir, "no-legacy.db"),
+      core: {
+        adapterImports: fakeAdapterImports({ rules: [], fallback: { result: "ok" } }).imports,
+        adapterRuntime: () => ({ usable: true }),
+        env: {},
+        home: join(dir, "home"),
+        watchConfig: false,
+      },
+    });
+    try {
+      const reader = await coreClient(again.url);
+      try {
+        const sessions = await reader.command("session.list", {}) as unknown as { id: string; recovery?: { state: string }; externalWriter?: unknown }[];
+        const listed = sessions.find((entry) => entry.id === sessionId);
+        assert.equal(listed?.recovery?.state, "uncertain");
+        assert.equal(listed?.externalWriter, undefined);
+      } finally {
+        reader.close();
+      }
+    } finally {
+      await again.close();
+    }
+  } finally {
+    if (child.exitCode === null && child.signalCode === null) {
+      child.kill("SIGKILL");
+      await exited;
+    }
+    // A failed assertion leaves no fixture process behind.
+    for (const pid of agentPids) if (processAlive(pid)) process.kill(pid, "SIGKILL");
   }
 });

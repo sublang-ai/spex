@@ -425,12 +425,12 @@ describe("run-view-171: a remote place offers no picker, reveal or path entry", 
     expect(revealPath).not.toHaveBeenCalled();
   });
 
-  test("the palette: this computer's path entry and picker, a seat's projects named among its groups", async () => {
+  test("the palette: this computer's folder picker, a seat's projects named among its groups", async () => {
     render(<App />);
-    fireEvent.click(screen.getByTestId("sidebar-palette"));
+    fireEvent.keyDown(window, { key: "p", metaKey: true });
     const palette = screen.getByTestId("project-palette");
-    // This computer's add flow: the path entry and the picker.
-    expect(within(palette).getByTestId("palette-path")).toBeTruthy();
+    // Desktop adds this computer's project through its folder picker.
+    expect(within(palette).queryByTestId("palette-path")).toBeNull();
     expect(within(palette).getByTestId("palette-open-folder")).toBeTruthy();
     expect(within(palette).getByTestId("palette-new-place").textContent).toBe(
       "A new project is added on This computer.",
@@ -456,7 +456,7 @@ describe("run-view-171: a remote place offers no picker, reveal or path entry", 
   test("a seat's Overview offers no picker, reveal or path entry", async () => {
     alphaStore.getState().setWorkspaceTab("p2", "overview");
     render(<App />);
-    fireEvent.click(screen.getByTestId("sidebar-palette"));
+    fireEvent.keyDown(window, { key: "p", metaKey: true });
     fireEvent.click(screen.getByTestId(`palette-project-p2@${ALPHA.place}`));
     await settle();
     const overview = screen.getByTestId("overview-tab");
@@ -607,10 +607,13 @@ describe("run-view-171: a remote place offers no picker, reveal or path entry", 
     // [run-view-169] a seat's projects are opened among the member's
     // groups, its core allocating every folder: no example is seeded at
     // a folder named there, the way in being the palette.
-    expect(screen.getByTestId("home-add-project")).toBeTruthy();
+    expect(screen.getByTestId("home-add-project").textContent).toBe("Open a project");
     expect(screen.queryByTestId("home-academy")).toBeNull();
     expect(screen.queryByText("Try the Academy example")).toBeNull();
     expect(callsOf(alpha, "project.create")).toEqual([]);
+    fireEvent.click(screen.getByTestId("home-add-project"));
+    expect(screen.queryByTestId("palette-own-project")).toBeNull();
+    expect(screen.getByTestId(`palette-groups-${ALPHA.place}`)).toBeTruthy();
   });
 
   test("a seat's project with no specs offers no Academy example in its Specs tab", async () => {
@@ -633,7 +636,7 @@ describe("run-view-171: a remote place offers no picker, reveal or path entry", 
 describe("run-view-171: opening a group's project at a seat", () => {
   test("sends space.join with no folder to that place's client alone", async () => {
     render(<App />);
-    fireEvent.click(screen.getByTestId("sidebar-palette"));
+    fireEvent.keyDown(window, { key: "p", metaKey: true });
     await settle();
     fireEvent.click(screen.getByTestId(`palette-join-${ABSENT_KEY}@${ALPHA.place}`));
     await settle();
@@ -652,7 +655,7 @@ describe("run-view-171: opening a group's project at a seat", () => {
       throw new SpexCommandError("invalid_request", "No longer shared with you");
     };
     render(<App />);
-    fireEvent.click(screen.getByTestId("sidebar-palette"));
+    fireEvent.keyDown(window, { key: "p", metaKey: true });
     await settle();
     fireEvent.click(screen.getByTestId(`palette-join-${ABSENT_KEY}@${ALPHA.place}`));
     await settle();
@@ -662,7 +665,7 @@ describe("run-view-171: opening a group's project at a seat", () => {
 
   test("a seat's project whose code clone failed is listed to join again, and joins again with no folder", async () => {
     render(<App />);
-    fireEvent.click(screen.getByTestId("sidebar-palette"));
+    fireEvent.keyDown(window, { key: "p", metaKey: true });
     await settle();
     // [run-view-169] cloned at the seat with its code clone failed, it is
     // no project there yet and stays openable: listed to join again,
@@ -687,7 +690,7 @@ describe("run-view-171: opening a group's project at a seat", () => {
     betaStore.setState({ connection: "connecting" });
     beta.answers["space.get"] = placeGroups();
     render(<App />);
-    fireEvent.click(screen.getByTestId("sidebar-palette"));
+    fireEvent.keyDown(window, { key: "p", metaKey: true });
     await settle();
     // Not connected yet: nothing is asked of it.
     expect(callsOf(beta, "space.get")).toEqual([]);

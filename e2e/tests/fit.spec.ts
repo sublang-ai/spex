@@ -1034,7 +1034,7 @@ test.describe("committed queue rows and cards", () => {
       defects,
     );
 
-    await page.getByRole("tab", { name: "Start another session" }).click();
+    await page.getByRole("tab", { name: "New task" }).click();
     const homeCard = page.getByTestId("next-card");
     const homeTarget = (): QueueFitTarget => ({
       row: homeCard.getByTestId("next-row"),

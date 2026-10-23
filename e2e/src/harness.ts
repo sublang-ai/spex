@@ -1519,7 +1519,7 @@ export function composer(page: Page) {
 export async function send(page: Page, text: string): Promise<void> {
   const box = composer(page);
   await box.fill(text);
-  await page.getByRole("button", { name: "Send", exact: true }).click();
+  await page.getByTestId("start-send").or(page.getByRole("button", { name: "Send", exact: true })).click();
 }
 
 // ---------------------------------------------------------------------------
