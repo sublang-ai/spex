@@ -74,10 +74,98 @@ test("release-33: the Linux parity script names the runners' Node and Git (relea
   assert.equal(JSON.parse(readFileSync(join(root, "package.json"), "utf8")).scripts["test:linux"], "bash scripts/test-linux.sh");
 });
 
-test("release-33: the merge-on-green script merges only a head whose checks are all green (release-29)", () => {
+test("release-33: the merge-on-green script merges only a head whose newest run's checks are all green (release-29)", () => {
   const script = readFileSync(join(root, "scripts/merge-on-green.sh"), "utf8");
-  assert.match(script, /all\(\. == "SUCCESS" or \. == "SKIPPED" or \. == "NEUTRAL"\)/, "every check green");
+  assert.match(script, /group_by\(\.workflowName\)/, "each workflow's checks grouped");
+  assert.match(script, /\(map\(\.run\) \| max\) as \$m \| map\(select\(\.run == \$m\)\)/, "only each workflow's newest run kept");
+  assert.match(script, /--jq "\(\$newest\)"' as \$checks \| \{head: \.headRefOid, mergeable, done: \(\(\$checks\|length\) > 0 and \(\[\$checks\[\] \| \.status\]/, "done read over the newest runs");
+  assert.match(script, /green: \(\(\$checks\|length\) > 0 and \(\[\$checks\[\] \| \.conclusion\] \| all\(\. == "SUCCESS" or \. == "SKIPPED" or \. == "NEUTRAL"\)\)\)/, "every newest check green");
+  assert.match(script, /--jq "\(\$newest\)"' \| \.\[\] \| select\(\.conclusion != "SUCCESS"/, "the failing checks listed from the newest runs");
+  assert.doesNotMatch(script, /\.statusCheckRollup\[\]/, "no judgment over the whole rollup");
   assert.match(script, /The head moved; run again for the new head/, "a moved head is refused");
+  assert.match(script, /if \[ -n "\$now" \] && \[ "\$now" != "\$head" \]; then/, "only a read naming another head is a move");
   assert.match(script, /gh pr merge "\$number" --merge/);
   assert.equal(JSON.parse(readFileSync(join(root, "package.json"), "utf8")).scripts["merge-on-green"], "bash scripts/merge-on-green.sh");
+});
+
+test("release-33: the merge-on-green script judges each workflow's newest run, keeping a status context (release-29)", (t) => {
+  if (spawnSync("jq", ["--version"]).error) {
+    t.skip("jq is not on PATH: the script's jq filters cannot run");
+    return;
+  }
+  const script = readFileSync(join(root, "scripts/merge-on-green.sh"), "utf8");
+  const newest = /^newest='([^']*)'$/m.exec(script)?.[1];
+  const state = /--jq "\(\$newest\)"'( as \$checks [^']*)'/.exec(script)?.[1];
+  const failing = /--jq "\(\$newest\)"'( \| \.\[\] [^']*)'/.exec(script)?.[1];
+  assert.ok(newest && state && failing, "the script's jq filters");
+  const jq = (filter, input) => {
+    const run = spawnSync("jq", ["-c", filter], { input: JSON.stringify(input), encoding: "utf8" });
+    assert.equal(run.status, 0, run.stderr);
+    return run.stdout.trim().split("\n").map((line) => JSON.parse(line));
+  };
+  const check = (name, run, status, conclusion) => ({
+    __typename: "CheckRun", workflowName: "CI", name, status, conclusion,
+    detailsUrl: `https://github.com/sublang-ai/spex/actions/runs/${run}/job/${run}1`,
+  });
+  // A close and reopen: the cancelled run's entries stay beside the new run's.
+  // The new run's id has one digit more, so a textual comparison would keep the old run.
+  const checks = [
+    check("test (ubuntu-latest, 22)", 9973185691, "COMPLETED", "FAILURE"),
+    check("journeys (ubuntu-latest)", 9973185691, "COMPLETED", "CANCELLED"),
+    check("test (ubuntu-latest, 22)", 39980673777, "COMPLETED", "SUCCESS"),
+    check("journeys (ubuntu-latest)", 39980673777, "COMPLETED", "SUCCESS"),
+  ];
+  const context = { __typename: "StatusContext", context: "ci/external", state: "SUCCESS", targetUrl: "https://ci.example.test/build/7" };
+  const label = (entry) => `${entry.name ?? entry.context} ${entry.conclusion ?? entry.state}`;
+  const [kept] = jq(newest, { statusCheckRollup: [...checks, context] });
+  assert.deepEqual(kept.map(label).sort(), ["ci/external SUCCESS", "journeys (ubuntu-latest) SUCCESS", "test (ubuntu-latest, 22) SUCCESS"]);
+  const pr = { headRefOid: "b6bd25a7", mergeable: "MERGEABLE", statusCheckRollup: checks };
+  assert.deepEqual(jq(`(${newest})${state}`, pr), [{ head: "b6bd25a7", mergeable: "MERGEABLE", done: true, green: true }]);
+  const red = { statusCheckRollup: [...checks.slice(0, 3), check("journeys (ubuntu-latest)", 39980673777, "COMPLETED", "FAILURE")] };
+  assert.deepEqual(jq(`(${newest})${failing}`, red), ["journeys (ubuntu-latest) FAILURE"]);
+});
+
+test("release-33: the merge-on-green script polls again after a failed or empty read and refuses only another head (release-29)", () => {
+  const dir = mkdtempSync(join(tmpdir(), "spex-merge-on-green-"));
+  const bin = join(dir, "bin");
+  mkdirSync(bin);
+  // The stand-in gh answers its reads in turn from GH_REPLIES, `fail` failing as a dropped connection does.
+  writeFileSync(join(bin, "gh"), [
+    "#!/usr/bin/env bash",
+    'echo "$*" >> "$GH_LOG"',
+    '[ "$2" = merge ] && exit 0',
+    'n=$(( $(cat "$GH_COUNT") + 1 )); echo "$n" > "$GH_COUNT"',
+    'reply="$(sed -n "${n}p" "$GH_REPLIES")"',
+    '[ "$reply" = fail ] && { echo "Post \\"https://api.github.com/graphql\\": dial tcp: i/o timeout" >&2; exit 1; }',
+    "printf '%s\\n' \"$reply\"",
+    "",
+  ].join("\n"), { mode: 0o755 });
+  writeFileSync(join(bin, "sleep"), '#!/usr/bin/env bash\necho "sleep $*" >> "$GH_LOG"\n', { mode: 0o755 });
+  const state = (head) => JSON.stringify({ head, mergeable: "MERGEABLE", done: true, green: true });
+  const cases = [
+    { name: "a failed and an empty read, then green", replies: ["2b11055a", "fail", "", state("2b11055a")], status: 0, merged: true },
+    { name: "a failed read, then another head", replies: ["2b11055a", "fail", state("3c22166b")], status: 2, merged: false },
+  ];
+  for (const [index, c] of cases.entries()) {
+    const log = join(dir, `${index}.log`);
+    const count = join(dir, `${index}.count`);
+    const replies = join(dir, `${index}.replies`);
+    writeFileSync(log, "");
+    writeFileSync(count, "0");
+    writeFileSync(replies, `${c.replies.join("\n")}\n`);
+    const run = spawnSync("bash", [join(root, "scripts/merge-on-green.sh"), "232"], {
+      encoding: "utf8",
+      env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, GH_LOG: log, GH_COUNT: count, GH_REPLIES: replies },
+    });
+    const calls = readFileSync(log, "utf8").split("\n").filter(Boolean);
+    assert.equal(run.status, c.status, `${c.name}: ${run.stderr}`);
+    assert.ok(calls.includes("sleep 60"), `${c.name}: the failed read waits the poll's 60 s and reads again`);
+    assert.equal(calls.includes("pr merge 232 --merge"), c.merged, c.name);
+    if (c.merged) {
+      assert.match(run.stdout, /Merged #232/, c.name);
+      assert.doesNotMatch(run.stderr, /The head moved/, c.name);
+    } else {
+      assert.match(run.stderr, /The head moved; run again for the new head\./, c.name);
+    }
+  }
 });
