@@ -6,7 +6,10 @@
 // sign-in card; while any is signed in, Refresh, reading each; the
 // issues and Git's presence (space-1, space-3) — over the groups list,
 // your own group and then each instance under its heading, each group
-// with its spex repositories as rows (space-61). Activating a row opens that
+// with its spex repositories as rows (space-61), and at this computer,
+// under each signed-in instance, the team servers it lists with Open or
+// Close (run-view-170). The surface reads the store of the place the
+// selector names (run-view-168). Activating a row opens that
 // repository's Sync and Explore tabs beneath the list. The surface
 // renders the core's state and runs no Git and no call to the host
 // itself: every action is a command, a repository named by its key,
@@ -23,7 +26,8 @@ import {
 } from "react";
 import type { GroupsState, RepositoryState } from "@sublang/spex-core/protocol";
 
-import { useAppStore } from "../state/store.js";
+import { usePlaceStore } from "../state/place-context.js";
+import { isLocalPlace } from "../state/store.js";
 import { i18n } from "../i18n.js";
 import { useClock } from "../lib/useClock.js";
 import { allRepositories, anySignedIn } from "../lib/instances.js";
@@ -42,6 +46,7 @@ import { IssuesList, SyncTab } from "./SpaceSync.js";
 import { ExploreTab } from "./SpaceExplorer.js";
 import { GroupsList, statusDot } from "./SpaceGroups.js";
 import { SignInCard, useSignIn, type SignInFlow } from "./SpaceSignIn.js";
+import { useServers } from "./SpaceServers.js";
 
 export interface SpaceSurfaceProps {
   /** Open a session as its tab (space-7, run-view-68). */
@@ -213,14 +218,26 @@ function Field({
 }
 
 export function SpaceSurface({ onOpenSession, onOpenProject }: SpaceSurfaceProps) {
-  const groups = useAppStore((state) => state.space);
-  const spaceError = useAppStore((state) => state.spaceError);
-  const spaceChangeSeq = useAppStore((state) => state.spaceChangeSeq);
-  const connection = useAppStore((state) => state.connection);
-  const loadSpace = useAppStore((state) => state.loadSpace);
-  const spaceRefresh = useAppStore((state) => state.spaceRefresh);
+  const store = usePlaceStore();
+  const groups = store((state) => state.space);
+  const spaceError = store((state) => state.spaceError);
+  const spaceChangeSeq = store((state) => state.spaceChangeSeq);
+  const connection = store((state) => state.connection);
+  const loadSpace = store((state) => state.loadSpace);
+  const spaceRefresh = store((state) => state.spaceRefresh);
+  const seats = store((state) => state.seats);
   const connected = connection === "open";
   const now = useClock(true, 30_000);
+  // The servers each signed-in instance lists (run-view-170), at this
+  // computer alone, whose core holds the seats: read as the surface
+  // opens, and again as the signed-in instances or the open seats
+  // change.
+  const signedIn = groups?.instances.filter((instance) => instance.signedIn).map((instance) => instance.origin) ?? [];
+  const servers = useServers(
+    connected && isLocalPlace(store.place) && signedIn.length > 0
+      ? JSON.stringify([signedIn, seats.map((seat) => seat.place)])
+      : undefined,
+  );
 
   const [selected, setSelected] = useState<string>();
   const [issuesOpen, setIssuesOpen] = useState(false);
@@ -354,6 +371,8 @@ export function SpaceSurface({ onOpenSession, onOpenProject }: SpaceSurfaceProps
               connected={connected}
               refreshes={refreshes}
               signIn={signIn}
+              servers={servers.listing}
+              onServersChanged={servers.reload}
               onSelect={(key) => setSelected((current) => (current === key ? undefined : key))}
               onNote={onNote}
             />

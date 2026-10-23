@@ -20,7 +20,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import type { CommandResults, GroupsState } from "@sublang/spex-core/protocol";
 
-import { useAppStore } from "../state/store.js";
+import { usePlaceStore } from "../state/place-context.js";
 import { i18n } from "../i18n.js";
 import { hostNameOf, instanceOf, originOf } from "../lib/instances.js";
 import { openExternalBridge } from "../lib/space.js";
@@ -62,8 +62,9 @@ export interface SignInFlow {
 /** The one sign-in of the surface (space-3, git-host-2): at most one
  * runs, whichever instance it names. */
 export function useSignIn(groups: GroupsState | undefined, onNote: Note): SignInFlow {
-  const spaceSignIn = useAppStore((state) => state.spaceSignIn);
-  const spaceSignInCancel = useAppStore((state) => state.spaceSignInCancel);
+  const store = usePlaceStore();
+  const spaceSignIn = store((state) => state.spaceSignIn);
+  const spaceSignInCancel = store((state) => state.spaceSignInCancel);
   const [started, setStarted] = useState<StartReply & { opened?: boolean }>();
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string>();

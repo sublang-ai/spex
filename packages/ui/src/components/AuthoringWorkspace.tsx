@@ -26,12 +26,10 @@ import {
   DRAFT_STACK_DEFAULT,
   DRAFT_STACK_MAX,
   DRAFT_STACK_MIN,
-  draftShown,
-  getClient,
-  useAppStore,
   type DraftRegisterForm,
   type DraftSourceMode,
 } from "../state/store.js";
+import { usePlaceStore } from "../state/place-context.js";
 import { draftChipTitle, draftChipTone, draftChipWord, draftMediaOwner, draftPackagePath } from "../lib/drafts.js";
 import type { SpecEditorState } from "../lib/spec-view-model.js";
 import { i18n } from "../i18n.js";
@@ -138,43 +136,44 @@ export function AuthoringWorkspace({
    * publish leads to Space (playbook-library-93). */
   onNavigate?: (surface: "Settings" | "Space") => void;
 }) {
-  const draft = useAppStore((state) => state.drafts[draftId]);
+  const store = usePlaceStore();
+  const draft = store((state) => state.drafts[draftId]);
   const media = useComposerAttachments(
     draftAttachmentKey(draftId),
     draft ? draftMediaOwner(draft) : undefined,
   );
-  const draftView = useAppStore((state) => state.draftViews[draftId]);
-  const source = useAppStore((state) => state.draftSources[draftId]);
-  const artifacts = useAppStore((state) => state.draftArtifacts[draftId]);
-  const composer = useAppStore((state) => state.draftComposers[draftId]);
-  const sourceMode = useAppStore((state) => state.draftSourceModes[draftId]);
-  const editor = useAppStore((state) => state.draftEditors[draftId]);
-  const form = useAppStore((state) => state.draftForms[draftId]);
-  const error = useAppStore((state) => state.draftErrors[draftId]);
-  const lines = useAppStore((state) => state.compileProgress[draftId]);
-  const times = useAppStore((state) => state.compileProgressAt[draftId]);
-  const configState = useAppStore((state) => state.configState);
-  const readiness = useAppStore((state) => state.readiness);
-  const connection = useAppStore((state) => state.connection);
-  const draftSplit = useAppStore((state) => state.draftSplit);
-  const draftStackSplit = useAppStore((state) => state.draftStackSplit);
-  const setDraftSplit = useAppStore((state) => state.setDraftSplit);
-  const setDraftStackSplit = useAppStore((state) => state.setDraftStackSplit);
-  const sendDraft = useAppStore((state) => state.sendDraft);
-  const abortDraft = useAppStore((state) => state.abortDraft);
-  const writeDraftSource = useAppStore((state) => state.writeDraftSource);
-  const refreshDraftSource = useAppStore((state) => state.refreshDraftSource);
-  const compileDraft = useAppStore((state) => state.compileDraft);
-  const abortDraftCompile = useAppStore((state) => state.abortDraftCompile);
-  const registerDraft = useAppStore((state) => state.registerDraft);
-  const setDraftPlayer = useAppStore((state) => state.setDraftPlayer);
-  const loadDraftArtifacts = useAppStore((state) => state.loadDraftArtifacts);
-  const setDraftComposer = useAppStore((state) => state.setDraftComposer);
-  const setDraftSourceMode = useAppStore((state) => state.setDraftSourceMode);
-  const setDraftEditor = useAppStore((state) => state.setDraftEditor);
-  const setDraftForm = useAppStore((state) => state.setDraftForm);
-  const clearDraftError = useAppStore((state) => state.clearDraftError);
-  const reportDraftError = useAppStore((state) => state.reportDraftError);
+  const draftView = store((state) => state.draftViews[draftId]);
+  const source = store((state) => state.draftSources[draftId]);
+  const artifacts = store((state) => state.draftArtifacts[draftId]);
+  const composer = store((state) => state.draftComposers[draftId]);
+  const sourceMode = store((state) => state.draftSourceModes[draftId]);
+  const editor = store((state) => state.draftEditors[draftId]);
+  const form = store((state) => state.draftForms[draftId]);
+  const error = store((state) => state.draftErrors[draftId]);
+  const lines = store((state) => state.compileProgress[draftId]);
+  const times = store((state) => state.compileProgressAt[draftId]);
+  const configState = store((state) => state.configState);
+  const readiness = store((state) => state.readiness);
+  const connection = store((state) => state.connection);
+  const draftSplit = store((state) => state.draftSplit);
+  const draftStackSplit = store((state) => state.draftStackSplit);
+  const setDraftSplit = store((state) => state.setDraftSplit);
+  const setDraftStackSplit = store((state) => state.setDraftStackSplit);
+  const sendDraft = store((state) => state.sendDraft);
+  const abortDraft = store((state) => state.abortDraft);
+  const writeDraftSource = store((state) => state.writeDraftSource);
+  const refreshDraftSource = store((state) => state.refreshDraftSource);
+  const compileDraft = store((state) => state.compileDraft);
+  const abortDraftCompile = store((state) => state.abortDraftCompile);
+  const registerDraft = store((state) => state.registerDraft);
+  const setDraftPlayer = store((state) => state.setDraftPlayer);
+  const loadDraftArtifacts = store((state) => state.loadDraftArtifacts);
+  const setDraftComposer = store((state) => state.setDraftComposer);
+  const setDraftSourceMode = store((state) => state.setDraftSourceMode);
+  const setDraftEditor = store((state) => state.setDraftEditor);
+  const setDraftForm = store((state) => state.setDraftForm);
+  const clearDraftError = store((state) => state.clearDraftError);
+  const reportDraftError = store((state) => state.reportDraftError);
 
   const [tab, setTab] = useState<Tab>("source");
   const [toolchain, setToolchain] = useState<Toolchain>();
@@ -185,7 +184,7 @@ export function AuthoringWorkspace({
 
   useEffect(() => {
     if (connected) {
-      getClient().command("compile.check", {}).then(setToolchain).catch(() => {});
+      store.getClient().command("compile.check", {}).then(setToolchain).catch(() => {});
     }
   }, [connected]);
 
@@ -229,7 +228,7 @@ export function AuthoringWorkspace({
   // its own composer, Source tab and form (playbook-library-62).
   const shown = draft.instance;
   const forShown = <A extends unknown[]>(effect: (...args: A) => void) => (...args: A): void => {
-    if (shown === undefined || draftShown(draftId, shown)) effect(...args);
+    if (shown === undefined || store.getState().drafts[draftId]?.instance === shown) effect(...args);
   };
   const summary = configState?.status === "valid" ? configState.summary : undefined;
   // Its compile, whatever turn runs beside it (core-service-96).

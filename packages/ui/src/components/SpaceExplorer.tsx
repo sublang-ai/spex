@@ -24,8 +24,8 @@ import {
   SPACE_SPLIT_DEFAULT,
   SPACE_SPLIT_MAX,
   SPACE_SPLIT_MIN,
-  useAppStore,
 } from "../state/store.js";
+import { usePlaceStore } from "../state/place-context.js";
 import {
   SHARING_LABELS,
   absolutePath,
@@ -168,8 +168,9 @@ function entrySize(entry: SpaceEntry): string | undefined {
 /** The "Stays on this device" panel (space-25): every ignored family
  * with its reason; folded state is chrome preference (DR-030). */
 function PrivacyPanel() {
-  const collapsed = useAppStore((state) => state.spacePrivacyCollapsed);
-  const setCollapsed = useAppStore((state) => state.setSpacePrivacyCollapsed);
+  const store = usePlaceStore();
+  const collapsed = store((state) => state.spacePrivacyCollapsed);
+  const setCollapsed = store((state) => state.setSpacePrivacyCollapsed);
   const families = staysHere();
   return (
     <div
@@ -429,10 +430,11 @@ export function ExploreTab({
   onOpenSession(sessionId: string): void;
   onNote: Note;
 }) {
-  const spaceTree = useAppStore((state) => state.spaceTree);
-  const spaceRead = useAppStore((state) => state.spaceRead);
-  const split = useAppStore((state) => state.spaceSplit);
-  const setSplit = useAppStore((state) => state.setSpaceSplit);
+  const store = usePlaceStore();
+  const spaceTree = store((state) => state.spaceTree);
+  const spaceRead = store((state) => state.spaceRead);
+  const split = store((state) => state.spaceSplit);
+  const setSplit = store((state) => state.setSpaceSplit);
 
   const [roots, setRoots] = useState<Node[]>();
   const [rootError, setRootError] = useState<string>();

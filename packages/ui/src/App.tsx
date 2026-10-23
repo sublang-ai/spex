@@ -46,6 +46,7 @@ import { DashboardSurface } from "./components/DashboardSurface.js";
 import { LibrarySurface } from "./components/LibrarySurface.js";
 import { SettingsSurface } from "./components/SettingsSurface.js";
 import { SpaceSurface } from "./components/SpaceSurface.js";
+import { PlaceSelector } from "./components/PlaceSelector.js";
 import { OverviewTab } from "./components/ProjectsSurface.js";
 import { ProjectPalette } from "./components/ProjectPalette.js";
 import {
@@ -1053,6 +1054,22 @@ export function App() {
   useEffect(() => {
     if (shown.place.key !== shownPlace) setShownPlace(LOCAL_PLACE_KEY);
   }, [shown, shownPlace]);
+  // The place Settings, Playbooks, Groups and Environments show, as the
+  // place selector names it (run-view-168): this computer's until the
+  // reader picks a seat, and again once a seat it showed is closed.
+  const [configuredPlace, setConfiguredPlace] = useState<string>(LOCAL_PLACE_KEY);
+  const configured = storeAt(configuredPlace);
+  useEffect(() => {
+    if (configured.place.key !== configuredPlace) setConfiguredPlace(LOCAL_PLACE_KEY);
+  }, [configured, configuredPlace]);
+  /** Go to a surface on behalf of `store`'s place: Settings, Playbooks
+   * and Groups open at that place (run-view-168). */
+  const navigateFrom = (store: AppStore) => (next: Surface) => {
+    if (next === "Settings" || next === "Playbooks" || next === "Space") {
+      setConfiguredPlace(store.place.key);
+    }
+    setSurface(next);
+  };
   // Each place's sidebar inputs, read from its own store.
   const placeStates = useEachPlace((state) => ({
     projects: state.projects,
@@ -1444,7 +1461,7 @@ export function App() {
       <button
         type="button"
         data-testid="config-status"
-        onClick={() => setSurface("Settings")}
+        onClick={() => navigateFrom(useAppStore)("Settings")}
         title={i18n._("Open Settings to see what's wrong")}
         // The status is the core's own enum: a machine word travels as
         // it is in every language (localization-1).
@@ -1530,15 +1547,32 @@ export function App() {
           aria-label={SURFACE_LABELS[surface]()}
           className="flex min-h-0 min-w-0 flex-1 flex-col outline-none"
         >
-          {surface === "Playbooks" ? (
-            <LibrarySurface onNavigate={setSurface} />
-          ) : surface === "Settings" ? (
-            <SettingsSurface />
-          ) : surface === "Space" ? (
-            <SpaceSurface
-              onOpenSession={(sessionId) => openSessionAndShow(sessionId)}
-              onOpenProject={(projectId) => pickProject(projectId)}
-            />
+          {surface === "Playbooks" || surface === "Settings" || surface === "Space" ? (
+            // Settings, Playbooks — with its Environments — and Groups
+            // show one place at a time, the one the selector names
+            // (run-view-168); with no seat open there is none to pick.
+            <PlaceStoreContext.Provider value={configured}>
+              {stores.length > 1 ? (
+                <PlaceSelector
+                  stores={stores}
+                  shown={configured}
+                  onShow={(store) => setConfiguredPlace(store.place.key)}
+                />
+              ) : null}
+              {surface === "Playbooks" ? (
+                <LibrarySurface key={configured.place.key} onNavigate={setSurface} />
+              ) : surface === "Settings" ? (
+                <SettingsSurface key={configured.place.key} />
+              ) : (
+                <SpaceSurface
+                  key={configured.place.key}
+                  onOpenSession={(sessionId) =>
+                    openSessionAndShow(sessionId, undefined, configured.place.key)
+                  }
+                  onOpenProject={(projectId) => pickProject(projectId, configured.place.key)}
+                />
+              )}
+            </PlaceStoreContext.Provider>
           ) : surface === "Dashboard" ? (
             <DashboardSurface
               onOpenSession={openSessionAndShow}
@@ -1551,7 +1585,7 @@ export function App() {
             <PlaceStoreContext.Provider value={shown}>
               <WorkspaceSurface
                 key={shown.place.key}
-                onNavigate={setSurface}
+                onNavigate={navigateFrom(shown)}
                 onOpenPalette={() => setPaletteOpen(true)}
                 attentionBySession={attentionBySession}
                 pendingFocus={pendingFocus}

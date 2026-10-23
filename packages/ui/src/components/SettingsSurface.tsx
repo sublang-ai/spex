@@ -32,7 +32,7 @@ import {
   type MissingPlayer,
 } from "@sublang/spex-core/protocol";
 
-import { getClient, useAppStore } from "../state/store.js";
+import { usePlaceStore } from "../state/place-context.js";
 import { i18n, type Language } from "../i18n.js";
 import { patchPlayer, setCaptain } from "../lib/config-ops.js";
 import { NOTIFICATION_LABELS } from "../lib/labels.js";
@@ -113,9 +113,10 @@ const LANGUAGE_CHOICES: readonly { value: string; label: () => string }[] = [
 ];
 
 function LanguageSection({ onError }: { onError: (message?: string) => void }) {
-  const choice = useAppStore((state) => state.language.choice);
-  const savedAt = useAppStore((state) => state.language.savedAt);
-  const setLanguage = useAppStore((state) => state.setLanguage);
+  const store = usePlaceStore();
+  const choice = store((state) => state.language.choice);
+  const savedAt = store((state) => state.language.savedAt);
+  const setLanguage = store((state) => state.setLanguage);
   const [pending, setPending] = useState(false);
   const [saved, setSaved] = useTransient(SAVED_MS);
   // A landed write re-renders the whole app in the chosen language
@@ -345,7 +346,8 @@ const NEW_PLAYER_BLOCK: AgentBlockInput = {
  * roster lacks (settings-46): named by its project, with Add creating
  * it from the neutral block, so each person picks their own models. */
 function MissingPlayerRow({ entry }: { entry: MissingPlayer }) {
-  const project = useAppStore((state) => state.projects.find((item) => item.id === entry.repository));
+  const store = usePlaceStore();
+  const project = store((state) => state.projects.find((item) => item.id === entry.repository));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const positions = entry.roles.map((item) => `${item.playbook}.${item.role}`).join(", ");
@@ -371,7 +373,7 @@ function MissingPlayerRow({ entry }: { entry: MissingPlayer }) {
           onClick={() => {
             setBusy(true);
             setError(undefined);
-            void patchPlayer(entry.player, NEW_PLAYER_BLOCK)
+            void patchPlayer(entry.player, NEW_PLAYER_BLOCK, store.getClient())
               .catch((cause: Error) => setError(cause.message))
               .finally(() => setBusy(false));
           }}
@@ -417,6 +419,7 @@ function PlayerRoster({
   captain: AgentBlockInput;
   rows: RowEditing;
 }) {
+  const store = usePlaceStore();
   const [adding, setAdding] = useState(false);
   const [newId, setNewId] = useState("");
   const [confirmDelete, setConfirmDelete] = useState<string>();
@@ -429,7 +432,7 @@ function PlayerRoster({
 
   function remove(playerId: string): void {
     setError(undefined);
-    void getClient()
+    void store.getClient()
       .command("config.edit", { op: { kind: "player.delete", playerId } })
       .then(() => setConfirmDelete(undefined))
       .catch((cause: Error) =>
@@ -526,7 +529,7 @@ function PlayerRoster({
                 readiness={readiness}
                 captain={captain}
                 onSave={(patch) =>
-                  patchPlayer(player.id, patch).then((result) => {
+                  patchPlayer(player.id, patch, store.getClient()).then((result) => {
                     rows.close(player.id);
                     setSaved(player.id);
                     return result;
@@ -594,7 +597,7 @@ function PlayerRoster({
                 });
                 return Promise.reject(new Error("duplicate id"));
               }
-              return patchPlayer(id, patch).then(
+              return patchPlayer(id, patch, store.getClient()).then(
                 (result) => {
                   setAdding(false);
                   setNewId("");
@@ -629,11 +632,12 @@ function PlayerRoster({
 }
 
 export function SettingsSurface() {
-  const configState = useAppStore((state) => state.configState);
-  const readiness = useAppStore((state) => state.readiness);
-  const space = useAppStore((state) => state.space);
-  const refreshReadiness = useAppStore((state) => state.refreshReadiness);
-  const refresh = useAppStore((state) => state.refresh);
+  const store = usePlaceStore();
+  const configState = store((state) => state.configState);
+  const readiness = store((state) => state.readiness);
+  const space = store((state) => state.space);
+  const refreshReadiness = store((state) => state.refreshReadiness);
+  const refresh = store((state) => state.refresh);
   const [error, setError] = useState<string>();
   const [copied, setCopied] = useState(false);
   const [retrying, setRetrying] = useState(false);
@@ -732,7 +736,7 @@ export function SettingsSurface() {
   function edit(op: ConfigEditOpInput, key: string) {
     setError(undefined);
     setPending(key);
-    getClient()
+    store.getClient()
       .command("config.edit", { op })
       .then(() => setSaved(key))
       .catch((cause: Error) => setError(cause.message))
@@ -826,7 +830,7 @@ export function SettingsSurface() {
                 initial={summary.captain}
                 readiness={readiness}
                 onSave={(patch) =>
-                  setCaptain(patch).then((result) => {
+                  setCaptain(patch, store.getClient()).then((result) => {
                     rows.close("captain");
                     setSaved("captain");
                     return result;

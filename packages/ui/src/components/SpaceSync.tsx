@@ -24,7 +24,7 @@ import type {
   SyncStep,
 } from "@sublang/spex-core/protocol";
 
-import { useAppStore } from "../state/store.js";
+import { usePlaceStore } from "../state/place-context.js";
 import { i18n } from "../i18n.js";
 import { relativeAge } from "../lib/time.js";
 import {
@@ -58,7 +58,8 @@ function DiffBox({
   side: Side;
   testId: string;
 }) {
-  const spaceDiff = useAppStore((state) => state.spaceDiff);
+  const store = usePlaceStore();
+  const spaceDiff = store((state) => state.spaceDiff);
   const [patches, setPatches] = useState<{ path: string; patch: string; truncated: boolean }[]>();
   const [error, setError] = useState<string>();
 
@@ -585,9 +586,10 @@ function RepairRow({
   onResolved(key: string, summary: string, projectId?: string): void;
   onNote: Note;
 }) {
-  const rebindProject = useAppStore((state) => state.rebindProject);
-  const removeProject = useAppStore((state) => state.removeProject);
-  const decline = useAppStore((state) => state.spaceRepairDecline);
+  const store = usePlaceStore();
+  const rebindProject = store((state) => state.rebindProject);
+  const removeProject = store((state) => state.removeProject);
+  const decline = store((state) => state.spaceRepairDecline);
   const proposal = repair.proposal;
   const recorded = repair.directories[0] ?? "";
   const folderRepair = repair.kind === "folder";
@@ -1115,9 +1117,10 @@ export function SyncTab({
   onOpenSession(sessionId: string): void;
   onNote: Note;
 }) {
-  const spaceFetch = useAppStore((state) => state.spaceFetch);
-  const spaceSync = useAppStore((state) => state.spaceSync);
-  const spaceCancel = useAppStore((state) => state.spaceCancel);
+  const store = usePlaceStore();
+  const spaceFetch = store((state) => state.spaceFetch);
+  const spaceSync = store((state) => state.spaceSync);
+  const spaceCancel = store((state) => state.spaceCancel);
   const key = repo.key;
   const sync = repo.sync;
   const branch = repo.branch;

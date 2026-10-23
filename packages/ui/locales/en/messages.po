@@ -1387,6 +1387,7 @@ msgid "Can't reach the Spex core at {endpoint} — retrying every second. On a s
 msgstr "Can't reach the Spex core at {endpoint} — retrying every second. On a served page, check the link's token; on the desktop, restart the app."
 
 #. default cancel button: back out of the act
+#. default cancel button: back out of the act
 #. leave an editor without saving
 #. leave an editor without saving
 #. leave an editor without saving
@@ -1414,6 +1415,7 @@ msgstr "Can't reach the Spex core at {endpoint} — retrying every second. On a 
 #: src/components/SpaceGroups.tsx
 #: src/components/SpaceInstance.tsx
 #: src/components/SpaceMembers.tsx
+#: src/components/SpaceServers.tsx
 #: src/components/SpaceSignIn.tsx
 #: src/components/SpaceSync.tsx
 #: src/components/SpecEditor.tsx
@@ -1657,6 +1659,11 @@ msgstr "client not connected"
 #: src/lib/space.ts
 msgid "Cloning code…"
 msgstr "Cloning code…"
+
+#. close the seat open on a team server
+#: src/components/SpaceServers.tsx
+msgid "Close"
+msgstr "Close"
 
 #: src/lib/shortcuts.ts
 msgid "Close the focused session tab"
@@ -2041,6 +2048,11 @@ msgstr "Couldn't read the files: {reason}"
 #: src/lib/failure-catalogue.ts
 msgid "Couldn't read the repository's state"
 msgstr "Couldn't read the repository's state"
+
+#. the instance's servers listing failed; {reason} is the core's relayed cause
+#: src/components/SpaceServers.tsx
+msgid "Couldn't read the servers: {reason}"
+msgstr "Couldn't read the servers: {reason}"
 
 #: src/components/SpaceSurface.tsx
 msgid "Couldn't read your groups: {reason}"
@@ -3015,6 +3027,11 @@ msgstr "History — this session can't be continued"
 #: src/components/NavRail.tsx
 msgid "history, can't be continued"
 msgstr "history, can't be continued"
+
+#. accepting a team server's contract, which opens the seat
+#: src/components/SpaceServers.tsx
+msgid "I understand"
+msgstr "I understand"
 
 #. a spex repository's status: nothing is running
 #. session row: no turn in flight
@@ -4052,8 +4069,10 @@ msgstr "One normative spec item per state behavior — the compiler's middle sta
 msgid "One spec item per state behavior, from the last compile"
 msgstr "One spec item per state behavior, from the last compile"
 
+#. open a seat on a team server
 #. open this authoring session's workspace
 #: src/components/LibrarySurface.tsx
+#: src/components/SpaceServers.tsx
 msgid "Open"
 msgstr "Open"
 
@@ -4159,6 +4178,11 @@ msgstr "Open to retry or drop the run."
 #: src/components/SpecView.tsx
 msgid "Opened {id}"
 msgstr "Opened {id}"
+
+#. the instance's contract, in the words its record fixes, shown before a seat's first open on this device; {server} is the server's name, {instance} the instance's; Devices is the instance's page of devices
+#: src/components/SpaceServers.tsx
+msgid "Opening a seat places your sign-in on {server}. Whoever runs {server} can act as you: in your spaces, in your records, and with the account you sign in to {instance} with, wherever it reaches. Agents on {server} run on the sign-ins its administrator set up, unless you set your own. A credential you place on {server} stays there until you remove it. Retiring the server or revoking the seat under Devices stops new use; a credential already on the server lasts until it expires."
+msgstr "Opening a seat places your sign-in on {server}. Whoever runs {server} can act as you: in your spaces, in your records, and with the account you sign in to {instance} with, wherever it reaches. Agents on {server} run on the sign-ins its administrator set up, unless you set your own. A credential you place on {server} stays there until you remove it. Retiring the server or revoking the seat under Devices stops new use; a credential already on the server lasts until it expires."
 
 #. an authoring session is being opened
 #. an authoring session is being opened
@@ -4290,6 +4314,11 @@ msgstr "Pick folder"
 #: src/components/TuningField.tsx
 msgid "pin a value…"
 msgstr "pin a value…"
+
+#. the selector of where Settings, Playbooks, Groups and Environments are shown: This computer or a team server
+#: src/components/PlaceSelector.tsx
+msgid "Place"
+msgstr "Place"
 
 #: src/components/DraftConversation.tsx
 msgid "Places the six-line example as your first message"
@@ -5231,6 +5260,11 @@ msgstr "sends when this turn ends"
 #: src/components/CompileBand.tsx
 msgid "sent to the agent"
 msgstr "sent to the agent"
+
+#. the team servers an instance lets the person open a seat on
+#: src/components/SpaceServers.tsx
+msgid "Servers"
+msgstr "Servers"
 
 #. one unit's kind: a session
 #. one unit's kind: a session
