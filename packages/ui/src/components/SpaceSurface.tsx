@@ -54,6 +54,9 @@ export interface SpaceSurfaceProps {
   /** Open the repaired project, the one control here that leaves the
    * surface (space-48). */
   onOpenProject(projectId: string): void;
+  /** Open this place's Credentials section at a code host whose clone
+   * failed for want of the member's credential (space-103, settings-48). */
+  onAddCredential?(host: string): void;
 }
 
 export type SpaceTab = "sync" | "explore";
@@ -92,7 +95,9 @@ export function syncRefusal(
 
 /** Reveal in the file manager where the bridge exists, Copy path
  * otherwise (space-26): the copy is acknowledged in words, and a page
- * with no clipboard falls back to a selectable read-only field. */
+ * with no clipboard falls back to a selectable read-only field. A
+ * remote place's path is on its server, so nothing reveals it there
+ * (run-view-169). */
 export function PathControls({
   path,
   testId,
@@ -108,7 +113,8 @@ export function PathControls({
   const [copied, setCopied] = useState(false);
   const [fallback, setFallback] = useState(false);
   const [revealFailed, setRevealFailed] = useState(false);
-  const reveal = revealBridge();
+  const local = isLocalPlace(usePlaceStore().place);
+  const reveal = local ? revealBridge() : undefined;
   const revealName = revealLabel();
 
   const copy = () => {
@@ -217,7 +223,7 @@ function Field({
   );
 }
 
-export function SpaceSurface({ onOpenSession, onOpenProject }: SpaceSurfaceProps) {
+export function SpaceSurface({ onOpenSession, onOpenProject, onAddCredential }: SpaceSurfaceProps) {
   const store = usePlaceStore();
   const groups = store((state) => state.space);
   const spaceError = store((state) => state.spaceError);
@@ -373,6 +379,7 @@ export function SpaceSurface({ onOpenSession, onOpenProject }: SpaceSurfaceProps
               signIn={signIn}
               servers={servers.listing}
               onServersChanged={servers.reload}
+              onAddCredential={onAddCredential}
               onSelect={(key) => setSelected((current) => (current === key ? undefined : key))}
               onNote={onNote}
             />

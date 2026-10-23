@@ -23,7 +23,7 @@ import type {
   EnvironmentState,
 } from "@sublang/spex-core/protocol";
 
-import { type RegistryResult } from "../state/store.js";
+import { isLocalPlace, type RegistryResult } from "../state/store.js";
 import { usePlaceStore } from "../state/place-context.js";
 import {
   SPEC_PACKAGE_NAME_RULE,
@@ -734,7 +734,10 @@ function FolderRequest({
   const [name, setName] = useState("");
   const [path, setPath] = useState("");
   const [refusal, setRefusal] = useState<string>();
-  const pickDirectory = window.spexNative?.pickDirectory;
+  // The shell's picker reads this computer's folders: a remote place's
+  // project is on its server, so none is offered there (run-view-169).
+  const local = isLocalPlace(usePlaceStore().place);
+  const pickDirectory = local ? window.spexNative?.pickDirectory : undefined;
   return (
     <RequestForm
       testId="folder-request"

@@ -131,6 +131,8 @@ function defaultReply(type: string, fields?: Record<string, unknown>): unknown {
       return environment({ repository: String(fields?.repository) });
     case "server.list":
       return { servers: [], failures: [] };
+    case "credential.list":
+      return { hosts: [], agents: [] };
     case "draft.defaults":
       return { org: "me", license: "Apache-2.0" };
     default:
