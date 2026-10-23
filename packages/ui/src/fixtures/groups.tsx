@@ -523,12 +523,16 @@ export const TREE: Record<string, SpaceEntry[]> = {
     { name: "s1.json", path: "sessions/s1.json", kind: "file", family: "session manifest", sync: "shared", size: 4100, owner: owner("s1", "Fix the login redirect"), preview: "text" },
     { name: "s1.records.jsonl", path: "sessions/s1.records.jsonl", kind: "file", family: "session records", sync: "shared", size: 310_000, owner: owner("s1", "Fix the login redirect"), preview: "text" },
     { name: "s1.hints.json", path: "sessions/s1.hints.json", kind: "file", family: "provider hints", sync: "local", size: 100, owner: owner("s1", "Fix the login redirect"), preview: "withheld" },
+    { name: "s1.chunks", path: "sessions/s1.chunks", kind: "dir", family: "session chunks", sync: "shared", count: 1, owner: owner("s1", "Fix the login redirect"), preview: "none" },
     { name: "s2.json", path: "sessions/s2.json", kind: "file", family: "session manifest", sync: "pending", size: 900, owner: owner("s2", "Draft the release notes"), preview: "text" },
   ],
   // The placement's file at the fixtures' instance (storage-36): its
   // folder is the instance's, and it names nothing of the Git system.
   placements: [
     { name: "@spex.example.yaml", path: "placements/@spex.example.yaml", kind: "file", family: "placement", sync: "shared", size: 52, preview: "text" },
+  ],
+  "sessions/s1.chunks": [
+    { name: "a".repeat(64), path: `sessions/s1.chunks/${"a".repeat(64)}`, kind: "file", family: "session chunks", sync: "shared", size: 128, owner: owner("s1", "Fix the login redirect"), preview: "binary" },
   ],
 };
 

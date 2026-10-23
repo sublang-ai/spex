@@ -7,8 +7,9 @@
 // machine's states with a nested review, two player transcripts with
 // tool use, usage, and a clean finish — with no credentials.
 
-import { cpSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
+import { readSessionReplay, writeSessionManifest } from "./session-storage.js";
 import { createSessionStore, validateSessionManifest } from "@sublang/playbook/session-store";
 import { resolveMachineIdentity } from "@sublang/playbook/machine-identity";
 import { sha256, writeApplicationFile } from "../app-storage.js";
@@ -117,6 +118,25 @@ export async function seedDemoHistory(
 export const demoHistoryIntentId = (index: number): string =>
   `72000000-0000-4000-8000-${String(index).padStart(12, "0")}`;
 
+async function appendFixtureRecords(shared: ReturnType<typeof createSessionStore>, sessionId: string, records: Record<string, unknown>[]): Promise<void> {
+  const path = join(shared.sessionsDir, `${sessionId}.json`);
+  if (JSON.parse(readFileSync(path, "utf8")).schemaVersion === 7) {
+    // Stopped synthetic legacy history stays legacy. Runtime admission now
+    // requires explicit migration before a writer can append to this format.
+    const lease = await shared.acquireManagement(sessionId);
+    try {
+      const history = await shared.readHistory(sessionId);
+      const replay = join(shared.sessionsDir, `${sessionId}.records.jsonl`);
+      const suffix = records.map((record, index) => JSON.stringify({ v: 1, seq: history.lastReadableSeq + index + 1, record }) + "\n").join("");
+      writeFileSync(replay, Buffer.concat([readFileSync(replay), Buffer.from(suffix)]), { mode: 0o600 });
+    } finally { await lease.release(); }
+    return;
+  }
+  const writer = await shared.acquire(sessionId);
+  try { for (const record of records) await writer.append(record); }
+  finally { await writer.release(); }
+}
+
 /** Historical fixtures have no runtime checkpoint and never claim to resume. */
 export async function seedHistorySession(
   sessionsDir: string,
@@ -125,12 +145,23 @@ export async function seedHistorySession(
   sessionId: string = randomUUID(),
 ): Promise<string> {
   const shared = createSessionStore({ sessionsDir }); await shared.prepare();
-  const writer = await shared.acquire(sessionId);
-  try { for (const record of records) await writer.append(record); }
-  finally { await writer.release(); }
-  const history = await shared.readHistory(sessionId);
-  const bytes = readFileSync(join(sessionsDir, `${sessionId}.records.jsonl`));
+  const manifestPath = join(sessionsDir, `${sessionId}.json`);
   const times = records.map((record) => record.timestamp).filter((at): at is number => typeof at === "number" && Number.isFinite(at));
+  if (!existsSync(manifestPath)) {
+    mkdirSync(sessionsDir, { recursive: true, mode: 0o700 });
+    // Deliberately legacy historical fixtures exercise old stores too.
+    // A real runtime session is always created by the public host.
+    writeApplicationFile(manifestPath, validateSessionManifest({
+      schemaVersion: 7, kind: "captain-session", sessionId, cwd,
+      createdAt: new Date(times[0] ?? 0).toISOString(), updatedAt: new Date(times.at(-1) ?? 0).toISOString(),
+      state: "history-only", reason: "Historical demonstration fixture", contextSeq: null,
+      replay: { seq: 0, sha256: sha256(Buffer.alloc(0)), incomplete: false },
+    }));
+    writeFileSync(join(sessionsDir, `${sessionId}.records.jsonl`), "", { mode: 0o600 });
+  }
+  await appendFixtureRecords(shared, sessionId, records);
+  const history = await shared.readHistory(sessionId);
+  const bytes = await readSessionReplay(join(sessionsDir, `${sessionId}.records.jsonl`));
   const lease = await shared.acquireManagement(sessionId);
   try {
     const manifest = validateSessionManifest({
@@ -139,7 +170,7 @@ export async function seedHistorySession(
       state: "history-only", reason: "Historical demonstration fixture", contextSeq: null,
       replay: { seq: history.lastReadableSeq, sha256: sha256(bytes), incomplete: false },
     });
-    writeApplicationFile(join(sessionsDir, `${sessionId}.json`), manifest);
+    await writeSessionManifest(manifestPath, manifest);
   } finally { await lease.release(); }
   const checked = await shared.validate(sessionId);
   if (!checked.integrityValid) throw new Error(checked.reasons.join("; "));
@@ -161,12 +192,10 @@ export async function appendHistorySession(
 ): Promise<void> {
   const shared = createSessionStore({ sessionsDir }); await shared.prepare();
   const manifestPath = join(sessionsDir, `${sessionId}.json`);
-  const prior = JSON.parse(readFileSync(manifestPath, "utf8")) as Record<string, unknown>;
-  const writer = await shared.acquire(sessionId);
-  try { for (const record of records) await writer.append(record); }
-  finally { await writer.release(); }
+  const prior = await shared.readManifest(sessionId);
+  await appendFixtureRecords(shared, sessionId, records);
   const history = await shared.readHistory(sessionId);
-  const bytes = readFileSync(join(sessionsDir, `${sessionId}.records.jsonl`));
+  const bytes = await readSessionReplay(join(sessionsDir, `${sessionId}.records.jsonl`));
   const times = records.map((record) => record.timestamp).filter((at): at is number => typeof at === "number" && Number.isFinite(at));
   const lease = await shared.acquireManagement(sessionId);
   try {
@@ -175,7 +204,7 @@ export async function appendHistorySession(
       updatedAt: new Date(Math.max(Date.parse(String(prior.updatedAt)) || 0, times.at(-1) ?? 0)).toISOString(),
       replay: { seq: history.lastReadableSeq, sha256: sha256(bytes), incomplete: false },
     });
-    writeApplicationFile(manifestPath, manifest);
+    await writeSessionManifest(manifestPath, manifest);
   } finally { await lease.release(); }
   const checked = await shared.validate(sessionId);
   if (!checked.resumable) throw new Error(checked.reasons.join("; "));

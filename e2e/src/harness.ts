@@ -63,8 +63,16 @@ import {
   type StandinHost,
   type StandinPerson,
   type StandinRegistry,
+  type StandinServer,
   type StubSlcStep,
 } from "@sublang/spex-core/testing";
+// The stand-in hub (hub-2, hub-3) is the core's own test module, not
+// re-exported from its testing entry.
+import {
+  STANDIN_HUB_CA,
+  startStandinHub,
+  type StandinHub,
+} from "../../packages/core/dist/testing/standin-hub.js";
 import {
   startServer,
   type RunningServer,
@@ -199,6 +207,17 @@ export interface AppOptions {
    * started over the protocol, its code approved through the script,
    * and the account's set-up awaited (space-4). Needs `host`. */
   signedIn?: boolean;
+  /**
+   * Team servers for the places journeys (DR-133): each a stand-in hub
+   * over TLS (hub-2, hub-3) listed by the stand-in instance as a server
+   * of its team group under `name` (servers-5), its tickets redeemed
+   * there, and its relays piped to a further core standing as the
+   * person's seat — a plain served core on a scratch root of its own,
+   * booted with `seat`'s options as a journey's app is, not in seat
+   * mode — while this app's core trusts the hubs' fixture CA beside the
+   * system's (core-service-128). Needs `host`.
+   */
+  servers?: { name: string; seat?: AppOptions }[];
   /**
    * Playbook authoring (DR-058): a stub `slc` on the toolchain path
    * — passing, failing once at gears2fsm and then passing, asking for
@@ -607,6 +626,21 @@ export const PEER_SESSION_TITLE = "Plan the release on the other laptop";
 // The app under test
 // ---------------------------------------------------------------------------
 
+/** A team server of the journey (`AppOptions.servers`, DR-133). */
+export interface TeamServer {
+  /** The server as the stand-in instance lists it (servers-5). */
+  server: StandinServer;
+  /** Its stand-in hub: `admissions` holds each bearer it minted, and a
+   * journey scripts its relays (hub-3). */
+  hub: StandinHub;
+  /** The core the hub relays to as the person's seat: an app of its
+   * own, with its own arrange-only client, root and port. */
+  seat: App;
+  /** The seat's place, `<instance origin>#<server id>`
+   * (core-service-128). */
+  place: string;
+}
+
 export interface App {
   /** The one access URL: origin plus token. */
   url: string;
@@ -644,6 +678,8 @@ export interface App {
    * undefined where that instance fronts none (`host.registry`,
    * `host.second.registry`, environments-18). */
   registries: (StandinRegistry | undefined)[];
+  /** The team servers `AppOptions.servers` started, in its order. */
+  servers: TeamServer[];
   /** Your own group's spex repository's key, as `home.yaml` now names
    * it (storage-1). */
   readonly ownKey: string;
@@ -842,6 +878,24 @@ async function arrangeApp(
     for (const service of owned.reverse()) await service.close().catch(() => undefined);
   };
   started.closeOwned = closeOwned;
+  // The team servers (DR-133): each hub started, its seat's core booted
+  // and the hub relaying to it, the server then listed by the instance
+  // — closed after this app's core, the seat before its hub.
+  const servers: TeamServer[] = [];
+  if (options.servers?.length) {
+    const instance = host;
+    if (!instance) throw new Error("servers need host");
+    for (const [index, entry] of options.servers.entries()) {
+      const hub = await startStandinHub({ redeem: (ticket) => instance.script.redeemTicket(ticket) });
+      owned.push(hub);
+      const seat = await startApp(entry.seat ?? {});
+      owned.push(seat);
+      hub.relayTo(seat.url.replace(/^http/, "ws"));
+      const server: StandinServer = { id: `srv_${index + 1}`, name: entry.name, group: HOST_GROUP, address: hub.url };
+      instance.script.servers.push(server);
+      servers.push({ server, hub, seat, place: `${canonicalOrigin(instance.url)}#${server.id}` });
+    }
+  }
   if (options.compiler) {
     writeFileSync(configPath, compilerConfig(options.compiler));
   } else if ((options.config ?? "demo") === "demo") {
@@ -942,6 +996,9 @@ async function arrangeApp(
           ...(options.forge
             ? { forgeAdapter: { state: async () => FORGE_FIXTURE } }
             : {}),
+          // The hubs' fixture CA, trusted beside the system's where the
+          // core presents a ticket at a team server (DR-133).
+          ...(options.servers?.length ? { serverCertificateAuthorities: [STANDIN_HUB_CA] } : {}),
         },
   };
 
@@ -972,6 +1029,7 @@ async function arrangeApp(
     hosts,
     registry,
     registries,
+    servers,
     get ownKey() {
       return ownKey(dataDir);
     },
@@ -1594,7 +1652,7 @@ export function composer(page: Page) {
 export async function send(page: Page, text: string): Promise<void> {
   const box = composer(page);
   await box.fill(text);
-  await page.getByRole("button", { name: "Send", exact: true }).click();
+  await page.getByTestId("start-send").or(page.getByRole("button", { name: "Send", exact: true })).click();
 }
 
 // ---------------------------------------------------------------------------

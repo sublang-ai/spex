@@ -73,15 +73,18 @@ export interface ServerShellOptions {
   seat?: ShellSeat;
   /**
    * Core service overrides for a harness starting the shell from code
-   * (server-shell-20, DR-039): the core's agent seams and its
-   * environment. No command-line form exists, so a served deployment
-   * never carries them; absent, the boot is exactly the command line's.
+   * (server-shell-20, DR-039): the core's agent seams, its environment,
+   * and the stop's bounds and agent-process walk. No command-line form
+   * exists, so a served deployment never carries them; absent, the boot
+   * is exactly the command line's.
    */
   core?: Pick<
     CoreServiceOptions,
     | "adapterImports"
     | "adapterRuntime" | "discoverAgentModels"
     | "captainFactory"
+    | "stop"
+    | "agentProcesses"
     | "env"
     | "home"
     | "loadModule"
@@ -91,6 +94,7 @@ export interface ServerShellOptions {
     | "systemLanguages"
     | "watchConfig"
     | "own"
+    | "serverCertificateAuthorities"
   >;
 }
 
@@ -864,4 +868,49 @@ export async function startSeat(options: ServerShellOptions): Promise<RunningSea
       }),
   );
   return { service, server, socket: seat.socket, close: stopper(server, service) };
+}
+
+/** A stop reports its disposal failures together; name each one, or
+ * the operator learns a count and never the cause. */
+export function describeError(error: unknown): string {
+  if (error instanceof AggregateError) {
+    return [
+      error.message,
+      ...error.errors.map((cause) => `  - ${describeError(cause)}`),
+    ].join("\n");
+  }
+  return error instanceof Error ? error.message : String(error);
+}
+
+/** The latest the shell exits after SIGINT or SIGTERM (server-shell-6);
+ * the core's own bounds end its stop within fifteen seconds. */
+const SIGNAL_EXIT_MS = 20_000;
+
+/**
+ * Stop the core on the first SIGINT or SIGTERM and exit once the stop
+ * returns — with 1 when it reports a failure — or with 1 twenty seconds
+ * after the signal without its return; a later signal changes nothing
+ * (server-shell-6, DR-134).
+ */
+export function exitOnSignals(running: { close(): Promise<void> }): void {
+  let stopping = false;
+  const shutdown = (): void => {
+    if (stopping) return;
+    stopping = true;
+    setTimeout(() => {
+      console.error(
+        `[spex-server] the stop did not finish within ${SIGNAL_EXIT_MS / 1000} s; exiting`,
+      );
+      process.exit(1);
+    }, SIGNAL_EXIT_MS);
+    running
+      .close()
+      .then(() => process.exit(0))
+      .catch((error) => {
+        console.error(describeError(error));
+        process.exit(1);
+      });
+  };
+  process.on("SIGINT", shutdown);
+  process.on("SIGTERM", shutdown);
 }

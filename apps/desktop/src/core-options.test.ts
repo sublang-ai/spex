@@ -49,6 +49,9 @@ test("the desktop's core signs in through the browser and runs Git's helper on t
   });
   assert.deepEqual(options.scaffoldCommand, [electron, join(packageRoot, "..", "..", "packages", "cli", "dist", "cli.js")]);
   assert.deepEqual(options.scaffoldEnv, { ELECTRON_RUN_AS_NODE: "1" });
+  // app-shell-39: the core's stop signals none of this process's
+  // children, Electron's helpers among them; the shell bounds its exit.
+  assert.deepEqual(options.agentProcesses?.(), []);
 });
 
 test("a packaged shell hands the core the module directories its asar archive unpacks", () => {

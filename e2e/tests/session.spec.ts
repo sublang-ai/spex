@@ -5,8 +5,7 @@
 // served page, its token gone from the address bar, running the
 // scripted Captain's narration through the real core.
 
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { createSessionStore } from "@sublang/playbook/session-store";
 
 import { test, expect, open, send, settled } from "../src/harness";
 
@@ -404,9 +403,7 @@ test.describe("run-view-141: an agent's settings for one conversation", () => {
       .poll(async () => (await app.core.command("session.list", {})).find((e) => e.id === sessionId)?.turns ?? 0, { timeout: 30_000 })
       .toBe(2);
     await settled(app);
-    const applied = (JSON.parse(
-      readFileSync(join(app.sharedSessionsDir, `${sessionId}.json`), "utf8"),
-    ) as { lastAppliedExecutionProjection: { captain: { model: { value?: string } }; catalog: Record<string, { roles: Record<string, { model: { value?: string }; subagentModel?: string; subagentEffort?: string }> }> } })
+    const applied = (await createSessionStore({ sessionsDir: app.sharedSessionsDir }).read(sessionId))
       .lastAppliedExecutionProjection;
     expect(applied.captain.model.value).toBe("claude-tuned-captain");
     expect(applied.catalog.code?.roles.coder?.model.value).toBe("claude-tuned-coder");

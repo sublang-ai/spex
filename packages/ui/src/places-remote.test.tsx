@@ -15,12 +15,14 @@
 // that seat's core a join with no folder, lists a seat's failed code
 // clone as joinable again, and reads a seat's groups as it connects.
 // A remote place's repair row offers neither a folder nor its
-// proposal's "Add project", its environment's folder request no picker,
-// and its draft's source neither a picked file nor a pasted path; the
-// Academy example is seeded on this computer alone. settings-51: the
-// Credentials section says its fixed sentence, sends `credential.set`
-// and `credential.remove`, lists what is set with no secret shown, and
-// opens at the host a failed clone named.
+// proposal's "Add project", its environment's folder request no picker
+// — its folder named relative to its project alone — and its draft's
+// source neither a picked file nor a pasted path; the Academy example
+// is seeded on this computer alone. settings-51: the Credentials
+// section says its fixed sentence, sends `credential.set` and
+// `credential.remove`, lists what is set with no secret shown, refuses
+// a blank name or value in place, shows the host a failed clone named
+// and opens at that host.
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
@@ -426,12 +428,12 @@ describe("run-view-171: a remote place offers no picker, reveal or path entry", 
     expect(revealPath).not.toHaveBeenCalled();
   });
 
-  test("the palette: this computer's path entry and picker, a seat's projects named among its groups", async () => {
+  test("the palette: this computer's folder picker, a seat's projects named among its groups", async () => {
     render(<App />);
-    fireEvent.click(screen.getByTestId("sidebar-palette"));
+    fireEvent.keyDown(window, { key: "p", metaKey: true });
     const palette = screen.getByTestId("project-palette");
-    // This computer's add flow: the path entry and the picker.
-    expect(within(palette).getByTestId("palette-path")).toBeTruthy();
+    // Desktop adds this computer's project through its folder picker.
+    expect(within(palette).queryByTestId("palette-path")).toBeNull();
     expect(within(palette).getByTestId("palette-open-folder")).toBeTruthy();
     expect(within(palette).getByTestId("palette-new-place").textContent).toBe(
       "A new project is added on This computer.",
@@ -457,7 +459,7 @@ describe("run-view-171: a remote place offers no picker, reveal or path entry", 
   test("a seat's Overview offers no picker, reveal or path entry", async () => {
     alphaStore.getState().setWorkspaceTab("p2", "overview");
     render(<App />);
-    fireEvent.click(screen.getByTestId("sidebar-palette"));
+    fireEvent.keyDown(window, { key: "p", metaKey: true });
     fireEvent.click(screen.getByTestId(`palette-project-p2@${ALPHA.place}`));
     await settle();
     const overview = screen.getByTestId("overview-tab");
@@ -509,7 +511,7 @@ describe("run-view-171: a remote place offers no picker, reveal or path entry", 
     expect(callsOf(alpha, "project.rebind")).toEqual([]);
   });
 
-  test("an environment's folder request: this computer's offers the picker, a seat's none", async () => {
+  test("an environment's folder request: this computer's offers the picker, a seat's a folder named relative to its project alone", async () => {
     local.answers["environment.get"] = (fields?: Record<string, unknown>) =>
       environment({ repository: String(fields?.repository), pathRoot: "/work/home-project" });
     alpha.answers["environment.get"] = (fields?: Record<string, unknown>) =>
@@ -534,10 +536,26 @@ describe("run-view-171: a remote place offers no picker, reveal or path entry", 
     const there = screen.getByTestId("folder-request");
     expect(there.textContent).toContain("Folder inside /home/member/projects/gpu");
     // [run-view-171] [run-view-169] a remote place's environment folder
-    // request offers no picker: the shell's reads this computer's disk.
+    // request offers no folder picker: the shell's reads this
+    // computer's disk.
     expect(within(there).queryByTestId("folder-request-pick")).toBeNull();
     expect(within(there).queryByText("Pick folder")).toBeNull();
     expect(pickDirectory).not.toHaveBeenCalled();
+    // [run-view-171] no path on this computer: the one folder field
+    // names the folder relative to its project, and the request sent to
+    // the seat's core alone carries that relative name.
+    const fields = pathEntries(there).map((field) => field.getAttribute("data-testid"));
+    expect(fields).toEqual(["folder-request-name", "folder-request-path"]);
+    expect(there.textContent).not.toContain("/work/");
+    fireEvent.change(within(there).getByTestId("folder-request-name"), { target: { value: "acme/triage" } });
+    fireEvent.change(within(there).getByTestId("folder-request-path"), { target: { value: "spex-packages/triage" } });
+    fireEvent.click(within(there).getByTestId("folder-request-submit"));
+    await settle();
+    expect(callsOf(alpha, "environment.request")).toEqual([
+      { repository: expect.any(String), name: "acme/triage", request: { kind: "path", path: "spex-packages/triage" } },
+    ]);
+    expect(callsOf(local, "environment.request")).toEqual([]);
+    expect(callsOf(beta, "environment.request")).toEqual([]);
   });
 
   test("a draft's source: this computer's offers a picked file and a pasted path, a seat's text alone", async () => {
@@ -608,10 +626,13 @@ describe("run-view-171: a remote place offers no picker, reveal or path entry", 
     // [run-view-169] a seat's projects are opened among the member's
     // groups, its core allocating every folder: no example is seeded at
     // a folder named there, the way in being the palette.
-    expect(screen.getByTestId("home-add-project")).toBeTruthy();
+    expect(screen.getByTestId("home-add-project").textContent).toBe("Open a project");
     expect(screen.queryByTestId("home-academy")).toBeNull();
     expect(screen.queryByText("Try the Academy example")).toBeNull();
     expect(callsOf(alpha, "project.create")).toEqual([]);
+    fireEvent.click(screen.getByTestId("home-add-project"));
+    expect(screen.queryByTestId("palette-own-project")).toBeNull();
+    expect(screen.getByTestId(`palette-groups-${ALPHA.place}`)).toBeTruthy();
   });
 
   test("a seat's project with no specs offers no Academy example in its Specs tab", async () => {
@@ -634,7 +655,7 @@ describe("run-view-171: a remote place offers no picker, reveal or path entry", 
 describe("run-view-171: opening a group's project at a seat", () => {
   test("sends space.join with no folder to that place's client alone", async () => {
     render(<App />);
-    fireEvent.click(screen.getByTestId("sidebar-palette"));
+    fireEvent.keyDown(window, { key: "p", metaKey: true });
     await settle();
     fireEvent.click(screen.getByTestId(`palette-join-${ABSENT_KEY}@${ALPHA.place}`));
     await settle();
@@ -653,7 +674,7 @@ describe("run-view-171: opening a group's project at a seat", () => {
       throw new SpexCommandError("invalid_request", "No longer shared with you");
     };
     render(<App />);
-    fireEvent.click(screen.getByTestId("sidebar-palette"));
+    fireEvent.keyDown(window, { key: "p", metaKey: true });
     await settle();
     fireEvent.click(screen.getByTestId(`palette-join-${ABSENT_KEY}@${ALPHA.place}`));
     await settle();
@@ -663,7 +684,7 @@ describe("run-view-171: opening a group's project at a seat", () => {
 
   test("a seat's project whose code clone failed is listed to join again, and joins again with no folder", async () => {
     render(<App />);
-    fireEvent.click(screen.getByTestId("sidebar-palette"));
+    fireEvent.keyDown(window, { key: "p", metaKey: true });
     await settle();
     // [run-view-169] cloned at the seat with its code clone failed, it is
     // no project there yet and stays openable: listed to join again,
@@ -688,7 +709,7 @@ describe("run-view-171: opening a group's project at a seat", () => {
     betaStore.setState({ connection: "connecting" });
     beta.answers["space.get"] = placeGroups();
     render(<App />);
-    fireEvent.click(screen.getByTestId("sidebar-palette"));
+    fireEvent.keyDown(window, { key: "p", metaKey: true });
     await settle();
     // Not connected yet: nothing is asked of it.
     expect(callsOf(beta, "space.get")).toEqual([]);
@@ -861,26 +882,64 @@ describe("settings-51: the Credentials section of a seat's Settings", () => {
   });
 });
 
-describe("settings-48: a seat's Credentials section refuses in place", () => {
-  test("a refusal reads the core's words in the section, and a set host is no longer named as needed", async () => {
-    alpha.answers["credential.set"] = () => {
-      throw new SpexCommandError("invalid_request", "git example is no host name");
-    };
+describe("settings-51: a seat's Credentials section refuses in place", () => {
+  test("a blank name or value is refused in place, and a refusal reads the core's words in the section", async () => {
     render(<App />);
     goTo("Settings");
     pick("build-box");
     await settle();
     const section = screen.getByTestId("credentials-section");
-    // [settings-48] the host whose code clone failed is named.
-    expect(within(section).getByTestId("credentials-needed-git.example.com")).toBeTruthy();
-    fireEvent.change(within(section).getByTestId("credential-host-name"), { target: { value: "git example" } });
-    fireEvent.change(within(section).getByTestId("credential-host-token"), { target: { value: "t" } });
-    fireEvent.click(within(section).getByTestId("credential-host-save"));
+    const hostName = within(section).getByTestId("credential-host-name");
+    const hostToken = within(section).getByTestId("credential-host-token");
+    const hostSave = within(section).getByTestId("credential-host-save") as HTMLButtonElement;
+    const agentSave = within(section).getByTestId("credential-agent-save") as HTMLButtonElement;
+
+    // [settings-51] [settings-48] a blank host name or token is refused
+    // in place: the form will not save, and submitting it writes nothing.
+    fireEvent.change(hostName, { target: { value: "   " } });
+    fireEvent.change(hostToken, { target: { value: "tok" } });
+    expect(hostSave.disabled).toBe(true);
+    fireEvent.submit(within(section).getByTestId("credential-host-form"));
+    fireEvent.change(hostName, { target: { value: "git.example.com" } });
+    fireEvent.change(hostToken, { target: { value: "  " } });
+    expect(hostSave.disabled).toBe(true);
+    fireEvent.submit(within(section).getByTestId("credential-host-form"));
+    // [settings-51] [settings-48] so is an agent's form with no value.
+    fireEvent.change(within(section).getByTestId("credential-agent"), { target: { value: "kimi" } });
+    fireEvent.change(within(section).getByTestId("credential-agent-value-KIMI_MODEL_API_KEY"), { target: { value: " " } });
+    expect(agentSave.disabled).toBe(true);
+    fireEvent.submit(within(section).getByTestId("credential-agent-form"));
+    await settle();
+    expect(callsOf(alpha, "credential.set")).toEqual([]);
+    expect(credentialCommands(local)).toEqual([]);
+
+    // [settings-51] [settings-48] a name the core refuses reads its words
+    // in the section.
+    alpha.answers["credential.set"] = () => {
+      throw new SpexCommandError("invalid_request", "git example is no host name");
+    };
+    fireEvent.change(hostName, { target: { value: "git example" } });
+    fireEvent.change(hostToken, { target: { value: "t" } });
+    fireEvent.click(hostSave);
     await settle();
     expect(within(section).getByTestId("credentials-error").textContent).toBe("git example is no host name");
+  });
+
+  test("the host a failed clone named is shown, and no longer once a credential is set for it", async () => {
+    render(<App />);
+    goTo("Settings");
+    pick("build-box");
+    await settle();
+    const section = screen.getByTestId("credentials-section");
+    // [settings-51] [settings-48] the host whose code clone failed is
+    // named.
+    expect(within(section).getByTestId("credentials-needed-git.example.com").textContent).toBe(
+      "git.example.com needs a credential of yours to clone a project's code",
+    );
 
     alpha.answers["credential.set"] = () => ({ hosts: [{ name: "git.example.com" }], agents: [] });
     fireEvent.change(within(section).getByTestId("credential-host-name"), { target: { value: "git.example.com" } });
+    fireEvent.change(within(section).getByTestId("credential-host-token"), { target: { value: "t" } });
     fireEvent.click(within(section).getByTestId("credential-host-save"));
     await settle();
     await waitFor(() => expect(within(section).queryByTestId("credentials-needed-git.example.com")).toBeNull());

@@ -6,6 +6,7 @@
 // playbook authored in a project and published to the stand-in
 // registry, and the environment commands driven over the protocol.
 
+import { createSessionStore } from "@sublang/playbook/session-store";
 import { randomUUID } from "node:crypto";
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -268,7 +269,7 @@ test("environments-23: a fresh home with no registry reachable seeds the built-i
   const session = await core.client.expectOk("session.create", { projectId: project.id });
   await core.client.expectOk("turn.submit", { sessionId: session.id, text: "Hello" });
   await core.client.waitFor((m) => m.type === "session.state" && m.session.id === session.id && m.session.turns === 1 && m.session.turnActive === false, 60_000);
-  const manifest = JSON.parse(readFileSync(join(projectClone, "sessions", `${session.id}.json`), "utf8")) as { structuralProjection: { catalog: Record<string, { from: string }> } };
+  const manifest = await createSessionStore({ sessionsDir: join(projectClone, "sessions") }).readManifest(session.id) as { structuralProjection: { catalog: Record<string, { from: string }> } };
   const ids = ["branch", "code", "decide", "dev", "inspect", "pr", "review"];
   assert.deepEqual(Object.keys(manifest.structuralProjection.catalog).sort(), ids);
   for (const id of ids) {
@@ -491,7 +492,7 @@ test("environments-24: a playbook authored in a project compiles, is requested b
   const session = await core.client.expectOk("session.create", { projectId: project.id });
   const manifestFile = join(clone, "sessions", `${session.id}.json`);
   await until(() => existsSync(manifestFile), 10_000, "the session's manifest");
-  const catalog = (JSON.parse(readFileSync(manifestFile, "utf8")) as { structuralProjection: { catalog: Record<string, { from: string }> } }).structuralProjection.catalog;
+  const catalog = (await createSessionStore({ sessionsDir: join(clone, "sessions") }).readManifest(session.id) as { structuralProjection: { catalog: Record<string, { from: string }> } }).structuralProjection.catalog;
   assert.equal(catalog.triage?.from, pathToFileURL(join(folder, "playbooks", "en", "triage", "triage.registry.mjs")).href);
 
   // What the compiler keeps beside the playbook for itself — its build

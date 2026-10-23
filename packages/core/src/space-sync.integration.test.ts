@@ -14,6 +14,7 @@ import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { createSessionStore } from "@sublang/playbook/session-store";
+import { readSessionReplay } from "./testing/session-storage.js";
 import { appendHistorySession, seedHistorySession } from "./testing/demo.js";
 import { clonePath, createSpaceHarness, OWN_KEY, ownClone, placementOf, prefsOf, rowsOf } from "./testing/space-harness.js";
 
@@ -81,7 +82,7 @@ test("space-38: your own group's repository joins with one Settings choice, and 
   const from = b.client.mark();
   await joinRemote(b, key);
   assert.equal(existsSync(join(bClone, "sessions", `${sessionA}.json`)), true);
-  assert.equal(existsSync(join(bClone, "sessions", `${sessionA}.records.jsonl`)), true);
+  assert.equal(existsSync(join(bClone, "sessions", `${sessionA}.replay.json`)), true);
   const listed = (await b.client.expectOk("session.list", {})).find((s) => s.id === sessionA);
   assert.equal(listed?.title, "Fix the login redirect");
   assert.equal(listed?.projectId, key);
@@ -221,7 +222,7 @@ test("space-38: the same session changed on both homes is one choice; the host's
   const done = await b.client.settle("space.sync", { repository: key, placement: null, choices: { [`sessions/${shared}`]: "remote" } });
   assert.equal(done.sync.phase, "done", JSON.stringify(done.sync));
   assert.deepEqual(readFileSync(join(bClone, "sessions", `${shared}.json`)), readFileSync(join(aClone, "sessions", `${shared}.json`)));
-  assert.deepEqual(readFileSync(join(bClone, "sessions", `${shared}.records.jsonl`)), readFileSync(join(aClone, "sessions", `${shared}.records.jsonl`)));
+  assert.deepEqual(await readSessionReplay(join(bClone, "sessions", `${shared}.records.jsonl`)), await readSessionReplay(join(aClone, "sessions", `${shared}.records.jsonl`)));
   assert.equal(existsSync(join(bClone, "sessions", `${shared}.hints.json`)), false, "hints cleared");
   assert.equal(prefsOf(b.dataDir)[`viewed:${shared}`], undefined, "viewed marker cleared");
   const messages = b.client.messages.slice(from);
@@ -245,7 +246,7 @@ test("space-38: the same session changed on both homes is one choice; the host's
   const gone = await a.client.settle("space.sync", { repository: key, placement: null, choices: { [`sessions/${doomed}`]: "remote" } });
   assert.equal(gone.sync.phase, "done", JSON.stringify(gone.sync));
   assert.equal(existsSync(join(aClone, "sessions", `${doomed}.json`)), false);
-  assert.equal(existsSync(join(aClone, "sessions", `${doomed}.records.jsonl`)), false);
+  assert.equal(existsSync(join(aClone, "sessions", `${doomed}.replay.json`)), false);
   assert.ok(!(await a.client.expectOk("session.list", {})).some((s) => s.id === doomed));
   assert.ok(a.client.messages.some((m) => m.type === "session.removed" && m.sessionId === doomed));
 });
@@ -289,7 +290,7 @@ test("space-38: a marker with a half-written selection is repaired at startup in
   const prefsFile = join(dataDir, "local", "prefs.json");
   const prefs = existsSync(prefsFile) ? JSON.parse(readFileSync(prefsFile, "utf8")) : { format: 1, prefs: {} };
   writeFileSync(prefsFile, JSON.stringify({ ...prefs, prefs: { ...prefs.prefs, [`viewed:${whole}`]: Date.now() } }));
-  writeFileSync(join(clone, "sessions", `${sessionId}.records.jsonl`), readFileSync(join(theirsDir, "sessions", `${sessionId}.records.jsonl`)));
+  writeFileSync(join(clone, "sessions", `${sessionId}.records.jsonl`), await readSessionReplay(join(theirsDir, "sessions", `${sessionId}.records.jsonl`)));
   writeFileSync(marker, JSON.stringify({ v: 1, ours, theirs, base, choices: { [`sessions/${sessionId}`]: "theirs" }, at: Date.now() }));
   const home = await startHome("repair-start", { dataDir, project: false });
   t.after(() => home.stop());
@@ -463,7 +464,7 @@ test("space-38: unsafe partial Apply defers refresh and repairs after restoring 
     repository.store = { ...sessions, acquireManagement: async (id) => {
       const lease = await acquire(id);
       if (!replaced && id === ids[1]) {
-        assert.match(readFileSync(join(clone, "sessions", `${ids[0]}.records.jsonl`), "utf8"), /Incoming/);
+        assert.match((await readSessionReplay(join(clone, "sessions", `${ids[0]}.records.jsonl`))).toString("utf8"), /Incoming/);
         renameSync(join(clone, "intents"), kept); symlinkSync(outside, join(clone, "intents"), "dir");
         if (refusal === "changed") {
           const file = join(clone, "sessions", `${id}.json`);
@@ -527,7 +528,7 @@ test("space-38: a half-written selection whose startup repair a held session lea
   // not, so this device's manifest no longer matches its replay; the
   // marker stands.
   const marker = join(clone, ".spex-apply.json");
-  writeFileSync(join(clone, "sessions", `${sessionId}.records.jsonl`), readFileSync(join(theirsDir, "sessions", `${sessionId}.records.jsonl`)));
+  writeFileSync(join(clone, "sessions", `${sessionId}.records.jsonl`), await readSessionReplay(join(theirsDir, "sessions", `${sessionId}.records.jsonl`)));
   writeFileSync(marker, JSON.stringify({ v: 1, ours, theirs, base, choices: { [`sessions/${sessionId}`]: "theirs" }, at: Date.now() }));
   // Another process holds that session across the core's start: the
   // startup repair is refused at its lease, and the half-written session
@@ -554,7 +555,7 @@ test("space-38: a half-written selection whose startup repair a held session lea
   assert.equal(existsSync(marker), false);
   assert.equal(git(clone, "log", "--merges", "--format=%P", `${ours}..HEAD`), `${ours} ${theirs}`, "the recorded merge on the Save commit");
   assert.deepEqual(readFileSync(join(clone, "sessions", `${sessionId}.json`)), readFileSync(join(theirsDir, "sessions", `${sessionId}.json`)));
-  assert.deepEqual(readFileSync(join(clone, "sessions", `${sessionId}.records.jsonl`)), readFileSync(join(theirsDir, "sessions", `${sessionId}.records.jsonl`)));
+  assert.deepEqual(await readSessionReplay(join(clone, "sessions", `${sessionId}.records.jsonl`)), await readSessionReplay(join(theirsDir, "sessions", `${sessionId}.records.jsonl`)));
   assert.equal(git(clone, "show", "HEAD:notes.txt"), "ours");
   assert.equal(git(remote, "rev-parse", "spex"), git(clone, "rev-parse", "spex"));
   const after = await home.client.expectOk("space.get", {});
@@ -637,7 +638,7 @@ test("space-38: two Syncs sent together over a marker a released lease left are 
   assert.ok(!(await home.client.expectOk("space.get", {})).diagnostics.some((d) => d.file.endsWith(".spex-apply.json")));
   assert.equal(existsSync(marker), false);
   assert.equal(git(clone, "log", "--merges", "--format=%P", `${recorded.ours}..HEAD`), `${recorded.ours} ${recorded.theirs}`, "one merge of the recorded sides on the Save commit");
-  assert.deepEqual(readFileSync(join(clone, "sessions", `${sessionId}.records.jsonl`)), readFileSync(join(peer, "sessions", `${sessionId}.records.jsonl`)));
+  assert.deepEqual(await readSessionReplay(join(clone, "sessions", `${sessionId}.records.jsonl`)), await readSessionReplay(join(peer, "sessions", `${sessionId}.records.jsonl`)));
   assert.equal(git(clone, "show", "HEAD:notes.txt"), "mine");
   assert.equal(git(bare, "rev-parse", "spex"), git(clone, "rev-parse", "spex"));
 });
@@ -692,4 +693,25 @@ test("space-38: a missing repository, an unreachable host and a sleeping transpo
   const sshStop = await plain.client.settle("space.fetch", { repository: plainKey });
   assert.ok(sshStop.sync.phase === "stopped" && sshStop.sync.cause === "unreachable", JSON.stringify(sshStop.sync));
   assert.ok(!/SSH key|gh auth|sign this machine in/.test(sshStop.sync.phase === "stopped" ? sshStop.sync.guidance : ""), JSON.stringify(sshStop.sync));
+});
+
+test("space-38: Save refuses orphan bounded replay and chunks before committing or pushing", async (t) => {
+  const remote = bareRepo();
+  const home = await startHome("orphan-bounded-save"); t.after(() => home.stop());
+  const { key, clone } = await addFolder(home, home.projectDir);
+  await home.client.expectOk("space.remote.set", { repository: key, url: remote });
+  assert.equal((await home.client.settle("space.sync", { repository: key })).sync.phase, "done");
+  const saved = git(clone, "rev-parse", "HEAD"); const pushed = git(remote, "rev-parse", "spex");
+  const id = await runTurn(home, key, "Orphan validation fixture");
+  const root = join(clone, "sessions", `${id}.json`);
+  assert.equal(JSON.parse(readFileSync(root, "utf8")).schemaVersion, 8);
+  rmSync(root);
+  const result = await home.client.settle("space.sync", { repository: key });
+  assert.equal(result.sync.phase, "stopped", JSON.stringify(result.sync));
+  assert.equal(result.sync.step, "save");
+  assert.match(result.sync.message ?? "", /root is missing/);
+  assert.equal(git(clone, "rev-parse", "HEAD"), saved);
+  assert.equal(git(remote, "rev-parse", "spex"), pushed);
+  assert.ok(existsSync(join(clone, "sessions", `${id}.replay.json`)));
+  assert.ok(existsSync(join(clone, "sessions", `${id}.chunks`)));
 });

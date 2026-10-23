@@ -1896,7 +1896,7 @@ test("git-host-25, space-84, space-60, storage-36, storage-5, git-host-22, git-h
   assert.equal(git(clone, "config", "--get", `remote.${hostFolder(second)}.spexId`), a.id);
   // Its placement file follows the remote in that step: the second's
   // naming the same id, the first's deleted (storage-36).
-  assert.deepEqual(readdirSync(join(clone, "placements")), [`${hostFolder(second)}.yaml`]);
+  assert.deepEqual(readdirSync(join(clone, "placements")).sort(), [`${hostFolder(second)}.yaml`].sort());
   assert.equal(readFileSync(join(clone, "placements", `${hostFolder(second)}.yaml`), "utf8"), placed(second.url, a.id));
   assert.deepEqual(atCompare, { last, former: [], remotes: [hostFolder(second)], spex: true }, "its last sync and fetched spex kept, re-keyed");
   assert.equal(Home.load(home.dataDir).keyForFolder(code), followedKey, "its pair follows it");

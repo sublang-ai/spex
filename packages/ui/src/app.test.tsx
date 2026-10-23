@@ -507,6 +507,59 @@ describe("run-view-70: the sidebar navigates, the tabs hold what is open", () =>
   });
 });
 
+describe("dashboard-10/54: a session another runtime runs", () => {
+  test("reads the core's phrase as its reason, offers no continuation, Restore or Discard, and summons nothing here", async () => {
+    // As the core lists it (core-service-32): `runsOn` with that
+    // runtime's label, not continuable, the phrase as its reason, no
+    // recovery — whatever failed or was cut short there.
+    const elsewhere = session({
+      id: "elsewhere",
+      title: "ship the parser",
+      failed: true,
+      continuable: undefined,
+      continuationReason: "Runs on build-server",
+      runsOn: "build-server",
+    });
+    const ledger = { intents: [], attention: [], badge: 0 };
+    commandMock.mockImplementation(async (type: string) =>
+      type === "ledger.get"
+        ? ledger
+        : type === "history.get"
+          ? { records: [] }
+          : defaultReply(type),
+    );
+    useAppStore.setState({
+      sessions: [elsewhere],
+      views: { elsewhere: view() },
+      activeSessionId: "elsewhere",
+      workspaceTabs: { p1: "elsewhere" },
+      openTabs: { p1: ["elsewhere"] },
+      ledger: ledger as never,
+    });
+    render(<App />);
+    await act(async () => {});
+
+    // The history notice carries the phrase, and nothing continues,
+    // restores or discards it.
+    expect(screen.getByTestId("history-notice").textContent).toContain(
+      "Runs on build-server",
+    );
+    expect(screen.queryByTestId("boss-composer")).toBeNull();
+    expect(screen.queryByRole("region", { name: "Interrupted turn" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Restore" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Discard" })).toBeNull();
+    // The fold serves no entry for it, and the surfaces add none: no
+    // badge, and its sidebar mark is quiet history, not a summons.
+    expect(screen.queryByTestId("nav-attention-badge")).toBeNull();
+    expect(screen.getByTestId("sidebar-mark-elsewhere").dataset.life).toBe(
+      "history",
+    );
+    expect(
+      commandMock.mock.calls.map(([type]) => type),
+    ).not.toContain("session.restore");
+  });
+});
+
 describe("run-view-72: the chrome folds without dropping a duty", () => {
   test("the binding collapses and the foot control restores", () => {
     const { unmount } = render(<App />);
@@ -524,14 +577,15 @@ describe("run-view-72: the chrome folds without dropping a duty", () => {
     // Sessions stop listing, but the open tab is still the reach.
     expect(screen.queryByTestId("sidebar-session-a-live")).toBeNull();
     expect(screen.getByRole("tab", { selected: true })).toBeTruthy();
-    // The palette control keeps its icon-only form under the
-    // Projects entry (DR-030): collapse never hides a duty.
-    const palette = screen.getByLabelText("Switch or add a project");
-    expect(palette.title).toBe(`Switch or add a project (${keyLabel("P")})`);
-    fireEvent.click(palette);
-    expect(screen.getByRole("dialog", { name: "Choose a project" })).toBeTruthy();
-    fireEvent.keyDown(screen.getByTestId("palette-search"), { key: "Escape" });
-    expect(screen.queryByRole("dialog", { name: "Choose a project" })).toBeNull();
+    // The add control keeps its icon-only form under the Projects
+    // entry (DR-030): collapse never hides a duty.
+    const addProject = screen.getByLabelText("Add a local project");
+    expect(addProject.title).toBe("Add a local project");
+    fireEvent.click(addProject);
+    expect(screen.getByRole("dialog", { name: "Add a project" })).toBeTruthy();
+    expect(screen.getByTestId("palette-own-project")).toBeTruthy();
+    fireEvent.keyDown(screen.getByTestId("palette-path"), { key: "Escape" });
+    expect(screen.queryByRole("dialog", { name: "Add a project" })).toBeNull();
 
     // Chrome state is a preference: it survives a remount.
     unmount();
@@ -684,6 +738,37 @@ describe("run-view-57: a workspace holding projects opens inside one", () => {
     await useAppStore.getState().refresh();
 
     expect(useAppStore.getState().currentProjectId).toBe("fresh-1");
+  });
+});
+
+describe("run-view-172: first-project welcome route", () => {
+  test("landing and sidebar add the same way; the switch shortcut still offers Academy", () => {
+    useAppStore.setState({
+      projects: [],
+      sessions: [],
+      views: {},
+      currentProjectId: undefined,
+      activeSessionId: undefined,
+      workspaceTabs: {},
+      openTabs: {},
+      ledger: { intents: [], attention: [], badge: 0 } as never,
+    });
+    render(<App />);
+
+    expect(screen.getByTestId("welcome-home")).toBeTruthy();
+    expect(screen.queryByTestId("sidebar-add-project")).toBeNull();
+    fireEvent.click(screen.getByTestId("home-add-project"));
+    expect(document.activeElement).toBe(screen.getByTestId("palette-path"));
+    expect(screen.queryByTestId("palette-academy")).toBeNull();
+
+    fireEvent.keyDown(window, { key: "p", metaKey: true });
+    expect(screen.queryByTestId("project-palette")).toBeNull();
+    fireEvent.click(screen.getByTestId("sidebar-palette"));
+    expect(screen.getByTestId("palette-own-project")).toBeTruthy();
+    expect(screen.queryByTestId("palette-academy")).toBeNull();
+    fireEvent.keyDown(screen.getByTestId("palette-path"), { key: "Escape" });
+    fireEvent.keyDown(window, { key: "p", metaKey: true });
+    expect(screen.getByTestId("palette-academy")).toBeTruthy();
   });
 });
 
@@ -1107,7 +1192,7 @@ describe("run-view-48/50: the strip walks by keyboard and names its attention", 
     const failed = screen.getByRole("tab", {
       name: "chase the flaky test",
     });
-    const plus = screen.getByRole("tab", { name: "Start another session" });
+    const plus = screen.getByRole("tab", { name: "New task" });
     const specs = screen.getByTestId("workspace-tab-specs");
     const overview = screen.getByTestId("workspace-tab-overview");
     expect(live.tabIndex).toBe(0);
@@ -1135,7 +1220,7 @@ describe("run-view-48/50: the strip walks by keyboard and names its attention", 
     expect(specs.title).toBe(
       `The project's spec packages (${keyLabel("⇧S")})`,
     );
-    expect(plus.title).toBe(`Start another session (${keyLabel("N")})`);
+    expect(plus.title).toBe(`New task (${keyLabel("N")})`);
   });
 
   test("a failure tab's tooltip says why it failed", async () => {
@@ -1332,6 +1417,32 @@ describe("run-view-88: Captain Home consumes the published next standing", () =>
 });
 
 describe("spec-view-58: the Specs tab on a project with no specs/", () => {
+  test("the project start links to existing specs and the pinned tab shows item count", async () => {
+    useAppStore.setState({
+      workspaceTabs: { p1: "start" },
+      specTrees: { p1: {
+        present: true, legacy: false, decisions: [], intents: [], notices: [], readAt: 1,
+        files: [
+          { path: "specs/packages/design.md", key: "design", dir: "", basename: "design", notices: [], items: [
+            { id: "design-1", group: "external", section: "External Behavior", firstLine: "A goal", text: "A goal", cites: [] },
+          ] },
+          { path: "specs/packages/git.md", key: "git", dir: "", basename: "git", notices: [], items: [] },
+        ],
+      } },
+    });
+    render(<App />);
+    const tab = screen.getByTestId("workspace-tab-specs");
+    expect(tab.querySelector('[aria-hidden="true"]')?.textContent).toBe("(1)");
+    expect(screen.getByRole("tab", { name: "Specs, 1 spec item" })).toBe(tab);
+    expect(tab.getAttribute("aria-selected")).toBe("false");
+    expect(screen.getByTestId("project-spec-status").textContent).toContain("2 packages · 1 item");
+    fireEvent.click(within(screen.getByTestId("project-spec-status")).getByRole("button", { name: "View specs" }));
+    expect(tab.getAttribute("aria-selected")).toBe("true");
+    fireEvent.click(screen.getByRole("tab", { name: "New task" }));
+    expect(tab.getAttribute("aria-selected")).toBe("false");
+    expect(screen.getByRole("textbox", { name: "Describe a project task" })).toBeTruthy();
+  });
+
   // The tree the core replies with when a project has no `specs/`
   // directory: absence stated with empty lists, never a failure and
   // never a reply missing them (spec-view-10). The view reads those

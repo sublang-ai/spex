@@ -21,8 +21,6 @@
 //
 //   node dist/testing/stopped-writer.js <sessionsDir> <cwd> <configPath> <input> [sessionId] [--runtime=<device>:<label>]
 
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { createSessionStore } from "@sublang/playbook/session-store";
 import { executionConfigFromPlan, loadLaunchPlan, openSessionHost } from "@sublang/playbook/session-host";
 import { runtimeRecord } from "../control-record.js";
@@ -72,7 +70,7 @@ const held: FakeScript = continued
 // at launch — the one a continued session was launched on, else the
 // built-in spec package's.
 const stored = continued
-  ? (JSON.parse(readFileSync(join(sessionsDir, `${continued}.json`), "utf8")) as { structuralProjection?: { catalog?: Record<string, { from?: string }> } }).structuralProjection?.catalog ?? {}
+  ? ((await createSessionStore({ sessionsDir }).readManifest(continued)) as { structuralProjection?: { catalog?: Record<string, { from?: string }> } }).structuralProjection?.catalog ?? {}
   : {};
 const enabled = builtinLaunchModules(configPath);
 const modules = { ...enabled,

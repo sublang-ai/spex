@@ -509,12 +509,13 @@ When a client requests adapter readiness, the core service shall report one dedu
 
 #### core-service-10
 
-The core service shall persist and replay sessions through Playbook's common manifest/stream contract [[1]], using the shared root and explicit overrides [[storage-1](storage.md#storage-1)] ([DR-045](../decisions/045-unified-session-storage.md)):
+The core service shall persist and replay sessions through Playbook's hydrated manifest and replay API over its versioned physical session files [[1]] ([DR-144](../decisions/144-bounded-session-storage.md)), using the shared root and explicit overrides [[storage-1](storage.md#storage-1)] ([DR-045](../decisions/045-unified-session-storage.md)):
 
 - restart serves the same records and visibility filtering [[core-service-8](#core-service-8)], deriving turns, summaries, usage, and per-agent active time [[core-service-102](#core-service-102)]; liveness comes from runtime/leases rather than stored flags;
 - valid opaque v1 records, including unknown/headerless objects, remain in sequence/digest accounting; unsupported presentation is skipped without damage;
 - record-write failure preserves live presentation and durable recovery, marks the manifest's replay incomplete and refuses later continuation [[core-service-73](#core-service-73)]; a restart cannot clear the marker merely because the retained bytes parse;
 - a reader serves the valid complete prefix with the damaged boundary reported, without altering files during a read;
+- a monolithic schema-7 session remains readable without implicit conversion; continuation follows Playbook's explicit migration requirement ([DR-144](../decisions/144-bounded-session-storage.md));
 - token-free presentation includes synthesized visible failures [[core-service-30](#core-service-30)]; provider hints never enter the portable stream or manifest;
 - historical participants, settings, bindings and graphs come from stored context [[core-service-80](#core-service-80)], not today's installed modules.
 
@@ -525,7 +526,7 @@ The core service shall serve every session present in the `sessions/` directory 
 - a session's project is the clone holding it [[storage-6](storage.md#storage-6)]; it lists with shared continuation eligibility [[core-service-73](#core-service-73)], and a clone no folder pairs lists its sessions as history only;
 - a record beside no replay stream lists from its Boss journal: each Boss entry opens a turn with its prompt, each Captain reply follows it, and the record's own timestamps bound them ([DR-037](../decisions/037-playbook-12-adoption.md));
 - an arrival or change while the service runs is announced to subscribed clients as a session-state report, with `intents.changed` where a derived intent state can change [[core-service-51](#core-service-51)]; a record's disappearance is forgotten [[core-service-76](#core-service-76)];
-- a stream append also reaches that session's subscribers through the record visibility filter [[core-service-8](#core-service-8)], once per appended record, without waiting for directory activity to stop; a replacement history is served on the next history request;
+- a replay append, including one published through a replay descriptor while another host holds the writer lease, also reaches that session's subscribers through the record visibility filter [[core-service-8](#core-service-8)], once per appended record, without waiting for directory activity to stop; a replacement history is served on the next history request;
 - each session is read independently from its complete newline-terminated stream prefix, so an unfinished final line waits for its newline and an unreadable manifest preserves its previous served history without hiding healthy neighbors;
 - preserve opaque records [[core-service-10](#core-service-10)]; summary times use first/last finite record timestamps, otherwise manifest creation/update times or zero;
 - pairing a folder with a spex repository re-reads that clone's sessions [[storage-6](storage.md#storage-6)], without waiting for a new record.
@@ -569,7 +570,7 @@ When a host shell stops the core service, the core service shall persist every l
 - Successful cleanup reports the session as no longer live; failed or unconfirmed cleanup retains its ownership evidence [[core-service-4](#core-service-4)].
 - Shutdown waits for settlement bookkeeping already in progress before closing the store.
 - Shutdown closes session and turn admission before waiting, drains session openings already admitted (including their pre-open waits), and attempts disposal of any runtime they create before closing the store; an opening or disposal failure does not skip the remaining cleanup.
-- Shutdown is bounded: every active turn is aborted with the core-stop reason as admission closes; when every turn has settled, or ten seconds after the stop began, every agent process the core started that is still alive receives SIGTERM, and SIGKILL five seconds later; the stop then stops waiting for disposals not yet confirmed, reports them unconfirmed, releases its leases and closes the store, having written nothing into any working folder and reverted no file, so a turn cut before settlement stands `uncertain` for Restore on this runtime ([DR-134](../decisions/134-execution-ownership.md)).
+- Shutdown is bounded: every active turn is aborted with the core-stop reason as admission closes; when every turn active at the stop has settled, or ten seconds after the stop began, every agent process the core started that is still alive receives SIGTERM, and SIGKILL five seconds later; the stop then stops waiting for disposals not yet confirmed, reports them unconfirmed, releases its leases and closes the store, having written nothing into any working folder and reverted no file, so a turn cut before settlement stands `uncertain` for Restore on this runtime ([DR-134](../decisions/134-execution-ownership.md)).
 - An observed Captain cleanup-hook rejection or an ambiguous compound construction failure is reported as cleanup unconfirmed, including one whose opening settled before shutdown; a lease released during failed construction alone does not confirm runtime cleanup ([DR-048](../decisions/048-failed-session-cleanup.md)).
 
 ### Interface Language
@@ -604,6 +605,7 @@ Where the core runs as a seat — started with a server's id and name, the admit
 - every command naming a working folder path — `project.register`, `project.rebind`, `project.create`, and a join naming a folder — is refused `invalid_request`, "Projects on a server are opened from their group"; a join names no folder, the core allocating it [[space-103](space.md#space-103)];
 - intents without a runtime are run nowhere here [[core-service-107](#core-service-107)];
 - `server.open` is refused `invalid_request`, "A seat opens no server": a seat holds no seats of its own [[core-service-128](#core-service-128)];
+- the seat account's own Git configuration names the app's credential helper in its member mode, so the pushes agents make from a work tree carry the member's token [[git-host-9](git-host.md#git-host-9)];
 - the runtime's label is the server's name [[core-service-4](#core-service-4)].
 
 #### core-service-126
@@ -906,6 +908,7 @@ Where a fixture session — manifest naming a registered project's directory as 
 - their records are served with hidden records filtered from the session subscription [[core-service-10](#core-service-10)];
 - a session-state report announcing the second session reaches a subscribed client [[core-service-60](#core-service-60)];
 - after the terminal appends to an already listed session's stream without replacing its manifest, the listing and history reflect the new title and turns, and the session subscriber receives each appended visible record once even during continuous directory activity, with the complete but unterminated final record withheld until its newline arrives [[core-service-60](#core-service-60)];
+- an external host appending through a bounded replay descriptor, with the session root unchanged, streams each new visible record once and updates the title and turn count [[core-service-60](#core-service-60)]; a missing recovery chunk retains the session's association and readable history with execution refused, a blocking diagnostic and lease-bound deletion still available [[core-service-10](#core-service-10)] [[core-service-65](#core-service-65)];
 - rescanning the same streams leaves their turn, usage, and active-time folds unchanged, replacing a stream refreshes its title, history, and active-time fold, and a malformed neighboring manifest hides no healthy session [[core-service-60](#core-service-60)] [[core-service-102](#core-service-102)];
 - leading, interspersed and trailing opaque v1 objects preserve history without inventing players, turns or failures; summary times stay finite even for wholly opaque streams [[core-service-60](#core-service-60)];
 - a fixture session whose working directory matches no registered project is absent from the listing [[core-service-60](#core-service-60)];
@@ -1175,7 +1178,7 @@ Where two homes pair one project at the same working-folder path and sync its re
 
 #### core-service-127
 
-Where the core runs as a seat against a stand-in instance with a fixture adapter recording its environment, the integration suite shall assert seat mode [[core-service-125](#core-service-125)]: the device request names the server and the person and a sign-in as another account stores nothing; your own group gains no placement; the path-naming commands are refused with the phrase; `server.open` is refused before anything is asked; a join names no folder; an intent holding no runtime is listed queued, never next while a newer intent the seat captured is, and refused `conflict`, "Runs nowhere yet", on a turn while its edit and close succeed; and the shared credential file [[core-service-126](#core-service-126)]: its values reach a run's environment, a value replaced between runs reaches the next run while the running one keeps its own, a member's own credential displaces the shared names of its agent, and an unreadable file is reported without blocking.
+Where the core runs as a seat against a stand-in instance with a fixture adapter recording its environment, the integration suite shall assert seat mode [[core-service-125](#core-service-125)]: the device request names the server and the person and a sign-in as another account stores nothing; your own group gains no placement; the path-naming commands are refused with the phrase; `server.open` is refused before anything is asked; a join names no folder; an intent holding no runtime is listed queued, never next while a newer intent the seat captured is, and refused `conflict`, "Runs nowhere yet", on a turn while its edit and close succeed; a `git push` run outside the app in a project's work tree reaches an `http` or `https` host the member placed a token for with that token and a host without one with none [[core-service-125](#core-service-125)]; and the shared credential file [[core-service-126](#core-service-126)]: its values reach a run's environment, a value replaced between runs reaches the next run while the running one keeps its own, a member's own credential displaces the shared names of its agent, and an unreadable file is reported without blocking.
 
 #### core-service-130
 

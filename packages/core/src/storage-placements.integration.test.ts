@@ -127,7 +127,7 @@ test("storage-36, space-35, space-23: your own group's sign-in, a pick's creatio
   // (storage-36, space-5).
   await a.client.expectOk("space.remote.set", { repository: key, url: bareRepo() });
   assert.deepEqual(remoteNamesOf(clone), [hostFolder(host), "origin"]);
-  assert.deepEqual(readdirSync(join(clone, "placements")), [`${hostFolder(host)}.yaml`]);
+  assert.deepEqual(readdirSync(join(clone, "placements")).sort(), [`${hostFolder(host)}.yaml`].sort());
   assert.equal(readFileSync(join(clone, file), "utf8"), bytes);
 
   // A group's first session (space-65): its own spex repository, on no
@@ -338,7 +338,7 @@ test("storage-42, storage-36, storage-34, storage-5, space-57, space-60: two ins
   home.hooks.beforeStep = async ({ step, repository }) => {
     if (step !== "compare" || repository !== followed || atCompare !== undefined) return;
     const seen: Record<string, unknown> = {
-      files: readdirSync(join(clone, "placements")),
+      files: readdirSync(join(clone, "placements")).sort(),
       bytes: readFileSync(join(clone, "placements", `${secondFolder}.yaml`), "utf8"),
       remotes: remoteNamesOf(clone),
       id: git(clone, "config", "--get", `remote.${secondFolder}.spexId`),
@@ -370,7 +370,7 @@ test("storage-42, storage-36, storage-34, storage-5, space-57, space-60: two ins
   // Its push to the second records its last sync there.
   assert.ok(movedLine.lastSync && onceLine.lastSync && movedLine.lastSync.at >= onceLine.lastSync.at, JSON.stringify(movedLine.lastSync));
   assert.deepEqual({ ...syncRecordsOf(home.dataDir, key), ...syncRecordsOf(home.dataDir, followed) }, { [`sync:${followed}:${secondFolder}:last`]: movedLine.lastSync, [`sync:${followed}:${secondFolder}:noticed`]: true });
-  assert.deepEqual(readdirSync(join(clone, "placements")), [`${secondFolder}.yaml`]);
+  assert.deepEqual(readdirSync(join(clone, "placements")).sort(), [`${secondFolder}.yaml`].sort());
 });
 
 /** A clone's remote and host id as a Spex before DR-127 kept them: the
@@ -717,7 +717,7 @@ test("storage-39, storage-36, storage-34, storage-1, storage-31, storage-6, stor
   // space-5).
   await home.client.expectOk("space.remote.set", { repository: key, url: bareRepo() });
   assert.deepEqual(remotesOf(clone), [firstFolder, "origin"]);
-  assert.deepEqual(readdirSync(join(clone, "placements")), [`${firstFolder}.yaml`]);
+  assert.deepEqual(readdirSync(join(clone, "placements")).sort(), [`${firstFolder}.yaml`].sort());
 
   // Placed in the second's acme: its remote added after `origin`, read
   // in the order added with `origin` last; its file written beside the
