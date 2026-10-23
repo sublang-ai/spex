@@ -227,7 +227,7 @@ test("git-host-26, git-host-5, space-87, space-61, space-1, space-29, space-30, 
   await home.client.expectError("space.join", { instance: second.url, hostId: there.id }, "invalid_request", /^atlas-spex is on this device already$/);
 });
 
-test("git-host-26, git-host-5, space-87, space-1, space-29, space-62: a host repository both of two instances over one Git backend list is one placement — a clone holding it through the first, with a file for the second naming it too, holds one line, no line or row offering it through the second, no other group naming the row, Join through the second refused as on this device, the row carrying both instances its files name", async (t) => {
+test("git-host-26, git-host-5, space-87, space-1, space-29, space-62: a host repository both of two instances over one Git backend list is one placement — a clone holding it through the first, with a file for the second naming it too, holds one line, no line or row offering it through the second, the namespace listing it at the second naming the row in one line and your namespace at the first naming your own group's own repository, a Place and a Join through the second refused as on this device, the row carrying both instances its files name", async (t) => {
   const first = await startHost();
   const second = await startHost({ gitBackend: first, displayName: SECOND_NAME });
   const home = await startHome("one-placement", { host: first, project: false });
@@ -256,7 +256,19 @@ test("git-host-26, git-host-5, space-87, space-1, space-29, space-62: a host rep
   assert.deepEqual([...row.placedAt].sort(), [firstOrigin, secondOrigin].sort());
   assert.deepEqual(rowsOf(state).filter((repository) => repository.id === id || repository.placements.some((line) => line.id === id)).map((repository) => repository.key), [key]);
   assert.deepEqual(entryAt(state, first.url, LOGIN).repositories.map((repository) => repository.key), [key]);
-  assert.ok(instanceOf(state, second.url)?.groups.every((group) => group.placed.length === 0 && group.repositories.every((repository) => repository.id !== id)), "nothing at the second stands for it");
+  // Your own group's own repository stands under your own group, so your
+  // namespace listing it at its first instance names it in one line
+  // (space-1).
+  assert.deepEqual(entryAt(state, first.url, LOGIN).placed, [{ key: HOST_OWN, name: `${LOGIN}-spex` }]);
+  // The second lists the one placement too: the namespace there names
+  // the row in one line, and no row or other line at the second stands
+  // for it (space-1, DR-128).
+  const atSecond = instanceOf(state, second.url)?.groups ?? [];
+  assert.ok(atSecond.every((group) => group.repositories.every((repository) => repository.id !== id)), "no row at the second stands for it");
+  assert.deepEqual(atSecond.filter((group) => group.placed.some((line) => line.key === key)).map((group) => group.fullPath), [LOGIN]);
+  assert.ok(entryAt(state, second.url, LOGIN).placed.some((line) => line.key === key && line.name === "team-spex"));
+  // A Place there is refused, the row placed there already (space-29).
+  await home.client.expectError("space.place", { repository: key, choice: { kind: "create", instance: second.url, groupId: null, name: "team" } }, "invalid_request", new RegExp(`^team-spex is placed at ${SECOND_NAME} already$`));
   await home.client.expectError("space.join", { instance: second.url, hostId: id }, "invalid_request", /^team-spex is on this device already$/);
 });
 

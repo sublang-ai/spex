@@ -1667,8 +1667,8 @@ test.describe("three instances", () => {
 
     // Your own group is placed at every instance the home signed in to,
     // in your namespace there, in the order signed in; its row offers
-    // neither "Place at…" nor "Leave…", and each namespace after the
-    // first shows one line naming it under your own group, with no
+    // neither "Place at…" nor "Leave…", and each namespace, the first's
+    // among them, shows one line naming it under your own group, with no
     // control (space-4, space-88, space-89, space-87, space-1).
     const ownRow = list.getByTestId("space-own").getByTestId(`space-row-${OWN_KEY}`);
     const ownLines = ownRow.getByTestId(`space-lines-${OWN_KEY}`).locator(":scope > li");
@@ -1679,7 +1679,7 @@ test.describe("three instances", () => {
     }
     await expect(ownRow.getByTestId(`space-row-place-${OWN_KEY}`)).toHaveCount(0);
     await expect(ownRow.getByTestId(`space-row-leave-${OWN_KEY}`)).toHaveCount(0);
-    for (const host of [second, third]) {
+    for (const host of [first, second, third]) {
       const placed = instanceSection(page, host).getByTestId(`space-group-@${HOST_LOGIN}`).getByTestId(`space-placed-${OWN_KEY}`);
       await expect(placed).toHaveText(`${OWN_NAME} stands under your own group`);
       await expect(placed.getByRole("button")).toHaveCount(0);
@@ -1940,6 +1940,79 @@ test.describe("three instances", () => {
       .toBe(LOCAL_KEY);
 
     expect(defects, defects.join("\n")).toEqual([]);
+  });
+});
+
+test.describe("one Git backend", () => {
+  // Signed in at the first stand-in with the demo project registered; a
+  // second stand-in over the first's Git backend, listing the accounts'
+  // namespaces under the same ids, and a third on one of its own
+  // (git-host-12, DR-128).
+  test.use({
+    appOptions: {
+      host: { second: { backend: "shared" }, third: { backend: "separate" } },
+      project: true,
+      signedIn: true,
+    },
+  });
+
+  test("space-1, space-88: a host repository both of two instances over one Git backend list is one placement — your namespace at the second names the project's row and your own group's in one line each, with no control, and Place at… offers the third alone", async ({
+    page,
+    app,
+  }) => {
+    test.setTimeout(180_000);
+    const first = app.hosts[0]!;
+    const second = app.hosts[1]!;
+    const third = app.hosts[2]!;
+    const KEY = hostKey(first, NAMESPACE_PATH);
+    // The home signed in at the second and the third, and the project
+    // synced in your namespace at the first, which the second lists too
+    // (arrange only, space-4, space-58).
+    await signInCore(app, second);
+    await signInCore(app, third);
+    await pickGroup(app, { namespace: true });
+
+    await open(page, app);
+    await showGroups(page);
+
+    // Refresh reads every signed-in instance, the second's listing now
+    // holding the project (space-1, git-host-5). The row stands in your
+    // namespace at the first with that one line; your namespace at the
+    // second, whose listing holds the same placement, stands no row for
+    // it and names it in one line with no control, as it and your
+    // namespace at the first name your own group's own repository
+    // (space-1, DR-128).
+    await page.getByTestId("space-refresh").click();
+    await expect(page.getByTestId("space-refresh")).toHaveText("Refresh", { timeout: 30_000 });
+    const row = instanceSection(page, first).getByTestId(`space-group-@${HOST_LOGIN}`).getByTestId(`space-row-${KEY}`);
+    await expect(row).toHaveAttribute("data-state", "reachable", { timeout: 30_000 });
+    expect(await testIds(row.getByTestId(`space-lines-${KEY}`).locator(":scope > li"))).toEqual([`space-line-${first.url}`]);
+    const secondNamespace = instanceSection(page, second).getByTestId(`space-group-@${HOST_LOGIN}`);
+    await expect(secondNamespace.locator(`[data-testid^="space-row-"]`)).toHaveCount(0);
+    const placed = secondNamespace.getByTestId(`space-placed-${KEY}`);
+    await expect(placed).toHaveText(`demo-project-spex stands under ${HOST_LOGIN} at Stand-in Git host`);
+    await expect(placed.getByRole("button")).toHaveCount(0);
+    for (const host of [first, second]) {
+      const own = instanceSection(page, host).getByTestId(`space-group-@${HOST_LOGIN}`).getByTestId(`space-placed-${OWN_KEY}`);
+      await expect(own).toHaveText(`${OWN_NAME} stands under your own group`);
+      await expect(own.getByRole("button")).toHaveCount(0);
+    }
+
+    // "Place at…" offers the third alone, titled and named for it, the
+    // second holding that placement already: it opens the third's picker
+    // with no choice, and Cancel closes it, choosing nothing (space-88).
+    const place = row.getByTestId(`space-row-place-${KEY}`);
+    await expect(place).toHaveText("Place at…");
+    await expect(place).toHaveAttribute("title", `Also place at ${THIRD_HOST_NAME}`);
+    await expect(place).toHaveAccessibleName(`Also place at ${THIRD_HOST_NAME}`);
+    await place.click();
+    await expect(row.getByTestId(`space-place-choice-${KEY}`)).toHaveCount(0);
+    const picker = row.getByTestId(`space-place-${KEY}`);
+    await expect(picker).toHaveAttribute("aria-label", `Also place at ${THIRD_HOST_NAME}`);
+    expect(await testIds(picker.locator('[data-testid^="space-pick-instance-"]'))).toEqual([`space-pick-instance-${third.url}`]);
+    await picker.getByTestId(`space-pick-cancel-${KEY}`).click();
+    await expect(picker).toHaveCount(0);
+    expect(await testIds(row.getByTestId(`space-lines-${KEY}`).locator(":scope > li"))).toEqual([`space-line-${first.url}`]);
   });
 });
 

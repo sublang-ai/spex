@@ -5,7 +5,7 @@
 
 ## Status
 
-In progress (2026-10-22); every deliverable is ticked, and two gaps between [[space-1](../packages/space.md#space-1)] and the code remain: the core lists no line naming your own group's own repository in your namespace at its first placement's instance, and a row's opened tabs and focus stay on its former key when a Leave moves its clone while the left instance still lists that host repository.
+In progress (2026-10-22); every deliverable is ticked, and one gap between [[space-1](../packages/space.md#space-1)] and the code remains: a row's opened tabs and focus stay on its former key when a Leave moves its clone while the left instance still lists that host repository.
 
 ## Intent
 

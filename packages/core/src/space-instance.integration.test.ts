@@ -997,6 +997,13 @@ function rowsUnder(state: GroupsState, origin: string, fullPath: string): [strin
   return (group?.repositories ?? []).map((repository) => [repository.key, repository.state, repository.instance]);
 }
 
+/** The keys of the rows standing elsewhere a group or namespace names
+ * in one line each (space-1), sorted. */
+function placedUnder(state: GroupsState, origin: string, fullPath: string): string[] {
+  const group = instanceOf(state, origin)?.groups.find((entry) => entry.fullPath === fullPath);
+  return (group?.placed ?? []).map((line) => line.key).sort();
+}
+
 /** Who each instance's `/api/v1/host/me` was asked by, counted: one per
  * read of it (git-host-5). */
 function meReads(host: StandinHost): number {
@@ -1633,7 +1640,7 @@ function membersRequests(host: StandinHost, from: number): string[] {
   return host.script.requests.slice(from).filter((request) => request.path.endsWith("/members")).map((request) => `${request.method} ${request.path}`);
 }
 
-test("git-host-25, space-84, git-host-5, git-host-8, git-host-16, git-host-9, space-1, space-61, space-63: two instances over one Git backend list a namespace repository as one row under the first; Join keys it under the first's folder, whichever instance it names, and the second's listing withholds another; the second answering it archived or below the pushing role changes nothing while the first is signed in; its members are read and added at the first, and its push presents a credential the first issued", async (t) => {
+test("git-host-25, space-84, git-host-5, git-host-8, git-host-16, git-host-9, space-1, space-61, space-63: two instances over one Git backend list a namespace repository as one row under the first, the second's namespace naming it in one line; Join keys it under the first's folder, whichever instance it names, and the second's listing withholds another; the second answering it archived or below the pushing role changes nothing while the first is signed in; its members are read and added at the first, and its push presents a credential the first issued", async (t) => {
   const first = await startHost();
   const second = await startHost({ gitBackend: first, displayName: "Second stand-in" });
   // Both list the person's namespace there with its repositories under
@@ -1667,6 +1674,10 @@ test("git-host-25, space-84, git-host-5, git-host-8, git-host-16, git-host-9, sp
   assert.deepEqual(rowsWith(listed, b.id), [[bKey, "absent", first.url]]);
   assert.deepEqual(rowsUnder(listed, first.url, LOGIN), [[aKey, "absent", first.url], [bKey, "absent", first.url]]);
   assert.deepEqual(rowsUnder(listed, second.url, LOGIN), [], "the second's namespace there holds no row of its own");
+  // It names each in one line instead, and your own group's own
+  // repository, which your namespace at the first names too (space-1).
+  assert.deepEqual(placedUnder(listed, second.url, LOGIN), [aKey, bKey, HOST_OWN].sort());
+  assert.deepEqual(placedUnder(listed, first.url, LOGIN), [HOST_OWN]);
   assert.deepEqual(instanceOf(listed, second.url)?.groups.find((group) => group.fullPath === LOGIN)?.mine, true);
   assert.deepEqual(rowsWith(listed, own.id ?? ""), [[HOST_OWN, "reachable", first.url]]);
   assert.ok(listed.own.repositories.some((repository) => repository.key === HOST_OWN));
@@ -1689,12 +1700,13 @@ test("git-host-25, space-84, git-host-5, git-host-8, git-host-16, git-host-9, sp
   assert.deepEqual([...new Set(transportsOf(first, `${LOGIN}/a-spex`).map((entry) => entry.instance))], [first.url], "the first brokered the clone");
 
   // Joined, each stays one row under the first; the second's listing
-  // only withholds Join, a join naming either instance refused as here
-  // already (space-61, git-host-5).
+  // withholds Join and names the row in one line, a join naming either
+  // instance refused as here already (space-61, git-host-5, space-1).
   const joined = await refreshed(home);
   assert.deepEqual(rowsWith(joined, a.id), [[aKey, "reachable", first.url]]);
   assert.deepEqual(rowsWith(joined, b.id), [[bKey, "reachable", first.url]]);
   assert.deepEqual(rowsUnder(joined, second.url, LOGIN), []);
+  assert.deepEqual(placedUnder(joined, second.url, LOGIN), [aKey, bKey, HOST_OWN].sort());
   for (const fields of [{ instance: second.url, hostId: a.id }, { instance: first.url, hostId: a.id }, { instance: second.url, hostId: b.id }]) {
     await home.client.expectError("space.join", fields, "invalid_request", /on this device already/);
   }

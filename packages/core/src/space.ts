@@ -8073,20 +8073,26 @@ export class SpaceManager {
   private overlay(machine: RepositorySync, read: MachineRead): Placed {
     const placed = this.overlaid(machine, read.row);
     const lines = this.linesOf(machine, placed.row, read.held);
-    return { ...placed, row: { ...placed.row, ...this.rowStateOf(placed.row, lines), placements: lines }, elsewhere: this.elsewhereOf(machine, read.held) };
+    return { ...placed, row: { ...placed.row, ...this.rowStateOf(placed.row, lines), placements: lines }, elsewhere: this.elsewhereOf(read.held) };
   }
 
-  /** The groups each placement a clone holds beside its key placement
-   * stands in, as the listing of the instance governing it names them
-   * (space-1, git-host-5): each shows one line naming the row, which
-   * stands under its key placement's (overlaid). */
-  private elsewhereOf(machine: RepositorySync, held: Placement[]): { instance: string; group: HostGroup }[] {
-    const key = keyPlacement(held);
+  /** The groups whose listings hold a placement a clone holds with an
+   * instance (space-1, DR-128): at every signed-in instance whose view
+   * lists its host repository by its Git origin and id (listingOf) — so
+   * two instances over one Git backend both list one placement — its key
+   * placement's among them, the group of each showing one line naming the
+   * row but the group the row stands under (overlaid, byInstance); your
+   * own group's own repository standing under your own group, your
+   * namespace listing its key placement shows one too. */
+  private elsewhereOf(held: Placement[]): { instance: string; group: HostGroup }[] {
+    const instances = this.listedInstances().filter((instance) => this.signedInAt(instance));
     return held.flatMap((placement) => {
-      if (placement === key || placement.instance === null) return [];
-      const instance = this.governingOfPlacement(machine, placement);
-      const listing = instance ? this.listingOf(instance, { remote: placement.url, id: placement.id }) : undefined;
-      return instance && listing ? [{ instance: instance.origin, group: listing.repository.group }] : [];
+      if (placement.instance === null) return [];
+      const facts = { remote: placement.url, id: placement.id };
+      return instances.flatMap((instance) => {
+        const listing = this.listingOf(instance, facts);
+        return listing ? [{ instance: instance.origin, group: listing.repository.group }] : [];
+      });
     });
   }
 
@@ -8099,8 +8105,9 @@ export class SpaceManager {
    * remote, after the lines its clone holds and before a creation's
    * wait; one line per host repository, "Not on this device", with that
    * listing's path, members and rights, or unreachable in a group named
-   * like a login (space-61); each listing's group showing one line naming
-   * the row (space-1). `held` is every placement a remote here holds.
+   * like a login (space-61); the group of every signed-in instance
+   * listing that host repository showing one line naming the row
+   * (space-1, listedAt). `held` is every placement a remote here holds.
    */
   private withFiled(placed: Placed, files: PlacementFile[], held: Placement[]): Placed {
     const lines: PlacementState[] = [];
@@ -8134,7 +8141,7 @@ export class SpaceManager {
         noticed: false,
         outcome: null,
       });
-      elsewhere.push({ instance: instance.origin, group: repository.group });
+      elsewhere.push(...this.listedAt(gitOrigin, repository.id));
     }
     if (lines.length === 0) return placed;
     const placements = placed.row.placements;
@@ -8156,6 +8163,18 @@ export class SpaceManager {
     const listing = instance.view?.listings.find((entry) => entry.repository.id === file.id) ?? instance.attached.get(file.id);
     const gitOrigin = instance.knownOrigin();
     return listing && gitOrigin !== undefined ? { instance, listing, gitOrigin } : undefined;
+  }
+
+  /** The group each signed-in instance the home lists stands one host
+   * repository in, by its Git origin and id (git-host-5): in its last
+   * read, or among what this core attached there since — two instances
+   * over one Git backend both list it (DR-128). */
+  private listedAt(gitOrigin: string, id: string): { instance: string; group: HostGroup }[] {
+    return this.listedInstances().flatMap((instance) => {
+      if (!this.signedInAt(instance) || !sameOrigin(instance.knownOrigin(), gitOrigin)) return [];
+      const listing = instance.view?.listings.find((entry) => entry.repository.id === id) ?? instance.attached.get(id);
+      return listing ? [{ instance: instance.origin, group: listing.repository.group }] : [];
+    });
   }
 
   /** Whether a placement file names a host repository an instance lists
@@ -8355,11 +8374,11 @@ export class SpaceManager {
    * instance's own read (git-host-5), keyed under its folder as its clone
    * would be (DR-127): a host repository several signed-in instances
    * list by one Git origin and id is one row, under the earliest of them
-   * in the home's list, every later listing only withholding Join
-   * (space-1); one in a group held as colliding reads unreachable, keyed
-   * `<folder>/<path>@<id>` so it names no clone (space-30). `clones`
-   * are the clones read, each with the placements it holds and those
-   * its files name. */
+   * in the home's list, every later listing withholding Join and naming
+   * the row in one line (space-1); one in a group held as colliding
+   * reads unreachable, keyed `<folder>/<path>@<id>` so it names no clone
+   * (space-30). `clones` are the clones read, each with the placements
+   * it holds and those its files name. */
   private absentRows(clones: { key: string; held: Placement[]; files: PlacementFile[] }[]): Placed[] {
     const store = this.host.store;
     // A clone the instances migration deferred, listed by the key it
@@ -8367,8 +8386,8 @@ export class SpaceManager {
     const deferred = new Set(store.deferredMoves().map((move) => move.to));
     const own = store.home.own();
     // The host repositories an earlier instance's listing stands for, by
-    // its Git origin and id.
-    const earlier: { gitOrigin: string; id: string }[] = [];
+    // its Git origin and id, with the row it stands as.
+    const earlier: { gitOrigin: string; id: string; row: Placed | undefined }[] = [];
     const rows: Placed[] = [];
     for (const instance of this.listedInstances()) {
       const view = this.viewOf(instance);
@@ -8396,9 +8415,13 @@ export class SpaceManager {
       for (const listing of view.listings) {
         const repository = listing.repository;
         if (matched.has(repository.id)) continue;
-        if (earlier.some((entry) => entry.id === repository.id && sameOrigin(entry.gitOrigin, view.gitOrigin))) continue;
-        earlier.push({ gitOrigin: view.gitOrigin, id: repository.id });
+        const first = earlier.find((entry) => entry.id === repository.id && sameOrigin(entry.gitOrigin, view.gitOrigin));
+        if (first) {
+          if (first.row) (first.row.elsewhere ??= []).push({ instance: instance.origin, group: repository.group });
+          continue;
+        }
         const row = this.absentRow(instance, folder, view, listing, deferred);
+        earlier.push({ gitOrigin: view.gitOrigin, id: repository.id, row });
         if (row) rows.push(row);
       }
     }
