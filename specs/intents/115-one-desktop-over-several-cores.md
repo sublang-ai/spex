@@ -5,7 +5,7 @@
 
 ## Status
 
-In progress (2026-10-21), after the hub admits a seat and after the home's client per instance.
+Done (2026-10-23), begun 2026-10-21, after the hub admits a seat and after the home's client per instance.
 
 ## Intent
 
