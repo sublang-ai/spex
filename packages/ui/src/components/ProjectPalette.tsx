@@ -9,7 +9,9 @@
 // Academy example leading the list (projects-22). The palette owns
 // focus while open — Tab wraps inside it and Escape closes from
 // anywhere in it — and returns focus to the opener with any draft
-// intact (run-view-42).
+// intact (run-view-42). Where any seat is open, the palette lists
+// every place's projects, each naming its place, and names the place a
+// project added here lands at (run-view-168).
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ProjectInfo, RepositoryState, SessionInfo } from "@sublang/spex-core/protocol";
@@ -19,7 +21,7 @@ import {
   ATTENTION_RANK,
   type AttentionItem,
 } from "../state/dashboard.js";
-import { useAppStore } from "../state/store.js";
+import { LOCAL_PLACE, placeLabel, useAppStore } from "../state/store.js";
 import { i18n } from "../i18n.js";
 import { allRepositories, anySignedIn, pickInstances } from "../lib/instances.js";
 import { Icon } from "./Icon.js";
@@ -40,6 +42,18 @@ function refusalOf(cause: unknown): Refusal {
   return typeof output === "string" && output.trim() ? { message, detail: output } : { message };
 }
 
+/** A seat's projects as the palette lists them (run-view-168). */
+export interface PalettePlace {
+  key: string;
+  /** The server's name. */
+  label: string;
+  projects: ProjectInfo[];
+  sessions: SessionInfo[];
+  attention: Map<string, AttentionItem>;
+  /** The seat's current project, where the workspace is on it. */
+  currentProjectId?: string;
+}
+
 export interface ProjectPaletteProps {
   projects: ProjectInfo[];
   sessions: SessionInfo[];
@@ -47,8 +61,12 @@ export interface ProjectPaletteProps {
    * (dashboard-9, DR-066) — the palette derives no count of its own. */
   attention: Map<string, AttentionItem>;
   currentProjectId?: string;
+  /** Each open seat's projects, after this computer's (run-view-168). */
+  seats?: PalettePlace[];
   onPickFolder?: () => Promise<string | null>;
   onPick: (projectId: string) => void;
+  /** Pick a seat's project, at its place. */
+  onPickAt?: (place: string, projectId: string) => void;
   /** Register-or-init by path (store's addProjectByPath). */
   onAddPath: (path: string) => Promise<ProjectInfo>;
   onCreatePath: (path: string, scaffold: boolean) => Promise<ProjectInfo>;
@@ -59,6 +77,44 @@ interface ProjectRowState {
   running: number;
   attention: number;
   worst?: AttentionItem["kind"];
+}
+
+/** One row of the list: a project at its place — a seat's, or this
+ * computer's where `seat` is absent. */
+interface PaletteRow {
+  project: ProjectInfo;
+  seat?: PalettePlace;
+  state?: ProjectRowState;
+  current: boolean;
+}
+
+/** Each project's running and attention counts at one place, from that
+ * place's own sessions and attention. */
+function rowStates(
+  projects: readonly ProjectInfo[],
+  sessions: readonly SessionInfo[],
+  attentionMap: Map<string, AttentionItem>,
+): Map<string, ProjectRowState> {
+  const attention = [...attentionMap.values()];
+  const byProject = new Map<string, ProjectRowState>();
+  for (const project of projects) {
+    byProject.set(project.id, { running: 0, attention: 0 });
+  }
+  for (const session of sessions) {
+    if (!session.live) continue;
+    const row = byProject.get(session.projectId);
+    if (row) row.running += 1;
+  }
+  for (const item of attention) {
+    const session = sessions.find((s) => s.id === item.sessionId);
+    const row = session && byProject.get(session.projectId);
+    if (!row) continue;
+    row.attention += 1;
+    if (!row.worst || ATTENTION_RANK[item.kind] < ATTENTION_RANK[row.worst]) {
+      row.worst = item.kind;
+    }
+  }
+  return byProject;
 }
 
 const ROW_ACTIVE = "bg-neutral-100 dark:bg-neutral-800";
@@ -112,31 +168,33 @@ export function ProjectPalette(props: ProjectPaletteProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const rowState = useMemo(() => {
-    const attention = [...props.attention.values()];
-    const byProject = new Map<string, ProjectRowState>();
-    for (const project of props.projects) {
-      byProject.set(project.id, { running: 0, attention: 0 });
-    }
-    for (const session of props.sessions) {
-      if (!session.live) continue;
-      const row = byProject.get(session.projectId);
-      if (row) row.running += 1;
-    }
-    for (const item of attention) {
-      const session = props.sessions.find((s) => s.id === item.sessionId);
-      const row = session && byProject.get(session.projectId);
-      if (!row) continue;
-      row.attention += 1;
-      if (!row.worst || ATTENTION_RANK[item.kind] < ATTENTION_RANK[row.worst]) {
-        row.worst = item.kind;
+  // This computer's projects first, then each seat's at its place.
+  const listed = useMemo((): PaletteRow[] => {
+    const local = rowStates(props.projects, props.sessions, props.attention);
+    const rows: PaletteRow[] = props.projects.map((project) => ({
+      project,
+      state: local.get(project.id),
+      current: project.id === props.currentProjectId,
+    }));
+    for (const seat of props.seats ?? []) {
+      const states = rowStates(seat.projects, seat.sessions, seat.attention);
+      for (const project of seat.projects) {
+        rows.push({
+          project,
+          seat,
+          state: states.get(project.id),
+          current: project.id === seat.currentProjectId,
+        });
       }
     }
-    return byProject;
-  }, [props.projects, props.sessions, props.attention]);
+    return rows;
+  }, [props.projects, props.sessions, props.attention, props.currentProjectId, props.seats]);
+  // Each project names its place where any seat is open (run-view-168).
+  const placed = (props.seats?.length ?? 0) > 0;
+  const here = placeLabel(LOCAL_PLACE);
 
-  const filtered = props.projects.filter(
-    (project) =>
+  const filtered = listed.filter(
+    ({ project }) =>
       project.name.toLowerCase().includes(query.toLowerCase()) ||
       project.path.toLowerCase().includes(query.toLowerCase()),
   );
@@ -151,6 +209,14 @@ export function ProjectPalette(props: ProjectPaletteProps) {
   function pick(projectId: string): void {
     props.onPick(projectId);
     props.onClose();
+  }
+
+  /** Pick a listed row at its own place. */
+  function pickRow(row: PaletteRow): void {
+    if (row.seat) {
+      props.onPickAt?.(row.seat.key, row.project.id);
+      props.onClose();
+    } else pick(row.project.id);
   }
 
   /** A folder added (projects-1): it becomes the current project, and
@@ -233,8 +299,8 @@ export function ProjectPalette(props: ProjectPaletteProps) {
       void runAcademy();
       return;
     }
-    const project = filtered[at - lead];
-    if (project) pick(project.id);
+    const row = filtered[at - lead];
+    if (row) pickRow(row);
     else if (props.onPickFolder && at === openFolderIndex) openFolder();
   }
 
@@ -384,22 +450,33 @@ export function ProjectPalette(props: ProjectPaletteProps) {
               <span className="text-xs text-neutral-500">{academyHint}</span>
             </button>
           ) : null}
-          {filtered.map((project, i) => {
-            const row = rowState.get(project.id);
+          {filtered.map((entry, i) => {
+            const { project, seat, state: row } = entry;
+            // This computer's rows keep their keys and test ids; a
+            // seat's are qualified by its place (run-view-168).
+            const key = seat ? `${project.id}@${seat.key}` : project.id;
             return (
               <button
-                key={project.id}
+                key={key}
                 type="button"
-                data-testid={`palette-project-${project.id}`}
+                data-testid={`palette-project-${key}`}
                 title={project.path}
-                onClick={() => pick(project.id)}
+                onClick={() => pickRow(entry)}
                 className={`flex w-full items-center gap-2 px-4 py-2 text-left text-sm hover:bg-neutral-50 dark:hover:bg-neutral-800 ${
                   i + lead === clamped ? ROW_ACTIVE : ""
                 }`}
               >
                 <Icon name="folder" className="h-3.5 w-3.5 text-neutral-500" />
                 <span className="truncate">{project.name}</span>
-                {project.id === props.currentProjectId ? (
+                {placed ? (
+                  <span
+                    data-testid="palette-place"
+                    className="shrink-0 truncate text-xs text-neutral-500"
+                  >
+                    {seat ? seat.label : here}
+                  </span>
+                ) : null}
+                {entry.current ? (
                   <span className="text-xs text-neutral-500">
                     {i18n._({
                       id: "current",
@@ -511,6 +588,18 @@ export function ProjectPalette(props: ProjectPaletteProps) {
               })}
             </button>
           </div>
+          {placed ? (
+            // A project added or created here is this computer's
+            // (run-view-168): a seat's projects are opened among the
+            // member's groups, with no path entry (run-view-169).
+            <p data-testid="palette-new-place" className="px-0.5 text-xs text-neutral-500">
+              {i18n._({
+                id: "A new project is added on {place}.",
+                comment: "project palette: where a project added or created by path lands; {place} is the place's name, \"This computer\"",
+                values: { place: here },
+              })}
+            </p>
+          ) : null}
           {pathDraft.trim() ? (
             <label className="flex items-center gap-1.5 px-0.5 text-xs text-neutral-500">
               <input
