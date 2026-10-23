@@ -1566,7 +1566,7 @@ test.describe("placed at two instances", () => {
         .getByRole("tree", { name: "Projects and sessions" })
         .getByRole("treeitem", { name: "demo-project", exact: true })
         .click();
-      await page2.getByRole("tab", { name: "Start another session" }).click();
+      await expect(page2.getByTestId("captain-home")).toContainText("demo-project");
       await send(page2, SECOND_HOME_TURN);
       await expect(page2.getByTestId("captain-pane")).toContainText("/code finished");
       await settled(other);
