@@ -5,7 +5,7 @@
 
 ## Status
 
-In progress (2026-10-22); every deliverable is ticked, and one gap between [[space-1](../packages/space.md#space-1)] and the code remains: a row's opened tabs and focus stay on its former key when a Leave moves its clone while the left instance still lists that host repository.
+Implemented (2026-10-22); every deliverable is ticked.
 
 ## Intent
 
@@ -31,3 +31,4 @@ Implement [DR-128](../decisions/128-a-spex-repository-placed-at-several-instance
 
 - The root build, `npx @sublang/spex lint`, every package's tests and the browser journeys pass after each task.
 - A project placed at two stand-in instances syncs through a device holding both, and a second device attaches from the placement's file.
+- The live check of two devices placing, syncing and attaching over real instances is the owner's.
