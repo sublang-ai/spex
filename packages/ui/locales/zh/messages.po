@@ -5279,6 +5279,11 @@ msgstr "运行中"
 msgid "Running the workflow's control"
 msgstr "正在执行工作流的操作"
 
+#. queued row: the intent is assigned to another runtime, named by its label — the server's name on a seat, else the host name — and runs there alone
+#: src/components/QueuedIntentPresentation.tsx
+msgid "Runs on {label}"
+msgstr "在 {label} 上运行"
+
 #: src/components/AuthoringWorkspace.tsx
 msgid "Runs slc over the draft's source — a few minutes, longer for many roles"
 msgstr "对草稿源文运行 slc — 通常几分钟，角色多则更久"

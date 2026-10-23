@@ -5279,6 +5279,11 @@ msgstr "Running"
 msgid "Running the workflow's control"
 msgstr "Running the workflow's control"
 
+#. queued row: the intent is assigned to another runtime, named by its label — the server's name on a seat, else the host name — and runs there alone
+#: src/components/QueuedIntentPresentation.tsx
+msgid "Runs on {label}"
+msgstr "Runs on {label}"
+
 #: src/components/AuthoringWorkspace.tsx
 msgid "Runs slc over the draft's source — a few minutes, longer for many roles"
 msgstr "Runs slc over the draft's source — a few minutes, longer for many roles"
