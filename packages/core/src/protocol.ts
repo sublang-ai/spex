@@ -541,6 +541,11 @@ export interface SessionInfo {
   /** The checkpoint and current path/config permit continuation; admission checks again. */
   continuable?: boolean;
   continuationReason?: string;
+  /** The label of the runtime the session is assigned to, where that is
+   * another runtime (core-service-32, DR-134): the session is then not
+   * continuable here, its reason "Runs on <label>", and it carries no
+   * `recovery`. Absent where it runs here or names no runtime. */
+  runsOn?: string;
   /** Interrupted work awaiting the Boss (core-service-32): the saved
    * input, and whether Playbook's shared discard predicate allows
    * Discard — nothing recorded, no abandonment, unchanged repository
@@ -747,7 +752,7 @@ export interface IntentAuthor {
   displayName: string | null;
 }
 
-/** The runtime a record is assigned to (DR-131): one core on one home,
+/** The runtime a record is assigned to (DR-134): one core on one home,
  * named by the home's `device`, with a label for display alone — the
  * server's name on a seat, the host name elsewhere. */
 export interface AssignedRuntime {
@@ -826,7 +831,14 @@ export interface DerivedIntent {
   stats?: IntentStats;
   /** Why an interrupted intent stands stopped on the Boss. */
   reason?: "question" | "failure";
-  /** Present on exactly the project's oldest queued row. */
+  /** The label of another runtime its work runs on (core-service-107,
+   * DR-134): the runtime the intent is assigned to, or — for one naming
+   * none — the runtime of the session holding its dispatch, whose stop
+   * or abort is that runtime's to read. Such a row keeps its place by
+   * age, is never next here and offers no manual start. */
+  runsOn?: string;
+  /** Present on exactly the project's oldest queued row this runtime
+   * may run (core-service-107). */
   next?: QueueSchedule;
 }
 

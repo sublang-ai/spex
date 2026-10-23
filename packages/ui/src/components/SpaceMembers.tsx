@@ -15,7 +15,8 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import type { HostMemberInfo, InstanceState } from "@sublang/spex-core/protocol";
 
-import { useAppStore, type SpaceMembersReply, type SpaceMembersTarget } from "../state/store.js";
+import { type SpaceMembersReply, type SpaceMembersTarget } from "../state/store.js";
+import { usePlaceStore } from "../state/place-context.js";
 import { i18n } from "../i18n.js";
 import { InlineConfirm } from "./InlineConfirm.js";
 import { SECONDARY, type Note } from "./SpaceSurface.js";
@@ -74,8 +75,9 @@ export function GroupNameEditor({
   onClose(): void;
   onNote: Note;
 }) {
-  const spaceGroupCreate = useAppStore((state) => state.spaceGroupCreate);
-  const spaceGroupRename = useAppStore((state) => state.spaceGroupRename);
+  const store = usePlaceStore();
+  const spaceGroupCreate = store((state) => state.spaceGroupCreate);
+  const spaceGroupRename = store((state) => state.spaceGroupRename);
   const [name, setName] = useState(rename?.name ?? "");
   const [path, setPath] = useState(rename?.path ?? "");
   // The path follows the name until the reader edits it; a group's own
@@ -237,7 +239,8 @@ export function MembersPanel({
   onClose(): void;
   onNote: Note;
 }) {
-  const spaceMembers = useAppStore((state) => state.spaceMembers);
+  const store = usePlaceStore();
+  const spaceMembers = store((state) => state.spaceMembers);
   const [result, setResult] = useState<SpaceMembersReply>();
   const [error, setError] = useState<string>();
   const [outcome, setOutcome] = useState<string>();
@@ -383,7 +386,8 @@ function MemberRow({
   onRemoved(reply: SpaceMembersReply): void;
   onNote: Note;
 }) {
-  const spaceUnshare = useAppStore((state) => state.spaceUnshare);
+  const store = usePlaceStore();
+  const spaceUnshare = store((state) => state.spaceUnshare);
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [refusal, setRefusal] = useState<string>();
@@ -493,7 +497,8 @@ function ShareEditor({
   onClose(): void;
   onNote: Note;
 }) {
-  const spaceShare = useAppStore((state) => state.spaceShare);
+  const store = usePlaceStore();
+  const spaceShare = store((state) => state.spaceShare);
   const roles = instance.roles;
   const [login, setLogin] = useState("");
   const [role, setRole] = useState(() => (roles.find((entry) => entry.mayPush) ?? roles[0])?.id ?? "");

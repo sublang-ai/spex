@@ -23,7 +23,8 @@ import type {
   SessionPlayerSummary,
 } from "@sublang/spex-core/protocol";
 
-import { useAppStore, type DraftRegisterForm, type DraftSourceState } from "../state/store.js";
+import { type DraftRegisterForm, type DraftSourceState } from "../state/store.js";
+import { usePlaceStore } from "../state/place-context.js";
 import { applyLocalPatch } from "../lib/config-ops.js";
 import {
   agentBlockOf,
@@ -186,13 +187,14 @@ export function DraftRegisterTab({
   onRegister: (input: RegisterInput) => Promise<void>;
   onNavigate?: (surface: "Settings" | "Space") => void;
 }) {
+  const store = usePlaceStore();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const [openRole, setOpenRole] = useState<string>();
   const gearRef = useRef<HTMLButtonElement>(null);
-  const project = useAppStore((state) => state.projects.find((entry) => entry.id === draft.projectId));
-  const space = useAppStore((state) => state.space);
-  const ownListed = useAppStore((state) => state.playbookLists?.own);
+  const project = store((state) => state.projects.find((entry) => entry.id === draft.projectId));
+  const space = store((state) => state.space);
+  const ownListed = store((state) => state.playbookLists?.own);
   const ownKey = ownRepositoryKey(space, ownListed);
   const readinessByAdapter = new Map(readiness.map((entry) => [entry.adapter as string, entry]));
   const resolved = resolveRegisterForm(draft, source, players, form);
@@ -457,9 +459,10 @@ function PublishControl({
   target: PublishTarget | undefined;
   onNavigate?: (surface: "Settings" | "Space") => void;
 }) {
-  const environment = useAppStore((state) => state.environments[draft.projectId]);
-  const previewPublish = useAppStore((state) => state.previewPublish);
-  const publish = useAppStore((state) => state.publishSpecPackage);
+  const store = usePlaceStore();
+  const environment = store((state) => state.environments[draft.projectId]);
+  const previewPublish = store((state) => state.previewPublish);
+  const publish = store((state) => state.publishSpecPackage);
   const [preview, setPreview] = useState<PublishPreview>();
   const [pending, setPending] = useState<"preview" | "publish">();
   const [error, setError] = useState<string>();

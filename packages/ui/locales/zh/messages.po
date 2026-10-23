@@ -326,6 +326,11 @@ msgstr "{head} — {said}"
 msgid "{head} is no longer an ancestor"
 msgstr "{head} 已不再是祖先提交"
 
+#. Credentials section on a team server: a project's code could not be cloned from {host}, a code host, for want of the member's credential
+#: src/components/SettingsSurface.tsx
+msgid "{host} needs a credential of yours to clone a project's code"
+msgstr "克隆项目的代码需要你在 {host} 上的凭据"
+
 #: src/lib/time.ts
 msgid "{hours}h"
 msgstr "{hours} 小时"
@@ -726,6 +731,10 @@ msgstr "✗ 失败"
 msgid "A command the run needs is not installed"
 msgstr "运行所需的命令未安装"
 
+#: src/components/SettingsSurface.tsx
+msgid "A credential you place here stays on this server until you remove it."
+msgstr "你放在这里的凭据会一直留在此服务器上，直到你将其移除。"
+
 #: src/components/DeliveryCard.tsx
 msgid "A follow-up message continues this intent."
 msgstr "再发一条消息即可继续该意图。"
@@ -864,6 +873,11 @@ msgstr "添加"
 msgid "Add {id} with the neutral agent, then tune it here"
 msgstr "以中性智能体添加 {id}，再在此调整"
 
+#. on a team server's project whose code could not be cloned for want of the member's credential: open the server's Credentials settings
+#: src/components/SpaceGroups.tsx
+msgid "Add a credential"
+msgstr "添加凭据"
+
 #: src/components/SettingsSurface.tsx
 msgid "Add a player"
 msgstr "添加 Player"
@@ -989,6 +1003,11 @@ msgstr "刚刚"
 #: src/lib/time.ts
 msgid "age.weeks"
 msgstr "{weeks} 周"
+
+#. Credentials section: the agent a credential of the member's is for
+#: src/components/SettingsSurface.tsx
+msgid "Agent"
+msgstr "智能体"
 
 #. subagent-effort choice: the agent picks each subagent's effort per task
 #: src/lib/agent-options.ts
@@ -1292,6 +1311,11 @@ msgstr "只取回新的内容，不发出任何内容"
 msgid "Brings both histories into one and asks about anything that differs"
 msgstr "把两段历史合为一段，并就有差异之处询问你"
 
+#. the Join control's title at a team server's seat: {place} is the server's name, which allocates the project's folder itself
+#: src/components/SpaceGroups.tsx
+msgid "Brings it to {place}"
+msgstr "将它取到 {place} 上"
+
 #: src/components/SpaceGroups.tsx
 msgid "Brings it to this device"
 msgstr "将它取到此设备上"
@@ -1387,6 +1411,7 @@ msgid "Can't reach the Spex core at {endpoint} — retrying every second. On a s
 msgstr "无法连接 {endpoint} 上的 Spex 核心 — 每秒重试中。网页端请检查链接中的令牌；桌面端请重启应用。"
 
 #. default cancel button: back out of the act
+#. default cancel button: back out of the act
 #. leave an editor without saving
 #. leave an editor without saving
 #. leave an editor without saving
@@ -1414,6 +1439,7 @@ msgstr "无法连接 {endpoint} 上的 Spex 核心 — 每秒重试中。网页�
 #: src/components/SpaceGroups.tsx
 #: src/components/SpaceInstance.tsx
 #: src/components/SpaceMembers.tsx
+#: src/components/SpaceServers.tsx
 #: src/components/SpaceSignIn.tsx
 #: src/components/SpaceSync.tsx
 #: src/components/SpecEditor.tsx
@@ -1653,10 +1679,20 @@ msgstr "单击打开 · 拖动移动 · 滚动缩放"
 msgid "client not connected"
 msgstr "客户端未连接"
 
+#. the title of 'Join again' on a team server's project whose code clone failed: {place} is the server's name
+#: src/components/SpaceGroups.tsx
+msgid "Clones its code again into its folder on {place}"
+msgstr "将它的代码重新克隆到 {place} 上它的文件夹中"
+
 #. join step running: cloning the project's code into its folder
 #: src/lib/space.ts
 msgid "Cloning code…"
 msgstr "克隆代码中…"
+
+#. close the seat open on a team server
+#: src/components/SpaceServers.tsx
+msgid "Close"
+msgstr "关闭"
 
 #: src/lib/shortcuts.ts
 msgid "Close the focused session tab"
@@ -1683,6 +1719,11 @@ msgstr "关闭此标签页 — 会话仍留在侧栏"
 #: src/lib/space.ts
 msgid "Code"
 msgstr "代码"
+
+#. Credentials section: the code hosts the member placed a token for
+#: src/components/SettingsSurface.tsx
+msgid "Code hosts"
+msgstr "代码托管平台"
 
 #. a project's spex repository whose records name no code remote
 #: src/components/SpaceGroups.tsx
@@ -2042,6 +2083,11 @@ msgstr "无法读取文件：{reason}"
 msgid "Couldn't read the repository's state"
 msgstr "无法读取仓库状态"
 
+#. the instance's servers listing failed; {reason} is the core's relayed cause
+#: src/components/SpaceServers.tsx
+msgid "Couldn't read the servers: {reason}"
+msgstr "无法读取服务器：{reason}"
+
 #: src/components/SpaceSurface.tsx
 msgid "Couldn't read your groups: {reason}"
 msgstr "无法读取你的群组：{reason}"
@@ -2096,6 +2142,11 @@ msgstr "创建中…"
 #. a file family that stays on this device
 #: src/lib/space.ts
 msgid "credentials"
+msgstr "凭据"
+
+#. Settings section on a team server: the member's own code-host tokens and agent credentials
+#: src/components/SettingsSurface.tsx
+msgid "Credentials"
 msgstr "凭据"
 
 #. tag on the project row the workspace is on
@@ -2878,6 +2929,11 @@ msgstr "来自本次更改前的编译"
 msgid "From the host ({count})"
 msgstr "来自托管平台（{count}）"
 
+#. project palette: heading over the spex repositories of the member's groups a team server can open; {place} is the server's name
+#: src/components/ProjectPalette.tsx
+msgid "From your groups on {place}"
+msgstr "来自你在 {place} 上的群组"
+
 #. pipeline stage: the compiled spec items
 #. pipeline stage: the compiler's normative spec items (a proper name)
 #. pipeline stage: the compiler's normative spec items (a proper name)
@@ -3015,6 +3071,16 @@ msgstr "历史 — 此会话无法继续"
 #: src/components/NavRail.tsx
 msgid "history, can't be continued"
 msgstr "历史，无法继续"
+
+#. Credentials section: the code host a token is for, such as git.example.com
+#: src/components/SettingsSurface.tsx
+msgid "Host name"
+msgstr "主机名"
+
+#. accepting a team server's contract, which opens the seat
+#: src/components/SpaceServers.tsx
+msgid "I understand"
+msgstr "我已了解"
 
 #. a spex repository's status: nothing is running
 #. session row: no turn in flight
@@ -3249,6 +3315,13 @@ msgstr "它的 spex 仓库不在此设备上。"
 msgid "Join"
 msgstr "加入"
 
+#. on a team server's project whose code clone failed: join it again, cloning its code into the folder the server allocated
+#. on a team server's project whose code clone failed: join it again, cloning its code into the folder the server allocated
+#: src/components/ProjectPalette.tsx
+#: src/components/SpaceGroups.tsx
+msgid "Join again"
+msgstr "重新加入"
+
 #: src/components/SpaceSync.tsx
 msgid "Join both histories into one to sync."
 msgstr "将两段历史合并为一段后即可同步。"
@@ -3260,6 +3333,9 @@ msgstr "将两段历史合并为一段？有差异的内容会让你选择。"
 #. the Join control, while the join runs
 #. the Join control, while the join runs
 #. the Join control, while the join runs
+#. the Join control, while the join runs
+#. the Join control, while the join runs
+#: src/components/ProjectPalette.tsx
 #: src/components/SpaceGroups.tsx
 msgid "Joining…"
 msgstr "加入中…"
@@ -3794,6 +3870,11 @@ msgstr "本机没有工作文件夹"
 msgid "none (adapter default)"
 msgstr "无（适配器默认）"
 
+#. a list of the member's credentials on a team server, while it holds none
+#: src/components/SettingsSurface.tsx
+msgid "None placed yet"
+msgstr "尚未放置"
+
 #: src/components/AgentEditor.tsx
 msgid "none: the adapter's own default posture"
 msgstr "无：适配器自身的默认权限模式"
@@ -3941,6 +4022,11 @@ msgstr "{project} 中没有需要关注的内容。"
 msgid "Nothing is repeated"
 msgstr "不会重复任何工作"
 
+#. project palette: a team server's groups list no spex repository it lacks
+#: src/components/ProjectPalette.tsx
+msgid "Nothing more to open from your groups"
+msgstr "你的群组中没有更多可打开的项目"
+
 #: src/components/SpaceSync.tsx
 msgid "Nothing new on the host"
 msgstr "托管平台没有新内容"
@@ -4052,8 +4138,10 @@ msgstr "每个状态行为一条规范规约条目 — 编译器的中间阶段"
 msgid "One spec item per state behavior, from the last compile"
 msgstr "每个状态行为一条规约条目，来自上次编译"
 
+#. open a seat on a team server
 #. open this authoring session's workspace
 #: src/components/LibrarySurface.tsx
+#: src/components/SpaceServers.tsx
 msgid "Open"
 msgstr "打开"
 
@@ -4160,6 +4248,11 @@ msgstr "打开以重试或放弃该运行。"
 msgid "Opened {id}"
 msgstr "已打开 {id}"
 
+#. the instance's contract, in the words its record fixes, shown before a seat's first open on this device; {server} is the server's name, {instance} the instance's; Devices is the instance's page of devices
+#: src/components/SpaceServers.tsx
+msgid "Opening a seat places your sign-in on {server}. Whoever runs {server} can act as you: in your spaces, in your records, and with the account you sign in to {instance} with, wherever it reaches. Agents on {server} run on the sign-ins its administrator set up, unless you set your own. A credential you place on {server} stays there until you remove it. Retiring the server or revoking the seat under Devices stops new use; a credential already on the server lasts until it expires."
+msgstr "打开席位会把你的登录放到 {server} 上。运行 {server} 的人可以以你的身份行事：在你的空间中、在你的记录中，以及凭你登录 {instance} 所用的账号，在它能触及的任何地方。{server} 上的智能体使用其管理员设置的登录运行，除非你设置自己的。你放到 {server} 上的凭据会一直留在那里，直到你将其移除。停用该服务器或在“设备”中撤销该席位会阻止新的使用；已在服务器上的凭据会一直有效，直到过期。"
+
 #. an authoring session is being opened
 #. an authoring session is being opened
 #: src/components/LibrarySurface.tsx
@@ -4169,6 +4262,11 @@ msgstr "打开中…"
 #: src/components/LibrarySurface.tsx
 msgid "Opens a playbook named {id} with the normalized text ready to paste — nothing is written or compiled"
 msgstr "打开名为 {id} 的规程，并备好可粘贴的规范化文本 — 不写入也不编译"
+
+#. the title of 'Add a credential' on a team server's project whose code could not be cloned: {host} is the code host needing the member's credential
+#: src/components/SpaceGroups.tsx
+msgid "Opens Credentials in this server's Settings at {host}"
+msgstr "在此服务器的设置中打开 {host} 的凭据"
 
 #. compile phase: slc optimizes the spec items
 #: src/lib/compile-log.ts
@@ -4232,6 +4330,10 @@ msgid "Paste"
 msgstr "粘贴"
 
 #: src/components/DraftSourceTab.tsx
+msgid "Paste a source"
+msgstr "粘贴源文"
+
+#: src/components/DraftSourceTab.tsx
 msgid "Paste a source or pick a file"
 msgstr "粘贴源文或选择文件"
 
@@ -4290,6 +4392,11 @@ msgstr "选择文件夹"
 #: src/components/TuningField.tsx
 msgid "pin a value…"
 msgstr "指定一个值…"
+
+#. the selector of where Settings, Playbooks, Groups and Environments are shown: This computer or a team server
+#: src/components/PlaceSelector.tsx
+msgid "Place"
+msgstr "位置"
 
 #: src/components/DraftConversation.tsx
 msgid "Places the six-line example as your first message"
@@ -4580,6 +4687,7 @@ msgstr "正在读取成员…"
 msgid "reading specs…"
 msgstr "正在读取规约…"
 
+#: src/components/ProjectPalette.tsx
 #: src/components/SpaceSurface.tsx
 msgid "Reading your groups…"
 msgstr "正在读取你的群组…"
@@ -4716,6 +4824,7 @@ msgstr "重新加载页面"
 #. queue row control: take this row out of the queue
 #. row menu item: take this row out of the queue
 #. take a member out of a group or a spex repository on the Git host
+#. take the member's credential for a code host or an agent off the team server
 #. take this spec package out of the requests
 #: src/components/EnvironmentSection.tsx
 #: src/components/NextCard.tsx
@@ -4771,6 +4880,11 @@ msgstr "从 Spex 移除？仓库会保留在磁盘上。"
 msgid "Remove project"
 msgstr "移除项目"
 
+#. accessible name of the control taking the member's credential for a code host or an agent off the team server
+#: src/components/SettingsSurface.tsx
+msgid "Remove the credential for {name}"
+msgstr "移除 {name} 的凭据"
+
 #: src/components/LibrarySurface.tsx
 msgid "Remove the session and its conversation; the spec package folder stays"
 msgstr "移除会话及其对话；规约包文件夹保留"
@@ -4817,6 +4931,10 @@ msgstr "重命名"
 #: src/components/SpaceSync.tsx
 msgid "Replace {count, plural, one {# unit} other {# units}} with the host's version? The other version stays in Git history; a replaced session loses its local resume hints and where you stopped reading."
 msgstr "用托管平台的版本替换 {count, plural, other {# 个单元}}？另一版本仍保留在 Git 历史中；被替换的会话会丢失本地的续接提示和你读到的位置。"
+
+#: src/components/DraftSourceTab.tsx
+msgid "Replace the source with pasted text"
+msgstr "用粘贴的文本替换源文"
 
 #: src/components/DraftSourceTab.tsx
 msgid "Replace the source with pasted text or a file"
@@ -5075,6 +5193,8 @@ msgstr "与代理相同"
 msgid "Same as Captain"
 msgstr "与 Captain 相同"
 
+#. Credentials section: place the credential on the team server
+#. Credentials section: place the credential on the team server
 #. commit the edits in this editor
 #. commit the edits in this editor
 #. commit the edits in this editor
@@ -5085,6 +5205,7 @@ msgstr "与 Captain 相同"
 #: src/components/AgentSettings.tsx
 #: src/components/BindingEditor.tsx
 #: src/components/ProjectGroup.tsx
+#: src/components/SettingsSurface.tsx
 #: src/components/SpaceMembers.tsx
 #: src/components/SpecEditor.tsx
 #: src/lib/space.ts
@@ -5231,6 +5352,11 @@ msgstr "本轮结束后发送"
 #: src/components/CompileBand.tsx
 msgid "sent to the agent"
 msgstr "已发送给智能体"
+
+#. the team servers an instance lets the person open a seat on
+#: src/components/SpaceServers.tsx
+msgid "Servers"
+msgstr "服务器"
 
 #. one unit's kind: a session
 #. one unit's kind: a session
@@ -6209,6 +6335,11 @@ msgstr "连续三次 — 请告诉智能体如何继续"
 #: src/components/SpecView.tsx
 msgid "Toggle {name}"
 msgstr "展开或折叠 {name}"
+
+#. Credentials section: the member's access token for a code host
+#: src/components/SettingsSurface.tsx
+msgid "Token"
+msgstr "令牌"
 
 #: src/lib/media.ts
 msgid "Tool {tool}"

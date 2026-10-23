@@ -50,7 +50,8 @@ Where the server shell starts as a seat — `--seat` with `--server-id`, `--serv
 
 - `--token` beside `--token-file`, a missing id or name, an unreadable token file or an empty token refuses startup naming the mistake; `--host`, `--port`, the TLS pair and `--insecure` are refused beside `--socket`, since the hub alone reaches the socket [[hub-3](hub.md#hub-3)];
 - the device label is "Spex on <server name>";
-- the socket's directory is made by whoever starts the shell, the hub's helper [[hub-4](hub.md#hub-4)], and the shell removes a stale socket file there before listening.
+- the socket's directory is made by whoever starts the shell, the hub's helper [[hub-4](hub.md#hub-4)]; the shell removes a stale socket file there before listening — one that refuses a connection — refuses startup at a socket that answers, "in use", or at a path holding another kind of file, and makes the socket it binds group-accessible;
+- a socket that cannot be bound refuses startup naming the cause, as the flag mistakes do.
 
 ### Serving
 

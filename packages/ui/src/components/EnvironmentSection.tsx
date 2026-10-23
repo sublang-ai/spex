@@ -23,7 +23,8 @@ import type {
   EnvironmentState,
 } from "@sublang/spex-core/protocol";
 
-import { useAppStore, type RegistryResult } from "../state/store.js";
+import { isLocalPlace, type RegistryResult } from "../state/store.js";
+import { usePlaceStore } from "../state/place-context.js";
 import {
   SPEC_PACKAGE_NAME_RULE,
   artifactKindWord,
@@ -231,11 +232,12 @@ export function EnvironmentSection({
 }: {
   repository: string;
 }) {
-  const state = useAppStore((store) => store.environments[repository]);
-  const loadError = useAppStore((store) => store.environmentErrors[repository]);
-  const resolve = useAppStore((store) => store.resolveEnvironment);
-  const install = useAppStore((store) => store.installEnvironment);
-  const remove = useAppStore((store) => store.removeSpecPackage);
+  const store = usePlaceStore();
+  const state = store((current) => current.environments[repository]);
+  const loadError = store((current) => current.environmentErrors[repository]);
+  const resolve = store((current) => current.resolveEnvironment);
+  const install = store((current) => current.installEnvironment);
+  const remove = store((current) => current.removeSpecPackage);
   const [error, setError] = useState<string>();
   const [pending, setPending] = useState<"resolve" | "update" | "install" | "export">();
   const progress = progressOf(state);
@@ -446,8 +448,9 @@ type AddMode = "registry" | "folder" | "git";
  * inside the environment's path root — the paired working folder, or
  * your own group's clone (environments-2) — or from Git at a rev. */
 export function AddSpecPackages({ repository }: { repository: string }) {
-  const request = useAppStore((store) => store.requestSpecPackage);
-  const folder = useAppStore((store) => store.environments[repository]?.pathRoot ?? null);
+  const store = usePlaceStore();
+  const request = store((current) => current.requestSpecPackage);
+  const folder = store((current) => current.environments[repository]?.pathRoot ?? null);
   const [mode, setMode] = useState<AddMode>();
   const [added, setAdded] = useState<string>();
 
@@ -524,7 +527,8 @@ function RegistrySearch({
   repository: string;
   onAdd: (name: string, request: EnvironmentRequest) => Promise<void>;
 }) {
-  const search = useAppStore((store) => store.searchRegistry);
+  const store = usePlaceStore();
+  const search = store((current) => current.searchRegistry);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<RegistryResult[]>();
   const [searching, setSearching] = useState(false);
@@ -730,7 +734,10 @@ function FolderRequest({
   const [name, setName] = useState("");
   const [path, setPath] = useState("");
   const [refusal, setRefusal] = useState<string>();
-  const pickDirectory = window.spexNative?.pickDirectory;
+  // The shell's picker reads this computer's folders: a remote place's
+  // project is on its server, so none is offered there (run-view-169).
+  const local = isLocalPlace(usePlaceStore().place);
+  const pickDirectory = local ? window.spexNative?.pickDirectory : undefined;
   return (
     <RequestForm
       testId="folder-request"
