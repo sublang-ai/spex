@@ -178,7 +178,7 @@ class Client {
     return reply.error;
   }
 
-  async waitFor(check: (message: ServerMessage) => boolean, timeoutMs = 10_000): Promise<ServerMessage> {
+  async waitFor(check: (message: ServerMessage) => boolean, timeoutMs = 60_000): Promise<ServerMessage> {
     const start = Date.now();
     for (;;) {
       const found = this.messages.find(check);

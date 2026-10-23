@@ -5,7 +5,7 @@
 
 ## Status
 
-In progress (2026-10-22).
+Completed (2026-10-23).
 Renumbered before integration to avoid main's record-ID collision.
 
 ## Intent
@@ -37,3 +37,5 @@ Implement [DR-144](../decisions/144-bounded-session-storage.md) across session d
 - Verify history and continuation through the hydrated store, with no semantic snapshot serialization in Spex.
 - Verify the official installed runtime is 18.0.0, its files match the verified release, and legacy sessions remain readable while continuation requires explicit migration.
 - Before release, run the project CI and installed smoke with every supported writer upgraded together.
+
+Verified for `app-v0.9.0-beta.16` at `2641f07aef58854ac2fc8978833a9a63179ef76b`: successful exact-main CI and applicable installed smoke with its live stage are recorded in the [release record](../../docs/releases/0.9.0-beta.16-preparation.md#completed-release).

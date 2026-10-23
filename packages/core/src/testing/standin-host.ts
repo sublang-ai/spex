@@ -309,7 +309,8 @@ export interface StandinScript {
    * change answering after it; 0 stops delaying. */
   sleepListing(ms: number): void;
   /** Answer the next `count` admitted host requests 429 with this
-   * `Retry-After`, or with none where it is null. */
+   * `Retry-After`, or with none where it is null; with `Infinity`, every
+   * one after those already scripted, for the stand-in's life. */
   rateLimit(count: number, retryAfter: string | null): void;
   /** Answer the next `count` admitted host requests 503 `provider_unavailable`. */
   unavailable(count: number): void;
@@ -720,7 +721,11 @@ export async function startStandinHost(opts: StandinHostOptions): Promise<Standi
   let groupRenameRefusal: string | null = null;
   let groupDeleteRefusal: string | null = null;
   let transferRefusal: string | null = null;
-  const hostFaults: ({ kind: "rate"; retryAfter: string | null } | { kind: "unavailable" } | { kind: "refused"; message: string })[] = [];
+  type HostFault = { kind: "rate"; retryAfter: string | null } | { kind: "unavailable" } | { kind: "refused"; message: string };
+  const hostFaults: HostFault[] = [];
+  /** The fault answering every admitted host request once `hostFaults`
+   * is spent, where one is scripted to last. */
+  let lastingFault: HostFault | undefined;
   const listingFaults: StandinServersFault[] = [];
   const ticketFaults: StandinServersFault[] = [];
   /** What this instance answers of a repository unlike its Git backend's
@@ -1160,7 +1165,8 @@ export async function startStandinHost(opts: StandinHostOptions): Promise<Standi
     sleepTransport: (ms) => { backend.transportSleepMs = Math.max(0, ms); },
     sleepListing: (ms) => { listingSleepMs = Math.max(0, ms); },
     rateLimit: (count, retryAfter) => {
-      for (let i = 0; i < count; i += 1) hostFaults.push({ kind: "rate", retryAfter });
+      if (count === Infinity) lastingFault = { kind: "rate", retryAfter };
+      else for (let i = 0; i < count; i += 1) hostFaults.push({ kind: "rate", retryAfter });
     },
     unavailable: (count) => {
       for (let i = 0; i < count; i += 1) hostFaults.push({ kind: "unavailable" });
@@ -1400,7 +1406,7 @@ export async function startStandinHost(opts: StandinHostOptions): Promise<Standi
     if (serversRoute) script.serverCalls.push({ method, path, bearer: bearerOf(req) });
     const found = bearerDevice(bearerOf(req));
     if ("code" in found) return envelope(res, 401, found.code, found.message);
-    const fault = hostFaults.shift();
+    const fault = hostFaults.shift() ?? lastingFault;
     if (fault?.kind === "rate") return envelope(res, 429, "rate_limited", "Too many requests to the Git host.", fault.retryAfter === null ? {} : { "retry-after": fault.retryAfter });
     if (fault?.kind === "unavailable") return envelope(res, 503, "provider_unavailable", "The Git host did not answer.");
     if (fault?.kind === "refused") return envelope(res, 403, "host_refused", fault.message);

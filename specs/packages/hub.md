@@ -53,7 +53,7 @@ When a person is admitted for the first time, or admitted while their seat is st
 While a seat holds a lease, every thirty minutes while a relay to it is open or the seat reports a turn active — read over the hub's own connection to the seat as any client reads it [[core-service-32](core-service.md#core-service-32)] — the hub shall renew the lease at the instance with the server token, naming the person, and record the expiry answered ([DR-132](../decisions/132-team-servers.md)):
 
 - the instance's `403` or `404` ends the lease at once; its `429` or `502`, or no answer, is retried at the interval until the lease's expiry, so no grace exceeds the sixty minutes the instance advertised;
-- at the lease's end the hub closes the seat's relays [[hub-3](#hub-3)] and asks the helper to stop the seat's unit [[hub-4](#hub-4)], the seat's files standing;
+- at the lease's end the hub closes the seat's relays [[hub-3](#hub-3)] and asks the helper to stop the seat's unit [[hub-4](#hub-4)], the seat's files standing but the core's own lease and scratch, which its stop removes [[core-service-39](core-service.md#core-service-39)];
 - leases survive the hub's restart: a restarted hub continues each recorded lease from its recorded expiry.
 
 ### The administrator's commands
@@ -102,4 +102,4 @@ Where a stand-in instance answers the servers routes, a fake helper at a configu
 
 #### hub-10
 
-Where the privileged lane runs on a Linux host with systemd and sudo, the suite shall install the hub with its helper and units, admit two members, and assert that each seat runs as its own account unable to read the other's home, that the seat's token and socket are readable by the hub and that seat alone, that a stop at the lease's end kills a stubborn agent child within the unit's timeout with the seat's files standing, and that `retire` leaves the homes and removes the credentials [[hub-4](#hub-4)] [[hub-5](#hub-5)] [[hub-6](#hub-6)].
+Where the privileged lane runs on a Linux host with systemd and sudo, the suite shall install the hub with its helper and units, admit two members, and assert that each seat runs as its own account unable to read the other's home, that the seat's token and socket are readable by the hub and that seat alone, that a stop at the lease's end kills a stubborn agent child within the unit's timeout with the seat's files standing but the core's own lease and scratch, and that `retire` leaves the homes and removes the credentials [[hub-4](#hub-4)] [[hub-5](#hub-5)] [[hub-6](#hub-6)].

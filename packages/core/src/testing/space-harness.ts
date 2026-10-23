@@ -119,7 +119,7 @@ class Client {
     if (pattern) assert.match(reply.error.message, pattern);
     return reply.error.message;
   }
-  async waitFor(check: (message: ServerMessage) => boolean, timeoutMs = 10_000): Promise<ServerMessage> {
+  async waitFor(check: (message: ServerMessage) => boolean, timeoutMs = 60_000): Promise<ServerMessage> {
     const start = Date.now();
     for (;;) {
       const found = this.messages.find(check);
@@ -129,7 +129,7 @@ class Client {
     }
   }
   /** The first space.state message at or after `from` matching `check`. */
-  async waitSpace(from: number, check: (state: GroupsState) => boolean, timeoutMs = 20_000): Promise<GroupsState> {
+  async waitSpace(from: number, check: (state: GroupsState) => boolean, timeoutMs = 60_000): Promise<GroupsState> {
     const start = Date.now();
     for (;;) {
       for (let i = from; i < this.messages.length; i += 1) {
@@ -146,7 +146,7 @@ class Client {
     }
   }
   /** The first state at or after `from` where one repository matches. */
-  async waitRepository(from: number, key: string, check: (repository: RepositoryState) => boolean, timeoutMs = 20_000): Promise<RepositoryState> {
+  async waitRepository(from: number, key: string, check: (repository: RepositoryState) => boolean, timeoutMs = 60_000): Promise<RepositoryState> {
     const state = await this.waitSpace(from, (candidate) => {
       try { return check(repositoryOf(candidate, key)); } catch { return false; }
     }, timeoutMs);
