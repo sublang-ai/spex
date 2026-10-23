@@ -68,5 +68,9 @@ export function desktopCoreOptions(input: DesktopCoreInput): CoreServiceOptions 
     // (git-host-9).
     signIn: "browser",
     hostRuntime: { execPath: input.execPath, electron: true },
+    // This process's descendants are Electron's helpers as well as the
+    // agents, so the core's stop signals none; the shell bounds its own
+    // exit instead (app-shell-39).
+    agentProcesses: () => [],
   };
 }

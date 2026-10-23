@@ -408,7 +408,7 @@ Where the Settings surface renders against fixture state, the test suite shall a
 
 #### settings-51
 
-Where the UI holds a seat's store over a fake client, the test suite shall assert the Credentials section [[settings-48](#settings-48)]: its fixed sentence; the host form sending `credential.set` with the host and the token and the agent forms sending it with the agent's names; the listing naming the hosts and agents set with no secret shown; a remove sending `credential.remove`; and the section opened at a host a failed clone named.
+Where the UI holds a seat's store over a fake client, the test suite shall assert the Credentials section [[settings-48](#settings-48)]: its fixed sentence; the host form sending `credential.set` with the host and the token and the agent forms sending it with the agent's names; the listing naming the hosts and agents set with no secret shown; a remove sending `credential.remove`; a blank name or value refused in place; the host a failed clone named shown; and the section opened at that host.
 
 ### Browser Journeys
 

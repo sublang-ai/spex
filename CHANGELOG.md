@@ -296,6 +296,8 @@ and `npm start` (desktop) or `npm run start:server` (server).
   between this computer and an open seat, keeping their state separate.
   Projects appear under their place; attention and approvals span the
   connected places, and a disconnected place leaves the others usable.
+  A seat with no projects offers its groups; remote project and environment
+  forms offer no folder picker or path on this computer.
 
 ### Changed
 
@@ -308,6 +310,8 @@ and `npm start` (desktop) or `npm run start:server` (server).
   ([DR-134](specs/decisions/134-execution-ownership.md)). Another runtime
   shows their history with `Runs on <label>` but cannot continue or recover
   the session, start or change its open intent, or advance its queue into it.
+  The history notice retains that reason without a composer or recovery
+  controls, and foreign queued rows offer only their provenance action.
   Foreign work does not occupy the local execution lane or attention queue.
   Intent files now use format 2; upgrade every member's devices together
   before syncing those records. Older records retain their existing rules.
@@ -748,8 +752,11 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 - Stopping the core closes session admission immediately and waits for
   already-admitted opens before disposing runtimes and storage. New and
-  resumed turns cannot cross the shutdown fence; unconfirmed cleanup
-  retains ownership and remains reported.
+  resumed turns cannot cross the shutdown fence. Active turns are aborted
+  immediately; surviving agent processes receive SIGTERM when those turns
+  settle or after ten seconds, then SIGKILL five seconds later. Server
+  shutdown is bounded too; unconfirmed cleanup remains reported with its
+  ownership evidence.
 
 - A push rejected specifically for content size keeps saved commits and
   existing access, and reports instance-only guidance with the reported
@@ -782,6 +789,8 @@ and `npm start` (desktop) or `npm run start:server` (server).
 - Joining private code at the instance's reported Git origin now uses
   the app's brokered credential helper, as records do. Code at another
   origin continues to use the device's own credentials.
+  On a seat, Git pushes from an agent's working folder use the member's
+  saved token for that code host, without putting it in a remote or log.
 - Code addresses hosted by the instance no longer expose its backing
   host in Groups, project status or cached forge guidance. After a restart,
   a remote reads neutrally until the instance's description arrives; its
