@@ -12,12 +12,14 @@ import assert from "node:assert/strict";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { hostname } from "node:os";
 import { dirname, join } from "node:path";
 import { WebSocket } from "ws";
+import { parse as parseYaml } from "yaml";
 
 import { prefsFileOf, Store } from "./store.js";
 import { foldLedger, type LiveLane } from "./ledger.js";
-import { BOSS_ABORT_REASON, controlRecord } from "./control-record.js";
+import { BOSS_ABORT_REASON, controlRecord, runtimeRecord } from "./control-record.js";
 import { CoreService } from "./service.js";
 import { parseSpecTree } from "./specs.js";
 import { fakeAdapterImports } from "./testing/fake-adapter.js";
@@ -25,6 +27,7 @@ import { createScriptedCaptain } from "./testing/scripted-captain.js";
 import { demoHistoryIntentId, seedHistorySession } from "./testing/demo.js";
 import {
   UUID_PATTERN,
+  type AssignedRuntime,
   type Command,
   type CommandResults,
   type DerivedIntent,
@@ -1734,7 +1737,7 @@ function queueIds(ledger: LedgerState, projectId: string): string[] {
 
 /** The storage-4 field set an intent file may hold, and nothing else. */
 const INTENT_FILE_FIELDS = new Set([
-  "format", "id", "text", "attachments", "source", "author", "createdAt", "dispatched", "closed",
+  "format", "id", "text", "attachments", "source", "author", "runtime", "createdAt", "dispatched", "closed",
 ]);
 
 function readIntentFile(intentsDir: string, id: string): Record<string, unknown> {
@@ -2284,8 +2287,12 @@ test("core-service-53: an intent lives as one file of its spex repository throug
   };
 
   // Two intents captured a moment apart: each is one file holding
-  // exactly storage-4's fields, and the queue reads them oldest first
-  // with the oldest next (core-service-42, core-service-49, core-service-52).
+  // exactly storage-4's fields at format 2, assigned to this runtime —
+  // the home's device with the host name as its label — and the queue
+  // reads them oldest first with the oldest next (core-service-42,
+  // core-service-49, core-service-52).
+  const { device } = parseYaml(readFileSync(join(harness.dataDir, "home.yaml"), "utf8")) as { device: string };
+  const runtime = { device, label: hostname() };
   const first = await announced(() => client.queue({
     projectId: project.id,
     text: "Ship the ledger\nwith its fold",
@@ -2297,10 +2304,12 @@ test("core-service-53: an intent lives as one file of its spex repository throug
   assert.ok(first.createdAt < second.createdAt);
   for (const intent of [first, second]) {
     assert.match(intent.id, UUID_PATTERN);
+    assert.deepEqual(intent.runtime, runtime);
     assert.deepEqual(readIntentFile(intentsDir, intent.id), {
-      format: 1,
+      format: 2,
       id: intent.id,
       text: intent.text,
+      runtime,
       createdAt: intent.createdAt,
     });
   }
@@ -2309,17 +2318,18 @@ test("core-service-53: an intent lives as one file of its spex repository throug
   assert.deepEqual(queueIds(ledger, project.id), [first.id, second.id]);
   assert.equal(nextOf(ledger, project.id).intent.id, first.id);
 
-  // An edit lands while the intent is queued, rewriting its file whole
-  // (core-service-43).
+  // An edit lands while the intent is queued, rewriting its file whole,
+  // its format and runtime kept (core-service-43, core-service-52).
   const edited = await announced(() => client.expectOk("intent.edit", {
     intentId: first.id,
     text: "Ship the ledger\nwith its fold, sharpened",
   }));
   assert.equal(edited.text, "Ship the ledger\nwith its fold, sharpened");
   assert.deepEqual(readIntentFile(intentsDir, first.id), {
-    format: 1,
+    format: 2,
     id: first.id,
     text: edited.text,
+    runtime,
     createdAt: first.createdAt,
   });
 
@@ -2360,6 +2370,8 @@ test("core-service-53: an intent lives as one file of its spex repository throug
   assert.equal(stamped?.sessionId, session.id);
   assert.equal(stamped?.turnId, startedTurnId);
   assert.equal(typeof stamped?.at, "number");
+  assert.equal(readIntentFile(intentsDir, first.id).format, 2);
+  assert.deepEqual(readIntentFile(intentsDir, first.id).runtime, runtime);
   ledger = await client.expectOk("ledger.get", {});
   assert.equal(stateOf(ledger, first.id).state, "working");
 
@@ -2405,6 +2417,8 @@ test("core-service-53: an intent lives as one file of its spex repository throug
   assert.equal(done.closedAs, "done");
   const closedFile = readIntentFile(intentsDir, first.id);
   assert.deepEqual(closedFile.closed, { as: "done", at: done.closedAt });
+  assert.equal(closedFile.format, 2);
+  assert.deepEqual(closedFile.runtime, runtime);
   for (const key of Object.keys(closedFile)) assert.ok(INTENT_FILE_FIELDS.has(key), key);
   let history = await client.expectOk("ledger.history", { projectId: project.id });
   assert.deepEqual(
@@ -3079,13 +3093,16 @@ test("core-service-54: ledger.get replies identically after a service restart, a
   assert.deepEqual(await client.expectOk("ledger.history", { projectId: project.id }), history);
 
   // Each intent is one file of provenance and stamps only: exactly
-  // storage-4's fields, no state or status anywhere (core-service-52).
+  // storage-4's fields at format 2, naming the runtime that captured it,
+  // no state or status anywhere (core-service-52).
   const intentsDir = harness.service["store"].repository(project.id)!.intentsDir;
   const files = readdirSync(intentsDir).filter((name) => name.endsWith(".json")).sort();
   assert.deepEqual(files, [confirmed.id, delivered.id, kept.id].map((id) => `${id}.json`).sort());
+  const { device } = parseYaml(readFileSync(join(harness.dataDir, "home.yaml"), "utf8")) as { device: string };
   for (const name of files) {
     const file = JSON.parse(readFileSync(join(intentsDir, name), "utf8")) as Record<string, unknown>;
-    assert.equal(file.format, 1);
+    assert.equal(file.format, 2);
+    assert.deepEqual(file.runtime, { device, label: hostname() });
     for (const key of Object.keys(file)) assert.ok(INTENT_FILE_FIELDS.has(key), `${name} holds ${key}`);
     for (const part of [file, file.dispatched, file.closed]) {
       if (part && typeof part === "object") {
@@ -3382,5 +3399,110 @@ test("dashboard-10: a run dismissed while parked takes its question with it", ()
   const ledger = fold(store, [lane("s1", projectId, false)]);
   assert.equal(stateOf(ledger, "Q").state, "finished");
   assert.equal(ledger.attention.some((entry) => entry.kind === "question"), false);
+  store.close();
+});
+
+// ---------------------------------------------------------------------------
+// Another runtime's records (core-service-47, core-service-49,
+// core-service-107, DR-134)
+// ---------------------------------------------------------------------------
+
+/** A settled session of the project: assigned to a runtime where one is
+ * named — its runtime record first in its stream, as the core creating
+ * it appends one (storage-43) — and naming none otherwise. */
+function assignedSession(store: Store, projectId: string, id: string, runtime?: AssignedRuntime): void {
+  store.createSession({
+    id: uid(id),
+    projectId,
+    projectPath: "/tmp/ledger-proj",
+    createdAt: 100,
+    live: false,
+    endedAt: 200,
+    players: [{ id: "dev.coder", adapter: "claude" }],
+    initialVisible: ["dev.coder"],
+    turns: 0,
+    failed: false,
+  });
+  if (!runtime) return;
+  const record = runtimeRecord(runtime, 100);
+  store.appendRecord(uid(id), store.maxSeq(uid(id)) + 1, record);
+  store.foldStoredRecord(uid(id), record);
+}
+
+test("core-service-124: another runtime's dispatch is never released here, its work never next, and none of it summons", () => {
+  const { store, projectId } = newProjectStore();
+  const here: AssignedRuntime = { device: store.home.device, label: "laptop" };
+  const there: AssignedRuntime = { device: randomUUID(), label: "build-server" };
+  for (const id of ["far1", "far2", "far3", "far4"]) assignedSession(store, projectId, id, there);
+  assignedSession(store, projectId, "old1");
+  // Captured there, the oldest, never dispatched.
+  queueIntent(store, projectId, "away", { runtime: there });
+  // Naming no runtime, each dispatched by a session of there: one still
+  // running there, one aborted there, one finished there.
+  queueIntent(store, projectId, "run");
+  beginTurn(store, "far1", 1, "run it", 1000);
+  stamp(store, "run", "far1", 1, 1000);
+  queueIntent(store, projectId, "stop");
+  beginTurn(store, "far2", 1, "stop it", 1000);
+  stamp(store, "stop", "far2", 1, 1000);
+  abortStoredTurn(store, "far2", 1, 1100, BOSS_ABORT_REASON);
+  queueIntent(store, projectId, "done");
+  beginTurn(store, "far3", 1, "finish it", 1000);
+  stamp(store, "done", "far3", 1, 1000);
+  finishTurn(store, "far3", 1, 1200);
+  // Naming no runtime, aborted in a session naming none: released by
+  // today's rule.
+  queueIntent(store, projectId, "free");
+  beginTurn(store, "old1", 1, "let it go", 1000);
+  stamp(store, "free", "old1", 1, 1000);
+  abortStoredTurn(store, "old1", 1, 1100, BOSS_ABORT_REASON);
+  // Captured here, the youngest.
+  queueIntent(store, projectId, "mine", { runtime: here });
+  // Chat of there, finished and never viewed.
+  beginTurn(store, "far4", 1, "plain chat", 1000);
+  finishTurn(store, "far4", 1, 1300);
+
+  // Here — the home's own device, read where the fold is given none.
+  let ledger = fold(store, []);
+  const row = (name: string): DerivedIntent => stateOf(ledger, name);
+  const reading = (name: string) => [row(name).state, row(name).runsOn];
+  // Every row keeps its place by age (core-service-107).
+  assert.deepEqual(
+    ledger.intents.map((entry) => entry.intent.id),
+    ["away", "run", "stop", "done", "free", "mine"].map(uid),
+  );
+  assert.deepEqual(reading("away"), ["queued", "build-server"]);
+  // An open dispatch of there's session is not derived as released
+  // here: its turn still open there is work running there
+  // (core-service-47).
+  assert.deepEqual(reading("run"), ["working", "build-server"]);
+  // Its abort is there's to read: in place by age, never next here.
+  assert.deepEqual(reading("stop"), ["queued", "build-server"]);
+  assert.deepEqual(reading("done"), ["finished", "build-server"]);
+  // An intent naming no runtime, released by today's rule, is next here
+  // before the younger one captured here (core-service-107).
+  assert.deepEqual(reading("free"), ["queued", undefined]);
+  assert.deepEqual(reading("mine"), ["queued", undefined]);
+  assert.equal(nextOf(ledger, projectId).intent.id, uid("free"));
+  // There's finished work summons no one here, and counts in no badge
+  // (core-service-49).
+  assert.deepEqual(ledger.attention, []);
+  assert.equal(ledger.badge, 0);
+  // Its session raises no stand-in here, even handed in as a lane.
+  assert.deepEqual(fold(store, [lane("far4", projectId, false)]).attention, []);
+
+  // There, the same stored state is its own: what it captured is next,
+  // what ran there summons there, and this home's capture is the other's.
+  ledger = foldLedger({ store, lanes: [lane("far4", projectId, false)], device: there.device, now: () => NOW });
+  assert.equal(nextOf(ledger, projectId).intent.id, uid("away"));
+  assert.deepEqual(reading("away"), ["queued", undefined]);
+  assert.deepEqual(reading("stop"), ["queued", undefined]);
+  assert.deepEqual(reading("done"), ["finished", undefined]);
+  assert.deepEqual(reading("mine"), ["queued", "laptop"]);
+  assert.deepEqual(
+    ledger.attention.map((entry) => [entry.kind, entry.intentId ?? entry.sessionId]),
+    [["finish", uid("done")], ["review", uid("far4")]],
+  );
+  assert.equal(ledger.badge, 2);
   store.close();
 });

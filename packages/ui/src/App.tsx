@@ -8,10 +8,28 @@
 
 import { ApprovalInbox, ApprovalFeedback } from "./components/ApprovalInbox.js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { IntentInfo, SessionInfo } from "@sublang/spex-core/protocol";
+import type { IntentInfo, LedgerState, SessionInfo } from "@sublang/spex-core/protocol";
 
 import type { ProjectInfo } from "@sublang/spex-core/protocol";
-import { safeStorageGet, safeStorageSet, SURFACE_KEY, useAppStore } from "./state/store.js";
+import {
+  isLocalPlace,
+  LOCAL_PLACE_KEY,
+  placeKey,
+  placeLabel,
+  safeStorageGet,
+  safeStorageSet,
+  SURFACE_KEY,
+  useAppStore,
+  type AppStore,
+} from "./state/store.js";
+import { usePlaces } from "./state/places.js";
+import {
+  PlaceStoreContext,
+  useEachPlace,
+  useJoinedAttention,
+  usePlaceStore,
+  usePlaceStores,
+} from "./state/place-context.js";
 import {
   ATTENTION_MARK_CLASS,
   ATTENTION_RANK,
@@ -28,12 +46,14 @@ import { DashboardSurface } from "./components/DashboardSurface.js";
 import { LibrarySurface } from "./components/LibrarySurface.js";
 import { SettingsSurface } from "./components/SettingsSurface.js";
 import { SpaceSurface } from "./components/SpaceSurface.js";
+import { PlaceSelector } from "./components/PlaceSelector.js";
 import { OverviewTab } from "./components/ProjectsSurface.js";
 import { ProjectPalette } from "./components/ProjectPalette.js";
 import {
   NavRail,
   SURFACES,
   SURFACE_LABELS,
+  type NavPlace,
   type Surface,
 } from "./components/NavRail.js";
 import {
@@ -44,8 +64,8 @@ import {
 } from "./components/SpecView.js";
 
 /** A record another surface asked the spec view to open, with where
- * it was asked from (spec-view-57). */
-type PendingRecord = { projectId: string; path: string; origin: RecordOrigin };
+ * it was asked from (spec-view-57), at the place of its project. */
+type PendingRecord = { place: string; projectId: string; path: string; origin: RecordOrigin };
 import { editorDirty, treeCounts } from "./lib/spec-view-model.js";
 import { isHistory } from "./lib/sessions.js";
 import { Icon } from "./components/Icon.js";
@@ -107,42 +127,38 @@ declare global {
  * re-sources from the core-derived ledger, grouped by session — never
  * from a client-side derivation of its own. Where a session carries
  * several entries the most severe wins its mark, in the one rank
- * every surface shares. */
-function useLedgerAttention(): Map<string, AttentionItem> {
-  const ledger = useAppStore((state) => state.ledger);
-  const sessions = useAppStore((state) => state.sessions);
-  const views = useAppStore((state) => state.views);
-  // The mark carries a catalog phrase, and the root re-renders rather
-  // than remounts on a change of language (localization-3): the
-  // language is a dependency, so the phrase is read again.
-  const language = useAppStore((state) => state.language.resolved);
-  return useMemo(() => {
-    const map = new Map<string, AttentionItem>();
-    for (const entry of ledger?.attention ?? []) {
-      const view = views[entry.sessionId];
-      const session = sessions.find((s) => s.id === entry.sessionId);
-      // An earlier delivery still counts on the Dashboard, but does
-      // not mean the later work is waiting for a reply.
-      if (entry.band === "finished" && (session?.turnActive ?? view?.turnActive)) continue;
-      // The entry's own kind travels (DR-066): a mark that says
-      // "needs your reply" where a turn is merely unread names an act
-      // the reader cannot take.
-      const existing = map.get(entry.sessionId);
-      if (existing && ATTENTION_RANK[existing.kind] <= ATTENTION_RANK[entry.kind]) {
-        continue;
-      }
-      map.set(entry.sessionId, {
-        kind: entry.kind,
-        sessionId: entry.sessionId,
-        projectPath: session?.projectPath ?? "",
-        text: entry.title,
-        // Why it failed, in the catalogue's phrase (DR-075): the mark
-        // says what happened wherever it is read.
-        ...(causePhrase(entry.cause) ? { why: causePhrase(entry.cause)! } : {}),
-      });
+ * every surface shares. One place's fold, over that place's own
+ * sessions (run-view-168). */
+function attentionOf(
+  ledger: LedgerState | undefined,
+  sessions: readonly SessionInfo[],
+  views: Record<string, SessionView>,
+): Map<string, AttentionItem> {
+  const map = new Map<string, AttentionItem>();
+  for (const entry of ledger?.attention ?? []) {
+    const view = views[entry.sessionId];
+    const session = sessions.find((s) => s.id === entry.sessionId);
+    // An earlier delivery still counts on the Dashboard, but does
+    // not mean the later work is waiting for a reply.
+    if (entry.band === "finished" && (session?.turnActive ?? view?.turnActive)) continue;
+    // The entry's own kind travels (DR-066): a mark that says
+    // "needs your reply" where a turn is merely unread names an act
+    // the reader cannot take.
+    const existing = map.get(entry.sessionId);
+    if (existing && ATTENTION_RANK[existing.kind] <= ATTENTION_RANK[entry.kind]) {
+      continue;
     }
-    return map;
-  }, [ledger, sessions, views, language]);
+    map.set(entry.sessionId, {
+      kind: entry.kind,
+      sessionId: entry.sessionId,
+      projectPath: session?.projectPath ?? "",
+      text: entry.title,
+      // Why it failed, in the catalogue's phrase (DR-075): the mark
+      // says what happened wherever it is read.
+      ...(causePhrase(entry.cause) ? { why: causePhrase(entry.cause)! } : {}),
+    });
+  }
+  return map;
 }
 
 /** How long a first boot may dial before the page raises the alarm:
@@ -150,10 +166,22 @@ function useLedgerAttention(): Map<string, AttentionItem> {
  * needs longer than a flap (run-view-50). */
 export const NEVER_CONNECTED_GRACE_MS = 8_000;
 
-function ConnectionBanner() {
-  const connection = useAppStore((state) => state.connection);
-  const everConnected = useAppStore((state) => state.everConnected);
-  const coreUrl = useAppStore((state) => state.coreUrl);
+/** Redial one place alone (run-view-50): its connection is let go and
+ * dialed afresh, every other place's untouched. */
+function redial(store: AppStore): void {
+  store.close();
+  store.getState().connect();
+}
+
+/** One place's connection banner (run-view-50, run-view-168): the
+ * local core's names its endpoint, a seat's names its server; each
+ * reads its own store's connection alone. */
+function ConnectionBanner({ store }: { store: AppStore }) {
+  const connection = store((state) => state.connection);
+  const everConnected = store((state) => state.everConnected);
+  const coreUrl = store((state) => state.coreUrl);
+  const local = isLocalPlace(store.place);
+  const server = placeLabel(store.place);
   // A boot that never connects must say so (run-view-50): after a
   // grace period the page names the endpoint it keeps dialing.
   // The clock runs from mount, untouched by the dial-close-dial flaps
@@ -173,15 +201,22 @@ function ConnectionBanner() {
     return (
       <div
         role="alert"
+        data-place={store.place.key}
         className="flex items-center justify-center gap-2 border-b border-amber-300 bg-amber-50 px-4 py-1.5 text-center text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200"
       >
-        {i18n._(
-          "Can't reach the Spex core at {endpoint} — retrying every second. On a served page, check the link's token; on the desktop, restart the app.",
-          { endpoint: scrubbed ?? i18n._("its endpoint") },
-        )}
+        {local
+          ? i18n._(
+              "Can't reach the Spex core at {endpoint} — retrying every second. On a served page, check the link's token; on the desktop, restart the app.",
+              { endpoint: scrubbed ?? i18n._("its endpoint") },
+            )
+          : i18n._({
+              id: "Can't reach {server} — retrying every second.",
+              comment: "banner: a team server's seat never answered; {server} is the server's name",
+              values: { server },
+            })}
         <button
           type="button"
-          onClick={() => window.location.reload()}
+          onClick={() => (local ? window.location.reload() : redial(store))}
           className="font-medium text-brand-700 hover:underline dark:text-brand-300"
         >
           {i18n._({ id: "Retry", comment: "take the failed read again" })}
@@ -191,40 +226,68 @@ function ConnectionBanner() {
   }
   if (connection === "mismatch") {
     return (
-      <div className="border-b border-red-300 bg-red-50 px-4 py-1.5 text-center text-xs text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200">
-        {i18n._(
-          "The Spex window and its core speak different protocol versions — restart the app (or update Spex) to fix this.",
-        )}
+      <div
+        data-place={store.place.key}
+        className="border-b border-red-300 bg-red-50 px-4 py-1.5 text-center text-xs text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200"
+      >
+        {local
+          ? i18n._(
+              "The Spex window and its core speak different protocol versions — restart the app (or update Spex) to fix this.",
+            )
+          : i18n._({
+              id: "{server} speaks a different protocol version than this window — it needs the same Spex release as this app.",
+              comment: "banner: a team server's seat runs another protocol version; {server} is the server's name",
+              values: { server },
+            })}
       </div>
     );
   }
   return (
-    <div className="border-b border-amber-300 bg-amber-50 px-4 py-1.5 text-center text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
-      {i18n._(
-        "Reconnecting to the Spex core… actions are paused until the connection returns.",
-      )}
+    <div
+      data-place={store.place.key}
+      className="border-b border-amber-300 bg-amber-50 px-4 py-1.5 text-center text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200"
+    >
+      {local
+        ? i18n._(
+            "Reconnecting to the Spex core… actions are paused until the connection returns.",
+          )
+        : i18n._({
+            id: "Reconnecting to {server}… actions there are paused until the connection returns.",
+            comment: "banner: the connection to a team server's seat dropped; {server} is the server's name",
+            values: { server },
+          })}
     </div>
   );
 }
 
-/** Connected-but-blank is never presented as normal (DR-010 §5). */
-function RefreshErrorBanner() {
-  const refreshError = useAppStore((state) => state.refreshError);
-  const refresh = useAppStore((state) => state.refresh);
-  const connection = useAppStore((state) => state.connection);
+/** Connected-but-blank is never presented as normal (DR-010 §5), at
+ * any place (run-view-168). */
+function RefreshErrorBanner({ store }: { store: AppStore }) {
+  const refreshError = store((state) => state.refreshError);
+  const refresh = store((state) => state.refresh);
+  const connection = store((state) => state.connection);
   if (!refreshError || connection !== "open") return null;
   return (
-    <div className="flex items-center justify-center gap-2 border-b border-amber-300 bg-amber-50 px-4 py-1.5 text-center text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
+    <div
+      data-place={store.place.key}
+      className="flex items-center justify-center gap-2 border-b border-amber-300 bg-amber-50 px-4 py-1.5 text-center text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200"
+    >
       {/* The core's own words for what failed ride as data inside the
           one sentence the page owns (localization-4). */}
-      {i18n._("Connected, but {reason}", { reason: refreshError })}
+      {isLocalPlace(store.place)
+        ? i18n._("Connected, but {reason}", { reason: refreshError })
+        : i18n._({
+            id: "Connected to {server}, but {reason}",
+            comment: "banner: a team server's seat answered but its state failed to load; {server} is the server's name",
+            values: { server: placeLabel(store.place), reason: refreshError },
+          })}
       <button
         type="button"
         onClick={() =>
           void refresh()
-            .then(() => useAppStore.setState({ refreshError: undefined }))
+            .then(() => store.setState({ refreshError: undefined }))
             .catch((cause: Error) =>
-              useAppStore.setState({
+              store.setState({
                 refreshError: i18n._("app state failed to load: {reason}", {
                   reason: cause.message,
                 }),
@@ -239,16 +302,30 @@ function RefreshErrorBanner() {
   );
 }
 
+/** Each seat's banners, beside the local core's (run-view-168): a
+ * connection, its banner and a protocol mismatch are per place. */
+function SeatBanners({ banner }: { banner: "connection" | "refresh" }) {
+  const seats = usePlaces((state) => state.seats);
+  return seats.map(({ store }) =>
+    banner === "connection" ? (
+      <ConnectionBanner key={store.place.key} store={store} />
+    ) : (
+      <RefreshErrorBanner key={store.place.key} store={store} />
+    ),
+  );
+}
+
 /** One persistent polite live region (DR-010 §7): announces the
  * moments the product is built around without spamming. */
 function Announcer() {
-  const ledger = useAppStore((state) => state.ledger);
   const connection = useAppStore((state) => state.connection);
   const everConnected = useAppStore((state) => state.everConnected);
   const [message, setMessage] = useState("");
-  // The core-derived attention queue is the one derivation (DR-035).
-  const blockingCount = ledger?.badge ?? 0;
-  const first = ledger?.attention?.[0];
+  // The core-derived attention queue is the one derivation (DR-035),
+  // joined across the places (dashboard-9).
+  const joined = useJoinedAttention();
+  const blockingCount = joined.badge;
+  const first = joined.entries[0]?.entry;
   const latestDetail = first?.kind === "question" ? first.title : undefined;
   const lastCount = useRef(0);
   const lastConnection = useRef(connection);
@@ -342,9 +419,10 @@ function WorkspaceSurface({
   onOpenPalette: () => void;
   onOpenOwnProject: () => void;
   /** Per-project spec view state, held above the workspace so a
-   * draft under edit survives every surface (spec-view-51). */
+   * draft under edit survives every surface (spec-view-51), keyed by
+   * place and project (run-view-168). */
   specViewStates: Record<string, SpecViewState>;
-  onSpecViewState: (projectId: string, next: SpecViewState) => void;
+  onSpecViewState: (key: string, next: SpecViewState) => void;
   /** The Overview's ledger group actions, the Dashboard's own
    * (projects-4, DR-038). */
   onOpenSession: (sessionId: string, turnId?: number) => void;
@@ -363,47 +441,50 @@ function WorkspaceSurface({
   pendingFocus?: { sessionId: string; turnId: number };
   onFocusHandled: () => void;
 }) {
-  const sessions = useAppStore((state) => state.sessions);
-  const views = useAppStore((state) => state.views);
-  const composers = useAppStore((state) => state.composers);
-  const runErrors = useAppStore((state) => state.runErrors);
-  const connection = useAppStore((state) => state.connection);
-  const activeSessionId = useAppStore((state) => state.activeSessionId);
-  const focusSession = useAppStore((state) => state.focusSession);
-  const loadPastSession = useAppStore((state) => state.loadPastSession);
-  const submitBossText = useAppStore((state) => state.submitBossText);
-  const removeQueued = useAppStore((state) => state.removeQueued);
-  const abortTurn = useAppStore((state) => state.abortTurn);
-  const clearRunError = useAppStore((state) => state.clearRunError);
-  const setDraft = useAppStore((state) => state.setDraft);
-  const homeDraft = useAppStore((state) => state.homeDraft);
-  const setHomeDraft = useAppStore((state) => state.setHomeDraft);
-  const refreshReadiness = useAppStore((state) => state.refreshReadiness);
-  const configState = useAppStore((state) => state.configState);
-  const readiness = useAppStore((state) => state.readiness);
-  const projects = useAppStore((state) => state.projects);
-  const openSession = useAppStore((state) => state.openSession);
-  const currentProjectId = useAppStore((state) => state.currentProjectId);
+  // The place this surface shows (run-view-168): every read and act
+  // here is that place's core's.
+  const store = usePlaceStore();
+  const sessions = store((state) => state.sessions);
+  const views = store((state) => state.views);
+  const composers = store((state) => state.composers);
+  const runErrors = store((state) => state.runErrors);
+  const connection = store((state) => state.connection);
+  const activeSessionId = store((state) => state.activeSessionId);
+  const focusSession = store((state) => state.focusSession);
+  const loadPastSession = store((state) => state.loadPastSession);
+  const submitBossText = store((state) => state.submitBossText);
+  const removeQueued = store((state) => state.removeQueued);
+  const abortTurn = store((state) => state.abortTurn);
+  const clearRunError = store((state) => state.clearRunError);
+  const setDraft = store((state) => state.setDraft);
+  const homeDraft = store((state) => state.homeDraft);
+  const setHomeDraft = store((state) => state.setHomeDraft);
+  const refreshReadiness = store((state) => state.refreshReadiness);
+  const configState = store((state) => state.configState);
+  const readiness = store((state) => state.readiness);
+  const projects = store((state) => state.projects);
+  const openSession = store((state) => state.openSession);
+  const currentProjectId = store((state) => state.currentProjectId);
   const homeMedia = useComposerAttachments(currentProjectId ? homeAttachmentKey(currentProjectId) : undefined, currentProjectId ? { kind: "project", id: currentProjectId } : undefined);
-  const setCurrentProject = useAppStore((state) => state.setCurrentProject);
-  const workspaceTabs = useAppStore((state) => state.workspaceTabs);
-  const setWorkspaceTab = useAppStore((state) => state.setWorkspaceTab);
-  const openTabs = useAppStore((state) => state.openTabs);
-  const closeTab = useAppStore((state) => state.closeTab);
-  const specTrees = useAppStore((state) => state.specTrees);
-  const specErrors = useAppStore((state) => state.specErrors);
-  const loadSpecs = useAppStore((state) => state.loadSpecs);
-  const readSpecRecord = useAppStore((state) => state.readSpecRecord);
-  const writeSpec = useAppStore((state) => state.writeSpec);
-  const openAcademyExample = useAppStore(
+  const setCurrentProject = store((state) => state.setCurrentProject);
+  const workspaceTabs = store((state) => state.workspaceTabs);
+  const setWorkspaceTab = store((state) => state.setWorkspaceTab);
+  const openTabs = store((state) => state.openTabs);
+  const closeTab = store((state) => state.closeTab);
+  const specTrees = store((state) => state.specTrees);
+  const specErrors = store((state) => state.specErrors);
+  const loadSpecs = store((state) => state.loadSpecs);
+  const readSpecRecord = store((state) => state.readSpecRecord);
+  const writeSpec = store((state) => state.writeSpec);
+  const openAcademyExample = store(
     (state) => state.openAcademyExample,
   );
-  const ledger = useAppStore((state) => state.ledger);
-  const markViewed = useAppStore((state) => state.markViewed);
-  const stagedIntents = useAppStore((state) => state.stagedIntents);
-  const clearStagedIntent = useAppStore((state) => state.clearStagedIntent);
-  const queueIntent = useAppStore((state) => state.queueIntent);
-  const stageDispatch = useAppStore((state) => state.stageDispatch);
+  const ledger = store((state) => state.ledger);
+  const markViewed = store((state) => state.markViewed);
+  const stagedIntents = store((state) => state.stagedIntents);
+  const clearStagedIntent = store((state) => state.clearStagedIntent);
+  const queueIntent = store((state) => state.queueIntent);
+  const stageDispatch = store((state) => state.stageDispatch);
 
   const [seedErrors, setSeedErrors] = useState<
     Record<string, string | undefined>
@@ -482,8 +563,8 @@ function WorkspaceSurface({
   // top (core-service-2), so the slash menus offer that project's
   // composed catalog — yours alone while it is not read, or refused
   // (playbook-library-34, DR-104: every member gets the same tools).
-  const projectConfigs = useAppStore((state) => state.projectConfigs);
-  const loadProjectConfig = useAppStore((state) => state.loadProjectConfig);
+  const projectConfigs = store((state) => state.projectConfigs);
+  const loadProjectConfig = store((state) => state.loadProjectConfig);
   useEffect(() => {
     if (connection !== "open" || !currentProjectId) return;
     void loadProjectConfig(currentProjectId).catch(() => {});
@@ -554,7 +635,7 @@ function WorkspaceSurface({
       onOpenPalette={onOpenPalette}
       onOpenOwnProject={onOpenOwnProject}
       onNavigate={(surface) => onNavigate(surface)}
-      onSaveCaptain={setCaptain}
+      onSaveCaptain={(patch) => setCaptain(patch, store.getClient())}
       next={
         nextIntent
           ? {
@@ -580,24 +661,24 @@ function WorkspaceSurface({
       onStart={async (text) => {
         if (!currentProjectId) return;
         const session = await openSession(currentProjectId);
-        useAppStore.getState().setDraft(session.id, text);
-        useAppStore.getState().stageAttachmentAssets(sessionAttachmentKey(session.id), { kind: "project", id: currentProjectId }, homeMedia.assets);
-        const transferredIds = useAppStore.getState().attachmentDrafts[sessionAttachmentKey(session.id)].map((file) => file.id);
+        store.getState().setDraft(session.id, text);
+        store.getState().stageAttachmentAssets(sessionAttachmentKey(session.id), { kind: "project", id: currentProjectId }, homeMedia.assets);
+        const transferredIds = store.getState().attachmentDrafts[sessionAttachmentKey(session.id)].map((file) => file.id);
         // A dispatch staged on the home follows the text into the new
         // session, so the send stamps the intent (run-view-86/88).
-        const state = useAppStore.getState();
+        const state = store.getState();
         const homeStaged = state.stagedIntents.home;
         if (homeStaged) {
           const { home: _home, ...rest } = state.stagedIntents;
-          useAppStore.setState({
+          store.setState({
             stagedIntents: { ...rest, [session.id]: homeStaged },
           });
         }
         await submitBossText(session.id, text, homeMedia.assets);
         homeMedia.consume();
-        useAppStore.getState().removeAttachmentFiles(sessionAttachmentKey(session.id), transferredIds);
-        if (useAppStore.getState().composers[session.id]?.draft === text)
-          useAppStore.getState().setDraft(session.id, "");
+        store.getState().removeAttachmentFiles(sessionAttachmentKey(session.id), transferredIds);
+        if (store.getState().composers[session.id]?.draft === text)
+          store.getState().setDraft(session.id, "");
       }}
     />
   );
@@ -848,7 +929,7 @@ function WorkspaceSurface({
                   </span>
                 </>
               ) : null}
-              {project && editorDirty(specViewStates[project.id]) ? (
+              {project && editorDirty(specViewStates[placeKey(store.place, project.id)]) ? (
                 <>
                   <span className="sr-only">
                     {i18n._({
@@ -892,26 +973,34 @@ function WorkspaceSurface({
           onWriteSpec={(path, content, baseVersion) =>
             writeSpec(project.id, path, content, baseVersion)
           }
-          onSeedExample={() => {
-            setSeedErrors((current) => ({ ...current, [project.id]: undefined }));
-            void openAcademyExample().catch((cause: Error) => {
-              setSeedErrors((current) => ({
-                ...current,
-                [project.id]:
-                  cause.message || i18n._("seeding the example failed"),
-              }));
-            });
-          }}
+          // The example is seeded at a folder this page names, so it is
+          // this computer's alone: a seat's projects are opened among
+          // the member's groups, its core allocating every folder
+          // (run-view-169).
+          onSeedExample={
+            isLocalPlace(store.place)
+              ? () => {
+                  setSeedErrors((current) => ({ ...current, [project.id]: undefined }));
+                  void openAcademyExample().catch((cause: Error) => {
+                    setSeedErrors((current) => ({
+                      ...current,
+                      [project.id]:
+                        cause.message || i18n._("seeding the example failed"),
+                    }));
+                  });
+                }
+              : undefined
+          }
           seedError={seedErrors[project.id]}
-          viewState={specViewStates[project.id] ?? initialSpecViewState}
-          onViewState={(next) => onSpecViewState(project.id, next)}
+          viewState={specViewStates[placeKey(store.place, project.id)] ?? initialSpecViewState}
+          onViewState={(next) => onSpecViewState(placeKey(store.place, project.id), next)}
           openRecordPath={
-            pendingRecord?.projectId === project.id
+            pendingRecord?.projectId === project.id && pendingRecord.place === store.place.key
               ? pendingRecord.path
               : undefined
           }
           openRecordOrigin={
-            pendingRecord?.projectId === project.id
+            pendingRecord?.projectId === project.id && pendingRecord.place === store.place.key
               ? pendingRecord.origin
               : undefined
           }
@@ -943,7 +1032,7 @@ function WorkspaceSurface({
             error={runErrors[activeSession.id]}
             readOnly={!!activeSession.externalWriter || (!activeSession.live && !activeSession.continuable)}
             readinessHint={readinessHint}
-            onRecover={(action) => useAppStore.getState().recoverSession(activeSession.id, action)}
+            onRecover={(action) => store.getState().recoverSession(activeSession.id, action)}
             onRetryLoad={() => {
               void loadPastSession(activeSession.id, true).catch(() => {});
             }}
@@ -994,23 +1083,83 @@ export function App() {
     setPaletteOpen(true);
   };
   const configState = useAppStore((state) => state.configState);
-  const sessions = useAppStore((state) => state.sessions);
-  const views = useAppStore((state) => state.views);
-  const projects = useAppStore((state) => state.projects);
-  const currentProjectId = useAppStore((state) => state.currentProjectId);
-  const focusSession = useAppStore((state) => state.focusSession);
   const railCollapsed = useAppStore((state) => state.railCollapsed);
   const setRailCollapsed = useAppStore((state) => state.setRailCollapsed);
-  const expandedProjects = useAppStore((state) => state.expandedProjects);
-  const toggleProjectExpanded = useAppStore(
-    (state) => state.toggleProjectExpanded,
-  );
-  const workspaceTabs = useAppStore((state) => state.workspaceTabs);
   const connection = useAppStore((state) => state.connection);
+  // Every place (run-view-168): this computer's, then each open seat's.
+  const stores = usePlaceStores();
+  const storeAt = (place?: string): AppStore =>
+    (place === undefined ? undefined : stores.find((store) => store.place.key === place)) ?? useAppStore;
+  // The place the Projects surface shows: the one whose project or
+  // session the reader last opened — this computer's until then, and
+  // again once a seat it showed is closed.
+  const [shownPlace, setShownPlace] = useState<string>(LOCAL_PLACE_KEY);
+  const shown = storeAt(shownPlace);
+  useEffect(() => {
+    if (shown.place.key !== shownPlace) setShownPlace(LOCAL_PLACE_KEY);
+  }, [shown, shownPlace]);
+  // The place Settings, Playbooks, Groups and Environments show, as the
+  // place selector names it (run-view-168): this computer's until the
+  // reader picks a seat, and again once a seat it showed is closed.
+  const [configuredPlace, setConfiguredPlace] = useState<string>(LOCAL_PLACE_KEY);
+  const configured = storeAt(configuredPlace);
+  useEffect(() => {
+    if (configured.place.key !== configuredPlace) setConfiguredPlace(LOCAL_PLACE_KEY);
+  }, [configured, configuredPlace]);
+  // The code host a place's Groups row asked its Settings to take a
+  // credential for (space-103, settings-48), until that place's
+  // Credentials section has opened at it.
+  const [credentialAsk, setCredentialAsk] = useState<{ place: string; host: string }>();
+  /** Go to a surface on behalf of `store`'s place: Settings, Playbooks
+   * and Groups open at that place (run-view-168). */
+  const navigateFrom = (store: AppStore) => (next: Surface) => {
+    if (next === "Settings" || next === "Playbooks" || next === "Space") {
+      setConfiguredPlace(store.place.key);
+    }
+    setSurface(next);
+  };
+  // Each place's sidebar inputs, read from its own store.
+  const placeStates = useEachPlace((state) => ({
+    projects: state.projects,
+    sessions: state.sessions,
+    views: state.views,
+    ledger: state.ledger,
+    // The mark carries a catalog phrase, and the root re-renders rather
+    // than remounts on a change of language (localization-3): the
+    // language is an input, so the phrase is read again.
+    language: state.language.resolved,
+    currentProjectId: state.currentProjectId,
+    expandedProjects: state.expandedProjects,
+    workspaceTabs: state.workspaceTabs,
+    // A seat's groups name the projects the palette opens there
+    // (run-view-169), read once it is connected.
+    space: state.space,
+    connection: state.connection,
+  }));
+  const local = placeStates[0]!.value;
   // The badge and every dot re-source from the one core-side ledger
-  // fold (DR-035, dashboard-9/10).
-  const attentionCount = useAppStore((state) => state.ledger?.badge ?? 0);
-  const attentionBySession = useLedgerAttention();
+  // fold (DR-035, dashboard-9/10): each place's dots from its own, the
+  // badge summing every place's (dashboard-9). A place speaking another
+  // protocol version is no connected core: it marks nothing, as it adds
+  // nothing to the queue and the badge (run-view-168).
+  const attentionByPlace = useMemo(
+    () =>
+      new Map(
+        placeStates.map(({ store, value }) => [
+          store.place.key,
+          attentionOf(
+            value.connection === "mismatch" ? undefined : value.ledger,
+            value.sessions,
+            value.views,
+          ),
+        ]),
+      ),
+    [placeStates],
+  );
+  const attentionAt = (place: string): Map<string, AttentionItem> =>
+    attentionByPlace.get(place) ?? new Map();
+  const attentionCount = useJoinedAttention().badge;
+  const attentionBySession = attentionAt(shown.place.key);
   // An attention activation owed its landing in the thread
   // (run-view-91): held until the session's run view takes it.
   const [pendingFocus, setPendingFocus] = useState<{
@@ -1031,21 +1180,31 @@ export function App() {
   // Last non-Specs tab per project, for the Specs toggle shortcut.
   const prevTabRef = useRef<Record<string, string>>({});
 
-  // Opening with a turn id lands at that turn's place in the thread
-  // (run-view-91): the question bubble, failure line, or delivery card.
-  const openSessionAndShow = (sessionId: string, turnId?: number) => {
-    void focusSession(sessionId);
-    setPendingFocus(
-      turnId !== undefined ? { sessionId, turnId } : undefined,
-    );
+  /** Show `store`'s place on the Projects surface. */
+  const showPlace = (store: AppStore) => {
+    setShownPlace(store.place.key);
     setSurface("Workspace");
   };
 
+  // Opening with a turn id lands at that turn's place in the thread
+  // (run-view-91): the question bubble, failure line, or delivery card.
+  // A session is opened at its own place, this computer's unless one
+  // is named (dashboard-9, run-view-168).
+  const openSessionAndShow = (sessionId: string, turnId?: number, place?: string) => {
+    const store = storeAt(place);
+    void store.getState().focusSession(sessionId);
+    setPendingFocus(
+      turnId !== undefined ? { sessionId, turnId } : undefined,
+    );
+    showPlace(store);
+  };
+
   // Start on an intent stages its dispatch (run-view-86): the store
-  // picks the lane — the live session's composer, or the Captain home.
-  const startIntent = async (intent: IntentInfo) => {
-    await useAppStore.getState().stageDispatch(intent);
-    setSurface("Workspace");
+  // picks the lane — the live session's composer, or the Captain home —
+  // at the intent's own place.
+  const startIntentAt = (store: AppStore) => async (intent: IntentInfo) => {
+    await store.getState().stageDispatch(intent);
+    showPlace(store);
   };
 
   // An intent picked off the Dashboard or a project's Overview opens
@@ -1056,13 +1215,14 @@ export function App() {
     null,
   );
   const openIntentFrom =
-    (surface: RecordOrigin["surface"]) =>
+    (surface: RecordOrigin["surface"], store: AppStore = useAppStore) =>
     (projectId: string, path: string, anchor: string) => {
-      const state = useAppStore.getState();
+      const state = store.getState();
       state.setCurrentProject(projectId);
       state.setWorkspaceTab(projectId, "specs");
-      setSurface("Workspace");
+      showPlace(store);
       setPendingRecord({
+        place: store.place.key,
         projectId,
         path,
         origin: { surface, projectId, anchor },
@@ -1073,7 +1233,8 @@ export function App() {
   // sends the Overview's origin to the Dashboard instead.
   const [pendingReturn, setPendingReturn] = useState<RecordOrigin>();
   const returnToOrigin = (origin: RecordOrigin) => {
-    const state = useAppStore.getState();
+    // The record was read on the Projects surface, at the place shown.
+    const state = shown.getState();
     const registered = state.projects.some(
       (project) => project.id === origin.projectId,
     );
@@ -1122,9 +1283,11 @@ export function App() {
 
   // Picking a project with parked attention lands on the session that
   // needs the human (DR-011), not the last-active tab — read from the
-  // one ledger fold (DR-035).
-  const pickProject = (projectId: string) => {
-    const state = useAppStore.getState();
+  // one ledger fold (DR-035) of the project's own place, this
+  // computer's unless one is named (run-view-168).
+  const pickProject = (projectId: string, place?: string) => {
+    const store = storeAt(place);
+    const state = store.getState();
     const needy = state.ledger?.attention.find(
       (entry) => entry.projectId === projectId,
     );
@@ -1133,7 +1296,7 @@ export function App() {
     } else {
       state.setCurrentProject(projectId);
     }
-    setSurface("Workspace");
+    showPlace(store);
   };
 
   // Returning from a terminal sign-in self-heals readiness (DR-009).
@@ -1188,7 +1351,8 @@ export function App() {
   useEffect(() => {
     const onKeydown = (event: KeyboardEvent) => {
       const meta = event.metaKey || event.ctrlKey;
-      const state = useAppStore.getState();
+      // The current project is the shown place's (run-view-168).
+      const state = shown.getState();
       const projectId = state.currentProjectId;
       if (meta && !event.shiftKey && !event.altKey) {
         const index = Number.parseInt(event.key, 10);
@@ -1221,7 +1385,10 @@ export function App() {
         }
         if (event.key.toLowerCase() === "b") {
           event.preventDefault();
-          state.setRailCollapsed(!state.railCollapsed);
+          // The rail is the page's own chrome, kept by this computer's
+          // store.
+          const page = useAppStore.getState();
+          page.setRailCollapsed(!page.railCollapsed);
           setLanding({ on: "rail" });
           return;
         }
@@ -1296,20 +1463,54 @@ export function App() {
     };
     window.addEventListener("keydown", onKeydown);
     return () => window.removeEventListener("keydown", onKeydown);
-  }, [surface, paletteOpen]);
+  }, [surface, paletteOpen, shown]);
 
   const playbookCount =
     configState?.status === "valid"
       ? configState.summary.playbooks.length
       : undefined;
 
-  // The sidebar's selection: which session the workspace is showing.
-  const activeTabSessionId = (projectId: string): string | undefined => {
-    if (surface !== "Workspace") return undefined;
+  // The sidebar's selection: which session the workspace is showing,
+  // read from the tabs of the place it shows.
+  const activeTabSessionId = (
+    workspaceTabs: Record<string, string>,
+    projectId: string | undefined,
+  ): string | undefined => {
+    if (surface !== "Workspace" || !projectId) return undefined;
     const tab = workspaceTabs[projectId];
     if (!tab || pinnedTab(tab)) return undefined;
     return tab;
   };
+
+  // The sidebar's places (run-view-67, run-view-168): each lists its
+  // own projects and sessions, and every act on a row is taken at the
+  // row's own place.
+  const navPlaces: NavPlace[] = placeStates.map(({ store, value }) => ({
+    key: store.place.key,
+    label: placeLabel(store.place),
+    projects: value.projects,
+    sessions: value.sessions,
+    attention: attentionAt(store.place.key),
+    currentProjectId: value.currentProjectId,
+    activeSessionId:
+      store === shown
+        ? activeTabSessionId(value.workspaceTabs, value.currentProjectId)
+        : undefined,
+    shown: store === shown,
+    expanded: value.expandedProjects,
+    onExpanded: (projectId, expanded) =>
+      store.getState().toggleProjectExpanded(projectId, expanded),
+    onPickProject: (projectId) => pickProject(projectId, store.place.key),
+    onActivateSession: (sessionId) =>
+      openSessionAndShow(sessionId, undefined, store.place.key),
+    onNewSession: (projectId) => {
+      const state = store.getState();
+      state.setCurrentProject(projectId);
+      state.setWorkspaceTab(projectId, "start");
+      showPlace(store);
+    },
+    onDeleteSession: (sessionId) => store.getState().deleteSession(sessionId),
+  }));
 
   // The rail foot's other tenant. A broken config keeps its red voice
   // in both rail states (DR-030) — a first-hour failure must not go
@@ -1319,7 +1520,7 @@ export function App() {
       <button
         type="button"
         data-testid="config-status"
-        onClick={() => setSurface("Settings")}
+        onClick={() => navigateFrom(useAppStore)("Settings")}
         title={i18n._("Open Settings to see what's wrong")}
         // The status is the core's own enum: a machine word travels as
         // it is in every language (localization-1).
@@ -1351,24 +1552,46 @@ export function App() {
 
   return (
     <div className="flex h-full flex-col">
-      <ConnectionBanner />
+      <ConnectionBanner store={useAppStore} />
+      <SeatBanners banner="connection" />
       <ApprovalInbox />
       <ApprovalFeedback />
-      <RefreshErrorBanner />
+      <RefreshErrorBanner store={useAppStore} />
+      <SeatBanners banner="refresh" />
       <Announcer />
       {paletteOpen ? (
         <ProjectPalette
           addProjectOnly={paletteAddProject}
-          projects={projects}
-          sessions={sessions}
-          attention={attentionBySession}
-          currentProjectId={currentProjectId}
+          projects={local.projects}
+          sessions={local.sessions}
+          attention={attentionAt(LOCAL_PLACE_KEY)}
+          // The current project is the shown place's (run-view-168).
+          currentProjectId={shown === useAppStore ? local.currentProjectId : undefined}
+          seats={placeStates.slice(1).map(({ store, value }) => ({
+            key: store.place.key,
+            label: placeLabel(store.place),
+            projects: value.projects,
+            sessions: value.sessions,
+            attention: attentionAt(store.place.key),
+            currentProjectId: store === shown ? value.currentProjectId : undefined,
+            // A seat's project is opened among the member's groups there,
+            // with no folder (run-view-169, space-103).
+            groups: value.space,
+            connected: value.connection === "open",
+            onJoin: (instance, hostId) => store.getState().spaceJoin(instance, hostId),
+            onReadGroups: () => {
+              if (store.getState().connection === "open") {
+                void store.getState().loadSpace().catch(() => {});
+              }
+            },
+          }))}
           onPickFolder={
             window.spexNative
               ? () => window.spexNative!.pickDirectory()
               : undefined
           }
-          onPick={pickProject}
+          onPick={(projectId) => pickProject(projectId)}
+          onPickAt={(place, projectId) => pickProject(projectId, place)}
           onAddPath={addProjectByPath}
           onCreatePath={(path, scaffold) => createProject(path, scaffold)}
           onClose={() => {
@@ -1384,26 +1607,7 @@ export function App() {
           attentionCount={attentionCount}
           collapsed={railCollapsed}
           onCollapsed={setRailCollapsed}
-          projects={projects}
-          sessions={sessions}
-          attention={attentionBySession}
-          currentProjectId={currentProjectId}
-          activeSessionId={
-            currentProjectId ? activeTabSessionId(currentProjectId) : undefined
-          }
-          expanded={expandedProjects}
-          onExpanded={toggleProjectExpanded}
-          onPickProject={pickProject}
-          onActivateSession={openSessionAndShow}
-          onNewSession={(projectId) => {
-            const state = useAppStore.getState();
-            state.setCurrentProject(projectId);
-            state.setWorkspaceTab(projectId, "start");
-            setSurface("Workspace");
-          }}
-          onDeleteSession={(sessionId) =>
-            useAppStore.getState().deleteSession(sessionId)
-          }
+          places={navPlaces}
           onAddProject={openAddProject}
           foot={configFoot}
         />
@@ -1416,44 +1620,81 @@ export function App() {
           aria-label={SURFACE_LABELS[surface]()}
           className="flex min-h-0 min-w-0 flex-1 flex-col outline-none"
         >
-          {surface === "Playbooks" ? (
-            <LibrarySurface onNavigate={setSurface} />
-          ) : surface === "Settings" ? (
-            <SettingsSurface />
-          ) : surface === "Space" ? (
-            <SpaceSurface
-              onOpenSession={openSessionAndShow}
-              onOpenProject={pickProject}
-            />
+          {surface === "Playbooks" || surface === "Settings" || surface === "Space" ? (
+            // Settings, Playbooks — with its Environments — and Groups
+            // show one place at a time, the one the selector names
+            // (run-view-168); with no seat open there is none to pick.
+            <PlaceStoreContext.Provider value={configured}>
+              {stores.length > 1 ? (
+                <PlaceSelector
+                  stores={stores}
+                  shown={configured}
+                  onShow={(store) => setConfiguredPlace(store.place.key)}
+                />
+              ) : null}
+              {surface === "Playbooks" ? (
+                <LibrarySurface key={configured.place.key} onNavigate={setSurface} />
+              ) : surface === "Settings" ? (
+                <SettingsSurface
+                  key={configured.place.key}
+                  credentialHost={
+                    credentialAsk?.place === configured.place.key ? credentialAsk.host : undefined
+                  }
+                  onCredentialHostShown={() => setCredentialAsk(undefined)}
+                />
+              ) : (
+                <SpaceSurface
+                  key={configured.place.key}
+                  onOpenSession={(sessionId) =>
+                    openSessionAndShow(sessionId, undefined, configured.place.key)
+                  }
+                  onOpenProject={(projectId) => pickProject(projectId, configured.place.key)}
+                  // A failed code clone's host opens this place's
+                  // Credentials section at it (space-103, settings-48).
+                  onAddCredential={(host) => {
+                    setCredentialAsk({ place: configured.place.key, host });
+                    setSurface("Settings");
+                  }}
+                />
+              )}
+            </PlaceStoreContext.Provider>
           ) : surface === "Dashboard" ? (
             <DashboardSurface
               onOpenSession={openSessionAndShow}
               onOpenIntent={openIntentFrom("dashboard")}
-              onStartIntent={startIntent}
-              onNavigate={setSurface}
+              onStartIntent={startIntentAt(useAppStore)}
+              // A link to a project opens it at the project's place,
+              // the Projects surface showing that place (run-view-168).
+              onNavigate={(_surface, place) => showPlace(place)}
             />
           ) : (
-            <WorkspaceSurface
-              onNavigate={setSurface}
-              onOpenPalette={openPalette}
-              onOpenOwnProject={openAddProject}
-              attentionBySession={attentionBySession}
-              pendingFocus={pendingFocus}
-              onFocusHandled={() => setPendingFocus(undefined)}
-              onOpenSession={openSessionAndShow}
-              onOpenIntent={openIntentFrom("overview")}
-              onStartIntent={startIntent}
-              pendingRecord={pendingRecord}
-              onRecordOpened={() => setPendingRecord(null)}
-              onReturn={returnToOrigin}
-              specViewStates={specViewStates}
-              onSpecViewState={(projectId, next) =>
-                setSpecViewStates((current) => ({
-                  ...current,
-                  [projectId]: next,
-                }))
-              }
-            />
+            // The Projects surface reads the place it shows (run-view-168).
+            <PlaceStoreContext.Provider value={shown}>
+              <WorkspaceSurface
+                key={shown.place.key}
+                onNavigate={navigateFrom(shown)}
+                onOpenPalette={openPalette}
+                onOpenOwnProject={isLocalPlace(shown.place) ? openAddProject : openPalette}
+                attentionBySession={attentionBySession}
+                pendingFocus={pendingFocus}
+                onFocusHandled={() => setPendingFocus(undefined)}
+                onOpenSession={(sessionId, turnId) =>
+                  openSessionAndShow(sessionId, turnId, shown.place.key)
+                }
+                onOpenIntent={openIntentFrom("overview", shown)}
+                onStartIntent={startIntentAt(shown)}
+                pendingRecord={pendingRecord}
+                onRecordOpened={() => setPendingRecord(null)}
+                onReturn={returnToOrigin}
+                specViewStates={specViewStates}
+                onSpecViewState={(key, next) =>
+                  setSpecViewStates((current) => ({
+                    ...current,
+                    [key]: next,
+                  }))
+                }
+              />
+            </PlaceStoreContext.Provider>
           )}
         </main>
       </div>

@@ -207,8 +207,8 @@ describe("projects-22: with no project, the palette is an add flow", () => {
     renderPalette({ ...EMPTY, addProjectOnly: true, onPickFolder: vi.fn(async () => null) });
     fireEvent.click(screen.getByTestId("palette-create-start"));
     expect(screen.queryByTestId("palette-path")).toBeNull();
-    expect(screen.getByText("New project folder path (not created yet)")).toBeTruthy();
-    expect(screen.getByText("Spex will create this folder and initialize a Git repository.")).toBeTruthy();
+    expect(screen.getByText("New folder path")).toBeTruthy();
+    expect(screen.getByText("Spex will create this folder and set up Git.")).toBeTruthy();
     expect(screen.queryByTestId("palette-create-back")).toBeNull();
     expect(screen.getByTestId("palette-open-folder")).toBeTruthy();
     expect(screen.queryByTestId("palette-manual-path-start")).toBeNull();
@@ -275,7 +275,7 @@ describe("projects-26: the palette's path actions, live rows and plain words", (
     // Two distinct actions on the typed path, each titled with what it
     // does (projects-22, projects-25).
     expect(add.textContent).toBe("Add");
-    expect(add.title).toBe("Register this existing repository");
+    expect(add.title).toBe("Add this project");
     expect(create.textContent).toBe("Create");
     expect(create.title).toBe("Create a new repository at this path");
     expect(add.disabled).toBe(true);

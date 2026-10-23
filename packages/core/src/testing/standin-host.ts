@@ -16,7 +16,11 @@
 // refusals; and, for undo (host-30..32, DR-120), a group renamed —
 // everything inside it carried to its new path — or deleted, and a spex
 // repository moved to another group or the person's own, each as the
-// person may, with taken paths and scripted refusals. Like spex.pub
+// person may, with taken paths and scripted refusals; and, for team
+// servers (servers-5..7, DR-133), the servers listing and the tickets,
+// each call recorded with the bearer it carried, a server left out of
+// the listing, scripted faults of the listing or the ticket route alone,
+// and a ticket spent as a server's admission spends it. Like spex.pub
 // (DR-120) it answers every path relative to the instance's root, keeps
 // no group of its own, hides the service identity a root creation adds
 // as an Owner, and answers no page URL. Several run at once as several
@@ -36,6 +40,9 @@ import { performance } from "node:perf_hooks";
 import { RELAY_HEADERS } from "./standin-registry.js";
 
 export interface StandinPerson { id: string; login: string; displayName: string | null }
+
+/** A device request as the stand-in admitted it (auth-71). */
+export interface StandinDeviceRequest { label: string; serverId: string | null; personId: string | null }
 
 /** What the stand-in lets the person do in a group (host-4): create a
  * subgroup, manage its members, rename it, delete it. */
@@ -89,6 +96,37 @@ export interface StandinRepository {
    * group where it is Owner. */
   can?: { manageMembers: boolean; transfer: boolean };
 }
+
+/** A team server this instance lists for the person (servers-5), as a
+ * test registers it: its opaque id, name, group — a group's full path or
+ * id — and address, the https origin it listens at. `listed: false`
+ * keeps it out of the listing while its ticket route still answers for
+ * it, as servers-5 leaves out a server whose group the person holds
+ * below Developer, which servers-6 refuses. */
+export interface StandinServer { id: string; name: string; group: string; address: string; listed?: boolean }
+
+/** A scripted answer of one servers route alone (servers-5, servers-6),
+ * every other route answering as it stands: 403 `host_refused` with these
+ * words, 404 `not_found`, or 429 with this `Retry-After` or none. */
+export type StandinServersFault =
+  | { code: "host_refused"; message: string }
+  | { code: "not_found" }
+  | { code: "rate_limited"; retryAfter: string | null };
+
+/** A call to the servers routes (git-host-30): its method, its path and
+ * the bearer it carried, null where it carried none. */
+export interface StandinServerCall { method: string; path: string; bearer: string | null }
+
+/** A ticket this instance minted (servers-6), for the server it is bound
+ * to, until its expiry in Unix milliseconds, spent at most once. */
+export interface StandinTicket { ticket: string; serverId: string; expiresAt: number; spent: boolean }
+
+/** A ticket's redemption as the instance answers a server's admission
+ * (servers-7): the person and the server with the lease's expiry, or the
+ * refusal. */
+export type StandinRedemption =
+  | { person: StandinPerson; server: { id: string; name: string }; leaseExpiresAt: string }
+  | { status: number; code: string; message: string };
 
 /** A transport request whose credential the Git transport accepted
  * (git-host-12, DR-127): the instance that issued that credential. */
@@ -165,9 +203,34 @@ export interface StandinScript {
   requests: StandinRequest[];
   /** Every token grant, in order. */
   tokenGrants: { grantType: string; ok: boolean; error: string | null }[];
+  /** Every device request admitted (auth-71), in order: its label and,
+   * from a seat, the server's id and the person's id it named, which the
+   * stand-in accepts unchecked as the instance does; null where absent. */
+  deviceRequests: StandinDeviceRequest[];
   /** Every `POST /api/v1/host/repositories` body admitted, as it came,
    * in order (host-6). */
   creations: unknown[];
+  /** The team servers the person may open a seat on, in registration
+   * order (servers-5): the listing answers them, a ticket is minted for
+   * any of them, and one not here answers `404 not_found` (servers-6). */
+  servers: StandinServer[];
+  /** Every call to the servers routes, in order, with the bearer it
+   * carried (git-host-30). */
+  serverCalls: StandinServerCall[];
+  /** Every ticket minted, in order (servers-6). */
+  tickets: StandinTicket[];
+  /** Answer the next `count` servers listings with this fault while
+   * every other route answers as it stands (servers-5). */
+  faultServersListing(count: number, fault: StandinServersFault): void;
+  /** Answer the next `count` ticket requests with this fault, minting
+   * nothing, while every other route answers as it stands (servers-6). */
+  faultTickets(count: number, fault: StandinServersFault): void;
+  /** Spend a ticket as the instance does at a server's admission
+   * (servers-7): one unspent and unexpired answers the person and the
+   * server with a lease 60 minutes ahead; any other `401
+   * ticket_invalid`. A stand-in hub calls it in place of the instance's
+   * admit route. */
+  redeemTicket(ticket: string): StandinRedemption;
   /** The number of browser sign-ins held by `browser: "hold"`. */
   heldSignIns(): number;
   /** Approve the oldest held browser sign-in, delivering its callback to
@@ -343,6 +406,10 @@ const DEFAULT_ROLES: StandinRole[] = [
 const MANAGING_ROLES = new Set(["Maintainer", "Owner"]);
 const MOVING_ROLE = "Owner";
 const USER_CODE_ALPHABET = "BCDFGHJKLMNPQRSTVWXZ";
+/** A ticket's life, in seconds (servers-6). */
+const TICKET_TTL_S = 120;
+/** An execution lease's length from an admission (servers-7). */
+const LEASE_MS = 60 * 60_000;
 const CODE_TTL_MS = 10 * 60_000;
 const POLL_TOLERANCE_MS = 50;
 const PAGE_SIZE = 2;
@@ -530,6 +597,13 @@ function envelope(res: ServerResponse, status: number, code: string, message: st
   json(res, status, { error: { code, message } }, headers);
 }
 
+/** A servers route's scripted fault, answered as spex.pub answers it. */
+function serversFault(res: ServerResponse, fault: StandinServersFault): void {
+  if (fault.code === "host_refused") return envelope(res, 403, "host_refused", fault.message);
+  if (fault.code === "not_found") return envelope(res, 404, "not_found", "no server has this id");
+  return envelope(res, 429, "rate_limited", "Too many requests to the Git host.", fault.retryAfter === null ? {} : { "retry-after": fault.retryAfter });
+}
+
 async function readBody(req: IncomingMessage): Promise<string> {
   const chunks: Buffer[] = [];
   for await (const chunk of req) chunks.push(chunk as Buffer);
@@ -647,6 +721,8 @@ export async function startStandinHost(opts: StandinHostOptions): Promise<Standi
   let groupDeleteRefusal: string | null = null;
   let transferRefusal: string | null = null;
   const hostFaults: ({ kind: "rate"; retryAfter: string | null } | { kind: "unavailable" } | { kind: "refused"; message: string })[] = [];
+  const listingFaults: StandinServersFault[] = [];
+  const ticketFaults: StandinServersFault[] = [];
   /** What this instance answers of a repository unlike its Git backend's
    * own state, scripted over another instance's backend (DR-127). */
   const archivedHere = new Map<StandinRepository, boolean>();
@@ -974,7 +1050,28 @@ export async function startStandinHost(opts: StandinHostOptions): Promise<Standi
     refuseRefresh: false,
     requests: [],
     tokenGrants: [],
+    deviceRequests: [],
     creations: [],
+    servers: [],
+    serverCalls: [],
+    tickets: [],
+    faultServersListing: (count, fault) => {
+      for (let i = 0; i < count; i += 1) listingFaults.push(fault);
+    },
+    faultTickets: (count, fault) => {
+      for (let i = 0; i < count; i += 1) ticketFaults.push(fault);
+    },
+    redeemTicket: (ticket) => {
+      const minted = script.tickets.find((entry) => entry.ticket === ticket);
+      if (!minted || minted.spent || minted.expiresAt <= Date.now()) return { status: 401, code: "ticket_invalid", message: "The ticket is not valid." };
+      minted.spent = true;
+      const server = script.servers.find((entry) => entry.id === minted.serverId);
+      return {
+        person: { ...script.person },
+        server: { id: minted.serverId, name: server?.name ?? minted.serverId },
+        leaseExpiresAt: new Date(Date.now() + LEASE_MS).toISOString(),
+      };
+    },
     heldSignIns: () => held.length,
     approveHeld: async () => {
       const request = held.shift();
@@ -1186,6 +1283,15 @@ export async function startStandinHost(opts: StandinHostOptions): Promise<Standi
     if (!isRecord(body)) return envelope(res, 400, "invalid_request", "The body must be a JSON object.");
     if (body.client_id !== "spex") return envelope(res, 400, "invalid_client", "The client is not known.");
     if (typeof body.label !== "string" || body.label.length === 0 || body.label.length > 80) return envelope(res, 400, "invalid_request", "A label of at most 80 characters is required.");
+    // A seat's server and person come together or not at all, each at
+    // most 64 characters, accepted unchecked (auth-71, servers-10).
+    const seatId = (value: unknown): string | null | false => value === undefined ? null : typeof value === "string" && value.length <= 64 ? value : false;
+    const serverId = seatId(body.server_id);
+    const personId = seatId(body.person_id);
+    if (serverId === false || personId === false || (serverId === null) !== (personId === null)) {
+      return envelope(res, 400, "invalid_request", "A server_id and a person_id of at most 64 characters come together or not at all.");
+    }
+    script.deviceRequests.push({ label: body.label, serverId, personId });
     const deviceCode = secret("");
     const code = userCode();
     const now = performance.now();
@@ -1290,6 +1396,8 @@ export async function startStandinHost(opts: StandinHostOptions): Promise<Standi
   }
 
   async function hostRoute(req: IncomingMessage, res: ServerResponse, method: string, path: string, target: URL): Promise<void> {
+    const serversRoute = path === "/api/v1/host/servers" || path.startsWith("/api/v1/host/servers/");
+    if (serversRoute) script.serverCalls.push({ method, path, bearer: bearerOf(req) });
     const found = bearerDevice(bearerOf(req));
     if ("code" in found) return envelope(res, 401, found.code, found.message);
     const fault = hostFaults.shift();
@@ -1307,6 +1415,22 @@ export async function startStandinHost(opts: StandinHostOptions): Promise<Standi
     }
     if (path === "/api/v1/host/groups" && method === "GET") return json(res, 200, { groups: script.groups.filter((g) => !lagging.has(g)).map(listedGroupWire) });
     if (path === "/api/v1/host/groups" && method === "POST") return createGroup(req, res);
+    // Team servers (servers-5, servers-6): the listing and the tickets.
+    if (path === "/api/v1/host/servers" && method === "GET") {
+      const listingFault = listingFaults.shift();
+      if (listingFault) return serversFault(res, listingFault);
+      return json(res, 200, { servers: script.servers.filter((s) => s.listed !== false).map((s) => ({ id: s.id, name: s.name, group: groupWire(findGroup(s.group)), address: s.address })) });
+    }
+    const ticketMatch = /^\/api\/v1\/host\/servers\/([^/]+)\/tickets$/.exec(path);
+    if (ticketMatch && method === "POST") {
+      const ticketFault = ticketFaults.shift();
+      if (ticketFault) return serversFault(res, ticketFault);
+      const server = script.servers.find((s) => s.id === decodeURIComponent(ticketMatch[1]));
+      if (!server) return envelope(res, 404, "not_found", "no server has this id");
+      const ticket = secret("spext_");
+      script.tickets.push({ ticket, serverId: server.id, expiresAt: Date.now() + TICKET_TTL_S * 1000, spent: false });
+      return json(res, 201, { ticket, expires_in: TICKET_TTL_S, server: { id: server.id, name: server.name, address: server.address } });
+    }
     const groupOnly = /^\/api\/v1\/host\/groups\/([^/]+)$/.exec(path);
     if (groupOnly && (method === "PATCH" || method === "DELETE")) {
       const group = script.groups.find((g) => g.kind === "group" && g.id === decodeURIComponent(groupOnly[1]));

@@ -688,7 +688,7 @@ describe("run-view-57: a workspace holding projects opens inside one", () => {
   });
 });
 
-describe("run-view-168: first-project welcome route", () => {
+describe("run-view-172: first-project welcome route", () => {
   test("landing and sidebar add the same way; the switch shortcut still offers Academy", () => {
     useAppStore.setState({
       projects: [],

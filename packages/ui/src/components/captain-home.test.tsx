@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // RUN-29/31/35: the project start explains its scope, discovers
-// playbooks through slash, and tunes the Captain in place (DR-138).
+// playbooks through slash, and tunes the Captain in place (DR-141).
 
 import { afterEach, describe, expect, test, vi } from "vitest";
 import {
@@ -178,19 +178,19 @@ describe("RUN-29: captain home structure and one-motion start", () => {
       readiness: [{ adapter: "claude", ready: false, requirement: "sign in", usedBy: ["captain"], fastModeSupported: true, subagentModelSupported: true }],
     });
     expect(screen.getByTestId("welcome-home")).toBeTruthy();
-    expect(screen.getByText("Define checkable specs. Deliver through playbooks.")).toBeTruthy();
+    expect(screen.getByText("Write clear specs. Build with playbooks.")).toBeTruthy();
     expect(screen.getByText("Specs")).toBeTruthy();
-    expect(screen.getByText("Define goals and acceptance criteria")).toBeTruthy();
+    expect(screen.getByText("Describe how the system should work and how to check it")).toBeTruthy();
     expect(screen.getByText("Playbooks")).toBeTruthy();
-    expect(screen.getByText("Compile natural-language playbooks into executable workflows")).toBeTruthy();
+    expect(screen.getByText("Turn workflows written in plain language into steps AI can run")).toBeTruthy();
     expect(screen.getByText("Delivery")).toBeTruthy();
-    expect(screen.getByText("Coordinate AI implementation and review, with traceable changes")).toBeTruthy();
+    expect(screen.getByText("AI builds and reviews changes, with a record of each step")).toBeTruthy();
     const primary = screen.getByTestId("home-add-project");
     const academy = screen.getByTestId("home-academy");
     expect(primary.className).toContain("bg-brand-600");
     expect(academy.className).toContain("border-neutral-300");
     expect(primary.compareDocumentPosition(academy) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(screen.getByTestId("home-academy").textContent).toContain("Academy example project");
+    expect(screen.getByTestId("home-academy").textContent).toContain("Academy example");
     expect(screen.queryByText(/does not play a recorded task yet/)).toBeNull();
     expect(screen.queryByTestId("start-composer")).toBeNull();
     expect(screen.queryByTestId("quick-start")).toBeNull();
@@ -201,9 +201,9 @@ describe("RUN-29: captain home structure and one-motion start", () => {
 
   test("task scope and slash discovery sit outside the input", () => {
     renderHome();
-    expect(screen.getByText(/Spex helps you turn goals and acceptance criteria into specs/)).toBeTruthy();
+    expect(screen.getByText(/Describe your goal. AI helps write specs for how the system should work/)).toBeTruthy();
     const hint = document.getElementById("start-playbook-hint")!;
-    expect(hint.textContent).toBe("Type / in the task box to see all 2 playbooks");
+    expect(hint.textContent).toBe("Type / in the task box to see 2 playbooks");
     expect(hint.querySelector("code")?.textContent).toBe("/");
     expect(hint.compareDocumentPosition(screen.getByTestId("composer-box")) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
     const field = screen.getByLabelText("Describe a project task");
@@ -230,16 +230,16 @@ describe("RUN-29: captain home structure and one-motion start", () => {
       { ...PLAYBOOKS[0], intent: "implement a coding intent in reviewed, one-commit phases, using an intent record when needed" },
     ] });
     const preview = screen.getByTestId("playbook-preview");
-    expect(preview.textContent).toContain("like a Skill compiled into an executable workflow");
+    expect(preview.textContent).toContain("a workflow written in plain language");
     expect(preview.textContent).toContain("/code");
     expect(preview.textContent).toContain("/review");
     expect(preview.textContent).not.toContain("/inspect");
     expect(preview.querySelectorAll("p")).toHaveLength(1);
     expect(preview.querySelectorAll("button")).toHaveLength(0);
     const hint = document.getElementById("start-playbook-hint")!;
-    expect(hint.textContent).toBe("Type / in the task box to see all 3 playbooks");
+    expect(hint.textContent).toBe("Type / in the task box to see 3 playbooks");
     expect(preview.compareDocumentPosition(hint) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(preview.textContent).toContain("implement in reviewed phases");
+    expect(preview.textContent).toContain("build and review step by step");
     expect(preview.textContent).toContain("review committed changes");
     expect(preview.querySelector("code")?.className).toBe(hint.querySelector("code")?.className);
   });
@@ -301,7 +301,7 @@ describe("RUN-29: captain home structure and one-motion start", () => {
   });
 });
 
-describe("run-view-168: with nothing registered, the welcome page carries the ways in", () => {
+describe("run-view-172: with nothing registered, the welcome page carries the ways in", () => {
   test("a seeding failure lands on the page, the controls stay", async () => {
     useAppStore.setState({
       openAcademyExample: vi.fn(async (): Promise<never> => {
@@ -464,7 +464,7 @@ describe("RUN-45: readiness heals at hand", () => {
       ],
     });
     const status = screen.getByTestId("captain-readiness");
-    expect(status.textContent).toContain("selected agent is not ready");
+    expect(status.textContent).toContain("Set up an agent before starting a task.");
     const composer = screen.getByTestId("start-composer") as HTMLTextAreaElement;
     fireEvent.change(composer, { target: { value: "Review this task" } });
     expect(composer.value).toBe("Review this task");

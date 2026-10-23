@@ -1,14 +1,14 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
 
-# DR-132: A Welcome Page Before the First Project
+# DR-135: A Welcome Page Before the First Project
 
 ## Status
 
 Accepted (2026-10-22) on the owner's P0-0 direction.
 Amends [DR-007](007-conversational-session-start.md) and [DR-010](010-interface-craft.md) only while no project is registered.
-The own-project entry's label and palette layout are amended by [DR-133](133-the-first-project-picker-leads-with-a-folder.md).
-The welcome copy and action order are amended by [DR-134](134-specs-first-welcome-and-distinct-project-paths.md).
+The own-project entry's label and palette layout are amended by [DR-136](136-the-first-project-picker-leads-with-a-folder.md).
+The welcome copy and action order are amended by [DR-137](137-specs-first-welcome-and-distinct-project-paths.md).
 
 ## Context
 

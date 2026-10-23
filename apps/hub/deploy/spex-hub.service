@@ -1,0 +1,31 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
+
+# The hub (hub-2..hub-6): the server's one public process, unprivileged
+# but for binding the address's port. It reaches root only through
+# sudo and the seat helper, so the unit sets no NoNewPrivileges and no
+# capability bounding set, either of which would stop sudo. Stopping
+# or restarting the hub leaves the seats running and their leases
+# recorded. Its state directory is /var/lib/spex-hub, owner-only (hub-8).
+# install.sh writes this unit for its prefix and node, in place of
+# /opt/spex and /usr/bin/node; its header holds the paths.
+
+[Unit]
+Description=Spex hub
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=spex-hub
+Group=spex-hub
+ExecStart=/usr/bin/node /opt/spex/app/apps/hub/dist/main.js serve --state-dir=/var/lib/spex-hub --run-dir=/run/spex/seats --helper=/opt/spex/libexec/spex-seatctl
+StateDirectory=spex-hub
+StateDirectoryMode=0700
+UMask=0077
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

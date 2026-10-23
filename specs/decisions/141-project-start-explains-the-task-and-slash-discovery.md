@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
 
-# DR-138: Project Start Explains the Task and Slash Discovery
+# DR-141: Project Start Explains the Task and Slash Discovery
 
 ## Status
 
@@ -13,6 +13,8 @@ Amended (2026-10-22) after the owner's copy review: explain playbooks through th
 Amended (2026-10-22) after the owner's specs-first review: the project task guidance names specs as the place for goals and acceptance criteria, and a compact per-project status links to the existing Specs tab; the pinned tab shows the count of spec packages when known.
 Amended (2026-10-22) after the owner's tab and copy review: the guidance is concise enough to avoid a forced balanced break, the new-task tab has a visible name alongside its plus icon, and the pinned Specs tab counts spec items rather than package files.
 Amends [DR-007](007-conversational-session-start.md) in the project home before a session starts, [DR-019](019-inline-agent-configuration.md) and [DR-038](038-history-is-done-work.md) in that home's Captain identity, and [DR-041](041-chrome-that-fits.md) in that home's composer hint.
+
+The explanation of specs and playbooks is amended by [DR-143](143-start-with-a-goal-and-explain-specs-plainly.md): start from a goal, let AI help refine specs for system behavior, and describe playbooks as workflows written in plain language.
 
 ## Context
 

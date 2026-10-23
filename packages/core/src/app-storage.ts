@@ -15,7 +15,7 @@ import {
   assertPlainDirectory, readJsonFile, sha256, StorageFormatError, writeApplicationBytes, writeApplicationFile, writeVersionedBytes, UUID,
 } from "./files.js";
 import { i18n } from "./i18n.js";
-import { mediaAttachmentsSchema, type DiagnosticRepair, type IntentAuthor, type IntentInfo, type IntentSource, type MediaAsset, type RepairChecked } from "./protocol.js";
+import { mediaAttachmentsSchema, type AssignedRuntime, type DiagnosticRepair, type IntentAuthor, type IntentInfo, type IntentSource, type MediaAsset, type RepairChecked } from "./protocol.js";
 
 export {
   closed, isObject, knownFormat, need, readJsonFile, sha256, StorageFormatError, UUID, writeApplicationBytes, writeApplicationFile,
@@ -48,9 +48,10 @@ export function foldDiagnostics(diagnostics: StorageDiagnostic[]): StorageDiagno
 // Intents (storage-4)
 // ---------------------------------------------------------------------------
 
-/** `<clone>/intents/<id>.json`, exactly. */
-export interface IntentFile {
-  format: 1;
+/** `<clone>/intents/<id>.json`, exactly: format 2 names the runtime that
+ * captured it, and format 1, written before runtimes were recorded,
+ * names none (storage-4, DR-134). */
+export type IntentFile = {
   id: string;
   text: string;
   attachments?: MediaAsset[];
@@ -59,7 +60,11 @@ export interface IntentFile {
   createdAt: number;
   dispatched?: { sessionId: string; turnId: number; at: number };
   closed?: { as: "done" | "dropped"; at: number };
-}
+} & ({ format: 1; runtime?: never } | { format: 2; runtime: AssignedRuntime });
+
+/** The intent file formats this Spex reads; a format above them is
+ * malformed (storage-4). */
+const INTENT_FORMATS = [1, 2] as const;
 
 const invalidIntent = (): string =>
   i18n._({ id: "invalid queued intent", comment: "Storage diagnostic: a queued intent's own fields are malformed" });
@@ -69,6 +74,8 @@ const invalidDispatch = (): string =>
   i18n._({ id: "invalid dispatch", comment: "Storage diagnostic: a dispatch names no valid session and turn" });
 const invalidClose = (): string =>
   i18n._({ id: "invalid close", comment: "Storage diagnostic: a verdict is neither done nor dropped" });
+const invalidRuntime = (): string =>
+  i18n._({ id: "invalid runtime", comment: "Storage diagnostic: the runtime an intent is assigned to names no device UUID and label" });
 
 function validateSource(value: unknown, file: string): void {
   closed(value, ["kind", "ref"], ["url", "labels"], file);
@@ -83,11 +90,19 @@ function validateDispatch(value: unknown, file: string): void {
   need(isUuid(value.sessionId) && Number.isSafeInteger(value.turnId) && (value.turnId as number) > 0 && isTimestamp(value.at), file, invalidDispatch());
 }
 
-/** Read one intent file against storage-4 exactly; `id` is its name. */
+/** The runtime a format 2 intent names: a device UUID and a label. */
+function validateRuntime(value: unknown, file: string): void {
+  closed(value, ["device", "label"], [], file);
+  need(isUuid(value.device) && isText(value.label), file, invalidRuntime());
+}
+
+/** Read one intent file against storage-4 exactly; `id` is its name. A
+ * format 2 file requires its `runtime` and a format 1 file holds none. */
 export function parseIntentFile(value: unknown, file: string, id?: string): IntentFile {
   need(isObject(value), file, invalidIntent());
-  knownFormat(value, file);
-  closed(value, ["format", "id", "text", "createdAt"], ["attachments", "source", "author", "dispatched", "closed"], file);
+  knownFormat(value, file, INTENT_FORMATS);
+  closed(value, ["format", "id", "text", "createdAt", ...(value.format === 2 ? ["runtime"] : [])],
+    ["attachments", "source", "author", "dispatched", "closed"], file);
   need(isUuid(value.id) && (id === undefined || value.id === id) && typeof value.text === "string" && isTimestamp(value.createdAt), file, invalidIntent());
   if (value.attachments !== undefined) need(mediaAttachmentsSchema.safeParse(value.attachments).success, file, invalidAttachments());
   if (value.source !== undefined) validateSource(value.source, file);
@@ -95,6 +110,7 @@ export function parseIntentFile(value: unknown, file: string, id?: string): Inte
     closed(value.author, ["login", "displayName"], [], file);
     need(isText(value.author.login) && (value.author.displayName === null || typeof value.author.displayName === "string"), file, invalidIntent());
   }
+  if (value.runtime !== undefined) validateRuntime(value.runtime, file);
   if (value.dispatched !== undefined) validateDispatch(value.dispatched, file);
   if (value.closed !== undefined) {
     closed(value.closed, ["as", "at"], [], file);
@@ -112,25 +128,33 @@ export function intentInfoOf(file: IntentFile, projectId: string): IntentInfo {
     ...(file.attachments?.length ? { attachments: structuredClone(file.attachments) } : {}),
     ...(file.source ? { source: structuredClone(file.source) } : {}),
     ...(file.author ? { author: { ...file.author } } : {}),
+    ...(file.runtime ? { runtime: { ...file.runtime } } : {}),
     createdAt: file.createdAt,
     ...(file.dispatched ? { dispatched: { ...file.dispatched } } : {}),
     ...(file.closed ? { closedAt: file.closed.at, closedAs: file.closed.as } : {}),
   };
 }
 
-/** The file a stored intent is written as: nothing beyond storage-4. */
+/** The file a stored intent is written as: nothing beyond storage-4. An
+ * intent naming its runtime is format 2 and one naming none format 1, so
+ * a rewrite of an intent as it read keeps its file's format and runtime
+ * as they were. */
 export function intentFileOf(intent: IntentInfo): IntentFile {
-  return {
-    format: 1,
+  const head = {
     id: intent.id,
     text: intent.text,
     ...(intent.attachments?.length ? { attachments: structuredClone([...intent.attachments]) } : {}),
     ...(intent.source ? { source: structuredClone(intent.source) } : {}),
     ...(intent.author ? { author: { login: intent.author.login, displayName: intent.author.displayName } } : {}),
+  };
+  const tail = {
     createdAt: intent.createdAt,
     ...(intent.dispatched ? { dispatched: { sessionId: intent.dispatched.sessionId, turnId: intent.dispatched.turnId, at: intent.dispatched.at } } : {}),
     ...(intent.closedAt !== undefined && intent.closedAs !== undefined ? { closed: { as: intent.closedAs, at: intent.closedAt } } : {}),
   };
+  return intent.runtime
+    ? { format: 2, ...head, runtime: { device: intent.runtime.device, label: intent.runtime.label }, ...tail }
+    : { format: 1, ...head, ...tail };
 }
 
 /** Every intent file of a clone's `intents/`: the readable ones, and a

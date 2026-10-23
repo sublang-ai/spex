@@ -1,13 +1,13 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
 
-# DR-135: Welcome Flow Copy and Scoped Academy Note
+# DR-138: Welcome Flow Copy and Scoped Academy Note
 
 ## Status
 
 Accepted (2026-10-22) for the owner's P0-0 revision.
-Amends [DR-134](134-specs-first-welcome-and-distinct-project-paths.md) in the welcome presentation and first-project picker.
-The welcome value explanation and Academy caption are amended by [DR-136](136-quieter-welcome-flow-and-academy-choice.md).
+Amends [DR-137](137-specs-first-welcome-and-distinct-project-paths.md) in the welcome presentation and first-project picker.
+The welcome value explanation and Academy caption are amended by [DR-139](139-quieter-welcome-flow-and-academy-choice.md).
 
 ## Context
 

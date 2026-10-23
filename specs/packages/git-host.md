@@ -193,7 +193,7 @@ When the core runs a Git transport — clone, fetch, push or `ls-remote` — on 
 
 - a placement's transport is on behalf of the instance its remote is named by [[storage-34](storage.md#storage-34)], or of the instance it is joined, created or attached at, never of one chosen by the Git origin alone, so a placement whose instance is signed out is fetched through no other instance sharing that Git origin until it follows one [[space-60](space.md#space-60)]; a project's code and a Git source are on behalf of the instance their own rules name [[projects-37](projects.md#projects-37)] [[environments-13](environments.md#environments-13)];
 - the credential — the username and the secret the instance returned, with its expiry — is written to a file with owner-only permissions in a temporary directory, which is removed when the Git child ends;
-- Git runs with `-c credential.helper=` naming the app's own helper script on the app's own runtime, which answers Git's `get` with that username and password and ignores `store` and `erase`; a transport on behalf of no instance — a remote the reader named, any other origin — names no helper and uses the device's own;
+- Git runs with `-c credential.helper=` naming the app's own helper script on the app's own runtime, which answers Git's `get` with that username and password and ignores `store` and `erase`; a transport on behalf of no instance — a remote the reader named, any other origin — names no helper and uses the device's own, except that on a seat a remote at a host the member placed a token for [[storage-44](storage.md#storage-44)] takes the app's helper with that token, so a project's code is cloned and pushed with the member's own credential and never the administrator's ([DR-132](../decisions/132-team-servers.md));
 - the instance refusing the credential signs the device out of it alone [[git-host-4](git-host.md#git-host-4)] and stops the transport before Git runs.
 
 #### git-host-10
@@ -224,6 +224,14 @@ When an instance answers a call 429, the core shall hold, for that instance alon
 
 - the calls that wait are a sync step's, whose Stop ends that wait unsent and stops the step [[space-16](space.md#space-16)], and the host read's [[git-host-5](#git-host-5)];
 - the hold is 120 seconds at most and none where the answer's seconds are unknown, and an instant already held stands where it is the later.
+
+#### git-host-27
+
+Where the core runs as a seat [[core-service-125](core-service.md#core-service-125)], when the device flow runs [[git-host-3](#git-host-3)], the request shall carry `server_id` and `person_id` beside the client id and the label "Spex on <server name>", and the sign-in shall end `failed` with `denied` where the instance denies the code and `failed` naming another account where the person read bears another permanent id than the person's, storing nothing either way ([DR-132](../decisions/132-team-servers.md)).
+
+#### git-host-29
+
+When the core lists a signed-in instance's servers or asks it for a ticket — `GET /api/v1/host/servers` and `POST /api/v1/host/servers/:id/tickets`, with that instance's app token [[git-host-4](#git-host-4)] — it shall take the listing and the ticket as the instance answers them, holding nothing after the reply, and relay any other answer [[git-host-11](#git-host-11)] ([DR-133](../decisions/133-one-desktop-over-several-cores.md)).
 
 ## Internal Behavior
 
@@ -324,6 +332,14 @@ When an integration suite starts a real core against two stand-in instances on s
 - members are read from, a member added to and removed from, and the repository moved at the instance of the placement each command names [[git-host-8](#git-host-8)] [[git-host-16](#git-host-16)] [[git-host-17](#git-host-17)] [[git-host-20](#git-host-20)];
 - a credential the second refuses to a transport signs the second out alone, its placement unreachable and the first's syncing [[git-host-4](#git-host-4)] [[git-host-9](#git-host-9)];
 - a repository the second lists that a placement file names is held as that clone's placement not on this device, offering no Join, and one both of two instances over one Git backend list is one placement [[git-host-5](#git-host-5)].
+
+#### git-host-28
+
+Where the core runs as a seat against the stand-in instance and the Git HTTP host, the test suite shall assert that the device request carries the server and the person, that a denied code and a person of another id each end the sign-in `failed` storing nothing [[git-host-27](#git-host-27)], and that a transport to the Git HTTP host takes the app's helper with the token the member placed for it and none without one [[git-host-9](#git-host-9)].
+
+#### git-host-30
+
+Where the stand-in instance answers the servers listing and the ticket route, the test suite shall assert that each call carries that instance's app token, that the listing and the ticket are returned as answered and held nowhere, and that a `host_refused`, a `not_found` and a `429` are relayed as [[git-host-11](#git-host-11)] states [[git-host-29](#git-host-29)].
 
 ## References
 

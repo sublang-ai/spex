@@ -7,9 +7,11 @@
 // exists is always on screen while the tabs hold only what is open.
 // Two widgets, not one — a navigation list for the surfaces and one
 // ARIA tree for the projects — because "current surface" and
-// "selected session" are different words (run-view-67).
+// "selected session" are different words (run-view-67). Where any seat
+// is open, the tree lists each place's projects under a heading naming
+// the place, this computer's first (run-view-168).
 
-import { useMemo, useRef, useState, type ReactNode } from "react";
+import { Fragment, useMemo, useRef, useState, type ReactNode } from "react";
 import type { ProjectInfo, SessionInfo } from "@sublang/spex-core/protocol";
 
 import {
@@ -18,7 +20,8 @@ import {
   PROJECT_ATTENTION_WORDS,
   type AttentionItem,
 } from "../state/dashboard.js";
-import { useAppStore } from "../state/store.js";
+import { useEachPlace } from "../state/place-context.js";
+import { LOCAL_PLACE_KEY } from "../state/store.js";
 import { i18n } from "../i18n.js";
 import { isHistory } from "../lib/sessions.js";
 import { keyLabel } from "../lib/shortcuts.js";
@@ -78,21 +81,25 @@ const SURFACE_ICONS: Record<Surface, IconName> = {
   Settings: "gear",
 };
 
-export interface NavRailProps {
-  surface: Surface;
-  onSurface(surface: Surface): void;
-  /** Cross-project attention count; rides the Dashboard entry. */
-  attentionCount: number;
-  collapsed: boolean;
-  onCollapsed(collapsed: boolean): void;
+/** One place's projects in the tree (run-view-67, run-view-168): its
+ * core's own state, and acts taken at that core. */
+export interface NavPlace {
+  /** The place's key: "local", or a seat's. */
+  key: string;
+  /** What the place is shown by: "This computer", or the server's name. */
+  label: string;
   projects: ProjectInfo[];
   sessions: SessionInfo[];
   /** Non-idle attention by session id, the same derivation the badge
    * and the tab dots use (run-view-73). */
   attention: Map<string, AttentionItem>;
+  /** The place's current project, which starts disclosed. */
   currentProjectId?: string;
-  /** The session whose tab is showing, if any. */
+  /** The session whose tab is showing at this place, if any. */
   activeSessionId?: string;
+  /** Whether the Projects surface shows this place: only then is its
+   * current project's row the selected one. */
+  shown: boolean;
   /** Explicit disclosure; a project with no entry follows current. */
   expanded: Record<string, boolean>;
   onExpanded(projectId: string, expanded: boolean): void;
@@ -102,6 +109,18 @@ export interface NavRailProps {
   /** Delete an idle session this core owns (DR-038); rejects with
    * the core's reason, which the row shows. */
   onDeleteSession(sessionId: string): Promise<void>;
+}
+
+export interface NavRailProps {
+  surface: Surface;
+  onSurface(surface: Surface): void;
+  /** Cross-project attention count, every place's; rides the
+   * Dashboard entry. */
+  attentionCount: number;
+  collapsed: boolean;
+  onCollapsed(collapsed: boolean): void;
+  /** Every place, this computer's first (run-view-168). */
+  places: NavPlace[];
   onAddProject(): void;
   /** Config status / playbook count, the foot's other tenant. */
   foot?: ReactNode;
@@ -219,30 +238,37 @@ function projectRowName(
 interface Row {
   key: string;
   kind: "project" | "session" | "action";
+  /** The place the row stands at. */
+  place: NavPlace;
+  /** The key of the project row this row belongs to. */
+  projectRow: string;
   projectId: string;
-  sessionId?: string;
+  /** What type-ahead matches: a project's name or a session's title. */
+  label: string;
   activate(): void;
 }
 
+/** A place's key for one of its rows (run-view-168): the local place's
+ * is the row's own, so this computer's rows read as they always have;
+ * a seat's is qualified by its place, since one repository cloned at
+ * two places has one project id at both. */
+function placed(place: NavPlace, key: string): string {
+  return place.key === LOCAL_PLACE_KEY ? key : `${key}@${place.key}`;
+}
+
+type Buckets = Map<string, { live: SessionInfo[]; idle: SessionInfo[] }>;
+
 export function NavRail(props: NavRailProps) {
-  const {
-    surface,
-    onSurface,
-    attentionCount,
-    collapsed,
-    onCollapsed,
-    projects,
-    sessions,
-    attention,
-    currentProjectId,
-    activeSessionId,
-    expanded,
-    onExpanded,
-  } = props;
+  const { surface, onSurface, attentionCount, collapsed, onCollapsed, places } = props;
+  // Keyed by each row's placed key (run-view-168): a project or a
+  // session at two places keeps two of each.
   const [showAll, setShowAll] = useState<Record<string, boolean>>({});
   const [focusKey, setFocusKey] = useState<string>();
-  // A delete confirm names an unsent draft it would take (DR-010 §4).
-  const drafts = useAppStore((state) => state.composers);
+  // A delete confirm names an unsent draft it would take (DR-010 §4),
+  // read from the session's own place.
+  const composers = useEachPlace((state) => state.composers);
+  const draftOf = (place: NavPlace, sessionId: string): string | undefined =>
+    composers.find((entry) => entry.store.place.key === place.key)?.value[sessionId]?.draft;
   // Deletion is destructive and irreversible, so it keeps one inline
   // confirmation at the row (DR-038, DR-010 §4).
   const [confirmDelete, setConfirmDelete] = useState<string>();
@@ -252,82 +278,98 @@ export function NavRail(props: NavRailProps) {
   const typeahead = useRef({ text: "", at: 0 });
   // One clock per render keeps every row's age consistent.
   const now = Date.now();
+  // A heading per place where any seat is open (run-view-67).
+  const headed = places.length > 1;
 
-  const isExpanded = (projectId: string): boolean =>
-    expanded[projectId] ?? projectId === currentProjectId;
+  const isExpanded = (place: NavPlace, projectId: string): boolean =>
+    place.expanded[projectId] ?? projectId === place.currentProjectId;
 
   // A working session first, then the rest by last activity
   // (run-view-67): the recent window applies to the idle ones only.
-  const byProject = useMemo(() => {
-    const map = new Map<string, { live: SessionInfo[]; idle: SessionInfo[] }>();
-    for (const project of projects) map.set(project.id, { live: [], idle: [] });
-    for (const session of sessions) {
-      const bucket = map.get(session.projectId);
-      if (!bucket) continue;
-      if (session.live || session.externalWriter) bucket.live.push(session);
-      else bucket.idle.push(session);
-    }
-    for (const bucket of map.values()) {
-      bucket.live.sort((a, b) => b.createdAt - a.createdAt);
-      bucket.idle.sort((a, b) => (b.endedAt ?? b.createdAt) - (a.endedAt ?? a.createdAt));
-    }
-    return map;
-  }, [projects, sessions]);
-
-  const projectAttention = useMemo(() => {
-    const map = new Map<string, AttentionItem["kind"]>();
-    for (const session of sessions) {
-      const item = attention.get(session.id);
-      if (!item) continue;
-      const worst = map.get(session.projectId);
-      if (!worst || ATTENTION_RANK[item.kind] < ATTENTION_RANK[worst]) {
-        map.set(session.projectId, item.kind);
+  // Each place's sessions bucket under that place's projects alone.
+  const byPlace = useMemo(() => {
+    const result = new Map<string, { buckets: Buckets; worst: Map<string, AttentionItem["kind"]> }>();
+    for (const place of places) {
+      const buckets: Buckets = new Map();
+      for (const project of place.projects) buckets.set(project.id, { live: [], idle: [] });
+      for (const session of place.sessions) {
+        const bucket = buckets.get(session.projectId);
+        if (!bucket) continue;
+        if (session.live || session.externalWriter) bucket.live.push(session);
+        else bucket.idle.push(session);
       }
+      for (const bucket of buckets.values()) {
+        bucket.live.sort((a, b) => b.createdAt - a.createdAt);
+        bucket.idle.sort((a, b) => (b.endedAt ?? b.createdAt) - (a.endedAt ?? a.createdAt));
+      }
+      const worst = new Map<string, AttentionItem["kind"]>();
+      for (const session of place.sessions) {
+        const item = place.attention.get(session.id);
+        if (!item) continue;
+        const prior = worst.get(session.projectId);
+        if (!prior || ATTENTION_RANK[item.kind] < ATTENTION_RANK[prior]) {
+          worst.set(session.projectId, item.kind);
+        }
+      }
+      result.set(place.key, { buckets, worst });
     }
-    return map;
-  }, [sessions, attention]);
+    return result;
+  }, [places]);
+  const bucketOf = (place: NavPlace, projectId: string) =>
+    byPlace.get(place.key)?.buckets.get(projectId) ?? { live: [], idle: [] };
 
   // The rows the tree can reach right now, in visual order — the one
-  // list arrow keys, Home/End and type-ahead all walk.
+  // list arrow keys, Home/End and type-ahead all walk, across places.
   const rows: Row[] = [];
-  for (const project of projects) {
-    rows.push({
-      key: `p:${project.id}`,
-      kind: "project",
-      projectId: project.id,
-      activate: () => props.onPickProject(project.id),
-    });
-    if (!isExpanded(project.id)) continue;
-    const bucket = byProject.get(project.id) ?? { live: [], idle: [] };
-    const ended = showAll[project.id]
-      ? bucket.idle
-      : bucket.idle.slice(0, RECENT_WINDOW);
-    for (const session of [...bucket.live, ...ended]) {
+  for (const place of places) {
+    for (const project of place.projects) {
+      const projectRow = placed(place, `p:${project.id}`);
+      const projectKey = placed(place, project.id);
       rows.push({
-        key: `s:${session.id}`,
-        kind: "session",
+        key: projectRow,
+        kind: "project",
+        place,
+        projectRow,
         projectId: project.id,
-        sessionId: session.id,
-        activate: () => props.onActivateSession(session.id),
+        label: project.name,
+        activate: () => place.onPickProject(project.id),
       });
-    }
-    if (!showAll[project.id] && bucket.idle.length > RECENT_WINDOW) {
+      if (!isExpanded(place, project.id)) continue;
+      const bucket = bucketOf(place, project.id);
+      const ended = showAll[projectKey] ? bucket.idle : bucket.idle.slice(0, RECENT_WINDOW);
+      for (const session of [...bucket.live, ...ended]) {
+        rows.push({
+          key: placed(place, `s:${session.id}`),
+          kind: "session",
+          place,
+          projectRow,
+          projectId: project.id,
+          label: session.title ?? "",
+          activate: () => place.onActivateSession(session.id),
+        });
+      }
+      if (!showAll[projectKey] && bucket.idle.length > RECENT_WINDOW) {
+        rows.push({
+          key: placed(place, `m:${project.id}`),
+          kind: "action",
+          place,
+          projectRow,
+          projectId: project.id,
+          label: "",
+          activate: () => setShowAll((current) => ({ ...current, [projectKey]: true })),
+        });
+      }
       rows.push({
-        key: `m:${project.id}`,
+        key: placed(place, `n:${project.id}`),
         kind: "action",
+        place,
+        projectRow,
         projectId: project.id,
-        activate: () =>
-          setShowAll((current) => ({ ...current, [project.id]: true })),
+        label: "",
+        activate: () => place.onNewSession(project.id),
       });
     }
-    rows.push({
-      key: `n:${project.id}`,
-      kind: "action",
-      projectId: project.id,
-      activate: () => props.onNewSession(project.id),
-    });
   }
-
   const focused = rows.some((row) => row.key === focusKey)
     ? focusKey
     : rows[0]?.key;
@@ -373,16 +415,16 @@ export function NavRail(props: NavRailProps) {
       case "ArrowRight":
         if (row.kind === "project") {
           event.preventDefault();
-          if (!isExpanded(row.projectId)) onExpanded(row.projectId, true);
+          if (!isExpanded(row.place, row.projectId)) row.place.onExpanded(row.projectId, true);
           else if (rows[index + 1]) moveFocus(rows[index + 1].key);
         }
         return;
       case "ArrowLeft":
         event.preventDefault();
-        if (row.kind === "project" && isExpanded(row.projectId)) {
-          onExpanded(row.projectId, false);
+        if (row.kind === "project" && isExpanded(row.place, row.projectId)) {
+          row.place.onExpanded(row.projectId, false);
         } else {
-          moveFocus(`p:${row.projectId}`);
+          moveFocus(row.projectRow);
         }
         return;
       case "Enter":
@@ -401,18 +443,9 @@ export function NavRail(props: NavRailProps) {
       (at - typeahead.current.at < 800 ? typeahead.current.text : "") +
       event.key.toLowerCase();
     typeahead.current = { text, at };
-    const labelOf = (candidate: Row): string => {
-      if (candidate.kind === "project") {
-        return projects.find((p) => p.id === candidate.projectId)?.name ?? "";
-      }
-      if (candidate.sessionId) {
-        return sessions.find((s) => s.id === candidate.sessionId)?.title ?? "";
-      }
-      return "";
-    };
     const order = [...rows.slice(index + 1), ...rows.slice(0, index + 1)];
     const hit = order.find((candidate) =>
-      labelOf(candidate).toLowerCase().startsWith(text),
+      candidate.label.toLowerCase().startsWith(text),
     );
     if (hit) {
       event.preventDefault();
@@ -420,20 +453,23 @@ export function NavRail(props: NavRailProps) {
     }
   }
 
-  function deleteSession(sessionId: string): void {
+  /** Delete a session at its own place; its row's state is kept by
+   * its placed key. */
+  function deleteSession(place: NavPlace, sessionId: string): void {
+    const key = placed(place, sessionId);
     setConfirmDelete(undefined);
-    setDeleting((current) => ({ ...current, [sessionId]: true }));
-    setDeleteErrors(({ [sessionId]: _, ...rest }) => rest);
-    void props
+    setDeleting((current) => ({ ...current, [key]: true }));
+    setDeleteErrors(({ [key]: _, ...rest }) => rest);
+    void place
       .onDeleteSession(sessionId)
       .catch((cause: Error) =>
         setDeleteErrors((current) => ({
           ...current,
-          [sessionId]: cause.message || i18n._("delete failed"),
+          [key]: cause.message || i18n._("delete failed"),
         })),
       )
       .finally(() =>
-        setDeleting(({ [sessionId]: _, ...rest }) => rest),
+        setDeleting(({ [key]: _, ...rest }) => rest),
       );
   }
 
@@ -498,9 +534,12 @@ export function NavRail(props: NavRailProps) {
   // (run-view-67): off Projects the surface's own entry is the only
   // current place, and the remembered project lights again when
   // Projects comes back.
+  // Of the places, only the one the surface shows has a selected row.
   const inWorkspace = surface === "Workspace";
-  const selectedProjectId = inWorkspace ? currentProjectId : undefined;
-  const shownSessionId = inWorkspace ? activeSessionId : undefined;
+  const selectedProjectOf = (place: NavPlace): string | undefined =>
+    inWorkspace && place.shown ? place.currentProjectId : undefined;
+  const shownSessionOf = (place: NavPlace): string | undefined =>
+    inWorkspace && place.shown ? place.activeSessionId : undefined;
 
   /** One selection voice: the active row wears the interaction hue,
    * the treatment the surface entries already use (run-view-73). */
@@ -527,6 +566,272 @@ export function NavRail(props: NavRailProps) {
     </button>
   );
 
+  /** One project node and, disclosed, its sessions — every row's key
+   * and test id placed (run-view-168), this computer's as they were. */
+  const projectNode = (place: NavPlace, project: ProjectInfo) => {
+    const open = isExpanded(place, project.id);
+    const bucket = bucketOf(place, project.id);
+    const worst = byPlace.get(place.key)?.worst.get(project.id);
+    const projectKey = placed(place, project.id);
+    const listed = showAll[projectKey]
+      ? bucket.idle
+      : bucket.idle.slice(0, RECENT_WINDOW);
+    const hidden = bucket.idle.length - listed.length;
+    const selectedProjectId = selectedProjectOf(place);
+    const shownSessionId = shownSessionOf(place);
+    const projectRow = placed(place, `p:${project.id}`);
+    return (
+      <div key={projectKey} className="flex flex-col">
+        <div
+          role="treeitem"
+          aria-expanded={open}
+          aria-selected={project.id === selectedProjectId}
+          data-row={projectRow}
+          data-testid={placed(place, `sidebar-project-${project.id}`)}
+          tabIndex={focused === projectRow ? 0 : -1}
+          onFocus={() => setFocusKey(projectRow)}
+          onClick={() => place.onPickProject(project.id)}
+          title={
+            worst
+              ? i18n._("{path} — needs you", { path: project.path })
+              : project.path
+          }
+          aria-label={projectRowName(project.name, worst)}
+          className={`${rowClass(
+            project.id === selectedProjectId && !shownSessionId,
+          )} pl-0.5`}
+        >
+          <button
+            type="button"
+            tabIndex={-1}
+            data-testid={placed(place, `sidebar-disclose-${project.id}`)}
+            aria-label={
+              open
+                ? i18n._("Hide sessions in {project}", {
+                    project: project.name,
+                  })
+                : i18n._("Show sessions in {project}", {
+                    project: project.name,
+                  })
+            }
+            onClick={(event) => {
+              // Disclosure is its own axis (DR-027): opening a
+              // project never moves the workspace into it.
+              event.stopPropagation();
+              place.onExpanded(project.id, !open);
+            }}
+            // A 24px target inside a shorter row: the negative
+            // margins keep the row's height (DR-010 §7).
+            className="-my-1 flex h-6 w-6 shrink-0 items-center justify-center rounded text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200"
+          >
+            <Icon
+              name={open ? "caretDown" : "caretRight"}
+              className="h-3.5 w-3.5"
+            />
+          </button>
+          <Icon name="folder" className="h-3.5 w-3.5 shrink-0" />
+          <span className="min-w-0 flex-1 truncate">{project.name}</span>
+          {worst ? (
+            <span
+              data-testid={placed(place, `sidebar-project-attention-${project.id}`)}
+              aria-hidden
+              className={`h-2 w-2 shrink-0 rounded-full ${ATTENTION_MARK_CLASS[worst]}`}
+              title={PROJECT_ATTENTION_WORDS[worst]()}
+            />
+          ) : null}
+        </div>
+        {open ? (
+          <div role="group" className="flex flex-col">
+            {[...bucket.live, ...listed].map((session) => {
+              const item = place.attention.get(session.id);
+              const life = lifeOf(session, item);
+              const active = session.id === shownSessionId;
+              // External ownership must be known idle before deletion.
+              const deletable = !session.live && !session.externalWriter;
+              const sessionKey = placed(place, session.id);
+              const sessionRow = placed(place, `s:${session.id}`);
+              const confirming = deletable && confirmDelete === sessionKey;
+              const draft = draftOf(place, session.id)?.trim();
+              return (
+                <div
+                  key={session.id}
+                  role="treeitem"
+                  aria-selected={active}
+                  data-row={sessionRow}
+                  data-testid={placed(place, `sidebar-session-${session.id}`)}
+                  tabIndex={focused === sessionRow ? 0 : -1}
+                  onFocus={() => setFocusKey(sessionRow)}
+                  onClick={() => place.onActivateSession(session.id)}
+                  aria-label={sessionLabel(session, life, now, item)}
+                  title={sessionLabel(session, life, now, item)}
+                  className={`${rowClass(active)} group pl-6`}
+                >
+                  <span
+                    aria-hidden
+                    data-testid={placed(place, `sidebar-mark-${session.id}`)}
+                    data-life={life}
+                    className={`h-2 w-2 shrink-0 rounded-full ${LIFE_MARKS[life]}`}
+                  />
+                  {confirming ? (
+                    <span
+                      data-testid={placed(place, `sidebar-delete-confirm-${session.id}`)}
+                      onClick={stop}
+                      onKeyDown={stop}
+                      className="min-w-0 flex-1"
+                    >
+                      <InlineConfirm
+                        // One whole question per case (localization-4):
+                        // where it ran, and whether an unsent draft
+                        // goes with it.
+                        question={
+                          session.foreign
+                            ? draft
+                              ? i18n._(
+                                  "Delete this session? It was run from the terminal; its history goes too. Its unsent draft goes with it.",
+                                )
+                              : i18n._(
+                                  "Delete this session? It was run from the terminal; its history goes too.",
+                                )
+                            : draft
+                              ? i18n._(
+                                  "Delete this session and its transcript? Its unsent draft goes with it.",
+                                )
+                              : i18n._(
+                                  "Delete this session and its transcript?",
+                                )
+                        }
+                        confirmLabel={i18n._({
+                          id: "Delete",
+                          comment: "confirm: delete this session for good",
+                        })}
+                        cancelLabel={i18n._({
+                          id: "Keep",
+                          comment:
+                            "cancel a destructive confirm: leave things as they are",
+                        })}
+                        onConfirm={() => deleteSession(place, session.id)}
+                        onCancel={() => setConfirmDelete(undefined)}
+                      />
+                    </span>
+                  ) : (
+                    <>
+                      <span
+                        className={`min-w-0 flex-1 truncate ${
+                          session.title
+                            ? ""
+                            : "italic text-neutral-500 dark:text-neutral-400"
+                        }`}
+                      >
+                        {session.title ?? i18n._("no messages yet")}
+                      </span>
+                      {deleteErrors[sessionKey] ? (
+                        <span
+                          data-testid={placed(place, `sidebar-delete-error-${session.id}`)}
+                          title={deleteErrors[sessionKey]}
+                          className="shrink-0 truncate text-xs text-red-600 dark:text-red-400"
+                        >
+                          {i18n._("not deleted")}
+                        </span>
+                      ) : (
+                        // The one time vocabulary (run-view-73): a
+                        // compact age with the exact moment on hover.
+                        <span
+                          data-testid={placed(place, `sidebar-age-${session.id}`)}
+                          title={absoluteTitle(
+                            session.endedAt ?? session.createdAt,
+                          )}
+                          className="shrink-0 text-xs tabular-nums text-neutral-500 dark:text-neutral-400"
+                        >
+                          {deleting[sessionKey]
+                            ? i18n._({
+                                id: "deleting…",
+                                comment:
+                                  "session row, busy: the delete is in flight",
+                              })
+                            : compactAge(
+                                session.endedAt ?? session.createdAt,
+                                now,
+                              )}
+                        </span>
+                      )}
+                      {deletable ? (
+                        // Revealed on hover or focus, reachable by
+                        // Tab regardless (DR-010 §6).
+                        <button
+                          type="button"
+                          data-testid={placed(place, `sidebar-delete-${session.id}`)}
+                          aria-label={i18n._("Delete session {title}", {
+                            title:
+                              session.title ?? i18n._("no messages yet"),
+                          })}
+                          title={i18n._(
+                            "Delete this session and its transcript",
+                          )}
+                          disabled={deleting[sessionKey]}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setConfirmDelete(sessionKey);
+                          }}
+                          onKeyDown={stop}
+                          className="-my-1 flex h-6 w-6 shrink-0 items-center justify-center rounded text-neutral-500 opacity-0 hover:text-red-600 focus:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 disabled:opacity-40 dark:hover:text-red-400"
+                        >
+                          <Icon name="trash" className="h-3.5 w-3.5" />
+                        </button>
+                      ) : null}
+                    </>
+                  )}
+                </div>
+              );
+            })}
+            {hidden > 0 ? (
+              <div
+                role="treeitem"
+                aria-selected={false}
+                data-row={placed(place, `m:${project.id}`)}
+                data-testid={placed(place, `sidebar-more-${project.id}`)}
+                tabIndex={focused === placed(place, `m:${project.id}`) ? 0 : -1}
+                onFocus={() => setFocusKey(placed(place, `m:${project.id}`))}
+                onClick={() =>
+                  setShowAll((current) => ({
+                    ...current,
+                    [projectKey]: true,
+                  }))
+                }
+                aria-label={i18n._(
+                  "Show all {count} sessions in {project}",
+                  { count: bucket.idle.length, project: project.name },
+                )}
+                className={`${rowClass(false)} pl-6 text-xs text-brand-600 dark:text-brand-300`}
+              >
+                {i18n._("all {count}…", { count: bucket.idle.length })}
+              </div>
+            ) : null}
+            <div
+              role="treeitem"
+              aria-selected={false}
+              data-row={placed(place, `n:${project.id}`)}
+              data-testid={placed(place, `sidebar-new-${project.id}`)}
+              tabIndex={focused === placed(place, `n:${project.id}`) ? 0 : -1}
+              onFocus={() => setFocusKey(placed(place, `n:${project.id}`))}
+              onClick={() => place.onNewSession(project.id)}
+              aria-label={i18n._("New session in {project}", {
+                project: project.name,
+              })}
+              className={`${rowClass(false)} pl-6 text-neutral-500`}
+            >
+              <Icon name="plus" className="h-3 w-3 shrink-0" />
+              {i18n._("New session")}
+            </div>
+          </div>
+        ) : null}
+      </div>
+    );
+  };
+
+  /** One place's project nodes. */
+  const placeNodes = (place: NavPlace) =>
+    place.projects.map((project) => projectNode(place, project));
+
   const tree = (
     <div
       ref={treeRef}
@@ -536,258 +841,30 @@ export function NavRail(props: NavRailProps) {
       onKeyDown={onTreeKeyDown}
       className="relative flex min-h-0 flex-1 flex-col overflow-y-auto"
     >
-      {projects.map((project) => {
-        const open = isExpanded(project.id);
-        const bucket = byProject.get(project.id) ?? { live: [], idle: [] };
-        const worst = projectAttention.get(project.id);
-        const listed = showAll[project.id]
-          ? bucket.idle
-          : bucket.idle.slice(0, RECENT_WINDOW);
-        const hidden = bucket.idle.length - listed.length;
-        return (
-          <div key={project.id} className="flex flex-col">
+      {headed
+        ? // A heading per place (run-view-67, run-view-168): each
+          // place's projects form a group named by the place, the
+          // heading its visible name.
+          places.map((place) => (
             <div
-              role="treeitem"
-              aria-expanded={open}
-              aria-selected={project.id === selectedProjectId}
-              data-row={`p:${project.id}`}
-              data-testid={`sidebar-project-${project.id}`}
-              tabIndex={focused === `p:${project.id}` ? 0 : -1}
-              onFocus={() => setFocusKey(`p:${project.id}`)}
-              onClick={() => props.onPickProject(project.id)}
-              title={
-                worst
-                  ? i18n._("{path} — needs you", { path: project.path })
-                  : project.path
-              }
-              aria-label={projectRowName(project.name, worst)}
-              className={`${rowClass(
-                project.id === selectedProjectId && !shownSessionId,
-              )} pl-0.5`}
+              key={place.key}
+              role="group"
+              aria-label={place.label}
+              data-place-key={place.key}
+              className="flex flex-col"
             >
-              <button
-                type="button"
-                tabIndex={-1}
-                data-testid={`sidebar-disclose-${project.id}`}
-                aria-label={
-                  open
-                    ? i18n._("Hide sessions in {project}", {
-                        project: project.name,
-                      })
-                    : i18n._("Show sessions in {project}", {
-                        project: project.name,
-                      })
-                }
-                onClick={(event) => {
-                  // Disclosure is its own axis (DR-027): opening a
-                  // project never moves the workspace into it.
-                  event.stopPropagation();
-                  onExpanded(project.id, !open);
-                }}
-                // A 24px target inside a shorter row: the negative
-                // margins keep the row's height (DR-010 §7).
-                className="-my-1 flex h-6 w-6 shrink-0 items-center justify-center rounded text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200"
+              <div
+                aria-hidden
+                data-testid="sidebar-place-heading"
+                title={place.label}
+                className="truncate px-1 pb-0.5 pt-1.5 text-[11px] font-medium text-neutral-500 dark:text-neutral-400"
               >
-                <Icon
-                  name={open ? "caretDown" : "caretRight"}
-                  className="h-3.5 w-3.5"
-                />
-              </button>
-              <Icon name="folder" className="h-3.5 w-3.5 shrink-0" />
-              <span className="min-w-0 flex-1 truncate">{project.name}</span>
-              {worst ? (
-                <span
-                  data-testid={`sidebar-project-attention-${project.id}`}
-                  aria-hidden
-                  className={`h-2 w-2 shrink-0 rounded-full ${ATTENTION_MARK_CLASS[worst]}`}
-                  title={PROJECT_ATTENTION_WORDS[worst]()}
-                />
-              ) : null}
-            </div>
-            {open ? (
-              <div role="group" className="flex flex-col">
-                {[...bucket.live, ...listed].map((session) => {
-                  const item = attention.get(session.id);
-                  const life = lifeOf(session, item);
-                  const active = session.id === shownSessionId;
-                  // External ownership must be known idle before deletion.
-                  const deletable = !session.live && !session.externalWriter;
-                  const confirming = deletable && confirmDelete === session.id;
-                  return (
-                    <div
-                      key={session.id}
-                      role="treeitem"
-                      aria-selected={active}
-                      data-row={`s:${session.id}`}
-                      data-testid={`sidebar-session-${session.id}`}
-                      tabIndex={focused === `s:${session.id}` ? 0 : -1}
-                      onFocus={() => setFocusKey(`s:${session.id}`)}
-                      onClick={() => props.onActivateSession(session.id)}
-                      aria-label={sessionLabel(session, life, now, item)}
-                      title={sessionLabel(session, life, now, item)}
-                      className={`${rowClass(active)} group pl-6`}
-                    >
-                      <span
-                        aria-hidden
-                        data-testid={`sidebar-mark-${session.id}`}
-                        data-life={life}
-                        className={`h-2 w-2 shrink-0 rounded-full ${LIFE_MARKS[life]}`}
-                      />
-                      {confirming ? (
-                        <span
-                          data-testid={`sidebar-delete-confirm-${session.id}`}
-                          onClick={stop}
-                          onKeyDown={stop}
-                          className="min-w-0 flex-1"
-                        >
-                          <InlineConfirm
-                            // One whole question per case (localization-4):
-                            // where it ran, and whether an unsent draft
-                            // goes with it.
-                            question={
-                              session.foreign
-                                ? drafts[session.id]?.draft?.trim()
-                                  ? i18n._(
-                                      "Delete this session? It was run from the terminal; its history goes too. Its unsent draft goes with it.",
-                                    )
-                                  : i18n._(
-                                      "Delete this session? It was run from the terminal; its history goes too.",
-                                    )
-                                : drafts[session.id]?.draft?.trim()
-                                  ? i18n._(
-                                      "Delete this session and its transcript? Its unsent draft goes with it.",
-                                    )
-                                  : i18n._(
-                                      "Delete this session and its transcript?",
-                                    )
-                            }
-                            confirmLabel={i18n._({
-                              id: "Delete",
-                              comment: "confirm: delete this session for good",
-                            })}
-                            cancelLabel={i18n._({
-                              id: "Keep",
-                              comment:
-                                "cancel a destructive confirm: leave things as they are",
-                            })}
-                            onConfirm={() => deleteSession(session.id)}
-                            onCancel={() => setConfirmDelete(undefined)}
-                          />
-                        </span>
-                      ) : (
-                        <>
-                          <span
-                            className={`min-w-0 flex-1 truncate ${
-                              session.title
-                                ? ""
-                                : "italic text-neutral-500 dark:text-neutral-400"
-                            }`}
-                          >
-                            {session.title ?? i18n._("no messages yet")}
-                          </span>
-                          {deleteErrors[session.id] ? (
-                            <span
-                              data-testid={`sidebar-delete-error-${session.id}`}
-                              title={deleteErrors[session.id]}
-                              className="shrink-0 truncate text-xs text-red-600 dark:text-red-400"
-                            >
-                              {i18n._("not deleted")}
-                            </span>
-                          ) : (
-                            // The one time vocabulary (run-view-73): a
-                            // compact age with the exact moment on hover.
-                            <span
-                              data-testid={`sidebar-age-${session.id}`}
-                              title={absoluteTitle(
-                                session.endedAt ?? session.createdAt,
-                              )}
-                              className="shrink-0 text-xs tabular-nums text-neutral-500 dark:text-neutral-400"
-                            >
-                              {deleting[session.id]
-                                ? i18n._({
-                                    id: "deleting…",
-                                    comment:
-                                      "session row, busy: the delete is in flight",
-                                  })
-                                : compactAge(
-                                    session.endedAt ?? session.createdAt,
-                                    now,
-                                  )}
-                            </span>
-                          )}
-                          {deletable ? (
-                            // Revealed on hover or focus, reachable by
-                            // Tab regardless (DR-010 §6).
-                            <button
-                              type="button"
-                              data-testid={`sidebar-delete-${session.id}`}
-                              aria-label={i18n._("Delete session {title}", {
-                                title:
-                                  session.title ?? i18n._("no messages yet"),
-                              })}
-                              title={i18n._(
-                                "Delete this session and its transcript",
-                              )}
-                              disabled={deleting[session.id]}
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                setConfirmDelete(session.id);
-                              }}
-                              onKeyDown={stop}
-                              className="-my-1 flex h-6 w-6 shrink-0 items-center justify-center rounded text-neutral-500 opacity-0 hover:text-red-600 focus:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 disabled:opacity-40 dark:hover:text-red-400"
-                            >
-                              <Icon name="trash" className="h-3.5 w-3.5" />
-                            </button>
-                          ) : null}
-                        </>
-                      )}
-                    </div>
-                  );
-                })}
-                {hidden > 0 ? (
-                  <div
-                    role="treeitem"
-                    aria-selected={false}
-                    data-row={`m:${project.id}`}
-                    data-testid={`sidebar-more-${project.id}`}
-                    tabIndex={focused === `m:${project.id}` ? 0 : -1}
-                    onFocus={() => setFocusKey(`m:${project.id}`)}
-                    onClick={() =>
-                      setShowAll((current) => ({
-                        ...current,
-                        [project.id]: true,
-                      }))
-                    }
-                    aria-label={i18n._(
-                      "Show all {count} sessions in {project}",
-                      { count: bucket.idle.length, project: project.name },
-                    )}
-                    className={`${rowClass(false)} pl-6 text-xs text-brand-600 dark:text-brand-300`}
-                  >
-                    {i18n._("all {count}…", { count: bucket.idle.length })}
-                  </div>
-                ) : null}
-                <div
-                  role="treeitem"
-                  aria-selected={false}
-                  data-row={`n:${project.id}`}
-                  data-testid={`sidebar-new-${project.id}`}
-                  tabIndex={focused === `n:${project.id}` ? 0 : -1}
-                  onFocus={() => setFocusKey(`n:${project.id}`)}
-                  onClick={() => props.onNewSession(project.id)}
-                  aria-label={i18n._("New session in {project}", {
-                    project: project.name,
-                  })}
-                  className={`${rowClass(false)} pl-6 text-neutral-500`}
-                >
-                  <Icon name="plus" className="h-3 w-3 shrink-0" />
-                  {i18n._("New session")}
-                </div>
+                {place.label}
               </div>
-            ) : null}
-          </div>
-        );
-      })}
+              {placeNodes(place)}
+            </div>
+          ))
+        : places.map((place) => <Fragment key={place.key}>{placeNodes(place)}</Fragment>)}
     </div>
   );
 

@@ -1509,7 +1509,7 @@ test("PROJ: the create flow scaffolds with the supplied command, else the regist
   await bare.service.stop();
 });
 
-test("projects-27: removed Academy reopens without replacing edits, other occupied paths refuse", async () => {
+test("projects-43: removed Academy reopens without replacing edits, other occupied paths refuse", async () => {
   const harness = await startHarness(VALID_CONFIG);
   const client = new Client(harness.service.port());
   try {
@@ -1535,10 +1535,12 @@ test("projects-27: removed Academy reopens without replacing edits, other occupi
     writeFileSync(join(unrelated, "keep.txt"), "keep this\n");
     execFileSync("git", ["init", "-q", unrelated]);
     execFileSync("git", ["-C", unrelated, "add", "keep.txt"]);
-    execFileSync("git", ["-C", unrelated, "-c", "user.name=Test", "-c", "user.email=test@example.test", "commit", "-q", "-m", "other project"]);
+    execFileSync("git", ["-C", unrelated, "-c", "user.name=Test", "-c", "user.email=test@example.test", "-c", "commit.gpgsign=false", "commit", "-q", "-m", "other project"]);
     const refused = await client.command("project.create", { path: unrelated, example: true });
     assert.ok(!refused.ok && refused.error.code === "invalid_request");
     assert.match(refused.error.message, /not empty/);
+    const projects = await client.expectOk("project.list", {});
+    assert.ok(!projects.some((project) => project.path === unrelated));
     assert.equal(readFileSync(join(unrelated, "keep.txt"), "utf8"), "keep this\n");
   } finally {
     client.close();
@@ -5958,4 +5960,117 @@ test("storage-29: session.create makes a paired clone's missing sessions/ privat
   const lateRefused = await pending;
   assert.ok(!lateRefused.ok && lateRefused.error.code === "not_found", JSON.stringify(lateRefused));
   assert.equal(existsSync(cloneOf(late.id)), false);
+});
+
+test("core-service-124: what one home captured runs on it alone, and a second home pairing the folder at the same path reads it as the other's", { timeout: 60_000 }, async (t) => {
+  const harness = await startHarness();
+  const client = new Client(harness.service.port());
+  t.after(async () => { client.close(); await harness.service.stop(); });
+  await client.open();
+  const project = await client.expectOk("project.register", { path: harness.projectDir });
+  // The second home is this one with another device: the same folder at
+  // the same path, the same records, as a sync leaves them (storage-2).
+  const homeFile = join(harness.dataDir, "home.yaml");
+  const onDevice = (device: string): void => {
+    const home = parseYaml(readFileSync(homeFile, "utf8")) as Record<string, unknown>;
+    writeFileSync(homeFile, stringifyYaml({ ...home, device }));
+  };
+  const first = (parseYaml(readFileSync(homeFile, "utf8")) as { device: string }).device;
+  const second = randomUUID();
+  const label = hostname();
+  const phrase = `Runs on ${label}`;
+  const refusedAs = (reply: Awaited<ReturnType<Client["command"]>>, code: string, what: string): void => {
+    assert.ok(!reply.ok, `${what} is refused`);
+    assert.equal(reply.error.code, code, what);
+    assert.equal(reply.error.message, phrase, what);
+    assert.deepEqual(reply.error.details, { runsOn: label }, what);
+  };
+
+  // The first home captures an intent and runs it in a session whose
+  // runtime record stands before its first turn, hidden and naming no
+  // turn (core-service-4, core-service-42, storage-43).
+  const worked = await client.expectOk("intent.queue", { projectId: project.id, text: "Ship the parser" });
+  assert.deepEqual(worked.runtime, { device: first, label });
+  const session = await client.expectOk("session.create", { projectId: project.id });
+  const shared = createSessionStore({ sessionsDir: projectSessions(harness.dataDir, project.id) });
+  const assignment = (await shared.readHistory(session.id)).entries
+    .filter(({ record }) => (record as { topic?: unknown }).topic === "spex.session.runtime");
+  assert.equal(assignment.length, 1);
+  assert.deepEqual((assignment[0].record as { payload?: unknown }).payload, { device: first, label });
+  assert.equal((assignment[0].record as { turnId?: unknown }).turnId, null);
+  assert.equal((assignment[0].record as { visibility?: unknown }).visibility, "hidden");
+  await client.expectOk("turn.submit", { sessionId: session.id, text: worked.text, intentId: worked.id });
+  await settledSession(client, session.id, 1);
+  const entries = (await shared.readHistory(session.id)).entries;
+  const firstTurn = entries.find(({ record }) => record.type === "turn_started");
+  assert.ok(firstTurn && assignment[0].seq < firstTurn.seq, "assigned before its first turn");
+  assert.equal(entries.filter(({ record }) => (record as { topic?: unknown }).topic === "spex.session.runtime").length, 1, "never rewritten");
+  assert.equal((await client.expectOk("history.get", { sessionId: session.id })).records
+    .some(({ record }) => (record as { topic?: unknown }).topic === "spex.session.runtime"), false, "no session channel carries it");
+  // Queued once that turn settled, so nothing advances into it.
+  const waiting = await client.expectOk("intent.queue", { projectId: project.id, text: "Document the parser" });
+  let ledger = await client.expectOk("ledger.get", {});
+  assert.deepEqual(ledger.attention.map((entry) => [entry.kind, entry.intentId]), [["finish", worked.id]]);
+  assert.ok(ledger.intents.find((entry) => entry.intent.id === waiting.id)?.next, "next on the home that captured it");
+
+  // The second home reads the session as the first's: `runsOn`, not
+  // continuable, the phrase as its reason, no recovery (core-service-32),
+  // never its lane (core-service-93).
+  onDevice(second);
+  const listed = (await client.expectOk("session.list", {})).find((entry) => entry.id === session.id);
+  assert.equal(listed?.runsOn, label);
+  assert.equal(listed?.continuable, undefined);
+  assert.equal(listed?.continuationReason, phrase);
+  assert.equal(listed?.recovery, undefined);
+  assert.deepEqual(harness.service["sessions"].listLanes().filter((lane) => lane.projectId === project.id), []);
+  // Continuation, a control, Restore and Discard are refused with the
+  // phrase and the label, writing nothing (core-service-73,
+  // core-service-82, core-service-83).
+  const streamFile = join(projectSessions(harness.dataDir, project.id), `${session.id}.records.jsonl`);
+  const streamBefore = readFileSync(streamFile);
+  refusedAs(await client.command("turn.submit", { sessionId: session.id, text: "Keep going" }), "invalid_request", "turn.submit");
+  refusedAs(await client.command("session.control", { sessionId: session.id, kind: "recovery" }), "invalid_request", "session.control");
+  refusedAs(await client.command("session.restore", { sessionId: session.id }), "invalid_request", "session.restore");
+  refusedAs(await client.command("session.discard", { sessionId: session.id }), "invalid_request", "session.discard");
+  assert.deepEqual(readFileSync(streamFile), streamBefore);
+  // The first's work summons nothing here (core-service-49), and its
+  // intents keep their place with its label, never next
+  // (core-service-107).
+  ledger = await client.expectOk("ledger.get", {});
+  assert.deepEqual(ledger.attention, []);
+  assert.equal(ledger.badge, 0);
+  const row = (id: string) => ledger.intents.find((entry) => entry.intent.id === id);
+  assert.deepEqual([row(worked.id)?.state, row(worked.id)?.runsOn], ["finished", label]);
+  assert.deepEqual([row(waiting.id)?.state, row(waiting.id)?.runsOn, row(waiting.id)?.next], ["queued", label, undefined]);
+  // The second starts a session of its own beside it, and a turn naming
+  // the first's intent, its edit and its close are refused `conflict`
+  // (core-service-43, core-service-46, core-service-47).
+  const own = await client.expectOk("session.create", { projectId: project.id });
+  const intentFile = (id: string) => join(clonePath(harness.dataDir, project.id), "intents", `${id}.json`);
+  const intentsBefore = [readFileSync(intentFile(worked.id)), readFileSync(intentFile(waiting.id))];
+  refusedAs(await client.command("turn.submit", { sessionId: own.id, text: waiting.text, intentId: waiting.id }), "conflict", "a turn naming it");
+  refusedAs(await client.command("intent.edit", { intentId: waiting.id, text: "Document the parser for users" }), "conflict", "intent.edit");
+  refusedAs(await client.command("intent.close", { intentId: worked.id, as: "done" }), "conflict", "intent.close done");
+  refusedAs(await client.command("intent.close", { intentId: waiting.id, as: "dropped" }), "conflict", "intent.close dropped");
+  assert.deepEqual([readFileSync(intentFile(worked.id)), readFileSync(intentFile(waiting.id))], intentsBefore);
+  assert.equal(harness.stats.runs.filter((run) => run.prompt?.includes(waiting.text)).length, 0);
+  await client.expectOk("session.dispose", { sessionId: own.id });
+  await client.expectOk("session.delete", { sessionId: own.id });
+
+  // Back on the first, the session continues and the verdicts are its.
+  onDevice(first);
+  const again = (await client.expectOk("session.list", {})).find((entry) => entry.id === session.id);
+  assert.equal(again?.runsOn, undefined);
+  assert.equal(again?.continuable, true, again?.continuationReason ?? "no reason given");
+  await client.expectOk("intent.close", { intentId: waiting.id, as: "dropped" });
+  await client.expectOk("turn.submit", { sessionId: session.id, text: "Keep going" });
+  await settledSession(client, session.id, 2);
+  await client.expectOk("intent.close", { intentId: worked.id, as: "done" });
+
+  // The second removes the closed intent from History and deletes the
+  // session, as any home may (core-service-46, core-service-124).
+  onDevice(second);
+  await client.expectOk("intent.remove", { intentId: worked.id });
+  await client.expectOk("session.delete", { sessionId: session.id });
+  assert.equal((await client.expectOk("session.list", {})).some((entry) => entry.id === session.id), false);
 });

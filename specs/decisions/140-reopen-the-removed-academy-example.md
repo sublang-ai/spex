@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
 
-# DR-137: Reopen the Removed Academy Example
+# DR-140: Reopen the Removed Academy Example
 
 ## Status
 

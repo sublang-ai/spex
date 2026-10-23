@@ -93,9 +93,10 @@ While an entry bound to an open intent stands on the Dashboard [[dashboard-1](#d
 
 #### dashboard-9
 
-The Dashboard shall publish an attention count equal to the number of entries in the attention queue, from the one ledger fold [[dashboard-10](#dashboard-10)], for consumers such as the sidebar's Dashboard badge and the desktop shell's dock badge ([DR-002](../decisions/002-desktop-app-architecture.md)):
+The Dashboard shall publish an attention count equal to the number of entries in the attention queue, from the one ledger fold [[dashboard-10](#dashboard-10)] of each connected core, for consumers such as the sidebar's Dashboard badge and the desktop shell's dock badge ([DR-002](../decisions/002-desktop-app-architecture.md), [DR-133](../decisions/133-one-desktop-over-several-cores.md)):
 
 - When the queue changes, the published count updates to the new queue size.
+- Where the page holds several places [[run-view-168](run-view.md#run-view-168)], the queue joins each core's entries band by band, each band interleaved by onset — this computer's entry first where two share one — so each core's own order stands, and the count sums the badges of the cores whose fold is read, a place speaking another protocol version adding nothing and a reconnecting place keeping its last; an entry is answered at its own core.
 
 ### Running Band
 
@@ -180,6 +181,7 @@ While the Now band shows the open intent the session serves [[dashboard-28](#das
 The group's Up next band shall list the project's queued intents oldest first, every row carrying a neutral `Queued` tag, with the core-published oldest queued intent [[core-service-107](core-service.md#core-service-107)] emphasized as the project's next and rendering its scheduling standing [[dashboard-59](#dashboard-59)], followed by an inline add row whose one Queue action captures a new queued intent ([DR-077](../decisions/077-up-next-is-a-committed-queue.md)):
 
 - the next row carries Start only where its standing makes manual dispatch available, and otherwise carries the standing phrase with no Start; every later row carries only its `Queued` tag, since age says it is later, and a row may be started directly from its menu ([DR-103](../decisions/103-the-home-and-its-groups.md));
+- a row assigned to another runtime [[core-service-107](core-service.md#core-service-107)] carries "Runs on <label>" in place of any standing, no Start, and a menu offering only its provenance action ([DR-134](../decisions/134-execution-ownership.md));
 - the visible Start and Queue labels stay short while Start's accessible name identifies its intent and project and Queue's identifies its destination project ([DR-041](../decisions/041-chrome-that-fits.md));
 - the title and standing share the row's sole shrinkable text region and one line at and above the `@md` container step, each truncating with its full text in its title; below `@md` the standing takes its own line within that region, while the grip, `Queued` mark, available Start, and row menu remain visible ([DR-041](../decisions/041-chrome-that-fits.md));
 - the add field is one row while empty, soft-wraps and grows with its text to the smaller of eight lines and two fifths of the viewport, then scrolls with no native resize grip; Queue and Enter take the same capture of a nonblank draft or at least one ready attachment, preserving the exact text and ordered files [[run-view-158](run-view.md#run-view-158)], Shift+Enter inserts a line, and no Start stands beside Queue ([DR-041](../decisions/041-chrome-that-fits.md));
@@ -329,6 +331,7 @@ Each intent's state derives exactly as follows, over its turn range [[dashboard-
 
 - an intent a remove act retired [[core-service-79](core-service.md#core-service-79)] is absent from every state above: no History row, no source artifact held, no attention entry, and no band lists it ([DR-038](../decisions/038-history-is-done-work.md));
 - the fold produces no attention entry from records with `hidden` visibility ([DR-003](../decisions/003-runtime-reuse.md));
+- an intent or a session assigned to another runtime [[core-service-49](core-service.md#core-service-49)] enters no band and no badge, its state still deriving for History and the queue ([DR-134](../decisions/134-execution-ownership.md));
 - where several rows hold at once, the fold ranks failure, then working, then question, then finished — a standing summons is never masked by the running mark;
 - a consumer reading the fold over the protocol applies replies in request order — an older read's reply landing after a newer one's is discarded — so a stale fold never overwrites a fresh one.
 
@@ -340,6 +343,8 @@ Where the fold derives attention entries [[dashboard-10](#dashboard-10)], it sha
 | --- | --- |
 | Interrupted | question, failure |
 | Finished | finish, review |
+
+- a record assigned to another runtime raises none of them [[core-service-49](core-service.md#core-service-49)] ([DR-134](../decisions/134-execution-ownership.md));
 
 - historical permission telemetry raises no ledger entry and stands in the player's pane [[run-view-136](run-view.md#run-view-136)], while live requests appear only in the approval inbox [[approvals-5](approvals.md#approvals-5)] and never as a ledger entry;
 - a project whose acts are refused raises nothing: its conditions stand as storage diagnostics, where the repair is, exactly as a session whose project holds no local binding already does.
@@ -433,7 +438,8 @@ Where fixture ledger replies publish next intents spanning every scheduling stan
 - `question-park` reads `waiting — your reply`, and `failure-park` reads `waiting — current work failed` with the fixture catalogue cause, each with no Start [[dashboard-29](#dashboard-29)] [[dashboard-59](#dashboard-59)];
 - `failed` reads `waiting — previous work failed` with its known catalogue cause and carries Start, while `stopped` reads `waiting — previous work stopped` and carries Start [[dashboard-29](#dashboard-29)] [[dashboard-59](#dashboard-59)];
 - the all-clear names the same global next with the same phrase and Start availability, its Start accessible name identifying the intent and project; under a project filter its copy names the cross-project scope, while hidden attention replaces it with the selected project's quiet empty note [[dashboard-8](#dashboard-8)] [[dashboard-32](#dashboard-32)] [[dashboard-59](#dashboard-59)];
-- visible row Start and Queue labels keep their short forms while their accessible names identify the intent and project or destination project, respectively [[dashboard-29](#dashboard-29)].
+- visible row Start and Queue labels keep their short forms while their accessible names identify the intent and project or destination project, respectively [[dashboard-29](#dashboard-29)];
+- a row assigned to another runtime reads "Runs on <label>", carries no Start, and its menu offers neither Start, Edit nor Remove [[dashboard-29](#dashboard-29)].
 
 ### Capture Coverage
 

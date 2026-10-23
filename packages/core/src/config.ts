@@ -51,6 +51,7 @@ import { i18n } from "./i18n.js";
 import { canonicalWritablePath } from "./permission-paths.js";
 
 import type {
+  AdapterCredential,
   AdapterName,
   AgentSummary,
   ConfigSummary,
@@ -1983,6 +1984,16 @@ export interface AdapterReadiness {
   adapter: AdapterName;
   ready: boolean | null;
   requirement?: string;
+  /** On a seat, the credential class and its phrase (settings-49). */
+  credential?: AdapterCredential;
+}
+
+/** The credential half where another rule than the launcher's decides
+ * it: a seat's forms (settings-49). */
+export interface CredentialHalf {
+  ready: boolean;
+  requirement?: string;
+  credential: AdapterCredential;
 }
 
 /** The runtime half of readiness: usable, or a requirement naming why not. */
@@ -2156,6 +2167,9 @@ export async function checkAdapterReadiness(
   runtime: (
     adapter: AdapterName,
   ) => AdapterRuntimeCheck | Promise<AdapterRuntimeCheck> = checkAdapterRuntime,
+  // On a seat the credential half is the seat's forms' (settings-14,
+  // settings-49), in place of the launcher's rules below.
+  credentialHalf?: (adapter: AdapterName) => Promise<CredentialHalf>,
 ): Promise<AdapterReadiness> {
   // Both halves are evaluated so an adapter missing both reports both —
   // reporting one at a time sends the user round the loop twice.
@@ -2165,7 +2179,13 @@ export async function checkAdapterReadiness(
     faults.push(runtimeCheck.requirement);
   }
   let credentialReady: boolean | null = null;
-  if (adapter === "claude") {
+  let credential: AdapterCredential | undefined;
+  if (credentialHalf) {
+    const half = await credentialHalf(adapter);
+    credentialReady = half.ready;
+    credential = half.credential;
+    if (!half.ready) faults.push(half.requirement ?? half.credential.phrase);
+  } else if (adapter === "claude") {
     credentialReady =
       Boolean(env.ANTHROPIC_API_KEY) || existsSync(join(home, ".claude"));
     if (!credentialReady) {
@@ -2193,9 +2213,10 @@ export async function checkAdapterReadiness(
       requirement: faults.join(
         i18n._({ id: "; ", comment: "Separates reasons listed in one message" }),
       ),
+      ...(credential ? { credential } : {}),
     };
   }
   // The null class survives only over a usable runtime (settings-14): no
   // credential rule exists, so the UI shows verify-yourself guidance.
-  return { adapter, ready: credentialReady === null ? null : true };
+  return { adapter, ready: credentialReady === null ? null : true, ...(credential ? { credential } : {}) };
 }

@@ -6,7 +6,7 @@
 import { test, type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { WebSocket } from "ws";
@@ -15,7 +15,7 @@ import { createSessionStore } from "@sublang/playbook/session-store";
 import { CoreService } from "./service.js";
 import { fakeAdapterImports } from "./testing/fake-adapter.js";
 import { createScriptedCaptain, type CaptainTurnScript } from "./testing/scripted-captain.js";
-import type { Command, CommandResults, IntentInfo, LedgerState, ServerMessage, TmuxPlayRecord } from "./protocol.js";
+import type { AssignedRuntime, Command, CommandResults, IntentInfo, LedgerState, ServerMessage, TmuxPlayRecord } from "./protocol.js";
 
 const VALID_CONFIG = `
 captain:
@@ -82,7 +82,7 @@ class Client {
     fields: Omit<Extract<Command, { type: T }>, "type" | "id">,
   ): Promise<
     | { ok: true; result: CommandResults[T] }
-    | { ok: false; error: { code: string; message: string } }
+    | { ok: false; error: { code: string; message: string; details?: Record<string, unknown> } }
   > {
     const id = `c${(this.nextId += 1)}`;
     this.socket.send(JSON.stringify({ type, id, ...fields }));
@@ -855,11 +855,14 @@ function holdAfterAuthorization(h: Harness) {
 
 /** A sync lands an intent another device captured: its file arrives in
  * the project's clone, and the store re-reads the clone as a sync's
- * refresh does (space-20). */
-function arriveThroughSync(h: Harness, createdAt: number): IntentInfo {
+ * refresh does (space-20). Captured by a Spex that recorded no runtime,
+ * it is format 1; with a runtime, format 2 assigned to it (storage-4). */
+function arriveThroughSync(h: Harness, createdAt: number, runtime?: AssignedRuntime): IntentInfo {
   const store = h.service["store"];
   const id = randomUUID();
-  const file = { format: 1, id, text: "Captured elsewhere, earlier", createdAt };
+  const file = runtime
+    ? { format: 2, id, text: "Captured elsewhere, earlier", runtime, createdAt }
+    : { format: 1, id, text: "Captured elsewhere, earlier", createdAt };
   writeFileSync(join(store.repository(h.project.id)!.intentsDir, `${id}.json`), `${JSON.stringify(file, null, 2)}\n`);
   store.reload();
   const intent = store.getIntent(id);
@@ -935,6 +938,65 @@ test("queue advance: an older intent arriving through a sync after authorization
   assert.equal(starts(client).length, 1);
   assert.equal(h.service["sessions"].getLive(session.id), undefined);
   assert.equal(h.service["sessions"].listSessions().find((row) => row.id === session.id)?.live, false);
+});
+
+test("queue advance: another runtime's older intent arriving through a sync neither becomes the successor nor cancels it, and runs nowhere here", { timeout: 20_000 }, async (t) => {
+  const prompts: string[] = [];
+  const h = await harness(t, async (turn, context) => {
+    prompts.push(turn.prompt);
+    await context.emitReply("Done");
+  });
+  const { client, project, session } = h;
+  const first = await client.queue({ projectId: project.id, text: "First work" });
+  const next = await client.queue({ projectId: project.id, text: "Authorized next" });
+  const held = holdAfterAuthorization(h);
+  await client.expectOk("turn.submit", { sessionId: session.id, text: first.text, intentId: first.id });
+  await held.opened;
+  // Captured on another runtime before the authorized row: it keeps its
+  // place by age with that runtime's label, and next stays next here
+  // (core-service-94, core-service-107, DR-134).
+  const synced = arriveThroughSync(h, next.createdAt - 60_000, { device: randomUUID(), label: "build-server" });
+  const pending = await client.expectOk("ledger.get", {});
+  assert.deepEqual(
+    pending.intents.filter((row) => row.state === "queued").map((row) => row.intent.id),
+    [synced.id, next.id],
+  );
+  expectNext(pending, next.id, "after-current-work", false);
+  assert.equal(entry(pending, synced.id).next, undefined);
+  assert.equal(entry(pending, synced.id).runsOn, "build-server");
+  held.release();
+  // The handoff stands: the authorized successor runs, and the other
+  // runtime's intent is never advanced into.
+  const after = await client.ledgerUntil(
+    (ledger) => entry(ledger, next.id).state === "finished",
+    "the authorized successor",
+  );
+  await settled(h, 2);
+  assert.deepEqual(prompts, [first.text, next.text]);
+  assert.equal(entry(after, next.id).intent.dispatched?.turnId, 2);
+  assert.equal(entry(after, synced.id).intent.dispatched, undefined);
+  assert.equal(entry(after, synced.id).state, "queued");
+  assert.equal(entry(after, synced.id).next, undefined, "no manual start offered here");
+  // A turn naming it, its edit and its close are refused `conflict` with
+  // the phrase and the label, writing nothing (core-service-43,
+  // core-service-46, core-service-47).
+  const file = join(h.service["store"].repository(project.id)!.intentsDir, `${synced.id}.json`);
+  const before = readFileSync(file);
+  for (const [type, fields] of [
+    ["turn.submit", { sessionId: session.id, text: synced.text, intentId: synced.id }],
+    ["intent.edit", { intentId: synced.id, text: "Reworded here" }],
+    ["intent.close", { intentId: synced.id, as: "dropped" }],
+    ["intent.close", { intentId: synced.id, as: "done" }],
+  ] as const) {
+    const reply = await client.command(type, fields as never);
+    assert.ok(!reply.ok, `${type} is refused`);
+    assert.equal(reply.error.code, "conflict", type);
+    assert.equal(reply.error.message, "Runs on build-server", type);
+    assert.deepEqual(reply.error.details, { runsOn: "build-server" }, type);
+  }
+  assert.deepEqual(readFileSync(file), before);
+  assert.equal(starts(client).length, 2);
+  assert.deepEqual(prompts, [first.text, next.text]);
 });
 
 test("queue advance: closing the authorized successor cancels rather than substitutes work", { timeout: 20_000 }, async (t) => {

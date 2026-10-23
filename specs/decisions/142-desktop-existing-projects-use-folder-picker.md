@@ -1,12 +1,12 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
 
-# DR-139: Desktop Existing Projects Use the Folder Picker
+# DR-142: Desktop Existing Projects Use the Folder Picker
 
 ## Status
 
 Accepted (2026-10-22) for the owner's P0-0 project-add review.
-Amends [DR-133](133-the-first-project-picker-leads-with-a-folder.md) and [DR-134](134-specs-first-welcome-and-distinct-project-paths.md) for existing-repository entry on desktop.
+Amends [DR-136](136-the-first-project-picker-leads-with-a-folder.md) and [DR-137](137-specs-first-welcome-and-distinct-project-paths.md) for existing-repository entry on desktop.
 
 ## Context
 

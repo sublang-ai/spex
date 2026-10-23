@@ -13,7 +13,7 @@ import type { AgentCapabilities, ApprovalDecision, ApprovalRequest, BrowserSetup
 import type { SessionRecord as RuntimeRecord } from "@sublang/playbook/session-assets";
 import { LANGUAGES, type Language } from "./language.js";
 
-export const PROTOCOL_VERSION = 27;
+export const PROTOCOL_VERSION = 28;
 
 /** The compile pipeline's phases and their human names, shared so the
  * core's thread lines and the UI's band name a phase alike. */
@@ -533,6 +533,11 @@ export interface SessionInfo {
   /** The checkpoint and current path/config permit continuation; admission checks again. */
   continuable?: boolean;
   continuationReason?: string;
+  /** The label of the runtime the session is assigned to, where that is
+   * another runtime (core-service-32, DR-134): the session is then not
+   * continuable here, its reason "Runs on <label>", and it carries no
+   * `recovery`. Absent where it runs here or names no runtime. */
+  runsOn?: string;
   /** Interrupted work awaiting the Boss (core-service-32): the saved
    * input, and whether Playbook's shared discard predicate allows
    * Discard — nothing recorded, no abandonment, unchanged repository
@@ -634,6 +639,29 @@ export interface ReadinessEntry {
   fastModeSupported: boolean;
   /** Whether cligent serves a subagent model for this adapter (DR-093). */
   subagentModelSupported: boolean;
+  /** On a team server's seat alone (settings-49): the adapter's
+   * credential class and its phrase. */
+  credential?: AdapterCredential;
+}
+
+/** A seat's credential classes (settings-49): the member's own, the
+ * administrator's shared sign-in, a shared file that cannot be read, a
+ * credential the agent's status command reports expired or refused, or
+ * no form set. */
+export type CredentialClass = "own" | "shared" | "unreadable" | "expired" | "none";
+
+export interface AdapterCredential {
+  class: CredentialClass;
+  /** The class in the reader's words; for `none`, how to set one. */
+  phrase: string;
+}
+
+/** The credentials a seat's member placed (settings-48), no secret
+ * among them: each code host with its username, if any, and each agent
+ * with the names of the forms set. */
+export interface CredentialList {
+  hosts: { name: string; username?: string }[];
+  agents: { name: AdapterName; names: string[] }[];
 }
 
 /** What a run reported spending. `costSources` names every provenance
@@ -716,6 +744,14 @@ export interface IntentAuthor {
   displayName: string | null;
 }
 
+/** The runtime a record is assigned to (DR-134): one core on one home,
+ * named by the home's `device`, with a label for display alone — the
+ * server's name on a seat, the host name elsewhere. */
+export interface AssignedRuntime {
+  device: string;
+  label: string;
+}
+
 /** One stored intent: a staged Boss turn, one file of its project's
  * spex repository (DR-035, DR-103). There is no stored state, no rank
  * and no link — everything visible derives, and the queue is ordered
@@ -731,6 +767,10 @@ export interface IntentInfo {
    * the project has no instance or the home is not signed in there
    * (core-service-42, core-service-52). */
   author?: IntentAuthor;
+  /** The runtime that captured it and alone runs it; absent in a file
+   * written before runtimes were recorded (core-service-42,
+   * core-service-52). */
+  runtime?: AssignedRuntime;
   /** The capture time, which orders the queue (core-service-107). */
   createdAt: number;
   /** Stamped when the dispatched turn starts; re-written by a later
@@ -783,7 +823,14 @@ export interface DerivedIntent {
   stats?: IntentStats;
   /** Why an interrupted intent stands stopped on the Boss. */
   reason?: "question" | "failure";
-  /** Present on exactly the project's oldest queued row. */
+  /** The label of another runtime its work runs on (core-service-107,
+   * DR-134): the runtime the intent is assigned to, or — for one naming
+   * none — the runtime of the session holding its dispatch, whose stop
+   * or abort is that runtime's to read. Such a row keeps its place by
+   * age, is never next here and offers no manual start. */
+  runsOn?: string;
+  /** Present on exactly the project's oldest queued row this runtime
+   * may run (core-service-107). */
   next?: QueueSchedule;
 }
 
@@ -1007,6 +1054,14 @@ export const commandSchema = z.discriminatedUnion("type", [
    * environment's playbooks first (core-service-2, environments-9). */
   z.object({ type: z.literal("config.get"), id, projectId: repositoryKeySchema.optional() }),
   z.object({ type: z.literal("readiness.get"), id }),
+  // A seat member's own credentials (settings-48, storage-44): a code
+  // host's token, `values` {token, username?}, or an agent's, `values`
+  // {<NAME>: value} over its forms; the core checks each field and
+  // refuses `invalid_request` before anything is written.
+  z.object({ type: z.literal("credential.set"), id, kind: z.enum(["host", "agent"]), name: z.string(),
+    values: z.record(z.string(), z.string()) }).strict(),
+  z.object({ type: z.literal("credential.remove"), id, kind: z.enum(["host", "agent"]), name: z.string() }).strict(),
+  z.object({ type: z.literal("credential.list"), id }).strict(),
   z.object({ type: z.literal("agent.options"), id, adapter: adapterNameSchema }),
   z.object({ type: z.literal("project.list"), id }),
   z.object({ type: z.literal("project.register"), id, path: z.string().min(1) }),
@@ -1330,6 +1385,14 @@ export const commandSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("space.tree"), id, repository: repositoryKeySchema, path: z.string().optional() }).strict(),
   z.object({ type: z.literal("space.read"), id, repository: repositoryKeySchema, path: z.string().min(1) }).strict(),
   z.object({ type: z.literal("space.repair.decline"), id, repair: z.string().min(1), declined: z.boolean() }).strict(),
+  // Team servers (core-service-128, DR-133): the servers each signed-in
+  // instance lists, and a seat on one opened or closed, the server named
+  // by its instance's origin and its id there. `consented`: the client
+  // showed the contract of the instance's record; absent or false, the
+  // core refuses the open and asks nothing.
+  z.object({ type: z.literal("server.list"), id }).strict(),
+  z.object({ type: z.literal("server.open"), id, instance: instanceOriginSchema, serverId: z.string().min(1), consented: z.boolean().optional() }).strict(),
+  z.object({ type: z.literal("server.close"), id, instance: instanceOriginSchema, serverId: z.string().min(1) }).strict(),
   // Authoring sessions (DR-058, core-service-96): each in the spex
   // repository of the project `projectId` names; one activity per
   // session, Boss messages queue while a turn or compile runs.
@@ -1433,6 +1496,10 @@ export interface CommandResults {
   "media.read": {asset: MediaAsset; offset: number; data: string; eof: boolean};
   "config.get": ConfigState;
   "readiness.get": ReadinessEntry[];
+  /** The credentials after the write, as `credential.list` lists them. */
+  "credential.set": CredentialList;
+  "credential.remove": CredentialList;
+  "credential.list": CredentialList;
   "agent.options": AgentOptions;
   "project.list": ProjectInfo[];
   "project.rebind": ProjectInfo;
@@ -1525,6 +1592,11 @@ export interface CommandResults {
   "space.tree": { path: string; entries: SpaceEntry[] };
   "space.read": SpaceReadResult;
   "space.repair.decline": GroupsState;
+  "server.list": ServerListing;
+  /** The seat's place and its lease's expiry in Unix milliseconds; never
+   * its endpoint or its bearer (core-service-128). */
+  "server.open": { place: string; leaseExpiresAt: number };
+  "server.close": { closed: true };
   "draft.list": DraftInfo[];
   /** The org and license a new playbook of the project starts from,
    * null where no license is derived (playbook-library-103). */
@@ -1916,6 +1988,12 @@ export type SpaceSyncPhase =
       message: string;
       guidance: string;
       retry: boolean;
+      /** On a seat, the https code host a join's failed code clone
+       * needs a credential of the member's for, or whose credential of
+       * theirs cannot be read, by the name the Credentials section
+       * takes it (space-103, settings-48); absent for any other
+       * failure. */
+      credential?: string;
     }
   | { phase: "done"; at: number; sent: number; received: number; pushed: boolean };
 
@@ -1999,6 +2077,40 @@ export interface HostMemberInfo {
   /** The path in the instance of the group the membership comes through
    * where it is not direct, else null. */
   via: string | null;
+}
+
+/** A team server a signed-in instance lists for the person
+ * (core-service-128, DR-133): its instance's origin, its id there, its
+ * name, its group's path in the instance, and whether a seat this core
+ * opened is open at it. */
+export interface ServerInfo { instance: string; id: string; name: string; group: string; open: boolean }
+
+/** `server.list`'s reply (core-service-128): every server each signed-in
+ * instance lists, in the home's order of instances and each instance's
+ * own, and one entry per instance whose read failed, with the failure as
+ * the reader reads it (git-host-11); one instance failing hides no
+ * other's servers. */
+export interface ServerListing { servers: ServerInfo[]; failures: { instance: string; message: string }[] }
+
+/** A seat's relay (core-service-128, core-service-129): connecting to
+ * the seat, open, closed, or mismatched — the seat speaking another
+ * protocol version. */
+export type SeatRelayState = "connecting" | "open" | "closed" | "mismatched";
+
+/** An open seat (core-service-128, DR-133): its instance's origin, its
+ * server's id there, the server's name and group, its place, the lease's
+ * expiry in Unix milliseconds, and its relay's state. Never its endpoint
+ * or its bearer. */
+export interface SeatState {
+  instance: string;
+  serverId: string;
+  name: string;
+  group: string;
+  /** `<instance origin>#<server id>` (storage-45): the place, shown by
+   * the server's name. */
+  place: string;
+  leaseExpiresAt: number;
+  relay: SeatRelayState;
 }
 
 /** The home, its groups and their spex repositories (space-30,
@@ -2211,6 +2323,13 @@ export interface SpaceStateMessage {
   state: GroupsState;
 }
 
+/** The open seats, whole (core-service-128): broadcast to every client
+ * on every change, and sent to each client as it connects. */
+export interface ServerStateMessage {
+  type: "server.state";
+  seats: SeatState[];
+}
+
 /** One authoring record, to the subscribers of the draft's channel. */
 export interface DraftRecordMessage {
   type: "draft.record";
@@ -2273,6 +2392,7 @@ export type ServerMessage =
   | IntentsChangedMessage
   | LanguageStateMessage
   | SpaceStateMessage
+  | ServerStateMessage
   | EnvironmentStateMessage
   | DraftRecordMessage
   | DraftStateMessage

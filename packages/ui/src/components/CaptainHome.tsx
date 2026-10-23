@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The Captain home (DR-007, DR-132, DR-138): a welcome page until a
+// The Captain home (DR-007, DR-135, DR-141): a welcome page until a
 // project exists, then a scoped task start with slash discovery.
 // Props-driven so RUN-29/31 exercise it without a live core.
 
@@ -20,7 +20,8 @@ import type { AgentPatch } from "../lib/config-ops.js";
 import { keyLabel } from "../lib/shortcuts.js";
 import { playbookIntent } from "../lib/playbook-intent.js";
 import { treeCounts } from "../lib/spec-view-model.js";
-import { useAppStore, type StagedIntent } from "../state/store.js";
+import { isLocalPlace, type StagedIntent } from "../state/store.js";
+import { usePlaceStore } from "../state/place-context.js";
 import { SlashMenuList, slashMatches } from "./SlashMenu.js";
 import { AgentChip, agentChipText, fastModeWord, readinessWord } from "./AgentChip.js";
 import { AgentEditorPopover } from "./AgentEditor.js";
@@ -114,7 +115,7 @@ export function popoverRoom(
 
 function previewIntent(playbook: PlaybookSummary): string {
   if (playbook.command === "code" && playbook.intent === "implement a coding intent in reviewed, one-commit phases, using an intent record when needed") {
-    return i18n._("implement in reviewed phases");
+    return i18n._("build and review step by step");
   }
   if (playbook.command === "review" && playbook.intent === "review a supplied scope of committed work until no unsettled findings remain") {
     return i18n._("review committed changes");
@@ -141,6 +142,7 @@ function CaptainBubble({ children }: { children: React.ReactNode }) {
 }
 
 export function CaptainHome(props: CaptainHomeProps) {
+  const store = usePlaceStore();
   const { playbooks, captain, readiness, connected } = props;
   const [localText, setLocalText] = useState("");
   // Draft lives in the store when the host wires it (DR-010: surface
@@ -157,8 +159,13 @@ export function CaptainHome(props: CaptainHomeProps) {
   const [queueNote, setQueueNote] = useState<string>();
   const [captainPopover, setCaptainPopover] =
     useState<ReturnType<typeof popoverRoom>>();
-  // Seeding is the same store action the palette uses (run-view-168).
-  const openAcademyExample = useAppStore((state) => state.openAcademyExample);
+  // With nothing registered the greeting itself carries the ways in
+  // (run-view-25); seeding is the store action the palette uses. The
+  // example is seeded at a folder this page names, so it is this
+  // computer's alone: a seat's projects are opened among the member's
+  // groups, its core allocating every folder (run-view-169).
+  const openAcademyExample = store((state) => state.openAcademyExample);
+  const seedable = isLocalPlace(store.place);
   const [seeding, setSeeding] = useState(false);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const chipRef = useRef<HTMLButtonElement>(null);
@@ -272,23 +279,23 @@ export function CaptainHome(props: CaptainHomeProps) {
             Spex
           </span>
           <h1 className="text-3xl font-semibold leading-tight tracking-tight text-neutral-900 dark:text-neutral-100 sm:text-4xl">
-            {i18n._("Define checkable specs. Deliver through playbooks.")}
+            {i18n._("Write clear specs. Build with playbooks.")}
           </h1>
           <ol className="mt-5 max-w-lg border-l border-neutral-300 text-sm leading-6 dark:border-neutral-700">
             <li className="relative pb-3 pl-5">
               <span aria-hidden="true" className="absolute -left-[5px] top-2 size-2 rounded-full bg-brand-500" />
               <span className="font-semibold text-neutral-800 dark:text-neutral-100">{i18n._("Specs")}</span>
-              <span className="ml-3 text-neutral-600 dark:text-neutral-300">{i18n._("Define goals and acceptance criteria")}</span>
+              <span className="ml-3 text-neutral-600 dark:text-neutral-300">{i18n._("Describe how the system should work and how to check it")}</span>
             </li>
             <li className="relative pb-3 pl-5">
               <span aria-hidden="true" className="absolute -left-[5px] top-2 size-2 rounded-full bg-neutral-400 dark:bg-neutral-500" />
               <span className="font-semibold text-neutral-800 dark:text-neutral-100">{i18n._("Playbooks")}</span>
-              <span className="ml-3 text-neutral-600 dark:text-neutral-300">{i18n._("Compile natural-language playbooks into executable workflows")}</span>
+              <span className="ml-3 text-neutral-600 dark:text-neutral-300">{i18n._("Turn workflows written in plain language into steps AI can run")}</span>
             </li>
             <li className="relative pl-5">
               <span aria-hidden="true" className="absolute -left-[5px] top-2 size-2 rounded-full bg-neutral-400 dark:bg-neutral-500" />
               <span className="font-semibold text-neutral-800 dark:text-neutral-100">{i18n._("Delivery")}</span>
-              <span className="ml-3 text-neutral-600 dark:text-neutral-300">{i18n._("Coordinate AI implementation and review, with traceable changes")}</span>
+              <span className="ml-3 text-neutral-600 dark:text-neutral-300">{i18n._("AI builds and reviews changes, with a record of each step")}</span>
             </li>
           </ol>
           <div className="mt-8 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
@@ -298,9 +305,9 @@ export function CaptainHome(props: CaptainHomeProps) {
               onClick={props.onOpenOwnProject ?? props.onOpenPalette}
               className="rounded-lg bg-brand-600 px-5 py-3 text-sm font-semibold text-white hover:bg-brand-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500"
             >
-              {i18n._("Add a local project")}
+              {seedable ? i18n._("Add a local project") : i18n._("Open a project")}
             </button>
-            <button
+            {seedable ? <button
               type="button"
               data-testid="home-academy"
               disabled={seeding || !connected}
@@ -308,9 +315,9 @@ export function CaptainHome(props: CaptainHomeProps) {
               className="rounded-lg border border-neutral-300 px-5 py-3 text-sm font-medium text-neutral-700 hover:bg-neutral-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500 disabled:opacity-40 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800"
             >
               {seeding
-                ? i18n._("Seeding…")
-                : i18n._("Open the Academy example project")}
-            </button>
+                ? i18n._("Opening…")
+                : i18n._("Open the Academy example")}
+            </button> : null}
           </div>
           {configBroken ? (
             <div
@@ -348,12 +355,12 @@ export function CaptainHome(props: CaptainHomeProps) {
 
   return (
     // The surface root is height-constrained (DR-041 §9): the shell
-    // fills the window, and the greeting scrolls inside the box below
-    // rather than growing the page.
+    // fills the window. The greeting yields first; when the task controls
+    // need more room, the home scrolls instead of growing the page.
     <div
       data-testid="captain-home"
-      className={`mx-auto flex w-full min-h-0 max-w-2xl flex-1 flex-col p-6 ${
-        emptyCanvas ? "justify-center" : ""
+      className={`mx-auto flex w-full min-h-0 max-w-2xl flex-1 flex-col overflow-y-auto p-6 ${
+        emptyCanvas ? "justify-center-safe" : ""
       }`}
     >
       <div
@@ -369,7 +376,7 @@ export function CaptainHome(props: CaptainHomeProps) {
               })}
             </h1>
             <p className="mt-3 text-sm leading-6 text-neutral-600 dark:text-neutral-300">
-              {i18n._("Spex helps you turn goals and acceptance criteria into specs, then uses playbooks to coordinate AI implementation and review.")}
+              {i18n._("Describe your goal. AI helps write specs for how the system should work and how to check it, then follows playbooks to build and review changes.")}
             </p>
             {props.onOpenSpecs ? (
               <div data-testid="project-spec-status" className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs leading-5 text-neutral-500 dark:text-neutral-400">
@@ -379,9 +386,9 @@ export function CaptainHome(props: CaptainHomeProps) {
                     : specState === "missing"
                       ? i18n._("No project specs yet")
                       : specState === "empty"
-                        ? i18n._("Specs directory exists, but no packages yet")
+                        ? i18n._("No spec packages yet")
                         : specState === "legacy"
-                          ? i18n._("Specs need migration")
+                          ? i18n._("Specs use an older format")
                           : specState === "error"
                             ? i18n._("Couldn't read project specs")
                             : specState === "disconnected"
@@ -393,7 +400,7 @@ export function CaptainHome(props: CaptainHomeProps) {
                     {specState === "missing"
                       ? i18n._("See how to start")
                       : specState === "legacy"
-                        ? i18n._("View migration guidance")
+                        ? i18n._("See how to update")
                         : specState === "error"
                           ? i18n._("View details")
                           : i18n._("View specs")}
@@ -406,7 +413,7 @@ export function CaptainHome(props: CaptainHomeProps) {
           <CaptainBubble>
             <p>
               {i18n._(
-                "Hello! I'm your Captain. Pick a project in the sidebar, then tell me what to do with it and I'll route it to a playbook, a scripted workflow the AI players run.",
+                "Pick a project in the sidebar, then describe your goal.",
               )}
             </p>
           </CaptainBubble>
@@ -469,14 +476,14 @@ export function CaptainHome(props: CaptainHomeProps) {
             className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200"
           >
             <span>
-              {i18n._("The selected agent is not ready, so this task cannot start yet.")}
+              {i18n._("Set up an agent before starting a task.")}
             </span>{" "}
             <button
               type="button"
               onClick={() => props.onNavigate("Settings")}
               className="font-medium underline"
             >
-              {i18n._("Connect an agent")}
+              {i18n._("Set up an agent")}
             </button>
             {readyAlternative ? (
               <button
@@ -574,8 +581,10 @@ export function CaptainHome(props: CaptainHomeProps) {
               activeIndex={Math.min(slashIndex, slash.length - 1)}
               onPick={insertCommand}
               onCompileNew={() => {
-                // The Library lands on its id field (playbook-library-51).
-                useAppStore.getState().requestNewPlaybook();
+                // The Library lands on its id field (playbook-library-51),
+                // at the place shown here: the navigation opens Playbooks
+                // there (run-view-168).
+                store.getState().requestNewPlaybook();
                 props.onNavigate("Playbooks");
               }}
             />
@@ -719,7 +728,7 @@ export function CaptainHome(props: CaptainHomeProps) {
             {!configBroken && !props.next && previewPlaybooks.length > 0 ? (
               <div data-testid="playbook-preview">
                 <p>
-                  {i18n._("A playbook is like a Skill compiled into an executable workflow: it coordinates AI through predefined steps.")}{" "}
+                  {i18n._("A playbook is a workflow written in plain language. Spex turns it into steps for AI to follow.")}{" "}
                   {i18n._("For example:")}{" "}
                   {previewPlaybooks.map((playbook, index) => (
                     <span key={playbook.id}>
@@ -735,7 +744,7 @@ export function CaptainHome(props: CaptainHomeProps) {
               {playbooks.length > 0 ? (
                 <span id="start-playbook-hint">
                   <Rich
-                    text={i18n._("Type <0>/</0> in the task box to see all {count} playbooks", { count: playbooks.length })}
+                    text={i18n._("Type <0>/</0> in the task box to see {count, plural, one {# playbook} other {# playbooks}}", { count: playbooks.length })}
                     components={[<code key="slash" className="font-mono" />]}
                   />
                 </span>

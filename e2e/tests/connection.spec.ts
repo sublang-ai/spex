@@ -14,7 +14,9 @@ test("run-view-100: a wrong token fails loudly, with retry", async ({ page, app 
   await expect(banner.first()).toBeVisible({ timeout: 15_000 });
   await expect(banner.first()).toContainText(new RegExp(app.origin.replace(/^http/, "ws")));
   await expect(page.getByRole("button", { name: "Retry" })).toBeVisible();
-  await expect(page.getByTestId("start-composer")).toBeDisabled();
+  await expect(page.getByTestId("welcome-home")).toBeVisible();
+  await expect(page.getByTestId("start-composer")).toHaveCount(0);
+  await expect(page.getByTestId("home-academy")).toBeDisabled();
 });
 
 test("run-view-100: the page says it is reconnecting and recovers", async ({

@@ -52,6 +52,7 @@ import {
   type PlaybookModules,
 } from "./config.js";
 import {
+  adapterNameSchema,
   CAPTAIN_AGENT_ID,
   parseCommand,
   PACKAGE_LICENSE_PATTERN,
@@ -70,9 +71,9 @@ import {
 } from "./protocol.js";
 import { resolveLanguage, type Language } from "./language.js";
 import { i18n, speak } from "./i18n.js";
-import { CoreError, SessionManager, currentSession, executionConfig, storedMembers, type CaptainFactory, type RecordEnvelope } from "./session.js";
+import { CoreError, SessionManager, assertRunsHere, currentSession, executionConfig, runsElsewhereRefusal, runsNowhereRefusal, storedMembers, type CaptainFactory, type RecordEnvelope } from "./session.js";
 import { closedStats, foldConditions, foldLedger, intentTitle, queueSchedule, wasWorked } from "./ledger.js";
-import type { TurnControlKind } from "./control-record.js";
+import { runsElsewhere, type TurnControlKind } from "./control-record.js";
 import { readStoredLanguage, Store, type SpexRepository } from "./store.js";
 import { UPLOAD_STAGING } from "./storage-git.js";
 import { foldDiagnostics, StorageFormatError, type RepairChecked, type StorageDiagnostic } from "./app-storage.js";
@@ -118,7 +119,7 @@ import {
   type BuiltinPackage,
 } from "./environment/index.js";
 import { splitKey } from "./home.js";
-import type { CommandResults, IntentInfo, InvalidPlaybookEntry, PlaybookAvailability, ProjectInfo, PublishPreview, RoleBindingSummary } from "./protocol.js";
+import type { AssignedRuntime, CommandResults, IntentInfo, InvalidPlaybookEntry, PlaybookAvailability, ProjectInfo, PublishPreview, RoleBindingSummary } from "./protocol.js";
 import {
   parseSpecTree,
   readRecordCommitTimes,
@@ -131,8 +132,12 @@ import { browserAgent } from "./browser.js";
 import { ApplicationMedia } from "./media.js";
 import { MediaTransferError } from "./media-transfers.js";
 import { readAgentOptions, type AgentModelDiscovery } from "./agent-options.js";
+import { DEFAULT_ADAPTER_IMPORTS } from "./agent-runtime.js";
+import { canonicalHost, codeCredentialsPath, codeCredentialStore, isAdapterName, type AgentCredential, type CodeCredentialStore, type HostCredential } from "./code-credentials.js";
+import { AGENT_CREDENTIAL_FORMS, SeatEnvironment, seatAdapterImports, seatCredentialHalf, type SeatCredentialSources } from "./seat-credentials.js";
 import { SpaceManager, type SpaceHost } from "./space.js";
-import { GitHostClient, fileCredentialStore } from "./git-host.js";
+import { Places } from "./places.js";
+import { GitHostClient, SEAT_ID_MAX, fileCredentialStore } from "./git-host.js";
 import { relayHostError } from "./space-groups.js";
 import { currentRuntime, withGitCredential } from "./git-credential.js";
 import { displayRemote, validateRemoteUrl } from "./space-git.js";
@@ -247,6 +252,156 @@ export interface CoreServiceOptions {
   userHome?: string | null;
   /** The registry's fetch (environments-12); a test seam. */
   registryFetch?: typeof fetch;
+  /** This runtime's label, stored beside the home's device at assignment
+   * for display alone (DR-134): the server's name on a seat, else this
+   * label, else the host name. */
+  runtimeLabel?: string;
+  /**
+   * Seat mode (core-service-125, DR-132): this core runs on a team
+   * server for one member — the server's id and name and the admitted
+   * person's permanent account id at the instance. Its sign-in is the
+   * device flow naming the server and the person (git-host-27), your
+   * own group is placed at no instance (space-102), the commands naming
+   * a working folder are refused, and the runtime's label is the
+   * server's name. The ids are at most 64 characters. Its runs inherit
+   * the shared credential file's forms and the member's own credentials
+   * (core-service-126).
+   */
+  seat?: SeatOptions;
+  /** Test seam (DR-133): CA certificates, PEM, trusted beside the
+   * system's when the core presents a ticket at a team server's address;
+   * a stand-in hub's fixture CA. */
+  serverCertificateAuthorities?: readonly string[];
+}
+
+/** A seat's facts (core-service-125). */
+export interface SeatOptions {
+  serverId: string;
+  serverName: string;
+  personId: string;
+  /** The administrator's shared credential file, an absolute path: its
+   * `NAME=value` lines are read into the environment of every agent run
+   * (core-service-126). */
+  sharedCredentialFile?: string;
+}
+
+/** A seat's options checked at start: both ids hold 1 to 64 characters
+ * (git-host-27), the name some text, and a shared credential file, where
+ * one is given, an absolute path. A shell's mistake, in English. */
+function checkSeat(seat: SeatOptions): SeatOptions {
+  for (const [name, value] of [["serverId", seat.serverId], ["personId", seat.personId]] as const) {
+    if (typeof value !== "string" || value.length === 0 || value.length > SEAT_ID_MAX) {
+      throw new Error(`spex: a seat's ${name} must hold 1 to ${SEAT_ID_MAX} characters`);
+    }
+  }
+  const serverName = typeof seat.serverName === "string" ? seat.serverName.trim() : "";
+  if (serverName.length === 0) throw new Error("spex: a seat's serverName must hold some text");
+  const shared = seat.sharedCredentialFile;
+  if (shared !== undefined && (typeof shared !== "string" || !isAbsolute(shared))) {
+    throw new Error("spex: a seat's sharedCredentialFile must be an absolute path");
+  }
+  return { serverId: seat.serverId, serverName, personId: seat.personId, ...(shared !== undefined ? { sharedCredentialFile: shared } : {}) };
+}
+
+/** The refusal off a seat of a command on the member's own credentials
+ * (settings-48). */
+const credentialsOffSeat = (): CoreError => new CoreError("invalid_request", i18n._({
+  id: "Credentials are kept on a server's seat",
+  comment: "Refusal of a credentials command on a machine of one's own: Spex keeps a member's code-host and agent credentials only on a team server's seat",
+}));
+
+// A credential command's fields, each checked before anything is written
+// (settings-48); a refusal never repeats what was given, which may hold
+// a secret.
+const blankCredentialName = (): CoreError => new CoreError("invalid_request", i18n._({
+  id: "A credential needs a name",
+  comment: "Refusal of a credential on a team server's seat: the host's or the agent's name, or a variable's name, is blank",
+}));
+const blankCredentialValue = (): CoreError => new CoreError("invalid_request", i18n._({
+  id: "A credential's value cannot be blank",
+  comment: "Refusal of a credential on a team server's seat: a token, a username or an agent's value is blank, or none is given",
+}));
+
+/** A code host as the member names it, in lowercase. */
+function credentialHost(name: string): string {
+  if (name.trim() === "") throw blankCredentialName();
+  const host = canonicalHost(name);
+  if (host === null) {
+    throw new CoreError("invalid_request", i18n._({
+      id: "That is not a host name: give the host alone, with a port where it needs one, and no scheme, path, user or spaces",
+      comment: "Refusal of a code host's credential on a team server's seat: the name given is not a DNS host name with an optional port",
+    }));
+  }
+  return host;
+}
+
+/** An agent as the member names it: one of the adapters. */
+function credentialAgent(name: string): AdapterName {
+  if (name.trim() === "") throw blankCredentialName();
+  if (!isAdapterName(name)) {
+    throw new CoreError("invalid_request", i18n._({
+      id: "That is not an agent: name one of {agents}",
+      comment: "Refusal of an agent's credential on a team server's seat: the name is no agent's; `agents` lists the agents' names as they are",
+      values: { agents: listed(adapterNameSchema.options) },
+    }));
+  }
+  return name;
+}
+
+/** A code host's credential: a token and an optional username, each one
+ * line of text. */
+function hostCredentialOf(values: Record<string, string>): HostCredential {
+  if (Object.keys(values).some((field) => field !== "token" && field !== "username")) {
+    throw new CoreError("invalid_request", i18n._({
+      id: "A code host's credential is a token and, where the host asks for one, a username",
+      comment: "Refusal of a code host's credential on a team server's seat: it names a field other than the token and the username",
+    }));
+  }
+  const { token, username } = values;
+  if (token === undefined || token.trim() === "" || (username !== undefined && username.trim() === "")) throw blankCredentialValue();
+  if ([token, username ?? ""].some((value) => /[\u0000-\u001f\u007f]/.test(value))) {
+    throw new CoreError("invalid_request", i18n._({
+      id: "A code host's token and username are each one line of text",
+      comment: "Refusal of a code host's credential on a team server's seat: the token or the username holds a line break or another control character",
+    }));
+  }
+  return { token, ...(username !== undefined ? { username } : {}) };
+}
+
+/** An agent's own credential: values by the agent's forms (settings-49). */
+function agentCredentialOf(adapter: AdapterName, values: Record<string, string>): AgentCredential {
+  const names = Object.keys(values);
+  if (names.length === 0) throw blankCredentialValue();
+  const forms = AGENT_CREDENTIAL_FORMS[adapter].names;
+  for (const name of names) {
+    if (name.trim() === "") throw blankCredentialName();
+    if (!forms.includes(name)) {
+      throw new CoreError("invalid_request", i18n._({
+        id: "{adapter} takes only {forms}",
+        comment: "Refusal of an agent's credential on a team server's seat: a variable's name is none of the agent's forms; `adapter` is the agent's name and `forms` lists the variables' names, both as they are",
+        values: { adapter, forms: listed(forms) },
+      }));
+    }
+    const value = values[name] ?? "";
+    if (value.trim() === "") throw blankCredentialValue();
+    if (value.includes("\0")) {
+      throw new CoreError("invalid_request", i18n._({
+        id: "An agent's credential cannot hold a NUL character",
+        comment: "Refusal of an agent's credential on a team server's seat: a value holds a NUL character, which no process environment carries",
+      }));
+    }
+  }
+  // A credential holds the agent's key form: Kimi's model name, base URL
+  // and provider type only accompany its key (settings-48, settings-49).
+  const keys = AGENT_CREDENTIAL_FORMS[adapter].keys;
+  if (!names.some((name) => keys.includes(name))) {
+    throw new CoreError("invalid_request", i18n._({
+      id: "A {adapter} credential needs {keys}",
+      comment: "Refusal of an agent's credential on a team server's seat: it carries only names that accompany the agent's key, such as Kimi's model name, and not the key; `adapter` is the agent's name and `keys` lists the key's variable names, any one of which will do, both as they are",
+      values: { adapter, keys: listed(keys) },
+    }));
+  }
+  return { ...values };
 }
 
 // The Sources cache ages out at ten minutes (dashboard-14).
@@ -348,6 +503,13 @@ const invalidPlaybookId = (id: string): CoreError =>
     values: { id },
   }));
 
+/** A handshake request's path, its query and fragment left out. */
+function requestPath(url: string | undefined): string {
+  const raw = url ?? "/";
+  const end = raw.search(/[?#]/);
+  return end < 0 ? raw : raw.slice(0, end);
+}
+
 /** Expand a leading ~ so the most natural path spelling works. */
 function expandPath(input: string, home: string): string {
   const trimmed = input.trim();
@@ -360,8 +522,10 @@ export interface CoreServiceEvents {
   /** Local hook for an embedding shell (notifications, badges). */
   onRecord?: (envelope: RecordEnvelope) => void;
   onSessionState?: (session: import("./protocol.js").SessionInfo) => void;
-  /** The ledger fold moved (DR-035): the shell re-reads `ledger()`
-   * for its badge, so the dock and the app never disagree. */
+  /** The attention count moved — this core's ledger fold (DR-035) or
+   * a seat's counted badge (core-service-129): the shell re-reads
+   * `attentionCount()` for its badge, so the dock and the app never
+   * disagree. */
   onLedgerChange?: () => void;
 }
 
@@ -438,6 +602,21 @@ export class CoreService {
   private configPath: string;
   /** The runtime the Git credential helper runs on (git-host-9). */
   private readonly hostRuntime: { execPath: string; electron: boolean };
+  /** This core's seat on a team server, where it runs as one
+   * (core-service-125); none on a machine of one's own. */
+  private readonly seat?: SeatOptions;
+  /** On a seat, the environment its agent runs inherit (core-service-126)
+   * and the member's own credentials (storage-44). */
+  private readonly seatEnvironment?: SeatEnvironment;
+  private readonly codeCredentials?: CodeCredentialStore;
+  /** The adapter imports every agent run loads: on a seat, each run
+   * first writes its environment (core-service-126). */
+  private readonly adapterImports?: PlayerAdapterImports;
+  /** This runtime's label for display (core-service-4, DR-134): the
+   * server's name on a seat, else the given label, else this machine's
+   * host name; its name is the home's device, read when a record is
+   * assigned. */
+  private readonly runtimeLabel: string;
   private readonly env: NodeJS.ProcessEnv;
   private readonly home: string;
   private readonly store: Store;
@@ -479,6 +658,9 @@ export class CoreService {
   private ledgerTimer?: NodeJS.Timeout;
   /** Monotonic reload identity; a superseded reload commits nothing. */
   private reloadGeneration = 0;
+  /** Each readiness push a change of the member's agent credentials
+   * started, the newest alone announced (settings-49). */
+  private credentialPushes = 0;
   /** The reload in flight, awaited before a runtime opens (core-service-92). */
   private reloading?: Promise<void>;
   private readonly migrationDiagnostics: {file: string; reason: string; blocking: boolean}[] = [];
@@ -491,6 +673,8 @@ export class CoreService {
   private readonly submitting = new Map<string, Promise<void>>();
   /** Groups' engine (DR-103): one sync machine per spex repository. */
   private readonly space: SpaceManager;
+  /** The seats this core holds on team servers (core-service-128). */
+  private readonly places: Places;
   /** Every spex repository's environment (DR-104). */
   private readonly environments: EnvironmentManager;
   /** Set once start finished: environment changes then reload. */
@@ -508,9 +692,18 @@ export class CoreService {
 
   private constructor(options: CoreServiceOptions, store: Store) {
     this.options = options;
+    if (options.seat) this.seat = options.seat;
+    this.runtimeLabel = options.seat?.serverName ?? (options.runtimeLabel || hostname());
     this.env = options.env ?? process.env;
     this.home = options.home ?? this.env.HOME ?? homedir();
     this.store = store;
+    if (options.seat) {
+      const credentials = codeCredentialStore(store.dir);
+      const environment = new SeatEnvironment(process.env, options.seat.sharedCredentialFile, () => credentials.readAgents());
+      this.codeCredentials = credentials;
+      this.seatEnvironment = environment;
+      this.adapterImports = seatAdapterImports(options.adapterImports ?? DEFAULT_ADAPTER_IMPORTS, () => { environment.prepare(); });
+    } else if (options.adapterImports) this.adapterImports = options.adapterImports;
     // Your own group's config, inside its clone (storage-1, DR-103); an
     // explicit path is the operator's.
     this.configPath = options.configPath ?? store.ownRepository().configPath;
@@ -532,9 +725,10 @@ export class CoreService {
       cancelApprovals: (sessionId) => this.approvals.cancel({kind: "session", id: sessionId}),
       store: this.store,
       loadModule: this.options.loadModule,
-      adapterImports: options.adapterImports,
+      adapterImports: this.adapterImports,
       captainFactory: options.captainFactory,
       env: this.env,
+      runtime: () => this.assignableRuntime(),
     });
     this.sessions.onRecord = (envelope) => {
       this.dispatchRecord(envelope);
@@ -642,7 +836,7 @@ export class CoreService {
       env: this.env,
       store: this.store,
       libraryDir: this.libraryDir(),
-      diagnostics: () => foldDiagnostics([...this.migrationDiagnostics, ...this.store.storageDiagnostics(), ...this.store.sessionDiagnostics()]),
+      diagnostics: () => foldDiagnostics([...this.migrationDiagnostics, ...this.store.storageDiagnostics(), ...this.store.sessionDiagnostics(), ...this.credentialDiagnostics()]),
       checkRepairs: (diagnostics) => checkRepairs(
         diagnostics,
         this.store.listProjects().map((project) => ({ id: project.id, name: project.name, path: project.path })),
@@ -668,12 +862,35 @@ export class CoreService {
       ...(options.spaceTransportTimeoutMs !== undefined ? { transportTimeoutMs: options.spaceTransportTimeoutMs } : {}),
       ...(options.spaceBeforeStep ? { beforeStep: options.spaceBeforeStep } : {}),
       clientFor: (origin: string) => this.hostClientFor(origin),
-      signInFlow: options.signIn ?? "device",
+      // A seat signs in through the device flow alone (core-service-125).
+      signInFlow: options.seat ? "device" : options.signIn ?? "device",
+      seat: options.seat !== undefined,
+      // On a seat, the member's own token for a code host, read from
+      // its file before each transport to that host; an entry that will
+      // not read is refused, serving no transport, the storage
+      // diagnostics reporting it and a failed code clone saying so
+      // (git-host-9, storage-44, space-103).
+      ...(this.codeCredentials ? {
+        hostToken: (host: string) => this.codeCredentials?.readHost(host) ?? null,
+      } : {}),
       hostRuntime: this.hostRuntime,
       repositoriesChanged: () => this.afterRepositoriesChanged(),
       repositoriesMoved: (moves) => this.repositoriesMoved(moves),
     };
     this.space = new SpaceManager(spaceHost);
+    // The seats on team servers (core-service-128, DR-133): each
+    // signed-in instance's servers read through the client this core
+    // keeps for it, every change of the open seats announced.
+    this.places = new Places({
+      homeDir: this.store.dir,
+      signedInOrigins: () => this.space.signedInOrigins(),
+      signedInInstance: (named) => this.space.signedInInstance(named),
+      clientOf: (origin) => this.space.clientOf(origin),
+      instanceName: (origin) => this.space.instanceName(origin),
+      broadcast: (seats) => this.broadcast({ type: "server.state", seats }),
+      attentionChanged: () => this.events.onLedgerChange?.(),
+      ...(options.serverCertificateAuthorities ? { certificateAuthorities: options.serverCertificateAuthorities } : {}),
+    });
     // Authoring sessions live in the spex repository of their project
     // (storage-23); their spec packages in its working folder
     // (environments-10).
@@ -692,7 +909,8 @@ export class CoreService {
       // Read when used: your own group's config moves with its clone.
       get configPath() { return service.configPath; },
       env: this.env,
-      adapterImports: options.adapterImports,
+      agentEnv: () => service.agentRunEnv(),
+      adapterImports: this.adapterImports,
       compileSpawner: options.compileSpawner,
       compileRuntime: options.compileRuntime,
       composed: () => this.composed,
@@ -774,16 +992,68 @@ export class CoreService {
     return null;
   }
 
+  /** The environment an agent run the core spawns itself inherits — a
+   * compile's slc and the agent it drives (playbook-library-42), a
+   * model discovery: on a seat, the shared credential file and the
+   * member's own credentials read afresh first, as before every agent
+   * run (core-service-126). */
+  private agentRunEnv(): NodeJS.ProcessEnv {
+    const seat = this.seatEnvironment;
+    if (!seat) return this.env;
+    seat.prepare();
+    return seat.envFor(this.env);
+  }
+
+  /** On a seat, the member's credentials file refused or its malformed
+   * entries (storage-44), as the file stands now. */
+  private credentialDiagnostics(): StorageDiagnostic[] {
+    try {
+      return this.codeCredentials?.diagnostics() ?? [];
+    } catch {
+      return [];
+    }
+  }
+
+  /** This runtime (DR-134): one core on one home, named by the home's
+   * `device` as `home.yaml` reads now, with its label. A caller reads it
+   * once the home reads, in the step that writes the assignment, so a
+   * device minted for one run while `home.yaml` does not read assigns
+   * nothing: that write is refused (storage-2). */
+  private runtime(): AssignedRuntime {
+    return { device: this.store.home.device, label: this.runtimeLabel };
+  }
+
+  /** This runtime as a new session is assigned to it (core-service-4,
+   * DR-134): none while `home.yaml` does not read, as its device may be
+   * one minted for this run alone, which assigns nothing. */
+  private assignableRuntime(): AssignedRuntime | undefined {
+    try { this.store.assertProjectsWritable(); }
+    catch { return undefined; }
+    return this.runtime();
+  }
+
+  /** An intent assigned to another runtime runs there alone: its turn,
+   * edit and close are refused `conflict` here, read against this home's
+   * device now, so no sync choice can drop the stamp of work that ran
+   * there (core-service-43, core-service-46, core-service-47, DR-134). */
+  private requireOwnIntent(intent: IntentInfo): void {
+    const runsOn = intent.runtime ? runsElsewhere(intent.runtime, this.store.home.device) : undefined;
+    if (runsOn !== undefined) throw runsElsewhereRefusal("conflict", runsOn);
+  }
+
   /** A client of the instance at an origin (git-host-1..11, DR-127),
    * which the space keeps one of per instance: its app token under that
    * origin in `local/credentials.yaml`, this device and app as its label,
    * a refusal that signs the device out of that instance alone, its
    * entry marked so (git-host-4), and a rate limit holding that
-   * instance's calls, offering Stop on the steps that wait (git-host-21). */
+   * instance's calls, offering Stop on the steps that wait (git-host-21).
+   * On a seat, the label names the server and the device request the
+   * server and the person (git-host-27). */
   private hostClientFor(origin: string): GitHostClient {
     return new GitHostClient({
       url: origin,
-      label: `Spex on ${hostname()}`,
+      label: `Spex on ${this.runtimeLabel}`,
+      ...(this.seat ? { server: { id: this.seat.serverId, personId: this.seat.personId } } : {}),
       credentials: fileCredentialStore(this.store.dir, origin),
       onSignedOut: () => this.space.signedOutByHost(origin),
       onHold: () => this.space.holdBegan(origin),
@@ -1036,11 +1306,24 @@ export class CoreService {
     }, 200);
   }
 
-  /** The one ledger fold (DR-035), for the embedding shell's badge. */
+  /** The one attention count the shell's badge shows
+   * (core-service-129): this core's badge (core-service-49) plus each
+   * seat's last read badge while its relay stands open or closed, none
+   * for a mismatched seat. */
+  attentionCount(): number {
+    return this.ledger().badge + this.places.badges();
+  }
+
+  /** The one ledger fold (DR-035). */
   ledger(): import("./protocol.js").LedgerState {
     return foldLedger({
       store: this.store,
       lanes: this.ledgerLanes(),
+      // This runtime's: another's records summon nothing here, and run
+      // nowhere but there (DR-134); on a seat an intent holding no
+      // runtime runs nowhere (core-service-125).
+      device: this.store.home.device,
+      seat: !!this.seat,
       now: Date.now,
     });
   }
@@ -1063,6 +1346,8 @@ export class CoreService {
       }));
     }
     if (options.dataDir) ApplicationMedia.assertStagingParents(options.dataDir);
+    // A seat's facts are checked before anything opens (core-service-125).
+    if (options.seat) options = { ...options, seat: checkSeat(options.seat) };
     const env = options.env ?? process.env;
     // The store's load composes diagnostics, so the home's stored
     // language is spoken before it opens (core-service-111); the full
@@ -1119,6 +1404,9 @@ export class CoreService {
     let service: CoreService;
     try { service = new CoreService(options, store); }
     catch (error) { store.close(); throw error; }
+    // A seat reads its credentials into the environment at start
+    // (core-service-126).
+    service.seatEnvironment?.prepare();
     try {
     // Store construction already holds the exclusive home lease. Never
     // reclaim another live core's incomplete uploads before that boundary.
@@ -1156,6 +1444,9 @@ export class CoreService {
       service.watchConfigFile();
       service.watchRepositories();
     }
+    // Every seat the seats file holds is read and announced
+    // (core-service-128); each client is sent them as it connects.
+    service.places.start();
     await service.listen(options.port ?? 0);
     service.started = true;
     return service;
@@ -1432,6 +1723,9 @@ export class CoreService {
     this.stopping = true;
     this.sessions.beginShutdown();
     this.approvals.stop();
+    // Every seat's relay ends; the seats stand in their file, reopened at
+    // the next start (DR-133).
+    this.places.stop();
     for (const entry of this.browserPreparations.values()) entry.controller.abort();
     await Promise.allSettled([...this.browserPreparations.values()].map(({done}) => done));
     this.watcher?.close();
@@ -1471,6 +1765,9 @@ export class CoreService {
     // No draft is written once the authors have stopped; a scratch
     // home goes with its store.
     this.store.close();
+    // No run of this seat remains: the forms go back as the process
+    // started with them.
+    this.seatEnvironment?.restore();
     if (failure) throw failure.error;
   }
 
@@ -1908,6 +2205,13 @@ export class CoreService {
       if (player.boundBy.length === 0) continue;
       note(player.agent.adapter, `${player.id} (${player.boundBy.join(", ")})`);
     }
+    // On a seat the credential half is the forms a run would inherit
+    // now, read as before a run (settings-49, core-service-126).
+    const seat = this.seatEnvironment;
+    const sources: SeatCredentialSources | undefined = seat?.prepare();
+    const credentialHalf = seat && sources
+      ? (adapter: AdapterName) => seatCredentialHalf(adapter, sources, seat.runValues(adapter), this.runCommand)
+      : undefined;
     return Promise.all(
       [...positions.entries()].map(async ([adapter, usedBy]) => {
         const readiness = await checkAdapterReadiness(
@@ -1915,6 +2219,7 @@ export class CoreService {
           this.env,
           this.home,
           this.options.adapterRuntime ?? checkAdapterRuntime,
+          credentialHalf,
         );
         this.readinessByAdapter.set(adapter, readiness.ready);
         return {
@@ -1923,6 +2228,7 @@ export class CoreService {
           ...(readiness.requirement
             ? { requirement: readiness.requirement }
             : {}),
+          ...(readiness.credential ? { credential: readiness.credential } : {}),
           usedBy,
           // The embedded runtime declares which adapters take fast mode
           // (DR-038); the editor offers the switch only for those.
@@ -1968,13 +2274,24 @@ export class CoreService {
       ) {
         return false;
       }
+      // The path `/`, or an open seat's relay path, admitted alike
+      // (core-service-24, core-service-129); every other path refused.
+      const path = requestPath(info.req.url);
+      if (path !== "/" && !this.places.relaying(path)) return false;
       const query = new URL(info.req.url ?? "/", "ws://127.0.0.1").searchParams;
       return query.get("token") === this.authToken;
     };
     this.wss = this.options.httpServer
       ? new WebSocketServer({ server: this.options.httpServer, verifyClient })
       : new WebSocketServer({ host: "127.0.0.1", port, verifyClient });
-    this.wss.on("connection", (socket) => {
+    this.wss.on("connection", (socket, req) => {
+      // A relay path's connection is the seat's: piped there, frames
+      // unread, with no word of this core's (core-service-129).
+      const path = requestPath(req.url);
+      if (path !== "/") {
+        this.places.pipe(path, socket);
+        return;
+      }
       const client: ClientState = { socket, channels: new Set() };
       this.clients.add(client);
       socket.on("close", () => {
@@ -1992,6 +2309,7 @@ export class CoreService {
         coreVersion: CORE_VERSION,
       });
       this.send(socket, {type: "approval.state", state: this.approvals.snapshot()});
+      this.send(socket, {type: "server.state", seats: this.places.state()});
     });
     if (this.options.httpServer) return; // the shell listens
     await new Promise<void>((resolveListen, rejectListen) => {
@@ -2085,7 +2403,7 @@ export class CoreService {
       cwd = packageDir;
     }
     try {
-      return await browserAgent(command.agent, cwd, command.context?.kind === "draft", this.options.adapterImports);
+      return await browserAgent(command.agent, cwd, command.context?.kind === "draft", this.adapterImports);
     } catch (cause) {
       throw new CoreError("invalid_config", cause instanceof Error ? cause.message : String(cause));
     }
@@ -2097,6 +2415,24 @@ export class CoreService {
   ): Promise<unknown> {
     if (this.stopping && ["session.create", "turn.submit", "session.restore", "session.control"].includes(command.type)) {
       throw new CoreError("busy", i18n._({id: "The core is stopping.", comment: "Refusal during core shutdown"}));
+    }
+    // On a seat no command names a working folder (core-service-125): a
+    // project is opened from its group, the core allocating its folder.
+    if (this.seat && (command.type === "project.register" || command.type === "project.rebind" || command.type === "project.create" ||
+      (command.type === "space.join" && command.folder !== undefined))) {
+      throw new CoreError("invalid_request", i18n._({
+        id: "Projects on a server are opened from their group",
+        comment: "Refusal on a team server's seat of a command naming a working folder: the server allocates every project's folder itself",
+      }));
+    }
+    // A seat holds no seats of its own (core-service-125): its
+    // `server.open` is refused before anything is asked; `server.list`
+    // and `server.close` answer as on any core.
+    if (this.seat && command.type === "server.open") {
+      throw new CoreError("invalid_request", i18n._({
+        id: "A seat opens no server",
+        comment: "Refusal on a team server's seat of opening a seat on a team server: a team server's seat holds no seats of its own",
+      }));
     }
     // No operation refuses a command (space-21): each write is checked
     // at its own instant, against its file's version or its session's
@@ -2153,6 +2489,36 @@ export class CoreService {
         await this.settledConfig();
         if (command.projectId === undefined) return this.configState;
         return this.projectConfigState(command.projectId, true);
+      case "credential.list": {
+        const credentials = this.codeCredentials;
+        if (!credentials) throw credentialsOffSeat();
+        return credentials.list();
+      }
+      case "credential.set":
+      case "credential.remove": {
+        // Each field is checked before anything is written; the entry is
+        // replaced as read, in one synchronous step (settings-48,
+        // storage-44).
+        const credentials = this.codeCredentials;
+        if (!credentials) throw credentialsOffSeat();
+        if (command.kind === "host") {
+          const host = credentialHost(command.name);
+          const next = command.type === "credential.set" ? hostCredentialOf(command.values) : null;
+          if (!credentials.replaceHost(host, credentials.readHost(host), next)) throw changedMeanwhile(codeCredentialsPath(this.store.dir));
+        } else {
+          const adapter = credentialAgent(command.name);
+          const next = command.type === "credential.set" ? agentCredentialOf(adapter, command.values) : null;
+          if (!credentials.replaceAgent(adapter, credentials.readAgent(adapter), next)) throw changedMeanwhile(codeCredentialsPath(this.store.dir));
+          // The agent's credential class follows (settings-49): pushed
+          // unless a newer change or a reload answers after it.
+          const generation = this.reloadGeneration;
+          const push = ++this.credentialPushes;
+          void this.readiness().then((entries) => {
+            if (generation === this.reloadGeneration && push === this.credentialPushes) this.broadcast({ type: "readiness.state", entries });
+          }).catch(() => {});
+        }
+        return credentials.list();
+      }
       case "readiness.get": {
         await this.settledConfig();
         // The probes await: their answer stands only on the files it read.
@@ -2163,7 +2529,7 @@ export class CoreService {
         return entries;
       }
       case "agent.options":
-        return readAgentOptions(command.adapter, this.env, this.options.discoverAgentModels);
+        return readAgentOptions(command.adapter, this.agentRunEnv(), this.options.discoverAgentModels);
       case "project.list":
         return this.store.listProjects();
       case "project.register": {
@@ -2237,7 +2603,7 @@ export class CoreService {
         return project;
       }
       case "storage.diagnostics":
-        return foldDiagnostics([...this.migrationDiagnostics, ...this.store.storageDiagnostics(), ...this.store.sessionDiagnostics(), ...this.authors.diagnostics()]);
+        return foldDiagnostics([...this.migrationDiagnostics, ...this.store.storageDiagnostics(), ...this.store.sessionDiagnostics(), ...this.authors.diagnostics(), ...this.credentialDiagnostics()]);
       case "project.create": {
         const path = expandPath(command.path, this.home);
         const registered = this.store.getProjectByPath(path);
@@ -2435,6 +2801,9 @@ export class CoreService {
       case "session.restore": {
         const session = this.store.describeSession(command.sessionId);
         if (!session) throw noSession(command.sessionId);
+        // Another runtime's session is refused first, whatever its
+        // checkpoint holds (core-service-82, DR-134).
+        assertRunsHere(session);
         const project = this.store.getProject(session.projectId);
         if (!project) throw new CoreError("invalid_request", i18n._({
           id: "bind the existing project before restoring",
@@ -2447,6 +2816,8 @@ export class CoreService {
       case "session.discard": {
         const session = this.store.describeSession(command.sessionId);
         if (!session) throw noSession(command.sessionId);
+        // Refused before anything is retired (core-service-83, DR-134).
+        assertRunsHere(session);
         const result = await this.media.retireOwner({kind: "session", id: session.id}, () => this.sessions.discardSession(session.id));
         if (result.removed) this.broadcast({type:"session.removed", sessionId:session.id, projectId:session.projectId});
         return result;
@@ -2713,7 +3084,8 @@ export class CoreService {
               command: command.command,
               intent: command.intent,
               libraryDir,
-              env: this.env,
+              // The compile's agent is an agent run (core-service-126).
+              env: this.agentRunEnv(),
               // The form's compile runs on the Captain's block
               // (playbook-library-42).
               ...(this.composed
@@ -2880,7 +3252,10 @@ export class CoreService {
           // Read again after the await, in the step that writes: an
           // intent another queue or a sync wrote meanwhile holds it.
           refuseHeldSource();
-          this.store.addIntent(intent);
+          // Its runtime is this one, read once the home reads, in the
+          // step that writes it (core-service-42, DR-134).
+          this.store.assertWritable({ projectId: project.id });
+          this.store.addIntent({ ...intent, runtime: this.runtime() });
         } catch (error) {
           // The project may have left meanwhile: only its own folder goes.
           if (this.store.repository(project.id)) rmSync(this.store.intentAssetsDir(id, project.id), { recursive: true, force: true });
@@ -2891,6 +3266,7 @@ export class CoreService {
       }
       case "intent.edit": {
         const intent = this.requireOpenIntent(command.intentId);
+        this.requireOwnIntent(intent);
         if (this.deriveIntentState(intent.id) !== "queued") {
           throw new CoreError(
             "conflict",
@@ -2914,6 +3290,7 @@ export class CoreService {
       }
       case "intent.close": {
         let intent = this.requireOpenIntent(command.intentId);
+        this.requireOwnIntent(intent);
         if (
           command.as === "done" &&
           this.deriveIntentState(intent.id) !== "finished"
@@ -3070,6 +3447,14 @@ export class CoreService {
         }
         return { language };
       }
+      // Team servers (core-service-128, DR-133): the servers each signed-in
+      // instance lists, and the seats this core opens and closes on them.
+      case "server.list":
+        return this.places.list();
+      case "server.open":
+        return this.places.open({ instance: command.instance, serverId: command.serverId, ...(command.consented !== undefined ? { consented: command.consented } : {}) });
+      case "server.close":
+        return this.places.close({ instance: command.instance, serverId: command.serverId });
       // Groups (space-29): the core performs every Git operation, one
       // spex repository at a time; long commands reply accepted and
       // report as state.
@@ -3755,8 +4140,11 @@ export class CoreService {
     const owner = this.store.getIntent(intentId);
     if (owner && owner.closedAt === undefined &&
         ledger.intents.find((entry) => entry.intent.id === intentId)?.state !== "finished") return;
+    // The successor is the project's next: its oldest queued intent this
+    // runtime may run, never one assigned to another (core-service-94,
+    // DR-134).
     const next = ledger.intents.find((entry) =>
-      entry.intent.projectId === session.projectId && entry.state === "queued"
+      entry.intent.projectId === session.projectId && entry.next !== undefined
     )?.intent;
     if (!next) return;
     return {
@@ -3867,6 +4255,12 @@ export class CoreService {
 
   private validateIntentDispatch(sessionId: string, intentId: string): void {
     const intent = this.requireOpenIntent(intentId);
+    // Another runtime's intent runs there alone (core-service-47, DR-134),
+    // and on a seat one holding no runtime runs nowhere (core-service-125,
+    // DR-132); its edit and close stay allowed (core-service-43,
+    // core-service-46).
+    this.requireOwnIntent(intent);
+    if (this.seat && intent.runtime === undefined) throw runsNowhereRefusal();
     const session = this.store.describeSession(sessionId);
     if (!session || session.projectId !== intent.projectId) {
       throw new CoreError("invalid_request", i18n._({
@@ -3874,12 +4268,17 @@ export class CoreService {
         comment: "Refusal: the work named is not this session's project's",
       }));
     }
-    if (this.deriveIntentState(intent.id) !== "queued") {
+    const row = this.ledger().intents.find((entry) => entry.intent.id === intent.id);
+    if (row?.state !== "queued") {
       throw new CoreError("conflict", i18n._({
         id: "the intent is already dispatched",
         comment: "Refusal: this work was already sent to a turn",
       }));
     }
+    // One naming no runtime whose dispatch another runtime's session
+    // holds is never released here: that runtime reads its stop
+    // (core-service-47, DR-134).
+    if (row.runsOn !== undefined) throw runsElsewhereRefusal("conflict", row.runsOn);
     // An answer is a turn of the work that asked (DR-119): a dispatch is
     // new work, so it waits while a run of this session stands parked on
     // a Boss question — the fact the fold reads for an interrupted
@@ -3896,6 +4295,10 @@ export class CoreService {
   private async continueSession(sessionId: string): Promise<void> {
     const session = this.store.describeSession(sessionId);
     if (!session) throw noSession(sessionId);
+    // A session assigned to another runtime continues there alone, the
+    // folder rule standing beneath: refused first, with its label as a
+    // detail, whatever its checkpoint holds (core-service-73, DR-134).
+    assertRunsHere(session);
     // The summary's current-config refusal is advisory. Check admission
     // again below, so a stale reading neither admits nor blocks a turn.
     if (!this.store.hasContinuableCheckpoint(sessionId)) {

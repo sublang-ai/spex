@@ -330,6 +330,11 @@ msgstr "{head} — {said}"
 msgid "{head} is no longer an ancestor"
 msgstr "{head} 已不再是祖先提交"
 
+#. Credentials section on a team server: a project's code could not be cloned from {host}, a code host, for want of the member's credential
+#: src/components/SettingsSurface.tsx
+msgid "{host} needs a credential of yours to clone a project's code"
+msgstr "克隆项目的代码需要你在 {host} 上的凭据"
+
 #: src/lib/time.ts
 msgid "{hours}h"
 msgstr "{hours} 小时"
@@ -503,6 +508,11 @@ msgstr "{role} 的 Player"
 #: src/lib/time.ts
 msgid "{seconds}s"
 msgstr "{seconds} 秒"
+
+#. banner: a team server's seat runs another protocol version; {server} is the server's name
+#: src/App.tsx
+msgid "{server} speaks a different protocol version than this window — it needs the same Spex release as this app."
+msgstr "{server} 与此窗口的协议版本不一致 — 它需要运行与本应用相同的 Spex 版本。"
 
 #: src/components/SpaceInstance.tsx
 msgid "{site} signed this device out. Sign in again to continue as @{login}."
@@ -723,6 +733,10 @@ msgstr "✗ 失败"
 msgid "A command the run needs is not installed"
 msgstr "运行所需的命令未安装"
 
+#: src/components/SettingsSurface.tsx
+msgid "A credential you place here stays on this server until you remove it."
+msgstr "你放在这里的凭据会一直留在此服务器上，直到你将其移除。"
+
 #: src/components/DeliveryCard.tsx
 msgid "A follow-up message continues this intent."
 msgstr "再发一条消息即可继续该意图。"
@@ -739,13 +753,18 @@ msgstr "终端中有合并正在进行，请在那里完成或中止。"
 msgid "A nested workflow failed"
 msgstr "嵌套工作流失败"
 
+#. project palette: where a project added or created by path lands; {place} is the place's name, "This computer"
+#: src/components/ProjectPalette.tsx
+msgid "A new project is added on {place}."
+msgstr "新项目添加在{place}。"
+
 #: src/lib/failure-catalogue.ts
 msgid "A Playbook defect"
 msgstr "Playbook 缺陷"
 
 #: src/components/CaptainHome.tsx
-msgid "A playbook is like a Skill compiled into an executable workflow: it coordinates AI through predefined steps."
-msgstr "「规程」像经过编译的 Skill，可以按预设步骤编排 AI。"
+msgid "A playbook is a workflow written in plain language. Spex turns it into steps for AI to follow."
+msgstr "规程是用自然语言描述的工作流，Spex 将它转成 AI 可执行的步骤。"
 
 #: src/lib/labels.ts
 msgid "A player finishes its step"
@@ -861,6 +880,11 @@ msgstr "添加"
 msgid "Add {id} with the neutral agent, then tune it here"
 msgstr "以中性智能体添加 {id}，再在此调整"
 
+#. on a team server's project whose code could not be cloned for want of the member's credential: open the server's Credentials settings
+#: src/components/SpaceGroups.tsx
+msgid "Add a credential"
+msgstr "添加凭据"
+
 #: src/components/CaptainHome.tsx
 #: src/components/NavRail.tsx
 #: src/components/ProjectPalette.tsx
@@ -932,6 +956,14 @@ msgstr "添加 Player"
 msgid "Add project"
 msgstr "添加项目"
 
+#: src/components/ProjectPalette.tsx
+msgid "Add starter specs when creating"
+msgstr "创建时添加规约模板"
+
+#: src/components/ProjectPalette.tsx
+msgid "Add this project"
+msgstr "添加此项目"
+
 #: src/components/CaptainHome.tsx
 #: src/components/Composer.tsx
 msgid "Add this to the project's Up next without sending it"
@@ -992,6 +1024,11 @@ msgstr "刚刚"
 msgid "age.weeks"
 msgstr "{weeks} 周"
 
+#. Credentials section: the agent a credential of the member's is for
+#: src/components/SettingsSurface.tsx
+msgid "Agent"
+msgstr "智能体"
+
 #. subagent-effort choice: the agent picks each subagent's effort per task
 #: src/lib/agent-options.ts
 msgid "Agent chooses"
@@ -1012,6 +1049,10 @@ msgstr "智能体"
 #: src/components/ProjectsSurface.tsx
 msgid "ahead of upstream"
 msgstr "领先于上游"
+
+#: src/components/CaptainHome.tsx
+msgid "AI builds and reviews changes, with a record of each step"
+msgstr "AI 开发和审阅，记录每一步"
 
 #: src/components/NavRail.tsx
 msgid "all {count}…"
@@ -1294,6 +1335,11 @@ msgstr "只取回新的内容，不发出任何内容"
 msgid "Brings both histories into one and asks about anything that differs"
 msgstr "把两段历史合为一段，并就有差异之处询问你"
 
+#. the Join control's title at a team server's seat: {place} is the server's name, which allocates the project's folder itself
+#: src/components/SpaceGroups.tsx
+msgid "Brings it to {place}"
+msgstr "将它取到 {place} 上"
+
 #: src/components/SpaceGroups.tsx
 msgid "Brings it to this device"
 msgstr "将它取到此设备上"
@@ -1349,6 +1395,10 @@ msgstr "缺陷"
 msgid "bug fixed"
 msgstr "已修复缺陷"
 
+#: src/components/CaptainHome.tsx
+msgid "build and review step by step"
+msgstr "逐步开发和审阅"
+
 #. a spec package's source: the one the app ships
 #: src/lib/environments.ts
 msgid "built-in"
@@ -1380,10 +1430,16 @@ msgstr "C"
 msgid "call /{playbookId}"
 msgstr "调用 /{playbookId}"
 
+#. banner: a team server's seat never answered; {server} is the server's name
+#: src/App.tsx
+msgid "Can't reach {server} — retrying every second."
+msgstr "无法连接 {server} — 每秒重试中。"
+
 #: src/App.tsx
 msgid "Can't reach the Spex core at {endpoint} — retrying every second. On a served page, check the link's token; on the desktop, restart the app."
 msgstr "无法连接 {endpoint} 上的 Spex 核心 — 每秒重试中。网页端请检查链接中的令牌；桌面端请重启应用。"
 
+#. default cancel button: back out of the act
 #. default cancel button: back out of the act
 #. leave an editor without saving
 #. leave an editor without saving
@@ -1412,6 +1468,7 @@ msgstr "无法连接 {endpoint} 上的 Spex 核心 — 每秒重试中。网页�
 #: src/components/SpaceGroups.tsx
 #: src/components/SpaceInstance.tsx
 #: src/components/SpaceMembers.tsx
+#: src/components/SpaceServers.tsx
 #: src/components/SpaceSignIn.tsx
 #: src/components/SpaceSync.tsx
 #: src/components/SpecEditor.tsx
@@ -1648,10 +1705,20 @@ msgstr "单击打开 · 拖动移动 · 滚动缩放"
 msgid "client not connected"
 msgstr "客户端未连接"
 
+#. the title of 'Join again' on a team server's project whose code clone failed: {place} is the server's name
+#: src/components/SpaceGroups.tsx
+msgid "Clones its code again into its folder on {place}"
+msgstr "将它的代码重新克隆到 {place} 上它的文件夹中"
+
 #. join step running: cloning the project's code into its folder
 #: src/lib/space.ts
 msgid "Cloning code…"
 msgstr "克隆代码中…"
+
+#. close the seat open on a team server
+#: src/components/SpaceServers.tsx
+msgid "Close"
+msgstr "关闭"
 
 #: src/lib/shortcuts.ts
 msgid "Close the focused session tab"
@@ -1678,6 +1745,11 @@ msgstr "关闭此标签页 — 会话仍留在侧栏"
 #: src/lib/space.ts
 msgid "Code"
 msgstr "代码"
+
+#. Credentials section: the code hosts the member placed a token for
+#: src/components/SettingsSurface.tsx
+msgid "Code hosts"
+msgstr "代码托管平台"
 
 #. a project's spex repository whose records name no code remote
 #: src/components/SpaceGroups.tsx
@@ -1785,10 +1857,6 @@ msgstr "编译在未知阶段失败"
 msgid "Compile interrupted when Spex closed"
 msgstr "Spex 关闭时编译被中断"
 
-#: src/components/CaptainHome.tsx
-msgid "Compile natural-language playbooks into executable workflows"
-msgstr "将自然语言规程编译为可执行流程"
-
 #. draft state chip, at most 14 characters: the last compile succeeded
 #: src/lib/drafts.ts
 msgid "Compiled"
@@ -1884,12 +1952,13 @@ msgid "Confirming…"
 msgstr "确认中…"
 
 #: src/components/CaptainHome.tsx
-msgid "Connect an agent"
-msgstr "连接智能体"
-
-#: src/components/CaptainHome.tsx
 msgid "Connect to read project specs"
 msgstr "连接后可查看项目规约"
+
+#. banner: a team server's seat answered but its state failed to load; {server} is the server's name
+#: src/App.tsx
+msgid "Connected to {server}, but {reason}"
+msgstr "已连接 {server}，但{reason}"
 
 #: src/App.tsx
 msgid "Connected, but {reason}"
@@ -1926,10 +1995,6 @@ msgstr "请在浏览器中继续："
 #: src/components/ApprovalInbox.tsx
 msgid "Conversation: {name}"
 msgstr "对话：{name}"
-
-#: src/components/CaptainHome.tsx
-msgid "Coordinate AI implementation and review, with traceable changes"
-msgstr "编排 AI 实现与复核，改动可追溯"
 
 #. the item's ID went to the clipboard
 #: src/components/SpecItemRows.tsx
@@ -2052,6 +2117,11 @@ msgstr "无法读取文件：{reason}"
 msgid "Couldn't read the repository's state"
 msgstr "无法读取仓库状态"
 
+#. the instance's servers listing failed; {reason} is the core's relayed cause
+#: src/components/SpaceServers.tsx
+msgid "Couldn't read the servers: {reason}"
+msgstr "无法读取服务器：{reason}"
+
 #: src/components/SpaceSurface.tsx
 msgid "Couldn't read your groups: {reason}"
 msgstr "无法读取你的群组：{reason}"
@@ -2116,6 +2186,11 @@ msgstr "创建中…"
 msgid "credentials"
 msgstr "凭据"
 
+#. Settings section on a team server: the member's own code-host tokens and agent credentials
+#: src/components/SettingsSurface.tsx
+msgid "Credentials"
+msgstr "凭据"
+
 #. tag on the project row the workspace is on
 #: src/components/ProjectPalette.tsx
 msgid "current"
@@ -2149,14 +2224,6 @@ msgstr "决策记录"
 #: src/components/SpecView.tsx
 msgid "Decisions, {count} records"
 msgstr "决策记录，共 {count} 条"
-
-#: src/components/CaptainHome.tsx
-msgid "Define checkable specs. Deliver through playbooks."
-msgstr "写清规约，让 AI 按规程交付"
-
-#: src/components/CaptainHome.tsx
-msgid "Define goals and acceptance criteria"
-msgstr "明确目标与验收标准"
 
 #. confirm: delete the group on the Git host
 #. confirm: delete this session for good
@@ -2247,9 +2314,17 @@ msgstr "拒绝"
 msgid "Describe a project task"
 msgstr "描述项目任务"
 
+#: src/components/CaptainHome.tsx
+msgid "Describe how the system should work and how to check it"
+msgstr "写清系统该做什么、怎样检查结果"
+
 #: src/components/DraftConversation.tsx
 msgid "Describe the playbook…"
 msgstr "描述这个规程…"
+
+#: src/components/CaptainHome.tsx
+msgid "Describe your goal. AI helps write specs for how the system should work and how to check it, then follows playbooks to build and review changes."
+msgstr "说说你的目标。AI 帮你把系统该做什么、怎样检查结果写成规约，再按规程开发和审阅。"
 
 #. notification sink: an OS notification
 #: src/components/SettingsSurface.tsx
@@ -2924,6 +2999,11 @@ msgstr "来自本次更改前的编译"
 msgid "From the host ({count})"
 msgstr "来自托管平台（{count}）"
 
+#. project palette: heading over the spex repositories of the member's groups a team server can open; {place} is the server's name
+#: src/components/ProjectPalette.tsx
+msgid "From your groups on {place}"
+msgstr "来自你在 {place} 上的群组"
+
 #. pipeline stage: the compiled spec items
 #. pipeline stage: the compiler's normative spec items (a proper name)
 #. pipeline stage: the compiler's normative spec items (a proper name)
@@ -3006,10 +3086,6 @@ msgstr "群组"
 msgid "Groups are made by the people who run {name}"
 msgstr "群组由运营 {name} 的人创建"
 
-#: src/components/CaptainHome.tsx
-msgid "Hello! I'm your Captain. Pick a project in the sidebar, then tell me what to do with it and I'll route it to a playbook, a scripted workflow the AI players run."
-msgstr "你好！我是你的 Captain。在侧栏选择一个项目，再告诉我要做什么，我会把它交给某个规程，也就是由 AI Player 执行的脚本化工作流。"
-
 #: src/components/SpecView.tsx
 msgid "Hide {group} items"
 msgstr "隐藏{group}条目"
@@ -3041,6 +3117,16 @@ msgstr "历史 — 此会话无法继续"
 #: src/components/NavRail.tsx
 msgid "history, can't be continued"
 msgstr "历史，无法继续"
+
+#. Credentials section: the code host a token is for, such as git.example.com
+#: src/components/SettingsSurface.tsx
+msgid "Host name"
+msgstr "主机名"
+
+#. accepting a team server's contract, which opens the seat
+#: src/components/SpaceServers.tsx
+msgid "I understand"
+msgstr "我已了解"
 
 #. a spex repository's status: nothing is running
 #. session row: no turn in flight
@@ -3074,10 +3160,6 @@ msgstr "图片"
 #: src/lib/playbook-intent.ts
 msgid "implement a coding intent in reviewed, one-commit phases, using an intent record when needed"
 msgstr "分阶段实现编码意图，每个阶段经审阅、形成一个提交，必要时使用意图记录"
-
-#: src/components/CaptainHome.tsx
-msgid "implement in reviewed phases"
-msgstr "分阶段实现与复核"
 
 #: src/App.tsx
 #: src/components/NavRail.tsx
@@ -3279,6 +3361,13 @@ msgstr "它的 spex 仓库不在此设备上。"
 msgid "Join"
 msgstr "加入"
 
+#. on a team server's project whose code clone failed: join it again, cloning its code into the folder the server allocated
+#. on a team server's project whose code clone failed: join it again, cloning its code into the folder the server allocated
+#: src/components/ProjectPalette.tsx
+#: src/components/SpaceGroups.tsx
+msgid "Join again"
+msgstr "重新加入"
+
 #: src/components/SpaceSync.tsx
 msgid "Join both histories into one to sync."
 msgstr "将两段历史合并为一段后即可同步。"
@@ -3290,6 +3379,9 @@ msgstr "将两段历史合并为一段？有差异的内容会让你选择。"
 #. the Join control, while the join runs
 #. the Join control, while the join runs
 #. the Join control, while the join runs
+#. the Join control, while the join runs
+#. the Join control, while the join runs
+#: src/components/ProjectPalette.tsx
 #: src/components/SpaceGroups.tsx
 msgid "Joining…"
 msgstr "加入中…"
@@ -3641,6 +3733,10 @@ msgstr "从未同步"
 msgid "new"
 msgstr "新增"
 
+#: src/components/ProjectPalette.tsx
+msgid "New folder path"
+msgstr "新文件夹路径"
+
 #. create a group at the root of the instance whose heading carries it
 #: src/components/SpaceInstance.tsx
 msgid "New group"
@@ -3669,10 +3765,6 @@ msgstr "新建 Player {id}"
 #: src/components/ProjectPalette.tsx
 msgid "New project"
 msgstr "新项目"
-
-#: src/components/ProjectPalette.tsx
-msgid "New project folder path (not created yet)"
-msgstr "新项目文件夹路径（尚不存在）"
 
 #: src/components/ProjectPalette.tsx
 msgid "New project path"
@@ -3832,6 +3924,10 @@ msgstr "没有匹配的规约包"
 msgid "No spec packages requested yet"
 msgstr "尚未请求任何规约包"
 
+#: src/components/CaptainHome.tsx
+msgid "No spec packages yet"
+msgstr "还没有规约包"
+
 #: src/components/SpaceGroups.tsx
 msgid "No spex repositories here yet"
 msgstr "这里还没有 spex 仓库"
@@ -3851,6 +3947,11 @@ msgstr "本机没有工作文件夹"
 #: src/components/AgentEditor.tsx
 msgid "none (adapter default)"
 msgstr "无（适配器默认）"
+
+#. a list of the member's credentials on a team server, while it holds none
+#: src/components/SettingsSurface.tsx
+msgid "None placed yet"
+msgstr "尚未放置"
 
 #: src/components/AgentEditor.tsx
 msgid "none: the adapter's own default posture"
@@ -3998,6 +4099,11 @@ msgstr "{project} 中没有需要关注的内容。"
 msgid "Nothing is repeated"
 msgstr "不会重复任何工作"
 
+#. project palette: a team server's groups list no spex repository it lacks
+#: src/components/ProjectPalette.tsx
+msgid "Nothing more to open from your groups"
+msgstr "你的群组中没有更多可打开的项目"
+
 #: src/components/SpaceSync.tsx
 msgid "Nothing new on the host"
 msgstr "托管平台没有新内容"
@@ -4109,8 +4215,10 @@ msgstr "每个状态行为一条规范规约条目 — 编译器的中间阶段"
 msgid "One spec item per state behavior, from the last compile"
 msgstr "每个状态行为一条规约条目，来自上次编译"
 
+#. open a seat on a team server
 #. open this authoring session's workspace
 #: src/components/LibrarySurface.tsx
+#: src/components/SpaceServers.tsx
 msgid "Open"
 msgstr "打开"
 
@@ -4141,6 +4249,10 @@ msgstr "打开 {title} — {reason}"
 #: src/components/DashboardSurface.tsx
 msgid "Open {title} — running in {project}"
 msgstr "打开 {title} — 正在 {project} 中运行"
+
+#: src/components/CaptainHome.tsx
+msgid "Open a project"
+msgstr "打开项目"
 
 #: src/components/DashboardSurface.tsx
 msgid "Open and send a message to pick it up."
@@ -4190,8 +4302,8 @@ msgid "Open Settings to see what's wrong"
 msgstr "打开设置查看问题所在"
 
 #: src/components/CaptainHome.tsx
-msgid "Open the Academy example project"
-msgstr "打开 Academy 示例项目"
+msgid "Open the Academy example"
+msgstr "打开 Academy 示例"
 
 #: src/components/SourcesTabs.tsx
 msgid "Open the project's Overview"
@@ -4221,8 +4333,14 @@ msgstr "打开以重试或放弃该运行。"
 msgid "Opened {id}"
 msgstr "已打开 {id}"
 
+#. the instance's contract, in the words its record fixes, shown before a seat's first open on this device; {server} is the server's name, {instance} the instance's; Devices is the instance's page of devices
+#: src/components/SpaceServers.tsx
+msgid "Opening a seat places your sign-in on {server}. Whoever runs {server} can act as you: in your spaces, in your records, and with the account you sign in to {instance} with, wherever it reaches. Agents on {server} run on the sign-ins its administrator set up, unless you set your own. A credential you place on {server} stays there until you remove it. Retiring the server or revoking the seat under Devices stops new use; a credential already on the server lasts until it expires."
+msgstr "打开席位会把你的登录放到 {server} 上。运行 {server} 的人可以以你的身份行事：在你的空间中、在你的记录中，以及凭你登录 {instance} 所用的账号，在它能触及的任何地方。{server} 上的智能体使用其管理员设置的登录运行，除非你设置自己的。你放到 {server} 上的凭据会一直留在那里，直到你将其移除。停用该服务器或在“设备”中撤销该席位会阻止新的使用；已在服务器上的凭据会一直有效，直到过期。"
+
 #. an authoring session is being opened
 #. an authoring session is being opened
+#: src/components/CaptainHome.tsx
 #: src/components/LibrarySurface.tsx
 msgid "Opening…"
 msgstr "打开中…"
@@ -4230,6 +4348,11 @@ msgstr "打开中…"
 #: src/components/LibrarySurface.tsx
 msgid "Opens a playbook named {id} with the normalized text ready to paste — nothing is written or compiled"
 msgstr "打开名为 {id} 的规程，并备好可粘贴的规范化文本 — 不写入也不编译"
+
+#. the title of 'Add a credential' on a team server's project whose code could not be cloned: {host} is the code host needing the member's credential
+#: src/components/SpaceGroups.tsx
+msgid "Opens Credentials in this server's Settings at {host}"
+msgstr "在此服务器的设置中打开 {host} 的凭据"
 
 #. compile phase: slc optimizes the spec items
 #: src/lib/compile-log.ts
@@ -4297,6 +4420,10 @@ msgid "Paste"
 msgstr "粘贴"
 
 #: src/components/DraftSourceTab.tsx
+msgid "Paste a source"
+msgstr "粘贴源文"
+
+#: src/components/DraftSourceTab.tsx
 msgid "Paste a source or pick a file"
 msgstr "粘贴源文或选择文件"
 
@@ -4345,6 +4472,10 @@ msgstr "为 {name} 选择群组"
 msgid "Pick a project first ({keys})"
 msgstr "请先选择项目（{keys}）"
 
+#: src/components/CaptainHome.tsx
+msgid "Pick a project in the sidebar, then describe your goal."
+msgstr "在侧栏选择一个项目，再说说你的目标。"
+
 #. open the OS file picker
 #: src/components/DraftSourceTab.tsx
 msgid "Pick file"
@@ -4359,6 +4490,11 @@ msgstr "选择文件夹"
 #: src/components/TuningField.tsx
 msgid "pin a value…"
 msgstr "指定一个值…"
+
+#. the selector of where Settings, Playbooks, Groups and Environments are shown: This computer or a team server
+#: src/components/PlaceSelector.tsx
+msgid "Place"
+msgstr "位置"
 
 #: src/components/DraftConversation.tsx
 msgid "Places the six-line example as your first message"
@@ -4650,6 +4786,7 @@ msgstr "正在读取项目规约…"
 msgid "reading specs…"
 msgstr "正在读取规约…"
 
+#: src/components/ProjectPalette.tsx
 #: src/components/SpaceSurface.tsx
 msgid "Reading your groups…"
 msgstr "正在读取你的群组…"
@@ -4690,6 +4827,11 @@ msgstr "推理强度"
 #: src/components/ApprovalInbox.tsx
 msgid "Reconnect to answer these requests."
 msgstr "重新连接后可答复这些请求。"
+
+#. banner: the connection to a team server's seat dropped; {server} is the server's name
+#: src/App.tsx
+msgid "Reconnecting to {server}… actions there are paused until the connection returns."
+msgstr "正在重新连接 {server}…连接恢复前该处的操作暂停。"
 
 #: src/App.tsx
 msgid "Reconnecting to the Spex core… actions are paused until the connection returns."
@@ -4745,10 +4887,6 @@ msgstr "刷新状态和 GitHub 数据"
 msgid "Refreshing…"
 msgstr "刷新中…"
 
-#: src/components/ProjectPalette.tsx
-msgid "Register this existing repository"
-msgstr "注册这个已有的仓库"
-
 #. a spec package's source: the registry
 #: src/lib/environments.ts
 msgid "registry"
@@ -4781,6 +4919,7 @@ msgstr "重新加载页面"
 #. queue row control: take this row out of the queue
 #. row menu item: take this row out of the queue
 #. take a member out of a group or a spex repository on the Git host
+#. take the member's credential for a code host or an agent off the team server
 #. take this spec package out of the requests
 #: src/components/EnvironmentSection.tsx
 #: src/components/NextCard.tsx
@@ -4836,6 +4975,11 @@ msgstr "从 Spex 移除？仓库会保留在磁盘上。"
 msgid "Remove project"
 msgstr "移除项目"
 
+#. accessible name of the control taking the member's credential for a code host or an agent off the team server
+#: src/components/SettingsSurface.tsx
+msgid "Remove the credential for {name}"
+msgstr "移除 {name} 的凭据"
+
 #: src/components/LibrarySurface.tsx
 msgid "Remove the session and its conversation; the spec package folder stays"
 msgstr "移除会话及其对话；规约包文件夹保留"
@@ -4882,6 +5026,10 @@ msgstr "重命名"
 #: src/components/SpaceSync.tsx
 msgid "Replace {count, plural, one {# unit} other {# units}} with the host's version? The other version stays in Git history; a replaced session loses its local resume hints and where you stopped reading."
 msgstr "用托管平台的版本替换 {count, plural, other {# 个单元}}？另一版本仍保留在 Git 历史中；被替换的会话会丢失本地的续接提示和你读到的位置。"
+
+#: src/components/DraftSourceTab.tsx
+msgid "Replace the source with pasted text"
+msgstr "用粘贴的文本替换源文"
 
 #: src/components/DraftSourceTab.tsx
 msgid "Replace the source with pasted text or a file"
@@ -5144,6 +5292,8 @@ msgstr "与代理相同"
 msgid "Same as Captain"
 msgstr "与 Captain 相同"
 
+#. Credentials section: place the credential on the team server
+#. Credentials section: place the credential on the team server
 #. commit the edits in this editor
 #. commit the edits in this editor
 #. commit the edits in this editor
@@ -5154,6 +5304,7 @@ msgstr "与 Captain 相同"
 #: src/components/AgentSettings.tsx
 #: src/components/BindingEditor.tsx
 #: src/components/ProjectGroup.tsx
+#: src/components/SettingsSurface.tsx
 #: src/components/SpaceMembers.tsx
 #: src/components/SpecEditor.tsx
 #: src/lib/space.ts
@@ -5198,10 +5349,6 @@ msgstr "保存中…"
 msgid "Scaffold one in the project directory:"
 msgstr "在项目目录中生成一个："
 
-#: src/components/ProjectPalette.tsx
-msgid "Scaffold specs when creating"
-msgstr "创建时生成规约"
-
 #: src/components/EnvironmentSection.tsx
 msgid "Search the registry"
 msgstr "搜索注册表"
@@ -5219,12 +5366,15 @@ msgstr "搜索中…"
 msgid "See how to start"
 msgstr "查看如何开始"
 
+#: src/components/CaptainHome.tsx
+msgid "See how to update"
+msgstr "查看更新方法"
+
 #: src/App.tsx
 msgid "seeding the example failed"
 msgstr "生成示例失败"
 
 #. busy: the Academy example is being written to disk
-#: src/components/CaptainHome.tsx
 #: src/components/ProjectPalette.tsx
 msgid "Seeding…"
 msgstr "生成中…"
@@ -5301,6 +5451,11 @@ msgstr "本轮结束后发送"
 msgid "sent to the agent"
 msgstr "已发送给智能体"
 
+#. the team servers an instance lets the person open a seat on
+#: src/components/SpaceServers.tsx
+msgid "Servers"
+msgstr "服务器"
+
 #. one unit's kind: a session
 #. one unit's kind: a session
 #. row menu item: open the session this intent came from
@@ -5370,6 +5525,14 @@ msgstr "会话与项目视图"
 #: src/components/AgentSettings.tsx
 msgid "set to {set}, runtime reports {model}"
 msgstr "设为 {set}，运行时报告 {model}"
+
+#: src/components/CaptainHome.tsx
+msgid "Set up an agent"
+msgstr "设置智能体"
+
+#: src/components/CaptainHome.tsx
+msgid "Set up an agent before starting a task."
+msgstr "先设置智能体，再开始任务。"
 
 #: src/components/BrowserControl.tsx
 msgid "Set up browser"
@@ -5649,16 +5812,8 @@ msgid "Specs"
 msgstr "规约"
 
 #: src/components/CaptainHome.tsx
-msgid "Spex helps you turn goals and acceptance criteria into specs, then uses playbooks to coordinate AI implementation and review."
-msgstr "Spex 帮你把目标和验收标准写成「规约」，再按「规程」安排 AI 实现与复核。"
-
-#: src/components/CaptainHome.tsx
-msgid "Specs directory exists, but no packages yet"
-msgstr "规约目录已建立，尚无规约包"
-
-#: src/components/CaptainHome.tsx
-msgid "Specs need migration"
-msgstr "规约需要迁移"
+msgid "Specs use an older format"
+msgstr "规约使用旧格式"
 
 #: src/components/SpecView.tsx
 msgid "specs/ is present but holds no spec files yet."
@@ -5701,8 +5856,8 @@ msgid "Spex repository shown"
 msgstr "显示的 spex 仓库"
 
 #: src/components/ProjectPalette.tsx
-msgid "Spex will create this folder and initialize a Git repository."
-msgstr "Spex 会创建此文件夹并初始化 Git 仓库。"
+msgid "Spex will create this folder and set up Git."
+msgstr "Spex 会创建此文件夹并设置 Git。"
 
 #: src/lib/failure-catalogue.ts
 msgid "Squash or reset them yourself"
@@ -6143,10 +6298,6 @@ msgstr "重新加载失败"
 msgid "the save failed"
 msgstr "保存失败"
 
-#: src/components/CaptainHome.tsx
-msgid "The selected agent is not ready, so this task cannot start yet."
-msgstr "当前选中的智能体尚未就绪，暂时无法启动任务。"
-
 #: src/components/SpaceSignIn.tsx
 msgid "The sign-in did not start"
 msgstr "登录未能开始"
@@ -6217,6 +6368,11 @@ msgstr "此智能体不支持浏览器工具"
 msgid "This command refreshes the spec law and prints a migration prompt for an AI agent to apply:"
 msgstr "此命令会刷新规约规则并打印迁移提示词，由 AI 智能体执行迁移："
 
+#. the place of the local core, beside each team server's name
+#: src/state/store.ts
+msgid "This computer"
+msgstr "本机"
+
 #: src/components/AgentSettings.tsx
 msgid "This conversation is in use elsewhere — its settings read only."
 msgstr "该对话正在别处使用 — 其设置为只读。"
@@ -6285,6 +6441,11 @@ msgstr "连续三次 — 请告诉智能体如何继续"
 #: src/components/SpecView.tsx
 msgid "Toggle {name}"
 msgstr "展开或折叠 {name}"
+
+#. Credentials section: the member's access token for a code host
+#: src/components/SettingsSurface.tsx
+msgid "Token"
+msgstr "令牌"
 
 #: src/lib/media.ts
 msgid "Tool {tool}"
@@ -6370,6 +6531,10 @@ msgstr "请为该模型关闭快速模式。"
 msgid "Turn off fast mode for this selection."
 msgstr "请为当前选择关闭快速模式。"
 
+#: src/components/CaptainHome.tsx
+msgid "Turn workflows written in plain language into steps AI can run"
+msgstr "将自然语言描述的工作流转成 AI 可执行的步骤"
+
 #: src/components/DraftRegisterTab.tsx
 #: src/components/LibrarySurface.tsx
 msgid "Tweak the {name} agent in place"
@@ -6380,8 +6545,8 @@ msgid "Tweak the Captain agent in place"
 msgstr "就地调整 Captain 智能体"
 
 #: src/components/CaptainHome.tsx
-msgid "Type <0>/</0> in the task box to see all {count} playbooks"
-msgstr "在输入框输入 <0>/</0>，查看全部 {count} 个规程"
+msgid "Type <0>/</0> in the task box to see {count, plural, one {# playbook} other {# playbooks}}"
+msgstr "在输入框输入 <0>/</0>，查看 {count} 个规程"
 
 #. a required role no player answers yet
 #: src/components/LibrarySurface.tsx
@@ -6558,10 +6723,6 @@ msgid "View diff"
 msgstr "查看差异"
 
 #: src/components/CaptainHome.tsx
-msgid "View migration guidance"
-msgstr "查看迁移说明"
-
-#: src/components/CaptainHome.tsx
 msgid "View specs"
 msgstr "查看规约"
 
@@ -6633,7 +6794,7 @@ msgstr "等待你的裁定"
 
 #: src/components/CaptainHome.tsx
 msgid "What should change?"
-msgstr "想改什么、怎样算完成？"
+msgstr "想做什么改动？"
 
 #: src/components/CaptainHome.tsx
 msgid "What would you change in {project}?"
@@ -6715,6 +6876,10 @@ msgstr "执行中…"
 #: src/components/AgentEditor.tsx
 msgid "Writable paths (comma-separated)"
 msgstr "可写路径（逗号分隔）"
+
+#: src/components/CaptainHome.tsx
+msgid "Write clear specs. Build with playbooks."
+msgstr "写清规约，按规程开发。"
 
 #. the source is being written to disk
 #: src/components/DraftSourceTab.tsx

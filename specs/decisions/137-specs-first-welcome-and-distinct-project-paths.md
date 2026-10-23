@@ -1,14 +1,16 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
 
-# DR-134: Specs-First Welcome and Distinct Project Paths
+# DR-137: Specs-First Welcome and Distinct Project Paths
 
 ## Status
 
 Accepted (2026-10-22) for the owner's P0-0 revision.
-Amends [DR-132](132-a-welcome-page-before-the-first-project.md) in the welcome copy and action order, and [DR-133](133-the-first-project-picker-leads-with-a-folder.md) in the first-project palette.
-The value explanation, Academy caption placement, and creation form's redundant link are amended by [DR-135](135-welcome-flow-copy-and-scoped-academy-note.md).
-The desktop manual existing-path alternative is removed by [DR-139](139-desktop-existing-projects-use-folder-picker.md).
+Amends [DR-135](135-a-welcome-page-before-the-first-project.md) in the welcome copy and action order, and [DR-136](136-the-first-project-picker-leads-with-a-folder.md) in the first-project palette.
+The value explanation, Academy caption placement, and creation form's redundant link are amended by [DR-138](138-welcome-flow-copy-and-scoped-academy-note.md).
+The desktop manual existing-path alternative is removed by [DR-142](142-desktop-existing-projects-use-folder-picker.md).
+
+The explanation of specs and playbooks is amended by [DR-143](143-start-with-a-goal-and-explain-specs-plainly.md): start from a goal, let AI help refine specs for system behavior, and describe playbooks as workflows written in plain language.
 
 ## Context
 

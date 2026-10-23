@@ -330,6 +330,11 @@ msgstr "{head} — {said}"
 msgid "{head} is no longer an ancestor"
 msgstr "{head} is no longer an ancestor"
 
+#. Credentials section on a team server: a project's code could not be cloned from {host}, a code host, for want of the member's credential
+#: src/components/SettingsSurface.tsx
+msgid "{host} needs a credential of yours to clone a project's code"
+msgstr "{host} needs a credential of yours to clone a project's code"
+
 #: src/lib/time.ts
 msgid "{hours}h"
 msgstr "{hours}h"
@@ -503,6 +508,11 @@ msgstr "{role} runs as"
 #: src/lib/time.ts
 msgid "{seconds}s"
 msgstr "{seconds}s"
+
+#. banner: a team server's seat runs another protocol version; {server} is the server's name
+#: src/App.tsx
+msgid "{server} speaks a different protocol version than this window — it needs the same Spex release as this app."
+msgstr "{server} speaks a different protocol version than this window — it needs the same Spex release as this app."
 
 #: src/components/SpaceInstance.tsx
 msgid "{site} signed this device out. Sign in again to continue as @{login}."
@@ -723,6 +733,10 @@ msgstr "✗ failed"
 msgid "A command the run needs is not installed"
 msgstr "A command the run needs is not installed"
 
+#: src/components/SettingsSurface.tsx
+msgid "A credential you place here stays on this server until you remove it."
+msgstr "A credential you place here stays on this server until you remove it."
+
 #: src/components/DeliveryCard.tsx
 msgid "A follow-up message continues this intent."
 msgstr "A follow-up message continues this intent."
@@ -739,13 +753,18 @@ msgstr "A merge is in progress in your terminal. Finish or abort it there."
 msgid "A nested workflow failed"
 msgstr "A nested workflow failed"
 
+#. project palette: where a project added or created by path lands; {place} is the place's name, "This computer"
+#: src/components/ProjectPalette.tsx
+msgid "A new project is added on {place}."
+msgstr "A new project is added on {place}."
+
 #: src/lib/failure-catalogue.ts
 msgid "A Playbook defect"
 msgstr "A Playbook defect"
 
 #: src/components/CaptainHome.tsx
-msgid "A playbook is like a Skill compiled into an executable workflow: it coordinates AI through predefined steps."
-msgstr "A playbook is like a Skill compiled into an executable workflow: it coordinates AI through predefined steps."
+msgid "A playbook is a workflow written in plain language. Spex turns it into steps for AI to follow."
+msgstr "A playbook is a workflow written in plain language. Spex turns it into steps for AI to follow."
 
 #: src/lib/labels.ts
 msgid "A player finishes its step"
@@ -861,6 +880,11 @@ msgstr "Add"
 msgid "Add {id} with the neutral agent, then tune it here"
 msgstr "Add {id} with the neutral agent, then tune it here"
 
+#. on a team server's project whose code could not be cloned for want of the member's credential: open the server's Credentials settings
+#: src/components/SpaceGroups.tsx
+msgid "Add a credential"
+msgstr "Add a credential"
+
 #: src/components/CaptainHome.tsx
 #: src/components/NavRail.tsx
 #: src/components/ProjectPalette.tsx
@@ -932,6 +956,14 @@ msgstr "Add player"
 msgid "Add project"
 msgstr "Add project"
 
+#: src/components/ProjectPalette.tsx
+msgid "Add starter specs when creating"
+msgstr "Add starter specs when creating"
+
+#: src/components/ProjectPalette.tsx
+msgid "Add this project"
+msgstr "Add this project"
+
 #: src/components/CaptainHome.tsx
 #: src/components/Composer.tsx
 msgid "Add this to the project's Up next without sending it"
@@ -992,6 +1024,11 @@ msgstr "now"
 msgid "age.weeks"
 msgstr "{weeks}w"
 
+#. Credentials section: the agent a credential of the member's is for
+#: src/components/SettingsSurface.tsx
+msgid "Agent"
+msgstr "Agent"
+
 #. subagent-effort choice: the agent picks each subagent's effort per task
 #: src/lib/agent-options.ts
 msgid "Agent chooses"
@@ -1012,6 +1049,10 @@ msgstr "Agents"
 #: src/components/ProjectsSurface.tsx
 msgid "ahead of upstream"
 msgstr "ahead of upstream"
+
+#: src/components/CaptainHome.tsx
+msgid "AI builds and reviews changes, with a record of each step"
+msgstr "AI builds and reviews changes, with a record of each step"
 
 #: src/components/NavRail.tsx
 msgid "all {count}…"
@@ -1294,6 +1335,11 @@ msgstr "Brings back anything new; sends nothing"
 msgid "Brings both histories into one and asks about anything that differs"
 msgstr "Brings both histories into one and asks about anything that differs"
 
+#. the Join control's title at a team server's seat: {place} is the server's name, which allocates the project's folder itself
+#: src/components/SpaceGroups.tsx
+msgid "Brings it to {place}"
+msgstr "Brings it to {place}"
+
 #: src/components/SpaceGroups.tsx
 msgid "Brings it to this device"
 msgstr "Brings it to this device"
@@ -1349,6 +1395,10 @@ msgstr "bug"
 msgid "bug fixed"
 msgstr "bug fixed"
 
+#: src/components/CaptainHome.tsx
+msgid "build and review step by step"
+msgstr "build and review step by step"
+
 #. a spec package's source: the one the app ships
 #: src/lib/environments.ts
 msgid "built-in"
@@ -1380,10 +1430,16 @@ msgstr "C"
 msgid "call /{playbookId}"
 msgstr "call /{playbookId}"
 
+#. banner: a team server's seat never answered; {server} is the server's name
+#: src/App.tsx
+msgid "Can't reach {server} — retrying every second."
+msgstr "Can't reach {server} — retrying every second."
+
 #: src/App.tsx
 msgid "Can't reach the Spex core at {endpoint} — retrying every second. On a served page, check the link's token; on the desktop, restart the app."
 msgstr "Can't reach the Spex core at {endpoint} — retrying every second. On a served page, check the link's token; on the desktop, restart the app."
 
+#. default cancel button: back out of the act
 #. default cancel button: back out of the act
 #. leave an editor without saving
 #. leave an editor without saving
@@ -1412,6 +1468,7 @@ msgstr "Can't reach the Spex core at {endpoint} — retrying every second. On a 
 #: src/components/SpaceGroups.tsx
 #: src/components/SpaceInstance.tsx
 #: src/components/SpaceMembers.tsx
+#: src/components/SpaceServers.tsx
 #: src/components/SpaceSignIn.tsx
 #: src/components/SpaceSync.tsx
 #: src/components/SpecEditor.tsx
@@ -1648,10 +1705,20 @@ msgstr "click opens · drag moves · scroll zooms"
 msgid "client not connected"
 msgstr "client not connected"
 
+#. the title of 'Join again' on a team server's project whose code clone failed: {place} is the server's name
+#: src/components/SpaceGroups.tsx
+msgid "Clones its code again into its folder on {place}"
+msgstr "Clones its code again into its folder on {place}"
+
 #. join step running: cloning the project's code into its folder
 #: src/lib/space.ts
 msgid "Cloning code…"
 msgstr "Cloning code…"
+
+#. close the seat open on a team server
+#: src/components/SpaceServers.tsx
+msgid "Close"
+msgstr "Close"
 
 #: src/lib/shortcuts.ts
 msgid "Close the focused session tab"
@@ -1678,6 +1745,11 @@ msgstr "Close this tab — the session stays in the sidebar"
 #: src/lib/space.ts
 msgid "Code"
 msgstr "Code"
+
+#. Credentials section: the code hosts the member placed a token for
+#: src/components/SettingsSurface.tsx
+msgid "Code hosts"
+msgstr "Code hosts"
 
 #. a project's spex repository whose records name no code remote
 #: src/components/SpaceGroups.tsx
@@ -1785,10 +1857,6 @@ msgstr "Compile failed at an unknown phase"
 msgid "Compile interrupted when Spex closed"
 msgstr "Compile interrupted when Spex closed"
 
-#: src/components/CaptainHome.tsx
-msgid "Compile natural-language playbooks into executable workflows"
-msgstr "Compile natural-language playbooks into executable workflows"
-
 #. draft state chip, at most 14 characters: the last compile succeeded
 #: src/lib/drafts.ts
 msgid "Compiled"
@@ -1884,12 +1952,13 @@ msgid "Confirming…"
 msgstr "Confirming…"
 
 #: src/components/CaptainHome.tsx
-msgid "Connect an agent"
-msgstr "Connect an agent"
-
-#: src/components/CaptainHome.tsx
 msgid "Connect to read project specs"
 msgstr "Connect to read project specs"
+
+#. banner: a team server's seat answered but its state failed to load; {server} is the server's name
+#: src/App.tsx
+msgid "Connected to {server}, but {reason}"
+msgstr "Connected to {server}, but {reason}"
 
 #: src/App.tsx
 msgid "Connected, but {reason}"
@@ -1926,10 +1995,6 @@ msgstr "Continue in your browser:"
 #: src/components/ApprovalInbox.tsx
 msgid "Conversation: {name}"
 msgstr "Conversation: {name}"
-
-#: src/components/CaptainHome.tsx
-msgid "Coordinate AI implementation and review, with traceable changes"
-msgstr "Coordinate AI implementation and review, with traceable changes"
 
 #. the item's ID went to the clipboard
 #: src/components/SpecItemRows.tsx
@@ -2052,6 +2117,11 @@ msgstr "Couldn't read the files: {reason}"
 msgid "Couldn't read the repository's state"
 msgstr "Couldn't read the repository's state"
 
+#. the instance's servers listing failed; {reason} is the core's relayed cause
+#: src/components/SpaceServers.tsx
+msgid "Couldn't read the servers: {reason}"
+msgstr "Couldn't read the servers: {reason}"
+
 #: src/components/SpaceSurface.tsx
 msgid "Couldn't read your groups: {reason}"
 msgstr "Couldn't read your groups: {reason}"
@@ -2116,6 +2186,11 @@ msgstr "Creating…"
 msgid "credentials"
 msgstr "credentials"
 
+#. Settings section on a team server: the member's own code-host tokens and agent credentials
+#: src/components/SettingsSurface.tsx
+msgid "Credentials"
+msgstr "Credentials"
+
 #. tag on the project row the workspace is on
 #: src/components/ProjectPalette.tsx
 msgid "current"
@@ -2149,14 +2224,6 @@ msgstr "decisions"
 #: src/components/SpecView.tsx
 msgid "Decisions, {count} records"
 msgstr "Decisions, {count} records"
-
-#: src/components/CaptainHome.tsx
-msgid "Define checkable specs. Deliver through playbooks."
-msgstr "Define checkable specs. Deliver through playbooks."
-
-#: src/components/CaptainHome.tsx
-msgid "Define goals and acceptance criteria"
-msgstr "Define goals and acceptance criteria"
 
 #. confirm: delete the group on the Git host
 #. confirm: delete this session for good
@@ -2247,9 +2314,17 @@ msgstr "Deny"
 msgid "Describe a project task"
 msgstr "Describe a project task"
 
+#: src/components/CaptainHome.tsx
+msgid "Describe how the system should work and how to check it"
+msgstr "Describe how the system should work and how to check it"
+
 #: src/components/DraftConversation.tsx
 msgid "Describe the playbook…"
 msgstr "Describe the playbook…"
+
+#: src/components/CaptainHome.tsx
+msgid "Describe your goal. AI helps write specs for how the system should work and how to check it, then follows playbooks to build and review changes."
+msgstr "Describe your goal. AI helps write specs for how the system should work and how to check it, then follows playbooks to build and review changes."
 
 #. notification sink: an OS notification
 #: src/components/SettingsSurface.tsx
@@ -2924,6 +2999,11 @@ msgstr "from the compile before this change"
 msgid "From the host ({count})"
 msgstr "From the host ({count})"
 
+#. project palette: heading over the spex repositories of the member's groups a team server can open; {place} is the server's name
+#: src/components/ProjectPalette.tsx
+msgid "From your groups on {place}"
+msgstr "From your groups on {place}"
+
 #. pipeline stage: the compiled spec items
 #. pipeline stage: the compiler's normative spec items (a proper name)
 #. pipeline stage: the compiler's normative spec items (a proper name)
@@ -3006,10 +3086,6 @@ msgstr "Groups"
 msgid "Groups are made by the people who run {name}"
 msgstr "Groups are made by the people who run {name}"
 
-#: src/components/CaptainHome.tsx
-msgid "Hello! I'm your Captain. Pick a project in the sidebar, then tell me what to do with it and I'll route it to a playbook, a scripted workflow the AI players run."
-msgstr "Hello! I'm your Captain. Pick a project in the sidebar, then tell me what to do with it and I'll route it to a playbook, a scripted workflow the AI players run."
-
 #: src/components/SpecView.tsx
 msgid "Hide {group} items"
 msgstr "Hide {group} items"
@@ -3041,6 +3117,16 @@ msgstr "History — this session can't be continued"
 #: src/components/NavRail.tsx
 msgid "history, can't be continued"
 msgstr "history, can't be continued"
+
+#. Credentials section: the code host a token is for, such as git.example.com
+#: src/components/SettingsSurface.tsx
+msgid "Host name"
+msgstr "Host name"
+
+#. accepting a team server's contract, which opens the seat
+#: src/components/SpaceServers.tsx
+msgid "I understand"
+msgstr "I understand"
 
 #. a spex repository's status: nothing is running
 #. session row: no turn in flight
@@ -3074,10 +3160,6 @@ msgstr "image"
 #: src/lib/playbook-intent.ts
 msgid "implement a coding intent in reviewed, one-commit phases, using an intent record when needed"
 msgstr "implement a coding intent in reviewed, one-commit phases, using an intent record when needed"
-
-#: src/components/CaptainHome.tsx
-msgid "implement in reviewed phases"
-msgstr "implement in reviewed phases"
 
 #: src/App.tsx
 #: src/components/NavRail.tsx
@@ -3279,6 +3361,13 @@ msgstr "Its spex repository is not on this device."
 msgid "Join"
 msgstr "Join"
 
+#. on a team server's project whose code clone failed: join it again, cloning its code into the folder the server allocated
+#. on a team server's project whose code clone failed: join it again, cloning its code into the folder the server allocated
+#: src/components/ProjectPalette.tsx
+#: src/components/SpaceGroups.tsx
+msgid "Join again"
+msgstr "Join again"
+
 #: src/components/SpaceSync.tsx
 msgid "Join both histories into one to sync."
 msgstr "Join both histories into one to sync."
@@ -3290,6 +3379,9 @@ msgstr "Join both histories into one? Anything that differs will ask you to choo
 #. the Join control, while the join runs
 #. the Join control, while the join runs
 #. the Join control, while the join runs
+#. the Join control, while the join runs
+#. the Join control, while the join runs
+#: src/components/ProjectPalette.tsx
 #: src/components/SpaceGroups.tsx
 msgid "Joining…"
 msgstr "Joining…"
@@ -3641,6 +3733,10 @@ msgstr "Never synced"
 msgid "new"
 msgstr "new"
 
+#: src/components/ProjectPalette.tsx
+msgid "New folder path"
+msgstr "New folder path"
+
 #. create a group at the root of the instance whose heading carries it
 #: src/components/SpaceInstance.tsx
 msgid "New group"
@@ -3669,10 +3765,6 @@ msgstr "New player {id}"
 #: src/components/ProjectPalette.tsx
 msgid "New project"
 msgstr "New project"
-
-#: src/components/ProjectPalette.tsx
-msgid "New project folder path (not created yet)"
-msgstr "New project folder path (not created yet)"
 
 #: src/components/ProjectPalette.tsx
 msgid "New project path"
@@ -3832,6 +3924,10 @@ msgstr "No spec package matches"
 msgid "No spec packages requested yet"
 msgstr "No spec packages requested yet"
 
+#: src/components/CaptainHome.tsx
+msgid "No spec packages yet"
+msgstr "No spec packages yet"
+
 #: src/components/SpaceGroups.tsx
 msgid "No spex repositories here yet"
 msgstr "No spex repositories here yet"
@@ -3851,6 +3947,11 @@ msgstr "No working folder on this device"
 #: src/components/AgentEditor.tsx
 msgid "none (adapter default)"
 msgstr "none (adapter default)"
+
+#. a list of the member's credentials on a team server, while it holds none
+#: src/components/SettingsSurface.tsx
+msgid "None placed yet"
+msgstr "None placed yet"
 
 #: src/components/AgentEditor.tsx
 msgid "none: the adapter's own default posture"
@@ -3998,6 +4099,11 @@ msgstr "Nothing in {project} needs attention."
 msgid "Nothing is repeated"
 msgstr "Nothing is repeated"
 
+#. project palette: a team server's groups list no spex repository it lacks
+#: src/components/ProjectPalette.tsx
+msgid "Nothing more to open from your groups"
+msgstr "Nothing more to open from your groups"
+
 #: src/components/SpaceSync.tsx
 msgid "Nothing new on the host"
 msgstr "Nothing new on the host"
@@ -4109,8 +4215,10 @@ msgstr "One normative spec item per state behavior — the compiler's middle sta
 msgid "One spec item per state behavior, from the last compile"
 msgstr "One spec item per state behavior, from the last compile"
 
+#. open a seat on a team server
 #. open this authoring session's workspace
 #: src/components/LibrarySurface.tsx
+#: src/components/SpaceServers.tsx
 msgid "Open"
 msgstr "Open"
 
@@ -4141,6 +4249,10 @@ msgstr "Open {title} — {reason}"
 #: src/components/DashboardSurface.tsx
 msgid "Open {title} — running in {project}"
 msgstr "Open {title} — running in {project}"
+
+#: src/components/CaptainHome.tsx
+msgid "Open a project"
+msgstr "Open a project"
 
 #: src/components/DashboardSurface.tsx
 msgid "Open and send a message to pick it up."
@@ -4190,8 +4302,8 @@ msgid "Open Settings to see what's wrong"
 msgstr "Open Settings to see what's wrong"
 
 #: src/components/CaptainHome.tsx
-msgid "Open the Academy example project"
-msgstr "Open the Academy example project"
+msgid "Open the Academy example"
+msgstr "Open the Academy example"
 
 #: src/components/SourcesTabs.tsx
 msgid "Open the project's Overview"
@@ -4221,8 +4333,14 @@ msgstr "Open to retry or drop the run."
 msgid "Opened {id}"
 msgstr "Opened {id}"
 
+#. the instance's contract, in the words its record fixes, shown before a seat's first open on this device; {server} is the server's name, {instance} the instance's; Devices is the instance's page of devices
+#: src/components/SpaceServers.tsx
+msgid "Opening a seat places your sign-in on {server}. Whoever runs {server} can act as you: in your spaces, in your records, and with the account you sign in to {instance} with, wherever it reaches. Agents on {server} run on the sign-ins its administrator set up, unless you set your own. A credential you place on {server} stays there until you remove it. Retiring the server or revoking the seat under Devices stops new use; a credential already on the server lasts until it expires."
+msgstr "Opening a seat places your sign-in on {server}. Whoever runs {server} can act as you: in your spaces, in your records, and with the account you sign in to {instance} with, wherever it reaches. Agents on {server} run on the sign-ins its administrator set up, unless you set your own. A credential you place on {server} stays there until you remove it. Retiring the server or revoking the seat under Devices stops new use; a credential already on the server lasts until it expires."
+
 #. an authoring session is being opened
 #. an authoring session is being opened
+#: src/components/CaptainHome.tsx
 #: src/components/LibrarySurface.tsx
 msgid "Opening…"
 msgstr "Opening…"
@@ -4230,6 +4348,11 @@ msgstr "Opening…"
 #: src/components/LibrarySurface.tsx
 msgid "Opens a playbook named {id} with the normalized text ready to paste — nothing is written or compiled"
 msgstr "Opens a playbook named {id} with the normalized text ready to paste — nothing is written or compiled"
+
+#. the title of 'Add a credential' on a team server's project whose code could not be cloned: {host} is the code host needing the member's credential
+#: src/components/SpaceGroups.tsx
+msgid "Opens Credentials in this server's Settings at {host}"
+msgstr "Opens Credentials in this server's Settings at {host}"
 
 #. compile phase: slc optimizes the spec items
 #: src/lib/compile-log.ts
@@ -4297,6 +4420,10 @@ msgid "Paste"
 msgstr "Paste"
 
 #: src/components/DraftSourceTab.tsx
+msgid "Paste a source"
+msgstr "Paste a source"
+
+#: src/components/DraftSourceTab.tsx
 msgid "Paste a source or pick a file"
 msgstr "Paste a source or pick a file"
 
@@ -4345,6 +4472,10 @@ msgstr "Pick a group for {name}"
 msgid "Pick a project first ({keys})"
 msgstr "Pick a project first ({keys})"
 
+#: src/components/CaptainHome.tsx
+msgid "Pick a project in the sidebar, then describe your goal."
+msgstr "Pick a project in the sidebar, then describe your goal."
+
 #. open the OS file picker
 #: src/components/DraftSourceTab.tsx
 msgid "Pick file"
@@ -4359,6 +4490,11 @@ msgstr "Pick folder"
 #: src/components/TuningField.tsx
 msgid "pin a value…"
 msgstr "pin a value…"
+
+#. the selector of where Settings, Playbooks, Groups and Environments are shown: This computer or a team server
+#: src/components/PlaceSelector.tsx
+msgid "Place"
+msgstr "Place"
 
 #: src/components/DraftConversation.tsx
 msgid "Places the six-line example as your first message"
@@ -4650,6 +4786,7 @@ msgstr "Reading project specs…"
 msgid "reading specs…"
 msgstr "reading specs…"
 
+#: src/components/ProjectPalette.tsx
 #: src/components/SpaceSurface.tsx
 msgid "Reading your groups…"
 msgstr "Reading your groups…"
@@ -4690,6 +4827,11 @@ msgstr "Reasoning effort"
 #: src/components/ApprovalInbox.tsx
 msgid "Reconnect to answer these requests."
 msgstr "Reconnect to answer these requests."
+
+#. banner: the connection to a team server's seat dropped; {server} is the server's name
+#: src/App.tsx
+msgid "Reconnecting to {server}… actions there are paused until the connection returns."
+msgstr "Reconnecting to {server}… actions there are paused until the connection returns."
 
 #: src/App.tsx
 msgid "Reconnecting to the Spex core… actions are paused until the connection returns."
@@ -4745,10 +4887,6 @@ msgstr "Refresh status and GitHub data"
 msgid "Refreshing…"
 msgstr "Refreshing…"
 
-#: src/components/ProjectPalette.tsx
-msgid "Register this existing repository"
-msgstr "Register this existing repository"
-
 #. a spec package's source: the registry
 #: src/lib/environments.ts
 msgid "registry"
@@ -4781,6 +4919,7 @@ msgstr "Reload the page"
 #. queue row control: take this row out of the queue
 #. row menu item: take this row out of the queue
 #. take a member out of a group or a spex repository on the Git host
+#. take the member's credential for a code host or an agent off the team server
 #. take this spec package out of the requests
 #: src/components/EnvironmentSection.tsx
 #: src/components/NextCard.tsx
@@ -4836,6 +4975,11 @@ msgstr "Remove from Spex? The repo stays on disk."
 msgid "Remove project"
 msgstr "Remove project"
 
+#. accessible name of the control taking the member's credential for a code host or an agent off the team server
+#: src/components/SettingsSurface.tsx
+msgid "Remove the credential for {name}"
+msgstr "Remove the credential for {name}"
+
 #: src/components/LibrarySurface.tsx
 msgid "Remove the session and its conversation; the spec package folder stays"
 msgstr "Remove the session and its conversation; the spec package folder stays"
@@ -4882,6 +5026,10 @@ msgstr "Rename"
 #: src/components/SpaceSync.tsx
 msgid "Replace {count, plural, one {# unit} other {# units}} with the host's version? The other version stays in Git history; a replaced session loses its local resume hints and where you stopped reading."
 msgstr "Replace {count, plural, one {# unit} other {# units}} with the host's version? The other version stays in Git history; a replaced session loses its local resume hints and where you stopped reading."
+
+#: src/components/DraftSourceTab.tsx
+msgid "Replace the source with pasted text"
+msgstr "Replace the source with pasted text"
 
 #: src/components/DraftSourceTab.tsx
 msgid "Replace the source with pasted text or a file"
@@ -5144,6 +5292,8 @@ msgstr "Same as agent"
 msgid "Same as Captain"
 msgstr "Same as Captain"
 
+#. Credentials section: place the credential on the team server
+#. Credentials section: place the credential on the team server
 #. commit the edits in this editor
 #. commit the edits in this editor
 #. commit the edits in this editor
@@ -5154,6 +5304,7 @@ msgstr "Same as Captain"
 #: src/components/AgentSettings.tsx
 #: src/components/BindingEditor.tsx
 #: src/components/ProjectGroup.tsx
+#: src/components/SettingsSurface.tsx
 #: src/components/SpaceMembers.tsx
 #: src/components/SpecEditor.tsx
 #: src/lib/space.ts
@@ -5198,10 +5349,6 @@ msgstr "Saving…"
 msgid "Scaffold one in the project directory:"
 msgstr "Scaffold one in the project directory:"
 
-#: src/components/ProjectPalette.tsx
-msgid "Scaffold specs when creating"
-msgstr "Scaffold specs when creating"
-
 #: src/components/EnvironmentSection.tsx
 msgid "Search the registry"
 msgstr "Search the registry"
@@ -5219,12 +5366,15 @@ msgstr "Searching…"
 msgid "See how to start"
 msgstr "See how to start"
 
+#: src/components/CaptainHome.tsx
+msgid "See how to update"
+msgstr "See how to update"
+
 #: src/App.tsx
 msgid "seeding the example failed"
 msgstr "seeding the example failed"
 
 #. busy: the Academy example is being written to disk
-#: src/components/CaptainHome.tsx
 #: src/components/ProjectPalette.tsx
 msgid "Seeding…"
 msgstr "Seeding…"
@@ -5301,6 +5451,11 @@ msgstr "sends when this turn ends"
 msgid "sent to the agent"
 msgstr "sent to the agent"
 
+#. the team servers an instance lets the person open a seat on
+#: src/components/SpaceServers.tsx
+msgid "Servers"
+msgstr "Servers"
+
 #. one unit's kind: a session
 #. one unit's kind: a session
 #. row menu item: open the session this intent came from
@@ -5370,6 +5525,14 @@ msgstr "Sessions and project views"
 #: src/components/AgentSettings.tsx
 msgid "set to {set}, runtime reports {model}"
 msgstr "set to {set}, runtime reports {model}"
+
+#: src/components/CaptainHome.tsx
+msgid "Set up an agent"
+msgstr "Set up an agent"
+
+#: src/components/CaptainHome.tsx
+msgid "Set up an agent before starting a task."
+msgstr "Set up an agent before starting a task."
 
 #: src/components/BrowserControl.tsx
 msgid "Set up browser"
@@ -5649,16 +5812,8 @@ msgid "Specs"
 msgstr "Specs"
 
 #: src/components/CaptainHome.tsx
-msgid "Spex helps you turn goals and acceptance criteria into specs, then uses playbooks to coordinate AI implementation and review."
-msgstr "Spex helps you turn goals and acceptance criteria into specs, then uses playbooks to coordinate AI implementation and review."
-
-#: src/components/CaptainHome.tsx
-msgid "Specs directory exists, but no packages yet"
-msgstr "Specs directory exists, but no packages yet"
-
-#: src/components/CaptainHome.tsx
-msgid "Specs need migration"
-msgstr "Specs need migration"
+msgid "Specs use an older format"
+msgstr "Specs use an older format"
 
 #: src/components/SpecView.tsx
 msgid "specs/ is present but holds no spec files yet."
@@ -5701,8 +5856,8 @@ msgid "Spex repository shown"
 msgstr "Spex repository shown"
 
 #: src/components/ProjectPalette.tsx
-msgid "Spex will create this folder and initialize a Git repository."
-msgstr "Spex will create this folder and initialize a Git repository."
+msgid "Spex will create this folder and set up Git."
+msgstr "Spex will create this folder and set up Git."
 
 #: src/lib/failure-catalogue.ts
 msgid "Squash or reset them yourself"
@@ -6143,10 +6298,6 @@ msgstr "the reload failed"
 msgid "the save failed"
 msgstr "the save failed"
 
-#: src/components/CaptainHome.tsx
-msgid "The selected agent is not ready, so this task cannot start yet."
-msgstr "The selected agent is not ready, so this task cannot start yet."
-
 #: src/components/SpaceSignIn.tsx
 msgid "The sign-in did not start"
 msgstr "The sign-in did not start"
@@ -6217,6 +6368,11 @@ msgstr "This agent does not support browser tools"
 msgid "This command refreshes the spec law and prints a migration prompt for an AI agent to apply:"
 msgstr "This command refreshes the spec law and prints a migration prompt for an AI agent to apply:"
 
+#. the place of the local core, beside each team server's name
+#: src/state/store.ts
+msgid "This computer"
+msgstr "This computer"
+
 #: src/components/AgentSettings.tsx
 msgid "This conversation is in use elsewhere — its settings read only."
 msgstr "This conversation is in use elsewhere — its settings read only."
@@ -6285,6 +6441,11 @@ msgstr "three in a row — tell the agent how to proceed"
 #: src/components/SpecView.tsx
 msgid "Toggle {name}"
 msgstr "Toggle {name}"
+
+#. Credentials section: the member's access token for a code host
+#: src/components/SettingsSurface.tsx
+msgid "Token"
+msgstr "Token"
 
 #: src/lib/media.ts
 msgid "Tool {tool}"
@@ -6370,6 +6531,10 @@ msgstr "Turn off fast mode for this model."
 msgid "Turn off fast mode for this selection."
 msgstr "Turn off fast mode for this selection."
 
+#: src/components/CaptainHome.tsx
+msgid "Turn workflows written in plain language into steps AI can run"
+msgstr "Turn workflows written in plain language into steps AI can run"
+
 #: src/components/DraftRegisterTab.tsx
 #: src/components/LibrarySurface.tsx
 msgid "Tweak the {name} agent in place"
@@ -6380,8 +6545,8 @@ msgid "Tweak the Captain agent in place"
 msgstr "Tweak the Captain agent in place"
 
 #: src/components/CaptainHome.tsx
-msgid "Type <0>/</0> in the task box to see all {count} playbooks"
-msgstr "Type <0>/</0> in the task box to see all {count} playbooks"
+msgid "Type <0>/</0> in the task box to see {count, plural, one {# playbook} other {# playbooks}}"
+msgstr "Type <0>/</0> in the task box to see {count, plural, one {# playbook} other {# playbooks}}"
 
 #. a required role no player answers yet
 #: src/components/LibrarySurface.tsx
@@ -6558,10 +6723,6 @@ msgid "View diff"
 msgstr "View diff"
 
 #: src/components/CaptainHome.tsx
-msgid "View migration guidance"
-msgstr "View migration guidance"
-
-#: src/components/CaptainHome.tsx
 msgid "View specs"
 msgstr "View specs"
 
@@ -6715,6 +6876,10 @@ msgstr "Working…"
 #: src/components/AgentEditor.tsx
 msgid "Writable paths (comma-separated)"
 msgstr "Writable paths (comma-separated)"
+
+#: src/components/CaptainHome.tsx
+msgid "Write clear specs. Build with playbooks."
+msgstr "Write clear specs. Build with playbooks."
 
 #. the source is being written to disk
 #: src/components/DraftSourceTab.tsx

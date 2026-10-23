@@ -242,6 +242,36 @@ While the agent editor [[settings-1](#settings-1)] stands open as an anchored po
 - that box bounds the popover's width and height, and the editor scrolls its own content when the box is the shorter of the two;
 - an anchor too near an edge for the popover's side moves the popover along that edge instead of past it, because what leaves a pane to the left or above it never becomes scrollable.
 
+### Credentials on a Seat
+
+#### settings-48
+
+Where the core runs as a seat [[core-service-125](core-service.md#core-service-125)], the Settings surface shall show a Credentials section taking a code host's token — the host name and the token — and, per agent, a credential of the member's own by the agent's forms [[settings-49](#settings-49)], each sent as `credential.set {kind: 'host' | 'agent', name, values}`, removed with `credential.remove {kind, name}`, and listed by `credential.list` as the hosts and agents set with no secret echoed ([DR-132](../decisions/132-team-servers.md)):
+
+- the core keeps them under `local/` [[storage-44](storage.md#storage-44)], applies an agent's to its runs as its environment [[core-service-126](core-service.md#core-service-126)] and a host's to every transport to that host [[git-host-9](git-host.md#git-host-9)];
+- the section says "A credential you place here stays on this server until you remove it", and names a host whose clone failed for want of one [[space-103](space.md#space-103)];
+- a blank name or value, a host name that is no host, or an agent credential without the agent's key form — Kimi's `KIMI_MODEL_API_KEY` beside its companions [[settings-49](#settings-49)] — is refused `invalid_request` before anything is written.
+
+#### settings-49
+
+Where the core runs as a seat [[core-service-125](core-service.md#core-service-125)], when readiness is evaluated, the core service shall count the forms below as an agent's credential half over the launcher's rules [[settings-14](#settings-14)], run the agent's own status command with the run's environment where the agent has one — `claude auth status`, `codex login status` — and report each adapter's credential class with its phrase ([DR-132](../decisions/132-team-servers.md)):
+
+| Agent | Shared and own forms |
+| --- | --- |
+| `claude` | `CLAUDE_CODE_OAUTH_TOKEN`, `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN` |
+| `codex` | `CODEX_ACCESS_TOKEN`, `CODEX_API_KEY`, `OPENAI_API_KEY` |
+| `opencode` | `OPENCODE_AUTH_CONTENT` |
+| `gemini` | `GEMINI_API_KEY`, `GOOGLE_APPLICATION_CREDENTIALS`, `GOOGLE_API_KEY` |
+| `kimi` | `KIMI_MODEL_API_KEY` with `KIMI_MODEL_NAME`, `KIMI_MODEL_BASE_URL` and `KIMI_MODEL_PROVIDER_TYPE` |
+
+| Class | Holds while | Phrase |
+| --- | --- | --- |
+| `own` | the member set a credential for the agent [[settings-48](#settings-48)] | "Your own credential" |
+| `shared` | a shared form of the agent is in the shared file [[core-service-126](core-service.md#core-service-126)] | "Signed in by this server's administrator" |
+| `unreadable` | the shared file cannot be read | "This server's shared sign-in cannot be read: ask its administrator" |
+| `expired` | the agent's status command reports the credential expired or refused | "This server's shared sign-in has expired: ask its administrator", or "Your own credential has expired" |
+| none | no form of the agent is set | the launcher's not-ready guidance, naming the Credentials section in place of a terminal login |
+
 ## Internal Behavior
 
 ### Validation
@@ -272,7 +302,7 @@ When the core service applies an accepted Settings save to the shared config fil
 
 #### settings-14
 
-Where the core service evaluates adapter readiness, the core service shall report readiness keyed by adapter — one deduplicated entry per adapter the active config references, each carrying the positions using it — `captain`, and each session player with the bindings it answers — applying per-adapter rules identical to the playbook launcher's, which combine a runtime half with a credential half ([DR-024](../decisions/024-app-supplied-agent-runtimes.md), [DR-004](../decisions/004-config-and-persistence.md)): an adapter whose runtime cligent's availability probe finds unusable [[core-service-9](core-service.md#core-service-9)] is not ready whatever its credential class, and one whose cligent-published runtime is missing or below cligent's supported floor carries cligent's verdict and the repair for its install tree — the pinned global install for a `PATH` runtime, reinstall guidance for a bundled SDK; over a usable runtime, `claude` is ready when `ANTHROPIC_API_KEY` is set or `~/.claude` exists; `codex` is ready when `OPENAI_API_KEY` is set or `~/.codex` exists; both halves unmet report both requirements; an adapter with a usable runtime and no credential rule shall be reported with null readiness and verify-yourself guidance rather than not ready:
+Where the core service evaluates adapter readiness, the core service shall report readiness keyed by adapter — one deduplicated entry per adapter the active config references, each carrying the positions using it — `captain`, and each session player with the bindings it answers — applying per-adapter rules identical to the playbook launcher's, which combine a runtime half with a credential half ([DR-024](../decisions/024-app-supplied-agent-runtimes.md), [DR-004](../decisions/004-config-and-persistence.md)): an adapter whose runtime cligent's availability probe finds unusable [[core-service-9](core-service.md#core-service-9)] is not ready whatever its credential class, and one whose cligent-published runtime is missing or below cligent's supported floor carries cligent's verdict and the repair for its install tree — the pinned global install for a `PATH` runtime, reinstall guidance for a bundled SDK; over a usable runtime, `claude` is ready when `ANTHROPIC_API_KEY` is set or `~/.claude` exists; `codex` is ready when `OPENAI_API_KEY` is set or `~/.codex` exists; both halves unmet report both requirements; an adapter with a usable runtime and no credential rule shall be reported with null readiness and verify-yourself guidance rather than not ready; on a seat the credential half is [[settings-49](#settings-49)]'s:
 
 - Environment lookups use the captured login-shell environment ([DR-004](../decisions/004-config-and-persistence.md)), not the bare app process environment.
 
@@ -376,6 +406,10 @@ Where the Settings surface renders against fixture state, the test suite shall a
 - the permission mode's description follows the selected mode, and the shortcut sheet lists the bindings with the platform's modifier [[settings-10](#settings-10)];
 - a missing config names the could-not-create remedy with a Retry that refreshes the app state, and never the fix-in-editor line [[settings-24](#settings-24)].
 
+#### settings-51
+
+Where the UI holds a seat's store over a fake client, the test suite shall assert the Credentials section [[settings-48](#settings-48)]: its fixed sentence; the host form sending `credential.set` with the host and the token and the agent forms sending it with the agent's names; the listing naming the hosts and agents set with no secret shown; a remove sending `credential.remove`; and the section opened at a host a failed clone named.
+
 ### Browser Journeys
 
 #### settings-47
@@ -398,3 +432,7 @@ Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-
 #### settings-30
 
 Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell on the demo config, when the journey shows the Settings surface at the widths 320, 480, 640, 800, 1024, and 1280 pixels, each at 800 and 400 pixels tall, with the sidebar collapsed and, from 480 pixels, open ([DR-041](../decisions/041-chrome-that-fits.md)), the test suite shall assert fit through the page, naming every offending element: no element outside the shortcut sheet's sideways-scrolling table is wider than its box [[settings-10](#settings-10)], the surface scrolls inside its own box with nothing positioned past the viewport uncontained [[settings-32](#settings-32)], within every list row and header no two visible siblings overlap and every child lies inside its parent [[settings-22](#settings-22)] [[settings-5](#settings-5)], and every control keeps its accessible name at every size [[settings-6](#settings-6)].
+
+#### settings-50
+
+Where the core runs as a seat with fixture shared files — present, absent and unreadable — a fake status command answering valid and expired, and a member's own credential set for one agent, the test suite shall assert each class and phrase of [[settings-49](#settings-49)] delivered over the protocol, and that `credential.set`, `credential.list` and `credential.remove` write, list without a secret and remove the member's credentials with the file owner-only [[settings-48](#settings-48)].

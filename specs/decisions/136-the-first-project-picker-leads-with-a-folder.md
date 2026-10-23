@@ -1,14 +1,14 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
 
-# DR-133: The First Project Picker Leads With a Folder
+# DR-136: The First Project Picker Leads With a Folder
 
 ## Status
 
 Accepted (2026-10-22) for the owner's P0-0 iteration.
-Amends [DR-132](132-a-welcome-page-before-the-first-project.md) in the own-project entry and [DR-011](011-project-workspace.md) in that palette entry alone.
-The folder treatment and distinction between existing and new paths are amended by [DR-134](134-specs-first-welcome-and-distinct-project-paths.md).
-The desktop manual existing-path alternative is removed by [DR-139](139-desktop-existing-projects-use-folder-picker.md).
+Amends [DR-135](135-a-welcome-page-before-the-first-project.md) in the own-project entry and [DR-011](011-project-workspace.md) in that palette entry alone.
+The folder treatment and distinction between existing and new paths are amended by [DR-137](137-specs-first-welcome-and-distinct-project-paths.md).
+The desktop manual existing-path alternative is removed by [DR-142](142-desktop-existing-projects-use-folder-picker.md).
 
 ## Context
 

@@ -11,19 +11,37 @@
 // keep creating a new project separate (projects-42). The palette owns
 // focus while open — Tab wraps inside it and Escape closes from
 // anywhere in it — and returns focus to the opener with any draft
-// intact (run-view-42).
+// intact (run-view-42). Where any seat is open, the palette lists
+// every place's projects, each naming its place, and names the place a
+// project added here lands at (run-view-168). A project at a seat is
+// opened by naming it among the spex repositories of the member's
+// groups there, with no folder picked or typed: its core allocates the
+// folder (run-view-169, space-103).
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { ProjectInfo, RepositoryState, SessionInfo } from "@sublang/spex-core/protocol";
+import type {
+  GroupsState,
+  InstanceGroupState,
+  ProjectInfo,
+  RepositoryState,
+  SessionInfo,
+} from "@sublang/spex-core/protocol";
 
 import {
   ATTENTION_MARK_CLASS,
   ATTENTION_RANK,
   type AttentionItem,
 } from "../state/dashboard.js";
-import { useAppStore } from "../state/store.js";
+import { LOCAL_PLACE, placeLabel, useAppStore } from "../state/store.js";
 import { i18n } from "../i18n.js";
-import { allRepositories, anySignedIn, pickInstances } from "../lib/instances.js";
+import {
+  allRepositories,
+  anySignedIn,
+  entriesOf,
+  pickInstances,
+  signedInInstances,
+} from "../lib/instances.js";
+import { awaitsFolder } from "../lib/space.js";
 import { Icon } from "./Icon.js";
 import { GroupPicker } from "./SpaceGroups.js";
 
@@ -42,6 +60,59 @@ function refusalOf(cause: unknown): Refusal {
   return typeof output === "string" && output.trim() ? { message, detail: output } : { message };
 }
 
+/** A seat's projects as the palette lists them (run-view-168). */
+export interface PalettePlace {
+  key: string;
+  /** The server's name. */
+  label: string;
+  projects: ProjectInfo[];
+  sessions: SessionInfo[];
+  attention: Map<string, AttentionItem>;
+  /** The seat's current project, where the workspace is on it. */
+  currentProjectId?: string;
+  /** The member's groups at the seat, as its Groups state reads them;
+   * absent until read (run-view-169). */
+  groups?: GroupsState;
+  /** Whether the seat's connection is open, so its groups can be read. */
+  connected?: boolean;
+  /** Open a spex repository of the member's groups at the seat:
+   * `space.join` with no folder, the seat allocating one (space-103). */
+  onJoin?: (instance: string, hostId: string) => Promise<void>;
+  /** Read the seat's Groups state, where nothing has read it yet. */
+  onReadGroups?: () => void;
+}
+
+/** A spex repository a seat may open (run-view-169): one a signed-in
+ * instance of that place lists in the member's groups, with no join of
+ * it running — with no clone there, as its Join row stands (space-61),
+ * or cloned there with its code clone failed, joined again as its row's
+ * "Join again" is (space-103). */
+interface PaletteJoin {
+  seat: PalettePlace;
+  /** The origin of the instance whose heading lists it (space-29). */
+  instance: string;
+  group: InstanceGroupState;
+  repo: RepositoryState;
+  /** Joined there before, its code clone failed: joined again. */
+  again: boolean;
+}
+
+function joinable(seat: PalettePlace): PaletteJoin[] {
+  if (!seat.groups) return [];
+  return signedInInstances(seat.groups).flatMap((instance) =>
+    entriesOf(instance).flatMap((group) =>
+      group.repositories
+        .filter(
+          (repo) =>
+            repo.id !== null &&
+            repo.sync.phase !== "running" &&
+            (repo.state === "absent" || awaitsFolder(group, repo)),
+        )
+        .map((repo) => ({ seat, instance: instance.origin, group, repo, again: repo.state !== "absent" })),
+    ),
+  );
+}
+
 export interface ProjectPaletteProps {
   projects: ProjectInfo[];
   sessions: SessionInfo[];
@@ -49,8 +120,12 @@ export interface ProjectPaletteProps {
    * (dashboard-9, DR-066) — the palette derives no count of its own. */
   attention: Map<string, AttentionItem>;
   currentProjectId?: string;
+  /** Each open seat's projects, after this computer's (run-view-168). */
+  seats?: PalettePlace[];
   onPickFolder?: () => Promise<string | null>;
   onPick: (projectId: string) => void;
+  /** Pick a seat's project, at its place. */
+  onPickAt?: (place: string, projectId: string) => void;
   /** Register an existing repository by path (store's addProjectByPath). */
   onAddPath: (path: string) => Promise<ProjectInfo>;
   onCreatePath: (path: string, scaffold: boolean) => Promise<ProjectInfo>;
@@ -66,6 +141,44 @@ interface ProjectRowState {
   worst?: AttentionItem["kind"];
 }
 
+/** One row of the list: a project at its place — a seat's, or this
+ * computer's where `seat` is absent. */
+interface PaletteRow {
+  project: ProjectInfo;
+  seat?: PalettePlace;
+  state?: ProjectRowState;
+  current: boolean;
+}
+
+/** Each project's running and attention counts at one place, from that
+ * place's own sessions and attention. */
+function rowStates(
+  projects: readonly ProjectInfo[],
+  sessions: readonly SessionInfo[],
+  attentionMap: Map<string, AttentionItem>,
+): Map<string, ProjectRowState> {
+  const attention = [...attentionMap.values()];
+  const byProject = new Map<string, ProjectRowState>();
+  for (const project of projects) {
+    byProject.set(project.id, { running: 0, attention: 0 });
+  }
+  for (const session of sessions) {
+    if (!session.live) continue;
+    const row = byProject.get(session.projectId);
+    if (row) row.running += 1;
+  }
+  for (const item of attention) {
+    const session = sessions.find((s) => s.id === item.sessionId);
+    const row = session && byProject.get(session.projectId);
+    if (!row) continue;
+    row.attention += 1;
+    if (!row.worst || ATTENTION_RANK[item.kind] < ATTENTION_RANK[row.worst]) {
+      row.worst = item.kind;
+    }
+  }
+  return byProject;
+}
+
 const ROW_ACTIVE = "bg-neutral-100 dark:bg-neutral-800";
 
 /** The controls Tab walks inside the dialog, in document order. */
@@ -79,6 +192,8 @@ export function ProjectPalette(props: ProjectPaletteProps) {
   const [creating, setCreating] = useState(false);
   const [scaffold, setScaffold] = useState(true);
   const [busy, setBusy] = useState(false);
+  /** The seat's project being opened, by its row's key. */
+  const [joining, setJoining] = useState<string>();
   const [error, setError] = useState<Refusal>();
   const dialogRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -107,7 +222,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
   }, [picking, pickingRepo, onClose]);
   // With no project registered, the ordinary switcher has no filter;
   // the explicit add form works with or without registered projects.
-  const empty = props.projects.length === 0;
+  const empty = props.projects.length === 0 && (props.seats ?? []).every((seat) => seat.projects.length === 0);
   const addProjectOnly = props.addProjectOnly === true;
   const hasFolderPicker = Boolean(props.onPickFolder);
 
@@ -133,45 +248,89 @@ export function ProjectPalette(props: ProjectPaletteProps) {
     else if (addProjectOnly) pathRef.current?.focus();
   }, [creating, addProjectOnly, hasFolderPicker]);
 
-  const rowState = useMemo(() => {
-    const attention = [...props.attention.values()];
-    const byProject = new Map<string, ProjectRowState>();
-    for (const project of props.projects) {
-      byProject.set(project.id, { running: 0, attention: 0 });
-    }
-    for (const session of props.sessions) {
-      if (!session.live) continue;
-      const row = byProject.get(session.projectId);
-      if (row) row.running += 1;
-    }
-    for (const item of attention) {
-      const session = props.sessions.find((s) => s.id === item.sessionId);
-      const row = session && byProject.get(session.projectId);
-      if (!row) continue;
-      row.attention += 1;
-      if (!row.worst || ATTENTION_RANK[item.kind] < ATTENTION_RANK[row.worst]) {
-        row.worst = item.kind;
+  // This computer's projects first, then each seat's at its place.
+  const listed = useMemo((): PaletteRow[] => {
+    const local = rowStates(props.projects, props.sessions, props.attention);
+    const rows: PaletteRow[] = props.projects.map((project) => ({
+      project,
+      state: local.get(project.id),
+      current: project.id === props.currentProjectId,
+    }));
+    for (const seat of props.seats ?? []) {
+      const states = rowStates(seat.projects, seat.sessions, seat.attention);
+      for (const project of seat.projects) {
+        rows.push({
+          project,
+          seat,
+          state: states.get(project.id),
+          current: project.id === seat.currentProjectId,
+        });
       }
     }
-    return byProject;
-  }, [props.projects, props.sessions, props.attention]);
+    return rows;
+  }, [props.projects, props.sessions, props.attention, props.currentProjectId, props.seats]);
+  // Each project names its place where any seat is open (run-view-168).
+  const placed = (props.seats?.length ?? 0) > 0;
+  const here = placeLabel(LOCAL_PLACE);
 
-  const filtered = props.projects.filter(
-    (project) =>
+  const filtered = listed.filter(
+    ({ project }) =>
       project.name.toLowerCase().includes(query.toLowerCase()) ||
       project.path.toLowerCase().includes(query.toLowerCase()),
   );
 
+  // Each seat's Groups state is read where nothing has read it yet, so
+  // its groups' projects can be named (run-view-169): as the palette
+  // opens, and as a seat connects while it is open. One read per
+  // connection; the store keeps them fresh from there.
+  const asked = useRef(new Set<string>());
+  const unread = (props.seats ?? [])
+    .map((seat) => `${seat.key}:${seat.connected === true}:${seat.groups !== undefined}`)
+    .join("\n");
+  useEffect(() => {
+    for (const seat of props.seats ?? []) {
+      if (seat.connected === false) {
+        asked.current.delete(seat.key);
+        continue;
+      }
+      if (seat.groups || asked.current.has(seat.key)) continue;
+      asked.current.add(seat.key);
+      seat.onReadGroups?.();
+    }
+    // The seats' keys, connections and reads are the inputs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [unread]);
+  // Each seat's spex repositories of the member's groups not there yet,
+  // under the seat's name, filtered as the projects are.
+  const joinSections = (props.seats ?? [])
+    .filter((seat) => seat.onJoin)
+    .map((seat) => ({ seat, rows: joinable(seat) }));
+  const matches = (entry: PaletteJoin): boolean =>
+    entry.repo.name.toLowerCase().includes(query.toLowerCase()) ||
+    entry.group.fullPath.toLowerCase().includes(query.toLowerCase());
+  const joinShown = joinSections.map(({ seat, rows }) => ({ seat, rows: rows.filter(matches) }));
+  const joinRows = joinShown.flatMap(({ rows }) => rows);
+
   // Entries the arrow keys traverse, in visual order: the Academy row
-  // where it leads the list, then projects, then Open folder…
+  // where it leads the list, then projects, then each seat's groups'
+  // projects, then Open folder…
   const lead = empty && !addProjectOnly ? 1 : 0;
-  const entryCount = lead + filtered.length + (props.onPickFolder ? 1 : 0);
+  const joinStart = lead + filtered.length;
+  const entryCount = joinStart + joinRows.length + (props.onPickFolder ? 1 : 0);
   const clamped = Math.min(index, Math.max(0, entryCount - 1));
-  const openFolderIndex = lead + filtered.length;
+  const openFolderIndex = joinStart + joinRows.length;
 
   function pick(projectId: string): void {
     props.onPick(projectId);
     props.onClose();
+  }
+
+  /** Pick a listed row at its own place. */
+  function pickRow(row: PaletteRow): void {
+    if (row.seat) {
+      props.onPickAt?.(row.seat.key, row.project.id);
+      props.onClose();
+    } else pick(row.project.id);
   }
 
   /** A folder added (projects-1): it becomes the current project, and
@@ -234,6 +393,28 @@ export function ProjectPalette(props: ProjectPaletteProps) {
     }
   }
 
+  /** Open a seat's project from the member's groups (run-view-169):
+   * `space.join` naming its instance and host id, and no folder, to that
+   * seat's core — again where its code clone failed, its core cloning
+   * the code into the folder it allocated (space-103); accepted, the
+   * palette closes, the join reporting on the seat's Groups row
+   * (space-63). */
+  async function runJoin(entry: PaletteJoin): Promise<void> {
+    if (busy || entry.repo.id === null || !entry.seat.onJoin) return;
+    setBusy(true);
+    setJoining(`${entry.repo.key}@${entry.seat.key}`);
+    setError(undefined);
+    try {
+      await entry.seat.onJoin(entry.instance, entry.repo.id);
+      props.onClose();
+    } catch (cause) {
+      setError(refusalOf(cause));
+    } finally {
+      setBusy(false);
+      setJoining(undefined);
+    }
+  }
+
   function openFolder(): void {
     void props.onPickFolder?.().then((path) => {
       if (!path) return;
@@ -254,8 +435,10 @@ export function ProjectPalette(props: ProjectPaletteProps) {
       void runAcademy();
       return;
     }
-    const project = filtered[at - lead];
-    if (project) pick(project.id);
+    const row = filtered[at - lead];
+    const join = at >= joinStart ? joinRows[at - joinStart] : undefined;
+    if (row) pickRow(row);
+    else if (join) void runJoin(join);
     else if (props.onPickFolder && at === openFolderIndex) openFolder();
   }
 
@@ -442,7 +625,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
                       data-testid="palette-add"
                       disabled={!pathDraft.trim() || busy}
                       onClick={() => void runAdd(false)}
-                      title={i18n._("Register this existing repository")}
+                      title={i18n._("Add this project")}
                       className="rounded-md border border-brand-300 px-3 py-2 text-sm font-medium text-brand-700 hover:bg-brand-50 disabled:opacity-40 dark:border-brand-800 dark:text-brand-300 dark:hover:bg-brand-950"
                     >
                       {i18n._({ id: "Add", comment: "register the typed path as an existing repository" })}
@@ -471,7 +654,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
               ) : (
                 <div className="mt-2 flex flex-col gap-2">
                   <label className="text-xs text-neutral-500 dark:text-neutral-400" htmlFor="palette-new-path">
-                    {i18n._("New project folder path (not created yet)")}
+                    {i18n._("New folder path")}
                   </label>
                   <input
                     id="palette-new-path"
@@ -490,11 +673,11 @@ export function ProjectPalette(props: ProjectPaletteProps) {
                     className="rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-brand-500 dark:border-neutral-700 dark:bg-neutral-950"
                   />
                   <p className="text-xs text-neutral-500 dark:text-neutral-400">
-                    {i18n._("Spex will create this folder and initialize a Git repository.")}
+                    {i18n._("Spex will create this folder and set up Git.")}
                   </p>
                   <label className="flex items-center gap-1.5 text-xs text-neutral-500">
                     <input type="checkbox" checked={scaffold} onChange={(event) => setScaffold(event.target.checked)} />
-                    {i18n._("Scaffold specs when creating")}
+                    {i18n._("Add starter specs when creating")}
                   </label>
                   <button
                     type="button"
@@ -552,22 +735,33 @@ export function ProjectPalette(props: ProjectPaletteProps) {
               <span className="text-xs text-neutral-500">{academyHint}</span>
             </button>
           ) : null}
-          {filtered.map((project, i) => {
-            const row = rowState.get(project.id);
+          {filtered.map((entry, i) => {
+            const { project, seat, state: row } = entry;
+            // This computer's rows keep their keys and test ids; a
+            // seat's are qualified by its place (run-view-168).
+            const key = seat ? `${project.id}@${seat.key}` : project.id;
             return (
               <button
-                key={project.id}
+                key={key}
                 type="button"
-                data-testid={`palette-project-${project.id}`}
+                data-testid={`palette-project-${key}`}
                 title={project.path}
-                onClick={() => pick(project.id)}
+                onClick={() => pickRow(entry)}
                 className={`flex w-full items-center gap-2 px-4 py-2 text-left text-sm hover:bg-neutral-50 dark:hover:bg-neutral-800 ${
                   i + lead === clamped ? ROW_ACTIVE : ""
                 }`}
               >
                 <Icon name="folder" className="h-3.5 w-3.5 text-neutral-500" />
                 <span className="truncate">{project.name}</span>
-                {project.id === props.currentProjectId ? (
+                {placed ? (
+                  <span
+                    data-testid="palette-place"
+                    className="shrink-0 truncate text-xs text-neutral-500"
+                  >
+                    {seat ? seat.label : here}
+                  </span>
+                ) : null}
+                {entry.current ? (
                   <span className="text-xs text-neutral-500">
                     {i18n._({
                       id: "current",
@@ -622,6 +816,75 @@ export function ProjectPalette(props: ProjectPaletteProps) {
               {i18n._('No project matches "{query}"', { query })}
             </div>
           ) : null}
+          {joinShown.map(({ seat, rows }) => (
+            // A seat's projects are opened among the member's groups
+            // there, never by a folder (run-view-169).
+            <div
+              key={seat.key}
+              role="group"
+              data-testid={`palette-groups-${seat.key}`}
+              aria-labelledby={`palette-groups-heading-${seat.key}`}
+              className="border-t border-neutral-100 py-1 dark:border-neutral-800"
+            >
+              <div
+                id={`palette-groups-heading-${seat.key}`}
+                className="px-4 py-1 text-xs font-medium text-neutral-500"
+              >
+                {i18n._({
+                  id: "From your groups on {place}",
+                  values: { place: seat.label },
+                  comment: "project palette: heading over the spex repositories of the member's groups a team server can open; {place} is the server's name",
+                })}
+              </div>
+              {rows.map((entry) => {
+                const key = `${entry.repo.key}@${seat.key}`;
+                const at = joinStart + joinRows.indexOf(entry);
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    data-testid={entry.again ? `palette-join-again-${key}` : `palette-join-${key}`}
+                    disabled={busy}
+                    title={entry.repo.key}
+                    onClick={() => void runJoin(entry)}
+                    className={`flex w-full items-center gap-2 px-4 py-2 text-left text-sm hover:bg-neutral-50 disabled:opacity-60 dark:hover:bg-neutral-800 ${
+                      at === clamped ? ROW_ACTIVE : ""
+                    }`}
+                  >
+                    <Icon name="plus" className="h-3.5 w-3.5 text-neutral-500" />
+                    <span className="truncate">{entry.repo.name}</span>
+                    <span className="min-w-0 shrink truncate text-xs text-neutral-500">
+                      {entry.group.login ?? entry.group.fullPath}
+                    </span>
+                    {joining === key ? (
+                      <span className="ml-auto shrink-0 text-xs text-neutral-500">
+                        {i18n._({ id: "Joining…", comment: "the Join control, while the join runs" })}
+                      </span>
+                    ) : entry.again ? (
+                      // Cloned there, its code clone failed: the seat's
+                      // row offers the same (space-103).
+                      <span className="ml-auto shrink-0 text-xs text-neutral-500">
+                        {i18n._({
+                          id: "Join again",
+                          comment: "on a team server's project whose code clone failed: join it again, cloning its code into the folder the server allocated",
+                        })}
+                      </span>
+                    ) : null}
+                  </button>
+                );
+              })}
+              {rows.length === 0 && !query ? (
+                <div className="px-4 py-1 text-xs text-neutral-500">
+                  {seat.groups
+                    ? i18n._({
+                        id: "Nothing more to open from your groups",
+                        comment: "project palette: a team server's groups list no spex repository it lacks",
+                      })
+                    : i18n._("Reading your groups…")}
+                </div>
+              ) : null}
+            </div>
+          ))}
           {props.onPickFolder ? (
             <button
               type="button"
@@ -660,7 +923,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
               data-testid="palette-add"
               disabled={!pathDraft.trim() || busy}
               onClick={() => void runAdd(false)}
-              title={i18n._("Register this existing repository")}
+              title={i18n._("Add this project")}
               className="rounded border border-brand-300 px-2 py-1 text-xs text-brand-600 disabled:opacity-40 dark:border-brand-800 dark:text-brand-300"
             >
               {i18n._({
@@ -689,10 +952,22 @@ export function ProjectPalette(props: ProjectPaletteProps) {
                 checked={scaffold}
                 onChange={(event) => setScaffold(event.target.checked)}
               />
-              {i18n._("Scaffold specs when creating")}
+              {i18n._("Add starter specs when creating")}
             </label>
           ) : null}
           </>
+          ) : null}
+          {placed ? (
+            // A project added or created here is this computer's
+            // (run-view-168): a seat's projects are opened among the
+            // member's groups, with no path entry (run-view-169).
+            <p data-testid="palette-new-place" className="px-0.5 text-xs text-neutral-500">
+              {i18n._({
+                id: "A new project is added on {place}.",
+                comment: "project palette: where a project added or created by path lands; {place} is the place's name, \"This computer\"",
+                values: { place: here },
+              })}
+            </p>
           ) : null}
           {empty ? null : (
             <button

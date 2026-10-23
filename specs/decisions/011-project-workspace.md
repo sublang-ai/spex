@@ -5,7 +5,7 @@
 
 ## Status
 
-The first-project entry from the welcome page is amended by [DR-133](133-the-first-project-picker-leads-with-a-folder.md).
+The first-project entry from the welcome page is amended by [DR-136](136-the-first-project-picker-leads-with-a-folder.md).
 
 Amended by [DR-065](065-repairs-the-reader-answers.md): a Space repair adds the project it names from the folder it has checked, so the palette is no longer the only place a project is added; it remains where projects are browsed, chosen and created.
 
