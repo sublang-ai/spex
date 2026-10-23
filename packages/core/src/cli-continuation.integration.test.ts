@@ -119,8 +119,7 @@ test("core-service-77: the real CLI continues a Spex-created session", { timeout
     const before = await store.read(session.id);
     assert.equal(before.state, "settled");
     assert.equal(before.snapshot.sequences.turn, 1);
-    const streamPath = join(store.sessionsDir, `${session.id}.records.jsonl`);
-    const replayBefore = await readFile(streamPath);
+    const replayBefore = Buffer.from((await store.exportBundle(session.id)).replay);
 
     const loader = join(scratch, "loader.mjs");
     await writeFile(loader, `export async function load(url,context,nextLoad){
@@ -139,8 +138,7 @@ test("core-service-77: the real CLI continues a Spex-created session", { timeout
     // module Spex launched the session on — the installed built-in in
     // the project's environment (environments-9) — with none supplied
     // (core-service-16, DR-105).
-    const manifest = JSON.parse(await readFile(join(sessionsDir, `${session.id}.json`), "utf8")) as { structuralProjection: { catalog: { code: { from: string } } } };
-    const moduleUrl = manifest.structuralProjection.catalog.code.from;
+    const moduleUrl = before.structuralProjection.catalog.code.from as string;
     assert.match(moduleUrl, /^file:.*\/packages\/sublang\/playbooks\/playbooks\/en\/code\//);
     const cliHome = join(scratch, "cli-home");
     await mkdir(join(cliHome, "config"), { recursive: true, mode: 0o700 });
@@ -160,9 +158,8 @@ test("core-service-77: the real CLI continues a Spex-created session", { timeout
     assert.equal(after.snapshot.sequences.turn, 2);
     assert.equal(after.sessionId, session.id);
     assert.ok((await store.validate(session.id)).resumable);
-    const continued = JSON.parse(await readFile(join(sessionsDir, `${session.id}.json`), "utf8")) as { structuralProjection: { catalog: { code: { from: string } } } };
-    assert.equal(continued.structuralProjection.catalog.code.from, moduleUrl, "the CLI ran the module the session records");
-    const replayAfter = await readFile(streamPath);
+    assert.equal(after.structuralProjection.catalog.code.from, moduleUrl, "the CLI ran the module the session records");
+    const replayAfter = Buffer.from((await store.exportBundle(session.id)).replay);
     assert.deepEqual(replayAfter.subarray(0, replayBefore.length), replayBefore);
     const turns = replayAfter.toString("utf8").trim().split("\n").map((line) => JSON.parse(line))
       .filter((entry) => entry.record.type === "turn_started");

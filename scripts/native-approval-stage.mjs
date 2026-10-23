@@ -39,7 +39,7 @@ export async function nativeApprovalStage({page, client, inspector, scratch, pro
     const prompt = `/inspect Use the Bash tool to run exactly this read-only command once: ${command}\nReport the resulting reference if the operation succeeds. If permission is denied, stop and report that denial. Do not retry or use another tool to read the file. Do not change files or make a commit.`;
     assert.ok(!prompt.includes(token));
     await page.getByTestId("start-composer").fill(prompt);
-    await page.getByRole("button", {name: "Send", exact: true}).click();
+    await page.getByTestId("start-send").click();
     const session = await waitFor(async () => (await client.command("session.list")).find((entry) => entry.projectId === project.id), 60_000, "native approval session");
     const pending = await waitFor(async () => {
       const state = await client.command("approval.list");

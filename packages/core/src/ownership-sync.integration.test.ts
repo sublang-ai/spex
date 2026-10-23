@@ -11,12 +11,13 @@ import { test, type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse as parseYaml } from "yaml";
 import { createSessionStore } from "@sublang/playbook/session-store";
 import { fakeAdapterImports } from "./testing/fake-adapter.js";
+import { readSessionReplay } from "./testing/session-storage.js";
 import { createSpaceHarness } from "./testing/space-harness.js";
 
 const fixture = createSpaceHarness();
@@ -88,6 +89,45 @@ const runtimeRecords = async (sessionsDir: string, sessionId: string) =>
   (await createSessionStore({ sessionsDir }).readHistory(sessionId)).entries
     .filter(({ record }) => (record as { topic?: unknown }).topic === "spex.session.runtime");
 
+/** Pin the real roots before copying their immutable dependencies. The
+ * held turn may still append; newer chunks cannot invalidate this prefix. */
+function copySessionSnapshot(source: string, destination: string, id: string): void {
+  const roots = new Map<string, Buffer>();
+  for (const name of [`${id}.json`, `${id}.replay.json`, `${id}.records.jsonl`]) {
+    if (existsSync(join(source, name))) roots.set(name, readFileSync(join(source, name)));
+  }
+  assert.ok(roots.has(`${id}.json`), "the running session has a root");
+  const privateDirectory = (path: string) => {
+    mkdirSync(path, { recursive: true, mode: 0o700 });
+    chmodSync(path, 0o700);
+  };
+  const privateFile = (path: string, bytes: Buffer) => {
+    writeFileSync(path, bytes, { mode: 0o600 });
+    chmodSync(path, 0o600);
+  };
+  const copyDirectory = (relative: string) => {
+    privateDirectory(join(destination, relative));
+    for (const entry of readdirSync(join(source, relative), { withFileTypes: true })) {
+      // A chunk publication's temporary alias is not persisted evidence.
+      if (relative === `${id}.chunks` && /^\.write-[0-9a-f]{64}-[0-9a-f-]{36}\.tmp$/.test(entry.name)) continue;
+      const child = join(relative, entry.name);
+      if (entry.isDirectory()) copyDirectory(child);
+      else {
+        assert.ok(entry.isFile(), "the synthetic session family contains only regular files");
+        privateFile(join(destination, child), readFileSync(join(source, child)));
+      }
+    }
+  };
+  privateDirectory(destination);
+  for (const name of [`${id}.chunks`, `${id}.assets`]) {
+    if (existsSync(join(source, name))) copyDirectory(name);
+  }
+  for (const name of [`${id}.records.jsonl`, `${id}.replay.json`, `${id}.json`]) {
+    const bytes = roots.get(name);
+    if (bytes) privateFile(join(destination, name), bytes);
+  }
+}
+
 /** A format 1 intent, as a Spex that recorded no runtime wrote it
  * (storage-4). */
 function unassignedIntent(clone: string, text: string, createdAt: number): { id: string; text: string; createdAt: number } {
@@ -137,12 +177,12 @@ test("core-service-124: what the first home creates or captures runs there alone
   // `invalid_request` with the phrase, writing nothing (core-service-124,
   // core-service-73, core-service-82, core-service-83).
   const streamFile = join(bClone, "sessions", `${session}.records.jsonl`);
-  const streamBefore = readFileSync(streamFile);
+  const streamBefore = await readSessionReplay(streamFile);
   refusedAs(await b.client.command("turn.submit", { sessionId: session, text: "Keep going" }), "invalid_request", label, "a continuation");
   refusedAs(await b.client.command("session.control", { sessionId: session, kind: "recovery" }), "invalid_request", label, "session.control");
   refusedAs(await b.client.command("session.restore", { sessionId: session }), "invalid_request", label, "session.restore");
   refusedAs(await b.client.command("session.discard", { sessionId: session }), "invalid_request", label, "session.discard");
-  assert.deepEqual(readFileSync(streamFile), streamBefore);
+  assert.deepEqual(await readSessionReplay(streamFile), streamBefore);
   // Never the second's lane (core-service-124, core-service-93), and
   // its work summons nothing there (core-service-124, core-service-49).
   assert.deepEqual(b.service["sessions"].listLanes().filter((lane) => lane.projectId === key), []);
@@ -218,12 +258,12 @@ test("core-service-124: what the first home creates or captures runs there alone
   };
   assert.equal((await inFlight()).intent.dispatched?.sessionId, running);
   const peer = peerClone(bare);
-  await peerPush(peer, (dir) => {
-    mkdirSync(join(dir, "sessions"), { recursive: true });
+  await peerPush(peer, async (dir) => {
     mkdirSync(join(dir, "intents"), { recursive: true });
-    for (const file of [`sessions/${running}.json`, `sessions/${running}.records.jsonl`, `intents/${unassigned.id}.json`]) {
-      copyFileSync(join(aClone, file), join(dir, file));
-    }
+    copySessionSnapshot(join(aClone, "sessions"), join(dir, "sessions"), running);
+    const copied = await createSessionStore({ sessionsDir: join(dir, "sessions") }).validate(running);
+    assert.equal(copied.integrityValid, true, copied.reasons.join("; "));
+    copyFileSync(join(aClone, "intents", `${unassigned.id}.json`), join(dir, "intents", `${unassigned.id}.json`));
   });
   // The first stops its turn: its own read releases the intent there.
   await a.client.expectOk("turn.abort", { sessionId: running });
