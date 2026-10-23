@@ -116,7 +116,7 @@ test("space-94, space-91, space-60, space-5: for a project placed at the first o
   const merged = await home.client.settle("space.sync", { repository: key }, 30_000);
   assert.equal(merged.sync.phase, "done", JSON.stringify(merged.sync));
   assert.doesNotThrow(() => git(clone, "cat-file", "-e", `HEAD:${secondFile}`), "the merge brought the second's file");
-  assert.deepEqual(readdirSync(join(clone, "placements")), [`${firstFolder}.yaml`]);
+  assert.deepEqual(readdirSync(join(clone, "placements")).sort(), [`${firstFolder}.yaml`].sort());
   assert.ok(units(merged.local).includes(secondFile), "its deletion a local change the next sync carries");
   assert.deepEqual(remoteNamesOf(clone), [firstFolder]);
   assert.deepEqual([merged.key, merged.instance, merged.placements.map((line) => line.instance)], [key, first.url, [first.url]]);
@@ -148,7 +148,7 @@ test("space-94, space-91, space-60, space-5: for a project placed at the first o
       repository,
       remotes: remoteNamesOf(movedClone),
       id: git(movedClone, "config", "--get", `remote.${secondFolder}.spexId`),
-      files: readdirSync(join(movedClone, "placements")),
+      files: readdirSync(join(movedClone, "placements")).sort(),
       records: { ...syncRecordsOf(home.dataDir, key), ...syncRecordsOf(home.dataDir, followed) },
     };
   };
@@ -282,7 +282,7 @@ test("space-60, space-61, space-5: a placement beside the first follows a signed
   assert.ok(stranded.outcome?.kind === "stopped" && stranded.outcome.cause === "reauth", JSON.stringify(stranded.outcome));
   assert.deepEqual([placementOf(unfollowed, first.url).outcome?.kind, placementOf(unfollowed, third.url).outcome?.kind], ["synced", "synced"]);
   assert.deepEqual(remoteNamesOf(clone), [firstFolder, secondFolder, thirdFolder]);
-  assert.deepEqual(readdirSync(join(clone, "placements")), [`${firstFolder}.yaml`, `${secondFolder}.yaml`, `${thirdFolder}.yaml`]);
+  assert.deepEqual(readdirSync(join(clone, "placements")).sort(), [`${firstFolder}.yaml`, `${secondFolder}.yaml`, `${thirdFolder}.yaml`].sort());
 
   // The third's placement taken away from a terminal: the second's now
   // follows the third at its Check — its remote renamed to the third's
@@ -299,7 +299,7 @@ test("space-60, space-61, space-5: a placement beside the first follows a signed
   assert.deepEqual(remoteNamesOf(clone), [firstFolder, thirdFolder]);
   assert.equal(git(clone, "config", "--get", `remote.${thirdFolder}.url`), atSecond.url);
   assert.equal(git(clone, "config", "--get", `remote.${thirdFolder}.spexId`), atSecond.id);
-  assert.deepEqual(readdirSync(join(clone, "placements")), [`${firstFolder}.yaml`, `${thirdFolder}.yaml`]);
+  assert.deepEqual(readdirSync(join(clone, "placements")).sort(), [`${firstFolder}.yaml`, `${thirdFolder}.yaml`].sort());
   assert.equal(readFileSync(join(clone, "placements", `${thirdFolder}.yaml`), "utf8"), placementBytes(third.url, atSecond.id));
   const line = placementOf(follows, third.url);
   assert.deepEqual([line.path, line.id, line.state, line.outcome?.kind], [`${LOGIN}/atlas-spex`, atSecond.id, "reachable", "synced"], JSON.stringify(line));
@@ -403,7 +403,7 @@ test("storage-38, space-91: a first placement's drop a merge brings is refused, 
   assert.deepEqual([moved.sync.phase, moved.instance, moved.id, moved.placements.map((line) => line.instance)], ["done", second.url, placed.id, [second.url]], JSON.stringify(moved.sync));
   assert.ok(existsSync(join(movedClone, ".git")) && !existsSync(clone), "moved to its path at the second");
   assert.deepEqual(remoteNamesOf(movedClone), [secondFolder]);
-  assert.deepEqual(readdirSync(join(movedClone, "placements")), [`${secondFolder}.yaml`]);
+  assert.deepEqual(readdirSync(join(movedClone, "placements")).sort(), [`${secondFolder}.yaml`].sort());
   assert.equal(Home.load(home.dataDir).keyForFolder(code), movedKey);
   assert.equal(git(firstBare, "rev-parse", "spex"), atFirst);
 });
@@ -638,7 +638,7 @@ test("space-101, space-98, space-60, space-61, storage-36, storage-38: with the 
   assert.equal(Home.load(home.dataDir).keyForFolder(beaconCode), followed);
   assert.deepEqual(remoteNamesOf(followedClone), [secondFolder]);
   assert.equal(git(followedClone, "config", "--get", `remote.${secondFolder}.spexId`), beaconId);
-  assert.deepEqual(readdirSync(join(followedClone, "placements")), [`${secondFolder}.yaml`]);
+  assert.deepEqual(readdirSync(join(followedClone, "placements")).sort(), [`${secondFolder}.yaml`].sort());
   assert.equal(readFileSync(join(followedClone, secondFile), "utf8"), placementBytes(second.url, beaconId));
   assert.ok(syncRecordsOf(home.dataDir, followed)[`sync:${followed}:${secondFolder}:last`], "its last sync kept under its remote");
   assert.deepEqual(first.script.transportCredentials.slice(transports), [], "nothing fetched");
@@ -668,5 +668,5 @@ test("space-101, space-98, space-60, space-61, storage-36, storage-38: with the 
   assert.deepEqual([dropped.sync, dropped.instance, dropped.placements.map((each) => each.instance)], [{ phase: "idle" }, second.url, [second.url]], JSON.stringify(dropped));
   assert.ok(existsSync(join(atSecondClone, ".git")) && !existsSync(atlasClone), "moved to its path at the second");
   assert.deepEqual(remoteNamesOf(atSecondClone), [secondFolder]);
-  assert.deepEqual(readdirSync(join(atSecondClone, "placements")), [`${secondFolder}.yaml`]);
+  assert.deepEqual(readdirSync(join(atSecondClone, "placements")).sort(), [`${secondFolder}.yaml`].sort());
 });
