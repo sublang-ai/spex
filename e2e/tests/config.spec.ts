@@ -29,5 +29,5 @@ test("run-view-103: a broken config is named, and repair restores the home", asy
   writeFileSync(app.configPath, DEMO_CONFIG);
   await expect(page.getByTestId("config-status")).toHaveCount(0, { timeout: 15_000 });
   await expect(home).not.toContainText(/invalid/i);
-  await expect(home).toContainText(/tell me what to do/i);
+  await expect(home).toContainText("What would you change in demo-project?");
 });

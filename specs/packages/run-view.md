@@ -235,7 +235,7 @@ The Boss composer — on the Captain home and in a session alike — shall take 
 | Part | Form |
 | --- | --- |
 | Field | on top at full width, one row when empty and never shorter whatever height the viewport reports, growing with its text to eight lines or two fifths of the viewport, shrinking toward that one-row floor when the Captain column has less room so its caption and actions remain inside the column, and scrolling excess text, refitted whenever the viewport or the field's own box resizes — a divider dragged or a sidebar folded rewraps the draft with no window resize behind it — with no native resize grip |
-| Caption | one line under the field reading "/ for playbooks · Enter sends", which an acknowledgment or the staged intent chip occupies instead of stacking above the box |
+| Caption | one line under the field reading "/ for playbooks · Enter sends" in a session or while no project is chosen; the project home's resting composer omits it because its slash guidance sits outside the box [[run-view-25](#run-view-25)]; an acknowledgment or staged intent chip occupies that line when present |
 | Action row | beneath, wrapping: the secondary action at the left, then Abort while a turn runs, and the primary control last at the right |
 | Placeholder | at most 24 characters — "Message the Captain…", "Reply to ⟨player⟩…" for a waiting question, "Captain is working…" while a turn runs, "Connecting…" without the core |
 | Queued indicator | above the field, the queued submissions [[run-view-8](#run-view-8)] in their own positioned scrolling frame a few entries tall, kept at its end so the newest shows; the composer yields around it, so the field, the caption, and the action row keep their place at any queue length and the pane the composer sits in is never pushed out of the window |
@@ -293,27 +293,40 @@ The app shell shall fill the window at every size, giving the surface it shows a
 
 #### run-view-25
 
-Where no session tab is active, when the Projects surface is shown, the run view shall present the Captain home: a chat thread opened by a Captain greeting, a chat composer, and the captain's adapter, model, and effort — with a lightning mark after them while the captain runs in fast mode, "fast mode" in its tooltip, as every agent chip wears it ([DR-038](../decisions/038-history-is-done-work.md)) — with a gear control opening the in-place agent editor, per [DR-007](../decisions/007-conversational-session-start.md) and [DR-011](../decisions/011-project-workspace.md):
+Where a project is registered and no session tab is active, when the Projects surface is shown, the run view shall present a project task start with one composer and secondary Captain settings ([DR-007](../decisions/007-conversational-session-start.md), [DR-011](../decisions/011-project-workspace.md), [DR-141](../decisions/141-project-start-explains-the-task-and-slash-discovery.md), [DR-143](../decisions/143-start-with-a-goal-and-explain-specs-plainly.md)):
 
-- the greeting names the current project and asks what to do with it, since the reader is already inside one and the question is the work, not the place, and says in one clause what a playbook is — a scripted workflow the AI players run — so the first sentence needs no glossary;
-- with no project current, the greeting names the remedy the workspace actually has — picking one where projects exist, adding one where none do — never sending the reader to a sidebar holding nothing;
-- with no project registered, the greeting itself carries the two ways in — a control opening the project palette [[run-view-42](#run-view-42)] and one seeding the Academy example through the same action the palette uses [[projects-27](projects.md#projects-27)] — acknowledging in place while it seeds and reporting a refusal in the thread;
+- the heading and task field invite a goal for the named project; concise guidance aligned to the composer's width explains that AI helps write specs for how the system should work and how to check it, then follows playbooks to implement and review changes; the copy needs no completed specs or acceptance criteria to begin and makes no automatic spec-writing promise;
+- below the guidance, a compact per-project specs status links to the pinned Specs tab [[run-view-58](#run-view-58)]: when known it reports package and item counts, while a missing `specs/`, an empty package collection, a legacy tree, and a read failure receive distinct guidance; loading shall not display a false zero;
+- immediately above the composer, Captain wears the same avatar and name as the running Captain pane, beside a clickable chip showing its current adapter, model, effort, fast-mode mark, and readiness; that chip opens the in-place editor [[run-view-32](#run-view-32)], while blocking readiness remains at the composer;
+- the sole task field has an accessible label without a visible label, and a stable hint below the composer says to type `/` in that field to inspect all configured playbooks, naming their live count [[run-view-27](#run-view-27)]; its idle inside-caption is absent while staged-intent and acknowledgment captions still appear [[run-view-106](#run-view-106)];
+- the introduction and the Captain/composer group have more breathing room than the gaps within each group; a compact, borderless, low-emphasis footer directly below the composer explains a playbook as a workflow written in plain language that Spex can run to coordinate AI work and previews at most two configured examples in the same paragraph, preferring `/code` and `/review`; a final slash hint uses the same muted color and command typography, and the preview disappears when an Up next card takes priority [[run-view-27](#run-view-27)];
+- with no project current, the greeting directs the reader to pick one where projects exist;
 - Project choice lives in the sidebar and palette, not in the composer row.
+
+#### run-view-172
+
+While no local project is registered, the local Projects surface shall show a welcome page explaining specs as descriptions of system behavior and playbooks as workflows written in plain language for AI implementation and review, with one primary "Add a local project" action [[projects-42](projects.md#projects-42)] and one secondary action to open the current Academy specs example [[projects-27](projects.md#projects-27)] ([DR-135](../decisions/135-a-welcome-page-before-the-first-project.md), [DR-136](../decisions/136-the-first-project-picker-leads-with-a-folder.md), [DR-137](../decisions/137-specs-first-welcome-and-distinct-project-paths.md), [DR-138](../decisions/138-welcome-flow-copy-and-scoped-academy-note.md), [DR-139](../decisions/139-quieter-welcome-flow-and-academy-choice.md), [DR-143](../decisions/143-start-with-a-goal-and-explain-specs-plainly.md)):
+
+- the Academy action shall acknowledge seeding and report a refusal in place, and its copy shall not promise a recorded replay before one exists;
+- the value explanation shall show the path from specs through playbooks to implementation and review as three compact, connected steps with short, plain labels and descriptions; the Academy action shall have no caption below it;
+- the page shall hide the Captain chat, composer, agent identity, quick-start playbooks, and adapter-readiness warning;
+- the sidebar shall retain its compact project-palette control without a second prominent add control;
+- shared config errors shall remain visible with a Settings action [[run-view-44](#run-view-44)], and connection failures shall remain visible [[run-view-50](#run-view-50)].
 
 #### run-view-26
 
 While the Captain home is shown, when the user submits composer text, the run view shall act by whether the workspace has a current project:
 
 - a current project — the run view creates a session for that project, dispatches the text as the session's first Boss turn, and switches to the new session's tab;
-- no project chosen — the workspace opens the project palette instead of dispatching, keeping the draft intact, and the draft equally survives a project arriving through the greeting's own controls [[run-view-25](#run-view-25)], so the text goes the moment there is somewhere to send it;
+- no project chosen while projects exist — the workspace opens the project palette instead of dispatching, keeping the draft intact;
 - the send control's tooltip says how to send — Enter, with Shift+Enter for a new line — and, with no project, what to do first, naming the palette's binding the platform's way [[run-view-49](#run-view-49)].
 
 #### run-view-27
 
-The run view shall make configured playbooks discoverable at the composer:
+The run view shall make configured playbooks discoverable at the composer ([DR-141](../decisions/141-project-start-explains-the-task-and-slash-discovery.md)):
 
 - when the user types `/` at the start of a composer, the run view shows the configured playbooks filtered by the typed prefix, each with its intent — a built-in's in the interface language [[localization-4](localization.md#localization-4)] — as the hint, and inserts the selected command into the composer without dispatching it;
-- the Captain home shows highlighted playbooks, each with its command and that intent, as a quick start card that the user can dismiss, with the dismissal persisting across launches.
+- at the project task start, a stable hint at the end of the compact footer below the composer explicitly tells the reader to type `/` in the task field to inspect all configured playbooks and names their live count; when playbooks are available and no Up next card is present, up to two configured examples appear in a low-emphasis, read-only explanation before that hint. Examples do not act as command selectors or quick-start controls.
 
 #### run-view-30
 
@@ -600,7 +613,7 @@ While the app is connected, the sidebar shall present navigation as surface entr
 - activating a project row makes it the current project and changes no disclosure;
 - a disclosed project lists its sessions by last activity, a working one first, the five most recent shown with one control revealing the rest in place and one control opening that project's start tab — a project holds at most one turn in flight [[core-service-4](core-service.md#core-service-4)], so starting a session is a composer away, never a conflict away ([DR-051](../decisions/051-runtime-held-for-a-turn.md));
 - a project whose sessions need a human carries a dot in the most severe of their colors on its own row, disclosed or not [[run-view-73](#run-view-73)];
-- the section header carries the control that opens the project palette [[run-view-42](#run-view-42)], where projects are added and created;
+- the section header carries a plus control that opens the local-project add form [[projects-42](projects.md#projects-42)], where projects are added and created;
 - the surface entries are a navigation list publishing the current surface, and the projects and their sessions are one tree publishing disclosure, selection, and a single focus stop;
 - the tree's selection follows the surface: the current project's row and the session row whose tab is shown are selected only while Projects is the surface — on the Dashboard, Playbooks, Space, or Settings no row is selected and that surface's entry alone reads as current — and choosing Projects again selects the remembered project once more.
 - the surface the reader stands on is remembered across launches ([DR-030](../decisions/030-workspace-chrome.md)), so reopening the app — or reloading the page after a failure — returns them to it rather than to Projects.
@@ -670,8 +683,8 @@ While a session's tab is shown, the run view shall lay the Captain column and th
 
 The project palette shall be fully keyboard-operable ([DR-011](../decisions/011-project-workspace.md)):
 
-- it opens from Cmd/Ctrl+P, the sidebar's Projects section — in the expanded tree and the collapsed rail alike [[run-view-71](#run-view-71)] — the Captain home's greeting where nothing is registered [[run-view-25](#run-view-25)], or submitting a composer with no project chosen;
-- its filter input holds focus — the path field where no project is registered, the palette then being an add flow [[projects-22](projects.md#projects-22)];
+- its searchable switcher opens from Cmd/Ctrl+P or submitting a composer with no project chosen, while the sidebar's Projects plus — in the expanded tree and the collapsed rail alike [[run-view-71](#run-view-71)] — and the welcome page's local-project action [[run-view-172](#run-view-172)] open its add form [[projects-42](projects.md#projects-42)];
+- the switcher's filter input holds focus — or, where no project is registered, the folder choice when a native picker exists and the path field otherwise [[projects-22](projects.md#projects-22)] — while the add form focuses the folder choice or its existing-path fallback [[projects-42](projects.md#projects-42)];
 - arrow keys move the highlight over the Academy row where it leads the list, the project rows, and "Open folder…";
 - Enter picks, in an empty path field too, while a typed path adds;
 - the palette announces itself modal, and Tab and Shift+Tab wrap inside it;
@@ -691,7 +704,7 @@ The tab strip shall show the current project's open sessions, working and idle a
 - session tabs are titled by the session's first Boss turn (truncated; "new session" before the first turn) with the full prompt and start time in the tooltip — never by the project name, which the sidebar carries ([DR-011](../decisions/011-project-workspace.md));
 - tabs carry the shared attention signal [[dashboard-9](dashboard.md#dashboard-9)]: a red dot for a failure and an amber one for every other entry, standing on the active tab as well as a background one — showing a session clears what showing settles [[run-view-134](#run-view-134)], so a dot that stands is one the reader still owes — with the detail in the tab tooltip — a failure entry's tooltip carrying the catalogue's phrase for the cause that entry names [[run-view-147](#run-view-147)] [[dashboard-1](dashboard.md#dashboard-1)] ([DR-075](../decisions/075-a-failure-says-what-and-what-now.md)) — and the tab's accessible name ending in that entry's own words — "failed", "needs your reply", "needs your verdict", "unread turn" — so the dot is never the only channel, and a tab of history the core cannot continue says "history" ([DR-051](../decisions/051-runtime-held-for-a-turn.md));
 - each tab's close control files the session out of the working set, stopping nothing and confirming nothing ([DR-029](../decisions/029-session-history-home.md)), and after a tab closes focus moves to a neighboring tab, never to the document body;
-- the strip scrolls horizontally when tabs overflow, keeps the new-session control — a plus glyph, its name in its accessible name and tooltip ([DR-041](../decisions/041-chrome-that-fits.md)) — reachable, exposes tab-list semantics, and keeps the active tab scrolled into view;
+- the strip scrolls horizontally when tabs overflow, keeps the new-task control — a plus glyph and a visible name identifying the task composer, with the same destination in its accessible name and tooltip ([DR-041](../decisions/041-chrome-that-fits.md)) — reachable, exposes tab-list semantics, and keeps the active tab scrolled into view; choosing it opens the composer but does not submit a task;
 - the strip has one Tab stop — the active tab — and Arrow Left, Arrow Right, Home, and End move focus between session tabs, the new-session control, and the pinned tabs without activating any;
 - a tab tooltip that names a shortcut prints it with the platform's own modifier (⌘ on a Mac, Ctrl elsewhere).
 
@@ -707,12 +720,13 @@ The app shall provide keyboard shortcuts implemented in the web UI (so they work
 
 #### run-view-44
 
-While the shared config is invalid or missing, the Captain home shall say so in the thread — listing the actual errors, or saying there is no config file yet where it is missing — with an in-place link to Settings, where the missing file's remedy waits [[settings-24](settings.md#settings-24)], never rendering the captain identity blank.
+While the shared config is invalid or missing, the Captain home shall say so in the thread — listing the actual errors, or saying there is no config file yet where it is missing — with an in-place link to Settings, where the missing file's remedy waits [[settings-24](settings.md#settings-24)], never rendering the captain identity blank; with no project registered, the welcome page shall show the same failure and Settings action [[run-view-172](#run-view-172)].
 
 #### run-view-45
 
-The not-ready heads-up shall offer an in-place re-check, with copy that is honest about env vars requiring a restart:
+While the selected Captain adapter reports not ready on a project's home, the run view shall explain beside the composer that a task cannot start, keep its draft editable, block dispatch, and offer Settings and an in-place re-check ([DR-135](../decisions/135-a-welcome-page-before-the-first-project.md)):
 
+- where a different adapter is ready, the notice shall also open the Captain's in-place agent editor to switch to it [[run-view-32](#run-view-32)];
 - the app re-checks readiness when its window regains focus while anything is not ready;
 - readiness covers every adapter any configured agent names.
 
@@ -731,7 +745,7 @@ The app shall fail loudly and stay accessible:
 
 #### run-view-51
 
-Where the Captain home has nothing to report (no warnings or errors), it shall center its whole cluster — greeting, quick start, and composer — on the canvas, reverting to the bottom-docked chat layout once real content exists; session history lives in the sidebar [[run-view-67](#run-view-67)], never on the home.
+Where the Captain home has nothing to report (no warnings or errors), it shall center its whole cluster — project task guidance, Captain role, and composer — on the canvas, reverting to the bottom-docked layout once real content exists; session history lives in the sidebar [[run-view-67](#run-view-67)], never on the home ([DR-141](../decisions/141-project-start-explains-the-task-and-slash-discovery.md)).
 
 ### Project Workspace (DR-011)
 
@@ -739,7 +753,7 @@ Where the Captain home has nothing to report (no warnings or errors), it shall c
 
 The Projects surface shall name the current project in the sidebar's Projects section rather than in a bar of its own [[run-view-67](#run-view-67)] ([DR-029](../decisions/029-session-history-home.md)):
 
-- the project palette opens from its keyboard binding [[run-view-49](#run-view-49)] and from the sidebar's Projects section;
+- the project switcher opens from its keyboard binding [[run-view-49](#run-view-49)], and the sidebar's Projects plus opens the add form [[projects-42](projects.md#projects-42)];
 - while no project is chosen, the tab strip (including pinned tabs) is absent and the sidebar plus the Captain home's guidance is the whole surface.
 
 
@@ -757,6 +771,7 @@ Each project shall keep its own working set — the sessions open as tabs and wh
 The tab strip shall end with pinned Specs and Overview tabs — one spec view and one project overview [[projects-4](projects.md#projects-4)] per project — that participate in the tab list and the tab-cycling shortcut ([DR-038](../decisions/038-history-is-done-work.md)):
 
 - Switching projects swaps the whole strip; sessions of other projects keep running and stay reachable through the sidebar [[run-view-67](#run-view-67)], the palette's live-state rows, and the Dashboard.
+- When the current project's specs tree is known and contains spec items, the Specs tab shows the item count as a plain text suffix, spoken with the item unit; loading, empty, legacy, and unreadable trees keep the unnumbered tab. This is navigation context, not an attention badge [[run-view-25](#run-view-25)].
 
 ### Intent Ledger (DR-035)
 
@@ -766,7 +781,7 @@ When the composer's add-to-Up-next action is activated, the Boss composer shall 
 
 - the capture starts no turn and queues no submission [[run-view-8](#run-view-8)] — the text joins Up next but is not sent by capture;
 - the acknowledgment is an inline note in the composer's caption line [[run-view-106](#run-view-106)] naming where the row landed — "Added to Up next — see the project's Overview.", the project's Up next in its Overview tab, where the row's Remove waits [[dashboard-29](dashboard.md#dashboard-29)] — the run view's form of the shelf reveal;
-- the action stands beside send as the composer's one secondary action, labeled "Add to Up next" — by where the text goes, never by a mechanism — with no Start capture action beside it.
+- the action stands beside send as the composer's one secondary action, labeled "Add to Up next" — by where the text goes, never by a mechanism — with no Start capture action beside it; on the Captain home it uses a text treatment so Start task remains the dominant action.
 
 #### run-view-86
 
@@ -791,7 +806,7 @@ When a dispatched intent's final turn ends finished, the run view shall render t
 
 #### run-view-88
 
-While the Captain home is shown and the current project's queue holds an unblocked intent, the Captain home shall present a next card naming the core-published next intent and standing [[core-service-49](core-service.md#core-service-49)], with its `Queued` mark and, from the published standing, the exact scheduling phrase where one applies and Start exactly when manual start is available [[dashboard-59](dashboard.md#dashboard-59)], Remove beside it [[run-view-114](#run-view-114)], and a count of the remaining queued intents, coexisting with the quick start card [[run-view-27](#run-view-27)] ([DR-035](../decisions/035-intent-ledger.md), [DR-077](../decisions/077-up-next-is-a-committed-queue.md)):
+While the Captain home is shown and the current project's queue holds an unblocked intent, the Captain home shall present a next card naming the core-published next intent and standing [[core-service-49](core-service.md#core-service-49)], with its `Queued` mark and, from the published standing, the exact scheduling phrase where one applies and Start exactly when manual start is available [[dashboard-59](dashboard.md#dashboard-59)], Remove beside it [[run-view-114](#run-view-114)], and a count of the remaining queued intents alongside the project task guidance [[run-view-25](#run-view-25)] ([DR-035](../decisions/035-intent-ledger.md), [DR-077](../decisions/077-up-next-is-a-committed-queue.md)):
 
 - the queued-intent title, standing, and remaining count occupy the card row's sole shrinkable text region; the title and standing share one line at and above the `@md` container step, each truncating with its full text in its title, while below `@md` the standing takes its own line and the count keeps its own line within that region; the `Queued` mark, available Start, and Remove remain visible ([DR-041](../decisions/041-chrome-that-fits.md));
 - the visible Start label stays short while its accessible name identifies the queued intent ([DR-041](../decisions/041-chrome-that-fits.md));
@@ -1035,8 +1050,8 @@ When fixture turn and question states, real record-folded turns and deferred sub
 
 Where no session is live, when the Projects surface renders with a fixture config of one project and one playbook, the test suite shall assert the Captain home's one-motion start:
 
-- the Captain home shows the greeting naming the current project, the chat composer, and the captain identity [[run-view-25](#run-view-25)];
-- with no project current, the greeting offers picking one where the workspace holds projects and adding one where it holds none [[run-view-25](#run-view-25)];
+- in English and Chinese, the Captain home names the current project, presents one task composer, invites a goal, explains how AI helps write specs for system behavior, and describes playbooks as workflows written in plain language [[run-view-25](#run-view-25)];
+- with no project current but projects registered, the greeting offers picking one [[run-view-25](#run-view-25)]; with no local project registered, the local welcome page explains specs and playbooks in English and Chinese and offers the Academy example and own-project paths without a composer [[run-view-172](#run-view-172)];
 - when text is submitted with a current project, a session is created for that project and the text is dispatched as its first Boss turn [[run-view-26](#run-view-26)];
 - when text is submitted with no project chosen, the palette opens and the draft survives [[run-view-26](#run-view-26)].
 
@@ -1045,12 +1060,12 @@ Where no session is live, when the Projects surface renders with a fixture confi
 When the Captain home composer and thread render against the fixture playbook, the test suite shall assert playbook discovery and IM presentation:
 
 - when `/` is typed at the start of the composer, the slash menu lists the fixture playbook with its intent, filters as more is typed, and inserts the command without dispatching on selection [[run-view-27](#run-view-27)];
-- when the quick start card is dismissed and the view is remounted, the card stays dismissed [[run-view-27](#run-view-27)];
+- the project task start aligns its guidance with the composer, shows Captain's avatar and configured agent chip immediately above it, keeps slash discovery below its sole task field, and shows the complete configured playbook list when `/` is typed [[run-view-25](#run-view-25)] [[run-view-27](#run-view-27)];
 - when a fixture stream containing a boss turn is replayed, the submitted text renders as a user bubble in the Captain thread [[run-view-30](#run-view-30)].
 
 #### run-view-35
 
-When the captain editor popover is opened from the Captain home with a fixture captain block, the test suite shall assert it offers the runtime's adapters with their readiness, that changing the adapter or model issues a captain merge patch through the configuration edit path, that the patch carries the editor's surfaced fields and never a hand-written one, and that the popover opens on the roomier side of its gear under a cap of the room the window can show there — all without a surface change [[run-view-32](#run-view-32)].
+When the captain editor popover is opened from the Captain home's agent chip with a fixture captain block, the test suite shall assert it offers the runtime's adapters with their readiness, that changing the adapter or model issues a captain merge patch through the configuration edit path, that the patch carries the editor's surfaced fields and never a hand-written one, and that the popover opens on the roomier side of its chip under a cap of the room the window can show there — all without a surface change [[run-view-32](#run-view-32)].
 
 #### run-view-36
 
@@ -1173,7 +1188,7 @@ Where a replayed fixture stream dispatches a queued intent whose turn then ends 
 
 Where fixture projects hold queues whose next intents span the published scheduling standings, when the Captain home renders, the test suite shall assert the next card case by case [[run-view-88](#run-view-88)]:
 
-- every next card names its intent with `Queued` and counts the rest while the quick start card stands beside it [[run-view-88](#run-view-88)];
+- every next card names its intent with `Queued` and counts the rest beside the task-start guidance [[run-view-88](#run-view-88)];
 - a manual-ready next carries Start whose accessible name identifies that intent, and activation stages the intent under its chip into the current conversation's composer when one exists and otherwise into the home composer [[run-view-88](#run-view-88)] [[run-view-86](#run-view-86)];
 - a next behind active work reads `after current work`, one behind a question park reads `waiting — your reply`, and one behind a parked failure reads `waiting — current work failed` with its catalogue phrase, each with no Start [[run-view-88](#run-view-88)];
 - an unparked failure reads `waiting — previous work failed` and a stopped turn reads `waiting — previous work stopped`, each with Start [[run-view-88](#run-view-88)];
@@ -1244,9 +1259,8 @@ When the integration suite reveals earlier entries of a long player transcript t
 
 Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell on an empty state root with no config and opens its token URL, the test suite shall assert the first run through the page alone:
 
-- the Captain home greets and offers adding a project, with the quick start listing the seeded playbooks [[run-view-25](#run-view-25)] [[run-view-27](#run-view-27)];
-- submitting composer text with no project opens the palette and keeps the draft [[run-view-26](#run-view-26)];
-- once the Academy example seeds from the palette, the greeting names the project and the sidebar lists it [[run-view-25](#run-view-25)] [[run-view-67](#run-view-67)];
+- the welcome page offers adding a local project and opening the Academy example without a composer [[run-view-172](#run-view-172)];
+- once the Academy example seeds, the project task start names that project and the sidebar lists it [[run-view-25](#run-view-25)] [[run-view-67](#run-view-67)];
 - typing `/` lists the configured playbooks, Escape hides the menu with the draft intact, and typing reopens it [[run-view-27](#run-view-27)] [[run-view-43](#run-view-43)].
 
 #### run-view-98
@@ -1406,4 +1420,8 @@ Where the live journey lane runs with the machine's signed-in agents ([DR-089](.
 
 #### run-view-171
 
-Where the UI holds the local store and two seat stores with fake clients, the test suite shall assert the places [[run-view-168](#run-view-168)]: an approval snapshot, a ledger reply and a backfill in one store leave the others untouched; a seat's language state activates no language and writes none; the sidebar shows a heading per place with the local rows' test ids unchanged; one place's banner and one place's mismatch show alone; the selector switches Settings, Playbooks, Groups and Environments; and the remote rules [[run-view-169](#run-view-169)] [[run-view-170](#run-view-170)]: a remote place offers no picker, reveal or path entry, opening a group's project sends `space.join` with no folder to that place's client, and the first Open shows the contract and sends `server.open` with consent only on "I understand"; a remote place's repair row, environment folder request and draft source offer no folder, picker or path; a seat's row whose code clone failed offers "Join again", sending the join again, and "Add a credential", opening that seat's Credentials section at the host [[run-view-169](#run-view-169)]; the sidebar's attention marks leave out a place speaking another protocol version [[run-view-168](#run-view-168)].
+Where the UI holds the local store and two seat stores with fake clients, the test suite shall assert the places [[run-view-168](#run-view-168)]: an approval snapshot, a ledger reply and a backfill in one store leave the others untouched; a seat's language state activates no language and writes none; the sidebar shows a heading per place with the local rows' test ids unchanged; one place's banner and one place's mismatch show alone; the selector switches Settings, Playbooks, Groups and Environments; and the remote rules [[run-view-169](#run-view-169)] [[run-view-170](#run-view-170)]: a remote place offers no picker, reveal or path entry, opening a group's project sends `space.join` with no folder to that place's client, and the first Open shows the contract and sends `server.open` with consent only on "I understand"; a remote place's repair row, environment folder request and draft source offer no folder picker and no path on this computer, an environment's folder named relative to its project alone; a seat with no project greets with its groups, naming no folder of this computer; a seat's row whose code clone failed offers "Join again", sending the join again, and "Add a credential", opening that seat's Credentials section at the host [[run-view-169](#run-view-169)]; the sidebar's attention marks leave out a place speaking another protocol version [[run-view-168](#run-view-168)].
+
+#### run-view-173
+
+Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell beside a stand-in instance listing one server, a stand-in hub admitting tickets and relaying to two further cores started as seats, and substitute agents ([DR-089](../decisions/089-every-fresh-user-scenario-walked-for-real.md)), when the journey opens both seats from the Groups surface — the first Open showing the contract and "I understand", the second sending at once [[run-view-170](#run-view-170)] — the test suite shall assert through the page the places [[run-view-168](#run-view-168)]: each place's projects under its own heading, the selector naming the three places; one queue carrying the three cores' attention in each band's order with the badge counting them, an entry opened at its own place; an approval answered at its seat; a seat whose hello carries another protocol version read as mismatched alone while the other stays open; the seat's bearer absent from every message the renderer receives; and, after Close, the seat's heading gone and its relay path refused [[run-view-169](#run-view-169)].

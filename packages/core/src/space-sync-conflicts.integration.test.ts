@@ -6,6 +6,7 @@
 // bare remote, a peer clone advancing it between steps.
 
 import { test } from "node:test";
+import { readSessionReplay } from "./testing/session-storage.js";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
@@ -202,13 +203,13 @@ test("space-38: a Settings conflict, validation at Apply, a unit changed before 
   // session's newer turn, so the selection is kept whole: the marker
   // stays, and Retry after the lease's release finishes the recorded units.
   await runTurn(a, key, "Seed again", seed);
-  const turns = readFileSync(join(aClone, "sessions", `${seed}.records.jsonl`), "utf8").trim().split("\n")
+  const turns = (await readSessionReplay(join(aClone, "sessions", `${seed}.records.jsonl`))).toString("utf8").trim().split("\n")
     .map((line) => (JSON.parse(line) as { record: { type?: string; turnId?: number } }).record).filter((record) => record.type === "turn_started").map((record) => record.turnId as number);
   const written = randomUUID();
   writeFileSync(join(aClone, "intents", `${written}.json`), JSON.stringify({ format: 1, id: written, text: "Dispatched to the held session", createdAt: Date.now(), dispatched: { sessionId: seed, turnId: Math.max(...turns), at: Date.now() } }));
   assert.equal((await a.client.settle("space.sync", { repository: key })).sync.phase, "done");
   const seedRecords = join(bClone, "sessions", `${seed}.records.jsonl`);
-  const seedBytes = readFileSync(seedRecords);
+  const seedBytes = await readSessionReplay(seedRecords);
   const saved = git(bClone, "rev-parse", "HEAD");
   release = holdAtApply(seed);
   let leased: RepositoryState;
@@ -221,7 +222,7 @@ test("space-38: a Settings conflict, validation at Apply, a unit changed before 
   // newer turn is not published before it.
   const writtenFile = join(bClone, "intents", `${written}.json`);
   assert.equal(existsSync(writtenFile), false);
-  assert.deepEqual(readFileSync(seedRecords), seedBytes, "the held session is untouched");
+  assert.deepEqual(await readSessionReplay(seedRecords), seedBytes, "the held session is untouched");
   // Still held across a restart, the startup repair meets the lease and a
   // Retry's own repair stops it naming the session with the marker kept;
   // released, the next Retry's repair finishes the recorded selection — no
@@ -243,7 +244,7 @@ test("space-38: a Settings conflict, validation at Apply, a unit changed before 
   assert.equal(retried.sync.phase, "done", JSON.stringify(retried.sync));
   assert.equal(existsSync(join(bClone, ".spex-apply.json")), false);
   assert.deepEqual(readFileSync(writtenFile), readFileSync(join(aClone, "intents", `${written}.json`)));
-  assert.deepEqual(readFileSync(seedRecords), readFileSync(join(aClone, "sessions", `${seed}.records.jsonl`)));
+  assert.deepEqual(await readSessionReplay(seedRecords), await readSessionReplay(join(aClone, "sessions", `${seed}.records.jsonl`)));
   assert.deepEqual(git(bClone, "log", "-1", "--format=%P", "HEAD").split(" ")[0], saved, "the recorded merge on the Save commit");
   git(bClone, "merge-base", "--is-ancestor", "origin/spex", "HEAD");
   assert.equal(git(bClone, "status", "--porcelain"), "");

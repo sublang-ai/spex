@@ -9,6 +9,11 @@
 // helpers and then naming the app's helper script on the app's own
 // runtime, so the brokered secret is neither looked up in nor stored to
 // any other helper. A transport to any other origin uses none of this.
+//
+// On a seat the same script serves in its member mode too, named by the
+// seat account's own Git configuration (core-service-125): it answers
+// from the member's credential store (storage-44) for the Git a person's
+// agent runs outside the app, with no secret in the command.
 
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -44,17 +49,41 @@ const UNSAFE_FOR_SH = /["`$\\\n\r\0]/;
 /** Git's credential protocol is line-based: no newline or NUL inside. */
 const UNSAFE_FOR_PROTOCOL = /[\n\r\0]/;
 
+/** Refuse a path the helper's command line cannot quote. */
+function assertQuotable(paths: readonly (readonly [what: string, path: string])[]): void {
+  for (const [what, path] of paths) {
+    if (path.length === 0 || UNSAFE_FOR_SH.test(path)) {
+      throw new Error(`The ${what} path cannot be quoted for Git's credential helper: ${JSON.stringify(path)}`);
+    }
+  }
+}
+
+/** The argument putting the helper in its member mode, the store's path
+ * following it (git-host-9, storage-44). */
+const MEMBER_MODE_ARG = "--member";
+
+/** The helper in its member mode as a seat account's Git configuration
+ * names it (core-service-125, git-host-9): a shell command running the
+ * script on the app's own runtime, which needs no running core, and
+ * reading the member's store at `storePath` when Git asks; no secret is
+ * in it. */
+export function memberHelperCommand(
+  runtime: { execPath: string; electron: boolean },
+  storePath: string,
+  options: { helperPath?: string } = {},
+): string {
+  const helperPath = options.helperPath ?? gitCredentialHelperPath();
+  assertQuotable([["runtime", runtime.execPath], ["helper", helperPath], ["store", storePath]]);
+  return `!${runtime.electron ? "ELECTRON_RUN_AS_NODE=1 " : ""}"${runtime.execPath}" "${helperPath}" ${MEMBER_MODE_ARG} "${storePath}"`;
+}
+
 export async function withGitCredential(
   credential: { username: string; secret: string },
   runtime: { execPath: string; electron: boolean },
   options: { helperPath?: string } = {},
 ): Promise<GitCredentialHandle> {
   const helperPath = options.helperPath ?? gitCredentialHelperPath();
-  for (const [what, path] of [["runtime", runtime.execPath], ["helper", helperPath]] as const) {
-    if (path.length === 0 || UNSAFE_FOR_SH.test(path)) {
-      throw new Error(`The ${what} path cannot be quoted for Git's credential helper: ${JSON.stringify(path)}`);
-    }
-  }
+  assertQuotable([["runtime", runtime.execPath], ["helper", helperPath]]);
   if (UNSAFE_FOR_PROTOCOL.test(credential.username) || UNSAFE_FOR_PROTOCOL.test(credential.secret)) {
     throw new Error("The Git host returned a credential Git cannot carry");
   }

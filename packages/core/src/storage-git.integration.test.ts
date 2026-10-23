@@ -22,7 +22,7 @@ import { Home } from "./home.js";
 import { starterText, templatePath, type PlaybookModules } from "./config.js";
 import { speak } from "./i18n.js";
 import type { ProjectInfo } from "./protocol.js";
-import { applyStorageSelection, EMPTY_TREE, planStorageMerge, prepareStorageGitFiles, reserveStorageHome, selectStorageMerge as selectStorageMergeWith, StorageDestinationRefused, StorageWriteRefused, validateStorageTree, type StorageChoice } from "./storage-git.js";
+import { applyStorageSelection, EMPTY_TREE, planStorageMerge, prepareStorageGitFiles, reserveStorageHome, selectStorageMerge as selectStorageMergeWith, StorageDestinationRefused, StorageWriteRefused, validateStorageSnapshot, validateStorageTree, type StorageChoice } from "./storage-git.js";
 import { scratchDir } from "./testing/scratch.js";
 import { StorageFormatError } from "./files.js";
 
@@ -1065,4 +1065,197 @@ test("storage-16: validation keeps optional absence and malformed-file diagnosti
     assert.equal(readFileSync(join(root, "project.json"), "utf8"), "{malformed");
     assert.equal(lstatSync(join(root, "project.json")).mode, mode);
   } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+/** Convert a deliberately legacy synthetic bundle through the public
+ * migrator; no test duplicates the bounded format's encoder. */
+async function boundedFixture(sessionsDir: string, sessionId: string): Promise<ReturnType<typeof createSessionStore>> {
+  // Each branch is a separate fixture import. The migrator correctly
+  // refuses replacing a prior migration's retained original input.
+  const temporary = mkdtempSync(join(tmpdir(), "spex-bounded-fixture-"));
+  const stage = join(temporary, "sessions"); mkdirSync(stage, { mode: 0o700 });
+  try {
+    for (const suffix of [".json", ".records.jsonl"]) writeFileSync(join(stage, `${sessionId}${suffix}`), readFileSync(join(sessionsDir, `${sessionId}${suffix}`)), { mode: 0o600 });
+    const imported = createSessionStore({ sessionsDir: stage }); await imported.prepare();
+    await imported.migrate(sessionId);
+    const exported = await imported.exportBundle(sessionId);
+    const files = (exported as typeof exported & { files: readonly { path: string; byteLength: number }[] }).files;
+    for (const file of [...files].sort((a, b) => Number(a.path === `${sessionId}.json`) - Number(b.path === `${sessionId}.json`))) {
+      mkdirSync(dirname(join(sessionsDir, file.path)), { recursive: true, mode: 0o700 });
+      writeFileSync(join(sessionsDir, file.path), readFileSync(join(stage, file.path)), { mode: 0o600 });
+    }
+    rmSync(join(sessionsDir, `${sessionId}.records.jsonl`));
+  } finally { rmSync(temporary, { recursive: true, force: true }); }
+  const shared = createSessionStore({ sessionsDir }); await shared.prepare();
+  const physical = JSON.parse(readFileSync(join(sessionsDir, `${sessionId}.json`), "utf8"));
+  assert.equal(physical.schemaVersion, 8);
+  assert.equal(physical.kind, "captain-session-storage");
+  assert.equal((await shared.readManifest(sessionId)).schemaVersion, 7, "the semantic host API stays hydrated");
+  return shared;
+}
+
+test("storage-16: bounded session roots, replay and immutable chunks are selected whole through the shared store", async () => {
+  const { home, clone, sessionId, bundle, commit, dispose } = setup();
+  const sessionsDir = join(clone, "sessions");
+  const intentId = randomUUID();
+  const runtime = { device: Home.load(home).device, label: "Captured runtime" };
+  const intentPath = join(clone, "intents", `${intentId}.json`);
+  const dispatchedBundle = (label: string, text: string): void => {
+    bundle(label);
+    const replayPath = join(sessionsDir, `${sessionId}.records.jsonl`);
+    const replay = readFileSync(replayPath, "utf8") + [
+      { v: 1, seq: 2, record: { type: "turn_started", turnId: 1, timestamp: 1, turn: { id: 1, prompt: text } } },
+      { v: 1, seq: 3, record: { type: "turn_finished", turnId: 1, timestamp: 2 } },
+    ].map((entry) => `${JSON.stringify(entry)}\n`).join("");
+    writeFileSync(replayPath, replay, { mode: 0o600 });
+    const manifestPath = join(sessionsDir, `${sessionId}.json`);
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+    writeFileSync(manifestPath, JSON.stringify({ ...manifest, replay: { seq: 3, sha256: sha256(replay), incomplete: false } }), { mode: 0o600 });
+    writeIntent(clone, intentId, text, { format: 2, runtime, dispatched: { sessionId, turnId: 1, at: 1 } });
+  };
+  try {
+    writeIntent(clone, intentId, "Captured intent", { format: 2, runtime });
+    await boundedFixture(sessionsDir, sessionId); commit("bounded base");
+    git(clone, "branch", "bounded-peer");
+    dispatchedBundle("ours", "Our dispatched intent"); await boundedFixture(sessionsDir, sessionId); commit("ours");
+    const ours = git(clone, "rev-parse", "HEAD");
+    git(clone, "checkout", "-q", "bounded-peer");
+    // Both recovery data and one replay record cross the physical-file
+    // bound; the real migrator must preserve their complete values.
+    const large = `incoming:${"x".repeat(9 * 1024 * 1024)}`;
+    dispatchedBundle(large, "Peer's dispatched intent");
+    const peer = await boundedFixture(sessionsDir, sessionId);
+    commit("bounded peer");
+    const incoming = git(clone, "rev-parse", "HEAD");
+    const incomingIntent = readFileSync(intentPath);
+    const exported = await peer.exportBundle(sessionId);
+    const files = (exported as typeof exported & { files: readonly { path: string; byteLength: number }[] }).files;
+    assert.ok(files.some((file) => file.path === `${sessionId}.replay.json`));
+    assert.ok(files.some((file) => file.path.startsWith(`${sessionId}.chunks/`)));
+    for (const file of files) assert.ok(file.byteLength <= 8 * 1024 * 1024, `${file.path} stays bounded`);
+    assert.equal(existsSync(join(sessionsDir, `${sessionId}.records.jsonl`)), false);
+    const incomingFiles = new Map(files.map((file) => [file.path, readFileSync(join(sessionsDir, file.path))]));
+    git(clone, "checkout", "-q", "spex");
+    const plan = planStorageMerge(clone, ours, incoming);
+    const unit = plan.units.find((unit) => unit.name === `sessions/${sessionId}`)!;
+    assert.equal(unit.choice, "conflict");
+    assert.equal(plan.units.find((unit) => unit.name === `intents/${intentId}`)?.choice, "conflict");
+    assert.ok(unit.paths.includes(`sessions/${sessionId}.replay.json`));
+    assert.ok(unit.paths.some((path) => path.startsWith(`sessions/${sessionId}.chunks/`)));
+    assert.equal(plan.units.some((unit) => unit.name.includes(".chunks/")), false, "a chunk is never a choice of its own");
+    writeFileSync(join(sessionsDir, `${sessionId}.hints.json`), "synthetic stale hint\n", { mode: 0o600 });
+    const release = reserveStorageHome(home, machineIdentity);
+    try { await applyStorageSelection(clone, plan, { [`sessions/${sessionId}`]: "theirs", [`intents/${intentId}`]: "theirs" }); }
+    finally { release(); }
+    for (const [path, bytes] of incomingFiles) assert.deepEqual(readFileSync(join(sessionsDir, path)), bytes);
+    assert.deepEqual(readFileSync(intentPath), incomingIntent, "selection preserves the format-2 intent and its frozen runtime byte for byte");
+    assert.deepEqual(JSON.parse(incomingIntent.toString()).dispatched, { sessionId, turnId: 1, at: 1 });
+    assert.equal(existsSync(join(sessionsDir, `${sessionId}.hints.json`)), false);
+    const selected = createSessionStore({ sessionsDir });
+    assert.equal((await selected.readManifest(sessionId) as { reason?: string }).reason, large);
+    assert.equal((await selected.readHistory(sessionId)).entries[0].record.futureKind, large);
+    assert.equal((await selected.validate(sessionId)).integrityValid, true);
+    assert.equal(statSync(join(sessionsDir, `${sessionId}.chunks`)).mode & 0o777, 0o700);
+    for (const file of files) assert.equal(statSync(join(sessionsDir, file.path)).mode & 0o777, 0o600);
+    assert.equal(git(clone, "write-tree"), git(clone, "rev-parse", `${incoming}^{tree}`));
+    const reopened = new Store({ machineIdentity, dir: home, own: "tester", env: gitEnv });
+    try {
+      assert.deepEqual(reopened.getIntent(intentId)?.runtime, runtime);
+      reopened.editIntent(intentId, "Edited after selection");
+      reopened.stampIntentDispatch(intentId, sessionId, 1, 3);
+      reopened.closeIntent(intentId, "done", 4);
+      const rewritten = JSON.parse(readFileSync(intentPath, "utf8"));
+      assert.equal(rewritten.format, 2);
+      assert.deepEqual(rewritten.runtime, runtime, "edit, dispatch and close preserve the runtime captured before Sync");
+    } finally { reopened.close(); }
+  } finally { dispose(); }
+});
+
+test("storage-16: a selected bounded session with a missing or corrupt chunk refuses before any live write", async (t) => {
+  for (const damage of ["missing", "corrupt"] as const) await t.test(damage, async () => {
+    const { clone, sessionId, bundle, commit, dispose } = setup();
+    const sessionsDir = join(clone, "sessions");
+    try {
+      await boundedFixture(sessionsDir, sessionId); commit("bounded base");
+      git(clone, "branch", "bounded-bad");
+      bundle("ours"); await boundedFixture(sessionsDir, sessionId); commit("ours");
+      git(clone, "checkout", "-q", "bounded-bad");
+      bundle("incoming"); await boundedFixture(sessionsDir, sessionId);
+      const root = JSON.parse(readFileSync(join(sessionsDir, `${sessionId}.json`), "utf8"));
+      const chunk = join(sessionsDir, `${sessionId}.chunks`, root.root.sha256);
+      if (damage === "missing") rmSync(chunk);
+      else writeFileSync(chunk, "synthetic corrupt chunk\n", { mode: 0o600 });
+      commit(`bounded ${damage}`);
+      git(clone, "checkout", "-q", "spex");
+      const plan = planStorageMerge(clone, "HEAD", "bounded-bad");
+      const before = snapshot(clone);
+      const index = git(clone, "write-tree");
+      await assert.rejects(() => applyStorageSelection(clone, plan, { [`sessions/${sessionId}`]: "theirs" }), /chunk|digest|missing|ENOENT|content|hash/i);
+      assert.deepEqual(snapshot(clone), before, "the live unit is unchanged");
+      assert.equal(git(clone, "write-tree"), index, "the index is unchanged");
+    } finally { dispose(); }
+  });
+});
+
+test("storage-16: a chunk added while a bounded session's lease is awaited refuses replacement and stays local", async (t) => {
+  for (const workingTree of ["ours", "merge"] as const) await t.test(workingTree, async () => {
+  const { clone, sessionId, bundle, commit, dispose } = setup();
+  const sessionsDir = join(clone, "sessions");
+  try {
+    await boundedFixture(sessionsDir, sessionId); commit("bounded base");
+    git(clone, "branch", "bounded-peer");
+    bundle("ours"); await boundedFixture(sessionsDir, sessionId); commit("ours");
+    git(clone, "checkout", "-q", "bounded-peer");
+    bundle("incoming"); await boundedFixture(sessionsDir, sessionId); commit("incoming");
+    git(clone, "checkout", "-q", "spex");
+    const shared = createSessionStore({ sessionsDir }); await shared.prepare();
+    const plan = planStorageMerge(clone, "HEAD", "bounded-peer");
+    const root = readFileSync(join(sessionsDir, `${sessionId}.json`));
+    const index = git(clone, "write-tree");
+    const bytes = Buffer.from("synthetic newly published immutable chunk\n");
+    const { createSessionChunks } = await import(new URL("./bin/session-chunks.js", import.meta.resolve("@sublang/playbook/session-host")).href);
+    const chunks = createSessionChunks({ directory: join(sessionsDir, `${sessionId}.chunks`) });
+    let late = ""; let published: Buffer | undefined;
+    const preexisting = workingTree === "merge" ? await chunks.writeBytes(Buffer.from("synthetic preexisting untracked chunk\n")) : undefined;
+    const preexistingPath = preexisting ? join(sessionsDir, `${sessionId}.chunks`, preexisting.sha256) : undefined;
+    const preexistingBytes = preexistingPath ? readFileSync(preexistingPath) : undefined;
+    await assert.rejects(() => applyStorageSelection(clone, plan, { [`sessions/${sessionId}`]: "theirs" }, {
+      workingTree,
+      sessions: { acquireManagement: async (id) => {
+        const ref = await chunks.writeBytes(bytes);
+        late = join(sessionsDir, `${sessionId}.chunks`, ref.sha256);
+        published = readFileSync(late);
+        return shared.acquireManagement(id);
+      } },
+    }), (error: StorageWriteRefused) => error instanceof StorageWriteRefused && error.reason === "changed" && error.unit === `sessions/${sessionId}` && error.written.length === 0);
+    assert.deepEqual(readFileSync(late), published);
+    if (preexistingPath) assert.deepEqual(readFileSync(preexistingPath), preexistingBytes);
+    assert.deepEqual(readFileSync(join(sessionsDir, `${sessionId}.json`)), root);
+    assert.equal(git(clone, "write-tree"), index);
+    await (await shared.acquireManagement(sessionId)).release();
+    if (workingTree === "merge") {
+      rmSync(late);
+      await applyStorageSelection(clone, plan, { [`sessions/${sessionId}`]: "theirs" }, { workingTree });
+      assert.deepEqual(readFileSync(preexistingPath!), preexistingBytes, "preexisting untracked chunks remain local");
+    }
+  } finally { dispose(); }
+  });
+});
+
+test("storage-16: snapshot validation refuses orphan bounded replay and chunks without changing live files or index", async (t) => {
+  for (const orphan of ["replay", "chunks", "both"] as const) await t.test(orphan, async () => {
+    const { clone, sessionId, commit, dispose } = setup();
+    const sessionsDir = join(clone, "sessions");
+    try {
+      await boundedFixture(sessionsDir, sessionId);
+      rmSync(join(sessionsDir, `${sessionId}.json`));
+      if (orphan === "replay") rmSync(join(sessionsDir, `${sessionId}.chunks`), { recursive: true });
+      if (orphan === "chunks") rmSync(join(sessionsDir, `${sessionId}.replay.json`));
+      commit(`orphan ${orphan}`);
+      const tree = git(clone, "write-tree"); const before = snapshot(clone);
+      await assert.rejects(() => validateStorageSnapshot(clone, tree), /session bundle root is missing/);
+      assert.equal(git(clone, "write-tree"), tree);
+      assert.deepEqual(snapshot(clone), before);
+    } finally { dispose(); }
+  });
 });

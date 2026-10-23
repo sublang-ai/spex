@@ -91,13 +91,14 @@ test.describe("a browser that asks for Chinese", () => {
     app,
   }) => {
     await openTranslated(page, app);
-    await page.getByRole("button", { name: "切换或添加项目", exact: true }).click();
-    await page.getByTestId("palette-path").fill(app.projectDir);
+    await page.getByTestId("sidebar").getByRole("button", { name: "添加本地项目", exact: true }).click();
+    await page.getByTestId("palette-create-start").click();
+    await page.getByTestId("palette-new-path").fill(app.projectDir);
     await page.getByTestId("palette-create").click();
-    await expect(page.getByTestId("palette-path")).toBeHidden();
+    await expect(page.getByTestId("palette-new-path")).toBeHidden();
     const meta = readFileSync(join(app.projectDir, "specs", "meta.md"), "utf8");
     expect(meta).toContain("Authoring language: zh");
-    await page.getByRole("tab", { name: "规约", exact: true }).click();
+    await page.getByRole("tab", { name: /^规约/ }).click();
     await page.getByRole("button", { name: "meta", exact: true }).click();
     await expect(page.getByText("Authoring language: zh", { exact: true })).toBeVisible();
   });
@@ -126,88 +127,93 @@ test.describe("a browser that asks for Chinese", () => {
 // The choice is the home's
 // ---------------------------------------------------------------------------
 
-test("localization-10: choosing 简体中文 re-renders this page and reaches a second page of the home", async ({
-  page,
-  app,
-  browser,
-}) => {
-  await open(page, app);
-  await expectRail(page, RAIL_EN);
-  await expect(page.locator("html")).toHaveAttribute("lang", "en");
+test.describe("the language choice with a project draft", () => {
+  // The welcome has no composer; preserving a task draft requires a project.
+  test.use({ appOptions: { project: true } });
 
-  // A mark on this page's window: a reload would take it with it.
-  await page.evaluate(() => {
-    (window as unknown as { __spexSameDocument?: boolean }).__spexSameDocument =
-      true;
-  });
-
-  // What this page holds when the language changes, which the change
-  // must keep (localization-3): a message typed into the Captain home's
-  // composer, and a form under edit on the surface the choice is made
-  // from — the page re-renders whole, it never remounts.
-  const typed = "a message that outlives the language";
-  await page.getByTestId("start-composer").fill(typed);
-  const playerId = "qa.keeps-its-words";
-
-  await nav(page, "Settings").click();
-  await page.getByTestId("player-add").click();
-  await page.getByTestId("player-add-id").fill(playerId);
-  const section = page.getByTestId("language-section");
-  const select = section.getByTestId("language-select");
-  await expect(select).toHaveValue("system");
-  await expect(
-    select.locator("option").evaluateAll((options) =>
-      options.map((option) => (option as HTMLOptionElement).textContent),
-    ),
-  ).resolves.toEqual(["System", "English", "简体中文"]);
-
-  await select.selectOption("zh");
-  // The whole interface changes language: the root re-renders off the
-  // resolved language, so every surface is painted anew — the language
-  // section among them, which carries its own landed-write tick
-  // (settings-37).
-  await expectRail(page, RAIL_ZH);
-  await expect(page.locator("html")).toHaveAttribute("lang", "zh");
-  // 设置 is the Settings heading; 界面语言 names the control itself.
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("设置");
-  await expect(select).toHaveAccessibleName("界面语言");
-  expect(
-    await page.evaluate(
-      () =>
-        (window as unknown as { __spexSameDocument?: boolean })
-          .__spexSameDocument === true,
-    ),
-    "the page re-rendered without a reload",
-  ).toBe(true);
-  // Re-rendered, not remounted: the form under edit still holds its
-  // id, and the composer its message.
-  await expect(page.getByTestId("player-add-id")).toHaveValue(playerId);
-  await surfaceEntry(page, "Workspace").click();
-  await expect(page.getByTestId("start-composer")).toHaveValue(typed);
-  await surfaceEntry(page, "Settings").click();
-
-  // A second page of the same home, whose own browser asks for
-  // English: it paints in what it prefers, then follows the home's
-  // choice once the core answers, so Chinese is waited for.
-  const second = await browser.newContext({ locale: "en-US" });
-  const other = await second.newPage();
-  try {
-    await openTranslated(other, app);
-    await expectRail(other, RAIL_ZH);
-    await expect(other.locator("html")).toHaveAttribute("lang", "zh");
-
-    // System on either page returns both: the core broadcasts the
-    // choice, and each page resolves it against its own browser.
-    await surfaceEntry(other, "Settings").click();
-    await other.getByTestId("language-select").selectOption("system");
-    await expectRail(other, RAIL_EN);
-    await expect(other.locator("html")).toHaveAttribute("lang", "en");
+  test("localization-10: choosing 简体中文 re-renders this page and reaches a second page of the home", async ({
+    page,
+    app,
+    browser,
+  }) => {
+    await open(page, app);
     await expectRail(page, RAIL_EN);
     await expect(page.locator("html")).toHaveAttribute("lang", "en");
+
+    // A mark on this page's window: a reload would take it with it.
+    await page.evaluate(() => {
+      (window as unknown as { __spexSameDocument?: boolean }).__spexSameDocument =
+        true;
+    });
+
+    // What this page holds when the language changes, which the change
+    // must keep (localization-3): a message typed into the Captain home's
+    // composer, and a form under edit on the surface the choice is made
+    // from — the page re-renders whole, it never remounts.
+    const typed = "a message that outlives the language";
+    await page.getByTestId("start-composer").fill(typed);
+    const playerId = "qa.keeps-its-words";
+
+    await nav(page, "Settings").click();
+    await page.getByTestId("player-add").click();
+    await page.getByTestId("player-add-id").fill(playerId);
+    const section = page.getByTestId("language-section");
+    const select = section.getByTestId("language-select");
     await expect(select).toHaveValue("system");
-  } finally {
-    await second.close();
-  }
+    await expect(
+      select.locator("option").evaluateAll((options) =>
+        options.map((option) => (option as HTMLOptionElement).textContent),
+      ),
+    ).resolves.toEqual(["System", "English", "简体中文"]);
+
+    await select.selectOption("zh");
+    // The whole interface changes language: the root re-renders off the
+    // resolved language, so every surface is painted anew — the language
+    // section among them, which carries its own landed-write tick
+    // (settings-37).
+    await expectRail(page, RAIL_ZH);
+    await expect(page.locator("html")).toHaveAttribute("lang", "zh");
+    // 设置 is the Settings heading; 界面语言 names the control itself.
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("设置");
+    await expect(select).toHaveAccessibleName("界面语言");
+    expect(
+      await page.evaluate(
+        () =>
+          (window as unknown as { __spexSameDocument?: boolean })
+            .__spexSameDocument === true,
+      ),
+      "the page re-rendered without a reload",
+    ).toBe(true);
+    // Re-rendered, not remounted: the form under edit still holds its
+    // id, and the composer its message.
+    await expect(page.getByTestId("player-add-id")).toHaveValue(playerId);
+    await surfaceEntry(page, "Workspace").click();
+    await expect(page.getByTestId("start-composer")).toHaveValue(typed);
+    await surfaceEntry(page, "Settings").click();
+
+    // A second page of the same home, whose own browser asks for
+    // English: it paints in what it prefers, then follows the home's
+    // choice once the core answers, so Chinese is waited for.
+    const second = await browser.newContext({ locale: "en-US" });
+    const other = await second.newPage();
+    try {
+      await openTranslated(other, app);
+      await expectRail(other, RAIL_ZH);
+      await expect(other.locator("html")).toHaveAttribute("lang", "zh");
+
+      // System on either page returns both: the core broadcasts the
+      // choice, and each page resolves it against its own browser.
+      await surfaceEntry(other, "Settings").click();
+      await other.getByTestId("language-select").selectOption("system");
+      await expectRail(other, RAIL_EN);
+      await expect(other.locator("html")).toHaveAttribute("lang", "en");
+      await expectRail(page, RAIL_EN);
+      await expect(page.locator("html")).toHaveAttribute("lang", "en");
+      await expect(select).toHaveValue("system");
+    } finally {
+      await second.close();
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------
