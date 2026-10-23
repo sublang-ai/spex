@@ -244,15 +244,21 @@ export function fakeAdapterImports(
       }
       if (response.approval) {
         const source = response.approval;
+        const createdAt = Date.now();
         const request: ApprovalRequest = {id: source.id ?? "reusable-native-id", kind: "tool", agent: this.agent,
           sessionId, toolUseId: "approval-tool", toolName: source.toolName, input: namedInput(source.input),
           ...(source.reason ? {reason: source.reason} : {}), ...(source.details ? {details: source.details} : {}), choices: source.choices ?? ["allow_once", "deny"],
-          createdAt: Date.now(), expiresAt: Date.now() + (source.expiresInMs ?? 600_000)};
-        yield {...base, type: "approval_request", timestamp: Date.now(), payload: request};
-        let decision: ApprovalDecision = "deny";
+          createdAt, expiresAt: createdAt + (source.expiresInMs ?? 600_000)};
+        // The handler receives the request as it is made, as a native
+        // adapter's approval controller hands it over — not once the
+        // consumer has taken the request's event: what the consumer does
+        // with that event, recording it among the rest, runs after the
+        // host holds the request, never inside its deadline before.
         let outcome = "host";
-        try { decision = await options?.approvalHandler?.(request, {signal: options.abortSignal ?? new AbortController().signal}) ?? "deny"; }
-        catch { outcome = options?.abortSignal?.aborted ? "cancelled" : Date.now() >= request.expiresAt ? "timeout" : "error"; }
+        const answered = (async (): Promise<ApprovalDecision> => (await options?.approvalHandler?.(request, {signal: options.abortSignal ?? new AbortController().signal})) ?? "deny")()
+          .catch((): ApprovalDecision => { outcome = options?.abortSignal?.aborted ? "cancelled" : Date.now() >= request.expiresAt ? "timeout" : "error"; return "deny"; });
+        yield {...base, type: "approval_request", timestamp: Date.now(), payload: request};
+        const decision = await answered;
         yield {...base, type: "approval_response", timestamp: Date.now(), payload: {requestId: request.id, decision, source: outcome}};
         if (decision !== "allow_once") {
           yield {...base, type: "done", timestamp: Date.now(), payload: {status: options?.abortSignal?.aborted ? "interrupted" : "success", result: "The requested action was not performed.", usage: {toolUses: 0}, durationMs: 1}};

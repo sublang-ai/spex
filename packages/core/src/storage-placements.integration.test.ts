@@ -441,6 +441,15 @@ test("storage-40, storage-37, storage-34, storage-38, space-91, space-97, space-
   assert.equal(`${git(cloneA, "show", `HEAD:${file}`)}\n`, bytes);
   assert.equal(committed(shared.bare, file), bytes);
   const pushedA = git(shared.bare, "rev-parse", "spex");
+  // Both homes commit as the one person signed in at the stand-in
+  // (space-32), under a message naming the machine they share here, so
+  // the second home's Save of the same file on the same commit is a
+  // commit of its own only in a later second than the first's — Git
+  // dates a commit in whole seconds — and in the same second is the
+  // first's very commit, leaving nothing to merge: the second home's
+  // sync begins once the clock has passed the first commit's second.
+  const firstSecond = Number(git(shared.bare, "log", "-1", "--format=%ct", pushedA));
+  while (Date.now() < (firstSecond + 1) * 1000) await sleep(10);
 
   // The second home's first sync: its own Save writes and commits the
   // same bytes before it reads the host, and its merge with the first's
