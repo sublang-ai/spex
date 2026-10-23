@@ -5,6 +5,16 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  schedule:
+    # The full matrix nightly, so a macOS-only difference is found on
+    # main within a day while pull requests run the reduced one (DR-145).
+    - cron: '17 3 * * *'
+
+# One run per pull-request head: a push cancels the run it supersedes;
+# a push to main cancels nothing (release-30).
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -30,6 +40,9 @@ jobs:
           - os: windows-latest
             node-version: 24
     runs-on: ${{ matrix.os }}
+    # A pull request runs Linux and Windows and one macOS smoke job; main
+    # and the nightly run take the full matrix (release-34).
+    if: ${{ github.event_name != 'pull_request' || matrix.os != 'macos-latest' || matrix.node-version == 22 }}
 
     steps:
       # Full history: the file-history append-only guard audits every
@@ -72,6 +85,8 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
+    # Linux alone on a pull request; the full matrix on main and nightly (release-34).
+    if: ${{ github.event_name != 'pull_request' || matrix.os == 'ubuntu-latest' }}
 
     steps:
       - uses: actions/checkout@v4
@@ -136,6 +151,8 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
+    # Linux alone on a pull request; the full matrix on main and nightly (release-34).
+    if: ${{ github.event_name != 'pull_request' || matrix.os == 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v4
       - name: Select separate owned source and packaged browser caches
