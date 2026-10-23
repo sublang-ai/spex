@@ -73,3 +73,11 @@ test("release-33: the Linux parity script names the runners' Node and Git (relea
   assert.match(script, /Node 22 and Git 2\.55/);
   assert.equal(JSON.parse(readFileSync(join(root, "package.json"), "utf8")).scripts["test:linux"], "bash scripts/test-linux.sh");
 });
+
+test("release-33: the merge-on-green script merges only a head whose checks are all green (release-29)", () => {
+  const script = readFileSync(join(root, "scripts/merge-on-green.sh"), "utf8");
+  assert.match(script, /all\(\. == "SUCCESS" or \. == "SKIPPED" or \. == "NEUTRAL"\)/, "every check green");
+  assert.match(script, /The head moved; run again for the new head/, "a moved head is refused");
+  assert.match(script, /gh pr merge "\$number" --merge/);
+  assert.equal(JSON.parse(readFileSync(join(root, "package.json"), "utf8")).scripts["merge-on-green"], "bash scripts/merge-on-green.sh");
+});

@@ -28,7 +28,8 @@
     "test:browser-host": "node scripts/browser-host-acceptance.mjs",
     "test:inspect-host": "node scripts/inspect-host-acceptance.mjs",
     "prepush": "bash scripts/prepush.sh",
-    "test:linux": "bash scripts/test-linux.sh"
+    "test:linux": "bash scripts/test-linux.sh",
+    "merge-on-green": "bash scripts/merge-on-green.sh"
   },
   "engines": {
     "node": ">=22.19"
