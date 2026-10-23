@@ -320,7 +320,7 @@ test("storage-42, storage-36, storage-34, storage-5, space-57, space-60: two ins
   await home.client.expectOk("space.join", { instance: first.url, hostId: team.id });
   await home.client.waitRepository(from, key, (repository) => repository.state === "reachable" && repository.sync.phase === "idle", 30_000);
   await home.client.expectError("space.sync", { repository: key }, "invalid_request", /sharing notice/);
-  const once = await home.client.settle("space.sync", { repository: key, noticed: true }, 30_000);
+  const once = await home.client.settle("space.sync", { repository: key, placement: first.url, noticed: true }, 30_000);
   const onceLine = placementOf(once, first.url);
   assert.deepEqual([once.sync.phase, onceLine.noticed], ["done", true], JSON.stringify(once.sync));
   assert.deepEqual(syncRecordsOf(home.dataDir, key), { [`sync:${key}:${firstFolder}:last`]: onceLine.lastSync, [`sync:${key}:${firstFolder}:noticed`]: true });

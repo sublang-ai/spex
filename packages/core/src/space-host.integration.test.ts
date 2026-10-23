@@ -843,7 +843,7 @@ test("space-37, space-92, storage-5: a repository listed with no clone here read
   // (space-57, space-12, space-22).
   await runTurn(home, hostKey(host, "acme/team-spex"), "For the team");
   await home.client.expectError("space.sync", { repository: hostKey(host, "acme/team-spex") }, "invalid_request", /sharing notice/);
-  const done = await home.client.settle("space.sync", { repository: hostKey(host, "acme/team-spex"), noticed: true });
+  const done = await home.client.settle("space.sync", { repository: hostKey(host, "acme/team-spex"), placement: host.url, noticed: true });
   assert.ok(done.sync.phase === "done" && done.sync.pushed, JSON.stringify(done.sync));
   const doneLine = placementOf(done, host.url);
   assert.equal(doneLine.noticed, true);
@@ -911,7 +911,7 @@ test("git-host-14, space-37: with every members route failing at the stand-in, a
   assert.equal(joined.state, "reachable");
   assert.equal(placementOf(joined, host.url).members, null);
   await home.client.expectError("space.sync", { repository: hostKey(host, "acme/solo-spex") }, "invalid_request", /sharing notice/);
-  const noticed = await home.client.settle("space.sync", { repository: hostKey(host, "acme/solo-spex"), noticed: true });
+  const noticed = await home.client.settle("space.sync", { repository: hostKey(host, "acme/solo-spex"), placement: host.url, noticed: true });
   assert.equal(noticed.sync.phase, "done", JSON.stringify(noticed.sync));
   // And a pick joining one waits for it too.
   const mine = await addFolder(home, gitFolder("pal"));

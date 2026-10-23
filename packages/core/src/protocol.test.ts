@@ -64,7 +64,7 @@ test("parseCommand accepts the space commands and their optional fields", () => 
     { type: "space.get", id: "s1" },
     { type: "space.remote.set", id: "s3", repository, url: null },
     { type: "space.fetch", id: "s4", repository },
-    { type: "space.sync", id: "s5", repository, choices: { "sessions/a": "remote" }, join: true, noticed: true },
+    { type: "space.sync", id: "s5", repository, placement: null, choices: { "sessions/a": "remote" }, join: true, noticed: true },
     { type: "space.cancel", id: "s6", repository },
     { type: "space.diff", id: "s7", repository, unit: ".gitignore", path: ".gitignore", side: "mine" },
     { type: "space.tree", id: "s8", repository: "acme/platform/a-spex" },
@@ -195,6 +195,28 @@ test("space-29: a sync, a diff and a move name the placement they are for, an in
   }
 });
 
+test("space-29: `space.sync` naming choices, join or noticed without a placement is refused", () => {
+  const instance = "https://spex.pub";
+  const repository = "@spex.pub/acme/a-spex";
+  const choices = { "sessions/a": "remote" };
+  // Each is for one placement, which the sync names.
+  for (const fields of [{ choices }, { join: true }, { join: false }, { noticed: true }, { noticed: false }, { choices, join: true }, { choices, noticed: true }]) {
+    const parsed = parseCommand({ type: "space.sync", id: "n1", repository, ...fields });
+    assert.ok(!parsed.ok, JSON.stringify(fields));
+    if (!parsed.ok) {
+      assert.equal(parsed.id, "n1", "the refusal names the command");
+      assert.equal(parsed.error, "placement: required with choices, join or noticed");
+    }
+    for (const placement of [instance, null]) {
+      const named = parseCommand({ type: "space.sync", id: "n2", repository, placement, ...fields });
+      assert.ok(named.ok, `${JSON.stringify({ placement, ...fields })}: ${named.ok ? "" : named.error}`);
+    }
+  }
+  // A sync asking none of them names none, or one.
+  assert.ok(parseCommand({ type: "space.sync", id: "n3", repository }).ok);
+  assert.ok(parseCommand({ type: "space.sync", id: "n4", repository, placement: instance }).ok);
+});
+
 test("space-29: a space command names its repository by key", () => {
   for (const repository of [undefined, "a-spex/", "alice/a", "../a-spex", ""]) {
     const parsed = parseCommand({ type: "space.fetch", id: "k1", ...(repository !== undefined ? { repository } : {}) });
@@ -248,6 +270,7 @@ test("parseCommand rejects a space command with an unknown field or side", () =>
     type: "space.sync",
     id: "s2",
     repository: "alice/a-spex",
+    placement: null,
     choices: { "sessions/a": "theirs" },
   });
   assert.ok(!side.ok);

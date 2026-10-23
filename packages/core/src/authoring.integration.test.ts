@@ -2356,7 +2356,7 @@ test("space-37: a sync taking the host's side of a transcript stops while this c
     env: { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" } }).trim();
   const sync = async (choices?: Record<string, "remote">) => {
     const after = client.messages.length;
-    assert.deepEqual(await client.expectOk("space.sync", { repository: projectId, ...(choices ? { choices } : {}) }), { accepted: true });
+    assert.deepEqual(await client.expectOk("space.sync", { repository: projectId, ...(choices ? { placement: null, choices } : {}) }), { accepted: true });
     const phaseOf = (message: ServerMessage) => message.type === "space.state"
       ? rowsOf(message.state).find((repository) => repository.key === projectId)?.sync
       : undefined;

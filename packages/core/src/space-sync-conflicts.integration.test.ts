@@ -57,7 +57,7 @@ test("space-38: a Settings conflict, validation at Apply, a unit changed before 
   assert.equal(settings.conflicts[0].unit.kind, "settings");
   assert.equal(settings.conflicts[0].unit.label, "Settings changed");
   assert.ok(settings.conflicts[0].mine.change === "new" && settings.conflicts[0].remote.change === "new");
-  const kept = await b.client.settle("space.sync", { repository: key, choices: { "config/playbook.config.yaml": "mine" } });
+  const kept = await b.client.settle("space.sync", { repository: key, placement: null, choices: { "config/playbook.config.yaml": "mine" } });
   assert.equal(kept.sync.phase, "done", JSON.stringify(kept.sync));
   assert.equal(readFileSync(join(bClone, "config", "playbook.config.yaml"), "utf8"), projectConfig("B"));
   assert.equal((await a.client.settle("space.sync", { repository: key })).sync.phase, "done");
@@ -124,13 +124,13 @@ test("space-38: a Settings conflict, validation at Apply, a unit changed before 
   edits = 2;
   applies = 0;
   const choice = { [`intents/${shared.id}`]: "remote" as const };
-  const twice = await b.client.settle("space.sync", { repository: key, choices: choice });
+  const twice = await b.client.settle("space.sync", { repository: key, placement: null, choices: choice });
   assert.ok(twice.sync.phase === "stopped" && twice.sync.step === "apply" && twice.sync.cause === "writer", JSON.stringify(twice.sync));
   assert.equal(applies, 2, "one restart from Save");
   assert.match(readFileSync(sharedFile, "utf8"), /B's late edit 3/);
   assert.equal(git(bClone, "log", "-1", "--format=%P").split(" ").length, 1, "no merge commit");
   b.hooks.beforeStep = undefined;
-  assert.equal((await b.client.settle("space.sync", { repository: key, choices: choice })).sync.phase, "done");
+  assert.equal((await b.client.settle("space.sync", { repository: key, placement: null, choices: choice })).sync.phase, "done");
   assert.deepEqual(readFileSync(sharedFile), readFileSync(join(aClone, "intents", `${shared.id}.json`)), "the host's unit, whole");
   assert.equal(git(bClone, "log", "-1", "--format=%P").split(" ").length, 2);
   // A push rejected because the peer advanced after the check re-checks once; advanced again, it stops.

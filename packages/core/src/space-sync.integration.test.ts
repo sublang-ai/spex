@@ -49,7 +49,7 @@ test("space-38: your own group's repository joins with one Settings choice, and 
   assert.equal(unrelated.sync.phase, "unrelated", JSON.stringify(unrelated.sync));
   assert.equal(placementOf(unrelated, null).branch?.unrelated, true);
   assert.deepEqual(placementOf(unrelated, null).incoming, []);
-  const choices = await b.client.settle("space.sync", { repository: OWN_KEY, join: true });
+  const choices = await b.client.settle("space.sync", { repository: OWN_KEY, placement: null, join: true });
   assert.equal(choices.sync.phase, "choices", JSON.stringify(choices.sync));
   assert.equal(choices.conflicts.length, 1);
   const conflict = choices.conflicts[0];
@@ -60,10 +60,10 @@ test("space-38: your own group's repository joins with one Settings choice, and 
   assert.equal(conflict.remote.change, "new");
   assert.ok(conflict.mine.diff && conflict.remote.diff);
   assert.ok(typeof conflict.mine.at === "number" && typeof conflict.remote.at === "number");
-  await b.client.expectError("space.sync", { repository: OWN_KEY, choices: { "sessions/nope": "mine" }, join: true }, "invalid_request", /unknown unit/);
-  await b.client.expectError("space.sync", { repository: OWN_KEY, choices: { ".gitignore": "mine" }, join: true }, "invalid_request", /no divergent change/);
+  await b.client.expectError("space.sync", { repository: OWN_KEY, placement: null, choices: { "sessions/nope": "mine" }, join: true }, "invalid_request", /unknown unit/);
+  await b.client.expectError("space.sync", { repository: OWN_KEY, placement: null, choices: { ".gitignore": "mine" }, join: true }, "invalid_request", /no divergent change/);
   const mineBytes = readFileSync(b.configPath);
-  const joined = await b.client.settle("space.sync", { repository: OWN_KEY, choices: { "config/playbook.config.yaml": "mine" }, join: true });
+  const joined = await b.client.settle("space.sync", { repository: OWN_KEY, placement: null, choices: { "config/playbook.config.yaml": "mine" }, join: true });
   assert.equal(joined.sync.phase, "done", JSON.stringify(joined.sync));
   assert.ok(joined.sync.phase === "done" && joined.sync.pushed);
   assert.deepEqual(readFileSync(b.configPath), mineBytes, "Keep mine leaves this home's file");
@@ -110,7 +110,7 @@ test("space-38: your own group's repository joins with one Settings choice, and 
   assert.match(mine.patch, /\+.*claude-test-b2/);
   const remote = await b.client.expectOk("space.diff", { repository: OWN_KEY, unit: "config/playbook.config.yaml", path: "config/playbook.config.yaml", side: "remote" });
   assert.match(remote.patch, /\+.*claude-test-a2/);
-  const taken = await b.client.settle("space.sync", { repository: OWN_KEY, choices: { "config/playbook.config.yaml": "remote" } });
+  const taken = await b.client.settle("space.sync", { repository: OWN_KEY, placement: null, choices: { "config/playbook.config.yaml": "remote" } });
   assert.equal(taken.sync.phase, "done", JSON.stringify(taken.sync));
   assert.match(readFileSync(b.configPath, "utf8"), /claude-test-a2/, "Take host's replaces the file");
   const configState = await b.client.expectOk("config.get", {});
@@ -159,7 +159,7 @@ test("space-38: an intent added on each home lists on the other with no choice a
   assert.equal(row.remote.change, "updated");
   assert.ok(!row.mine.diff && !row.remote.diff);
   await b.client.expectError("space.diff", { repository: key, unit: `intents/${newer.id}`, path: `intents/${newer.id}.json`, side: "mine" }, "invalid_request", /no text diff/);
-  const taken = await b.client.settle("space.sync", { repository: key, choices: { [`intents/${newer.id}`]: "remote" } });
+  const taken = await b.client.settle("space.sync", { repository: key, placement: null, choices: { [`intents/${newer.id}`]: "remote" } });
   assert.equal(taken.sync.phase, "done", JSON.stringify(taken.sync));
   assert.deepEqual(readFileSync(join(bClone, "intents", `${newer.id}.json`)), readFileSync(join(aClone, "intents", `${newer.id}.json`)));
   const ledger = (await b.client.expectOk("ledger.get", {})).intents.find((entry) => entry.intent.id === newer.id);
@@ -205,7 +205,7 @@ test("space-38: the same session changed on both homes is one choice; the host's
   assert.ok(typeof row.mine.at === "number" && typeof row.remote.at === "number");
   await b.client.expectError("space.diff", { repository: key, unit: `sessions/${shared}`, path: `sessions/${shared}.json`, side: "mine" }, "invalid_request", /no text diff/);
   const from = b.client.mark();
-  const done = await b.client.settle("space.sync", { repository: key, choices: { [`sessions/${shared}`]: "remote" } });
+  const done = await b.client.settle("space.sync", { repository: key, placement: null, choices: { [`sessions/${shared}`]: "remote" } });
   assert.equal(done.sync.phase, "done", JSON.stringify(done.sync));
   assert.deepEqual(readFileSync(join(bClone, "sessions", `${shared}.json`)), readFileSync(join(aClone, "sessions", `${shared}.json`)));
   assert.deepEqual(readFileSync(join(bClone, "sessions", `${shared}.records.jsonl`)), readFileSync(join(aClone, "sessions", `${shared}.records.jsonl`)));
@@ -229,7 +229,7 @@ test("space-38: the same session changed on both homes is one choice; the host's
   assert.equal(deleting?.remote.change, "deleted");
   assert.equal(deleting?.remote.detail, "deleted");
   assert.equal(deleting?.mine.change, "updated");
-  const gone = await a.client.settle("space.sync", { repository: key, choices: { [`sessions/${doomed}`]: "remote" } });
+  const gone = await a.client.settle("space.sync", { repository: key, placement: null, choices: { [`sessions/${doomed}`]: "remote" } });
   assert.equal(gone.sync.phase, "done", JSON.stringify(gone.sync));
   assert.equal(existsSync(join(aClone, "sessions", `${doomed}.json`)), false);
   assert.equal(existsSync(join(aClone, "sessions", `${doomed}.records.jsonl`)), false);

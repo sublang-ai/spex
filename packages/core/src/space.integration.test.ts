@@ -184,7 +184,7 @@ test("space-37, space-22, storage-5: the first sync pushes spex to the empty hos
   const joined = await addFolder(joiner, joiner.projectDir);
   const empty = bareRepo();
   await joiner.client.expectOk("space.remote.set", { repository: joined.key, url: empty });
-  const first = await joiner.client.settle("space.sync", { repository: joined.key, join: true });
+  const first = await joiner.client.settle("space.sync", { repository: joined.key, placement: null, join: true });
   assert.ok(first.sync.phase === "done" && first.sync.pushed && first.sync.sent > 0 && first.sync.received === 0, JSON.stringify(first.sync));
   assert.equal(placementOf(first, null).branch?.hostEmpty, false);
   assert.equal(git(empty, "rev-parse", "spex"), git(joined.clone, "rev-parse", "spex"));

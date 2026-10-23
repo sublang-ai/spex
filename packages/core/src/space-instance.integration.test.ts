@@ -1436,7 +1436,7 @@ test("git-host-24, space-83, git-host-6, git-host-9, git-host-15, git-host-16, g
     await live.release();
     released = true;
     mark = home.client.mark();
-    await home.client.expectOk("space.sync", { repository: leasedLocal, noticed: true });
+    await home.client.expectOk("space.sync", { repository: leasedLocal, placement: second.url, noticed: true });
     const moved = await home.client.waitRepository(mark, leasedKey, (repository) => repository.sync.phase !== "running" && repository.sync.phase !== "idle", 30_000);
     assert.deepEqual([moved.sync.phase, moved.state, moved.id, moved.instance], ["done", "reachable", stopped.id, second.url], JSON.stringify(moved.sync));
     assert.ok(existsSync(join(clonePath(home.dataDir, leasedKey), ".git")) && !existsSync(leasedClone), "its next sync moved it");
@@ -1727,7 +1727,7 @@ test("git-host-25, space-84, git-host-5, git-host-8, git-host-16, git-host-9, sp
   // own state the first's (git-host-9).
   const pushedFrom = first.script.transportCredentials.length;
   for (const key of [aKey, bKey]) {
-    const synced = await home.client.settle("space.sync", { repository: key, noticed: true }, 30_000);
+    const synced = await home.client.settle("space.sync", { repository: key, placement: first.url, noticed: true }, 30_000);
     assert.deepEqual([synced.sync.phase, synced.state], ["done", "reachable"], `${key}: ${JSON.stringify(synced.sync)}`);
     assert.ok(synced.sync.phase === "done" && synced.sync.pushed, `${key} pushed`);
     assert.equal(git(bareOf(first, key), "rev-parse", "spex"), git(clonePath(home.dataDir, key), "rev-parse", "spex"));
@@ -1822,7 +1822,7 @@ test("git-host-25, space-84, space-60, storage-36, storage-5, git-host-22, git-h
   mark = home.client.mark();
   await home.client.expectOk("space.join", { instance: first.url, hostId: solo.id });
   await home.client.waitRepository(mark, soloKey, (repository) => repository.state === "reachable" && repository.sync.phase === "idle", 30_000);
-  const once = await home.client.settle("space.sync", { repository: aKey, noticed: true }, 30_000);
+  const once = await home.client.settle("space.sync", { repository: aKey, placement: first.url, noticed: true }, 30_000);
   assert.deepEqual([once.sync.phase, once.state], ["done", "reachable"], JSON.stringify(once.sync));
   // The join named its placement at the first in a tracked file
   // (storage-36).
@@ -1973,7 +1973,7 @@ test("space-60, space-5, storage-34, storage-31: a follow half made — a clone 
   // Its next Sync makes the rename: the remote named by the second's
   // folder, its upstream and fetched spex with it, its key and id kept,
   // and it syncs with the second (space-60, space-5, storage-34).
-  const synced = await again.client.settle("space.sync", { repository: followedKey, noticed: true }, 30_000);
+  const synced = await again.client.settle("space.sync", { repository: followedKey, placement: first.url, noticed: true }, 30_000);
   assert.deepEqual([synced.sync.phase, synced.state, synced.key, synced.id, synced.instance], ["done", "reachable", followedKey, a.id, second.url], JSON.stringify(synced.sync));
   assert.deepEqual(git(clone, "remote").split("\n"), [hostFolder(second)]);
   assert.equal(git(clone, "config", "--get", "branch.spex.remote"), hostFolder(second));

@@ -114,8 +114,8 @@ export type RowFields = Omit<RepositoryState, keyof PlacementOver | "placements"
  * a placement holds one, its key placement, a path remote being the path
  * placement; a local-only one holds none, but for an unattached line a
  * creation waits on; a row with no clone lists one, unattached. Lines a
- * test gives stand as given. The row also carries its key placement's
- * fields itself while the protocol mirrors them.
+ * test gives stand as given. What a placement holds is on its line
+ * alone.
  */
 export function rowOf(fields: RowFields): RepositoryState {
   const { remote, waiting, members, visibility, can, branch, incoming, lastSync, noticed, placements, ...row } = fields;
@@ -149,19 +149,7 @@ export function rowOf(fields: RowFields): RepositoryState {
             conflicts: here ? row.conflicts : [],
           }),
         ]);
-  return {
-    ...row,
-    placements: lines,
-    remote,
-    waiting,
-    members,
-    visibility,
-    can,
-    branch: branch === null ? null : { ...branch, mergePending: row.mergePending },
-    incoming,
-    lastSync,
-    noticed,
-  };
+  return { ...row, placements: lines };
 }
 
 /** A repository row as the core sends one, local only on this device

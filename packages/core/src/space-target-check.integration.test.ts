@@ -142,7 +142,7 @@ test("git-host-23: fresh unknown target members require notice despite a cached 
   host.script.failMembers(true);
   await home.client.expectError("space.sync", { repository: OWN }, "invalid_request", /sharing notice/);
   assert.equal(placementOf(await home.client.repository(OWN), host.url).members, null);
-  const row = await home.client.settle("space.sync", { repository: OWN, noticed: true });
+  const row = await home.client.settle("space.sync", { repository: OWN, placement: host.url, noticed: true });
   assert.deepEqual([row.sync.phase, row.state, placementOf(row, host.url).noticed], ["done", "reachable", true]);
 });
 
@@ -407,7 +407,7 @@ test("git-host-23: solo membership becoming shared at Check stops before transpo
   assert.ok(!host.script.requests.slice(from).some((request) => request.path.includes(".git/") || request.path.endsWith("/credential") || request.path.endsWith("/spex-branch")), "no branch preparation or Git transport");
   await home.client.expectError("space.sync", { repository: OWN }, "invalid_request", /sharing notice/);
   assert.equal(core.store.getPref(`sync:${OWN}:${hostFolder(host)}:noticed`), undefined);
-  const seen = await home.client.settle("space.sync", { repository: OWN, noticed: true });
+  const seen = await home.client.settle("space.sync", { repository: OWN, placement: host.url, noticed: true });
   assert.deepEqual([seen.sync.phase, placementOf(seen, host.url).noticed], ["done", true]);
 });
 
@@ -434,7 +434,7 @@ test("git-host-23, space-57, space-58: a sync the core starts after a pick owes 
   const [line] = waiting.placements;
   assert.deepEqual([line.outcome, line.members, line.noticed, line.lastSync], [{ kind: "waiting", sent: 0, received: 0 }, 2, false, null]);
   assert.ok(!host.script.requests.slice(from).some((request) => request.path.includes(".git/") || request.path.endsWith("/credential") || request.path.endsWith("/spex-branch")), "no branch preparation or Git transport");
-  const seen = await home.client.settle("space.sync", { repository: key, noticed: true }, 30_000);
+  const seen = await home.client.settle("space.sync", { repository: key, placement: host.url, noticed: true }, 30_000);
   const seenLine = placementOf(seen, host.url);
   assert.deepEqual([seen.sync.phase, seenLine.noticed, seenLine.outcome?.kind], ["done", true, "synced"], JSON.stringify(seen.sync));
   assert.equal(git(host.bareOf("acme/pick-notice-spex"), "rev-parse", "spex"), git(clonePath(home.dataDir, key), "rev-parse", "spex"));
