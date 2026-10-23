@@ -14,6 +14,7 @@
 // start, and a host URL the origin rule refuses stops it naming the URL.
 
 import { test } from "node:test";
+import { remoteNamesOf } from "./testing/space-harness.js";
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
@@ -182,7 +183,7 @@ const git = (cwd: string, ...args: string[]): string =>
 const FOLDER = "@spex.pub";
 const GIT_ORIGIN = "https://git.spex.example";
 const workspace = (root: string, key: string): string => join(root, "workspace", ...key.split("/"));
-const remotesOf = (dir: string): string[] => orderRemotes(git(dir, "remote").split("\n").filter(Boolean), (name) => name, remoteOrderOf(dir));
+const remotesOf = (dir: string): string[] => orderRemotes(remoteNamesOf(dir), (name) => name, remoteOrderOf(dir));
 const prefsIn = (root: string): Record<string, unknown> =>
   (JSON.parse(readFileSync(join(root, "local", "prefs.json"), "utf8")) as { prefs: Record<string, unknown> }).prefs;
 const receiptsOf = (root: string): string[] => readdirSync(join(root, "local", "migrations"));

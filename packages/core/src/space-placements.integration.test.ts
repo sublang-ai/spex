@@ -47,7 +47,7 @@ import { encodePlacementFile, PLACEMENTS_DIR } from "./placements.js";
 import type { Command, GroupsState, SpaceUnit } from "./protocol.js";
 import type { SpaceStepEvent } from "./space.js";
 import type { StandinGroup, StandinHost } from "./testing/standin-host.js";
-import { bareOf, clonePath, createSpaceHarness, hostFolder, hostKey, instanceOf, placementOf, repositoryOf, rowsOf, syncRecordsOf } from "./testing/space-harness.js";
+import { bareOf, clonePath, createSpaceHarness, hostFolder, hostKey, instanceOf, placementOf, repositoryOf, rowsOf, syncRecordsOf, remoteNamesOf } from "./testing/space-harness.js";
 
 const fixture = createSpaceHarness();
 const { git, gitFolder, addFolder, bareRepo, peerClone, peerPush, attachByHand, startHome, startHost, signIn, signOut, forget } = fixture;
@@ -735,7 +735,7 @@ test("space-94, space-4, space-65, space-57, space-29, space-1, space-82, space-
   await signIn(home, first);
   const created = await home.client.waitRepository(mark, HOST_OWN, (repository) => repository.sync.phase === "done", 30_000);
   assert.deepEqual(names(first), [[`${LOGIN}-spex`, null]]);
-  assert.deepEqual(git(own, "remote").split("\n"), [hostFolder(first)]);
+  assert.deepEqual(remoteNamesOf(own), [hostFolder(first)]);
   const ownId = created.id;
   assert.ok(ownId);
 
@@ -753,7 +753,7 @@ test("space-94, space-4, space-65, space-57, space-29, space-1, space-82, space-
   const atThird = third.script.repositories.find((repository) => repository.path === "bob-spex");
   assert.ok(atThird, "bob-spex stands at the third");
   assert.equal(atThird.group.fullPath, "bob");
-  assert.deepEqual(git(own, "remote").split("\n"), [hostFolder(first), hostFolder(third)]);
+  assert.deepEqual(remoteNamesOf(own), [hostFolder(first), hostFolder(third)]);
   assert.equal(configOf(own, `remote.${hostFolder(third)}.spexId`), atThird.id);
   assert.equal(readFileSync(join(own, PLACEMENTS_DIR, `${hostFolder(third)}.yaml`), "utf8"), encodePlacementFile(canonicalOrigin(third.url), atThird.id));
   assert.deepEqual(waiting.placements.map((line) => [line.instance, line.path, line.attached, line.outcome?.kind ?? null]), [[first.url, HOST_OWN, true, "synced"], [third.url, "bob/bob-spex", true, "waiting"]]);
@@ -774,7 +774,7 @@ test("space-94, space-4, space-65, space-57, space-29, space-1, space-82, space-
   // and no row of its own (space-4, git-host-5).
   await signIn(home, second);
   assert.deepEqual(second.script.creations, [], "nothing is created at the second");
-  assert.deepEqual(git(own, "remote").split("\n"), [hostFolder(first), hostFolder(third)]);
+  assert.deepEqual(remoteNamesOf(own), [hostFolder(first), hostFolder(third)]);
   assert.equal(existsSync(join(own, PLACEMENTS_DIR, `${hostFolder(second)}.yaml`)), false);
   const state = await home.client.expectOk("space.get", {});
   const row = repositoryOf(state, HOST_OWN);
@@ -786,7 +786,7 @@ test("space-94, space-4, space-65, space-57, space-29, space-1, space-82, space-
   const asked = [first, second, third].map((host) => host.script.requests.length);
   await home.client.expectError("space.place", { repository: HOST_OWN, choice: { kind: "create", instance: second.url, groupId: null, name: LOGIN } }, "invalid_request", new RegExp(`^${LOGIN}-spex holds a group's records; only a project's are placed at another instance$`));
   await home.client.expectError("space.leave", { repository: HOST_OWN, instance: third.url }, "invalid_request", new RegExp(`^${LOGIN}-spex holds a group's records; only a project's are removed from an instance$`));
-  assert.deepEqual(git(own, "remote").split("\n"), [hostFolder(first), hostFolder(third)]);
+  assert.deepEqual(remoteNamesOf(own), [hostFolder(first), hostFolder(third)]);
   assert.deepEqual([first, second, third].map((host) => host.script.requests.length), asked);
 
   // The first signed out and forgotten: your own group's placement there

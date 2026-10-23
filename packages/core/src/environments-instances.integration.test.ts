@@ -42,7 +42,7 @@ import {
 import type { EnvironmentState, GroupsState, RepositoryState } from "./protocol.js";
 import { credentialsPath, fileCredentialStore, GitHostClient, type StoredCredential } from "./git-host.js";
 import { holdingFetch } from "./testing/holding-fetch.js";
-import { clonePath, createSpaceHarness, hostFolder, hostKey, instanceOf, ownClone, rowsOf } from "./testing/space-harness.js";
+import { clonePath, createSpaceHarness, hostFolder, hostKey, instanceOf, ownClone, rowsOf, remoteNamesOf } from "./testing/space-harness.js";
 import type { StandinHost } from "./testing/standin-host.js";
 import { makeRelease, startStandinRegistry, type StandinRegistry, type StandinRegistryRequest } from "./testing/standin-registry.js";
 
@@ -778,7 +778,7 @@ test("environments-34, environments-11, storage-31: with the first, the default 
   }, 30_000);
   const synced = await home.client.settle("space.sync", { repository: HOST_OWN }, 30_000);
   assert.deepEqual([synced.sync.phase, synced.instance, synced.key], ["done", second.url, HOST_OWN], JSON.stringify(synced.sync));
-  assert.deepEqual(git(ownClone(home.dataDir), "remote").split("\n"), [hostFolder(second)]);
+  assert.deepEqual(remoteNamesOf(ownClone(home.dataDir)), [hostFolder(second)]);
 
   // Stopped, its environment taken away, then started again: the first
   // is still the home's default instance, signed out, and your own

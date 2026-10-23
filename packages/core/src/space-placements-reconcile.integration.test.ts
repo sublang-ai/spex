@@ -30,7 +30,7 @@ import { createSessionStore } from "@sublang/playbook/session-store";
 import { Home } from "./home.js";
 import { canonicalOrigin } from "./instance.js";
 import type { GroupsState, SpaceUnit } from "./protocol.js";
-import { bareOf, clonePath, createSpaceHarness, hostFolder, hostKey, instanceOf, placementOf, syncRecordsOf } from "./testing/space-harness.js";
+import { bareOf, clonePath, createSpaceHarness, hostFolder, hostKey, instanceOf, placementOf, syncRecordsOf, remoteNamesOf } from "./testing/space-harness.js";
 
 const fixture = createSpaceHarness();
 const { git, gitFolder, addFolder, peerClone, peerPush, attachByHand, startHome, startHost, signIn, signOut } = fixture;
@@ -118,7 +118,7 @@ test("space-94, space-91, space-60, space-5: for a project placed at the first o
   assert.doesNotThrow(() => git(clone, "cat-file", "-e", `HEAD:${secondFile}`), "the merge brought the second's file");
   assert.deepEqual(readdirSync(join(clone, "placements")), [`${firstFolder}.yaml`]);
   assert.ok(units(merged.local).includes(secondFile), "its deletion a local change the next sync carries");
-  assert.deepEqual(git(clone, "remote").split("\n"), [firstFolder]);
+  assert.deepEqual(remoteNamesOf(clone), [firstFolder]);
   assert.deepEqual([merged.key, merged.instance, merged.placements.map((line) => line.instance)], [key, first.url, [first.url]]);
 
   // The Sync after pushes that deletion.
@@ -146,7 +146,7 @@ test("space-94, space-91, space-60, space-5: for a project placed at the first o
     if (step !== "refresh" || atRefresh !== undefined) return;
     atRefresh = {
       repository,
-      remotes: git(movedClone, "remote").split("\n"),
+      remotes: remoteNamesOf(movedClone),
       id: git(movedClone, "config", "--get", `remote.${secondFolder}.spexId`),
       files: readdirSync(join(movedClone, "placements")),
       records: { ...syncRecordsOf(home.dataDir, key), ...syncRecordsOf(home.dataDir, followed) },
@@ -175,7 +175,7 @@ test("space-94, space-91, space-60, space-5: for a project placed at the first o
   const again = await home.client.settle("space.sync", { repository: followed }, 30_000);
   assert.equal(again.sync.phase, "done", JSON.stringify(again.sync));
   assert.deepEqual([...new Set(first.script.transportCredentials.slice(transports).map((entry) => entry.instance))], [second.url]);
-  assert.deepEqual(git(movedClone, "remote").split("\n"), [secondFolder]);
+  assert.deepEqual(remoteNamesOf(movedClone), [secondFolder]);
 });
 
 test("space-101, space-91, storage-38, storage-37: for a project placed at the first and the third of three instances, the first two over one Git backend, a peer's commit at the third deleting the first's placement file drops nothing at the next Sync while a lease taken out of band stands beneath the clone, syncing nothing with the first, nor at the Sync after, which writes no file again; the Sync after the release drops it and moves the clone under the third's folder with its pair", async (t) => {
@@ -216,7 +216,7 @@ test("space-101, space-91, storage-38, storage-37: for a project placed at the f
     assert.equal(placementOf(leased, third.url).outcome?.kind, "synced");
     assert.equal(git(clone, "rev-parse", "HEAD"), removed, "the third's merge stands");
     assert.equal(git(firstBare, "rev-parse", "spex"), atFirst, "nothing synced with the first");
-    assert.deepEqual(git(clone, "remote").split("\n"), [firstFolder, thirdFolder]);
+    assert.deepEqual(remoteNamesOf(clone), [firstFolder, thirdFolder]);
     assert.equal(existsSync(join(clone, firstFile)), false);
 
     // The Sync after: the drop, tried again before the first's turn, still
@@ -231,7 +231,7 @@ test("space-101, space-91, storage-38, storage-37: for a project placed at the f
     assert.equal(existsSync(join(clone, firstFile)), false);
     assert.throws(() => git(clone, "cat-file", "-e", `HEAD:${firstFile}`));
     assert.equal(git(firstBare, "rev-parse", "spex"), atFirst);
-    assert.deepEqual(git(clone, "remote").split("\n"), [firstFolder, thirdFolder]);
+    assert.deepEqual(remoteNamesOf(clone), [firstFolder, thirdFolder]);
 
     // Released, the Sync after drops the first and moves the clone to its
     // path at the third, its pair and its records there following; the
@@ -246,7 +246,7 @@ test("space-101, space-91, storage-38, storage-37: for a project placed at the f
     assert.deepEqual(moved.placements.map((line) => [line.instance, line.outcome?.kind]), [[third.url, "synced"]]);
     const movedClone = clonePath(home.dataDir, movedKey);
     assert.ok(existsSync(join(movedClone, ".git")) && !existsSync(clone), "moved under the third's folder");
-    assert.deepEqual(git(movedClone, "remote").split("\n"), [thirdFolder]);
+    assert.deepEqual(remoteNamesOf(movedClone), [thirdFolder]);
     assert.equal(Home.load(home.dataDir).keyForFolder(code), movedKey);
     assert.deepEqual(Object.keys({ ...syncRecordsOf(home.dataDir, key), ...syncRecordsOf(home.dataDir, movedKey) }).filter((name) => name.includes(`:${firstFolder}:`)), []);
     assert.equal(git(firstBare, "rev-parse", "spex"), atFirst, "the first's host repository left as it stands");
@@ -281,7 +281,7 @@ test("space-60, space-61, space-5: a placement beside the first follows a signed
   assert.deepEqual([stranded.state, stranded.reason, stranded.outcome?.kind], ["unreachable", "Sign in again", "stopped"], JSON.stringify(stranded));
   assert.ok(stranded.outcome?.kind === "stopped" && stranded.outcome.cause === "reauth", JSON.stringify(stranded.outcome));
   assert.deepEqual([placementOf(unfollowed, first.url).outcome?.kind, placementOf(unfollowed, third.url).outcome?.kind], ["synced", "synced"]);
-  assert.deepEqual(git(clone, "remote").split("\n"), [firstFolder, secondFolder, thirdFolder]);
+  assert.deepEqual(remoteNamesOf(clone), [firstFolder, secondFolder, thirdFolder]);
   assert.deepEqual(readdirSync(join(clone, "placements")), [`${firstFolder}.yaml`, `${secondFolder}.yaml`, `${thirdFolder}.yaml`]);
 
   // The third's placement taken away from a terminal: the second's now
@@ -296,7 +296,7 @@ test("space-60, space-61, space-5: a placement beside the first follows a signed
   assert.equal(follows.sync.phase, "done", JSON.stringify(follows.sync));
   assert.deepEqual([follows.key, follows.instance, follows.id], [key, first.url, id]);
   assert.ok(existsSync(join(clone, ".git")), "the clone stays where it is");
-  assert.deepEqual(git(clone, "remote").split("\n"), [firstFolder, thirdFolder]);
+  assert.deepEqual(remoteNamesOf(clone), [firstFolder, thirdFolder]);
   assert.equal(git(clone, "config", "--get", `remote.${thirdFolder}.url`), atSecond.url);
   assert.equal(git(clone, "config", "--get", `remote.${thirdFolder}.spexId`), atSecond.id);
   assert.deepEqual(readdirSync(join(clone, "placements")), [`${firstFolder}.yaml`, `${thirdFolder}.yaml`]);
@@ -373,7 +373,7 @@ test("storage-38, space-91: a first placement's drop a merge brings is refused, 
   const refused = placementOf(taken, first.url).outcome;
   assert.ok(refused?.kind === "stopped" && refused.message === `workspace/${movedKey} already exists, so the clone cannot follow the host there`, JSON.stringify(refused));
   assert.equal(placementOf(taken, second.url).outcome?.kind, "synced");
-  assert.deepEqual(git(clone, "remote").split("\n"), [firstFolder, secondFolder]);
+  assert.deepEqual(remoteNamesOf(clone), [firstFolder, secondFolder]);
   assert.equal(readFileSync(movedClone, "utf8"), "taken\n");
   rmSync(movedClone);
   await home.stop();
@@ -390,7 +390,7 @@ test("storage-38, space-91: a first placement's drop a merge brings is refused, 
   const named = placementOf(unread, first.url).outcome;
   assert.ok(named?.kind === "stopped" && named.message === `${SECOND_NAME} is not read yet, so the clone cannot move to its path there`, JSON.stringify(named));
   assert.equal(placementOf(unread, second.url).outcome?.kind, "synced");
-  assert.deepEqual(git(clone, "remote").split("\n"), [firstFolder, secondFolder]);
+  assert.deepEqual(remoteNamesOf(clone), [firstFolder, secondFolder]);
   assert.equal(git(firstBare, "rev-parse", "spex"), atFirst, "nothing synced with the first");
 
   // The second read at its turn, the sync after drops the first and moves
@@ -400,7 +400,7 @@ test("storage-38, space-91: a first placement's drop a merge brings is refused, 
   const moved = await again.client.waitRepository(mark, movedKey, (repository) => repository.sync.phase !== "running" && repository.sync.phase !== "idle", 30_000);
   assert.deepEqual([moved.sync.phase, moved.instance, moved.id, moved.placements.map((line) => line.instance)], ["done", second.url, placed.id, [second.url]], JSON.stringify(moved.sync));
   assert.ok(existsSync(join(movedClone, ".git")) && !existsSync(clone), "moved to its path at the second");
-  assert.deepEqual(git(movedClone, "remote").split("\n"), [secondFolder]);
+  assert.deepEqual(remoteNamesOf(movedClone), [secondFolder]);
   assert.deepEqual(readdirSync(join(movedClone, "placements")), [`${secondFolder}.yaml`]);
   assert.equal(Home.load(home.dataDir).keyForFolder(code), movedKey);
   assert.equal(git(firstBare, "rev-parse", "spex"), atFirst);
@@ -444,7 +444,7 @@ test("storage-38, space-91, storage-31, space-57, space-4: your own group's own 
   assert.deepEqual([dropped.key, dropped.own, dropped.instance], [HOST_OWN, true, second.url]);
   assert.deepEqual(dropped.placements.map((line) => [line.instance, line.outcome?.kind]), [[second.url, "synced"]]);
   assert.ok(existsSync(join(own, ".git")), "the clone keeps its folder");
-  assert.deepEqual(git(own, "remote").split("\n"), [secondFolder]);
+  assert.deepEqual(remoteNamesOf(own), [secondFolder]);
   assert.equal(git(own, "for-each-ref", "--format=%(refname)", `refs/remotes/${firstFolder}`), "");
   const upstream = ((): string | null => { try { return git(own, "config", "--get", "branch.spex.remote"); } catch { return null; } })();
   assert.notEqual(upstream, firstFolder);
@@ -475,7 +475,7 @@ test("space-91, storage-41, storage-12: a placement's file a merge makes unreada
   const merged = await home.client.settle("space.sync", { repository: key }, 30_000);
   assert.equal(merged.sync.phase, "done", JSON.stringify(merged.sync));
   assert.deepEqual(merged.placements.map((line) => [line.instance, line.outcome?.kind]), [[first.url, "synced"], [second.url, "synced"]]);
-  assert.deepEqual(git(clone, "remote").split("\n"), [firstFolder, secondFolder]);
+  assert.deepEqual(remoteNamesOf(clone), [firstFolder, secondFolder]);
   assert.equal(readFileSync(join(clone, firstFile), "utf8"), unreadable);
   const diagnostics = await home.client.expectOk("storage.diagnostics", {});
   assert.deepEqual(
@@ -531,7 +531,7 @@ test("space-101, space-98, space-15, space-31, storage-38, space-7, space-29: fo
   const unreceived = await home.client.settle("space.leave", { repository: key, instance: third.url }, 30_000);
   assert.deepEqual(unreceived.sync, { phase: "stopped", op: "leave", step: "check", cause: "unreceived", message: "1 record has reached no other placement", guidance: "Confirm to remove it anyway.", retry: true, count: 1 });
   assert.equal(git(clone, "rev-parse", `refs/remotes/${thirdFolder}/spex`), atThird, "the third fetched first");
-  assert.deepEqual(git(clone, "remote").split("\n"), [firstFolder, thirdFolder]);
+  assert.deepEqual(remoteNamesOf(clone), [firstFolder, thirdFolder]);
   assert.ok(existsSync(join(clone, thirdFile)), "its file kept");
   assert.deepEqual(unreceived.placements.map((line) => line.instance), [first.url, third.url]);
 
@@ -546,7 +546,7 @@ test("space-101, space-98, space-15, space-31, storage-38, space-7, space-29: fo
   try {
     const leased = await home.client.settle("space.leave", { repository: key, instance: first.url }, 30_000);
     assert.ok(leased.sync.phase === "stopped" && leased.sync.op === "leave" && leased.sync.step === "check" && leased.sync.cause === "lease" && leased.sync.retry && leased.sync.message.includes(lease.slice(0, 8)), JSON.stringify(leased.sync));
-    assert.deepEqual(git(clone, "remote").split("\n"), [firstFolder, thirdFolder]);
+    assert.deepEqual(remoteNamesOf(clone), [firstFolder, thirdFolder]);
     assert.ok(existsSync(join(clone, firstFile)), "its file kept");
     assert.equal(Home.load(home.dataDir).keyForFolder(code), key);
     await live.release();
@@ -565,7 +565,7 @@ test("space-101, space-98, space-15, space-31, storage-38, space-7, space-29: fo
   assert.deepEqual([moved.sync, moved.instance, moved.placements.map((line) => line.instance)], [{ phase: "idle" }, third.url, [third.url]], JSON.stringify(moved));
   assert.ok(existsSync(join(movedClone, ".git")) && !existsSync(clone), "moved under the third's folder");
   assert.equal(Home.load(home.dataDir).keyForFolder(code), movedKey, "its pair re-keyed");
-  assert.deepEqual(git(movedClone, "remote").split("\n"), [thirdFolder]);
+  assert.deepEqual(remoteNamesOf(movedClone), [thirdFolder]);
   assert.throws(() => git(movedClone, "rev-parse", "-q", "--verify", `refs/remotes/${firstFolder}/spex`));
   assert.equal(existsSync(join(movedClone, firstFile)), false, "its file deleted");
   assert.ok(moved.local.some((unit) => unit.unit === firstFile && unit.change === "deleted"), JSON.stringify(moved.local));
@@ -579,7 +579,7 @@ test("space-101, space-98, space-15, space-31, storage-38, space-7, space-29: fo
   // (space-98, storage-38).
   const every = await home.client.settle("space.leave", { repository: movedKey, instance: third.url }, 30_000);
   assert.deepEqual(every.sync, { phase: "stopped", op: "leave", step: "check", cause: "unreceived", message: "3 records have reached no other placement", guidance: "Confirm to remove it anyway.", retry: true, count: 3 });
-  assert.deepEqual(git(movedClone, "remote").split("\n"), [thirdFolder]);
+  assert.deepEqual(remoteNamesOf(movedClone), [thirdFolder]);
   const localKey = `${LOGIN}/atlas-spex`;
   const localClone = clonePath(home.dataDir, localKey);
   mark = home.client.mark();
@@ -634,7 +634,7 @@ test("space-101, space-98, space-60, space-61, storage-36, storage-38: with the 
   assert.deepEqual([renamed.sync, renamed.instance, renamed.id, renamed.placements.map((line) => [line.instance, line.id])], [{ phase: "idle" }, second.url, beaconId, [[second.url, beaconId]]], JSON.stringify(renamed));
   assert.ok(existsSync(join(followedClone, ".git")) && !existsSync(clonePath(home.dataDir, beacon)), "the clone follows its key placement");
   assert.equal(Home.load(home.dataDir).keyForFolder(beaconCode), followed);
-  assert.deepEqual(git(followedClone, "remote").split("\n"), [secondFolder]);
+  assert.deepEqual(remoteNamesOf(followedClone), [secondFolder]);
   assert.equal(git(followedClone, "config", "--get", `remote.${secondFolder}.spexId`), beaconId);
   assert.deepEqual(readdirSync(join(followedClone, "placements")), [`${secondFolder}.yaml`]);
   assert.equal(readFileSync(join(followedClone, secondFile), "utf8"), placementBytes(second.url, beaconId));
@@ -649,7 +649,7 @@ test("space-101, space-98, space-60, space-61, storage-36, storage-38: with the 
   const line = placementOf(stranded, first.url);
   assert.deepEqual([line.state, line.reason, line.outcome?.kind], ["unreachable", "Sign in again", "stopped"], JSON.stringify(line));
   assert.equal(placementOf(stranded, second.url).outcome?.kind, "synced");
-  assert.deepEqual(git(atlasClone, "remote").split("\n"), [firstFolder, secondFolder]);
+  assert.deepEqual(remoteNamesOf(atlasClone), [firstFolder, secondFolder]);
 
   // Its first left: a placement it cannot read stops the leave, saying
   // records pushed there since the last sync may be left behind, nothing
@@ -657,7 +657,7 @@ test("space-101, space-98, space-60, space-61, storage-36, storage-38: with the 
   // at the second (space-98, storage-38).
   const unread = await home.client.settle("space.leave", { repository: atlas, instance: first.url }, 30_000);
   assert.deepEqual(unread.sync, { phase: "stopped", op: "leave", step: "check", cause: "reauth", message: `Records pushed to ${FIRST_NAME} since the last sync may be left behind`, guidance: "Confirm to remove it anyway.", retry: true });
-  assert.deepEqual(git(atlasClone, "remote").split("\n"), [firstFolder, secondFolder]);
+  assert.deepEqual(remoteNamesOf(atlasClone), [firstFolder, secondFolder]);
   const atSecond = hostKey(second, "acme/atlas-spex");
   const atSecondClone = clonePath(home.dataDir, atSecond);
   mark = home.client.mark();
@@ -665,6 +665,6 @@ test("space-101, space-98, space-60, space-61, storage-36, storage-38: with the 
   const dropped = await home.client.waitRepository(mark, atSecond, (repository) => repository.sync.phase !== "running", 30_000);
   assert.deepEqual([dropped.sync, dropped.instance, dropped.placements.map((each) => each.instance)], [{ phase: "idle" }, second.url, [second.url]], JSON.stringify(dropped));
   assert.ok(existsSync(join(atSecondClone, ".git")) && !existsSync(atlasClone), "moved to its path at the second");
-  assert.deepEqual(git(atSecondClone, "remote").split("\n"), [secondFolder]);
+  assert.deepEqual(remoteNamesOf(atSecondClone), [secondFolder]);
   assert.deepEqual(readdirSync(join(atSecondClone, "placements")), [`${secondFolder}.yaml`]);
 });

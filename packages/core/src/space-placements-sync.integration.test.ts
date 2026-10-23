@@ -29,7 +29,7 @@ import type { GroupsState, RepositoryState, SpaceConflict, SpaceUnit } from "./p
 import type { SpaceStepEvent } from "./space.js";
 import { holdingFetch } from "./testing/holding-fetch.js";
 import type { StandinGroup, StandinHost } from "./testing/standin-host.js";
-import { bareOf, clonePath, createSpaceHarness, hostFolder, hostKey, instanceOf, placementOf, repositoryOf, syncRecordsOf } from "./testing/space-harness.js";
+import { bareOf, clonePath, createSpaceHarness, hostFolder, hostKey, instanceOf, placementOf, repositoryOf, syncRecordsOf, remoteNamesOf } from "./testing/space-harness.js";
 
 const fixture = createSpaceHarness();
 const { scratch, git, gitFolder, addFolder, bareRepo, peerClone, peerPush, attachByHand, startHome, startHost, signIn, signOut, sleep } = fixture;
@@ -254,13 +254,13 @@ test("storage-34, space-5, space-29: a clone placed at the second holds one remo
   assert.deepEqual(synced.placements.map((line) => [line.instance, line.attached, line.outcome?.kind]), [[first.url, true, "synced"], [second.url, true, "synced"]]);
   assert.equal(git(clone, "for-each-ref", "--format=%(refname)", "refs/remotes/spare"), "");
   assert.equal(refs(spare.bare), spareRefs, "nothing pushed to its repository");
-  assert.deepEqual(git(clone, "remote").split("\n").sort(), [hostFolder(first), hostFolder(second), "spare"].sort());
+  assert.deepEqual(remoteNamesOf(clone).sort(), [hostFolder(first), hostFolder(second), "spare"].sort());
   assert.equal(git(clone, "config", "--get", "remote.spare.url"), spareUrl);
 
   // A remote the reader names at that instance's Git origin is refused,
   // nothing written (space-5, space-29).
   await home.client.expectError("space.remote.set", { repository: key, url: spareUrl }, "invalid_request", /used as the host gives them/);
-  assert.ok(!git(clone, "remote").split("\n").includes("origin"), "no path placement written");
+  assert.ok(!remoteNamesOf(clone).includes("origin"), "no path placement written");
 });
 
 test("space-100, space-11, space-6: with both instances signed out no placement can run, and the Sync is refused naming the first's display name, nothing run", async (t) => {
@@ -488,7 +488,7 @@ test("space-92, space-12, space-5: a path placement set by space.remote.set sync
   // The upstream stays at the first placement, and the path placement
   // stands after the merge (space-12, space-5).
   assert.equal(git(clone, "config", "--get", "branch.spex.remote"), hostFolder(first));
-  assert.deepEqual(git(clone, "remote").split("\n").sort(), [hostFolder(first), hostFolder(second), "origin"].sort());
+  assert.deepEqual(remoteNamesOf(clone).sort(), [hostFolder(first), hostFolder(second), "origin"].sort());
   assert.equal(git(clone, "rev-parse", "refs/remotes/origin/spex"), git(clone, "rev-parse", "HEAD"));
 });
 
@@ -927,7 +927,7 @@ test("space-21, space-98, space-31, space-57, space-93: a Leave sent while a Syn
   assert.ok(before.length > 0 && before.every((step) => step.startsWith("sync:")) && before.includes("sync:save") && before.includes("sync:first:push"), steps.join(" "));
   assert.ok(!before.some((step) => step.startsWith("sync:second:")), steps.join(" "));
   assert.deepEqual(left.placements.map((line) => line.instance), [canonicalOrigin(first.url)]);
-  assert.deepEqual(git(clone, "remote").split("\n"), [hostFolder(first)]);
+  assert.deepEqual(remoteNamesOf(clone), [hostFolder(first)]);
   assert.equal(existsSync(join(clone, "placements", `${placed.folder}.yaml`)), false, "its file deleted");
   assert.equal(git(firstBare, "cat-file", "-p", "spex:later.md"), "sent by the sync the leave follows");
 });
@@ -953,5 +953,5 @@ test("space-98, space-12, space-29: a Leave not confirmed counts a unit changed 
   const stopped = await home.client.waitRepository(from, key, (row) => row.sync.phase === "stopped", 30_000);
   assert.ok(stopped.sync.phase === "stopped" && stopped.sync.op === "leave" && stopped.sync.cause === "unreceived" && stopped.sync.count === 1, JSON.stringify(stopped.sync));
   assert.deepEqual(stopped.placements.map((line) => [line.instance, line.attached]), [[canonicalOrigin(first.url), true], [canonicalOrigin(second.url), true]]);
-  assert.deepEqual(git(clone, "remote").split("\n").sort(), [hostFolder(first), placed.folder].sort());
+  assert.deepEqual(remoteNamesOf(clone).sort(), [hostFolder(first), placed.folder].sort());
 });

@@ -4,6 +4,8 @@
 // Real Groups integration fixtures; each file owns its scratch and cores.
 
 import assert from "node:assert/strict";
+import { orderRemotes, remoteOrderOf } from "../home.js";
+import { spawnSync as spawnSyncForRemotes } from "node:child_process";
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -827,4 +829,13 @@ playbooks:
       rmSync(scratch, { recursive: true, force: true });
     },
   };
+}
+
+/** A clone's remotes in the order its Git configuration holds them
+ * (storage-34): Git's own listing sorts them in some versions, so the
+ * listing is ordered by the config file's sections. */
+export function remoteNamesOf(dir: string): string[] {
+  const run = spawnSyncForRemotes("git", ["-C", dir, "remote"], { encoding: "utf8" });
+  const listed = (run.stdout ?? "").split("\n").filter((name) => name !== "");
+  return orderRemotes(listed, (name) => name, remoteOrderOf(dir));
 }
