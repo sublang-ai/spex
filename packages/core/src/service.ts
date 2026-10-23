@@ -141,6 +141,7 @@ import { Places } from "./places.js";
 import { GitHostClient, SEAT_ID_MAX, fileCredentialStore } from "./git-host.js";
 import { relayHostError } from "./space-groups.js";
 import { currentRuntime, withGitCredential } from "./git-credential.js";
+import { configureSeatGit } from "./seat-git.js";
 import { displayRemote, validateRemoteUrl } from "./space-git.js";
 import type { SpaceOp, SyncStep } from "./protocol.js";
 import { isFastModeSupported, isSubagentModelSupported } from "@sublang/cligent";
@@ -1019,6 +1020,20 @@ export class CoreService {
     return seat.envFor(this.env);
   }
 
+  /** On a seat, write the seat account's own Git configuration naming
+   * the app's helper in its member mode (core-service-125, git-host-9):
+   * an agent's push from a project's work tree then carries the member's
+   * token. Nothing is written off a seat; a failure is logged, blocking
+   * nothing else, and no secret enters either file or the log. */
+  private async configureSeatGit(): Promise<void> {
+    if (!this.seat) return;
+    try {
+      await configureSeatGit({ home: this.home, env: this.env, runtime: this.hostRuntime, storePath: codeCredentialsPath(this.store.dir) });
+    } catch (error) {
+      console.error(`spex: the seat's Git configuration was not written: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
   /** On a seat, the member's credentials file refused or its malformed
    * entries (storage-44), as the file stands now. */
   private credentialDiagnostics(): StorageDiagnostic[] {
@@ -1430,6 +1445,9 @@ export class CoreService {
     // (core-service-126).
     service.seatEnvironment?.prepare();
     try {
+    // A seat's account names the app's helper in its member mode, for
+    // the Git its agents run (core-service-125, git-host-9).
+    await service.configureSeatGit();
     // Store construction already holds the exclusive home lease. Never
     // reclaim another live core's incomplete uploads before that boundary.
     await service.media.prepare();

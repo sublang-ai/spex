@@ -3003,6 +3003,13 @@ msgstr "不支持的动作类型或版本"
 msgid "unsupported format {format}; preserved unchanged"
 msgstr "不支持的格式 {format}；已原样保留"
 
+#. Storage diagnostic: a credentials file names a layout version that is no number, which is not repeated; the file is left as it is
+#. Storage diagnostic: a credentials file names a layout version that is no number, which is not repeated; the file is left as it is
+#: src/code-credentials.ts
+#: src/git-host.ts
+msgid "unsupported format; preserved unchanged"
+msgstr "不支持的格式；已原样保留"
+
 #. Storage diagnostic: the state root's own metadata file cannot be read
 #: src/store.ts
 msgid "unsupported migration metadata; original bytes preserved"
