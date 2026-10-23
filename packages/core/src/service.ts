@@ -1711,7 +1711,6 @@ export class CoreService {
   async stop(): Promise<void> {
     this.stopping = true;
     this.sessions.beginShutdown();
-<<<<<<< HEAD
     // The stop is bounded (core-service-39, DR-134): every active turn
     // is aborted as admission closes; once those turns have settled, or
     // ten seconds after the stop began, the agent processes still alive
@@ -1723,38 +1722,11 @@ export class CoreService {
       killMs: this.options.stop?.killMs ?? 5_000,
       agentProcesses: this.options.agentProcesses ?? (() => this.startedProcesses.pids()),
     });
-=======
-    this.approvals.stop();
-    // Every seat's relay ends; the seats stand in their file, reopened at
-    // the next start (DR-133).
-    this.places.stop();
-    for (const entry of this.browserPreparations.values()) entry.controller.abort();
-    await Promise.allSettled([...this.browserPreparations.values()].map(({done}) => done));
-    this.watcher?.close();
-    for (const watcher of this.sessionsWatchers.values()) watcher.close();
-    this.sessionsWatchers.clear();
-    for (const { watcher } of this.configWatchers.values()) watcher.close();
-    this.configWatchers.clear();
-    if (this.reloadTimer) clearTimeout(this.reloadTimer);
-    if (this.adoptTimer) clearTimeout(this.adoptTimer);
-    // A Space transport in flight is stopped; a local step finishes.
-    await this.space.stop();
-    // An environment's resolve or install finishes; nothing new starts.
-    await this.environments.stop();
-    await this.adoptScan;
-    if (this.ledgerTimer) clearTimeout(this.ledgerTimer);
-    // A draft compile cut here stays "running" on disk and reads as
-    // interrupted at the next start (playbook-library-59); its turns
-    // abort and are awaited so no Cligent outlives the core (DR-051).
-    this.authors.markStopping();
-    // Kill any in-flight compile child so shutdown never orphans slc.
-    for (const handles of this.standaloneCompiles.values()) for (const controller of handles) controller.abort();
-    // A disposal failure must not leave the endpoint or the store open
-    // (CORE-39): finish the shutdown, then report it to the host.
-    let failure: { error: unknown } | undefined;
->>>>>>> origin/main
     try {
       this.approvals.stop();
+      // Every seat's relay ends; the seats stand in their file, reopened at
+      // the next start (DR-133).
+      this.places.stop();
       for (const entry of this.browserPreparations.values()) entry.controller.abort();
       await bound.within(Promise.allSettled([...this.browserPreparations.values()].map(({done}) => done)));
       this.watcher?.close();
@@ -1800,26 +1772,13 @@ export class CoreService {
       // No draft is written once the authors have stopped; a scratch
       // home goes with its store, and the root lease is released.
       this.store.close();
+      // No run of this seat remains: the forms go back as the process
+      // started with them.
+      this.seatEnvironment?.restore();
       if (failure) throw failure.error;
     } finally {
       bound.clear();
     }
-<<<<<<< HEAD
-=======
-    await this.authors.stopAll();
-    await this.media.close();
-    for (const client of this.clients) client.socket.close();
-    await new Promise<void>((resolveClose) =>
-      this.wss ? this.wss.close(() => resolveClose()) : resolveClose(),
-    );
-    // No draft is written once the authors have stopped; a scratch
-    // home goes with its store.
-    this.store.close();
-    // No run of this seat remains: the forms go back as the process
-    // started with them.
-    this.seatEnvironment?.restore();
-    if (failure) throw failure.error;
->>>>>>> origin/main
   }
 
   // -- config ---------------------------------------------------------------
