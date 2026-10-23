@@ -430,6 +430,19 @@ export function signInAgain(): string {
 }
 
 /**
+ * The HTTP status Git printed for a transport the host answered with an
+ * error, where it names one and the push was not rejected as behind:
+ * read by the rows of space-15 that come after the host's own refusals,
+ * where it marks the host's error rather than Git's own — the one stopping
+ * its placement alone, the other the whole sync.
+ */
+export function hostErrorStatus(text: string): string | undefined {
+  const status = /returned error: (\d{3})|RPC failed; HTTP (\d{3})|HTTP (\d{3})/i.exec(text);
+  if (!status || /\[rejected\]|non-fast-forward|fetch first/i.test(text)) return undefined;
+  return status[1] ?? status[2] ?? status[3];
+}
+
+/**
  * Classify a failed transport to the Git host's own origin (space-15,
  * space-50): the host's display name in each message, a refusal carried
  * in the host's own words with nothing claimed beyond them, a failed
@@ -483,13 +496,13 @@ export function classifyHostTransportFailure(run: GitRun, host: string): GitFail
   }
   // An HTTP status no rule above reads is the host's own error, never
   // Git's words (space-15, DR-064); Git's own failures keep their lines.
-  const status = /returned error: (\d{3})|RPC failed; HTTP (\d{3})|HTTP (\d{3})/i.exec(text);
-  if (status && !/\[rejected\]|non-fast-forward|fetch first/i.test(text)) {
+  const status = hostErrorStatus(text);
+  if (status !== undefined) {
     return {
       cause: "git",
       message: i18n._({
         id: "{host} answered with an error (HTTP {status})",
-        values: { host, status: status[1] ?? status[2] ?? status[3] },
+        values: { host, status },
         comment: "A stopped transfer: the Git host answered with an HTTP error no other message reads; {host} is its display name, {status} the HTTP status Git printed",
       }),
       guidance: i18n._({

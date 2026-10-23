@@ -26,6 +26,7 @@ import {
 } from "./home.js";
 import { i18n } from "./i18n.js";
 import { canonicalOrigin, instanceFolder, instanceSegmentOf, isInstanceFolder, OriginRefused } from "./instance.js";
+import { type ConfigRun, LEGACY_ID_KEY, moveLegacyIds } from "./placements.js";
 import { gitEnvironment } from "./storage-git.js";
 
 export interface InstancesReceipt {
@@ -252,30 +253,39 @@ function gitIn(dir: string, args: string[], env: NodeJS.ProcessEnv): { ok: boole
   return { ok: !run.error && run.status === 0, stdout: run.stdout ?? "", stderr: run.stderr ?? (run.error?.message ?? "") };
 }
 
-/** The host's id a clone records beside its remote — which a join, a
- * creation or a check by a Spex wrote, the host's remote with it — and
- * the URL of the remote a clone before DR-127 synced through, `origin`;
- * each null where it has none. */
+/** The host's id a clone before DR-127 records at the top level of its
+ * Git configuration — which a join, a creation or a check by that Spex
+ * wrote, the host's remote with it — and the URL of the remote it
+ * synced through, `origin`; each null where it has none. */
 function cloneIdentity(dir: string, env: NodeJS.ProcessEnv): { id: string | null; url: string | null } {
   const value = (key: string): string | null => {
     const read = gitIn(dir, ["config", "--get", key], env);
     const text = read.ok ? read.stdout.trim() : "";
     return text.length > 0 ? text : null;
   };
-  return { id: value("spex.repositoryId"), url: value("remote.origin.url") };
+  return { id: value(LEGACY_ID_KEY), url: value("remote.origin.url") };
 }
 
 /** The host's remote takes the instance's folder's name: one still
  * named `origin` is renamed, its fetched `spex` and its upstream with it,
- * where no remote bears that name already. A rename Git refuses leaves
- * `origin`, through which the clone still syncs, and is reported. */
+ * where no remote bears that name already. The host's id and the core's
+ * creation mark the clone records at the top level, which a Spex before
+ * DR-127 recorded beside that remote, move into its section in the same
+ * step, first, so the rename carries them (storage-34); a restart after
+ * the rename moves them into the folder's remote. A rename Git refuses
+ * leaves `origin`, through which the clone still syncs, its id in its
+ * section, and is reported. */
 function nameRemoteBy(dir: string, folder: string, env: NodeJS.ProcessEnv): void {
   const read = gitIn(dir, ["config", "-z", "--get-regexp", "^remote\\..+\\.url$"], env);
   const names = read.ok ? read.stdout.split("\0").map((entry) => entry.split("\n", 1)[0]).filter((key) => key.startsWith("remote.") && key.endsWith(".url"))
     .map((key) => key.slice("remote.".length, -".url".length)) : [];
-  if (!names.includes("origin") || names.includes(folder)) return;
-  const renamed = gitIn(dir, ["remote", "rename", "origin", folder], env);
-  if (!renamed.ok) console.error(`spex: the remote of ${dir} keeps its name: ${renamed.stderr.trim()}`);
+  const run: ConfigRun = (args) => gitIn(dir, args, env);
+  const report = (): void => console.error(`spex: the host's id of ${dir} stays where it was recorded`);
+  if (names.includes("origin") && !names.includes(folder)) {
+    if (!moveLegacyIds(run, "origin")) report();
+    const renamed = gitIn(dir, ["remote", "rename", "origin", folder], env);
+    if (!renamed.ok) console.error(`spex: the remote of ${dir} keeps its name: ${renamed.stderr.trim()}`);
+  } else if (names.includes(folder) && !moveLegacyIds(run, folder)) report();
 }
 
 /** What the migration does with each clone (DR-127): your own group's

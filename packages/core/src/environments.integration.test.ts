@@ -865,10 +865,11 @@ test("environments-33 through real cores: a skill your own group requests by a p
   const refusals: [string, RegExp][] = [
     [".", /is not a folder below your own group's clone's root/],
     ["../elsewhere", /is not a relative folder inside the working folder or your own group's clone/],
-    ...["config", "sessions", "intents", "authoring", "packages", "skills", "local", ".git", ".spex-uploads", "spex.yaml", "spex.lock", "project.json", ".gitignore", ".gitattributes", ".spex-apply.json", ".lockfoo"]
+    ...["config", "sessions", "intents", "authoring", "placements", "packages", "skills", "local", ".git", ".spex-uploads", "spex.yaml", "spex.lock", "project.json", ".gitignore", ".gitattributes", ".spex-apply.json", ".lockfoo"]
       .map((first): [string, RegExp] => [`${first}/notes`, kept]),
     // Compared without case after compatibility normalization.
     ["Sessions/notes", kept],
+    ["Placements/notes", kept],
     ["\u017fkills/notes", kept],
     ["drafts.tmp", /the clone's Git rules ignore/],
     ["linked", /is reached through a link/],

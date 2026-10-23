@@ -19,7 +19,7 @@ import { createSessionStore } from "@sublang/playbook/session-store";
 import { seedHistorySession } from "./testing/demo.js";
 import { Home } from "./home.js";
 import type { Command } from "./protocol.js";
-import { clonePath, createSpaceHarness, OWN, OWN_KEY, ownClone, prefsOf, repositoryOf, rowsOf } from "./testing/space-harness.js";
+import { clonePath, createSpaceHarness, OWN, OWN_KEY, ownClone, placementOf, prefsOf, repositoryOf, rowsOf } from "./testing/space-harness.js";
 
 const fixture = createSpaceHarness();
 const { scratch, git, bareRepo, gitFolder, addFolder, sleepingSsh, holdingGit, sleep, sleeperPid, hangingCompileSpawner, COMPILE_INPUT, startHome, runTurn, peerClone, peerPush, turnRecords } = fixture;
@@ -116,6 +116,10 @@ test("space-37: setting a remote turns a repository reachable, refuses malformed
   const bare = bareRepo();
   const set = await home.client.expectOk("space.remote.set", { repository: key, url: bare });
   assert.equal(repositoryOf(set, key).state, "reachable");
+  // A remote the reader named is the path placement: no instance, read
+  // as a report reads it (space-30, space-15).
+  const line = placementOf(repositoryOf(set, key), null);
+  assert.deepEqual([repositoryOf(set, key).placements.length, line.path, line.id, line.attached, line.state], [1, bare, null, true, "reachable"]);
   assert.equal(repositoryOf(set, OWN_KEY).state, "local-only", "only that repository");
   assert.equal(git(clone, "remote", "get-url", "origin"), bare);
   for (const [url, pattern] of [["", /malformed/], ["  ", /malformed/], ["git@example.com:a b.git", /malformed/], ["https://user:secret@example.com/x.git", /credential/]] as const) {
@@ -133,10 +137,11 @@ test("space-37: setting a remote turns a repository reachable, refuses malformed
   assert.equal(git(clone, "remote", "get-url", "origin"), other);
   const cleared = repositoryOf(await home.client.expectOk("space.remote.set", { repository: key, url: null }), key);
   assert.equal(cleared.state, "local-only");
+  assert.deepEqual(cleared.placements, []);
   await home.client.expectError("space.sync", { repository: key }, "invalid_request", /^Pick a group first$/);
 });
 
-test("space-37: the first sync pushes spex to the empty host, sets the upstream and records sync:<repository>:last", async (t) => {
+test("space-37, space-22, storage-5: the first sync pushes spex to the empty host, sets the upstream and records sync:<repository>:<placement>:last under its path placement origin; naming another path placement removes it", async (t) => {
   const home = await startHome("first-push");
   t.after(() => home.stop());
   const { key, clone } = await addFolder(home, home.projectDir);
@@ -151,12 +156,12 @@ test("space-37: the first sync pushes spex to the empty host, sets the upstream 
   assert.equal(git(clone, "config", "--get", "branch.spex.remote"), "origin");
   assert.equal(done.branch?.ahead, 0);
   assert.equal(done.branch?.behind, 0);
-  const last = prefsOf(home.dataDir)[`sync:${key}:last`] as { at: number; sent: number; received: number };
+  const last = prefsOf(home.dataDir)[`sync:${key}:origin:last`] as { at: number; sent: number; received: number };
   assert.equal(typeof last.at, "number");
   assert.equal(last.sent, done.sync.phase === "done" ? done.sync.sent : -1);
   assert.deepEqual(done.lastSync, last);
   assert.deepEqual(done.local, []);
-  assert.equal(prefsOf(home.dataDir)[`sync:${OWN_KEY}:last`], undefined, "only the synced repository records a sync");
+  assert.deepEqual(Object.keys(prefsOf(home.dataDir)).filter((name) => name.startsWith("sync:")), [`sync:${key}:origin:last`], "only the synced placement records a sync");
   assert.equal(git(clone, "status", "--porcelain"), "", "nothing of the sync stands uncommitted");
   const again = await home.client.settle("space.sync", { repository: key });
   assert.ok(again.sync.phase === "done" && !again.sync.pushed && again.sync.sent === 0 && again.sync.received === 0, JSON.stringify(again.sync));
@@ -172,7 +177,7 @@ test("space-37: the first sync pushes spex to the empty host, sets the upstream 
   const moved = repositoryOf(await restarted.client.expectOk("space.remote.set", { repository: key, url: bareRepo() }), key);
   assert.equal(moved.branch?.checkedAt, null);
   assert.equal(moved.lastSync, null);
-  assert.equal(prefsOf(home.dataDir)[`sync:${key}:last`], undefined);
+  assert.equal(prefsOf(home.dataDir)[`sync:${key}:origin:last`], undefined);
   // A fresh home's joining sync against an empty host completes as a first push.
   const joiner = await startHome("joiner");
   t.after(() => joiner.stop());

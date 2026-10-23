@@ -104,6 +104,11 @@ msgstr "{command} 失败：{output}"
 msgid "{count, plural, one {# record has} other {# records have}} not reached the host and would be lost; confirm to remove anyway"
 msgstr "{count, plural, other {# 条记录}}尚未送达托管平台，移除将丢失这些记录；仍要移除请再次确认"
 
+#. A stopped Leave: that many records, of the placement being removed or of this device, are held by none of the spex repository's other placements, as this device last fetched or pushed them; a second confirmation removes it anyway
+#: src/space.ts
+msgid "{count, plural, one {# record has} other {# records have}} reached no other placement"
+msgstr "{count, plural, other {# 条记录}}尚未到达其他任何放置"
+
 #. A session unit's detail: how many turns it holds
 #: src/space.ts
 msgid "{count, plural, one {# turn} other {# turns}}"
@@ -198,6 +203,11 @@ msgstr "{host} 要求稍候片刻"
 msgid "{host} holds no default branch for it yet"
 msgstr "{host} 上它还没有默认分支"
 
+#. A stopped sync: a placement of a spex repository is dropped, which moves its clone to the path of its next placement, at the instance {host} (its display name), which the core has not read since it started
+#: src/space.ts
+msgid "{host} is not read yet, so the clone cannot move to its path there"
+msgstr "尚未读取 {host}，克隆无法移到它在那里的路径"
+
 #. Refusal naming a group the Git host's last read did not list; {group} is the group's id as sent, {host} the host's display name
 #: src/space-groups.ts
 msgid "{host} listed no group {group}"
@@ -273,6 +283,26 @@ msgstr "{name} 在 {path} 中已更改；请重新解析后再安装"
 msgid "{name} has no folder on this device"
 msgstr "{name} 在本设备上没有文件夹"
 
+#. Refusal of Place or Attach: the spex repository is a group's own (or, for Place, your own group's), which stays at its one instance; {name} is the repository's name
+#: src/space.ts
+msgid "{name} holds a group's records; only a project's are placed at another instance"
+msgstr "{name} 存放的是群组的记录；只有项目的记录才能放置到另一个实例"
+
+#. Refusal of Leave: the spex repository is a group's own or your own group's, whose placements Leave does not remove; {name} is the repository's name
+#: src/space.ts
+msgid "{name} holds a group's records; only a project's are removed from an instance"
+msgstr "{name} 存放的是群组的记录；只有项目的记录才能从实例移除"
+
+#. Refusal: the command names a placement — an instance, or the remote the reader named — that the spex repository {name} does not hold
+#: src/space.ts
+msgid "{name} holds no such placement"
+msgstr "{name} 没有这个放置"
+
+#. Refusal of a join: a placement file of the spex repository {repository}, on this device, names the spex repository {name} listed at an instance; it stands as a line of {repository}'s row, to attach there, not as a repository of its own
+#: src/space.ts
+msgid "{name} is a placement of {repository} not on this device yet"
+msgstr "{name} 是 {repository} 尚未在本设备上的放置"
+
 #. Refusal: another host holds this project's conversation
 #: src/session.ts
 msgid "{name} is in use elsewhere in {project}"
@@ -298,6 +328,16 @@ msgstr "{name} 已在托管平台上"
 #: src/space.ts
 msgid "{name} is on this device already"
 msgstr "{name} 已在本设备上"
+
+#. Refusal of a pick, Place or Attach that joins the spex repository {name} listed at an instance, already held on this device by the spex repository {repository}, which syncs with it
+#: src/space.ts
+msgid "{name} is on this device already, as a placement of {repository}"
+msgstr "{name} 已作为 {repository} 的放置在本设备上"
+
+#. Refusal of Place or Attach: the spex repository already has a placement at that instance; {name} is the repository's name, {host} the instance's display name
+#: src/space.ts
+msgid "{name} is placed at {host} already"
+msgstr "{name} 已放置在 {host}"
 
 #. Refusal: a request by path needs the repository's working folder here
 #: src/environments.ts
@@ -1148,6 +1188,11 @@ msgstr "配置无效：{errors}"
 msgid "config must be a YAML mapping"
 msgstr "配置必须是 YAML 映射"
 
+#. Guidance under a stopped Leave: confirming again removes the placement whatever it holds
+#: src/space.ts
+msgid "Confirm to remove it anyway."
+msgstr "仍要移除请再次确认。"
+
 #. A stopped transfer's message; {host} is the remote's host
 #. A stopped transfer's message; {host} is the remote's host
 #. A stopped transfer's message; {host} is the remote's host
@@ -1175,6 +1220,11 @@ msgstr "记录 {seq} 之后的对话记录已损坏；该草稿除“删除”�
 #: src/space.ts
 msgid "deleted"
 msgstr "已删除"
+
+#. Storage diagnostic: a placement file under placements/ holds something other than its three lines, so it names no placement
+#: src/placements.ts
+msgid "does not read as format: 1, instance and id, one line each"
+msgstr "无法按 format: 1、instance 与 id 各占一行读取"
 
 #. Refusal: a draft with that id is already on this device
 #: src/authoring.ts
@@ -1649,6 +1699,11 @@ msgstr "条目 ID 前缀“{prefix}”与文件名“{basename}”不一致"
 msgid "items under unexpected section \"{section}\""
 msgstr "规约条目位于非预期的章节“{section}”下"
 
+#. Storage diagnostic: a placement file under placements/ is named for another instance than the one it records, so it names no placement
+#: src/placements.ts
+msgid "its name is not the folder of the instance it names"
+msgstr "文件名不是其所记实例的文件夹名"
+
 #. Why a state-root lock cannot be verified; the path stays as it is
 #: src/root-lease.ts
 msgid "its retired path {retired} is already occupied"
@@ -1811,6 +1866,11 @@ msgstr "已不再与你共享"
 msgid "no one"
 msgstr "无人"
 
+#. Refusal of Attach: none of the spex repository's placement files names a spex repository that the instance lists for this account; {name} is the repository's name, {host} the instance's display name
+#: src/space.ts
+msgid "No placement file of {name} names a spex repository {host} lists"
+msgstr "{name} 的放置文件中没有 {host} 列出的 spex 仓库"
+
 #. Refusal: no project of this id is registered
 #. Refusal: no project of this id is registered
 #: src/service.ts
@@ -1874,6 +1934,11 @@ msgstr "本设备上没有 spex 仓库 {key}"
 #: src/authoring.ts
 msgid "Normalize"
 msgstr "规范化"
+
+#. Storage diagnostic: the clone's placements/ is a file or a link, so no placement file in it is read
+#: src/placements.ts
+msgid "not a folder of placement files"
+msgstr "不是存放放置文件的文件夹"
 
 #. The Git host found nothing a write named, and gave no words of its own; {host} is its display name
 #: src/space-groups.ts
@@ -1993,6 +2058,11 @@ msgstr "路径解析后位于项目之外"
 #: src/space.ts
 msgid "Pick a group first"
 msgstr "请先选择一个群组"
+
+#. Refusal of Place: the person may not manage the members of every placement the spex repository holds, and placing it shares its records with more people; {name} is the repository's name
+#: src/space.ts
+msgid "Placing {name} elsewhere needs the right to manage the members of each of its placements"
+msgstr "要将 {name} 放置到别处，你需要有权管理它每个放置的成员"
 
 #. One settings drift: a stored playbook left the config
 #: src/session.ts
@@ -2177,6 +2247,11 @@ msgstr "发布已停止：{cause}"
 msgid "Read and accept the server's contract before opening a seat"
 msgstr "请先阅读并接受服务器的约定，再打开席位"
 
+#. Refusal of Attach until the reader has seen the privacy notice for that placement: every record reaches its members; {name} is the spex repository's name at that instance
+#: src/space.ts
+msgid "Read the sharing notice before attaching {name}"
+msgstr "关联 {name} 之前，请先阅读共享说明"
+
 #. Refusal of a pick joining a spex repository with other members until the reader has seen the privacy notice
 #: src/space.ts
 msgid "Read the sharing notice before joining {name}"
@@ -2186,6 +2261,16 @@ msgstr "加入 {name} 之前，请先阅读共享说明"
 #: src/space.ts
 msgid "Read the sharing notice before the first sync of {name}"
 msgstr "首次同步 {name} 之前，请先阅读共享说明"
+
+#. A stopped Leave: the placement being removed, at the instance {host} (its display name), could not be read, so records others pushed there since this device's last sync with it would not reach this device; a second confirmation removes it anyway
+#: src/space.ts
+msgid "Records pushed to {host} since the last sync may be left behind"
+msgstr "自上次同步以来推送到 {host} 的记录可能会被遗漏"
+
+#. Guidance where the core must read an instance before a spex repository's clone can move to its path there
+#: src/space.ts
+msgid "Refresh, then Retry."
+msgstr "请刷新，然后重试。"
 
 #. A stopped save's message: a staged file belongs to a family the home never shares; {leak} is its path
 #: src/space.ts
@@ -2483,6 +2568,11 @@ msgstr "状态根目录 {dir} 在 {lock} 处的锁无法核实：{reason}；请�
 #: src/space.ts
 msgid "Still kept under {host}: {names}"
 msgstr "仍位于 {host} 之下：{names}"
+
+#. Refusal of Forget: spex repositories kept under another instance that are still placed at this one too, no signed-in instance listing that placement; {host} is the instance's display name, {names} the repositories' names as a list
+#: src/space.ts
+msgid "Still placed at {host}: {names}"
+msgstr "仍放置在 {host}：{names}"
 
 #. A stopped step's message: the reader stopped it while the Git host's rate limit held its call; {host} is the host's display name
 #: src/space.ts

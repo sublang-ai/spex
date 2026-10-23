@@ -35,7 +35,8 @@ import {
 } from "./app-storage.js";
 import { occupied } from "./clone-moves.js";
 import { readJsonFile, StorageFormatError, VersionConflictError, writeApplicationFile } from "./files.js";
-import { cloneRemoteName, defaultOwnName, Home, REMOTE_URL_KEYS, remoteNamesIn, repositoryNameFor, splitKey, WORKSPACE_DEPTH } from "./home.js";
+import { defaultOwnName, Home, repositoryNameFor, splitKey, WORKSPACE_DEPTH } from "./home.js";
+import { filedIn, formerPlacementPrefKey, PLACEMENT_PREF_KINDS, placementPrefKey, readPlacementFiles, readPlacements, type PlacementPrefKind } from "./placements.js";
 import { folderRemote, needsGroupsMigration, migrateFormerHome } from "./migrate-home.js";
 import { needsBoundedSessionImport, stageBoundedHomeSessions, finishBoundedHomeSessions } from "./migrate-bounded-sessions.js";
 import { deferredMoves, migrateInstances, needsInstancesMigration, settleDeferred, type DeferredMove } from "./migrate-instances.js";
@@ -420,6 +421,22 @@ function usageTotals(entries: UsageEntry[]): UsageTotals {
 /** The home's preference file (storage-5). */
 export function prefsFileOf(dir: string): string { return join(dir, "local", "prefs.json"); }
 
+/** What a Spex before DR-128 recorded for a repository, one record per
+ * kind, moved under its placement `name` where that holds none of its
+ * own, the former keys leaving (storage-5); whether anything changed. */
+function adoptFormerPlacementPrefs(prefs: Map<string, unknown>, key: string, name: string): boolean {
+  let changed = false;
+  for (const kind of PLACEMENT_PREF_KINDS) {
+    const former = formerPlacementPrefKey(key, kind);
+    if (!prefs.has(former)) continue;
+    const own = placementPrefKey(key, name, kind);
+    if (!prefs.has(own)) prefs.set(own, prefs.get(former));
+    prefs.delete(former);
+    changed = true;
+  }
+  return changed;
+}
+
 /** The rebuildable forge cache, on this device alone (storage-1). */
 function forgeCacheFileOf(dir: string): string { return join(dir, "local", "forge-cache.json"); }
 
@@ -665,14 +682,17 @@ export class Store {
     catch (error) { console.error(`spex: ${key} was not prepared: ${error instanceof Error ? error.message : String(error)}`); return false; }
   }
 
-  /** The name of the remote a clone syncs with (DR-127), as its Git
-   * configuration holds it now; none for a folder that is no repository
-   * of its own yet, or whose configuration Git cannot read. */
+  /** The name of a clone's first placement's remote (storage-34,
+   * storage-31), as its Git configuration holds it now; none for a
+   * folder that is no repository of its own yet, or whose configuration
+   * Git cannot read. */
   private remoteNameOf(dir: string, key: string): string | null {
     if (!existsSync(join(dir, ".git"))) return null;
-    const run = spawnSync("git", ["-C", dir, "config", "-z", "--get-regexp", REMOTE_URL_KEYS], { env: gitEnvironment(this.env), stdio: ["ignore", "pipe", "ignore"], timeout: 10_000 });
-    if (run.error || run.status !== 0) return null;
-    return cloneRemoteName(key, remoteNamesIn(run.stdout.toString("utf8")));
+    const placements = readPlacements((args) => {
+      const run = spawnSync("git", ["-C", dir, ...args], { env: gitEnvironment(this.env), stdio: ["ignore", "pipe", "ignore"], timeout: 10_000 });
+      return { ok: !run.error && run.status === 0, stdout: run.stdout?.toString("utf8") ?? "" };
+    }, key, this.homeFile, this.deferred, filedIn(dir), dir);
+    return placements[0]?.name ?? null;
   }
 
   /** A clone's instance (storage-31), its remote's name as `remoteName`
@@ -1714,6 +1734,9 @@ export class Store {
       ...(this.homeProblem ? [this.homeProblem] : []),
       ...this.readIntents().problems,
       ...repositories.flatMap((repository) => this.readProjectFile(repository).problem ?? []),
+      // A placement file that will not read names no placement, blocking
+      // nothing (storage-12, storage-41).
+      ...repositories.flatMap((repository) => readPlacementFiles(repository.dir).problems.map((problem) => ({ file: join(repository.dir, problem.file), reason: problem.reason, blocking: false }))),
       ...(this.prefsProblem ? [this.prefsProblem] : []),
       ...(this.cacheProblem ? [this.cacheProblem] : []),
     ];
@@ -2407,6 +2430,77 @@ export class Store {
    * of records naming things that no longer stand (space-54). */
   prefKeys(prefix: string): string[] {
     return [...this.currentPrefs().keys()].filter((key) => key.startsWith(prefix));
+  }
+
+  /** One of a placement's records in this device's preferences
+   * (storage-5): under its remote's name, else, for the clone's first
+   * placement (`first`), what a Spex before DR-128 recorded for the
+   * repository. */
+  placementPref<T>(key: string, name: string, kind: PlacementPrefKind, first: boolean): T | undefined {
+    const prefs = this.currentPrefs();
+    const own = placementPrefKey(key, name, kind);
+    if (prefs.has(own)) return prefs.get(own) as T;
+    const former = formerPlacementPrefKey(key, kind);
+    return first && prefs.has(former) ? (prefs.get(former) as T) : undefined;
+  }
+
+  /** Record one of a placement's records (storage-5), in one step with
+   * the read: for the clone's first placement (`first`), what a Spex
+   * before DR-128 recorded for the repository becomes its own first —
+   * the record written replacing its kind, the other moved under the
+   * placement's name where none stands there — and the former keys
+   * leave, so no later first placement reads them. */
+  setPlacementPref(key: string, name: string, kind: PlacementPrefKind, value: unknown, first: boolean): void {
+    this.currentPrefs();
+    if (this.prefsProblem) throw new StorageFormatError(this.prefsProblem.file, this.prefsProblem.reason);
+    this.changePrefs((prefs) => {
+      if (first) adoptFormerPlacementPrefs(prefs, key, name);
+      prefs.set(placementPrefKey(key, name, kind), value);
+      return true;
+    });
+  }
+
+  /** What a Spex before DR-128 recorded for a repository made its
+   * current first placement's own, `name` (storage-5), as another
+   * placement comes before it, so the record stays with the placement
+   * it was read as. */
+  adoptFormerPlacementPrefs(key: string, name: string): void {
+    this.changePrefs((prefs) => adoptFormerPlacementPrefs(prefs, key, name));
+  }
+
+  /** A placement's records follow its remote's rename (storage-5): in
+   * one step, re-keyed from its former name to `to`, nothing left under
+   * either but what the placement recorded. */
+  renamePlacementPrefs(key: string, from: string, to: string): void {
+    if (from === to) return;
+    this.changePrefs((prefs) => {
+      let changed = false;
+      for (const kind of PLACEMENT_PREF_KINDS) {
+        const was = placementPrefKey(key, from, kind);
+        const next = placementPrefKey(key, to, kind);
+        if (prefs.has(was)) {
+          prefs.set(next, prefs.get(was));
+          prefs.delete(was);
+          changed = true;
+        } else if (prefs.delete(next)) changed = true;
+      }
+      return changed;
+    });
+  }
+
+  /** A placement's records leave with its remote (storage-5, space-5):
+   * in one step, those under its name, and, for the clone's first
+   * placement (`first`), what a Spex before DR-128 recorded for the
+   * repository; `kinds` limits them. */
+  dropPlacementPrefs(key: string, name: string, first: boolean, kinds: readonly PlacementPrefKind[] = PLACEMENT_PREF_KINDS): void {
+    this.changePrefs((prefs) => {
+      let changed = false;
+      for (const kind of kinds) {
+        if (prefs.delete(placementPrefKey(key, name, kind))) changed = true;
+        if (first && prefs.delete(formerPlacementPrefKey(key, kind))) changed = true;
+      }
+      return changed;
+    });
   }
 
   /** A session's own tuning (core-service-100, DR-067): what its

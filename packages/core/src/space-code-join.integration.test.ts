@@ -4,23 +4,27 @@
 // Code joining runs the real core, broker and credential helper against
 // Git's smart-HTTP backend, with no machine credentials or live host; a
 // home signed in to two stand-in instances has a project's code brokered
-// and read by its project's instance (projects-37, DR-127).
+// and read by its project's instance, or by the instance of another of
+// its placements whose Git origin the code lies under (projects-37,
+// DR-127, DR-128).
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { GIT_CREDENTIAL_FILE_ENV } from "./git-credential.js";
+import { canonicalOrigin } from "./instance.js";
+import { encodePlacementFile, PLACEMENTS_DIR } from "./placements.js";
 import { SpaceGit, type GitRunOptions } from "./space-git.js";
 import { startGitHttpHost } from "./testing/git-http-host.js";
 import { holdingFetch } from "./testing/holding-fetch.js";
-import { clonePath, createSpaceHarness, hostKey, instanceOf, repositoryOf, stringsOf } from "./testing/space-harness.js";
+import { clonePath, createSpaceHarness, hostFolder, hostKey, instanceOf, repositoryOf, stringsOf } from "./testing/space-harness.js";
 import { type StandinHost } from "./testing/standin-host.js";
 import type { GroupsState, ServerMessage } from "./protocol.js";
 import type { Store } from "./store.js";
 
 const fixture = createSpaceHarness();
-const { scratch, git, gitFolder, addFolder, startHome, startHost, signIn, signOut } = fixture;
+const { scratch, git, gitFolder, addFolder, startHome, startHost, signIn, signOut, peerClone, peerPush } = fixture;
 test.after(() => fixture.dispose());
 
 const HOST_OWN = "ada/ada-spex";
@@ -297,7 +301,9 @@ test("projects-39, projects-37, space-83, space-1, space-63, space-15: signed in
   assert.deepEqual([joined.state, joined.folder, joined.sync.phase], ["reachable", alphaFolder, "idle"], JSON.stringify(joined.sync));
   assert.equal(git(alphaFolder, "rev-parse", "HEAD"), git(firstCode.bare, "rev-parse", "main"));
   assert.deepEqual(codeChildren, [{ remote: firstCode.remote, credential: true }], "the code child presents the brokered helper");
-  assert.deepEqual([credentialRequests(first) - before[0], credentialRequests(second) - before[1]], [2, 0], "the first brokers the records and the code, the second nothing");
+  // Git's own number of helper calls varies by its version (2.55 asks once more), so the first's count is a floor.
+  const brokered = [credentialRequests(first) - before[0], credentialRequests(second) - before[1]];
+  assert.ok(brokered[0] >= 2 && brokered[1] === 0, `the first brokers the records and the code, the second nothing: ${JSON.stringify(brokered)}`);
   const fetched = first.script.transportCredentials.filter((entry) => entry.path.startsWith(`${codePath(firstCode.remote)}/`));
   assert.ok(fetched.length > 0 && fetched.every((entry) => entry.instance === first.url), JSON.stringify(fetched));
 
@@ -332,6 +338,50 @@ test("projects-39, projects-37, space-83, space-1, space-63, space-15: signed in
   assert.deepEqual(rowOf(after, cKey), ["reachable", first.url, "Code on a remote"]);
   assert.deepEqual(rowOf(after, alphaKey), ["reachable", first.url, "Code on this instance"]);
   assert.deepEqual(leaks([first, second], [...broadcasts(home.client.messages), after]), []);
+});
+
+test("projects-41, projects-37, space-63, storage-36: signed in to two instances on Git backends of their own, the first listing a project's spex repository whose placement file names a placement at the second and whose code is private at the second's Git origin, Join at the first with this device's Git holding no credential clones the code with a credential the second brokered, the first's broker asked for the records alone", async (t) => {
+  const { first, second, home } = await twoInstances("code-by-placement");
+  t.after(() => home.stop());
+  // The project's code is private at the second; its spex repository
+  // lies in the first's `acme` and is placed at the second's too, its
+  // file there committed by another device (storage-36).
+  const code = privateCode(second, "d-code");
+  const records = first.script.addRepository({ group: "acme", name: "d-spex", project: { format: 1, name: "d", remote: code.remote } });
+  const there = second.script.addRepository({ group: "acme", name: "d-spex" });
+  await peerPush(peerClone(records.bare), (dir) => {
+    mkdirSync(join(dir, PLACEMENTS_DIR), { recursive: true });
+    writeFileSync(join(dir, PLACEMENTS_DIR, `${hostFolder(second)}.yaml`), encodePlacementFile(canonicalOrigin(second.url), there.id));
+  });
+  const key = hostKey(first, "acme/d-spex");
+  const codePath = new URL(code.remote).pathname;
+  await readEach(home);
+
+  const codeChildren: boolean[] = [];
+  const run = SpaceGit.prototype.run;
+  t.mock.method(SpaceGit.prototype, "run", function (this: SpaceGit, args: string[], options: GitRunOptions = {}) {
+    if (args[0] === "clone" && args.includes(code.remote)) codeChildren.push(options.credential !== undefined);
+    return run.call(this, args, options);
+  });
+
+  // The join's records come through the first, the instance it joins
+  // at; its code through the second, the instance of the placement its
+  // file names whose Git origin the code lies under (projects-37).
+  const before = [credentialRequests(first), credentialRequests(second)];
+  const folder = join(mkdtempSync(join(scratch, "d-code-")), "code");
+  const mark = home.client.mark();
+  await home.client.expectOk("space.join", { instance: first.url, hostId: records.id, folder });
+  const joined = await home.client.waitRepository(mark, key, (repository) => repository.folder !== null || repository.sync.phase === "stopped", 30_000);
+  assert.deepEqual([joined.folder, joined.sync.phase, joined.instance], [folder, "idle", first.url], JSON.stringify(joined.sync));
+  assert.equal(git(folder, "rev-parse", "HEAD"), git(code.bare, "rev-parse", "main"), "the code is cloned");
+  assert.ok(existsSync(join(clonePath(home.dataDir, key), PLACEMENTS_DIR, `${hostFolder(second)}.yaml`)), "the clone holds the file naming the second");
+  assert.deepEqual(codeChildren, [true], "the code child presents the brokered helper");
+  const brokeredApart = [credentialRequests(first) - before[0], credentialRequests(second) - before[1]];
+  assert.ok(brokeredApart[0] >= 1 && brokeredApart[1] >= 1, `the first brokers the records, the second the code: ${JSON.stringify(brokeredApart)}`);
+  const fetched = second.script.transportCredentials.filter((entry) => entry.path.startsWith(`${codePath}/`));
+  assert.ok(fetched.length > 0 && fetched.every((entry) => entry.instance === second.url), JSON.stringify(fetched));
+  assert.ok(!first.script.transportCredentials.some((entry) => entry.path.startsWith(`${codePath}/`)), "the first's credential reached no code");
+  assert.ok((await home.client.expectOk("project.list", {})).some((project) => project.id === key && project.path === folder), "the folder is paired");
 });
 
 test("projects-38, projects-7, projects-36: signed in to two instances on Git backends of their own, the first the default, a project at the first reads its forge guidance and project.status by the first's reported Git origin — code at the first's on this instance, at the second's on a remote, at another origin named with its credential-free URL — and a local-only project by the default instance's; after a restart with the second signed out and the first read anew, code at another origin reads on a remote with no URL", async (t) => {

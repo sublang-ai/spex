@@ -78,7 +78,7 @@ test("parseCommand accepts the space commands and their optional fields", () => 
   assert.ok(!parseCommand({ type: "space.init", id: "s2" }).ok);
 });
 
-test("space-29, space-82: a space command names the instance it acts at by its origin, a group with its instance, and a sign-in the URL as the reader gave it", () => {
+test("space-29, space-82, space-98, space-99: a space command names the instance it acts at by its origin, a group with its instance, a placement left or attached by its instance — an Attach with whether its notice was seen — and a sign-in the URL as the reader gave it", () => {
   const instance = "https://spex.pub";
   const repository = "@spex.pub/acme/a-spex";
   const named = [
@@ -95,19 +95,31 @@ test("space-29, space-82: a space command names the instance it acts at by its o
     { type: "space.unshare", id: "i11", instance, group: "7", login: "bob" },
     { type: "space.members", id: "i12", repository },
     { type: "space.forget", id: "i13", instance },
+    { type: "space.place", id: "i14", repository, choice: { kind: "join", instance: "https://second.example", hostId: "7" }, noticed: true },
+    { type: "space.place", id: "i15", repository, choice: { kind: "create", instance: "https://second.example", groupId: null, name: "a" } },
+    { type: "space.leave", id: "i16", repository, instance: "https://second.example" },
+    { type: "space.leave", id: "i17", repository, instance, confirmed: true },
+    { type: "space.attach", id: "i18", repository, instance: "https://second.example", noticed: true },
   ];
   for (const command of named) {
     const parsed = parseCommand(command);
     assert.ok(parsed.ok, `${command.type}: ${parsed.ok ? "" : parsed.error}`);
   }
   // A command acting at an instance names it, and a sign-in its URL:
-  // none stands in for a default.
+  // none stands in for a default; an Attach says whether its notice was
+  // seen.
   for (const command of [
     { type: "space.signin.start", id: "d1" },
     { type: "space.signin.start", id: "d2", url: "" },
     { type: "space.signout", id: "d3" },
     { type: "space.pick", id: "d4", repository: "ada/a-spex", choice: { kind: "join", hostId: "42" } },
     { type: "space.pick", id: "d5", repository: "ada/a-spex", choice: { kind: "create", groupId: null, name: "a" } },
+    { type: "space.place", id: "d10", repository, choice: { kind: "join", hostId: "42" } },
+    { type: "space.place", id: "d11", repository, choice: { kind: "create", groupId: null, name: "a" } },
+    { type: "space.leave", id: "d12", repository },
+    { type: "space.leave", id: "d13", repository, instance: "", confirmed: true },
+    { type: "space.attach", id: "d14", repository, noticed: true },
+    { type: "space.attach", id: "d15", repository, instance },
     { type: "space.join", id: "d6", hostId: "42" },
     { type: "space.group.create", id: "d7", name: "Acme", path: "acme", parent: null },
     { type: "space.group.rename", id: "d8", group: "7", name: "Acme Corp" },
@@ -144,11 +156,40 @@ test("space-29, space-82: a space command names the instance it acts at by its o
     { type: "space.join", id: "r2", instance: 7, hostId: "42" },
     { type: "space.signin.start", id: "r3", url: null },
     { type: "space.refresh", id: "r4", instance },
-    { type: "space.repository.move", id: "r5", repository, groupId: null, instance },
     // Forget names the instance it removes, always (space-82).
     { type: "space.forget", id: "r6" },
     { type: "space.forget", id: "r7", instance: "" },
     { type: "space.forget", id: "r8", instance, repository },
+  ]) {
+    assert.ok(!parseCommand(command).ok, JSON.stringify(command));
+  }
+});
+
+test("space-29: a sync, a diff and a move name the placement they are for, an instance's origin or null for the path placement, or omit it", () => {
+  const instance = "https://spex.pub";
+  const repository = "@spex.pub/acme/a-spex";
+  for (const command of [
+    { type: "space.sync", id: "p1", repository, placement: instance, noticed: true },
+    { type: "space.sync", id: "p2", repository, placement: null, choices: { "sessions/a": "remote" } },
+    { type: "space.sync", id: "p3", repository, placement: instance, join: true },
+    { type: "space.sync", id: "p4", repository },
+    { type: "space.diff", id: "p5", repository, unit: ".gitignore", path: ".gitignore", side: "remote", placement: instance },
+    { type: "space.diff", id: "p6", repository, unit: ".gitignore", path: ".gitignore", side: "remote", placement: null },
+    { type: "space.repository.move", id: "p7", repository, instance, groupId: "7" },
+    { type: "space.repository.move", id: "p8", repository, groupId: null },
+  ]) {
+    const parsed = parseCommand(command);
+    assert.ok(parsed.ok, `${command.type}: ${parsed.ok ? "" : parsed.error}`);
+    if (parsed.ok && "placement" in command) assert.equal((parsed.command as { placement?: unknown }).placement, command.placement, "the placement reaches the core as sent");
+    if (parsed.ok && "instance" in command) assert.equal((parsed.command as { instance?: unknown }).instance, command.instance, "the placement's instance reaches the core as sent");
+  }
+  // A placement is an origin, never blank, never another kind.
+  for (const command of [
+    { type: "space.sync", id: "q1", repository, placement: "" },
+    { type: "space.sync", id: "q2", repository, placement: 7 },
+    { type: "space.diff", id: "q3", repository, unit: ".gitignore", path: ".gitignore", side: "remote", placement: "" },
+    { type: "space.repository.move", id: "q4", repository, instance: "", groupId: null },
+    { type: "space.repository.move", id: "q5", repository, instance: null, groupId: null },
   ]) {
     assert.ok(!parseCommand(command).ok, JSON.stringify(command));
   }

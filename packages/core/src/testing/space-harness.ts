@@ -4,6 +4,8 @@
 // Real Groups integration fixtures; each file owns its scratch and cores.
 
 import assert from "node:assert/strict";
+import { orderRemotes, remoteOrderOf } from "../home.js";
+import { spawnSync as spawnSyncForRemotes } from "node:child_process";
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -11,13 +13,15 @@ import { tmpdir } from "node:os";
 import { basename, join, relative } from "node:path";
 import { WebSocket } from "ws";
 import { CoreService, type CoreServiceOptions } from "../service.js";
+import type { SpaceStepEvent } from "../space.js";
 import { fakeAdapterImports } from "./fake-adapter.js";
 import { createScriptedCaptain } from "./scripted-captain.js";
 import { startStandinHost, type StandinHost, type StandinPerson } from "./standin-host.js";
 import type { StandinRegistry } from "./standin-registry.js";
 import { canonicalOrigin, instanceFolder, instanceSegmentOf } from "../instance.js";
+import { encodePlacementFile, PLACEMENTS_DIR } from "../placements.js";
 import type { LineSpawner } from "../compile.js";
-import type { Command, CommandResults, GroupsState, RepositoryState, ServerMessage, SpaceStateMessage, SyncStep, SpaceOp } from "../protocol.js";
+import type { Command, CommandResults, GroupsState, PlacementState, RepositoryState, ServerMessage, SpaceStateMessage } from "../protocol.js";
 
 /** Every scratch home's own group: a name no device user collides with. */
 export const OWN = "tester";
@@ -48,6 +52,15 @@ export function bareOf(host: StandinHost, key: string): string {
  * headings hold them (space-30). */
 export function rowsOf(state: GroupsState): RepositoryState[] {
   return [...state.own.repositories, ...state.instances.flatMap((instance) => instance.groups.flatMap((group) => group.repositories))];
+}
+
+/** A row's line for the placement at an instance by its origin, or the
+ * path placement's for null (space-30, space-87). */
+export function placementOf(row: RepositoryState, origin: string | null): PlacementState {
+  const wanted = origin === null ? null : canonicalOrigin(origin);
+  const found = row.placements.find((line) => (line.instance === null ? null : canonicalOrigin(line.instance)) === wanted);
+  if (found) return found;
+  throw new Error(`no placement ${origin} on ${row.key}: ${JSON.stringify(row.placements.map((line) => line.instance))}`);
 }
 
 /** One repository's state out of the Groups state: under your own group
@@ -139,14 +152,14 @@ class Client {
     }, timeoutMs);
     return repositoryOf(state, key);
   }
-  /** Run a long command on one repository — it replies accepted at once
-   * (space-29) — and wait until that repository's machine leaves
-   * running. Broadcasts coalesce, and one assembled before the command
+  /** Run a long command on one repository — it replies accepted at once,
+   * or, a Place or an Attach, once its first step is done (space-29) — and wait
+   * until that repository's machine leaves running. Broadcasts coalesce, and one assembled before the command
    * took effect can arrive after it still reading the previous phase: a
    * reading that is not running settles the command only after one of
    * its own running readings, or where a read made after the reply
    * agrees the machine no longer runs. */
-  async settle<T extends "space.sync" | "space.fetch">(type: T, fields: Omit<Extract<Command, { type: T }>, "type" | "id">, timeoutMs = 20_000): Promise<RepositoryState> {
+  async settle<T extends "space.sync" | "space.fetch" | "space.place" | "space.leave" | "space.attach">(type: T, fields: Omit<Extract<Command, { type: T }>, "type" | "id">, timeoutMs = 20_000): Promise<RepositoryState> {
     const key = (fields as { repository: string }).repository;
     const from = this.messages.length;
     // The core runs in this process: its steps' `since` reads this clock.
@@ -210,13 +223,51 @@ const SIGN_IN_FAILED_KEYS = ["cause", "instance", "message", "phase"];
 
 const INSTANCE_KEYS = ["account", "displayName", "groups", "host", "hostSignedOut", "origin", "read", "readAt", "roles", "signedIn"];
 
-const GROUP_ENTRY_KEYS = ["can", "fullPath", "id", "login", "mine", "name", "repositories"];
+const GROUP_ENTRY_KEYS = ["can", "fullPath", "id", "login", "mine", "name", "placed", "repositories"];
 
-const REPOSITORY_KEYS = ["branch", "can", "code", "conflicts", "folder", "governing", "id", "incoming", "instance", "key", "lastSync", "local", "members", "name", "noticed", "own", "reason", "remote", "state", "sync", "visibility", "waiting"];
+/** A row's fields (space-30), with the transitional mirrors of its key
+ * placement's line — `branch`, `can`, `incoming`, `lastSync`, `members`,
+ * `noticed`, `remote`, `visibility` and `waiting` — until the interface
+ * reads placements. */
+const REPOSITORY_KEYS = ["branch", "can", "code", "conflicts", "folder", "governing", "id", "incoming", "instance", "key", "lastSync", "local", "members", "mergePending", "name", "noticed", "own", "placedAt", "placements", "reason", "remote", "state", "sync", "visibility", "waiting"];
+
+const PLACEMENT_KEYS = ["attached", "branch", "can", "conflicts", "id", "incoming", "instance", "lastSync", "members", "noticed", "outcome", "path", "reason", "state", "visibility", "waiting"];
 
 const BRANCH_KEYS = ["agreed", "ahead", "behind", "checkedAt", "hostEmpty", "mergePending", "unrelated"];
 
+const PLACEMENT_BRANCH_KEYS = ["agreed", "ahead", "behind", "checkedAt", "hostEmpty", "unrelated"];
+
 const PHASES = new Set(["idle", "running", "choices", "unrelated", "stopped", "done"]);
+
+/** Each phase's fields (space-30): those it always carries, and those
+ * it may. */
+const PHASE_KEYS: Record<string, { required: string[]; optional: string[] }> = {
+  idle: { required: ["phase"], optional: [] },
+  running: { required: ["cancelable", "op", "phase", "since", "step"], optional: ["placement"] },
+  choices: { required: ["phase", "placement", "savedCommit"], optional: [] },
+  unrelated: { required: ["phase", "placement"], optional: [] },
+  stopped: { required: ["cause", "guidance", "message", "op", "phase", "retry", "step"], optional: ["count", "credential"] },
+  done: { required: ["at", "phase", "pushed", "received", "sent"], optional: [] },
+};
+
+const PLACEMENT_STATES = new Set(["reachable", "read-only", "unreachable", "absent"]);
+
+/** A phase carries its own fields alone (space-30). */
+function assertPhase(sync: RepositoryState["sync"]): void {
+  assert.ok(PHASES.has(sync.phase), `phase ${JSON.stringify(sync)}`);
+  const keys = PHASE_KEYS[sync.phase];
+  const fields = Object.keys(sync);
+  assert.ok(keys.required.every((field) => fields.includes(field)) && fields.every((field) => keys.required.includes(field) || keys.optional.includes(field)), `phase fields ${JSON.stringify(sync)}`);
+  if ("placement" in sync && sync.placement !== undefined) assert.ok(sync.placement === null || typeof sync.placement === "string", JSON.stringify(sync));
+  // A count is a leave's units no remaining placement received, and
+  // comes with that cause alone (space-30, space-98).
+  if (sync.phase === "stopped") assert.equal(sync.count !== undefined, sync.cause === "unreceived", JSON.stringify(sync));
+  if (sync.phase === "stopped" && sync.count !== undefined) assert.ok(sync.op === "leave" && Number.isInteger(sync.count) && sync.count > 0, JSON.stringify(sync));
+  // A credential names the code host a join's failed code clone needs
+  // one of the member's for, and comes with that step alone (space-30,
+  // space-103).
+  if (sync.phase === "stopped" && sync.credential !== undefined) assert.ok(sync.op === "join" && sync.step === "code" && typeof sync.credential === "string" && sync.credential.length > 0, JSON.stringify(sync));
+}
 
 const CHANGES = new Set(["new", "updated", "deleted"]);
 
@@ -279,6 +330,9 @@ export function assertGroupsState(state: GroupsState): void {
     }
     for (const group of instance.groups) {
       assert.deepEqual(Object.keys(group).sort(), GROUP_ENTRY_KEYS);
+      // The rows standing elsewhere this entry holds a placement of,
+      // each by its key and name (space-1, space-30).
+      assert.ok(Array.isArray(group.placed) && group.placed.every((line) => Object.keys(line).sort().join() === "key,name" && typeof line.key === "string" && typeof line.name === "string"), JSON.stringify(group.placed));
       assert.deepEqual(Object.keys(group.can).sort(), ["createSubgroup", "delete", "manageMembers", "rename"]);
       assert.ok(Object.values(group.can).every((value) => typeof value === "boolean"), JSON.stringify(group.can));
       // A namespace by its login, with no id and nothing to do there; a
@@ -287,6 +341,15 @@ export function assertGroupsState(state: GroupsState): void {
         assert.equal(group.id, null, JSON.stringify(group));
         assert.deepEqual(group.can, { createSubgroup: false, manageMembers: false, rename: false, delete: false }, "a namespace takes no subgroup, member, rename or deletion");
       } else assert.equal(group.mine, false, JSON.stringify(group));
+    }
+    // A line naming a row stands where the row does not, the row
+    // standing once elsewhere in the state (space-1).
+    for (const group of instance.groups) {
+      for (const line of group.placed) {
+        assert.ok(!group.repositories.some((repository) => repository.key === line.key), `${line.key} stands in ${group.fullPath} and is named there`);
+        const named = rowsOf(state).find((repository) => repository.key === line.key);
+        assert.equal(named?.name, line.name, `${group.fullPath} names a row standing elsewhere: ${JSON.stringify(line)}`);
+      }
     }
     // An entry is one by its instance and id (DR-127).
     const ids = instance.groups.flatMap((group) => (group.id === null ? [] : [group.id]));
@@ -318,9 +381,10 @@ export function assertGroupsState(state: GroupsState): void {
     if (repository.state === "local-only") assert.equal(repository.governing, null, `${repository.key} is local only`);
     assert.deepEqual(Object.keys(repository.can), ["manageMembers", "transfer"]);
     assert.ok(typeof repository.can.manageMembers === "boolean" && typeof repository.can.transfer === "boolean", JSON.stringify(repository.can));
-    assert.ok(PHASES.has(repository.sync.phase), `phase ${JSON.stringify(repository.sync)}`);
+    assertPhase(repository.sync);
     assert.ok(["local-only", "reachable", "read-only", "unreachable", "absent"].includes(repository.state));
     if (repository.branch !== null) assert.deepEqual(Object.keys(repository.branch).sort(), BRANCH_KEYS);
+    assertPlacements(repository);
     const agreed = repository.branch?.agreed;
     if (agreed) assert.ok(Object.keys(agreed).sort().join() === "at,current" && typeof agreed.at === "number" && typeof agreed.current === "boolean", JSON.stringify(agreed));
     for (const unit of [...repository.local, ...repository.incoming, ...repository.conflicts.map((c) => c.unit)]) {
@@ -333,13 +397,66 @@ export function assertGroupsState(state: GroupsState): void {
   }
 }
 
+/** A row's lines in their shape (space-30), and, while the interface
+ * reads the row's transitional mirrors, those mirrors equal to its key
+ * placement's line — its first — wherever a remote here holds it or no
+ * clone is here, `waiting` to the one line a wait shows on; a local-only
+ * clone holds no line but a creation's waiting at an instance
+ * (space-87). */
+function assertPlacements(row: RepositoryState): void {
+  assert.equal(typeof row.mergePending, "boolean", JSON.stringify(row.mergePending));
+  assert.equal(row.mergePending, row.branch?.mergePending ?? false, `${row.key}: the row's pending merge is its branch's`);
+  assert.ok(Array.isArray(row.placedAt) && row.placedAt.every((origin) => typeof origin === "string"), JSON.stringify(row.placedAt));
+  assert.ok(Array.isArray(row.placements), JSON.stringify(row.placements));
+  for (const line of row.placements) {
+    assert.deepEqual(Object.keys(line).sort(), PLACEMENT_KEYS);
+    assert.ok((line.instance === null || typeof line.instance === "string") && typeof line.path === "string" && (line.id === null || typeof line.id === "string") && typeof line.attached === "boolean", JSON.stringify(line));
+    assert.ok(PLACEMENT_STATES.has(line.state), JSON.stringify(line));
+    assert.deepEqual(Object.keys(line.can), ["manageMembers", "transfer"]);
+    if (line.branch !== null) assert.deepEqual(Object.keys(line.branch).sort(), PLACEMENT_BRANCH_KEYS);
+    if (line.lastSync !== null) assert.deepEqual(Object.keys(line.lastSync).sort(), ["at", "received", "sent"]);
+    assert.ok(Array.isArray(line.incoming) && Array.isArray(line.conflicts) && typeof line.noticed === "boolean", JSON.stringify(line));
+    if (!line.attached) assert.equal(line.branch, null, `${row.key}: a line no remote here holds has no branch`);
+  }
+  // Local only, a clone holds no placement: its lines are a creation's
+  // wait and the placements its files name, none attached (space-87).
+  if (row.state === "local-only") assert.ok(row.placements.every((line) => !line.attached && (line.waiting !== null || line.state === "absent" || line.state === "unreachable")), `${row.key}: local only holds no line but a creation's wait or a placement its files name`);
+  // A line no remote here holds comes after every line held (space-87).
+  const unheld = row.placements.findIndex((line) => !line.attached);
+  assert.ok(unheld < 0 || row.placements.slice(unheld).every((line) => !line.attached), `${row.key}: the lines held come first`);
+  // A phase in choices or with an unrelated history names a placement
+  // the clone holds (space-30).
+  const sync = row.sync;
+  if (sync.phase === "choices" || sync.phase === "unrelated") {
+    assert.ok(row.placements.some((line) => line.attached && line.instance === sync.placement), `${row.key}: ${JSON.stringify(sync)} names a placement it holds`);
+  }
+  // A step waiting at the host shows on one line per instance, its
+  // placement's or its instance's (space-87); transitional, the row's
+  // `waiting` mirrors its key placement's line where it holds one, else
+  // the first line a wait shows on.
+  const waits = row.placements.filter((line) => line.waiting !== null);
+  assert.equal(new Set(waits.map((line) => line.instance)).size, waits.length, `${row.key}: one wait per instance`);
+  const keyLine = row.placements[0]?.attached && row.placements[0].instance !== null ? row.placements[0] : undefined;
+  assert.deepEqual(row.waiting, keyLine ? keyLine.waiting : waits[0]?.waiting ?? null, `${row.key}: waiting mirrors the line it shows on`);
+  const key = row.placements[0];
+  if (!key) return;
+  // Transitional: the row's mirrors are its key placement's line's.
+  if (!key.attached && row.branch !== null) return;
+  const { mergePending: _, ...branch } = row.branch ?? { mergePending: false };
+  assert.deepEqual(
+    { remote: row.remote, id: row.id, members: row.members, visibility: row.visibility, can: row.can, branch: row.branch === null ? null : branch, incoming: row.incoming, lastSync: row.lastSync, noticed: row.noticed },
+    { remote: key.path, id: key.id, members: key.members, visibility: key.visibility, can: key.can, branch: key.branch, incoming: key.incoming, lastSync: key.lastSync, noticed: key.noticed },
+    `${row.key}: the row's mirrors are its key placement's line's`,
+  );
+}
+
 interface Home {
   service: CoreService;
   client: Client;
   dataDir: string;
   projectDir: string;
   configPath: string;
-  hooks: { beforeStep?: (event: { op: SpaceOp; step: SyncStep; repository: string; at?: "commit" }) => void | Promise<void> };
+  hooks: { beforeStep?: (event: SpaceStepEvent) => void | Promise<void> };
   stop(): Promise<void>;
 }
 
@@ -359,6 +476,13 @@ export function clonePath(dataDir: string, key: string): string {
 /** A scratch home's preferences file, as written. */
 export const prefsOf = (dataDir: string): Record<string, unknown> =>
   (JSON.parse(readFileSync(join(dataDir, "local", "prefs.json"), "utf8")) as { prefs: Record<string, unknown> }).prefs;
+
+/** A spex repository's sync records in a scratch home's preferences
+ * (storage-5): each `sync:<repository>:…` entry — its placements' under
+ * `sync:<repository>:<placement>:`, and any a Spex before DR-128 wrote —
+ * with its value. */
+export const syncRecordsOf = (dataDir: string, key: string): Record<string, unknown> =>
+  Object.fromEntries(Object.entries(prefsOf(dataDir)).filter(([name]) => name.startsWith(`sync:${key}:`)));
 
 export function createSpaceHarness() {
   const scratch = mkdtempSync(join(tmpdir(), "spex-space-"));
@@ -687,16 +811,49 @@ playbooks:
     return git(dir, "rev-parse", "HEAD");
   }
 
+  /** A placement of a clone at another instance, made by hand as a
+   * device holding it would have made it (storage-34, storage-36): a
+   * spex repository named as the clone's added to `group` at `host`, the
+   * clone's `spex` pushed there as a peer pushes, a remote named by that
+   * instance's folder with the host's id in its own section, and the
+   * placement's file written in the clone, uncommitted; its host id, its
+   * remote URL and that folder. `group` may name an account's namespace,
+   * which every instance over that Git backend lists (DR-127). */
+  function attachByHand(home: Home, key: string, host: StandinHost, group = "acme"): { id: string; url: string; folder: string } {
+    const clone = clonePath(home.dataDir, key);
+    const name = key.slice(key.lastIndexOf("/") + 1);
+    const repository = host.script.addRepository({ group, name });
+    // A namespace stands at its login on the Git system, a group inside
+    // its instance's container.
+    const url = `${host.gitOrigin}/${repository.group.kind === "user" ? "" : `${host.storage}/`}${group}/${name}.git`;
+    git(clone, "push", "-q", repository.bare, "spex:spex");
+    const folder = hostFolder(host);
+    git(clone, "remote", "add", folder, url);
+    git(clone, "config", `remote.${folder}.spexId`, repository.id);
+    mkdirSync(join(clone, PLACEMENTS_DIR), { recursive: true, mode: 0o700 });
+    writeFileSync(join(clone, PLACEMENTS_DIR, `${folder}.yaml`), encodePlacementFile(canonicalOrigin(host.url), repository.id));
+    return { id: repository.id, url, folder };
+  }
+
   const turnRecords = (prompt: string, turnId: number, at = Date.now()): Record<string, unknown>[] => [
     { type: "turn_started", turnId, turn: { id: turnId, prompt }, timestamp: at },
     { type: "turn_finished", turnId, timestamp: at + 1 },
   ];
 
   return {
-    scratch, config, git, bareRepo, otherDevice, gitFolder, sameNameFolder, addFolder, sleepingSsh, holdingGit, sleep, sleeperPid, joinRemote, hangingCompileSpawner, COMPILE_INPUT, startHome, startHost, signIn, signOut, forget, runTurn, snapshot, peerClone, peerPush, turnRecords,
+    scratch, config, git, bareRepo, otherDevice, gitFolder, sameNameFolder, addFolder, sleepingSsh, holdingGit, sleep, sleeperPid, joinRemote, hangingCompileSpawner, COMPILE_INPUT, startHome, startHost, signIn, signOut, forget, runTurn, snapshot, peerClone, peerPush, attachByHand, turnRecords,
     dispose: async () => {
       await Promise.all(hosts.map((host) => host.close()));
       rmSync(scratch, { recursive: true, force: true });
     },
   };
+}
+
+/** A clone's remotes in the order its Git configuration holds them
+ * (storage-34): Git's own listing sorts them in some versions, so the
+ * listing is ordered by the config file's sections. */
+export function remoteNamesOf(dir: string): string[] {
+  const run = spawnSyncForRemotes("git", ["-C", dir, "remote"], { encoding: "utf8" });
+  const listed = (run.stdout ?? "").split("\n").filter((name) => name !== "");
+  return orderRemotes(listed, (name) => name, remoteOrderOf(dir));
 }

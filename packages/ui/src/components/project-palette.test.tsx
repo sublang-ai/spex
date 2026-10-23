@@ -395,7 +395,7 @@ describe("projects-1, space-58: a folder added while signed in asks for its grou
   const HOST = "https://host.test";
   const SECOND = "https://second.test";
   const row = (key: string, extra: Partial<RepositoryState> = {}) => repositoryRow(key, { folder: "/tmp/gamma", ...extra });
-  const acme = (id: string) => ({ id, login: null, mine: false, fullPath: "acme", name: "acme", can: NO_CAN, repositories: [] });
+  const acme = (id: string) => ({ id, login: null, mine: false, fullPath: "acme", name: "acme", can: NO_CAN, placed: [], repositories: [] });
   /** An instance where ada may be signed in, listing her namespace and
    * acme. */
   const at = (origin: string, signedIn: boolean, id: string) =>

@@ -73,6 +73,7 @@ function teamGroup(repos?: RepositoryState[]): InstanceGroupState {
     fullPath: "acme/team",
     name: "team",
     can: NO_CAN,
+    placed: [],
     repositories: repos ?? [
       repo({ key: "@spex.example/acme/team/team-spex", name: "team-spex", id: "50", code: null, folder: null, members: 4 }),
       repo({ key: "@spex.example/acme/team/academy-spex", name: "academy-spex", id: "51", code: CODE, folder: null, members: 3, state: "absent", branch: null }),
@@ -1135,7 +1136,7 @@ describe("GROUPS: the instance's entries (space-1, space-58, space-61, DR-120)",
     const home = base({}, [repo({ state: "local-only", remote: null, id: null, branch: null, members: null })]);
     return withGroups(
       home,
-      { id: "3", login: null, mine: false, fullPath: "acme", name: "Acme", can: { createSubgroup: true, manageMembers: true, rename: false, delete: false }, repositories: [] },
+      { id: "3", login: null, mine: false, fullPath: "acme", name: "Acme", can: { createSubgroup: true, manageMembers: true, rename: false, delete: false }, placed: [], repositories: [] },
       namespace(
         "bob",
         [repo({ key: "@spex.example/bob/notes-spex", name: "notes-spex", id: "80", remote: "bob/notes-spex", code: null, folder: null, members: 2, can: { manageMembers: true, transfer: false } })],
@@ -1148,6 +1149,7 @@ describe("GROUPS: the instance's entries (space-1, space-58, space-61, DR-120)",
         fullPath: "jane",
         name: "Jane's team",
         can: { createSubgroup: true, manageMembers: true, rename: false, delete: false },
+        placed: [],
         repositories: [
           repo({ key: "@spex.example/jane/jane-spex@81", name: "jane-spex", id: "81", remote: "jane/jane-spex", code: null, folder: null, state: "unreachable", reason: "a group named like your login", branch: null }),
         ],
@@ -1265,7 +1267,7 @@ describe("GROUPS: copy and fit (space-27, space-28)", () => {
     ]),
     base({}, [repo({ state: "unreachable", reason: "the device is offline", folder: null })]),
     base({}, [repo({ sync: { phase: "running", op: "sync", step: "push", since: NOW, cancelable: true }, branch: { ...BRANCH, ahead: 1 } })]),
-    base({}, [repo({ sync: { phase: "unrelated" }, branch: { ...BRANCH, unrelated: true } })]),
+    base({}, [repo({ sync: { phase: "unrelated", placement: ORIGIN }, branch: { ...BRANCH, unrelated: true } })]),
   ];
 
   test("no visible text says ours, theirs, HEAD, origin/spex, space or namespace, and remote only for the code's", async () => {

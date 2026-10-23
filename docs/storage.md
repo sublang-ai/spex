@@ -24,6 +24,7 @@ Ignored files can contain durable local state.
 | --- | --- | --- |
 | `home.yaml` | This device's id, the instance it was created with, every instance it has signed in to with its account (the first is the default), your own group's folder name, and each working folder with its spex repository and recorded `cwd` aliases. | Outside any clone |
 | `<clone>/project.json` | The project's name and its code's remote URL. | Tracked |
+| `<clone>/placements/<folder>.yaml` | One placement of the spex repository at an instance, named by that instance's folder: the instance's origin and the host's id for the repository there. | Tracked |
 | `<clone>/config/playbook.config.yaml` | Your own group's Captain, player and playbook settings; in a project's clone, only the playbooks it enables and the player each role uses. | Tracked |
 | `<clone>/spex.yaml`, `<clone>/spex.lock` | The environment's requests and lock. | Tracked, one unit |
 | `<clone>/intents/<id>.json` | One intent: text, capture time, attachments, source, dispatch and close. | Tracked |
@@ -102,7 +103,7 @@ Agent-written Markdown paths and remote URLs are not imported as assets.
 Each clone tracks portable files only; provider tokens never enter recovery fields that Git sees.
 Tracked `.gitignore` rules exclude local data; `.gitattributes` disables line-ending conversion for JSON/JSONL files, chunk directories and asset directories.
 
-The app's Groups surface syncs each spex repository's `spex` branch with its host remote, one spex repository at a time, without stopping the core, and never text-merges a file.
+The app's Groups surface syncs each spex repository's `spex` branch with the remote of each of its placements in turn, one spex repository at a time, without stopping the core, and never text-merges a file.
 Signed in, Spex asks the Git host for a short-lived Git credential before each transport to the host's Git origin and hands it to Git through its own credential helper, run on the app's runtime, in a file only you can read that is removed when Git ends; it never enters a remote URL.
 A transport to any other remote, and a fetch of a spec package from a Git repository elsewhere, uses this device's own Git and its credentials.
 The command-line path stops local writers of that spex repository during its commit, checkout and merge; the [Git workflow](storage-git.md) gives the selection and validation commands.
@@ -146,7 +147,7 @@ Deletion fails if another writer is active or exclusive ownership cannot be prov
 Retired lease directories remain so delayed stale-lock recovery cannot affect a new owner.
 If one side deletes a session and another modifies it, synchronization requires an explicit choice between deletion and the complete modified bundle.
 
-Removing a project forgets its pair and deletes its clone, asking a second confirmation while the clone holds records that have not reached the host; the working folder is left untouched.
+Removing a project forgets its pair and deletes its clone, asking a second confirmation while the clone holds records that no placement holds, as the clone last fetched or pushed it or at their last shared commit; the working folder is left untouched.
 Replacing session history resets its last-viewed turn.
 Local preferences and migration records never leave the device; caches are rebuildable.
 

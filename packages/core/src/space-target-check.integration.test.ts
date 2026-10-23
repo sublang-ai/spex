@@ -137,8 +137,8 @@ test("git-host-23: fresh unknown target members require notice despite a cached 
   assert.equal((await home.client.repository(OWN)).members, 1);
   // Same joined clone, first push on this device: forget only this
   // scratch device's acknowledgments through the real preferences API.
-  core.store.deletePref(`sync:${OWN}:last`);
-  core.store.deletePref(`sync:${OWN}:noticed`);
+  core.store.deletePref(`sync:${OWN}:${hostFolder(host)}:last`);
+  core.store.deletePref(`sync:${OWN}:${hostFolder(host)}:noticed`);
   host.script.failMembers(true);
   await home.client.expectError("space.sync", { repository: OWN }, "invalid_request", /sharing notice/);
   assert.equal((await home.client.repository(OWN)).members, null);
@@ -199,12 +199,13 @@ test("git-host-23: exact remote discovery records the id; every catalog page par
   const { host, home, core, id } = await prepared("target-collision");
   t.after(() => home.stop());
   const clone = clonePath(home.dataDir, OWN);
-  git(clone, "config", "--unset", "spex.repositoryId");
+  // Your own group's remote is named by the instance's folder (DR-127),
+  // the host's id in its section (storage-34).
+  const folder = hostFolder(host);
+  git(clone, "config", "--unset", `remote.${folder}.spexId`);
   const restored = await home.client.settle("space.sync", { repository: OWN });
   assert.equal(restored.sync.phase, "done");
-  assert.equal(git(clone, "config", "--get", "spex.repositoryId"), id);
-  // Your own group's remote is named by the instance's folder (DR-127).
-  const folder = hostFolder(host);
+  assert.equal(git(clone, "config", "--get", `remote.${folder}.spexId`), id);
   const origin = git(clone, "remote", "get-url", folder);
   const collision = { id: "2300", fullPath: "bob", name: "Bob's team", kind: "group" as const };
   host.script.addRepository({ group: "acme", name: "page-two-spex" });
@@ -351,8 +352,8 @@ for (const next of ["signed-out", "another-account"] as const) {
 test("git-host-23: one failed fresh notice read refuses before Save and cannot fall through to a healthy unnoticed Check", async (t) => {
   const { host, home, core, id } = await prepared("notice-admission-failure");
   t.after(() => home.stop());
-  core.store.deletePref(`sync:${OWN}:last`);
-  core.store.deletePref(`sync:${OWN}:noticed`);
+  core.store.deletePref(`sync:${OWN}:${hostFolder(host)}:last`);
+  core.store.deletePref(`sync:${OWN}:${hostFolder(host)}:noticed`);
   const target = host.script.repositories.find((repository) => repository.id === id)!;
   target.members.push({ id: "1002", login: "bob", displayName: "Bob", role: "Developer" });
   const clone = clonePath(home.dataDir, OWN);
@@ -378,14 +379,14 @@ test("git-host-23: one failed fresh notice read refuses before Save and cannot f
   // implicit acknowledgment inherited from the failed read.
   await home.client.expectError("space.sync", { repository: OWN }, "invalid_request", /sharing notice/);
   assert.equal((await home.client.repository(OWN)).noticed, false);
-  assert.equal(core.store.getPref(`sync:${OWN}:last`), undefined);
+  assert.equal(core.store.getPref(`sync:${OWN}:${hostFolder(host)}:last`), undefined);
 });
 
 test("git-host-23: solo membership becoming shared at Check stops before transport and leaves the notice owed", async (t) => {
   const { host, home, core, id } = await prepared("notice-membership-change");
   t.after(() => home.stop());
-  core.store.deletePref(`sync:${OWN}:last`);
-  core.store.deletePref(`sync:${OWN}:noticed`);
+  core.store.deletePref(`sync:${OWN}:${hostFolder(host)}:last`);
+  core.store.deletePref(`sync:${OWN}:${hostFolder(host)}:noticed`);
   const target = host.script.repositories.find((repository) => repository.id === id)!;
   let shared = false;
   home.hooks.beforeStep = (event) => {
@@ -404,7 +405,35 @@ test("git-host-23: solo membership becoming shared at Check stops before transpo
   assert.deepEqual([row.members, row.noticed, row.lastSync], [2, false, null]);
   assert.ok(!host.script.requests.slice(from).some((request) => request.path.includes(".git/") || request.path.endsWith("/credential") || request.path.endsWith("/spex-branch")), "no branch preparation or Git transport");
   await home.client.expectError("space.sync", { repository: OWN }, "invalid_request", /sharing notice/);
-  assert.equal(core.store.getPref(`sync:${OWN}:noticed`), undefined);
+  assert.equal(core.store.getPref(`sync:${OWN}:${hostFolder(host)}:noticed`), undefined);
   const seen = await home.client.settle("space.sync", { repository: OWN, noticed: true });
   assert.deepEqual([seen.sync.phase, seen.noticed], ["done", true]);
+});
+
+test("git-host-23, space-57, space-58: a sync the core starts after a pick owes the notice as any sync: a repository created in a group another member joins before its Check waits for Continue on its line, its branch unprepared and nothing sent, and a sync noticed for it then prepares the branch and pushes", async (t) => {
+  const { host, home } = await prepared("pick-notice");
+  t.after(() => home.stop());
+  const { key: local } = await addFolder(home, gitFolder("pick-notice"));
+  const key = hostKey(host, "acme/pick-notice-spex");
+  const acme = host.script.groups.find((group) => group.fullPath === "acme")!;
+  let shared = false;
+  home.hooks.beforeStep = (event) => {
+    if (event.op !== "sync" || event.step !== "check" || event.repository === OWN || shared) return;
+    shared = true;
+    acme.members = [...(acme.members ?? []), { id: "1002", login: "bob", displayName: "Bob", role: "Developer" }];
+  };
+  const from = host.script.requests.length;
+  const mark = home.client.mark();
+  await home.client.expectOk("space.pick", { repository: local, choice: { kind: "create", instance: host.url, groupId: "2002", name: "pick-notice" } });
+  const waiting = await home.client.waitRepository(mark, key, (row) => row.sync.phase === "stopped", 30_000);
+  home.hooks.beforeStep = undefined;
+  assert.ok(waiting.sync.phase === "stopped", JSON.stringify(waiting.sync));
+  assert.deepEqual([waiting.sync.op, waiting.sync.step, waiting.sync.cause], ["sync", "check", "refused"]);
+  assert.match(waiting.sync.message, /^Read the sharing notice before the first sync of pick-notice-spex$/);
+  const [line] = waiting.placements;
+  assert.deepEqual([line.outcome, line.members, line.noticed, line.lastSync], [{ kind: "waiting", sent: 0, received: 0 }, 2, false, null]);
+  assert.ok(!host.script.requests.slice(from).some((request) => request.path.includes(".git/") || request.path.endsWith("/credential") || request.path.endsWith("/spex-branch")), "no branch preparation or Git transport");
+  const seen = await home.client.settle("space.sync", { repository: key, noticed: true }, 30_000);
+  assert.deepEqual([seen.sync.phase, seen.noticed, seen.placements[0].outcome?.kind], ["done", true, "synced"], JSON.stringify(seen.sync));
+  assert.equal(git(host.bareOf("acme/pick-notice-spex"), "rev-parse", "spex"), git(clonePath(home.dataDir, key), "rev-parse", "spex"));
 });

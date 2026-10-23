@@ -16,7 +16,7 @@ import {
   StorageFormatError, writeApplicationBytes,
 } from "./files.js";
 import { i18n } from "./i18n.js";
-import { canonicalOrigin, hostUrlFor, instanceFolder, instanceSegmentOf, isInstanceFolder, OriginRefused } from "./instance.js";
+import { canonicalOrigin, hostUrlFor, instanceFolder, instanceSegmentOf, OriginRefused } from "./instance.js";
 import { REPOSITORY_KEY_PATTERN } from "./protocol.js";
 
 export { hostUrlFor };
@@ -106,7 +106,7 @@ export const REMOTE_URL_KEYS = "^remote\\..+\\.url$";
  * from the output of `git config -z --get-regexp` over REMOTE_URL_KEYS.
  * A name may hold dots, as an instance's folder does, so it is what
  * lies between `remote.` and `.url`. */
-export function remoteNamesIn(output: string): string[] {
+export function remoteNamesIn(output: string, order: readonly string[] = []): string[] {
   const names: string[] = [];
   for (const entry of output.split("\0")) {
     const key = entry.split("\n", 1)[0];
@@ -114,25 +114,35 @@ export function remoteNamesIn(output: string): string[] {
     const name = key.slice("remote.".length, -".url".length);
     if (name !== "" && !names.includes(name)) names.push(name);
   }
-  return names;
+  return orderRemotes(names, (name) => name, order);
 }
 
-/** The remote a clone syncs with, among the names its remotes bear
- * (DR-127): its key's instance folder where a remote of that name
- * stands; else `origin` — a remote the reader named, or one a clone
- * made before its remote took its instance's name; else the one remote
- * named by an instance's folder — for a clone keyed in your own group's
- * folder, which names no instance, your own group's own repository's or
- * that of a clone a pick left there (storage-35, storage-31); for one
- * keyed under an instance, the remote a follow half made left named by
- * another instance's folder, which its next sync renames (space-60);
- * none otherwise. */
-export function cloneRemoteName(key: string, names: readonly string[]): string | null {
-  const instance = splitKey(key).instance;
-  if (instance !== null && names.includes(instance)) return instance;
-  if (names.includes("origin")) return "origin";
-  const folders = names.filter(isInstanceFolder);
-  return folders.length === 1 ? folders[0] : null;
+/** The remotes in the order a clone's Git configuration holds them
+ * (storage-34): the order of their `[remote "<name>"]` sections in the
+ * file, which `git remote add` appends to and a rename keeps — read from
+ * the file itself, since Git's own listing of the keys sorts them in
+ * some versions. A name Git unescapes as the file wrote it. */
+export function remoteSectionOrder(configText: string): string[] {
+  const order: string[] = [];
+  for (const match of configText.matchAll(/^[ \t]*\[remote[ \t]+"((?:[^"\\]|\\.)*)"[ \t]*\]/gm)) {
+    const name = match[1].replace(/\\(.)/g, "$1");
+    if (!order.includes(name)) order.push(name);
+  }
+  return order;
+}
+
+/** The order of a clone's remote sections, read from its `.git/config`;
+ * none where the file cannot be read, the listing's order standing. */
+export function remoteOrderOf(dir: string): string[] {
+  try { return remoteSectionOrder(readFileSync(join(dir, ".git", "config"), "utf8")); } catch { return []; }
+}
+
+/** Items named by remotes, in the configuration's section order where
+ * it names them, the rest after in the order given. */
+export function orderRemotes<T>(items: readonly T[], nameOf: (item: T) => string, order: readonly string[]): T[] {
+  if (order.length === 0) return [...items];
+  const rank = (item: T): number => { const at = order.indexOf(nameOf(item)); return at < 0 ? order.length : at; };
+  return [...items].map((item, index) => ({ item, index })).sort((a, b) => rank(a.item) - rank(b.item) || a.index - b.index).map(({ item }) => item);
 }
 
 export const invalidHome = (): string =>

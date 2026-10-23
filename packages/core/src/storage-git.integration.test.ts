@@ -439,6 +439,156 @@ test("storage-16: real Git branches forced to track a meta.yaml under packages/,
   } finally { dispose(); }
 });
 
+test("storage-11, storage-12, storage-41: a placement file is one unit chosen whole and a meta.yaml under placements/ forms no unit; the validator reports a placement file not of its encoding, one named for another instance and a placements that is no folder, each blocking nothing", async () => {
+  const { home, key, clone, commit, dispose } = setup();
+  const write = (path: string, text: string): void => { mkdirSync(dirname(join(clone, path)), { recursive: true }); writeFileSync(join(clone, path), text); };
+  const placed = (origin: string, id: string): string => `format: 1\ninstance: "${origin}"\nid: "${id}"\n`;
+  const file = "placements/@a.example.yaml";
+  try {
+    write(file, placed("https://a.example", "1")); write("placements/kit/meta.yaml", "base"); write("placements/kit/x.md", "base"); commit("base");
+    git(clone, "branch", "other");
+    write(file, placed("https://a.example", "2")); write("placements/kit/meta.yaml", "ours"); commit("ours");
+    git(clone, "checkout", "-q", "other");
+    write(file, placed("https://a.example", "3")); write("placements/kit/x.md", "theirs"); commit("theirs");
+    git(clone, "checkout", "-q", "spex");
+    const plan = planStorageMerge(clone, "HEAD", "other");
+    const unit = plan.units.find((u) => u.name === file);
+    assert.deepEqual([unit?.choice, unit?.paths], ["conflict", [file]], "each placement file its own unit");
+    assert.ok(!plan.units.some((u) => u.name === "placements/kit/"), "a meta.yaml under placements/ forms no unit");
+    assert.deepEqual(plan.units.filter((u) => u.name.startsWith("placements/kit/")).map((u) => [u.name, u.choice]),
+      [["placements/kit/meta.yaml", "ours"], ["placements/kit/x.md", "theirs"]], "each file there is its own unit");
+    merge(clone);
+    await selectStorageMerge(home, key, { [file]: "theirs" });
+    assert.equal(readFileSync(join(clone, file), "utf8"), placed("https://a.example", "3"));
+    assert.equal(git(clone, "diff", "--name-only", "--diff-filter=U"), "");
+
+    // A file not of its encoding, and one named for another instance than
+    // the one it names, name no placement and block nothing (storage-12).
+    write("placements/@b.example.yaml", placed("https://c.example", "4"));
+    write("placements/@d.example.yaml", "format: 1\n");
+    const reported = async (): Promise<unknown[]> => (await validateStorageTree(clone)).filter((d) => d.file.startsWith("placements")).map((d) => [d.file, d.reason, d.blocking]);
+    assert.deepEqual(await reported(), [
+      ["placements/@b.example.yaml", "its name is not the folder of the instance it names", false],
+      ["placements/@d.example.yaml", "does not read as format: 1, instance and id, one line each", false],
+    ]);
+    rmSync(join(clone, "placements"), { recursive: true });
+    writeFileSync(join(clone, "placements"), "not a folder");
+    assert.deepEqual(await reported(), [["placements", "not a folder of placement files", false]]);
+  } finally { dispose(); }
+});
+
+test("storage-16: through the documented entry point, a clone placed at two instances is planned and selected against each placement's remote in turn, the second against the first's merge, each placement file its own unit and one that does not read reported without blocking, and the push to the first again a fast-forward", async () => {
+  const { root, home, key, clone, commit, dispose } = setup();
+  const write = (dir: string, path: string, text: string): void => { mkdirSync(dirname(join(dir, path)), { recursive: true }); writeFileSync(join(dir, path), text); };
+  const placed = (origin: string, id: string): string => `format: 1\ninstance: "${origin}"\nid: "${id}"\n`;
+  const unitsOf = (plan: { units: { name: string; choice: string; paths: string[] }[] }, names: string[]) =>
+    Object.fromEntries(names.map((name) => { const unit = plan.units.find((u) => u.name === name); return [name, unit && [unit.choice, unit.paths]]; }));
+  const unreadable = { file: "placements/@d.example.yaml", reason: "does not read as format: 1, instance and id, one line each", blocking: false };
+  try {
+    // Two placements, in the order added: each a remote named by its
+    // instance's folder with the host's id in its own section, and each
+    // named in its own placement file, both holding the same `spex`.
+    const bare = { a: join(root, "a.git"), b: join(root, "b.git") };
+    for (const dir of [bare.a, bare.b]) execFileSync("git", ["init", "-q", "--bare", dir], { env: gitEnv, stdio: "pipe" });
+    const edited = randomUUID(); writeIntent(clone, edited, "base");
+    writeFileSync(join(clone, "notes.md"), "base\n");
+    write(clone, "placements/@a.example.yaml", placed("https://a.example", "100"));
+    write(clone, "placements/@b.example.yaml", placed("https://b.example", "200"));
+    commit("placed at both");
+    const base = git(clone, "rev-parse", "HEAD");
+    for (const [name, dir, id] of [["@a.example", bare.a, "100"], ["@b.example", bare.b, "200"]]) {
+      git(clone, "remote", "add", name, dir); git(clone, "config", `remote.${name}.spexId`, id);
+      git(clone, "push", "-q", name, "spex");
+    }
+    // The documented listing names the placements in the order added.
+    assert.deepEqual(git(clone, "config", "--get-regexp", "^remote\\..*\\.url$").split("\n").map((line) => line.split(" ")[0]),
+      ["remote.@a.example.url", "remote.@b.example.url"]);
+
+    // A peer at each instance edits the intent this device edits too;
+    // the first's also places the records at a third instance, and the
+    // second's changes the notes and adds a placement file that does not
+    // read.
+    const peer = (name: string, from: string, change: (dir: string) => void): void => {
+      const dir = join(root, name);
+      execFileSync("git", ["clone", "-q", "--branch", "spex", from, dir], { env: gitEnv, stdio: "pipe" });
+      change(dir);
+      git(dir, "add", "-A", "--", "."); git(dir, "commit", "-q", "-m", name); git(dir, "push", "-q", "origin", "spex");
+    };
+    peer("peer-a", bare.a, (dir) => { writeIntent(dir, edited, "from the first"); write(dir, "placements/@c.example.yaml", placed("https://c.example", "300")); });
+    peer("peer-b", bare.b, (dir) => { writeIntent(dir, edited, "from the second"); writeFileSync(join(dir, "notes.md"), "the second's\n"); write(dir, unreadable.file, "format: 1\n"); });
+    writeIntent(clone, edited, "ours"); commit("saved");
+    const saved = git(clone, "rev-parse", "HEAD");
+    const files = ["placements/@a.example.yaml", "placements/@b.example.yaml", "placements/@c.example.yaml", unreadable.file];
+    const names = [`intents/${edited}`, "notes.md", ...files];
+
+    // The first placement: its remote's `spex` fetched and planned with
+    // neither the index nor the files changed (storage-20), each placement
+    // file one unit of its one path (storage-11).
+    git(clone, "fetch", "-q", "@a.example");
+    const indexBefore = git(clone, "ls-files", "-s"); const filesBefore = snapshot(clone);
+    const first = cli(home, key, "plan", "HEAD", "@a.example/spex");
+    assert.deepEqual([first.ours, first.theirs, first.base], [saved, git(clone, "rev-parse", "refs/remotes/@a.example/spex"), base]);
+    assert.deepEqual(unitsOf(first, names), {
+      [`intents/${edited}`]: ["conflict", [`intents/${edited}.json`]],
+      "notes.md": ["ours", ["notes.md"]],
+      [files[0]]: ["ours", [files[0]]],
+      [files[1]]: ["ours", [files[1]]],
+      [files[2]]: ["theirs", [files[2]]],
+      [files[3]]: undefined,
+    });
+    assert.equal(git(clone, "ls-files", "-s"), indexBefore, "plan leaves the index");
+    assert.deepEqual(snapshot(clone), filesBefore, "plan leaves the files");
+    // Merged, selected (storage-21), committed and pushed there.
+    merge(clone, "@a.example/spex");
+    const firstSelected = cli(home, key, "select", `intents/${edited}=theirs`);
+    assert.deepEqual(firstSelected.diagnostics, []);
+    git(clone, "commit", "-q", "-m", "merge the first placement");
+    const firstMerge = git(clone, "rev-parse", "HEAD");
+    assert.deepEqual(git(clone, "log", "-1", "--format=%P").split(" "), [saved, first.theirs]);
+    assert.equal(readFileSync(join(clone, files[2]), "utf8"), placed("https://c.example", "300"));
+    git(clone, "push", "-q", "@a.example", "spex");
+    assert.equal(git(bare.a, "rev-parse", "spex"), firstMerge);
+
+    // The second placement, planned against `spex` as the first's merge
+    // left it: the intent that merge took from the first is ours now,
+    // in conflict with the second's.
+    git(clone, "fetch", "-q", "@b.example");
+    const second = cli(home, key, "plan", "HEAD", "@b.example/spex");
+    assert.deepEqual([second.ours, second.theirs, second.base], [firstMerge, git(clone, "rev-parse", "refs/remotes/@b.example/spex"), base]);
+    assert.deepEqual(unitsOf(second, names), {
+      [`intents/${edited}`]: ["conflict", [`intents/${edited}.json`]],
+      "notes.md": ["theirs", ["notes.md"]],
+      [files[0]]: ["ours", [files[0]]],
+      [files[1]]: ["ours", [files[1]]],
+      [files[2]]: ["ours", [files[2]]],
+      [files[3]]: ["theirs", [files[3]]],
+    });
+    merge(clone, "@b.example/spex");
+    // A placement file that does not read blocks no selection; the
+    // validation reports it (storage-12).
+    const secondSelected = cli(home, key, "select", `intents/${edited}=theirs`);
+    assert.deepEqual(secondSelected.diagnostics, [unreadable]);
+    git(clone, "commit", "-q", "-m", "merge the second placement");
+    const secondMerge = git(clone, "rev-parse", "HEAD");
+    assert.deepEqual(git(clone, "log", "-1", "--format=%P").split(" "), [firstMerge, second.theirs]);
+    assert.equal(intentText(clone, edited), "from the second");
+    assert.equal(readFileSync(join(clone, "notes.md"), "utf8"), "the second's\n");
+    git(clone, "push", "-q", "@b.example", "spex");
+
+    // The first placement again: the second's merge descends from what
+    // it holds, so the push is a fast-forward and both hold one `spex`.
+    git(clone, "merge-base", "--is-ancestor", firstMerge, secondMerge);
+    git(clone, "push", "-q", "@a.example", "spex");
+    assert.deepEqual([git(bare.a, "rev-parse", "spex"), git(bare.b, "rev-parse", "spex")], [secondMerge, secondMerge]);
+
+    // validate reports the file that does not read and blocks nothing,
+    // changing nothing (storage-22).
+    const settled = snapshot(clone); const settledIndex = git(clone, "ls-files", "-s");
+    assert.deepEqual(cli(home, key, "validate"), [unreadable]);
+    assert.deepEqual(snapshot(clone), settled); assert.equal(git(clone, "ls-files", "-s"), settledIndex);
+  } finally { dispose(); }
+});
+
 test("storage-16: through the apply seam, a file added under a spec package folder since the Save refuses the folder's replacement, that file kept", async () => {
   const { clone, commit, dispose } = setup();
   const skill = join(clone, "mine", "notes", "skills", "en", "notes", "SKILL.md");
@@ -644,6 +794,55 @@ test("storage-16: the apply seam writes each changed unit under the version it r
     assert.equal(readFileSync(records, "utf8"), theirsRecords);
     assert.equal(git(clone, "write-tree"), git(clone, "rev-parse", `${theirs}^{tree}`), "the index holds the validated tree");
     assert.equal(git(clone, "rev-parse", "HEAD"), ours, "the seam commits nothing itself");
+  } finally { dispose(); }
+});
+
+test("storage-16: through the apply seam, against an earlier placement's merge commit as a later placement's base, a file changed while its session's lease is awaited is refused with the change kept and the index unchanged, and the apply then stages the validated tree with the lease free", async () => {
+  const { home, clone, sessionId, bundle, commit, dispose } = setup();
+  try {
+    git(clone, "branch", "first");
+    git(clone, "branch", "second");
+    // Each placement's `spex`: the first's adds a note, the second's
+    // changes the session this device changed too.
+    git(clone, "checkout", "-q", "first"); writeFileSync(join(clone, "first.md"), "the first's\n"); commit("first's");
+    git(clone, "checkout", "-q", "second"); bundle("second's"); commit("second's");
+    const second = git(clone, "rev-parse", "HEAD");
+    const theirsRecords = readFileSync(join(clone, "sessions", `${sessionId}.records.jsonl`), "utf8");
+    git(clone, "checkout", "-q", "spex"); bundle("ours"); commit("saved");
+    // The first placement's merge, as a sync's Apply records it: `spex`
+    // and the first's `spex` as parents.
+    git(clone, "merge", "-q", "--no-ff", "--no-edit", "first");
+    const firstMerge = git(clone, "rev-parse", "HEAD");
+    assert.equal(git(clone, "log", "-1", "--format=%P", firstMerge).split(" ").length, 2);
+    const records = join(clone, "sessions", `${sessionId}.records.jsonl`);
+    const oursRecords = readFileSync(records, "utf8");
+    const plan = planStorageMerge(clone, "HEAD", "second");
+    assert.equal(plan.ours, firstMerge);
+    const choices = { [`sessions/${sessionId}`]: "theirs" as const };
+    const store = createSessionStore({ sessionsDir: join(clone, "sessions") }); await store.prepare();
+    const index = git(clone, "ls-files", "-s");
+    const release = reserveStorageHome(home, machineIdentity);
+    try {
+      // A writer appending just before the lease is granted has its change
+      // refused over and kept, and the index stays (storage-14).
+      const appendFirst = { acquireManagement: (id: string) => { writeFileSync(records, `${oursRecords}{"appended":true}\n`); return store.acquireManagement(id); } };
+      await assert.rejects(() => applyStorageSelection(clone, plan, choices, { sessions: appendFirst }), (error: StorageWriteRefused) => error instanceof StorageWriteRefused && error.reason === "changed" && error.unit === `sessions/${sessionId}`);
+      assert.match(readFileSync(records, "utf8"), /appended/);
+      assert.equal(git(clone, "ls-files", "-s"), index, "the index stays");
+      await (await store.acquireManagement(sessionId)).release();
+      writeFileSync(records, oursRecords);
+      // The selection on the first's merge stages its validated tree: the
+      // first's note and this device's commit kept, the second's session
+      // taken, and the session's lease the write's alone (storage-21).
+      const applied = await applyStorageSelection(clone, plan, choices);
+      assert.deepEqual(applied.written, [`sessions/${sessionId}`]);
+      assert.equal(readFileSync(records, "utf8"), theirsRecords);
+      assert.equal(git(clone, "write-tree"), applied.tree, "the index holds the validated tree");
+      assert.equal(git(clone, "rev-parse", `${applied.tree}:first.md`), git(clone, "rev-parse", `${firstMerge}:first.md`));
+      assert.equal(git(clone, "rev-parse", `${applied.tree}:sessions/${sessionId}.records.jsonl`), git(clone, "rev-parse", `${second}:sessions/${sessionId}.records.jsonl`));
+      await (await store.acquireManagement(sessionId)).release();
+    } finally { release(); }
+    assert.equal(git(clone, "rev-parse", "HEAD"), firstMerge, "the seam commits nothing itself");
   } finally { dispose(); }
 });
 

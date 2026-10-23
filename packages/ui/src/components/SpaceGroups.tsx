@@ -95,6 +95,7 @@ function ownEntry(groups: GroupsState): InstanceGroupState {
     fullPath: groups.own.name,
     name: groups.own.name,
     can: { createSubgroup: false, manageMembers: false, rename: false, delete: false },
+    placed: [],
     repositories: groups.own.repositories,
   };
 }

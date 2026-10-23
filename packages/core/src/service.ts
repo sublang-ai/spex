@@ -136,14 +136,13 @@ import { readAgentOptions, type AgentModelDiscovery } from "./agent-options.js";
 import { DEFAULT_ADAPTER_IMPORTS } from "./agent-runtime.js";
 import { canonicalHost, codeCredentialsPath, codeCredentialStore, isAdapterName, type AgentCredential, type CodeCredentialStore, type HostCredential } from "./code-credentials.js";
 import { AGENT_CREDENTIAL_FORMS, SeatEnvironment, seatAdapterImports, seatCredentialHalf, type SeatCredentialSources } from "./seat-credentials.js";
-import { SpaceManager, type SpaceHost } from "./space.js";
+import { SpaceManager, type SpaceHost, type SpaceStepEvent } from "./space.js";
 import { Places } from "./places.js";
 import { GitHostClient, SEAT_ID_MAX, fileCredentialStore } from "./git-host.js";
 import { relayHostError } from "./space-groups.js";
 import { currentRuntime, withGitCredential } from "./git-credential.js";
 import { configureSeatGit } from "./seat-git.js";
 import { displayRemote, validateRemoteUrl } from "./space-git.js";
-import type { SpaceOp, SyncStep } from "./protocol.js";
 import { isFastModeSupported, isSubagentModelSupported } from "@sublang/cligent";
 import type { PlayerAdapterImports } from "@sublang/cligent/tmux-play";
 
@@ -230,8 +229,10 @@ export interface CoreServiceOptions {
   hostHoldMaxMs?: number;
   /** Test seam: awaited before each Space step runs, and inside Save
    * between its validation and its commit (`at: "commit"`), so a suite can
-   * act between them deterministically. */
-  spaceBeforeStep?: (event: { op: SpaceOp; step: SyncStep; repository: string; at?: "commit" }) => void | Promise<void>;
+   * act between them deterministically; a placement's step names that
+   * placement, and the catch-up's push is marked `at: "catch-up"`
+   * (space-12). */
+  spaceBeforeStep?: (event: SpaceStepEvent) => void | Promise<void>;
   /** Your own group's folder name for a new home; this device's user
    * name by default (storage-2). */
   own?: string;
@@ -2789,7 +2790,7 @@ export class CoreService {
           if (key === this.store.home.own() && !this.store.home.folderOf(key)) throw noProject(key);
         };
         assertProject();
-        // What has not reached the host asks a second confirmation
+        // What no placement's `spex` holds asks a second confirmation
         // naming the count (projects-9).
         if (command.confirm !== true) {
           const units = await this.space.pendingUnits(key);
@@ -3539,6 +3540,18 @@ export class CoreService {
         return this.requireSpace().forget(command.instance);
       case "space.pick":
         return this.requireSpace().pick(command.repository, command.choice, command.noticed === true);
+      // A placement at another instance, an operation of the clone's
+      // machine (space-97, DR-128).
+      case "space.place":
+        return this.requireSpace().place(command.repository, command.choice, command.noticed === true);
+      // A placement left, an operation of the clone's machine (space-98,
+      // DR-128).
+      case "space.leave":
+        return this.requireSpace().leave(command.repository, command.instance, command.confirmed === true);
+      // A placement a file names, attached as an operation of the clone's
+      // machine (space-99, DR-128).
+      case "space.attach":
+        return this.requireSpace().attach(command.repository, command.instance, command.noticed);
       case "space.join":
         return this.requireSpace().join(command.instance, command.hostId, command.folder === undefined ? undefined : expandPath(command.folder, this.home));
       case "space.members":
@@ -3557,7 +3570,7 @@ export class CoreService {
       case "space.group.delete":
         return this.requireSpace().deleteGroup(command.instance, command.group);
       case "space.repository.move":
-        return this.requireSpace().moveRepository(command.repository, command.groupId);
+        return this.requireSpace().moveRepository(command.repository, command.groupId, command.instance);
       case "space.share":
         return this.requireSpace().share({ instance: command.instance, repository: command.repository, group: command.group, login: command.login, role: command.role });
       case "space.unshare":
@@ -3568,6 +3581,7 @@ export class CoreService {
         return this.requireSpace().fetch(command.repository);
       case "space.sync":
         return this.requireSpace().sync(command.repository, {
+          ...(command.placement !== undefined ? { placement: command.placement } : {}),
           ...(command.choices ? { choices: command.choices } : {}),
           ...(command.join !== undefined ? { join: command.join } : {}),
           ...(command.noticed !== undefined ? { noticed: command.noticed } : {}),
@@ -3575,7 +3589,7 @@ export class CoreService {
       case "space.cancel":
         return { stopped: this.requireSpace().cancel(command.repository) };
       case "space.diff":
-        return this.requireSpace().diff(command.repository, command.unit, command.path, command.side);
+        return this.requireSpace().diff(command.repository, command.unit, command.path, command.side, command.placement);
       case "space.tree":
         return this.requireSpace().tree(command.repository, command.path);
       case "space.read":

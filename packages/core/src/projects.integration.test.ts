@@ -2,14 +2,16 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // Projects as working folders paired with spex repositories (projects-9,
-// projects-10, projects-21): removal forgets the pair and deletes the
-// clone, asking a second confirmation while the clone holds what has not
-// reached the host, and leaves the working folder exactly as it was.
+// projects-10, projects-21, projects-40): removal forgets the pair and
+// deletes the clone, asking a second confirmation while the clone holds
+// a unit no placement's `spex` holds, as last fetched or pushed or at
+// their last shared commit — every unit of a local-only one — and leaves
+// the working folder exactly as it was and every instance unchanged.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { WebSocket } from "ws";
@@ -18,8 +20,11 @@ import { CoreService } from "./service.js";
 import { fakeAdapterImports } from "./testing/fake-adapter.js";
 import { createScriptedCaptain } from "./testing/scripted-captain.js";
 import { scratchDir } from "./testing/scratch.js";
-import { rowsOf } from "./testing/space-harness.js";
+import { bareOf, clonePath, createSpaceHarness, hostKey, placementOf, rowsOf } from "./testing/space-harness.js";
 import type { Command, CommandResults, ServerMessage } from "./protocol.js";
+
+const fixture = createSpaceHarness();
+test.after(() => fixture.dispose());
 
 const CONFIG = `captain:
   adapter: claude
@@ -191,4 +196,114 @@ test("projects-21: removal deletes the clone behind a second confirm naming its 
     client.close();
     await service.stop();
   }
+});
+
+test("projects-40, projects-9: a project placed at two stand-in instances, while a session neither placement's `spex` holds stands, asks the second confirmation naming that one unit, deleting nothing; once every unit is held by one placement or the other — the sessions synced while the first's transport failed held by the second alone — it is removed on the first confirm alone, nothing at either instance changed", async (t) => {
+  const { gitFolder, addFolder, startHome, startHost, signIn, runTurn } = fixture;
+  const first = await startHost();
+  const second = await startHost({ displayName: "Second stand-in", person: { id: "1002", login: "bob", displayName: "Bob" } });
+  const home = await startHome("removal-placed", { host: first, project: false });
+  t.after(() => home.stop());
+  // Signed in to both: your own group created at the first, then placed
+  // at the second, waiting there for Continue (space-94).
+  let mark = home.client.mark();
+  await signIn(home, first);
+  await home.client.waitRepository(mark, "ada/ada-spex", (repository) => repository.sync.phase === "done", 30_000);
+  mark = home.client.mark();
+  await signIn(home, second);
+  await home.client.waitRepository(mark, "ada/ada-spex", (repository) => repository.sync.phase !== "running" && repository.placements[1]?.outcome?.kind === "waiting", 30_000);
+
+  // A fixture repository whose spex repository is created in the
+  // first's acme and then placed in the second's, both synced.
+  const { key: local } = await addFolder(home, gitFolder("atlas"));
+  mark = home.client.mark();
+  await home.client.expectOk("space.pick", { repository: local, choice: { kind: "create", instance: first.url, groupId: "2002", name: "atlas" } });
+  const key = hostKey(first, "acme/atlas-spex");
+  await home.client.waitRepository(mark, key, (repository) => repository.sync.phase === "done", 30_000);
+  const placed = await home.client.settle("space.place", { repository: key, choice: { kind: "create", instance: second.url, groupId: "2002", name: "atlas" }, noticed: true }, 30_000);
+  assert.deepEqual(placed.placements.map((line) => [line.attached, line.outcome?.kind]), [[true, "synced"], [true, "synced"]]);
+  const clone = clonePath(home.dataDir, key);
+  const firstBare = bareOf(first, key);
+  const secondBare = second.script.repositories.find((repository) => repository.group.fullPath === "acme" && repository.path === "atlas-spex")?.bare;
+  assert.ok(secondBare, "created at the second");
+  const sessionsAt = (bare: string): string[] => git(bare, "ls-tree", "-r", "--name-only", "spex", "sessions").split("\n").filter((path) => path !== "");
+
+  // The first's transport failing, a session's turn reaches the second
+  // alone: the first's line stops at Check, the second's syncs.
+  first.script.failTransport(503);
+  t.after(() => first.script.failTransport(null));
+  const reached = await runTurn(home, key, "Note the plan");
+  const synced = await home.client.settle("space.sync", { repository: key }, 30_000);
+  assert.deepEqual(synced.placements.map((line) => line.outcome?.kind), ["stopped", "synced"]);
+  assert.ok(sessionsAt(secondBare).some((path) => path.startsWith(`sessions/${reached}`)), "the second holds the session");
+  assert.ok(!sessionsAt(firstBare).some((path) => path.startsWith(`sessions/${reached}`)), "the first does not");
+
+  // A second session's turn, synced nowhere: the one unit neither
+  // placement holds asks the second confirmation, naming that one unit;
+  // the session the second alone holds is not counted (projects-9).
+  const unsent = await runTurn(home, key, "Draft the next step");
+  const refused = await home.client.command("project.remove", { projectId: key });
+  assert.ok(!refused.ok, "the first confirm is refused");
+  assert.equal(refused.error.code, "conflict");
+  assert.match(refused.error.message, /^1 record has not reached the host/);
+  assert.deepEqual((refused.error as { details?: unknown }).details, { units: 1 });
+  assert.ok(existsSync(join(clone, ".git")), "nothing is deleted before the second confirm");
+
+  // Synced while the first still fails, every unit is held by one
+  // placement or the other — both sessions by the second alone — and the
+  // removal goes on the first confirm alone (projects-9, projects-10).
+  const again = await home.client.settle("space.sync", { repository: key }, 30_000);
+  assert.deepEqual(again.placements.map((line) => line.outcome?.kind), ["stopped", "synced"]);
+  assert.ok(sessionsAt(secondBare).some((path) => path.startsWith(`sessions/${unsent}`)), "the second holds the second session");
+  assert.deepEqual(sessionsAt(firstBare), [], "the first holds neither session");
+  first.script.failTransport(null);
+  const atFirst = git(firstBare, "rev-parse", "spex");
+  const atSecond = git(secondBare, "rev-parse", "spex");
+  assert.equal(await home.client.expectOk("project.remove", { projectId: key }), null);
+  assert.ok(!existsSync(clone), "the clone is gone");
+  assert.ok(!(await home.client.expectOk("project.list", {})).some((project) => project.id === key), "no project card for it remains");
+  assert.deepEqual([git(firstBare, "rev-parse", "spex"), git(secondBare, "rev-parse", "spex")], [atFirst, atSecond], "nothing at either instance changed");
+});
+
+test("projects-9, projects-40: a project whose one placement holds a peer's change to a unit this device left unchanged since their last shared commit — fetched, not merged — counts that unit as reached: a unit changed here asks the second confirmation naming it alone, and without it the removal goes on the first confirm, nothing at the instance changed", async (t) => {
+  const { gitFolder, addFolder, startHome, startHost, signIn, peerClone, peerPush } = fixture;
+  const host = await startHost();
+  const home = await startHome("removal-incoming", { host, project: false });
+  t.after(() => home.stop());
+  let mark = home.client.mark();
+  await signIn(home, host);
+  await home.client.waitRepository(mark, "ada/ada-spex", (repository) => repository.sync.phase === "done", 30_000);
+  const { key: local } = await addFolder(home, gitFolder("cedar"));
+  mark = home.client.mark();
+  await home.client.expectOk("space.pick", { repository: local, choice: { kind: "create", instance: host.url, groupId: "2002", name: "cedar" } });
+  const key = hostKey(host, "acme/cedar-spex");
+  await home.client.waitRepository(mark, key, (repository) => repository.sync.phase === "done", 30_000);
+  const clone = clonePath(home.dataDir, key);
+  const bare = bareOf(host, key);
+  writeFileSync(join(clone, "notes.md"), "as this device wrote it\n");
+  assert.equal((await home.client.settle("space.sync", { repository: key }, 30_000)).sync.phase, "done");
+
+  // A peer rewrites the unit at the placement, and this device fetches
+  // that without merging it: the clone holds it as at their last shared
+  // commit (space-12).
+  await peerPush(peerClone(bare), (dir) => { writeFileSync(join(dir, "notes.md"), "as a peer rewrote it\n"); });
+  const fetched = await home.client.settle("space.fetch", { repository: key }, 30_000);
+  assert.deepEqual(placementOf(fetched, host.url).incoming.map((unit) => unit.unit), ["notes.md"]);
+
+  // A unit changed here and sent nowhere asks the second confirmation,
+  // naming it alone (projects-9).
+  writeFileSync(join(clone, "draft.md"), "changed here, sent nowhere\n");
+  const refused = await home.client.command("project.remove", { projectId: key });
+  assert.ok(!refused.ok, "the first confirm is refused");
+  assert.equal(refused.error.code, "conflict");
+  assert.deepEqual((refused.error as { details?: unknown }).details, { units: 1 });
+  assert.ok(existsSync(join(clone, ".git")), "nothing is deleted before the second confirm");
+
+  // Without it, the unit only the peer changed has reached the
+  // placement, and the removal goes on the first confirm alone.
+  rmSync(join(clone, "draft.md"));
+  const atHost = git(bare, "rev-parse", "spex");
+  assert.equal(await home.client.expectOk("project.remove", { projectId: key }), null);
+  assert.ok(!existsSync(clone), "the clone is gone");
+  assert.equal(git(bare, "rev-parse", "spex"), atHost, "nothing at the instance changed");
 });

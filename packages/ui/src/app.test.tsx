@@ -858,6 +858,7 @@ describe("space-59, space-60, space-63: the page follows a project a move re-key
             {
               id: "30", login: null, mine: false, fullPath: "acme", name: "acme",
               can: { createSubgroup: false, manageMembers: false, rename: false, delete: false },
+              placed: [],
               repositories: [repositoryRow("p1", { instance: "https://second.test", folder: "/tmp/alpha", state: "reachable" })],
             },
           ],
