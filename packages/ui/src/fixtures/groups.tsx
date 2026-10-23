@@ -15,6 +15,8 @@ import type {
   HostMemberInfo,
   InstanceGroupState,
   InstanceState,
+  PlacementBranch,
+  PlacementState,
   RepositoryState,
   SpaceConflict,
   SpaceEntry,
@@ -24,9 +26,9 @@ import type {
 
 import { SpaceSurface } from "../components/SpaceSurface.js";
 import { deliverServerMessageForTests, setClientForTests, useAppStore } from "../state/store.js";
-import { namespace } from "./groups-state.js";
+import { NO_CAN, namespace, placementState, rowOf, type RowOver } from "./groups-state.js";
 
-export { NO_CAN, namespace } from "./groups-state.js";
+export { NO_CAN, namespace, placementState, type RowOver } from "./groups-state.js";
 
 export const NOW = Date.now();
 export const MIN = 60_000;
@@ -157,22 +159,38 @@ export const CONFLICTS: SpaceConflict[] = [
   },
 ];
 
-export const BRANCH: NonNullable<RepositoryState["branch"]> = {
+export const BRANCH: PlacementBranch = {
   ahead: 2,
   behind: 1,
   checkedAt: NOW - 5 * MIN,
   hostEmpty: false,
   unrelated: false,
-  mergePending: false,
   agreed: null,
 };
 
+/** The opened project's placement at the fixtures' instance, held and
+ * reachable, its only member the account, nothing synced since its
+ * check, unless a test says otherwise (space-30, space-87). */
+export function placement(over: Partial<PlacementState> = {}): PlacementState {
+  return placementState({
+    instance: ORIGIN,
+    path: "jane/academy-spex",
+    id: "42",
+    members: 1,
+    visibility: "private",
+    branch: BRANCH,
+    noticed: true,
+    ...over,
+  });
+}
+
 /** The opened project's spex repository, reachable, nothing changed,
  * governed by its instance — by none while local only — unless a test
- * says otherwise (space-30). */
-export function repo(over: Partial<RepositoryState> = {}): RepositoryState {
+ * says otherwise (space-30): what a test says of its key placement is
+ * that placement's line, as `rowOf` routes it. */
+export function repo(over: RowOver = {}): RepositoryState {
   const instance = over.instance === undefined ? ORIGIN : over.instance;
-  return {
+  return rowOf({
     key: KEY,
     instance,
     governing: over.state === "local-only" ? null : instance,
@@ -186,7 +204,6 @@ export function repo(over: Partial<RepositoryState> = {}): RepositoryState {
     state: "reachable",
     reason: null,
     mergePending: false,
-    placements: [],
     placedAt: [],
     waiting: null,
     members: 1,
@@ -200,21 +217,28 @@ export function repo(over: Partial<RepositoryState> = {}): RepositoryState {
     sync: { phase: "idle" },
     can: { manageMembers: false, transfer: false },
     ...over,
-  };
+  });
+}
+
+/** Your own group's spex repository, on the host, as a test says
+ * otherwise of it. */
+export function ownRepo(over: RowOver = {}): RepositoryState {
+  return repo({
+    key: OWN,
+    name: "jane-spex",
+    id: "7",
+    own: true,
+    remote: OWN,
+    code: null,
+    folder: null,
+    branch: null,
+    lastSync: { at: NOW - 3 * HOUR, sent: 1, received: 0 },
+    ...over,
+  });
 }
 
 /** Your own group's spex repository, on the host. */
-export const OWN_REPO: RepositoryState = repo({
-  key: OWN,
-  name: "jane-spex",
-  id: "7",
-  own: true,
-  remote: OWN,
-  code: null,
-  folder: null,
-  branch: null,
-  lastSync: { at: NOW - 3 * HOUR, sent: 1, received: 0 },
-});
+export const OWN_REPO: RepositoryState = ownRepo();
 
 /** The host's own roles in its order, Developer upward may push
  * (DR-114): what a host read brings. */
@@ -289,7 +313,7 @@ export function withGroups(state: GroupsState, ...groups: InstanceGroupState[]):
  * still bearing this device's user name, its own spex repository on this
  * device only, beside the given rows. */
 export function noInstance(over: Partial<GroupsState> = {}, repos: RepositoryState[] = []): GroupsState {
-  const own = { ...OWN_REPO, state: "local-only" as const, governing: null, remote: null, id: null, lastSync: null };
+  const own = ownRepo({ state: "local-only", remote: null, id: null, lastSync: null });
   return base({ instances: [], own: { name: "jane", named: true, repositories: [own, ...repos] }, ...over });
 }
 
@@ -330,9 +354,147 @@ export function twoInstances(over: HomeOver = {}, repos: RepositoryState[] = [re
   };
 }
 
+/** The project at the first instance alone, whose placement file names
+ * a repository the second lists (space-95). */
+export const BETA = "@spex.example/jane/beta-spex";
+/** A project on this device only, in your own group's folder. */
+export const GAMMA = "jane/gamma-spex";
+/** A group's own spex repository at the first instance. */
+export const ACME = "@spex.example/acme/acme-spex";
+
+/**
+ * A home signed in to two instances, as space-95 arranges it (DR-128):
+ * the opened project placed at both — its key placement at the first in
+ * your namespace, its second in the second's `workshop`, whose listing
+ * names it as placed there; a project at the first alone whose placement
+ * file names a repository the second's `workshop` lists, with two
+ * members; a local-only project; a group's own spex repository in the
+ * first's `acme`; and your own group's own repository placed at both,
+ * which each namespace lists. `placedAt` is what the files say.
+ */
+export function twoPlacementsHome(): GroupsState {
+  const may = { manageMembers: true, transfer: true };
+  const academy = repo({
+    placedAt: [ORIGIN, SECOND],
+    lastSync: { at: NOW - 5 * MIN, sent: 1, received: 0 },
+    can: may,
+    placements: [
+      placement({ lastSync: { at: NOW - 5 * MIN, sent: 1, received: 0 }, can: may }),
+      placementState({
+        instance: SECOND,
+        path: "workshop/academy-spex",
+        id: "52",
+        members: 2,
+        visibility: "private",
+        branch: { ...BRANCH, ahead: 0, behind: 0 },
+        noticed: true,
+        lastSync: { at: NOW - HOUR, sent: 0, received: 1 },
+        can: may,
+      }),
+    ],
+  });
+  const beta = repo({
+    key: BETA,
+    name: "beta-spex",
+    id: "43",
+    remote: "jane/beta-spex",
+    code: "https://github.com/jane/beta.git",
+    folder: "/Users/jane/code/beta",
+    placedAt: [ORIGIN, SECOND],
+    lastSync: { at: NOW - 2 * HOUR, sent: 2, received: 0 },
+    can: may,
+    placements: [
+      placement({ path: "jane/beta-spex", id: "43", lastSync: { at: NOW - 2 * HOUR, sent: 2, received: 0 }, can: may }),
+      placementState({
+        instance: SECOND,
+        path: "workshop/beta-spex",
+        id: "53",
+        attached: false,
+        state: "absent",
+        members: 2,
+        visibility: "private",
+      }),
+    ],
+  });
+  const gamma = repo({
+    key: GAMMA,
+    name: "gamma-spex",
+    instance: null,
+    id: null,
+    remote: null,
+    code: "https://github.com/jane/gamma.git",
+    folder: "/Users/jane/code/gamma",
+    state: "local-only",
+    branch: null,
+    members: null,
+    visibility: null,
+  });
+  const acme = repo({
+    key: ACME,
+    name: "acme-spex",
+    id: "60",
+    remote: "acme/acme-spex",
+    code: null,
+    folder: null,
+    members: 3,
+    lastSync: { at: NOW - 4 * HOUR, sent: 0, received: 2 },
+    placedAt: [ORIGIN],
+  });
+  const own = ownRepo({
+    placedAt: [ORIGIN, SECOND],
+    placements: [
+      placement({ path: OWN, id: "7", branch: null, lastSync: { at: NOW - 3 * HOUR, sent: 1, received: 0 } }),
+      placementState({
+        instance: SECOND,
+        path: "jada/jada-spex",
+        id: "71",
+        members: 1,
+        visibility: "private",
+        noticed: true,
+        lastSync: { at: NOW - 3 * HOUR, sent: 1, received: 0 },
+      }),
+    ],
+  });
+  const home = twoInstances({}, [academy, beta]);
+  const [first, second] = home.instances;
+  const ownPlaced = [{ key: OWN, name: "jane-spex" }];
+  return {
+    ...home,
+    own: { ...home.own, repositories: [own, gamma] },
+    instances: [
+      {
+        ...first!,
+        groups: [
+          { id: "3", login: null, mine: false, fullPath: "acme", name: "Acme", can: NO_CAN, placed: [], repositories: [acme] },
+          { ...namespace("jane", [academy, beta]), placed: ownPlaced },
+        ],
+      },
+      {
+        ...second!,
+        groups: [
+          {
+            id: "81",
+            login: null,
+            mine: false,
+            fullPath: "workshop",
+            name: "Workshop",
+            can: NO_CAN,
+            placed: [
+              { key: KEY, name: "academy-spex" },
+              { key: BETA, name: "beta-spex" },
+            ],
+            repositories: [],
+          },
+          { ...namespace("jada"), placed: ownPlaced },
+        ],
+      },
+    ],
+  };
+}
+
 /** The opened repository with local changes of every kind, listed out
  * of order so the grouping is what orders them. */
-export function repoState(over: Partial<RepositoryState> = {}, home: HomeOver = {}): GroupsState {
+export function repoState(over: RowOver = {}, home: HomeOver = {}): GroupsState {
   return base(home, [
     repo({
       local: [OTHER_UNIT, SETTINGS_UNIT, SESSION_UNIT, RULES_UNIT, INTENT_UNIT, CODE_UNIT, ENVIRONMENT_UNIT, AUTHORING_UNIT, DELETED_SESSION],
@@ -350,6 +512,7 @@ export const TREE: Record<string, SpaceEntry[]> = {
     { name: "sessions", path: "sessions", kind: "dir", family: "Not a Spex folder", sync: "shared", count: 4, preview: "none" },
     { name: "intents", path: "intents", kind: "dir", family: "Not a Spex folder", sync: "pending", count: 0, preview: "none" },
     { name: "packages", path: "packages", kind: "dir", family: "installed spec packages", sync: "local", count: 1, preview: "none" },
+    { name: "placements", path: "placements", kind: "dir", family: "placement", sync: "shared", count: 1, preview: "none" },
     { name: "spex.yaml", path: "spex.yaml", kind: "file", family: "spec package requests", sync: "local", size: 512, preview: "text" },
     { name: "project.json", path: "project.json", kind: "file", family: "code remote", sync: "shared", size: 4200, preview: "text" },
     { name: "README.md", path: "README.md", kind: "file", family: "Not a Spex file", sync: "pending", size: 300, preview: "text" },
@@ -362,6 +525,11 @@ export const TREE: Record<string, SpaceEntry[]> = {
     { name: "s1.hints.json", path: "sessions/s1.hints.json", kind: "file", family: "provider hints", sync: "local", size: 100, owner: owner("s1", "Fix the login redirect"), preview: "withheld" },
     { name: "s1.chunks", path: "sessions/s1.chunks", kind: "dir", family: "session chunks", sync: "shared", count: 1, owner: owner("s1", "Fix the login redirect"), preview: "none" },
     { name: "s2.json", path: "sessions/s2.json", kind: "file", family: "session manifest", sync: "pending", size: 900, owner: owner("s2", "Draft the release notes"), preview: "text" },
+  ],
+  // The placement's file at the fixtures' instance (storage-36): its
+  // folder is the instance's, and it names nothing of the Git system.
+  placements: [
+    { name: "@spex.example.yaml", path: "placements/@spex.example.yaml", kind: "file", family: "placement", sync: "shared", size: 52, preview: "text" },
   ],
   "sessions/s1.chunks": [
     { name: "a".repeat(64), path: `sessions/s1.chunks/${"a".repeat(64)}`, kind: "file", family: "session chunks", sync: "shared", size: 128, owner: owner("s1", "Fix the login redirect"), preview: "binary" },
@@ -415,7 +583,10 @@ export async function answer(type: string, fields: Record<string, unknown> = {})
     case "space.fetch":
     case "space.sync":
     case "space.pick":
+    case "space.place":
     case "space.join":
+    case "space.attach":
+    case "space.leave":
       return { accepted: true };
     case "space.cancel":
     case "space.signin.cancel":

@@ -972,7 +972,7 @@ describe("run-view-58, projects-4: the Overview tab pins the project's group", (
     ).toContain("No GitHub origin remote");
   });
 
-  test("the header's records field names the spex repository with its group and its state", async () => {
+  test("projects-4, space-61: the header's records field names the spex repository with its group and its state, a waiting creation's phrase standing in place of it", async () => {
     const row = (state: "local-only", extra: Parameters<typeof repositoryRow>[1] = {}) =>
       repositoryRow("p1", { name: "alpha-spex", folder: "/tmp/alpha", state, ...extra });
     const groups = (repository: ReturnType<typeof row>) => groupsState({ own: { name: "me", named: true, repositories: [repository] } });
@@ -998,7 +998,9 @@ describe("run-view-58, projects-4: the Overview tab pins the project's group", (
     );
     expect(commandMock).toHaveBeenCalledWith("space.get", {});
 
-    // The Groups broadcast moves it: a waiting creation reads its phrase.
+    // The Groups broadcast moves it: a waiting creation reads its phrase,
+    // which the Groups surface carries on its placement's line alone
+    // (space-64).
     act(() => {
       deliverServerMessageForTests({
         type: "space.state",

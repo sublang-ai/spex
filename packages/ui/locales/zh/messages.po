@@ -119,7 +119,7 @@ msgstr "{actor} · 第 {turn} 轮"
 msgid "{adapter} is not ready — check Settings"
 msgstr "{adapter} 未就绪 — 请查看设置"
 
-#: src/components/SpaceGroups.tsx
+#: src/lib/space.ts
 msgid "{ahead, plural, one {# commit} other {# commits}} ahead, {behind, plural, one {# commit} other {# commits}} behind · checked {at}"
 msgstr "领先 {ahead, plural, other {# 个提交}}，落后 {behind, plural, other {# 个提交}} · {at} 检查过"
 
@@ -253,6 +253,11 @@ msgstr "{count, plural, other {# 个会话需要关注}}"
 #: src/components/NavRail.tsx
 msgid "{count, plural, one {# turn} other {# turns}}"
 msgstr "{count, plural, other {# 个轮次}}"
+
+#. Leave…'s second confirm: units no remaining placement holds; {name} is the instance's display name
+#: src/components/SpacePlacementActs.tsx
+msgid "{count, plural, one {# unit has} other {# units have}} reached no other instance yet. Remove from {name} anyway?"
+msgstr "{count, plural, other {# 个单元}}尚未到达其他任何实例。仍要从 {name} 移除吗？"
 
 #: src/lib/failure-catalogue.ts
 msgid "{count, plural, one {Changed # file without committing} other {Changed # files without committing}}"
@@ -433,6 +438,16 @@ msgstr "{name} 在本次对话中的设置"
 msgid "{name} settings: {reading}"
 msgstr "{name} 设置：{reading}"
 
+#. a line, with no control, under a group of an instance, or a login there, whose listing holds a placement of a spex repository standing elsewhere; {name} is that spex repository's name, {group} the group it stands under, read by its name, then ' · ' and its path where the two differ, or the login it stands under, and {instance} the display name of that group's instance
+#: src/lib/placements.ts
+msgid "{name} stands under {group} at {instance}"
+msgstr "{name} 位于 {instance} 的 {group} 下"
+
+#. a line, with no control, under a group of an instance, or a login there, whose listing holds a placement of a spex repository standing under your own group; {name} is that spex repository's name
+#: src/lib/placements.ts
+msgid "{name} stands under your own group"
+msgstr "{name} 位于你自己的群组下"
+
 #: src/components/SpecGraph.tsx
 msgid "{name}, {items} items, cites {out}, cited by {in}"
 msgstr "{name}，{items} 个条目，引用 {out}，被引用 {in}"
@@ -555,6 +570,7 @@ msgid "{stage} not found beside this playbook's module"
 msgstr "在该规程的模块旁未找到 {stage}"
 
 #: src/components/SpaceGroups.tsx
+#: src/lib/space.ts
 msgid "{state} · last synced {at}"
 msgstr "{state} · 上次同步于 {at}"
 
@@ -569,8 +585,13 @@ msgstr "{step}已停止"
 
 #. {step} is the sync step's name; {message} is the cause the host gave
 #. {step} is the sync step's name; {message} is the cause the host gave
+#. {step} is the sync step's name; {message} is the cause the host gave
+#. {step} is the sync step's name; {message} is the cause the host gave
+#. {step} is the sync step's name; {message} is the cause the host gave
+#: src/components/SpaceGroups.tsx
 #: src/components/SpaceSurface.tsx
 #: src/components/SpaceSync.tsx
+#: src/lib/space.ts
 msgid "{step} stopped — {message}"
 msgstr "{step}已停止 — {message}"
 
@@ -1104,6 +1125,11 @@ msgstr "兼 {position}"
 msgid "Also answers {positions}"
 msgstr "同时担任 {positions}"
 
+#. the title and accessible name of Place at… where one instance is offered, and of each instance in its choice; {name} is the instance's display name, or its host name before any read
+#: src/components/SpacePlacementActs.tsx
+msgid "Also place at {name}"
+msgstr "同时放到 {name}"
+
 #: src/components/AgentSettings.tsx
 msgid "Also sets {positions}"
 msgstr "同时设定 {positions}"
@@ -1224,9 +1250,19 @@ msgstr "位于 {state} — 正在调用 /{playbookId}"
 msgid "at {state} → calling /{playbookId}"
 msgstr "位于 {state} → 正在调用 /{playbookId}"
 
+#. on a line naming a placement another device named, not yet on this device: brings it here after the sharing notice
+#: src/components/SpacePlacements.tsx
+msgid "Attach"
+msgstr "接入"
+
 #: src/components/ComposerAttachments.tsx
 msgid "Attach files"
 msgstr "添加文件"
+
+#. the Attach control while the placement is added and synced
+#: src/components/SpacePlacements.tsx
+msgid "Attaching…"
+msgstr "接入中…"
 
 #: src/components/Composer.tsx
 #: src/components/DraftConversation.tsx
@@ -1288,6 +1324,11 @@ msgstr "返回 {id}"
 msgid "Back to the playbook list — the session stays as it is"
 msgstr "返回规程列表 — 会话保持原样"
 
+#. a placement's line: the sync left its copy behind this device's; another Sync carries it
+#: src/lib/space.ts
+msgid "Behind — Sync again"
+msgstr "落后 — 请再次同步"
+
 #: src/components/ProjectsSurface.tsx
 msgid "behind upstream"
 msgstr "落后于上游"
@@ -1331,7 +1372,7 @@ msgstr "把文件引入为源文，再请求改编它"
 msgid "Brings back anything new; sends nothing"
 msgstr "只取回新的内容，不发出任何内容"
 
-#: src/components/SpaceGroups.tsx
+#: src/components/SpacePlacements.tsx
 msgid "Brings both histories into one and asks about anything that differs"
 msgstr "把两段历史合为一段，并就有差异之处询问你"
 
@@ -1345,6 +1386,7 @@ msgid "Brings it to this device"
 msgstr "将它取到此设备上"
 
 #: src/components/SpaceSync.tsx
+#: src/lib/space.ts
 msgid "Brought {received}; nothing sent"
 msgstr "收到 {received}；未发出任何内容"
 
@@ -1456,6 +1498,8 @@ msgstr "无法连接 {endpoint} 上的 Spex 核心 — 每秒重试中。网页�
 #. leave the editor without changing anything
 #. leave the editor without changing anything
 #. leave the editor without changing anything
+#. leave the editor without changing anything
+#. leave the editor without changing anything
 #. stop the running compile
 #: src/components/AgentEditor.tsx
 #: src/components/AgentSettings.tsx
@@ -1468,6 +1512,7 @@ msgstr "无法连接 {endpoint} 上的 Spex 核心 — 每秒重试中。网页�
 #: src/components/SpaceGroups.tsx
 #: src/components/SpaceInstance.tsx
 #: src/components/SpaceMembers.tsx
+#: src/components/SpacePlacementActs.tsx
 #: src/components/SpaceServers.tsx
 #: src/components/SpaceSignIn.tsx
 #: src/components/SpaceSync.tsx
@@ -1983,8 +2028,8 @@ msgstr "连接已恢复。"
 msgid "Connection to the Spex core lost — reconnecting."
 msgstr "与 Spex 核心的连接已断开 — 正在重连。"
 
-#. confirm: go on with the first sync, or the pick joining a repository others share
-#: src/components/SpaceGroups.tsx
+#. confirm: go on with the first sync, or the pick joining a repository others share; on a placement's line waiting for the sharing notice, opens that notice
+#: src/components/SpacePlacements.tsx
 msgid "Continue"
 msgstr "继续"
 
@@ -2675,16 +2720,17 @@ msgstr "错误"
 msgid "Every role needs a player, and the command and intent their words"
 msgstr "每个角色都要有 Player，命令与意图都要填写"
 
-#: src/components/SpaceGroups.tsx
+#: src/components/SpacePlacements.tsx
 msgid "Every session goes there whole — hidden parts and attachments included — and nothing recalls what others downloaded."
 msgstr "每个会话都会完整地发往那里——包括隐藏部分和附件——他人已下载的内容无法收回。"
 
-#: src/components/SpaceGroups.tsx
+#: src/components/SpacePlacements.tsx
 msgid "Every session goes there whole — hidden parts and attachments included — and nothing recalls what others downloaded. This repository is public, so its records are public."
 msgstr "每个会话都会完整地发往那里——包括隐藏部分和附件——他人已下载的内容无法收回。此仓库是公开的，因此其中的记录也是公开的。"
 
 #: src/components/SpaceSurface.tsx
 #: src/components/SpaceSync.tsx
+#: src/lib/space.ts
 msgid "Everything is in sync"
 msgstr "全部已同步"
 
@@ -3358,6 +3404,7 @@ msgstr "它的 spex 仓库不在此设备上。"
 #. confirm: join both histories into one
 #. confirm: join both histories into one
 #: src/components/SpaceGroups.tsx
+#: src/components/SpacePlacements.tsx
 msgid "Join"
 msgstr "加入"
 
@@ -3372,7 +3419,7 @@ msgstr "重新加入"
 msgid "Join both histories into one to sync."
 msgstr "将两段历史合并为一段后即可同步。"
 
-#: src/components/SpaceGroups.tsx
+#: src/components/SpacePlacements.tsx
 msgid "Join both histories into one? Anything that differs will ask you to choose."
 msgstr "将两段历史合并为一段？有差异的内容会让你选择。"
 
@@ -3383,6 +3430,7 @@ msgstr "将两段历史合并为一段？有差异的内容会让你选择。"
 #. the Join control, while the join runs
 #: src/components/ProjectPalette.tsx
 #: src/components/SpaceGroups.tsx
+#: src/components/SpacePlacements.tsx
 msgid "Joining…"
 msgstr "加入中…"
 
@@ -3410,6 +3458,7 @@ msgstr "刚刚"
 #. cancel a removal: leave it as it is
 #. cancel a removal: leave it as it is
 #. cancel a removal: leave it as it is
+#. cancel a removal: leave it as it is
 #. cancel: keep the unsaved draft
 #. confirm: keep the intent open
 #. confirm: leave the run as it is
@@ -3423,6 +3472,7 @@ msgstr "刚刚"
 #: src/components/SettingsSurface.tsx
 #: src/components/SpaceGroups.tsx
 #: src/components/SpaceMembers.tsx
+#: src/components/SpacePlacementActs.tsx
 #: src/components/SpecEditor.tsx
 #: src/components/WorkingLine.tsx
 msgid "Keep"
@@ -3463,6 +3513,16 @@ msgstr "租约"
 #: src/lib/space.ts
 msgid "leases and locks"
 msgstr "租约与锁"
+
+#. on a project's row: stop keeping its records at one instance; its title and accessible name are "Remove from <display name>" where one is held
+#: src/components/SpacePlacementActs.tsx
+msgid "Leave…"
+msgstr "移除…"
+
+#. the Leave… control while that placement is checked and removed
+#: src/components/SpacePlacementActs.tsx
+msgid "Leaving…"
+msgstr "移除中…"
 
 #. catalog family: a session file an earlier release wrote
 #: src/lib/space.ts
@@ -3586,9 +3646,8 @@ msgstr "媒体不可用"
 
 #. list the people the host lets read a spex repository
 #. list the people the host lets read a spex repository
-#. list the people the host lets read a spex repository
-#. list the people the host lets read a spex repository
 #: src/components/SpaceGroups.tsx
+#: src/components/SpacePlacements.tsx
 msgid "Members"
 msgstr "成员"
 
@@ -3650,17 +3709,17 @@ msgid "Move the focused Up next row"
 msgstr "移动“接下来”中选中的行"
 
 #. move a spex repository into another group of the instance, or your own
-#: src/components/SpaceGroups.tsx
+#: src/components/SpacePlacements.tsx
 msgid "Move to another group"
 msgstr "移到另一个群组"
 
 #. open the groups a spex repository may move to; its full name is 'Move to another group'
-#: src/components/SpaceGroups.tsx
+#: src/components/SpacePlacements.tsx
 msgid "Move…"
 msgstr "移动…"
 
 #. the Move control, while the host moves the spex repository
-#: src/components/SpaceGroups.tsx
+#: src/components/SpacePlacements.tsx
 msgid "Moving…"
 msgstr "移动中…"
 
@@ -3707,6 +3766,7 @@ msgstr "需要你选择"
 
 #: src/components/SpaceSurface.tsx
 #: src/components/SpaceSync.tsx
+#: src/lib/space.ts
 msgid "Needs your choice"
 msgstr "需要你选择"
 
@@ -4460,6 +4520,7 @@ msgid "Pick a folder inside {folder}"
 msgstr "请选择 {folder} 内的文件夹"
 
 #. choose where on the Git host a project's records go
+#. choose where on the Git host a project's records go
 #: src/components/SpaceGroups.tsx
 msgid "Pick a group"
 msgstr "选择群组"
@@ -4496,9 +4557,24 @@ msgstr "指定一个值…"
 msgid "Place"
 msgstr "位置"
 
+#. on a project's row: opens another instance's picker to keep its records there too; its title and accessible name are "Also place at <display name>" where one instance is offered
+#: src/components/SpacePlacementActs.tsx
+msgid "Place at…"
+msgstr "放到…"
+
+#. catalog family: a file naming one instance these records are kept at, or the folder holding those files
+#: src/lib/space.ts
+msgid "placement"
+msgstr "放置"
+
 #: src/components/DraftConversation.tsx
 msgid "Places the six-line example as your first message"
 msgstr "把六行示例放为你的第一条消息"
+
+#. the Place at… control while the placement is made and synced
+#: src/components/SpacePlacementActs.tsx
+msgid "Placing…"
+msgstr "放置中…"
 
 #. the built-in /dev playbook's intent, as its registry entry states it
 #: src/lib/playbook-intent.ts
@@ -4805,6 +4881,7 @@ msgstr "读取中…"
 
 #. Refresh's title: it reads every instance the home is signed in to
 #: src/components/SpaceGroups.tsx
+#: src/components/SpacePlacements.tsx
 #: src/components/SpaceSurface.tsx
 msgid "Reads each signed-in instance again"
 msgstr "重新读取每个已登录的实例"
@@ -4845,6 +4922,16 @@ msgstr "重新连接中…"
 #: src/lib/space.ts
 msgid "records"
 msgstr "记录"
+
+#. the sharing notice's first sentence: {path} is the placement's path at the instance, {name} the instance's display name
+#: src/components/SpacePlacements.tsx
+msgid "Records go to {path} at {name}."
+msgstr "记录将发往 {name} 上的 {path}。"
+
+#. Leave…'s second confirm where that placement could not be read; {name} is the instance's display name
+#: src/components/SpacePlacementActs.tsx
+msgid "Records pushed to {name} since the last sync may be left behind. Remove anyway?"
+msgstr "上次同步后推送到 {name} 的记录可能会被留下。仍要移除吗？"
 
 #: src/lib/failure-catalogue.ts
 msgid "Recover them from your editor's history, if it keeps one"
@@ -4912,6 +4999,7 @@ msgstr "重新加载页面"
 
 #. confirm: forget this project, leaving the repo on disk
 #. confirm: forget this project, leaving the repo on disk
+#. confirm: stop keeping the records at that instance; nothing there changes
 #. confirm: take the member out on the Git host
 #. confirm: take this player out of the roster
 #. confirm: take this row off the record
@@ -4927,6 +5015,7 @@ msgstr "重新加载页面"
 #: src/components/ProjectsSurface.tsx
 #: src/components/SettingsSurface.tsx
 #: src/components/SpaceMembers.tsx
+#: src/components/SpacePlacementActs.tsx
 msgid "Remove"
 msgstr "移除"
 
@@ -4962,6 +5051,16 @@ msgstr "移除 @{login}"
 #: src/components/SpaceMembers.tsx
 msgid "Remove @{login} from {place}?"
 msgstr "要将 @{login} 从 {place} 中移除吗？"
+
+#. the title and accessible name of Leave… where one instance is held, and of each instance in its choice; {name} is the instance's display name, or its host name before any read
+#: src/components/SpacePlacementActs.tsx
+msgid "Remove from {name}"
+msgstr "从 {name} 移除"
+
+#. Leave…'s inline confirm, answered Remove or Keep; {name} is the instance's display name
+#: src/components/SpacePlacementActs.tsx
+msgid "Remove from {name}? Nothing at {name} changes; these records stop syncing there."
+msgstr "要从 {name} 移除吗？{name} 上的内容不会改变；这些记录将不再同步到那里。"
 
 #: src/components/ProjectsSurface.tsx
 msgid "Remove from Spex (repo stays on disk)"
@@ -5008,6 +5107,11 @@ msgstr "移除这条排队的消息"
 #: src/components/ProjectGroup.tsx
 msgid "Removed “{title}”"
 msgstr "已移除“{title}”"
+
+#. the live note once a placement is left; {name} is the instance's display name
+#: src/components/SpacePlacementActs.tsx
+msgid "Removed from {name}"
+msgstr "已从 {name} 移除"
 
 #. queue row control, busy: the removal is in flight
 #. the removal is in flight
@@ -5183,6 +5287,7 @@ msgstr "本机智能体对话的续接令牌；在别处无效"
 #. read the specs tree again
 #. run the stopped step again
 #. run the stopped step again
+#. run the stopped step again
 #. take the failed read again
 #. take the failed read again
 #. take the failed read again
@@ -5194,6 +5299,7 @@ msgstr "本机智能体对话的续接令牌；在别处无效"
 #: src/components/RunView.tsx
 #: src/components/SettingsSurface.tsx
 #: src/components/SpaceGroups.tsx
+#: src/components/SpacePlacements.tsx
 #: src/components/SpaceSync.tsx
 #: src/components/SpecEditor.tsx
 #: src/components/SpecView.tsx
@@ -5220,8 +5326,10 @@ msgstr "重试浏览器支持检查"
 #. a retry is in flight
 #. the Retry control, while the retry is in flight
 #. the Retry control, while the retry is in flight
+#. the Retry control, while the retry is in flight
 #: src/components/SettingsSurface.tsx
 #: src/components/SpaceGroups.tsx
+#: src/components/SpacePlacements.tsx
 #: src/components/SpaceSync.tsx
 msgid "Retrying…"
 msgstr "重试中…"
@@ -6081,6 +6189,7 @@ msgid "Synced {age}"
 msgstr "{age}同步"
 
 #: src/components/SpaceSync.tsx
+#: src/lib/space.ts
 msgid "Synced {age} · {sent} sent · {received} received"
 msgstr "{age}同步 · 发出 {sent} · 收到 {received}"
 
@@ -6352,6 +6461,11 @@ msgstr "工作流正在等待你的答复。"
 msgid "The workflow markdown the playbook was compiled from"
 msgstr "规程编译所用的工作流 markdown"
 
+#. a placement's members panel; {names} lists the other instances the records are kept at, by display name
+#: src/components/SpaceMembers.tsx
+msgid "These records are also placed at {names}"
+msgstr "这些记录也放在 {names}"
+
 #. stands where a project name would, for sessions with no folder
 #: src/components/SpaceSync.tsx
 msgid "these sessions"
@@ -6617,6 +6731,7 @@ msgstr "历史互不相关"
 
 #: src/components/SpaceSurface.tsx
 #: src/components/SpaceSync.tsx
+#: src/lib/space.ts
 msgid "Unrelated history"
 msgstr "历史互不相关"
 
@@ -6786,6 +6901,11 @@ msgstr "等待能在 {group} 中创建它的成员"
 msgid "Waiting for a member who can prepare its branch in {group}"
 msgstr "等待能在 {group} 中准备其分支的成员"
 
+#. a placement's line: its first push waits for the sharing notice to be seen; Continue stands beside it
+#: src/lib/space.ts
+msgid "Waiting for you to continue"
+msgstr "等待你继续"
+
 #: src/components/CompileBand.tsx
 msgid "waiting for your queued message"
 msgstr "等待你已排队的消息"
@@ -6904,9 +7024,10 @@ msgstr "浏览器已打开 {site}：请在那里登录并批准；完成后回�
 msgid "Your changes are saved locally ({count, plural, one {# commit} other {# commits}} ahead)."
 msgstr "更改已保存在本地（领先 {count, plural, other {# 个提交}}）。"
 
+#. the choices note; {name} is that placement's instance's display name, or the path placement's remote
 #: src/components/SpaceSync.tsx
-msgid "Your changes are saved; nothing is pushed yet"
-msgstr "更改已保存；尚未推送"
+msgid "Your changes are saved; nothing is pushed to {name} yet"
+msgstr "更改已保存；尚未推送到 {name}"
 
 #: src/components/CaptainHome.tsx
 msgid "Your config file has errors — playbooks are unavailable."
@@ -6928,6 +7049,11 @@ msgstr "你自己的群组"
 #: src/components/SettingsSurface.tsx
 msgid "Your own group's config, in {repository}"
 msgstr "你自己的群组的配置，位于 {repository}"
+
+#. the sign-in card opened from "Add instance…": your own group's records are kept at every instance the home signs in to, this one included
+#: src/components/SpaceInstance.tsx
+msgid "Your own group's records will be kept there too."
+msgstr "你自己的群组的记录也会保存在那里。"
 
 #: src/components/CaptainHome.tsx
 msgid "your project"

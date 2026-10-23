@@ -33,6 +33,7 @@ import type {
   DraftInfo,
   GroupsState,
   InstanceGroupState,
+  PlacementState,
   ProjectInfo,
   RepositoryState,
   SeatState,
@@ -72,13 +73,12 @@ const ALPHA: SeatState = {
 };
 const BETA: SeatState = { ...ALPHA, serverId: "42", name: "gpu-box", place: `${SPEX}#42` };
 
-const BRANCH: NonNullable<RepositoryState["branch"]> = {
+const BRANCH: NonNullable<PlacementState["branch"]> = {
   ahead: 0,
   behind: 0,
   checkedAt: 1,
   hostEmpty: false,
   unrelated: false,
-  mergePending: false,
   agreed: null,
 };
 

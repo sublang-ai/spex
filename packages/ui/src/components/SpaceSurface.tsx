@@ -10,7 +10,8 @@
 // under each signed-in instance, the team servers it lists with Open or
 // Close (run-view-170). The surface reads the store of the place the
 // selector names (run-view-168). Activating a row opens that
-// repository's Sync and Explore tabs beneath the list. The surface
+// repository's Sync and Explore tabs beneath the list, the row followed
+// by its folder where a Leave moves its clone (storage-38). The surface
 // renders the core's state and runs no Git and no call to the host
 // itself: every action is a command, a repository named by its key,
 // whose outcome arrives as state (space-29), and the state is re-read
@@ -31,6 +32,7 @@ import { isLocalPlace } from "../state/store.js";
 import { i18n } from "../i18n.js";
 import { useClock } from "../lib/useClock.js";
 import { allRepositories, anySignedIn } from "../lib/instances.js";
+import { instanceNameAt, placementAt } from "../lib/placements.js";
 import {
   STEP_LINES,
   STEP_NAMES,
@@ -45,6 +47,7 @@ import { Icon } from "./Icon.js";
 import { IssuesList, SyncTab } from "./SpaceSync.js";
 import { ExploreTab } from "./SpaceExplorer.js";
 import { GroupsList, statusDot } from "./SpaceGroups.js";
+import { removedFrom } from "./SpacePlacementActs.js";
 import { SignInCard, useSignIn, type SignInFlow } from "./SpaceSignIn.js";
 import { useServers } from "./SpaceServers.js";
 
@@ -83,7 +86,7 @@ export function syncRefusal(
 ): string | undefined {
   if (!groups.git.ok) return groups.git.guidance;
   if (repo.state === "absent") return i18n._("Not on this device");
-  if (repo.branch?.mergePending) {
+  if (repo.mergePending) {
     return i18n._("Finish or abort the merge in your terminal");
   }
   // A diagnostic shown under issues refuses nothing here: it may be
@@ -91,6 +94,25 @@ export function syncRefusal(
   // stand. An operation running here refuses nothing either (space-21):
   // its progress stands on the row instead.
   return undefined;
+}
+
+/** Focus once a row's Leave has run (DR-010 §6): only focus the Leave
+ * left with its row — on the name of the row under `from`, its key when
+ * Remove was asked, where Remove parked it, which a row of no clone
+ * standing under that key since keeps, or nowhere, its row moved — goes
+ * to its Leave…, else its Sync, else its "Pick a group" where the last
+ * Leave left it local only, else its name. */
+function focusAfterLeave(key: string, from: string = key): void {
+  const row = document.querySelector(`[data-testid="space-row-${key}"]`);
+  const name = row?.querySelector<HTMLElement>(`[data-testid="space-repo-${key}"]`);
+  if (!row || !name) return;
+  const parked = document.querySelector(`[data-testid="space-repo-${from}"]`);
+  const active = document.activeElement;
+  if (active && active !== document.body && active !== name && active !== parked) return;
+  const target = [`space-row-leave-${key}`, `space-row-sync-${key}`, `space-row-pick-${key}`]
+    .map((id) => row.querySelector<HTMLButtonElement>(`[data-testid="${id}"]`))
+    .find((control) => control !== null && !control.disabled);
+  (target ?? name).focus();
 }
 
 /** Reveal in the file manager where the bridge exists, Copy path
@@ -254,6 +276,11 @@ export function SpaceSurface({ onOpenSession, onOpenProject, onAddCredential }: 
   const [refreshing, setRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState<string>();
   const [note, setNote] = useState("");
+  // The sync phase the reader dismissed on each repository's Sync tab,
+  // by its key: the outcome cards it put away, and the same outcomes on
+  // its row's placement lines (space-15, space-87), stay away while the
+  // surface stands, whichever row is open.
+  const [dismissed, setDismissed] = useState<Readonly<Record<string, string>>>({});
 
   const onNote = useCallback<Note>((text) => setNote(text), []);
   const signIn = useSignIn(groups, onNote);
@@ -327,6 +354,51 @@ export function SpaceSurface({ onOpenSession, onOpenProject, onAddCredential }: 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [syncKey]);
 
+  // The state before this one: a row a first placement's Leave moved
+  // (storage-38) is the one new row holding its folder, and stays open
+  // as it was, even where a row holding another folder or none stands
+  // under the former key — the left instance's listing, not on this
+  // device; a Leave that has run and left its placement is said in the
+  // live note — not one that only followed it to another signed-in
+  // instance listing its host repository, which still holds it there
+  // (space-98) — focus that stayed with its row moving to its Leave…,
+  // or to its Sync where none is left (space-89, DR-010 §6, §7).
+  const previous = useRef<GroupsState | undefined>(undefined);
+  useEffect(() => {
+    const before = previous.current;
+    previous.current = groups;
+    if (!groups || !before) return;
+    const rows = allRepositories(groups);
+    const was = allRepositories(before);
+    const known = new Set(was.map((row) => row.key));
+    for (const old of was) {
+      let now = rows.find((row) => row.key === old.key);
+      // The clone is known by its folder (storage-38): a row under its
+      // former key holding another folder, or none, is another row.
+      if (old.folder !== null && now?.folder !== old.folder) {
+        const followers = rows.filter((row) => row.folder === old.folder && !known.has(row.key));
+        if (followers.length === 1) {
+          now = followers[0]!;
+          const to = now.key;
+          setSelected((current) => (current === old.key ? to : current));
+        }
+      }
+      if (!now) continue;
+      const left = old.sync.phase === "running" && old.sync.op === "leave" ? old.sync.placement : undefined;
+      if (typeof left !== "string") continue;
+      if (now.sync.phase === "running" && now.sync.op === "leave") continue;
+      if (placementAt(now, left)?.attached === true) continue;
+      const id = placementAt(old, left)?.id ?? null;
+      const followed =
+        id !== null &&
+        now.placements.some(
+          (line) => line.id === id && line.instance !== left && placementAt(old, line.instance)?.attached !== true,
+        );
+      if (!followed) setNote(removedFrom(instanceNameAt(groups, left)));
+      focusAfterLeave(now.key, old.key);
+    }
+  }, [groups]);
+
   const surfaceName = i18n._({
     id: "Groups",
     comment: "the surface: your groups on the Git host and their spex repositories",
@@ -376,6 +448,7 @@ export function SpaceSurface({ onOpenSession, onOpenProject, onAddCredential }: 
               selected={selected}
               connected={connected}
               refreshes={refreshes}
+              dismissed={dismissed}
               signIn={signIn}
               servers={servers.listing}
               onServersChanged={servers.reload}
@@ -391,6 +464,8 @@ export function SpaceSurface({ onOpenSession, onOpenProject, onAddCredential }: 
               repo={repo}
               now={now}
               connected={connected}
+              dismissed={dismissed[repo.key]}
+              onDismiss={(phase) => setDismissed((was) => ({ ...was, [repo.key]: phase }))}
               onOpenSession={onOpenSession}
               onNote={onNote}
             />
@@ -532,6 +607,8 @@ function RepositoryPanel({
   repo,
   now,
   connected,
+  dismissed,
+  onDismiss,
   onOpenSession,
   onNote,
 }: {
@@ -539,6 +616,9 @@ function RepositoryPanel({
   repo: RepositoryState;
   now: number;
   connected: boolean;
+  /** The sync phase the reader dismissed on its Sync tab. */
+  dismissed?: string;
+  onDismiss(phase: string): void;
   onOpenSession(sessionId: string): void;
   onNote: Note;
 }) {
@@ -583,10 +663,12 @@ function RepositoryPanel({
       id="space-repository"
       data-testid="space-repository"
       aria-label={repo.name}
-      // The explorer fills the pane and scrolls inside itself; the Sync
-      // tab keeps its whole height, so a long groups list scrolls the
-      // surface instead of laying the foot over its lists (space-28).
-      className={`flex min-w-0 flex-1 flex-col gap-3 ${tab === "explore" ? "min-h-0" : ""}`}
+      // The explorer fills the pane and scrolls inside itself, keeping a
+      // floor of 24rem, so a long groups list — a line per placement
+      // beneath each row (space-87) — scrolls the surface instead of
+      // folding the explorer under the foot; the Sync tab keeps its
+      // whole height for the same reason (space-28).
+      className={`flex min-w-0 flex-1 flex-col gap-3 ${tab === "explore" ? "min-h-96" : ""}`}
     >
       <div
         data-testid="space-repository-header"
@@ -640,6 +722,8 @@ function RepositoryPanel({
             repo={repo}
             now={now}
             connected={connected}
+            dismissed={dismissed}
+            onDismiss={onDismiss}
             onOpenSession={onOpenSession}
             onNote={onNote}
           />

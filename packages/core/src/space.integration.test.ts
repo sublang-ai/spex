@@ -45,10 +45,9 @@ test("space-37: a fresh home lists your own group alone with its own repository,
   assert.equal(own.state, "local-only");
   assert.equal(own.code, null);
   assert.equal(own.folder, null);
-  assert.equal(own.lastSync, null);
+  assert.deepEqual(own.placements, [], "local only, it holds no placement to have synced or checked");
   assert.equal(own.sync.phase, "idle");
-  assert.equal(own.branch?.checkedAt, null);
-  assert.equal(own.branch?.mergePending, false);
+  assert.equal(own.mergePending, false);
   assert.equal(git(ownClone(home.dataDir), "symbolic-ref", "--short", "HEAD"), "spex");
   assert.ok(git(ownClone(home.dataDir), "ls-files").split("\n").includes("config/playbook.config.yaml"));
   const empty = mkdtempSync(join(scratch, "nogit-"));
@@ -57,7 +56,7 @@ test("space-37: a fresh home lists your own group alone with its own repository,
   const without = await bare.client.expectOk("space.get", {});
   assert.equal(without.git.ok, false);
   assert.match((without.git as { guidance: string }).guidance, /Git is not installed/);
-  assert.equal(repositoryOf(without, OWN_KEY).branch, null, "no repository without git");
+  assert.deepEqual(repositoryOf(without, OWN_KEY).placements, [], "no placement read without git");
 });
 
 test("space-37: a working folder added pairs with a local-only spex repository whose commits hold only portable files", async (t) => {
@@ -128,10 +127,10 @@ test("space-37: setting a remote turns a repository reachable, refuses malformed
   }
   const checked = await home.client.settle("space.fetch", { repository: key });
   assert.equal(checked.sync.phase, "idle");
-  assert.equal(typeof checked.branch?.checkedAt, "number");
-  assert.equal(checked.branch?.hostEmpty, true);
+  assert.equal(typeof placementOf(checked, null).branch?.checkedAt, "number");
+  assert.equal(placementOf(checked, null).branch?.hostEmpty, true);
   const other = bareRepo();
-  const changed = repositoryOf(await home.client.expectOk("space.remote.set", { repository: key, url: other }), key);
+  const changed = placementOf(repositoryOf(await home.client.expectOk("space.remote.set", { repository: key, url: other }), key), null);
   assert.equal(changed.branch?.checkedAt, null);
   assert.equal(changed.branch?.ahead, null);
   assert.equal(git(clone, "remote", "get-url", "origin"), other);
@@ -154,12 +153,13 @@ test("space-37, space-22, storage-5: the first sync pushes spex to the empty hos
   assert.ok(done.sync.phase === "done" && done.sync.sent > 0);
   assert.equal(git(bare, "rev-parse", "spex"), git(clone, "rev-parse", "spex"));
   assert.equal(git(clone, "config", "--get", "branch.spex.remote"), "origin");
-  assert.equal(done.branch?.ahead, 0);
-  assert.equal(done.branch?.behind, 0);
+  const doneLine = placementOf(done, null);
+  assert.equal(doneLine.branch?.ahead, 0);
+  assert.equal(doneLine.branch?.behind, 0);
   const last = prefsOf(home.dataDir)[`sync:${key}:origin:last`] as { at: number; sent: number; received: number };
   assert.equal(typeof last.at, "number");
   assert.equal(last.sent, done.sync.phase === "done" ? done.sync.sent : -1);
-  assert.deepEqual(done.lastSync, last);
+  assert.deepEqual(doneLine.lastSync, last);
   assert.deepEqual(done.local, []);
   assert.deepEqual(Object.keys(prefsOf(home.dataDir)).filter((name) => name.startsWith("sync:")), [`sync:${key}:origin:last`], "only the synced placement records a sync");
   assert.equal(git(clone, "status", "--porcelain"), "", "nothing of the sync stands uncommitted");
@@ -171,10 +171,10 @@ test("space-37, space-22, storage-5: the first sync pushes spex to the empty hos
   const restarted = await startHome("first-push-restart", { dataDir: home.dataDir, project: false });
   t.after(() => restarted.stop());
   const reread = await restarted.client.repository(key);
-  assert.equal(reread.branch?.checkedAt, null);
-  assert.deepEqual(reread.lastSync, again.lastSync);
+  assert.equal(placementOf(reread, null).branch?.checkedAt, null);
+  assert.deepEqual(placementOf(reread, null).lastSync, placementOf(again, null).lastSync);
   assert.equal(reread.state, "reachable");
-  const moved = repositoryOf(await restarted.client.expectOk("space.remote.set", { repository: key, url: bareRepo() }), key);
+  const moved = placementOf(repositoryOf(await restarted.client.expectOk("space.remote.set", { repository: key, url: bareRepo() }), key), null);
   assert.equal(moved.branch?.checkedAt, null);
   assert.equal(moved.lastSync, null);
   assert.equal(prefsOf(home.dataDir)[`sync:${key}:origin:last`], undefined);
@@ -184,9 +184,9 @@ test("space-37, space-22, storage-5: the first sync pushes spex to the empty hos
   const joined = await addFolder(joiner, joiner.projectDir);
   const empty = bareRepo();
   await joiner.client.expectOk("space.remote.set", { repository: joined.key, url: empty });
-  const first = await joiner.client.settle("space.sync", { repository: joined.key, join: true });
+  const first = await joiner.client.settle("space.sync", { repository: joined.key, placement: null, join: true });
   assert.ok(first.sync.phase === "done" && first.sync.pushed && first.sync.sent > 0 && first.sync.received === 0, JSON.stringify(first.sync));
-  assert.equal(first.branch?.hostEmpty, false);
+  assert.equal(placementOf(first, null).branch?.hostEmpty, false);
   assert.equal(git(empty, "rev-parse", "spex"), git(joined.clone, "rev-parse", "spex"));
 });
 
@@ -414,8 +414,8 @@ test("space-37: a MERGE_HEAD planted in a clone reads as a pending merge and ref
   const home = await startHome("merge-again", { dataDir: first.dataDir, project: false });
   t.after(() => home.stop());
   const state = await home.client.expectOk("space.get", {});
-  assert.equal(repositoryOf(state, key).branch?.mergePending, true);
-  assert.equal(repositoryOf(state, OWN_KEY).branch?.mergePending, false);
+  assert.equal(repositoryOf(state, key).mergePending, true);
+  assert.equal(repositoryOf(state, OWN_KEY).mergePending, false);
   assert.ok(state.diagnostics.some((d) => d.file === `workspace/${key}/.git/MERGE_HEAD` && /merge is pending/.test(d.reason) && !d.blocking), JSON.stringify(state.diagnostics));
   await home.client.expectOk("space.remote.set", { repository: key, url: bareRepo() });
   await home.client.expectError("space.sync", { repository: key }, "invalid_request", /Finish or abort the merge/);
@@ -529,14 +529,15 @@ test("space-39: local changes of every unit kind list in order, incoming units a
   });
   const checked = await home.client.settle("space.fetch", { repository: key });
   assert.equal(checked.sync.phase, "idle", JSON.stringify(checked.sync));
-  assert.equal(checked.branch?.ahead, 0);
-  assert.equal(checked.branch?.behind, 1);
-  assert.equal(checked.branch?.hostEmpty, false);
-  assert.deepEqual(checked.incoming.map((u) => u.kind), ["session", "intent"], JSON.stringify(checked.incoming));
-  assert.equal(checked.incoming[0].label, "Peer's session");
-  assert.equal(checked.incoming[0].change, "new");
-  assert.equal(checked.incoming[1].label, "Review the parser");
-  assert.equal(checked.incoming[1].intentId, peerIntent);
+  const line = placementOf(checked, null);
+  assert.equal(line.branch?.ahead, 0);
+  assert.equal(line.branch?.behind, 1);
+  assert.equal(line.branch?.hostEmpty, false);
+  assert.deepEqual(line.incoming.map((u) => u.kind), ["session", "intent"], JSON.stringify(line.incoming));
+  assert.equal(line.incoming[0].label, "Peer's session");
+  assert.equal(line.incoming[0].change, "new");
+  assert.equal(line.incoming[1].label, "Review the parser");
+  assert.equal(line.incoming[1].intentId, peerIntent);
   assert.deepEqual(checked.conflicts.map((c) => c.unit.unit), ["config/playbook.config.yaml"]);
   assert.ok(checked.conflicts[0].mine.diff && checked.conflicts[0].remote.diff);
   assert.deepEqual(checked.local.map((u) => u.kind), ["session", "intent", "authoring", "environment", "code", "rules", "other", "other"]);
@@ -556,8 +557,8 @@ test("space-39: local changes of every unit kind list in order, incoming units a
   const empty = bareRepo();
   await home.client.expectOk("space.remote.set", { repository: key, url: empty });
   const vacant = await home.client.settle("space.fetch", { repository: key });
-  assert.equal(vacant.branch?.hostEmpty, true);
-  assert.deepEqual(vacant.incoming, []);
+  assert.equal(placementOf(vacant, null).branch?.hostEmpty, true);
+  assert.deepEqual(placementOf(vacant, null).incoming, []);
   assert.deepEqual(vacant.conflicts, []);
   assert.ok(vacant.local.every((u) => u.change === "new"));
   await home.client.expectOk("space.remote.set", { repository: key, url: bare });

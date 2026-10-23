@@ -119,7 +119,7 @@ msgstr "{actor} · Turn {turn}"
 msgid "{adapter} is not ready — check Settings"
 msgstr "{adapter} is not ready — check Settings"
 
-#: src/components/SpaceGroups.tsx
+#: src/lib/space.ts
 msgid "{ahead, plural, one {# commit} other {# commits}} ahead, {behind, plural, one {# commit} other {# commits}} behind · checked {at}"
 msgstr "{ahead, plural, one {# commit} other {# commits}} ahead, {behind, plural, one {# commit} other {# commits}} behind · checked {at}"
 
@@ -253,6 +253,11 @@ msgstr "{count, plural, one {# session needs your attention} other {# sessions n
 #: src/components/NavRail.tsx
 msgid "{count, plural, one {# turn} other {# turns}}"
 msgstr "{count, plural, one {# turn} other {# turns}}"
+
+#. Leave…'s second confirm: units no remaining placement holds; {name} is the instance's display name
+#: src/components/SpacePlacementActs.tsx
+msgid "{count, plural, one {# unit has} other {# units have}} reached no other instance yet. Remove from {name} anyway?"
+msgstr "{count, plural, one {# unit has} other {# units have}} reached no other instance yet. Remove from {name} anyway?"
 
 #: src/lib/failure-catalogue.ts
 msgid "{count, plural, one {Changed # file without committing} other {Changed # files without committing}}"
@@ -433,6 +438,16 @@ msgstr "{name} settings for this conversation"
 msgid "{name} settings: {reading}"
 msgstr "{name} settings: {reading}"
 
+#. a line, with no control, under a group of an instance, or a login there, whose listing holds a placement of a spex repository standing elsewhere; {name} is that spex repository's name, {group} the group it stands under, read by its name, then ' · ' and its path where the two differ, or the login it stands under, and {instance} the display name of that group's instance
+#: src/lib/placements.ts
+msgid "{name} stands under {group} at {instance}"
+msgstr "{name} stands under {group} at {instance}"
+
+#. a line, with no control, under a group of an instance, or a login there, whose listing holds a placement of a spex repository standing under your own group; {name} is that spex repository's name
+#: src/lib/placements.ts
+msgid "{name} stands under your own group"
+msgstr "{name} stands under your own group"
+
 #: src/components/SpecGraph.tsx
 msgid "{name}, {items} items, cites {out}, cited by {in}"
 msgstr "{name}, {items} items, cites {out}, cited by {in}"
@@ -555,6 +570,7 @@ msgid "{stage} not found beside this playbook's module"
 msgstr "{stage} not found beside this playbook's module"
 
 #: src/components/SpaceGroups.tsx
+#: src/lib/space.ts
 msgid "{state} · last synced {at}"
 msgstr "{state} · last synced {at}"
 
@@ -569,8 +585,13 @@ msgstr "{step} stopped"
 
 #. {step} is the sync step's name; {message} is the cause the host gave
 #. {step} is the sync step's name; {message} is the cause the host gave
+#. {step} is the sync step's name; {message} is the cause the host gave
+#. {step} is the sync step's name; {message} is the cause the host gave
+#. {step} is the sync step's name; {message} is the cause the host gave
+#: src/components/SpaceGroups.tsx
 #: src/components/SpaceSurface.tsx
 #: src/components/SpaceSync.tsx
+#: src/lib/space.ts
 msgid "{step} stopped — {message}"
 msgstr "{step} stopped — {message}"
 
@@ -1104,6 +1125,11 @@ msgstr "also {position}"
 msgid "Also answers {positions}"
 msgstr "Also answers {positions}"
 
+#. the title and accessible name of Place at… where one instance is offered, and of each instance in its choice; {name} is the instance's display name, or its host name before any read
+#: src/components/SpacePlacementActs.tsx
+msgid "Also place at {name}"
+msgstr "Also place at {name}"
+
 #: src/components/AgentSettings.tsx
 msgid "Also sets {positions}"
 msgstr "Also sets {positions}"
@@ -1224,9 +1250,19 @@ msgstr "at {state} — calling /{playbookId}"
 msgid "at {state} → calling /{playbookId}"
 msgstr "at {state} → calling /{playbookId}"
 
+#. on a line naming a placement another device named, not yet on this device: brings it here after the sharing notice
+#: src/components/SpacePlacements.tsx
+msgid "Attach"
+msgstr "Attach"
+
 #: src/components/ComposerAttachments.tsx
 msgid "Attach files"
 msgstr "Attach files"
+
+#. the Attach control while the placement is added and synced
+#: src/components/SpacePlacements.tsx
+msgid "Attaching…"
+msgstr "Attaching…"
 
 #: src/components/Composer.tsx
 #: src/components/DraftConversation.tsx
@@ -1288,6 +1324,11 @@ msgstr "back to {id}"
 msgid "Back to the playbook list — the session stays as it is"
 msgstr "Back to the playbook list — the session stays as it is"
 
+#. a placement's line: the sync left its copy behind this device's; another Sync carries it
+#: src/lib/space.ts
+msgid "Behind — Sync again"
+msgstr "Behind — Sync again"
+
 #: src/components/ProjectsSurface.tsx
 msgid "behind upstream"
 msgstr "behind upstream"
@@ -1331,7 +1372,7 @@ msgstr "Brings a file in as the source, then asks to adapt it"
 msgid "Brings back anything new; sends nothing"
 msgstr "Brings back anything new; sends nothing"
 
-#: src/components/SpaceGroups.tsx
+#: src/components/SpacePlacements.tsx
 msgid "Brings both histories into one and asks about anything that differs"
 msgstr "Brings both histories into one and asks about anything that differs"
 
@@ -1345,6 +1386,7 @@ msgid "Brings it to this device"
 msgstr "Brings it to this device"
 
 #: src/components/SpaceSync.tsx
+#: src/lib/space.ts
 msgid "Brought {received}; nothing sent"
 msgstr "Brought {received}; nothing sent"
 
@@ -1456,6 +1498,8 @@ msgstr "Can't reach the Spex core at {endpoint} — retrying every second. On a 
 #. leave the editor without changing anything
 #. leave the editor without changing anything
 #. leave the editor without changing anything
+#. leave the editor without changing anything
+#. leave the editor without changing anything
 #. stop the running compile
 #: src/components/AgentEditor.tsx
 #: src/components/AgentSettings.tsx
@@ -1468,6 +1512,7 @@ msgstr "Can't reach the Spex core at {endpoint} — retrying every second. On a 
 #: src/components/SpaceGroups.tsx
 #: src/components/SpaceInstance.tsx
 #: src/components/SpaceMembers.tsx
+#: src/components/SpacePlacementActs.tsx
 #: src/components/SpaceServers.tsx
 #: src/components/SpaceSignIn.tsx
 #: src/components/SpaceSync.tsx
@@ -1983,8 +2028,8 @@ msgstr "Connection restored."
 msgid "Connection to the Spex core lost — reconnecting."
 msgstr "Connection to the Spex core lost — reconnecting."
 
-#. confirm: go on with the first sync, or the pick joining a repository others share
-#: src/components/SpaceGroups.tsx
+#. confirm: go on with the first sync, or the pick joining a repository others share; on a placement's line waiting for the sharing notice, opens that notice
+#: src/components/SpacePlacements.tsx
 msgid "Continue"
 msgstr "Continue"
 
@@ -2675,16 +2720,17 @@ msgstr "error"
 msgid "Every role needs a player, and the command and intent their words"
 msgstr "Every role needs a player, and the command and intent their words"
 
-#: src/components/SpaceGroups.tsx
+#: src/components/SpacePlacements.tsx
 msgid "Every session goes there whole — hidden parts and attachments included — and nothing recalls what others downloaded."
 msgstr "Every session goes there whole — hidden parts and attachments included — and nothing recalls what others downloaded."
 
-#: src/components/SpaceGroups.tsx
+#: src/components/SpacePlacements.tsx
 msgid "Every session goes there whole — hidden parts and attachments included — and nothing recalls what others downloaded. This repository is public, so its records are public."
 msgstr "Every session goes there whole — hidden parts and attachments included — and nothing recalls what others downloaded. This repository is public, so its records are public."
 
 #: src/components/SpaceSurface.tsx
 #: src/components/SpaceSync.tsx
+#: src/lib/space.ts
 msgid "Everything is in sync"
 msgstr "Everything is in sync"
 
@@ -3358,6 +3404,7 @@ msgstr "Its spex repository is not on this device."
 #. confirm: join both histories into one
 #. confirm: join both histories into one
 #: src/components/SpaceGroups.tsx
+#: src/components/SpacePlacements.tsx
 msgid "Join"
 msgstr "Join"
 
@@ -3372,7 +3419,7 @@ msgstr "Join again"
 msgid "Join both histories into one to sync."
 msgstr "Join both histories into one to sync."
 
-#: src/components/SpaceGroups.tsx
+#: src/components/SpacePlacements.tsx
 msgid "Join both histories into one? Anything that differs will ask you to choose."
 msgstr "Join both histories into one? Anything that differs will ask you to choose."
 
@@ -3383,6 +3430,7 @@ msgstr "Join both histories into one? Anything that differs will ask you to choo
 #. the Join control, while the join runs
 #: src/components/ProjectPalette.tsx
 #: src/components/SpaceGroups.tsx
+#: src/components/SpacePlacements.tsx
 msgid "Joining…"
 msgstr "Joining…"
 
@@ -3410,6 +3458,7 @@ msgstr "just now"
 #. cancel a removal: leave it as it is
 #. cancel a removal: leave it as it is
 #. cancel a removal: leave it as it is
+#. cancel a removal: leave it as it is
 #. cancel: keep the unsaved draft
 #. confirm: keep the intent open
 #. confirm: leave the run as it is
@@ -3423,6 +3472,7 @@ msgstr "just now"
 #: src/components/SettingsSurface.tsx
 #: src/components/SpaceGroups.tsx
 #: src/components/SpaceMembers.tsx
+#: src/components/SpacePlacementActs.tsx
 #: src/components/SpecEditor.tsx
 #: src/components/WorkingLine.tsx
 msgid "Keep"
@@ -3463,6 +3513,16 @@ msgstr "lease"
 #: src/lib/space.ts
 msgid "leases and locks"
 msgstr "leases and locks"
+
+#. on a project's row: stop keeping its records at one instance; its title and accessible name are "Remove from <display name>" where one is held
+#: src/components/SpacePlacementActs.tsx
+msgid "Leave…"
+msgstr "Leave…"
+
+#. the Leave… control while that placement is checked and removed
+#: src/components/SpacePlacementActs.tsx
+msgid "Leaving…"
+msgstr "Leaving…"
 
 #. catalog family: a session file an earlier release wrote
 #: src/lib/space.ts
@@ -3586,9 +3646,8 @@ msgstr "Media unavailable"
 
 #. list the people the host lets read a spex repository
 #. list the people the host lets read a spex repository
-#. list the people the host lets read a spex repository
-#. list the people the host lets read a spex repository
 #: src/components/SpaceGroups.tsx
+#: src/components/SpacePlacements.tsx
 msgid "Members"
 msgstr "Members"
 
@@ -3650,17 +3709,17 @@ msgid "Move the focused Up next row"
 msgstr "Move the focused Up next row"
 
 #. move a spex repository into another group of the instance, or your own
-#: src/components/SpaceGroups.tsx
+#: src/components/SpacePlacements.tsx
 msgid "Move to another group"
 msgstr "Move to another group"
 
 #. open the groups a spex repository may move to; its full name is 'Move to another group'
-#: src/components/SpaceGroups.tsx
+#: src/components/SpacePlacements.tsx
 msgid "Move…"
 msgstr "Move…"
 
 #. the Move control, while the host moves the spex repository
-#: src/components/SpaceGroups.tsx
+#: src/components/SpacePlacements.tsx
 msgid "Moving…"
 msgstr "Moving…"
 
@@ -3707,6 +3766,7 @@ msgstr "needs your choice"
 
 #: src/components/SpaceSurface.tsx
 #: src/components/SpaceSync.tsx
+#: src/lib/space.ts
 msgid "Needs your choice"
 msgstr "Needs your choice"
 
@@ -4460,6 +4520,7 @@ msgid "Pick a folder inside {folder}"
 msgstr "Pick a folder inside {folder}"
 
 #. choose where on the Git host a project's records go
+#. choose where on the Git host a project's records go
 #: src/components/SpaceGroups.tsx
 msgid "Pick a group"
 msgstr "Pick a group"
@@ -4496,9 +4557,24 @@ msgstr "pin a value…"
 msgid "Place"
 msgstr "Place"
 
+#. on a project's row: opens another instance's picker to keep its records there too; its title and accessible name are "Also place at <display name>" where one instance is offered
+#: src/components/SpacePlacementActs.tsx
+msgid "Place at…"
+msgstr "Place at…"
+
+#. catalog family: a file naming one instance these records are kept at, or the folder holding those files
+#: src/lib/space.ts
+msgid "placement"
+msgstr "placement"
+
 #: src/components/DraftConversation.tsx
 msgid "Places the six-line example as your first message"
 msgstr "Places the six-line example as your first message"
+
+#. the Place at… control while the placement is made and synced
+#: src/components/SpacePlacementActs.tsx
+msgid "Placing…"
+msgstr "Placing…"
 
 #. the built-in /dev playbook's intent, as its registry entry states it
 #: src/lib/playbook-intent.ts
@@ -4805,6 +4881,7 @@ msgstr "Reading…"
 
 #. Refresh's title: it reads every instance the home is signed in to
 #: src/components/SpaceGroups.tsx
+#: src/components/SpacePlacements.tsx
 #: src/components/SpaceSurface.tsx
 msgid "Reads each signed-in instance again"
 msgstr "Reads each signed-in instance again"
@@ -4845,6 +4922,16 @@ msgstr "Reconnecting…"
 #: src/lib/space.ts
 msgid "records"
 msgstr "records"
+
+#. the sharing notice's first sentence: {path} is the placement's path at the instance, {name} the instance's display name
+#: src/components/SpacePlacements.tsx
+msgid "Records go to {path} at {name}."
+msgstr "Records go to {path} at {name}."
+
+#. Leave…'s second confirm where that placement could not be read; {name} is the instance's display name
+#: src/components/SpacePlacementActs.tsx
+msgid "Records pushed to {name} since the last sync may be left behind. Remove anyway?"
+msgstr "Records pushed to {name} since the last sync may be left behind. Remove anyway?"
 
 #: src/lib/failure-catalogue.ts
 msgid "Recover them from your editor's history, if it keeps one"
@@ -4912,6 +4999,7 @@ msgstr "Reload the page"
 
 #. confirm: forget this project, leaving the repo on disk
 #. confirm: forget this project, leaving the repo on disk
+#. confirm: stop keeping the records at that instance; nothing there changes
 #. confirm: take the member out on the Git host
 #. confirm: take this player out of the roster
 #. confirm: take this row off the record
@@ -4927,6 +5015,7 @@ msgstr "Reload the page"
 #: src/components/ProjectsSurface.tsx
 #: src/components/SettingsSurface.tsx
 #: src/components/SpaceMembers.tsx
+#: src/components/SpacePlacementActs.tsx
 msgid "Remove"
 msgstr "Remove"
 
@@ -4962,6 +5051,16 @@ msgstr "Remove @{login}"
 #: src/components/SpaceMembers.tsx
 msgid "Remove @{login} from {place}?"
 msgstr "Remove @{login} from {place}?"
+
+#. the title and accessible name of Leave… where one instance is held, and of each instance in its choice; {name} is the instance's display name, or its host name before any read
+#: src/components/SpacePlacementActs.tsx
+msgid "Remove from {name}"
+msgstr "Remove from {name}"
+
+#. Leave…'s inline confirm, answered Remove or Keep; {name} is the instance's display name
+#: src/components/SpacePlacementActs.tsx
+msgid "Remove from {name}? Nothing at {name} changes; these records stop syncing there."
+msgstr "Remove from {name}? Nothing at {name} changes; these records stop syncing there."
 
 #: src/components/ProjectsSurface.tsx
 msgid "Remove from Spex (repo stays on disk)"
@@ -5008,6 +5107,11 @@ msgstr "Remove this queued message"
 #: src/components/ProjectGroup.tsx
 msgid "Removed “{title}”"
 msgstr "Removed “{title}”"
+
+#. the live note once a placement is left; {name} is the instance's display name
+#: src/components/SpacePlacementActs.tsx
+msgid "Removed from {name}"
+msgstr "Removed from {name}"
 
 #. queue row control, busy: the removal is in flight
 #. the removal is in flight
@@ -5183,6 +5287,7 @@ msgstr "resume tokens for this machine's agent conversations; they work nowhere 
 #. read the specs tree again
 #. run the stopped step again
 #. run the stopped step again
+#. run the stopped step again
 #. take the failed read again
 #. take the failed read again
 #. take the failed read again
@@ -5194,6 +5299,7 @@ msgstr "resume tokens for this machine's agent conversations; they work nowhere 
 #: src/components/RunView.tsx
 #: src/components/SettingsSurface.tsx
 #: src/components/SpaceGroups.tsx
+#: src/components/SpacePlacements.tsx
 #: src/components/SpaceSync.tsx
 #: src/components/SpecEditor.tsx
 #: src/components/SpecView.tsx
@@ -5220,8 +5326,10 @@ msgstr "Retry browser support check"
 #. a retry is in flight
 #. the Retry control, while the retry is in flight
 #. the Retry control, while the retry is in flight
+#. the Retry control, while the retry is in flight
 #: src/components/SettingsSurface.tsx
 #: src/components/SpaceGroups.tsx
+#: src/components/SpacePlacements.tsx
 #: src/components/SpaceSync.tsx
 msgid "Retrying…"
 msgstr "Retrying…"
@@ -6081,6 +6189,7 @@ msgid "Synced {age}"
 msgstr "Synced {age}"
 
 #: src/components/SpaceSync.tsx
+#: src/lib/space.ts
 msgid "Synced {age} · {sent} sent · {received} received"
 msgstr "Synced {age} · {sent} sent · {received} received"
 
@@ -6352,6 +6461,11 @@ msgstr "The workflow is waiting for your answer."
 msgid "The workflow markdown the playbook was compiled from"
 msgstr "The workflow markdown the playbook was compiled from"
 
+#. a placement's members panel; {names} lists the other instances the records are kept at, by display name
+#: src/components/SpaceMembers.tsx
+msgid "These records are also placed at {names}"
+msgstr "These records are also placed at {names}"
+
 #. stands where a project name would, for sessions with no folder
 #: src/components/SpaceSync.tsx
 msgid "these sessions"
@@ -6617,6 +6731,7 @@ msgstr "unrelated history"
 
 #: src/components/SpaceSurface.tsx
 #: src/components/SpaceSync.tsx
+#: src/lib/space.ts
 msgid "Unrelated history"
 msgstr "Unrelated history"
 
@@ -6786,6 +6901,11 @@ msgstr "Waiting for a member who can create it in {group}"
 msgid "Waiting for a member who can prepare its branch in {group}"
 msgstr "Waiting for a member who can prepare its branch in {group}"
 
+#. a placement's line: its first push waits for the sharing notice to be seen; Continue stands beside it
+#: src/lib/space.ts
+msgid "Waiting for you to continue"
+msgstr "Waiting for you to continue"
+
 #: src/components/CompileBand.tsx
 msgid "waiting for your queued message"
 msgstr "waiting for your queued message"
@@ -6904,9 +7024,10 @@ msgstr "Your browser is open at {site}: sign in there and approve; you return he
 msgid "Your changes are saved locally ({count, plural, one {# commit} other {# commits}} ahead)."
 msgstr "Your changes are saved locally ({count, plural, one {# commit} other {# commits}} ahead)."
 
+#. the choices note; {name} is that placement's instance's display name, or the path placement's remote
 #: src/components/SpaceSync.tsx
-msgid "Your changes are saved; nothing is pushed yet"
-msgstr "Your changes are saved; nothing is pushed yet"
+msgid "Your changes are saved; nothing is pushed to {name} yet"
+msgstr "Your changes are saved; nothing is pushed to {name} yet"
 
 #: src/components/CaptainHome.tsx
 msgid "Your config file has errors — playbooks are unavailable."
@@ -6928,6 +7049,11 @@ msgstr "Your own group"
 #: src/components/SettingsSurface.tsx
 msgid "Your own group's config, in {repository}"
 msgstr "Your own group's config, in {repository}"
+
+#. the sign-in card opened from "Add instance…": your own group's records are kept at every instance the home signs in to, this one included
+#: src/components/SpaceInstance.tsx
+msgid "Your own group's records will be kept there too."
+msgstr "Your own group's records will be kept there too."
 
 #: src/components/CaptainHome.tsx
 msgid "your project"

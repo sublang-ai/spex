@@ -225,15 +225,12 @@ const INSTANCE_KEYS = ["account", "displayName", "groups", "host", "hostSignedOu
 
 const GROUP_ENTRY_KEYS = ["can", "fullPath", "id", "login", "mine", "name", "placed", "repositories"];
 
-/** A row's fields (space-30), with the transitional mirrors of its key
- * placement's line — `branch`, `can`, `incoming`, `lastSync`, `members`,
- * `noticed`, `remote`, `visibility` and `waiting` — until the interface
- * reads placements. */
-const REPOSITORY_KEYS = ["branch", "can", "code", "conflicts", "folder", "governing", "id", "incoming", "instance", "key", "lastSync", "local", "members", "mergePending", "name", "noticed", "own", "placedAt", "placements", "reason", "remote", "state", "sync", "visibility", "waiting"];
+/** A row's fields (space-30): what each placement holds is on its line
+ * alone. */
+const REPOSITORY_KEYS = ["code", "conflicts", "folder", "governing", "id", "instance", "key", "local", "mergePending", "name", "own", "placedAt", "placements", "reason", "state", "sync"];
 
+/** A placement's line's fields (space-30). */
 const PLACEMENT_KEYS = ["attached", "branch", "can", "conflicts", "id", "incoming", "instance", "lastSync", "members", "noticed", "outcome", "path", "reason", "state", "visibility", "waiting"];
-
-const BRANCH_KEYS = ["agreed", "ahead", "behind", "checkedAt", "hostEmpty", "mergePending", "unrelated"];
 
 const PLACEMENT_BRANCH_KEYS = ["agreed", "ahead", "behind", "checkedAt", "hostEmpty", "unrelated"];
 
@@ -379,33 +376,24 @@ export function assertGroupsState(state: GroupsState): void {
     // (space-30).
     assert.ok(repository.governing === null || typeof repository.governing === "string", JSON.stringify(repository.governing));
     if (repository.state === "local-only") assert.equal(repository.governing, null, `${repository.key} is local only`);
-    assert.deepEqual(Object.keys(repository.can), ["manageMembers", "transfer"]);
-    assert.ok(typeof repository.can.manageMembers === "boolean" && typeof repository.can.transfer === "boolean", JSON.stringify(repository.can));
     assertPhase(repository.sync);
     assert.ok(["local-only", "reachable", "read-only", "unreachable", "absent"].includes(repository.state));
-    if (repository.branch !== null) assert.deepEqual(Object.keys(repository.branch).sort(), BRANCH_KEYS);
     assertPlacements(repository);
-    const agreed = repository.branch?.agreed;
-    if (agreed) assert.ok(Object.keys(agreed).sort().join() === "at,current" && typeof agreed.at === "number" && typeof agreed.current === "boolean", JSON.stringify(agreed));
-    for (const unit of [...repository.local, ...repository.incoming, ...repository.conflicts.map((c) => c.unit)]) {
+    for (const unit of [...repository.local, ...repository.placements.flatMap((line) => line.incoming), ...repository.conflicts.map((c) => c.unit)]) {
       assert.ok(typeof unit.unit === "string" && typeof unit.label === "string" && CHANGES.has(unit.change) && Array.isArray(unit.paths) && typeof unit.diff === "boolean", JSON.stringify(unit));
     }
     for (const conflict of repository.conflicts) {
       assert.ok(CHANGES.has(conflict.mine.change) && CHANGES.has(conflict.remote.change), JSON.stringify(conflict));
     }
-    if (repository.lastSync !== null) assert.deepEqual(Object.keys(repository.lastSync).sort(), ["at", "received", "sent"]);
   }
 }
 
-/** A row's lines in their shape (space-30), and, while the interface
- * reads the row's transitional mirrors, those mirrors equal to its key
- * placement's line — its first — wherever a remote here holds it or no
- * clone is here, `waiting` to the one line a wait shows on; a local-only
- * clone holds no line but a creation's waiting at an instance
- * (space-87). */
+/** A row's lines in their shape (space-30): a local-only clone holds no
+ * line but a creation's waiting at an instance and the placements its
+ * files name, a wait shows on one line per instance (space-87), and the
+ * row's id is its first placement's. */
 function assertPlacements(row: RepositoryState): void {
   assert.equal(typeof row.mergePending, "boolean", JSON.stringify(row.mergePending));
-  assert.equal(row.mergePending, row.branch?.mergePending ?? false, `${row.key}: the row's pending merge is its branch's`);
   assert.ok(Array.isArray(row.placedAt) && row.placedAt.every((origin) => typeof origin === "string"), JSON.stringify(row.placedAt));
   assert.ok(Array.isArray(row.placements), JSON.stringify(row.placements));
   for (const line of row.placements) {
@@ -413,7 +401,10 @@ function assertPlacements(row: RepositoryState): void {
     assert.ok((line.instance === null || typeof line.instance === "string") && typeof line.path === "string" && (line.id === null || typeof line.id === "string") && typeof line.attached === "boolean", JSON.stringify(line));
     assert.ok(PLACEMENT_STATES.has(line.state), JSON.stringify(line));
     assert.deepEqual(Object.keys(line.can), ["manageMembers", "transfer"]);
+    assert.ok(typeof line.can.manageMembers === "boolean" && typeof line.can.transfer === "boolean", JSON.stringify(line.can));
     if (line.branch !== null) assert.deepEqual(Object.keys(line.branch).sort(), PLACEMENT_BRANCH_KEYS);
+    const agreed = line.branch?.agreed;
+    if (agreed) assert.ok(Object.keys(agreed).sort().join() === "at,current" && typeof agreed.at === "number" && typeof agreed.current === "boolean", JSON.stringify(agreed));
     if (line.lastSync !== null) assert.deepEqual(Object.keys(line.lastSync).sort(), ["at", "received", "sent"]);
     assert.ok(Array.isArray(line.incoming) && Array.isArray(line.conflicts) && typeof line.noticed === "boolean", JSON.stringify(line));
     if (!line.attached) assert.equal(line.branch, null, `${row.key}: a line no remote here holds has no branch`);
@@ -431,23 +422,12 @@ function assertPlacements(row: RepositoryState): void {
     assert.ok(row.placements.some((line) => line.attached && line.instance === sync.placement), `${row.key}: ${JSON.stringify(sync)} names a placement it holds`);
   }
   // A step waiting at the host shows on one line per instance, its
-  // placement's or its instance's (space-87); transitional, the row's
-  // `waiting` mirrors its key placement's line where it holds one, else
-  // the first line a wait shows on.
+  // placement's or its instance's (space-87).
   const waits = row.placements.filter((line) => line.waiting !== null);
   assert.equal(new Set(waits.map((line) => line.instance)).size, waits.length, `${row.key}: one wait per instance`);
-  const keyLine = row.placements[0]?.attached && row.placements[0].instance !== null ? row.placements[0] : undefined;
-  assert.deepEqual(row.waiting, keyLine ? keyLine.waiting : waits[0]?.waiting ?? null, `${row.key}: waiting mirrors the line it shows on`);
-  const key = row.placements[0];
-  if (!key) return;
-  // Transitional: the row's mirrors are its key placement's line's.
-  if (!key.attached && row.branch !== null) return;
-  const { mergePending: _, ...branch } = row.branch ?? { mergePending: false };
-  assert.deepEqual(
-    { remote: row.remote, id: row.id, members: row.members, visibility: row.visibility, can: row.can, branch: row.branch === null ? null : branch, incoming: row.incoming, lastSync: row.lastSync, noticed: row.noticed },
-    { remote: key.path, id: key.id, members: key.members, visibility: key.visibility, can: key.can, branch: key.branch, incoming: key.incoming, lastSync: key.lastSync, noticed: key.noticed },
-    `${row.key}: the row's mirrors are its key placement's line's`,
-  );
+  // Its id is its first placement's (space-30).
+  const first = row.placements[0];
+  if (first?.attached) assert.equal(row.id, first.id, `${row.key}: its id is its first placement's`);
 }
 
 interface Home {
@@ -630,10 +610,12 @@ playbooks:
    * each. */
   async function joinRemote(home: Home, repository: string): Promise<RepositoryState> {
     const unrelated = await home.client.settle("space.sync", { repository });
-    assert.equal(unrelated.sync.phase, "unrelated", JSON.stringify(unrelated.sync));
-    let joined = await home.client.settle("space.sync", { repository, join: true });
+    assert.ok(unrelated.sync.phase === "unrelated", JSON.stringify(unrelated.sync));
+    // The join is for the placement whose history is unrelated (space-29).
+    const placement = unrelated.sync.placement;
+    let joined = await home.client.settle("space.sync", { repository, placement, join: true });
     if (joined.sync.phase === "choices") {
-      joined = await home.client.settle("space.sync", { repository, join: true, choices: Object.fromEntries(joined.conflicts.map((c) => [c.unit.unit, "mine" as const])) });
+      joined = await home.client.settle("space.sync", { repository, placement, join: true, choices: Object.fromEntries(joined.conflicts.map((c) => [c.unit.unit, "mine" as const])) });
     }
     assert.equal(joined.sync.phase, "done", JSON.stringify(joined.sync));
     return joined;

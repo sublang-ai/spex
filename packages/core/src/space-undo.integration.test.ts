@@ -14,7 +14,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
-import { clonePath, createSpaceHarness, hostFolder, hostKey, instanceOf, repositoryOf, stringsOf } from "./testing/space-harness.js";
+import { clonePath, createSpaceHarness, hostFolder, hostKey, instanceOf, placementOf, repositoryOf, stringsOf } from "./testing/space-harness.js";
 import { STANDIN_STORAGE, type StandinHost } from "./testing/standin-host.js";
 import type { Command, CommandResults, GroupsState, InstanceGroupState, ServerMessage } from "./protocol.js";
 
@@ -121,8 +121,8 @@ test("space-79: a group renamed, a non-empty one refused deletion and an empty o
   assert.deepEqual(entry(state, host, LOGIN, true).can, { createSubgroup: false, manageMembers: false, rename: false, delete: false });
   assert.deepEqual(entry(state, host, "acme").can, { createSubgroup: true, manageMembers: true, rename: true, delete: true });
   assert.deepEqual(entry(state, host, "acme/research").can, { createSubgroup: true, manageMembers: true, rename: true, delete: true });
-  assert.deepEqual(repositoryOf(state, key).can, { manageMembers: true, transfer: true });
-  assert.deepEqual(repositoryOf(state, hostKey(host, "acme/team-spex")).can, { manageMembers: false, transfer: false });
+  assert.deepEqual(placementOf(repositoryOf(state, key), host.url).can, { manageMembers: true, transfer: true });
+  assert.deepEqual(placementOf(repositoryOf(state, hostKey(host, "acme/team-spex")), host.url).can, { manageMembers: false, transfer: false });
 
   // A rename of acme/research replies its new path, announced before the
   // reply; the stand-in holds it there (space-29, space-1).
@@ -157,7 +157,7 @@ test("space-79: a group renamed, a non-empty one refused deletion and an empty o
   replies.push(moved.reply);
   assert.deepEqual(moved.reply, { repository: { id, fullPath: "acme/studies/plans-spex" } });
   assert.ok(!keysUnder(moved.announced, host, "acme").includes(key), "no longer under its former group");
-  assert.equal(repositoryOf(moved.announced, key).remote, "acme/studies/plans-spex");
+  assert.equal(placementOf(repositoryOf(moved.announced, key), host.url).path, "acme/studies/plans-spex");
   assert.ok(existsSync(clonePath(home.dataDir, key)), "the move moves no clone");
 
   // Its next sync moves the clone under that group's folder (space-60).
@@ -282,7 +282,7 @@ test("git-host-14: a rename carries the groups and repositories inside to the ne
   assert.deepEqual(groupPaths(renamed.announced, host), ["acme-labs", "acme-labs/research", LOGIN, "empty"]);
   assert.deepEqual(entry(renamed.announced, host, "acme-labs").name, "Acme Labs");
   assert.deepEqual(keysUnder(renamed.announced, host, "acme-labs"), [key, hostKey(host, "acme-labs/team-spex")].sort());
-  assert.equal(repositoryOf(renamed.announced, key).remote, "acme-labs/plans-spex");
+  assert.equal(placementOf(repositoryOf(renamed.announced, key), host.url).path, "acme-labs/plans-spex");
   // A read held after it lists the stand-in's answer, the same.
   const from = home.client.mark();
   const readAt = instanceOf(await home.client.expectOk("space.get", {}), host.url)?.readAt;
