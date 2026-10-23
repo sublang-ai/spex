@@ -7,7 +7,7 @@
 // the built-in spec package — so a Playbook whose intent moved, or a
 // catalog key that drifted from it by a byte, fails here rather than
 // reading English to a Chinese team. With `zh` resolved, the
-// quick-start card, the slash menu and the Playbooks surface each show
+// slash menu and the Playbooks surface each show
 // a built-in's intent as the catalog translates that English text,
 // while a team's own playbook keeps its own words — even words the
 // catalog happens to hold for a label of its own.
@@ -80,7 +80,6 @@ function summaries(): PlaybookSummary[] {
 }
 
 function renderHome(): void {
-  const data = new Map<string, string>();
   render(
     <CaptainHome
       hasProject
@@ -93,31 +92,25 @@ function renderHome(): void {
       onNavigate={vi.fn()}
       onSaveCaptain={vi.fn(async () => {})}
       onStart={vi.fn(async () => {})}
-      storage={{ getItem: (key) => data.get(key) ?? null, setItem: (key, value) => void data.set(key, value) }}
     />,
   );
 }
 
-describe("localization-4: the quick-start card and the slash menu", () => {
+describe("localization-4: slash menu discovery", () => {
   test("with zh resolved a built-in's intent reads Chinese and a team's own reads as given", () => {
     activateLanguage("zh");
     renderHome();
 
-    // The card offers the first four: the team's own, then three
-    // built-ins.
-    const team = screen.getByTestId(`playbook-chip-${TEAM.id}`);
-    expect(within(team).getByText(TEAM.intent)).toBeTruthy();
-    expect(within(team).queryByText("发布")).toBeNull();
-    for (const id of BUILTIN_IDS.slice(0, 3)) {
-      const chip = screen.getByTestId(`playbook-chip-${id}`);
-      expect(within(chip).getByText(chinese(id))).toBeTruthy();
-      expect(chip.textContent).not.toContain(builtinIntents[id]);
-    }
+    expect(screen.queryByTestId("quick-start")).toBeNull();
+    const hint = document.getElementById("start-playbook-hint")!;
+    expect(hint.textContent).toBe(`在输入框输入 /，查看 ${summaries().length} 个规程`);
+    expect(hint.querySelector("code")?.textContent).toBe("/");
 
     // The slash menu offers every playbook, each intent its hint.
     fireEvent.change(screen.getByTestId("start-composer"), { target: { value: "/" } });
     const menu = screen.getByTestId("slash-menu");
     expect(within(menu).getByText(TEAM.intent)).toBeTruthy();
+    expect(within(menu).queryByText("发布")).toBeNull();
     for (const id of BUILTIN_IDS) {
       expect(within(menu).getByText(chinese(id))).toBeTruthy();
       expect(menu.textContent).not.toContain(builtinIntents[id]);

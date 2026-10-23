@@ -322,6 +322,19 @@ export function academyCorpusDir(): string {
   return fileURLToPath(new URL("../assets/academy", import.meta.url));
 }
 
+const ACADEMY_SEED_COMMIT = "chore: seed the Academy example";
+
+/** Recognize a previously seeded Academy without relying on its current
+ * files, which the reader may have edited after removing the project. */
+export async function isSeededAcademyProject(
+  path: string,
+  run: RunCommand = defaultRunCommand,
+): Promise<boolean> {
+  if (!(await isWorkTreeRoot(path, run))) return false;
+  const roots = await run("git", ["log", "--all", "--max-parents=0", "--format=%s"], path);
+  return roots.code === 0 && roots.stdout.split(/\r?\n/).includes(ACADEMY_SEED_COMMIT);
+}
+
 /**
  * Materialize the Academy example (DR-015): empty or absent target
  * only, copy the corpus, git init, add everything, one seed commit.
@@ -353,7 +366,7 @@ export async function seedExampleProject(
     throw new Error(`git init failed: ${init.stderr.trim() || init.stdout.trim()}`);
   }
   await run("git", ["add", "-A"], target);
-  const message = "chore: seed the Academy example";
+  const message = ACADEMY_SEED_COMMIT;
   const commit = await run("git", ["commit", "-m", message], target);
   if (commit.code !== 0) {
     // A signing policy without a usable key, or a machine with no git

@@ -509,13 +509,13 @@ When a client requests adapter readiness, the core service shall report one dedu
 
 #### core-service-10
 
-The core service shall persist and replay sessions through Playbook's hydrated manifest and replay API over its versioned physical session files [[1]] ([DR-135](../decisions/135-bounded-session-storage.md)), using the shared root and explicit overrides [[storage-1](storage.md#storage-1)] ([DR-045](../decisions/045-unified-session-storage.md)):
+The core service shall persist and replay sessions through Playbook's hydrated manifest and replay API over its versioned physical session files [[1]] ([DR-144](../decisions/144-bounded-session-storage.md)), using the shared root and explicit overrides [[storage-1](storage.md#storage-1)] ([DR-045](../decisions/045-unified-session-storage.md)):
 
 - restart serves the same records and visibility filtering [[core-service-8](#core-service-8)], deriving turns, summaries, usage, and per-agent active time [[core-service-102](#core-service-102)]; liveness comes from runtime/leases rather than stored flags;
 - valid opaque v1 records, including unknown/headerless objects, remain in sequence/digest accounting; unsupported presentation is skipped without damage;
 - record-write failure preserves live presentation and durable recovery, marks the manifest's replay incomplete and refuses later continuation [[core-service-73](#core-service-73)]; a restart cannot clear the marker merely because the retained bytes parse;
 - a reader serves the valid complete prefix with the damaged boundary reported, without altering files during a read;
-- a monolithic schema-7 session remains readable without implicit conversion; continuation follows Playbook's explicit migration requirement ([DR-135](../decisions/135-bounded-session-storage.md));
+- a monolithic schema-7 session remains readable without implicit conversion; continuation follows Playbook's explicit migration requirement ([DR-144](../decisions/144-bounded-session-storage.md));
 - token-free presentation includes synthesized visible failures [[core-service-30](#core-service-30)]; provider hints never enter the portable stream or manifest;
 - historical participants, settings, bindings and graphs come from stored context [[core-service-80](#core-service-80)], not today's installed modules.
 

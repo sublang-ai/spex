@@ -86,6 +86,7 @@ import {
   seedExampleProject,
   defaultRunCommand,
   isWorkTreeRoot,
+  isSeededAcademyProject,
   repoStatus,
   type ForgeAdapter,
   type RunCommand,
@@ -2625,7 +2626,12 @@ export class CoreService {
         }
         try {
           if (command.example) {
-            await seedExampleProject({ path, run: this.runCommand });
+            // Removing a project deliberately leaves its working folder.
+            // Reopen that same Academy repository without copying over
+            // any edits; every other occupied path remains a refusal.
+            if (!(await isSeededAcademyProject(path, this.runCommand))) {
+              await seedExampleProject({ path, run: this.runCommand });
+            }
           } else {
             await createProjectRepo({
               path,

@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// RUN-29/31/35: the Captain home greets, starts in one motion, filters
-// the slash menu, keeps the quick start dismissed, and tunes the
-// Captain's inline agent block in place (DR-019).
+// RUN-29/31/35: the project start explains its scope, discovers
+// playbooks through slash, and tunes the Captain in place (DR-141).
 
 import { afterEach, describe, expect, test, vi } from "vitest";
 import {
@@ -17,7 +16,7 @@ import {
 
 afterEach(cleanup);
 
-import { CaptainHome, QUICK_START_KEY, popoverRoom } from "./CaptainHome.js";
+import { CaptainHome, popoverRoom } from "./CaptainHome.js";
 
 const PROJECT = { id: "p1", path: "/tmp/demo", name: "demo", registeredAt: 0 };
 
@@ -27,6 +26,7 @@ import type {
   PlaybookSummary,
   QueueSchedule,
   ReadinessEntry,
+  SpecTreeState,
 } from "@sublang/spex-core/protocol";
 import type { ComposerAttachmentControls } from "./ComposerAttachments.js";
 import type { AgentPatch } from "../lib/config-ops.js";
@@ -73,22 +73,19 @@ const PLAYBOOKS: PlaybookSummary[] = [
   },
 ];
 
-function memoryStorage(): Pick<Storage, "getItem" | "setItem"> {
-  const data = new Map<string, string>();
-  return {
-    getItem: (key) => data.get(key) ?? null,
-    setItem: (key, value) => void data.set(key, value),
-  };
-}
-
 function renderHome({
   attachments = undefined as ComposerAttachmentControls | undefined,
   onStart = vi.fn(async () => {}),
   onSaveCaptain = vi.fn(async (_patch: AgentPatch) => {}),
   onNavigate = vi.fn(),
   onOpenPalette = vi.fn(),
+  onOpenOwnProject = vi.fn(),
   hasProject = true,
   hasProjects = true,
+  playbooks = PLAYBOOKS as PlaybookSummary[],
+  specTree = undefined as SpecTreeState | undefined,
+  specError = undefined as string | undefined,
+  onOpenSpecs = undefined as (() => void) | undefined,
   // null renders the no-captain state; undefined would fall back to
   // this default the way an omitted option does.
   captain = CAPTAIN as AgentSummary | null,
@@ -96,7 +93,6 @@ function renderHome({
   readiness = READY,
   configStatus = undefined as "valid" | "invalid" | "missing" | undefined,
   configErrors = undefined as string[] | undefined,
-  storage = memoryStorage(),
   next = undefined as
     | { intent: IntentInfo; schedule: QueueSchedule; more: number }
     | undefined,
@@ -112,7 +108,10 @@ function renderHome({
       hasProject={hasProject}
       hasProjects={hasProjects}
       projectName={hasProject ? PROJECT.name : undefined}
-      playbooks={PLAYBOOKS}
+      specTree={specTree}
+      specError={specError}
+      onOpenSpecs={onOpenSpecs}
+      playbooks={playbooks}
       captain={captain ?? undefined}
       readiness={readiness}
       connected
@@ -120,11 +119,11 @@ function renderHome({
       configErrors={configErrors}
       onRecheckReadiness={onRecheckReadiness}
       onOpenPalette={onOpenPalette}
+      onOpenOwnProject={onOpenOwnProject}
       onNavigate={onNavigate}
       onSaveCaptain={onSaveCaptain}
       onStart={onStart}
       attachments={attachments}
-      storage={storage}
       next={next}
       onStartIntent={onStartIntent}
       staged={staged}
@@ -137,27 +136,26 @@ function renderHome({
     onSaveCaptain,
     onNavigate,
     onOpenPalette,
-    storage,
+    onOpenOwnProject,
     view,
   };
 }
 
 describe("RUN-29: captain home structure and one-motion start", () => {
-  test("greeting, composer, and captain identity render", () => {
+  test("project task framing, composer, and Captain role render", () => {
     renderHome();
-    expect(screen.getByText(/Hello! This is demo/).textContent).toBeTruthy();
+    expect(screen.getByText("What would you change in demo?")).toBeTruthy();
     expect(screen.getByTestId("start-composer")).toBeTruthy();
-    // The Captain shows as the one agent chip (DR-019): adapter ·
-    // model @ effort, with the adapter's readiness dot.
     const chip = screen.getByTestId("agent-chip");
     expect(chip.textContent).toContain("claude · claude-opus-4-8 @ high");
-    expect(chip.getAttribute("aria-label")).toBe(
-      "Captain: claude · claude-opus-4-8 @ high (ready)",
-    );
-    expect(screen.getByTestId("captain-settings")).toBeTruthy();
+    expect(chip.getAttribute("aria-label")).toBe("Captain: claude · claude-opus-4-8 @ high (ready)");
+    const settings = screen.getByTestId("captain-settings");
+    expect(settings.contains(chip)).toBe(true);
+    expect(settings.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.getByTestId("project-task-start").className).toContain("w-full");
   });
 
-  test("a config with no captain reads as not set, gear inert", () => {
+  test("a config with no captain reads as not set, model control inert", () => {
     renderHome({ captain: null, configStatus: "invalid" });
     expect(screen.queryByTestId("agent-chip")).toBeNull();
     expect(screen.getByText("not set")).toBeTruthy();
@@ -175,30 +173,119 @@ describe("RUN-29: captain home structure and one-motion start", () => {
     await vi.waitFor(() => expect(onStart).toHaveBeenCalledWith("fix the bug"));
   });
 
-  test("with no project registered, the greeting offers adding one", () => {
-    // The remedy the workspace actually has: with nothing registered,
-    // there is nothing in the sidebar to pick (run-view-25).
-    renderHome({ hasProject: false, hasProjects: false });
-    expect(screen.getByText(/Add a project — any local git repo/)).toBeTruthy();
-    expect(screen.queryByText(/Pick a project in the sidebar/)).toBeNull();
-    // Send says what to do first, with this platform's modifier.
-    expect(screen.getByTestId("start-send").title).toBe(
-      `Add a project first (${keyLabel("P")})`,
-    );
+  test("with no project registered, welcome gives two clear paths without Captain chrome", () => {
+    const { onOpenOwnProject } = renderHome({ hasProject: false, hasProjects: false,
+      readiness: [{ adapter: "claude", ready: false, requirement: "sign in", usedBy: ["captain"], fastModeSupported: true, subagentModelSupported: true }],
+    });
+    expect(screen.getByTestId("welcome-home")).toBeTruthy();
+    expect(screen.getByText("Write clear specs. Build with playbooks.")).toBeTruthy();
+    expect(screen.getByText("Specs")).toBeTruthy();
+    expect(screen.getByText("Describe how the system should work and how to check it")).toBeTruthy();
+    expect(screen.getByText("Playbooks")).toBeTruthy();
+    expect(screen.getByText("Turn workflows written in plain language into steps AI can run")).toBeTruthy();
+    expect(screen.getByText("Delivery")).toBeTruthy();
+    expect(screen.getByText("AI builds and reviews changes, with a record of each step")).toBeTruthy();
+    const primary = screen.getByTestId("home-add-project");
+    const academy = screen.getByTestId("home-academy");
+    expect(primary.className).toContain("bg-brand-600");
+    expect(academy.className).toContain("border-neutral-300");
+    expect(primary.compareDocumentPosition(academy) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByTestId("home-academy").textContent).toContain("Academy example");
+    expect(screen.queryByText(/does not play a recorded task yet/)).toBeNull();
+    expect(screen.queryByTestId("start-composer")).toBeNull();
+    expect(screen.queryByTestId("quick-start")).toBeNull();
+    expect(screen.queryByTestId("captain-readiness")).toBeNull();
+    fireEvent.click(screen.getByTestId("home-add-project"));
+    expect(onOpenOwnProject).toHaveBeenCalledOnce();
   });
 
-  test("the greeting says what a playbook is, and Send says how", () => {
+  test("task scope and slash discovery sit outside the input", () => {
     renderHome();
-    expect(
-      screen.getByText(/a scripted workflow the AI players run/),
-    ).toBeTruthy();
+    expect(screen.getByText(/Describe your goal. AI helps write specs for how the system should work/)).toBeTruthy();
+    const hint = document.getElementById("start-playbook-hint")!;
+    expect(hint.textContent).toBe("Type / in the task box to see 2 playbooks");
+    expect(hint.querySelector("code")?.textContent).toBe("/");
+    expect(hint.compareDocumentPosition(screen.getByTestId("composer-box")) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
+    const field = screen.getByLabelText("Describe a project task");
+    expect(field).toBe(screen.getByTestId("start-composer"));
+    expect(field.getAttribute("aria-describedby")).toBe("start-playbook-hint");
+    expect(screen.getByText("Describe a project task").className).toContain("sr-only");
+    expect(screen.queryByTestId("quick-start")).toBeNull();
+    expect(screen.queryByText("/ for playbooks · Enter sends")).toBeNull();
+    expect(screen.getByTestId("start-send").textContent).toBe("Start task");
     expect(screen.getByTestId("start-send").title).toBe(
       "Enter to send · Shift+Enter for a new line",
     );
   });
 
+  test("a quiet preview explains only configured playbooks without another command control", () => {
+    const inspect: PlaybookSummary = {
+      id: "inspect", from: "@sublang/playbook/inspect/registry", command: "inspect",
+      intent: "inspect supplied material or a running web interface and explain observed evidence without changing the repository",
+      roles: {},
+    };
+    renderHome({ playbooks: [
+      { ...PLAYBOOKS[1], intent: "review a supplied scope of committed work until no unsettled findings remain" },
+      inspect,
+      { ...PLAYBOOKS[0], intent: "implement a coding intent in reviewed, one-commit phases, using an intent record when needed" },
+    ] });
+    const preview = screen.getByTestId("playbook-preview");
+    expect(preview.textContent).toContain("a workflow written in plain language");
+    expect(preview.textContent).toContain("/code");
+    expect(preview.textContent).toContain("/review");
+    expect(preview.textContent).not.toContain("/inspect");
+    expect(preview.querySelectorAll("p")).toHaveLength(1);
+    expect(preview.querySelectorAll("button")).toHaveLength(0);
+    const hint = document.getElementById("start-playbook-hint")!;
+    expect(hint.textContent).toBe("Type / in the task box to see 3 playbooks");
+    expect(preview.compareDocumentPosition(hint) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(preview.textContent).toContain("build and review step by step");
+    expect(preview.textContent).toContain("review committed changes");
+    expect(preview.querySelector("code")?.className).toBe(hint.querySelector("code")?.className);
+  });
+
+  test("no playbook preview appears without configured playbooks", () => {
+    renderHome({ playbooks: [] });
+    expect(screen.queryByTestId("playbook-preview")).toBeNull();
+  });
+
+  test("existing project specs are counted and open the pinned Specs tab", () => {
+    const onOpenSpecs = vi.fn();
+    const specTree: SpecTreeState = {
+      present: true, legacy: false, decisions: [], intents: [], notices: [], readAt: 1,
+      files: [
+        { path: "specs/packages/design.md", key: "design", dir: "", basename: "design", notices: [], items: [
+          { id: "design-1", group: "external", section: "External Behavior", firstLine: "A checkable goal", text: "A checkable goal", cites: [] },
+        ] },
+        { path: "specs/packages/git.md", key: "git", dir: "", basename: "git", notices: [], items: [] },
+      ],
+    };
+    renderHome({ specTree, onOpenSpecs });
+    const status = screen.getByTestId("project-spec-status");
+    expect(status.textContent).toContain("2 packages · 1 item");
+    fireEvent.click(within(status).getByRole("button", { name: "View specs" }));
+    expect(onOpenSpecs).toHaveBeenCalledOnce();
+  });
+
+  test("a missing specs tree offers guidance without presenting a false count", () => {
+    const onOpenSpecs = vi.fn();
+    const view = renderHome({ onOpenSpecs });
+    const status = screen.getByTestId("project-spec-status");
+    expect(status.textContent).toBe("Reading project specs…");
+    expect(status.querySelector("button")).toBeNull();
+    view.view.rerender(<CaptainHome hasProject hasProjects projectName="demo" playbooks={PLAYBOOKS} readiness={READY} connected
+      onOpenPalette={vi.fn()} onNavigate={vi.fn()} onSaveCaptain={vi.fn(async () => {})} onStart={vi.fn(async () => {})}
+      specTree={{ present: false, legacy: false, files: [], decisions: [], intents: [], notices: [], readAt: 1 }}
+      onOpenSpecs={onOpenSpecs} />);
+    expect(status.textContent).toContain("No project specs yet");
+    fireEvent.click(within(status).getByRole("button", { name: "See how to start" }));
+    expect(onOpenSpecs).toHaveBeenCalledOnce();
+  });
+
   test("submitting without a project opens the palette, draft intact", () => {
-    const { onStart, onOpenPalette } = renderHome({ hasProject: false });
+    const { onStart, onOpenPalette } = renderHome({ hasProject: false,
+      readiness: [{ adapter: "claude", ready: false, requirement: "sign in", usedBy: ["captain"], fastModeSupported: true, subagentModelSupported: true }],
+    });
     expect(screen.getByText(/Pick a project in the sidebar/)).toBeTruthy();
     expect(screen.getByTestId("start-send").title).toBe(
       `Pick a project first (${keyLabel("P")})`,
@@ -214,8 +301,8 @@ describe("RUN-29: captain home structure and one-motion start", () => {
   });
 });
 
-describe("run-view-25: with nothing registered, the greeting carries the ways in", () => {
-  test("a seeding failure lands in the thread, the controls stay", async () => {
+describe("run-view-172: with nothing registered, the welcome page carries the ways in", () => {
+  test("a seeding failure lands on the page, the controls stay", async () => {
     useAppStore.setState({
       openAcademyExample: vi.fn(async (): Promise<never> => {
         throw new Error("target directory is not empty");
@@ -238,7 +325,7 @@ describe("run-view-25: with nothing registered, the greeting carries the ways in
   });
 });
 
-describe("RUN-31: slash menu and quick start dismissal", () => {
+describe("RUN-31: slash menu discovery", () => {
   test("typing / lists playbooks with intents and filters by prefix", () => {
     renderHome();
     const composer = screen.getByTestId("start-composer");
@@ -264,16 +351,13 @@ describe("RUN-31: slash menu and quick start dismissal", () => {
     expect(onStart).not.toHaveBeenCalled();
   });
 
-  test("dismissing the quick start persists across remounts", () => {
-    const storage = memoryStorage();
-    const first = renderHome({ storage });
-    expect(screen.getByTestId("quick-start")).toBeTruthy();
-    fireEvent.click(screen.getByTestId("quick-start-dismiss"));
-    expect(screen.queryByTestId("quick-start")).toBeNull();
-    expect(storage.getItem(QUICK_START_KEY)).toBe("1");
-    first.view.unmount();
-    renderHome({ storage });
-    expect(screen.queryByTestId("quick-start")).toBeNull();
+  test("no command list at rest; slash shows every configured playbook", () => {
+    renderHome();
+    expect(screen.queryByTestId("slash-menu")).toBeNull();
+    fireEvent.change(screen.getByTestId("start-composer"), { target: { value: "/" } });
+    const menu = screen.getByTestId("slash-menu");
+    expect(menu.textContent).toContain("/code");
+    expect(menu.textContent).toContain("/review");
   });
 });
 
@@ -365,7 +449,7 @@ describe("RUN-44: broken config surfaces in the thread", () => {
 });
 
 describe("RUN-45: readiness heals at hand", () => {
-  test("the heads-up bubble names the adapter and offers a re-check", async () => {
+  test("only the selected Captain blocks dispatch and offers a re-check", async () => {
     const onRecheckReadiness = vi.fn(async () => {});
     renderHome({
       onRecheckReadiness,
@@ -379,14 +463,26 @@ describe("RUN-45: readiness heals at hand", () => {
         },
       ],
     });
-    const bubble = screen.getByText(/aren't ready yet/).closest("div")!;
-    expect(bubble.textContent).toContain("claude");
-    expect(bubble.textContent).toContain("ANTHROPIC_API_KEY");
-    // Within the label budget (DR-041): the bubble's prose says what
-    // to set up, the control just re-checks.
+    const status = screen.getByTestId("captain-readiness");
+    expect(status.textContent).toContain("Set up an agent before starting a task.");
+    const composer = screen.getByTestId("start-composer") as HTMLTextAreaElement;
+    fireEvent.change(composer, { target: { value: "Review this task" } });
+    expect(composer.value).toBe("Review this task");
+    expect((screen.getByTestId("start-send") as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByTestId("recheck-readiness").textContent).toBe("Re-check");
     fireEvent.click(screen.getByTestId("recheck-readiness"));
     await vi.waitFor(() => expect(onRecheckReadiness).toHaveBeenCalled());
+  });
+
+  test("a ready alternative opens the Captain agent picker", () => {
+    renderHome({
+      readiness: [
+        { adapter: "claude", ready: false, requirement: "sign in", usedBy: ["captain"], fastModeSupported: true, subagentModelSupported: true },
+        { adapter: "codex", ready: true, usedBy: ["code.coder"], fastModeSupported: false, subagentModelSupported: false },
+      ],
+    });
+    fireEvent.click(screen.getByText("Switch to a ready agent"));
+    expect(screen.getByTestId("agent-popover")).toBeTruthy();
   });
 });
 
@@ -464,6 +560,7 @@ describe("run-view-88: the Captain home names the queue's head", () => {
       renderHome({ next: nextCard(schedule, {}, 2) });
 
       const card = screen.getByTestId("next-card");
+      expect(screen.queryByTestId("playbook-preview")).toBeNull();
       expect(card.textContent).toContain("Up next");
       expect(card.textContent).toContain("Address #12: harden the auth flow");
       expect(card.textContent).toContain("+2 more queued");
@@ -479,8 +576,7 @@ describe("run-view-88: the Captain home names the queue's head", () => {
       expect(Boolean(screen.queryByTestId("next-start"))).toBe(
         schedule.manualStart,
       );
-      // Coexists with the quick start card (run-view-88).
-      expect(screen.getByTestId("quick-start")).toBeTruthy();
+      expect(screen.getByTestId("project-task-start")).toBeTruthy();
     },
   );
 
@@ -501,10 +597,10 @@ describe("run-view-88: the Captain home names the queue's head", () => {
     );
   });
 
-  test("no queued intent, no card — the quick start stands alone", () => {
+  test("no queued intent, no card — task start stands alone", () => {
     renderHome();
     expect(screen.queryByTestId("next-card")).toBeNull();
-    expect(screen.getByTestId("quick-start")).toBeTruthy();
+    expect(screen.getByTestId("project-task-start")).toBeTruthy();
   });
 
   test("Remove closes the head dropped on the click; Undo re-queues the same text and provenance (run-view-114)", async () => {
@@ -526,7 +622,6 @@ describe("run-view-88: the Captain home names the queue's head", () => {
       onNavigate: vi.fn(),
       onSaveCaptain: vi.fn(async () => {}),
       onStart: vi.fn(async () => {}),
-      storage: memoryStorage(),
     };
     const view = render(
       <CaptainHome {...props} next={nextCard()} />,
@@ -610,7 +705,6 @@ describe("run-view-88: the Captain home names the queue's head", () => {
       onNavigate: vi.fn(),
       onSaveCaptain: vi.fn(async () => {}),
       onStart: vi.fn(async () => {}),
-      storage: memoryStorage(),
     };
     const view = render(<CaptainHome {...props} next={nextCard(waiting)} />);
     expect(screen.queryByTestId("next-start")).toBeNull();
@@ -750,19 +844,18 @@ describe("run-view-85: queue instead of send, from the home", () => {
   });
 });
 
-describe("run-view-25, DR-038: the Captain chip wears the fast-mode mark", () => {
-  test("a captain in fast mode shows the lightning with its tooltip", () => {
+describe("run-view-25: Captain chip carries current tuning and opens the editor", () => {
+  test("a captain in fast mode shows the mark and keeps the setting in the editor", () => {
     renderHome({ captain: { ...CAPTAIN, fastMode: true } });
-    const chip = screen.getByTestId("agent-chip");
-    expect(within(chip).getByTitle("fast mode").textContent).toBe("⚡");
-    expect(chip.getAttribute("aria-label")).toContain("fast mode");
+    expect(screen.getByTestId("fast-mode-mark")).toBeTruthy();
+    fireEvent.click(screen.getByTestId("captain-settings"));
+    expect((screen.getByTestId("agent-fast-mode") as HTMLInputElement).checked).toBe(true);
   });
 
-  test("without fast mode there is no mark", () => {
+  test("without fast mode the editor leaves it off", () => {
     renderHome();
-    expect(
-      within(screen.getByTestId("agent-chip")).queryByTitle("fast mode"),
-    ).toBeNull();
+    fireEvent.click(screen.getByTestId("captain-settings"));
+    expect((screen.getByTestId("agent-fast-mode") as HTMLInputElement).checked).toBe(false);
   });
 });
 

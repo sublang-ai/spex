@@ -6,7 +6,9 @@
 // each project's live state so quiet runs in other projects stay one
 // keystroke away. With nothing registered there is nothing to filter,
 // so the palette opens as an add flow: the path field focused and the
-// Academy example leading the list (projects-22). The palette owns
+// Academy example leading its ordinary list (projects-22). The welcome
+// page and sidebar's add route lead with the native folder picker and
+// keep creating a new project separate (projects-42). The palette owns
 // focus while open — Tab wraps inside it and Escape closes from
 // anywhere in it — and returns focus to the opener with any draft
 // intact (run-view-42). Where any seat is open, the palette lists
@@ -124,9 +126,12 @@ export interface ProjectPaletteProps {
   onPick: (projectId: string) => void;
   /** Pick a seat's project, at its place. */
   onPickAt?: (place: string, projectId: string) => void;
-  /** Register-or-init by path (store's addProjectByPath). */
+  /** Register an existing repository by path (store's addProjectByPath). */
   onAddPath: (path: string) => Promise<ProjectInfo>;
   onCreatePath: (path: string, scaffold: boolean) => Promise<ProjectInfo>;
+  /** Opened from a project-add action: lead with folder selection,
+   * keeping project switching and the Academy choice out of this form. */
+  addProjectOnly?: boolean;
   onClose: () => void;
 }
 
@@ -183,6 +188,8 @@ export function ProjectPalette(props: ProjectPaletteProps) {
   const [query, setQuery] = useState("");
   const [index, setIndex] = useState(0);
   const [pathDraft, setPathDraft] = useState("");
+  const [newPathDraft, setNewPathDraft] = useState("");
+  const [creating, setCreating] = useState(false);
   const [scaffold, setScaffold] = useState(true);
   const [busy, setBusy] = useState(false);
   /** The seat's project being opened, by its row's key. */
@@ -191,6 +198,8 @@ export function ProjectPalette(props: ProjectPaletteProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const pathRef = useRef<HTMLInputElement>(null);
+  const newPathRef = useRef<HTMLInputElement>(null);
+  const folderRef = useRef<HTMLButtonElement>(null);
   const openerRef = useRef<Element | null>(null);
   // Academy seeding (DR-015) lives on the store: registration and
   // project selection happen there, the palette only offers the row.
@@ -211,14 +220,20 @@ export function ProjectPalette(props: ProjectPaletteProps) {
   useEffect(() => {
     if (picking && !pickingRepo) onClose();
   }, [picking, pickingRepo, onClose]);
-  // No project registered: the remedy is adding one, so the filter
-  // goes and the add flow takes the front (projects-22).
-  const empty = props.projects.length === 0;
+  // With no project registered, the ordinary switcher has no filter;
+  // the explicit add form works with or without registered projects.
+  const empty = props.projects.length === 0 && (props.seats ?? []).every((seat) => seat.projects.length === 0);
+  const addProjectOnly = props.addProjectOnly === true;
+  const hasFolderPicker = Boolean(props.onPickFolder);
 
   // The palette owns focus while open and hands it back on close.
   useEffect(() => {
     openerRef.current = document.activeElement;
-    (empty ? pathRef.current : searchRef.current)?.focus();
+    ((addProjectOnly || empty) && hasFolderPicker
+      ? folderRef.current
+      : empty
+        ? pathRef.current
+        : searchRef.current)?.focus();
     return () => {
       (openerRef.current as HTMLElement | null)?.focus?.();
     };
@@ -226,6 +241,12 @@ export function ProjectPalette(props: ProjectPaletteProps) {
     // must not steal it back.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (creating) newPathRef.current?.focus();
+    else if (addProjectOnly && hasFolderPicker) folderRef.current?.focus();
+    else if (addProjectOnly) pathRef.current?.focus();
+  }, [creating, addProjectOnly, hasFolderPicker]);
 
   // This computer's projects first, then each seat's at its place.
   const listed = useMemo((): PaletteRow[] => {
@@ -293,7 +314,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
   // Entries the arrow keys traverse, in visual order: the Academy row
   // where it leads the list, then projects, then each seat's groups'
   // projects, then Open folder…
-  const lead = empty ? 1 : 0;
+  const lead = empty && !addProjectOnly ? 1 : 0;
   const joinStart = lead + filtered.length;
   const entryCount = joinStart + joinRows.length + (props.onPickFolder ? 1 : 0);
   const clamped = Math.min(index, Math.max(0, entryCount - 1));
@@ -337,7 +358,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
   }
 
   async function runAdd(create: boolean): Promise<void> {
-    const path = pathDraft.trim();
+    const path = (create && addProjectOnly ? newPathDraft : pathDraft).trim();
     if (!path || busy) return;
     setBusy(true);
     setError(undefined);
@@ -410,7 +431,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
 
   /** Enter on the highlighted entry. */
   function activate(at: number): void {
-    if (empty && at === 0) {
+    if (lead === 1 && at === 0) {
       void runAcademy();
       return;
     }
@@ -447,13 +468,13 @@ export function ProjectPalette(props: ProjectPaletteProps) {
   }
 
   function pathKeydown(event: React.KeyboardEvent): void {
-    if (moveHighlight(event)) return;
+    if (!addProjectOnly && moveHighlight(event)) return;
     if (event.key === "Enter") {
       event.preventDefault();
       // A typed path adds; an empty field hands Enter to the
       // highlighted row, so the zero-state is one keystroke deep.
       if (pathDraft.trim()) void runAdd(false);
-      else activate(clamped);
+      else if (!addProjectOnly) activate(clamped);
     }
   }
 
@@ -492,6 +513,23 @@ export function ProjectPalette(props: ProjectPaletteProps) {
       ? i18n._("— a sample project with specs, ready to run")
       : i18n._("— seeds a sample project");
 
+  const refusal = error ? (
+    <div
+      data-testid="palette-error"
+      className="rounded border border-red-300 bg-red-50 px-2 py-1 text-xs text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300"
+    >
+      {error.message}
+      {error.detail ? (
+        <pre
+          data-testid="palette-error-detail"
+          className="mt-1 max-h-[min(6rem,12vh)] overflow-y-auto whitespace-pre-wrap break-words font-mono text-[11px] text-red-800/80 dark:text-red-300/80"
+        >
+          {error.detail}
+        </pre>
+      ) : null}
+    </div>
+  ) : null;
+
   return (
     <div
       data-testid="project-palette"
@@ -509,7 +547,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
         role="dialog"
         aria-modal="true"
         aria-label={
-          empty ? i18n._("Add a project") : i18n._("Choose a project")
+          addProjectOnly || empty ? i18n._("Add a project") : i18n._("Choose a project")
         }
         onKeyDown={dialogKeydown}
         className="flex max-h-full w-[28rem] max-w-[90vw] flex-col overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-2xl dark:border-neutral-700 dark:bg-neutral-900"
@@ -525,6 +563,136 @@ export function ProjectPalette(props: ProjectPaletteProps) {
               onClose={props.onClose}
               onNote={() => {}}
             />
+          </div>
+        ) : addProjectOnly ? (
+          <div data-testid="palette-own-project" className="min-h-0 overflow-y-auto p-4">
+            <h2 className="text-base font-semibold text-neutral-900 dark:text-neutral-100">
+              {i18n._("Add a local project")}
+            </h2>
+            <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
+              {i18n._("Add an existing Git repository or create a new project.")}
+            </p>
+
+            <div className="mt-5">
+              <h3 className="text-xs font-semibold text-neutral-700 dark:text-neutral-200">
+                {i18n._("Existing project")}
+              </h3>
+              {props.onPickFolder ? (
+                <button
+                  ref={folderRef}
+                  type="button"
+                  data-testid="palette-open-folder"
+                  disabled={busy}
+                  onClick={openFolder}
+                  className="mt-2 flex w-full items-center gap-2 rounded-lg border border-neutral-300 bg-neutral-50 px-4 py-3 text-left text-sm font-medium text-neutral-900 hover:border-brand-400 hover:bg-neutral-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500 disabled:opacity-40 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100 dark:hover:bg-neutral-700"
+                >
+                  <Icon name="folder" className="h-4 w-4" />
+                  {i18n._("Choose a project folder…")}
+                </button>
+              ) : null}
+              {!props.onPickFolder && creating ? (
+                <button
+                  type="button"
+                  data-testid="palette-manual-path-start"
+                  onClick={() => {
+                    setCreating(false);
+                    setError(undefined);
+                  }}
+                  className="mt-3 text-left text-xs font-medium text-neutral-600 hover:text-brand-700 hover:underline dark:text-neutral-300"
+                >
+                  {i18n._("Or enter an existing Git repository path")}
+                </button>
+              ) : null}
+              {!props.onPickFolder && !creating ? (
+                <div className="mt-3">
+                  <label className="block text-xs text-neutral-500 dark:text-neutral-400" htmlFor="palette-own-path">
+                    {i18n._("Path to an existing Git repository")}
+                  </label>
+                  <div className="mt-1.5 flex gap-2">
+                    <input
+                      id="palette-own-path"
+                      ref={pathRef}
+                      data-testid="palette-path"
+                      aria-label={i18n._("Project path")}
+                      value={pathDraft}
+                      onChange={(event) => setPathDraft(event.target.value)}
+                      onKeyDown={pathKeydown}
+                      placeholder={i18n._("/path/to/existing-project")}
+                      className="min-w-0 flex-1 rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-brand-500 dark:border-neutral-700 dark:bg-neutral-950"
+                    />
+                    <button
+                      type="button"
+                      data-testid="palette-add"
+                      disabled={!pathDraft.trim() || busy}
+                      onClick={() => void runAdd(false)}
+                      title={i18n._("Add this project")}
+                      className="rounded-md border border-brand-300 px-3 py-2 text-sm font-medium text-brand-700 hover:bg-brand-50 disabled:opacity-40 dark:border-brand-800 dark:text-brand-300 dark:hover:bg-brand-950"
+                    >
+                      {i18n._({ id: "Add", comment: "register the typed path as an existing repository" })}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
+            <div className="mt-5 border-t border-neutral-200 pt-4 dark:border-neutral-800">
+              <h3 className="text-xs font-semibold text-neutral-700 dark:text-neutral-200">
+                {i18n._("New project")}
+              </h3>
+              {!creating ? (
+                <button
+                  type="button"
+                  data-testid="palette-create-start"
+                  onClick={() => {
+                    setError(undefined);
+                    setCreating(true);
+                  }}
+                  className="mt-2 text-left text-sm font-medium text-brand-700 hover:underline dark:text-brand-300"
+                >
+                  {i18n._("Create a new project…")}
+                </button>
+              ) : (
+                <div className="mt-2 flex flex-col gap-2">
+                  <label className="text-xs text-neutral-500 dark:text-neutral-400" htmlFor="palette-new-path">
+                    {i18n._("New folder path")}
+                  </label>
+                  <input
+                    id="palette-new-path"
+                    ref={newPathRef}
+                    data-testid="palette-new-path"
+                    aria-label={i18n._("New project path")}
+                    value={newPathDraft}
+                    onChange={(event) => setNewPathDraft(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        if (newPathDraft.trim()) void runAdd(true);
+                      }
+                    }}
+                    placeholder={i18n._("/path/to/new-project")}
+                    className="rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-brand-500 dark:border-neutral-700 dark:bg-neutral-950"
+                  />
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                    {i18n._("Spex will create this folder and set up Git.")}
+                  </p>
+                  <label className="flex items-center gap-1.5 text-xs text-neutral-500">
+                    <input type="checkbox" checked={scaffold} onChange={(event) => setScaffold(event.target.checked)} />
+                    {i18n._("Add starter specs when creating")}
+                  </label>
+                  <button
+                    type="button"
+                    data-testid="palette-create"
+                    disabled={!newPathDraft.trim() || busy}
+                    onClick={() => void runAdd(true)}
+                    title={i18n._("Create a new repository at this path")}
+                    className="self-start rounded-md border border-neutral-300 px-3 py-2 text-sm font-medium hover:bg-neutral-100 disabled:opacity-40 dark:border-neutral-700 dark:hover:bg-neutral-800"
+                  >
+                    {i18n._("Create project")}
+                  </button>
+                </div>
+              )}
+            </div>
+            {refusal ? <div className="mt-4">{refusal}</div> : null}
           </div>
         ) : (
         <>
@@ -547,7 +715,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
             path row, its options, and a failure message keep their
             place at every window height (projects-30). */}
         <div className="relative min-h-0 flex-1 overflow-y-auto py-1">
-          {empty ? (
+          {empty && !addProjectOnly ? (
             <button
               type="button"
               data-testid="palette-academy"
@@ -721,6 +889,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
             <button
               type="button"
               data-testid="palette-open-folder"
+              ref={folderRef}
               onClick={openFolder}
               disabled={busy}
               className={`flex w-full items-center gap-2 border-t border-neutral-100 px-4 py-2 text-left text-sm text-neutral-600 hover:bg-neutral-50 dark:border-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-800 ${
@@ -732,6 +901,8 @@ export function ProjectPalette(props: ProjectPaletteProps) {
           ) : null}
         </div>
         <div className="flex flex-col gap-1.5 border-t border-neutral-200 p-2 dark:border-neutral-800">
+          {!hasFolderPicker ? (
+          <>
           <div className="flex gap-1.5">
             <input
               ref={pathRef}
@@ -752,7 +923,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
               data-testid="palette-add"
               disabled={!pathDraft.trim() || busy}
               onClick={() => void runAdd(false)}
-              title={i18n._("Register this existing repository")}
+              title={i18n._("Add this project")}
               className="rounded border border-brand-300 px-2 py-1 text-xs text-brand-600 disabled:opacity-40 dark:border-brand-800 dark:text-brand-300"
             >
               {i18n._({
@@ -774,6 +945,18 @@ export function ProjectPalette(props: ProjectPaletteProps) {
               })}
             </button>
           </div>
+          {pathDraft.trim() ? (
+            <label className="flex items-center gap-1.5 px-0.5 text-xs text-neutral-500">
+              <input
+                type="checkbox"
+                checked={scaffold}
+                onChange={(event) => setScaffold(event.target.checked)}
+              />
+              {i18n._("Add starter specs when creating")}
+            </label>
+          ) : null}
+          </>
+          ) : null}
           {placed ? (
             // A project added or created here is this computer's
             // (run-view-168): a seat's projects are opened among the
@@ -785,16 +968,6 @@ export function ProjectPalette(props: ProjectPaletteProps) {
                 values: { place: here },
               })}
             </p>
-          ) : null}
-          {pathDraft.trim() ? (
-            <label className="flex items-center gap-1.5 px-0.5 text-xs text-neutral-500">
-              <input
-                type="checkbox"
-                checked={scaffold}
-                onChange={(event) => setScaffold(event.target.checked)}
-              />
-              {i18n._("Scaffold specs when creating")}
-            </label>
           ) : null}
           {empty ? null : (
             <button
@@ -808,26 +981,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
               <span className="text-xs text-neutral-500">{academyHint}</span>
             </button>
           )}
-          {error ? (
-            <div
-              data-testid="palette-error"
-              className="rounded border border-red-300 bg-red-50 px-2 py-1 text-xs text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300"
-            >
-              {error.message}
-              {error.detail ? (
-                // Git's own words, whole, beneath the app's: bounded by
-                // the window too, so a long one scrolls inside the
-                // palette rather than pushing its box out of a short
-                // window, where the list has already yielded (projects-30).
-                <pre
-                  data-testid="palette-error-detail"
-                  className="mt-1 max-h-[min(6rem,12vh)] overflow-y-auto whitespace-pre-wrap break-words font-mono text-[11px] text-red-800/80 dark:text-red-300/80"
-                >
-                  {error.detail}
-                </pre>
-              ) : null}
-            </div>
-          ) : null}
+          {refusal}
         </div>
         </>
         )}

@@ -10,7 +10,7 @@ Renumbered before integration to avoid main's record-ID collision.
 
 ## Intent
 
-Implement [DR-135](../decisions/135-bounded-session-storage.md) across session discovery, whole-session synchronization, historical choice summaries and the explorer.
+Implement [DR-144](../decisions/144-bounded-session-storage.md) across session discovery, whole-session synchronization, historical choice summaries and the explorer.
 
 ## Deliverables
 

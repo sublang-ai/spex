@@ -358,7 +358,7 @@ try {
   await page.getByTestId(`sidebar-project-${project.id}`).click();
   const prompt = `/inspect Open ${preview} in the browser and inspect the rendered subscription screen. Take a screenshot without a filename. In at most 120 words, explain the most important UX issue, quote the displayed plan and total prices, and suggest a practical fix. Do not change any repository files or make a commit.`;
   await page.getByTestId("start-composer").fill(prompt);
-  await page.getByRole("button", { name: "Send", exact: true }).click();
+  await page.getByTestId("start-send").click();
   const session = await waitFor(async () => (await client.command("session.list")).find((entry) => entry.projectId === project.id), 60_000, "UI-created Inspect session");
   sessionId = session.id;
   const browserSessionId = sessionId;
@@ -462,7 +462,7 @@ try {
   await (await chooser).setFiles({ name: "reference.png", mimeType: "image/png", buffer: inputImage });
   await page.getByRole("list", { name: "Attachments", exact: true }).getByText("Ready", { exact: true }).waitFor();
   await page.getByTestId("start-composer").fill(inputPrompt);
-  await page.getByRole("button", { name: "Send", exact: true }).click();
+  await page.getByTestId("start-send").click();
   const inputSession = await waitFor(async () => (await client.command("session.list")).find((entry) => entry.projectId === inputProject.id), 60_000, "fresh attachment session");
   sessionId = inputSession.id;
   assert.notEqual(sessionId, browserSessionId);

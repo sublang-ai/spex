@@ -299,6 +299,11 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Changed
 
+- First-run guidance now explains specs and playbooks in plain language,
+  invites a goal, and makes local project setup and task start clearer in
+  English and Chinese ([DR-143](specs/decisions/143-start-with-a-goal-and-explain-specs-plainly.md)).
+  Desktop project selection leads with the native folder picker.
+
 - New sessions and intents belong to the runtime that creates them
   ([DR-134](specs/decisions/134-execution-ownership.md)). Another runtime
   shows their history with `Runs on <label>` but cannot continue or recover
@@ -310,7 +315,7 @@ and `npm start` (desktop) or `npm run start:server` (server).
 - Playbook 18 shared session persistence now uses bounded files and
   deduplicated immutable chunks, with Sync selecting each complete session
   family together
-  ([DR-135](specs/decisions/135-bounded-session-storage.md)). Legacy sessions
+  ([DR-144](specs/decisions/144-bounded-session-storage.md)). Legacy sessions
   remain readable and require explicit Playbook migration before continuation.
   Stop older Playbook CLIs and Spex shells sharing a home before any upgraded
   writer starts.
@@ -427,7 +432,7 @@ and `npm start` (desktop) or `npm run start:server` (server).
   Agent SDK 0.3.284, Codex SDK 0.159.0 and OpenCode SDK 1.18.33. The
   compiler shares the app's Cligent; slc 0.19.0 retains a compiler-only
   nested Playbook 17.11.1, while the core and root acceptance tooling
-  use Playbook 18 ([DR-135](specs/decisions/135-bounded-session-storage.md)).
+  use Playbook 18 ([DR-144](specs/decisions/144-bounded-session-storage.md)).
   Cligent refuses an agent runtime older than the
   oldest release that serves its provider's latest models, so an older
   runtime on your `PATH`, such as an OpenCode CLI before 1.18.29, reads
@@ -704,6 +709,10 @@ and `npm start` (desktop) or `npm run start:server` (server).
 - Your own group's environment requests a spec package by a path in its clone ([DR-125](specs/decisions/125-your-own-groups-path-sources-live-in-its-clone.md)): keep an unpublished skill, spec or playbook of your own in a folder of your own group's spex repository, request it by that path, and edit it in place; the sync carries the folder, as one unit, to every device, where it exports to your agents. A path under Spex's own folders, however it is cased, one the sync rules drop, one reached through a link, and a folder in or holding a Git repository of its own, or holding a link or a file the sync would drop or refuse to share, are refused before anything is written, and again at each resolution and install, so a file added later fails the next install on the device holding it, the last exports standing; a release holding a `uv.lock`, `Cargo.lock` or `*.tmp`, which the sync rules drop anywhere, cannot live there. Explore reads such a folder as a spec package. "Add from folder" on your own group's side asks for a folder inside its clone, and `environment.get` names that folder as `pathRoot`. A request your own group made by a path in a paired working folder reads as missing until its folder moves into the clone. A project's and another group's paths stay relative to the working folder.
 
 ### Fixed
+
+- Reopening a removed Academy example preserves its committed and
+  uncommitted edits and Git history; unrelated nonempty folders still
+  refuse example seeding ([DR-140](specs/decisions/140-reopen-the-removed-academy-example.md)).
 
 - A background session read finishing after its project clone moves no
   longer hides the valid session from Sync or restores its old project

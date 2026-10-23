@@ -5,7 +5,7 @@
 
 ## Status
 
-Amended by [DR-135](135-bounded-session-storage.md) for bounded session roots, replay descriptors and session-owned chunks selected and published as one unit.
+Amended by [DR-144](144-bounded-session-storage.md) for bounded session roots, replay descriptors and session-owned chunks selected and published as one unit.
 
 Amended by [DR-097](097-media-and-browser-tools-across-hosts.md) for session bundles and whole-unit selection to include owned media assets.
 

@@ -273,7 +273,7 @@ test.describe("the project palette", () => {
   }) => {
     await open(page, app);
     await page.setViewportSize({ width: 900, height: SHORT });
-    await page.getByRole("button", { name: "Switch or add a project" }).click();
+    await page.getByTestId("sidebar").getByRole("button", { name: "Add a local project" }).click();
     const palette = page.getByRole("dialog", {
       name: /Add a project|Choose a project/,
     });
