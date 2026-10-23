@@ -7,8 +7,8 @@
 // with who changed it last and when; Edit through the whole-file
 // editor idiom with its version-token conflicts (spec-view-48/50);
 // Paste — text or a picked file — as the way in for a source of one's
-// own. Save and Use as source wait while the agent may be editing the
-// same file.
+// own, text alone at a remote place (run-view-169). Save and Use as
+// source wait while the agent may be editing the same file.
 
 import { useState } from "react";
 import type { DraftInfo } from "@sublang/spex-core/protocol";
@@ -34,6 +34,7 @@ export function DraftSourceTab({
   editor,
   connected,
   pickFile,
+  pathEntry = true,
   onMode,
   onEditor,
   onWrite,
@@ -49,6 +50,10 @@ export function DraftSourceTab({
   connected: boolean;
   /** The native bridge's file picker, where the shell offers one. */
   pickFile?: () => Promise<string | null>;
+  /** Whether a file's path may be named: false at a remote place,
+   * whose drafts are on its server, where only text is pasted
+   * (run-view-169). */
+  pathEntry?: boolean;
   onMode: (mode: Partial<DraftSourceMode>) => void;
   onEditor: (editor: SpecEditorState | undefined) => void;
   onWrite: (input: {
@@ -100,17 +105,18 @@ export function DraftSourceTab({
   }
 
   if (mode.mode === "paste") {
+    // A path is read only where one may be named (run-view-169).
+    const pastedPath = pathEntry ? mode.pastePath.trim() : "";
     const canUse =
       connected &&
       !pasteBusy &&
-      (mode.pasteText.trim().length > 0 || mode.pastePath.trim().length > 0);
+      (mode.pasteText.trim().length > 0 || pastedPath.length > 0);
     const useAsSource = async (): Promise<void> => {
       if (!canUse) return;
       setPasteBusy(true);
       setPasteError(undefined);
       try {
-        const filePath = mode.pastePath.trim();
-        await onWrite(filePath ? { sourcePath: filePath } : { content: mode.pasteText });
+        await onWrite(pastedPath ? { sourcePath: pastedPath } : { content: mode.pasteText });
         onMode({ mode: "view", pasteText: "", pastePath: "" });
       } catch (cause) {
         setPasteError((cause as Error).message);
@@ -133,33 +139,35 @@ export function DraftSourceTab({
             className="rounded border border-neutral-300 bg-white px-2 py-1 font-mono text-xs dark:border-neutral-700 dark:bg-neutral-950"
           />
         </label>
-        <label className="flex flex-col gap-0.5 text-sm">
-          <span className="text-xs text-neutral-500">{i18n._("Source file path (overrides the text)")}</span>
-          <span className="flex items-center gap-1.5">
-            <input
-              data-testid="paste-path"
-              value={mode.pastePath}
-              onChange={(event) => onMode({ pastePath: event.target.value })}
-              // The placeholder is the shape of a path, not a phrase.
-              placeholder="/path/to/workflow.md"
-              className="min-w-0 flex-1 rounded border border-neutral-300 bg-white px-2 py-1 dark:border-neutral-700 dark:bg-neutral-950"
-            />
-            {pickFile ? (
-              <button
-                type="button"
-                data-testid="paste-pick"
-                onClick={() => {
-                  void pickFile().then((picked) => {
-                    if (picked) onMode({ pastePath: picked });
-                  });
-                }}
-                className={BUTTON_CLASS}
-              >
-                {i18n._({ id: "Pick file", comment: "open the OS file picker" })}
-              </button>
-            ) : null}
-          </span>
-        </label>
+        {pathEntry ? (
+          <label className="flex flex-col gap-0.5 text-sm">
+            <span className="text-xs text-neutral-500">{i18n._("Source file path (overrides the text)")}</span>
+            <span className="flex items-center gap-1.5">
+              <input
+                data-testid="paste-path"
+                value={mode.pastePath}
+                onChange={(event) => onMode({ pastePath: event.target.value })}
+                // The placeholder is the shape of a path, not a phrase.
+                placeholder="/path/to/workflow.md"
+                className="min-w-0 flex-1 rounded border border-neutral-300 bg-white px-2 py-1 dark:border-neutral-700 dark:bg-neutral-950"
+              />
+              {pickFile ? (
+                <button
+                  type="button"
+                  data-testid="paste-pick"
+                  onClick={() => {
+                    void pickFile().then((picked) => {
+                      if (picked) onMode({ pastePath: picked });
+                    });
+                  }}
+                  className={BUTTON_CLASS}
+                >
+                  {i18n._({ id: "Pick file", comment: "open the OS file picker" })}
+                </button>
+              ) : null}
+            </span>
+          </label>
+        ) : null}
         {pasteError ? (
           <div
             role="alert"
@@ -171,7 +179,7 @@ export function DraftSourceTab({
         ) : null}
         <div className="flex flex-wrap items-center gap-2">
           <span data-testid="paste-caption" className="text-xs text-neutral-500">
-            {mode.pastePath.trim()
+            {pastedPath
               ? i18n._("The file is copied in as the playbook's source")
               : i18n._("Replaces the playbook's source")}
           </span>
@@ -230,7 +238,7 @@ export function DraftSourceTab({
           <button
             type="button"
             data-testid="source-paste"
-            title={i18n._("Paste a source or pick a file")}
+            title={pathEntry ? i18n._("Paste a source or pick a file") : i18n._("Paste a source")}
             onClick={() => onMode({ mode: "paste" })}
             className={BUTTON_CLASS}
           >
@@ -278,7 +286,11 @@ export function DraftSourceTab({
           <button
             type="button"
             data-testid="source-paste"
-            title={i18n._("Replace the source with pasted text or a file")}
+            title={
+              pathEntry
+                ? i18n._("Replace the source with pasted text or a file")
+                : i18n._("Replace the source with pasted text")
+            }
             onClick={() => onMode({ mode: "paste" })}
             className={BUTTON_CLASS}
           >

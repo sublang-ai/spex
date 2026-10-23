@@ -484,10 +484,15 @@ export function DashboardSurface({
    * stageDispatch and switches to the Workspace). */
   onStartIntent: (intent: IntentInfo) => Promise<void> | void;
   /** Optional Projects navigation for empty-state guidance
-   * (dashboard-8); plain copy stands in when the App leaves it
-   * unwired. */
-  onNavigate?: (surface: "Workspace") => void;
+   * (dashboard-8), showing the place named; plain copy stands in when
+   * the App leaves it unwired. */
+  onNavigate?: (surface: "Workspace", place: AppStore) => void;
 }) {
+  // The place the project groups stand at: this computer's, the
+  // Dashboard joining the places' attention alone (DR-133). A link to a
+  // project, or to Projects from the empty state, opens at this place,
+  // whichever the Projects surface last showed (run-view-168).
+  const home = useAppStore;
   const projects = useAppStore((state) => state.projects);
   const sessions = useAppStore((state) => state.sessions);
   const views = useAppStore((state) => state.views);
@@ -591,7 +596,7 @@ export function DashboardSurface({
   const workspaceLink = onNavigate ? (
     <button
       type="button"
-      onClick={() => onNavigate("Workspace")}
+      onClick={() => onNavigate("Workspace", home)}
       className="text-brand-600 hover:underline dark:text-brand-300"
     />
   ) : (
@@ -599,12 +604,13 @@ export function DashboardSurface({
   );
 
   // The Sources guidance points at the project's Overview, where the
-  // repository header shows the GitHub binding (dashboard-8, DR-038).
+  // repository header shows the GitHub binding (dashboard-8, DR-038),
+  // opened at the project's place (run-view-168).
   const openOverview = (projectId: string) => () => {
-    const state = useAppStore.getState();
+    const state = home.getState();
     state.setCurrentProject(projectId);
     state.setWorkspaceTab(projectId, "overview");
-    onNavigate?.("Workspace");
+    onNavigate?.("Workspace", home);
   };
 
   return (

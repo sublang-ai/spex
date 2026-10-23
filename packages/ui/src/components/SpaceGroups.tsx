@@ -64,7 +64,7 @@ import {
   displayRemote,
   isGroupRepository,
   lastSegment,
-  cloneHere,
+  awaitsFolder,
   lastSyncOf,
   pickDirectoryBridge,
   repositoryStatePhrase,
@@ -945,7 +945,7 @@ function RepositoryRow({
   // a row with no clone here has nothing to pair (space-61). At a remote
   // place it is joined again instead, its core cloning the code into the
   // folder it allocated (space-103).
-  const needsFolder = cloneHere(repo) && !groupRepository && repo.folder === null && repo.state !== "local-only";
+  const needsFolder = awaitsFolder(group, repo);
   // A code clone at a remote place that failed for want of the
   // member's credential names its host (space-103): the row opens that
   // place's Credentials section at it (settings-48).

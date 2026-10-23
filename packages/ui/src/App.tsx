@@ -946,16 +946,24 @@ function WorkspaceSurface({
           onWriteSpec={(path, content, baseVersion) =>
             writeSpec(project.id, path, content, baseVersion)
           }
-          onSeedExample={() => {
-            setSeedErrors((current) => ({ ...current, [project.id]: undefined }));
-            void openAcademyExample().catch((cause: Error) => {
-              setSeedErrors((current) => ({
-                ...current,
-                [project.id]:
-                  cause.message || i18n._("seeding the example failed"),
-              }));
-            });
-          }}
+          // The example is seeded at a folder this page names, so it is
+          // this computer's alone: a seat's projects are opened among
+          // the member's groups, its core allocating every folder
+          // (run-view-169).
+          onSeedExample={
+            isLocalPlace(store.place)
+              ? () => {
+                  setSeedErrors((current) => ({ ...current, [project.id]: undefined }));
+                  void openAcademyExample().catch((cause: Error) => {
+                    setSeedErrors((current) => ({
+                      ...current,
+                      [project.id]:
+                        cause.message || i18n._("seeding the example failed"),
+                    }));
+                  });
+                }
+              : undefined
+          }
           seedError={seedErrors[project.id]}
           viewState={specViewStates[placeKey(store.place, project.id)] ?? initialSpecViewState}
           onViewState={(next) => onSpecViewState(placeKey(store.place, project.id), next)}
@@ -1088,19 +1096,26 @@ export function App() {
     expandedProjects: state.expandedProjects,
     workspaceTabs: state.workspaceTabs,
     // A seat's groups name the projects the palette opens there
-    // (run-view-169).
+    // (run-view-169), read once it is connected.
     space: state.space,
+    connection: state.connection,
   }));
   const local = placeStates[0]!.value;
   // The badge and every dot re-source from the one core-side ledger
   // fold (DR-035, dashboard-9/10): each place's dots from its own, the
-  // badge summing every place's (dashboard-9).
+  // badge summing every place's (dashboard-9). A place speaking another
+  // protocol version is no connected core: it marks nothing, as it adds
+  // nothing to the queue and the badge (run-view-168).
   const attentionByPlace = useMemo(
     () =>
       new Map(
         placeStates.map(({ store, value }) => [
           store.place.key,
-          attentionOf(value.ledger, value.sessions, value.views),
+          attentionOf(
+            value.connection === "mismatch" ? undefined : value.ledger,
+            value.sessions,
+            value.views,
+          ),
         ]),
       ),
     [placeStates],
@@ -1524,6 +1539,7 @@ export function App() {
             // A seat's project is opened among the member's groups there,
             // with no folder (run-view-169, space-103).
             groups: value.space,
+            connected: value.connection === "open",
             onJoin: (instance, hostId) => store.getState().spaceJoin(instance, hostId),
             onReadGroups: () => {
               if (store.getState().connection === "open") {
@@ -1606,7 +1622,9 @@ export function App() {
               onOpenSession={openSessionAndShow}
               onOpenIntent={openIntentFrom("dashboard")}
               onStartIntent={startIntentAt(useAppStore)}
-              onNavigate={setSurface}
+              // A link to a project opens it at the project's place,
+              // the Projects surface showing that place (run-view-168).
+              onNavigate={(_surface, place) => showPlace(place)}
             />
           ) : (
             // The Projects surface reads the place it shows (run-view-168).
