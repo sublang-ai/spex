@@ -13,7 +13,7 @@ import { basename, join } from "node:path";
 import { createSessionStore } from "@sublang/playbook/session-store";
 import { seedHistorySession } from "./testing/demo.js";
 import type { RepositoryState } from "./protocol.js";
-import { clonePath, createSpaceHarness } from "./testing/space-harness.js";
+import { clonePath, createSpaceHarness, placementOf } from "./testing/space-harness.js";
 
 const fixture = createSpaceHarness();
 const { scratch, git, bareRepo, otherDevice, joinRemote, startHome, runTurn, snapshot, peerClone, peerPush, turnRecords, sleep } = fixture;
@@ -154,8 +154,9 @@ test("space-38: a Settings conflict, validation at Apply, a unit changed before 
   const changedAgain = await b.client.settle("space.sync", { repository: key });
   assert.ok(changedAgain.sync.phase === "stopped" && changedAgain.sync.step === "push" && changedAgain.sync.cause === "rejected", JSON.stringify(changedAgain.sync));
   assert.ok(changedAgain.sync.phase === "stopped" && /changed again/.test(changedAgain.sync.message));
-  assert.ok((changedAgain.branch?.ahead ?? 0) >= 1, JSON.stringify(changedAgain.branch));
-  assert.equal(git(bClone, "rev-list", "--count", "origin/spex..spex"), String(changedAgain.branch?.ahead));
+  const changedBranch = placementOf(changedAgain, null).branch;
+  assert.ok((changedBranch?.ahead ?? 0) >= 1, JSON.stringify(changedBranch));
+  assert.equal(git(bClone, "rev-list", "--count", "origin/spex..spex"), String(changedBranch?.ahead));
   b.hooks.beforeStep = undefined;
   assert.equal((await b.client.settle("space.sync", { repository: key })).sync.phase, "done");
   // A fast-forward: spex equals the host's with no merge commit, hints cleared, private modes under umask 022.

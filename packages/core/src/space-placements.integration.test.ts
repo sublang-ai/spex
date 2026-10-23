@@ -624,7 +624,7 @@ test("space-100, space-97, space-88, space-29, space-57, space-64, space-13, spa
   assert.deepEqual(waiting.placements.map((line) => [line.instance, line.attached, line.state, line.outcome?.kind ?? null]), [[firstOrigin, true, "reachable", "synced"], [secondOrigin, false, "absent", null]]);
   assert.deepEqual(placementOf(waiting, second.url).waiting, { step: "create", group: "acme", message: words });
   assert.equal(placementOf(waiting, second.url).path, "acme/beacon-spex");
-  assert.deepEqual([waiting.state, waiting.waiting], ["reachable", null]);
+  assert.deepEqual([waiting.state, placementOf(waiting, first.url).waiting], ["reachable", null]);
   assert.ok(existsSync(join(beaconClone, "peer.md")), "the first synced meanwhile");
   assert.equal(configOf(beaconClone, `remote.${secondFolder}.url`), null);
   assert.ok(!existsSync(join(beaconClone, PLACEMENTS_DIR, `${secondFolder}.yaml`)), "no file for a placement not added");
@@ -881,7 +881,7 @@ test("space-101, space-82, space-60, space-29, space-65, space-64, storage-31, s
   await home.client.expectOk("project.rebind", { projectId: group, path: work });
   mark = home.client.mark();
   assert.equal((await home.client.expectOk("project.register", { path: work })).id, group);
-  const pending = await home.client.waitRepository(mark, group, (repository) => repository.waiting !== null, 30_000);
+  const pending = await home.client.waitRepository(mark, group, (repository) => repository.placements.some((line) => line.waiting !== null), 30_000);
   assert.deepEqual([pending.state, placementOf(pending, third.url).waiting?.message], ["local-only", words]);
 
   // The first signed out, a Refresh reads the second's listing of what

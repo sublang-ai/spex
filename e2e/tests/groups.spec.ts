@@ -573,7 +573,7 @@ test.describe("a folder joining a team's project", () => {
       await expect(row).toHaveAttribute("data-state", "reachable", { timeout: 30_000 });
       await expect(page.getByTestId(`space-repo-state-${key}`)).toHaveText(/^Synced (just now|\d+m ago)$/, { timeout: 30_000 });
       const joined = repositoryOf(await app.core.command("space.get", {}), key);
-      expect(joined.noticed).toBe(true);
+      expect(placementOf(joined, host.url).noticed).toBe(true);
       expect(joined.folder).toBe(app.projectDir);
       const clone = clonePath(app.dataDir, key);
       expect(git(clone, "rev-parse", "spex")).toBe(git(bareOf(host, key), "rev-parse", "spex"));

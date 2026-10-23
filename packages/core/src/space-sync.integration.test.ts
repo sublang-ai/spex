@@ -15,7 +15,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, symlinkSync, w
 import { join } from "node:path";
 import { createSessionStore } from "@sublang/playbook/session-store";
 import { appendHistorySession, seedHistorySession } from "./testing/demo.js";
-import { clonePath, createSpaceHarness, OWN_KEY, ownClone, prefsOf, rowsOf } from "./testing/space-harness.js";
+import { clonePath, createSpaceHarness, OWN_KEY, ownClone, placementOf, prefsOf, rowsOf } from "./testing/space-harness.js";
 
 const fixture = createSpaceHarness();
 const { scratch, git, bareRepo, otherDevice, sameNameFolder, addFolder, sleepingSsh, sleep, joinRemote, startHome, runTurn, peerClone, peerPush, turnRecords } = fixture;
@@ -47,8 +47,8 @@ test("space-38: your own group's repository joins with one Settings choice, and 
   await b.client.expectOk("space.remote.set", { repository: OWN_KEY, url: bareOwn });
   const unrelated = await b.client.settle("space.sync", { repository: OWN_KEY });
   assert.equal(unrelated.sync.phase, "unrelated", JSON.stringify(unrelated.sync));
-  assert.equal(unrelated.branch?.unrelated, true);
-  assert.deepEqual(unrelated.incoming, []);
+  assert.equal(placementOf(unrelated, null).branch?.unrelated, true);
+  assert.deepEqual(placementOf(unrelated, null).incoming, []);
   const choices = await b.client.settle("space.sync", { repository: OWN_KEY, join: true });
   assert.equal(choices.sync.phase, "choices", JSON.stringify(choices.sync));
   assert.equal(choices.conflicts.length, 1);
@@ -67,7 +67,7 @@ test("space-38: your own group's repository joins with one Settings choice, and 
   assert.equal(joined.sync.phase, "done", JSON.stringify(joined.sync));
   assert.ok(joined.sync.phase === "done" && joined.sync.pushed);
   assert.deepEqual(readFileSync(b.configPath), mineBytes, "Keep mine leaves this home's file");
-  assert.equal(joined.branch?.unrelated, false);
+  assert.equal(placementOf(joined, null).branch?.unrelated, false);
   assert.equal(git(ownClone(b.dataDir), "log", "-1", "--format=%P").split(" ").length, 2, "one merge commit with two parents");
   assert.equal(git(bareOwn, "rev-parse", "spex"), git(ownClone(b.dataDir), "rev-parse", "spex"));
   assert.equal(git(ownClone(b.dataDir), "log", "-1", "--format=%cn"), "Home B");
