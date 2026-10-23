@@ -7,7 +7,7 @@ import type { SessionInfo, TmuxPlayRecord } from "@sublang/spex-core/protocol";
 import { RunView } from "./RunView.js";
 import { applyRecords, initialSessionView, type SessionView } from "../state/reducer.js";
 import { setClientForTests, useAppStore } from "../state/store.js";
-import { PLAYERS, TURN_TWO_QUESTION } from "../fixtures/sample-run.js";
+import { CALLED_LANES, PLAYERS, TURN_TWO_QUESTION } from "../fixtures/sample-run.js";
 
 const previous = useAppStore.getState();
 afterEach(() => {
@@ -33,9 +33,10 @@ function conversation(view: SessionView, id = session.id) {
 
 function start(question = false) {
   useAppStore.setState({ collapsedLanes: {}, ledger: undefined, stagedIntents: {} });
-  const view = applyRecords(initialSessionView(PLAYERS), question
+  // Both lanes stand once a call has reached them (run-view-7).
+  const view = applyRecords(initialSessionView(PLAYERS), [...CALLED_LANES, ...(question
     ? TURN_TWO_QUESTION.filter((entry) => entry.record.type !== "turn_finished")
-    : [record(1, { type: "turn_started", turn: { id: 2, prompt: "Do the task" } })]);
+    : [record(1, { type: "turn_started", turn: { id: 2, prompt: "Do the task" } })])]);
   const rendered = render(conversation(view));
   const settle = () => {
     applyRecords(view, [record(999, { type: "turn_finished" })]);
