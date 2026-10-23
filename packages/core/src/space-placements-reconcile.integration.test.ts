@@ -326,7 +326,9 @@ test("git-host-21, space-16, space-15, space-60: a placement beside the first wh
 
   // The third asks to wait as long as a hold lasts: its read fails and
   // its calls are held, its view kept (git-host-21, git-host-5).
-  third.script.rateLimit(1, "120");
+  // Two answers, so the Check's own call meets the limit even where a
+  // read made meanwhile took the first one.
+  third.script.rateLimit(2, "120");
   let mark = home.client.mark();
   await home.client.expectOk("space.refresh", {});
   await home.client.waitSpace(mark, (state) => instanceOf(state, third.url)?.read.phase === "failed", 30_000);
