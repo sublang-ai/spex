@@ -5,7 +5,9 @@
 // turn record carries the control label but not whether it was a recovery
 // or an ending, so the core keeps that fact in the same durable stream.
 
-import { RESTORED_TOPIC, RESTORING_TOPIC, type FailureCause, type RestoredPosition, type RestoredRun, type TmuxPlayRecord } from "./protocol.js";
+import { isText, isUuid } from "./files.js";
+import { i18n } from "./i18n.js";
+import { RESTORED_TOPIC, RESTORING_TOPIC, type AssignedRuntime, type FailureCause, type RestoredPosition, type RestoredRun, type TmuxPlayRecord } from "./protocol.js";
 
 export type TurnControlKind = "recovery" | "ending";
 
@@ -49,6 +51,61 @@ export function controlKind(
     telemetry.payload?.kind === "ending"
     ? telemetry.payload.kind
     : undefined;
+}
+
+/** The hidden record naming the runtime a session is assigned to
+ * (storage-43, DR-134). */
+export const RUNTIME_TOPIC = "spex.session.runtime";
+
+/** The one record a session's creation appends before its first turn
+ * (storage-43): hidden, naming no turn, its payload the runtime's
+ * `{device, label}`. */
+export function runtimeRecord(runtime: AssignedRuntime, timestamp: number): TmuxPlayRecord {
+  return {
+    type: "captain_telemetry",
+    topic: RUNTIME_TOPIC,
+    payload: { device: runtime.device, label: runtime.label },
+    turnId: null,
+    timestamp,
+    visibility: "hidden",
+  } as unknown as TmuxPlayRecord;
+}
+
+/** The runtime a runtime record names (storage-43): undefined for any
+ * other record, and null — an unknown runtime, never this home's — for
+ * one whose device is not a UUID or whose label is empty. */
+export function recordedRuntime(record: TmuxPlayRecord): AssignedRuntime | null | undefined {
+  if (record.type !== "captain_telemetry") return undefined;
+  const telemetry = record as unknown as { topic?: unknown; payload?: { device?: unknown; label?: unknown } | null };
+  if (telemetry.topic !== RUNTIME_TOPIC) return undefined;
+  const device = telemetry.payload?.device;
+  const label = telemetry.payload?.label;
+  return isUuid(device) && isText(label) ? { device, label } : null;
+}
+
+/** The label of the runtime a record runs on when that runtime is not
+ * this home's `device` (DR-134): the label it names, or an unknown
+ * runtime's where its record cannot be read; undefined where it runs
+ * here, or where the record names no runtime and keeps today's rules. */
+export function runsElsewhere(runtime: AssignedRuntime | null | undefined, device: string): string | undefined {
+  if (runtime === undefined) return undefined;
+  if (runtime === null) {
+    return i18n._({
+      id: "an unknown runtime",
+      comment: "Stands for the label in “Runs on {label}” where the record naming the runtime cannot be read",
+    });
+  }
+  return runtime.device === device ? undefined : runtime.label;
+}
+
+/** The phrase wherever another runtime's record is read or refused
+ * (DR-134). */
+export function runsOnPhrase(label: string): string {
+  return i18n._({
+    id: "Runs on {label}",
+    comment: "Why a session or an intent does not run here: it is assigned to another runtime, named by its label — the server's name on a seat, else the host name",
+    values: { label },
+  });
 }
 
 /** The cause a checkpointed failure carries: the runtime's
