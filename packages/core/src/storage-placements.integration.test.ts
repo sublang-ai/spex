@@ -24,7 +24,7 @@ import { createSessionStore } from "@sublang/playbook/session-store";
 import { stringify as stringifyYaml } from "yaml";
 import { Home, orderRemotes, remoteOrderOf } from "./home.js";
 import type { GroupsState, SpaceUnit } from "./protocol.js";
-import { bareOf, clonePath, createSpaceHarness, hostFolder, hostKey, instanceOf, placementOf, prefsOf, repositoryOf, syncRecordsOf } from "./testing/space-harness.js";
+import { bareOf, clonePath, createSpaceHarness, hostFolder, hostKey, instanceOf, placementOf, prefsOf, repositoryOf, syncRecordsOf, remoteNamesOf } from "./testing/space-harness.js";
 
 const fixture = createSpaceHarness();
 const { git, gitFolder, bareRepo, addFolder, otherDevice, peerClone, peerPush, runTurn, sleep, startHome, startHost, signIn, signOut } = fixture;
@@ -126,7 +126,7 @@ test("storage-36, space-35, space-23: your own group's sign-in, a pick's creatio
   // A remote the reader names is the path placement, written to no file
   // (storage-36, space-5).
   await a.client.expectOk("space.remote.set", { repository: key, url: bareRepo() });
-  assert.deepEqual(git(clone, "remote").split("\n"), [hostFolder(host), "origin"]);
+  assert.deepEqual(remoteNamesOf(clone), [hostFolder(host), "origin"]);
   assert.deepEqual(readdirSync(join(clone, "placements")), [`${hostFolder(host)}.yaml`]);
   assert.equal(readFileSync(join(clone, file), "utf8"), bytes);
 
@@ -337,7 +337,7 @@ test("storage-42, storage-36, storage-34, storage-5, space-57, space-60: two ins
     const seen: Record<string, unknown> = {
       files: readdirSync(join(clone, "placements")),
       bytes: readFileSync(join(clone, "placements", `${secondFolder}.yaml`), "utf8"),
-      remotes: git(clone, "remote").split("\n"),
+      remotes: remoteNamesOf(clone),
       id: git(clone, "config", "--get", `remote.${secondFolder}.spexId`),
       records: { ...syncRecordsOf(home.dataDir, key), ...syncRecordsOf(home.dataDir, followed) },
     };
@@ -423,7 +423,7 @@ test("storage-40, storage-37, storage-34, storage-38, space-91, space-97, space-
     // file yet (storage-30, storage-34).
     const moved = clonePath(home.dataDir, key);
     assert.ok(existsSync(join(moved, ".git")) && !existsSync(clone), "moved under the instance's folder");
-    assert.deepEqual(git(moved, "remote").split("\n"), [folder]);
+    assert.deepEqual(remoteNamesOf(moved), [folder]);
     assert.equal(git(moved, "config", "--get", `remote.${folder}.spexId`), shared.id);
     assert.throws(() => git(moved, "config", "--get", "spex.repositoryId"));
     assert.equal(existsSync(join(moved, "placements")), false);
@@ -576,7 +576,7 @@ test("storage-37, storage-38, space-91: a placement file a commit once held, rem
     assert.ok(line?.outcome?.kind === "stopped" && line.outcome.cause === "lease", JSON.stringify(line?.outcome));
     assert.equal(git(clone, "rev-parse", "HEAD"), removed, "the merge stands");
     assert.equal(existsSync(join(clone, file)), false, "the removal the merge brought stands");
-    assert.deepEqual(git(clone, "remote").split("\n"), [folder]);
+    assert.deepEqual(remoteNamesOf(clone), [folder]);
 
     // The next Save finds that a commit held the file, and writes nothing;
     // the drop waits still, and nothing is synced with the placement
@@ -588,7 +588,7 @@ test("storage-37, storage-38, space-91: a placement file a commit once held, rem
     assert.throws(() => git(clone, "cat-file", "-e", `HEAD:${file}`));
     assert.throws(() => git(bare, "cat-file", "-e", `spex:${file}`));
     assert.equal(host.script.transportCredentials.length, transports, "nothing fetched from or pushed to the placement");
-    assert.deepEqual(git(clone, "remote").split("\n"), [folder]);
+    assert.deepEqual(remoteNamesOf(clone), [folder]);
 
     // Released, the next sync drops the placement before its turn: the
     // clone, its last placement gone, moves under your own group's folder,

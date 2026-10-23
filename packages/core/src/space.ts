@@ -1983,7 +1983,7 @@ class RepositorySync {
     // read.
     const store = this.host.store;
     const configured = await this.git.run(["config", "-z", "--get-regexp", PLACEMENT_CONFIG_KEYS]);
-    const placements = configured.code === 0 ? placementsIn(configured.stdout.toString("utf8"), this.key, store.home, store.deferredMoves(), filedIn(this.dir)) : [];
+    const placements = configured.code === 0 ? placementsIn(configured.stdout.toString("utf8"), this.key, store.home, store.deferredMoves(), filedIn(this.dir), remoteOrderOf(this.dir)) : [];
     const upstreamRead = await this.git.run(["config", "--get", `branch.${SPEX_BRANCH}.remote`]);
     const upstreamName = upstreamRead.code === 0 ? upstreamRead.stdout.toString("utf8").trim() || null : null;
     this.placements = placements;

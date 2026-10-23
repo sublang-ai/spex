@@ -28,7 +28,7 @@ import { encodePlacementFile, PLACEMENTS_DIR } from "./placements.js";
 import type { GroupsState, RepositoryState } from "./protocol.js";
 import type { SpaceStepEvent } from "./space.js";
 import type { StandinHost } from "./testing/standin-host.js";
-import { bareOf, clonePath, createSpaceHarness, hostFolder, hostKey, instanceOf, placementOf, repositoryOf, rowsOf, syncRecordsOf } from "./testing/space-harness.js";
+import { bareOf, clonePath, createSpaceHarness, hostFolder, hostKey, instanceOf, placementOf, repositoryOf, rowsOf, syncRecordsOf, remoteNamesOf } from "./testing/space-harness.js";
 
 const fixture = createSpaceHarness();
 const { scratch, git, gitFolder, addFolder, peerClone, peerPush, runTurn, sleep, startHome, startHost, signIn, signOut } = fixture;
@@ -180,7 +180,7 @@ test("space-93, space-99, space-90, space-87, space-29, space-61, space-62, spac
   const unattached = await three.client.settle("space.sync", { repository: key }, 30_000);
   assert.equal(unattached.sync.phase, "done", JSON.stringify(unattached.sync));
   assert.deepEqual(lines(unattached), [[firstOrigin, true, "reachable"], [secondOrigin, false, "absent"]]);
-  assert.deepEqual(git(threeClone, "remote").split("\n"), [firstFolder]);
+  assert.deepEqual(remoteNamesOf(threeClone), [firstFolder]);
   assert.equal(pushesTo(second, "acme/atlas-spex"), carried);
 
   // The second home, signed in at the second alone, joins the second's
@@ -300,7 +300,7 @@ test("space-93, space-99, space-90, space-87, space-29, space-61, space-62, spac
   const dropped = await three.client.settle("space.sync", { repository: key }, 30_000);
   assert.equal(dropped.sync.phase, "done", JSON.stringify(dropped.sync));
   assert.deepEqual(lines(dropped), [[firstOrigin, true, "reachable"]]);
-  assert.deepEqual(git(threeClone, "remote").split("\n"), [firstFolder]);
+  assert.deepEqual(remoteNamesOf(threeClone), [firstFolder]);
   assert.ok(existsSync(join(threeClone, "sessions", `${sessionId}.json`)) && existsSync(join(threeClone, "intents", `${intent.id}.json`)), "the clone's records kept");
   assert.deepEqual(Object.keys(syncRecordsOf(three.dataDir, key)).filter((name) => name.startsWith(`sync:${key}:${secondFolder}:`)), []);
 
@@ -435,7 +435,7 @@ test("storage-35, space-99, space-90, space-87, space-29, environments-11, stora
   assert.equal(synced.sync.phase, "done", JSON.stringify(synced.sync));
   assert.deepEqual([synced.state, synced.instance], ["reachable", second.url]);
   assert.deepEqual(outcomes(synced), [[secondOrigin, true, "synced"]]);
-  assert.deepEqual(git(movedClone, "remote").split("\n"), [secondFolder]);
+  assert.deepEqual(remoteNamesOf(movedClone), [secondFolder]);
   assert.equal(configOf(movedClone, `remote.${secondFolder}.spexId`), there.id);
   assert.equal(git(there.bare, "rev-parse", "spex"), git(movedClone, "rev-parse", "HEAD"));
   const records = syncRecordsOf(home.dataDir, key);
@@ -524,7 +524,7 @@ test("space-29, space-61, space-87, space-90, space-62, git-host-5: Attach refus
   before = asked();
   await home.client.expectError("space.attach", { repository: groupKey, instance: second.url, noticed: true }, "invalid_request", /^acme-spex holds a group's records; only a project's are placed at another instance$/);
   assert.deepEqual(asked(), before, "no request reached either stand-in");
-  assert.deepEqual(git(groupClone, "remote").split("\n"), [firstFolder]);
+  assert.deepEqual(remoteNamesOf(groupClone), [firstFolder]);
 
   // One clone per host repository: a project placed at both, then a pick
   // of the local-only project and a Place of another joining its
@@ -547,5 +547,5 @@ test("space-29, space-61, space-87, space-90, space-62, git-host-5: Attach refus
   await home.client.expectError("space.place", { repository: borealis, choice: { kind: "join", instance: second.url, hostId: atSecond.id }, noticed: true }, "invalid_request", /^atlas-spex is on this device already, as a placement of atlas-spex$/);
   assert.deepEqual(asked(), before, "no request reached either stand-in");
   assert.equal(git(localClone, "remote"), "");
-  assert.deepEqual(git(clonePath(home.dataDir, borealis), "remote").split("\n"), [firstFolder]);
+  assert.deepEqual(remoteNamesOf(clonePath(home.dataDir, borealis)), [firstFolder]);
 });
