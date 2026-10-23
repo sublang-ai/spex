@@ -74,11 +74,11 @@ export function useEachPlace<T>(
 }
 
 /** The attention queue joined across the places (dashboard-9): every
- * place's ledger fold, band by band, each entry kept with the store of
- * the core it is answered at. A place speaking another protocol version
- * is no connected core and adds nothing, as the core's own count leaves
- * a mismatched seat out (core-service-129); one reconnecting keeps its
- * last read fold. */
+ * place's ledger fold, band by band, this computer's first so its entry
+ * leads a tie, each entry kept with the store of the core it is answered
+ * at. A place speaking another protocol version is no connected core and
+ * adds nothing, as the core's own count leaves a mismatched seat out
+ * (core-service-129); one reconnecting keeps its last read fold. */
 export function useJoinedAttention(): JoinedAttention<AppStore> {
   const ledgers = useEachPlace((state) => (state.connection === "mismatch" ? undefined : state.ledger));
   return useMemo(
