@@ -100,10 +100,11 @@ test("dashboard-63, run-view-150 @live: a project created from the palette devel
   //    the Captain home names it, and the Specs tab reads the
   //    scaffolded packages.
   await open(page, app);
-  await page.getByRole("button", { name: "Switch or add a project" }).click();
+  await page.getByTestId("sidebar").getByRole("button", { name: "Add a local project" }).click();
   const palette = page.getByRole("dialog", { name: /Add a project|Choose a project/ });
-  await palette.getByTestId("palette-path").fill(projectDir);
-  await expect(palette.getByRole("checkbox", { name: "Scaffold specs when creating" })).toBeChecked();
+  await palette.getByTestId("palette-create-start").click();
+  await palette.getByTestId("palette-new-path").fill(projectDir);
+  await expect(palette.getByRole("checkbox", { name: "Add starter specs when creating" })).toBeChecked();
   await palette.getByTestId("palette-create").click();
   // Scaffolding fetches the published CLI, as it does for a user.
   await expect(palette).toBeHidden({ timeout: 5 * 60_000 });

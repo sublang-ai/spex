@@ -11,7 +11,9 @@
 // every other entry kept and the file removed with its last one. A file
 // of another format is refused and left as it is; a malformed entry is
 // refused by every read and write of it and reported, others kept. No
-// value ever enters an error, a diagnostic or a log.
+// value ever enters an error, a diagnostic or a log: a file that will
+// not read is reported by its path, the YAML parser's warnings and
+// errors, which quote the file, reaching no output.
 
 import { mkdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
@@ -117,7 +119,10 @@ export function codeCredentialStore(homeDir: string): CodeCredentialStore {
     }
     let doc: unknown;
     try {
-      doc = parseYaml(text);
+      // At "error" the parser emits no warning, each quoting the file,
+      // yet still throws where the YAML will not read; "silent" would
+      // read it.
+      doc = parseYaml(text, { logLevel: "error" });
     } catch {
       // The parser's own words quote the file, which may hold a secret.
       throw new StorageFormatError(file, i18n._({
@@ -126,6 +131,12 @@ export function codeCredentialStore(homeDir: string): CodeCredentialStore {
       }));
     }
     need(isObject(doc), file, i18n._({ id: "expected an object", comment: "Storage diagnostic: a record in the file is not an object" }));
+    // A format is named only where it is a number: one written by hand
+    // may hold anything, a secret among it.
+    need(typeof doc.format === "number", file, i18n._({
+      id: "unsupported format; preserved unchanged",
+      comment: "Storage diagnostic: a credentials file names a layout version that is no number, which is not repeated; the file is left as it is",
+    }));
     knownFormat(doc, file, 1);
     closed(doc, ["format", "hosts", "agents"], [], file);
     need(isObject(doc.hosts) && isObject(doc.agents), file, i18n._({ id: "expected an object", comment: "Storage diagnostic: a record in the file is not an object" }));

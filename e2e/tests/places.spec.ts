@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// One desktop over several cores (run-view-172, DR-133): the served
+// One desktop over several cores (run-view-173, DR-133): the served
 // shell's core signed in at the stand-in instance, which lists two team
 // servers, each a stand-in hub over TLS relaying to a further core
 // standing as the person's seat — plain served cores on scratch roots of
@@ -119,7 +119,7 @@ function dial(app: App, path: string): Promise<number | "open"> {
   });
 }
 
-test("run-view-172: one desktop opens two seats and reads its places, its joined queue and its relays through the page", async ({
+test("run-view-173: one desktop opens two seats and reads its places, its joined queue and its relays through the page", async ({
   page,
   app,
 }) => {
@@ -147,7 +147,7 @@ test("run-view-172: one desktop opens two seats and reads its places, its joined
   const tap = tapSockets(page);
   await open(page, app);
 
-  // [run-view-172] [run-view-170] the Groups surface lists both servers
+  // [run-view-173] [run-view-170] the Groups surface lists both servers
   // under the instance's heading, by name and group, each with Open.
   await nav(page, "Groups").click();
   const servers = instanceSection(page, host).getByTestId(`space-servers-${host.url}`);
@@ -161,7 +161,7 @@ test("run-view-172: one desktop opens two seats and reads its places, its joined
   await expect(controlOne).toHaveText("Open");
   await expect(controlTwo).toHaveText("Open");
 
-  // [run-view-172] [run-view-170] the first Open shows the contract in
+  // [run-view-173] [run-view-170] the first Open shows the contract in
   // the record's words and asks nothing yet; "I understand" sends
   // `server.open` with consent.
   await controlOne.click();
@@ -182,10 +182,10 @@ test("run-view-172: one desktop opens two seats and reads its places, its joined
   await expect(controlTwo).toHaveText("Close", { timeout: 30_000 });
   await expect.poll(() => opensSent(tap.sent).at(-1)).toEqual({ instance: host.url, serverId: two.server.id, consented: true });
 
-  // [run-view-172] [run-view-168] the selector names the three places.
+  // [run-view-173] [run-view-168] the selector names the three places.
   await expect(page.getByTestId("place-selector").locator("option")).toHaveText(["This computer", "lab-1", "lab-2"]);
 
-  // [run-view-172] [run-view-168] the sidebar lists each place's
+  // [run-view-173] [run-view-168] the sidebar lists each place's
   // projects under a heading naming the place, this computer's rows
   // keeping their ids.
   const sidebar = page.getByTestId("sidebar");
@@ -198,7 +198,7 @@ test("run-view-172: one desktop opens two seats and reads its places, its joined
   await expect(groupOf("This computer")).not.toContainText("lab-one-work");
   await expect(groupOf("lab-1")).not.toContainText("lab-two-work");
 
-  // [run-view-172] [run-view-168] one queue carries the three cores'
+  // [run-view-173] [run-view-168] one queue carries the three cores'
   // attention in each band's order — the interrupted band first, each
   // band by onset across the places, not by place — and the badge counts
   // them (dashboard-9). The rail's entry is found by what it is: its
@@ -213,14 +213,14 @@ test("run-view-172: one desktop opens two seats and reads its places, its joined
   ]);
   await expect(page.getByTestId("nav-attention-badge")).toHaveText("3");
 
-  // [run-view-172] [run-view-168] an entry opened from the queue opens
+  // [run-view-173] [run-view-168] an entry opened from the queue opens
   // at its own place: the first seat's session, shown from its store.
   await queue.getByTestId(`attention-${sessionOne}-review`).getByRole("button", { name: /^Open Summarize the lab-one notes/ }).click();
   await expect(page.getByTestId("captain-pane")).toContainText("Summarize the lab-one notes");
   await expect(page.getByTestId(`sidebar-session-${sessionOne}@${one.place}`)).toHaveAttribute("aria-selected", "true");
   await expect(page.getByTestId("nav-attention-badge")).toHaveText("2");
 
-  // [run-view-172] [run-view-168] the approval waiting at the first seat
+  // [run-view-173] [run-view-168] the approval waiting at the first seat
   // stands in the one inbox, named by its place, and is answered at that
   // seat: its core's request clears and the approved effect lands there.
   await page.getByRole("button", { name: "Tool approvals (1)", exact: true }).click();
@@ -243,7 +243,7 @@ test("run-view-172: one desktop opens two seats and reads its places, its joined
   await expect(queue.getByTestId(`attention-${asking.id}-review`)).toBeVisible();
   await expect(page.getByTestId("nav-attention-badge")).toHaveText("3");
 
-  // [run-view-172] [run-view-168] the second seat restarts and the hub
+  // [run-view-173] [run-view-168] the second seat restarts and the hub
   // answers its hello with another protocol version: that place reads
   // mismatched alone, the first seat and this computer standing open.
   two.hub.helloVersion(PROTOCOL_VERSION + 1);
@@ -261,7 +261,7 @@ test("run-view-172: one desktop opens two seats and reads its places, its joined
   // A mismatched place adds nothing to the badge (dashboard-9).
   await expect(page.getByTestId("nav-attention-badge")).toHaveText("2");
 
-  // [run-view-172] [run-view-169] after Close the seat's heading is gone
+  // [run-view-173] [run-view-169] after Close the seat's heading is gone
   // and its relay path refused.
   await nav(page, "Groups").click();
   await controlOne.click();
@@ -269,7 +269,7 @@ test("run-view-172: one desktop opens two seats and reads its places, its joined
   await expect(sidebar.getByTestId("sidebar-place-heading")).toHaveText(["This computer", "lab-2"]);
   await expect(groupOf("lab-1")).toHaveCount(0);
   expect(await dial(app, `/seats/${encodeURIComponent(one.place)}`)).toBe(401);
-  // [run-view-172] [run-view-170] a later Open of that server on this
+  // [run-view-173] [run-view-170] a later Open of that server on this
   // device sends `server.open` at once, with no contract shown.
   const opens = opensSent(tap.sent).length;
   await controlOne.click();
@@ -281,7 +281,7 @@ test("run-view-172: one desktop opens two seats and reads its places, its joined
   await expect(sidebar.getByTestId("sidebar-place-heading")).toHaveText(["This computer", "lab-2", "lab-1"]);
   await expect(groupOf("lab-1").getByTestId(`sidebar-project-${projectOne.key}@${one.place}`)).toBeVisible();
 
-  // [run-view-172] [run-view-168] no frame the page received, nor any
+  // [run-view-173] [run-view-168] no frame the page received, nor any
   // URL it dialed, carries a bearer a hub minted or the seat's endpoint:
   // the page reaches each seat at its relay path alone.
   const local = app.origin.replace(/^http/, "ws");
