@@ -35,7 +35,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { GroupsState, PlacementState, RepositoryState } from "@sublang/spex-core/protocol";
 
-import { useAppStore } from "../state/store.js";
+import { usePlaceStore } from "../state/place-context.js";
 import { i18n } from "../i18n.js";
 import type { SpexCommandError } from "../lib/client.js";
 import { instanceOf } from "../lib/instances.js";
@@ -191,12 +191,13 @@ function PlacementLine({
   refreshes: number;
   onNote: Note;
 }) {
-  const spaceRepositoryMove = useAppStore((state) => state.spaceRepositoryMove);
-  const spaceSync = useAppStore((state) => state.spaceSync);
-  const spaceFetch = useAppStore((state) => state.spaceFetch);
-  const spaceRefresh = useAppStore((state) => state.spaceRefresh);
-  const spaceAttach = useAppStore((state) => state.spaceAttach);
-  const spaceLastAct = useAppStore((state) => state.spaceLastAct);
+  const store = usePlaceStore();
+  const spaceRepositoryMove = store((state) => state.spaceRepositoryMove);
+  const spaceSync = store((state) => state.spaceSync);
+  const spaceFetch = store((state) => state.spaceFetch);
+  const spaceRefresh = store((state) => state.spaceRefresh);
+  const spaceAttach = store((state) => state.spaceAttach);
+  const spaceLastAct = store((state) => state.spaceLastAct);
   // "notice" says the sharing notice for a sync, "attach" for an Attach.
   const [opened, setOpened] = useState<"members" | "move" | "notice" | "attach" | "join">();
   const [moving, setMoving] = useState(false);

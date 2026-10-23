@@ -6,12 +6,14 @@
 // request names the server and the person under the server's name; a
 // sign-in as another account, or a denied code, stores nothing; your own
 // group is placed at no instance and offered no pick or remote; every
-// command naming a working folder is refused; and a seat opens no seat
-// on a team server, asking nothing.
+// command naming a working folder is refused; a seat opens no seat on a
+// team server, asking nothing; and an intent holding no runtime runs
+// nowhere there.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { credentialsPath } from "./git-host.js";
 import { Home } from "./home.js";
@@ -20,7 +22,7 @@ import { clonePath, createSpaceHarness, hostKey, instanceOf, OWN_KEY } from "./t
 import type { GroupsState } from "./protocol.js";
 
 const fixture = createSpaceHarness();
-const { scratch, git, gitFolder, startHome, startHost, signIn } = fixture;
+const { scratch, git, gitFolder, addFolder, startHome, startHost, signIn } = fixture;
 test.after(() => fixture.dispose());
 
 const SEAT = { serverId: "srv_7f3a", serverName: "lab-1", personId: "1001" };
@@ -163,4 +165,68 @@ test("core-service-125: a core without a seat names neither a server nor a perso
   const folder = gitFolder("own-work");
   const project = await home.client.expectOk("project.register", { path: folder });
   assert.equal(project.path, folder);
+});
+
+test("core-service-127, core-service-125, core-service-107, core-service-47: on a seat an intent holding no runtime keeps its place but is never next, never advanced into and refused a turn, while its edit and close stand", { timeout: 60_000 }, async (t) => {
+  // A home of one's own pairs a folder, and its project's records hold a
+  // format 1 intent, older than anything captured since, as a sync or
+  // the Playbook CLI leaves one (storage-4).
+  const own = await startHome("seat-nowhere");
+  t.after(() => own.stop());
+  const { key: projectId, clone } = await addFolder(own, own.projectDir);
+  const legacyId = randomUUID();
+  const legacyFile = join(clone, "intents", `${legacyId}.json`);
+  mkdirSync(join(clone, "intents"), { recursive: true });
+  writeFileSync(legacyFile, `${JSON.stringify({ format: 1, id: legacyId, text: "Port the old parser", createdAt: Date.now() - 60_000 })}\n`);
+  // Off a seat it runs on any runtime: it is next (core-service-107).
+  const off = await own.client.expectOk("ledger.get", {});
+  assert.ok(off.intents.find((entry) => entry.intent.id === legacyId)?.next, "next off a seat");
+  await own.stop();
+
+  // The same home runs as a seat: its captures name it, under the
+  // server's name (core-service-42, core-service-125).
+  const seat = await startHome("seat-nowhere", { dataDir: own.dataDir, extra: { seat: SEAT } });
+  t.after(() => seat.stop());
+  const first = await seat.client.expectOk("intent.queue", { projectId, text: "Ship the parser" });
+  const second = await seat.client.expectOk("intent.queue", { projectId, text: "Document the parser" });
+  assert.equal(first.runtime?.label, SEAT.serverName);
+  // Listed queued in its place by age, with no runtime's label, but never
+  // next: the oldest this seat captured is (core-service-107).
+  let ledger = await seat.client.expectOk("ledger.get", {});
+  const row = (id: string) => ledger.intents.find((entry) => entry.intent.id === id);
+  const order = ledger.intents.filter((entry) => entry.intent.projectId === projectId).map((entry) => entry.intent.id);
+  assert.deepEqual(order, [legacyId, first.id, second.id], "kept in its place by age");
+  assert.deepEqual([row(legacyId)?.state, row(legacyId)?.runsOn, row(legacyId)?.next], ["queued", undefined, undefined]);
+  assert.ok(row(first.id)?.next, "the oldest intent this seat captured is next");
+
+  // A turn naming it is refused `conflict` with the phrase and no runtime
+  // to name, writing nothing (core-service-47).
+  const session = await seat.client.expectOk("session.create", { projectId });
+  const before = readFileSync(legacyFile);
+  const refused = await seat.client.command("turn.submit", { sessionId: session.id, text: "Port the old parser", intentId: legacyId });
+  assert.ok(!refused.ok, "a turn naming it is refused");
+  assert.equal(refused.error.code, "conflict");
+  assert.equal(refused.error.message, "Runs nowhere yet");
+  assert.equal((refused.error as { details?: unknown }).details, undefined);
+  assert.deepEqual(readFileSync(legacyFile), before);
+
+  // The seat runs its own: the first intent's turn, then automatic
+  // advancement into the second, never into the older one
+  // (core-service-94, core-service-107).
+  await seat.client.expectOk("turn.submit", { sessionId: session.id, text: first.text, intentId: first.id });
+  await seat.client.waitFor((m) => m.type === "session.state" && m.session.id === session.id &&
+    m.session.turns === 2 && !m.session.turnActive && !m.session.live, 30_000);
+  ledger = await seat.client.expectOk("ledger.get", {});
+  assert.deepEqual([row(first.id)?.state, row(second.id)?.state], ["finished", "finished"]);
+  assert.equal(row(second.id)?.intent.dispatched?.sessionId, session.id, "advanced into the seat's own");
+  assert.deepEqual([row(legacyId)?.state, row(legacyId)?.next, row(legacyId)?.intent.dispatched], ["queued", undefined, undefined]);
+
+  // Its edit and close stand (core-service-43, core-service-46): the
+  // file keeps format 1 and names no runtime (storage-4).
+  await seat.client.expectOk("intent.edit", { intentId: legacyId, text: "Port the old parser to the new grammar" });
+  const edited = JSON.parse(readFileSync(legacyFile, "utf8")) as Record<string, unknown>;
+  assert.deepEqual([edited.format, edited.text, "runtime" in edited], [1, "Port the old parser to the new grammar", false]);
+  await seat.client.expectOk("intent.close", { intentId: legacyId, as: "dropped" });
+  ledger = await seat.client.expectOk("ledger.get", {});
+  assert.equal(row(legacyId), undefined, "dropped, it leaves the queue");
 });

@@ -28,7 +28,8 @@ import type {
   SyncStep,
 } from "@sublang/spex-core/protocol";
 
-import { useAppStore } from "../state/store.js";
+import { usePlaceStore } from "../state/place-context.js";
+import { isLocalPlace } from "../state/store.js";
 import { i18n } from "../i18n.js";
 import { heldPlacements, instanceNameAt, keyPlacement, placementAt, placementName } from "../lib/placements.js";
 import { relativeAge } from "../lib/time.js";
@@ -71,7 +72,8 @@ function DiffBox({
   placement?: string | null;
   testId: string;
 }) {
-  const spaceDiff = useAppStore((state) => state.spaceDiff);
+  const store = usePlaceStore();
+  const spaceDiff = store((state) => state.spaceDiff);
   const [patches, setPatches] = useState<{ path: string; patch: string; truncated: boolean }[]>();
   const [error, setError] = useState<string>();
 
@@ -669,9 +671,13 @@ function RepairRow({
   onResolved(key: string, summary: string, projectId?: string): void;
   onNote: Note;
 }) {
-  const rebindProject = useAppStore((state) => state.rebindProject);
-  const removeProject = useAppStore((state) => state.removeProject);
-  const decline = useAppStore((state) => state.spaceRepairDecline);
+  const store = usePlaceStore();
+  const rebindProject = store((state) => state.rebindProject);
+  const removeProject = store((state) => state.removeProject);
+  const decline = store((state) => state.spaceRepairDecline);
+  // A remote place's core allocates every project's folder (space-103,
+  // run-view-169): no folder is named there, picked or typed.
+  const local = isLocalPlace(store.place);
   const proposal = repair.proposal;
   const recorded = repair.directories[0] ?? "";
   const folderRepair = repair.kind === "folder";
@@ -767,7 +773,7 @@ function RepairRow({
   const checkedRecorded = (repair.checked ?? []).find((entry) => entry.path === recorded);
   const evidence = folderRepair
     ? i18n._("Its spex repository is not on this device.")
-    : proposal
+    : proposal && local
       ? i18n._("That folder is here and is a git repository. Add it as a project?")
       : checkedRecorded?.here === false
         ? i18n._("That folder is no longer on this device.")
@@ -814,7 +820,7 @@ function RepairRow({
     </div>
   ) : (
     <div className="flex flex-wrap items-center gap-2">
-      {proposal ? (
+      {proposal && local ? (
         <button
           type="button"
           ref={firstRef}
@@ -828,16 +834,18 @@ function RepairRow({
             : i18n._("Add project")}
         </button>
       ) : null}
-      <button
-        type="button"
-        ref={proposal ? undefined : firstRef}
-        data-testid="space-repair-choose"
-        className={SECONDARY}
-        disabled={disabled || busy || !repair.repository}
-        onClick={() => setEditing(true)}
-      >
-        {i18n._("Choose folder…")}
-      </button>
+      {local ? (
+        <button
+          type="button"
+          ref={proposal ? undefined : firstRef}
+          data-testid="space-repair-choose"
+          className={SECONDARY}
+          disabled={disabled || busy || !repair.repository}
+          onClick={() => setEditing(true)}
+        >
+          {i18n._("Choose folder…")}
+        </button>
+      ) : null}
       {!declined ? (
         <button
           type="button"
@@ -936,6 +944,8 @@ function RepairRow({
         </span>
       </div>
       {!declined && evidence ? <p className="text-xs text-neutral-500">{evidence}</p> : null}
+      {/* The editor opens from "Choose folder…" alone, which a remote
+          place never offers. */}
       {editing ? editor : controls}
     </li>
   );
@@ -1206,11 +1216,12 @@ export function SyncTab({
   onOpenSession(sessionId: string): void;
   onNote: Note;
 }) {
-  const spaceFetch = useAppStore((state) => state.spaceFetch);
-  const spaceSync = useAppStore((state) => state.spaceSync);
-  const spaceLeave = useAppStore((state) => state.spaceLeave);
-  const spaceLastAct = useAppStore((state) => state.spaceLastAct);
-  const spaceCancel = useAppStore((state) => state.spaceCancel);
+  const store = usePlaceStore();
+  const spaceFetch = store((state) => state.spaceFetch);
+  const spaceSync = store((state) => state.spaceSync);
+  const spaceLeave = store((state) => state.spaceLeave);
+  const spaceLastAct = store((state) => state.spaceLastAct);
+  const spaceCancel = store((state) => state.spaceCancel);
   const key = repo.key;
   const sync = repo.sync;
   const running = sync.phase === "running";

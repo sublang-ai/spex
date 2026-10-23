@@ -24,7 +24,7 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import type { GroupsState, InstanceState } from "@sublang/spex-core/protocol";
 
-import { useAppStore } from "../state/store.js";
+import { usePlaceStore } from "../state/place-context.js";
 import { i18n } from "../i18n.js";
 import { hostNameOf, instanceName, instanceOf, originOf } from "../lib/instances.js";
 import { absoluteTitle, relativeAge } from "../lib/time.js";
@@ -97,8 +97,9 @@ function InstanceHeading({
   signIn: SignInFlow;
   onNote: Note;
 }) {
-  const spaceSignOut = useAppStore((state) => state.spaceSignOut);
-  const spaceForget = useAppStore((state) => state.spaceForget);
+  const store = usePlaceStore();
+  const spaceSignOut = store((state) => state.spaceSignOut);
+  const spaceForget = store((state) => state.spaceForget);
   const [signingOut, setSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState<string>();
   const [forgetting, setForgetting] = useState(false);

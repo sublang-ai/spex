@@ -20,9 +20,9 @@ import {
 import { resolveArtifacts } from "./artifacts.js";
 import { i18n } from "./i18n.js";
 import { assertSubagentEffort, assertSubagentModel, type ComposedConfig, type LoadModule } from "./config.js";
-import { BOSS_ABORT_REASON, CORE_STOP_REASON, controlRecord, pendingRestore, restoredRecord, restoredRuns, restoreReports, restoringRecord, type TurnControlKind } from "./control-record.js";
+import { BOSS_ABORT_REASON, CORE_STOP_REASON, controlRecord, pendingRestore, restoredRecord, restoredRuns, restoreReports, restoringRecord, runsOnPhrase, runtimeRecord, type TurnControlKind } from "./control-record.js";
 import { foldConditions } from "./ledger.js";
-import { CAPTAIN_AGENT_ID, type MediaAsset, type ParkedRunAction, type ProjectInfo, type SessionAgentSettings, type SessionInfo, type SessionAgentSettingsMap, type TmuxPlayRecord } from "./protocol.js";
+import { CAPTAIN_AGENT_ID, type AssignedRuntime, type MediaAsset, type ParkedRunAction, type ProjectInfo, type SessionAgentSettings, type SessionInfo, type SessionAgentSettingsMap, type TmuxPlayRecord } from "./protocol.js";
 import { Store } from "./store.js";
 
 export class CoreError extends Error {
@@ -47,6 +47,32 @@ function nothingToRestore(): CoreError {
     comment:
       "Refusal: Restore was asked of a session with nothing interrupted, as when another client restored or discarded it first",
   }));
+}
+
+/** The refusal of a record assigned to another runtime (DR-134): the
+ * phrase, with that runtime's label as the detail a client acts on
+ * (core-service-111) — `invalid_request` for a session's continuation,
+ * control, Restore and Discard (core-service-73, core-service-82,
+ * core-service-83), `conflict` for an intent's turn, edit and close
+ * (core-service-43, core-service-46, core-service-47). */
+export function runsElsewhereRefusal(code: "invalid_request" | "conflict", runsOn: string): CoreError {
+  return new CoreError(code, runsOnPhrase(runsOn), { runsOn });
+}
+
+/** The refusal on a seat of a turn naming an intent that holds no
+ * runtime (core-service-47, core-service-125, DR-132): `conflict`, its
+ * phrase alone — no runtime to name as a detail. */
+export function runsNowhereRefusal(): CoreError {
+  return new CoreError("conflict", i18n._({
+    id: "Runs nowhere yet",
+    comment: "Why an intent cannot run on a team server's seat: it names no runtime, captured before runtimes were recorded or by the Playbook CLI, and a seat runs only what is assigned to it",
+  }));
+}
+
+/** A session assigned to another runtime runs there alone: refused
+ * before anything opens, whatever its checkpoint holds (DR-134). */
+export function assertRunsHere(session: SessionInfo | undefined): void {
+  if (session?.runsOn !== undefined) throw runsElsewhereRefusal("invalid_request", session.runsOn);
 }
 
 /** core-service-98: the optional control members a Captain shell may
@@ -81,6 +107,9 @@ export interface SessionManagerOptions {
   captainFactory?: CaptainFactory;
   now?: () => number;
   env?: NodeJS.ProcessEnv;
+  /** This runtime, read as a new session is assigned to it (storage-43,
+   * DR-134); none — or no reader — assigns nothing. */
+  runtime?: () => AssignedRuntime | undefined;
 }
 export interface RecordEnvelope {
   sessionId: string;
@@ -353,9 +382,10 @@ export function describeStructuralDrift(stored: SessionStructuralProjection, cur
 
 /** A project's current conversation (core-service-93, DR-051): its live
  * session, else the most recently active owned one that continues or
- * still carries a recovery boundary. */
+ * still carries a recovery boundary — never one assigned to another
+ * runtime, even while a writer there reads as live (DR-134). */
 export function currentSession(sessions: SessionInfo[], projectId: string): SessionInfo | undefined {
-  const own = sessions.filter((session) => session.projectId === projectId);
+  const own = sessions.filter((session) => session.projectId === projectId && session.runsOn === undefined);
   return own.find((session) => session.live) ?? own
     .filter((session) => !session.externalWriter &&
       (session.continuable || session.recovery))
@@ -468,6 +498,8 @@ export class SessionManager {
     // take the missing input as a paused task's and fail the turn — so
     // the record is read again under the lease before any turn starts.
     const info = this.store.describeSession(sessionId);
+    // Another runtime's session is its own to restore (DR-134).
+    assertRunsHere(info);
     if (info && !info.recovery && !info.externalWriter && !this.live.has(sessionId)) throw nothingToRestore();
     await this.open(project, undefined, sessionId, "recover");
     const entry = this.requireLive(sessionId);
@@ -490,6 +522,7 @@ export class SessionManager {
       comment: "Refusal: no session of this id is known",
       values: { sessionId },
     }));
+    assertRunsHere(info);
     if (this.opening.has(info.projectId) || [...this.recovering.values()].includes(info.projectId)) throw new CoreError("busy", i18n._({
       id: "the session is active",
       comment: "Refusal: the session is held, so it cannot be discarded now",
@@ -561,7 +594,10 @@ export class SessionManager {
       for (const session of this.store.listSessions()) {
         if (session.projectId === project.id && session.externalWriter) await this.refreshOwnership(session.id);
       }
-      const holder = this.store.listSessions().find((session) => session.projectId === project.id && (session.live || session.externalWriter));
+      // A session assigned to another runtime never holds the project
+      // here, so this runtime starts its own beside it (core-service-93,
+      // DR-134).
+      const holder = this.store.listSessions().find((session) => session.projectId === project.id && session.runsOn === undefined && (session.live || session.externalWriter));
       if (holder) {
         const name = holder.title
           ? i18n._({
@@ -664,6 +700,13 @@ export class SessionManager {
       if (!info) throw new Error("shared session has no readable project history");
       entry = {info, controller, runtime: controller.host, seq: this.store.maxSeq(sessionId), turnActive: false};
       this.live.set(sessionId, entry);
+      // A new session is assigned to this runtime before its first turn
+      // is admitted, under its lease, and before it is reported
+      // (core-service-4, storage-43).
+      if (mode === "new") {
+        const runtime = this.options.runtime?.();
+        if (runtime) await this.appendRuntime(entry, runtime);
+      }
       // A restore whose core stopped before it recorded the position is
       // completed by whichever open holds the session next
       // (core-service-82): the settled checkpoint is still its position.
@@ -795,6 +838,16 @@ export class SessionManager {
     for (const item of added.entries) this.record(entry.info.id, item, entry);
   }
 
+  /** Assign a new session to this runtime (storage-43, DR-134): one
+   * hidden record naming it, written once under the session's lease so
+   * it rides the session bundle, and never rewritten. */
+  private async appendRuntime(entry: LiveSession, runtime: AssignedRuntime): Promise<void> {
+    const afterSeq = this.store.maxSeq(entry.info.id);
+    await entry.controller.lease.append(runtimeRecord(runtime, this.now()));
+    const added = await entry.controller.lease.readStream({ afterSeq });
+    for (const item of added.entries) this.record(entry.info.id, item, entry);
+  }
+
   /** Mark the restore before it runs (core-service-82, DR-088): the
    * visible marker names the turn that next starts with the saved input
    * as the restore's report, so that turn reads as one — and its
@@ -838,11 +891,16 @@ export class SessionManager {
    * (core-service-82) in the named sessions — every session, at start —
    * that no one holds: under its lease, the settled checkpoint's
    * position is appended once, and the session's history and summary
-   * refresh with it. A session held elsewhere is left to the next open. */
+   * refresh with it. A session held elsewhere is left to the next open,
+   * and one assigned to another runtime — its `runsOn`, the label
+   * `runsElsewhere` reads from its runtime record against this home's
+   * device — is left as it is, that runtime's to complete (storage-43,
+   * DR-134); one naming no runtime is completed as before. */
   async completeRestores(ids?: Iterable<string>): Promise<void> {
     const named = ids ? new Set(ids) : undefined;
     for (const session of this.store.listSessions()) {
       if (named && !named.has(session.id)) continue;
+      if (session.runsOn !== undefined) continue;
       if (session.live || session.externalWriter || this.live.has(session.id) || this.settling.has(session.id)) continue;
       const pending = pendingRestore(this.store.getRecords(session.id));
       if (!pending) continue;

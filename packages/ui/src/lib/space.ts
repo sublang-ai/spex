@@ -287,6 +287,14 @@ export function isGroupRepository(group: { fullPath: string }, repo: RepositoryS
   return repo.own || repo.name === `${lastSegment(group.fullPath)}-spex`;
 }
 
+/** A project's spex repository cloned at the place with no working
+ * folder pairing it: a clone whose code found none here, paired later
+ * (space-63) — or, at a remote place, one whose code clone failed,
+ * joined again into the folder its core allocated (space-103). */
+export function awaitsFolder(group: { fullPath: string }, repo: RepositoryState): boolean {
+  return cloneHere(repo) && !isGroupRepository(group, repo) && repo.folder === null && repo.state !== "local-only";
+}
+
 /** Two code remotes name the same repository (space-58): compared as
  * the reader reads them, with no user part, no `.git` and no trailing
  * slash, the host's name in any case. */
