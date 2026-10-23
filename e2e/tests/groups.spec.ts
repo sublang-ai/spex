@@ -1339,7 +1339,9 @@ test.describe("daily sync", () => {
     await picker.getByTestId("space-apply").click();
     await confirm.getByRole("button", { name: "Apply" }).click();
     const done = tab.getByTestId("space-done-line");
-    await expect(done).toHaveText(/^Synced just now · 1 sent · 2 received$/);
+    // Applying choices runs Save through Push; filesystem and transport
+    // work need more than the generic UI assertion budget.
+    await expect(done).toHaveText(/^Synced just now · 1 sent · 2 received$/, { timeout: 30_000 });
     await expect(tab.getByTestId("space-picker")).toHaveCount(0);
     await expect(counts).toContainText("0 ahead");
     await expect(counts).toContainText("0 behind");
