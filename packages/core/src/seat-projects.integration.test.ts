@@ -14,6 +14,7 @@
 
 import { test, type TestContext } from "node:test";
 import assert from "node:assert/strict";
+import { createSessionStore } from "@sublang/playbook/session-store";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { isAbsolute, join, relative } from "node:path";
 import { codeCredentialsPath } from "./code-credentials.js";
@@ -178,13 +179,23 @@ test("space-104, space-103: a code clone failing for want of the member's creden
   // A retry is a join of it again (space-103).
   assert.equal(stopped.sync.guidance, "The spex repository is here; join it again to clone its code.");
   const folder = allocated(home.dataDir, host, "acme", "alpha-spex");
-  // The records are cloned, their session and intent readable in the
-  // repository's explorer (space-35).
+  // The cloned session descriptor and intent read in the explorer
+  // (space-35); the shared store hydrates the logical replay while the
+  // unpaired project remains outside the service's session listing.
   assert.ok(existsSync(join(home.dataDir, "workspace", ...key.split("/"), "project.json")), "the records are cloned");
   const sessions = (await home.client.expectOk("space.tree", { repository: key, path: "sessions" })).entries;
   assert.ok(sessions.some((entry) => entry.path === `sessions/${sessionId}.json`), JSON.stringify(sessions.map((entry) => entry.path)));
-  const records = await home.client.expectOk("space.read", { repository: key, path: `sessions/${sessionId}.records.jsonl` });
-  assert.ok(records.kind === "text" && records.text.includes("shape the project"), "the session's records read");
+  const records = await home.client.expectOk("space.read", { repository: key, path: `sessions/${sessionId}.replay.json` });
+  assert.ok(records.kind === "text", "the session's replay descriptor reads in the explorer");
+  const descriptor = JSON.parse(records.text);
+  assert.deepEqual([descriptor.kind, descriptor.schemaVersion, descriptor.sessionId],
+    ["captain-session-replay", 1, sessionId]);
+  const history = await createSessionStore({
+    sessionsDir: join(home.dataDir, "workspace", ...key.split("/"), "sessions"),
+  }).readHistory(sessionId);
+  assert.ok(history.entries.some(({record}) => record.type === "turn_started" &&
+    record.turn !== null && typeof record.turn === "object" && "prompt" in record.turn &&
+    record.turn.prompt === "shape the project"), "the session's records read");
   const queued = await home.client.expectOk("space.read", { repository: key, path: `intents/${intent.id}.json` });
   assert.ok(queued.kind === "text" && queued.text.includes("make it so"), "the intent reads");
   // In Chinese, the phrase names the same host.
