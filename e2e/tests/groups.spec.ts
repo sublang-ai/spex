@@ -248,7 +248,7 @@ test.describe("first start", () => {
     // "On this device only", with no control while signed out
     // (space-61).
     seedDemoProject(app.projectDir);
-    await page.getByRole("button", { name: "Switch or add a project" }).click();
+    await page.getByTestId("sidebar").getByRole("button", { name: "Add a local project" }).click();
     const palette = page.getByRole("dialog", { name: /Add a project|Choose a project/ });
     await palette.getByTestId("palette-path").fill(app.projectDir);
     await palette.getByTestId("palette-add").click();
@@ -391,7 +391,7 @@ test.describe("a folder added while signed in", () => {
     // The folder pairs with a spex repository through the picker of
     // matching spex repositories and groups, standing in the palette
     // in place of its list (projects-1, space-58).
-    await page.getByRole("button", { name: "Switch or add a project" }).click();
+    await page.getByTestId("sidebar").getByRole("button", { name: "Add a local project" }).click();
     const palette = page.getByRole("dialog", { name: /Add a project|Choose a project/ });
     await palette.getByTestId("palette-path").fill(app.projectDir);
     await palette.getByTestId("palette-add").click();
@@ -446,7 +446,7 @@ test.describe("a folder added while signed in at two instances", () => {
 
     // The palette's Add asks in place, under each signed-in instance's
     // display name, each offering its own `acme` (projects-1, space-58).
-    await page.getByRole("button", { name: "Switch or add a project" }).click();
+    await page.getByTestId("sidebar").getByRole("button", { name: "Add a local project" }).click();
     const palette = page.getByRole("dialog", { name: /Add a project|Choose a project/ });
     await palette.getByTestId("palette-path").fill(app.projectDir);
     await palette.getByTestId("palette-add").click();
@@ -625,7 +625,7 @@ test.describe("organizing", () => {
     // subgroup: `<name>-spex` stands there on the stand-in's `spex`
     // (space-58).
     seedDemoProject(app.projectDir);
-    await page.getByRole("button", { name: "Switch or add a project" }).click();
+    await page.getByTestId("sidebar").getByRole("button", { name: "Add a local project" }).click();
     const palette = page.getByRole("dialog", { name: /Add a project|Choose a project/ });
     await palette.getByTestId("palette-path").fill(app.projectDir);
     await palette.getByTestId("palette-add").click();
@@ -1796,7 +1796,7 @@ test.describe("second device", () => {
     // A session run here and synced lands on the stand-in's `spex`
     // beside the peer's (space-12); the repository's other member makes
     // its first push say what goes there (space-57).
-    await page.getByRole("tab", { name: "Start another session" }).click();
+    await page.getByRole("tab", { name: "New task" }).click();
     await send(page, "Fix the token refresh in auth.ts");
     await expect(page.getByTestId("captain-pane")).toContainText("/code finished");
     await settled(app);

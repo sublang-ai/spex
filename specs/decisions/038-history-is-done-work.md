@@ -13,6 +13,7 @@ Amended by [DR-051](051-runtime-held-for-a-turn.md): a session's delete control 
 Amends [DR-035](035-intent-ledger.md) (a never-worked intent leaves the ledger without a trace; history lists done work, records included), [DR-011](011-project-workspace.md) (the Repo tab becomes the project's Overview), and [DR-029](029-session-history-home.md) (session deletion is decided); playbook 12.1 and 12.2's published host-capabilities facade was tried against the Captain shell and refused — its repository object lacks `acquire` and `runCohort`, and its per-playbook ledgers diverge where the shell requires one — so [DR-037](037-playbook-12-adoption.md)'s by-path builder stands.
 
 Amended by [DR-052](052-runtime-model-options.md): model and tuning choices come from runtime discovery.
+Amended by [DR-141](141-project-start-explains-the-task-and-slash-discovery.md): before a session starts, the project home presents Captain's configured agent chip, including its fast-mode mark, beside the Captain identity and task composer.
 
 ## Context
 

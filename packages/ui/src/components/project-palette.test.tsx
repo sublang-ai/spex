@@ -178,6 +178,93 @@ describe("projects-22: with no project, the palette is an add flow", () => {
       expect(onAddPath).toHaveBeenCalledWith("/tmp/repo"),
     );
   });
+
+  test("welcome own-project entry focuses the path without repeating Academy", () => {
+    renderPalette({ ...EMPTY, addProjectOnly: true });
+    expect(document.activeElement).toBe(screen.getByTestId("palette-path"));
+    expect(screen.queryByTestId("palette-academy")).toBeNull();
+  });
+
+  test("desktop own-project entry exposes a neutral folder button and hides manual path", async () => {
+    useAppStore.setState({ space: undefined });
+    const onPickFolder = vi.fn(async () => "/tmp/existing");
+    const onAddPath = vi.fn(async () => PROJECTS[0]);
+    const { onPick } = renderPalette({ ...EMPTY, addProjectOnly: true, onPickFolder, onAddPath });
+    const folder = screen.getByTestId("palette-open-folder");
+    expect(document.activeElement).toBe(folder);
+    expect(folder.textContent).toContain("Choose a project folder");
+    expect(folder.className).toContain("border-neutral-300");
+    expect(folder.className).not.toContain("bg-brand-600");
+    expect(screen.queryByTestId("palette-path")).toBeNull();
+    expect(screen.queryByTestId("palette-manual-path-start")).toBeNull();
+    expect(screen.queryByTestId("palette-create")).toBeNull();
+    fireEvent.click(folder);
+    await vi.waitFor(() => expect(onAddPath).toHaveBeenCalledWith("/tmp/existing"));
+    expect(onPick).toHaveBeenCalledWith(PROJECTS[0].id);
+  });
+
+  test("desktop folder selection remains available while the new-project path is open", () => {
+    renderPalette({ ...EMPTY, addProjectOnly: true, onPickFolder: vi.fn(async () => null) });
+    fireEvent.click(screen.getByTestId("palette-create-start"));
+    expect(screen.queryByTestId("palette-path")).toBeNull();
+    expect(screen.getByText("New folder path")).toBeTruthy();
+    expect(screen.getByText("Spex will create this folder and set up Git.")).toBeTruthy();
+    expect(screen.queryByTestId("palette-create-back")).toBeNull();
+    expect(screen.getByTestId("palette-open-folder")).toBeTruthy();
+    expect(screen.queryByTestId("palette-manual-path-start")).toBeNull();
+  });
+
+  test("the desktop project switcher adds existing projects through its folder action", () => {
+    renderPalette({ onPickFolder: vi.fn(async () => null) });
+    expect(screen.getByTestId("palette-open-folder")).toBeTruthy();
+    expect(screen.queryByTestId("palette-path")).toBeNull();
+    expect(screen.queryByTestId("palette-add")).toBeNull();
+    expect(screen.queryByTestId("palette-create")).toBeNull();
+  });
+
+  test("an empty desktop switcher starts at the folder action", () => {
+    renderPalette({ ...EMPTY, onPickFolder: vi.fn(async () => null) });
+    expect(document.activeElement).toBe(screen.getByTestId("palette-open-folder"));
+    expect(screen.queryByTestId("palette-path")).toBeNull();
+  });
+
+  test("without a native picker, the existing path remains reachable above creation", () => {
+    renderPalette({ ...EMPTY, addProjectOnly: true });
+    fireEvent.click(screen.getByTestId("palette-create-start"));
+    expect(screen.queryByTestId("palette-path")).toBeNull();
+    fireEvent.click(screen.getByTestId("palette-manual-path-start"));
+    expect(screen.queryByTestId("palette-new-path")).toBeNull();
+    expect(document.activeElement).toBe(screen.getByTestId("palette-path"));
+  });
+
+  test("new project expands its own path and keeps existing-path Add separate", async () => {
+    const onCreatePath = vi.fn(async () => PROJECTS[1]);
+    renderPalette({ ...EMPTY, addProjectOnly: true, onCreatePath });
+    fireEvent.click(screen.getByTestId("palette-create-start"));
+    expect(document.activeElement).toBe(screen.getByTestId("palette-new-path"));
+    fireEvent.change(screen.getByTestId("palette-new-path"), {
+      target: { value: "/tmp/brand-new" },
+    });
+    fireEvent.click(screen.getByTestId("palette-create"));
+    await vi.waitFor(() => expect(onCreatePath).toHaveBeenCalledWith("/tmp/brand-new", true));
+  });
+
+  test("sidebar add mode uses the same form when projects already exist", async () => {
+    useAppStore.setState({ space: undefined });
+    const onPickFolder = vi.fn(async () => "/tmp/existing");
+    const onAddPath = vi.fn(async () => PROJECTS[0]);
+    const { onPick } = renderPalette({ addProjectOnly: true, onPickFolder, onAddPath });
+    expect(screen.getByRole("dialog", { name: "Add a project" })).toBeTruthy();
+    expect(screen.queryByTestId("palette-search")).toBeNull();
+    expect(screen.queryByTestId("palette-project-me/alpha-spex")).toBeNull();
+    expect(screen.queryByTestId("palette-academy")).toBeNull();
+    expect(screen.getByTestId("palette-create-start")).toBeTruthy();
+    const folder = screen.getByTestId("palette-open-folder");
+    expect(document.activeElement).toBe(folder);
+    fireEvent.click(folder);
+    await vi.waitFor(() => expect(onAddPath).toHaveBeenCalledWith("/tmp/existing"));
+    expect(onPick).toHaveBeenCalledWith(PROJECTS[0].id);
+  });
 });
 
 describe("projects-26: the palette's path actions, live rows and plain words", () => {
@@ -188,7 +275,7 @@ describe("projects-26: the palette's path actions, live rows and plain words", (
     // Two distinct actions on the typed path, each titled with what it
     // does (projects-22, projects-25).
     expect(add.textContent).toBe("Add");
-    expect(add.title).toBe("Register this existing repository");
+    expect(add.title).toBe("Add this project");
     expect(create.textContent).toBe("Create");
     expect(create.title).toBe("Create a new repository at this path");
     expect(add.disabled).toBe(true);
