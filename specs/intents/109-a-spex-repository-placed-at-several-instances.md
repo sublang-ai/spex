@@ -5,7 +5,7 @@
 
 ## Status
 
-In progress (2026-10-21).
+In progress (2026-10-22); every deliverable is ticked, and two gaps between [[space-1](../packages/space.md#space-1)] and the code remain: the core lists no line naming your own group's own repository in your namespace at its first placement's instance, and a row's opened tabs and focus stay on its former key when a Leave moves its clone while the left instance still lists that host repository.
 
 ## Intent
 
@@ -17,7 +17,7 @@ Implement [DR-128](../decisions/128-a-spex-repository-placed-at-several-instance
 - [x] Placements in the clone's configuration and the placement files as units, `placements/` among Spex's own paths, the first sync after the migration writing them.
 - [x] The sync over placements with its catch-up, choices and notice per placement, Stop, the apply's version per placement, and the storage Git tool with the remote named.
 - [x] Members, Share, removing a member and Move per placement; Place, Leave and Attach as operations; your own group placed at every instance; Forget and Leave on shared placements.
-- [ ] The surface's rows with a line per placement, the controls within their label budget, and the browser journeys over two stand-ins.
+- [x] The surface's rows with a line per placement, the controls within their label budget, and the browser journeys over two stand-ins.
 
 ## Tasks
 
