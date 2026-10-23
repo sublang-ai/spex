@@ -10,6 +10,7 @@ Extends [DR-020](020-desktop-live-smoke.md) (the live desktop smoke keeps its sc
 Amends [DR-040](040-source-only-app-releases.md) in how an app tag is prepared: the hermetic smoke installs the release from a fresh clone instead of re-running the checks, the regression joins the regular release's gates, and the manual checklist shrinks to what no automation sees.
 [DR-087](087-beta-app-releases.md) decides which tiers a beta release runs.
 Amended by [DR-089](089-every-fresh-user-scenario-walked-for-real.md) in what the smoke and the regression walk and how their failures are judged: an app tag runs the live smoke inside the fresh install, the regression compiles the app's own example and creates its project from the palette with `/decide` then `/code`, its observed-and-aborted `/code` leaves, CI runs a compiled playbook, and a compiler refusal is classed by its source.
+Extended by [DR-145](145-merge-on-green.md) in the CI check tier: the check is the gate every merge into `main` passes through, run once per pull-request head.
 
 ## Context
 

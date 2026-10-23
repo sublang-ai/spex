@@ -32,6 +32,7 @@ import type {
   Command,
   CommandResults,
   GroupsState,
+  PlacementState,
   RepositoryState,
   ServerMessage,
 } from "@sublang/spex-core";
@@ -103,6 +104,15 @@ export interface AppOptions {
   nativeBrowser?: boolean;
   /** Seed and register the demo project before the browser opens. */
   project?: boolean;
+  /**
+   * With `project`: a bare clone of the demo project in the scratch
+   * root, `code/demo-project.git`, set as its `origin` before it is
+   * registered, so its `project.json` names the code by a path this
+   * machine serves (space-36, space-96) — one a second home's Join
+   * clones, reading as the reader set it on the row (space-1), with
+   * neither "remote" nor "space" in it.
+   */
+  codeRemote?: boolean;
   /** With `project`: this many intents already worked and closed
    * done, written into the state root before boot — a History longer
    * than one intent page with nothing run. */
@@ -170,9 +180,12 @@ export interface AppOptions {
    * runs (space-3). `registry` also starts a stand-in registry
    * (environments-18) the host fronts at its own origin, as spex.pub
    * serves both (DR-104); `share` points a second home at a host
-   * another app started. The home's configuration lies in your own
-   * group's spex repository and follows it when sign-in renames it
-   * (space-59), and the core's Git is the isolated one of `remote`.
+   * another app started, and its `second` at that app's second instance
+   * (space-96), which this home reaches only by a sign-in naming it,
+   * both left to their owner to close. The home's configuration lies in
+   * your own group's spex repository and follows it when sign-in
+   * renames it (space-59), and the core's Git is the isolated one of
+   * `remote`.
    * `second` starts a second stand-in instance after it (DR-127), at an
    * origin of its own that the home reaches only by a sign-in naming it:
    * on a Git backend of its own (`separate`, the default) or over the
@@ -180,11 +193,15 @@ export interface AppOptions {
    * in and whether that person may make a root group; its `registry`
    * starts a stand-in registry of its own that the second fronts at its
    * origin, as each instance serves its own (environments-18).
+   * `third` starts a third stand-in instance after the second (DR-128),
+   * read as `second` is, `shared` meaning over the first's Git backend,
+   * and named "Third stand-in" unless another name is given.
    */
   host?: boolean | {
     registry?: boolean;
-    share?: { host: StandinHost; registry?: StandinRegistry };
+    share?: { host: StandinHost; registry?: StandinRegistry; second?: StandinHost };
     second?: { backend?: "separate" | "shared"; displayName?: string; person?: StandinPerson; canCreateGroup?: boolean; registry?: boolean };
+    third?: { backend?: "separate" | "shared"; displayName?: string; person?: StandinPerson; canCreateGroup?: boolean };
   };
   /** Signed in at the stand-in before the page opens: the device flow
    * started over the protocol, its code approved through the script,
@@ -259,6 +276,9 @@ export const HOST_LOGIN = "ada";
 /** The second stand-in instance's display name unless one is named
  * (`host.second`, DR-127). */
 export const SECOND_HOST_NAME = "Second stand-in";
+/** The third stand-in instance's display name unless one is named
+ * (`host.third`, DR-128). */
+export const THIRD_HOST_NAME = "Third stand-in";
 /** The stand-in's team group and its id (git-host-12). */
 export const HOST_GROUP = "acme";
 export const HOST_GROUP_ID = "2002";
@@ -303,6 +323,16 @@ export function repositoryOf(state: GroupsState, key: string): RepositoryState {
   const found = rowsOf(state).find((repository) => repository.key === key);
   if (found) return found;
   throw new Error(`no repository ${key}`);
+}
+
+/** A row's line for the placement at an instance by its origin, in any
+ * spelling of it, or the path placement's for null (space-30,
+ * space-87). */
+export function placementOf(row: RepositoryState, origin: string | null): PlacementState {
+  const wanted = origin === null ? null : canonicalOrigin(origin);
+  const found = row.placements.find((line) => (line.instance === null ? null : canonicalOrigin(line.instance)) === wanted);
+  if (found) return found;
+  throw new Error(`no placement ${origin} on ${row.key}: ${JSON.stringify(row.placements.map((line) => line.instance))}`);
 }
 
 /** The roster id `AppOptions.compiler` writes. */
@@ -636,8 +666,10 @@ export interface App {
    * codes and holds the fixture (git-host-12). The home's default
    * instance, from `SPEX_HOST_URL`. */
   host?: StandinHost;
-  /** Every stand-in instance of the journey, the first being `host` and
-   * the second `host.second`'s (DR-127); empty without `host`. */
+  /** Every stand-in instance of the journey, the first being `host`,
+   * the second `host.second`'s, or another app's `host.share.second`
+   * (DR-127), and the third `host.third`'s (DR-128); empty without
+   * `host`. */
   hosts: StandinHost[];
   /** The stand-in registry the host fronts (with `host.registry`):
    * `registries[0]`. */
@@ -654,6 +686,9 @@ export interface App {
   /** The bare repository standing in for `origin` (with `remote`), or
    * the stand-in's bare repository of the project once it is there. */
   remotePath?: string;
+  /** The bare repository the demo project's code names as its
+   * `origin` (with `codeRemote`). */
+  codeOrigin?: string;
   /** The peer home's working copy (with `remote: "peer"`). */
   peerDir?: string;
   /** The session both homes changed (with `remote: "peer"`). */
@@ -752,6 +787,16 @@ async function arrangeApp(
   const dataDir = join(scratch, "state");
   const projectDir = join(scratch, "demo-project");
   if (options.project) seedDemoProject(projectDir);
+  // The code's own remote, a bare path the project names before it is
+  // registered, which the registration writes into `project.json`.
+  let codeOrigin: string | undefined;
+  if (options.codeRemote) {
+    if (!options.project) throw new Error("codeRemote needs project");
+    codeOrigin = join(scratch, "code", "demo-project.git");
+    mkdirSync(dirname(codeOrigin), { recursive: true });
+    git(scratch, "clone", "-q", "--bare", projectDir, codeOrigin);
+    git(projectDir, "remote", "add", "origin", codeOrigin);
+  }
   const hostMode = options.host !== undefined && options.host !== false;
   if (options.signedIn && !hostMode) throw new Error("signedIn needs host");
   const homeConfig = options.homeConfig || options.remote !== undefined || hostMode;
@@ -784,6 +829,13 @@ async function arrangeApp(
     }
     hosts.push(host);
     registries.push(registry);
+    // Another app's second instance, which this home reaches only by a
+    // sign-in naming it (space-96); its owner closes it.
+    if (spec.share?.second) {
+      if (spec.second) throw new Error("host.share.second and host.second name two second instances");
+      hosts.push(spec.share.second);
+      registries.push(undefined);
+    }
     // The second instance, after the first and closed before it: over
     // the first's Git backend or on one of its own (git-host-12),
     // fronting a registry of its own where asked, started before it and
@@ -805,6 +857,21 @@ async function arrangeApp(
       if (canCreateGroup !== undefined) second.script.canCreateGroup = canCreateGroup;
       hosts.push(second);
       registries.push(fronted);
+    }
+    // The third instance, after the second and closed before it, over
+    // the first's Git backend or on one of its own (DR-128).
+    if (spec.third) {
+      if (hosts.length < 2) throw new Error("host.third needs a second instance");
+      const { backend, displayName, person, canCreateGroup } = spec.third;
+      const third = await startStandinHost({
+        ...(backend === "shared" ? { gitBackend: host } : { dir: join(scratch, "host-3") }),
+        displayName: displayName ?? THIRD_HOST_NAME,
+        ...(person ? { person } : {}),
+      });
+      owned.push(third);
+      if (canCreateGroup !== undefined) third.script.canCreateGroup = canCreateGroup;
+      hosts.push(third);
+      registries.push(undefined);
     }
   }
   const closeOwned = async (): Promise<void> => {
@@ -979,6 +1046,7 @@ async function arrangeApp(
       return live().core;
     },
     remotePath,
+    codeOrigin,
     async settleSpace(type, fields) {
       const core = live().core;
       const from = core.mark();
@@ -1410,6 +1478,13 @@ export async function signInThroughPage(
  * instance by its origin, never by its words. */
 export function instanceSection(page: Page, host: StandinHost) {
   return page.getByTestId("space-groups").getByTestId(`space-instance-${host.url}`);
+}
+
+/** A spex repository's line for its placement at a stand-in instance,
+ * or its path placement's for null, beneath its row (space-87): found by
+ * the instance's origin, as stand-ins share their host name. */
+export function placementLine(page: Page, key: string, host: StandinHost | null) {
+  return page.getByTestId(`space-row-${key}`).getByTestId(`space-line-${host?.url ?? "path"}`);
 }
 
 /**

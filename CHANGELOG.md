@@ -307,7 +307,7 @@ and `npm start` (desktop) or `npm run start:server` (server).
   Desktop project selection leads with the native folder picker.
 
 - A session's player panes appear as the work calls each player
-  ([DR-145](specs/decisions/145-a-lane-appears-with-its-first-call.md)).
+  ([DR-146](specs/decisions/146-a-lane-appears-with-its-first-call.md)).
   A new session shows the Captain alone at its reading width; a player's
   pane appears with its first call, in that order, and stays for the rest
   of the session, so idle panes no longer take the width and the

@@ -206,7 +206,7 @@ test("run-view-118: a collapsed lane unfolds when its call opens", async ({
 });
 
 // A pane appearing or brought into view leaves the reader's place
-// (run-view-174, DR-145): side by side and stacked, the reply sent from
+// (run-view-174, DR-146): side by side and stacked, the reply sent from
 // the keyboard calls the coder and then the reviewer, and neither the
 // page nor the split moves, the composer stays in the window, and focus
 // never enters the grid.

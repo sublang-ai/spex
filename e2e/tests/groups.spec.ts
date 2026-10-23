@@ -17,9 +17,16 @@
 // undo in Spex — a group renamed and deleted, a project moved, each
 // refusal in place (space-80); a second instance signed in from the
 // list's foot, a project picked into it and pushed there, the first
-// signed out, refused Forget and signed in again (space-85); and a
+// signed out, refused Forget and signed in again, "Place at…" and
+// "Leave…" open at the floor (space-85); a
 // folder added while signed in at two instances, paired at the second
-// (projects-17).
+// (projects-17); a project placed at a second instance through the
+// page, a second home joining it and attaching that placement from its
+// file, each home's session reaching both (space-96); and over three
+// instances, your own group's later placements continued, a project
+// placed at the third from the choice of two, then left placement by
+// placement until it stands on this device only (space-88, space-89,
+// space-98, space-4, space-57, storage-38).
 // Every host is the in-process stand-in on
 // loopback, every peer plain Git on its bare repositories, and the
 // exploring journey's remote a bare path: hermetic, no network, no
@@ -42,6 +49,7 @@ import {
   PEER_TURN,
   SECOND_HOST_NAME,
   SESSION_TITLE,
+  THIRD_HOST_NAME,
   arrangeHostPeer,
   bareOf,
   clonePath,
@@ -54,6 +62,8 @@ import {
   nav,
   open,
   pickGroup,
+  placementLine,
+  placementOf,
   registerLocalProject,
   repositoryOf,
   runTurn,
@@ -62,6 +72,7 @@ import {
   settled,
   signInCore,
   signInThroughPage,
+  startApp,
   surfaceEntry,
   test,
   type App,
@@ -81,10 +92,14 @@ import {
  * host's things, never lead on it (space-27). */
 const FORBIDDEN_WORDS = /\b(ours|theirs|HEAD|MERGE_HEAD)\b|origin\/spex|\b[Nn]amespace\b|\b[Ss]pace\b/;
 
-/** Note any forbidden word in the surface's visible text (space-27). */
-async function scanVocabulary(page: Page, where: string, found: string[]): Promise<void> {
+/** Note any forbidden word in the surface's visible text (space-27), or
+ * any of the journey's own `words`. It reads the Groups surface alone:
+ * space-27 governs the copy on the surface, so the Projects tree, the
+ * Captain home and a session's transcript a journey also shows are
+ * other surfaces' words, which no space item governs. */
+async function scanVocabulary(page: Page, where: string, found: string[], words: RegExp = FORBIDDEN_WORDS): Promise<void> {
   const text = await page.getByTestId("space-surface").innerText();
-  const hit = FORBIDDEN_WORDS.exec(text);
+  const hit = words.exec(text);
   if (hit) found.push(`${where}: "${hit[0]}" in "${text.slice(Math.max(0, hit.index - 40), hit.index + 40)}"`);
 }
 
@@ -309,6 +324,14 @@ test.describe("first start", () => {
     await section.getByTestId(`space-pick-group-${HOST_GROUP}`).click();
     await expect(page.getByTestId(`space-repo-state-${TEAM_KEY}`)).toHaveText("Synced just now", { timeout: 30_000 });
     await expect(page.getByTestId(`space-row-${TEAM_KEY}`)).toHaveAttribute("data-state", "reachable");
+    // Beneath the row, its one placement's line names the stand-in by its
+    // display name and the repository's path there, and says what the
+    // sync did there (space-87, space-12).
+    const line = page.getByTestId(`space-row-${TEAM_KEY}`).getByTestId(`space-line-${host.url}`);
+    await expect(line).toHaveAttribute("data-state", "reachable");
+    await expect(line.getByTestId("space-line-instance")).toHaveText("Stand-in Git host");
+    await expect(line.getByTestId("space-line-at")).toHaveText(TEAM_PATH);
+    await expect(line.getByTestId("space-line-state")).toHaveText(/^Synced just now/);
     await expect(page.getByTestId(`space-row-sync-${TEAM_KEY}`)).toHaveText("Sync");
     const clone = clonePath(app.dataDir, TEAM_KEY);
     expect(git(bareOf(host, TEAM_KEY), "rev-parse", "spex")).toBe(git(clone, "rev-parse", "spex"));
@@ -553,7 +576,7 @@ test.describe("a folder joining a team's project", () => {
       await expect(row).toHaveAttribute("data-state", "reachable", { timeout: 30_000 });
       await expect(page.getByTestId(`space-repo-state-${key}`)).toHaveText(/^Synced (just now|\d+m ago)$/, { timeout: 30_000 });
       const joined = repositoryOf(await app.core.command("space.get", {}), key);
-      expect(joined.noticed).toBe(true);
+      expect(placementOf(joined, host.url).noticed).toBe(true);
       expect(joined.folder).toBe(app.projectDir);
       const clone = clonePath(app.dataDir, key);
       expect(git(clone, "rev-parse", "spex")).toBe(git(bareOf(host, key), "rev-parse", "spex"));
@@ -770,9 +793,11 @@ test.describe("the instance alone", () => {
       await expect(bob.getByTestId(`space-row-${hostKey(host, "bob/notes-spex")}`)).toBeVisible();
       await expect(bob.getByTestId("space-group-members-bob")).toHaveCount(0);
       await expect(bob.getByTestId("space-group-subgroup-bob")).toHaveCount(0);
-      // The project's members panel, open, links no page (space-62).
-      const members = surface.getByTestId(`space-members-${TEAM_KEY}`);
-      if (!(await members.isVisible())) await surface.getByTestId(`space-row-members-${TEAM_KEY}`).click();
+      // The project's placement's members panel, opened from its line,
+      // links no page (space-62, space-87).
+      const line = surface.getByTestId(`space-row-${TEAM_KEY}`).getByTestId(`space-line-${host.url}`);
+      const members = line.getByTestId(`space-members-${TEAM_KEY}@${host.url}`);
+      if (!(await members.isVisible())) await line.getByTestId("space-line-members").click();
       await expect(members.getByTestId(`space-member-${HOST_LOGIN}`)).toBeVisible();
       await expect(surface.locator("a")).toHaveCount(0);
       expect(await leaks(), where).toEqual([]);
@@ -894,17 +919,18 @@ test.describe("undo", () => {
     await expect(renamed).toHaveCount(0);
     expect(standinGroup("core-platform")).toBeUndefined();
 
-    // The project's Move… offers your login and every group but acme,
-    // each read as the pick reads it; a move the stand-in refuses
-    // stands in the picker, and a move into acme/research lists the row
-    // there at once, its key unchanged (space-78).
+    // Move… on the project's placement line offers your login and every
+    // group but acme, each read as the pick reads it; a move the
+    // stand-in refuses stands in the picker, and a move into
+    // acme/research lists the row there at once, its key unchanged
+    // (space-78, space-87).
     const RESEARCH = `${HOST_GROUP}/research`;
     host.script.refuseTransfer("Moves are paused for this project.");
-    const move = list.getByTestId(`space-row-move-${TEAM_KEY}`);
+    const move = list.getByTestId(`space-row-${TEAM_KEY}`).getByTestId(`space-line-${host.url}`).getByTestId("space-line-move");
     await expect(move).toHaveText("Move…");
     await expect(move).toHaveAttribute("aria-label", "Move to another group");
     await move.click();
-    const picker = list.getByTestId(`space-move-${TEAM_KEY}`);
+    const picker = list.getByTestId(`space-move-${TEAM_KEY}@${host.url}`);
     await expect(picker.locator('[data-testid^="space-move-group-"]')).toHaveText([PICKED_AS[HOST_LOGIN]!, PICKED_AS[RESEARCH]!]);
     await clean("the move picker");
     await picker.getByTestId(`space-move-group-${RESEARCH}`).click();
@@ -933,8 +959,9 @@ test.describe("undo", () => {
     await page.setViewportSize({ width: 320, height: TALL });
     await research.getByTestId(`space-group-rename-${RESEARCH}`).click();
     await expect(research.getByTestId(`space-rename-${RESEARCH}`)).toBeVisible();
-    await research.getByTestId(`space-row-move-${MOVED}`).click();
-    await expect(research.getByTestId(`space-move-${MOVED}`)).toBeVisible();
+    const movedLine = research.getByTestId(`space-row-${MOVED}`).getByTestId(`space-line-${host.url}`);
+    await movedLine.getByTestId("space-line-move").click();
+    await expect(movedLine.getByTestId(`space-move-${MOVED}@${host.url}`)).toBeVisible();
     const defects: string[] = [];
     record(
       "Groups undo · 320",
@@ -942,7 +969,7 @@ test.describe("undo", () => {
       defects,
     );
     expect(defects, defects.join("\n")).toEqual([]);
-    await research.getByTestId(`space-move-cancel-${MOVED}`).click();
+    await movedLine.getByTestId(`space-move-cancel-${MOVED}@${host.url}`).click();
     await research.getByTestId(`space-rename-${RESEARCH}-cancel`).click();
     await page.setViewportSize({ width: 1280, height: TALL });
 
@@ -953,8 +980,8 @@ test.describe("undo", () => {
     await expect(page.locator("html")).toHaveAttribute("lang", "zh");
     await surfaceEntry(page, "Space").click();
     await expect(page.getByTestId("space-surface")).toBeVisible();
-    await page.getByTestId(`space-row-move-${MOVED}`).click();
-    const zhPicker = page.getByTestId(`space-move-${MOVED}`);
+    await page.getByTestId(`space-row-${MOVED}`).getByTestId(`space-line-${host.url}`).getByTestId("space-line-move").click();
+    const zhPicker = page.getByTestId(`space-move-${MOVED}@${host.url}`);
     await expect(zhPicker).toHaveAttribute("aria-label", "将 demo-project-spex 移到另一个群组");
     await expect(zhPicker.getByTestId(`space-move-group-${entryKey(HOST_LOGIN)}`)).toHaveText(HOST_LOGIN);
     await clean("the move picker in Chinese");
@@ -980,6 +1007,17 @@ const INSTANCE_ROWS = [
   '[data-testid="space-add-card"]',
   '[data-testid="space-add-card"] > div',
   '[data-testid="space-add-card"] label',
+];
+
+/** A project's rows and lines with what its "Place at…" and "Leave…"
+ * open beneath it — the picker, the choice, the confirm — measured at
+ * the floor (space-28, space-43, space-88, space-89). */
+const PLACEMENT_ROWS = [
+  ...INSTANCE_ROWS,
+  '[data-testid^="space-row-"]',
+  '[data-testid^="space-line-"]',
+  '[data-testid^="space-place-"]',
+  '[data-testid^="space-leave-"]',
 ];
 
 test.describe("a second instance", () => {
@@ -1013,12 +1051,12 @@ test.describe("a second instance", () => {
       await expect(page.getByTestId("space-surface").locator("a")).toHaveCount(0);
       expect(await surfaceLeaks(page, app.hosts), where).toEqual([]);
     };
-    const fit = async (where: string, show?: () => Promise<void>): Promise<void> => {
+    const fit = async (where: string, show?: () => Promise<void>, containers: string[] = INSTANCE_ROWS): Promise<void> => {
       await setRail(page, false);
       await page.setViewportSize({ width: 320, height: TALL });
       await show?.();
       const defects: string[] = [];
-      record(where, await measure(page, INSTANCE_ROWS), defects);
+      record(where, await measure(page, containers), defects);
       expect(defects, defects.join("\n")).toEqual([]);
       await page.setViewportSize({ width: 1280, height: TALL });
     };
@@ -1155,16 +1193,18 @@ test.describe("a second instance", () => {
     await page.getByTestId(`space-repo-${SECOND_KEY}`).click();
     await expect(page.getByTestId("space-repository")).toHaveCount(0);
 
-    // "Move…" on that row offers the second's groups alone: your
-    // namespace there, then every group but the row's own (space-78).
-    await secondRow.getByTestId(`space-row-move-${SECOND_KEY}`).click();
-    const mover = secondRow.getByTestId(`space-move-${SECOND_KEY}`);
+    // "Move…" on that row's placement line offers the second's groups
+    // alone: your namespace there, then every group but the row's own
+    // (space-78, space-87).
+    const secondLine = secondRow.getByTestId(`space-line-${second.url}`);
+    await secondLine.getByTestId("space-line-move").click();
+    const mover = secondLine.getByTestId(`space-move-${SECOND_KEY}@${second.url}`);
     await expect(mover.locator('[data-testid^="space-move-group-"]')).toHaveText([
       SECOND_PERSON.login,
       PICKED_AS[`${HOST_GROUP}/research`]!,
     ]);
     await expect(mover.getByTestId(`space-move-group-${entryKey(HOST_LOGIN)}`)).toHaveCount(0);
-    await mover.getByTestId(`space-move-cancel-${SECOND_KEY}`).click();
+    await mover.getByTestId(`space-move-cancel-${SECOND_KEY}@${second.url}`).click();
     await expect(mover).toHaveCount(0);
 
     // Sign out on the first's heading keeps it, signed out, with Forget
@@ -1210,6 +1250,37 @@ test.describe("a second instance", () => {
     await page.keyboard.press("Escape");
     await expect(card).toHaveCount(0);
 
+    // "Place at…" on the first's project opens the second's picker
+    // beneath the row, and "Leave…" its inline confirm: each fits at the
+    // floor, measured with the rows and lines (space-88, space-89,
+    // space-28).
+    const placeControl = firstRow.getByTestId(`space-row-place-${FIRST_KEY}`);
+    await expect(placeControl).toHaveAccessibleName(`Also place at ${SECOND_HOST_NAME}`);
+    const placePicker = firstRow.getByTestId(`space-place-${FIRST_KEY}`);
+    await fit(
+      "Groups · Place at… open · 320",
+      async () => {
+        await placeControl.click();
+        await expect(placePicker).toBeVisible();
+      },
+      PLACEMENT_ROWS,
+    );
+    await placePicker.getByTestId(`space-pick-cancel-${FIRST_KEY}`).click();
+    await expect(placePicker).toHaveCount(0);
+    const leaveControl = firstRow.getByTestId(`space-row-leave-${FIRST_KEY}`);
+    await expect(leaveControl).toHaveAccessibleName("Remove from Stand-in Git host");
+    const leaveConfirm = firstRow.getByTestId(`space-leave-confirm-${FIRST_KEY}`);
+    await fit(
+      "Groups · Leave… asking · 320",
+      async () => {
+        await leaveControl.click();
+        await expect(leaveConfirm).toBeVisible();
+      },
+      PLACEMENT_ROWS,
+    );
+    await leaveConfirm.getByRole("button", { name: "Keep" }).click();
+    await expect(leaveConfirm).toHaveCount(0);
+
     // In English and in Chinese, the surface holds no link and nothing
     // under either stand-in's URL but its origin, nor the Git system's
     // name (space-1, localization-10).
@@ -1221,6 +1292,769 @@ test.describe("a second instance", () => {
     await expect(page.getByTestId("space-surface")).toBeVisible();
     await expect(add).toHaveAccessibleName("另一个实例");
     await clean("two instances in Chinese");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// space-96: a project placed at two instances, across two homes
+// ---------------------------------------------------------------------------
+
+/** The second instance's group the project is placed in (space-96). */
+const WORKSHOP = "workshop";
+/** The project's spex repository there, by its path in the instance. */
+const WORKSHOP_PATH = `${WORKSHOP}/demo-project-spex`;
+/** Each home's session, by the first turn that titles it. */
+const FIRST_HOME_TURN = "Fix the token refresh in auth.ts";
+const SECOND_HOME_TURN = "Plan the release from the second laptop";
+/** A placement's line reading what its last sync did there (space-87,
+ * space-12): what moved, or that nothing had to. */
+const SYNCED_LINE = /^(Synced just now · \d+ sent · \d+ received|Everything is in sync)$/;
+/** A line whose sync sent this device's changes and brought nothing. */
+const SENT_LINE = /^Synced just now · [1-9]\d* sent · 0 received$/;
+
+/** The words space-96 keeps off the surface beside space-27's: a host's
+ * `spex` named by its instance, and "remote". */
+const PLACEMENT_WORDS = new RegExp(`${FORBIDDEN_WORDS.source}|@[^\\s/]+\\/spex|\\b[Rr]emote\\b`);
+
+/** A project's rows and lines, what they open, and the lines a group
+ * shows for a row placed in it, measured at the floor (space-28,
+ * space-1). */
+const PLACED_ROWS = [...PLACEMENT_ROWS, '[data-testid^="space-placed-"]'];
+
+test.describe("placed at two instances", () => {
+  // Signed in at the first stand-in with the demo project registered,
+  // its code on a bare path this machine serves; a second stand-in on a
+  // Git backend of its own (git-host-12, DR-128).
+  test.use({
+    appOptions: {
+      host: { second: { backend: "separate" } },
+      project: true,
+      codeRemote: true,
+      signedIn: true,
+    },
+  });
+
+  test("space-96: Place at… puts the project in the second's workshop through the page and Continue pushes there; a session reaches both; a second home joins it from the first and attaches the second from its file; its session reaches both and the first home's Sync brings it", async ({
+    page,
+    app,
+    browser,
+  }) => {
+    test.setTimeout(300_000);
+    const first = app.hosts[0]!;
+    const second = app.hosts[1]!;
+    const KEY = hostKey(first, TEAM_PATH);
+    // The project synced in the first's `acme`, the home signed in at the
+    // second too, where `workshop` holds `bob` beside the account, so a
+    // placement there owes the sharing notice (arrange only, space-57).
+    await pickGroup(app);
+    await signInCore(app, second);
+    const fromGroup = app.core.mark();
+    const { group } = await app.core.command("space.group.create", { instance: second.url, name: "Workshop", path: WORKSHOP, parent: null });
+    await app.core.command("space.share", { instance: second.url, group: group.id, login: PEER_MEMBER.login, role: "developer" });
+    await app.core.waitSpace(fromGroup, (state) => instanceOf(state, second.url)?.groups.some((entry) => entry.fullPath === WORKSHOP) ?? false);
+
+    // What every page passes: no forbidden word, and every row, line,
+    // picker, notice and group line inside its box at the 320-pixel
+    // floor (space-27, space-28), each finding named where it was met.
+    // "No visible text" is the surface's: the bullet verifies space-27,
+    // which governs the copy on the Groups surface, so each scan reads
+    // the surface, not the Projects tree or the Captain home the session
+    // steps pass through.
+    const words: string[] = [];
+    const scan = (on: Page, where: string): Promise<void> => scanVocabulary(on, where, words, PLACEMENT_WORDS);
+    const defects: string[] = [];
+    const fit = async (on: Page, where: string): Promise<void> => {
+      await setRail(on, false);
+      await on.setViewportSize({ width: 320, height: TALL });
+      record(where, await measure(on, PLACED_ROWS), defects);
+      await setRail(on, true);
+    };
+
+    await open(page, app);
+    await showGroups(page);
+    const row = instanceSection(page, first).getByTestId(`space-group-${HOST_GROUP}`).getByTestId(`space-row-${KEY}`);
+    const lines = row.getByTestId(`space-lines-${KEY}`).locator(":scope > li");
+    const firstLine = placementLine(page, KEY, first);
+    const secondLine = placementLine(page, KEY, second);
+    await expect(row).toHaveAttribute("data-state", "reachable");
+    await expect(lines).toHaveCount(1);
+    await expect(firstLine.getByTestId("space-line-instance")).toHaveText("Stand-in Git host");
+    await expect(firstLine.getByTestId("space-line-at")).toHaveText(TEAM_PATH);
+    await scan(page, "page one, placed at the first");
+
+    // "Place at…" on the project's row, the second the one instance to
+    // offer, is titled and named for it, and opens the second's picker
+    // alone beneath the row — your namespace and its groups there,
+    // `workshop` among them — which fits at the floor (space-88,
+    // space-28).
+    const place = row.getByTestId(`space-row-place-${KEY}`);
+    await expect(place).toHaveText("Place at…");
+    await expect(place).toHaveAttribute("title", `Also place at ${SECOND_HOST_NAME}`);
+    await expect(place).toHaveAccessibleName(`Also place at ${SECOND_HOST_NAME}`);
+    await place.click();
+    const picker = row.getByTestId(`space-place-${KEY}`);
+    await expect(picker).toHaveAttribute("aria-label", `Also place at ${SECOND_HOST_NAME}`);
+    await expect(picker.locator('[data-testid^="space-pick-instance-"]')).toHaveCount(1);
+    const section = await pickSection(picker, second, SECOND_HOST_NAME);
+    await expect(section.getByTestId(`space-pick-group-${WORKSHOP}`)).toHaveText(`Workshop · ${WORKSHOP}`);
+    await expect(picker.getByTestId(`space-pick-name-${KEY}`)).toHaveValue("demo-project");
+    await scan(page, "page one, the Place picker");
+    await fit(page, "page one · Place at… open · 320");
+
+    // Picking `workshop` creates `<name>-spex` there, "Place at…"
+    // reading "Placing…" until the placement is made and synced; the row
+    // then names both placements, in the order added, each by its
+    // instance's display name and its path there (space-88, space-97,
+    // space-87).
+    const placing = await watch(page, `[data-testid="space-row-place-${KEY}"]`);
+    await section.getByTestId(`space-pick-group-${WORKSHOP}`).click();
+    await expect(picker).toHaveCount(0);
+    await expect(secondLine).toBeVisible({ timeout: 30_000 });
+    await expect(place).toHaveCount(0, { timeout: 30_000 });
+    expect(await placing()).toEqual(["Place at…", "Placing…"]);
+    await expect(lines).toHaveCount(2);
+    expect(await lines.evaluateAll((items) => items.map((item) => item.getAttribute("data-testid")))).toEqual([
+      `space-line-${first.url}`,
+      `space-line-${second.url}`,
+    ]);
+    await expect(secondLine.getByTestId("space-line-instance")).toHaveText(SECOND_HOST_NAME);
+    await expect(secondLine.getByTestId("space-line-at")).toHaveText(WORKSHOP_PATH);
+    await expect(row).toHaveAttribute("data-state", "reachable");
+
+    // The second's repository has another member, so its line waits for
+    // the sharing notice with Continue while the first's reads synced;
+    // Continue says the notice on the line, naming the second's display
+    // name and the path there, Cancel focused (space-57, space-87).
+    await expect(secondLine.getByTestId("space-line-state")).toHaveText("Waiting for you to continue", { timeout: 30_000 });
+    await expect(firstLine.getByTestId("space-line-state")).toHaveText(SYNCED_LINE);
+    const proceed = secondLine.getByTestId("space-line-continue");
+    await expect(proceed).toHaveText("Continue");
+    await proceed.click();
+    const notice = secondLine.getByTestId("space-line-notice");
+    await expect(notice).toContainText(`Records go to ${WORKSHOP_PATH} at ${SECOND_HOST_NAME}.`);
+    await expect(notice).toContainText("Every session goes there whole — hidden parts and attachments included");
+    await expect(notice.getByRole("button", { name: "Cancel" })).toBeFocused();
+    await scan(page, "page one, the second's notice");
+    await fit(page, "page one · the second's notice · 320");
+
+    // Continue pushes there with the second's credential, the line then
+    // reading what went, the notice recorded for that placement; the
+    // second's `workshop`, whose listing holds the placement, shows one
+    // line naming the row and the group it stands under — its name, its
+    // path beside it, as the list heads it — with no control, and no
+    // Delete (space-57, space-12, space-1, space-77).
+    const pushes = second.script.transportCredentials.length;
+    await notice.getByRole("button", { name: "Continue" }).click();
+    await expect(notice).toHaveCount(0);
+    await expect(secondLine.getByTestId("space-line-state")).toHaveText(SENT_LINE, { timeout: 30_000 });
+    const clone = clonePath(app.dataDir, KEY);
+    const firstBare = bareOf(first, KEY);
+    const workshopBare = bareOf(second, WORKSHOP_PATH);
+    await expect.poll(() => headOf(workshopBare, "spex"), { timeout: 30_000 }).toBe(git(clone, "rev-parse", "spex"));
+    expect(second.script.transportCredentials.slice(pushes).some((entry) => entry.instance === second.url && entry.push)).toBe(true);
+    expect(placementOf(repositoryOf(await app.core.command("space.get", {}), KEY), second.url).noticed).toBe(true);
+    const workshop = instanceSection(page, second).getByTestId(`space-group-${WORKSHOP}`);
+    const placed = workshop.getByTestId(`space-placed-${KEY}`);
+    await expect(placed).toHaveText(`demo-project-spex stands under Acme · ${HOST_GROUP} at Stand-in Git host`);
+    await expect(placed.getByRole("button")).toHaveCount(0);
+    await expect(workshop.locator('[data-testid^="space-row-"]')).toHaveCount(0);
+    await expect(workshop.getByTestId(`space-group-delete-${WORKSHOP}`)).toHaveCount(0);
+    await scan(page, "page one, placed at both");
+    await fit(page, "page one · placed at both · 320");
+
+    // A session run on the first page and synced lands on both
+    // stand-ins' `spex` branches, each line reading what went (space-12).
+    await nav(page, "Projects").click();
+    await page
+      .getByRole("tree", { name: "Projects and sessions" })
+      .getByRole("treeitem", { name: "demo-project", exact: true })
+      .click();
+    await expect(page.getByTestId("captain-home")).toContainText("demo-project");
+    await send(page, FIRST_HOME_TURN);
+    await expect(page.getByTestId("captain-pane")).toContainText("/code finished");
+    await settled(app);
+    await showGroups(page);
+    await openRepository(page, KEY);
+    const firstSessionRow = page.getByTestId("space-local-list").locator('[data-testid^="space-unit-mine-sessions/"]');
+    await expect(firstSessionRow).toContainText(FIRST_HOME_TURN);
+    const firstSession = (await firstSessionRow.getAttribute("data-testid"))!.replace("space-unit-mine-sessions/", "");
+    await row.getByTestId(`space-row-sync-${KEY}`).click();
+    for (const line of [firstLine, secondLine]) {
+      await expect(line.getByTestId("space-line-state")).toHaveText(SENT_LINE, { timeout: 30_000 });
+    }
+    for (const bare of [firstBare, workshopBare]) {
+      await expect
+        .poll(() => git(bare, "ls-tree", "-r", "--name-only", "spex").split("\n"), { timeout: 30_000 })
+        .toContain(`sessions/${firstSession}.json`);
+    }
+    await scan(page, "page one, a session synced to both");
+    await page.getByTestId(`space-repo-${KEY}`).click();
+    await expect(page.getByTestId("space-repository")).toHaveCount(0);
+
+    // A second home, signed in at both instances as the same accounts
+    // there through device flows the harness approves (arrange only),
+    // its page in a browser context of its own.
+    const other = await startApp({ host: { share: { host: first, second } } });
+    const context = await browser.newContext({ locale: "en-US" });
+    try {
+      await signInCore(other, first);
+      await signInCore(other, second);
+      const page2 = await context.newPage();
+      await open(page2, other);
+      await showGroups(page2);
+
+      // The project, joined from the first's `acme` with its code cloned
+      // into the folder the page names, names the second's placement as
+      // not on this device, with Attach (space-63, space-87).
+      const row2 = instanceSection(page2, first).getByTestId(`space-group-${HOST_GROUP}`).getByTestId(`space-row-${KEY}`);
+      await expect(row2).toHaveAttribute("data-state", "absent");
+      await row2.getByTestId(`space-row-join-${KEY}`).click();
+      const folder = join(other.home, "work", "demo-project");
+      const editor = page2.getByTestId(`space-join-${KEY}`);
+      await editor.getByTestId(`space-join-${KEY}-path`).fill(folder);
+      await editor.getByRole("button", { name: "Join", exact: true }).click();
+      await expect(row2).toHaveAttribute("data-state", "reachable", { timeout: 30_000 });
+      expect(git(folder, "remote", "get-url", "origin")).toBe(app.codeOrigin);
+      const firstLine2 = placementLine(page2, KEY, first);
+      const secondLine2 = placementLine(page2, KEY, second);
+      await expect(firstLine2).toHaveAttribute("data-attached", "true");
+      await expect(secondLine2).toHaveAttribute("data-attached", "false", { timeout: 30_000 });
+      await expect(secondLine2).toHaveAttribute("data-state", "absent");
+      await expect(secondLine2.getByTestId("space-line-instance")).toHaveText(SECOND_HOST_NAME);
+      await expect(secondLine2.getByTestId("space-line-at")).toHaveText(WORKSHOP_PATH);
+      await expect(secondLine2.getByTestId("space-line-state")).toHaveText("Not on this device");
+      const attach = secondLine2.getByTestId("space-line-attach");
+      await expect(attach).toHaveText("Attach");
+      await scan(page2, "page two, joined");
+
+      // Attach says the notice on its line, naming the second's display
+      // name and the path there, Cancel focused; Cancel attaches nothing,
+      // Attach standing again (space-90, space-57).
+      await attach.click();
+      const notice2 = secondLine2.getByTestId("space-line-notice");
+      await expect(notice2).toContainText(`Records go to ${WORKSHOP_PATH} at ${SECOND_HOST_NAME}.`);
+      await expect(notice2).toContainText("Every session goes there whole — hidden parts and attachments included");
+      await expect(notice2.getByRole("button", { name: "Cancel" })).toBeFocused();
+      await scan(page2, "page two, the Attach notice");
+      await fit(page2, "page two · the Attach notice · 320");
+      await notice2.getByRole("button", { name: "Cancel" }).click();
+      await expect(notice2).toHaveCount(0);
+      await expect(attach).toBeFocused();
+      await expect(attach).toHaveText("Attach");
+      await expect(secondLine2).toHaveAttribute("data-attached", "false");
+
+      // Continue attaches it, Attach reading "Attaching…" until the
+      // attach's sync ends; the line then reads synced, the notice
+      // recorded for that placement (space-90, space-99, space-87).
+      const attaching = await watch(
+        page2,
+        `[data-testid="space-row-${KEY}"] [data-testid="space-line-${second.url}"] [data-testid="space-line-attach"]`,
+      );
+      await attach.click();
+      await notice2.getByRole("button", { name: "Continue" }).click();
+      await expect(secondLine2).toHaveAttribute("data-attached", "true", { timeout: 30_000 });
+      await expect(attach).toHaveCount(0, { timeout: 30_000 });
+      expect(await attaching()).toEqual(["Attach", "Attaching…"]);
+      await expect(secondLine2.getByTestId("space-line-state")).toHaveText(SYNCED_LINE);
+      expect(placementOf(repositoryOf(await other.core.command("space.get", {}), KEY), second.url).noticed).toBe(true);
+      await scan(page2, "page two, attached");
+      await fit(page2, "page two · attached · 320");
+
+      // A session run on the second page and synced reaches both
+      // stand-ins, each line reading what went (space-12).
+      await page2
+        .getByRole("tree", { name: "Projects and sessions" })
+        .getByRole("treeitem", { name: "demo-project", exact: true })
+        .click();
+      await expect(page2.getByTestId("captain-home")).toContainText("demo-project");
+      await send(page2, SECOND_HOME_TURN);
+      await expect(page2.getByTestId("captain-pane")).toContainText("/code finished");
+      await settled(other);
+      await showGroups(page2);
+      await openRepository(page2, KEY);
+      const secondSessionRow = page2.getByTestId("space-local-list").locator('[data-testid^="space-unit-mine-sessions/"]');
+      await expect(secondSessionRow).toContainText(SECOND_HOME_TURN);
+      const secondSession = (await secondSessionRow.getAttribute("data-testid"))!.replace("space-unit-mine-sessions/", "");
+      await row2.getByTestId(`space-row-sync-${KEY}`).click();
+      for (const line of [firstLine2, secondLine2]) {
+        await expect(line.getByTestId("space-line-state")).toHaveText(SENT_LINE, { timeout: 30_000 });
+      }
+      for (const bare of [firstBare, workshopBare]) {
+        await expect
+          .poll(() => git(bare, "ls-tree", "-r", "--name-only", "spex").split("\n"), { timeout: 30_000 })
+          .toContain(`sessions/${secondSession}.json`);
+      }
+      await scan(page2, "page two, a session synced to both");
+
+      // The first page's Sync brings it: its first line reads what came,
+      // and the session lists in the first page's sidebar by its title
+      // (space-12).
+      await row.getByTestId(`space-row-sync-${KEY}`).click();
+      await expect(firstLine.getByTestId("space-line-state")).toHaveText(/^Synced just now · \d+ sent · [1-9]\d* received$/, {
+        timeout: 30_000,
+      });
+      expect(git(clone, "ls-tree", "-r", "--name-only", "spex").split("\n")).toContain(`sessions/${secondSession}.json`);
+      const project = page.getByTestId(`sidebar-project-${KEY}`);
+      if ((await project.getAttribute("aria-expanded")) !== "true") await page.getByTestId(`sidebar-disclose-${KEY}`).click();
+      await expect(
+        page.getByRole("tree", { name: "Projects and sessions" }).getByRole("treeitem", { name: new RegExp(SECOND_HOME_TURN, "i") }),
+      ).toBeVisible({ timeout: 30_000 });
+      await scan(page, "page one, the second home's session brought");
+    } finally {
+      await context.close();
+      await other.close();
+    }
+
+    expect(words, words.join("\n")).toEqual([]);
+    expect(defects, defects.join("\n")).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Placing and leaving over three instances
+// ---------------------------------------------------------------------------
+
+/** The project's spex repository in your namespace there, by its path
+ * in the instance (space-88). */
+const NAMESPACE_PATH = `${HOST_LOGIN}/demo-project-spex`;
+/** Your own group's spex repository's name (space-4). */
+const OWN_NAME = `${HOST_LOGIN}-spex`;
+/** The session run before the leaves, by the first turn that titles it. */
+const LEAVE_TURN = "Write the release notes before the move";
+
+/** The test ids of a list's items, in their order. */
+async function testIds(items: Locator): Promise<(string | null)[]> {
+  return items.evaluateAll((all) => all.map((item) => item.getAttribute("data-testid")));
+}
+
+test.describe("three instances", () => {
+  // Signed in at the first stand-in with the demo project registered; a
+  // second and a third stand-in, each on a Git backend of its own
+  // (git-host-12, DR-128).
+  test.use({
+    appOptions: {
+      host: { second: { backend: "separate" }, third: { backend: "separate" } },
+      project: true,
+      signedIn: true,
+    },
+  });
+
+  test("space-88, space-89, space-98, space-87, space-1, space-4, space-57, storage-38, space-28: your own group placed at each later instance waits for Continue; Place at… opens the choice of two instances and places the project at the third; Leave… stops for records no other placement received, then leaves the first, the clone moving under the third, and the last, leaving it on this device only", async ({
+    page,
+    app,
+  }) => {
+    test.setTimeout(300_000);
+    const first = app.hosts[0]!;
+    const second = app.hosts[1]!;
+    const third = app.hosts[2]!;
+    const KEY = hostKey(first, TEAM_PATH);
+    const MOVED_KEY = hostKey(third, NAMESPACE_PATH);
+    // On this device only, under your own group's folder, which bears
+    // your login (storage-38, space-59).
+    const LOCAL_KEY = `${HOST_LOGIN}/demo-project-spex`;
+    // The home signed in at the second and the third, your own group
+    // placed at each, and the project synced in the first's `acme`
+    // (arrange only, space-4, space-58).
+    await signInCore(app, second);
+    await signInCore(app, third);
+    await pickGroup(app);
+
+    // Every row, line, choice, confirm and notice inside its box at the
+    // 320-pixel floor (space-28), each finding named where it was met.
+    const defects: string[] = [];
+    const fit = async (where: string): Promise<void> => {
+      await setRail(page, false);
+      await page.setViewportSize({ width: 320, height: TALL });
+      record(where, await measure(page, PLACED_ROWS), defects);
+      await setRail(page, true);
+    };
+
+    await open(page, app);
+    await showGroups(page);
+    const list = page.getByTestId("space-groups");
+
+    // Your own group is placed at every instance the home signed in to,
+    // in your namespace there, in the order signed in; its row offers
+    // neither "Place at…" nor "Leave…", and each namespace, the first's
+    // among them, shows one line naming it under your own group, with no
+    // control (space-4, space-88, space-89, space-87, space-1).
+    const ownRow = list.getByTestId("space-own").getByTestId(`space-row-${OWN_KEY}`);
+    const ownLines = ownRow.getByTestId(`space-lines-${OWN_KEY}`).locator(":scope > li");
+    await expect(ownLines).toHaveCount(3, { timeout: 30_000 });
+    expect(await testIds(ownLines)).toEqual([`space-line-${first.url}`, `space-line-${second.url}`, `space-line-${third.url}`]);
+    for (const host of [first, second, third]) {
+      await expect(placementLine(page, OWN_KEY, host).getByTestId("space-line-at")).toHaveText(OWN_KEY);
+    }
+    await expect(ownRow.getByTestId(`space-row-place-${OWN_KEY}`)).toHaveCount(0);
+    await expect(ownRow.getByTestId(`space-row-leave-${OWN_KEY}`)).toHaveCount(0);
+    for (const host of [first, second, third]) {
+      const placed = instanceSection(page, host).getByTestId(`space-group-@${HOST_LOGIN}`).getByTestId(`space-placed-${OWN_KEY}`);
+      await expect(placed).toHaveText(`${OWN_NAME} stands under your own group`);
+      await expect(placed.getByRole("button")).toHaveCount(0);
+    }
+
+    // Each placement after the first waits for the sharing notice, its
+    // line reading "Waiting for you to continue" with Continue, the
+    // first's not; Continue says the notice on its line, naming that
+    // instance's display name and the path there, Cancel focused, and
+    // its Continue pushes there alone, the other still waiting (space-4,
+    // space-57, space-87).
+    await expect(placementLine(page, OWN_KEY, first).getByTestId("space-line-continue")).toHaveCount(0);
+    for (const host of [second, third]) {
+      const line = placementLine(page, OWN_KEY, host);
+      await expect(line.getByTestId("space-line-state")).toHaveText("Waiting for you to continue", { timeout: 30_000 });
+      await expect(line.getByTestId("space-line-continue")).toHaveText("Continue");
+    }
+    const ownClone = clonePath(app.dataDir, OWN_KEY);
+    for (const [host, name] of [
+      [second, SECOND_HOST_NAME],
+      [third, THIRD_HOST_NAME],
+    ] as const) {
+      const line = placementLine(page, OWN_KEY, host);
+      await line.getByTestId("space-line-continue").click();
+      const notice = line.getByTestId("space-line-notice");
+      await expect(notice).toContainText(`Records go to ${OWN_KEY} at ${name}.`);
+      await expect(notice).toContainText("Every session goes there whole — hidden parts and attachments included");
+      await expect(notice.getByRole("button", { name: "Cancel" })).toBeFocused();
+      if (host === second) await fit("Groups · your own group's notice at the second · 320");
+      await notice.getByRole("button", { name: "Continue" }).click();
+      await expect(notice).toHaveCount(0);
+      await expect(line.getByTestId("space-line-state")).toHaveText(SENT_LINE, { timeout: 30_000 });
+      await expect.poll(() => headOf(bareOf(host, OWN_KEY), "spex"), { timeout: 30_000 }).toBe(git(ownClone, "rev-parse", "spex"));
+      expect(placementOf(repositoryOf(await app.core.command("space.get", {}), OWN_KEY), host.url).noticed).toBe(true);
+      if (host === second) {
+        await expect(placementLine(page, OWN_KEY, third).getByTestId("space-line-state")).toHaveText("Waiting for you to continue", {
+          timeout: 30_000,
+        });
+      }
+    }
+
+    // "Place at…" on the project's row, synced in the first's `acme`,
+    // offers the two instances it holds no placement at: it opens the
+    // choice of them in place, each by its display name, titled and
+    // named "Also place at <display name>", focus on the first; Escape
+    // closes it, choosing nothing (space-88, space-28).
+    const row = instanceSection(page, first).getByTestId(`space-group-${HOST_GROUP}`).getByTestId(`space-row-${KEY}`);
+    const lines = row.getByTestId(`space-lines-${KEY}`).locator(":scope > li");
+    const firstLine = placementLine(page, KEY, first);
+    const thirdLine = placementLine(page, KEY, third);
+    await expect(row).toHaveAttribute("data-state", "reachable");
+    expect(await testIds(lines)).toEqual([`space-line-${first.url}`]);
+    const place = row.getByTestId(`space-row-place-${KEY}`);
+    await expect(place).toHaveText("Place at…");
+    await expect(place).toHaveAccessibleName("Place at…");
+    await expect(place).not.toHaveAttribute("title");
+    await place.click();
+    const choice = row.getByTestId(`space-place-choice-${KEY}`);
+    await expect(choice).toHaveAccessibleName("Place at…");
+    const offered = choice.locator('[data-testid^="space-place-instance-"]');
+    expect(await testIds(offered)).toEqual([`space-place-instance-${second.url}`, `space-place-instance-${third.url}`]);
+    await expect(offered).toHaveText([SECOND_HOST_NAME, THIRD_HOST_NAME]);
+    for (const [option, name] of [
+      [offered.nth(0), SECOND_HOST_NAME],
+      [offered.nth(1), THIRD_HOST_NAME],
+    ] as const) {
+      await expect(option).toHaveAttribute("title", `Also place at ${name}`);
+      await expect(option).toHaveAccessibleName(`Also place at ${name}`);
+    }
+    await expect(offered.nth(0)).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(choice).toHaveCount(0);
+    await expect(place).toBeFocused();
+    await place.click();
+    await expect(choice).toBeVisible();
+    await fit("Groups · the Place choice open · 320");
+
+    // The third chosen opens its picker alone beneath the row — your
+    // namespace and its groups there — and picking your namespace
+    // creates `<name>-spex` there with no notice, its only member being
+    // the account; "Place at…" reads "Placing…" until the placement is
+    // made and synced, the third's line then reading what went, and
+    // "Place at…" names the second alone (space-88, space-97, space-57,
+    // space-87).
+    await choice.getByTestId(`space-place-instance-${third.url}`).click();
+    const picker = row.getByTestId(`space-place-${KEY}`);
+    await expect(picker).toHaveAttribute("aria-label", `Also place at ${THIRD_HOST_NAME}`);
+    await expect(picker.locator('[data-testid^="space-pick-instance-"]')).toHaveCount(1);
+    const section = await pickSection(picker, third, THIRD_HOST_NAME);
+    await expect(section.locator('[data-testid^="space-pick-group-"]')).toHaveText([
+      PICKED_AS[HOST_LOGIN]!,
+      PICKED_AS[HOST_GROUP]!,
+      PICKED_AS[`${HOST_GROUP}/research`]!,
+    ]);
+    await expect(picker.getByTestId(`space-pick-name-${KEY}`)).toHaveValue("demo-project");
+    const placing = await watch(page, `[data-testid="space-row-place-${KEY}"]`);
+    await section.getByTestId(`space-pick-group-${entryKey(HOST_LOGIN)}`).click();
+    await expect(picker).toHaveCount(0);
+    await expect(thirdLine.getByTestId("space-line-state")).toHaveText(SENT_LINE, { timeout: 30_000 });
+    await expect(place).toHaveText("Place at…", { timeout: 30_000 });
+    expect(await placing()).toEqual(["Place at…", "Placing…", "Place at…"]);
+    expect(await testIds(lines)).toEqual([`space-line-${first.url}`, `space-line-${third.url}`]);
+    await expect(thirdLine.getByTestId("space-line-instance")).toHaveText(THIRD_HOST_NAME);
+    await expect(thirdLine.getByTestId("space-line-at")).toHaveText(NAMESPACE_PATH);
+    await expect(firstLine.getByTestId("space-line-state")).toHaveText(SYNCED_LINE);
+    await expect(place).toHaveAttribute("title", `Also place at ${SECOND_HOST_NAME}`);
+    await expect(place).toHaveAccessibleName(`Also place at ${SECOND_HOST_NAME}`);
+    const clone = clonePath(app.dataDir, KEY);
+    const firstBare = bareOf(first, KEY);
+    const thirdBare = bareOf(third, NAMESPACE_PATH);
+    await expect.poll(() => headOf(thirdBare, "spex"), { timeout: 30_000 }).toBe(git(clone, "rev-parse", "spex"));
+
+    // Your namespace at the third, whose listing holds the placement,
+    // shows one line naming the row and the group it stands under, as
+    // the list heads it, with no control (space-1).
+    const thirdNamespace = instanceSection(page, third).getByTestId(`space-group-@${HOST_LOGIN}`);
+    const placed = thirdNamespace.getByTestId(`space-placed-${KEY}`);
+    await expect(placed).toHaveText(`demo-project-spex stands under Acme · ${HOST_GROUP} at Stand-in Git host`);
+    await expect(placed.getByRole("button")).toHaveCount(0);
+
+    // A session run on the page, not synced.
+    await nav(page, "Projects").click();
+    await page
+      .getByRole("tree", { name: "Projects and sessions" })
+      .getByRole("treeitem", { name: "demo-project", exact: true })
+      .click();
+    await expect(page.getByTestId("captain-home")).toContainText("demo-project");
+    await send(page, LEAVE_TURN);
+    await expect(page.getByTestId("captain-pane")).toContainText("/code finished");
+    await settled(app);
+    await showGroups(page);
+
+    // "Leave…" on the placed project opens the choice of its placements,
+    // each by its display name, named "Remove from <display name>",
+    // focus on the first (space-89, space-28).
+    const leave = row.getByTestId(`space-row-leave-${KEY}`);
+    await expect(leave).toHaveText("Leave…");
+    await expect(leave).toHaveAccessibleName("Leave…");
+    await leave.click();
+    const leaveChoice = row.getByTestId(`space-leave-choice-${KEY}`);
+    await expect(leaveChoice).toHaveAccessibleName("Leave…");
+    const held = leaveChoice.locator('[data-testid^="space-leave-instance-"]');
+    expect(await testIds(held)).toEqual([`space-leave-instance-${first.url}`, `space-leave-instance-${third.url}`]);
+    for (const [option, name] of [
+      [held.nth(0), "Stand-in Git host"],
+      [held.nth(1), THIRD_HOST_NAME],
+    ] as const) {
+      await expect(option).toContainText(name);
+      await expect(option).toHaveAttribute("title", `Remove from ${name}`);
+      await expect(option).toHaveAccessibleName(`Remove from ${name}`);
+    }
+    await expect(held.nth(0)).toBeFocused();
+    await fit("Groups · the Leave choice open · 320");
+
+    // The third chosen asks inline, Keep focused, and Escape keeps it,
+    // focus back on "Leave…" (space-89).
+    await leaveChoice.getByTestId(`space-leave-instance-${third.url}`).click();
+    const confirm = row.getByTestId(`space-leave-confirm-${KEY}`);
+    await expect(confirm).toHaveAttribute("data-stage", "first");
+    await expect(confirm).toContainText(`Remove from ${THIRD_HOST_NAME}? Nothing at ${THIRD_HOST_NAME} changes; these records stop syncing there.`);
+    await expect(confirm.getByRole("button", { name: "Keep" })).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(confirm).toHaveCount(0);
+    await expect(leave).toBeFocused();
+    await expect(lines).toHaveCount(2);
+
+    // Remove sends the Leave, "Leaving…" until it stops: the session
+    // reached no remaining placement, so it asks again naming the count,
+    // Keep focused, and Keep leaves the placement held, the row saying
+    // how the Leave stopped (space-89, space-98, space-15).
+    await leave.click();
+    await leaveChoice.getByTestId(`space-leave-instance-${third.url}`).click();
+    const leaving = await watch(page, `[data-testid="space-row-leave-${KEY}"]`);
+    await confirm.getByRole("button", { name: "Remove" }).click();
+    await expect(confirm).toHaveAttribute("data-stage", "unreceived", { timeout: 30_000 });
+    await expect(confirm).toContainText(`1 unit has reached no other instance yet. Remove from ${THIRD_HOST_NAME} anyway?`);
+    await expect(confirm.getByRole("button", { name: "Keep" })).toBeFocused();
+    expect(await leaving()).toEqual(["Leave…", "Leaving…", "Leave…"]);
+    await fit("Groups · Leave… asking again · 320");
+    await confirm.getByRole("button", { name: "Keep" }).click();
+    await expect(confirm).toHaveCount(0);
+    await expect(row.getByTestId(`space-row-caption-${KEY}`)).toHaveText("Check stopped — 1 record has reached no other placement");
+    await expect(thirdLine).toHaveAttribute("data-attached", "true");
+    expect(placementOf(repositoryOf(await app.core.command("space.get", {}), KEY), third.url).attached).toBe(true);
+
+    // Sync sends the session to both placements.
+    await row.getByTestId(`space-row-sync-${KEY}`).click();
+    for (const line of [firstLine, thirdLine]) {
+      await expect(line.getByTestId("space-line-state")).toHaveText(SENT_LINE, { timeout: 30_000 });
+    }
+    await expect(row.getByTestId(`space-row-caption-${KEY}`)).toHaveCount(0);
+    for (const bare of [firstBare, thirdBare]) {
+      await expect.poll(() => headOf(bare, "spex"), { timeout: 30_000 }).toBe(git(clone, "rev-parse", "spex"));
+    }
+
+    // Leaving the first, with the row opened: Remove drops it, nothing at
+    // the first changing, and the clone moves to the third's path, the
+    // row standing under your namespace there, opened as it was, with
+    // the third's line alone, the live note saying so and focus on its
+    // "Leave…" (space-89, space-98, storage-38).
+    await openRepository(page, KEY);
+    const atFirst = headOf(firstBare, "spex");
+    await leave.click();
+    await leaveChoice.getByTestId(`space-leave-instance-${first.url}`).click();
+    await expect(confirm).toHaveAttribute("data-stage", "first");
+    await expect(confirm).toContainText(`Remove from Stand-in Git host? Nothing at Stand-in Git host changes; these records stop syncing there.`);
+    await confirm.getByRole("button", { name: "Remove" }).click();
+    const moved = thirdNamespace.getByTestId(`space-row-${MOVED_KEY}`);
+    await expect(moved).toHaveAttribute("data-state", "reachable", { timeout: 30_000 });
+    expect(await testIds(moved.getByTestId(`space-lines-${MOVED_KEY}`).locator(":scope > li"))).toEqual([`space-line-${third.url}`]);
+    await expect(thirdNamespace.getByTestId(`space-placed-${KEY}`)).toHaveCount(0);
+    await expect(page.getByTestId(`space-repo-${MOVED_KEY}`)).toHaveAttribute("aria-expanded", "true");
+    await expect(page.getByTestId("space-repository")).toHaveAttribute("aria-label", "demo-project-spex");
+    await expect(page.getByTestId("space-tab-sync")).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByTestId("space-live")).toHaveText("Removed from Stand-in Git host");
+    const leaveMoved = moved.getByTestId(`space-row-leave-${MOVED_KEY}`);
+    await expect(leaveMoved).toHaveAccessibleName(`Remove from ${THIRD_HOST_NAME}`);
+    await expect(leaveMoved).toHaveAttribute("title", `Remove from ${THIRD_HOST_NAME}`);
+    await expect(leaveMoved).toBeFocused();
+    expect(existsSync(clonePath(app.dataDir, MOVED_KEY))).toBe(true);
+    expect(existsSync(clone)).toBe(false);
+    expect(headOf(firstBare, "spex")).toBe(atFirst);
+    await expect
+      .poll(async () => (await app.core.command("project.list", {})).find((project) => project.path === app.projectDir)?.id, { timeout: 30_000 })
+      .toBe(MOVED_KEY);
+    await fit("Groups · moved under the third · 320");
+
+    // Leaving the last, titled and named for the third, asks first, then
+    // again naming every unit, none being held by another placement; its
+    // Remove drops it, nothing at the third changing, and the clone moves
+    // under your own group's folder, on this device only with "Pick a
+    // group", focused, still opened (space-89, space-98, storage-38,
+    // space-61).
+    const atThird = headOf(thirdBare, "spex");
+    await leaveMoved.click();
+    const lastConfirm = moved.getByTestId(`space-leave-confirm-${MOVED_KEY}`);
+    await expect(lastConfirm).toHaveAttribute("data-stage", "first");
+    await expect(lastConfirm).toContainText(`Remove from ${THIRD_HOST_NAME}? Nothing at ${THIRD_HOST_NAME} changes; these records stop syncing there.`);
+    await lastConfirm.getByRole("button", { name: "Remove" }).click();
+    await expect(lastConfirm).toHaveAttribute("data-stage", "unreceived", { timeout: 30_000 });
+    await expect(lastConfirm).toContainText(new RegExp(`[1-9]\\d* units have reached no other instance yet\\. Remove from ${THIRD_HOST_NAME} anyway\\?`));
+    await lastConfirm.getByRole("button", { name: "Remove" }).click();
+    const local = list.getByTestId("space-own").getByTestId(`space-row-${LOCAL_KEY}`);
+    await expect(local).toHaveAttribute("data-state", "local-only", { timeout: 30_000 });
+    await expect(local.getByTestId(`space-repo-state-${LOCAL_KEY}`)).toHaveText("On this device only");
+    await expect(local.getByTestId(`space-row-pick-${LOCAL_KEY}`)).toHaveText("Pick a group");
+    await expect(local.getByTestId(`space-row-pick-${LOCAL_KEY}`)).toBeFocused();
+    await expect(local.getByTestId(`space-lines-${LOCAL_KEY}`)).toHaveCount(0);
+    await expect(local.getByTestId(`space-row-leave-${LOCAL_KEY}`)).toHaveCount(0);
+    await expect(local.getByTestId(`space-row-place-${LOCAL_KEY}`)).toHaveCount(0);
+    await expect(page.getByTestId(`space-repo-${LOCAL_KEY}`)).toHaveAttribute("aria-expanded", "true");
+    await expect(page.getByTestId("space-live")).toHaveText(`Removed from ${THIRD_HOST_NAME}`);
+    expect(existsSync(clonePath(app.dataDir, LOCAL_KEY))).toBe(true);
+    expect(existsSync(clonePath(app.dataDir, MOVED_KEY))).toBe(false);
+    expect(headOf(thirdBare, "spex")).toBe(atThird);
+    await expect
+      .poll(async () => (await app.core.command("project.list", {})).find((project) => project.path === app.projectDir)?.id, { timeout: 30_000 })
+      .toBe(LOCAL_KEY);
+
+    expect(defects, defects.join("\n")).toEqual([]);
+  });
+});
+
+test.describe("one Git backend", () => {
+  // Signed in at the first stand-in with the demo project registered; a
+  // second stand-in over the first's Git backend, listing the accounts'
+  // namespaces under the same ids, and a third on one of its own
+  // (git-host-12, DR-128).
+  test.use({
+    appOptions: {
+      host: { second: { backend: "shared" }, third: { backend: "separate" } },
+      project: true,
+      signedIn: true,
+    },
+  });
+
+  test("space-1, space-88, space-89, storage-38: a host repository both of two instances over one Git backend list is one placement — your namespace at the second names the project's row and your own group's in one line each, with no control, and Place at… offers the third alone; placed there, leaving the first while it still lists that host repository keeps the opened row, its tabs and focus on the moved clone, not on the row of no clone standing under the former key", async ({
+    page,
+    app,
+  }) => {
+    test.setTimeout(180_000);
+    const first = app.hosts[0]!;
+    const second = app.hosts[1]!;
+    const third = app.hosts[2]!;
+    const KEY = hostKey(first, NAMESPACE_PATH);
+    const MOVED_KEY = hostKey(third, NAMESPACE_PATH);
+    // The home signed in at the second and the third, and the project
+    // synced in your namespace at the first, which the second lists too
+    // (arrange only, space-4, space-58).
+    await signInCore(app, second);
+    await signInCore(app, third);
+    await pickGroup(app, { namespace: true });
+
+    await open(page, app);
+    await showGroups(page);
+
+    // Refresh reads every signed-in instance, the second's listing now
+    // holding the project (space-1, git-host-5). The row stands in your
+    // namespace at the first with that one line; your namespace at the
+    // second, whose listing holds the same placement, stands no row for
+    // it and names it in one line with no control, as it and your
+    // namespace at the first name your own group's own repository
+    // (space-1, DR-128).
+    await page.getByTestId("space-refresh").click();
+    await expect(page.getByTestId("space-refresh")).toHaveText("Refresh", { timeout: 30_000 });
+    const row = instanceSection(page, first).getByTestId(`space-group-@${HOST_LOGIN}`).getByTestId(`space-row-${KEY}`);
+    await expect(row).toHaveAttribute("data-state", "reachable", { timeout: 30_000 });
+    expect(await testIds(row.getByTestId(`space-lines-${KEY}`).locator(":scope > li"))).toEqual([`space-line-${first.url}`]);
+    const secondNamespace = instanceSection(page, second).getByTestId(`space-group-@${HOST_LOGIN}`);
+    await expect(secondNamespace.locator(`[data-testid^="space-row-"]`)).toHaveCount(0);
+    const placed = secondNamespace.getByTestId(`space-placed-${KEY}`);
+    await expect(placed).toHaveText(`demo-project-spex stands under ${HOST_LOGIN} at Stand-in Git host`);
+    await expect(placed.getByRole("button")).toHaveCount(0);
+    for (const host of [first, second]) {
+      const own = instanceSection(page, host).getByTestId(`space-group-@${HOST_LOGIN}`).getByTestId(`space-placed-${OWN_KEY}`);
+      await expect(own).toHaveText(`${OWN_NAME} stands under your own group`);
+      await expect(own.getByRole("button")).toHaveCount(0);
+    }
+
+    // "Place at…" offers the third alone, titled and named for it, the
+    // second holding that placement already: it opens the third's picker
+    // with no choice, and Cancel closes it, choosing nothing (space-88).
+    const place = row.getByTestId(`space-row-place-${KEY}`);
+    await expect(place).toHaveText("Place at…");
+    await expect(place).toHaveAttribute("title", `Also place at ${THIRD_HOST_NAME}`);
+    await expect(place).toHaveAccessibleName(`Also place at ${THIRD_HOST_NAME}`);
+    await place.click();
+    await expect(row.getByTestId(`space-place-choice-${KEY}`)).toHaveCount(0);
+    const picker = row.getByTestId(`space-place-${KEY}`);
+    await expect(picker).toHaveAttribute("aria-label", `Also place at ${THIRD_HOST_NAME}`);
+    expect(await testIds(picker.locator('[data-testid^="space-pick-instance-"]'))).toEqual([`space-pick-instance-${third.url}`]);
+    await picker.getByTestId(`space-pick-cancel-${KEY}`).click();
+    await expect(picker).toHaveCount(0);
+    expect(await testIds(row.getByTestId(`space-lines-${KEY}`).locator(":scope > li"))).toEqual([`space-line-${first.url}`]);
+
+    // Placed at the third in your namespace there — its only member the
+    // account, so no notice — the row holds both placements (space-88,
+    // space-97, space-87).
+    await place.click();
+    const section = await pickSection(picker, third, THIRD_HOST_NAME);
+    await section.getByTestId(`space-pick-group-${entryKey(HOST_LOGIN)}`).click();
+    await expect(picker).toHaveCount(0);
+    await expect(placementLine(page, KEY, third).getByTestId("space-line-state")).toHaveText(SENT_LINE, { timeout: 30_000 });
+
+    // Leaving the first with the row opened, the first still listing that
+    // host repository: the clone moves under the third, and the first's
+    // listing stands as a row of no clone under the former key, closed;
+    // the moved row stays open with its Sync tab, the live note says the
+    // placement left, and focus goes to the moved row's Leave… (space-89,
+    // space-98, storage-38).
+    await openRepository(page, KEY);
+    await row.getByTestId(`space-row-leave-${KEY}`).click();
+    await row.getByTestId(`space-leave-choice-${KEY}`).getByTestId(`space-leave-instance-${first.url}`).click();
+    const confirm = row.getByTestId(`space-leave-confirm-${KEY}`);
+    await expect(confirm).toHaveAttribute("data-stage", "first");
+    await confirm.getByRole("button", { name: "Remove" }).click();
+    const moved = instanceSection(page, third).getByTestId(`space-group-@${HOST_LOGIN}`).getByTestId(`space-row-${MOVED_KEY}`);
+    await expect(moved).toHaveAttribute("data-state", "reachable", { timeout: 30_000 });
+    const former = instanceSection(page, first).getByTestId(`space-group-@${HOST_LOGIN}`).getByTestId(`space-row-${KEY}`);
+    await expect(former).toHaveAttribute("data-state", "absent");
+    await expect(page.getByTestId(`space-repo-${KEY}`)).toHaveAttribute("aria-expanded", "false");
+    await expect(page.getByTestId(`space-repo-${MOVED_KEY}`)).toHaveAttribute("aria-expanded", "true");
+    await expect(page.getByTestId("space-repository")).toHaveAttribute("aria-label", "demo-project-spex");
+    await expect(page.getByTestId("space-tab-sync")).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByTestId("space-live")).toHaveText("Removed from Stand-in Git host");
+    await expect(moved.getByTestId(`space-row-leave-${MOVED_KEY}`)).toBeFocused();
+    expect(existsSync(clonePath(app.dataDir, MOVED_KEY))).toBe(true);
   });
 });
 
@@ -1252,11 +2086,12 @@ test.describe("daily sync", () => {
     const sync = page.getByTestId(`space-row-sync-${TEAM_KEY}`);
 
     // Check host lists the peer's session and Settings as incoming, the
-    // units changed on both sides marked, and the row reads behind
-    // (space-8).
+    // units changed on both sides marked, under the placement's instance,
+    // and the row reads behind (space-8).
     await expect(tab.getByTestId("space-check")).toHaveText("Check host");
     await tab.getByTestId("space-check").click();
     const incoming = tab.getByTestId("space-incoming-list");
+    await expect(tab.getByTestId(`space-incoming-${host.url}`).getByRole("heading", { level: 3 })).toHaveText("Stand-in Git host");
     const incomingSession = incoming.getByTestId(`space-unit-remote-${sessionUnit}`);
     await expect(incomingSession).toContainText(SESSION_TITLE);
     await expect(incomingSession).toHaveAttribute("data-change", "updated");
@@ -1293,7 +2128,7 @@ test.describe("daily sync", () => {
     await sync.click();
     const note = tab.getByTestId("space-choices-note");
     await expect(note.getByTestId("space-step-line")).toHaveText("Needs your choice");
-    await expect(note).toContainText("Your changes are saved; nothing is pushed yet");
+    await expect(note).toContainText("Your changes are saved; nothing is pushed to Stand-in Git host yet");
     const picker = tab.getByTestId("space-picker");
     await expect(picker).toContainText("Choose for 2 conflicts");
     await expect(picker.getByTestId("space-chosen")).toHaveText("0 of 2 chosen");
@@ -1311,7 +2146,8 @@ test.describe("daily sync", () => {
     const sessionGroup = picker.getByRole("radiogroup", { name: SESSION_TITLE });
     const settingsGroup = picker.getByRole("radiogroup", { name: "Settings changed" });
     await expect(sessionGroup).toContainText(/Keep mine\s+updated/);
-    await expect(sessionGroup).toContainText(/Take host's\s+updated/);
+    // The host's side names the placement's instance (space-17).
+    await expect(sessionGroup).toContainText(/Take host's\s+Stand-in Git host\s+·\s+updated/);
     await sessionGroup.getByRole("radio", { name: /Keep mine/ }).focus();
     await page.keyboard.press("ArrowDown");
     await expect(sessionGroup.getByRole("radio", { name: /Take host's/ })).toBeChecked();
@@ -1405,12 +2241,14 @@ test.describe("daily sync", () => {
     host.script.sleepTransport(0);
     await scanVocabulary(page, "check stopped", words);
 
-    // Members lists the stand-in's members with the host's role names
-    // and links no page of the host (space-62).
+    // Members on the placement's line lists the stand-in's members with
+    // the host's role names and links no page of the host (space-62,
+    // space-87).
     const listed = host.script.repositories.find((repo) => `${repo.group.fullPath}/${repo.path}` === TEAM_PATH)!;
     listed.members.push(PEER_MEMBER);
-    await page.getByTestId(`space-row-members-${TEAM_KEY}`).click();
-    const members = page.getByTestId(`space-members-${TEAM_KEY}`);
+    const line = page.getByTestId(`space-row-${TEAM_KEY}`).getByTestId(`space-line-${host.url}`);
+    await line.getByTestId("space-line-members").click();
+    const members = line.getByTestId(`space-members-${TEAM_KEY}@${host.url}`);
     await expect(members.getByTestId(`space-member-${HOST_LOGIN}`)).toContainText("Ada Lovelace");
     await expect(members.getByTestId(`space-member-${HOST_LOGIN}`)).toContainText("Owner");
     await expect(members.getByTestId(`space-member-${PEER_MEMBER.login}`)).toContainText(PEER_MEMBER.displayName);
@@ -1661,6 +2499,10 @@ test.describe("fit", () => {
       '[data-testid="space-groups"] h2',
       '[data-testid="space-groups"] h3',
       '[data-testid^="space-row-"]',
+      '[data-testid^="space-line-"]',
+      '[data-testid^="space-place-"]',
+      '[data-testid^="space-leave-"]',
+      '[data-testid^="space-incoming-"]',
       '[data-testid^="space-unit-"]',
       '[data-testid="space-picker"]',
       '[role="radiogroup"]',
@@ -1712,6 +2554,16 @@ test.describe("fit", () => {
         }
       }
     }
+    // "Leave…" asking beneath the row fits at the floor too (space-89,
+    // space-28).
+    await setRail(page, false);
+    await page.setViewportSize({ width: 320, height: TALL });
+    await page.getByTestId(`space-row-leave-${TEAM_KEY}`).click();
+    const leaveConfirm = page.getByTestId(`space-leave-confirm-${TEAM_KEY}`);
+    await expect(leaveConfirm).toBeVisible();
+    record(`Groups · Leave… asking · sidebar collapsed · 320×${TALL}`, await measure(page, containers), defects);
+    await leaveConfirm.getByRole("button", { name: "Keep" }).click();
+    await expect(leaveConfirm).toHaveCount(0);
     expect(defects, defects.join("\n")).toEqual([]);
   });
 });
@@ -1844,6 +2696,11 @@ test.describe("second device", () => {
     const ownSession = (await sessionRow.getAttribute("data-testid"))!.replace("space-unit-mine-sessions/", "");
     await page.getByTestId(`space-row-sync-${key}`).click();
     const notice = page.getByTestId("space-notice-confirm");
+    // It leads with where the records go: the placement's path at its
+    // instance, as its line names them (space-57, space-87).
+    const placed = page.getByTestId(`space-row-${key}`).getByTestId(`space-line-${host.url}`);
+    const at = await placed.getByTestId("space-line-at").textContent();
+    await expect(notice).toContainText(`Records go to ${at} at Stand-in Git host.`);
     await expect(notice).toContainText("Every session goes there whole — hidden parts and attachments included");
     await notice.getByRole("button", { name: "Continue" }).click();
     await expect(page.getByTestId("space-done-line")).toHaveText(/^Synced just now · [1-9]\d* sent · 0 received$/);

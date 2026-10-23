@@ -14,6 +14,8 @@
 // would freeze the language this module was imported in.
 
 import type {
+  PlacementBranch,
+  PlacementState,
   RepositoryState,
   SpaceEntry,
   SpaceUnit,
@@ -22,7 +24,8 @@ import type {
 } from "@sublang/spex-core/protocol";
 
 import { i18n } from "../i18n.js";
-import { relativeAge, shortMoment } from "./time.js";
+import { keyPlacement, placementLastSync, waitingOf } from "./placements.js";
+import { absoluteTitle, relativeAge, shortMoment } from "./time.js";
 
 /** The home's path with the user's home directory as `~` (space-1):
  * the full path rides the title. Only the two POSIX layouts the app
@@ -40,12 +43,12 @@ export function displayRemote(url: string): string {
   return embedded ? `${embedded[1]}${embedded[3]}` : url;
 }
 
-/** Whether a spex repository's clone is on this device: the core reads
- * no branch where none is (space-30) — a row the host lists that this
+/** Whether a spex repository's clone is on this device (space-61): it
+ * is local only or holds a placement; a row the host lists that this
  * device lacks, or one in a group named like a login, which takes no
- * folder (space-61). */
+ * folder, holds none (space-30). */
 export function cloneHere(repo: RepositoryState): boolean {
-  return repo.state === "local-only" || repo.branch !== null;
+  return repo.state === "local-only" || repo.placements.some((placement) => placement.attached);
 }
 
 /** A spex repository's clone: its key is its path under `workspace/`
@@ -57,50 +60,75 @@ export function clonePath(home: string, key: string): string {
 /** The phrase a step waiting on someone else's rights reads on its
  * row (space-58, space-64): the step and the group, phrased here in the
  * reader's language; the host's own words ride the row's title. */
-export function waitingPhrase(waiting: NonNullable<RepositoryState["waiting"]>): string {
+export function waitingPhrase(waiting: NonNullable<PlacementState["waiting"]>): string {
   return waiting.step === "create"
     ? i18n._("Waiting for a member who can create it in {group}", { group: waiting.group })
     : i18n._("Waiting for a member who can prepare its branch in {group}", { group: waiting.group });
 }
 
-/** A spex repository's last sync (space-61): this device's last
- * completed sync of it, else the last one its clone holds — current
- * where the clone's `spex` is still the host's — else none. */
+/** A spex repository's last sync (space-61), its key placement's: this
+ * device's last completed sync with it, else the last one its clone
+ * holds — current where the clone's `spex` is still that placement's —
+ * else none. */
 export function lastSyncOf(repo: RepositoryState): { at: number; current: boolean } | null {
-  if (repo.lastSync) return { at: repo.lastSync.at, current: true };
-  return repo.branch?.agreed ?? null;
+  return placementLastSync(keyPlacement(repo));
 }
 
-/** What a spex repository's row reads for its state (space-61): a
- * waiting step's phrase stands in place of the state's (space-64). */
+/** What a last sync reads (space-61): "Synced <age>" while the clone's
+ * `spex` is still the one it shared, "Not synced since <moment>" where
+ * the two have differed since, "Never synced" where none is held. */
+function lastSyncPhrase(last: { at: number; current: boolean } | null, now: number): string {
+  if (!last) return i18n._("Never synced");
+  return last.current
+    ? i18n._({
+        id: "Synced {age}",
+        values: { age: relativeAge(last.at, now) },
+        comment: "a spex repository's row: when it last synced",
+      })
+    : i18n._({
+        id: "Not synced since {moment}",
+        values: { moment: shortMoment(last.at) },
+        comment: "a spex repository's row: this device and the host have differed since that moment, when they last agreed",
+      });
+}
+
+/** Ahead and behind a placement's `spex` as its last check counted them
+ * (space-8): the row's counts' title, and each line's beside its own
+ * phrase; none where it was never checked or shares no history. */
+export function countsTitle(branch: PlacementBranch | null | undefined): string | null {
+  if (!branch || branch.checkedAt === null || branch.unrelated) return null;
+  return i18n._(
+    "{ahead, plural, one {# commit} other {# commits}} ahead, {behind, plural, one {# commit} other {# commits}} behind · checked {at}",
+    { ahead: branch.ahead ?? 0, behind: branch.behind ?? 0, at: absoluteTitle(branch.checkedAt) },
+  );
+}
+
+/** What a read-only or unreachable repository or placement reads
+ * (space-61): the state, with the host's words where it gave any. */
+function hostStatePhrase(state: "read-only" | "unreachable", reason: string | null): string {
+  if (state === "read-only") {
+    return reason
+      ? i18n._("Read-only: {reason}", { reason })
+      : i18n._({ id: "Read-only", comment: "a spex repository's state: the host lets this account only read it" });
+  }
+  return reason
+    ? i18n._("Unreachable: {reason}", { reason })
+    : i18n._({ id: "Unreachable", comment: "a spex repository's state: the host cannot be read for it" });
+}
+
+/** What a spex repository's row reads for its state (space-61): the
+ * core's aggregate over its placements, a reachable row reading its key
+ * placement's last sync; a waiting step reads on its placement's line
+ * instead (space-64, space-87). */
 export function repositoryStatePhrase(repo: RepositoryState, now: number): string {
-  if (repo.waiting) return waitingPhrase(repo.waiting);
   switch (repo.state) {
     case "local-only":
       return i18n._("On this device only");
-    case "reachable": {
-      const last = lastSyncOf(repo);
-      if (!last) return i18n._("Never synced");
-      return last.current
-        ? i18n._({
-            id: "Synced {age}",
-            values: { age: relativeAge(last.at, now) },
-            comment: "a spex repository's row: when it last synced",
-          })
-        : i18n._({
-            id: "Not synced since {moment}",
-            values: { moment: shortMoment(last.at) },
-            comment: "a spex repository's row: this device and the host have differed since that moment, when they last agreed",
-          });
-    }
+    case "reachable":
+      return lastSyncPhrase(lastSyncOf(repo), now);
     case "read-only":
-      return repo.reason
-        ? i18n._("Read-only: {reason}", { reason: repo.reason })
-        : i18n._({ id: "Read-only", comment: "a spex repository's state: the host lets this account only read it" });
     case "unreachable":
-      return repo.reason
-        ? i18n._("Unreachable: {reason}", { reason: repo.reason })
-        : i18n._({ id: "Unreachable", comment: "a spex repository's state: the host cannot be read for it" });
+      return hostStatePhrase(repo.state, repo.reason);
     case "absent":
       return i18n._("Not on this device");
     default:
@@ -109,18 +137,161 @@ export function repositoryStatePhrase(repo: RepositoryState, now: number): strin
   }
 }
 
+/** What the project's records line reads (projects-4): a placement's
+ * waiting step where one waits, which no row of the Groups surface
+ * carries but its line (space-64), else the row's own state. */
+export function recordsStatePhrase(repo: RepositoryState, now: number): string {
+  const waiting = waitingOf(repo)?.waiting;
+  return waiting ? waitingPhrase(waiting) : repositoryStatePhrase(repo, now);
+}
+
+/** What a placement's line reads (space-87): its words, the fuller
+ * reading for its title, and its tone — attention for an outcome that
+ * asks for the reader, stopped for a stop. */
+export interface LinePhrase {
+  text: string;
+  title: string;
+  tone: "idle" | "running" | "attention" | "stopped";
+}
+
+/** The outcome a placement's line carries (space-87, space-12): the one
+ * the last sync left there, until the next operation; those that need
+ * nothing of the reader — synced, behind, stopped — put away while
+ * `dismissed` is the sync phase the reader dismissed on the Sync tab. */
+export function lineOutcome(
+  repo: RepositoryState,
+  line: PlacementState,
+  dismissed?: string,
+): PlacementState["outcome"] {
+  const outcome = line.outcome;
+  if (!outcome) return null;
+  const putAway = dismissed !== undefined && dismissed === JSON.stringify(repo.sync);
+  return putAway && (outcome.kind === "synced" || outcome.kind === "behind" || outcome.kind === "stopped") ? null : outcome;
+}
+
+/** A placement's line (space-87), the first that applies: the step in
+ * flight at it (space-12); a waiting step at the host (space-64); the
+ * outcome the last sync left there until the next operation, the ones
+ * that need nothing of the reader put away by Dismiss — `dismissed`
+ * being the sync phase the reader dismissed (space-12, space-15); else
+ * its state, a reachable one reading its last sync (space-61) and a
+ * read-only one carrying it beside the host's reason, one a placement
+ * file names "Not on this device". Where its last check
+ * counted them, its own ahead and behind ride the title of a sync's
+ * outcome and of its state (space-8). */
+export function placementPhrase(
+  repo: RepositoryState,
+  line: PlacementState,
+  now: number,
+  dismissed?: string,
+): LinePhrase {
+  const counts = countsTitle(line.branch);
+  const counted = (title: string): string => (counts ? `${title} · ${counts}` : title);
+  const sync = repo.sync;
+  if (sync.phase === "running" && sync.placement === line.instance) {
+    const text = STEP_LINES[sync.step]();
+    return { text, title: text, tone: "running" };
+  }
+  if (line.waiting) return { text: waitingPhrase(line.waiting), title: line.waiting.message, tone: "attention" };
+  const outcome = lineOutcome(repo, line, dismissed);
+  if (outcome) {
+    switch (outcome.kind) {
+      case "synced": {
+        const at = line.lastSync?.at ?? (sync.phase === "done" ? sync.at : now);
+        const text =
+          line.state === "read-only"
+            ? i18n._("Brought {received}; nothing sent", { received: outcome.received })
+            : outcome.sent + outcome.received === 0
+              ? i18n._("Everything is in sync")
+              : i18n._("Synced {age} · {sent} sent · {received} received", {
+                  age: relativeAge(at, now),
+                  sent: outcome.sent,
+                  received: outcome.received,
+                });
+        return { text, title: counted(absoluteTitle(at)), tone: "idle" };
+      }
+      case "behind": {
+        const text = i18n._({
+          id: "Behind — Sync again",
+          comment: "a placement's line: the sync left its copy behind this device's; another Sync carries it",
+        });
+        return { text, title: counted(text), tone: "attention" };
+      }
+      case "choices": {
+        const text = i18n._("Needs your choice");
+        return { text, title: text, tone: "attention" };
+      }
+      case "unrelated": {
+        const text = i18n._("Unrelated history");
+        return { text, title: text, tone: "attention" };
+      }
+      case "waiting": {
+        const text = i18n._({
+          id: "Waiting for you to continue",
+          comment: "a placement's line: its first push waits for the sharing notice to be seen; Continue stands beside it",
+        });
+        return { text, title: text, tone: "attention" };
+      }
+      case "stopped": {
+        const text = i18n._({
+          id: "{step} stopped — {message}",
+          values: { step: STEP_NAMES[outcome.step](), message: outcome.message },
+          comment: "{step} is the sync step's name; {message} is the cause the host gave",
+        });
+        return { text, title: outcome.guidance || text, tone: outcome.cause === "rejected" ? "attention" : "stopped" };
+      }
+    }
+  }
+  const last = placementLastSync(line);
+  switch (line.state) {
+    case "reachable": {
+      const text = lastSyncPhrase(last, now);
+      return { text, title: counted(last ? absoluteTitle(last.at) : text), tone: "idle" };
+    }
+    case "read-only":
+    case "unreachable": {
+      const state = hostStatePhrase(line.state, line.reason);
+      // A read-only line carries its last sync as a reachable one does —
+      // its age while the clone's `spex` is still the one it shared, the
+      // moment they last agreed otherwise — and an unreachable one in its
+      // title alone (space-87, space-61).
+      const text =
+        line.state === "read-only" && last
+          ? i18n._("{state} · last synced {at}", {
+              state,
+              at: last.current ? relativeAge(last.at, now) : shortMoment(last.at),
+            })
+          : state;
+      return {
+        text,
+        title: counted(last ? i18n._("{state} · last synced {at}", { state, at: absoluteTitle(last.at) }) : state),
+        tone: "idle",
+      };
+    }
+    case "absent": {
+      const text = i18n._("Not on this device");
+      return { text, title: text, tone: "idle" };
+    }
+    default:
+      // A state the page does not know: the raw value is data.
+      return { text: line.state, title: line.state, tone: "idle" };
+  }
+}
+
 /** A group's own spex repository rather than a project's (DR-103):
- * your own group's, or the one named `<group>-spex` in its group — a
- * project of that name is refused at creation, the name being taken. */
-export function isGroupRepository(group: { name: string }, repo: RepositoryState): boolean {
-  return repo.own || repo.name === `${group.name}-spex`;
+ * your own group's, or the one named `<group>-spex` in its group, after
+ * the last segment of the group's path as the core names it (space-65),
+ * whatever the group's name — a project of that name is refused at
+ * creation, the name being taken. */
+export function isGroupRepository(group: { fullPath: string }, repo: RepositoryState): boolean {
+  return repo.own || repo.name === `${lastSegment(group.fullPath)}-spex`;
 }
 
 /** A project's spex repository cloned at the place with no working
  * folder pairing it: a clone whose code found none here, paired later
  * (space-63) — or, at a remote place, one whose code clone failed,
  * joined again into the folder its core allocated (space-103). */
-export function awaitsFolder(group: { name: string }, repo: RepositoryState): boolean {
+export function awaitsFolder(group: { fullPath: string }, repo: RepositoryState): boolean {
   return cloneHere(repo) && !isGroupRepository(group, repo) && repo.folder === null && repo.state !== "local-only";
 }
 
@@ -285,6 +456,7 @@ export const FAMILY_LABELS: Record<string, () => string> = {
   "upload staging": () => i18n._({ id: "upload staging", comment: "catalog family: files uploaded and not yet attached" }),
   Settings: () => i18n._({ id: "Settings", comment: "catalog family: the shared config the Settings surface edits" }),
   "code remote": () => i18n._({ id: "code remote", comment: "catalog family: the file naming where a project's code lives" }),
+  placement: () => i18n._({ id: "placement", comment: "catalog family: a file naming one instance these records are kept at, or the folder holding those files" }),
   "installed spec packages": () => i18n._({ id: "installed spec packages", comment: "catalog family: spec packages installed on this device from the lock" }),
   "exported skills": () => i18n._({ id: "exported skills", comment: "catalog family: skills exported from the installed spec packages" }),
   "sync rules": () => i18n._({ id: "sync rules", comment: "catalog family: the files saying what syncs" }),

@@ -10,12 +10,15 @@
 // (space-61, space-11); the heading's fit (space-28); Pick a group
 // offers each signed-in instance's namespace and groups under its
 // display name, and a choice names its instance (space-58, space-29);
-// Move… offers the groups of the row's instance alone (space-78); Join
+// Move… on a placement's line offers the groups of its instance alone
+// (space-78, space-87); Join
 // names the instance its row stands under (space-63, space-29);
-// "Add instance…" at the list's foot opens the sign-in card in its place
-// (space-1, space-3, space-28); Forget on a signed-out heading removes
-// the instance from the home, a refusal standing beneath it (space-82,
-// space-29). Each act is checked by the command it sends.
+// "Add instance…" at the list's foot opens the sign-in card in its place,
+// saying your own group's records will be kept there too (space-1,
+// space-3, space-28); Forget on a signed-out heading removes the
+// instance from the home, a refusal standing beneath it, and with none
+// left your own group reads as the core names it (space-82, space-29,
+// space-1). Each act is checked by the command it sends.
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
@@ -26,11 +29,13 @@ import { repositoryRow } from "../fixtures/groups-state.js";
 import { setClientForTests } from "../state/store.js";
 import { absoluteTitle } from "../lib/time.js";
 import {
+  BRANCH,
   KEY,
   MIN,
   NOW,
   NO_CAN,
   ORIGIN,
+  OWN,
   OWN_REPO,
   SECOND,
   answer,
@@ -44,6 +49,7 @@ import {
   namespace,
   noInstance,
   renderGroups,
+  ownRepo,
   repo,
   signedOutAt,
   twoInstances,
@@ -108,6 +114,10 @@ const options = (section: HTMLElement, prefix: string): string[][] =>
   within(section)
     .getAllByTestId(new RegExp(`^${prefix}`))
     .map((option) => [option.dataset.testid!.slice(prefix.length), option.textContent ?? ""]);
+
+/** A row's placement line at an instance, by its origin (space-87). */
+const lineAt = (key: string, origin: string): HTMLElement =>
+  within(screen.getByTestId(`space-row-${key}`)).getByTestId(`space-line-${origin}`);
 
 /** An instance's section of the groups list, by its origin. */
 const sectionOf = (origin: string): HTMLElement => screen.getByTestId(`space-instance-${origin}`);
@@ -305,27 +315,33 @@ describe("GROUPS: each instance under its heading (space-1, git-host-5, space-3,
         ]),
       ],
       [group("3", "acme", "Acme Works", [repo({ key: "@second.example/acme/c-spex", instance: SECOND, name: "c-spex", id: "62", state: "unreachable", reason: "the device is offline" })]), namespace("jada")],
-      // Your own group's own repository, which the second lists too, is
-      // governed by the second once the first is signed out (git-host-5).
-      [{ ...OWN_REPO, governing: SECOND }],
+      // Your own group's own repository, its clone here, which the
+      // second lists too, is governed by the second once the first is
+      // signed out (git-host-5).
+      [ownRepo({ governing: SECOND, branch: BRANCH })],
     );
     await renderGroups(signedOutAt(ORIGIN, {}, home), { open: false });
+    // Leave… stands on a project's row holding a placement at an
+    // instance, signed in or not (space-89): the controls below are the
+    // state's.
     const controls = (key: string) =>
       within(screen.getByTestId(`space-row-${key}`))
         .getAllByRole("button")
-        .filter((button) => !button.dataset.testid?.startsWith("space-repo-"));
+        .filter((button) => !button.dataset.testid?.startsWith("space-repo-") && !button.dataset.testid?.startsWith("space-row-leave-"));
     // Signed out, a row at the instance offers no Retry, and no row a
     // sign-in: its heading's Sign in again is the one (space-61, space-3).
     expect(screen.getByTestId(`space-repo-state-${KEY}`).textContent).toBe("Unreachable: Sign in again");
     expect(controls(KEY)).toEqual([]);
+    expect(screen.getByTestId(`space-row-leave-${KEY}`).getAttribute("aria-label")).toBe("Remove from Spex Example");
     // A row still read reachable there refuses Sync naming the instance,
-    // and offers no Members (space-11).
+    // and its placement's line offers no Members and no Move (space-11,
+    // space-87).
     const sync = screen.getByTestId(`space-row-sync-${stale}`) as HTMLButtonElement;
     expect(sync.disabled).toBe(true);
     expect(screen.getByTestId(`space-row-caption-${stale}`).textContent).toBe("Sign in to Spex Example first");
     expect(sync.getAttribute("aria-describedby")).toBe(`space-row-caption-${stale}`);
-    expect(screen.queryByTestId(`space-row-members-${stale}`)).toBeNull();
-    expect(screen.queryByTestId(`space-row-move-${stale}`)).toBeNull();
+    expect(within(lineAt(stale, ORIGIN)).queryByTestId("space-line-members")).toBeNull();
+    expect(within(lineAt(stale, ORIGIN)).queryByTestId("space-line-move")).toBeNull();
     // A path remote is reached without the instance, so it retries.
     expect(controls(pathRemote).map((button) => button.textContent)).toEqual(["Retry"]);
     // The other instance, signed in, retries its own, which reads every
@@ -333,9 +349,10 @@ describe("GROUPS: each instance under its heading (space-1, git-host-5, space-3,
     expect(controls("@second.example/acme/c-spex").map((button) => button.textContent)).toEqual(["Retry"]);
     expect(controls("@second.example/acme/c-spex")[0]!.title).toBe("Reads each signed-in instance again");
     // Your own group's own repository follows the signed-in instance
-    // governing it: Sync and Members stand (space-60, space-1).
+    // governing it: Sync stands, and Members on its line (space-60,
+    // space-1).
     expect((screen.getByTestId(`space-row-sync-${OWN_REPO.key}`) as HTMLButtonElement).disabled).toBe(false);
-    expect(screen.getByTestId(`space-row-members-${OWN_REPO.key}`)).toBeTruthy();
+    expect(within(lineAt(OWN_REPO.key, ORIGIN)).getByTestId("space-line-members")).toBeTruthy();
     cleanup();
 
     // Governed by none, with no signed-in instance to follow, it waits
@@ -347,7 +364,7 @@ describe("GROUPS: each instance under its heading (space-1, git-host-5, space-3,
     );
     expect(screen.getByTestId(`space-row-caption-${OWN_REPO.key}`).textContent).toBe("Sign in to spex.example first");
     expect((screen.getByTestId(`space-row-sync-${OWN_REPO.key}`) as HTMLButtonElement).disabled).toBe(true);
-    expect(screen.queryByTestId(`space-row-members-${OWN_REPO.key}`)).toBeNull();
+    expect(within(lineAt(OWN_REPO.key, ORIGIN)).queryByTestId("space-line-members")).toBeNull();
   });
 
   test("space-1, space-62: a row's members panel reads the roles and host name of the instance the core names as governing it, not of the first signed in", async () => {
@@ -355,7 +372,7 @@ describe("GROUPS: each instance under its heading (space-1, git-host-5, space-3,
     // signed in, does not list your own group's own repository, which the
     // second governs (git-host-5).
     const THIRD = "https://third.example";
-    const home = twoHome([namespace("jane")], [namespace("jada")], [{ ...OWN_REPO, governing: SECOND, can: { manageMembers: true, transfer: false } }]);
+    const home = twoHome([namespace("jane")], [namespace("jada")], [ownRepo({ governing: SECOND, can: { manageMembers: true, transfer: false }, branch: BRANCH })]);
     const roles = [
       { id: "1", name: "Viewer", mayPush: false },
       { id: "2", name: "Editor", mayPush: true },
@@ -370,14 +387,15 @@ describe("GROUPS: each instance under its heading (space-1, git-host-5, space-3,
     });
     await renderGroups(state, { open: false });
     expect(sections().map((section) => section.dataset.testid)).toEqual([`space-instance-${ORIGIN}`, `space-instance-${THIRD}`, `space-instance-${SECOND}`]);
-    // Members reads the repository from the core, and Share offers the
-    // governing instance's login field and roles (space-62, space-69).
-    fireEvent.click(screen.getByTestId(`space-row-members-${OWN_REPO.key}`));
-    const panel = await screen.findByTestId(`space-members-${OWN_REPO.key}`);
+    // Members on its placement's line reads that placement from the
+    // core, and Share offers the governing instance's login field and
+    // roles (space-62, space-69).
+    fireEvent.click(within(lineAt(OWN_REPO.key, ORIGIN)).getByTestId("space-line-members"));
+    const panel = await screen.findByTestId(`space-members-${OWN_REPO.key}@${ORIGIN}`);
     await within(panel).findAllByTestId(/^space-member-/);
-    expect(calls("space.members")).toEqual([{ repository: OWN_REPO.key }]);
-    fireEvent.click(within(panel).getByTestId(`space-share-${OWN_REPO.key}`));
-    const editor = within(panel).getByTestId(`space-share-${OWN_REPO.key}-editor`);
+    expect(calls("space.members")).toEqual([{ repository: OWN_REPO.key, instance: ORIGIN }]);
+    fireEvent.click(within(panel).getByTestId(`space-share-${OWN_REPO.key}@${ORIGIN}`));
+    const editor = within(panel).getByTestId(`space-share-${OWN_REPO.key}@${ORIGIN}-editor`);
     expect(within(editor).getByLabelText("Login at second.example")).toBeTruthy();
     expect(within(within(editor).getByRole("listbox", { name: "Role" })).getAllByRole("option").map((option) => option.textContent)).toEqual([
       "Viewer",
@@ -570,7 +588,7 @@ describe("GROUPS: Pick a group at each instance (space-58, space-29)", () => {
   });
 });
 
-describe("GROUPS: Move… within its instance (space-78, space-29)", () => {
+describe("GROUPS: Move… within its placement's instance (space-78, space-87, space-29)", () => {
   const A_SPEX = "@spex.example/acme/a-spex";
 
   /** a-spex in the first's acme, and the opened project in your
@@ -589,14 +607,14 @@ describe("GROUPS: Move… within its instance (space-78, space-29)", () => {
     );
   }
 
-  test("space-78: Move… offers only the row's instance, your login first, the row's group left out", async () => {
+  test("space-78: Move… on a placement's line offers only that placement's instance, your login first, the row's group left out", async () => {
     await renderGroups(moveHome(), { open: false });
 
     // A row in acme: your namespace at its instance first, read by your
     // login, then every group there but acme; nothing of the second
     // instance (space-78).
-    fireEvent.click(screen.getByTestId(`space-row-move-${A_SPEX}`));
-    const picker = screen.getByTestId(`space-move-${A_SPEX}`);
+    fireEvent.click(within(lineAt(A_SPEX, ORIGIN)).getByTestId("space-line-move"));
+    const picker = screen.getByTestId(`space-move-${A_SPEX}@${ORIGIN}`);
     expect(options(picker, "space-move-group-")).toEqual([
       ["@jane", "jane"],
       ["other", "Other team · other"],
@@ -605,19 +623,19 @@ describe("GROUPS: Move… within its instance (space-78, space-29)", () => {
     expect(within(picker).queryByTestId("space-move-group-lab")).toBeNull();
     expect(within(picker).queryByTestId("space-move-group-acme")).toBeNull();
     fireEvent.click(within(picker).getByTestId("space-move-group-other"));
-    await waitFor(() => expect(calls("space.repository.move")).toEqual([{ repository: A_SPEX, groupId: "4" }]));
-    await waitFor(() => expect(screen.queryByTestId(`space-move-${A_SPEX}`)).toBeNull());
+    await waitFor(() => expect(calls("space.repository.move")).toEqual([{ repository: A_SPEX, instance: ORIGIN, groupId: "4" }]));
+    await waitFor(() => expect(screen.queryByTestId(`space-move-${A_SPEX}@${ORIGIN}`)).toBeNull());
 
     // A row in your namespace: the namespace left out, the groups of its
     // instance alone offered, your namespace named by none elsewhere.
-    fireEvent.click(screen.getByTestId(`space-row-move-${KEY}`));
-    const own = screen.getByTestId(`space-move-${KEY}`);
+    fireEvent.click(within(lineAt(KEY, ORIGIN)).getByTestId("space-line-move"));
+    const own = screen.getByTestId(`space-move-${KEY}@${ORIGIN}`);
     expect(options(own, "space-move-group-")).toEqual([
       ["acme", "Acme · acme"],
       ["other", "Other team · other"],
     ]);
     fireEvent.click(within(own).getByTestId("space-move-group-acme"));
-    await waitFor(() => expect(calls("space.repository.move")[1]).toEqual({ repository: KEY, groupId: "3" }));
+    await waitFor(() => expect(calls("space.repository.move")[1]).toEqual({ repository: KEY, instance: ORIGIN, groupId: "3" }));
   });
 });
 
@@ -909,6 +927,41 @@ describe("GROUPS: Add instance… at the list's foot (space-1, space-3, space-28
     expect(calls("space.signin.cancel")).toEqual([]);
   });
 
+  test.each(["en", "zh"] as const)("space-3: the card opened from Add instance… reads 'Your own group's records will be kept there too.', its flow running or not; the header card does not (%s)", async (language) => {
+    activateLanguage(language);
+    startsAtSecond();
+    const zh = language === "zh";
+    const own = zh ? "你自己的群组的记录也会保存在那里。" : "Your own group's records will be kept there too.";
+    await renderGroups(base(), { open: false });
+    // Nothing says it until the card opens.
+    expect(screen.queryByTestId("space-add-own")).toBeNull();
+    expect(document.body.textContent).not.toContain(own);
+    fireEvent.click(add());
+    // The card says it beneath its name, before its field, and it
+    // describes the card for assistive technology (space-3).
+    const sentence = within(card()).getByTestId("space-add-own");
+    expect(sentence.textContent).toBe(own);
+    expect(sentence.id).not.toBe("");
+    expect(card().getAttribute("aria-describedby")).toBe(sentence.id);
+    const textbox = within(card()).getByRole("textbox", { name: zh ? "实例" : "Instance" });
+    expect(sentence.compareDocumentPosition(textbox) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(within(card()).getByRole("heading", { level: 2 }).compareDocumentPosition(sentence) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // While the card's flow runs, it still says it, once.
+    fireEvent.change(textbox, { target: { value: SECOND } });
+    fireEvent.click(within(card()).getByTestId("space-signin"));
+    await within(card()).findByTestId("space-signin-link");
+    expect(within(card()).getAllByTestId("space-add-own").map((line) => line.textContent)).toEqual([own]);
+    expect(within(card()).getByTestId("space-signin-body").textContent).not.toContain(own);
+    cleanup();
+
+    // The header's card, the first sign-in while the home lists no
+    // instance, does not say it (space-3).
+    await renderGroups(noInstance(), { open: false });
+    expect(screen.getByTestId("space-signin-card")).toBeTruthy();
+    expect(screen.queryByTestId("space-add-own")).toBeNull();
+    expect(document.body.textContent).not.toContain(own);
+  });
+
   test.each(["en", "zh"] as const)("space-28, space-1: Add instance… and its card read the catalog's words, every control at most 14 characters, busy forms included, the card stacking below 20rem (%s)", async (language) => {
     activateLanguage(language);
     startsAtSecond();
@@ -948,7 +1001,7 @@ describe("GROUPS: Add instance… at the list's foot (space-1, space-3, space-28
   });
 });
 
-describe("GROUPS: Forget a signed-out instance (space-82, space-29, space-66)", () => {
+describe("GROUPS: Forget a signed-out instance (space-82, space-29, space-66, space-1)", () => {
   /** The core's refusal while a clone is still kept under the second
    * instance (space-82), in its own words. */
   const KEPT = "Still kept under Second Example: a-spex";
@@ -1067,6 +1120,27 @@ describe("GROUPS: Forget a signed-out instance (space-82, space-29, space-66)", 
     const card = within(screen.getByTestId("space-signin-card"));
     expect((card.getByTestId("space-signin-instance") as HTMLInputElement).value).toBe(ORIGIN);
     await waitFor(() => expect(document.activeElement).toBe(card.getByTestId("space-signin-instance")));
+  });
+
+  test("space-1: with no instance left after a Forget, your own group's heading reads its path while its own repository's placement file stands", async () => {
+    // The last instance forgotten: your own group's folder bears the
+    // login a sign-in named it after, its own repository's remote and id
+    // dropped while its placement files stand (space-82, storage-36).
+    const forgotten = ownRepo({ state: "local-only", remote: null, id: null, lastSync: null, placedAt: [ORIGIN, SECOND] });
+    const home = noInstance({ own: { name: "jane", named: false, repositories: [forgotten] } });
+    await renderGroups(home, { open: false });
+    const heading = () => within(screen.getByTestId("space-own")).getByRole("heading", { level: 2 });
+    // The heading reads its path, as the core says the folder no longer
+    // bears this device's user name — the files standing or not (space-1,
+    // space-30).
+    expect(heading().textContent).toBe("Your own group · jane");
+    expect(screen.queryByText(/named after your login at sign-in/)).toBeNull();
+    expect(screen.getByTestId(`space-repo-state-${OWN}`).textContent).toBe("On this device only — shared once you sign in");
+    // Where the core says the folder still bears it — an account named
+    // like this device's user, which names nothing — the key phrase
+    // stands, those files standing too (space-1, space-30).
+    deliver({ ...home, own: { ...home.own, named: true } });
+    expect(heading().textContent).toBe("Your own group · named after your login at sign-in");
   });
 
   test("space-82: a refusal speaks of the sign-out it met: signed in again it goes, and a later sign-out reads none", async () => {
