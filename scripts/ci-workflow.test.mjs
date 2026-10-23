@@ -24,18 +24,27 @@ test("release-33: one run per pull-request head, cancelled by its next push and 
 });
 
 test("release-33: a pull request runs the reduced matrix, main and the nightly the whole; the required checks are that run's jobs (release-29, release-34)", () => {
+  // The matrices narrow by event through expressions: a job-level `if`
+  // cannot read the matrix, so each matrix picks its own rows.
+  const byEvent = (expression) => {
+    const m = /^\$\{\{ github\.event_name == 'pull_request' && fromJSON\('(.*)'\) \|\| fromJSON\('(.*)'\) \}\}$/.exec(expression);
+    assert.ok(m, `a matrix picked by event: ${expression}`);
+    return { pullRequest: JSON.parse(m[1]), other: JSON.parse(m[2]) };
+  };
   const test = workflow.jobs.test;
-  assert.equal(test.if, "${{ github.event_name != 'pull_request' || matrix.os != 'macos-latest' || matrix.node-version == 22 }}");
+  const exclude = byEvent(test.strategy.matrix.exclude);
+  assert.deepEqual(exclude.pullRequest, [{ os: "windows-latest", "node-version": 24 }, { os: "macos-latest", "node-version": 24 }]);
+  assert.deepEqual(exclude.other, [{ os: "windows-latest", "node-version": 24 }]);
   for (const name of ["journeys", "desktop-browser"]) {
-    assert.equal(workflow.jobs[name].if, "${{ github.event_name != 'pull_request' || matrix.os == 'ubuntu-latest' }}", name);
-    assert.deepEqual(workflow.jobs[name].strategy.matrix.os, ["ubuntu-latest", "macos-latest"], name);
+    const os = byEvent(workflow.jobs[name].strategy.matrix.os);
+    assert.deepEqual(os.pullRequest, ["ubuntu-latest"], name);
+    assert.deepEqual(os.other, ["ubuntu-latest", "macos-latest"], name);
   }
-  // Every job the matrix would run on a pull request is a required check, and nothing else is.
-  const excluded = new Set((test.strategy.matrix.exclude ?? []).map((row) => `${row.os}:${row["node-version"]}`));
+  // Every job the matrix runs on a pull request is a required check, and nothing else is.
+  const excluded = new Set(exclude.pullRequest.map((row) => `${row.os}:${row["node-version"]}`));
   const onPullRequest = [];
   for (const os of test.strategy.matrix.os) for (const node of test.strategy.matrix["node-version"]) {
     if (excluded.has(`${os}:${node}`)) continue;
-    if (os === "macos-latest" && node !== 22) continue;
     onPullRequest.push(`test (${os}, ${node})`);
   }
   onPullRequest.push("journeys (ubuntu-latest)", "desktop-browser (ubuntu-latest)");

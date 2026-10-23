@@ -32,17 +32,13 @@ jobs:
         # reached end of life in April 2026.
         os: [ubuntu-latest, macos-latest, windows-latest]
         node-version: [22, 24]
-        exclude:
-          # Windows keeps the single Node whose better-sqlite3 win32
-          # prebuild the lockfile is known to resolve: a source build
-          # there trips node-gyp's VS detection. The second version's
-          # coverage stays on ubuntu/macos.
-          - os: windows-latest
-            node-version: 24
+        # Windows keeps the single Node whose better-sqlite3 win32 prebuild
+        # the lockfile is known to resolve: a source build there trips
+        # node-gyp's VS detection. A pull request also keeps one macOS
+        # smoke job, Node 22; main and the nightly run take the full
+        # matrix (release-34, DR-145).
+        exclude: ${{ github.event_name == 'pull_request' && fromJSON('[{"os":"windows-latest","node-version":24},{"os":"macos-latest","node-version":24}]') || fromJSON('[{"os":"windows-latest","node-version":24}]') }}
     runs-on: ${{ matrix.os }}
-    # A pull request runs Linux and Windows and one macOS smoke job; main
-    # and the nightly run take the full matrix (release-34).
-    if: ${{ github.event_name != 'pull_request' || matrix.os != 'macos-latest' || matrix.node-version == 22 }}
 
     steps:
       # Full history: the file-history append-only guard audits every
@@ -83,10 +79,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        # Linux alone on a pull request; the full matrix on main and nightly (release-34).
+        os: ${{ github.event_name == 'pull_request' && fromJSON('["ubuntu-latest"]') || fromJSON('["ubuntu-latest", "macos-latest"]') }}
     runs-on: ${{ matrix.os }}
-    # Linux alone on a pull request; the full matrix on main and nightly (release-34).
-    if: ${{ github.event_name != 'pull_request' || matrix.os == 'ubuntu-latest' }}
 
     steps:
       - uses: actions/checkout@v4
@@ -149,10 +144,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        # Linux alone on a pull request; the full matrix on main and nightly (release-34).
+        os: ${{ github.event_name == 'pull_request' && fromJSON('["ubuntu-latest"]') || fromJSON('["ubuntu-latest", "macos-latest"]') }}
     runs-on: ${{ matrix.os }}
-    # Linux alone on a pull request; the full matrix on main and nightly (release-34).
-    if: ${{ github.event_name != 'pull_request' || matrix.os == 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v4
       - name: Select separate owned source and packaged browser caches
