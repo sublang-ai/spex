@@ -964,6 +964,11 @@ msgstr "中断的同步无法修复：{cause}"
 msgid "an open intent already holds this source: \"{title}\""
 msgstr "已有未结意图占用此来源：“{title}”"
 
+#. Stands for the label in “Runs on {label}” where the record naming the runtime cannot be read
+#: src/control-record.ts
+msgid "an unknown runtime"
+msgstr "未知运行时"
+
 #. Guidance under a sync another writer keeps restarting
 #: src/space.ts
 msgid "Another process is writing to the home; wait for it to finish, then Retry."
@@ -1051,6 +1056,16 @@ msgstr "请检查 URL，若仓库尚不存在请先创建，或者{act}。然后
 #: src/space.ts
 msgid "Choose the other side for this unit or fix the file, then Retry."
 msgstr "请为该单元改选另一个版本，或修好该文件，然后重试。"
+
+#. A project's code clone failed on a team server's seat where the member placed no token for the code's host, which is no signed-in instance's; {host} is the code host's name as the Credentials section in Settings takes it
+#: src/space.ts
+msgid "Code not cloned: {host} needs a credential of yours. Add one under Settings."
+msgstr "代码未克隆：{host} 需要你自己的凭据。请在“设置”中添加一个。"
+
+#. A project's code clone failed on a team server's seat where the member's token for the code's host, which is no signed-in instance's, cannot be read from the server's credentials file, its entry or the file malformed; {host} is the code host's name as the Credentials section in Settings takes it
+#: src/space.ts
+msgid "Code not cloned: your credential for {host} cannot be read"
+msgstr "代码未克隆：无法读取你为 {host} 设置的凭据"
 
 #. Where a project's code lives before every instance has reported its Git origin, or when its remote lies under another instance's; the actual remote is withheld
 #: src/space.ts
@@ -2227,6 +2242,16 @@ msgstr "请重试；若再次失败，在终端中执行该步骤查看详情。
 msgid "Retry; if it fails again, the host's error stands for now."
 msgstr "请重试；若再次失败，说明托管平台的错误暂时仍在。"
 
+#. Why an intent cannot run on a team server's seat: it names no runtime, captured before runtimes were recorded or by the Playbook CLI, and a seat runs only what is assigned to it
+#: src/session.ts
+msgid "Runs nowhere yet"
+msgstr "暂无处运行"
+
+#. Why a session or an intent does not run here: it is assigned to another runtime, named by its label — the server's name on a seat, else the host name
+#: src/control-record.ts
+msgid "Runs on {label}"
+msgstr "在 {label} 上运行"
+
 #. Refusal when the registry's scaffold CLI exits non-zero because the app supplied none; command and output are verbatim
 #: src/forge.ts
 msgid "scaffold failed running {command} (the app's own scaffold CLI was not supplied, so the registry's ran): {output}"
@@ -2782,6 +2807,11 @@ msgstr "工作文件夹中缺少 {id} 的规约包"
 #: src/space.ts
 msgid "The spex repository is here; choose a folder for its code to pair it."
 msgstr "spex 仓库已在本设备上；请为其代码选择一个文件夹以完成配对。"
+
+#. Guidance after a project's code clone failed on a team server's seat, where the server allocates the code's folder: joining the repository again clones its code there
+#: src/space.ts
+msgid "The spex repository is here; join it again to clone its code."
+msgstr "spex 仓库已在本设备上；再次加入即可克隆其代码。"
 
 #. Repair row: a working folder is paired with a spex repository whose clone is gone
 #: src/store.ts

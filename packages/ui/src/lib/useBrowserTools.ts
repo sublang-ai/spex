@@ -3,7 +3,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { AgentSummary, CommandResults, MediaUploadOwner } from "@sublang/spex-core/protocol";
-import { getClient, useAppStore } from "../state/store.js";
+import { usePlaceStore } from "../state/place-context.js";
 import { i18n } from "../i18n.js";
 import { subscribeBrowserProgress } from "./browser-progress.js";
 import type { BrowserControlProps } from "../components/BrowserControl.js";
@@ -14,7 +14,8 @@ type Preparation = BrowserControlProps["preparation"];
 /** Contextual facts belong to the core, never adapter-name heuristics in
  * the renderer. Preparing grants no tools and does not write a choice. */
 export function useBrowserTools(agent: AgentSummary, context?: MediaUploadOwner) {
-  const connection = useAppStore((state) => state.connection);
+  const store = usePlaceStore();
+  const connection = store((state) => state.connection);
   const [attempt, setAttempt] = useState(0);
   // A checkbox's value does not affect hypothetical browser admission.
   const { browser: _browser, ...settings } = agent;
@@ -33,7 +34,7 @@ export function useBrowserTools(agent: AgentSummary, context?: MediaUploadOwner)
     active.release();
     // Closing an editor must still work after the socket has closed. The
     // host also owns disconnect cancellation; no rejected promise escapes.
-    try { void getClient().command("browser.cancel", { operationId: active.id }).catch(() => {}); } catch { /* disconnected */ }
+    try { void store.getClient().command("browser.cancel", { operationId: active.id }).catch(() => {}); } catch { /* disconnected */ }
   }
 
   useEffect(() => {
@@ -44,7 +45,7 @@ export function useBrowserTools(agent: AgentSummary, context?: MediaUploadOwner)
     const request = JSON.parse(key) as {agent: AgentSummary; context?: MediaUploadOwner};
     void (async () => {
       try {
-        const result = await getClient().command("agent.capabilities", request);
+        const result = await store.getClient().command("agent.capabilities", request);
         if (active) setCapability({ key, value: result });
       } catch (cause) {
         if (active) setFailure({ key, message: cause instanceof Error ? cause.message : String(cause) });
@@ -74,7 +75,7 @@ export function useBrowserTools(agent: AgentSummary, context?: MediaUploadOwner)
     try {
       // Cligent bounds setup on the host. The generic 30-second command
       // timeout must not falsely fail a legitimate Chromium download.
-      const result = await getClient().command("browser.prepare", { ...request, operationId: id }, { timeoutMs: 0 });
+      const result = await store.getClient().command("browser.prepare", { ...request, operationId: id }, { timeoutMs: 0 });
       if (operation.current?.id !== id || currentKey.current !== key) return;
       setSetup({ key, value: result.status === "ready" ? { status: "ready" }
         : result.status === "cancelled" ? { status: "idle", detail: i18n._("Browser setup cancelled") }
@@ -94,7 +95,7 @@ export function useBrowserTools(agent: AgentSummary, context?: MediaUploadOwner)
     if (!active) return;
     setSetup({ key, value: { status: "preparing", detail: i18n._("Cancelling browser setup…") } });
     try {
-      const result = await getClient().command("browser.cancel", { operationId: active.id });
+      const result = await store.getClient().command("browser.cancel", { operationId: active.id });
       if (result.canceled && operation.current?.id === active.id) {
         operation.current = undefined;
         active.release();

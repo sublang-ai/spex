@@ -12,7 +12,9 @@
 // editor with Save and Cancel, one row open at a time (settings-1,
 // settings-26). The Agents panel shows per-adapter readiness. Every
 // edit acknowledges in place — disabled while it is in flight, a
-// transient "Saved ✓" on the row once it landed (DR-010 §3).
+// transient "Saved ✓" on the row once it landed (DR-010 §3). On a team
+// server's seat a Credentials section takes the member's own code-host
+// tokens and agent credentials, kept on that server (settings-48).
 
 import {
   useCallback,
@@ -24,16 +26,20 @@ import {
 } from "react";
 import {
   PROTOCOL_VERSION,
+  type AdapterName,
   type AgentBlockInput,
   type ConfigEditOpInput,
+  type CredentialList,
   type ReadinessEntry,
   type SessionPlayerSummary,
   type GroupsState,
   type MissingPlayer,
 } from "@sublang/spex-core/protocol";
 
-import { getClient, useAppStore } from "../state/store.js";
+import { usePlaceStore } from "../state/place-context.js";
+import { isLocalPlace } from "../state/store.js";
 import { i18n, type Language } from "../i18n.js";
+import { allRepositories } from "../lib/instances.js";
 import { patchPlayer, setCaptain } from "../lib/config-ops.js";
 import { NOTIFICATION_LABELS } from "../lib/labels.js";
 import {
@@ -113,9 +119,10 @@ const LANGUAGE_CHOICES: readonly { value: string; label: () => string }[] = [
 ];
 
 function LanguageSection({ onError }: { onError: (message?: string) => void }) {
-  const choice = useAppStore((state) => state.language.choice);
-  const savedAt = useAppStore((state) => state.language.savedAt);
-  const setLanguage = useAppStore((state) => state.setLanguage);
+  const store = usePlaceStore();
+  const choice = store((state) => state.language.choice);
+  const savedAt = store((state) => state.language.savedAt);
+  const setLanguage = store((state) => state.setLanguage);
   const [pending, setPending] = useState(false);
   const [saved, setSaved] = useTransient(SAVED_MS);
   // A landed write re-renders the whole app in the chosen language
@@ -345,7 +352,8 @@ const NEW_PLAYER_BLOCK: AgentBlockInput = {
  * roster lacks (settings-46): named by its project, with Add creating
  * it from the neutral block, so each person picks their own models. */
 function MissingPlayerRow({ entry }: { entry: MissingPlayer }) {
-  const project = useAppStore((state) => state.projects.find((item) => item.id === entry.repository));
+  const store = usePlaceStore();
+  const project = store((state) => state.projects.find((item) => item.id === entry.repository));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const positions = entry.roles.map((item) => `${item.playbook}.${item.role}`).join(", ");
@@ -371,7 +379,7 @@ function MissingPlayerRow({ entry }: { entry: MissingPlayer }) {
           onClick={() => {
             setBusy(true);
             setError(undefined);
-            void patchPlayer(entry.player, NEW_PLAYER_BLOCK)
+            void patchPlayer(entry.player, NEW_PLAYER_BLOCK, store.getClient())
               .catch((cause: Error) => setError(cause.message))
               .finally(() => setBusy(false));
           }}
@@ -398,6 +406,349 @@ function ownRepositoryOf(space: GroupsState | undefined, path: string): string |
   return /\/workspace\/([a-z0-9][a-z0-9/-]*-spex)\/config\//u.exec(path)?.[1];
 }
 
+/** Each agent's forms a member may set on a seat (settings-49), in the
+ * table's order: the names are the agents' own environment names. */
+const AGENT_CREDENTIAL_FORMS: readonly { agent: AdapterName; names: readonly string[] }[] = [
+  { agent: "claude", names: ["CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"] },
+  { agent: "codex", names: ["CODEX_ACCESS_TOKEN", "CODEX_API_KEY", "OPENAI_API_KEY"] },
+  { agent: "opencode", names: ["OPENCODE_AUTH_CONTENT"] },
+  { agent: "gemini", names: ["GEMINI_API_KEY", "GOOGLE_APPLICATION_CREDENTIALS", "GOOGLE_API_KEY"] },
+  { agent: "kimi", names: ["KIMI_MODEL_API_KEY", "KIMI_MODEL_NAME", "KIMI_MODEL_BASE_URL", "KIMI_MODEL_PROVIDER_TYPE"] },
+];
+
+/** The forms that only accompany a key, or name a file, rather than hold
+ * a secret: typed in the clear (settings-49). */
+const PLAIN_FORMS: ReadonlySet<string> = new Set([
+  "GOOGLE_APPLICATION_CREDENTIALS",
+  "KIMI_MODEL_NAME",
+  "KIMI_MODEL_BASE_URL",
+  "KIMI_MODEL_PROVIDER_TYPE",
+]);
+
+const FIELD =
+  "min-w-0 rounded border border-neutral-300 bg-white px-2 py-1 text-xs disabled:opacity-60 dark:border-neutral-700 dark:bg-neutral-900";
+const BUTTON =
+  "rounded border border-neutral-300 px-2 py-0.5 text-xs hover:bg-neutral-100 disabled:opacity-50 dark:border-neutral-700 dark:hover:bg-neutral-800";
+
+/** The Credentials section of a seat's Settings (settings-48): a code
+ * host's token — the host name and the token — and, per agent, a
+ * credential of the member's own by the agent's forms (settings-49),
+ * each sent as `credential.set`, removed with `credential.remove` and
+ * listed by `credential.list` with no secret echoed; the section names
+ * each host whose code clone failed for want of one (space-103), and
+ * opens at the host a Groups row asked for. */
+function CredentialsSection({
+  ask,
+  onAskShown,
+}: {
+  /** The code host a Groups row asked to take a credential for. */
+  ask?: string;
+  onAskShown?: () => void;
+}) {
+  const store = usePlaceStore();
+  const connected = store((state) => state.connection === "open");
+  const space = store((state) => state.space);
+  const loadSpace = store((state) => state.loadSpace);
+  const [list, setList] = useState<CredentialList>();
+  const [host, setHost] = useState(ask ?? "");
+  const [token, setToken] = useState("");
+  const [agent, setAgent] = useState<AdapterName>("claude");
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [pending, setPending] = useState<string>();
+  const [error, setError] = useState<string>();
+  const [saved, setSaved] = useTransient(SAVED_MS);
+  const sectionRef = useRef<HTMLElement>(null);
+  const tokenRef = useRef<HTMLInputElement>(null);
+
+  // What is set, read as the section opens and each time the core is
+  // reached again; a write's reply is the list after it.
+  useEffect(() => {
+    if (!connected) return;
+    let live = true;
+    store
+      .getClient()
+      .command("credential.list", {})
+      .then((next) => {
+        if (live) setList(next);
+      })
+      .catch((cause: Error) => {
+        if (live) setError(cause.message);
+      });
+    return () => {
+      live = false;
+    };
+  }, [connected, store]);
+
+  // The failed clones the section names are the seat's Groups rows,
+  // read here where nothing has read them yet.
+  useEffect(() => {
+    if (connected && !store.getState().space) void loadSpace().catch(() => {});
+  }, [connected, loadSpace, store]);
+
+  // Opened at a host a Groups row named: the section comes into view
+  // with that host in the field, and the token is what is asked.
+  useEffect(() => {
+    if (ask === undefined) return;
+    sectionRef.current?.scrollIntoView?.({ block: "start" });
+    tokenRef.current?.focus();
+    onAskShown?.();
+    // The ask is taken once, as the section opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const placed = new Set((list?.hosts ?? []).map((entry) => entry.name.toLowerCase()));
+  const needed = [
+    ...new Set(
+      (space ? allRepositories(space) : []).flatMap((repo) =>
+        repo.sync.phase === "stopped" && repo.sync.credential !== undefined ? [repo.sync.credential] : [],
+      ),
+    ),
+  ].filter((name) => !placed.has(name.toLowerCase()));
+
+  const forms = AGENT_CREDENTIAL_FORMS.find((entry) => entry.agent === agent)?.names ?? [];
+  const filled = Object.fromEntries(
+    forms.flatMap((name) => (values[name]?.trim() ? [[name, values[name]!.trim()]] : [])),
+  );
+
+  /** One write, its reply the list after it (settings-48); a placed
+   * credential ticks its form, a removed one leaves the list. */
+  function write(key: string, run: () => Promise<CredentialList>, done?: () => void): void {
+    setError(undefined);
+    setPending(key);
+    run()
+      .then((next) => {
+        setList(next);
+        done?.();
+        if (done) setSaved(key);
+      })
+      .catch((cause: Error) => setError(cause.message))
+      .finally(() => setPending((current) => (current === key ? undefined : current)));
+  }
+
+  const saveHost = () => {
+    const name = host.trim();
+    if (!name || !token.trim()) return;
+    write(
+      "host",
+      () => store.getClient().command("credential.set", { kind: "host", name, values: { token: token.trim() } }),
+      () => {
+        setHost("");
+        setToken("");
+      },
+    );
+  };
+
+  const saveAgent = () => {
+    if (Object.keys(filled).length === 0) return;
+    write(
+      "agent",
+      () => store.getClient().command("credential.set", { kind: "agent", name: agent, values: filled }),
+      () => setValues({}),
+    );
+  };
+
+  const remove = (kind: "host" | "agent", name: string) =>
+    write(`remove:${kind}:${name}`, () => store.getClient().command("credential.remove", { kind, name }));
+
+  const removeLabel = (name: string) =>
+    i18n._({
+      id: "Remove the credential for {name}",
+      values: { name },
+      comment: "accessible name of the control taking the member's credential for a code host or an agent off the team server",
+    });
+  const removeWord = () =>
+    i18n._({ id: "Remove", comment: "take the member's credential for a code host or an agent off the team server" });
+  const none = () =>
+    i18n._({ id: "None placed yet", comment: "a list of the member's credentials on a team server, while it holds none" });
+
+  return (
+    <section
+      ref={sectionRef}
+      data-testid="credentials-section"
+      aria-labelledby="credentials-heading"
+      className="flex flex-col gap-2"
+    >
+      <h2 id="credentials-heading" className="text-sm font-semibold text-neutral-500">
+        {i18n._({
+          id: "Credentials",
+          comment: "Settings section on a team server: the member's own code-host tokens and agent credentials",
+        })}
+      </h2>
+      <p data-testid="credentials-note" className="text-xs text-neutral-500">
+        {i18n._("A credential you place here stays on this server until you remove it.")}
+      </p>
+      {needed.map((name) => (
+        <p
+          key={name}
+          data-testid={`credentials-needed-${name}`}
+          className="rounded border border-amber-300 bg-amber-50 px-2 py-1 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200"
+        >
+          {i18n._({
+            id: "{host} needs a credential of yours to clone a project's code",
+            values: { host: name },
+            comment: "Credentials section on a team server: a project's code could not be cloned from {host}, a code host, for want of the member's credential",
+          })}
+        </p>
+      ))}
+      <div className="flex flex-col gap-1.5 rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm dark:border-neutral-800 dark:bg-neutral-900">
+        <h3 className="text-xs font-semibold text-neutral-500">
+          {i18n._({ id: "Code hosts", comment: "Credentials section: the code hosts the member placed a token for" })}
+        </h3>
+        <ul data-testid="credential-hosts" className="flex flex-col gap-1">
+          {(list?.hosts ?? []).map((entry) => (
+            <li
+              key={entry.name}
+              data-testid={`credential-host-${entry.name}`}
+              className="flex flex-wrap items-center gap-2"
+            >
+              <span className="font-mono">{entry.name}</span>
+              {entry.username ? <span className="text-xs text-neutral-500">{entry.username}</span> : null}
+              <span className="ml-auto flex items-center gap-1">
+                <button
+                  type="button"
+                  data-testid={`credential-host-remove-${entry.name}`}
+                  aria-label={removeLabel(entry.name)}
+                  disabled={!connected || pending !== undefined}
+                  onClick={() => remove("host", entry.name)}
+                  className={BUTTON}
+                >
+                  {removeWord()}
+                </button>
+              </span>
+            </li>
+          ))}
+          {list && list.hosts.length === 0 ? <li className="text-xs text-neutral-500">{none()}</li> : null}
+        </ul>
+        <form
+          data-testid="credential-host-form"
+          className="flex flex-wrap items-center gap-1.5"
+          onSubmit={(event) => {
+            event.preventDefault();
+            saveHost();
+          }}
+        >
+          <input
+            data-testid="credential-host-name"
+            aria-label={i18n._({ id: "Host name", comment: "Credentials section: the code host a token is for, such as git.example.com" })}
+            placeholder="git.example.com"
+            value={host}
+            spellCheck={false}
+            autoComplete="off"
+            disabled={pending === "host"}
+            onChange={(event) => setHost(event.target.value)}
+            className={`${FIELD} flex-1 basis-40 font-mono`}
+          />
+          <input
+            ref={tokenRef}
+            data-testid="credential-host-token"
+            type="password"
+            aria-label={i18n._({ id: "Token", comment: "Credentials section: the member's access token for a code host" })}
+            value={token}
+            autoComplete="off"
+            disabled={pending === "host"}
+            onChange={(event) => setToken(event.target.value)}
+            className={`${FIELD} flex-1 basis-40`}
+          />
+          <button
+            type="submit"
+            data-testid="credential-host-save"
+            disabled={!connected || !host.trim() || !token.trim() || pending !== undefined}
+            className={BUTTON}
+          >
+            {i18n._({ id: "Save", comment: "Credentials section: place the credential on the team server" })}
+          </button>
+          {saved === "host" ? <SavedTick testId="credential-host-saved" /> : null}
+        </form>
+      </div>
+      <div className="flex flex-col gap-1.5 rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm dark:border-neutral-800 dark:bg-neutral-900">
+        <h3 className="text-xs font-semibold text-neutral-500">{i18n._("Agents")}</h3>
+        <ul data-testid="credential-agents" className="flex flex-col gap-1">
+          {(list?.agents ?? []).map((entry) => (
+            <li
+              key={entry.name}
+              data-testid={`credential-agent-${entry.name}`}
+              className="flex flex-wrap items-center gap-2"
+            >
+              <span className="font-mono font-medium">{entry.name}</span>
+              <span className="font-mono text-xs text-neutral-500">{entry.names.join(", ")}</span>
+              <span className="ml-auto flex items-center gap-1">
+                <button
+                  type="button"
+                  data-testid={`credential-agent-remove-${entry.name}`}
+                  aria-label={removeLabel(entry.name)}
+                  disabled={!connected || pending !== undefined}
+                  onClick={() => remove("agent", entry.name)}
+                  className={BUTTON}
+                >
+                  {removeWord()}
+                </button>
+              </span>
+            </li>
+          ))}
+          {list && list.agents.length === 0 ? <li className="text-xs text-neutral-500">{none()}</li> : null}
+        </ul>
+        <form
+          data-testid="credential-agent-form"
+          className="flex flex-col gap-1.5"
+          onSubmit={(event) => {
+            event.preventDefault();
+            saveAgent();
+          }}
+        >
+          <select
+            data-testid="credential-agent"
+            aria-label={i18n._({ id: "Agent", comment: "Credentials section: the agent a credential of the member's is for" })}
+            value={agent}
+            disabled={pending === "agent"}
+            onChange={(event) => {
+              setAgent(event.target.value as AdapterName);
+              setValues({});
+            }}
+            className={`${FIELD} self-start font-mono`}
+          >
+            {AGENT_CREDENTIAL_FORMS.map((entry) => (
+              <option key={entry.agent} value={entry.agent}>
+                {entry.agent}
+              </option>
+            ))}
+          </select>
+          {forms.map((name) => (
+            <label key={name} className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+              <span className="min-w-0 basis-56 font-mono text-xs">{name}</span>
+              <input
+                data-testid={`credential-agent-value-${name}`}
+                type={PLAIN_FORMS.has(name) ? "text" : "password"}
+                value={values[name] ?? ""}
+                spellCheck={false}
+                autoComplete="off"
+                disabled={pending === "agent"}
+                onChange={(event) => setValues((current) => ({ ...current, [name]: event.target.value }))}
+                className={`${FIELD} flex-1 basis-40`}
+              />
+            </label>
+          ))}
+          <span className="flex items-center gap-2">
+            <button
+              type="submit"
+              data-testid="credential-agent-save"
+              disabled={!connected || Object.keys(filled).length === 0 || pending !== undefined}
+              className={BUTTON}
+            >
+              {i18n._({ id: "Save", comment: "Credentials section: place the credential on the team server" })}
+            </button>
+            {saved === "agent" ? <SavedTick testId="credential-agent-saved" /> : null}
+          </span>
+        </form>
+      </div>
+      {error ? (
+        <p role="alert" data-testid="credentials-error" className="text-xs text-red-600 dark:text-red-400">
+          {error}
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
 /** The session-player roster (DR-032): each lane is one identity and
  * one provider conversation, edited here whole. Removal is refused by
  * the core while a binding still names the lane, and that refusal is
@@ -417,6 +768,7 @@ function PlayerRoster({
   captain: AgentBlockInput;
   rows: RowEditing;
 }) {
+  const store = usePlaceStore();
   const [adding, setAdding] = useState(false);
   const [newId, setNewId] = useState("");
   const [confirmDelete, setConfirmDelete] = useState<string>();
@@ -429,7 +781,7 @@ function PlayerRoster({
 
   function remove(playerId: string): void {
     setError(undefined);
-    void getClient()
+    void store.getClient()
       .command("config.edit", { op: { kind: "player.delete", playerId } })
       .then(() => setConfirmDelete(undefined))
       .catch((cause: Error) =>
@@ -526,7 +878,7 @@ function PlayerRoster({
                 readiness={readiness}
                 captain={captain}
                 onSave={(patch) =>
-                  patchPlayer(player.id, patch).then((result) => {
+                  patchPlayer(player.id, patch, store.getClient()).then((result) => {
                     rows.close(player.id);
                     setSaved(player.id);
                     return result;
@@ -594,7 +946,7 @@ function PlayerRoster({
                 });
                 return Promise.reject(new Error("duplicate id"));
               }
-              return patchPlayer(id, patch).then(
+              return patchPlayer(id, patch, store.getClient()).then(
                 (result) => {
                   setAdding(false);
                   setNewId("");
@@ -628,12 +980,23 @@ function PlayerRoster({
   );
 }
 
-export function SettingsSurface() {
-  const configState = useAppStore((state) => state.configState);
-  const readiness = useAppStore((state) => state.readiness);
-  const space = useAppStore((state) => state.space);
-  const refreshReadiness = useAppStore((state) => state.refreshReadiness);
-  const refresh = useAppStore((state) => state.refresh);
+export function SettingsSurface({
+  credentialHost,
+  onCredentialHostShown,
+}: {
+  /** On a seat, the code host its Groups row asked to take a credential
+   * for: the Credentials section opens at it (settings-48). */
+  credentialHost?: string;
+  onCredentialHostShown?: () => void;
+} = {}) {
+  const store = usePlaceStore();
+  // A seat's Settings carry its Credentials section (settings-48).
+  const seat = !isLocalPlace(store.place);
+  const configState = store((state) => state.configState);
+  const readiness = store((state) => state.readiness);
+  const space = store((state) => state.space);
+  const refreshReadiness = store((state) => state.refreshReadiness);
+  const refresh = store((state) => state.refresh);
   const [error, setError] = useState<string>();
   const [copied, setCopied] = useState(false);
   const [retrying, setRetrying] = useState(false);
@@ -732,7 +1095,7 @@ export function SettingsSurface() {
   function edit(op: ConfigEditOpInput, key: string) {
     setError(undefined);
     setPending(key);
-    getClient()
+    store.getClient()
       .command("config.edit", { op })
       .then(() => setSaved(key))
       .catch((cause: Error) => setError(cause.message))
@@ -826,7 +1189,7 @@ export function SettingsSurface() {
                 initial={summary.captain}
                 readiness={readiness}
                 onSave={(patch) =>
-                  setCaptain(patch).then((result) => {
+                  setCaptain(patch, store.getClient()).then((result) => {
                     rows.close("captain");
                     setSaved("captain");
                     return result;
@@ -891,6 +1254,8 @@ export function SettingsSurface() {
           </div>
         ) : null}
       </section>
+
+      {seat ? <CredentialsSection ask={credentialHost} onAskShown={onCredentialHostShown} /> : null}
 
       <section
         data-testid="notifications-section"

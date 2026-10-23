@@ -19,7 +19,7 @@ import type {
   QueueSchedule,
   StoredRecord,
 } from "./protocol.js";
-import { controlKind, isStoppedTurnReason, restoredPosition, restoreReports } from "./control-record.js";
+import { controlKind, isStoppedTurnReason, restoredPosition, restoreReports, runsElsewhere } from "./control-record.js";
 import type { Store } from "./store.js";
 
 /** What the session manager knows live: the lanes and their activity. */
@@ -627,6 +627,13 @@ function turnIsRuled(store: Store, sessionId: string, turn: Turn): boolean {
 export interface LedgerSources {
   store: Store;
   lanes: LiveLane[];
+  /** This runtime's device (DR-134): an intent or a session assigned to
+   * another runtime summons nothing here and runs nowhere but there.
+   * The home's device as `home.yaml` reads now, where none is given. */
+  device?: string;
+  /** Whether this core runs as a team server's seat (core-service-125,
+   * DR-132): there an intent holding no runtime runs nowhere. */
+  seat?: boolean;
   now: () => number;
 }
 
@@ -692,8 +699,22 @@ export function queueSchedule(
  * two-band attention queue, and the badge. */
 export function foldLedger(sources: LedgerSources): LedgerState {
   const { store, lanes, now } = sources;
+  const device = sources.device ?? store.home.device;
   const live = new Map(lanes.map((lane) => [lane.sessionId, lane]));
   const open = store.listOpenIntents();
+  // Another runtime's records (DR-134): the label of the runtime a
+  // session is assigned to where that is not this one, read once per
+  // session the fold touches.
+  const sessionElsewhere = new Map<string, string | undefined>();
+  const sessionRunsOn = (sessionId: string): string | undefined => {
+    if (!sessionElsewhere.has(sessionId)) {
+      sessionElsewhere.set(sessionId, runsElsewhere(store.sessionRuntime(sessionId), device));
+    }
+    return sessionElsewhere.get(sessionId);
+  };
+  /** Intents assigned to another runtime, or worked by a session that
+   * is: they enter no band and no badge here (core-service-49). */
+  const elsewhereIntents = new Set<string>();
 
   // Per-session context, loaded once per session the fold touches.
   const turnsBySession = new Map<string, Turn[]>();
@@ -746,24 +767,42 @@ export function foldLedger(sources: LedgerSources): LedgerState {
   const ownedTurns = new Map<string, Set<number>>();
 
   for (const intent of open) {
+    // Another runtime's work (core-service-107, DR-134): each row of an
+    // intent assigned to another runtime carries that runtime's label,
+    // and so does one naming none whose dispatch another runtime's
+    // session holds; such a row is never next here.
+    let runsOn = intent.runtime ? runsElsewhere(intent.runtime, device) : undefined;
+    if (runsOn !== undefined) elsewhereIntents.add(intent.id);
+    const place = (row: DerivedIntent): void => {
+      derived.push(runsOn !== undefined ? { ...row, runsOn } : row);
+    };
     const bound = intent.dispatched;
     if (!bound) {
-      derived.push({ intent, state: "queued" });
+      place({ intent, state: "queued" });
       continue;
     }
 
     const turns = sessionTurns(bound.sessionId);
     const dispatchTurn = turns.find((turn) => turn.turnId === bound.turnId);
     const laneLive = live.has(bound.sessionId);
+    // A dispatch whose session is assigned to another runtime is never
+    // derived as released here: its stop or abort is that runtime's to
+    // read (core-service-47, DR-134), and its turn still open there is
+    // work running there.
+    const elsewhere = sessionRunsOn(bound.sessionId);
+    if (elsewhere !== undefined) {
+      elsewhereIntents.add(intent.id);
+      runsOn ??= elsewhere;
+    }
     // A dispatch whose turn aborted — or died with its session —
     // releases the intent by derivation (DR-035): back to its place
     // by age, text editable again.
-    const released =
+    const released = elsewhere === undefined && (
       !dispatchTurn ||
       dispatchTurn.status === "aborted" ||
-      (dispatchTurn.endedAt === null && !laneLive);
+      (dispatchTurn.endedAt === null && !laneLive));
     if (released) {
-      derived.push({ intent, state: "queued" });
+      place({ intent, state: "queued" });
       continue;
     }
 
@@ -827,7 +866,7 @@ export function foldLedger(sources: LedgerSources): LedgerState {
       lastError !== undefined &&
       (parked || !turns.some((turn) => turn.startedAt > lastError.timestamp));
     if (failureStands) {
-      derived.push({
+      place({
         intent,
         state: "interrupted",
         reason: "failure",
@@ -855,9 +894,9 @@ export function foldLedger(sources: LedgerSources): LedgerState {
       turnId === null ||
       (turnId >= bound.turnId && (endTurnId === null || turnId < endTurnId));
     const working =
-      laneLive && lastTurn !== undefined && lastTurn.endedAt === null;
+      (laneLive || elsewhere !== undefined) && lastTurn !== undefined && lastTurn.endedAt === null;
     if (working) {
-      derived.push({
+      place({
         intent,
         state: "working",
         stats,
@@ -870,7 +909,7 @@ export function foldLedger(sources: LedgerSources): LedgerState {
     // among them — reads working, and the question it did not clear
     // stands again once that turn ends (DR-085).
     if (conditions.question && owns(conditions.question.turnId)) {
-      derived.push({
+      place({
         intent,
         state: "interrupted",
         reason: "question",
@@ -893,7 +932,7 @@ export function foldLedger(sources: LedgerSources): LedgerState {
     }
 
     if (lastFinished) {
-      derived.push({
+      place({
         intent,
         state: "finished",
         stats,
@@ -913,8 +952,10 @@ export function foldLedger(sources: LedgerSources): LedgerState {
     }
 
     // Every turn in the range aborted after a re-dispatchable start:
-    // nothing delivered, nothing running — released.
-    derived.push({ intent, state: "queued" });
+    // nothing delivered, nothing running — released, though where
+    // another runtime's session holds the dispatch only there
+    // (core-service-47, DR-134): the row keeps its label, never next.
+    place({ intent, state: "queued" });
   }
 
   // Session stand-ins (DR-035): a live session whose condition no open
@@ -1009,7 +1050,13 @@ export function foldLedger(sources: LedgerSources): LedgerState {
     }
     return known;
   };
-  const answerable = attention.filter((entry) => canAnswer(entry.projectId));
+  // Another runtime's intents and sessions enter no band and no count:
+  // that runtime's ledger carries them, their states still deriving for
+  // History and the queue (core-service-49, DR-134).
+  const answerable = attention.filter((entry) =>
+    !(entry.intentId !== undefined && elsewhereIntents.has(entry.intentId)) &&
+    sessionRunsOn(entry.sessionId) === undefined &&
+    canAnswer(entry.projectId));
 
   answerable.sort((a, b) => {
     if (a.band !== b.band) return a.band === "interrupted" ? -1 : 1;
@@ -1017,16 +1064,25 @@ export function foldLedger(sources: LedgerSources): LedgerState {
   });
 
   // Presence of `next` is the project-local next marker: the oldest
-  // queued row, by capture time then id (core-service-107).
-  // TODO(core-service-125, core-service-107): on a seat an intent holding
-  // no runtime is never next — leave it out of `eligible` — once intents
-  // record the runtime that captured them (DR-131); none records one yet.
+  // queued row this runtime may run, by capture time then id — never one
+  // of another runtime's, which keeps its place by age and offers no
+  // manual start (core-service-107, DR-134). On a seat an intent holding
+  // no runtime — a format 1 file, written before runtimes, by the
+  // Playbook CLI or by a runtime that assigns nothing — runs nowhere
+  // (core-service-125, DR-132): it keeps its place by age and its derived
+  // state, and is never next. Its row carries no marker of its own: it
+  // reads queued as any later row does, the specs giving a client
+  // nothing more to read.
+  const runsNowhere = (entry: DerivedIntent): boolean =>
+    sources.seat === true && entry.intent.runtime === undefined;
   const lanesByProject = new Map(lanes.map((lane) => [lane.projectId, lane]));
   for (const projectId of new Set(derived.map((entry) => entry.intent.projectId))) {
     const lane = lanesByProject.get(projectId);
     const eligible = derived.filter((entry) =>
       entry.intent.projectId === projectId &&
-      entry.state === "queued"
+      entry.state === "queued" &&
+      entry.runsOn === undefined &&
+      !runsNowhere(entry)
     );
     const next = eligible[0];
     if (next) next.next = queueSchedule(store, lane);
