@@ -89,6 +89,11 @@ msgstr "{act}; on a first connection, accept the host key in a terminal. Then Re
 msgid "{act}. Then Retry."
 msgstr "{act}. Then Retry."
 
+#. Refusal of an agent's credential on a team server's seat: a variable's name is none of the agent's forms; `adapter` is the agent's name and `forms` lists the variables' names, both as they are
+#: src/service.ts
+msgid "{adapter} takes only {forms}"
+msgstr "{adapter} takes only {forms}"
+
 #. Project creation refusal; command and its output are verbatim
 #: src/forge.ts
 msgid "{command} failed: {output}"
@@ -222,6 +227,11 @@ msgstr "{host} refused this machine's access"
 #: src/space-git.ts
 msgid "{host} refused: {words}"
 msgstr "{host} refused: {words}"
+
+#. A sign-in on a team server's seat refused, nothing stored: the account approved at the instance is not the member the seat was opened for; {host} is the instance's display name, {login} the login of the account that signed in
+#: src/space-groups.ts
+msgid "{host} signed you in as @{login}; this seat is another member's"
+msgstr "{host} signed you in as @{login}; this seat is another member's"
 
 #. A sign-in refused, nothing stored: the person signed in at an instance the home lists as another account than the one it lists there; {host} is the instance's display name, {login} the listed account's login
 #: src/space-groups.ts
@@ -620,6 +630,41 @@ msgstr "{projectId} has no working folder on this device"
 msgid "{role} is not one of the roles {host} grants"
 msgstr "{role} is not one of the roles {host} grants"
 
+#. A seat's opening failed: the team server answered its admission with nothing that opens a seat; {server} is the server's name
+#: src/places.ts
+msgid "{server} answered no seat"
+msgstr "{server} answered no seat"
+
+#. A seat's opening failed: the team server could not reach the instance to redeem the ticket; {server} is the server's name, {host} the instance's display name
+#: src/places.ts
+msgid "{server} could not reach {host}"
+msgstr "{server} could not reach {host}"
+
+#. A seat's opening failed: the team server did not start the person's seat and said no more; {server} is the server's name
+#: src/places.ts
+msgid "{server} could not start your seat"
+msgstr "{server} could not start your seat"
+
+#. A seat's opening failed: the team server did not start the person's seat; {server} is the server's name, {words} its own words, kept whole
+#: src/places.ts
+msgid "{server} could not start your seat: {words}"
+msgstr "{server} could not start your seat: {words}"
+
+#. A seat's opening refused by the team server with no words of its own; {server} is the server's name
+#: src/places.ts
+msgid "{server} refused the seat"
+msgstr "{server} refused the seat"
+
+#. A seat's opening refused by the team server, its refusal relayed from it or from the instance; {server} is the server's name, {words} its own words, kept whole
+#: src/places.ts
+msgid "{server} refused the seat: {words}"
+msgstr "{server} refused the seat: {words}"
+
+#. A seat's opening failed: the team server's TLS certificate did not verify against the trusted certificate authorities, so nothing was sent to it; {server} is the server's name
+#: src/places.ts
+msgid "{server}'s certificate could not be verified"
+msgstr "{server}'s certificate could not be verified"
+
 #. Refusal where the folder chosen for the example already holds files
 #: src/forge.ts
 msgid "{target} is not empty; the example seeds only a new or empty directory"
@@ -723,10 +768,35 @@ msgstr "◇ Now answering: Captain — the conversation so far was replayed to i
 msgid "◇ The provider rejected the resumed conversation — replaying it"
 msgstr "◇ The provider rejected the resumed conversation — replaying it"
 
+#. Refusal of an agent's credential on a team server's seat: it carries only names that accompany the agent's key, such as Kimi's model name, and not the key; `adapter` is the agent's name and `keys` lists the key's variable names, any one of which will do, both as they are
+#: src/service.ts
+msgid "A {adapter} credential needs {keys}"
+msgstr "A {adapter} credential needs {keys}"
+
+#. Refusal of a code host's credential on a team server's seat: it names a field other than the token and the username
+#: src/service.ts
+msgid "A code host's credential is a token and, where the host asks for one, a username"
+msgstr "A code host's credential is a token and, where the host asks for one, a username"
+
+#. Refusal of a code host's credential on a team server's seat: the token or the username holds a line break or another control character
+#: src/service.ts
+msgid "A code host's token and username are each one line of text"
+msgstr "A code host's token and username are each one line of text"
+
 #. Refusal: another compile of this core writes the playbook's artifact folder
 #: src/compile.ts
 msgid "a compile is writing {folder}; retry once it ends"
 msgstr "a compile is writing {folder}; retry once it ends"
+
+#. Refusal of a credential on a team server's seat: the host's or the agent's name, or a variable's name, is blank
+#: src/service.ts
+msgid "A credential needs a name"
+msgstr "A credential needs a name"
+
+#. Refusal of a credential on a team server's seat: a token, a username or an agent's value is blank, or none is given
+#: src/service.ts
+msgid "A credential's value cannot be blank"
+msgstr "A credential's value cannot be blank"
 
 #. Refusal during attachment admission
 #: src/service.ts
@@ -748,6 +818,11 @@ msgstr "a Git merge is pending; finish or abort it in a terminal before syncing"
 msgid "a group named like your login"
 msgstr "a group named like your login"
 
+#. Storage diagnostic: the seat's credentials file holds a code host's entry under a key that is no host name, which is not repeated
+#: src/code-credentials.ts
+msgid "a host entry keyed by no host name is malformed; preserved unchanged"
+msgstr "a host entry keyed by no host name is malformed; preserved unchanged"
+
 #. Refusal: the license a new playbook's spec package names is empty, spans lines or is edged with spaces
 #: src/service.ts
 msgid "a new playbook needs a license on one line, such as Apache-2.0"
@@ -762,6 +837,11 @@ msgstr "a project's settings name only the playbooks they enable and the player 
 #: src/media-transfers.ts
 msgid "A retried upload chunk contains different bytes."
 msgstr "A retried upload chunk contains different bytes."
+
+#. Refusal on a team server's seat of opening a seat on a team server: a team server's seat holds no seats of its own
+#: src/service.ts
+msgid "A seat opens no server"
+msgstr "A seat opens no server"
 
 #. Stands in for the title of a session that has none
 #: src/session.ts
@@ -818,6 +898,16 @@ msgstr "add this machine's SSH key to an account that can see it"
 #: src/space-git.ts
 msgid "Add this machine's SSH key to an account that can see it"
 msgstr "Add this machine's SSH key to an account that can see it"
+
+#. Storage diagnostic: the seat's credentials file holds an agent's entry under a key that is no agent's name, which is not repeated
+#: src/code-credentials.ts
+msgid "an agent entry keyed by no agent's name is malformed; preserved unchanged"
+msgstr "an agent entry keyed by no agent's name is malformed; preserved unchanged"
+
+#. Refusal of an agent's credential on a team server's seat: a value holds a NUL character, which no process environment carries
+#: src/service.ts
+msgid "An agent's credential cannot hold a NUL character"
+msgstr "An agent's credential cannot hold a NUL character"
 
 #. Migration diagnostic: a stored intent references an attachment whose bytes are gone
 #: src/migrate-home.ts
@@ -962,6 +1052,16 @@ msgstr "Check the URL, create the repository if it is not there yet, or {act}. T
 msgid "Choose the other side for this unit or fix the file, then Retry."
 msgstr "Choose the other side for this unit or fix the file, then Retry."
 
+#. A project's code clone failed on a team server's seat where the member placed no token for the code's host, which is no signed-in instance's; {host} is the code host's name as the Credentials section in Settings takes it
+#: src/space.ts
+msgid "Code not cloned: {host} needs a credential of yours. Add one under Settings."
+msgstr "Code not cloned: {host} needs a credential of yours. Add one under Settings."
+
+#. A project's code clone failed on a team server's seat where the member's token for the code's host, which is no signed-in instance's, cannot be read from the server's credentials file, its entry or the file malformed; {host} is the code host's name as the Credentials section in Settings takes it
+#: src/space.ts
+msgid "Code not cloned: your credential for {host} cannot be read"
+msgstr "Code not cloned: your credential for {host} cannot be read"
+
 #. Where a project's code lives before every instance has reported its Git origin, or when its remote lies under another instance's; the actual remote is withheld
 #: src/space.ts
 msgid "Code on a remote"
@@ -1056,6 +1156,11 @@ msgstr "Could not reach {host}"
 msgid "Could not refresh groups; try again"
 msgstr "Could not refresh groups; try again"
 
+#. Refusal of a credentials command on a machine of one's own: Spex keeps a member's code-host and agent credentials only on a team server's seat
+#: src/service.ts
+msgid "Credentials are kept on a server's seat"
+msgstr "Credentials are kept on a server's seat"
+
 #. Storage diagnostic; Delete is the control's own name on the draft's row
 #: src/authoring.ts
 msgid "damaged transcript after record {seq}; the draft refuses everything but Delete"
@@ -1140,7 +1245,10 @@ msgstr "environment packages installed"
 #. Diagnostic for a damaged file: its top level is not an object
 #. Storage diagnostic: a record in the file is not an object
 #. Storage diagnostic: a record in the file is not an object
+#. Storage diagnostic: a record in the file is not an object
+#. Storage diagnostic: a record in the file is not an object
 #: src/app-storage.ts
+#: src/code-credentials.ts
 #: src/drafts.ts
 #: src/files.ts
 msgid "expected an object"
@@ -1720,6 +1828,11 @@ msgstr "No repository this machine can see at {target}"
 msgid "no roster player {playerId}"
 msgstr "no roster player {playerId}"
 
+#. Refusal of a seat's closing: this device holds no seat on the server named
+#: src/places.ts
+msgid "No seat is open on this server"
+msgstr "No seat is open on this server"
+
 #. Refusal: no session of this id is known
 #. Refusal: no session of this id is known
 #: src/service.ts
@@ -1776,6 +1889,11 @@ msgstr "Not on a branch; check out spex in a terminal"
 #: src/space-groups.ts
 msgid "Not signed in"
 msgstr "Not signed in"
+
+#. Storage diagnostic: a YAML file of the home does not parse; the file is left as it is
+#: src/code-credentials.ts
+msgid "not valid YAML; preserved unchanged"
+msgstr "not valid YAML; preserved unchanged"
 
 #. Guidance where the Git host no longer lists a spex repository for this account
 #. Guidance where the Git host no longer lists a spex repository for this account
@@ -2034,6 +2152,11 @@ msgstr "project directory is missing"
 msgid "Project is unavailable."
 msgstr "Project is unavailable."
 
+#. Refusal on a team server's seat of a command naming a working folder: the server allocates every project's folder itself
+#: src/service.ts
+msgid "Projects on a server are opened from their group"
+msgstr "Projects on a server are opened from their group"
+
 #. Media storage failure
 #: src/media-transfers.ts
 msgid "Published upload has a different byte length."
@@ -2043,6 +2166,11 @@ msgstr "Published upload has a different byte length."
 #: src/environments.ts
 msgid "Publishing stopped: {cause}"
 msgstr "Publishing stopped: {cause}"
+
+#. Refusal of a seat's opening sent without the person's consent to the contract the instance's record fixes for team servers
+#: src/places.ts
+msgid "Read and accept the server's contract before opening a seat"
+msgstr "Read and accept the server's contract before opening a seat"
 
 #. Refusal of a pick joining a spex repository with other members until the reader has seen the privacy notice
 #: src/space.ts
@@ -2178,6 +2306,11 @@ msgstr "sign in by running claude in a terminal, or set ANTHROPIC_API_KEY"
 msgid "sign in by running codex in a terminal, or set OPENAI_API_KEY"
 msgstr "sign in by running codex in a terminal, or set OPENAI_API_KEY"
 
+#. Adapter requirement on a team server's seat, where no credential of the agent is set; `adapter` is the agent's name and the Credentials section is the one in Settings
+#: src/seat-credentials.ts
+msgid "sign in by setting your own credential for {adapter} in the Credentials section"
+msgstr "sign in by setting your own credential for {adapter} in the Credentials section"
+
 #. Refusal: the act needs the Git host, and the home is not signed in
 #: src/space.ts
 msgid "Sign in first"
@@ -2219,6 +2352,11 @@ msgstr "Sign this machine in at that host as an account that can see it"
 #: src/space-groups.ts
 msgid "Signed in"
 msgstr "Signed in"
+
+#. Readiness on a team server's seat: the agent runs on the sign-in the server's administrator shared
+#: src/seat-credentials.ts
+msgid "Signed in by this server's administrator"
+msgstr "Signed in by this server's administrator"
 
 #. Spec notice: a link under specs/ pointed outside the project and was not read
 #: src/specs.ts
@@ -2362,6 +2500,16 @@ msgstr "taken, so {key} cannot move here under its instance's folder; move it as
 msgid "Text or an attachment is required."
 msgstr "Text or an attachment is required."
 
+#. Refusal of a code host's credential on a team server's seat: the name given is not a DNS host name with an optional port
+#: src/service.ts
+msgid "That is not a host name: give the host alone, with a port where it needs one, and no scheme, path, user or spaces"
+msgstr "That is not a host name: give the host alone, with a port where it needs one, and no scheme, path, user or spaces"
+
+#. Refusal of an agent's credential on a team server's seat: the name is no agent's; `agents` lists the agents' names as they are
+#: src/service.ts
+msgid "That is not an agent: name one of {agents}"
+msgstr "That is not an agent: name one of {agents}"
+
 #. Refusal: a summons is marked read only once its turn ended
 #: src/service.ts
 msgid "That turn has not ended, so it cannot be marked as read."
@@ -2391,6 +2539,11 @@ msgstr "the active lock is empty"
 #: src/authoring.ts
 msgid "the agent ended with status {status}"
 msgstr "the agent ended with status {status}"
+
+#. Storage diagnostic: an agent's entry in the seat's credentials file will not read; {name} is the agent's name
+#: src/code-credentials.ts
+msgid "the agent entry {name} is malformed; preserved unchanged"
+msgstr "the agent entry {name} is malformed; preserved unchanged"
 
 #. Refusal of a remote URL carrying a user before the host
 #: src/space-git.ts
@@ -2435,8 +2588,10 @@ msgstr "the config is not valid; fix it in Settings before the agent can answer"
 #. Refusal during attachment admission
 #. Refusal during core shutdown
 #. Refusal during core shutdown
+#. Refusal during core shutdown
 #. Refusal: environment work asked once the core stops
 #: src/environments.ts
+#: src/places.ts
 #: src/service.ts
 #: src/session.ts
 msgid "The core is stopping."
@@ -2468,6 +2623,11 @@ msgstr "the home is not a folder"
 #: src/space.ts
 msgid "The host changed again"
 msgstr "The host changed again"
+
+#. Storage diagnostic: a code host's entry in the seat's credentials file will not read; {name} is its host name as the file keys it
+#: src/code-credentials.ts
+msgid "the host entry {name} is malformed; preserved unchanged"
+msgstr "the host entry {name} is malformed; preserved unchanged"
 
 #. Refusal of a pick naming a group the Git host does not list
 #: src/space.ts
@@ -2576,6 +2736,11 @@ msgstr "The repository holds no commit yet; initialize it again"
 msgid "the run is still parked, so the intent stays open"
 msgstr "the run is still parked, so the intent stays open"
 
+#. Refusal of a seat's opening or closing: the seats file changed between the core's read and its write
+#: src/places.ts
+msgid "The seats changed meanwhile; try again"
+msgstr "The seats changed meanwhile; try again"
+
 #. Refusal: the session is held, so it cannot be discarded now
 #. Refusal: the session is held, so it cannot be discarded now
 #: src/session.ts
@@ -2627,6 +2792,11 @@ msgstr "the spec package of {id} is missing from the working folder"
 #: src/space.ts
 msgid "The spex repository is here; choose a folder for its code to pair it."
 msgstr "The spex repository is here; choose a folder for its code to pair it."
+
+#. Guidance after a project's code clone failed on a team server's seat, where the server allocates the code's folder: joining the repository again clones its code there
+#: src/space.ts
+msgid "The spex repository is here; join it again to clone its code."
+msgstr "The spex repository is here; join it again to clone its code."
 
 #. Repair row: a working folder is paired with a spex repository whose clone is gone
 #: src/store.ts
@@ -2713,6 +2883,16 @@ msgstr "This run no longer offers “{actionId}”."
 #: src/session.ts
 msgid "This run offers no recovery to rerun."
 msgstr "This run offers no recovery to rerun."
+
+#. Readiness on a team server's seat: the file holding the administrator's shared sign-ins cannot be read
+#: src/seat-credentials.ts
+msgid "This server's shared sign-in cannot be read: ask its administrator"
+msgstr "This server's shared sign-in cannot be read: ask its administrator"
+
+#. Readiness on a team server's seat: the agent's status command reports the administrator's shared sign-in expired or refused
+#: src/seat-credentials.ts
+msgid "This server's shared sign-in has expired: ask its administrator"
+msgstr "This server's shared sign-in has expired: ask its administrator"
 
 #. Refusal: nothing in the session's history can be continued
 #: src/service.ts
@@ -2926,6 +3106,21 @@ msgstr "You stopped the transfer; your commits stand. Git runs without prompts, 
 #: src/space.ts
 msgid "Your merge is saved locally; Retry to send it once the host settles."
 msgstr "Your merge is saved locally; Retry to send it once the host settles."
+
+#. Readiness on a team server's seat: the agent runs on a credential the member placed in Settings
+#: src/seat-credentials.ts
+msgid "Your own credential"
+msgstr "Your own credential"
+
+#. Readiness on a team server's seat: the agent's status command reports the credential the member placed expired or refused
+#: src/seat-credentials.ts
+msgid "Your own credential has expired"
+msgstr "Your own credential has expired"
+
+#. Refusal on a team server's seat of a pick or a remote for your own group: its records stay on the server and are placed at no instance
+#: src/space.ts
+msgid "Your own group stays on this server"
+msgstr "Your own group stays on this server"
 
 #. Refusal: your own group's request by path names a folder inside its spex repository's clone (environments-2), and this spec package lies elsewhere
 #: src/service.ts

@@ -927,9 +927,41 @@ test("core-service-32: a session's failure stands only until a later turn settle
   const project = await client.expectOk("project.register", { path: harness.projectDir });
   const session = await client.expectOk("session.create", { projectId: project.id });
   const turn = async (text: string, turns: number): Promise<SessionInfo | undefined> => {
+    const started = Date.now();
     await client.expectOk("turn.submit", { sessionId: session.id, text });
-    await client.waitFor((m) => m.type === "session.state" && m.session.id === session.id &&
-      m.session.turns === turns && !m.session.turnActive && !m.session.live);
+    const accepted = Date.now();
+    try {
+      // Real checkpoint/replay persistence and lease release contend with
+      // parallel macOS filesystem work; five seconds is no product latency contract.
+      await client.waitFor((m) => m.type === "session.state" && m.session.id === session.id &&
+        m.session.turns === turns && !m.session.turnActive && !m.session.live, 30_000);
+    } catch (error) {
+      // Failure-only evidence: lifecycle fields, never prompt or provider content.
+      const compact = (item: SessionInfo) => ({
+        turns: item.turns, live: item.live, turnActive: item.turnActive,
+        failed: item.failed, recovery: item.recovery?.state, externalWriter: item.externalWriter,
+      });
+      const recent = client.messages.flatMap((message) =>
+        message.type === "session.state" && message.session.id === session.id
+          ? [compact(message.session)] : []).slice(-12);
+      const elapsedMs = Date.now() - started;
+      const waitMs = Date.now() - accepted;
+      const shared = createSessionStore({ sessionsDir: projectSessions(harness.dataDir, project.id) });
+      const observations = await Promise.allSettled([
+        client.expectOk("session.list", {}).then((items) => {
+          const item = items.find((entry) => entry.id === session.id);
+          return item ? compact(item) : null;
+        }),
+        shared.readManifest(session.id).then((manifest) => ({state: manifest.state})),
+        shared.readStream(session.id).then(({entries}) => entries.slice(-12).map(({record}) => ({
+          type: record.type, turnId: (record as {turnId?: unknown}).turnId,
+        }))),
+      ]);
+      const evidence = observations.map((result) => result.status === "fulfilled"
+        ? result.value : {error: result.reason instanceof Error ? result.reason.name : "unknown"});
+      throw new Error(`turn settlement timeout: ${JSON.stringify({turns, elapsedMs, waitMs, recent,
+        listed: evidence[0], checkpoint: evidence[1], records: evidence[2]})}`, {cause: error});
+    }
     return (await client.expectOk("session.list", {})).find((item) => item.id === session.id);
   };
 

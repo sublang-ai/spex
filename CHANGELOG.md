@@ -282,6 +282,16 @@ and `npm start` (desktop) or `npm run start:server` (server).
   17.7.0" with one **Update**, which resolves it again. `environment.get`
   and `environment.state` carry it as the optional
   `builtinUpdate: { shipped, locked }`; the protocol version is unchanged.
+- The core lists the team servers each signed-in instance offers you,
+  opens a seat on one once you accept its contract — the ticket asked of
+  the instance and presented at the server over TLS — keeps the seat in
+  `local/seats.yaml`, owner-only, and closes it ([DR-133](specs/decisions/133-one-desktop-over-several-cores.md)).
+  Protocol 28 adds `server.list`, `server.open`, `server.close` and the
+  `server.state` event. While a seat is open the core's own endpoint
+  relays to it at `/seats/<place>`, admitted as `/` is, presenting the
+  bearer to the server itself; it reconnects to each seat every second,
+  reads a seat speaking another protocol as mismatched, removes a seat
+  whose lease ended, and adds each seat's badge to the dock's count.
 
 ### Changed
 
@@ -668,9 +678,11 @@ and `npm start` (desktop) or `npm run start:server` (server).
   `space.signout`, `space.refresh`, `space.pick`, `space.join`,
   `space.members`, `space.share`, `space.unshare` and
   `space.group.create` join, with `draft.defaults` and the
-  `environment.*` family; `intent.move`, `intent.link` and `space.init`
+  `environment.*` family, and `server.list`, `server.open` and
+  `server.close` with the `server.state` event for the seats a desktop
+  opens on team servers; `intent.move`, `intent.link` and `space.init`
   leave; and a draft's `malformedDirectives` entries carry `text` and
-  `reason`. The protocol is 27.
+  `reason`. The protocol is 28.
 
 - The dependency lock previously took Playbook 17.8.1 — the Captain ends a relayed question with the question's own words and reports a step's ending with the facts the step gave — and cligent 0.33.4 — the Claude Code adapter withholds the structured-question tool it cannot serve, so no refused call shows in the Captain's pane. That adoption left the floors of DR-116 unchanged.
 - The app previously adopted Playbook 17.9.0 and Cligent 0.33.5 ([DR-121](specs/decisions/121-playbook-17-9-0-cligent-0-33-5-adoption.md)). Claude Code runs with its own commit and pull-request attribution off, so a player's commits carry only the trailers the project asks for, and every player prompt opens with `Role: <role> · Model: <model>`, so such a trailer can name both. Every role after a Boss answer hears the run's questions and answers, whatever the playbook retains; a question and a reply reach a player behind `? ⟶` and `Boss ⟶` lines, and the lines the Captain appends to a reply read as marks — `✓`, `✕ <code>`, `▸ <label>` — not English sentences. The closing reply names each commit's hash and branch, and a judge's reply the machine admits is no longer forced into a string where the runtime could not read the field's shape. **Upgrade together:** stop every Playbook CLI and Spex shell sharing the home before the first new writer runs; an earlier Playbook rejects the run snapshots and ledgers this one writes.

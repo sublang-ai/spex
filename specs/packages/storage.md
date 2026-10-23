@@ -241,7 +241,7 @@ Before admitting writers to the groups layout, when the core finds the former la
 - no Git history is written before validation confirms session recovery fields contain no provider tokens;
 - `meta.json` remains `{version: 1, importedLegacy?: string[]}` for completed legacy database imports.
 
-### storage-46
+### storage-50
 
 While source writers are stopped, before admitting writers, when the home holds bounded Playbook sessions in its root `sessions/` or an incomplete bounded-session import receipt, a separate import stage shall preserve and move those complete families into the groups layout under the home lease [[storage-14](#storage-14)] without changing a released migration ([DR-135](../decisions/135-bounded-session-storage.md)):
 
@@ -359,7 +359,7 @@ When selecting stored data during a Git merge of a spex repository's `spex` bran
 Before reopening selected state, the validator shall validate the complete selected tree of a clone without modifying file contents, after Playbook's preparation removes excess permissions from verified user-owned session entries and refuses unsafe paths [[1]]:
 
 - before each Spex-owned project, intent, authoring or configuration read, inspect the clone-relative parents and leaf without following links: existing parents must be directories and an existing leaf must have its expected regular-file or directory kind; missing optional paths remain absent, and unsafe paths refuse before reading their contents; repeat these checks at the actual read boundary after awaited work, including before handing session or attachment paths to Playbook, whose validation remains authoritative [[1]];
-- file formats and closed encodings are valid [[storage-2](#storage-2)] [[storage-3](#storage-3)] [[storage-4](#storage-4)] [[storage-5](#storage-5)] [[storage-23](#storage-23)] [[storage-36](#storage-36)] [[storage-43](#storage-43)] [[storage-46](#storage-46)] [[1]];
+- file formats and closed encodings are valid [[storage-2](#storage-2)] [[storage-3](#storage-3)] [[storage-4](#storage-4)] [[storage-5](#storage-5)] [[storage-23](#storage-23)] [[storage-36](#storage-36)] [[storage-43](#storage-43)] [[storage-50](#storage-50)] [[1]];
 - open artifact-source identities are unique within a spex repository [[core-service-42](core-service.md#core-service-42)], and dispatch targets still present belong to the same spex repository with valid turn boundaries;
 - deleted session targets retain the existing ledger re-derivation behavior [[core-service-70](core-service.md#core-service-70)]; a missing session alone is not permission to discard a verdict or repeat work;
 - a clone no folder pairs, and a folder whose clone is missing, are reported with their records unlisted, without blocking unrelated valid spex repositories or automatically pairing anything;
@@ -500,7 +500,7 @@ When an integration suite merges two real Git branches of a group's own spex rep
 
 ### storage-47
 
-When integration tests import bounded CLI sessions through a real home open and shared store, they shall verify a former home and an established home receiving a later default-location session, complete root/replay/chunk/asset transfer with unchanged semantic recovery and hints retained locally, held source and destination leases leaving their families unchanged, retry after interrupted destination publication, and refusal of inconsistent receipts, divergent destination bytes and unsafe parents without overwriting them [[storage-46](#storage-46)].
+When integration tests import bounded CLI sessions through a real home open and shared store, they shall verify a former home and an established home receiving a later default-location session, complete root/replay/chunk/asset transfer with unchanged semantic recovery and hints retained locally, held source and destination leases leaving their families unchanged, retry after interrupted destination publication, and refusal of inconsistent receipts, divergent destination bytes and unsafe parents without overwriting them [[storage-50](#storage-50)].
 
 ### storage-28
 
@@ -539,6 +539,10 @@ When the root-lease integration suite runs the core's store and the storage Git 
 - a moved owner whose token differs from the one read fails closed with the moved directory intact [[storage-26](#storage-26)];
 - a former-layout `.lock/` held by a live owner or another machine's keeps the core out, leaving no lease, and a dead one of this machine is left in place [[storage-26](#storage-26)];
 - a storage command with an unavailable identity refuses before any change, naming the identity file [[storage-10](#storage-10)].
+
+### storage-46
+
+Where a home opens, closes and reopens seats against a stand-in instance and a stand-in hub, the test suite shall assert the seats file [[storage-45](#storage-45)]: written at an open with owner-only permissions under a `local/` of the same, read back at the next start with every entry, removed at the close of its last entry, a file of another format refused at an open and a close and left byte for byte as it was, and the bearer in no reply, event or log.
 
 ## References
 

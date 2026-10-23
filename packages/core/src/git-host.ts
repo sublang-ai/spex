@@ -8,9 +8,11 @@
 // the host's JSON routes under `/api/v1`: groups, spex repositories and
 // members, with what the host says the person may do and the roles it
 // grants, and the undo writes — a group renamed or deleted, a spex
-// repository moved. A rate limit the host answers holds a sync step's
-// calls and the host read until the instant it asked for, and refuses
-// every other call meanwhile with the seconds that remain (git-host-21).
+// repository moved — and the team servers a person may open a seat on
+// with the tickets that open one (git-host-29). A rate limit the host
+// answers holds a sync step's calls and the host read until the instant
+// it asked for, and refuses every other call meanwhile with the seconds
+// that remain (git-host-21).
 // It composes no reader-facing prose: a failure is a `HostError` carrying
 // its kind and the host's own words, which the core phrases where it
 // speaks (git-host-11). No secret ever enters an error message or a log
@@ -44,6 +46,9 @@ export const RATE_LIMIT_HOLD_MAX_MS = 120_000;
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
 const SLOW_DOWN_STEP_MS = 5_000;
 const LABEL_MAX = 80;
+/** The longest a server's id or a person's id may be in a device
+ * request (git-host-27; the instance's own bound). */
+export const SEAT_ID_MAX = 64;
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const MONTH = MONTHS.join("|");
@@ -151,6 +156,23 @@ export interface HostRepositoryDetail extends HostRepository {
  * the instance of the group it comes through. */
 export interface HostMember { id: string; login: string; displayName: string | null; role: string; direct: boolean; via: string | null }
 
+/** A team server the person may open a seat on, as the instance lists it
+ * (git-host-29, DR-133): its id, name and address — the https origin it
+ * listens at — and its group by the instance's id, path, name and kind,
+ * with no abilities. */
+export interface HostServer {
+  id: string;
+  name: string;
+  group: { id: string | null; fullPath: string; name: string; kind: "user" | "group" };
+  address: string;
+}
+
+/** A ticket the instance minted for a seat on one of its servers
+ * (git-host-29): single use and short-lived — `expiresIn` its seconds —
+ * presented to the server at its address. A secret: never held after the
+ * caller presents it, never in a log or a message. */
+export interface HostTicket { ticket: string; expiresIn: number; server: { id: string; name: string; address: string } }
+
 export type HostErrorKind =
   | "pending"
   | "name_taken"
@@ -161,8 +183,10 @@ export type HostErrorKind =
   | "unreachable"
   | "bad_request";
 
-/** Why a sign-in ended without an account (git-host-2, git-host-3). */
-export type SignInCause = "denied" | "expired" | "stopped" | "refused" | "state" | "unreachable" | "account";
+/** Why a sign-in ended without an account (git-host-2, git-host-3):
+ * `account` a person other than a listed instance's account, `person` a
+ * person other than the one a seat's device request named (git-host-27). */
+export type SignInCause = "denied" | "expired" | "stopped" | "refused" | "state" | "unreachable" | "account" | "person";
 
 /**
  * A host answer other than success (git-host-11). `words` is the host's
@@ -381,6 +405,11 @@ export interface GitHostClientOptions {
   /** Test seam (git-host-21): the longest a rate limit holds the calls;
    * 120 s by default. */
   holdMaxMs?: number;
+  /** On a seat (git-host-27): the server's id and the admitted person's
+   * permanent account id at the instance, which the device request
+   * carries as `server_id` and `person_id`; a sign-in whose person bears
+   * another id ends `failed`, storing nothing. */
+  server?: { id: string; personId: string };
 }
 
 /** Whether a sign-in may store its token for the person it read
@@ -392,6 +421,13 @@ export type AdmitAccount = (account: HostAccount) => HostError | null;
  * its entry's account (git-host-2): `words` carries the entry's login. */
 export function anotherAccountError(login: string): HostError {
   return signInError("account", { words: login });
+}
+
+/** The refusal of a seat's sign-in as a person other than the one its
+ * device request named (git-host-27): `words` carries the login the
+ * instance signed in. */
+export function anotherPersonError(login: string): HostError {
+  return signInError("person", { words: login });
 }
 
 /** A running browser sign-in (git-host-2). */
@@ -454,6 +490,7 @@ export class GitHostClient {
   private readonly requestTimeoutMs: number;
   private readonly onHold?: (until: number) => void;
   private readonly holdMaxMs: number;
+  private readonly server?: { id: string; personId: string };
   private refreshing: Promise<StoredCredential> | null = null;
   private signIn: object | null = null;
   /** The instant the host's last rate limit asked every call to wait
@@ -472,6 +509,7 @@ export class GitHostClient {
     this.requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
     this.onHold = options.onHold;
     this.holdMaxMs = options.holdMaxMs ?? RATE_LIMIT_HOLD_MAX_MS;
+    if (options.server) this.server = { id: options.server.id, personId: options.server.personId };
   }
 
   /** Whether the host's rate limit holds the calls now (git-host-21). */
@@ -625,7 +663,10 @@ export class GitHostClient {
     const { slot, expected } = await this.beginSignIn();
     let start: { deviceCode: string; userCode: string; verificationUri: string; expiresIn: number; interval: number };
     try {
-      const answer = await this.send("POST", "/api/v1/auth/device", { body: { client_id: this.clientId, label: this.label } });
+      // A seat names its server and the person it was opened for, both
+      // or neither (git-host-27).
+      const seat = this.server ? { server_id: this.server.id, person_id: this.server.personId } : {};
+      const answer = await this.send("POST", "/api/v1/auth/device", { body: { client_id: this.clientId, label: this.label, ...seat } });
       if (answer.status !== 200) throw answerError(answer);
       const body = record(answer.json);
       start = {
@@ -916,6 +957,33 @@ export class GitHostClient {
     return { status: "ready" };
   }
 
+  /**
+   * `GET /api/v1/host/servers` (git-host-29): the servers the person may
+   * open a seat on, as the instance answers them, in its order. The
+   * client keeps nothing of the answer.
+   */
+  async servers(options: HostCallOptions = {}): Promise<HostServer[]> {
+    const body = record((await this.call("GET", "/api/v1/host/servers", undefined, options)).json);
+    return list(body.servers).map(serverFrom);
+  }
+
+  /**
+   * `POST /api/v1/host/servers/:id/tickets` (git-host-29): a ticket for a
+   * seat on the server `id`, as the instance answers it; the client keeps
+   * nothing of it. A server the instance does not list for the person
+   * throws `not_found`, a membership below the role it needs
+   * `host_refused`, each with the instance's words.
+   */
+  async ticket(id: string, options: HostCallOptions = {}): Promise<HostTicket> {
+    const body = record((await this.call("POST", `/api/v1/host/servers/${encodeURIComponent(id)}/tickets`, {}, options)).json);
+    const server = record(body.server);
+    return {
+      ticket: text(body.ticket),
+      expiresIn: positive(body.expires_in, 0),
+      server: { id: text(server.id), name: text(server.name), address: text(server.address) },
+    };
+  }
+
   /** `POST /api/v1/host/credential` (git-host-9): the Git credential for
    * the host's Git origin, with its expiry in Unix milliseconds. */
   async credential(origin: string, options: HostCallOptions = {}): Promise<{ username: string; secret: string; expiresAt: number }> {
@@ -993,12 +1061,14 @@ export class GitHostClient {
   }
 
   /** Store an issued token in place of the pair its sign-in began over;
-   * the caller ends the sign-in in the same turn. A person `admit`
-   * refuses ends it with that refusal, and another pair stored meanwhile
-   * ends it `stopped`, that pair kept: either stores nothing
-   * (git-host-2). */
+   * the caller ends the sign-in in the same turn. On a seat, a person
+   * bearing another permanent id than the one the request named ends it
+   * naming the account signed in (git-host-27); a person `admit` refuses
+   * ends it with that refusal; and another pair stored meanwhile ends it
+   * `stopped`, that pair kept: each stores nothing (git-host-2). */
   private publish(expected: StoredCredential | null, issued: Issued, admit?: AdmitAccount): { account: HostAccount } | { error: HostError } {
     try {
+      if (this.server && issued.account.id !== this.server.personId) return { error: anotherPersonError(issued.account.login) };
       const refused = admit?.(issued.account);
       if (refused) return { error: refused };
       return this.credentials.replace(expected, issued.credential) ? { account: issued.account } : { error: signInError("stopped") };
@@ -1215,6 +1285,12 @@ function groupFrom(value: unknown): HostGroup {
     kind: body.kind === "user" ? "user" : "group",
     can: { createSubgroup: flag(can.create_subgroup), manageMembers: flag(can.manage_members), rename: flag(can.rename), delete: flag(can.delete) },
   };
+}
+
+function serverFrom(value: unknown): HostServer {
+  const body = record(value);
+  const { can: _can, ...group } = groupFrom(body.group);
+  return { id: text(body.id), name: text(body.name), group, address: text(body.address) };
 }
 
 function roleFrom(value: unknown): HostRole {
