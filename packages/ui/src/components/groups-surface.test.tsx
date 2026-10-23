@@ -49,9 +49,13 @@ import {
   withGroups,
   withInstance,
   type HomeOver,
+  type RowOver,
 } from "../fixtures/groups.js";
 
 beforeEach(installClient);
+
+/** A row's placement line at the fixtures' instance (space-87). */
+const lineAt = (key: string): HTMLElement => within(screen.getByTestId(`space-row-${key}`)).getByTestId(`space-line-${ORIGIN}`);
 
 afterEach(() => {
   cleanup();
@@ -694,8 +698,14 @@ describe("GROUPS: the groups list and its rows (space-1, space-61, space-64)", (
     expect(screen.getByTestId("space-heading-beside-jane1").className).toContain("text-neutral-500");
     expect(screen.queryByTestId("space-heading-beside-lab")).toBeNull();
     expect(screen.queryByTestId("space-heading-beside-@jane")).toBeNull();
-    // In each group the rows stand in the core's order, its own first.
-    expect(within(groups[2]!).getAllByRole("listitem").map((item) => item.dataset.testid)).toEqual([
+    // In each group the rows stand in the core's order, its own first;
+    // a row's placement lines are items of its own list (space-87).
+    const rowsOf = (group: HTMLElement) =>
+      within(group)
+        .getAllByRole("listitem")
+        .map((item) => item.dataset.testid)
+        .filter((id) => id?.startsWith("space-row-"));
+    expect(rowsOf(groups[2]!)).toEqual([
       "space-row-@spex.example/acme/team/team-spex",
       "space-row-@spex.example/acme/team/academy-spex",
       "space-row-@spex.example/acme/team/docs-spex",
@@ -734,16 +744,16 @@ describe("GROUPS: the groups list and its rows (space-1, space-61, space-64)", (
     expect(screen.queryByTestId("space-repository")).toBeNull();
   });
 
-  test("each state reads its phrase and offers its control; Members stands on a reachable row alone", async () => {
-    const cases: [Partial<RepositoryState>, string, string | null, boolean][] = [
-      [{ state: "reachable", lastSync: null }, "Never synced", "Sync", true],
-      [{ state: "reachable", lastSync: { at: NOW - 5 * MIN, sent: 1, received: 1 } }, "Synced 5m ago", "Sync", true],
-      [{ state: "read-only", reason: "archived" }, "Read-only: archived", "Sync", false],
-      [{ state: "unreachable", reason: "the host stopped listing it" }, "Unreachable: the host stopped listing it", "Retry", false],
-      [{ state: "absent", folder: null, branch: null }, "Not on this device", "Join", false],
-      [{ state: "local-only", remote: null, id: null, branch: null }, "On this device only", "Pick a group", false],
+  test("each state reads its phrase and offers its control; Members stands on a reachable row's placement line alone; Leave… on a project's row holding a placement at an instance (space-89)", async () => {
+    const cases: [RowOver, string, string | null, boolean, boolean][] = [
+      [{ state: "reachable", lastSync: null }, "Never synced", "Sync", true, true],
+      [{ state: "reachable", lastSync: { at: NOW - 5 * MIN, sent: 1, received: 1 } }, "Synced 5m ago", "Sync", true, true],
+      [{ state: "read-only", reason: "archived" }, "Read-only: archived", "Sync", false, true],
+      [{ state: "unreachable", reason: "the host stopped listing it" }, "Unreachable: the host stopped listing it", "Retry", false, true],
+      [{ state: "absent", folder: null, branch: null }, "Not on this device", "Join", false, false],
+      [{ state: "local-only", remote: null, id: null, branch: null }, "On this device only", "Pick a group", false, false],
     ];
-    for (const [over, phrase, controlName, members] of cases) {
+    for (const [over, phrase, controlName, members, leave] of cases) {
       await renderGroups(base({}, [repo(over)]), { open: false });
       const rowItem = screen.getByTestId(`space-row-${KEY}`);
       expect(screen.getByTestId(`space-repo-state-${KEY}`).textContent, phrase).toBe(phrase);
@@ -751,17 +761,24 @@ describe("GROUPS: the groups list and its rows (space-1, space-61, space-64)", (
         .getAllByRole("button")
         .filter((button) => !button.dataset.testid?.startsWith("space-repo-"))
         .map((button) => button.getAttribute("aria-label") ?? button.textContent);
-      expect(controls, phrase).toEqual([...(members ? ["Members"] : []), ...(controlName ? [controlName] : [])]);
+      // Leave… named by the instance it leaves, then the row's control,
+      // then the Members its placement's line carries (space-89,
+      // space-87).
+      expect(controls, phrase).toEqual([
+        ...(leave ? ["Remove from Spex Example"] : []),
+        ...(controlName ? [controlName] : []),
+        ...(members ? ["Members"] : []),
+      ]);
       cleanup();
     }
   });
 
-  test("a reachable row reads its recorded sync, else the last one its clone holds (space-61)", async () => {
+  test("space-61, space-66: a reachable row and its placement's line read its recorded sync, else the last one its clone holds", async () => {
     const held = (at: number, current: boolean) => ({ ...BRANCH, agreed: { at, current } });
     const recorded = NOW - 5 * MIN;
     const agreedAt = NOW - 3 * HOUR;
     const since = NOW - 26 * HOUR;
-    const cases: [Partial<RepositoryState>, string, number | null][] = [
+    const cases: [RowOver, string, number | null][] = [
       // This device's record stands over what the clone holds.
       [{ lastSync: { at: recorded, sent: 1, received: 0 }, branch: held(since, false) }, "Synced 5m ago", recorded],
       // None recorded — a core started afresh after a sync, a joined
@@ -776,6 +793,13 @@ describe("GROUPS: the groups list and its rows (space-1, space-61, space-64)", (
       expect(state.textContent, phrase).toBe(phrase);
       // The full moment rides the title (DR-010 §2).
       expect(state.getAttribute("title"), phrase).toBe(at === null ? phrase : absoluteTitle(at));
+      // Its placement's line reads the same last sync, its own ahead and
+      // behind beside it in the title (space-87, space-8).
+      const line = within(within(screen.getByTestId(`space-row-${KEY}`)).getByTestId(`space-line-${ORIGIN}`)).getByTestId("space-line-state");
+      expect(line.textContent, phrase).toBe(phrase);
+      expect(line.getAttribute("title"), phrase).toBe(
+        `${at === null ? phrase : absoluteTitle(at)} · 2 commits ahead, 1 commit behind · checked ${absoluteTitle(BRANCH.checkedAt!)}`,
+      );
       cleanup();
     }
     // In the reader's language, the moment as the locale writes it.
@@ -793,11 +817,15 @@ describe("GROUPS: the groups list and its rows (space-1, space-61, space-64)", (
   test("space-61: signed out, no row offers a sign-in: a repository the instance holds waits for its heading's; a path remote retries", async () => {
     await renderGroups(base({ instance: { signedIn: false } }, [repo({ state: "unreachable", reason: "Sign in again" })]), { open: false });
     expect(screen.getByTestId(`space-repo-state-${KEY}`).textContent).toBe("Unreachable: Sign in again");
+    // Leave… stands, signed in or not, so the placement can be left
+    // before its instance is forgotten (space-89, space-82); nothing
+    // else does.
     expect(
       within(screen.getByTestId(`space-row-${KEY}`))
         .getAllByRole("button")
-        .filter((button) => !button.dataset.testid?.startsWith("space-repo-")),
-    ).toEqual([]);
+        .filter((button) => !button.dataset.testid?.startsWith("space-repo-"))
+        .map((button) => button.dataset.testid),
+    ).toEqual([`space-row-leave-${KEY}`]);
     cleanup();
     await renderGroups(base({ instance: { signedIn: false } }, [repo({ state: "unreachable", reason: "the folder is gone", remote: "/srv/academy-spex.git" })]), { open: false });
     const reads = calls("space.get").length;
@@ -814,7 +842,7 @@ describe("GROUPS: the groups list and its rows (space-1, space-61, space-64)", (
     await waitFor(() => expect(calls("space.get")).toHaveLength(2));
   });
 
-  test("a group's own repository waiting on someone's rights reads the step and group, the host's words in the title (space-64)", async () => {
+  test("space-64, space-87: a waiting creation's phrase stands on its line, the host's words in its title, the row reading On this device only", async () => {
     const waiting = (step: "create" | "branch") =>
       repo({
         key: "@spex.example/acme/team/team-spex",
@@ -832,7 +860,15 @@ describe("GROUPS: the groups list and its rows (space-1, space-61, space-64)", (
       ["branch", "Waiting for a member who can prepare its branch in acme/team"],
     ] as const) {
       await renderGroups(withGroups(base(), teamGroup([waiting(step)])), { open: false });
-      const state = screen.getByTestId("space-repo-state-@spex.example/acme/team/team-spex");
+      // The row holds no placement: it reads local only (space-61).
+      expect(screen.getByTestId("space-repo-state-@spex.example/acme/team/team-spex").textContent).toBe("On this device only");
+      // The step waits on the line of the instance it waits at, the
+      // group named, the host's words in its title.
+      const line = within(screen.getByTestId("space-lines-@spex.example/acme/team/team-spex")).getByTestId(`space-line-${ORIGIN}`);
+      expect(line.dataset.attached).toBe("false");
+      expect(within(line).getByTestId("space-line-instance").textContent).toBe("Spex Example");
+      expect(within(line).getByTestId("space-line-at").textContent).toBe("acme/team/team-spex");
+      const state = within(line).getByTestId("space-line-state");
       expect(state.textContent).toBe(phrase);
       expect(state.getAttribute("title")).toBe("403 Forbidden: you need at least the Maintainer role");
       // A group's own repository is made at its first session, never
@@ -945,9 +981,9 @@ describe("GROUPS: Pick a group (space-58, space-29)", () => {
     // A project this device's reader has not been told about, beside a
     // team's spex repository for the same code.
     const LISTED = "@spex.example/acme/team/academy-spex";
-    const joining = (listed: Partial<RepositoryState>, local: Partial<RepositoryState> = {}): GroupsState => {
+    const joining = (listed: RowOver, local: RowOver = {}): GroupsState => {
       const state = base({}, [repo({ state: "local-only", remote: null, id: null, code: CODE, branch: null, members: null, noticed: false, ...local })]);
-      const team = repo({ key: LISTED, name: "academy-spex", id: "51", code: CODE, folder: null, members: 3, state: "absent", branch: null, ...listed });
+      const team = repo({ key: LISTED, name: "academy-spex", id: "51", code: CODE, folder: null, members: 3, state: "absent", branch: null, noticed: false, ...listed });
       return withGroups(state, teamGroup([team]));
     };
     const option = () => screen.getByTestId(`space-pick-repo-${LISTED}`);
@@ -1019,9 +1055,9 @@ describe("GROUPS: Pick a group (space-58, space-29)", () => {
     cleanup();
     commandMock.mockImplementation(answer);
 
-    // The account its only member, or the notice seen already: the pick
-    // joins at once, without noticed.
-    for (const [listed, local] of [[{ members: 1 }, {}], [{ members: 3 }, { noticed: true }], [{ members: null }, { noticed: true }]] as const) {
+    // The account its only member, or the notice seen already for that
+    // placement: the pick joins at once, without noticed.
+    for (const [listed, local] of [[{ members: 1 }, {}], [{ members: 3, noticed: true }, {}], [{ members: null, noticed: true }, {}]] as const) {
       commandMock.mockClear();
       await renderGroups(joining(listed, local), { open: false });
       fireEvent.click(screen.getByTestId(`space-row-pick-${KEY}`));
@@ -1157,7 +1193,7 @@ describe("GROUPS: the instance's entries (space-1, space-58, space-61, DR-120)",
     );
   }
 
-  test("another login's entry carries no control on its heading, its row its own Members; a group named like your login stands apart, unreachable with no Join and no Sync", async () => {
+  test("another login's entry carries no control on its heading, its row's placement line its own Members; a group named like your login stands apart, unreachable with no Join and no Sync", async () => {
     await renderGroups(instanceHome(), { open: false });
     const own = screen.getByRole("group", { name: "Your own group" });
     expect(within(own).getByRole("heading", { level: 2 }).textContent).toBe("Your own group · jane");
@@ -1176,11 +1212,12 @@ describe("GROUPS: the instance's entries (space-1, space-58, space-61, DR-120)",
     expect(within(bob).getByRole("heading", { level: 3 }).textContent).toBe("bob");
     expect(screen.queryByTestId("space-group-members-bob")).toBeNull();
     expect(screen.queryByTestId("space-group-subgroup-bob")).toBeNull();
-    // Its row carries its own Members, Share where the host says so (space-62).
-    fireEvent.click(screen.getByTestId("space-row-members-@spex.example/bob/notes-spex"));
-    const members = await screen.findByTestId("space-members-@spex.example/bob/notes-spex");
+    // Its placement's line carries its own Members, Share where the host
+    // says so (space-62, space-87).
+    fireEvent.click(within(lineAt("@spex.example/bob/notes-spex")).getByTestId("space-line-members"));
+    const members = await screen.findByTestId(`space-members-@spex.example/bob/notes-spex@${ORIGIN}`);
     await within(members).findByTestId("space-member-jane");
-    expect(within(members).getByTestId("space-share-@spex.example/bob/notes-spex").textContent).toBe("Share");
+    expect(within(members).getByTestId(`space-share-@spex.example/bob/notes-spex@${ORIGIN}`).textContent).toBe("Share");
     // The group named like your login: its own entry, its row
     // unreachable with the cause, Retry its one control (space-61).
     const apart = screen.getByTestId("space-group-jane");
@@ -1221,12 +1258,12 @@ describe("GROUPS: the instance's entries (space-1, space-58, space-61, DR-120)",
 });
 
 describe("GROUPS: Members (space-62)", () => {
-  test("Members lists the host's members with their role names and no page of the host, read on every opening and Refresh", async () => {
+  test("Members on the placement's line lists the host's members with their role names and no page of the host, read on every opening and Refresh", async () => {
     await renderGroups(base(), { open: false });
-    const control = screen.getByTestId(`space-row-members-${KEY}`);
+    const control = within(lineAt(KEY)).getByTestId("space-line-members");
     expect(control.getAttribute("aria-label")).toBe("Members");
     fireEvent.click(control);
-    await waitFor(() => expect(calls("space.members")).toEqual([{ repository: KEY }]));
+    await waitFor(() => expect(calls("space.members")).toEqual([{ repository: KEY, instance: ORIGIN }]));
     const list = await screen.findByRole("region", { name: "Members of academy-spex" });
     await waitFor(() => expect(within(list).getAllByRole("listitem")).toHaveLength(2));
     expect(screen.getByTestId("space-member-jane").textContent).toContain("Jane");
@@ -1251,7 +1288,7 @@ describe("GROUPS: Members (space-62)", () => {
       return answer(type, fields);
     });
     await renderGroups(base(), { open: false });
-    fireEvent.click(screen.getByTestId(`space-row-members-${KEY}`));
+    fireEvent.click(within(lineAt(KEY)).getByTestId("space-line-members"));
     expect((await screen.findByRole("alert")).textContent).toBe("Spex Example refused: 404 Project Not Found");
   });
 });
@@ -1276,7 +1313,8 @@ describe("GROUPS: copy and fit (space-27, space-28)", () => {
       // What a row opens counts too.
       const pick = screen.queryByTestId(`space-row-pick-${KEY}`);
       if (pick) fireEvent.click(pick);
-      const members = screen.queryByTestId(`space-row-members-${KEY}`);
+      const line = within(screen.getByTestId(`space-row-${KEY}`)).queryByTestId(`space-line-${ORIGIN}`);
+      const members = line ? within(line).queryByTestId("space-line-members") : null;
       if (members) {
         fireEvent.click(members);
         await screen.findByTestId("space-member-jane");
@@ -1341,8 +1379,8 @@ describe("GROUPS: copy and fit (space-27, space-28)", () => {
     const changes = screen.getByTestId(`space-repo-changes-${KEY}`);
     expect(changes.textContent).toContain("1");
     expect(changes.querySelector(".hidden")?.className).toContain("@md:inline");
-    // Members keeps its name in its icon form.
-    const members = screen.getByTestId(`space-row-members-${KEY}`);
+    // Members on the placement's line keeps its name in its icon form.
+    const members = within(lineAt(KEY)).getByTestId("space-line-members");
     expect(members.getAttribute("aria-label")).toBe("Members");
     expect(members.querySelector("svg")?.getAttribute("class")).toContain("@md:hidden");
     // The header's fields stack below @xs.

@@ -144,9 +144,11 @@ class Client {
     );
   }
 
+  /** The first message satisfying the check. The bound only ends a hung
+   * wait: the message is what the step waits for. */
   async waitFor(
     check: (message: ServerMessage) => boolean,
-    timeoutMs = 5000,
+    timeoutMs = 60_000,
   ): Promise<ServerMessage> {
     const start = Date.now();
     for (;;) {

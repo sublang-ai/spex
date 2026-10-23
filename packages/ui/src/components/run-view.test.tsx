@@ -379,7 +379,7 @@ describe("RUN-19: pane structure from the fixture stream", () => {
   test("a lane appears with its player's first call record, in that order", () => {
     // The reviewer is called first here: the panes follow the records,
     // not the roster, and a later call by the coder reorders nothing
-    // (run-view-7, DR-145).
+    // (run-view-7, DR-146).
     renderRun([...TURN_TWO_QUESTION, ...TURN_ONE]);
     const panes = [...document.querySelectorAll('[data-testid^="player-pane-"]')]
       .map((pane) => pane.getAttribute("data-testid"));

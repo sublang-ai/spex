@@ -468,7 +468,7 @@ export function RunView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusTurn, bound, delivered, dispatchTurns, view.captain]);
   // A pane is a player lane, not a moment (DR-032), but only once a
-  // call has reached it (DR-145): a bound player's lane appears with
+  // call has reached it (DR-146): a bound player's lane appears with
   // its first call record, in that order, and stays for the session's
   // life, so a call that ends leaves its transcript where the reader
   // last saw it and a player no call reached takes no place.

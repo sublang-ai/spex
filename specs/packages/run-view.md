@@ -122,7 +122,7 @@ When the session record stream delivers a player's failure — an error event, o
 
 #### run-view-7
 
-The run view shall show one player pane for each player of the session's bound roster of which the session holds a call record (its prompt, an event, or its finish), from that record on for the rest of the session; a player no call has reached takes no place ([DR-032](../decisions/032-session-players.md), [DR-145](../decisions/145-a-lane-appears-with-its-first-call.md)):
+The run view shall show one player pane for each player of the session's bound roster of which the session holds a call record (its prompt, an event, or its finish), from that record on for the rest of the session; a player no call has reached takes no place ([DR-032](../decisions/032-session-players.md), [DR-146](../decisions/146-a-lane-appears-with-its-first-call.md)):
 
 - a pane is a player's lane, so once it stands it stays whether or not that player is engaged in the call now running, and a finished call's transcript stays where the reader last read it;
 - panes stand in the order of their players' first call records, so simultaneous calls appear side by side in that order with no limit on their number, and no pane reorders by which one is working;
@@ -1329,7 +1329,7 @@ Where the harness boots with the demo project registered and the scripted Captai
 
 #### run-view-174
 
-Where the harness boots with the demo project registered and the scripted Captain, when the journey parks a session on a player question and sends the reply from the keyboard so the code run calls the coder and then the reviewer, once side by side at 1024 by 800 pixels and once stacked at 600 by 500, the test suite shall assert through the page that each pane appearing or brought into view leaves the reader's place ([DR-145](../decisions/145-a-lane-appears-with-its-first-call.md)):
+Where the harness boots with the demo project registered and the scripted Captain, when the journey parks a session on a player question and sends the reply from the keyboard so the code run calls the coder and then the reviewer, once side by side at 1024 by 800 pixels and once stacked at 600 by 500, the test suite shall assert through the page that each pane appearing or brought into view leaves the reader's place ([DR-146](../decisions/146-a-lane-appears-with-its-first-call.md)):
 
 - before the reply, no pane and no divider stand [[run-view-7](#run-view-7)];
 - the coder's pane appears first and the reviewer's beside or after it, in that order [[run-view-7](#run-view-7)];

@@ -97,15 +97,15 @@ test("core-service-127, space-102, space-104: on a seat your own group gains no 
   await signIn(home, host);
   const read = await home.client.waitSpace(from, (state) => (instanceOf(state, host.url)?.readAt ?? null) !== null && state.signIn.phase === "idle");
   // Renamed after the login as on any home, its clone stays local only
-  // with no remote; nothing is created at the instance and its own
+  // with no placement; nothing is created at the instance and its own
   // repository there is neither joined nor cloned (space-102).
   const own = ownRow(read);
-  assert.deepEqual([own.key, own.remote, own.instance, own.state], [HOST_OWN, null, null, "local-only"]);
+  assert.deepEqual([own.key, own.placements, own.instance, own.state], [HOST_OWN, [], null, "local-only"]);
   assert.equal(git(clonePath(home.dataDir, HOST_OWN), "remote"), "", "your own group's clone has no remote");
   assert.deepEqual(host.script.creations, [], "nothing is created at the instance");
   assert.equal(existsSync(clonePath(home.dataDir, hostKey(host, HOST_OWN))), false, "the member's own records are not cloned");
   const after = ownRow(await home.client.expectOk("space.get", {}));
-  assert.deepEqual([after.remote, after.state], [null, "local-only"]);
+  assert.deepEqual([after.placements, after.state], [[], "local-only"]);
 
   // No pick and no remote for your own group (space-102).
   await home.client.expectError("space.pick", { repository: HOST_OWN, choice: { kind: "create", instance: host.url, groupId: null, name: LOGIN } }, "invalid_request", OWN_REFUSAL);

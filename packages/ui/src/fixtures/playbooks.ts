@@ -19,7 +19,7 @@ import type {
   RepositoryState,
 } from "@sublang/spex-core/protocol";
 
-import { groupsState, instanceState, namespace } from "./groups-state.js";
+import { groupsState, instanceState, namespace, rowOf, type RowOver } from "./groups-state.js";
 
 export const NOW = Date.UTC(2026, 9, 6, 12);
 export const PROJECT_ID = "me/demo-spex";
@@ -81,8 +81,8 @@ export const READINESS: ReadinessEntry[] = [
   },
 ];
 
-export function repository(over: Partial<RepositoryState> = {}): RepositoryState {
-  return {
+export function repository(over: RowOver = {}): RepositoryState {
+  return rowOf({
     key: PROJECT_ID,
     instance: "https://spex.example",
     // A remote the reader named, a path: no instance governs it.
@@ -96,7 +96,6 @@ export function repository(over: Partial<RepositoryState> = {}): RepositoryState
     state: "reachable",
     reason: null,
     mergePending: false,
-    placements: [],
     placedAt: [],
     waiting: null,
     members: 1,
@@ -110,7 +109,7 @@ export function repository(over: Partial<RepositoryState> = {}): RepositoryState
     sync: { phase: "idle" },
     can: { manageMembers: false, transfer: false },
     ...over,
-  };
+  });
 }
 
 /** The home: your own group's spex repository and the project's, the

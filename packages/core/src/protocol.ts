@@ -1395,9 +1395,8 @@ export const commandSchema = z.discriminatedUnion("type", [
       id,
       repository: repositoryKeySchema,
       /** The placement `choices`, `join` and `noticed` are for — its
-       * instance's origin, or null for the path placement (space-29,
-       * DR-128). Transitional: optional until the interface reads
-       * placements, the row's own placement where omitted. */
+       * instance's origin, or null for the path placement — required
+       * with any of them (space-29, DR-128; parseCommand). */
       placement: instanceOriginSchema.nullable().optional(),
       choices: z.record(z.string().min(1), spaceChoiceSchema).optional(),
       join: z.boolean().optional(),
@@ -2103,31 +2102,6 @@ export interface RepositoryState {
   /** Every placement's, in the placements' order. */
   conflicts: SpaceConflict[];
   sync: SpaceSyncPhase;
-  /** Transitional: the key placement's, until the interface reads
-   * placements — its remote, one under the host's Git origin read as the
-   * repository's path in the instance (space-15, DR-120); null while
-   * local only. */
-  remote: string | null;
-  /** Transitional: the key placement's, until the interface reads placements. */
-  waiting: { step: "create" | "branch"; group: string; message: string } | null;
-  /** Transitional: the key placement's, until the interface reads placements. */
-  members: number | null;
-  /** Transitional: the key placement's, until the interface reads placements. */
-  visibility: string | null;
-  /** Transitional: the key placement's, until the interface reads
-   * placements — what the host's last read said the person may do on it
-   * (space-30, DR-114, DR-120): manage its members, move it to another
-   * group; false until a read is held. */
-  can: { manageMembers: boolean; transfer: boolean };
-  /** Transitional: the key placement's, with the row's `mergePending`,
-   * until the interface reads placements; null where no clone is here. */
-  branch: (PlacementBranch & { mergePending: boolean }) | null;
-  /** Transitional: the key placement's, until the interface reads placements. */
-  incoming: SpaceUnit[];
-  /** Transitional: the key placement's, until the interface reads placements. */
-  lastSync: { at: number; sent: number; received: number } | null;
-  /** Transitional: the key placement's, until the interface reads placements. */
-  noticed: boolean;
 }
 
 /** A clone's `spex` against one placement's (space-30, space-61). */
@@ -2554,6 +2528,12 @@ export function parseCommand(raw: unknown): ParseCommandResult {
     if ((command.type === "space.members" || command.type === "space.share" || command.type === "space.unshare") &&
       command.group !== undefined && command.instance === undefined) {
       return { ok: false, error: "instance: a group is named with its instance", id: command.id };
+    }
+    // Choices, a join and a notice are each for one placement, which the
+    // sync names (space-29, DR-128).
+    if (command.type === "space.sync" && command.placement === undefined &&
+      (command.choices !== undefined || command.join !== undefined || command.noticed !== undefined)) {
+      return { ok: false, error: "placement: required with choices, join or noticed", id: command.id };
     }
     return { ok: true, command };
   }

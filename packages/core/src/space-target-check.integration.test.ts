@@ -10,7 +10,7 @@ import { join } from "node:path";
 import type { Store } from "./store.js";
 import { STANDIN_STORAGE } from "./testing/standin-host.js";
 import { holdingFetch, settled } from "./testing/holding-fetch.js";
-import { clonePath, createSpaceHarness, hostFolder, hostKey, instanceOf, repositoryOf, rowsOf } from "./testing/space-harness.js";
+import { clonePath, createSpaceHarness, hostFolder, hostKey, instanceOf, placementOf, repositoryOf, rowsOf } from "./testing/space-harness.js";
 
 const fixture = createSpaceHarness();
 const { git, gitFolder, addFolder, startHost, startHome, signIn } = fixture;
@@ -134,16 +134,16 @@ test("git-host-23: catalog, target and auth failures refuse Check without a push
 test("git-host-23: fresh unknown target members require notice despite a cached solo count", async (t) => {
   const { home, host, core } = await prepared("target-notice");
   t.after(() => home.stop());
-  assert.equal((await home.client.repository(OWN)).members, 1);
+  assert.equal(placementOf(await home.client.repository(OWN), host.url).members, 1);
   // Same joined clone, first push on this device: forget only this
   // scratch device's acknowledgments through the real preferences API.
   core.store.deletePref(`sync:${OWN}:${hostFolder(host)}:last`);
   core.store.deletePref(`sync:${OWN}:${hostFolder(host)}:noticed`);
   host.script.failMembers(true);
   await home.client.expectError("space.sync", { repository: OWN }, "invalid_request", /sharing notice/);
-  assert.equal((await home.client.repository(OWN)).members, null);
-  const row = await home.client.settle("space.sync", { repository: OWN, noticed: true });
-  assert.deepEqual([row.sync.phase, row.state, row.noticed], ["done", "reachable", true]);
+  assert.equal(placementOf(await home.client.repository(OWN), host.url).members, null);
+  const row = await home.client.settle("space.sync", { repository: OWN, placement: host.url, noticed: true });
+  assert.deepEqual([row.sync.phase, row.state, placementOf(row, host.url).noticed], ["done", "reachable", true]);
 });
 
 for (const outcome of ["success", "failure"] as const) {
@@ -176,14 +176,14 @@ for (const outcome of ["success", "failure"] as const) {
     const movedPath = "acme/research/renamed-spex";
     const moved = hostKey(host, movedPath);
     const row = await home.client.waitRepository(mark, moved, (candidate) => candidate.sync.phase !== "running", 30_000);
-    assert.deepEqual([row.sync.phase, row.state, row.remote], ["done", "read-only", movedPath], JSON.stringify(row));
+    assert.deepEqual([row.sync.phase, row.state, placementOf(row, host.url).path], ["done", "read-only", movedPath], JSON.stringify(row));
     assert.equal(instanceOf(await home.client.expectOk("space.get", {}), host.url)?.read.phase, "running", "target Check does not settle the full read");
     failOld = outcome === "failure";
     gate.release();
     if (outcome === "failure") await assert.rejects(full); else await full;
     await settled();
     const after = await home.client.repository(moved);
-    assert.deepEqual([after.state, after.remote], ["read-only", movedPath]);
+    assert.deepEqual([after.state, placementOf(after, host.url).path], ["read-only", movedPath]);
     const state = await home.client.expectOk("space.get", {});
     assert.equal(rowsOf(state).filter((candidate) => candidate.id === id).length, 1);
     assert.ok(existsSync(clonePath(home.dataDir, moved)) && !existsSync(clonePath(home.dataDir, key)));
@@ -243,7 +243,7 @@ test("git-host-23: a core move during catalog reading is reconciled before the s
   const movedPath = "acme/research/catalog-move-spex";
   const moved = hostKey(host, movedPath);
   const row = await home.client.waitRepository(from, moved, (candidate) => candidate.sync.phase === "done", 30_000);
-  assert.deepEqual([row.id, row.remote, row.state], [id, movedPath, "reachable"]);
+  assert.deepEqual([row.id, placementOf(row, host.url).path, row.state], [id, movedPath, "reachable"]);
   assert.ok(host.script.requests.slice(calls).filter((request) => request.path === "/api/v1/host/me").length >= 2, "catalog is reread after the host change");
   assert.equal(git(clonePath(home.dataDir, moved), "remote", "get-url", hostFolder(host)), `${host.gitOrigin}/${STANDIN_STORAGE}/acme/research/catalog-move-spex.git`);
 });
@@ -267,7 +267,7 @@ test("git-host-23: a newer completed full read fences an older target before it 
   const movedPath = "acme/research/new-authority-spex";
   const moved = hostKey(host, movedPath);
   const row = await home.client.waitRepository(from, moved, (candidate) => candidate.sync.phase === "done", 30_000);
-  assert.deepEqual([row.state, row.remote], ["read-only", movedPath]);
+  assert.deepEqual([row.state, placementOf(row, host.url).path], ["read-only", movedPath]);
   assert.ok(!existsSync(clonePath(home.dataDir, key)) && existsSync(clonePath(home.dataDir, moved)));
 });
 
@@ -378,7 +378,7 @@ test("git-host-23: one failed fresh notice read refuses before Save and cannot f
   // A new user gesture now gets the healthy sharing notice, never an
   // implicit acknowledgment inherited from the failed read.
   await home.client.expectError("space.sync", { repository: OWN }, "invalid_request", /sharing notice/);
-  assert.equal((await home.client.repository(OWN)).noticed, false);
+  assert.equal(placementOf(await home.client.repository(OWN), host.url).noticed, false);
   assert.equal(core.store.getPref(`sync:${OWN}:${hostFolder(host)}:last`), undefined);
 });
 
@@ -402,12 +402,13 @@ test("git-host-23: solo membership becoming shared at Check stops before transpo
     assert.equal(row.sync.step, "check");
     assert.match(row.sync.message, /sharing notice/);
   }
-  assert.deepEqual([row.members, row.noticed, row.lastSync], [2, false, null]);
+  const line = placementOf(row, host.url);
+  assert.deepEqual([line.members, line.noticed, line.lastSync], [2, false, null]);
   assert.ok(!host.script.requests.slice(from).some((request) => request.path.includes(".git/") || request.path.endsWith("/credential") || request.path.endsWith("/spex-branch")), "no branch preparation or Git transport");
   await home.client.expectError("space.sync", { repository: OWN }, "invalid_request", /sharing notice/);
   assert.equal(core.store.getPref(`sync:${OWN}:${hostFolder(host)}:noticed`), undefined);
-  const seen = await home.client.settle("space.sync", { repository: OWN, noticed: true });
-  assert.deepEqual([seen.sync.phase, seen.noticed], ["done", true]);
+  const seen = await home.client.settle("space.sync", { repository: OWN, placement: host.url, noticed: true });
+  assert.deepEqual([seen.sync.phase, placementOf(seen, host.url).noticed], ["done", true]);
 });
 
 test("git-host-23, space-57, space-58: a sync the core starts after a pick owes the notice as any sync: a repository created in a group another member joins before its Check waits for Continue on its line, its branch unprepared and nothing sent, and a sync noticed for it then prepares the branch and pushes", async (t) => {
@@ -433,7 +434,8 @@ test("git-host-23, space-57, space-58: a sync the core starts after a pick owes 
   const [line] = waiting.placements;
   assert.deepEqual([line.outcome, line.members, line.noticed, line.lastSync], [{ kind: "waiting", sent: 0, received: 0 }, 2, false, null]);
   assert.ok(!host.script.requests.slice(from).some((request) => request.path.includes(".git/") || request.path.endsWith("/credential") || request.path.endsWith("/spex-branch")), "no branch preparation or Git transport");
-  const seen = await home.client.settle("space.sync", { repository: key, noticed: true }, 30_000);
-  assert.deepEqual([seen.sync.phase, seen.noticed, seen.placements[0].outcome?.kind], ["done", true, "synced"], JSON.stringify(seen.sync));
+  const seen = await home.client.settle("space.sync", { repository: key, placement: host.url, noticed: true }, 30_000);
+  const seenLine = placementOf(seen, host.url);
+  assert.deepEqual([seen.sync.phase, seenLine.noticed, seenLine.outcome?.kind], ["done", true, "synced"], JSON.stringify(seen.sync));
   assert.equal(git(host.bareOf("acme/pick-notice-spex"), "rev-parse", "spex"), git(clonePath(home.dataDir, key), "rev-parse", "spex"));
 });

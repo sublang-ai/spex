@@ -10,6 +10,8 @@
 // The two defaults are read from the catalog as the confirm renders
 // (localization-4), never held as module constants.
 
+import type { ReactNode } from "react";
+
 import { i18n } from "../i18n.js";
 
 export function InlineConfirm({
@@ -26,7 +28,8 @@ export function InlineConfirm({
   onConfirm,
   onCancel,
 }: {
-  question: string;
+  /** The question: one message, or whole messages side by side. */
+  question: ReactNode;
   confirmLabel?: string;
   cancelLabel?: string;
   disabled?: boolean;

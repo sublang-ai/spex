@@ -230,7 +230,7 @@ interface TargetReading {
 interface Placed { row: RepositoryState; group?: HostGroup; instance?: string; elsewhere?: { instance: string; group: HostGroup }[] }
 
 /** The last sync a clone holds (space-61). */
-type Agreed = NonNullable<NonNullable<RepositoryState["branch"]>["agreed"]>;
+type Agreed = NonNullable<PlacementBranch["agreed"]>;
 
 /** A step at the host waiting for a member with the rights (space-64). */
 interface Waiting {
@@ -730,9 +730,8 @@ type RepositoryInfo =
       placements: Placement[];
       /** Whether `spex`'s upstream is the clone's remote (space-12). */
       upstream: boolean;
-      originSpex: string | null;
       /** Each placement's `spex` as the clone last fetched or pushed it,
-       * by its remote's name: the first's is `originSpex`. */
+       * by its remote's name. */
       spex: ReadonlyMap<string, string | null>;
       mergePending: boolean;
     };
@@ -2035,7 +2034,6 @@ class RepositorySync {
       id: this.facts.id,
       placements,
       upstream: upstreamName !== null && upstreamName === this.facts.remoteName,
-      originSpex,
       spex,
       mergePending,
     };
@@ -2089,7 +2087,6 @@ class RepositorySync {
         });
       }
     }
-    const first = lines[0];
     const store = this.host.store;
     // The placements its files name as they stand, held here or not, a
     // file that does not read naming none (storage-36, storage-41), nor
@@ -2104,38 +2101,25 @@ class RepositorySync {
       code = typeof project?.remote === "string" ? this.owner.codeRemoteAsShown(project.remote, instance) : null;
     } catch { code = null; }
     const remote = repo.root ? repo.remote : null;
-    // The row's branch is its first placement's; with none, what the
-    // clone holds under the name its first would bear.
-    const branch = !repo.root ? null : first?.branch ?? await this.branchOf(repo, this.firstName(), this.remoteRef(), repo.originSpex);
     const state: RepositoryState = {
       key: this.key,
       instance,
       // The instance governing it is the owner's to read (overlay).
       governing: null,
       name: splitKey(this.key).name,
-      can: { manageMembers: false, transfer: false },
       id: repo.root ? repo.id : null,
       own: this.key === store.home.own(),
       code,
       folder: store.home.folderOf(this.key)?.path ?? null,
-      remote: remote === null ? null : displayRemote(remote),
       state: remote === null ? "local-only" : "reachable",
       reason: null,
       mergePending: repo.root ? repo.mergePending : false,
       placements: lines,
       // Each instance its files name, held here or not (space-62).
       placedAt: files.map((file) => file.origin),
-      waiting: null,
-      members: null,
-      visibility: null,
-      branch: branch === null ? null : { ...branch, mergePending: repo.root ? repo.mergePending : false },
       local: this.local,
-      // Every placement's conflicts, in the placements' order (space-30);
-      // its first's incoming units, last sync and notice (storage-5).
-      incoming: first?.incoming ?? [],
+      // Every placement's conflicts, in the placements' order (space-30).
       conflicts: lines.flatMap((line) => line.conflicts),
-      lastSync: first?.lastSync ?? null,
-      noticed: first?.noticed ?? false,
       sync: this.phase,
     };
     return { row: state, held, files };
@@ -2947,9 +2931,9 @@ class RepositorySync {
   /** The placement a sync's choices, join and notice are for (space-29):
    * the one `placement` names — its instance's origin, or null for the
    * path placement — a placement the clone does not hold refused; where
-   * none is named, the one the row's choices or unrelated history names,
-   * else the clone's first. Transitional: `placement` is optional until
-   * the interface reads placements. */
+   * none is named — a client's sync asking none of them, or the core's
+   * own (space-4, space-58) — the one the row's choices or unrelated
+   * history names, else the clone's first. */
   private syncTarget(placement: string | null | undefined, placements: readonly Placement[]): SyncTarget {
     const at = (origin: string | null): Placement | undefined => placements.find((candidate) => (candidate.instance === null ? null : canonicalOrigin(candidate.instance)) === (origin === null ? null : canonicalOrigin(origin)));
     let named: Placement | undefined;
@@ -8117,24 +8101,26 @@ export class SpaceManager {
   private overlay(machine: RepositorySync, read: MachineRead): Placed {
     const placed = this.overlaid(machine, read.row);
     const lines = this.linesOf(machine, placed.row, read.held);
-    // Transitional: the row's wait is its key placement's line's where it
-    // holds one, else the first line a wait shows on (space-87).
-    const keyLine = lines[0]?.attached && lines[0].instance !== null ? lines[0] : undefined;
-    const waiting = keyLine ? keyLine.waiting : lines.find((line) => line.waiting !== null)?.waiting ?? null;
-    return { ...placed, row: { ...placed.row, ...this.rowStateOf(placed.row, lines), placements: lines, waiting }, elsewhere: this.elsewhereOf(machine, read.held) };
+    return { ...placed, row: { ...placed.row, ...this.rowStateOf(placed.row, lines), placements: lines }, elsewhere: this.elsewhereOf(read.held) };
   }
 
-  /** The groups each placement a clone holds beside its key placement
-   * stands in, as the listing of the instance governing it names them
-   * (space-1, git-host-5): each shows one line naming the row, which
-   * stands under its key placement's (overlaid). */
-  private elsewhereOf(machine: RepositorySync, held: Placement[]): { instance: string; group: HostGroup }[] {
-    const key = keyPlacement(held);
+  /** The groups whose listings hold a placement a clone holds with an
+   * instance (space-1, DR-128): at every signed-in instance whose view
+   * lists its host repository by its Git origin and id (listingOf) — so
+   * two instances over one Git backend both list one placement — its key
+   * placement's among them, the group of each showing one line naming the
+   * row but the group the row stands under (overlaid, byInstance); your
+   * own group's own repository standing under your own group, your
+   * namespace listing its key placement shows one too. */
+  private elsewhereOf(held: Placement[]): { instance: string; group: HostGroup }[] {
+    const instances = this.listedInstances().filter((instance) => this.signedInAt(instance));
     return held.flatMap((placement) => {
-      if (placement === key || placement.instance === null) return [];
-      const instance = this.governingOfPlacement(machine, placement);
-      const listing = instance ? this.listingOf(instance, { remote: placement.url, id: placement.id }) : undefined;
-      return instance && listing ? [{ instance: instance.origin, group: listing.repository.group }] : [];
+      if (placement.instance === null) return [];
+      const facts = { remote: placement.url, id: placement.id };
+      return instances.flatMap((instance) => {
+        const listing = this.listingOf(instance, facts);
+        return listing ? [{ instance: instance.origin, group: listing.repository.group }] : [];
+      });
     });
   }
 
@@ -8147,8 +8133,9 @@ export class SpaceManager {
    * remote, after the lines its clone holds and before a creation's
    * wait; one line per host repository, "Not on this device", with that
    * listing's path, members and rights, or unreachable in a group named
-   * like a login (space-61); each listing's group showing one line naming
-   * the row (space-1). `held` is every placement a remote here holds.
+   * like a login (space-61); the group of every signed-in instance
+   * listing that host repository showing one line naming the row
+   * (space-1, listedAt). `held` is every placement a remote here holds.
    */
   private withFiled(placed: Placed, files: PlacementFile[], held: Placement[]): Placed {
     const lines: PlacementState[] = [];
@@ -8182,7 +8169,7 @@ export class SpaceManager {
         noticed: false,
         outcome: null,
       });
-      elsewhere.push({ instance: instance.origin, group: repository.group });
+      elsewhere.push(...this.listedAt(gitOrigin, repository.id));
     }
     if (lines.length === 0) return placed;
     const placements = placed.row.placements;
@@ -8204,6 +8191,18 @@ export class SpaceManager {
     const listing = instance.view?.listings.find((entry) => entry.repository.id === file.id) ?? instance.attached.get(file.id);
     const gitOrigin = instance.knownOrigin();
     return listing && gitOrigin !== undefined ? { instance, listing, gitOrigin } : undefined;
+  }
+
+  /** The group each signed-in instance the home lists stands one host
+   * repository in, by its Git origin and id (git-host-5): in its last
+   * read, or among what this core attached there since — two instances
+   * over one Git backend both list it (DR-128). */
+  private listedAt(gitOrigin: string, id: string): { instance: string; group: HostGroup }[] {
+    return this.listedInstances().flatMap((instance) => {
+      if (!this.signedInAt(instance) || !sameOrigin(instance.knownOrigin(), gitOrigin)) return [];
+      const listing = instance.view?.listings.find((entry) => entry.repository.id === id) ?? instance.attached.get(id);
+      return listing ? [{ instance: instance.origin, group: listing.repository.group }] : [];
+    });
   }
 
   /** Whether a placement file names a host repository an instance lists
@@ -8240,12 +8239,12 @@ export class SpaceManager {
 
   /** A clone's placement lines (space-87, space-30): those its clone
    * holds in the order added, the path placement last — the first read
-   * as its row is, its state, its listing's members and rights; each
-   * other by its own instance's last answer (overlayPlacement) — each
-   * with its branch against that placement's `spex`, its lists, and this
-   * device's last sync and notice of it as `held` and the row's machine
-   * read them; then the one a creation for it waits at, attached to no
-   * remote here. */
+   * as its row is, its state, its path and its listing's members and
+   * rights as `overlaid` read them; each other by its own instance's
+   * last answer (overlayPlacement) — each with its branch against that
+   * placement's `spex`, its lists, and this device's last sync and
+   * notice of it as `held` and the row's machine read them; then the one
+   * a creation for it waits at, attached to no remote here. */
   private linesOf(machine: RepositorySync, row: RepositoryState, held: Placement[]): PlacementState[] {
     const lines: PlacementState[] = [];
     // Each step waiting at the host waits on the line of the placement at
@@ -8265,14 +8264,10 @@ export class SpaceManager {
       const others = new Set(held.slice(1).flatMap((placement) => (placement.instance === null ? [] : [canonicalOrigin(placement.instance)])));
       lines.push({
         ...first,
-        path: row.remote ?? first.path,
         id: row.id,
         state,
         reason: row.reason,
         waiting: phrase(at(first.instance) ?? waits.find((waiting) => waiting.step === "branch" && !others.has(waiting.instance))),
-        members: row.members,
-        visibility: row.visibility,
-        can: { ...row.can },
       });
     }
     rest.forEach((line, index) => {
@@ -8342,22 +8337,26 @@ export class SpaceManager {
     return listed;
   }
 
-  /** The row `overlay` reads, before its lines. */
+  /** The row `overlay` reads, before its lines, its first line — its
+   * key placement's — read as the row is (linesOf). */
   private overlaid(machine: RepositorySync, base: RepositoryState): Placed {
     const facts = machine.facts;
+    // The first line with what the row's read says of it.
+    const keyLine = (from: RepositoryState, over: Partial<PlacementState>): RepositoryState => {
+      const [first, ...rest] = from.placements;
+      return first ? { ...from, placements: [{ ...first, ...over }, ...rest] } : from;
+    };
     // What a pick, a join or a pairing changed since the machine's last
     // reading is read afresh: its remote, its id and its working folder.
     // A remote at the host reads as its path in the instance (space-15).
-    const row: RepositoryState = {
+    const shown = this.remoteAsShown(facts, base.key);
+    const row: RepositoryState = keyLine({
       ...base,
       instance: this.cloneInstance(base.key, facts.remoteName),
       governing: null,
       id: facts.id,
-      remote: this.remoteAsShown(facts, base.key),
       folder: this.host.store.home.folderOf(base.key)?.path ?? null,
-      // Read from its lines (overlay).
-      waiting: null,
-    };
+    }, shown === null ? {} : { path: shown });
     if (facts.remote === null) return { row: { ...row, state: "local-only", reason: null } };
     // A remote the reader named, a path this device reaches: no host.
     if (!this.atHost(facts, this.servingOf(machine))) return { row };
@@ -8377,7 +8376,7 @@ export class SpaceManager {
     // What the host's listing says, the person's rights on it among it
     // (git-host-5, DR-114).
     const listed: RepositoryState = listing
-      ? { ...governed, members: listing.members, visibility: listing.repository.visibility, can: { manageMembers: listing.repository.can.manageMembers, transfer: listing.repository.can.transfer } }
+      ? keyLine(governed, { members: listing.members, visibility: listing.repository.visibility, can: { manageMembers: listing.repository.can.manageMembers, transfer: listing.repository.can.transfer } })
       : governed;
     // A clone whose join still runs is not on this device yet: its code
     // may still be cloning (space-61, space-63).
@@ -8403,11 +8402,11 @@ export class SpaceManager {
    * instance's own read (git-host-5), keyed under its folder as its clone
    * would be (DR-127): a host repository several signed-in instances
    * list by one Git origin and id is one row, under the earliest of them
-   * in the home's list, every later listing only withholding Join
-   * (space-1); one in a group held as colliding reads unreachable, keyed
-   * `<folder>/<path>@<id>` so it names no clone (space-30). `clones`
-   * are the clones read, each with the placements it holds and those
-   * its files name. */
+   * in the home's list, every later listing withholding Join and naming
+   * the row in one line (space-1); one in a group held as colliding
+   * reads unreachable, keyed `<folder>/<path>@<id>` so it names no clone
+   * (space-30). `clones` are the clones read, each with the placements
+   * it holds and those its files name. */
   private absentRows(clones: { key: string; held: Placement[]; files: PlacementFile[] }[]): Placed[] {
     const store = this.host.store;
     // A clone the instances migration deferred, listed by the key it
@@ -8415,8 +8414,8 @@ export class SpaceManager {
     const deferred = new Set(store.deferredMoves().map((move) => move.to));
     const own = store.home.own();
     // The host repositories an earlier instance's listing stands for, by
-    // its Git origin and id.
-    const earlier: { gitOrigin: string; id: string }[] = [];
+    // its Git origin and id, with the row it stands as.
+    const earlier: { gitOrigin: string; id: string; row: Placed | undefined }[] = [];
     const rows: Placed[] = [];
     for (const instance of this.listedInstances()) {
       const view = this.viewOf(instance);
@@ -8444,9 +8443,13 @@ export class SpaceManager {
       for (const listing of view.listings) {
         const repository = listing.repository;
         if (matched.has(repository.id)) continue;
-        if (earlier.some((entry) => entry.id === repository.id && sameOrigin(entry.gitOrigin, view.gitOrigin))) continue;
-        earlier.push({ gitOrigin: view.gitOrigin, id: repository.id });
+        const first = earlier.find((entry) => entry.id === repository.id && sameOrigin(entry.gitOrigin, view.gitOrigin));
+        if (first) {
+          if (first.row) (first.row.elsewhere ??= []).push({ instance: instance.origin, group: repository.group });
+          continue;
+        }
         const row = this.absentRow(instance, folder, view, listing, deferred);
+        earlier.push({ gitOrigin: view.gitOrigin, id: repository.id, row });
         if (row) rows.push(row);
       }
     }
@@ -8473,12 +8476,10 @@ export class SpaceManager {
         instance: instance.origin,
         governing: instance.origin,
         name: repository.path,
-        can: colliding ? { manageMembers: false, transfer: false } : { manageMembers: repository.can.manageMembers, transfer: repository.can.transfer },
         id: repository.id,
         own: false,
         code,
         folder: null,
-        remote: path,
         state: colliding ? "unreachable" : "absent",
         reason: colliding ? namedLikeYourLogin() : null,
         mergePending: false,
@@ -8502,15 +8503,8 @@ export class SpaceManager {
           outcome: null,
         }],
         placedAt: [],
-        waiting: null,
-        members: listing.members,
-        visibility: repository.visibility,
-        branch: null,
         local: [],
-        incoming: [],
         conflicts: [],
-        lastSync: null,
-        noticed: false,
         sync: colliding ? { phase: "idle" } : this.joining.get(this.joinKey(instance, repository.id)) ?? { phase: "idle" },
       },
       group: repository.group,

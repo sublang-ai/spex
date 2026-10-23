@@ -41,6 +41,7 @@ import {
   pickInstances,
   signedInInstances,
 } from "../lib/instances.js";
+import { waitingOf } from "../lib/placements.js";
 import { awaitsFolder } from "../lib/space.js";
 import { Icon } from "./Icon.js";
 import { GroupPicker } from "./SpaceGroups.js";
@@ -350,7 +351,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
     if (!known && !row()) await loadSpace().catch(() => {});
     const repo = known ? undefined : row();
     const current = useAppStore.getState().space;
-    if (repo && repo.state === "local-only" && !repo.waiting && current && pickInstances(current, repo).length > 0) {
+    if (repo && repo.state === "local-only" && !waitingOf(repo) && current && pickInstances(current, repo).length > 0) {
       setPicking(key);
       return;
     }

@@ -77,13 +77,13 @@ export function groupTestKey(group: InstanceGroupState): string {
 
 /** Where a row stands (space-1): under an entry of an instance's
  * heading, or under your own group. */
-export type Placement =
+export type Standing =
   | { own: true }
   | { own: false; instance: InstanceState; group: InstanceGroupState };
 
 /** The place the core stood a row at, by its key; none for a key the
  * state does not hold. */
-export function placementOf(state: GroupsState, key: string): Placement | undefined {
+export function standingOf(state: GroupsState, key: string): Standing | undefined {
   if (state.own.repositories.some((repository) => repository.key === key)) return { own: true };
   for (const instance of state.instances) {
     for (const group of instance.groups) {
