@@ -851,23 +851,23 @@ While the next card names the queue's head [[run-view-88](#run-view-88)], the Ca
 While the app is connected, the window shall hold one connection per core — the local core and each seat the person has open [[core-service-128](core-service.md#core-service-128)], reached at its relay path [[core-service-129](core-service.md#core-service-129)] — each a **place**, "This computer" or the server's name, and shall keep each core's state in a store of that core's own ([DR-133](../decisions/133-one-desktop-over-several-cores.md)):
 
 - no protocol id is re-keyed; per-project preferences are kept by place and project, the local place's under today's keys;
-- the sidebar's Projects section lists each place's projects under a heading naming the place [[run-view-67](#run-view-67)], and the project palette names the place of each project and of a new one;
-- Settings, Playbooks, Groups and Environments show one place at a time, named by a selector that reads "This computer" or the server's name, a seat's being the seat's own;
+- the sidebar's Projects section lists each place's projects under a heading naming the place [[run-view-67](#run-view-67)], and, where any seat is open, the project palette names the place of each project and of a new one;
+- Settings, Playbooks, Groups and Environments show one place at a time, named, where any seat is open, by a selector that reads "This computer" or the server's name, a seat's being the seat's own; a Dashboard link to a project opens it at the project's place;
 - a connection, its banner and a protocol mismatch are per place [[run-view-50](#run-view-50)]: one core failing leaves the others;
 - the page's language stays the local home's, a remote place's phrases arriving as its core composed them.
 
 #### run-view-169
 
-While a project stands at a remote place [[run-view-168](#run-view-168)], the app shall offer for it no folder picker, no reveal and no path entry, and shall open a project on a seat by naming it among the projects of the member's groups, sending that place's core a join with no folder ([DR-133](../decisions/133-one-desktop-over-several-cores.md)):
+While a project stands at a remote place [[run-view-168](#run-view-168)], the app shall offer for it no folder picker, no reveal and no path entry — a repair's folder and its proposal's "Add project", an environment's folder, a draft's picked file and pasted path among them — and shall open a project on a seat by naming it among the projects of the member's groups, sending that place's core a join with no folder ([DR-133](../decisions/133-one-desktop-over-several-cores.md)):
 
 - one spex repository cloned here and on a seat is one project shown under each place, its sessions and intents reading "Runs on <label>" at the place that does not hold them [[core-service-107](core-service.md#core-service-107)].
 
 #### run-view-170
 
-While the Groups surface shows an instance that lists servers [[core-service-128](core-service.md#core-service-128)], the surface shall list each server under that instance's heading by its name and group, with "Open" where no seat is open at it and "Close" where one is ([DR-133](../decisions/133-one-desktop-over-several-cores.md)):
+While this computer's Groups surface shows an instance that lists servers [[core-service-128](core-service.md#core-service-128)], the surface shall list each server under that instance's heading by its name and group, with "Open" where no seat is open at it and "Close" where one is ([DR-133](../decisions/133-one-desktop-over-several-cores.md)):
 
 - the first Open for a server on this device shows the instance's contract in the words its record fixes, rendered in the page's language, with "I understand" as the control that sends `server.open` with consent, and a later Open sends it at once;
-- a refusal reads the core's relayed cause in place.
+- a refusal reads the core's relayed cause in place, and the page waits for `server.open` as long as the admission may take, a seat starting at the server within thirty seconds [[core-service-128](core-service.md#core-service-128)].
 
 ## Internal Behavior
 
@@ -1406,4 +1406,4 @@ Where the live journey lane runs with the machine's signed-in agents ([DR-089](.
 
 #### run-view-171
 
-Where the UI holds the local store and two seat stores with fake clients, the test suite shall assert the places [[run-view-168](#run-view-168)]: an approval snapshot, a ledger reply and a backfill in one store leave the others untouched; a seat's language state activates no language and writes none; the sidebar shows a heading per place with the local rows' test ids unchanged; one place's banner and one place's mismatch show alone; the selector switches Settings, Playbooks, Groups and Environments; and the remote rules [[run-view-169](#run-view-169)] [[run-view-170](#run-view-170)]: a remote place offers no picker, reveal or path entry, opening a group's project sends `space.join` with no folder to that place's client, and the first Open shows the contract and sends `server.open` with consent only on "I understand".
+Where the UI holds the local store and two seat stores with fake clients, the test suite shall assert the places [[run-view-168](#run-view-168)]: an approval snapshot, a ledger reply and a backfill in one store leave the others untouched; a seat's language state activates no language and writes none; the sidebar shows a heading per place with the local rows' test ids unchanged; one place's banner and one place's mismatch show alone; the selector switches Settings, Playbooks, Groups and Environments; and the remote rules [[run-view-169](#run-view-169)] [[run-view-170](#run-view-170)]: a remote place offers no picker, reveal or path entry, opening a group's project sends `space.join` with no folder to that place's client, and the first Open shows the contract and sends `server.open` with consent only on "I understand"; a remote place's repair row, environment folder request and draft source offer no folder, picker or path; a seat's row whose code clone failed offers "Join again", sending the join again, and "Add a credential", opening that seat's Credentials section at the host [[run-view-169](#run-view-169)]; the sidebar's attention marks leave out a place speaking another protocol version [[run-view-168](#run-view-168)].

@@ -6,7 +6,10 @@
 // sign-in card; while any is signed in, Refresh, reading each; the
 // issues and Git's presence (space-1, space-3) — over the groups list,
 // your own group and then each instance under its heading, each group
-// with its spex repositories as rows (space-61). Activating a row opens that
+// with its spex repositories as rows (space-61), and at this computer,
+// under each signed-in instance, the team servers it lists with Open or
+// Close (run-view-170). The surface reads the store of the place the
+// selector names (run-view-168). Activating a row opens that
 // repository's Sync and Explore tabs beneath the list. The surface
 // renders the core's state and runs no Git and no call to the host
 // itself: every action is a command, a repository named by its key,
@@ -23,7 +26,8 @@ import {
 } from "react";
 import type { GroupsState, RepositoryState } from "@sublang/spex-core/protocol";
 
-import { useAppStore } from "../state/store.js";
+import { usePlaceStore } from "../state/place-context.js";
+import { isLocalPlace } from "../state/store.js";
 import { i18n } from "../i18n.js";
 import { useClock } from "../lib/useClock.js";
 import { allRepositories, anySignedIn } from "../lib/instances.js";
@@ -42,6 +46,7 @@ import { IssuesList, SyncTab } from "./SpaceSync.js";
 import { ExploreTab } from "./SpaceExplorer.js";
 import { GroupsList, statusDot } from "./SpaceGroups.js";
 import { SignInCard, useSignIn, type SignInFlow } from "./SpaceSignIn.js";
+import { useServers } from "./SpaceServers.js";
 
 export interface SpaceSurfaceProps {
   /** Open a session as its tab (space-7, run-view-68). */
@@ -49,6 +54,9 @@ export interface SpaceSurfaceProps {
   /** Open the repaired project, the one control here that leaves the
    * surface (space-48). */
   onOpenProject(projectId: string): void;
+  /** Open this place's Credentials section at a code host whose clone
+   * failed for want of the member's credential (space-103, settings-48). */
+  onAddCredential?(host: string): void;
 }
 
 export type SpaceTab = "sync" | "explore";
@@ -87,7 +95,9 @@ export function syncRefusal(
 
 /** Reveal in the file manager where the bridge exists, Copy path
  * otherwise (space-26): the copy is acknowledged in words, and a page
- * with no clipboard falls back to a selectable read-only field. */
+ * with no clipboard falls back to a selectable read-only field. A
+ * remote place's path is on its server, so nothing reveals it there
+ * (run-view-169). */
 export function PathControls({
   path,
   testId,
@@ -103,7 +113,8 @@ export function PathControls({
   const [copied, setCopied] = useState(false);
   const [fallback, setFallback] = useState(false);
   const [revealFailed, setRevealFailed] = useState(false);
-  const reveal = revealBridge();
+  const local = isLocalPlace(usePlaceStore().place);
+  const reveal = local ? revealBridge() : undefined;
   const revealName = revealLabel();
 
   const copy = () => {
@@ -212,15 +223,27 @@ function Field({
   );
 }
 
-export function SpaceSurface({ onOpenSession, onOpenProject }: SpaceSurfaceProps) {
-  const groups = useAppStore((state) => state.space);
-  const spaceError = useAppStore((state) => state.spaceError);
-  const spaceChangeSeq = useAppStore((state) => state.spaceChangeSeq);
-  const connection = useAppStore((state) => state.connection);
-  const loadSpace = useAppStore((state) => state.loadSpace);
-  const spaceRefresh = useAppStore((state) => state.spaceRefresh);
+export function SpaceSurface({ onOpenSession, onOpenProject, onAddCredential }: SpaceSurfaceProps) {
+  const store = usePlaceStore();
+  const groups = store((state) => state.space);
+  const spaceError = store((state) => state.spaceError);
+  const spaceChangeSeq = store((state) => state.spaceChangeSeq);
+  const connection = store((state) => state.connection);
+  const loadSpace = store((state) => state.loadSpace);
+  const spaceRefresh = store((state) => state.spaceRefresh);
+  const seats = store((state) => state.seats);
   const connected = connection === "open";
   const now = useClock(true, 30_000);
+  // The servers each signed-in instance lists (run-view-170), at this
+  // computer alone, whose core holds the seats: read as the surface
+  // opens, and again as the signed-in instances or the open seats
+  // change.
+  const signedIn = groups?.instances.filter((instance) => instance.signedIn).map((instance) => instance.origin) ?? [];
+  const servers = useServers(
+    connected && isLocalPlace(store.place) && signedIn.length > 0
+      ? JSON.stringify([signedIn, seats.map((seat) => seat.place)])
+      : undefined,
+  );
 
   const [selected, setSelected] = useState<string>();
   const [issuesOpen, setIssuesOpen] = useState(false);
@@ -354,6 +377,9 @@ export function SpaceSurface({ onOpenSession, onOpenProject }: SpaceSurfaceProps
               connected={connected}
               refreshes={refreshes}
               signIn={signIn}
+              servers={servers.listing}
+              onServersChanged={servers.reload}
+              onAddCredential={onAddCredential}
               onSelect={(key) => setSelected((current) => (current === key ? undefined : key))}
               onNote={onNote}
             />
