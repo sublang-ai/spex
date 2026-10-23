@@ -38,6 +38,7 @@
 // of its own.
 
 import { test } from "node:test";
+import { orderRemotes, remoteOrderOf } from "./home.js";
 import assert from "node:assert/strict";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -78,7 +79,9 @@ function configOf(clone: string, key: string): string | null {
 /** A clone's remotes in the order its Git configuration holds them
  * (storage-34). */
 function remotesOf(clone: string): string[] {
-  return git(clone, "config", "--get-regexp", "^remote\\..*\\.url$").split("\n").map((line) => line.split(" ")[0].replace(/^remote\./, "").replace(/\.url$/, ""));
+  // Git's listing sorts the keys in some versions; the order is the file's (storage-34).
+  const listed = git(clone, "config", "--get-regexp", "^remote\\..*\\.url$").split("\n").map((line) => line.split(" ")[0].replace(/^remote\./, "").replace(/\.url$/, ""));
+  return orderRemotes(listed, (name) => name, remoteOrderOf(clone));
 }
 
 /** The placement files a commit of a repository's `spex` holds. */

@@ -22,7 +22,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, w
 import { basename, dirname, join, relative } from "node:path";
 import { createSessionStore } from "@sublang/playbook/session-store";
 import { stringify as stringifyYaml } from "yaml";
-import { Home } from "./home.js";
+import { Home, orderRemotes, remoteOrderOf } from "./home.js";
 import type { GroupsState, SpaceUnit } from "./protocol.js";
 import { bareOf, clonePath, createSpaceHarness, hostFolder, hostKey, instanceOf, placementOf, prefsOf, repositoryOf, syncRecordsOf } from "./testing/space-harness.js";
 
@@ -47,7 +47,8 @@ function configOf(clone: string, key: string): string | null {
 function remotesOf(clone: string): string[] {
   let lines: string;
   try { lines = git(clone, "config", "--get-regexp", "^remote\\..*\\.url$"); } catch { return []; }
-  return lines.split("\n").filter((line) => line !== "").map((line) => line.split(" ")[0].replace(/^remote\./, "").replace(/\.url$/, ""));
+  // Git's listing sorts in some versions; the order is the file's (storage-34).
+  return orderRemotes(lines.split("\n").filter((line) => line !== "").map((line) => line.split(" ")[0].replace(/^remote\./, "").replace(/\.url$/, "")), (name) => name, remoteOrderOf(clone));
 }
 
 /** The unit names a list holds. */
