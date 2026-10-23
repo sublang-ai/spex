@@ -244,7 +244,7 @@ const PHASE_KEYS: Record<string, { required: string[]; optional: string[] }> = {
   running: { required: ["cancelable", "op", "phase", "since", "step"], optional: ["placement"] },
   choices: { required: ["phase", "placement", "savedCommit"], optional: [] },
   unrelated: { required: ["phase", "placement"], optional: [] },
-  stopped: { required: ["cause", "guidance", "message", "op", "phase", "retry", "step"], optional: ["count"] },
+  stopped: { required: ["cause", "guidance", "message", "op", "phase", "retry", "step"], optional: ["count", "credential"] },
   done: { required: ["at", "phase", "pushed", "received", "sent"], optional: [] },
 };
 
@@ -261,6 +261,10 @@ function assertPhase(sync: RepositoryState["sync"]): void {
   // comes with that cause alone (space-30, space-98).
   if (sync.phase === "stopped") assert.equal(sync.count !== undefined, sync.cause === "unreceived", JSON.stringify(sync));
   if (sync.phase === "stopped" && sync.count !== undefined) assert.ok(sync.op === "leave" && Number.isInteger(sync.count) && sync.count > 0, JSON.stringify(sync));
+  // A credential names the code host a join's failed code clone needs
+  // one of the member's for, and comes with that step alone (space-30,
+  // space-103).
+  if (sync.phase === "stopped" && sync.credential !== undefined) assert.ok(sync.op === "join" && sync.step === "code" && typeof sync.credential === "string" && sync.credential.length > 0, JSON.stringify(sync));
 }
 
 const CHANGES = new Set(["new", "updated", "deleted"]);

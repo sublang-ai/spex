@@ -4,11 +4,12 @@
 import { useEffect, useState } from "react";
 import type { AdapterName, AgentModelOption, AgentOptions } from "@sublang/spex-core/protocol";
 import { i18n } from "../i18n.js";
-import { useAppStore } from "../state/store.js";
+import { usePlaceStore } from "../state/place-context.js";
 
 /** Discovery belongs to an open editor, never application startup. */
 export function useAgentOptions(adapter: AdapterName) {
-  const load = useAppStore((state) => state.loadAgentOptions);
+  const store = usePlaceStore();
+  const load = store((state) => state.loadAgentOptions);
   const [attempt, setAttempt] = useState(0);
   const [result, setResult] = useState<{ adapter: AdapterName; attempt: number; options?: AgentOptions; error?: string }>();
   useEffect(() => {

@@ -2028,6 +2028,12 @@ export type SpaceSyncPhase =
       retry: boolean;
       /** A leave's units no remaining placement received (space-98). */
       count?: number;
+      /** On a seat, the https code host a join's failed code clone
+       * needs a credential of the member's for, or whose credential of
+       * theirs cannot be read, by the name the Credentials section
+       * takes it (space-103, settings-48); absent for any other
+       * failure. */
+      credential?: string;
     }
   | { phase: "done"; at: number; sent: number; received: number; pushed: boolean };
 
