@@ -5,7 +5,7 @@
 
 ## Status
 
-In progress (2026-10-21), after execution ownership and beside spex.pub's servers.
+Done (2026-10-23), begun 2026-10-21, after execution ownership and beside spex.pub's servers.
 
 ## Intent
 
@@ -14,13 +14,13 @@ Implement [DR-132](../decisions/132-team-servers.md): seat mode in the core and 
 ## Deliverables
 
 - [x] The `server-shell`, `core-service`, `settings`, `git-host`, `space`, `storage` and `projects` packages and a new `hub` package state DR-132, and DR-132 reads Accepted.
-- [ ] Seat mode in the core: the device request naming the server and the person, a device of another account refused, no own repository joined, path commands refused.
-- [ ] The shared credential file read into the environment at start and before each run, the member's own form winning, readiness recognizing the forms and reporting unreadable and expired.
+- [x] Seat mode in the core: the device request naming the server and the person, a device of another account refused, no own repository joined, path commands refused.
+- [x] The shared credential file read into the environment at start and before each run, the member's own form winning, readiness recognizing the forms and reporting unreadable and expired.
 - [x] Projects allocated under the seat's tree, code cloned and pushed with the member's own token for its host, the clone failure naming the credential, the Settings surface taking the token.
-- [ ] The server shell's seat flags: the token from a file, the device label, the server and person ids, the shared file, the socket.
-- [ ] The hub: TLS, admission by ticket, the bearer in a header, the relay to the seat, leases renewed at the instance and kept across restarts, the helper calls, `attach`, `status`, `evict` and `retire`.
-- [ ] The helper, the units, the sudoers fragment and the install script over a source release.
-- [ ] The privileged lane on Linux and the live acceptance with two members.
+- [x] The server shell's seat flags: the token from a file, the device label, the server and person ids, the shared file, the socket.
+- [x] The hub: TLS, admission by ticket, the bearer in a header, the relay to the seat, leases renewed at the instance and kept across restarts, the helper calls, `attach`, `status`, `evict` and `retire`.
+- [x] The helper, the units, the sudoers fragment and the install script over a source release.
+- [x] The privileged lane on Linux and the live acceptance with two members.
 
 ## Tasks
 
