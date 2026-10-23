@@ -5,7 +5,7 @@
 
 ## Status
 
-In progress (2026-10-21), before any shared execution ships.
+Done (2026-10-23), begun 2026-10-21, before any shared execution ships.
 
 ## Intent
 
