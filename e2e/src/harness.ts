@@ -185,11 +185,15 @@ export interface AppOptions {
    * in and whether that person may make a root group; its `registry`
    * starts a stand-in registry of its own that the second fronts at its
    * origin, as each instance serves its own (environments-18).
+   * `third` starts a third stand-in instance after the second (DR-128),
+   * read as `second` is, `shared` meaning over the first's Git backend,
+   * and named "Third stand-in" unless another name is given.
    */
   host?: boolean | {
     registry?: boolean;
     share?: { host: StandinHost; registry?: StandinRegistry; second?: StandinHost };
     second?: { backend?: "separate" | "shared"; displayName?: string; person?: StandinPerson; canCreateGroup?: boolean; registry?: boolean };
+    third?: { backend?: "separate" | "shared"; displayName?: string; person?: StandinPerson; canCreateGroup?: boolean };
   };
   /** Signed in at the stand-in before the page opens: the device flow
    * started over the protocol, its code approved through the script,
@@ -253,6 +257,9 @@ export const HOST_LOGIN = "ada";
 /** The second stand-in instance's display name unless one is named
  * (`host.second`, DR-127). */
 export const SECOND_HOST_NAME = "Second stand-in";
+/** The third stand-in instance's display name unless one is named
+ * (`host.third`, DR-128). */
+export const THIRD_HOST_NAME = "Third stand-in";
 /** The stand-in's team group and its id (git-host-12). */
 export const HOST_GROUP = "acme";
 export const HOST_GROUP_ID = "2002";
@@ -625,9 +632,10 @@ export interface App {
    * codes and holds the fixture (git-host-12). The home's default
    * instance, from `SPEX_HOST_URL`. */
   host?: StandinHost;
-  /** Every stand-in instance of the journey, the first being `host` and
+  /** Every stand-in instance of the journey, the first being `host`,
    * the second `host.second`'s, or another app's `host.share.second`
-   * (DR-127); empty without `host`. */
+   * (DR-127), and the third `host.third`'s (DR-128); empty without
+   * `host`. */
   hosts: StandinHost[];
   /** The stand-in registry the host fronts (with `host.registry`):
    * `registries[0]`. */
@@ -813,6 +821,21 @@ async function arrangeApp(
       if (canCreateGroup !== undefined) second.script.canCreateGroup = canCreateGroup;
       hosts.push(second);
       registries.push(fronted);
+    }
+    // The third instance, after the second and closed before it, over
+    // the first's Git backend or on one of its own (DR-128).
+    if (spec.third) {
+      if (hosts.length < 2) throw new Error("host.third needs a second instance");
+      const { backend, displayName, person, canCreateGroup } = spec.third;
+      const third = await startStandinHost({
+        ...(backend === "shared" ? { gitBackend: host } : { dir: join(scratch, "host-3") }),
+        displayName: displayName ?? THIRD_HOST_NAME,
+        ...(person ? { person } : {}),
+      });
+      owned.push(third);
+      if (canCreateGroup !== undefined) third.script.canCreateGroup = canCreateGroup;
+      hosts.push(third);
+      registries.push(undefined);
     }
   }
   const closeOwned = async (): Promise<void> => {
