@@ -42,13 +42,30 @@ class Client {
     return result.result as CommandResults[T];
   }
   close() { this.socket.close(); }
-  async pending(count = 1): Promise<ApprovalState> {
-    for (let retry = 0; retry < 500; retry++) {
-      const state = await this.command("approval.list", {});
-      if (state.pending.length === count) return state;
+  /** Where in `messages` the approval state `pending` last returned stands. */
+  private returned = -1;
+  /**
+   * The first approval state this client received after the one `pending`
+   * last returned — or, at its first call, since connecting — that holds
+   * `count` requests; where no state has arrived since, the one it
+   * returned, the core's latest. The client keeps every state as it
+   * arrives, the connection's snapshot first and each change after it
+   * (approvals-4), so a request raised and removed before this looks —
+   * one that expires within its deadline among them — is still seen.
+   * The bound only ends a hang.
+   */
+  async pending(count = 1, timeoutMs = 60_000): Promise<ApprovalState> {
+    await this.ready;
+    const deadline = Date.now() + timeoutMs;
+    for (;;) {
+      const states = this.messages.flatMap((message, index) => message.type === "approval.state" && index > this.returned ? [{index, state: message.state}] : []);
+      const found = states.find(({state}) => state.pending.length === count);
+      if (found) { this.returned = found.index; return found.state; }
+      const last = this.messages[this.returned];
+      if (states.length === 0 && last?.type === "approval.state" && last.state.pending.length === count) return last.state;
+      if (Date.now() > deadline) throw new Error(`Expected ${count} pending approvals; received states holding ${states.map(({state}) => state.pending.length).join(", ") || "none"} since the last returned`);
       await new Promise((resolve) => setTimeout(resolve, 10));
     }
-    throw new Error(`Expected ${count} pending approvals`);
   }
   answer(state: ApprovalState, request: PendingApproval, decision: "allow_once" | "deny") {
     return this.command("approval.respond", {generation: state.generation, requestId: request.id, owner: request.owner, decision});
@@ -81,13 +98,16 @@ async function fixture(expiresInMs = 600_000, approvalPatch: Partial<NonNullable
     async stop() { for (const client of clients) client.close(); await service.stop(); await rm(dir, {recursive: true, force: true}); }};
 }
 
-async function settle(client: Client, sessionId: string): Promise<void> {
-  for (let retry = 0; retry < 500; retry++) {
+/** The session's turn ended, which stands once reached; the bound only
+ * ends a hang. */
+async function settle(client: Client, sessionId: string, timeoutMs = 60_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
     const sessions = await client.command("session.list", {});
     if (!sessions.find((session) => session.id === sessionId)?.turnActive) return;
+    if (Date.now() > deadline) throw new Error("Session did not settle");
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
-  throw new Error("Session did not settle");
 }
 
 test("approvals-7: authenticated live requests survive reconnect and deliver once across competing clients", {timeout: 30_000}, async () => {
@@ -126,6 +146,8 @@ test("approvals-7: authenticated live requests survive reconnect and deliver onc
 
 test("approvals-7: deny, abort, and timeout never execute the pending action", {timeout: 30_000}, async () => {
   for (const action of ["deny", "abort", "timeout"] as const) {
+    // The request reaches the core as it is made, its deadline whole, and
+    // its expiry's removal is kept among the states the client received.
     const f = await fixture(action === "timeout" ? 250 : 600_000);
     try {
       await f.first.command("turn.submit", {sessionId: f.session.id, text: action});
