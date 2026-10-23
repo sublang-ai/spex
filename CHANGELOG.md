@@ -306,6 +306,15 @@ and `npm start` (desktop) or `npm run start:server` (server).
   English and Chinese ([DR-143](specs/decisions/143-start-with-a-goal-and-explain-specs-plainly.md)).
   Desktop project selection leads with the native folder picker.
 
+- A session's player panes appear as the work calls each player
+  ([DR-145](specs/decisions/145-a-lane-appears-with-its-first-call.md)).
+  A new session shows the Captain alone at its reading width; a player's
+  pane appears with its first call, in that order, and stays for the rest
+  of the session, so idle panes no longer take the width and the
+  "Idle until the playbook calls" line is gone. Bringing a working pane
+  into view scrolls only the player panes, never the page or the Captain
+  column, and never takes focus.
+
 - New sessions and intents belong to the runtime that creates them
   ([DR-134](specs/decisions/134-execution-ownership.md)). Another runtime
   shows their history with `Runs on <label>` but cannot continue or recover

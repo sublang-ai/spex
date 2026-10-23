@@ -174,6 +174,9 @@ export interface SessionView {
   /** Streaming captain speech accumulated from visible deltas. */
   captainDraft: string;
   players: Record<string, PlayerView>;
+  /** The players a call record has reached, in the order their first
+   * record arrived (run-view-7): the panes the run view shows. */
+  calledPlayers: string[];
   turnActive: boolean;
   currentTurnId: number | null;
   /** True while a history replay is loading after (re)subscription. */
@@ -215,6 +218,7 @@ export function initialSessionView(
         { id: player.id, running: false, segments: [] },
       ]),
     ),
+    calledPlayers: [],
     turnActive: false,
     currentTurnId: null,
     frames: [],
@@ -223,7 +227,10 @@ export function initialSessionView(
   };
 }
 
+/** The lane a call record reaches — every caller is one of the three
+ * player records, so the first one also gives the lane its place. */
 function player(view: SessionView, playerId: string): PlayerView {
+  if (!view.calledPlayers.includes(playerId)) view.calledPlayers.push(playerId);
   const existing = view.players[playerId];
   if (existing) return existing;
   const created: PlayerView = { id: playerId, running: false, segments: [] };

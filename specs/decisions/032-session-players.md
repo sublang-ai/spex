@@ -16,6 +16,7 @@ Amended by [DR-067](067-tuning-for-one-conversation.md): the two tuning tiers be
 Amended by [DR-093](093-a-players-subagent-model.md): a role binding's tuning is four fields — model, subagent model, effort and fast mode — in the same tri-state.
 Amended by [DR-095](095-a-subagents-effort-and-the-agents-own-model.md): five, with the subagent effort.
 The tri-state encoding, the player/binding ownership split, and the editor fork are used there unchanged.
+Amended by [DR-145](145-a-lane-appears-with-its-first-call.md): a pane stands for each player a call has reached, from its first call record on, rather than for each player the bindings reference.
 
 ## Context
 

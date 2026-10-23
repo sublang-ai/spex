@@ -7,7 +7,7 @@ import type { SessionInfo, TmuxPlayRecord } from "@sublang/spex-core/protocol";
 import { RunView } from "./RunView.js";
 import { applyRecords, initialSessionView } from "../state/reducer.js";
 import { setClientForTests, useAppStore } from "../state/store.js";
-import { PLAYERS } from "../fixtures/sample-run.js";
+import { CALLED_LANES, PLAYERS } from "../fixtures/sample-run.js";
 
 const previous = useAppStore.getState();
 afterEach(() => {
@@ -36,7 +36,8 @@ async function dropWhileBusy() {
       createdAt: 0, dispatched: { sessionId: session.id, turnId: 1, at: 0 } }, state: "working" }],
     attention: [], badge: 0,
   } });
-  const view = applyRecords(initialSessionView(PLAYERS), [record(1, {
+  // Both lanes stand once a call has reached them (run-view-7).
+  const view = applyRecords(initialSessionView(PLAYERS), [...CALLED_LANES, record(1, {
     type: "turn_started", turn: { id: 1, prompt: "Drop me midway" },
   })]);
   const conversation = () => <RunView session={session} view={view} composer={{ queued: [] }} connected

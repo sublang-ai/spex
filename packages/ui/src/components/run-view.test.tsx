@@ -29,7 +29,7 @@ import {
   FULL_RUN,
   INITIAL_VISIBLE,
   PLAYERS,
-  TURN_ONE,
+  CALLED_LANES, TURN_ONE, TURN_ONE_REVIEWED,
   TURN_TWO_QUESTION,
 } from "../fixtures/sample-run.js";
 import type {
@@ -222,7 +222,9 @@ describe("run-view-14: opaque records in the protocol stream", () => {
         lastSeq: seq,
       });
       expect(useAppStore.getState().collapsedLanes.s1).toEqual(["dev.reviewer"]);
-      expect(screen.getByTestId("player-pane-dev.reviewer").dataset.collapsed).toBe("true");
+      // An opaque player record is no call record: it opens no lane
+      // (run-view-7).
+      expect(screen.queryByTestId("player-pane-dev.reviewer")).toBeNull();
       expect(useAppStore.getState().composers.s1.queued).toEqual([
         { text: "Queued follow-up" },
       ]);
@@ -291,7 +293,8 @@ describe("RUN-19: pane structure from the fixture stream", () => {
     renderRun(TURN_ONE);
     expect(screen.getByTestId("captain-pane")).toBeTruthy();
     expect(screen.getByTestId("player-pane-dev.coder")).toBeTruthy();
-    expect(screen.getByTestId("player-pane-dev.reviewer")).toBeTruthy();
+    // A bound player no call has reached takes no place (run-view-7).
+    expect(screen.queryByTestId("player-pane-dev.reviewer")).toBeNull();
     // A status line is a left-aligned system line at the small step,
     // its glyph in an icon slot — never centered mono (run-view-1).
     const started = systemLine("◇ /code started");
@@ -332,16 +335,10 @@ describe("RUN-19: pane structure from the fixture stream", () => {
     const todoBody = screen.getByTestId("tool-body-9");
     expect(todoBody.querySelector("pre")!.getAttribute("data-kind")).toBe("json");
     expect(todoBody.textContent).toContain('"content": "ship it"');
-    // A call the core resolved no role for names the lane alone, and
-    // an unprompted lane says whom it waits for (run-view-7).
+    // A call the core resolved no role for names the lane alone
+    // (run-view-7).
     expect(screen.getByTestId("player-name-dev.coder").textContent).toBe(
       "dev.coder",
-    );
-    expect(screen.getByTestId("player-name-dev.reviewer").textContent).toBe(
-      "dev.reviewer",
-    );
-    expect(screen.getByTestId("player-pane-dev.reviewer").textContent).toContain(
-      "Idle until the playbook calls dev.reviewer",
     );
     // Only what the shell can open wears a link's affordance.
     expect(screen.getByText("the SDK docs").tagName).toBe("A");
@@ -360,10 +357,11 @@ describe("RUN-19: pane structure from the fixture stream", () => {
 
   test("a narrowing visibility record takes no pane away", () => {
     // What a nested call does when it returns: the runtime reports
-    // only the players it still engages. The lanes are the session's,
-    // so both panes stand (run-view-7).
+    // only the players it still engages. A lane a call reached stays
+    // the session's, so both panes stand (run-view-7).
     renderRun([
       ...TURN_ONE,
+      ...TURN_TWO_QUESTION,
       {
         seq: 99,
         record: {
@@ -376,6 +374,83 @@ describe("RUN-19: pane structure from the fixture stream", () => {
     ]);
     expect(screen.getByTestId("player-pane-dev.coder")).toBeTruthy();
     expect(screen.getByTestId("player-pane-dev.reviewer")).toBeTruthy();
+  });
+
+  test("a lane appears with its player's first call record, in that order", () => {
+    // The reviewer is called first here: the panes follow the records,
+    // not the roster, and a later call by the coder reorders nothing
+    // (run-view-7, DR-145).
+    renderRun([...TURN_TWO_QUESTION, ...TURN_ONE]);
+    const panes = [...document.querySelectorAll('[data-testid^="player-pane-"]')]
+      .map((pane) => pane.getAttribute("data-testid"));
+    expect(panes).toEqual(["player-pane-dev.reviewer", "player-pane-dev.coder"]);
+    expect(document.body.textContent).not.toContain("Idle until");
+  });
+
+  test("a call that records only its failure keeps its lane with the failure", () => {
+    // The first and only record of the call is its failed finish: the
+    // lane appears and shows it (run-view-7, run-view-127).
+    renderRun([{
+      seq: 1,
+      record: {
+        type: "player_finished",
+        turnId: 1,
+        timestamp: Date.now(),
+        playerId: "dev.reviewer",
+        result: { status: "error", playerId: "dev.reviewer", turnId: 1, error: "adapter refused" },
+      },
+    } as (typeof TURN_ONE)[number]]);
+    expect(screen.getByTestId("player-pane-dev.reviewer").textContent).toContain("adapter refused");
+    expect(screen.queryByTestId("player-pane-dev.coder")).toBeNull();
+  });
+
+  test("a lane that appears with only its failure is brought into view", () => {
+    // The reviewer's lane arrives beyond the grid's right edge and never
+    // runs: its arrival alone moves the grid's own offset (run-view-7).
+    const failed = {
+      seq: 900,
+      record: {
+        type: "player_finished",
+        turnId: 1,
+        timestamp: Date.now(),
+        playerId: "dev.reviewer",
+        result: { status: "error", playerId: "dev.reviewer", turnId: 1, error: "adapter refused" },
+      },
+    } as (typeof TURN_ONE)[number];
+    const original = HTMLElement.prototype.getBoundingClientRect;
+    HTMLElement.prototype.getBoundingClientRect = function (this: HTMLElement) {
+      const [left, right] = this.dataset.testid === "player-pane-dev.reviewer" ? [600, 1000]
+        : this.dataset.testid === "player-pane-dev.coder" ? [0, 400] : [0, 600];
+      return { left, right, top: 0, bottom: 400, width: right - left, height: 400, x: left, y: 0, toJSON: () => ({}) } as DOMRect;
+    };
+    try {
+      const props = {
+        session: SESSION,
+        composer: { queued: [] },
+        connected: true,
+        onSubmit: async () => {},
+        onAbort: () => {},
+        onRemoveQueued: () => {},
+        onDismissError: () => {},
+      };
+      const { rerender } = render(
+        <RunView {...props} view={applyRecords(initialSessionView(PLAYERS), TURN_ONE)} />,
+      );
+      const grid = screen.getByTestId("player-grid");
+      let scrollLeft = 0;
+      Object.defineProperty(grid, "scrollLeft", {
+        configurable: true,
+        get: () => scrollLeft,
+        set: (value: number) => { scrollLeft = value; },
+      });
+      rerender(
+        <RunView {...props} view={applyRecords(initialSessionView(PLAYERS), [...TURN_ONE, failed])} />,
+      );
+      expect(screen.getByTestId("player-pane-dev.reviewer").textContent).toContain("adapter refused");
+      expect(scrollLeft).toBe(400);
+    } finally {
+      HTMLElement.prototype.getBoundingClientRect = original;
+    }
   });
 
   test("a status line that is only a machine's name reads as its words", () => {
@@ -703,8 +778,9 @@ describe("run-view-143/144: cumulative active time stays with its agent", () => 
 
     const rendered = render(<ConnectedRun />);
     try {
-      expect(screen.getByTestId("agent-active-dev.coder").textContent)
-        .toBe("active · 1s");
+      // No call has reached the coder yet, so its summary has no lane
+      // to read in (run-view-7).
+      expect(screen.queryByTestId("player-pane-dev.coder")).toBeNull();
       record({
         type: "turn_started",
         turnId: 2,
@@ -1230,7 +1306,7 @@ describe("run-view-60/76/81: the card's words and its fit to the pane", () => {
   // can hide a pane and each says so on its own.
   test("the player grid fades whichever edge hides a pane", () => {
     const observers = observeResizes();
-    renderRun(MACHINE_RUN.slice(0, 13));
+    renderRun([...MACHINE_RUN.slice(0, 13), ...CALLED_LANES]);
     const grid = screen.getByTestId("player-grid");
     const geometry = { clientWidth: 544, scrollWidth: 572, scrollLeft: 0 };
     for (const key of Object.keys(geometry) as (keyof typeof geometry)[]) {
@@ -1268,7 +1344,7 @@ describe("run-view-60/76/81: the card's words and its fit to the pane", () => {
 
 describe("run-view-81: the divider lands under the pointer", () => {
   test("the split is read against the box the share resolves against", () => {
-    renderRun(MACHINE_RUN.slice(0, 13));
+    renderRun([...MACHINE_RUN.slice(0, 13), ...CALLED_LANES]);
     const divider = screen.getByTestId("captain-divider");
     const container = screen.getByTestId("captain-column").parentElement!;
     // The container's padding and its gap are the offsets the share
@@ -1984,7 +2060,7 @@ describe("run-view-96/91: attention activation lands at the place", () => {
 
 describe("run-view-25, DR-038: the player label wears the fast-mode mark", () => {
   test("a fast-mode player shows the lightning; the other lane does not", () => {
-    const view = applyRecords(initialSessionView(PLAYERS), TURN_ONE);
+    const view = applyRecords(initialSessionView(PLAYERS), TURN_ONE_REVIEWED);
     render(
       <RunView
         session={{
@@ -2385,7 +2461,7 @@ describe("run-view-116/117: a lane folds to a rail and returns for its call", ()
   });
 
   test("the header's control folds the pane to a rail, focus handed on", () => {
-    renderRun(TURN_ONE);
+    renderRun(TURN_ONE_REVIEWED);
     fireEvent.click(screen.getByRole("button", { name: "Collapse dev.reviewer" }));
     const rail = screen.getByTestId("player-pane-dev.reviewer");
     expect(rail.dataset.collapsed).toBe("true");
@@ -2449,7 +2525,7 @@ describe("run-view-116/117: a lane folds to a rail and returns for its call", ()
     useAppStore.setState({
       collapsedLanes: { s1: ["dev.reviewer"], s2: ["dev.reviewer"] },
     });
-    const idle = applyRecords(initialSessionView(PLAYERS), TURN_ONE);
+    const idle = applyRecords(initialSessionView(PLAYERS), TURN_ONE_REVIEWED);
     const props = {
       session: SESSION,
       composer: { queued: [] },
@@ -2485,7 +2561,7 @@ describe("run-view-116/117: a lane folds to a rail and returns for its call", ()
 
   test("a self-opening lane carries focus from the rail's control it removes", () => {
     useAppStore.setState({ collapsedLanes: { s1: ["dev.reviewer"] } });
-    const idle = applyRecords(initialSessionView(PLAYERS), TURN_ONE);
+    const idle = applyRecords(initialSessionView(PLAYERS), TURN_ONE_REVIEWED);
     const props = {
       session: SESSION,
       composer: { queued: [] },
@@ -3751,7 +3827,7 @@ describe("run-view-138/139/140: an agent's settings for one conversation", () =>
     useAppStore.setState({
       sessions: [{ ...SESSION, ...(agentSettings ? { agentSettings } : {}) }],
       activeSessionId: SESSION.id,
-      views: { s1: initialSessionView(PLAYERS) },
+      views: { s1: applyRecords(initialSessionView(PLAYERS), CALLED_LANES) },
       composers: { s1: { queued: [] } },
       collapsedLanes: {},
       configState: { status: "valid", summary: SUMMARY, seeded: false },
@@ -3763,7 +3839,7 @@ describe("run-view-138/139/140: an agent's settings for one conversation", () =>
     const result = render(
       <RunView
         session={session}
-        view={applyRecords(initialSessionView(PLAYERS), TURN_ONE)}
+        view={applyRecords(initialSessionView(PLAYERS), TURN_ONE_REVIEWED)}
         composer={{ queued: [] }}
         connected
         onSubmit={async () => {}}
@@ -4008,14 +4084,14 @@ describe("run-view-138/139/140: an agent's settings for one conversation", () =>
         : ({} as never)) } as never);
     useAppStore.setState({
       sessions: [SESSION], activeSessionId: SESSION.id,
-      views: { s1: initialSessionView(PLAYERS) }, composers: { s1: { queued: [] } },
+      views: { s1: applyRecords(initialSessionView(PLAYERS), CALLED_LANES) }, composers: { s1: { queued: [] } },
       collapsedLanes: {}, configState: { status: "valid", summary: SUMMARY, seeded: false },
       specTrees: {}, ledger: undefined, stagedIntents: {},
     } as never);
     render(
       <RunView
         session={{ ...SESSION, live: false, externalWriter: "active" }}
-        view={applyRecords(initialSessionView(PLAYERS), TURN_ONE)}
+        view={applyRecords(initialSessionView(PLAYERS), TURN_ONE_REVIEWED)}
         composer={{ queued: [] }}
         connected
         readOnly
@@ -4063,7 +4139,7 @@ describe("run-view-152: a chip names the model its runtime reported", () => {
     setClientForTests(undefined);
   });
 
-  const view = () => applyRecords(initialSessionView(PLAYERS), TURN_ONE);
+  const view = () => applyRecords(initialSessionView(PLAYERS), TURN_ONE_REVIEWED);
   const runView = (session: SessionInfo) => (
     <RunView
       session={session}
