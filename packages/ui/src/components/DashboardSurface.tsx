@@ -108,6 +108,15 @@ const TONE_ROW: Record<"amber" | "red", string> = {
   red: "border-red-300 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-300",
 };
 
+/** The row's secondary lines — stats, cause, act, project and age — in
+ * a tone-matched colour of their own: dimming the row's text to 70
+ * percent put 12 px text at 4.1:1 on the light amber row, under the
+ * 4.5:1 WCAG AA asks (run-view-102). */
+const TONE_MUTED: Record<"amber" | "red", string> = {
+  amber: "text-amber-800 dark:text-amber-300",
+  red: "text-red-700 dark:text-red-400",
+};
+
 /** The finished entry's stats line (dashboard-35): review rounds
  * foremost, omitted when absent. */
 export function statsLine(stats: IntentStats): string {
@@ -168,6 +177,7 @@ function AttentionRow({
   const [error, setError] = useState<string>();
   const [confirmDrop, setConfirmDrop] = useState(false);
   const tone = entryTone(entry);
+  const muted = TONE_MUTED[tone];
   // A verdict is one click by design (DR-038): Confirm and Drop both
   // act on the click, and the History row is the record of it.
   const close = (as: "done" | "dropped") => {
@@ -221,7 +231,7 @@ function AttentionRow({
           <span className="block truncate">{entry.title}</span>
           {entry.stats ? (
             <span
-              className="block truncate text-xs opacity-70"
+              className={`block truncate text-xs ${muted}`}
               data-testid={`attention-stats-${entry.intentId ?? entry.sessionId}`}
             >
               {statsLine(entry.stats)}
@@ -231,7 +241,7 @@ function AttentionRow({
               row says what happened, not only that something did. */}
           {why ? (
             <span
-              className="block truncate text-xs opacity-70"
+              className={`block truncate text-xs ${muted}`}
               data-testid={`attention-why-${entry.intentId ?? entry.sessionId}`}
               title={why}
             >
@@ -240,7 +250,7 @@ function AttentionRow({
           ) : null}
           {act ? (
             <span
-              className="block truncate text-xs opacity-70"
+              className={`block truncate text-xs ${muted}`}
               data-testid={`attention-act-${entry.intentId ?? entry.sessionId}`}
             >
               {act}
@@ -259,13 +269,13 @@ function AttentionRow({
           ) : null}
         </span>
         <span
-          className="hidden min-w-0 max-w-40 truncate text-xs opacity-70 @xs:inline"
+          className={`hidden min-w-0 max-w-40 truncate text-xs @xs:inline ${muted}`}
           title={projectName}
         >
           {projectName}
         </span>
         <span
-          className="hidden shrink-0 text-xs opacity-70 @md:inline"
+          className={`hidden shrink-0 text-xs @md:inline ${muted}`}
           title={absoluteTitle(entry.since)}
         >
           {relativeAge(entry.since, now)}
@@ -317,7 +327,7 @@ function AttentionRow({
             disabled={busy !== undefined}
             data-testid={`attention-drop-${entry.intentId}`}
             onClick={() => close("dropped")}
-            className="min-h-6 rounded px-1.5 py-0.5 text-xs opacity-70 hover:opacity-100 disabled:opacity-40"
+            className={`min-h-6 rounded px-1.5 py-0.5 text-xs ${muted} hover:text-current disabled:opacity-40`}
           >
             {busy === "dropped"
               ? i18n._({
@@ -358,7 +368,7 @@ function AttentionRow({
                 disabled={busy !== undefined}
                 data-testid={`attention-drop-keep-${entry.intentId}`}
                 onClick={() => setConfirmDrop(false)}
-                className="min-h-6 rounded px-1.5 py-0.5 text-xs opacity-70 hover:opacity-100 disabled:opacity-40"
+                className={`min-h-6 rounded px-1.5 py-0.5 text-xs ${muted} hover:text-current disabled:opacity-40`}
               >
                 {i18n._({
                   id: "Keep",
@@ -374,7 +384,7 @@ function AttentionRow({
               data-testid={`attention-drop-${entry.intentId}`}
               aria-label={i18n._("Drop {title}", { title: entry.title })}
               onClick={() => setConfirmDrop(true)}
-              className="min-h-6 rounded px-1.5 py-0.5 text-xs opacity-70 hover:opacity-100 disabled:opacity-40"
+              className={`min-h-6 rounded px-1.5 py-0.5 text-xs ${muted} hover:text-current disabled:opacity-40`}
             >
               {i18n._({
                 id: "Drop",
