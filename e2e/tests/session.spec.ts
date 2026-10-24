@@ -277,25 +277,39 @@ test.describe("a long active turn", () => {
     await open(page, app);
     await send(page, "/code add a hello world function");
     await expect(page.getByTestId("abort-button")).toBeVisible();
+    // The coder's long call is under way, so the layout is read in the
+    // long turn itself and the Abort below reaches a call in flight: on a
+    // loaded runner an abort landing before the turn's first call had
+    // begun missed it, leaving the call running past the core's stop
+    // bound when the fixture stopped the core.
+    await expect(page.getByTestId("player-pane-dev.coder")).toContainText(/editing/i, { timeout: 60_000 });
 
     await expect(page.getByTestId("boss-composer")).toBeDisabled();
     await expect(page.getByTestId("send-button")).toBeDisabled();
     await expect(page.getByTestId("queue-indicator")).toHaveCount(0);
 
     // The transcript keeps a readable share, and the action row is
-    // still in the window with the page unmoved (DR-041 §9).
-    const pane = (await page.getByTestId("captain-pane").boundingBox())!;
-    expect(pane.height).toBeGreaterThan(40);
-    for (const control of ["abort-button", "send-button"]) {
-      const rect = (await page.getByTestId(control).boundingBox())!;
-      expect(rect.y + rect.height, control).toBeLessThanOrEqual(700);
-    }
-    expect(
-      await page.evaluate(() => [
-        document.documentElement.scrollHeight,
-        document.documentElement.clientHeight,
-      ]),
-    ).toEqual([700, 700]);
+    // still in the window with the page unmoved (DR-041 §9), once the
+    // layout has settled around the running turn.
+    await expect(async () => {
+      const pane = (await page.getByTestId("captain-pane").boundingBox())!;
+      expect(pane.height).toBeGreaterThan(40);
+      for (const control of ["abort-button", "send-button"]) {
+        const rect = (await page.getByTestId(control).boundingBox())!;
+        expect(rect.y + rect.height, control).toBeLessThanOrEqual(700);
+      }
+      expect(
+        await page.evaluate(() => [
+          document.documentElement.scrollHeight,
+          document.documentElement.clientHeight,
+        ]),
+      ).toEqual([700, 700]);
+    }).toPass({ timeout: 30_000 });
+
+    // The turn ends here, where a loaded runner may take its time to
+    // settle the aborted call, not in the core's bounded stop at teardown.
+    await page.getByTestId("abort-button").click();
+    await expect(page.getByTestId("abort-button")).toHaveCount(0, { timeout: 60_000 });
   });
 });
 

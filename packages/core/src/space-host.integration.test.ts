@@ -481,6 +481,11 @@ test("space-37: Pick a group creates <name>-spex there and pushes, its placement
   const host = await startHost();
   const home = await startHome("pick", { host, project: false, extra: { signIn: "browser" } });
   t.after(() => home.stop());
+  // A creation's first sync — the host read, the clone's move and the
+  // push to the stand-in — ran past a 20 s wait on a loaded macOS runner
+  // while still pushing. The wait's end is the sync's: this bound only
+  // ends a hung sync.
+  const syncTimeoutMs = 120_000;
   const alpha = gitFolder("alpha");
   const first = await addFolder(home, alpha);
   await home.client.expectError("space.pick", { repository: first.key, choice: { kind: "create", instance: host.url, groupId: "2002", name: "alpha" } }, "not_found", unlisted(host));
@@ -500,7 +505,7 @@ test("space-37: Pick a group creates <name>-spex there and pushes, its placement
   // under `workspace/acme/`, its `spex` pushed (space-58, space-60).
   const from = home.client.mark();
   assert.deepEqual(await home.client.expectOk("space.pick", { repository: local, choice: { kind: "create", instance: host.url, groupId: "2002", name: "alpha" } }), { accepted: true });
-  const created = await home.client.waitRepository(from, hostKey(host, "acme/alpha-spex"), (repository) => repository.sync.phase === "done");
+  const created = await home.client.waitRepository(from, hostKey(host, "acme/alpha-spex"), (repository) => repository.sync.phase === "done", syncTimeoutMs);
   assert.equal(created.state, "reachable");
   assertNeverUnreachable(home.client.readings(from, [local, hostKey(host, "acme/alpha-spex")]));
   // Its one placement's line, at the stand-in, reads its last sync
@@ -546,7 +551,7 @@ test("space-37: Pick a group creates <name>-spex there and pushes, its placement
   );
   host.script.refuseCreate(null);
   assert.deepEqual(await home.client.expectOk("space.refresh", {}), { accepted: true });
-  const found = await home.client.waitRepository(fromGamma, hostKey(host, "acme/research/gamma-spex"), (repository) => repository.sync.phase === "done");
+  const found = await home.client.waitRepository(fromGamma, hostKey(host, "acme/research/gamma-spex"), (repository) => repository.sync.phase === "done", syncTimeoutMs);
   assert.equal(found.state, "reachable");
   assert.deepEqual(found.placements.map((placement) => [placement.path, placement.attached, placement.waiting]), [["acme/research/gamma-spex", true, null]]);
 });
