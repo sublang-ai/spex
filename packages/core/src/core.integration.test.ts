@@ -263,6 +263,8 @@ async function startHarness(
     /** Watch the config files and the clones as a running app does. */
     watchConfig?: boolean;
     loadModule?: import("./service.js").CoreServiceOptions["loadModule"];
+    /** Awaited as a session's lifecycle publishes its state. */
+    sessionStatePublished?: import("./service.js").CoreServiceOptions["sessionStatePublished"];
   } = {},
 ): Promise<Harness> {
   const dir = scratchDir("spex-core-it-");
@@ -319,6 +321,9 @@ async function startHarness(
     ...(options.scaffoldEnv ? { scaffoldEnv: options.scaffoldEnv } : {}),
     ...(options.compileSpawner
       ? { compileSpawner: options.compileSpawner }
+      : {}),
+    ...(options.sessionStatePublished
+      ? { sessionStatePublished: options.sessionStatePublished }
       : {}),
   });
   return { service, stats, imports, dir, dataDir, projectDir };
@@ -2361,6 +2366,67 @@ test(
     assert.equal(row?.state, "queued");
     assert.deepEqual([row?.next?.standing, row?.next?.manualStart], ["stopped", true]);
     assert.deepEqual(ledger.attention.filter((entry) => entry.sessionId === session.id), []);
+  },
+);
+
+test(
+  "core-service-131: an abort before the runtime begins the turn is held and takes effect as it begins",
+  { timeout: 180_000 },
+  async (t) => {
+    // The turn is active from its acceptance, while the shared lifecycle
+    // prepares it — the lease marked, the repository reconciled — before
+    // the runtime has a turn to abort. The seam holds the lifecycle at
+    // the checkpoint marking the turn begun, and the Captain's decision
+    // call is scripted far past the settlement bound: a lost abort lets
+    // it run its whole length, as the long-turn journey saw.
+    const script = parkingScript();
+    let holding = true;
+    const held: (() => void)[] = [];
+    const release = () => {
+      holding = false;
+      for (const resume of held.splice(0)) resume();
+    };
+    const harness = await startHarness(VALID_CONFIG, {
+      realShell: true,
+      script: { rules: [{ match: /"action"/, response: { result: "", delayMs: 120_000 } }, ...(script.rules ?? [])], fallback: script.fallback },
+      seedCommit: true,
+      sessionStatePublished: async (session) => {
+        if (holding && session.turnActive) await new Promise<void>((resume) => held.push(resume));
+      },
+    });
+    const client = new Client(harness.service.port());
+    t.after(async () => {
+      release();
+      client.close();
+      await harness.service.stop();
+    });
+    await client.open();
+    const project = await client.expectOk("project.register", { path: harness.projectDir });
+    const session = await client.expectOk("session.create", { projectId: project.id });
+    await client.expectOk("subscribe", { channel: { kind: "session", sessionId: session.id } });
+    await client.expectOk("turn.submit", { sessionId: session.id, text: "Add a line to work.txt" });
+    // The turn publishes its state as it is accepted and again at the
+    // lifecycle's checkpoint; with both held, the runtime has not begun
+    // the turn and no call has started.
+    const deadline = Date.now() + 60_000;
+    while (held.length < 2) {
+      if (Date.now() > deadline) throw new Error("the turn's checkpoint was never published");
+      await sleep(10);
+    }
+    assert.equal(harness.stats.runs.length, 0, "no call has started while the turn is held");
+    const reply = await client.expectOk("turn.abort", { sessionId: session.id });
+    assert.equal(reply.aborted, true, "the abort is taken while the turn is active");
+    release();
+
+    // The stop settles well inside the call's scripted length: the
+    // abort took effect as the runtime began the turn (core-service-6),
+    // and a call under an aborted signal never reaches the agent.
+    const stopped = await settledSession(client, session.id, 1);
+    assert.ok(client.records("session").some(({ record }) => record.type === "turn_aborted"));
+    assert.equal(harness.stats.runs.length, 0, "no agent call ran under the aborted turn");
+    assert.equal(stopped.recovery, undefined);
+    assert.equal(stopped.continuable, true, stopped.continuationReason ?? "no reason given");
+    assert.equal(stopped.parked, undefined);
   },
 );
 
