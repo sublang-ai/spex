@@ -45,6 +45,7 @@ Amends, under [DR-046](046-decision-record-evolution.md):
 - A project on a seat is opened from the desktop by naming it among the projects of the member's groups; the seat allocates its working folder ([DR-132](132-team-servers.md)).
   The local pickers, reveal and path entry are not offered for a remote place.
 - One spex repository cloned here and on a seat is one project shown under each place; which runtime may execute a session or an intent is [DR-134](134-execution-ownership.md).
+- A remote place holding no project greets the member with the welcome page in its server form: its projects come from the member's groups, the server keeping their folders, and no local folder or example is offered there; the sidebar's place heading shows that place.
 
 ### Considered and declined
 

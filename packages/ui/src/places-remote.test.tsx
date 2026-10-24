@@ -18,7 +18,9 @@
 // proposal's "Add project", its environment's folder request no picker
 // — its folder named relative to its project alone — and its draft's
 // source neither a picked file nor a pasted path; the Academy example
-// is seeded on this computer alone. settings-51: the Credentials
+// is seeded on this computer alone, a seat holding no project greeting
+// the member with the server welcome page (run-view-174), which its
+// heading in the sidebar shows (run-view-168). settings-51: the Credentials
 // section says its fixed sentence, sends `credential.set` and
 // `credential.remove`, lists what is set with no secret shown, refuses
 // a blank name or value in place, shows the host a failed clone named
@@ -626,11 +628,11 @@ describe("run-view-171: a remote place offers no picker, reveal or path entry", 
     // [run-view-169] a seat's projects are opened among the member's
     // groups, its core allocating every folder: no example is seeded at
     // a folder named there, the way in being the palette.
-    expect(screen.getByTestId("home-add-project").textContent).toBe("Open a project");
+    expect(screen.queryByTestId("home-add-project")).toBeNull();
     expect(screen.queryByTestId("home-academy")).toBeNull();
     expect(screen.queryByText("Try the Academy example")).toBeNull();
     expect(callsOf(alpha, "project.create")).toEqual([]);
-    fireEvent.click(screen.getByTestId("home-add-project"));
+    fireEvent.click(screen.getByTestId("home-open-from-groups"));
     expect(screen.queryByTestId("palette-own-project")).toBeNull();
     expect(screen.getByTestId(`palette-groups-${ALPHA.place}`)).toBeTruthy();
   });
@@ -649,6 +651,132 @@ describe("run-view-171: a remote place offers no picker, reveal or path entry", 
     // on the server, where the seat's core allocates every folder.
     expect(within(empty).queryByTestId("specs-empty-academy")).toBeNull();
     expect(callsOf(alpha, "specs.get")).toContainEqual({ projectId: "p2" });
+  });
+});
+
+/** The sidebar's heading of the place shown by `label`. */
+function headingOf(label: string): HTMLElement {
+  const headings = within(screen.getByTestId("sidebar")).getAllByTestId("sidebar-place-heading");
+  return headings.find((heading) => heading.textContent === label)!;
+}
+
+describe("run-view-171: a remote place holding no project shows the server welcome page", () => {
+  test("its heading shows the server form, its primary action opening the palette and its secondary Groups at that place", async () => {
+    beta.answers["space.get"] = placeGroups();
+    render(<App />);
+    await settle();
+    fireEvent.click(headingOf("gpu-box"));
+    await settle();
+
+    // [run-view-171] [run-view-174] the welcome page in its server form,
+    // naming the server, with the server's words in the local page's
+    // three steps.
+    const welcome = screen.getByTestId("welcome-home");
+    expect(within(welcome).getByRole("heading", { level: 1 }).textContent).toBe("Work on gpu-box from this computer.");
+    expect([...welcome.querySelectorAll("ol > li")].map((step) => step.textContent)).toEqual([
+      "GroupsYour projects here come from the spex repositories of your groups",
+      "SeatAgents run on gpu-box as you, in folders the server allocates",
+      "DeliveryAI builds and reviews changes, with a record of each step",
+    ]);
+    // [run-view-174] no local-folder action, no Academy example, and none
+    // of the Captain's chrome.
+    expect(screen.queryByTestId("home-add-project")).toBeNull();
+    expect(screen.queryByTestId("home-academy")).toBeNull();
+    expect(screen.queryByTestId("start-composer")).toBeNull();
+    expect(screen.queryByTestId("captain-settings")).toBeNull();
+    expect(screen.queryByTestId("captain-readiness")).toBeNull();
+    const primary = within(welcome).getByTestId("home-open-from-groups");
+    const secondary = within(welcome).getByTestId("home-open-groups");
+    expect(primary.textContent).toBe("Open a project from your groups");
+    expect(secondary.textContent).toBe("Open Groups");
+    expect(within(welcome).getAllByRole("button")).toEqual([primary, secondary]);
+
+    // [run-view-171] [run-view-174] the primary action opens the palette,
+    // where that place's groups' projects are listed; opening one sends
+    // that place's core a join with no folder (run-view-169).
+    fireEvent.click(primary);
+    await settle();
+    const palette = screen.getByTestId("project-palette");
+    expect(within(palette).queryByTestId("palette-own-project")).toBeNull();
+    fireEvent.click(within(palette).getByTestId(`palette-join-${ABSENT_KEY}@${BETA.place}`));
+    await settle();
+    expect(callsOf(beta, "space.join")).toEqual([{ instance: SPEX, hostId: "101" }]);
+    expect(callsOf(local, "space.join")).toEqual([]);
+    expect(callsOf(alpha, "space.join")).toEqual([]);
+    expect(pickDirectory).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("project-palette")).toBeNull();
+
+    // [run-view-171] [run-view-174] the secondary action shows the Groups
+    // surface at that place, the selector naming the server.
+    fireEvent.click(screen.getByTestId("home-open-groups"));
+    await settle();
+    expect(document.querySelector('[data-surface="Space"]')!.getAttribute("aria-current")).toBe("page");
+    expect(screen.getByTestId("space-surface")).toBeTruthy();
+    expect(shownPlace()).toBe("gpu-box");
+  });
+
+  test("its config errors stay visible with a Settings action opening that place's Settings", async () => {
+    betaStore.setState({ configState: { status: "missing", path: "/home/member/.spex/config/playbook.config.yaml" } });
+    render(<App />);
+    fireEvent.click(headingOf("gpu-box"));
+    await settle();
+    const welcome = screen.getByTestId("welcome-home");
+    expect(within(welcome).getByRole("heading", { level: 1 }).textContent).toBe("Work on gpu-box from this computer.");
+    // [run-view-174] the place's config error stands, its Settings action
+    // opening that place's Settings.
+    const alert = within(welcome).getByRole("alert");
+    expect(alert.textContent).toContain("Spex has no config file yet");
+    fireEvent.click(within(alert).getByRole("button", { name: "Open Settings →" }));
+    await settle();
+    expect(document.querySelector('[data-surface="Settings"]')!.getAttribute("aria-current")).toBe("page");
+    expect(shownPlace()).toBe("gpu-box");
+  });
+});
+
+describe("run-view-171: activating a place's heading in the sidebar shows that place", () => {
+  test("a seat's heading shows its project start, and this computer's brings this computer's back", async () => {
+    alphaStore.setState({ currentProjectId: "p2" });
+    render(<App />);
+    await settle();
+    const home = headingOf("This computer");
+    const seat = headingOf("build-box");
+    // [run-view-168] each heading is a row of the projects tree, inside
+    // the group its place names.
+    expect(home.getAttribute("role")).toBe("treeitem");
+    expect(screen.getByRole("group", { name: "build-box" }).contains(seat)).toBe(true);
+    expect(home.getAttribute("aria-current")).toBe("location");
+    expect(seat.getAttribute("aria-current")).toBeNull();
+
+    // [run-view-171] [run-view-168] from another surface, a seat's heading
+    // shows that place on the Projects surface: its project start.
+    fireEvent.click(document.querySelector<HTMLElement>('[data-surface="Dashboard"]')!);
+    fireEvent.click(seat);
+    await settle();
+    expect(screen.getByTestId("project-task-start").textContent).toContain("What would you change in gpu-project?");
+    expect(seat.getAttribute("aria-current")).toBe("location");
+    expect(home.getAttribute("aria-current")).toBeNull();
+
+    // [run-view-171] [run-view-168] this computer's heading, reached by
+    // the tree's keys and activated by Enter, brings this computer's back.
+    const row = screen.getByTestId("sidebar-project-p1");
+    row.focus();
+    fireEvent.keyDown(row, { key: "ArrowUp" });
+    expect(document.activeElement).toBe(home);
+    expect(home.tabIndex).toBe(0);
+    fireEvent.keyDown(home, { key: "Enter" });
+    await settle();
+    expect(screen.getByTestId("project-task-start").textContent).toContain("What would you change in home-project?");
+    expect(home.getAttribute("aria-current")).toBe("location");
+
+    // [run-view-168] Space activates a heading too: the seat holding no
+    // project shows its welcome page.
+    const empty = headingOf("gpu-box");
+    empty.focus();
+    fireEvent.keyDown(empty, { key: " " });
+    await settle();
+    expect(within(screen.getByTestId("welcome-home")).getByRole("heading", { level: 1 }).textContent).toBe(
+      "Work on gpu-box from this computer.",
+    );
   });
 });
 

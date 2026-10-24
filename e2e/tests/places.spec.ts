@@ -20,7 +20,6 @@
 
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import type { Page } from "@playwright/test";
 import WebSocket from "ws";
 import { PROTOCOL_VERSION } from "@sublang/spex-core";
 
@@ -32,6 +31,7 @@ import {
   registerLocalProject,
   runTurn,
   surfaceEntry,
+  tapSockets,
   test,
   type App,
   type TeamServer,
@@ -74,18 +74,6 @@ async function unreadTurn(core: App, projectId: string, text: string): Promise<s
   const session = await core.core.command("session.create", { projectId });
   await runTurn(core, session.id, text);
   return session.id;
-}
-
-/** Every frame the page's sockets carried, each way, from its first
- * load on, with the URLs the page dialed. */
-function tapSockets(page: Page): { received: string[]; sent: string[]; urls: string[] } {
-  const tap = { received: [] as string[], sent: [] as string[], urls: [] as string[] };
-  page.on("websocket", (socket) => {
-    tap.urls.push(socket.url());
-    socket.on("framereceived", (frame) => tap.received.push(String(frame.payload)));
-    socket.on("framesent", (frame) => tap.sent.push(String(frame.payload)));
-  });
-  return tap;
 }
 
 /** The `server.open` commands the page sent. */

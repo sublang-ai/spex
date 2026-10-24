@@ -10,7 +10,7 @@ import type { Page } from "@playwright/test";
 import { seedDemoProject } from "@sublang/spex-core/testing";
 
 import { test, expect, open, openTranslated, nav, git, clonePath } from "../src/harness";
-import { measure, record } from "../src/fit";
+import { expectOnboardingFit } from "../src/fit";
 
 test.use({ appOptions: { config: "none" } });
 
@@ -20,21 +20,6 @@ async function shoot(page: Page, name: string): Promise<void> {
   if (!dir) return;
   mkdirSync(dir, { recursive: true });
   await page.screenshot({ path: join(dir, `${name}.png`) });
-}
-
-/** Both translations must fit the desktop and the 320px sidebar floor. */
-async function expectOnboardingFit(page: Page, stage: string): Promise<void> {
-  const defects: string[] = [];
-  record(`${stage} · desktop`, await measure(page), defects);
-  const collapse = page.getByTestId("sidebar-collapse");
-  await collapse.click();
-  await expect(collapse).toHaveAttribute("aria-expanded", "false");
-  await page.setViewportSize({ width: 320, height: 800 });
-  record(`${stage} · 320px`, await measure(page), defects);
-  await page.setViewportSize({ width: 1440, height: 838 });
-  await collapse.click();
-  await expect(collapse).toHaveAttribute("aria-expanded", "true");
-  expect(defects, defects.join("\n")).toEqual([]);
 }
 
 const ONBOARDING = [
