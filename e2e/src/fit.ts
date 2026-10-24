@@ -307,6 +307,23 @@ export function record(where: string, found: Measured, defects: string[]): void 
   for (const line of found.overlap) defects.push(`${where}: ${line}`);
 }
 
+/** Both translations must fit the desktop and the 320px sidebar floor:
+ * one measurement there with the sidebar open, one at the floor with
+ * it collapsed, the sidebar left open at the desktop width after. */
+export async function expectOnboardingFit(page: Page, stage: string): Promise<void> {
+  const defects: string[] = [];
+  record(`${stage} · desktop`, await measure(page), defects);
+  const collapse = page.getByTestId("sidebar-collapse");
+  await collapse.click();
+  await expect(collapse).toHaveAttribute("aria-expanded", "false");
+  await page.setViewportSize({ width: 320, height: 800 });
+  record(`${stage} · 320px`, await measure(page), defects);
+  await page.setViewportSize({ width: 1440, height: 838 });
+  await collapse.click();
+  await expect(collapse).toHaveAttribute("aria-expanded", "true");
+  expect(defects, defects.join("\n")).toEqual([]);
+}
+
 /** Put the sidebar in the state to be measured, from a width where
  * both of its controls are reachable. */
 export async function setRail(page: Page, railOpen: boolean): Promise<void> {

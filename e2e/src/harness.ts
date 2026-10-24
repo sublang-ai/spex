@@ -79,7 +79,7 @@ import {
   type ServerShellOptions,
 } from "spex-server/dist/server.js";
 
-export { expect };
+export { canonicalOrigin, expect };
 
 /** The live lane: the machine's real adapters and Captain (DR-020). */
 export const LIVE = process.env.SPEX_E2E_LIVE === "1";
@@ -215,7 +215,10 @@ export interface AppOptions {
    * person's seat — a plain served core on a scratch root of its own,
    * booted with `seat`'s options as a journey's app is, not in seat
    * mode — while this app's core trusts the hubs' fixture CA beside the
-   * system's (core-service-128). Needs `host`.
+   * system's (core-service-128). A seat booted with `host: true` shares
+   * this app's own stand-in instance, and the registry it fronts, in
+   * place of starting one of its own (`host.share`), so its `signedIn`
+   * signs the seat in there as the same person. Needs `host`.
    */
   servers?: { name: string; seat?: AppOptions }[];
   /**
@@ -888,7 +891,13 @@ async function arrangeApp(
     for (const [index, entry] of options.servers.entries()) {
       const hub = await startStandinHub({ redeem: (ticket) => instance.script.redeemTicket(ticket) });
       owned.push(hub);
-      const seat = await startApp(entry.seat ?? {});
+      // A seat asking for a host shares this app's instance, where its
+      // `signedIn` signs it in.
+      const seatOptions: AppOptions =
+        entry.seat?.host === true
+          ? { ...entry.seat, host: { share: { host: instance, ...(registry ? { registry } : {}) } } }
+          : (entry.seat ?? {});
+      const seat = await startApp(seatOptions);
       owned.push(seat);
       hub.relayTo(seat.url.replace(/^http/, "ws"));
       const server: StandinServer = { id: `srv_${index + 1}`, name: entry.name, group: HOST_GROUP, address: hub.url };
@@ -1528,6 +1537,35 @@ export const test = base.extend<{ app: App; appOptions: AppOptions }>({
     }
   },
 });
+
+/** What the page's sockets carried (`tapSockets`). */
+export interface SocketTap {
+  received: string[];
+  sent: string[];
+  urls: string[];
+  /** Each socket's own frames, in the order the page dialed them. */
+  sockets: { url: string; received: string[]; sent: string[] }[];
+}
+
+/** Every frame the page's sockets carried, each way, from its first
+ * load on, with the URLs the page dialed. */
+export function tapSockets(page: Page): SocketTap {
+  const tap: SocketTap = { received: [], sent: [], urls: [], sockets: [] };
+  page.on("websocket", (socket) => {
+    const own = { url: socket.url(), received: [] as string[], sent: [] as string[] };
+    tap.urls.push(own.url);
+    tap.sockets.push(own);
+    socket.on("framereceived", (frame) => {
+      tap.received.push(String(frame.payload));
+      own.received.push(String(frame.payload));
+    });
+    socket.on("framesent", (frame) => {
+      tap.sent.push(String(frame.payload));
+      own.sent.push(String(frame.payload));
+    });
+  });
+  return tap;
+}
 
 /** Open the app at its token URL and wait for the shell to draw. */
 export async function open(page: Page, app: App, path = ""): Promise<void> {
