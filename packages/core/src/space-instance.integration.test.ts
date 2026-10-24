@@ -1162,14 +1162,25 @@ test("git-host-24, space-83, git-host-5, git-host-21: Refresh reads each instanc
 
   // A 429 from the first holds the first's read alone (git-host-21): a
   // Refresh's read of the second reaches it at once, while the first's
-  // waits out the 2 seconds the first asked for, then is held.
-  first.script.rateLimit(1, "2");
+  // waits out the seconds the first asked for, then is held. The hold
+  // outlasts by far what a loaded runner takes from the 429 to the next
+  // Refresh's reads, so the order of the two reads, not the runner's
+  // speed, decides the assertions below.
+  const holdSeconds = 10;
+  const holdMs = holdSeconds * 1_000;
+  const sentBeforeLimit = first.script.requests.length;
+  first.script.rateLimit(1, String(holdSeconds));
   let mark = again.client.mark();
   await again.client.expectOk("space.refresh", {});
   const limited = await again.client.waitSpace(mark, (state) => instanceOf(state, first.url)?.read.phase === "failed" && instanceOf(state, second.url)?.read.phase === "idle" && (instanceOf(state, second.url)?.readAt ?? null) !== null, 30_000);
-  assert.deepEqual(instanceOf(limited, first.url)?.read, { phase: "failed", message: `${HOST_NAME} asks to wait 2 seconds` });
+  assert.deepEqual(instanceOf(limited, first.url)?.read, { phase: "failed", message: `${HOST_NAME} asks to wait ${holdSeconds} seconds` });
   assert.equal(instanceOf(limited, first.url)?.readAt, atFirst?.readAt, "the first's view keeps its time");
-  const answered = Math.max(...first.script.requests.map((request) => request.at));
+  // The hold runs from the 429, which the stand-in gives the first host
+  // request it is asked after the limit, not from a request of the same
+  // read that arrived after it.
+  const limitedRequest = first.script.requests.slice(sentBeforeLimit).find((request) => request.path.startsWith("/api/v1/host/"));
+  assert.ok(limitedRequest, "the first was asked once the limit stood");
+  const answered = limitedRequest.at;
   const secondReadAt = instanceOf(limited, second.url)?.readAt ?? 0;
   mark = again.client.mark();
   const asked = performance.now();
@@ -1177,14 +1188,16 @@ test("git-host-24, space-83, git-host-5, git-host-21: Refresh reads each instanc
   const sentSecond = second.script.requests.length;
   await again.client.expectOk("space.refresh", {});
   const waited = await again.client.waitSpace(mark, (state) => state.instances.every((instance) => instance.read.phase === "idle")
-    && (instanceOf(state, first.url)?.readAt ?? 0) > (atFirst?.readAt ?? 0) && (instanceOf(state, second.url)?.readAt ?? 0) > secondReadAt, 30_000);
+    && (instanceOf(state, first.url)?.readAt ?? 0) > (atFirst?.readAt ?? 0) && (instanceOf(state, second.url)?.readAt ?? 0) > secondReadAt, holdMs + 60_000);
   const reachedSecond = second.script.requests[sentSecond]?.at ?? Infinity;
   const reachedFirst = first.script.requests[sentFirst]?.at ?? -Infinity;
-  // At once: within the first's hold, which the first's own read waits out
-  // — a bound a loaded runner meets, unlike a wall-clock one.
-  assert.ok(reachedSecond < answered + 1_900, `the second was read at once, ${Math.round(reachedSecond - asked)} ms after the ask`);
-  assert.ok(reachedFirst >= answered + 1_900, `the first waited out its hold, reached ${Math.round(reachedFirst - answered)} ms after its 429`);
-  assert.ok(reachedFirst > reachedSecond);
+  // At once: the second's read reaches it well inside the first's hold —
+  // two seconds short of its end, so a hold wrongly shared with the
+  // second cannot pass by jitter — before the first's own read, which
+  // waits that hold out — whatever the runner's speed within the hold.
+  assert.ok(reachedSecond < answered + holdMs - 2_000, `the second was read at once, ${Math.round(reachedSecond - asked)} ms after the ask and ${Math.round(reachedSecond - answered)} ms into the first's ${holdSeconds} s hold`);
+  assert.ok(reachedFirst >= answered + holdMs - 100, `the first waited out its hold, reached ${Math.round(reachedFirst - answered)} ms after its 429`);
+  assert.ok(reachedFirst > reachedSecond, "the second was read before the first");
   assert.deepEqual(rowsUnder(waited, second.url, "acme"), [[betaKey, "absent", second.url]]);
 });
 
