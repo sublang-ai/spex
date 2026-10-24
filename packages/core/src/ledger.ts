@@ -191,7 +191,7 @@ function captainOwn(trace: { playbookId?: unknown; depth?: unknown }): boolean {
 }
 
 export function foldConditions(records: StoredRecord[]): SessionConditions {
-  const { restoredFailures: _restored, answers: _answers, ...conditions } = foldConditionsDetail(records);
+  const { restoredFailures: _restored, settledFailures: _settled, answers: _answers, ...conditions } = foldConditionsDetail(records);
   return conditions;
 }
 
@@ -263,8 +263,26 @@ export function failureStands(records: StoredRecord[]): boolean {
 
 function foldConditionsDetail(
   records: StoredRecord[],
-): SessionConditions & { restoredFailures: RestoredFailure[]; answers: Set<number> } {
+): SessionConditions & { restoredFailures: RestoredFailure[]; settledFailures: RestoredFailure[]; answers: Set<number> } {
   const restoredFailures: RestoredFailure[] = [];
+  // The engagement settling failed (dashboard-10): a run's own move into
+  // its failure state within a turn that then ended finished, its onset
+  // that move, kept as history as a runtime_error is — whatever the run
+  // does later, and whichever conversation is current. A turn a stop
+  // ended — the Boss's abort, or a restore's report, the stop of the
+  // turn it reports (core-service-82) — settles none, and a park a
+  // restore re-stated keeps the onset the stream showed, never a new one.
+  const settledFailures: RestoredFailure[] = [];
+  const reportEnds = new Set(restoreReports(records).flatMap((report) =>
+    report.endSeq === undefined ? [] : [report.endSeq]));
+  const parkSeqs = new Map<string, number>();
+  let fallbackSeq: number | undefined;
+  const settledSeqs = new Set<number>();
+  const settle = (seq: number | undefined, turnId: number, timestamp: number): void => {
+    if (seq === undefined || settledSeqs.has(seq)) return;
+    settledSeqs.add(seq);
+    settledFailures.push({ seq, turnId, timestamp });
+  };
   const answers = new Set<number>();
   const started = new Set<number>();
   // The Captain shell's own move last traced, until the aggregate state
@@ -378,6 +396,15 @@ function foldConditionsDetail(
         }
         break;
       }
+      case "turn_finished": {
+        const turnId = (record as { turnId?: unknown }).turnId;
+        if (typeof turnId !== "number" || reportEnds.has(seq)) break;
+        for (const [runId, park] of parkedFailures) {
+          if (park.turnId === turnId) settle(parkSeqs.get(runId), turnId, park.since);
+        }
+        if (fallbackFailure?.turnId === turnId) settle(fallbackSeq, turnId, fallbackFailure.since);
+        break;
+      }
       case "captain_status":
         bearsCause((record as { data?: unknown }).data);
         break;
@@ -390,9 +417,11 @@ function foldConditionsDetail(
           const failedBefore = new Set(parkedFailures.keys());
           parkedQuestions.clear();
           parkedFailures.clear();
+          parkSeqs.clear();
           pendingByRun.clear();
           fallbackQuestion = undefined;
           fallbackFailure = undefined;
+          fallbackSeq = undefined;
           pendingCause = undefined;
           pendingFromError = false;
           const at = {
@@ -477,6 +506,8 @@ function foldConditionsDetail(
                 turnId: telemetry.turnId,
                 ...(traceCause ? { cause: traceCause } : {}),
               });
+              parkSeqs.set(trace.sessionId, seq);
+              fallbackSeq = undefined;
               pendingByRun.delete(trace.sessionId);
               pendingCause = undefined;
               pendingFromError = false;
@@ -484,6 +515,7 @@ function foldConditionsDetail(
             }
             else if (trace.payload?.from === "failed") {
               parkedFailures.delete(trace.sessionId);
+              parkSeqs.delete(trace.sessionId);
               pendingByRun.delete(trace.sessionId);
               latestFailure = parkedFailures.size > 0
                 ? "parked"
@@ -503,6 +535,7 @@ function foldConditionsDetail(
             // one of the two ways a failure stops summoning (DR-062).
             if (telemetry.turnId !== null) {
               parkedFailures.delete(trace.sessionId);
+              parkSeqs.delete(trace.sessionId);
               pendingByRun.delete(trace.sessionId);
               latestFailure = parkedFailures.size > 0
                 ? "parked"
@@ -555,6 +588,7 @@ function foldConditionsDetail(
           fallbackQuestion = undefined;
         }
         if (state === "failed" && parkedFailures.size === 0) {
+          if (!fallbackFailure) fallbackSeq = seq;
           fallbackFailure = fallbackFailure ?? {
             since: telemetry.timestamp,
             turnId: telemetry.turnId,
@@ -567,6 +601,7 @@ function foldConditionsDetail(
           // As above, never let an aggregate report erase a different
           // run's identified failure park.
           fallbackFailure = undefined;
+          fallbackSeq = undefined;
           latestFailure = parkedFailures.size > 0
             ? "parked"
             : unparkedFailureCause
@@ -589,6 +624,7 @@ function foldConditionsDetail(
     ...(failure ? { failure } : {}),
     ...(unparkedFailureCause ? { failureCause: unparkedFailureCause } : {}),
     restoredFailures,
+    settledFailures,
     answers,
   };
 }
@@ -738,8 +774,9 @@ export function foldLedger(sources: LedgerSources): LedgerState {
     return conditions;
   };
   // The failures in a turn range, oldest first: every runtime error
-  // but an intentional stop's, and every restore that brought a run
-  // back in its failure state (dashboard-10, DR-088).
+  // but an intentional stop's, every run's own park in a turn that then
+  // ended finished, and every restore that brought a run back in its
+  // failure state (dashboard-10, DR-062, DR-088).
   const effectiveRuntimeErrors = (
     sessionId: string,
     fromTurnId: number,
@@ -755,8 +792,10 @@ export function foldLedger(sources: LedgerSources): LedgerState {
       if (typeof turnId !== "number" || !inRange(turnId)) return [];
       return [{ seq, turnId, timestamp: record.timestamp }];
     });
-    const restored = foldConditionsDetail(records).restoredFailures.filter(({ turnId }) => inRange(turnId));
-    return [...errors, ...restored]
+    const detail = foldConditionsDetail(records);
+    const restored = detail.restoredFailures.filter(({ turnId }) => inRange(turnId));
+    const settled = detail.settledFailures.filter(({ turnId }) => inRange(turnId));
+    return [...errors, ...settled, ...restored]
       .sort((a, b) => a.seq - b.seq)
       .map(({ turnId, timestamp }) => ({ turnId, timestamp }));
   };

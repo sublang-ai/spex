@@ -412,7 +412,8 @@ When a client sends `ledger.get`, the core service shall reply with the cross-pr
 - an intent assigned to another runtime [[storage-4](storage.md#storage-4)], and a session assigned to one [[storage-43](storage.md#storage-43)], enter no band and no count: that runtime's ledger carries them ([DR-134](../decisions/134-execution-ownership.md));
 
 - a failure entry or queue standing carries the structured cause the runtime attached to that failure — the `{ code, evidence }` the stream reports beside the failure it decided — read defensively, so a shape that is not a code with an optional evidence object is dropped rather than half-read and the entry or standing states no reason the runtime did not state ([DR-075](../decisions/075-a-failure-says-what-and-what-now.md));
-- the core neither interprets nor completes that cause: the words are the client's to give it [[run-view-147](run-view.md#run-view-147)].
+- the core neither interprets nor completes that cause: the words are the client's to give it [[run-view-147](run-view.md#run-view-147)];
+- a failure among an intent's turns, or a session's own, is a `runtime_error` record or a run of the session moving into its failure state within a turn that then ended finished, its onset that move, whichever conversation is current; a move within a turn a stop ended — the Boss's abort [[core-service-6](#core-service-6)], or a restore's report, the stop of the turn it reports [[core-service-82](#core-service-82)] — raises none ([DR-062](../decisions/062-ending-a-failed-workflow.md)).
 
 #### core-service-107
 
@@ -985,6 +986,29 @@ Where a stored session's stream parks a run in its failure state, the test suite
 - a stream whose failed-state status record carries the runtime's error with a well-formed cause yields a parked failure entry carrying exactly that cause, code and evidence alike;
 - a stream carrying a shape that is not a cause yields the same parked entry with none, the fold stating no reason the runtime did not state.
 
+#### core-service-132
+
+Where stored session streams move a run into its failure state with no `runtime_error` record, the test suite shall fold each stream below and assert the onset contract of [[core-service-49](#core-service-49)]:
+
+| Stream | Bound to | Asserted |
+| --- | --- | --- |
+| the run's own move within a turn that then ends finished | no intent | one interrupted-band failure entry marked parked, naming no intent, its onset the move's time and turn and its title that turn's [[core-service-49](#core-service-49)] |
+| the same, then a later Boss turn, then a restore of a cut-off turn re-stating the run | no intent | that entry unchanged, onset, turn and title alike [[core-service-49](#core-service-49)] [[core-service-82](#core-service-82)] |
+| the same, then the run leaving its failure state | no intent | no failure entry [[core-service-49](#core-service-49)] |
+| the run's own move within a turn the Boss's abort ends, then a later finished turn, then a restore re-stating the run | no intent | no entry, before the restore and after it, while the session's summary reads its failure standing [[core-service-32](#core-service-32)] and the queue `failure-park` [[core-service-107](#core-service-107)] |
+| the run's own move within a dispatch turn the Boss's abort ends | an intent | the intent queued again and no entry [[core-service-49](#core-service-49)] |
+| the run's own move within a dispatch turn that then ends finished | an intent | the intent interrupted on a failure, never finished, its entry marked parked at the move's onset, and still interrupted with another conversation current [[core-service-49](#core-service-49)] |
+| the run's own move within a turn cut off, then that turn's restore re-stating the run, its report named by its marker or by its recorded position alone | no intent | no failure entry [[core-service-49](#core-service-49)] [[core-service-82](#core-service-82)] |
+| one run's move within an aborted turn, then another run's within a later turn that ends finished | no intent | one failure entry, at the second run's move [[core-service-49](#core-service-49)] |
+| the aggregate state report alone reaching the failure state within a turn that then ends finished | no intent | one failure entry marked parked, at that report [[core-service-49](#core-service-49)] |
+
+#### core-service-133
+
+When an integration suite parks a real session's run on its coder's failure — the real `/code` coder's call failing before it touches the repository — once in a session bound to no intent and once in a turn dispatching an intent, it shall assert through `ledger.get` the entry the settled park raises [[core-service-49](#core-service-49)]:
+
+- the session's own entry is an interrupted-band failure marked parked, carrying the cause the runtime attached and naming no intent, the stream's one `runtime_error` naming no turn;
+- the intent reads interrupted on a failure, its entry marked parked, and never finished awaiting a verdict, while its session's summary reads the failure standing [[core-service-32](#core-service-32)].
+
 #### core-service-55
 
 Where a project holds an open issue-sourced intent, the test suite shall send a second `intent.queue` with the same source kind and reference and assert the dedup contract of [[core-service-42](#core-service-42)]: the reply is a `conflict` error naming the existing intent, no intent is stored, and once the existing intent closes [[core-service-46](#core-service-46)] the same request is accepted; and that an intent holding the same source, whether written by a sync or stored by a second `intent.queue`, while a first queue is held adopting its attachments leaves exactly one intent file for that source and refuses the held queue with `conflict` [[core-service-42](#core-service-42)].
@@ -1031,7 +1055,7 @@ Where a session's scripted Captain leaves a run parked on a Boss question inside
 - the ending turn dispatches no successor, and `ledger.get` leaves the queued successor next with standing `stopped` and manual start available after the ending and after a service restart [[core-service-49](#core-service-49)] [[core-service-94](#core-service-94)] [[core-service-107](#core-service-107)];
 - closing an intent no run stands parked for records the verdict alone and runs no further turn;
 - where the opened session advertises no ending, the close is refused with that cause, the intent stays open and its entry stands [[core-service-98](#core-service-98)];
-- the same rule's failure park is not driven here: the turn-scoped `runtime_error` a failure stands on [[core-service-49](#core-service-49)] arrives in this harness only on a turn that aborts and disposes its runtime, leaving no live run to stand parked.
+- the same rule's failure park is not driven here: the harness keeps the engaged root parked on its coder's question, so no run of the session stands parked in its failure state.
 
 #### core-service-58
 
