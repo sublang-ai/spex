@@ -1863,12 +1863,12 @@ export function captainLines(page: Page, line: string) {
   return page.getByTestId("captain-pane").getByTestId("system-line").filter({ hasText: line });
 }
 
-/** A player's pane carries the output of a call it served: no longer
- * idle, and more than `least` characters of text. */
+/** A player's pane carries the output of a call it served: it stands,
+ * as a lane does from its first call (run-view-7), with more than
+ * `least` characters of text. */
 export async function expectEngaged(page: Page, playerId: string, least = 50): Promise<void> {
   const pane = page.getByTestId(`player-pane-${playerId}`);
   await expect(pane).toBeVisible();
-  await expect(pane).not.toContainText("Idle until the playbook calls");
   expect((await pane.innerText()).length, `${playerId}'s pane`).toBeGreaterThan(least);
 }
 

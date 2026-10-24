@@ -642,13 +642,6 @@ export function PlayerPane({
             {segments.map((segment) => (
               <Segment key={segment.seq} segment={segment} />
             ))}
-            {view.segments.length === 0 ? (
-              <div className="m-auto text-xs text-neutral-500">
-                {i18n._("Idle until the playbook calls {player}", {
-                  player: view.id,
-                })}
-              </div>
-            ) : null}
           </div>
         </div>
         {newBelow ? (

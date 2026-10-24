@@ -283,6 +283,39 @@ export const TURN_ONE: FixtureEntry[] = [
   rec(19, { type: "turn_finished", turnId: 1, timestamp: t + 12 }),
 ];
 
+/** Turn 1 with the reviewer called after the coder, so both lanes
+ * stand: a lane appears only with its player's first call record
+ * (run-view-7). */
+export const TURN_ONE_REVIEWED: FixtureEntry[] = [
+  ...TURN_ONE.slice(0, -2),
+  rec(171, {
+    type: "player_prompt",
+    turnId: 1,
+    timestamp: t + 10,
+    playerId: "dev.reviewer",
+    prompt: "Review the fix",
+  }),
+  rec(172, {
+    type: "player_finished",
+    turnId: 1,
+    timestamp: t + 10,
+    playerId: "dev.reviewer",
+    result: { status: "ok", playerId: "dev.reviewer", turnId: 1, finalText: "Looks right." },
+  }),
+  ...TURN_ONE.slice(-2),
+];
+
+/** A finished call for each player, so every lane stands with its
+ * controls: a lane appears only with its player's first call record
+ * (run-view-7). */
+export const CALLED_LANES: FixtureEntry[] = PLAYERS.map((player, index) => rec(901 + index, {
+  type: "player_finished",
+  turnId: 1,
+  timestamp: t + 901 + index,
+  playerId: player.id,
+  result: { status: "ok", playerId: player.id, turnId: 1 },
+}));
+
 /** Turn 2: the reviewer asks a question; the FSM parks awaiting a reply. */
 export const TURN_TWO_QUESTION: FixtureEntry[] = [
   rec(20, {

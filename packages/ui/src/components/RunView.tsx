@@ -467,45 +467,57 @@ export function RunView({
     return undefined;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusTurn, bound, delivered, dispatchTurns, view.captain]);
-  // A pane is a player lane, not a moment (DR-032): the session's
-  // bound roster is the pane set for the session's whole life, so a
-  // call that ends leaves its transcript where the reader last saw it.
-  const lanes = session.players.map((player) => player.id);
+  // A pane is a player lane, not a moment (DR-032), but only once a
+  // call has reached it (DR-146): a bound player's lane appears with
+  // its first call record, in that order, and stays for the session's
+  // life, so a call that ends leaves its transcript where the reader
+  // last saw it and a player no call reached takes no place.
+  const roster = new Set(session.players.map((player) => player.id));
+  const lanes = view.calledPlayers.filter((playerId) => roster.has(playerId));
   // The lanes the reader folded to rails (run-view-116): this
   // session's, kept while the app runs. The store unfolds one whose
   // call opens as it folds the record (run-view-117), so the pane
   // that comes into view below is already whole.
   const collapsed = new Set(collapsedLanes ?? []);
-  // A lane whose call just opened comes into view (run-view-7): the
-  // grid scrolls only as far as it must and only when the pane is
-  // out of sight, so a lane the reader is following never leaves
-  // under them and the working one never hides beyond the edge.
+  // A lane whose call just opened, or that just appeared, comes into
+  // view (run-view-7): the grid scrolls only as far as it must and
+  // only when the pane is out of sight, so a lane the reader is
+  // following never leaves under them and the working one never hides
+  // beyond the edge. A lane can appear with an event or its failure
+  // and never run, so its arrival counts as well as its running. Only
+  // the grid's own offset moves — scrollIntoView would carry the
+  // page and the Captain column along, pushing a question and its
+  // composer out of view in the stacked form.
   const runningLanes = lanes
     .filter((playerId) => activityView.players[playerId]?.running)
     .join("\u0000");
+  const laneKey = lanes.join("\u0000");
+  const shownLanes = useRef(lanes);
   useEffect(() => {
     const grid = gridRef.current;
-    if (!grid || !runningLanes) return;
+    const appeared = lanes.filter((playerId) => !shownLanes.current.includes(playerId));
+    shownLanes.current = lanes;
+    const targets = [...(runningLanes ? runningLanes.split("\u0000") : []), ...appeared];
+    if (!grid || targets.length === 0) return;
     const box = grid.getBoundingClientRect();
-    for (const playerId of runningLanes.split("\u0000")) {
+    for (const playerId of targets) {
       const pane = Array.from(
         grid.querySelectorAll<HTMLElement>('[data-testid^="player-pane-"]'),
       ).find((el) => el.dataset.testid === `player-pane-${playerId}`);
-      if (!pane || typeof pane.scrollIntoView !== "function") continue;
+      if (!pane) continue;
       const rect = pane.getBoundingClientRect();
-      const hidden =
-        rect.right > box.right + 1 ||
-        rect.left < box.left - 1 ||
-        rect.bottom > box.bottom + 1 ||
-        rect.top < box.top - 1;
-      if (hidden) pane.scrollIntoView({ block: "nearest", inline: "nearest" });
+      if (rect.left < box.left - 1) {
+        grid.scrollLeft -= box.left - rect.left;
+      } else if (rect.right > box.right + 1) {
+        grid.scrollLeft += Math.min(rect.right - box.right, rect.left - box.left);
+      }
     }
-  }, [runningLanes]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runningLanes, laneKey]);
   // The fade must return with the content it hides (run-view-7): the
   // grid's box changes with the divider and the rail, and a lane
   // folding to a rail narrows the content under an unchanged box, so
   // the panes are watched as well as the box.
-  const laneKey = lanes.join("\u0000");
   const collapsedKey = (collapsedLanes ?? []).join("\u0000");
   useEffect(() => {
     const grid = gridRef.current;
@@ -517,9 +529,10 @@ export function RunView({
     for (const pane of Array.from(grid.children)) observer.observe(pane);
     return () => observer.disconnect();
   }, [laneKey, collapsedKey, runningLanes]);
-  // No lane, no split (run-view-7): a session whose roster binds no
-  // player — a record the CLI wrote — reads as the Captain home does,
-  // one column at the home's measure, with no divider to nowhere.
+  // No lane, no split (run-view-7): until a call reaches a player —
+  // or in a session whose roster binds none — the Captain reads as
+  // the Captain home does, one column at the home's measure, with no
+  // divider to nowhere.
   const soloCaptain = lanes.length === 0;
   const metaById = new Map(session.players.map((player) => [player.id, player]));
   // This session's agents — the Captain and its players — with what

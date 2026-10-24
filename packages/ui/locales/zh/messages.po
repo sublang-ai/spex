@@ -3196,10 +3196,6 @@ msgstr "空闲"
 msgid "Idle — no conversation yet."
 msgstr "空闲 — 还没有对话。"
 
-#: src/components/PlayerPane.tsx
-msgid "Idle until the playbook calls {player}"
-msgstr "在规程调用 {player} 前保持空闲"
-
 #: src/components/NavRail.tsx
 msgid "idle, held a failure"
 msgstr "空闲，有失败未处理"
