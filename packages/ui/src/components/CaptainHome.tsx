@@ -2,10 +2,11 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // The Captain home (DR-007, DR-135, DR-141): a welcome page until a
-// project exists, then a scoped task start with slash discovery.
-// Props-driven so RUN-29/31 exercise it without a live core.
+// project exists — at a team server, its server form (DR-133) — then a
+// scoped task start with slash discovery. Props-driven so RUN-29/31
+// exercise it without a live core.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type {
   AgentSummary,
   IntentInfo,
@@ -20,7 +21,7 @@ import type { AgentPatch } from "../lib/config-ops.js";
 import { keyLabel } from "../lib/shortcuts.js";
 import { playbookIntent } from "../lib/playbook-intent.js";
 import { treeCounts } from "../lib/spec-view-model.js";
-import { isLocalPlace, type StagedIntent } from "../state/store.js";
+import { isLocalPlace, placeLabel, type StagedIntent } from "../state/store.js";
 import { usePlaceStore } from "../state/place-context.js";
 import { SlashMenuList, slashMatches } from "./SlashMenu.js";
 import { AgentChip, agentChipText, fastModeWord, readinessWord } from "./AgentChip.js";
@@ -67,7 +68,9 @@ export interface CaptainHomeProps {
   /** The welcome page's own-project path opens the palette without
    * repeating the Academy choice. */
   onOpenOwnProject?: () => void;
-  onNavigate: (surface: "Settings" | "Playbooks") => void;
+  /** Go to a surface at the place this home shows (run-view-168):
+   * the server form's "Open Groups" opens Groups there (run-view-174). */
+  onNavigate: (surface: "Settings" | "Playbooks" | "Space") => void;
   /** Apply a merge patch to the Captain's block (captain.set). */
   onSaveCaptain: (patch: AgentPatch) => Promise<unknown>;
   onStart: (text: string) => Promise<void>;
@@ -141,6 +144,67 @@ function CaptainBubble({ children }: { children: React.ReactNode }) {
   );
 }
 
+/** One step of the welcome page's path (run-view-172). */
+interface WelcomeStep {
+  label: string;
+  text: string;
+}
+
+const WELCOME_PRIMARY =
+  "rounded-lg bg-brand-600 px-5 py-3 text-sm font-semibold text-white hover:bg-brand-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500";
+const WELCOME_SECONDARY =
+  "rounded-lg border border-neutral-300 px-5 py-3 text-sm font-medium text-neutral-700 hover:bg-neutral-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500 disabled:opacity-40 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800";
+
+/** The welcome page's one layout (run-view-172), which the server
+ * form wears with the server's words (run-view-174): the badge, the
+ * headline, the three connected steps, the actions, and the notices
+ * the page keeps beneath them. */
+function WelcomeFrame({
+  headline,
+  steps,
+  actions,
+  children,
+}: {
+  headline: string;
+  steps: WelcomeStep[];
+  actions: ReactNode;
+  children?: ReactNode;
+}) {
+  return (
+    <section
+      data-testid="welcome-home"
+      className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col overflow-y-auto px-6 py-10 sm:px-10"
+    >
+      <div className="my-auto max-w-xl">
+        <span className="mb-5 inline-flex rounded-full border border-brand-200 bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700 dark:border-brand-800 dark:bg-brand-950 dark:text-brand-300">
+          Spex
+        </span>
+        <h1 className="text-3xl font-semibold leading-tight tracking-tight text-neutral-900 dark:text-neutral-100 sm:text-4xl">
+          {headline}
+        </h1>
+        <ol className="mt-5 max-w-lg border-l border-neutral-300 text-sm leading-6 dark:border-neutral-700">
+          {steps.map((step, index) => (
+            <li key={step.label} className={index < steps.length - 1 ? "relative pb-3 pl-5" : "relative pl-5"}>
+              <span
+                aria-hidden="true"
+                className={`absolute -left-[5px] top-2 size-2 rounded-full ${
+                  index === 0 ? "bg-brand-500" : "bg-neutral-400 dark:bg-neutral-500"
+                }`}
+              />
+              <span className="font-semibold text-neutral-800 dark:text-neutral-100">{step.label}</span>
+              <span className="ml-3 text-neutral-600 dark:text-neutral-300">{step.text}</span>
+            </li>
+          ))}
+        </ol>
+        <div className="mt-8 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
+          {actions}
+        </div>
+        {children}
+      </div>
+    </section>
+  );
+}
+
 export function CaptainHome(props: CaptainHomeProps) {
   const store = usePlaceStore();
   const { playbooks, captain, readiness, connected } = props;
@@ -162,10 +226,11 @@ export function CaptainHome(props: CaptainHomeProps) {
   // With nothing registered the greeting itself carries the ways in
   // (run-view-25); seeding is the store action the palette uses. The
   // example is seeded at a folder this page names, so it is this
-  // computer's alone: a seat's projects are opened among the member's
-  // groups, its core allocating every folder (run-view-169).
+  // computer's alone: a seat greets the member with the server form,
+  // its projects opened among the member's groups and its core
+  // allocating every folder (run-view-169, run-view-174).
   const openAcademyExample = store((state) => state.openAcademyExample);
-  const seedable = isLocalPlace(store.place);
+  const local = isLocalPlace(store.place);
   const [seeding, setSeeding] = useState(false);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const chipRef = useRef<HTMLButtonElement>(null);
@@ -269,87 +334,139 @@ export function CaptainHome(props: CaptainHomeProps) {
   const emptyCanvas = !configBroken && !error;
 
   if (!props.hasProject && !props.hasProjects) {
+    // The third step reads the same at every place.
+    const delivery: WelcomeStep = {
+      label: i18n._("Delivery"),
+      text: i18n._("AI builds and reviews changes, with a record of each step"),
+    };
+    const server = placeLabel(store.place);
     return (
-      <section
-        data-testid="welcome-home"
-        className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col overflow-y-auto px-6 py-10 sm:px-10"
-      >
-        <div className="my-auto max-w-xl">
-          <span className="mb-5 inline-flex rounded-full border border-brand-200 bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700 dark:border-brand-800 dark:bg-brand-950 dark:text-brand-300">
-            Spex
-          </span>
-          <h1 className="text-3xl font-semibold leading-tight tracking-tight text-neutral-900 dark:text-neutral-100 sm:text-4xl">
-            {i18n._("Write clear specs. Build with playbooks.")}
-          </h1>
-          <ol className="mt-5 max-w-lg border-l border-neutral-300 text-sm leading-6 dark:border-neutral-700">
-            <li className="relative pb-3 pl-5">
-              <span aria-hidden="true" className="absolute -left-[5px] top-2 size-2 rounded-full bg-brand-500" />
-              <span className="font-semibold text-neutral-800 dark:text-neutral-100">{i18n._("Specs")}</span>
-              <span className="ml-3 text-neutral-600 dark:text-neutral-300">{i18n._("Describe how the system should work and how to check it")}</span>
-            </li>
-            <li className="relative pb-3 pl-5">
-              <span aria-hidden="true" className="absolute -left-[5px] top-2 size-2 rounded-full bg-neutral-400 dark:bg-neutral-500" />
-              <span className="font-semibold text-neutral-800 dark:text-neutral-100">{i18n._("Playbooks")}</span>
-              <span className="ml-3 text-neutral-600 dark:text-neutral-300">{i18n._("Turn workflows written in plain language into steps AI can run")}</span>
-            </li>
-            <li className="relative pl-5">
-              <span aria-hidden="true" className="absolute -left-[5px] top-2 size-2 rounded-full bg-neutral-400 dark:bg-neutral-500" />
-              <span className="font-semibold text-neutral-800 dark:text-neutral-100">{i18n._("Delivery")}</span>
-              <span className="ml-3 text-neutral-600 dark:text-neutral-300">{i18n._("AI builds and reviews changes, with a record of each step")}</span>
-            </li>
-          </ol>
-          <div className="mt-8 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
-            <button
-              type="button"
-              data-testid="home-add-project"
-              onClick={props.onOpenOwnProject ?? props.onOpenPalette}
-              className="rounded-lg bg-brand-600 px-5 py-3 text-sm font-semibold text-white hover:bg-brand-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500"
-            >
-              {seedable ? i18n._("Add a local project") : i18n._("Open a project")}
-            </button>
-            {seedable ? <button
-              type="button"
-              data-testid="home-academy"
-              disabled={seeding || !connected}
-              onClick={() => void runAcademy()}
-              className="rounded-lg border border-neutral-300 px-5 py-3 text-sm font-medium text-neutral-700 hover:bg-neutral-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500 disabled:opacity-40 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800"
-            >
-              {seeding
-                ? i18n._("Opening…")
-                : i18n._("Open the Academy example")}
-            </button> : null}
-          </div>
-          {configBroken ? (
-            <div
-              role="alert"
-              className="mt-6 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200"
-            >
-              <p>
-                {props.configStatus === "missing"
-                  ? i18n._("Spex has no config file yet — playbooks are unavailable.")
-                  : i18n._("Your config file has errors — playbooks are unavailable.")}
-              </p>
-              {props.configErrors?.slice(0, 3).map((entry, index) => (
-                <p key={index} className="mt-1 font-mono text-xs">
-                  {entry}
-                </p>
-              ))}
+      <WelcomeFrame
+        headline={
+          local
+            ? i18n._("Write clear specs. Build with playbooks.")
+            : i18n._({
+                id: "Work on {server} from this computer.",
+                values: { server },
+                comment: "headline of the welcome page at a team server where you have no project yet; {server} is the server's name",
+              })
+        }
+        steps={
+          local
+            ? [
+                { label: i18n._("Specs"), text: i18n._("Describe how the system should work and how to check it") },
+                { label: i18n._("Playbooks"), text: i18n._("Turn workflows written in plain language into steps AI can run") },
+                delivery,
+              ]
+            : [
+                {
+                  label: i18n._({
+                    id: "Groups",
+                    comment: "label of the first step on the welcome page at a team server: your groups on the Git host, whose spex repositories are the projects there",
+                  }),
+                  text: i18n._({
+                    id: "Your projects here come from the spex repositories of your groups",
+                    comment: "the first step on the welcome page at a team server, beside its label Groups; \"here\" is that server",
+                  }),
+                },
+                {
+                  label: i18n._({
+                    id: "Seat",
+                    comment: "label of the second step on the welcome page at a team server: your seat, the place your agents run on that server",
+                  }),
+                  text: i18n._({
+                    id: "Agents run on {server} as you, in folders the server allocates",
+                    values: { server },
+                    comment: "the second step on the welcome page at a team server, beside its label Seat; {server} is the server's name",
+                  }),
+                },
+                delivery,
+              ]
+        }
+        actions={
+          local ? (
+            <>
               <button
                 type="button"
-                onClick={() => props.onNavigate("Settings")}
-                className="mt-2 font-medium text-brand-600 hover:underline dark:text-brand-300"
+                data-testid="home-add-project"
+                onClick={props.onOpenOwnProject ?? props.onOpenPalette}
+                className={WELCOME_PRIMARY}
               >
-                {i18n._("Open Settings →")}
+                {i18n._("Add a local project")}
               </button>
-            </div>
-          ) : null}
-          {error ? (
-            <p role="alert" className="mt-6 text-sm text-red-700 dark:text-red-300">
-              {error}
+              <button
+                type="button"
+                data-testid="home-academy"
+                disabled={seeding || !connected}
+                onClick={() => void runAcademy()}
+                className={WELCOME_SECONDARY}
+              >
+                {seeding
+                  ? i18n._("Opening…")
+                  : i18n._("Open the Academy example")}
+              </button>
+            </>
+          ) : (
+            // A seat's projects are its member's groups' spex
+            // repositories, opened from the palette with no folder
+            // (run-view-169), or from that place's Groups.
+            <>
+              <button
+                type="button"
+                data-testid="home-open-from-groups"
+                onClick={props.onOpenPalette}
+                className={WELCOME_PRIMARY}
+              >
+                {i18n._({
+                  id: "Open a project from your groups",
+                  comment: "primary action of the welcome page at a team server: opens the project palette listing your groups' projects there",
+                })}
+              </button>
+              <button
+                type="button"
+                data-testid="home-open-groups"
+                onClick={() => props.onNavigate("Space")}
+                className={WELCOME_SECONDARY}
+              >
+                {i18n._({
+                  id: "Open Groups",
+                  comment: "secondary action of the welcome page at a team server: shows the Groups surface at that server",
+                })}
+              </button>
+            </>
+          )
+        }
+      >
+        {configBroken ? (
+          <div
+            role="alert"
+            className="mt-6 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200"
+          >
+            <p>
+              {props.configStatus === "missing"
+                ? i18n._("Spex has no config file yet — playbooks are unavailable.")
+                : i18n._("Your config file has errors — playbooks are unavailable.")}
             </p>
-          ) : null}
-        </div>
-      </section>
+            {props.configErrors?.slice(0, 3).map((entry, index) => (
+              <p key={index} className="mt-1 font-mono text-xs">
+                {entry}
+              </p>
+            ))}
+            <button
+              type="button"
+              onClick={() => props.onNavigate("Settings")}
+              className="mt-2 font-medium text-brand-600 hover:underline dark:text-brand-300"
+            >
+              {i18n._("Open Settings →")}
+            </button>
+          </div>
+        ) : null}
+        {error ? (
+          <p role="alert" className="mt-6 text-sm text-red-700 dark:text-red-300">
+            {error}
+          </p>
+        ) : null}
+      </WelcomeFrame>
     );
   }
 

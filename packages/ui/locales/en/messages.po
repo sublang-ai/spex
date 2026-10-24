@@ -1067,6 +1067,11 @@ msgstr "Agent session {session}"
 msgid "Agents"
 msgstr "Agents"
 
+#. the second step on the welcome page at a team server, beside its label Seat; {server} is the server's name
+#: src/components/CaptainHome.tsx
+msgid "Agents run on {server} as you, in folders the server allocates"
+msgstr "Agents run on {server} as you, in folders the server allocates"
+
 #: src/components/ProjectsSurface.tsx
 msgid "ahead of upstream"
 msgstr "ahead of upstream"
@@ -3120,8 +3125,10 @@ msgstr "Group name"
 msgid "Group records"
 msgstr "Group records"
 
+#. label of the first step on the welcome page at a team server: your groups on the Git host, whose spex repositories are the projects there
 #. the surface: your groups on the Git host and their spex repositories
 #. the surface: your groups on the Git host and their spex repositories
+#: src/components/CaptainHome.tsx
 #: src/components/NavRail.tsx
 #: src/components/SpaceSurface.tsx
 msgid "Groups"
@@ -4310,9 +4317,10 @@ msgstr "Open {title} — {reason}"
 msgid "Open {title} — running in {project}"
 msgstr "Open {title} — running in {project}"
 
+#. primary action of the welcome page at a team server: opens the project palette listing your groups' projects there
 #: src/components/CaptainHome.tsx
-msgid "Open a project"
-msgstr "Open a project"
+msgid "Open a project from your groups"
+msgstr "Open a project from your groups"
 
 #: src/components/DashboardSurface.tsx
 msgid "Open and send a message to pick it up."
@@ -4326,6 +4334,11 @@ msgstr "Open Enable"
 #: src/components/SpaceSync.tsx
 msgid "Open folder…"
 msgstr "Open folder…"
+
+#. secondary action of the welcome page at a team server: shows the Groups surface at that server
+#: src/components/CaptainHome.tsx
+msgid "Open Groups"
+msgstr "Open Groups"
 
 #: src/components/SpaceSignIn.tsx
 msgid "Open it again"
@@ -5474,6 +5487,11 @@ msgstr "Search the registry and request a version"
 #: src/components/EnvironmentSection.tsx
 msgid "Searching…"
 msgstr "Searching…"
+
+#. label of the second step on the welcome page at a team server: your seat, the place your agents run on that server
+#: src/components/CaptainHome.tsx
+msgid "Seat"
+msgstr "Seat"
 
 #: src/components/CaptainHome.tsx
 msgid "See how to start"
@@ -6960,6 +6978,11 @@ msgstr "which process is writing right now"
 msgid "width — citations"
 msgstr "width — citations"
 
+#. headline of the welcome page at a team server where you have no project yet; {server} is the server's name
+#: src/components/CaptainHome.tsx
+msgid "Work on {server} from this computer."
+msgstr "Work on {server} from this computer."
+
 #: src/components/DraftSourceTab.tsx
 msgid "Workflow source"
 msgstr "Workflow source"
@@ -7058,3 +7081,8 @@ msgstr "Your own group's records will be kept there too."
 #: src/components/CaptainHome.tsx
 msgid "your project"
 msgstr "your project"
+
+#. the first step on the welcome page at a team server, beside its label Groups; "here" is that server
+#: src/components/CaptainHome.tsx
+msgid "Your projects here come from the spex repositories of your groups"
+msgstr "Your projects here come from the spex repositories of your groups"

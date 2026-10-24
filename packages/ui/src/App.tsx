@@ -1497,6 +1497,9 @@ export function App() {
         ? activeTabSessionId(value.workspaceTabs, value.currentProjectId)
         : undefined,
     shown: store === shown,
+    // The place's heading shows that place on the Projects surface: its
+    // current project's view, or its welcome page where it holds no project.
+    onShow: () => showPlace(store),
     expanded: value.expandedProjects,
     onExpanded: (projectId, expanded) =>
       store.getState().toggleProjectExpanded(projectId, expanded),
@@ -1674,7 +1677,10 @@ export function App() {
                 key={shown.place.key}
                 onNavigate={navigateFrom(shown)}
                 onOpenPalette={openPalette}
-                onOpenOwnProject={isLocalPlace(shown.place) ? openAddProject : openPalette}
+                // This computer's welcome adds a local project; a seat's
+                // greets the member with its server form, opening the
+                // palette at its groups (run-view-174).
+                onOpenOwnProject={openAddProject}
                 attentionBySession={attentionBySession}
                 pendingFocus={pendingFocus}
                 onFocusHandled={() => setPendingFocus(undefined)}

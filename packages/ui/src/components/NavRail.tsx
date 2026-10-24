@@ -9,7 +9,8 @@
 // ARIA tree for the projects — because "current surface" and
 // "selected session" are different words (run-view-67). Where any seat
 // is open, the tree lists each place's projects under a heading naming
-// the place, this computer's first (run-view-168).
+// the place, this computer's first, the heading a row of its own that
+// shows its place on the Projects surface (run-view-168).
 
 import { Fragment, useMemo, useRef, useState, type ReactNode } from "react";
 import type { ProjectInfo, SessionInfo } from "@sublang/spex-core/protocol";
@@ -100,6 +101,9 @@ export interface NavPlace {
   /** Whether the Projects surface shows this place: only then is its
    * current project's row the selected one. */
   shown: boolean;
+  /** Show this place on the Projects surface — its current project's
+   * view, or its welcome page where it holds no project (run-view-168). */
+  onShow(): void;
   /** Explicit disclosure; a project with no entry follows current. */
   expanded: Record<string, boolean>;
   onExpanded(projectId: string, expanded: boolean): void;
@@ -237,15 +241,22 @@ function projectRowName(
 
 interface Row {
   key: string;
-  kind: "project" | "session" | "action";
+  kind: "place" | "project" | "session" | "action";
   /** The place the row stands at. */
   place: NavPlace;
-  /** The key of the project row this row belongs to. */
+  /** The key of the project row this row belongs to; a place's
+   * heading row is its own. */
   projectRow: string;
   projectId: string;
-  /** What type-ahead matches: a project's name or a session's title. */
+  /** What type-ahead matches: a place's name, a project's name or a
+   * session's title. */
   label: string;
   activate(): void;
+}
+
+/** The key of a place's heading row (run-view-168). */
+function headingRowOf(place: NavPlace): string {
+  return `h:${place.key}`;
 }
 
 /** A place's key for one of its rows (run-view-168): the local place's
@@ -322,6 +333,20 @@ export function NavRail(props: NavRailProps) {
   // list arrow keys, Home/End and type-ahead all walk, across places.
   const rows: Row[] = [];
   for (const place of places) {
+    // A place's heading is a row too (run-view-168): the way to a place
+    // holding no project is its heading alone.
+    if (headed) {
+      const key = headingRowOf(place);
+      rows.push({
+        key,
+        kind: "place",
+        place,
+        projectRow: key,
+        projectId: "",
+        label: place.label,
+        activate: () => place.onShow(),
+      });
+    }
     for (const project of place.projects) {
       const projectRow = placed(place, `p:${project.id}`);
       const projectKey = placed(place, project.id);
@@ -845,25 +870,43 @@ export function NavRail(props: NavRailProps) {
         ? // A heading per place (run-view-67, run-view-168): each
           // place's projects form a group named by the place, the
           // heading its visible name.
-          places.map((place) => (
-            <div
-              key={place.key}
-              role="group"
-              aria-label={place.label}
-              data-place-key={place.key}
-              className="flex flex-col"
-            >
+          places.map((place) => {
+            const headingRow = headingRowOf(place);
+            // The place the Projects surface shows is the current one
+            // while that surface is up (run-view-67).
+            const current = inWorkspace && place.shown;
+            return (
               <div
-                aria-hidden
-                data-testid="sidebar-place-heading"
-                title={place.label}
-                className="truncate px-1 pb-0.5 pt-1.5 text-[11px] font-medium text-neutral-500 dark:text-neutral-400"
+                key={place.key}
+                role="group"
+                aria-label={place.label}
+                data-place-key={place.key}
+                className="flex flex-col"
               >
-                {place.label}
+                {/* The heading shows its place (run-view-168): a row the
+                    tree's keys reach, activated as every row is. */}
+                <div
+                  role="treeitem"
+                  aria-selected={false}
+                  aria-current={current ? "location" : undefined}
+                  data-row={headingRow}
+                  data-testid="sidebar-place-heading"
+                  tabIndex={focused === headingRow ? 0 : -1}
+                  onFocus={() => setFocusKey(headingRow)}
+                  onClick={() => place.onShow()}
+                  title={place.label}
+                  className={`w-full cursor-default truncate rounded-md px-1 pb-0.5 pt-1.5 text-left text-[11px] font-medium outline-none hover:bg-neutral-100 focus-visible:ring-2 focus-visible:ring-brand-400 dark:hover:bg-neutral-800 ${
+                    current
+                      ? "text-brand-700 dark:text-brand-300"
+                      : "text-neutral-500 dark:text-neutral-400"
+                  }`}
+                >
+                  {place.label}
+                </div>
+                {placeNodes(place)}
               </div>
-              {placeNodes(place)}
-            </div>
-          ))
+            );
+          })
         : places.map((place) => <Fragment key={place.key}>{placeNodes(place)}</Fragment>)}
     </div>
   );
