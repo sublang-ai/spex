@@ -187,7 +187,7 @@ When a pull request into `main` is ready, the maintainer shall ask GitHub to mer
 - `main` is a protected branch whose required status checks are exactly the jobs a pull request's run holds [[release-34](#release-34)], with the branch not required to be up to date;
 - a base branch is never deleted while a pull request still targets it.
 - a conflicting pull request merges only once the branch merges `main` and its checks pass again on that head;
-- where the repository can hold no protection, `npm run merge-on-green -- <number>` waits for the checks of the head's newest run and merges the moment they are green, refusing to act once the head moved or one of them is not green.
+- where the repository can hold no protection, `npm run merge-on-green -- <number>` waits for the checks of the head's newest run — a commit status among them judged by its state — and merges the moment they are green, naming the head it checked so that no other head merges, refusing to act once the head moved or one of them is not green.
 
 #### release-30
 
@@ -238,7 +238,7 @@ When the app release workflow's tag check and notes assembly run, as the workflo
 
 #### release-33
 
-When the repository-system audit reads the CI workflow and the Linux parity script, it shall assert that the workflow's concurrency groups a pull request's runs by its number and cancels the run in progress for a pull request and not for a push to `main` [[release-30](#release-30)], that the required checks the repository's merge rule names are exactly the jobs a pull request's run holds [[release-29](#release-29)] [[release-34](#release-34)], that the matrix narrows for a pull request and is whole for a push to `main` and for the nightly schedule [[release-34](#release-34)], that `npm run prepush` refuses a conflict marker [[release-35](#release-35)], that `npm run merge-on-green` merges only a head whose newest run's checks are all green [[release-29](#release-29)], and that `npm run test:linux` names the runners' Node and Git versions [[release-32](#release-32)].
+When the repository-system audit reads the CI workflow and the Linux parity script, it shall assert that the workflow's concurrency groups a pull request's runs by its number and cancels the run in progress for a pull request and not for a push to `main` [[release-30](#release-30)], that the required checks the repository's merge rule names are exactly the jobs a pull request's run holds [[release-29](#release-29)] [[release-34](#release-34)], that the matrix narrows for a pull request and is whole for a push to `main` and for the nightly schedule [[release-34](#release-34)], that `npm run prepush` refuses a conflict marker [[release-35](#release-35)], that `npm run merge-on-green` merges only a head whose newest run's checks are all green, a commit status judged by its state, naming the head it checked to the merge [[release-29](#release-29)], and that `npm run test:linux` names the runners' Node and Git versions [[release-32](#release-32)].
 
 ## References
 

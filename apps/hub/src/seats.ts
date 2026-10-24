@@ -8,7 +8,9 @@
 // interval while a relay is open or a turn runs; and the end of a lease
 // — at its expiry, at the instance's refusal, at `evict` or `retire` —
 // closing the seat's relays with 4401 and stopping its unit, the seat's
-// files standing. One person's operations run one at a time.
+// files standing, a stop that failed asked again at each renewal. One
+// person's operations run one at a time; once `retire` begins, no
+// admission starts a seat.
 
 import { runHelper, type HelperConfig } from "./helper.js";
 import { readAdmission, redeemTicket, renewLease } from "./instance.js";
@@ -66,7 +68,11 @@ export class SeatBook {
   private readonly relays = new Map<string, Set<RelayHandle>>();
   private readonly timers = new Map<string, NodeJS.Timeout>();
   private readonly queues = new Map<string, Promise<unknown>>();
+  /** The seats whose lease ended but whose stop failed (hub-5). */
+  private readonly stopOwed = new Set<string>();
   private closed = false;
+  /** Set as `retire` begins: no admission starts a seat past it (hub-2). */
+  private retiring = false;
 
   constructor(
     private readonly options: SeatBookOptions,
@@ -118,7 +124,8 @@ export class SeatBook {
   }
 
   /** Continue the recorded leases (hub-5): schedule each one's end,
-   * and stop a seat whose lease ended while no hub ran. */
+   * stop a seat whose lease ended while no hub ran, and ask again for a
+   * stop that was owed. */
   async resume(): Promise<void> {
     for (const id of Object.keys(this.leases)) {
       const lease = this.leases[id];
@@ -130,8 +137,10 @@ export class SeatBook {
       await this.serial(id, async () => {
         const current = this.leases[id];
         if (!current || leaseActive(current) || this.closed) return;
-        if (current.bearer_hash !== null || (await probeSeat(this.options.runDir, id))) {
+        if (current.bearer_hash !== null) {
           await this.endLocked(id, "it expired while the hub was down");
+        } else if (await probeSeat(this.options.runDir, id)) {
+          await this.endLocked(id, "its seat still ran when the hub started");
         }
       });
     }
@@ -163,6 +172,10 @@ export class SeatBook {
 
   /** Redeem a ticket and open its person's seat (hub-2, hub-4). */
   async admit(ticket: string): Promise<AdmitAnswer> {
+    // Refused before the ticket is redeemed while `retire` runs (hub-2).
+    if (this.retiring) {
+      return { status: 503, body: refusal("server_retiring", "this hub is retiring its server") };
+    }
     const token = this.state.token;
     if (!token) {
       return { status: 503, body: refusal("not_attached", "this hub is attached to no server; run spex-hub attach") };
@@ -191,6 +204,12 @@ export class SeatBook {
       if (this.closed) {
         return { status: 503, body: refusal("hub_stopping", "the hub is stopping") };
       }
+      // An admission the instance answered after `retire` began starts no
+      // seat; one already past this check is in retire's snapshot, its
+      // lease recorded before any wait (hub-2, hub-6).
+      if (this.retiring) {
+        return { status: 503, body: refusal("server_retiring", "this hub is retiring its server") };
+      }
       const prior = this.leases[person.id];
       // The lease is recorded before the seat starts, so a seat that
       // starts late still stops at the lease's end (hub-2).
@@ -204,7 +223,9 @@ export class SeatBook {
       const { runDir } = this.options;
       if (!(await probeSeat(runDir, person.id))) {
         try {
-          if (!prior) await runHelper(this.options.helper, "create", person.id);
+          // `create` is idempotent (hub-4): asked before every start, so a
+          // creation that failed is asked again.
+          await runHelper(this.options.helper, "create", person.id);
           await runHelper(this.options.helper, "start", person.id, mintSecret());
         } catch (error) {
           this.options.log(`seat ${person.id} did not start: ${(error as Error).message}`);
@@ -227,6 +248,8 @@ export class SeatBook {
       const bearer = mintSecret();
       this.leases[person.id].bearer_hash = sha256(bearer);
       this.save();
+      // The seat is wanted running again: no stop is owed (hub-5).
+      this.stopOwed.delete(person.id);
       this.options.log(
         `admitted ${person.login} (${person.id}) until ${admission.lease_expires_at}`,
       );
@@ -242,10 +265,30 @@ export class SeatBook {
     });
   }
 
-  /** Renew every lease whose seat is in use (hub-5). */
+  /** Renew every lease whose seat is in use, and ask again for every
+   * stop that failed (hub-5). */
   async renewDue(): Promise<void> {
     const ids = Object.keys(this.leases).filter((id) => leaseActive(this.leases[id]));
-    await Promise.all(ids.map((id) => this.serial(id, () => this.renewLocked(id))));
+    const owed = [...this.stopOwed].filter((id) => !this.leases[id] || !leaseActive(this.leases[id]));
+    await Promise.all([
+      ...ids.map((id) => this.serial(id, () => this.renewLocked(id))),
+      ...owed.map((id) => this.serial(id, () => this.stopOwedLocked(id))),
+    ]);
+  }
+
+  /** Ask the helper again to stop a seat whose lease ended (hub-5). */
+  private async stopOwedLocked(id: string): Promise<void> {
+    const lease = this.leases[id];
+    if (this.closed || !lease || !this.stopOwed.has(id) || leaseActive(lease)) return;
+    try {
+      await runHelper(this.options.helper, "stop", id);
+      this.stopOwed.delete(id);
+      this.options.log(`the seat of ${lease.login} (${id}) stopped at the retry`);
+    } catch (error) {
+      this.options.log(
+        `the seat of ${lease.login} (${id}) did not stop: ${(error as Error).message}; asked again at the next renewal`,
+      );
+    }
   }
 
   private async renewLocked(id: string): Promise<void> {
@@ -273,10 +316,12 @@ export class SeatBook {
     );
   }
 
-  /** End a lease at once: close its relays, stop its unit (hub-5). */
-  private async endLocked(id: string, why: string): Promise<void> {
+  /** End a lease at once: close its relays, stop its unit (hub-5).
+   * Answers undefined where the seat stopped, else the stop's cause,
+   * the stop then owed to the next renewal. */
+  private async endLocked(id: string, why: string): Promise<string | undefined> {
     const lease = this.leases[id];
-    if (!lease) return;
+    if (!lease) return undefined;
     const timer = this.timers.get(id);
     if (timer) clearTimeout(timer);
     this.timers.delete(id);
@@ -287,32 +332,43 @@ export class SeatBook {
     for (const relay of this.relays.get(id) ?? []) relay.close(LEASE_ENDED, "lease ended");
     try {
       await runHelper(this.options.helper, "stop", id);
+      this.stopOwed.delete(id);
       this.options.log(`the lease of ${lease.login} (${id}) ended: ${why}; seat stopped`);
+      return undefined;
     } catch (error) {
+      const cause = (error as Error).message;
+      this.stopOwed.add(id);
       this.options.log(
-        `the lease of ${lease.login} (${id}) ended: ${why}; the seat did not stop: ${(error as Error).message}`,
+        `the lease of ${lease.login} (${id}) ended: ${why}; the seat did not stop: ${cause}; asked again at the next renewal`,
       );
+      return cause;
     }
   }
 
-  /** `evict <id>` (hub-6): false where no seat bears that id. */
-  evict(id: string): Promise<boolean> {
+  /** `evict <id>` (hub-6): found false where no seat bears that id;
+   * failure the stop's cause where the seat did not stop. */
+  evict(id: string): Promise<{ found: boolean; failure?: string }> {
     return this.serial(id, async () => {
-      if (!this.leases[id]) return false;
-      await this.endLocked(id, "evicted");
-      return true;
+      if (!this.leases[id]) return { found: false };
+      const failure = await this.endLocked(id, "evicted");
+      return failure === undefined ? { found: true } : { found: true, failure };
     });
   }
 
   /** `retire` (hub-6): end every lease, stop every seat, wipe each
    * seat's credentials, and forget the server token. */
   async retire(): Promise<{ seats: number; failures: string[] }> {
+    // Set before the snapshot, so every seat an admission may start is in
+    // it or refused (hub-2).
+    this.retiring = true;
     const failures: string[] = [];
     const ids = Object.keys(this.leases);
     for (const id of ids) {
       await this.serial(id, async () => {
-        if (leaseActive(this.leases[id])) await this.endLocked(id, "the server retired");
-        else {
+        if (leaseActive(this.leases[id])) {
+          const failure = await this.endLocked(id, "the server retired");
+          if (failure !== undefined) failures.push(failure);
+        } else {
           try {
             await runHelper(this.options.helper, "stop", id);
           } catch (error) {

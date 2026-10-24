@@ -61,7 +61,7 @@ export type ControlRequest =
 
 export type ControlAnswer =
   | { ok: true; seats: SeatStatus[]; server: { id: string; name: string | null; instance: string; address: string; attached: boolean } }
-  | { ok: true; evicted: boolean }
+  | { ok: true; evicted: boolean; failure?: string }
   | { ok: true; retired: number; failures: string[] }
   | { ok: false; error: string };
 
@@ -342,9 +342,13 @@ export async function startHub(options: HubOptions): Promise<RunningHub> {
             attached: state.token !== null,
           },
         };
-      case "evict":
+      case "evict": {
         if (!PERSON_ID.test(request.id)) return { ok: false, error: `no seat id: ${request.id}` };
-        return { ok: true, evicted: await book.evict(request.id) };
+        const result = await book.evict(request.id);
+        return result.failure === undefined
+          ? { ok: true, evicted: result.found }
+          : { ok: true, evicted: result.found, failure: result.failure };
+      }
       case "retire": {
         const result = await book.retire();
         return { ok: true, retired: result.seats, failures: result.failures };

@@ -84,11 +84,13 @@ test("release-33: the merge-on-green script merges only a head whose newest run'
   assert.doesNotMatch(script, /\.statusCheckRollup\[\]/, "no judgment over the whole rollup");
   assert.match(script, /The head moved; run again for the new head/, "a moved head is refused");
   assert.match(script, /if \[ -n "\$now" \] && \[ "\$now" != "\$head" \]; then/, "only a read naming another head is a move");
-  assert.match(script, /gh pr merge "\$number" --merge/);
+  assert.match(script, /gh pr merge "\$number" --merge --match-head-commit "\$head"/, "the merge names the head checked");
+  assert.match(script, /name: \(\.name \/\/ \.context\)/, "a status context named by its context");
+  assert.match(script, /conclusion: \(\.conclusion \/\/ \.state\)/, "a status context judged by its state");
   assert.equal(JSON.parse(readFileSync(join(root, "package.json"), "utf8")).scripts["merge-on-green"], "bash scripts/merge-on-green.sh");
 });
 
-test("release-33: the merge-on-green script judges each workflow's newest run, keeping a status context (release-29)", (t) => {
+test("release-33: the merge-on-green script judges each workflow's newest run, keeping a status context judged by its state (release-29)", (t) => {
   if (spawnSync("jq", ["--version"]).error) {
     t.skip("jq is not on PATH: the script's jq filters cannot run");
     return;
@@ -123,16 +125,26 @@ test("release-33: the merge-on-green script judges each workflow's newest run, k
   assert.deepEqual(jq(`(${newest})${state}`, pr), [{ head: "b6bd25a7", mergeable: "MERGEABLE", done: true, green: true }]);
   const red = { statusCheckRollup: [...checks.slice(0, 3), check("journeys (ubuntu-latest)", 39980673777, "COMPLETED", "FAILURE")] };
   assert.deepEqual(jq(`(${newest})${failing}`, red), ["journeys (ubuntu-latest) FAILURE"]);
+  // A commit status has no status or conclusion: its state decides both.
+  assert.deepEqual(jq(`(${newest})${state}`, { ...pr, statusCheckRollup: [...checks, context] }), [{ head: "b6bd25a7", mergeable: "MERGEABLE", done: true, green: true }]);
+  for (const waiting of ["PENDING", "EXPECTED"]) {
+    assert.deepEqual(jq(`(${newest})${state}`, { ...pr, statusCheckRollup: [...checks, { ...context, state: waiting }] }), [{ head: "b6bd25a7", mergeable: "MERGEABLE", done: false, green: false }], waiting);
+  }
+  const failed = { ...pr, statusCheckRollup: [...checks, { ...context, state: "FAILURE" }] };
+  assert.deepEqual(jq(`(${newest})${state}`, failed), [{ head: "b6bd25a7", mergeable: "MERGEABLE", done: true, green: false }]);
+  assert.deepEqual(jq(`(${newest})${failing}`, failed), ["ci/external FAILURE"]);
 });
 
-test("release-33: the merge-on-green script polls again after a failed or empty read and refuses only another head (release-29)", () => {
+test("release-33: the merge-on-green script polls again after a failed or empty read, refuses only another head and merges only the head it checked (release-29)", () => {
   const dir = mkdtempSync(join(tmpdir(), "spex-merge-on-green-"));
   const bin = join(dir, "bin");
   mkdirSync(bin);
-  // The stand-in gh answers its reads in turn from GH_REPLIES, `fail` failing as a dropped connection does.
+  // The stand-in gh answers its reads in turn from GH_REPLIES, `fail` failing as a dropped connection does,
+  // and refuses the merge while the file GH_MERGE_FAIL names exists, as GitHub does a moved head.
   writeFileSync(join(bin, "gh"), [
     "#!/usr/bin/env bash",
     'echo "$*" >> "$GH_LOG"',
+    '[ "$2" = merge ] && [ -n "${GH_MERGE_FAIL:-}" ] && [ -e "$GH_MERGE_FAIL" ] && { echo "GraphQL: Head branch was modified. Review and try the merge again. (mergePullRequest)" >&2; exit 1; }',
     '[ "$2" = merge ] && exit 0',
     'n=$(( $(cat "$GH_COUNT") + 1 )); echo "$n" > "$GH_COUNT"',
     'reply="$(sed -n "${n}p" "$GH_REPLIES")"',
@@ -145,7 +157,9 @@ test("release-33: the merge-on-green script polls again after a failed or empty 
   const cases = [
     { name: "a failed and an empty read, then green", replies: ["2b11055a", "fail", "", state("2b11055a")], status: 0, merged: true },
     { name: "a failed read, then another head", replies: ["2b11055a", "fail", state("3c22166b")], status: 2, merged: false },
+    { name: "green, then a merge GitHub refuses", replies: ["2b11055a", state("2b11055a")], status: 2, merged: true, refused: true },
   ];
+  const merge = "pr merge 232 --merge --match-head-commit 2b11055a";
   for (const [index, c] of cases.entries()) {
     const log = join(dir, `${index}.log`);
     const count = join(dir, `${index}.count`);
@@ -153,17 +167,24 @@ test("release-33: the merge-on-green script polls again after a failed or empty 
     writeFileSync(log, "");
     writeFileSync(count, "0");
     writeFileSync(replies, `${c.replies.join("\n")}\n`);
+    const refuse = join(dir, `${index}.refuse`);
+    if (c.refused) writeFileSync(refuse, "");
     const run = spawnSync("bash", [join(root, "scripts/merge-on-green.sh"), "232"], {
       encoding: "utf8",
-      env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, GH_LOG: log, GH_COUNT: count, GH_REPLIES: replies },
+      env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, GH_LOG: log, GH_COUNT: count, GH_REPLIES: replies, GH_MERGE_FAIL: refuse },
     });
     const calls = readFileSync(log, "utf8").split("\n").filter(Boolean);
     assert.equal(run.status, c.status, `${c.name}: ${run.stderr}`);
-    assert.ok(calls.includes("sleep 60"), `${c.name}: the failed read waits the poll's 60 s and reads again`);
-    assert.equal(calls.includes("pr merge 232 --merge"), c.merged, c.name);
-    if (c.merged) {
+    assert.equal(calls.includes("sleep 60"), c.replies.includes("fail"), `${c.name}: a failed read, and only a failed read, waits the poll's 60 s and reads again`);
+    // Where the merge went, never how many times (release-31): the checked head, and no other.
+    assert.equal(calls.includes(merge), c.merged, `${c.name}: the merge names the checked head`);
+    assert.ok(calls.filter((call) => call.startsWith("pr merge ")).every((call) => call === merge), `${c.name}: no merge names another head`);
+    if (c.status === 0) {
       assert.match(run.stdout, /Merged #232/, c.name);
       assert.doesNotMatch(run.stderr, /The head moved/, c.name);
+    } else if (c.refused) {
+      assert.match(run.stderr, /GitHub refused the merge; if the head moved, run again for the new head\./, c.name);
+      assert.doesNotMatch(run.stdout, /Merged #232/, c.name);
     } else {
       assert.match(run.stderr, /The head moved; run again for the new head\./, c.name);
     }

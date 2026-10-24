@@ -11,11 +11,15 @@
 // input itself.
 //
 // Environment: FAKE_RUN_DIR, FAKE_SEATS_HOME, FAKE_SEATCTL_LOG, and
-// FAKE_SEAT_SCRIPT (a JSON file: {nostart: [<id>]}).
+// FAKE_SEAT_SCRIPT, a JSON file read at each call: `nostart: [<id>]`
+// writes the token but launches no stub seat; `nocreate: [<id>]` and
+// `nostop: [<id>]` refuse `create` and `stop` with exit 70, touching
+// nothing; `holdstop: {<id>: <path>}` holds `stop` until that file
+// exists, up to 20 seconds.
 
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { appendFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -57,6 +61,11 @@ const seatDir = join(runDir, id);
 const pidFile = join(seatDir, "seat.pid");
 const tokenFile = join(seatDir, "token");
 
+function refuse(form) {
+  console.error(`spex-seatctl: ${form} refused by the test's script`);
+  process.exit(70);
+}
+
 function runningPid() {
   try {
     const pid = Number(readFileSync(pidFile, "utf8"));
@@ -69,6 +78,7 @@ function runningPid() {
 
 switch (command) {
   case "create":
+    if ((script().nocreate ?? []).includes(id)) refuse("create");
     mkdirSync(join(homes, id), { recursive: true, mode: 0o700 });
     break;
   case "start": {
@@ -91,6 +101,14 @@ switch (command) {
     break;
   }
   case "stop": {
+    const { nostop = [], holdstop = {} } = script();
+    if (nostop.includes(id)) refuse("stop");
+    if (typeof holdstop[id] === "string") {
+      const deadline = Date.now() + 20_000;
+      while (!existsSync(holdstop[id]) && Date.now() < deadline) {
+        await new Promise((resolveWait) => setTimeout(resolveWait, 50));
+      }
+    }
     const pid = runningPid();
     if (pid !== undefined) {
       process.kill(pid, "SIGTERM");

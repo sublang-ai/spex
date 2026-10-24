@@ -203,7 +203,11 @@ async function administer(parsed: Parsed, io: Io): Promise<number> {
           },
         };
       } else if (request.op === "evict") {
-        answer = { ok: true, evicted: await book.evict(request.id) };
+        const result = await book.evict(request.id);
+        answer =
+          result.failure === undefined
+            ? { ok: true, evicted: result.found }
+            : { ok: true, evicted: result.found, failure: result.failure };
       } else {
         const result = await book.retire();
         answer = { ok: true, retired: result.seats, failures: result.failures };
@@ -229,6 +233,12 @@ async function administer(parsed: Parsed, io: Io): Promise<number> {
   if ("evicted" in answer) {
     if (!answer.evicted) {
       io.err(`spex-hub: no seat ${parsed.positionals[0]}`);
+      return 1;
+    }
+    // A stop that failed is reported with its cause (hub-6).
+    if (answer.failure) {
+      io.out(`evicted seat ${parsed.positionals[0]}: its lease ended; its files stand`);
+      io.err(`spex-hub: the seat did not stop: ${answer.failure}`);
       return 1;
     }
     io.out(`evicted seat ${parsed.positionals[0]}: its lease ended and its seat stopped; its files stand`);
