@@ -6,7 +6,7 @@ import { randomUUID } from "node:crypto";
 import { isAbsolute } from "node:path";
 import { pathToFileURL } from "node:url";
 import { isDeepStrictEqual } from "node:util";
-import { createTmuxPlayRuntime, type Captain, type PlayerAdapterImports } from "@sublang/cligent/tmux-play";
+import { createTmuxPlayRuntime, type Captain, type PlayerAdapterImports, type TmuxPlayRuntime } from "@sublang/cligent/tmux-play";
 import type { OwnerAssetStore, SessionTurnInput } from "@sublang/playbook/session-assets";
 import { openSessionHost, discardSessionUncertain, type SessionHostController } from "@sublang/playbook/session-host";
 import {
@@ -128,6 +128,10 @@ interface LiveSession {
   /** Ownership at this turn's start, before a possible human verdict. */
   turnIntentId?: string;
   operation?: Promise<void>;
+  /** The reason of an abort requested while the runtime had no turn to
+   * abort — during the lifecycle's preparation of the turn — applied as
+   * the runtime begins it (core-service-6). */
+  pendingAbort?: string;
 }
 
 /** The members a stored structure names: its playbooks, and its
@@ -659,9 +663,17 @@ export class SessionManager {
         // turn; only the shell supplies its reply and durable settlement.
         createHostRuntime: async (input: Parameters<typeof createTmuxPlayRuntime>[0]) => {
           const shell = input.captain;
-          return createTmuxPlayRuntime({...input, captain: {
+          const runtime: TmuxPlayRuntime = await createTmuxPlayRuntime({...input, captain: {
             async init(session) { await shell.init?.(session); await fixture?.init?.(session); },
             async handleBossTurn(turn,context) {
+              // The runtime has begun the turn: an abort requested before
+              // it had one to abort takes effect now, ahead of any call
+              // (core-service-6).
+              if (entry?.pendingAbort !== undefined) {
+                const reason = entry.pendingAbort;
+                entry.pendingAbort = undefined;
+                runtime.abortActiveTurn(reason);
+              }
               await fixture?.handleBossTurn(turn,{...context, emitReply: async () => {}});
               await shell.handleBossTurn(turn,context);
             },
@@ -680,6 +692,7 @@ export class SessionManager {
             // publishes none still advertises none.
             ...controlSurfaces(shell),
           }});
+          return runtime;
         },
         onStoredRecord: async (record) => {
           this.record(sessionId, record, entry);
@@ -1067,6 +1080,7 @@ export class SessionManager {
   private startTurn(entry: LiveSession, text: string | SessionTurnInput | undefined, restore: { input: string } | false, control?: { kind: "recovery" | "ending"; controlId: string }): void {
     this.assertAdmission();
     entry.turnIntentId = undefined;
+    entry.pendingAbort = undefined;
     entry.turnActive = true;
     // A turn accepted while a run waits on the Boss's question answers
     // it or asks it back (DR-119), so the question the last settlement
@@ -1109,6 +1123,7 @@ export class SessionManager {
       } finally {
         this.options.cancelApprovals?.(entry.info.id);
         entry.turnActive = false;
+        entry.pendingAbort = undefined;
         entry.pendingIntentId = undefined;
         const turnId = this.store.listTurns(entry.info.id).at(-1)?.turnId;
         const intentId = entry.turnIntentId;
@@ -1167,9 +1182,18 @@ export class SessionManager {
   private stopActiveTurn(entry: LiveSession, reason: string): void {
     this.intentionalStops.add(entry.info.id);
     try {
+      // The runtime aborts only a turn it has begun, and it begins the
+      // turn after the shared lifecycle has prepared it — the lease
+      // marked, the repository reconciled — so an abort requested in
+      // that window would be lost and the first call would run its
+      // whole length under a live signal. The reason is held on the
+      // entry as well, and applied as the runtime begins the turn
+      // (core-service-6).
+      entry.pendingAbort = reason;
       (entry.runtime.abortActiveTurn as (reason?: string) => void)(reason);
       this.options.cancelApprovals?.(entry.info.id);
     } catch (error) {
+      entry.pendingAbort = undefined;
       this.intentionalStops.delete(entry.info.id);
       throw error;
     }

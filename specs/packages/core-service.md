@@ -257,7 +257,9 @@ While a session is not live, when a client submits Boss text for it, the core se
 
 #### core-service-6
 
-While a boss turn is active on a session, when a client requests an abort for that session, the core service shall abort the active turn, stream the turn-aborted record to subscribed clients, and admit further input once the shared lifecycle has settled the stopped turn at its saved progress [[core-service-91](#core-service-91)] ([DR-088](../decisions/088-playbook-17-slc-0-12-cligent-0-27-adoption.md)).
+While a boss turn is active on a session, when a client requests an abort for that session, the core service shall abort the active turn, stream the turn-aborted record to subscribed clients, and admit further input once the shared lifecycle has settled the stopped turn at its saved progress [[core-service-91](#core-service-91)] ([DR-088](../decisions/088-playbook-17-slc-0-12-cligent-0-27-adoption.md)):
+
+- the turn is active from its acceptance, while the shared lifecycle prepares it — the lease marked, the repository reconciled — before the runtime has begun it: an abort requested in that window is held and applied as the runtime begins the turn, so no agent call starts under a live signal, and the stop settles as one taken during a call does.
 
 #### core-service-82
 
@@ -570,7 +572,7 @@ When a host shell stops the core service, the core service shall persist every l
 - Successful cleanup reports the session as no longer live; failed or unconfirmed cleanup retains its ownership evidence [[core-service-4](#core-service-4)].
 - Shutdown waits for settlement bookkeeping already in progress before closing the store.
 - Shutdown closes session and turn admission before waiting, drains session openings already admitted (including their pre-open waits), and attempts disposal of any runtime they create before closing the store; an opening or disposal failure does not skip the remaining cleanup.
-- Shutdown is bounded: every active turn is aborted with the core-stop reason as admission closes; when every turn active at the stop has settled, or ten seconds after the stop began, every agent process the core started that is still alive receives SIGTERM, and SIGKILL five seconds later; the stop then stops waiting for disposals not yet confirmed, reports them unconfirmed, releases its leases and closes the store, having written nothing into any working folder and reverted no file, so a turn cut before settlement stands `uncertain` for Restore on this runtime ([DR-134](../decisions/134-execution-ownership.md)).
+- Shutdown is bounded: every active turn is aborted with the core-stop reason as admission closes — one whose runtime has not begun it held and applied as it begins, as a client's abort is [[core-service-6](#core-service-6)]; when every turn active at the stop has settled, or ten seconds after the stop began, every agent process the core started that is still alive receives SIGTERM, and SIGKILL five seconds later; the stop then stops waiting for disposals not yet confirmed, reports them unconfirmed, releases its leases and closes the store, having written nothing into any working folder and reverted no file, so a turn cut before settlement stands `uncertain` for Restore on this runtime ([DR-134](../decisions/134-execution-ownership.md)).
 - An observed Captain cleanup-hook rejection or an ambiguous compound construction failure is reported as cleanup unconfirmed, including one whose opening settled before shutdown; a lease released during failed construction alone does not confirm runtime cleanup ([DR-048](../decisions/048-failed-session-cleanup.md)).
 
 ### Interface Language
@@ -1146,6 +1148,13 @@ When an integration suite aborts a real session's turn while a scripted call is 
 - in either case the turn-aborted record streams, and the settled session lists continuable with no recovery owed [[core-service-6](#core-service-6)] [[core-service-32](#core-service-32)];
 - the player's stop leaves its summary carrying the park's reason, the actions the stopped run advertised in order, and the shell's own ending, kept with the preferences as at any settlement [[core-service-91](#core-service-91)] [[core-service-32](#core-service-32)];
 - the Captain's stop, which moves the shell's own machine to its failure state, keeps no park and leaves its dispatched intent Queued with the next row `stopped`, manual start available, and no summons [[core-service-107](#core-service-107)] [[core-service-49](#core-service-49)].
+
+#### core-service-131
+
+Where the publication of a real session's state is held through the seam at the checkpoint that marks its turn begun — before the runtime has begun the turn and before any agent call, the Captain's first call scripted far past the settlement bound — when an integration suite aborts that turn and then releases the hold, it shall verify the held stop [[core-service-6](#core-service-6)]:
+
+- the abort is reported taken while the turn is held, no agent call having started;
+- released, the turn-aborted record streams and the session settles inside the bound, continuable with no recovery owed and no park, the held call never reaching the agent [[core-service-6](#core-service-6)] [[core-service-32](#core-service-32)].
 
 #### core-service-120
 
