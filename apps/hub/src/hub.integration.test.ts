@@ -468,7 +468,7 @@ function seatEvents(s: Scenario): { seat: string; event: string; code?: number; 
     .map((line) => JSON.parse(line));
 }
 
-function leases(s: Scenario): Record<string, { login: string; expires_at: string; bearer_hash: string | null }> {
+function leases(s: Scenario): Record<string, { login: string; expires_at: string; bearer_hash: string | null; stop_owed?: true }> {
   return JSON.parse(readFileSync(join(s.state, "leases.yaml"), "utf8"));
 }
 
@@ -583,7 +583,7 @@ test("an admission spends its ticket once and the relay pipes the member's frame
 
     // hub-8: the lease recorded with the bearer's hash alone.
     assert.deepEqual(leases(s), {
-      "4201": { login: "alice", expires_at: first.body.lease_expires_at, bearer_hash: sha256(first.bearer) },
+      "4201": { login: "alice", expires_at: first.body.lease_expires_at, bearer_hash: sha256(first.bearer), stop_owed: true },
     });
     assert.equal(mode(join(s.state, "leases.yaml")), 0o600);
     for (const file of readdirSync(s.state)) {
@@ -663,6 +663,8 @@ test("a seat that does not start answers 503 with its lease kept; the instance's
     assert.match(failed.body.error.message, /4203/);
     assert.equal(leases(s)["4203"].login, "carol");
     assert.ok(Date.parse(leases(s)["4203"].expires_at) > Date.now());
+    // hub-8: the stop is owed from the admission, the seat half started.
+    assert.equal(leases(s)["4203"].stop_owed, true);
 
     standin.admitAnswer = { status: 403, body: { error: { code: "token_scope", message: "not a server token" } } };
     const scoped = await admit(hub.port, JSON.stringify({ ticket: "spext_x" }));
@@ -694,6 +696,7 @@ test("a creation that fails answers 503 with its lease kept and is asked again a
     assert.equal(failed.body.error.code, "seat_unavailable");
     assert.match(failed.body.error.message, /4204/);
     assert.equal(leases(s)["4204"].login, "ivy");
+    assert.equal(leases(s)["4204"].stop_owed, true);
     assert.equal(called(s, "create", "4204"), 1);
     assert.equal(called(s, "start", "4204"), 0);
 
@@ -949,10 +952,14 @@ test("a stop that fails leaves the lease ended, is reported by evict and retire 
     outputs.push(run.stdout + run.stderr);
     return run;
   };
+  // The lease's record of an owed stop (hub-8).
+  const stopOwed = (id: string): true | undefined => leases(s)[id]?.stop_owed;
   try {
     const a = await admitted(hub, standin.ticket({ id: "4601", login: "kim", display_name: null }));
     const b = await admitted(hub, standin.ticket({ id: "4602", login: "lou", display_name: null }));
     secrets.push(a.bearer, b.bearer);
+    // hub-8: owed from the admission, before any end.
+    assert.equal(stopOwed("4601"), true);
     const relay = (await openRelay(hub.port, "4601", { bearer: a.bearer })).socket as WebSocket;
     assert.ok(relay, "the relay did not open");
     await nextMessage(relay, (message) => jsonOf(message)?.type === "hello");
@@ -967,12 +974,15 @@ test("a stop that fails leaves the lease ended, is reported by evict and retire 
     assert.match(evicted.stderr, /the seat did not stop: .*stop refused by the test's script/);
     assert.equal(await relayClosed, 4401);
     assert.equal(leases(s)["4601"].bearer_hash, null);
+    assert.equal(stopOwed("4601"), true);
     assert.equal((await openRelay(hub.port, "4601", { bearer: a.bearer })).status, 401);
     assert.match((await cli(["status"])).stdout, /4601\s+kim\s+running\s+ended/);
     await waitFor(
       () => /\(4601\) ended: evicted; the seat did not stop: .*asked again at the next renewal/.test(hub.output()),
       "the failed stop to be logged",
     );
+    // hub-5: the renewal round asks again while the socket is still open.
+    await waitFor(() => called(s, "stop", "4601") >= 2, "the renewal round to ask again");
 
     // hub-6: with no hub running, evict acts itself and reports the same.
     assert.equal(await hub.stop(), 0);
@@ -982,30 +992,53 @@ test("a stop that fails leaves the lease ended, is reported by evict and retire 
     assert.match(offline.stdout, /evicted seat 4602: its lease ended; its files stand/);
     assert.match(offline.stderr, /the seat did not stop: .*stop refused by the test's script/);
     assert.equal(leases(s)["4602"].bearer_hash, null);
+    assert.equal(stopOwed("4602"), true);
     const offlineStatus = await cli(["status"]);
     assert.match(offlineStatus.stdout, /the hub is not running/);
     assert.match(offlineStatus.stdout, /4602\s+lou\s+running\s+ended/);
 
-    // hub-5: the next start asks again for each owed stop.
+    // The seat's core dies while the stop stays owed: its socket closes,
+    // though the unit's other processes may remain.
+    const pid4602 = Number(readFileSync(join(s.run, "4602", "seat.pid"), "utf8"));
+    process.kill(pid4602, "SIGKILL");
+    await waitFor(() => {
+      try {
+        process.kill(pid4602, 0);
+        return false;
+      } catch {
+        return true;
+      }
+    }, "the seat's core to be gone");
+    const stopsBefore4602 = called(s, "stop", "4602");
+
+    // hub-5: the next start asks again for each owed stop, recorded on
+    // the lease, the socket closed as well as open.
     const stopsBefore = called(s, "stop", "4601");
     setScript(s, { nostop: ["4602"] });
     hub = await serve(s, { renewIntervalMs: 300 });
     await waitFor(
       () =>
-        /the lease of kim \(4601\) ended: its seat still ran when the hub started; seat stopped/.test(hub.output()) &&
-        /the lease of lou \(4602\) ended: its seat still ran when the hub started; the seat did not stop: .*asked again at the next renewal/.test(
+        /the lease of kim \(4601\) ended: its stop was still owed when the hub started; seat stopped/.test(
+          hub.output(),
+        ) &&
+        /the lease of lou \(4602\) ended: its stop was still owed when the hub started; the seat did not stop: .*asked again at the next renewal and at the hub's next start/.test(
           hub.output(),
         ),
       "the next start to ask again",
     );
     assert.equal(called(s, "stop", "4601"), stopsBefore + 1);
+    // The start's own ask, logged above; the renewal round may ask again.
+    assert.ok(called(s, "stop", "4602") >= stopsBefore4602 + 1);
+    assert.equal(stopOwed("4601"), undefined);
+    assert.equal(stopOwed("4602"), true);
     const restarted = await cli(["status"]);
     assert.match(restarted.stdout, /4601\s+kim\s+stopped\s+ended/);
-    assert.match(restarted.stdout, /4602\s+lou\s+running\s+ended/);
+    assert.match(restarted.stdout, /4602\s+lou\s+stopped\s+ended/);
 
     // hub-5: the renewal round asks again, and the seat stops.
     setScript(s, {});
     await waitFor(() => /the seat of lou \(4602\) stopped at the retry/.test(hub.output()), "the asked-again stop");
+    assert.equal(stopOwed("4602"), undefined);
     assert.match((await cli(["status"])).stdout, /4602\s+lou\s+stopped\s+ended/);
 
     // hub-6: retire reports an active seat's failed stop, exit 1, and
@@ -1016,10 +1049,24 @@ test("a stop that fails leaves the lease ended, is reported by evict and retire 
     const retired = await cli(["retire"]);
     assert.equal(retired.code, 1);
     assert.match(retired.stderr, /stop 4603 failed: .*stop refused by the test's script/);
+    assert.match(retired.stderr, /run retire again once the cause is fixed/);
     assert.match(retired.stdout, /server token is forgotten/);
     assert.equal(await hub.exited, 0);
     for (const id of ["4601", "4602", "4603"]) assert.equal(called(s, "wipe", id), 1);
     assert.equal(leases(s)["4603"].bearer_hash, null);
+    assert.equal(stopOwed("4603"), true);
+    assert.equal(JSON.parse(readFileSync(join(s.state, "state.yaml"), "utf8")).token, null);
+
+    // hub-6: with no hub to retry it, retire run again asks each stop and
+    // wipe again.
+    const stopsBefore4603 = called(s, "stop", "4603");
+    setScript(s, {});
+    const retiredAgain = await cli(["retire"]);
+    assert.equal(retiredAgain.code, 0, retiredAgain.stderr);
+    assert.match(retiredAgain.stdout, /server token is forgotten/);
+    assert.equal(called(s, "stop", "4603"), stopsBefore4603 + 1);
+    assert.equal(stopOwed("4603"), undefined);
+    for (const id of ["4601", "4602", "4603"]) assert.equal(called(s, "wipe", id), 2);
     assert.equal(JSON.parse(readFileSync(join(s.state, "state.yaml"), "utf8")).token, null);
     assert.ok(helperCalls(s).every((call) => !call.refused));
     assertNoSecret(outputs.join("\n"), secrets);

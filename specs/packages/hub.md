@@ -54,8 +54,8 @@ When a person is admitted for the first time, or admitted while their seat is st
 While a seat holds a lease, every thirty minutes while a relay to it is open or the seat reports a turn active — read over the hub's own connection to the seat as any client reads it [[core-service-32](core-service.md#core-service-32)] — the hub shall renew the lease at the instance with the server token, naming the person, and record the expiry answered ([DR-132](../decisions/132-team-servers.md)):
 
 - the instance's `403` or `404` ends the lease at once; its `429` or `502`, or no answer, is retried at the interval until the lease's expiry, so no grace exceeds the sixty minutes the instance advertised;
-- at the lease's end the hub closes the seat's relays [[hub-3](#hub-3)] and asks the helper to stop the seat's unit [[hub-4](#hub-4)], the seat's files standing but the core's own lease and scratch, which its stop removes [[core-service-39](core-service.md#core-service-39)]; a stop that fails is logged with its cause and asked again at each renewal interval and at the hub's next start while the seat runs;
-- leases survive the hub's restart: a restarted hub continues each recorded lease from its recorded expiry.
+- at the lease's end the hub closes the seat's relays [[hub-3](#hub-3)] and asks the helper to stop the seat's unit [[hub-4](#hub-4)], the seat's files standing but the core's own lease and scratch, which its stop removes [[core-service-39](core-service.md#core-service-39)]; a stop that fails is logged with its cause, the stop staying owed on the lease [[hub-8](#hub-8)] and asked again at each renewal interval and at the hub's next start until one succeeds;
+- leases survive the hub's restart: a restarted hub continues each recorded lease from its recorded expiry and asks the stop of every lease that ended while it was down, its stop still owed [[hub-8](#hub-8)].
 
 ### The administrator's commands
 
@@ -67,7 +67,7 @@ When the administrator runs `spex-hub status`, `spex-hub evict <id>` or `spex-hu
 | --- | --- |
 | `status` | lists each seat by its person id and login, whether its unit runs, its lease's expiry and whether a relay is open |
 | `evict <id>` | ends that seat's lease at once, as a refusal does [[hub-5](#hub-5)]; a stop that fails is reported with its cause, the lease ended and the command exiting 1 |
-| `retire` | ends every lease, stops every seat, wipes each seat's credentials [[hub-4](#hub-4)] and forgets the server token; the server's record and its seat devices are revoked by a group Owner at the instance, which this command says; every stop or wipe that fails is reported with its cause, the command exiting 1 |
+| `retire` | ends every lease, stops every seat, wipes each seat's credentials [[hub-4](#hub-4)] and forgets the server token; the server's record and its seat devices are revoked by a group Owner at the instance, which this command says; every stop or wipe that fails is reported with its cause, the command exiting 1 and saying that `retire` run again asks each stop and wipe again |
 
 ### Installation
 
@@ -84,7 +84,7 @@ When the administrator runs the install script of a source release on a Linux ho
 
 #### hub-8
 
-The hub shall keep its state under its own directory with owner-only permissions: the instance's URL, the server's id, name, address and token, and the leases as `{<person id>: {login, expires_at, bearer_hash}}`, a bearer stored as its SHA-256 and minted from 32 random bytes, so that a restart continues every lease and no secret is written elsewhere or logged.
+The hub shall keep its state under its own directory with owner-only permissions: the instance's URL, the server's id, name, address and token, and the leases as `{<person id>: {login, expires_at, bearer_hash, stop_owed}}`, `stop_owed` true from a lease's admission until the helper's stop succeeds after its end [[hub-5](#hub-5)] and absent otherwise, a bearer stored as its SHA-256 and minted from 32 random bytes, so that a restart continues every lease and no secret is written elsewhere or logged.
 
 ## Verification
 
@@ -101,7 +101,7 @@ Where a stand-in instance answers the servers routes, a fake helper at a configu
 - `status`, `evict` and `retire` act as their rows say, `retire` wiping the credentials and forgetting the token [[hub-6](#hub-6)];
 - an admission arriving while `retire` runs is refused `503` with its ticket unredeemed, one the instance was still answering is refused once answered, no seat is created or started for either and the retired seat is not restarted [[hub-2](#hub-2)] [[hub-6](#hub-6)];
 - a creation that failed is asked again at the next admission, which starts the seat [[hub-4](#hub-4)];
-- a stop that fails leaves the lease ended, is reported by `evict`, running or not, and by `retire` with its cause and exit 1, and is asked again at the next renewal interval and at the hub's next start [[hub-5](#hub-5)] [[hub-6](#hub-6)];
+- a stop that fails leaves the lease ended and the stop still owed, is reported by `evict`, running or not, and by `retire` with its cause and exit 1, and is asked again at the next renewal interval and at the hub's next start, with the seat's socket closed as well as open, until it succeeds, `retire` run again after a failure asking each stop and wipe again [[hub-5](#hub-5)] [[hub-6](#hub-6)] [[hub-8](#hub-8)];
 - no bearer or token appears in the hub's output or logs [[hub-8](#hub-8)].
 
 #### hub-10

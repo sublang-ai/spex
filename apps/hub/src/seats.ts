@@ -8,9 +8,10 @@
 // interval while a relay is open or a turn runs; and the end of a lease
 // — at its expiry, at the instance's refusal, at `evict` or `retire` —
 // closing the seat's relays with 4401 and stopping its unit, the seat's
-// files standing, a stop that failed asked again at each renewal. One
-// person's operations run one at a time; once `retire` begins, no
-// admission starts a seat.
+// files standing, a stop that failed asked again at each renewal and at
+// the next start, the debt recorded on the lease. One person's
+// operations run one at a time; once `retire` begins, no admission
+// starts a seat.
 
 import { runHelper, type HelperConfig } from "./helper.js";
 import { readAdmission, redeemTicket, renewLease } from "./instance.js";
@@ -68,8 +69,6 @@ export class SeatBook {
   private readonly relays = new Map<string, Set<RelayHandle>>();
   private readonly timers = new Map<string, NodeJS.Timeout>();
   private readonly queues = new Map<string, Promise<unknown>>();
-  /** The seats whose lease ended but whose stop failed (hub-5). */
-  private readonly stopOwed = new Set<string>();
   private closed = false;
   /** Set as `retire` begins: no admission starts a seat past it (hub-2). */
   private retiring = false;
@@ -123,9 +122,9 @@ export class SeatBook {
     this.timers.set(id, timer);
   }
 
-  /** Continue the recorded leases (hub-5): schedule each one's end,
-   * stop a seat whose lease ended while no hub ran, and ask again for a
-   * stop that was owed. */
+  /** Continue the recorded leases (hub-5): schedule each one's end, and
+   * ask the stop of every lease that ended while no hub ran — its stop
+   * still owed, its bearer never voided, or its seat found running. */
   async resume(): Promise<void> {
     for (const id of Object.keys(this.leases)) {
       const lease = this.leases[id];
@@ -137,10 +136,8 @@ export class SeatBook {
       await this.serial(id, async () => {
         const current = this.leases[id];
         if (!current || leaseActive(current) || this.closed) return;
-        if (current.bearer_hash !== null) {
-          await this.endLocked(id, "it expired while the hub was down");
-        } else if (await probeSeat(this.options.runDir, id)) {
-          await this.endLocked(id, "its seat still ran when the hub started");
+        if (current.stop_owed || current.bearer_hash !== null || (await probeSeat(this.options.runDir, id))) {
+          await this.endLocked(id, "its stop was still owed when the hub started");
         }
       });
     }
@@ -213,10 +210,13 @@ export class SeatBook {
       const prior = this.leases[person.id];
       // The lease is recorded before the seat starts, so a seat that
       // starts late still stops at the lease's end (hub-2).
+      // A seat is wanted running: its stop is owed from here until one
+      // succeeds after the lease's end, whether or not it starts (hub-8).
       this.leases[person.id] = {
         login: person.login,
         expires_at: admission.lease_expires_at,
         bearer_hash: prior && leaseActive(prior) ? prior.bearer_hash : null,
+        stop_owed: true,
       };
       this.save();
       this.schedule(person.id);
@@ -248,8 +248,6 @@ export class SeatBook {
       const bearer = mintSecret();
       this.leases[person.id].bearer_hash = sha256(bearer);
       this.save();
-      // The seat is wanted running again: no stop is owed (hub-5).
-      this.stopOwed.delete(person.id);
       this.options.log(
         `admitted ${person.login} (${person.id}) until ${admission.lease_expires_at}`,
       );
@@ -269,7 +267,9 @@ export class SeatBook {
    * stop that failed (hub-5). */
   async renewDue(): Promise<void> {
     const ids = Object.keys(this.leases).filter((id) => leaseActive(this.leases[id]));
-    const owed = [...this.stopOwed].filter((id) => !this.leases[id] || !leaseActive(this.leases[id]));
+    const owed = Object.keys(this.leases).filter(
+      (id) => this.leases[id].stop_owed && !leaseActive(this.leases[id]),
+    );
     await Promise.all([
       ...ids.map((id) => this.serial(id, () => this.renewLocked(id))),
       ...owed.map((id) => this.serial(id, () => this.stopOwedLocked(id))),
@@ -279,14 +279,15 @@ export class SeatBook {
   /** Ask the helper again to stop a seat whose lease ended (hub-5). */
   private async stopOwedLocked(id: string): Promise<void> {
     const lease = this.leases[id];
-    if (this.closed || !lease || !this.stopOwed.has(id) || leaseActive(lease)) return;
+    if (this.closed || !lease || !lease.stop_owed || leaseActive(lease)) return;
     try {
       await runHelper(this.options.helper, "stop", id);
-      this.stopOwed.delete(id);
+      delete lease.stop_owed;
+      this.save();
       this.options.log(`the seat of ${lease.login} (${id}) stopped at the retry`);
     } catch (error) {
       this.options.log(
-        `the seat of ${lease.login} (${id}) did not stop: ${(error as Error).message}; asked again at the next renewal`,
+        `the seat of ${lease.login} (${id}) did not stop: ${(error as Error).message}; asked again at the next renewal and at the hub's next start`,
       );
     }
   }
@@ -317,8 +318,9 @@ export class SeatBook {
   }
 
   /** End a lease at once: close its relays, stop its unit (hub-5).
-   * Answers undefined where the seat stopped, else the stop's cause,
-   * the stop then owed to the next renewal. */
+   * Answers undefined where the seat stopped, else the stop's cause, the
+   * stop recorded as owed from the lease's end until one succeeds, so a
+   * hub that dies mid-stop owes it at its next start (hub-8). */
   private async endLocked(id: string, why: string): Promise<string | undefined> {
     const lease = this.leases[id];
     if (!lease) return undefined;
@@ -328,18 +330,19 @@ export class SeatBook {
     const now = new Date();
     if (Date.parse(lease.expires_at) > now.getTime()) lease.expires_at = now.toISOString();
     lease.bearer_hash = null;
+    lease.stop_owed = true;
     this.save();
     for (const relay of this.relays.get(id) ?? []) relay.close(LEASE_ENDED, "lease ended");
     try {
       await runHelper(this.options.helper, "stop", id);
-      this.stopOwed.delete(id);
+      delete lease.stop_owed;
+      this.save();
       this.options.log(`the lease of ${lease.login} (${id}) ended: ${why}; seat stopped`);
       return undefined;
     } catch (error) {
       const cause = (error as Error).message;
-      this.stopOwed.add(id);
       this.options.log(
-        `the lease of ${lease.login} (${id}) ended: ${why}; the seat did not stop: ${cause}; asked again at the next renewal`,
+        `the lease of ${lease.login} (${id}) ended: ${why}; the seat did not stop: ${cause}; asked again at the next renewal and at the hub's next start`,
       );
       return cause;
     }
@@ -369,9 +372,18 @@ export class SeatBook {
           const failure = await this.endLocked(id, "the server retired");
           if (failure !== undefined) failures.push(failure);
         } else {
+          // An inactive lease's stop is asked again; one that fails stays
+          // owed, so `retire` run again or a start asks it (hub-5, hub-6).
+          const lease = this.leases[id];
           try {
             await runHelper(this.options.helper, "stop", id);
+            if (lease.stop_owed) {
+              delete lease.stop_owed;
+              this.save();
+            }
           } catch (error) {
+            lease.stop_owed = true;
+            this.save();
             failures.push((error as Error).message);
           }
         }

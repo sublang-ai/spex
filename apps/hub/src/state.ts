@@ -4,10 +4,12 @@
 // The hub's own state (hub-1, hub-8): one owner-only directory holding
 // `state.yaml` — the instance, the server's id, name, address and
 // token, and the TLS pair's paths — and `leases.yaml` — each seat's
-// lease as `{<person id>: {login, expires_at, bearer_hash}}`. Both are
-// written in YAML's JSON-compatible flow form, so any YAML reader reads
-// them and the hub needs no YAML library; every write replaces the file
-// whole through a rename, so a crash leaves the old file or the new.
+// lease as `{<person id>: {login, expires_at, bearer_hash, stop_owed}}`,
+// `stop_owed` present from a lease's admission until a stop succeeds
+// after its end. Both are written in
+// YAML's JSON-compatible flow form, so any YAML reader reads them and
+// the hub needs no YAML library; every write replaces the file whole
+// through a rename, so a crash leaves the old file or the new.
 
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import {
@@ -46,6 +48,9 @@ export interface Lease {
   /** SHA-256 (hex) of the bearer the last admission issued; null when
    * the lease ended or no bearer was issued. */
   bearer_hash: string | null;
+  /** True from a lease's admission until the helper's stop succeeds
+   * after its end (hub-5, hub-8); absent otherwise. */
+  stop_owed?: true;
 }
 
 export type Leases = Record<string, Lease>;
@@ -162,7 +167,8 @@ export function readLeases(dir: string): Leases {
       typeof entry.login !== "string" ||
       typeof entry.expires_at !== "string" ||
       !Number.isFinite(Date.parse(entry.expires_at)) ||
-      !stringOrNull(entry.bearer_hash)
+      !stringOrNull(entry.bearer_hash) ||
+      (entry.stop_owed !== undefined && typeof entry.stop_owed !== "boolean")
     ) {
       throw new Error(`${file} holds a malformed lease for ${JSON.stringify(id)}`);
     }
@@ -170,6 +176,7 @@ export function readLeases(dir: string): Leases {
       login: entry.login,
       expires_at: entry.expires_at,
       bearer_hash: entry.bearer_hash,
+      ...(entry.stop_owed === true ? { stop_owed: true } : {}),
     };
   }
   return leases;
