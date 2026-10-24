@@ -13,7 +13,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
 
-import { test, expect, open, nav, send, slowAuthoringScript } from "../src/harness";
+import { test, expect, open, nav, send, settled, slowAuthoringScript } from "../src/harness";
 
 test.use({
   appOptions: {
@@ -67,8 +67,18 @@ for (const theme of ["light", "dark"] as const) {
     await expect(page.getByTestId("failed-workflow")).toBeVisible();
     found.push(...(await scan(page, "Session (failed workflow)")));
 
+    // The Dashboard with a summons standing (dashboard-54): a session
+    // the page never shows finishes a turn, so its unread-turn row is
+    // there whenever the scan runs — the journey's own session's turn
+    // may end before or after the reader leaves it, which decided
+    // whether a row stood here at all, and the row's dimmed 12 px text
+    // once read 4.1:1 on the light amber row.
+    await settled(app);
+    const unread = await app.core.command("session.create", { projectId: app.projectId! });
+    await app.core.command("turn.submit", { sessionId: unread.id, text: "Tidy the changelog" });
     await nav(page, "Dashboard").click();
     await expect(page.getByTestId(`project-group-${app.projectId}`)).toBeVisible();
+    await expect(page.getByTestId(`attention-${unread.id}-review`)).toBeVisible({ timeout: 30_000 });
     found.push(...(await scan(page, "Dashboard")));
 
     await nav(page, "Projects").click();
