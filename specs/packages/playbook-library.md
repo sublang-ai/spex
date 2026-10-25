@@ -31,7 +31,7 @@ While a spex repository's side of the Playbooks surface is shown, the surface sh
 
 | Control | Act |
 | --- | --- |
-| Add from registry | a search field over the registry of that side's environment, each result with its versions, Add requesting the chosen version at a caret [[environments-15](environments.md#environments-15)] |
+| Add from registry | a search field over the registry of that side's environment, each result with its versions, Add requesting the chosen version at a caret [[environments-15](environments.md#environments-15)], and Add by name for a known package [[playbook-library-115](#playbook-library-115)] |
 | Add from folder, Add from Git | a request by path inside the environment's path root its state names [[environments-14](environments.md#environments-14)], offered while it names one, or by repository and rev, through the same command |
 | Resolve again | `environment.resolve`, offered while the lock is stale or a conflict stands |
 | Update | `environment.resolve`, offered on the built-in release line |
@@ -42,6 +42,18 @@ While a spex repository's side of the Playbooks surface is shown, the surface sh
 
 - a change the core refuses shows its cause in place; a sync of that spex repository, or a resolve or install the core runs, disables no control, the core's own work reading in place as progress ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md));
 - a stale lock reads "Requests changed; resolve again to install" and the last installed files stay in use.
+
+#### playbook-library-115
+
+When the reader submits Add by name under Add from registry, the surface shall request the entered `org/name` and explicit version requirement for the selected environment through the existing registry request operation [[environments-15](environments.md#environments-15)] ([DR-152](../decisions/152-install-a-known-package.md)):
+
+- both fields are required, the supported requirements are exact, caret and tilde [[environments-4](environments.md#environments-4)], and the entered requirement is preserved after trimming;
+- submission performs no registry search, and neither a guessed version nor a change to private visibility is used to make the request;
+- a refused request shows its cause in the form, an accepted request reads as requested, and the environment's resolution and installed state determine whether installation succeeded [[environments-14](environments.md#environments-14)].
+
+#### playbook-library-116
+
+When the reader changes the selected environment, the Add by name form shall clear its input and outcome so neither carries into another destination ([DR-152](../decisions/152-install-a-known-package.md)).
 
 ### Enable and Disable
 
@@ -940,3 +952,12 @@ Where the browser journey harness boots real cores with a stand-in instance and 
 - two subsequent attempts at the same immutable version each show the registry's refusal without presenting the earlier receipt as a new success [[playbook-library-93](#playbook-library-93)];
 - the second project's registry request lists the exact resolved version and the installed spec and skill artifacts [[playbook-library-92](#playbook-library-92)];
 - signing out of the publishing instance replaces its path row's action with guidance naming that instance, and changing the displayed repository or request path dismisses an open preview [[playbook-library-113](#playbook-library-113)].
+
+#### playbook-library-117
+
+Where the browser journey harness boots real cores against an authenticated stand-in registry with a private release omitted from search, when the journey installs that known release through Add by name and exercises the same control's refusal cases, the test suite shall assert:
+
+- name and explicit version are sufficient to request and install the permitted private release, with the selected instance's ordinary credential, while the package remains absent from public search [[playbook-library-115](#playbook-library-115)];
+- exact, caret and tilde input retain their respective request semantics, empty or invalid input is refused, and submitting a known name makes no search call [[playbook-library-115](#playbook-library-115)];
+- a registry access refusal is visible and never presented as successful installation, while a public search result can still be added through its existing path [[playbook-library-115](#playbook-library-115)] [[playbook-library-92](#playbook-library-92)];
+- changing the selected environment clears the direct form's fields and prior outcome [[playbook-library-116](#playbook-library-116)].

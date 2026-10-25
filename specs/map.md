@@ -173,6 +173,7 @@ meta.md       The spec of specs
 | [DR-149](decisions/149-the-privileged-lane-runs-on-ci.md) | 149-the-privileged-lane-runs-on-ci.md | The privileged lane runs on CI: the hub's lane as root on the Ubuntu runner, nightly and on a push to `main` touching the hub, its output the artifact, no required check; extends DR-086 and DR-145 |
 | [DR-150](decisions/150-spex-space-product-and-destination.md) | 150-spex-space-product-and-destination.md | Spex Space naming, public-origin plan on the existing internal deployment, and unchanged saved instance identities |
 | [DR-151](decisions/151-publish-local-spec-packages.md) | 151-publish-local-spec-packages.md | Publish directly requested local spec packages from their environment rows with the existing preview and account, and show the current attempt's outcome |
+| [DR-152](decisions/152-install-a-known-package.md) | 152-install-a-known-package.md | Install a known public or private registry package by name and explicit version requirement through the existing environment installer |
 
 ## Packages
 

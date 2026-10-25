@@ -171,8 +171,10 @@ Review the upload preview and confirm using your existing app sign-in;
 no playbook compilation or separate API token is needed. See
 [publishing packages](docs/getting-started.md#publish-specs-skills-and-playbooks),
 or the optional [HTTP guide](https://spex.sublang.ai/llms.txt) for automation.
-Registry search lists public packages; private packages require access
-and a known-name request in the project's environment.
+Registry search lists public packages. For a known public or private
+package, use **Add from registry → Add by name** with its `org/name` and
+version or range, such as `1.2.3` or `^1.2.3`. Private packages require
+sign-in with access.
 
 **Optional project-record sharing.** Sign in on **Space** when you want
 to sync records with a group. The default is [Spex Space](https://spex.sublang.ai) unless
