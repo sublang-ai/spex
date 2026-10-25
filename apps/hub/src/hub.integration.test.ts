@@ -33,8 +33,10 @@ import WebSocket from "ws";
 
 const packageDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const MAIN = join(packageDir, "dist", "main.js");
+const REAPER = join(packageDir, "dist", "reaper.js");
 const FIXTURES = join(packageDir, "test", "fixtures");
 const FAKE_HELPER = join(FIXTURES, "fake-seatctl");
+const FAKE_SYSTEMCTL = join(FIXTURES, "fake-systemctl");
 const REAL_HELPER = join(packageDir, "bin", "spex-seatctl");
 const TLS_CERT = join(FIXTURES, "tls", "cert.pem");
 const TLS_KEY = join(FIXTURES, "tls", "key.pem");
@@ -138,6 +140,27 @@ function runCli(s: Scenario, args: string[], input = ""): Promise<Run> {
     child.stderr.on("data", (chunk) => (stderr += chunk));
     child.on("close", (code) => resolveRun({ code, stdout, stderr }));
     child.stdin.end(input);
+  });
+}
+
+/** The sweep run once over the hub's state, as its unit runs it (hub-5),
+ * with the fake helper and the fake service manager. */
+function sweepOnce(s: Scenario): Promise<Run> {
+  return new Promise((resolveRun) => {
+    const child = spawn(
+      process.execPath,
+      [REAPER, `--state-dir=${s.state}`, `--helper=${FAKE_HELPER}`, "--sudo=", `--systemctl=${FAKE_SYSTEMCTL}`],
+      { env: helperEnv(s), stdio: ["ignore", "pipe", "pipe"] },
+    );
+    children.add(child);
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (chunk) => (stdout += chunk));
+    child.stderr.on("data", (chunk) => (stderr += chunk));
+    child.on("close", (code) => {
+      children.delete(child);
+      resolveRun({ code, stdout, stderr });
+    });
   });
 }
 
@@ -1140,6 +1163,54 @@ test("an admission and a renewal wait on a seat's lock the sweep holds (hub-5, h
     );
     assert.match(hub.output(), /renewed the lease of pia \(4701\)/);
     relay.close();
+    assert.ok(helperCalls(s).every((call) => !call.refused));
+  } finally {
+    assert.equal(await hub.stop(), 0);
+    await standin.close();
+  }
+  assertNoSecret(hub.output(), secrets);
+});
+
+test("an admission waits on a lock whose holder no longer runs until the sweep clears it (hub-5, hub-8)", async () => {
+  const s = scenario();
+  const standin = await startStandin();
+  await attach(s, standin);
+  const hub = await serve(s);
+  const quin: Person = { id: "4801", login: "quin", display_name: null };
+  const lock = join(s.state, "locks", "4801.lock");
+  const secrets = [SERVER_TOKEN];
+  try {
+    // A lock left by a holder that died, as a hub that crashed holding
+    // it: a pid that ran and exited.
+    const dead = spawn(process.execPath, ["-e", ""], { stdio: "ignore" });
+    await new Promise((resolveExit) => dead.once("exit", resolveExit));
+    writeFileSync(lock, `${dead.pid}\n`, { flag: "wx", mode: 0o644 });
+    const admission = admit(hub.port, JSON.stringify({ ticket: standin.ticket(quin) }));
+    await waitFor(
+      () =>
+        hub
+          .output()
+          .includes(`waiting for the lock of 4801 held by pid ${dead.pid}, whose hold is stale; the sweep clears it\n`),
+      "the admission to wait on the stale lock",
+    );
+    // hub-5: the hub breaks no lock: it stands, and no seat is created.
+    assert.equal(readFileSync(lock, "utf8"), `${dead.pid}\n`);
+    assert.equal(called(s, "create", "4801"), 0);
+
+    // hub-5: the sweep clears it, and the admission goes through.
+    const swept = await sweepOnce(s);
+    assert.equal(swept.code, 0, swept.stdout + swept.stderr);
+    assert.ok(
+      swept.stdout.includes(`[spex-seat-reaper] cleared the stale lock of 4801, left by pid ${dead.pid}\n`),
+      swept.stdout,
+    );
+    const answered = await admission;
+    assert.equal(answered.status, 200, JSON.stringify(answered.body));
+    secrets.push(answered.body.bearer);
+    assert.equal(called(s, "create", "4801"), 1);
+    assert.equal(called(s, "start", "4801"), 1);
+    assert.equal(leases(s)["4801"].bearer_hash, sha256(answered.body.bearer));
+    assert.equal(existsSync(lock), false, "the hub released the lock it took");
     assert.ok(helperCalls(s).every((call) => !call.refused));
   } finally {
     assert.equal(await hub.stop(), 0);

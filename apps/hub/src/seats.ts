@@ -97,12 +97,18 @@ export class SeatBook {
   }
 
   /** Take a seat's lock (hub-5), its directory made again where it went
-   * missing (hub-8). */
+   * missing (hub-8); one whose holder is gone is waited on until the
+   * sweep clears it, for the hub breaks no lock. */
   private lock(id: string, waitMs: number): Promise<SeatLock | undefined> {
     ensureLocksDir(this.options.stateDir);
-    return acquireSeatLock(this.options.stateDir, id, waitMs, (holder) =>
-      this.options.log(`waiting for the lock of ${id} held by ${lockHolder(holder)}`),
-    );
+    return acquireSeatLock(this.options.stateDir, id, waitMs, (holder, gone) => {
+      // A gone lock with no pid names no process still writing one.
+      const by =
+        holder === null && gone
+          ? "left without a pid; the sweep clears it"
+          : `held by ${lockHolder(holder)}${gone ? ", whose hold is stale; the sweep clears it" : ""}`;
+      this.options.log(`waiting for the lock of ${id} ${by}`);
+    });
   }
 
   private save(): void {

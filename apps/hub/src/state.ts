@@ -7,7 +7,8 @@
 // lease as `{<person id>: {login, expires_at, bearer_hash, stop_owed}}`,
 // `stop_owed` present from a lease's admission until a stop succeeds
 // after its end — and, under `locks/`, which the hub makes, a lock per
-// seat shared with the sweep (DR-148). Both files are written in
+// seat shared with the sweep, which alone clears one whose holder is
+// gone (DR-148). Both files are written in
 // YAML's JSON-compatible flow form, so any YAML reader reads them and
 // the hub needs no YAML library; every write replaces the file whole
 // through a rename, so a crash leaves the old file or the new.
@@ -22,10 +23,13 @@ import {
   lstatSync,
   mkdirSync,
   openSync,
+  readdirSync,
   readFileSync,
   readSync,
   renameSync,
+  rmdirSync,
   rmSync,
+  unlinkSync,
   statSync,
   writeFileSync,
   writeSync,
@@ -324,6 +328,17 @@ export function ensureLocksDir(dir: string): void {
   chmodSync(locksPath(dir), 0o700);
 }
 
+/** Remove a lock entry by its name alone: unlink follows no link and
+ * recurses into nothing, so root removes nothing but that name; one
+ * gone already is no error. */
+function unlinkLock(path: string): void {
+  try {
+    unlinkSync(path);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+}
+
 /** Whether a pid still runs: a signal refused (EPERM) is another
  * account's live process, root's among them; ESRCH is none. */
 function pidAlive(pid: number): boolean {
@@ -335,55 +350,80 @@ function pidAlive(pid: number): boolean {
   }
 }
 
-/** How old a lock grows before it is replaced whoever holds it (hub-8):
- * past every hold, each bounded by the seat's start and stop timeouts. */
+/** How old a lock grows before the sweep clears it whoever holds it
+ * (hub-5): past every hold, each bounded by the seat's start and stop
+ * timeouts. */
 const LOCK_STALE_MS = 15 * 60 * 1000;
 
-/** Whether a lock's holder is gone (hub-8), by any of three rules: its
- * pid no longer runs, or is this process's own — for no process holds a
- * lock twice: the hub takes one person's operations one at a time and the
- * sweep visits each seat once — and so a pid reused since a reboot; the
- * lock was written before this boot; or the lock is older than fifteen
- * minutes. */
-function holderGone(path: string, holder: number): boolean {
+/** How long a lock may hold no pid after it was made: a taker writes its
+ * pid at once after the create (hub-5). */
+const LOCK_EMPTY_MS = 1000;
+
+/** Whether a lock's holder is gone (hub-5), `mtimeMs` the modification
+ * time of the very file its pid was read from (readLock), by any of three
+ * rules: its pid no longer runs, or is this process's own — for no
+ * process holds a lock twice: the hub takes one person's operations one
+ * at a time and the sweep visits each seat once — and so a pid reused
+ * since a reboot; the lock was written before this boot; or the lock is
+ * older than fifteen minutes. */
+function holderGone(holder: number, mtimeMs: number): boolean {
   if (holder === process.pid || !pidAlive(holder)) return true;
-  try {
-    const written = lstatSync(path).mtimeMs;
-    const now = Date.now();
-    return written < now - uptime() * 1000 || now - written > LOCK_STALE_MS;
-  } catch {
-    // Gone meanwhile: the next round takes it.
-    return false;
-  }
+  const now = Date.now();
+  return mtimeMs < now - uptime() * 1000 || now - mtimeMs > LOCK_STALE_MS;
 }
 
-/** A lock file's text, at most 64 bytes, read through no link and from
- * nothing but a regular file, so a lock planted as a link, a FIFO or a
- * device leads its reader nowhere: "" for such a one, replaced as an
- * empty file is. Throws as the open does where it is gone (ENOENT) or
- * not yet readable. */
-function readLock(path: string): string {
+/** A lock as one read of it found it: its text and the modification time
+ * of the file the text came from. */
+interface LockRead {
+  text: string;
+  mtimeMs: number;
+}
+
+/** Whether a lock read, holding no pid, still holds none a second after
+ * it was made (hub-5). */
+function emptyGone(lock: LockRead): boolean {
+  return Date.now() - lock.mtimeMs > LOCK_EMPTY_MS;
+}
+
+/** A lock file's text, at most 64 bytes, and its modification time, both
+ * from the fstat and the read of one open file, so a file replaced
+ * meanwhile is never judged by another's time. It is read through no
+ * link and from nothing but a regular file bearing one name, so a lock
+ * planted as a link, a hard link, a FIFO or a device leads its reader
+ * nowhere: such a one reads as "" — a FIFO, a device or a hard link with
+ * its own fstat's time, a link, which no taker makes and which is never
+ * opened, as made at the epoch. The sweep's pass over every lock
+ * (clearStaleLocks) opens none that is no regular file, judging it by its
+ * lstat's time instead; the sweep of its own seat replaces it as an empty
+ * one (acquireSeatLock with `clearStale`). Throws as the open does where
+ * it is gone (ENOENT) or not yet readable. */
+function readLock(path: string): LockRead {
   let fd: number;
   try {
     fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ELOOP") return "";
+    if ((error as NodeJS.ErrnoException).code === "ELOOP") return { text: "", mtimeMs: 0 };
     throw error;
   }
   try {
-    // A regular file bearing one name: a hard link to another file reads
-    // as nothing, as a link does.
     const stat = fstatSync(fd);
-    if (!stat.isFile() || stat.nlink !== 1) return "";
+    if (!stat.isFile() || stat.nlink !== 1) return { text: "", mtimeMs: stat.mtimeMs };
     const buffer = Buffer.alloc(64);
-    return buffer.subarray(0, readSync(fd, buffer, 0, buffer.length, 0)).toString("utf8").trim();
+    const text = buffer.subarray(0, readSync(fd, buffer, 0, buffer.length, 0)).toString("utf8").trim();
+    return { text, mtimeMs: stat.mtimeMs };
   } finally {
     closeSync(fd);
   }
 }
 
+/** The pid a lock's text holds, null for none. */
+function lockPid(text: string): number | null {
+  return /^[0-9]+$/.test(text) ? Number(text) : null;
+}
+
 export interface SeatLock {
-  /** Give the lock back, once; a lock taken over as stale is left alone. */
+  /** Give the lock back, once; one no longer holding this process's pid
+   * — cleared as stale by the sweep — is left alone. */
   release(): void;
 }
 
@@ -400,22 +440,27 @@ export function lockHolder(holder: number | null): string {
  * release — so the sweep, as root, follows no path the hub's account
  * could redirect (hub-5). The file is made readable by every account
  * whatever the umask (the sweep's unit sets 0077), so the hub reads a
- * lock root took. A holder that is gone (holderGone) is replaced at
- * once; a file still empty after a second (a holder that died between
- * the create and the write, or a lock that is a link or no regular file:
- * readLock) likewise; one not yet readable is waited on as any holder
- * is. `onWait` is told the holder's pid the first time the lock is found
- * held. Answers undefined when the wait ran out, the lock still held. */
+ * lock root took. A lock whose holder is gone — holderGone, or a file
+ * still holding no pid a second after it was made: a holder that died
+ * between the create and the write, or a lock that is a link or no
+ * regular file (readLock), each judged by the time of the file read — is
+ * removed at once only with `clearStale`, which the sweep alone passes;
+ * every other taker waits on it as on a live holder until the sweep
+ * clears it (clearStaleLocks), so that no two takers of one stale lock
+ * both go on (hub-5). One not yet readable is waited on as any holder
+ * is. `onWait` is told the holder's pid, and whether it is gone, the
+ * first time the lock is found held. Answers undefined when the wait ran
+ * out, the lock still held. */
 export async function acquireSeatLock(
   dir: string,
   id: string,
   timeoutMs: number,
-  onWait?: (holder: number | null) => void,
+  onWait?: (holder: number | null, gone: boolean) => void,
+  options: { clearStale?: boolean } = {},
 ): Promise<SeatLock | undefined> {
   if (!PERSON_ID.test(id)) throw new Error(`no seat id: ${JSON.stringify(id)}`);
   const path = seatLockPath(dir, id);
   const deadline = Date.now() + timeoutMs;
-  let emptySince: number | null = null;
   let told = false;
   for (;;) {
     checkLocks(dir);
@@ -431,7 +476,7 @@ export async function acquireSeatLock(
         writeSync(fd, `${process.pid}\n`);
       } catch (error) {
         closeSync(fd);
-        rmSync(path, { force: true });
+        unlinkLock(path);
         throw error;
       }
       closeSync(fd);
@@ -442,41 +487,101 @@ export async function acquireSeatLock(
           released = true;
           try {
             checkLocks(dir);
-            if (readLock(path) === String(process.pid)) rmSync(path, { force: true });
+            if (readLock(path).text === String(process.pid)) unlinkLock(path);
           } catch {
-            // taken over as stale, gone already, or its directory no
-            // longer the hub's: left to whoever finds it stale
+            // cleared as stale, gone already, or its directory no
+            // longer the hub's: left to the sweep, which clears it once
+            // its holder is gone
           }
         },
       };
     }
-    let text: string | undefined;
+    let lock: LockRead | undefined;
     try {
-      text = readLock(path);
+      lock = readLock(path);
     } catch (error) {
       // Gone meanwhile: take it at once.
       if ((error as NodeJS.ErrnoException).code === "ENOENT") continue;
     }
-    const holder = text !== undefined && /^[0-9]+$/.test(text) ? Number(text) : null;
-    if (holder !== null) {
-      emptySince = null;
-      if (holderGone(path, holder)) {
-        rmSync(path, { force: true });
-        continue;
-      }
-    } else if (text !== undefined) {
-      emptySince ??= Date.now();
-      if (Date.now() - emptySince > 1000) {
-        rmSync(path, { force: true });
-        emptySince = null;
-        continue;
-      }
+    const holder = lock === undefined ? null : lockPid(lock.text);
+    let gone = false;
+    if (lock !== undefined) gone = holder !== null ? holderGone(holder, lock.mtimeMs) : emptyGone(lock);
+    if (gone && options.clearStale) {
+      unlinkLock(path);
+      continue;
     }
     if (!told) {
       told = true;
-      onWait?.(holder);
+      onWait?.(holder, gone);
     }
     if (Date.now() >= deadline) return undefined;
     await new Promise((resolveWait) => setTimeout(resolveWait, 50));
   }
+}
+
+/** A seat's lock file as `locks/` names it. */
+const LOCK_FILE = /^([0-9]{1,20})\.lock$/;
+
+/** Clear every seat's lock whose holder is gone, its seat's lease active
+ * or not: the sweep's, at each sweep (hub-5, hub-8). The sweep is the
+ * one process that breaks a lock, and its unit never runs twice at once:
+ * a gone holder releases nothing and every other taker only waits on it,
+ * so nothing replaces the file between the sweep's read of it and its
+ * removal, and no fresh lock is removed as stale — but for a holder the
+ * fifteen-minute rule judges gone while it still runs, which may release
+ * in that window, a hold the seat's timeouts make impossible. A lock is gone where
+ * holderGone says so of its pid, or where it still holds no pid a second
+ * after it was made (a holder that died between the create and the
+ * write, or a hard link: readLock), each judged by the time of the file
+ * read. An entry named as a lock that is no regular file — a link, a
+ * FIFO, a directory — no taker makes and only the hub's account could
+ * plant in its own owner-only directory: it is never opened, holds no
+ * pid, and is gone a second after its lstat's time, and removing it
+ * removes that name alone — a link and not what it leads to, a directory
+ * only while it is empty. One that cannot be read or removed
+ * is left to the next sweep. A missing directory holds no lock to clear;
+ * one that is a link or another account's throws as checkLocks does.
+ * Answers each lock removed, by its seat's id and the pid it held, null
+ * for none. */
+export function clearStaleLocks(dir: string): { id: string; holder: number | null }[] {
+  const locks = locksPath(dir);
+  try {
+    lstatSync(locks);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+    throw error;
+  }
+  checkLocks(dir);
+  const cleared: { id: string; holder: number | null }[] = [];
+  for (const name of readdirSync(locks)) {
+    const match = LOCK_FILE.exec(name);
+    if (!match) continue;
+    const path = join(locks, name);
+    let entry: Stats;
+    let lock: LockRead;
+    try {
+      entry = lstatSync(path);
+      // No regular file is opened: it holds no pid, judged by its own time.
+      lock = entry.isFile() ? readLock(path) : { text: "", mtimeMs: entry.mtimeMs };
+    } catch {
+      // Gone meanwhile, or not readable: the next sweep sees it again.
+      continue;
+    }
+    const holder = lockPid(lock.text);
+    if (!(holder !== null ? holderGone(holder, lock.mtimeMs) : emptyGone(lock))) continue;
+    try {
+      // By its name alone, never through it: unlink follows no link and
+      // recurses into nothing, where Node's rmSync, a rimraf, would walk a
+      // directory swapped in under root; rmdirSync removes one only while
+      // empty.
+      if (entry.isDirectory()) rmdirSync(path);
+      else unlinkLock(path);
+    } catch {
+      // Not removed — a directory not empty, or replaced meanwhile: the
+      // next sweep sees it again.
+      continue;
+    }
+    cleared.push({ id: match[1], holder });
+  }
+  return cleared;
 }
