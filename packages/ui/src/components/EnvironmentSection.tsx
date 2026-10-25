@@ -467,11 +467,18 @@ type AddMode = "registry" | "folder" | "git";
  * inside the environment's path root — the paired working folder, or
  * your own group's clone (environments-2) — or from Git at a rev. */
 export function AddSpecPackages({ repository }: { repository: string }) {
+  // A destination change remounts the form and its outcome. An older
+  // request can finish only in the component that submitted it.
+  return <EnvironmentRequests key={repository} repository={repository} />;
+}
+
+function EnvironmentRequests({ repository }: { repository: string }) {
   const store = usePlaceStore();
   const request = store((current) => current.requestSpecPackage);
   const folder = store((current) => current.environments[repository]?.pathRoot ?? null);
   const [mode, setMode] = useState<AddMode>();
   const [added, setAdded] = useState<string>();
+  const [byName, setByName] = useState(false);
 
   async function add(name: string, next: EnvironmentRequest): Promise<void> {
     await request(repository, name, next);
@@ -530,7 +537,21 @@ export function AddSpecPackages({ repository }: { repository: string }) {
           {i18n._("Requested {name}", { name: added })}
         </p>
       ) : null}
-      {mode === "registry" ? <RegistrySearch repository={repository} onAdd={add} /> : null}
+      {mode === "registry" ? (
+        <>
+          <RegistrySearch repository={repository} onAdd={add} />
+          <button
+            type="button"
+            data-testid="add-by-name"
+            aria-expanded={byName}
+            onClick={() => { setAdded(undefined); setByName((open) => !open); }}
+            className={`${BUTTON} self-start`}
+          >
+            {i18n._({ id: "Add by name", comment: "open the registry request form for a known package and version requirement" })}
+          </button>
+          {byName ? <KnownRegistryRequest onAttempt={() => setAdded(undefined)} onAdd={add} /> : null}
+        </>
+      ) : null}
       {mode === "folder" && folder ? <FolderRequest folder={folder} onAdd={add} /> : null}
       {mode === "git" ? <GitRequest onAdd={add} /> : null}
     </section>
@@ -740,6 +761,38 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
       <span className="text-neutral-500">{label}</span>
       {children}
     </label>
+  );
+}
+
+/** A known package needs no search or metadata preview. The existing
+ * request operation validates the requirement and resolves with access. */
+function KnownRegistryRequest({ onAttempt, onAdd }: {
+  onAttempt: () => void;
+  onAdd: (name: string, request: EnvironmentRequest) => Promise<void>;
+}) {
+  const [name, setName] = useState("");
+  const [version, setVersion] = useState("");
+  return (
+    <RequestForm
+      testId="known-package-request"
+      ready={name.trim().length > 0 && version.trim().length > 0}
+      onSubmit={async () => {
+        onAttempt();
+        const why = nameRefusal(name.trim());
+        if (why) throw new Error(why);
+        await onAdd(name.trim(), { kind: "registry", version: version.trim() });
+      }}
+      fields={
+        <>
+          <Field label={i18n._("Spec package name")}>
+            <input data-testid="known-package-name" value={name} onChange={(event) => setName(event.target.value)} placeholder="acme/triage" spellCheck={false} className={`${INPUT} font-mono`} />
+          </Field>
+          <Field label={i18n._({ id: "Version or range", comment: "required registry version: exact, caret or tilde requirement" })}>
+            <input data-testid="known-package-version" value={version} onChange={(event) => setVersion(event.target.value)} placeholder={i18n._({ id: "1.2.3, ^1.2.3, ~1.2.3", comment: "examples of exact, caret and tilde registry requirements; preserve the syntax" })} spellCheck={false} className={`${INPUT} font-mono`} />
+          </Field>
+        </>
+      }
+    />
   );
 }
 

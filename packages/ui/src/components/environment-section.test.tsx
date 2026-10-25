@@ -291,6 +291,7 @@ describe("playbook-library-94: the environment's controls", () => {
     commandMock.mockClear();
     fireEvent.click(screen.getByTestId("side-own"));
     await screen.findByTestId("env-package-sublang/playbooks");
+    fireEvent.click(screen.getByTestId("add-from-registry"));
     fireEvent.change(screen.getByTestId("registry-query"), { target: { value: "tidy" } });
     await vi.waitFor(() =>
       expect(commandMock).toHaveBeenCalledWith("environment.search", { repository: OWN_KEY, query: "tidy" }),
@@ -670,5 +671,93 @@ describe("playbook-library-113: publish a directly requested local package", () 
     act(() => useAppStore.setState({ space: home({ account: null }) }));
     expect(row().getByTestId("publish-signin").textContent).toContain("Sign in to publish at");
     expect(row().queryByTestId("publish-button")).toBeNull();
+  });
+});
+
+describe("playbook-library-115, playbook-library-116: request a known registry package", () => {
+  const name = "private/notes";
+  function openKnown() {
+    fireEvent.click(screen.getByTestId("add-from-registry"));
+    fireEvent.click(screen.getByTestId("add-by-name"));
+  }
+  function fill(version: string, packageName = name) {
+    fireEvent.change(screen.getByTestId("known-package-name"), { target: { value: packageName } });
+    fireEvent.change(screen.getByTestId("known-package-version"), { target: { value: version } });
+  }
+
+  test.each(["1.2.3", "^1.2.3", "~1.2.3"])("preserves trimmed %s without searching or claiming installation", async (version) => {
+    await renderSurface();
+    openKnown();
+    fill(`  ${version}  `, `  ${name}  `);
+    fireEvent.click(screen.getByTestId("known-package-request-submit"));
+    expect((await screen.findByTestId("add-note")).textContent).toBe(`Requested ${name}`);
+    expect(commandMock).toHaveBeenCalledWith("environment.request", {
+      repository: PROJECT_ID, name, request: { kind: "registry", version },
+    });
+    expect(commandMock.mock.calls.some(([type]) => type === "environment.search")).toBe(false);
+    expect(screen.queryByTestId(`env-installed-${name}`)).toBeNull();
+    act(() => deliverServerMessageForTests({
+      type: "environment.state", repository: PROJECT_ID,
+      state: { ...PROJECT_ENVIRONMENT, error: `${name}: this account may not fetch it from the registry` },
+    }));
+    expect(screen.getByTestId("environment-error").textContent).toContain("may not fetch");
+    expect(screen.queryByTestId(`env-installed-${name}`)).toBeNull();
+  });
+
+  test("requires both fields, checks the name and shows the authoritative requirement refusal", async () => {
+    await renderSurface();
+    openKnown();
+    const submit = screen.getByTestId("known-package-request-submit") as HTMLButtonElement;
+    expect(submit.disabled).toBe(true);
+    fill("   ");
+    expect(submit.disabled).toBe(true);
+    fill("1.2.3", "not-a-package");
+    fireEvent.click(submit);
+    expect((await screen.findByTestId("known-package-request-error")).textContent).toContain("org/name");
+    expect(commandMock.mock.calls.some(([type]) => type === "environment.request")).toBe(false);
+    fill("1.2.3");
+    fireEvent.click(submit);
+    await screen.findByTestId("add-note");
+    const base = commandMock.getMockImplementation()!;
+    commandMock.mockImplementation(async (type: string, params?: Record<string, unknown>) => {
+      if (type === "environment.request") throw new Error('"*" is not a version requirement: use 1.2.3, ^1.2.3 or ~1.2.3');
+      return base(type, params);
+    });
+    fill("*");
+    fireEvent.click(submit);
+    expect((await screen.findByTestId("known-package-request-error")).textContent).toContain("not a version requirement");
+    expect(screen.queryByTestId("add-note")).toBeNull();
+  });
+
+  test.each(["resolve", "reject"])("a delayed %s stays with its original environment", async (outcome) => {
+    const base = commandMock.getMockImplementation()!;
+    let finish!: () => void;
+    commandMock.mockImplementation((type: string, params?: Record<string, unknown>) => {
+      if (type === "environment.request" && params?.repository === PROJECT_ID) {
+        return new Promise((resolve, reject) => {
+          finish = () => outcome === "resolve" ? resolve({ accepted: true }) : reject(new Error("old destination refusal"));
+        });
+      }
+      return base(type, params);
+    });
+    await renderSurface();
+    openKnown();
+    fill("1.2.3");
+    fireEvent.click(screen.getByTestId("known-package-request-submit"));
+    await vi.waitFor(() => expect(finish).toBeTypeOf("function"));
+    fireEvent.click(screen.getByTestId("side-own"));
+    await screen.findByTestId("env-package-sublang/playbooks");
+    openKnown();
+    expect((screen.getByTestId("known-package-name") as HTMLInputElement).value).toBe("");
+    expect((screen.getByTestId("known-package-version") as HTMLInputElement).value).toBe("");
+    await act(async () => finish());
+    expect(screen.queryByTestId("add-note")).toBeNull();
+    expect(screen.queryByTestId("known-package-request-error")).toBeNull();
+    fill("~1.2.3");
+    fireEvent.click(screen.getByTestId("known-package-request-submit"));
+    await screen.findByTestId("add-note");
+    expect(commandMock).toHaveBeenCalledWith("environment.request", {
+      repository: OWN_KEY, name, request: { kind: "registry", version: "~1.2.3" },
+    });
   });
 });

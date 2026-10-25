@@ -183,7 +183,7 @@ msgstr "{count, plural, one {# citation} other {# citations}}"
 msgid "{count, plural, one {# entry} other {# entries}}"
 msgstr "{count, plural, one {# entry} other {# entries}}"
 
-#: src/components/DraftRegisterTab.tsx
+#: src/components/PublishControl.tsx
 msgid "{count, plural, one {# file uploads:} other {# files upload:}}"
 msgstr "{count, plural, one {# file uploads:} other {# files upload:}}"
 
@@ -750,6 +750,11 @@ msgstr "✗ cancel failed: {reason}"
 msgid "✗ failed"
 msgstr "✗ failed"
 
+#. examples of exact, caret and tilde registry requirements; preserve the syntax
+#: src/components/EnvironmentSection.tsx
+msgid "1.2.3, ^1.2.3, ~1.2.3"
+msgstr "1.2.3, ^1.2.3, ~1.2.3"
+
 #: src/lib/labels.ts
 msgid "A command the run needs is not installed"
 msgstr "A command the run needs is not installed"
@@ -943,6 +948,11 @@ msgstr "Add an existing Git repository or create a new project."
 #: src/components/ProjectGroup.tsx
 msgid "Add an intent to {project}"
 msgstr "Add an intent to {project}"
+
+#. open the registry request form for a known package and version requirement
+#: src/components/EnvironmentSection.tsx
+msgid "Add by name"
+msgstr "Add by name"
 
 #. request a spec package by its folder in the working folder
 #: src/components/EnvironmentSection.tsx
@@ -1510,10 +1520,10 @@ msgstr "Can't reach the Spex core at {endpoint} — retrying every second. On a 
 #: src/components/AgentSettings.tsx
 #: src/components/BindingEditor.tsx
 #: src/components/CompileBand.tsx
-#: src/components/DraftRegisterTab.tsx
 #: src/components/DraftSourceTab.tsx
 #: src/components/InlineConfirm.tsx
 #: src/components/ProjectGroup.tsx
+#: src/components/PublishControl.tsx
 #: src/components/SpaceGroups.tsx
 #: src/components/SpaceInstance.tsx
 #: src/components/SpaceMembers.tsx
@@ -1637,7 +1647,7 @@ msgstr "Checking host…"
 #. the Check host control, while the check runs
 #. the checks a publish makes are running, nothing uploads yet
 #: src/components/CaptainHome.tsx
-#: src/components/DraftRegisterTab.tsx
+#: src/components/PublishControl.tsx
 #: src/components/SpaceSync.tsx
 msgid "Checking…"
 msgstr "Checking…"
@@ -4326,7 +4336,7 @@ msgstr "Open folder…"
 msgid "Open it again"
 msgstr "Open it again"
 
-#: src/components/DraftRegisterTab.tsx
+#: src/components/PublishControl.tsx
 msgid "Open its page"
 msgstr "Open its page"
 
@@ -4725,7 +4735,7 @@ msgstr "PRs"
 
 #. upload the spec package to the registry
 #. upload the spec package to the registry
-#: src/components/DraftRegisterTab.tsx
+#: src/components/PublishControl.tsx
 msgid "Publish"
 msgstr "Publish"
 
@@ -4734,14 +4744,14 @@ msgstr "Publish"
 msgid "publish a reviewed branch as a pull request, wait for its checks, fix red checks once through code, and merge it"
 msgstr "publish a reviewed branch as a pull request, wait for its checks, fix red checks once through code, and merge it"
 
-#: src/components/DraftRegisterTab.tsx
+#: src/components/PublishControl.tsx
 msgid "Published {name} {version}"
 msgstr "Published {name} {version}"
 
 #. a spec package is being uploaded to the registry
 #. a spec package is being uploaded to the registry
 #. a spec package is being uploaded to the registry
-#: src/components/DraftRegisterTab.tsx
+#: src/components/PublishControl.tsx
 #: src/lib/environments.ts
 msgid "Publishing…"
 msgstr "Publishing…"
@@ -5793,7 +5803,7 @@ msgid "Sign in to {who} again"
 msgstr "Sign in to {who} again"
 
 #. in Publish's place: the home is not signed in to the instance a publish from this project goes to; {name} is that instance's display name as last read, else its host name
-#: src/components/DraftRegisterTab.tsx
+#: src/components/PublishControl.tsx
 msgid "Sign in to publish at {name}"
 msgstr "Sign in to publish at {name}"
 
@@ -6801,7 +6811,7 @@ msgstr "Updated {age} by you"
 msgid "Updating…"
 msgstr "Updating…"
 
-#: src/components/DraftRegisterTab.tsx
+#: src/components/PublishControl.tsx
 msgid "Upload {path} to the registry"
 msgstr "Upload {path} to the registry"
 
@@ -6847,6 +6857,11 @@ msgstr "Use default"
 #: src/components/EnvironmentSection.tsx
 msgid "Version of {name}"
 msgstr "Version of {name}"
+
+#. required registry version: exact, caret or tilde requirement
+#: src/components/EnvironmentSection.tsx
+msgid "Version or range"
+msgstr "Version or range"
 
 #. a membership that comes through the named group, not the group's or repository's own
 #: src/components/SpaceMembers.tsx
