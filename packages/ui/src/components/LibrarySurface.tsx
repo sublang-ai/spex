@@ -1512,7 +1512,7 @@ export function LibrarySurface({
         </div>
       ) : null}
 
-      {repository ? <EnvironmentSection repository={repository} /> : null}
+      {repository ? <EnvironmentSection repository={repository} onNavigate={onNavigate} /> : null}
 
       <section data-testid="playbooks-enabled" className="flex flex-col gap-2">
         <h2 className="text-sm font-semibold text-neutral-500">

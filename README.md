@@ -165,11 +165,14 @@ for each role; skills are exported for native agents separately. Author
 a workflow through **New playbook**, compile it, and use **Enable →
 Publish** after signing in with access to its claimed org. See the
 [package guide](docs/getting-started.md#install-and-use-a-package).
-Spec-only and ordinary skill packages need no playbook compilation;
-their archive-publishing path is in the
-[package and publishing guide](https://spex.sublang.ai/llms.txt). Registry
-search lists public packages; private packages require access and a
-known-name request in the project's environment.
+For a spec-only or ordinary skill package, prepare a valid local folder,
+use **Playbooks → Add from folder**, then **Publish** on its package row.
+Review the upload preview and confirm using your existing app sign-in;
+no playbook compilation or separate API token is needed. See
+[publishing packages](docs/getting-started.md#publish-specs-skills-and-playbooks),
+or the optional [HTTP guide](https://spex.sublang.ai/llms.txt) for automation.
+Registry search lists public packages; private packages require access
+and a known-name request in the project's environment.
 
 **Optional project-record sharing.** Sign in on **Space** when you want
 to sync records with a group. The default is [Spex Space](https://spex.sublang.ai) unless

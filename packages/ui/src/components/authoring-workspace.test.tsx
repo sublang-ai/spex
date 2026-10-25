@@ -1687,11 +1687,11 @@ describe("playbook-library-93: Publish beneath the Enable form", () => {
       deliverServerMessageForTests({
         type: "environment.state",
         repository: PROJECT_ID,
-        state: { ...CURRENT, published: { name: "me/triage", version: "0.1.0", url: "https://spex.pub/me/triage/0.1.0" } },
+        state: { ...CURRENT, published: { name: "me/triage", version: "0.1.0", url: "https://spex.example/me/triage/0.1.0" } },
       });
     });
     expect(screen.getByTestId("publish-done").textContent).toContain("Published me/triage 0.1.0");
-    expect(screen.getByTestId("publish-link").getAttribute("href")).toBe("https://spex.pub/me/triage/0.1.0");
+    expect(screen.getByTestId("publish-link").getAttribute("href")).toBe("https://spex.example/me/triage/0.1.0");
   });
 
   test("a refusal from the checks or the registry shows its issues in place", async () => {

@@ -31,12 +31,15 @@ import {
   busyWord,
   caretOf,
   relativeInside,
+  publishTargetOf,
+  type PublishTarget,
   requestPhrase,
   sourceKindWord,
 } from "../lib/environments.js";
 import { i18n } from "../i18n.js";
 import { InlineConfirm } from "./InlineConfirm.js";
 import { RunningMark } from "./RunningMark.js";
+import { PublishControl } from "./PublishControl.js";
 
 const BUTTON =
   "min-h-6 rounded-md border border-neutral-300 px-2 py-0.5 text-xs text-neutral-700 hover:bg-neutral-100 disabled:opacity-40 disabled:hover:bg-transparent dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800";
@@ -86,12 +89,18 @@ function PackageRow({
   depth,
   state,
   onRemove,
+  repository,
+  target,
+  onNavigate,
 }: {
   name: string;
   pkg: EnvironmentPackage | undefined;
   depth: number;
   state: EnvironmentState;
   onRemove: () => Promise<void>;
+  repository: string;
+  target: PublishTarget | undefined;
+  onNavigate?: (surface: "Settings" | "Space") => void;
 }) {
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -217,6 +226,9 @@ function PackageRow({
           ))}
         </ul>
       ) : null}
+      {request?.kind === "path" && state.pathRoot !== null ? (
+        <PublishControl repository={repository} path={request.path} target={target} onNavigate={onNavigate} />
+      ) : null}
       {error ? (
         <p role="alert" data-testid={`env-package-error-${name}`} className={ERROR}>
           {error}
@@ -229,11 +241,15 @@ function PackageRow({
 /** The environment of one spex repository (playbook-library-92). */
 export function EnvironmentSection({
   repository,
+  onNavigate,
 }: {
   repository: string;
+  onNavigate?: (surface: "Settings" | "Space") => void;
 }) {
   const store = usePlaceStore();
   const state = store((current) => current.environments[repository]);
+  const space = store((current) => current.space);
+  const target = publishTargetOf(space, repository);
   const loadError = store((current) => current.environmentErrors[repository]);
   const resolve = store((current) => current.resolveEnvironment);
   const install = store((current) => current.installEnvironment);
@@ -407,6 +423,9 @@ export function EnvironmentSection({
                 pkg={row.pkg}
                 depth={row.depth}
                 state={state}
+                repository={repository}
+                target={target}
+                onNavigate={onNavigate}
                 onRemove={() => remove(repository, row.name)}
               />
             ))}

@@ -79,17 +79,24 @@ implementing with `/code`. See [Approvals](approvals.md) for permissions.
 
 ## Publish specs, skills, and playbooks
 
-For a spec-only or ordinary skill package, prepare a package folder using
-the [package and publishing guide](https://spex.sublang.ai/llms.txt), then
-publish its archive through the documented HTTP API. No playbook compile
-is needed. The IDE's guided authoring and Publish controls currently
-belong to playbook authoring, not a generic spec/skill editor.
+Publishing needs a claimed org you can publish to; manage claims on
+Space's [Your orgs](https://spex.sublang.ai/account/orgs) page.
 
-For a playbook, use the IDE:
+### Publish a spec or skill package
+
+Prepare a valid package folder inside your project using the
+[package format](../specs/packages/environments.md#environments-1), including
+its description, license, and an org you can publish to. In **Playbooks →
+Add from folder**, enter its `org/name` and project-relative folder path,
+then **Add**. Sign in through **Space** to the publishing instance. On the
+local package's row, select **Publish**, review the name, version, and
+upload files, then confirm **Publish**. This uses your existing app sign-in;
+no playbook, compilation, or separate API token is needed.
+
+### Publish a playbook
 
 1. Open **Playbooks → New playbook**. Enter a lowercase id, **Org**, and
-   **License**. Publishing needs a claimed org you can publish to; manage
-   claims on Space's [Your orgs](https://spex.sublang.ai/account/orgs) page.
+   **License**.
 2. Describe what the workflow does, who does what, and when it is done.
    Inspect **Source**, or supply text with **Source → Paste → Use as source**.
 3. Select the answering agent in the conversation header, then **Compile**.
@@ -106,6 +113,8 @@ Only declared package artifacts are published; your whole project and its
 `specs/` directory are not uploaded automatically. Keep the authored package
 with your code. Another project can find a public release through **Add
 from registry**, then enable its playbooks or use its exported skills.
+The [HTTP publishing guide](https://spex.sublang.ai/llms.txt) is also
+available for automation.
 
 ## Optionally sync project records
 

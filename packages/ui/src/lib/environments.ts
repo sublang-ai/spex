@@ -63,6 +63,7 @@ export function repositoryOf(
  * the instance's display name as the home last read it, else its host
  * name. */
 export interface PublishTarget {
+  origin: string;
   signedIn: boolean;
   name: string;
 }
@@ -75,7 +76,7 @@ export function publishTargetOf(space: GroupsState | undefined, key: string): Pu
   if (!space) return undefined;
   const origin = repositoryOf(space, key)?.instance ?? space.defaultInstance;
   const entry = instanceOf(space, origin);
-  return { signedIn: entry?.signedIn ?? false, name: entry ? instanceName(entry) : hostNameOf(origin) };
+  return { origin, signedIn: entry?.signedIn ?? false, name: entry ? instanceName(entry) : hostNameOf(origin) };
 }
 
 /** What the core is doing to an environment, as its line reads. */

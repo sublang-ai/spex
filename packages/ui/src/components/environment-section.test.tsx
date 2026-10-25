@@ -18,6 +18,7 @@ import { act, cleanup, fireEvent, render, screen, within } from "@testing-librar
 import type { CommandResults, EnvironmentState } from "@sublang/spex-core/protocol";
 
 import { LibrarySurface } from "./LibrarySurface.js";
+import { instanceState } from "../fixtures/groups-state.js";
 import { deliverServerMessageForTests, setClientForTests, useAppStore } from "../state/store.js";
 import {
   CONFIG_STATE,
@@ -549,5 +550,125 @@ describe("playbook-library-94: the environment's controls", () => {
     seed();
     render(<LibrarySurface />);
     expect((await screen.findByTestId("environment-empty")).textContent).toBe("No spec packages requested yet");
+  });
+});
+
+
+describe("playbook-library-113: publish a directly requested local package", () => {
+  const NAME = "acme/triage";
+  const PATH = "spex-packages/current";
+  const PREVIEW = { name: NAME, version: "1.2.3", files: ["meta.yaml", "specs/en/triage.md", "skills/en/tidy/SKILL.md"] };
+  const receipt = { name: NAME, version: "1.2.3", url: `https://spex.example/${NAME}` };
+  const row = () => within(screen.getByTestId(`env-package-${NAME}`));
+  const local = (): EnvironmentState => ({
+    ...PROJECT_ENVIRONMENT,
+    // The current request, not its older registry lock, owns the folder.
+    requests: { ...PROJECT_ENVIRONMENT.requests, [NAME]: { kind: "path", path: PATH } },
+    stale: ["requests changed"],
+    pathRoot: "/project",
+  });
+  function update(state: EnvironmentState) {
+    environments[PROJECT_ID] = state;
+    act(() => deliverServerMessageForTests({ type: "environment.state", repository: PROJECT_ID, state }));
+  }
+  function publishingReplies() {
+    const base = commandMock.getMockImplementation()!;
+    commandMock.mockImplementation(async (type: string, params?: Record<string, unknown>) =>
+      type === "environment.publish"
+        ? params?.dryRun ? { accepted: true, preview: PREVIEW } : { accepted: true }
+        : base(type, params));
+  }
+  async function confirm(target = row()) {
+    fireEvent.click(target.getByTestId("publish-button"));
+    const summary = await target.findByTestId("publish-summary");
+    fireEvent.click(within(summary).getByTestId("publish-confirm"));
+    await vi.waitFor(() => expect(target.queryByTestId("publish-summary")).toBeNull());
+  }
+
+  test("uses the current folder despite a stale lock, previews and cancels without uploading, and excludes other sources", async () => {
+    environments[PROJECT_ID] = local();
+    publishingReplies();
+    await renderSurface();
+    expect(within(screen.getByTestId("env-package-acme/labels")).queryByTestId("publish")).toBeNull();
+    expect(within(screen.getByTestId("env-package-sublang/playbooks")).queryByTestId("publish")).toBeNull();
+    fireEvent.click(row().getByTestId("publish-button"));
+    const summary = await row().findByTestId("publish-summary");
+    expect(summary.textContent).toContain(`${NAME} 1.2.3`);
+    expect(within(summary).getByTestId("publish-files").textContent).toContain("skills/en/tidy/SKILL.md");
+    expect(commandMock).toHaveBeenCalledWith("environment.publish", { repository: PROJECT_ID, path: PATH, dryRun: true });
+    fireEvent.click(within(summary).getByTestId("publish-cancel"));
+    expect(row().queryByTestId("publish-summary")).toBeNull();
+    expect(commandMock.mock.calls.some(([type, params]) => type === "environment.publish" && !params.dryRun)).toBe(false);
+    update({ ...local(), requests: { ...local().requests, [NAME]: { kind: "git", repository: "remote", rev: "main" } } });
+    expect(row().queryByTestId("publish")).toBeNull();
+    update({ ...local(), pathRoot: null });
+    expect(row().queryByTestId("publish")).toBeNull();
+  });
+
+  test("a retained success cannot hide two identical refusals, and a different package can succeed", async () => {
+    let state = local();
+    environments[PROJECT_ID] = state;
+    publishingReplies();
+    await renderSurface();
+    await confirm();
+    update(state = { ...state, published: receipt, error: null });
+    expect(row().getByTestId("publish-done").textContent).toContain(`Published ${NAME} 1.2.3`);
+    const refusal = "the registry refused acme/triage 1.2.3: that version exists";
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await confirm();
+      update(state = { ...state, busy: "publishing" });
+      expect(row().queryByTestId("publish-done")).toBeNull();
+      expect(row().queryByTestId("publish-error")).toBeNull();
+      update(state = { ...state, busy: null, error: refusal });
+      expect(row().getByTestId("publish-error").textContent).toBe(refusal);
+      expect(row().queryByTestId("publish-done")).toBeNull();
+    }
+    const other = "acme/local-tools";
+    const otherRow = within(screen.getByTestId(`env-package-${other}`));
+    const base = commandMock.getMockImplementation()!;
+    commandMock.mockImplementation(async (type: string, params?: Record<string, unknown>) =>
+      type === "environment.publish" && params?.dryRun
+        ? { accepted: true, preview: { ...PREVIEW, name: other } }
+        : base(type, params));
+    await confirm(otherRow);
+    update({ ...state, error: null, published: { ...receipt, name: other, url: `https://spex.example/${other}` } });
+    expect(otherRow.getByTestId("publish-done").textContent).toContain(`Published ${other} 1.2.3`);
+    expect(row().queryByTestId("publish-done")).toBeNull();
+  });
+
+  test("changing path discards a delayed old preview, and repository and same-name target changes discard an open preview", async () => {
+    environments[PROJECT_ID] = local();
+    let finish!: (reply: { accepted: true; preview: typeof PREVIEW }) => void;
+    const base = commandMock.getMockImplementation()!;
+    commandMock.mockImplementation((type: string, params?: Record<string, unknown>) =>
+      type === "environment.publish" && params?.dryRun
+        ? new Promise((resolve) => { finish = resolve; })
+        : base(type, params));
+    await renderSurface();
+    fireEvent.click(row().getByTestId("publish-button"));
+    await vi.waitFor(() => expect(finish).toBeTypeOf("function"));
+    update({ ...local(), requests: { ...local().requests, [NAME]: { kind: "path", path: "spex-packages/replacement" } } });
+    await act(async () => { finish({ accepted: true, preview: PREVIEW }); });
+    expect(row().queryByTestId("publish-summary")).toBeNull();
+    publishingReplies();
+    fireEvent.click(row().getByTestId("publish-button"));
+    await row().findByTestId("publish-summary");
+    const changed = home({ account: null });
+    changed.own.repositories.forEach((repo) => { repo.instance = null; });
+    changed.defaultInstance = "https://second.test";
+    changed.instances = [instanceState("https://second.test", { displayName: "Spex Example" })];
+    act(() => useAppStore.setState({ space: changed }));
+    expect(row().queryByTestId("publish-summary")).toBeNull();
+    fireEvent.click(row().getByTestId("publish-button"));
+    await row().findByTestId("publish-summary");
+    fireEvent.click(screen.getByTestId("side-own"));
+    await screen.findByTestId("env-package-sublang/playbooks");
+    expect(screen.queryByTestId("publish-summary")).toBeNull();
+    fireEvent.click(screen.getByTestId("side-project"));
+    await screen.findByTestId(`env-package-${NAME}`);
+    expect(row().queryByTestId("publish-summary")).toBeNull();
+    act(() => useAppStore.setState({ space: home({ account: null }) }));
+    expect(row().getByTestId("publish-signin").textContent).toContain("Sign in to publish at");
+    expect(row().queryByTestId("publish-button")).toBeNull();
   });
 });
