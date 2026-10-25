@@ -29,7 +29,10 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import WebSocket from "ws";
+import WebSocket, { WebSocketServer } from "ws";
+
+import { SeatBook } from "./seats.js";
+import { writeLeases } from "./state.js";
 
 const packageDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const MAIN = join(packageDir, "dist", "main.js");
@@ -472,6 +475,8 @@ interface HelperCall {
   argv: string[];
   stdinSha256: string | null;
   refused?: boolean;
+  leaseEnded?: boolean;
+  relayEnded?: boolean;
 }
 
 function helperCalls(s: Scenario): HelperCall[] {
@@ -824,6 +829,82 @@ test("leases renew at the interval while in use, end at a refusal, retry a 502 a
   assertNoSecret(hub.output(), secrets);
 });
 
+test("expired renewal and retirement end the lease before helper entry (hub-9)", async (t) => {
+  for (const operation of ["renewal", "retirement"] as const) {
+    await t.test(operation, async (context) => {
+      const s = scenario();
+      const id = "4391";
+      const relayEndDir = join(s.root, "ended-relays");
+      mkdirSync(relayEndDir);
+      const environment = {
+        ...Object.fromEntries(Object.entries(helperEnv(s)).filter(([key]) => key.startsWith("FAKE_"))),
+        FAKE_LEASE_STATE: join(s.state, "leases.yaml"),
+        FAKE_RELAY_END_DIR: relayEndDir,
+      };
+      const prior = Object.fromEntries(Object.keys(environment).map((key) => [key, process.env[key]]));
+      Object.assign(process.env, environment);
+      const server = new WebSocketServer({ port: 0, host: "127.0.0.1" });
+      await new Promise<void>((resolveListen) => server.once("listening", resolveListen));
+      const connected = new Promise<WebSocket>((resolveConnected) => server.once("connection", resolveConnected));
+      const relay = new WebSocket(`ws://127.0.0.1:${(server.address() as AddressInfo).port}`);
+      const peer = await connected;
+      await new Promise<void>((resolveOpen) => {
+        if (relay.readyState === WebSocket.OPEN) resolveOpen();
+        else relay.once("open", resolveOpen);
+      });
+      const closed = closeOf(relay);
+      const now = Date.now();
+      const expiry = now + 60_000;
+      context.mock.timers.enable({ apis: ["Date", "setTimeout"], now });
+      writeLeases(s.state, { [id]: {
+        login: "expiry-fixture", expires_at: new Date(expiry).toISOString(),
+        bearer_hash: sha256("owned-fixture-bearer"), stop_owed: true,
+      } });
+      const book = new SeatBook({
+        stateDir: s.state, runDir: s.run,
+        helper: { helper: FAKE_HELPER, sudo: null }, seatTimeoutMs: 10_000, log: () => {},
+      }, {
+        instance: "http://127.0.0.1:1", server_id: SERVER_ID, name: "Fixture",
+        address: ADDRESS, token: SERVER_TOKEN, tls_cert: TLS_CERT, tls_key: TLS_KEY,
+      });
+      const removeRelay = book.addRelay(id, {
+        close(code, reason) {
+          peer.close(code, reason);
+          writeFileSync(join(relayEndDir, id), "ended");
+        },
+      });
+      setScript(s, { nostop: [id] });
+      try {
+        await book.resume();
+        // Changing Date alone leaves expiry undispatched. Queue the
+        // renewal/retirement first, then put expiry behind it for this seat.
+        context.mock.timers.setTime(expiry);
+        const ending = operation === "renewal" ? book.renewDue() : book.retire();
+        context.mock.timers.tick(0);
+        await ending;
+        assert.equal(await closed, 4401);
+        assert.equal(leases(s)[id].bearer_hash, null);
+        assert.equal(leases(s)[id].stop_owed, true, "a refused stop remains owed");
+        const stops = helperCalls(s).filter((call) => call.argv[0] === "stop");
+        assert.ok(stops.some((call) => call.argv[1] === id));
+        assert.ok(stops.every((call) => call.argv[1] === id && call.leaseEnded && call.relayEnded),
+          "every helper stop must observe persisted lease end and preceding relay closure");
+      } finally {
+        await book.close();
+        removeRelay();
+        relay.terminate();
+        peer.terminate();
+        await new Promise<void>((resolveClose) => server.close(() => resolveClose()));
+        context.mock.timers.reset();
+        for (const [key, value] of Object.entries(prior)) {
+          if (value === undefined) delete process.env[key];
+          else process.env[key] = value;
+        }
+      }
+    });
+  }
+});
+
 test("status, evict and retire act on the seats as their rows say (hub-6)", async () => {
   const s = scenario();
   const standin = await startStandin();
@@ -1072,7 +1153,7 @@ test("a stop that fails leaves the lease ended, is reported by evict and retire 
 
     // hub-5: the renewal round asks again, and the seat stops.
     setScript(s, {});
-    await waitFor(() => /the seat of lou \(4602\) stopped at the retry/.test(hub.output()), "the asked-again stop");
+    await waitFor(() => /the lease of lou \(4602\) ended: its stop was still owed at the renewal; seat stopped/.test(hub.output()), "the asked-again stop");
     assert.equal(stopOwed("4602"), undefined);
     assert.match((await cli(["status"])).stdout, /4602\s+lou\s+stopped\s+ended/);
 

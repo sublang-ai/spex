@@ -727,6 +727,9 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Fixed
 
+- Expired team-server leases now invalidate their bearer and close relays
+  before stopping the seat, including renewal retries and retirement.
+
 - Reopening a removed Academy example preserves its committed and
   uncommitted edits and Git history; unrelated nonempty folders still
   refuse example seeding ([DR-140](specs/decisions/140-reopen-the-removed-academy-example.md)).

@@ -146,6 +146,7 @@ export class SeatBook {
           this.schedule(id);
           return;
         }
+        if (!current.stop_owed && current.bearer_hash === null) return;
         await this.endLocked(id, "it expired");
       });
     }, Math.max(wait, 0));
@@ -342,16 +343,7 @@ export class SeatBook {
   private async stopOwedLocked(id: string): Promise<void> {
     const lease = this.leases[id];
     if (this.closed || !lease || !lease.stop_owed || leaseActive(lease)) return;
-    try {
-      await runHelper(this.options.helper, "stop", id);
-      delete lease.stop_owed;
-      this.save();
-      this.options.log(`the seat of ${lease.login} (${id}) stopped at the retry`);
-    } catch (error) {
-      this.options.log(
-        `the seat of ${lease.login} (${id}) did not stop: ${(error as Error).message}; asked again at the next renewal and at the hub's next start`,
-      );
-    }
+    await this.endLocked(id, "its stop was still owed at the renewal");
   }
 
   private async renewLocked(id: string): Promise<void> {
@@ -442,25 +434,8 @@ export class SeatBook {
     const ids = Object.keys(this.leases);
     for (const id of ids) {
       await this.serial(id, async () => {
-        if (leaseActive(this.leases[id])) {
-          const failure = await this.endLocked(id, "the server retired");
-          if (failure !== undefined) failures.push(failure);
-        } else {
-          // An inactive lease's stop is asked again; one that fails stays
-          // owed, so `retire` run again or a start asks it (hub-5, hub-6).
-          const lease = this.leases[id];
-          try {
-            await runHelper(this.options.helper, "stop", id);
-            if (lease.stop_owed) {
-              delete lease.stop_owed;
-              this.save();
-            }
-          } catch (error) {
-            lease.stop_owed = true;
-            this.save();
-            failures.push((error as Error).message);
-          }
-        }
+        const failure = await this.endLocked(id, "the server retired");
+        if (failure !== undefined) failures.push(failure);
         try {
           await runHelper(this.options.helper, "wipe", id);
         } catch (error) {
