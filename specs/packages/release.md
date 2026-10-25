@@ -197,6 +197,10 @@ When a push reaches a pull request's branch, the CI workflow shall cancel the ru
 
 When the CI workflow runs for a pull request, it shall run the `test` jobs on Linux and Windows and one macOS smoke `test` job, with `journeys` and `desktop-browser` on Linux alone, and when it runs for a push to `main` or on its nightly schedule, every job of the full matrix ([DR-145](../decisions/145-merge-on-green.md)).
 
+#### release-36
+
+When the hub lane workflow runs — on its nightly schedule, on a push to `main` that touches `apps/hub/` or `apps/server/`, or on request — it shall run the hub's privileged lane as root on the Linux runner, the commit's tree unpacked outside any home and the install script's own requirements met by the newest Node 22 placed under root's own directories [[hub-7](hub.md#hub-7)], keep the lane's output as the run's artifact, and be no required check of a pull request ([DR-149](../decisions/149-the-privileged-lane-runs-on-ci.md)).
+
 #### release-35
 
 When the developer/agent is about to push, they shall run `npm run prepush`, which refuses a tree holding a conflict marker and then runs `spex lint`, the catalogs' check and the type check, pushing only once it passes ([DR-145](../decisions/145-merge-on-green.md)).
@@ -238,7 +242,7 @@ When the app release workflow's tag check and notes assembly run, as the workflo
 
 #### release-33
 
-When the repository-system audit reads the CI workflow and the Linux parity script, it shall assert that the workflow's concurrency groups a pull request's runs by its number and cancels the run in progress for a pull request and not for a push to `main` [[release-30](#release-30)], that the required checks the repository's merge rule names are exactly the jobs a pull request's run holds [[release-29](#release-29)] [[release-34](#release-34)], that the matrix narrows for a pull request and is whole for a push to `main` and for the nightly schedule [[release-34](#release-34)], that `npm run prepush` refuses a conflict marker [[release-35](#release-35)], that `npm run merge-on-green` merges only a head whose newest run's checks are all green, a commit status judged by its state, naming the head it checked to the merge [[release-29](#release-29)], and that `npm run test:linux` names the runners' Node and Git versions [[release-32](#release-32)].
+When the repository-system audit reads the CI workflow, the hub lane workflow and the Linux parity script, it shall assert that the workflow's concurrency groups a pull request's runs by its number and cancels the run in progress for a pull request and not for a push to `main` [[release-30](#release-30)], that the required checks the repository's merge rule names are exactly the jobs a pull request's run holds [[release-29](#release-29)] [[release-34](#release-34)], that the matrix narrows for a pull request and is whole for a push to `main` and for the nightly schedule [[release-34](#release-34)], that `npm run prepush` refuses a conflict marker [[release-35](#release-35)], that `npm run merge-on-green` merges only a head whose newest run's checks are all green, a commit status judged by its state, naming the head it checked to the merge [[release-29](#release-29)], that `npm run test:linux` names the runners' Node and Git versions [[release-32](#release-32)], and that the hub lane workflow runs on its nightly schedule, on a push to `main` touching the hub or the server shell and on request, never on a pull request, running the lane's script as root and keeping its output as an artifact [[release-36](#release-36)].
 
 ## References
 

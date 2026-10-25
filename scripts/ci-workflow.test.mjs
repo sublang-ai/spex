@@ -10,6 +10,7 @@ import { parse } from "yaml";
 
 const root = resolve(import.meta.dirname, "..");
 const workflow = parse(readFileSync(join(root, ".github/workflows/ci.yml"), "utf8"));
+const laneWorkflow = parse(readFileSync(join(root, ".github/workflows/hub-lane.yml"), "utf8"));
 
 /** The jobs a pull request's run holds (release-34): the required checks (release-29). */
 const PULL_REQUEST_CHECKS = [
@@ -49,6 +50,28 @@ test("release-33: a pull request runs the reduced matrix, main and the nightly t
   }
   onPullRequest.push("journeys (ubuntu-latest)", "desktop-browser (ubuntu-latest)");
   assert.deepEqual(PULL_REQUEST_CHECKS.slice().sort(), onPullRequest.sort());
+});
+
+test("release-33: the hub lane runs nightly, on a push to main touching the hub and on request, never on a pull request, as root, keeping its output (release-36)", () => {
+  // YAML reads the bare `on` key as the boolean true.
+  const on = laneWorkflow.on ?? laneWorkflow[true];
+  assert.ok(Array.isArray(on.schedule) && on.schedule.length === 1, "one nightly schedule");
+  assert.notEqual(on.schedule[0].cron, workflow.on.schedule[0].cron, "a minute of its own, apart from CI's nightly");
+  assert.deepEqual(on.push.branches, ["main"]);
+  assert.ok(on.push.paths.includes("apps/hub/**") && on.push.paths.includes("apps/server/**"), "a push to main touching the hub or the server shell");
+  assert.ok("workflow_dispatch" in on, "runs on request");
+  assert.equal("pull_request" in on, false, "no pull request runs it");
+  assert.equal(laneWorkflow.concurrency["cancel-in-progress"], false);
+  const jobs = Object.values(laneWorkflow.jobs);
+  assert.equal(jobs.length, 1);
+  const [lane] = jobs;
+  assert.equal(lane["runs-on"], "ubuntu-latest");
+  const steps = lane.steps.map((step) => step.run ?? step.uses ?? "");
+  assert.ok(steps.some((step) => /^sudo -n env LANE_COMMIT="\$GITHUB_SHA" LANE_LOGS="\$LANE_LOGS" "\$CHECKOUT\/apps\/hub\/scripts\/privileged-lane\.sh"$/.test(step)), "the lane's script runs as root from the unpacked tree");
+  assert.ok(steps.some((step) => step.includes("git archive --format=tar HEAD | sudo tar -x --no-same-owner -C \"$CHECKOUT\"")), "the commit's tree unpacked outside any home");
+  assert.ok(steps.some((step) => step.includes("sha256sum --check --ignore-missing SHASUMS256.txt") && step.includes("/opt/nodejs")), "Node checked against its sums and placed under root's own directories");
+  const upload = lane.steps.find((step) => typeof step.uses === "string" && step.uses.startsWith("actions/upload-artifact@"));
+  assert.ok(upload && upload.if === "always()" && upload.with.name === "hub-lane-log", "the lane's output kept as the run's artifact, pass or fail");
 });
 
 test("release-33: the pre-push check refuses a conflict marker (release-35)", () => {
