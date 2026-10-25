@@ -31,9 +31,15 @@ The workflow prepares the runner as the procedure above prepares a host — the 
 It is no required check of a pull request.
 The procedure above stays the fallback for a host of one's own.
 
-## Accepted run
+## Accepted run on CI
 
-The sweep's phase, "the sweep while no hub runs" ([DR-148](../../../specs/decisions/148-a-lapsed-seat-is-stopped-by-a-sweep.md)), has not yet run on the lane: the run below predates it, and the next run must include it.
+- Date: 2026-10-25 (04:40 UTC)
+- Commit: 198edf0a, as the pull request sublang-ai/spex#246 merged it onto `main` for the run (6256dce940f3342e9bfa18faeadfbd4d3d71ae37); workflow run 40162710625
+- Host: GitHub-hosted `ubuntu-latest` — Ubuntu 24.04.5 LTS, kernel 6.17.0-1022-azure, systemd 255 (255.4-1ubuntu8.17), sudo 1.9.15p5 — with Node.js 22.23.4 from nodejs.org under `/usr/lib/nodejs`
+- Result: 97 passed, 0 failed, the sweep's phase of [DR-148](../../../specs/decisions/148-a-lapsed-seat-is-stopped-by-a-sweep.md) among them for the first time: with the hub's unit stopped, the sweep stopped the seat 43.5 s after its lease's end, its files standing, and the restarted hub recorded the lease ended.
+- Noted: the first seat's start on the fresh runner took 30 s, at the hub's thirty-second bound (hub-2), where the second took 2 s and the by-hand run's took 2 s; the run before this one, on the same code, saw no answer to that admission within the lane's 60 s and failed there. A repeat is read from the journals the workflow now keeps on a failure.
+
+## Accepted run by hand
 
 - Date: 2026-10-22 (11:47 UTC)
 - Commit: 53c25bc3a08e7077b16a8ebf040fdc7db5ed91bd, from `git archive`
