@@ -828,10 +828,14 @@ export function applyRecord(
       // record's own data travels with it: where the runtime attached
       // a structured cause, the line draws as the failure card
       // instead (run-view-147, DR-075).
+      // One naming no turn — every failure the core records of its own
+      // — is the latest turn's started before it, as the ledger counts
+      // it (core-service-49), so an attention entry finds its line
+      // (run-view-91).
       pushCaptain(view, {
         kind: "error",
         ...plainFailure(String(r.message)),
-        turnId: r.turnId,
+        turnId: typeof r.turnId === "number" ? r.turnId : view.currentTurnId,
         at: r.timestamp,
         data: r.data,
       });

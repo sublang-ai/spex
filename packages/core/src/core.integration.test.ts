@@ -2456,12 +2456,18 @@ test(
     const parked = await settledSession(client, own.id, 1);
     assert.equal(parked.parked?.reason, "failure");
     assert.equal(parked.failed, true);
-    // The one runtime_error the stream holds names no turn, so the
-    // fold's range reading passes it over: the entry stands on the park.
+    // The one runtime_error the stream holds names no turn: it lies in
+    // the turn started before it, after the run's move, so the entry's
+    // onset stays the move, the attempt's first failure (core-service-49).
     assert.deepEqual(
       client.records("session").filter(({ record }) => record.type === "runtime_error").map(({ record }) => (record as { turnId?: unknown }).turnId),
       [null],
     );
+    const move = client.records("session").find(({ record }) =>
+      (record as { topic?: unknown }).topic === "playbook.trace" &&
+      (record as { payload?: { playbookId?: unknown; payload?: { to?: unknown } } }).payload?.playbookId === "code" &&
+      (record as { payload?: { payload?: { to?: unknown } } }).payload?.payload?.to === "failed");
+    assert.ok(move, "the run's own move into its failure state streams");
     // The session's own entry: an interrupted-band failure, parked, with
     // the runtime's cause, naming no intent (core-service-49).
     const standIn = (await client.expectOk("ledger.get", {})).attention.filter((entry) => entry.sessionId === own.id);
@@ -2470,6 +2476,7 @@ test(
       [["interrupted", "failure", true, undefined, 1]],
     );
     assert.equal(typeof standIn[0]?.cause?.code, "string", "the entry carries the cause the runtime attached");
+    assert.equal(standIn[0]?.since, move.record.timestamp, "the entry's onset is the move, not the later error");
 
     // The same park under an intent: interrupted on the failure, never
     // finished awaiting a verdict, its session's summary failed.
@@ -2481,10 +2488,21 @@ test(
     const row = ledger.intents.find((entry) => entry.intent.id === intent.id);
     assert.equal(row?.state, "interrupted");
     assert.equal(row?.reason, "failure");
+    const entries = ledger.attention.filter((entry) => entry.sessionId === dispatched.id);
     assert.deepEqual(
-      ledger.attention.filter((entry) => entry.sessionId === dispatched.id).map((entry) => [entry.band, entry.kind, entry.parked, entry.intentId]),
+      entries.map((entry) => [entry.band, entry.kind, entry.parked, entry.intentId]),
       [["interrupted", "failure", true, intent.id]],
     );
+    // Its onset is its own run's move, ahead of the core's record.
+    const { records: dispatchedRecords } = await client.expectOk("history.get", { sessionId: dispatched.id });
+    const dispatchedMove = dispatchedRecords.find(({ record }) =>
+      (record as { topic?: unknown }).topic === "playbook.trace" &&
+      (record as { payload?: { playbookId?: unknown } }).payload?.playbookId === "code" &&
+      (record as { payload?: { payload?: { to?: unknown } } }).payload?.payload?.to === "failed");
+    assert.ok(dispatchedMove, "the dispatched run's own move into its failure state is stored");
+    assert.ok(dispatchedRecords.some(({ record }) => record.type === "runtime_error" && record.timestamp > dispatchedMove.record.timestamp),
+      "the core's own record follows the move");
+    assert.equal(entries[0]?.since, dispatchedMove.record.timestamp);
     assert.equal((await client.expectOk("session.list", {})).find((entry) => entry.id === dispatched.id)?.failed, true);
   },
 );
