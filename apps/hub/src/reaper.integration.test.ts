@@ -15,6 +15,7 @@ import { randomBytes } from "node:crypto";
 import {
   existsSync,
   lstatSync,
+  lutimesSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -361,14 +362,15 @@ test("a stop that fails is logged with its cause, exits 1 and is tried again at 
     /\[spex-seat-reaper\] the seat of eli \(5301\) did not stop: the helper's stop 5301 failed: spex-seatctl: stop refused by the test's script; tried again at the next sweep/,
   );
   assert.ok(alive(failingPid), "the seat whose stop failed still runs");
-  // The dead holder's lock is replaced at once, with no wait, and the
-  // other seat's stop goes on beside the failure.
+  // The dead holder's lock is cleared at the sweep's start, with no wait,
+  // and the other seat's stop goes on beside the failure.
+  assert.ok(first.output.includes(`cleared the stale lock of 5302, left by pid ${dead.pid}\n`), first.output);
   assert.equal(stops(s, "5302"), 1);
   await waitFor(() => !alive(freedPid), "the freed seat's stub to be gone");
   assert.match(first.output, /stopped the seat of fox \(5302\)/);
   assert.ok(!first.output.includes("waiting for the lock of 5302"), first.output);
   assert.equal(existsSync(lockFile(s, "5302")), false);
-  // hub-8: the aged lock likewise, its holder still running.
+  // hub-5: the aged lock likewise, its holder still running.
   assert.equal(stops(s, "5303"), 1);
   await waitFor(() => !alive(agedPid), "the aged lock's seat's stub to be gone");
   assert.match(first.output, /stopped the seat of gus \(5303\)/);
@@ -413,6 +415,11 @@ test("with the locks' directory a link, or missing, the sweep takes no lock, sto
   assert.match(
     linked.output,
     /\[spex-seat-reaper\] not swept: 5401: .*locks is no directory of the state directory's owner; tried again at the next sweep/,
+  );
+  // hub-5: nor does it clear a lock there.
+  assert.match(
+    linked.output,
+    /\[spex-seat-reaper\] locks not cleared: .*locks is no directory of the state directory's owner; tried again at the next sweep/,
   );
   assert.equal(calls(s.log).filter((call) => call.argv[0] === "stop").length, 0, "the helper stops nobody");
   assert.ok(alive(pid), "the seat runs on");
@@ -462,10 +469,20 @@ test("the lease table replaced by a link, past its size bound, or holding a key 
   const plantedText = `${JSON.stringify(planted, null, 2)}\n`;
   writeFileSync(target, plantedText, { mode: 0o600 });
   symlinkSync(target, leasesFile(s));
+  // A seat's lock left by a holder that died, its seat in no table.
+  const dead = spawn(process.execPath, ["-e", ""], { stdio: "ignore" });
+  await new Promise((resolveExit) => dead.once("exit", resolveExit));
+  holdLock(s, "5502", dead.pid as number);
 
   const linked = await sweepOnce(s);
   assert.equal(linked.code, 1, linked.output);
   assert.match(linked.output, REFUSED_TABLE);
+  // hub-5: the stale lock is cleared all the same, before and apart from
+  // the table's read.
+  const clearedLine = `[spex-seat-reaper] cleared the stale lock of 5502, left by pid ${dead.pid}\n`;
+  assert.ok(linked.stdout.includes(clearedLine), linked.stdout);
+  assert.ok(linked.stdout.indexOf(clearedLine) < linked.stdout.search(REFUSED_TABLE), linked.stdout);
+  assert.equal(existsSync(lockFile(s, "5502")), false);
   // hub-8: nothing of what the link led to is named.
   for (const named of ["SECRET-KEY-77", "planted-login-77", target, elsewhere]) {
     assert.ok(!linked.output.includes(named), `the output names ${named}: ${linked.output}`);
@@ -592,4 +609,100 @@ test("a login or an expiry holding a control character is logged with it replace
     assert.ok(line.startsWith("[spex-seat-reaper] "), `a line not the sweep's: ${JSON.stringify(line)}`);
   }
   assert.doesNotMatch(swept.output, /[\x00-\x09\x0b-\x1f\x7f]/, "no control character but the line ends");
+});
+
+test("the sweep clears at each sweep a lock whose holder is gone, its seat's lease active or not, and leaves a live holder's (hub-5, hub-8)", async () => {
+  const s = scenario();
+  writeLeaseTable(s, {
+    "5801": lease("kai", 60 * 60_000),
+    "5802": lease("lea", -60_000),
+    "5803": lease("mo", 60 * 60_000),
+  });
+  // An active lease's lock left by a holder that died: a pid that ran and
+  // exited.
+  const dead = spawn(process.execPath, ["-e", ""], { stdio: "ignore" });
+  await new Promise((resolveExit) => dead.once("exit", resolveExit));
+  const deadPid = dead.pid as number;
+  holdLock(s, "5801", deadPid);
+  // An expired lease's lock, its unit inactive, still empty two seconds
+  // after it was made: a holder that died between the create and the write.
+  writeFileSync(lockFile(s, "5802"), "", { flag: "wx", mode: 0o644 });
+  const made = (Date.now() - 2000) / 1000;
+  utimesSync(lockFile(s, "5802"), made, made);
+  // An active lease's lock a live process holds.
+  holdLock(s, "5803", process.pid);
+  // A lock planted as a link, its seat in no table, made two seconds ago
+  // by its own time: no pid in it, and nothing to open.
+  const elsewhere = mkdtempSync(join(tmpdir(), "hub-sweep-linked-lock-"));
+  roots.push(elsewhere);
+  const target = join(elsewhere, "target");
+  writeFileSync(target, "the link's target\n", { mode: 0o644 });
+  const targetBefore = statSync(target);
+  symlinkSync(target, lockFile(s, "5804"));
+  lutimesSync(lockFile(s, "5804"), made, made);
+  assert.ok(Date.now() - lstatSync(lockFile(s, "5804")).mtimeMs > 1000, "the link is older than a second");
+
+  const swept = await sweepOnce(s);
+  assert.equal(swept.code, 0, swept.output);
+  // hub-5: both stale locks cleared, whatever their leases, each named.
+  assert.equal(existsSync(lockFile(s, "5801")), false);
+  assert.equal(existsSync(lockFile(s, "5802")), false);
+  assert.ok(
+    swept.stdout.includes(`[spex-seat-reaper] cleared the stale lock of 5801, left by pid ${deadPid}\n`),
+    swept.stdout,
+  );
+  assert.ok(
+    swept.stdout.includes("[spex-seat-reaper] cleared the stale lock of 5802, left by a process that wrote no pid\n"),
+    swept.stdout,
+  );
+  // hub-5: the link is removed, never opened, and what it led to is
+  // left as it was.
+  assert.ok(!readdirSync(join(s.state, "locks")).includes("5804.lock"), "the planted link is removed");
+  assert.ok(
+    swept.stdout.includes("[spex-seat-reaper] cleared the stale lock of 5804, left by a process that wrote no pid\n"),
+    swept.stdout,
+  );
+  const targetAfter = statSync(target);
+  assert.equal(targetAfter.mtimeMs, targetBefore.mtimeMs);
+  assert.equal(targetAfter.ctimeMs, targetBefore.ctimeMs);
+  assert.equal(readFileSync(target, "utf8"), "the link's target\n");
+  assert.deepEqual(readdirSync(elsewhere), ["target"]);
+  // hub-5: a live holder's lock is left as it was.
+  assert.equal(readFileSync(lockFile(s, "5803"), "utf8"), `${process.pid}\n`);
+  assert.ok(!swept.output.includes("of 5803"), swept.output);
+  // hub-5: clearing a lock stops nobody.
+  assert.equal(allStops(s), 0, "the helper stops nobody");
+  assert.ok(calls(s.systemctlLog).every((call) => !call.refused));
+});
+
+test("a lock whose holder dies while the sweep waits on it is replaced at once and the seat stopped (hub-5, hub-8)", async () => {
+  const s = scenario();
+  const pid = startSeat(s, "5901");
+  writeLeaseTable(s, { "5901": lease("ned", -60_000) });
+  // A live holder, as a hub in the middle of a hold.
+  const holder = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { stdio: "ignore" });
+  children.add(holder);
+  const holderExited = new Promise((resolveExit) => holder.once("exit", resolveExit));
+  const holderPid = holder.pid as number;
+  holdLock(s, "5901", holderPid);
+
+  const sweep = startSweep(s, { lockWaitMs: 20_000 });
+  await waitFor(
+    () => sweep.output().includes(`[spex-seat-reaper] waiting for the lock of 5901 held by pid ${holderPid}\n`),
+    "the sweep to wait on the live holder",
+  );
+  assert.equal(stops(s, "5901"), 0);
+  // The holder dies holding the lock, as a hub that crashes.
+  holder.kill("SIGKILL");
+  await holderExited;
+  children.delete(holder);
+
+  const code = await sweep.exited;
+  assert.equal(code, 0, sweep.output());
+  // hub-5: the lock gone stale in its way replaced, the seat stopped.
+  assert.equal(stops(s, "5901"), 1);
+  await waitFor(() => !alive(pid), "the seat's stub to be gone");
+  assert.match(sweep.output(), /\[spex-seat-reaper\] stopped the seat of ned \(5901\)/);
+  assert.equal(existsSync(lockFile(s, "5901")), false, "the sweep released the lock it took");
+  assert.ok(calls(s.log).every((call) => !call.refused));
 });

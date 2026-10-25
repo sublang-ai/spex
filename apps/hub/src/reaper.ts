@@ -24,15 +24,24 @@
 // that seat to the next sweep, and a stop that fails is logged and tried
 // again there.
 //
+// The sweep is the one process that breaks a lock: at each sweep,
+// whatever the leases, it first clears every seat's lock whose holder is
+// gone — before it reads the lease table, so that a table it cannot read
+// leaves no stale lock in the hub's way — and it replaces one that goes
+// stale while it waits on it, the hub waiting on a stale one until then,
+// so that no two takers of one stale lock both go on (hub-5).
+//
 // Exit status: 0 when every stop it ran succeeded, or none was due; 1
-// when one failed, a seat could not be swept, or the lease table could
-// not be read; 2 for a mistaken command line.
+// when one failed, a seat could not be swept, the locks could not be
+// cleared, or the lease table could not be read; 2 for a mistaken
+// command line.
 
 import { spawn } from "node:child_process";
 
 import { DEFAULT_HELPER, runHelper, type HelperConfig } from "./helper.js";
 import {
   acquireSeatLock,
+  clearStaleLocks,
   DEFAULT_STATE_DIR,
   leaseActive,
   lockHolder,
@@ -154,8 +163,12 @@ interface Sweep {
 async function sweepSeat(sweep: Sweep, id: string, first: Lease): Promise<boolean> {
   try {
     if (!(await unitRunning(sweep.systemctl, id))) return true;
-    const lock = await acquireSeatLock(sweep.stateDir, id, sweep.lockWaitMs, (holder) =>
-      log(`waiting for the lock of ${id} held by ${lockHolder(holder)}`),
+    const lock = await acquireSeatLock(
+      sweep.stateDir,
+      id,
+      sweep.lockWaitMs,
+      (holder) => log(`waiting for the lock of ${id} held by ${lockHolder(holder)}`),
+      { clearStale: true },
     );
     if (!lock) {
       log(`left ${id} to the next sweep: its lock is held`);
@@ -216,6 +229,18 @@ async function main(argv: string[]): Promise<number> {
     systemctl: flags.get("systemctl") ?? "systemctl",
     lockWaitMs,
   };
+  // Every seat's stale lock cleared, its lease active or not, before the
+  // lease table is read, so that the hub, which waits on a stale lock
+  // until the sweep clears it, does not hang on the table (hub-5).
+  let cleared = true;
+  try {
+    for (const { id, holder } of clearStaleLocks(sweep.stateDir)) {
+      log(`cleared the stale lock of ${id}, left by ${holder === null ? "a process that wrote no pid" : `pid ${holder}`}`);
+    }
+  } catch (error) {
+    log(`locks not cleared: ${(error as Error).message}; tried again at the next sweep`);
+    cleared = false;
+  }
   let leases;
   try {
     leases = readLeasesGuarded(sweep.stateDir);
@@ -225,7 +250,7 @@ async function main(argv: string[]): Promise<number> {
   }
   const lapsed = Object.entries(leases).filter(([, lease]) => !leaseActive(lease));
   const swept = await Promise.all(lapsed.map(([id, lease]) => sweepSeat(sweep, id, lease)));
-  return swept.every(Boolean) ? 0 : 1;
+  return cleared && swept.every(Boolean) ? 0 : 1;
 }
 
 // The exit status is set, not forced, so every line logged reaches a

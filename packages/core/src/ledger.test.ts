@@ -1320,6 +1320,528 @@ test("DR-062: a parked failure stands through a later turn, and the run's end cl
   store.close();
 });
 
+test("DR-062/dashboard-33: a later intent's parked failure revives no earlier intent's acknowledged failure and lends it no cause", () => {
+  const { store, projectId } = newProjectStore();
+  addSession(store, projectId, "s1");
+  const lanes = [lane("s1", projectId, true)];
+
+  // A fails without parking a run, and a recovery turn delivers it.
+  queueIntent(store, projectId, "A");
+  beginTurn(store, "s1", 1, "run it", 1000);
+  stamp(store, "A", "s1", 1, 1000);
+  append(store, "s1", {
+    type: "runtime_error",
+    turnId: 1,
+    timestamp: 1500,
+    message: "The Captain's turn failed: boom",
+  });
+  finishTurn(store, "s1", 1, 2000);
+  beginTurn(store, "s1", 2, "fix it", 3000);
+  finishTurn(store, "s1", 2, 4000);
+
+  const recovered = fold(store, lanes);
+  assert.equal(stateOf(recovered, "A").state, "finished");
+  assert.deepEqual(
+    recovered.attention.map((entry) => [entry.band, entry.kind, entry.intentId]),
+    [["finished", "finish", uid("A")]],
+  );
+
+  // B, dispatched later in the same conversation, parks its own run in
+  // its failure state, the cause riding on the run's own move (DR-075).
+  const cause = {
+    code: "commit-residual",
+    evidence: {
+      required: "one-commit",
+      observed: "commit-and-worktree-change",
+      commitOid: "3b7de901",
+      paths: { uncommitted: ["src/a.ts"], altered: ["src/b.ts"] },
+    },
+  };
+  queueIntent(store, projectId, "B");
+  beginTurn(store, "s1", 3, "second", 5000);
+  stamp(store, "B", "s1", 3, 5000);
+  append(store, "s1", {
+    type: "captain_telemetry",
+    topic: "playbook.trace",
+    payload: {
+      sessionId: "run-2",
+      type: "fsm.transition",
+      payload: { from: "coding", to: "failed", cause },
+    },
+    turnId: 3,
+    timestamp: 5300,
+  });
+  append(store, "s1", {
+    type: "captain_telemetry",
+    topic: "playbook.fsm.state",
+    payload: { to: "failed" },
+    turnId: 3,
+    timestamp: 5400,
+  });
+  append(store, "s1", {
+    type: "runtime_error",
+    turnId: 3,
+    timestamp: 5500,
+    message: "CODE governed outcome remains unresolved",
+  });
+  finishTurn(store, "s1", 3, 6000);
+
+  // On the fold as it was, the session's park — B's — kept A's old
+  // failure standing too: A read interrupted, beside B, with B's cause.
+  const ledger = fold(store, lanes);
+  assert.equal(stateOf(ledger, "A").state, "finished");
+  const b = stateOf(ledger, "B");
+  assert.equal(b.state, "interrupted");
+  assert.equal(b.reason, "failure");
+  assert.deepEqual(
+    ledger.attention.map((entry) => [entry.band, entry.kind, entry.intentId, entry.parked, entry.cause]),
+    [
+      ["interrupted", "failure", uid("B"), true, cause],
+      ["finished", "finish", uid("A"), undefined, undefined],
+    ],
+  );
+  // The session's own reading is unchanged: a run of it stands parked.
+  assert.equal(failureStands(store.getRecords(uid("s1"))), true);
+  store.close();
+});
+
+/** One run's park in its failure state, as a real stream reports one:
+ * the run's own move carrying its cause where one is given (DR-075),
+ * the shell's state report, then the turn's runtime_error — each in the
+ * turn named, or in none where it is null, as the core records a
+ * failure of its own (core-service-32). */
+function parkInFailure(
+  store: Store,
+  sessionId: string,
+  runId: string,
+  turnId: number | null,
+  at: number,
+  cause?: Record<string, unknown>,
+): void {
+  append(store, sessionId, {
+    type: "captain_telemetry",
+    topic: "playbook.trace",
+    payload: {
+      sessionId: runId,
+      type: "fsm.transition",
+      payload: { from: "coding", to: "failed", ...(cause ? { cause } : {}) },
+    },
+    turnId,
+    timestamp: at,
+  });
+  append(store, sessionId, {
+    type: "captain_telemetry",
+    topic: "playbook.fsm.state",
+    payload: { to: "failed" },
+    turnId,
+    timestamp: at + 100,
+  });
+  append(store, sessionId, {
+    type: "runtime_error",
+    turnId,
+    timestamp: at + 200,
+    message: "CODE governed outcome remains unresolved",
+  });
+}
+
+const failureRows = (ledger: LedgerState) =>
+  ledger.attention.map((entry) => [entry.band, entry.kind, entry.intentId, entry.parked, entry.cause, entry.since]);
+
+test("DR-062/dashboard-33: two intents' runs parked in failure each stand on their own park, through a later Boss turn", () => {
+  const { store, projectId } = newProjectStore();
+  addSession(store, projectId, "s1");
+  const lanes = [lane("s1", projectId, true)];
+  const causeA = { code: "commit-residual", evidence: { run: "first" } };
+  const causeB = { code: "receipt-missing", evidence: { run: "second" } };
+
+  // A's run parks in its failure state in A's turn; B, dispatched in the
+  // next turn — the core admits a dispatch during a failure park — parks
+  // a run of its own there.
+  queueIntent(store, projectId, "A");
+  beginTurn(store, "s1", 1, "first", 1000);
+  stamp(store, "A", "s1", 1, 1000);
+  parkInFailure(store, "s1", "run-1", 1, 1300, causeA);
+  finishTurn(store, "s1", 1, 2000);
+  queueIntent(store, projectId, "B");
+  beginTurn(store, "s1", 2, "second", 3000);
+  stamp(store, "B", "s1", 2, 3000);
+  parkInFailure(store, "s1", "run-2", 2, 3300, causeB);
+  finishTurn(store, "s1", 2, 4000);
+
+  // On the fold as it was, the session held one park — its earliest, A's
+  // — so B's own hid behind it: B read failed by its runtime_error
+  // alone, unparked and with no cause.
+  const both = [
+    ["interrupted", "failure", uid("A"), true, causeA, 1300],
+    ["interrupted", "failure", uid("B"), true, causeB, 3300],
+  ];
+  let ledger = fold(store, lanes);
+  assert.equal(stateOf(ledger, "A").reason, "failure");
+  assert.equal(stateOf(ledger, "B").reason, "failure");
+  assert.deepEqual(failureRows(ledger), both);
+
+  // A later Boss turn answers neither park (DR-062). On the fold as it
+  // was, this turn acknowledged B's failure as though nothing were
+  // parked: B read working while the turn ran, and finished once it
+  // ended, its run still parked.
+  beginTurn(store, "s1", 3, "unrelated", 5000);
+  ledger = fold(store, lanes);
+  assert.equal(stateOf(ledger, "A").state, "interrupted");
+  assert.equal(stateOf(ledger, "B").state, "interrupted");
+  assert.deepEqual(failureRows(ledger), both);
+  finishTurn(store, "s1", 3, 5100);
+  ledger = fold(store, lanes);
+  assert.equal(stateOf(ledger, "A").state, "interrupted");
+  assert.equal(stateOf(ledger, "B").state, "interrupted");
+  assert.deepEqual(failureRows(ledger), both);
+
+  // A's run disposed within a turn ends A's park alone: A's failure,
+  // acknowledged long since, gives way to its finish, and B's stands.
+  beginTurn(store, "s1", 4, "let the first run go", 6000);
+  append(store, "s1", {
+    type: "captain_telemetry",
+    topic: "playbook.trace",
+    payload: { sessionId: "run-1", type: "session.disposed" },
+    turnId: 4,
+    timestamp: 6200,
+  });
+  ledger = fold(store, lanes);
+  assert.equal(stateOf(ledger, "A").state, "finished");
+  assert.equal(stateOf(ledger, "B").reason, "failure");
+  assert.deepEqual(failureRows(ledger), [
+    ["interrupted", "failure", uid("B"), true, causeB, 3300],
+    ["finished", "finish", uid("A"), undefined, undefined, 2000],
+  ]);
+  store.close();
+});
+
+test("core-service-49/dashboard-33: a park naming no turn lies in the turn open when it was recorded", () => {
+  const { store, projectId } = newProjectStore();
+  addSession(store, projectId, "s1");
+  const lanes = [lane("s1", projectId, false)];
+  const cause = { code: "commit-residual", evidence: { run: "turnless" } };
+
+  // A fails without parking a run; B's dispatch turn acknowledges it.
+  queueIntent(store, projectId, "A");
+  beginTurn(store, "s1", 1, "first", 1000);
+  stamp(store, "A", "s1", 1, 1000);
+  append(store, "s1", {
+    type: "runtime_error",
+    turnId: 1,
+    timestamp: 1500,
+    message: "The Captain's turn failed: boom",
+  });
+  finishTurn(store, "s1", 1, 2000);
+  // B's run parks with telemetry naming no turn, and the core's record
+  // of the failure names none either: both lie in B's turn.
+  queueIntent(store, projectId, "B");
+  beginTurn(store, "s1", 2, "second", 3000);
+  stamp(store, "B", "s1", 2, 3000);
+  parkInFailure(store, "s1", "run-2", null, 3300, cause);
+  finishTurn(store, "s1", 2, 4000);
+
+  // The park lies in B's turn, so that turn ending finished settles it
+  // there: B's entry stands on the run's move and points at B's turn.
+  // On the fold as it was, a park naming no turn belonged to every
+  // intent of the session: A's acknowledged failure stood again beside
+  // B's, parked, with B's cause; and once such a park was tried against
+  // the intents' ranges alone, B's turn ending settled nothing of it, so
+  // B's entry stood on the core's later record (3500), not the move.
+  const expected = [
+    ["interrupted", "failure", uid("B"), true, cause, 3300],
+    ["finished", "finish", uid("A"), undefined, undefined, 2000],
+  ];
+  let ledger = fold(store, lanes);
+  assert.equal(stateOf(ledger, "A").state, "finished");
+  assert.equal(stateOf(ledger, "B").state, "interrupted");
+  assert.equal(stateOf(ledger, "B").reason, "failure");
+  assert.deepEqual(failureRows(ledger), expected);
+  assert.equal(ledger.attention.find((entry) => entry.intentId === uid("B"))?.turnId, 2);
+  // B's park stands through a later Boss turn, as a park does.
+  beginTurn(store, "s1", 3, "unrelated", 5000);
+  finishTurn(store, "s1", 3, 5100);
+  ledger = fold(store, lanes);
+  assert.equal(stateOf(ledger, "A").state, "finished");
+  assert.equal(stateOf(ledger, "B").reason, "failure");
+  assert.deepEqual(failureRows(ledger), expected);
+
+  // A park before any turn started lies in no intent's range: C's own
+  // failure is acknowledged by the next turn, as an unparked one is. On
+  // the fold as it was, that park kept C's failure standing.
+  addSession(store, projectId, "s2");
+  append(store, "s2", {
+    type: "captain_telemetry",
+    topic: "playbook.trace",
+    payload: { sessionId: "run-0", type: "fsm.transition", payload: { from: "coding", to: "failed" } },
+    turnId: null,
+    timestamp: 500,
+  });
+  queueIntent(store, projectId, "C");
+  beginTurn(store, "s2", 1, "third", 1000);
+  stamp(store, "C", "s2", 1, 1000);
+  append(store, "s2", {
+    type: "runtime_error",
+    turnId: 1,
+    timestamp: 1500,
+    message: "The Captain's turn failed: boom",
+  });
+  finishTurn(store, "s2", 1, 2000);
+  beginTurn(store, "s2", 2, "next", 3000);
+  finishTurn(store, "s2", 2, 3100);
+  ledger = fold(store, [lane("s2", projectId, false)]);
+  assert.equal(stateOf(ledger, "C").state, "finished");
+  assert.deepEqual(entriesOf(ledger, "s2").map((entry) => [entry.kind, entry.intentId]), [["finish", uid("C")]]);
+  store.close();
+});
+
+test("DR-062/dashboard-33: a session's own failure takes no park an open intent's range owns", () => {
+  const { store, projectId } = newProjectStore();
+  addSession(store, projectId, "s1");
+  const lanes = [lane("s1", projectId, false)];
+  const causeA = { code: "commit-residual", evidence: { run: "first" } };
+
+  // A's run parks in A's turn; X, dispatched in the next turn, finishes
+  // and is confirmed, so the turns from X's on belong to no open intent.
+  queueIntent(store, projectId, "A");
+  beginTurn(store, "s1", 1, "first", 1000);
+  stamp(store, "A", "s1", 1, 1000);
+  parkInFailure(store, "s1", "run-1", 1, 1300, causeA);
+  finishTurn(store, "s1", 1, 2000);
+  queueIntent(store, projectId, "X");
+  beginTurn(store, "s1", 2, "quick fix", 3000);
+  stamp(store, "X", "s1", 2, 3000);
+  finishTurn(store, "s1", 2, 4000);
+  store.closeIntent(uid("X"), "done", 4500);
+
+  // Plain chat then fails without parking a run: the session's own
+  // failure, unparked and stating no cause. On the fold as it was, the
+  // stand-in took the session's park — A's — and read parked with A's
+  // cause.
+  beginTurn(store, "s1", 3, "plain chat", 5000);
+  append(store, "s1", {
+    type: "runtime_error",
+    turnId: 3,
+    timestamp: 5500,
+    message: "The Captain's turn failed: boom",
+  });
+  finishTurn(store, "s1", 3, 6000);
+  let ledger = fold(store, lanes);
+  assert.equal(stateOf(ledger, "A").reason, "failure");
+  assert.deepEqual(
+    ledger.attention.map((entry) => [entry.kind, entry.intentId, entry.parked, entry.cause, entry.turnId, entry.title]),
+    [
+      ["failure", uid("A"), true, causeA, 1, "Intent A"],
+      ["failure", undefined, undefined, undefined, 3, "plain chat"],
+    ],
+  );
+
+  // The next Boss turn acknowledges the session's unparked failure,
+  // leaving A's parked one and the new turn's own review. On the fold as
+  // it was, A's park kept the stand-in standing in its place.
+  beginTurn(store, "s1", 4, "next", 7000);
+  finishTurn(store, "s1", 4, 7100);
+  ledger = fold(store, lanes);
+  assert.deepEqual(
+    ledger.attention.map((entry) => [entry.kind, entry.intentId, entry.parked, entry.turnId]),
+    [
+      ["failure", uid("A"), true, 1],
+      ["review", undefined, undefined, 4],
+    ],
+  );
+  store.close();
+});
+
+test("core-service-82/dashboard-33: a restore re-stating a run already parked keeps its park where it was", () => {
+  const { store, projectId } = newProjectStore();
+  addSession(store, projectId, "s1");
+  const lanes = [lane("s1", projectId, false)];
+  const causeA = { code: "commit-residual", evidence: { run: "first" } };
+
+  // A's run parks in A's turn, which ends finished; B, dispatched next,
+  // delivers its own turn.
+  queueIntent(store, projectId, "A");
+  beginTurn(store, "s1", 1, "first", 1000);
+  stamp(store, "A", "s1", 1, 1000);
+  parkInFailure(store, "s1", "run-1", 1, 1300, causeA);
+  finishTurn(store, "s1", 1, 2000);
+  queueIntent(store, projectId, "B");
+  beginTurn(store, "s1", 2, "second", 3000);
+  stamp(store, "B", "s1", 2, 3000);
+  finishTurn(store, "s1", 2, 4000);
+
+  // A later turn — B's range — is cut off, and its restore re-states A's
+  // run still parked, the checkpoint carrying the failure's cause
+  // (core-service-82).
+  beginTurn(store, "s1", 3, "Keep going", 5000);
+  append(store, "s1", restoringRecord("Keep going", 5100) as unknown as Record<string, unknown>);
+  beginTurn(store, "s1", 3, "Keep going", 5110);
+  finishTurn(store, "s1", 3, 5120);
+  append(store, "s1", restoredRecord(3, [{
+    sessionId: "run-1",
+    playbookId: "code",
+    depth: 0,
+    state: { value: "failed", stateId: "failed", tags: [], status: "active" },
+    pendingBossQuestions: [],
+    cause: causeA,
+  }], 5130) as unknown as Record<string, unknown>);
+
+  // The restore brought back no new failure: A's run stands parked in
+  // A's turn, so A's failure stands where it was, on the run's move,
+  // with its cause, and B's delivery stands. On the fold as it was, the
+  // restore re-stated the park in its own turn, B's: A read finished
+  // with no failure entry while its run stood parked.
+  const ledger = fold(store, lanes);
+  assert.equal(stateOf(ledger, "A").state, "interrupted");
+  assert.equal(stateOf(ledger, "A").reason, "failure");
+  assert.equal(stateOf(ledger, "B").state, "finished");
+  assert.deepEqual(failureRows(ledger), [
+    ["interrupted", "failure", uid("A"), true, causeA, 1300],
+    ["finished", "finish", uid("B"), undefined, undefined, 4000],
+  ]);
+  assert.equal(ledger.attention[0]?.turnId, 1);
+  // The session's own reading: a run of it stands parked.
+  assert.equal(failureStands(store.getRecords(uid("s1"))), true);
+  store.close();
+});
+
+test("DR-035/dashboard-33: a session's own park summons on, whatever a later owned turn's error", () => {
+  const { store, projectId } = newProjectStore();
+  addSession(store, projectId, "s1");
+  const lanes = [lane("s1", projectId, false)];
+  const cause = { code: "commit-residual", evidence: { run: "chat" } };
+  const rows = (ledger: LedgerState) =>
+    ledger.attention.map((entry) => [entry.kind, entry.intentId, entry.parked, entry.cause, entry.turnId, entry.since, entry.title]);
+  const own = ["failure", undefined, true, cause, 1, 1300, "plain chat"];
+
+  // Plain chat parks a run in its failure state: the session's own
+  // failure, parked.
+  beginTurn(store, "s1", 1, "plain chat", 1000);
+  parkInFailure(store, "s1", "run-0", 1, 1300, cause);
+  finishTurn(store, "s1", 1, 2000);
+  assert.deepEqual(rows(fold(store, lanes)), [own]);
+
+  // B, dispatched next in the same conversation, fails without parking a
+  // run: B's own failure, beside the session's. On the fold as it was,
+  // the session's latest failure — B's — stood for the session too, and
+  // being B's it hid the session's own park: the stand-in showed nothing
+  // while its run stood parked.
+  queueIntent(store, projectId, "B");
+  beginTurn(store, "s1", 2, "second", 3000);
+  stamp(store, "B", "s1", 2, 3000);
+  append(store, "s1", {
+    type: "runtime_error",
+    turnId: 2,
+    timestamp: 3500,
+    message: "The Captain's turn failed: boom",
+  });
+  finishTurn(store, "s1", 2, 4000);
+  let ledger = fold(store, lanes);
+  assert.equal(stateOf(ledger, "B").reason, "failure");
+  assert.deepEqual(rows(ledger), [own, ["failure", uid("B"), undefined, undefined, 2, 3500, "Intent B"]]);
+
+  // The next Boss turn acknowledges B's unparked failure, while the
+  // session's park answers only to its run (DR-062): it summons on, and
+  // the queue it holds back is held by a summons (core-service-107).
+  beginTurn(store, "s1", 3, "thanks", 5000);
+  finishTurn(store, "s1", 3, 5100);
+  queueIntent(store, projectId, "C");
+  ledger = fold(store, lanes);
+  assert.equal(stateOf(ledger, "B").state, "finished");
+  assert.deepEqual(rows(ledger), [own, ["finish", uid("B"), undefined, undefined, 3, 5100, "Intent B"]]);
+  assert.deepEqual(nextOf(ledger, projectId).next, { standing: "failure-park", manualStart: false, cause });
+  store.close();
+});
+
+test("core-service-106/dashboard-33: a cause rides the park of its own turn", () => {
+  const { store, projectId } = newProjectStore();
+  const causeB = { code: "receipt-missing", evidence: { run: "second" } };
+  const turnError = (sessionId: string, turnId: number, at: number) =>
+    append(store, sessionId, {
+      type: "runtime_error",
+      turnId,
+      timestamp: at,
+      message: "CODE governed outcome remains unresolved",
+      cause: causeB,
+    });
+  const moveToFailed = (sessionId: string, runId: string, turnId: number, at: number) => {
+    append(store, sessionId, {
+      type: "captain_telemetry",
+      topic: "playbook.trace",
+      payload: { sessionId: runId, type: "fsm.transition", payload: { from: "coding", to: "failed" } },
+      turnId,
+      timestamp: at,
+    });
+    append(store, sessionId, {
+      type: "captain_telemetry",
+      topic: "playbook.fsm.state",
+      payload: { to: "failed" },
+      turnId,
+      timestamp: at + 100,
+    });
+  };
+  const rows = (ledger: LedgerState, sessionId: string) =>
+    entriesOf(ledger, sessionId).map((entry) => [entry.kind, entry.intentId, entry.parked, entry.cause, entry.turnId, entry.since]);
+
+  // In each conversation the first intent's run parks in its turn,
+  // stating no cause; the next intent's run parks in the next turn, and
+  // the cause arrives there — the runtime's error ahead of the run's
+  // move in one conversation, after it in the next, and the shell's
+  // status line ahead of the move in the third.
+  const modes = [["s1", "A", "B", "error-first"], ["s2", "C", "D", "error-after"], ["s3", "E", "F", "status-first"]] as const;
+  for (const [sessionId, first, second, mode] of modes) {
+    addSession(store, projectId, sessionId);
+    queueIntent(store, projectId, first);
+    beginTurn(store, sessionId, 1, "first", 1000);
+    stamp(store, first, sessionId, 1, 1000);
+    parkInFailure(store, sessionId, "run-1", 1, 1300);
+    finishTurn(store, sessionId, 1, 2000);
+    queueIntent(store, projectId, second);
+    beginTurn(store, sessionId, 2, "second", 3000);
+    stamp(store, second, sessionId, 2, 3000);
+    if (mode === "error-first") turnError(sessionId, 2, 3200);
+    if (mode === "status-first") {
+      append(store, sessionId, {
+        type: "captain_status",
+        turnId: 2,
+        timestamp: 3200,
+        message: "◆ workflow failed; awaiting Boss recovery.",
+        data: { lastError: { name: "Error", message: "unresolved", cause: causeB } },
+      });
+    }
+    moveToFailed(sessionId, "run-2", 2, 3300);
+    if (mode === "error-after") turnError(sessionId, 2, 3500);
+    if (mode === "status-first") {
+      append(store, sessionId, {
+        type: "runtime_error",
+        turnId: 2,
+        timestamp: 3500,
+        message: "CODE governed outcome remains unresolved",
+      });
+    }
+    finishTurn(store, sessionId, 2, 4000);
+  }
+
+  // Either arrival order gives the second run's park the cause and
+  // leaves the first's stating none (dashboard-10). On the fold as it
+  // was, an error or a status arriving ahead of its run's move gave its
+  // cause to the latest park standing — A's, of another turn and another
+  // intent — and B's park, finding no cause pending, stated none.
+  const ledger = fold(store, modes.map(([sessionId]) => lane(sessionId, projectId, false)));
+  assert.deepEqual(rows(ledger, "s1"), [
+    ["failure", uid("A"), true, undefined, 1, 1300],
+    ["failure", uid("B"), true, causeB, 2, 3200],
+  ]);
+  assert.deepEqual(rows(ledger, "s2"), [
+    ["failure", uid("C"), true, undefined, 1, 1300],
+    ["failure", uid("D"), true, causeB, 2, 3300],
+  ]);
+  assert.deepEqual(rows(ledger, "s3"), [
+    ["failure", uid("E"), true, undefined, 1, 1300],
+    ["failure", uid("F"), true, causeB, 2, 3300],
+  ]);
+  store.close();
+});
+
 test("core-service-106: the parked failure's cause travels to its attention entry", () => {
   const { store, projectId } = newProjectStore();
   addSession(store, projectId, "s1");
