@@ -14,6 +14,8 @@
 // "Sign in to publish at <name>" instead, naming the second.
 
 import type { Page } from "@playwright/test";
+import { cpSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { AUTHORING_SOURCE } from "@sublang/spex-core/testing";
 
 import {
@@ -175,4 +177,91 @@ test("playbook-library-95: Publish from a project at the second instance reads t
   await openEnableTab(page);
   await expect(page.getByTestId("publish").getByTestId("publish-signin")).toHaveText(`Sign in to publish at ${SECOND_HOST_NAME}`);
   await expect(page.getByTestId("publish-button")).toHaveCount(0);
+});
+
+
+test("playbook-library-114: a local spec-and-skill package publishes without a playbook, repeated versions refuse honestly, and another project installs it", async ({ page, app }) => {
+  test.setTimeout(180_000);
+  const [first, second] = app.hosts;
+  const [firstRegistry, registry] = app.registries;
+  if (!first || !second || !firstRegistry || !registry) throw new Error("two configured instances and registries");
+  await signInCore(app, second);
+  const project = await pickGroup(app, { host: second, namespace: true });
+  const id = "notes-tools";
+  const name = `${HOST_LOGIN}/${id}`;
+  const path = `spex-packages/${id}`;
+  const folder = join(app.projectDir, path);
+  const spec = `# notes-tools: Notes\n\n## Intent\nDescribe one local note.\n\n## External Behavior\n### notes-tools-1\nThe page shall retain one note.\n\n## Verification\n### notes-tools-2\nWhen a browser reloads the page, the system test shall verify note retention [[notes-tools-1](#notes-tools-1)].\n`;
+  const skill = "---\nname: notes-summary\ndescription: Summarize the notes contract\n---\nRead the notes contract and summarize it without changes.\n";
+  mkdirSync(join(folder, "specs", "en"), { recursive: true });
+  mkdirSync(join(folder, "skills", "en", "notes-summary"), { recursive: true });
+  writeFileSync(join(folder, "specs", "en", `${id}.md`), spec);
+  writeFileSync(join(folder, "skills", "en", "notes-summary", "SKILL.md"), skill);
+  writeFileSync(join(folder, "meta.yaml"), `format: 2\norg: ${HOST_LOGIN}\nname: ${id}\nversion: 0.1.0\ndescription: Reusable notes requirements and a summary skill\nlicense: Apache-2.0\nartifacts:\n  notes-tools: {kind: spec, language: en}\n  notes-summary: {kind: skill, language: en}\n`);
+  await app.core.command("environment.request", { repository: project.key, name, request: { kind: "path", path } });
+  expect(await app.core.command("draft.list", {})).toEqual([]);
+  await open(page, app);
+  await nav(page, "Playbooks").click();
+  const row = page.getByTestId(`env-package-${name}`);
+  const publish = row.getByTestId("publish");
+  await expect(publish.getByTestId("publish-button")).toBeVisible();
+  await expect(page.getByTestId("env-package-sublang/playbooks").getByTestId("publish")).toHaveCount(0);
+  await publish.getByTestId("publish-button").click();
+  await expect(publish.getByTestId("publish-summary")).toContainText(`${name} 0.1.0`);
+  await expect(publish.getByTestId("publish-files")).toContainText(`specs/en/${id}.md`);
+  await expect(publish.getByTestId("publish-files")).toContainText("skills/en/notes-summary/SKILL.md");
+  await publish.getByTestId("publish-cancel").click();
+  expect(registry.script.received.filter((request) => request.method === "PUT")).toEqual([]);
+
+  // A request changed while the preview is open cannot confirm its old folder.
+  await publish.getByTestId("publish-button").click();
+  await expect(publish.getByTestId("publish-summary")).toBeVisible();
+  const replacement = `spex-packages/${id}-copy`;
+  cpSync(folder, join(app.projectDir, replacement), { recursive: true });
+  await app.core.command("environment.request", { repository: project.key, name, request: { kind: "path", path: replacement } });
+  await expect(row.getByTestId(`env-source-${name}`)).toHaveText(`path ${replacement}`);
+  await expect(publish.getByTestId("publish-summary")).toHaveCount(0);
+  await app.core.command("environment.request", { repository: project.key, name, request: { kind: "path", path } });
+  await expect(row.getByTestId(`env-source-${name}`)).toHaveText(`path ${path}`);
+
+  await publish.getByTestId("publish-button").click();
+  await publish.getByTestId("publish-confirm").click();
+  await expect(publish.getByTestId("publish-done")).toContainText(`Published ${name} 0.1.0`);
+  await expect(publish.getByTestId("publish-link")).toHaveAttribute("href", `${second.url}/${name}`);
+  expect(registry.script.received.filter((request) => request.method === "PUT").map(({ instance, account, path }) => [instance, account, path])).toEqual([[second.url, HOST_LOGIN, `/api/v1/packages/${name}/0.1.0`]]);
+  expect(firstRegistry.script.received.filter((request) => request.method === "PUT")).toEqual([]);
+  for (let attempt = 0; attempt < 2; attempt++) {
+    await publish.getByTestId("publish-button").click();
+    await publish.getByTestId("publish-confirm").click();
+    await expect(publish.getByTestId("publish-error")).toContainText(/version|exists|published/i);
+    await expect(publish.getByTestId("publish-done")).toHaveCount(0);
+  }
+
+  const other = await startApp({ project: true, host: { share: { host: second, registry } }, signedIn: true });
+  try {
+    await open(page, other);
+    await nav(page, "Playbooks").click();
+    await page.getByTestId("add-from-registry").click();
+    await page.getByTestId("registry-query").fill(id);
+    const result = page.getByTestId(`registry-result-${name}`);
+    await expect(result).toBeVisible();
+    await result.getByTestId(`registry-add-${name}`).click();
+    const installed = page.getByTestId(`env-package-${name}`);
+    await expect(installed.getByTestId(`env-version-${name}`)).toHaveText("0.1.0");
+    await expect(installed.getByTestId(`env-installed-${name}`)).toHaveText("Installed");
+    await expect(installed.getByTestId(`env-artifact-${name}-notes-tools`)).toContainText("spec");
+    await expect(installed.getByTestId(`env-artifact-${name}-notes-summary`)).toContainText("skill");
+    await expect(installed.getByTestId("publish")).toHaveCount(0);
+    expect(readFileSync(join(other.projectDir, ".agents", "skills", "notes-summary", "SKILL.md"), "utf8")).toBe(skill);
+    expect(readFileSync(join(other.projectDir, ".agents", "skills", `${HOST_LOGIN}-${id}`, `${id}.md`), "utf8")).toBe(spec);
+  } finally { await other.close(); }
+
+  await open(page, app);
+  await nav(page, "Space").click();
+  const atSecond = instanceSection(page, second);
+  await atSecond.getByTestId("space-signout").click();
+  await expect(atSecond.getByTestId("space-signin-again")).toBeVisible();
+  await nav(page, "Playbooks").click();
+  await expect(publish.getByTestId("publish-signin")).toHaveText(`Sign in to publish at ${SECOND_HOST_NAME}`);
+  await expect(publish.getByTestId("publish-button")).toHaveCount(0);
 });

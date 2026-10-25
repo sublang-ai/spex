@@ -37,6 +37,7 @@ While a spex repository's side of the Playbooks surface is shown, the surface sh
 | Update | `environment.resolve`, offered on the built-in release line |
 | Install | `environment.install`, offered while files are missing |
 | Export again | `environment.install`, offered while the last export left anything out |
+| Publish | the current folder of a direct path request, through the package publishing control [[playbook-library-113](#playbook-library-113)] |
 | Remove | removes a direct request behind an inline confirm reading "Remove" and "Keep" |
 
 - a change the core refuses shows its cause in place; a sync of that spex repository, or a resolve or install the core runs, disables no control, the core's own work reading in place as progress ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md));
@@ -271,7 +272,17 @@ When the Boss activates an authoring session row's Delete, the Playbooks surface
 While an authoring session's last compile succeeded and the home is signed in to the instance a publish from its project goes to — the project's instance, or the home's default instance where the project has none [[environments-10](environments.md#environments-10)] — the Enable tab shall offer "Publish" beneath the form, which publishes the spec package under development to that instance's registry as that instance's account [[environments-10](environments.md#environments-10)] after showing, inline, the package's name, version and the files it will upload with Publish and Cancel ([DR-104](../decisions/104-spec-package-format-and-client-environments.md), [DR-127](../decisions/127-a-home-signed-in-to-several-instances.md)):
 
 - a refusal from the core's checks or the registry shows its issues in place; success reads the published version with a link to its page at the registry;
+- a retained receipt from a previous publish does not establish success of a later attempt, and a later settled refusal remains visible even when its text repeats an earlier refusal ([DR-151](../decisions/151-publish-local-spec-packages.md));
 - a home not signed in to that instance shows "Sign in to publish at <name>" in place of the control, <name> being the instance's display name as the home last read it, else its host name.
+
+#### playbook-library-113
+
+While an environment's current requests include a direct path source and the environment has a path root on this device [[environments-14](environments.md#environments-14)], the Playbooks surface shall offer Publish for that package's current request folder, using the environment's publish target and release checks [[environments-10](environments.md#environments-10)] and the preview, confirmation, sign-in guidance and outcome display of the authoring control [[playbook-library-93](#playbook-library-93)], without requiring an authoring session or compilation ([DR-151](../decisions/151-publish-local-spec-packages.md)):
+
+- registry, Git and built-in requests offer no publication of their installed copies;
+- the folder is the current request's path, not a path inferred from its displayed source or its older lock;
+- a stale lock or uncommitted source does not prevent previewing or publishing the current folder, whose validation failures remain visible;
+- changing the repository, path or target discards an open preview before another confirmation is possible.
 
 ### Pipeline Artifacts
 
@@ -919,3 +930,13 @@ Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-
 #### playbook-library-95
 
 Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell signed in to two stand-in instances, each with its stand-in host and registry, the first the home's default instance, with a compiled authoring session enabled in a project at the second, when the journey activates Publish on the Enable tab, confirms the inline summary, and then, on a second scratch home signed in to the second instance alone, adds the published spec package from the registry and enables its playbook, the test suite shall assert through the page that the published version reads with its link to the second instance's registry, the first's registry holding no such release [[playbook-library-93](#playbook-library-93)], that the second home's search finds it and Add requests it, that its playbook lists from the registry source and enables [[playbook-library-92](#playbook-library-92)] [[playbook-library-34](#playbook-library-34)], and that the first home, signed out of the second instance alone, shows "Sign in to publish at <name>" with the second's display name in the control's place [[playbook-library-93](#playbook-library-93)].
+
+#### playbook-library-114
+
+Where the browser journey harness boots real cores with a stand-in instance and registry and a project directly requests a local package containing a spec and an ordinary skill but no playbook, when the journey publishes that package from its environment row and installs it into a second project through the registry, the test suite shall assert:
+
+- the path row offers Publish without an authoring session or compilation, while registry and built-in rows offer none [[playbook-library-113](#playbook-library-113)];
+- preview names the package, version and files, Cancel uploads nothing, and confirmation publishes at the environment's instance with the resulting version and link visible [[playbook-library-113](#playbook-library-113)];
+- two subsequent attempts at the same immutable version each show the registry's refusal without presenting the earlier receipt as a new success [[playbook-library-93](#playbook-library-93)];
+- the second project's registry request lists the exact resolved version and the installed spec and skill artifacts [[playbook-library-92](#playbook-library-92)];
+- signing out of the publishing instance replaces its path row's action with guidance naming that instance, and changing the displayed repository or request path dismisses an open preview [[playbook-library-113](#playbook-library-113)].
