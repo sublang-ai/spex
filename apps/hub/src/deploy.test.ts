@@ -2,12 +2,12 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // The deploy files as far as an unprivileged host checks them (hub-4,
-// hub-6, hub-7, hub-8, server-shell-25): the scripts parse; the helper
-// and the install script refuse each mistake by name before touching
-// anything, run as the current user with HOME and PATH scoped; the
-// sudoers fragment names the helper alone; the units and the
-// administrator's command carry the flags and paths the hub and the
-// server shell expect. What needs root, systemd and sudo is the
+// hub-5, hub-6, hub-7, hub-8, server-shell-25): the scripts parse; the
+// helper and the install script refuse each mistake by name before
+// touching anything, run as the current user with HOME and PATH scoped;
+// the sudoers fragment names the helper alone; the units and the
+// administrator's command carry the flags and paths the hub, the sweep
+// and the server shell expect. What needs root, systemd and sudo is the
 // privileged lane's (hub-10). The refusal of an /etc/sudoers that does
 // not read /etc/sudoers.d is not run here: it reads the fixed
 // /etc/sudoers, which only root may read, past the root refusal and the
@@ -50,7 +50,11 @@ const HUB_UNIT = join(DEPLOY, "spex-hub.service");
 const SUDOERS = join(DEPLOY, "spex-hub.sudoers");
 const TMPFILES = join(DEPLOY, "spex-hub.tmpfiles");
 const COMMAND = join(DEPLOY, "spex-hub");
-const HUB_SCRIPT = "/opt/spex/app/apps/hub/dist/main.js";
+const REAPER_UNIT = join(DEPLOY, "spex-seat-reaper.service");
+const REAPER_TIMER = join(DEPLOY, "spex-seat-reaper.timer");
+const INSTALLED_HUB = "/opt/spex/app/apps/hub/";
+const HUB_SCRIPT = `${INSTALLED_HUB}dist/main.js`;
+const REAPER_SCRIPT = `${INSTALLED_HUB}dist/reaper.js`;
 const HELPER_USAGE = "usage: spex-seatctl create|start|stop|wipe <id>";
 const isRoot = process.getuid?.() === 0;
 
@@ -541,4 +545,67 @@ test("the hub's unit, the helper, the command, the tmpfiles fragment and the ins
   assert.equal(constant(INSTALL, "HUB_USER"), "spex-hub");
   assert.equal(constant(INSTALL, "HUB_GROUP"), "spex-hub");
   assert.equal(constant(INSTALL, "SEATS_GROUP"), "spex-seats");
+});
+
+test("the sweep's service runs the built sweep as root on the hub's state and helper, its timer every minute, and the install script installs both and enables the timer (hub-5, hub-7, hub-8)", () => {
+  const keys = unitKeys(REAPER_UNIT);
+  const { program, script, words, flags } = execStart(one(keys, "ExecStart"));
+  assert.equal(program, "/usr/bin/node");
+  assert.equal(script, REAPER_SCRIPT);
+  assert.ok(
+    existsSync(join(packageDir, REAPER_SCRIPT.slice(INSTALLED_HUB.length))),
+    "the unit runs the sweep this package builds",
+  );
+  assert.deepEqual(words, []);
+  assert.deepEqual([...flags.keys()].sort(), ["helper", "state-dir"]);
+  assert.equal(flags.get("state-dir"), DEFAULT_STATE_DIR);
+  assert.equal(flags.get("helper"), DEFAULT_HELPER);
+  assert.equal(one(keys, "Type"), "oneshot");
+  // hub-5: a oneshot has no start timeout by default; the unit bounds a
+  // sweep's time, so one that hangs holds off no later one.
+  assert.equal(one(keys, "TimeoutStartSec"), "5min");
+  assert.equal(keys.has("User"), false, "the sweep runs as root, the helper with no sudo");
+  assert.equal(keys.has("Group"), false);
+  assert.equal(one(keys, "UMask"), "0077");
+  // hub-5: root writes the hub's state and the seats' runtime base alone,
+  // the rest of the system read-only to it.
+  assert.equal(one(keys, "ProtectSystem"), "strict");
+  assert.deepEqual(one(keys, "ReadWritePaths").split(/\s+/), [DEFAULT_STATE_DIR, dirname(DEFAULT_RUN_DIR)]);
+  assert.equal(one(keys, "NoNewPrivileges"), "yes");
+  assert.equal(one(keys, "PrivateTmp"), "yes");
+  // The sweep takes the unit's flags: run with them over an empty state
+  // directory of its own, it finds nothing due and exits 0.
+  const state = join(scratch(), "state");
+  const swept = spawnSync(
+    process.execPath,
+    [join(packageDir, "dist", "reaper.js"), `--state-dir=${state}`, `--helper=${flags.get("helper")}`],
+    { encoding: "utf8", timeout: 30_000 },
+  );
+  assert.equal(swept.status, 0, swept.stderr);
+  assert.equal(swept.stdout + swept.stderr, "");
+
+  const timer = unitKeys(REAPER_TIMER);
+  assert.equal(one(timer, "OnBootSec"), "1min");
+  assert.equal(one(timer, "OnUnitActiveSec"), "1min");
+  assert.equal(one(timer, "AccuracySec"), "5s");
+  assert.equal(one(timer, "WantedBy"), "timers.target");
+  assert.equal(timer.has("Unit"), false, "the timer starts the service of its own name");
+  assert.equal(basename(REAPER_TIMER, ".timer"), basename(REAPER_UNIT, ".service"));
+
+  const text = readFileSync(INSTALL, "utf8");
+  const loop = /^for unit in (.+); do$/m.exec(text);
+  assert.ok(loop, "the install script installs the units in one loop");
+  const units = ["spex-hub.service", "spex-seat@.service", "spex-seat-reaper.service", "spex-seat-reaper.timer"];
+  assert.deepEqual(loop[1].split(/\s+/).sort(), [...units].sort());
+  for (const unit of units) assert.ok(existsSync(join(DEPLOY, unit)), `deploy/${unit} exists`);
+  // A checkout lacking them is refused before the first change.
+  const firstChange = text.indexOf('install -d -m 0700 -o root -g root "$NPM_CACHE"');
+  for (const file of ["apps/hub/deploy/spex-seat-reaper.service", "apps/hub/deploy/spex-seat-reaper.timer"]) {
+    const checked = text.indexOf(file);
+    assert.ok(checked > 0 && checked < firstChange, `${file} is checked before the first change`);
+  }
+  assert.match(text, /^for built in .*\bapps\/hub\/dist\/reaper\.js\b.*; do$/m);
+  const reload = text.indexOf("\nsystemctl daemon-reload\n");
+  const enable = text.indexOf("\nsystemctl enable --now spex-seat-reaper.timer\n");
+  assert.ok(reload > 0 && enable > reload, "the timer is enabled and started once systemd has read its units");
 });

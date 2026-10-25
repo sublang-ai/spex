@@ -13,6 +13,7 @@ import assert from "node:assert/strict";
 import { spawn, type ChildProcess } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -543,6 +544,11 @@ test("an admission spends its ticket once and the relay pipes the member's frame
   const hub = await serve(s);
   const secrets = [SERVER_TOKEN];
   try {
+    // hub-8: the hub makes the seats' locks' directory as it serves,
+    // owner-only, before any admission.
+    assert.equal(mode(join(s.state, "locks")), 0o700);
+    assert.deepEqual(readdirSync(join(s.state, "locks")), []);
+
     // hub-2: the ticket redeemed with the server token, once.
     const ticket = standin.ticket(alice);
     const first = await admitted(hub, ticket);
@@ -586,8 +592,10 @@ test("an admission spends its ticket once and the relay pipes the member's frame
       "4201": { login: "alice", expires_at: first.body.lease_expires_at, bearer_hash: sha256(first.bearer), stop_owed: true },
     });
     assert.equal(mode(join(s.state, "leases.yaml")), 0o600);
-    for (const file of readdirSync(s.state)) {
-      if (file === "control.sock") continue;
+    // The seats' locks, taken at the admission (hub-5), stay owner-only.
+    assert.equal(mode(join(s.state, "locks")), 0o700);
+    for (const file of readdirSync(s.state, { recursive: true }) as string[]) {
+      if (file === "control.sock" || statSync(join(s.state, file)).isDirectory()) continue;
       const text = readFileSync(join(s.state, file), "utf8");
       assert.ok(!text.includes(first.bearer) && !text.includes(handshake), `${file} holds a secret`);
     }
@@ -987,7 +995,11 @@ test("a stop that fails leaves the lease ended, is reported by evict and retire 
     // hub-6: with no hub running, evict acts itself and reports the same.
     assert.equal(await hub.stop(), 0);
     assertNoSecret(hub.output(), secrets);
+    // hub-8: the hub's own command makes the locks' directory too, where
+    // it went missing, owner-only.
+    rmSync(join(s.state, "locks"), { recursive: true });
     const offline = await cli(["evict", "4602"]);
+    assert.equal(mode(join(s.state, "locks")), 0o700);
     assert.equal(offline.code, 1);
     assert.match(offline.stdout, /evicted seat 4602: its lease ended; its files stand/);
     assert.match(offline.stderr, /the seat did not stop: .*stop refused by the test's script/);
@@ -1072,6 +1084,65 @@ test("a stop that fails leaves the lease ended, is reported by evict and retire 
     assertNoSecret(outputs.join("\n"), secrets);
   } finally {
     if (hub.child.exitCode === null) await hub.stop();
+    await standin.close();
+  }
+  assertNoSecret(hub.output(), secrets);
+});
+
+test("an admission and a renewal wait on a seat's lock the sweep holds (hub-5, hub-8)", async () => {
+  const s = scenario();
+  const standin = await startStandin();
+  await attach(s, standin);
+  const hub = await serve(s, { renewIntervalMs: 300 });
+  const pia: Person = { id: "4701", login: "pia", display_name: null };
+  const lock = join(s.state, "locks", "4701.lock");
+  const takeLock = (): boolean => {
+    try {
+      writeFileSync(lock, `${process.pid}\n`, { flag: "wx", mode: 0o644 });
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  const waits = () => hub.output().split(`waiting for the lock of 4701 held by pid ${process.pid}`).length - 1;
+  const recorded = () => (existsSync(join(s.state, "leases.yaml")) ? leases(s)["4701"] : undefined);
+  const secrets = [SERVER_TOKEN];
+  try {
+    // The sweep holds the seat's lock as the admission comes, in the
+    // directory the hub made as it served (hub-8).
+    assert.ok(takeLock(), "the test took the seat's lock");
+    const admission = admit(hub.port, JSON.stringify({ ticket: standin.ticket(pia) }));
+    await waitFor(() => waits() === 1, "the admission to wait on the lock");
+    // hub-5: no lease recorded and no seat started while the lock is held.
+    assert.equal(recorded(), undefined);
+    assert.equal(called(s, "create", "4701"), 0);
+    assert.equal(called(s, "start", "4701"), 0);
+    rmSync(lock);
+    const answered = await admission;
+    assert.equal(answered.status, 200, JSON.stringify(answered.body));
+    secrets.push(answered.body.bearer);
+    assert.equal(called(s, "start", "4701"), 1);
+    assert.equal(recorded()?.expires_at, answered.body.lease_expires_at);
+    assert.equal(existsSync(lock), false, "the hub released the lock it took");
+
+    // hub-5: with a relay open the lease renews, its expiry recorded under
+    // the lock, the instance's answer awaited outside it.
+    const relay = (await openRelay(hub.port, "4701", { bearer: answered.body.bearer })).socket as WebSocket;
+    assert.ok(relay, "the relay did not open");
+    await waitFor(takeLock, "the test to take the seat's lock between renewals");
+    const held = recorded()?.expires_at as string;
+    await waitFor(() => waits() >= 2, "a renewal to wait on the lock");
+    assert.equal(recorded()?.expires_at, held, "no expiry recorded while the lock is held");
+    rmSync(lock);
+    await waitFor(
+      () => Date.parse(recorded()?.expires_at ?? "") > Date.parse(held),
+      "the renewal to be recorded once the lock is released",
+    );
+    assert.match(hub.output(), /renewed the lease of pia \(4701\)/);
+    relay.close();
+    assert.ok(helperCalls(s).every((call) => !call.refused));
+  } finally {
+    assert.equal(await hub.stop(), 0);
     await standin.close();
   }
   assertNoSecret(hub.output(), secrets);

@@ -26,6 +26,8 @@ multipass delete spex-lane && multipass purge
 
 ## Accepted run
 
+The sweep's phase, "the sweep while no hub runs" ([DR-148](../../../specs/decisions/148-a-lapsed-seat-is-stopped-by-a-sweep.md)), has not yet run on the lane: the run below predates it, and the next run must include it.
+
 - Date: 2026-10-22 (11:47 UTC)
 - Commit: 53c25bc3a08e7077b16a8ebf040fdc7db5ed91bd, from `git archive`
 - Host: Ubuntu 24.04.5 LTS (arm64) under Multipass 1.16.1 on macOS, launched from the release's cloud image checked against its SHA256SUMS; kernel 6.8.0-147-generic, systemd 255, sudo 1.9.15p5

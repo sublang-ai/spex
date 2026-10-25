@@ -1,0 +1,7 @@
+#!/bin/sh
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
+
+# The tests' stand-in for systemctl as the sweep asks it: `show -p
+# ActiveState --value spex-seat@<id>.service` alone (fake-systemctl.mjs).
+exec "${FAKE_NODE:-node}" "$(dirname "$0")/fake-systemctl.mjs" "$@"

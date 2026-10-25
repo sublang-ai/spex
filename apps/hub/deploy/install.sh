@@ -35,12 +35,14 @@
 #     the administrator's command deploy/spex-hub as <prefix>/bin/spex-hub
 #     root:root 0755; deploy/spex-hub.tmpfiles as
 #     /etc/tmpfiles.d/spex-hub.conf (applied at once); the units
-#     deploy/spex-hub.service and deploy/spex-seat@.service under
-#     /etc/systemd/system; and deploy/spex-hub.sudoers as
-#     /etc/sudoers.d/spex-hub root:root 0440,
+#     deploy/spex-hub.service and deploy/spex-seat@.service, and the
+#     sweep's deploy/spex-seat-reaper.service and
+#     deploy/spex-seat-reaper.timer, under /etc/systemd/system; and
+#     deploy/spex-hub.sudoers as /etc/sudoers.d/spex-hub root:root 0440,
 #     checked with `visudo -cf` before it is put in place; then runs
-#     `systemctl daemon-reload` and checks that sudo lets spex-hub run
-#     the helper;
+#     `systemctl daemon-reload`, enables and starts the sweep's timer
+#     (`systemctl enable --now spex-seat-reaper.timer`), and checks that
+#     sudo lets spex-hub run the helper;
 #  5. makes /etc/spex/agents.env empty, root:spex-seats 0640, where it is
 #     absent, since every seat's unit names it, and prints the four
 #     files the administrator writes before `spex-hub attach` —
@@ -208,7 +210,8 @@ grep -Eq '^[[:space:]]*"name"[[:space:]]*:[[:space:]]*"spex-monorepo"' "$checkou
   not_checkout "its package.json does not name spex-monorepo"
 for file in package-lock.json apps/server/package.json apps/hub/package.json \
   apps/hub/bin/spex-seatctl apps/hub/deploy/spex-hub.service \
-  apps/hub/deploy/spex-seat@.service apps/hub/deploy/spex-hub.sudoers \
+  apps/hub/deploy/spex-seat@.service apps/hub/deploy/spex-seat-reaper.service \
+  apps/hub/deploy/spex-seat-reaper.timer apps/hub/deploy/spex-hub.sudoers \
   apps/hub/deploy/spex-hub.tmpfiles apps/hub/deploy/spex-hub; do
   [ -f "$checkout/$file" ] || not_checkout "$file is missing"
 done
@@ -304,7 +307,7 @@ if ! (cd -- "$checkout" &&
   "$npm" run build); then
   refuse 70 "the build in $checkout failed (above); nothing is installed"
 fi
-for built in apps/server/dist/main.js apps/hub/dist/main.js; do
+for built in apps/server/dist/main.js apps/hub/dist/main.js apps/hub/dist/reaper.js; do
   [ -f "$checkout/$built" ] || refuse 70 "the build made no $built; nothing is installed"
 done
 
@@ -394,7 +397,7 @@ install -m 0644 -o root -g root "$checkout/apps/hub/deploy/spex-hub.tmpfiles" "$
 systemd-tmpfiles --create "$TMPFILES_FILE"
 
 step="installing the units under $UNIT_DIR"
-for unit in spex-hub.service spex-seat@.service; do
+for unit in spex-hub.service spex-seat@.service spex-seat-reaper.service spex-seat-reaper.timer; do
   rendered=$(mktemp "$UNIT_DIR/.$unit.XXXXXX")
   render "$checkout/apps/hub/deploy/$unit" "$rendered"
   chmod 0644 "$rendered"
@@ -415,10 +418,12 @@ rendered=""
 
 step="reloading systemd"
 systemctl daemon-reload
+step="enabling the sweep's timer"
+systemctl enable --now spex-seat-reaper.timer
 helper="$prefix/libexec/spex-seatctl"
 sudo -n -l -U "$HUB_USER" "$helper" stop 1 >/dev/null 2>&1 ||
   refuse 70 "sudo does not let $HUB_USER run $helper: check that /etc/sudoers reads $SUDOERS_DIR (@includedir $SUDOERS_DIR)"
-echo "install.sh: installed the helper, the units and the sudoers fragment"
+echo "install.sh: installed the helper, the units, the sweep's timer (enabled) and the sudoers fragment"
 
 # --- What the administrator does next.
 

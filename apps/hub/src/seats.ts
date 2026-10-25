@@ -11,13 +11,19 @@
 // files standing, a stop that failed asked again at each renewal and at
 // the next start, the debt recorded on the lease. One person's
 // operations run one at a time; once `retire` begins, no admission
-// starts a seat.
+// starts a seat. An admission records its lease and starts the seat, and
+// a renewal records its expiry, under the seat's lock, which the sweep
+// holds while it reads that lease again and stops the seat; the book
+// makes the locks' directory, which the sweep never does (DR-148).
 
 import { runHelper, type HelperConfig } from "./helper.js";
-import { readAdmission, redeemTicket, renewLease } from "./instance.js";
+import { readAdmission, redeemTicket, renewLease, type Admission } from "./instance.js";
 import { probeSeat, readTurnActive, waitForSeat } from "./seat.js";
 import {
+  acquireSeatLock,
+  ensureLocksDir,
   leaseActive,
+  lockHolder,
   mintSecret,
   readLeases,
   sha256,
@@ -26,10 +32,18 @@ import {
   type HubState,
   type Lease,
   type Leases,
+  type SeatLock,
 } from "./state.js";
 
 /** The close code a relay ends with when its seat's lease ends (hub-3). */
 export const LEASE_ENDED = 4401;
+
+/** How long an admission waits for a seat's lock the sweep holds: past
+ * the seat unit's stop timeout (hub-5). */
+const ADMIT_LOCK_WAIT_MS = 60_000;
+/** How long a renewal waits for it; one not recorded is renewed again at
+ * the next round. */
+const RENEW_LOCK_WAIT_MS = 35_000;
 
 export interface SeatBookOptions {
   stateDir: string;
@@ -78,6 +92,17 @@ export class SeatBook {
     readonly state: HubState,
   ) {
     this.leases = readLeases(options.stateDir);
+    // The locks' directory is the hub's to make, served or not (hub-8).
+    ensureLocksDir(options.stateDir);
+  }
+
+  /** Take a seat's lock (hub-5), its directory made again where it went
+   * missing (hub-8). */
+  private lock(id: string, waitMs: number): Promise<SeatLock | undefined> {
+    ensureLocksDir(this.options.stateDir);
+    return acquireSeatLock(this.options.stateDir, id, waitMs, (holder) =>
+      this.options.log(`waiting for the lock of ${id} held by ${lockHolder(holder)}`),
+    );
   }
 
   private save(): void {
@@ -202,65 +227,96 @@ export class SeatBook {
         return { status: 503, body: refusal("hub_stopping", "the hub is stopping") };
       }
       // An admission the instance answered after `retire` began starts no
-      // seat; one already past this check is in retire's snapshot, its
-      // lease recorded before any wait (hub-2, hub-6).
+      // seat; one past this check and the same check once the lock is
+      // held is in retire's snapshot, its lease recorded before any other
+      // wait (hub-2, hub-6).
       if (this.retiring) {
         return { status: 503, body: refusal("server_retiring", "this hub is retiring its server") };
       }
-      const prior = this.leases[person.id];
-      // The lease is recorded before the seat starts, so a seat that
-      // starts late still stops at the lease's end (hub-2).
-      // A seat is wanted running: its stop is owed from here until one
-      // succeeds after the lease's end, whether or not it starts (hub-8).
-      this.leases[person.id] = {
-        login: person.login,
-        expires_at: admission.lease_expires_at,
-        bearer_hash: prior && leaseActive(prior) ? prior.bearer_hash : null,
-        stop_owed: true,
-      };
-      this.save();
-      this.schedule(person.id);
-      const { runDir } = this.options;
-      if (!(await probeSeat(runDir, person.id))) {
-        try {
-          // `create` is idempotent (hub-4): asked before every start, so a
-          // creation that failed is asked again.
-          await runHelper(this.options.helper, "create", person.id);
-          await runHelper(this.options.helper, "start", person.id, mintSecret());
-        } catch (error) {
-          this.options.log(`seat ${person.id} did not start: ${(error as Error).message}`);
-          return {
-            status: 503,
-            body: refusal("seat_unavailable", `seat ${person.id} could not be started`),
-          };
-        }
-        if (!(await waitForSeat(runDir, person.id, this.options.seatTimeoutMs))) {
-          this.options.log(`seat ${person.id} did not listen within ${this.options.seatTimeoutMs} ms`);
-          return {
-            status: 503,
-            body: refusal(
-              "seat_unavailable",
-              `seat ${person.id} did not start within ${Math.round(this.options.seatTimeoutMs / 1000)} seconds`,
-            ),
-          };
-        }
+      // The lease is recorded and the seat started under the seat's lock,
+      // so the sweep stops no seat admitted meanwhile (hub-5).
+      const lock = await this.lock(person.id, ADMIT_LOCK_WAIT_MS);
+      if (!lock) {
+        this.options.log(`seat ${person.id} was not admitted: its lock stayed held for ${ADMIT_LOCK_WAIT_MS / 1000} seconds`);
+        return {
+          status: 503,
+          body: refusal("seat_unavailable", `seat ${person.id} is held by a stop in progress`),
+        };
       }
-      const bearer = mintSecret();
-      this.leases[person.id].bearer_hash = sha256(bearer);
-      this.save();
-      this.options.log(
-        `admitted ${person.login} (${person.id}) until ${admission.lease_expires_at}`,
-      );
-      return {
-        status: 200,
-        body: {
-          endpoint: `wss://${new URL(this.state.address).host}/seats/${person.id}`,
-          bearer,
-          lease_expires_at: admission.lease_expires_at,
-          person,
-        },
-      };
+      try {
+        return await this.admitLocked(person, admission.lease_expires_at);
+      } finally {
+        lock.release();
+      }
     });
+  }
+
+  /** An admission's lease recorded and its seat started, the seat's lock
+   * held (hub-2, hub-4, hub-5). */
+  private async admitLocked(
+    person: Admission["person"],
+    leaseExpiresAt: string,
+  ): Promise<AdmitAnswer> {
+    // Checked again past the lock's wait, for `retire` or the hub's close
+    // may have begun meanwhile; from here the lease is recorded before
+    // any other wait (hub-2, hub-6).
+    if (this.closed) {
+      return { status: 503, body: refusal("hub_stopping", "the hub is stopping") };
+    }
+    if (this.retiring) {
+      return { status: 503, body: refusal("server_retiring", "this hub is retiring its server") };
+    }
+    const prior = this.leases[person.id];
+    // The lease is recorded before the seat starts, so a seat that
+    // starts late still stops at the lease's end (hub-2).
+    // A seat is wanted running: its stop is owed from here until one
+    // succeeds after the lease's end, whether or not it starts (hub-8).
+    this.leases[person.id] = {
+      login: person.login,
+      expires_at: leaseExpiresAt,
+      bearer_hash: prior && leaseActive(prior) ? prior.bearer_hash : null,
+      stop_owed: true,
+    };
+    this.save();
+    this.schedule(person.id);
+    const { runDir } = this.options;
+    if (!(await probeSeat(runDir, person.id))) {
+      try {
+        // `create` is idempotent (hub-4): asked before every start, so a
+        // creation that failed is asked again.
+        await runHelper(this.options.helper, "create", person.id);
+        await runHelper(this.options.helper, "start", person.id, mintSecret());
+      } catch (error) {
+        this.options.log(`seat ${person.id} did not start: ${(error as Error).message}`);
+        return {
+          status: 503,
+          body: refusal("seat_unavailable", `seat ${person.id} could not be started`),
+        };
+      }
+      if (!(await waitForSeat(runDir, person.id, this.options.seatTimeoutMs))) {
+        this.options.log(`seat ${person.id} did not listen within ${this.options.seatTimeoutMs} ms`);
+        return {
+          status: 503,
+          body: refusal(
+            "seat_unavailable",
+            `seat ${person.id} did not start within ${Math.round(this.options.seatTimeoutMs / 1000)} seconds`,
+          ),
+        };
+      }
+    }
+    const bearer = mintSecret();
+    this.leases[person.id].bearer_hash = sha256(bearer);
+    this.save();
+    this.options.log(`admitted ${person.login} (${person.id}) until ${leaseExpiresAt}`);
+    return {
+      status: 200,
+      body: {
+        endpoint: `wss://${new URL(this.state.address).host}/seats/${person.id}`,
+        bearer,
+        lease_expires_at: leaseExpiresAt,
+        person,
+      },
+    };
   }
 
   /** Renew every lease whose seat is in use, and ask again for every
@@ -301,10 +357,22 @@ export class SeatBook {
     const answer = await renewLease(this.state.instance, token, id);
     if (this.closed || this.leases[id] !== lease || !leaseActive(lease)) return;
     if (answer.kind === "renewed") {
-      lease.expires_at = answer.expiresAt;
-      this.save();
-      this.schedule(id);
-      this.options.log(`renewed the lease of ${lease.login} (${id}) until ${lease.expires_at}`);
+      // Recorded under the seat's lock, the instance's answer awaited
+      // outside it, so the sweep stops no seat renewed meanwhile (hub-5).
+      const lock = await this.lock(id, RENEW_LOCK_WAIT_MS);
+      if (!lock) {
+        this.options.log(`the renewal of ${lease.login} (${id}) was not recorded: the seat's lock is held`);
+        return;
+      }
+      try {
+        if (this.closed || this.leases[id] !== lease || !leaseActive(lease)) return;
+        lease.expires_at = answer.expiresAt;
+        this.save();
+        this.schedule(id);
+        this.options.log(`renewed the lease of ${lease.login} (${id}) until ${lease.expires_at}`);
+      } finally {
+        lock.release();
+      }
       return;
     }
     if (answer.kind === "refused" && (answer.status === 403 || answer.status === 404)) {
