@@ -77,6 +77,14 @@ jobs:
           test "$(sudo -n sh -c 'command -v node')" = /usr/local/bin/node
           test "$(readlink -f /usr/local/bin/node)" = "/usr/lib/nodejs/node-$version-linux-x64/bin/node"
 
+      # The runner leaves /opt writable by its own account for its
+      # toolcache; install.sh refuses a prefix under a directory an account
+      # other than root may write (hub-7), and the lane installs at its
+      # default prefix /opt/spex. A plain Ubuntu host has /opt as root's
+      # alone, so the runner is made to match.
+      - name: Root's own /opt
+        run: sudo chown root:root /opt && sudo chmod 0755 /opt
+
       # A release checkout outside any home, as LANE.md unpacks one.
       - name: The commit's tree outside any home
         run: |
