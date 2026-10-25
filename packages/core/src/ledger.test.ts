@@ -1704,6 +1704,60 @@ test("core-service-82/dashboard-33: a restore re-stating a run already parked ke
   store.close();
 });
 
+test("core-service-82/dashboard-33: a restore re-stating a run already waiting on the Boss keeps its question where it was", () => {
+  const { store, projectId } = newProjectStore();
+  addSession(store, projectId, "s1");
+  const lanes = [lane("s1", projectId, false)];
+  const rows = (ledger: LedgerState) =>
+    ledger.attention.map((entry) => [entry.band, entry.kind, entry.intentId, entry.turnId, entry.since]);
+
+  // Q's run parks on a Boss question in Q's turn.
+  queueIntent(store, projectId, "Q");
+  beginTurn(store, "s1", 1, "ask around", 1000);
+  stamp(store, "Q", "s1", 1, 1000);
+  append(store, "s1", {
+    type: "captain_telemetry",
+    topic: "playbook.trace",
+    payload: { sessionId: "run-1", type: "fsm.transition", payload: { from: "work", to: "awaitBossReply" } },
+    turnId: 1,
+    timestamp: 1500,
+  });
+  append(store, "s1", {
+    type: "captain_telemetry",
+    topic: "playbook.fsm.state",
+    payload: { to: "awaitBossReply" },
+    turnId: 1,
+    timestamp: 1500,
+  });
+  finishTurn(store, "s1", 1, 2000);
+  assert.deepEqual(rows(fold(store, lanes)), [["interrupted", "question", uid("Q"), 1, 1500]]);
+
+  // The Boss's answer — a turn of the work that asked (DR-119) — is cut
+  // off, and its restore re-states the run still waiting on the Boss
+  // (core-service-82).
+  beginTurn(store, "s1", 2, "Yes, migrate them", 3000);
+  append(store, "s1", restoringRecord("Yes, migrate them", 3100) as unknown as Record<string, unknown>);
+  beginTurn(store, "s1", 2, "Yes, migrate them", 3110);
+  finishTurn(store, "s1", 2, 3120);
+  append(store, "s1", restoredRecord(2, [{
+    sessionId: "run-1",
+    playbookId: "code",
+    depth: 0,
+    state: { value: "awaitBossReply", stateId: "awaitBossReply", tags: [], status: "active" },
+    pendingBossQuestions: [],
+  }], 3130) as unknown as Record<string, unknown>);
+
+  // The question stands where it was raised — its onset the ask, its
+  // turn Q's first — as a re-stated failure park does. On the fold as it
+  // was, the restore re-stated it in its own turn and at its own time,
+  // so the entry read as raised at the restore.
+  const ledger = fold(store, lanes);
+  assert.equal(stateOf(ledger, "Q").state, "interrupted");
+  assert.equal(stateOf(ledger, "Q").reason, "question");
+  assert.deepEqual(rows(ledger), [["interrupted", "question", uid("Q"), 1, 1500]]);
+  store.close();
+});
+
 test("DR-035/dashboard-33: a session's own park summons on, whatever a later owned turn's error", () => {
   const { store, projectId } = newProjectStore();
   addSession(store, projectId, "s1");
