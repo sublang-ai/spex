@@ -183,7 +183,7 @@ msgstr "{count, plural, other {# 条引用}}"
 msgid "{count, plural, one {# entry} other {# entries}}"
 msgstr "{count, plural, other {# 项}}"
 
-#: src/components/DraftRegisterTab.tsx
+#: src/components/PublishControl.tsx
 msgid "{count, plural, one {# file uploads:} other {# files upload:}}"
 msgstr "{count, plural, other {将上传 # 个文件：}}"
 
@@ -1510,10 +1510,10 @@ msgstr "无法连接 {endpoint} 上的 Spex 核心 — 每秒重试中。网页�
 #: src/components/AgentSettings.tsx
 #: src/components/BindingEditor.tsx
 #: src/components/CompileBand.tsx
-#: src/components/DraftRegisterTab.tsx
 #: src/components/DraftSourceTab.tsx
 #: src/components/InlineConfirm.tsx
 #: src/components/ProjectGroup.tsx
+#: src/components/PublishControl.tsx
 #: src/components/SpaceGroups.tsx
 #: src/components/SpaceInstance.tsx
 #: src/components/SpaceMembers.tsx
@@ -1637,7 +1637,7 @@ msgstr "检查托管平台中…"
 #. the Check host control, while the check runs
 #. the checks a publish makes are running, nothing uploads yet
 #: src/components/CaptainHome.tsx
-#: src/components/DraftRegisterTab.tsx
+#: src/components/PublishControl.tsx
 #: src/components/SpaceSync.tsx
 msgid "Checking…"
 msgstr "检查中…"
@@ -4326,7 +4326,7 @@ msgstr "打开文件夹…"
 msgid "Open it again"
 msgstr "再次打开"
 
-#: src/components/DraftRegisterTab.tsx
+#: src/components/PublishControl.tsx
 msgid "Open its page"
 msgstr "打开其页面"
 
@@ -4725,7 +4725,7 @@ msgstr "PR"
 
 #. upload the spec package to the registry
 #. upload the spec package to the registry
-#: src/components/DraftRegisterTab.tsx
+#: src/components/PublishControl.tsx
 msgid "Publish"
 msgstr "发布"
 
@@ -4734,14 +4734,18 @@ msgstr "发布"
 msgid "publish a reviewed branch as a pull request, wait for its checks, fix red checks once through code, and merge it"
 msgstr "将经审阅的分支发布为 PR，等待其检查，经由 code 修复一次未通过的检查，然后合并"
 
-#: src/components/DraftRegisterTab.tsx
+#: src/components/PublishControl.tsx
+msgid "Publish to {origin}"
+msgstr "发布到 {origin}"
+
+#: src/components/PublishControl.tsx
 msgid "Published {name} {version}"
 msgstr "已发布 {name} {version}"
 
 #. a spec package is being uploaded to the registry
 #. a spec package is being uploaded to the registry
 #. a spec package is being uploaded to the registry
-#: src/components/DraftRegisterTab.tsx
+#: src/components/PublishControl.tsx
 #: src/lib/environments.ts
 msgid "Publishing…"
 msgstr "发布中…"
@@ -5793,7 +5797,7 @@ msgid "Sign in to {who} again"
 msgstr "重新登录 {who}"
 
 #. in Publish's place: the home is not signed in to the instance a publish from this project goes to; {name} is that instance's display name as last read, else its host name
-#: src/components/DraftRegisterTab.tsx
+#: src/components/PublishControl.tsx
 msgid "Sign in to publish at {name}"
 msgstr "登录 {name} 后发布"
 
@@ -6801,7 +6805,7 @@ msgstr "{age}由你更新"
 msgid "Updating…"
 msgstr "更新中…"
 
-#: src/components/DraftRegisterTab.tsx
+#: src/components/PublishControl.tsx
 msgid "Upload {path} to the registry"
 msgstr "将 {path} 上传到注册表"
 

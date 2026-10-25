@@ -727,6 +727,9 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Fixed
 
+- Publishing previews now show the destination instance before confirmation,
+  for both local packages and authored playbooks.
+
 - Expired team-server leases now invalidate their bearer and close relays
   before stopping the seat, including renewal retries and retirement.
 

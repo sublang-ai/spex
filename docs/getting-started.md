@@ -89,9 +89,9 @@ Prepare a valid package folder inside your project using the
 its description, license, and an org you can publish to. In **Playbooks →
 Add from folder**, enter its `org/name` and project-relative folder path,
 then **Add**. Sign in through **Space** to the publishing instance. On the
-local package's row, select **Publish**, review the name, version, and
-upload files, then confirm **Publish**. This uses your existing app sign-in;
-no playbook, compilation, or separate API token is needed.
+local package's row, select **Publish**, review the destination, name,
+version, and upload files, then confirm **Publish**. This uses your existing
+app sign-in; no playbook, compilation, or separate API token is needed.
 
 ### Publish a playbook
 
@@ -105,9 +105,9 @@ no playbook, compilation, or separate API token is needed.
 4. On **Enable**, choose the command and a player per role, then enable it
    for the project. Try its command in a new task and review its work.
 5. Sign in through **Space** to the publishing instance. Return to the
-   author's **Enable** tab and select **Publish**. Review the package name,
-   version, and upload files, then confirm **Publish**. Success shows the
-   published version and package-page link.
+   author's **Enable** tab and select **Publish**. Review the destination,
+   package name, version, and upload files, then confirm **Publish**. Success
+   shows the published version and package-page link.
 
 Only declared package artifacts are published; your whole project and its
 `specs/` directory are not uploaded automatically. Keep the authored package
