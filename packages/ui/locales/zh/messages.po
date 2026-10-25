@@ -750,6 +750,11 @@ msgstr "✗ 取消失败：{reason}"
 msgid "✗ failed"
 msgstr "✗ 失败"
 
+#. examples of exact, caret and tilde registry requirements; preserve the syntax
+#: src/components/EnvironmentSection.tsx
+msgid "1.2.3, ^1.2.3, ~1.2.3"
+msgstr "1.2.3, ^1.2.3, ~1.2.3"
+
 #: src/lib/labels.ts
 msgid "A command the run needs is not installed"
 msgstr "运行所需的命令未安装"
@@ -943,6 +948,11 @@ msgstr "添加已有 Git 仓库，或创建全新项目。"
 #: src/components/ProjectGroup.tsx
 msgid "Add an intent to {project}"
 msgstr "向 {project} 添加意图"
+
+#. open the registry request form for a known package and version requirement
+#: src/components/EnvironmentSection.tsx
+msgid "Add by name"
+msgstr "按名称添加"
 
 #. request a spec package by its folder in the working folder
 #: src/components/EnvironmentSection.tsx
@@ -6851,6 +6861,11 @@ msgstr "使用默认"
 #: src/components/EnvironmentSection.tsx
 msgid "Version of {name}"
 msgstr "{name} 的版本"
+
+#. required registry version: exact, caret or tilde requirement
+#: src/components/EnvironmentSection.tsx
+msgid "Version or range"
+msgstr "版本或范围"
 
 #. a membership that comes through the named group, not the group's or repository's own
 #: src/components/SpaceMembers.tsx

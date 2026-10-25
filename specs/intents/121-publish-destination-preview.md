@@ -20,6 +20,7 @@ Make the actual destination instance visible before confirming a package or play
 ## Tasks
 
 1. Specify, implement, document and verify the shared publishing destination preview.
+2. Integrate the known-package installation mainline while preserving both features and their translations.
 
 ## Verification
 
@@ -31,3 +32,7 @@ Make the actual destination instance visible before confirming a package or play
 - The maintainer independently reviewed the shared destination source, localization and both journey assertions; only guide and comment reflow followed the functional checks.
 - Dependency installation succeeded and retained its pre-existing 17-vulnerability summary; this change does not modify the dependency graph.
 - Live deployed-service publication is outside this change's verification.
+- Follow-up integration with main `6c5e3181`: regenerated the combined catalogs with 1,504 messages per locale and no missing Chinese translations; the only catalog change against that main is the destination message.
+- Passed the required prepush again on the integrated tree and both affected UI files: 93 tests, including known-package installation; the existing spec warning and build advisory remain.
+- Publishing's shared control, target/routing behavior and both browser journey files are unchanged from the earlier passing head; no duplicate local browser invocation was run for the catalog integration.
+- Independent review confirmed the combined guide, specs and translations preserve both intents; successor PR CI remains pending.

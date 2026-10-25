@@ -49,10 +49,11 @@ coordinates; players inspect files, implement, and review through playbooks.
    every role, and select **Enable**. Start a new task and type `/` to find
    its command. Installing a package alone does not enable it.
 
-Private packages never appear in search. Sign in with access, add the
-known `org/name` and version request to the project's `spex.yaml`
-([request format](../specs/packages/environments.md#environments-2)), then
-select **Resolve again** in Playbooks.
+Private packages never appear in search. Sign in with access, select
+**Add from registry → Add by name**, and enter the known `org/name` and
+an explicit version or range, such as `1.2.3`, `^1.2.3`, or `~1.2.3`, then
+**Add**. This also works for known public packages. **Requested** confirms
+the request was accepted; the environment shows installation or an error.
 
 Skills need no role binding. Selected skills, and specs wrapped as skills,
 are exported to `.claude/skills/` for Claude Code and `.agents/skills/` for
@@ -81,6 +82,13 @@ implementing with `/code`. See [Approvals](approvals.md) for permissions.
 
 Publishing needs a claimed org you can publish to; manage claims on
 Space's [Your orgs](https://spex.sublang.ai/account/orgs) page.
+If you do not own a first-level group, open **Space** in Spex and choose
+**New group** under your signed-in publishing instance. Enter **Group name**
+and a lowercase **Path** such as `team-tools`, choose **Create**, then claim
+that **Path** in **Your orgs**. If **New group** is unavailable, ask the
+instance administrator to provide a first-level group you own.
+Your personal namespace alone does not qualify as an org. Choose **Private**
+on a new claim when the packages should be private.
 
 ### Publish a spec or skill package
 

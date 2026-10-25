@@ -750,6 +750,11 @@ msgstr "✗ cancel failed: {reason}"
 msgid "✗ failed"
 msgstr "✗ failed"
 
+#. examples of exact, caret and tilde registry requirements; preserve the syntax
+#: src/components/EnvironmentSection.tsx
+msgid "1.2.3, ^1.2.3, ~1.2.3"
+msgstr "1.2.3, ^1.2.3, ~1.2.3"
+
 #: src/lib/labels.ts
 msgid "A command the run needs is not installed"
 msgstr "A command the run needs is not installed"
@@ -943,6 +948,11 @@ msgstr "Add an existing Git repository or create a new project."
 #: src/components/ProjectGroup.tsx
 msgid "Add an intent to {project}"
 msgstr "Add an intent to {project}"
+
+#. open the registry request form for a known package and version requirement
+#: src/components/EnvironmentSection.tsx
+msgid "Add by name"
+msgstr "Add by name"
 
 #. request a spec package by its folder in the working folder
 #: src/components/EnvironmentSection.tsx
@@ -6851,6 +6861,11 @@ msgstr "Use default"
 #: src/components/EnvironmentSection.tsx
 msgid "Version of {name}"
 msgstr "Version of {name}"
+
+#. required registry version: exact, caret or tilde requirement
+#: src/components/EnvironmentSection.tsx
+msgid "Version or range"
+msgstr "Version or range"
 
 #. a membership that comes through the named group, not the group's or repository's own
 #: src/components/SpaceMembers.tsx
