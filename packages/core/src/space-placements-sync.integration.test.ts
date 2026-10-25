@@ -955,3 +955,50 @@ test("space-98, space-12, space-29: a Leave not confirmed counts a unit changed 
   assert.deepEqual(stopped.placements.map((line) => [line.instance, line.attached]), [[canonicalOrigin(first.url), true], [canonicalOrigin(second.url), true]]);
   assert.deepEqual(remoteNamesOf(clone).sort(), [hostFolder(first), placed.folder].sort());
 });
+
+test("space-98, space-12: a Leave not confirmed counts the units a remaining placement's host no longer holds, found holding no spex at the last check, whatever its tracking ref still names; stopped, it keeps the placement", async (t) => {
+  const { first, second, home, key, clone, placed, secondBare } = await settledAtBoth("leave-empty");
+  t.after(() => home.stop());
+  const firstFolder = hostFolder(first);
+  const firstFile = `placements/${firstFolder}.yaml`;
+  writeFileSync(join(clone, "notes.md"), "everywhere\n");
+  const synced = await home.client.settle("space.sync", { repository: key }, 30_000);
+  assert.equal(synced.sync.phase, "done", JSON.stringify(synced.sync));
+  assert.deepEqual(synced.placements.map((line) => line.outcome?.kind), ["synced", "synced"]);
+
+  // The second's `spex` deleted at its host; the Check finds it holding
+  // none, while the clone's tracking ref still names what it last
+  // fetched (space-8).
+  assert.equal(git(secondBare, "for-each-ref", "--format=%(refname)", "refs/heads/spex"), "refs/heads/spex");
+  const atSecond = git(secondBare, "rev-parse", "spex");
+  git(secondBare, "update-ref", "-d", "refs/heads/spex");
+  const checked = await home.client.settle("space.fetch", { repository: key }, 30_000);
+  assert.equal(checked.sync.phase, "idle", JSON.stringify(checked.sync));
+  assert.equal(placementOf(checked, second.url).branch?.hostEmpty, true, JSON.stringify(placementOf(checked, second.url).branch));
+  assert.equal(git(clone, "rev-parse", "--verify", `refs/remotes/${placed.folder}/spex`), atSecond, "the stale tracking ref stands");
+
+  // The Leave of the first counts every record unit it or the clone
+  // holds — the environment and notes.md, the managed rules, project.json
+  // and the placement files being none — the second holding none
+  // (space-98).
+  let mark = home.client.mark();
+  assert.deepEqual(await home.client.expectOk("space.leave", { repository: key, instance: first.url }), { accepted: true });
+  const stopped = await home.client.waitRepository(mark, key, (row) => row.sync.phase === "stopped", 30_000);
+  assert.deepEqual(stopped.sync, { phase: "stopped", op: "leave", step: "check", cause: "unreceived", message: "2 records have reached no other placement", guidance: "Confirm to remove it anyway.", retry: true, count: 2 });
+  assert.deepEqual(stopped.placements.map((line) => [line.instance, line.attached]), [[canonicalOrigin(first.url), true], [canonicalOrigin(second.url), true]]);
+  assert.deepEqual(remoteNamesOf(clone), [firstFolder, placed.folder]);
+  assert.ok(existsSync(join(clone, firstFile)), "its file kept");
+
+  // Sent confirmed, the first is dropped, the clone moving to its path at
+  // the second (space-98, storage-38).
+  const movedKey = hostKey(second, "acme/atlas-spex");
+  const movedClone = clonePath(home.dataDir, movedKey);
+  mark = home.client.mark();
+  assert.deepEqual(await home.client.expectOk("space.leave", { repository: key, instance: first.url, confirmed: true }), { accepted: true });
+  const moved = await home.client.waitRepository(mark, movedKey, (row) => row.sync.phase !== "running", 30_000);
+  assert.deepEqual([moved.sync, moved.placements.map((line) => line.instance)], [{ phase: "idle" }, [canonicalOrigin(second.url)]], JSON.stringify(moved));
+  assert.ok(existsSync(join(movedClone, ".git")) && !existsSync(clone), "moved under the second's folder");
+  assert.deepEqual(remoteNamesOf(movedClone), [placed.folder]);
+  assert.equal(existsSync(join(movedClone, firstFile)), false, "its file deleted");
+  assert.equal(readFileSync(join(movedClone, "notes.md"), "utf8"), "everywhere\n", "its records kept");
+});

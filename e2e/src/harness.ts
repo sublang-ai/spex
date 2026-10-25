@@ -60,6 +60,7 @@ import {
   startStandinRegistry,
   stubSlcScriptedSource,
   type FakeScript,
+  type FakeRunOptions,
   type StandinHost,
   type StandinPerson,
   type StandinRegistry,
@@ -79,7 +80,7 @@ import {
   type ServerShellOptions,
 } from "spex-server/dist/server.js";
 
-export { expect };
+export { canonicalOrigin, expect };
 
 /** The live lane: the machine's real adapters and Captain (DR-020). */
 export const LIVE = process.env.SPEX_E2E_LIVE === "1";
@@ -215,7 +216,10 @@ export interface AppOptions {
    * person's seat — a plain served core on a scratch root of its own,
    * booted with `seat`'s options as a journey's app is, not in seat
    * mode — while this app's core trusts the hubs' fixture CA beside the
-   * system's (core-service-128). Needs `host`.
+   * system's (core-service-128). A seat booted with `host: true` shares
+   * this app's own stand-in instance, and the registry it fronts, in
+   * place of starting one of its own (`host.share`), so its `signedIn`
+   * signs the seat in there as the same person. Needs `host`.
    */
   servers?: { name: string; seat?: AppOptions }[];
   /**
@@ -427,6 +431,35 @@ function adapterScript(options: AppOptions): FakeScript {
     ],
     ...(demo.fallback ? { fallback: demo.fallback } : {}),
   };
+}
+
+/** Keep the demo's provider call open at its terminal event until the
+ * journey has inspected its live lane (release-31). Other calls pass
+ * through unchanged, including the Captain's hidden routing calls. */
+function heldDemoImports(
+  script: FakeScript,
+  wait: (playerId: string, signal?: AbortSignal) => Promise<void>,
+): ReturnType<typeof fakeAdapterImports>["imports"] {
+  type Adapter = new (...args: any[]) => {
+    run(prompt: string, options?: FakeRunOptions): AsyncIterable<{ type: string }>;
+  };
+  const imports = fakeAdapterImports(script).imports;
+  return Object.fromEntries(Object.entries(imports).map(([name, load]) => [name, async () => {
+    const Base = await (load as () => Promise<Adapter>)();
+    return class extends Base {
+      async *run(prompt: string, options?: FakeRunOptions) {
+        const playerId = prompt.startsWith("Implement:") ? "dev.coder"
+          : prompt.startsWith("Review the change") ? "dev.reviewer" : undefined;
+        for await (const event of super.run(prompt, options)) {
+          if (playerId && event.type === "done") {
+            await wait(playerId, options?.abortSignal);
+            if (options?.abortSignal?.aborted) return;
+          }
+          yield event;
+        }
+      }
+    };
+  }])) as unknown as ReturnType<typeof fakeAdapterImports>["imports"];
 }
 
 /** The compiled run's script behind the authoring agent's: a passing
@@ -722,6 +755,10 @@ export interface App {
    * `authoring.hold`): one token per run, consumed when the run reads
    * it, so a token written before the run starts releases that run. */
   releaseCompile(id: string): void;
+  /** Hold the demo player's next completion until the journey releases
+   * it, leaving its prompt and streamed output available to inspect. */
+  holdPlayer(playerId: "dev.coder" | "dev.reviewer"): void;
+  releasePlayer(playerId: "dev.coder" | "dev.reviewer"): void;
   /** The app preferences file's text, empty when none was written. */
   readPrefs(): string;
   /** Stop the shell, keeping the root; `start` boots it again on the
@@ -888,7 +925,13 @@ async function arrangeApp(
     for (const [index, entry] of options.servers.entries()) {
       const hub = await startStandinHub({ redeem: (ticket) => instance.script.redeemTicket(ticket) });
       owned.push(hub);
-      const seat = await startApp(entry.seat ?? {});
+      // A seat asking for a host shares this app's instance, where its
+      // `signedIn` signs it in.
+      const seatOptions: AppOptions =
+        entry.seat?.host === true
+          ? { ...entry.seat, host: { share: { host: instance, ...(registry ? { registry } : {}) } } }
+          : (entry.seat ?? {});
+      const seat = await startApp(seatOptions);
       owned.push(seat);
       hub.relayTo(seat.url.replace(/^http/, "ws"));
       const server: StandinServer = { id: `srv_${index + 1}`, name: entry.name, group: HOST_GROUP, address: hub.url };
@@ -946,6 +989,20 @@ async function arrangeApp(
     );
     env = { ...baseEnv, SPEX_SLC: `${process.execPath} ${stubPath}`, SPEX_NODE: process.execPath };
   }
+  const playerHolds = new Map<string, { promise: Promise<void>; release: () => void }>();
+  const waitForPlayer = async (playerId: string, signal?: AbortSignal) => {
+    const hold = playerHolds.get(playerId);
+    if (!hold || signal?.aborted) return;
+    let onAbort: (() => void) | undefined;
+    try {
+      await Promise.race([hold.promise, new Promise<void>((resolve) => {
+        onAbort = resolve;
+        signal?.addEventListener("abort", onAbort, { once: true });
+      })]);
+    } finally {
+      if (onAbort) signal?.removeEventListener("abort", onAbort);
+    }
+  };
   const shellOptions: ServerShellOptions = {
     host: "127.0.0.1",
     port: 0,
@@ -976,7 +1033,7 @@ async function arrangeApp(
             ? fakeAdapterImports(askingScript({ delayMs: options.agentDelayMs ?? 1 })).imports
             : options.realCaptain
             ? fakeAdapterImports({ fallback: { result: JSON.stringify({ action: "respond", text: "Acknowledged by the real Captain." }) } }).imports
-            : fakeAdapterImports(adapterScript(options)).imports,
+            : heldDemoImports(adapterScript(options), waitForPlayer),
           adapterRuntime: () => ({ usable: true }),
           discoverAgentModels: options.discoverAgentModels ?? (async (adapter) => fixtureModelDiscovery(adapter)),
           ...(options.realCaptain || options.park || options.failPlayer || options.ask || options.compiled ? {} : { captainFactory: async (_composed: unknown, sessionId: string) => demoCaptain(sessionId, { governedCompletion: options.governedCompletion }) }),
@@ -1138,6 +1195,18 @@ async function arrangeApp(
       // The playbook artifact of the spec package under development in
       // the project's working folder (environments-10).
       return join(projectDir, "spex-packages", id, "playbooks", "en", id);
+    },
+    holdPlayer(playerId) {
+      if (playerHolds.has(playerId)) throw new Error(`${playerId} is already held`);
+      let release!: () => void;
+      const promise = new Promise<void>((resolve) => { release = resolve; });
+      playerHolds.set(playerId, { promise, release });
+    },
+    releasePlayer(playerId) {
+      const hold = playerHolds.get(playerId);
+      if (!hold) throw new Error(`${playerId} is not held`);
+      playerHolds.delete(playerId);
+      hold.release();
     },
     releaseCompile(id) {
       if (!options.authoring?.hold) throw new Error("releaseCompile needs authoring.hold");
@@ -1528,6 +1597,35 @@ export const test = base.extend<{ app: App; appOptions: AppOptions }>({
     }
   },
 });
+
+/** What the page's sockets carried (`tapSockets`). */
+export interface SocketTap {
+  received: string[];
+  sent: string[];
+  urls: string[];
+  /** Each socket's own frames, in the order the page dialed them. */
+  sockets: { url: string; received: string[]; sent: string[] }[];
+}
+
+/** Every frame the page's sockets carried, each way, from its first
+ * load on, with the URLs the page dialed. */
+export function tapSockets(page: Page): SocketTap {
+  const tap: SocketTap = { received: [], sent: [], urls: [], sockets: [] };
+  page.on("websocket", (socket) => {
+    const own = { url: socket.url(), received: [] as string[], sent: [] as string[] };
+    tap.urls.push(own.url);
+    tap.sockets.push(own);
+    socket.on("framereceived", (frame) => {
+      tap.received.push(String(frame.payload));
+      own.received.push(String(frame.payload));
+    });
+    socket.on("framesent", (frame) => {
+      tap.sent.push(String(frame.payload));
+      own.sent.push(String(frame.payload));
+    });
+  });
+  return tap;
+}
 
 /** Open the app at its token URL and wait for the shell to draw. */
 export async function open(page: Page, app: App, path = ""): Promise<void> {

@@ -1067,6 +1067,11 @@ msgstr "智能体会话 {session}"
 msgid "Agents"
 msgstr "智能体"
 
+#. the second step on the welcome page at a team server, beside its label Seat; {server} is the server's name
+#: src/components/CaptainHome.tsx
+msgid "Agents run on {server} as you, in folders the server allocates"
+msgstr "智能体以你的身份在 {server} 上运行，文件夹由服务器分配"
+
 #: src/components/ProjectsSurface.tsx
 msgid "ahead of upstream"
 msgstr "领先于上游"
@@ -3120,8 +3125,10 @@ msgstr "群组名称"
 msgid "Group records"
 msgstr "群组记录"
 
+#. label of the first step on the welcome page at a team server: your groups on the Git host, whose spex repositories are the projects there
 #. the surface: your groups on the Git host and their spex repositories
 #. the surface: your groups on the Git host and their spex repositories
+#: src/components/CaptainHome.tsx
 #: src/components/NavRail.tsx
 #: src/components/SpaceSurface.tsx
 msgid "Groups"
@@ -4306,9 +4313,10 @@ msgstr "打开 {title} — {reason}"
 msgid "Open {title} — running in {project}"
 msgstr "打开 {title} — 正在 {project} 中运行"
 
+#. primary action of the welcome page at a team server: opens the project palette listing your groups' projects there
 #: src/components/CaptainHome.tsx
-msgid "Open a project"
-msgstr "打开项目"
+msgid "Open a project from your groups"
+msgstr "从群组打开项目"
 
 #: src/components/DashboardSurface.tsx
 msgid "Open and send a message to pick it up."
@@ -4322,6 +4330,11 @@ msgstr "打开“启用”"
 #: src/components/SpaceSync.tsx
 msgid "Open folder…"
 msgstr "打开文件夹…"
+
+#. secondary action of the welcome page at a team server: shows the Groups surface at that server
+#: src/components/CaptainHome.tsx
+msgid "Open Groups"
+msgstr "打开群组"
 
 #: src/components/SpaceSignIn.tsx
 msgid "Open it again"
@@ -5470,6 +5483,11 @@ msgstr "搜索注册表并请求某个版本"
 #: src/components/EnvironmentSection.tsx
 msgid "Searching…"
 msgstr "搜索中…"
+
+#. label of the second step on the welcome page at a team server: your seat, the place your agents run on that server
+#: src/components/CaptainHome.tsx
+msgid "Seat"
+msgstr "席位"
 
 #: src/components/CaptainHome.tsx
 msgid "See how to start"
@@ -6956,6 +6974,11 @@ msgstr "当前正在写入的进程"
 msgid "width — citations"
 msgstr "宽度 — 引用数"
 
+#. headline of the welcome page at a team server where you have no project yet; {server} is the server's name
+#: src/components/CaptainHome.tsx
+msgid "Work on {server} from this computer."
+msgstr "从本机在 {server} 上工作。"
+
 #: src/components/DraftSourceTab.tsx
 msgid "Workflow source"
 msgstr "工作流源文"
@@ -7054,3 +7077,8 @@ msgstr "你自己的群组的记录也会保存在那里。"
 #: src/components/CaptainHome.tsx
 msgid "your project"
 msgstr "你的项目"
+
+#. the first step on the welcome page at a team server, beside its label Groups; "here" is that server
+#: src/components/CaptainHome.tsx
+msgid "Your projects here come from the spex repositories of your groups"
+msgstr "这里的项目来自你所在群组的 spex 仓库"

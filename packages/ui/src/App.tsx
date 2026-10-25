@@ -438,7 +438,7 @@ function WorkspaceSurface({
   /** The ledger-fed attention map the nav shares (DR-035). */
   attentionBySession: Map<string, AttentionItem>;
   /** An attention activation still owed its landing (run-view-91). */
-  pendingFocus?: { sessionId: string; turnId: number };
+  pendingFocus?: { sessionId: string; turnId?: number; at?: number };
   onFocusHandled: () => void;
 }) {
   // The place this surface shows (run-view-168): every read and act
@@ -1050,6 +1050,11 @@ function WorkspaceSurface({
                 ? pendingFocus.turnId
                 : undefined
             }
+            focusAt={
+              pendingFocus?.sessionId === activeSession.id
+                ? pendingFocus.at
+                : undefined
+            }
             onFocusHandled={onFocusHandled}
           />
         )
@@ -1164,7 +1169,8 @@ export function App() {
   // (run-view-91): held until the session's run view takes it.
   const [pendingFocus, setPendingFocus] = useState<{
     sessionId: string;
-    turnId: number;
+    turnId?: number;
+    at?: number;
   }>();
 
   // The ledger loads with the connection; intents.changed keeps it
@@ -1186,15 +1192,15 @@ export function App() {
     setSurface("Workspace");
   };
 
-  // Opening with a turn id lands at that turn's place in the thread
-  // (run-view-91): the question bubble, failure line, or delivery card.
+  // An attention entry lands at its turn's place, or at its failure's
+  // onset where it names no turn (run-view-91).
   // A session is opened at its own place, this computer's unless one
   // is named (dashboard-9, run-view-168).
-  const openSessionAndShow = (sessionId: string, turnId?: number, place?: string) => {
+  const openSessionAndShow = (sessionId: string, turnId?: number, place?: string, focusAt?: number) => {
     const store = storeAt(place);
     void store.getState().focusSession(sessionId);
     setPendingFocus(
-      turnId !== undefined ? { sessionId, turnId } : undefined,
+      turnId !== undefined || focusAt !== undefined ? { sessionId, turnId, at: focusAt } : undefined,
     );
     showPlace(store);
   };
@@ -1497,6 +1503,9 @@ export function App() {
         ? activeTabSessionId(value.workspaceTabs, value.currentProjectId)
         : undefined,
     shown: store === shown,
+    // The place's heading shows that place on the Projects surface: its
+    // current project's view, or its welcome page where it holds no project.
+    onShow: () => showPlace(store),
     expanded: value.expandedProjects,
     onExpanded: (projectId, expanded) =>
       store.getState().toggleProjectExpanded(projectId, expanded),
@@ -1674,7 +1683,10 @@ export function App() {
                 key={shown.place.key}
                 onNavigate={navigateFrom(shown)}
                 onOpenPalette={openPalette}
-                onOpenOwnProject={isLocalPlace(shown.place) ? openAddProject : openPalette}
+                // This computer's welcome adds a local project; a seat's
+                // greets the member with its server form, opening the
+                // palette at its groups (run-view-174).
+                onOpenOwnProject={openAddProject}
                 attentionBySession={attentionBySession}
                 pendingFocus={pendingFocus}
                 onFocusHandled={() => setPendingFocus(undefined)}

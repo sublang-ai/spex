@@ -7,6 +7,7 @@
 
 Accepted (2026-10-23) on the owner's direction to make merging timely while several people land work on `main` at once.
 Extends [DR-086](086-tests-in-tiers.md) in the CI check tier: the check is the gate every merge into `main` passes through, run once per pull-request head.
+Extended by [DR-149](149-the-privileged-lane-runs-on-ci.md): the hub's privileged lane runs beside the checks on CI and is no required check.
 
 ## Context
 
@@ -19,7 +20,7 @@ The suites held assumptions the CI platform did not share: an order Git's listin
 ## Decision
 
 - `main` is protected: a merge into it requires every job of the CI workflow to have passed on the pull request's head, with no requirement that the branch be up to date with `main`, so a green run stands until the branch itself changes.
-- A pull request merges by GitHub's auto-merge once its checks pass, the maintainer having asked for the merge when the pull request was ready, so no interval stands between green and merged for `main` to move in; where the repository can hold no protection — a private repository on GitHub's free plan — the maintainer merges through `npm run merge-on-green`, which waits for the head's checks and merges the moment they are green.
+- A pull request merges by GitHub's auto-merge once its checks pass, the maintainer having asked for the merge when the pull request was ready, so no interval stands between green and merged for `main` to move in; where the repository can hold no protection — a private repository on GitHub's free plan — the maintainer merges through `npm run merge-on-green`, which waits for the checks of the head's newest run and merges the moment they are green.
 - The CI workflow runs one run per pull-request head: a push to the branch cancels the run of the head it supersedes, while a push to `main` cancels nothing.
 - A pull request's run is the Linux and Windows matrix plus one macOS smoke job — the macOS runner queue was the slowest link — and a push to `main` and a nightly run take the full matrix, so a macOS-only difference is found on `main` within a day and never holds a merge.
 - A base branch is never deleted while a pull request still targets it: GitHub retargets its children only when the base merges, and deleting it closes them.

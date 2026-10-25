@@ -1,0 +1,31 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
+
+# The sweep (hub-5, DR-148): run every minute by spex-seat-reaper.timer,
+# whether a hub runs or not, it stops, through the seat helper run as
+# root with no sudo, every seat whose lease in the hub's table has
+# expired while its unit is still active, under the seat's lock the hub
+# shares (hub-8); it writes nothing to the table. It runs as root, so the
+# unit names no User=. install.sh writes this unit for its prefix and
+# node, in place of /opt/spex and /usr/bin/node; its header holds the
+# paths.
+
+[Unit]
+Description=Spex seat sweep: stops seats whose lease ended
+
+[Service]
+Type=oneshot
+# A oneshot has no start timeout by default: a hung sweep would hold off every later one.
+TimeoutStartSec=5min
+ExecStart=/usr/bin/node /opt/spex/app/apps/hub/dist/reaper.js --state-dir=/var/lib/spex-hub --helper=/opt/spex/libexec/spex-seatctl
+UMask=0077
+# Root touches the hub's state, for the seats' locks, and the seats'
+# runtime directory, where the helper's stop removes the token, and
+# nothing else: the rest of the system is read-only to the sweep, so no
+# path the hub's account could redirect leads root to write elsewhere
+# (hub-5). The helper runs as root with no sudo, so no new privilege is
+# wanted.
+ProtectSystem=strict
+ReadWritePaths=/var/lib/spex-hub /run/spex
+NoNewPrivileges=yes
+PrivateTmp=yes

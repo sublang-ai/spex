@@ -30,7 +30,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { readFileSync } from "node:fs";
 import { fakeAdapterImports, type FakeAdapterStats, type FakeScript } from "./testing/fake-adapter.js";
 import { createScriptedCaptain } from "./testing/scripted-captain.js";
-import { ASKING, askingScript, parkingScript } from "./testing/demo.js";
+import { ASKING, askingScript, failingScript, parkingScript } from "./testing/demo.js";
 import type { LineSpawner } from "./compile.js";
 import { defaultSpawner } from "./compile.js";
 import { stubSlcSource } from "./testing/stub-slc.js";
@@ -263,6 +263,10 @@ async function startHarness(
     /** Watch the config files and the clones as a running app does. */
     watchConfig?: boolean;
     loadModule?: import("./service.js").CoreServiceOptions["loadModule"];
+    /** Replaces the default scripted Captain's turn. */
+    captainScript?: Parameters<typeof createScriptedCaptain>[0];
+    /** Awaited as a session's lifecycle publishes its state. */
+    sessionStatePublished?: import("./service.js").CoreServiceOptions["sessionStatePublished"];
   } = {},
 ): Promise<Harness> {
   const dir = scratchDir("spex-core-it-");
@@ -289,12 +293,12 @@ async function startHarness(
     },
   });
 
-  const captain = createScriptedCaptain(async (turn, context, session) => {
+  const captain = createScriptedCaptain(options.captainScript ?? (async (turn, context, session) => {
     await session.emitStatus(`◇ turn ${turn.id}`);
     await context.callCaptain(`route: ${turn.prompt}`, { visibility: "hidden" });
     await context.callPlayer("dev.coder", `${turn.prompt}`);
     await context.emitReply("Finished the scripted turn.");
-  });
+  }));
 
   const service = await CoreService.start({
     token: "test",
@@ -319,6 +323,9 @@ async function startHarness(
     ...(options.scaffoldEnv ? { scaffoldEnv: options.scaffoldEnv } : {}),
     ...(options.compileSpawner
       ? { compileSpawner: options.compileSpawner }
+      : {}),
+    ...(options.sessionStatePublished
+      ? { sessionStatePublished: options.sessionStatePublished }
       : {}),
   });
   return { service, stats, imports, dir, dataDir, projectDir };
@@ -2361,6 +2368,211 @@ test(
     assert.equal(row?.state, "queued");
     assert.deepEqual([row?.next?.standing, row?.next?.manualStart], ["stopped", true]);
     assert.deepEqual(ledger.attention.filter((entry) => entry.sessionId === session.id), []);
+  },
+);
+
+test(
+  "core-service-131: an abort before the runtime begins the turn is held and takes effect as it begins",
+  { timeout: 180_000 },
+  async (t) => {
+    // The turn is active from its acceptance, while the shared lifecycle
+    // prepares it — the lease marked, the repository reconciled — before
+    // the runtime has a turn to abort. The seam holds the lifecycle at
+    // the checkpoint marking the turn begun, and the Captain's decision
+    // call is scripted far past the settlement bound: a lost abort lets
+    // it run its whole length, as the long-turn journey saw.
+    const script = parkingScript();
+    let holding = true;
+    const held: (() => void)[] = [];
+    const release = () => {
+      holding = false;
+      for (const resume of held.splice(0)) resume();
+    };
+    const harness = await startHarness(VALID_CONFIG, {
+      realShell: true,
+      script: { rules: [{ match: /"action"/, response: { result: "", delayMs: 120_000 } }, ...(script.rules ?? [])], fallback: script.fallback },
+      seedCommit: true,
+      sessionStatePublished: async (session) => {
+        if (holding && session.turnActive) await new Promise<void>((resume) => held.push(resume));
+      },
+    });
+    const client = new Client(harness.service.port());
+    t.after(async () => {
+      release();
+      client.close();
+      await harness.service.stop();
+    });
+    await client.open();
+    const project = await client.expectOk("project.register", { path: harness.projectDir });
+    const session = await client.expectOk("session.create", { projectId: project.id });
+    await client.expectOk("subscribe", { channel: { kind: "session", sessionId: session.id } });
+    await client.expectOk("turn.submit", { sessionId: session.id, text: "Add a line to work.txt" });
+    // The turn publishes its state as it is accepted and again at the
+    // lifecycle's checkpoint; with both held, the runtime has not begun
+    // the turn and no call has started.
+    const deadline = Date.now() + 60_000;
+    while (held.length < 2) {
+      if (Date.now() > deadline) throw new Error("the turn's checkpoint was never published");
+      await sleep(10);
+    }
+    assert.equal(harness.stats.runs.length, 0, "no call has started while the turn is held");
+    const reply = await client.expectOk("turn.abort", { sessionId: session.id });
+    assert.equal(reply.aborted, true, "the abort is taken while the turn is active");
+    release();
+
+    // The stop settles well inside the call's scripted length: the
+    // abort took effect as the runtime began the turn (core-service-6),
+    // and a call under an aborted signal never reaches the agent.
+    const stopped = await settledSession(client, session.id, 1);
+    assert.ok(client.records("session").some(({ record }) => record.type === "turn_aborted"));
+    assert.equal(harness.stats.runs.length, 0, "no agent call ran under the aborted turn");
+    assert.equal(stopped.recovery, undefined);
+    assert.equal(stopped.continuable, true, stopped.continuationReason ?? "no reason given");
+    assert.equal(stopped.parked, undefined);
+  },
+);
+
+test(
+  "core-service-133: a real coder failure parking the run summons as a failure, for the session's own entry and for its intent",
+  { timeout: 180_000 },
+  async (t) => {
+    // The real /code coder's call fails before it touches the repository
+    // (DR-117): the run parks in its failure state inside a turn that
+    // finishes, the stream's one runtime_error naming no turn — the park
+    // the fold used to read as an unread turn, or as an intent's finish.
+    const harness = await startHarness(VALID_CONFIG, {
+      realShell: true,
+      script: failingScript(),
+      seedCommit: true,
+    });
+    const client = new Client(harness.service.port());
+    t.after(async () => {
+      client.close();
+      await harness.service.stop();
+    });
+    await client.open();
+    const project = await client.expectOk("project.register", { path: harness.projectDir });
+    const own = await client.expectOk("session.create", { projectId: project.id });
+    await client.expectOk("subscribe", { channel: { kind: "session", sessionId: own.id } });
+    await client.expectOk("turn.submit", { sessionId: own.id, text: "Add a line to work.txt" });
+    const parked = await settledSession(client, own.id, 1);
+    assert.equal(parked.parked?.reason, "failure");
+    assert.equal(parked.failed, true);
+    // The one runtime_error the stream holds is the core's record of the
+    // Captain's failed call, naming its turn (core-service-135); it follows
+    // the run's move, so the entry's onset stays the move, the attempt's
+    // first failure (core-service-49).
+    assert.deepEqual(
+      client.records("session").filter(({ record }) => record.type === "runtime_error").map(({ record }) => (record as { turnId?: unknown }).turnId),
+      [1],
+    );
+    const move = client.records("session").find(({ record }) =>
+      (record as { topic?: unknown }).topic === "playbook.trace" &&
+      (record as { payload?: { playbookId?: unknown; payload?: { to?: unknown } } }).payload?.playbookId === "code" &&
+      (record as { payload?: { payload?: { to?: unknown } } }).payload?.payload?.to === "failed");
+    assert.ok(move, "the run's own move into its failure state streams");
+    // The session's own entry: an interrupted-band failure, parked, with
+    // the runtime's cause, naming no intent (core-service-49).
+    const standIn = (await client.expectOk("ledger.get", {})).attention.filter((entry) => entry.sessionId === own.id);
+    assert.deepEqual(
+      standIn.map((entry) => [entry.band, entry.kind, entry.parked, entry.intentId, entry.turnId]),
+      [["interrupted", "failure", true, undefined, 1]],
+    );
+    assert.equal(typeof standIn[0]?.cause?.code, "string", "the entry carries the cause the runtime attached");
+    assert.equal(standIn[0]?.since, move.record.timestamp, "the entry's onset is the move, not the later error");
+
+    // The same park under an intent: interrupted on the failure, never
+    // finished awaiting a verdict, its session's summary failed.
+    const intent = await client.expectOk("intent.queue", { projectId: project.id, text: "Add another line to work.txt" });
+    const dispatched = await client.expectOk("session.create", { projectId: project.id });
+    await client.expectOk("turn.submit", { sessionId: dispatched.id, text: intent.text, intentId: intent.id });
+    await settledSession(client, dispatched.id, 1);
+    const ledger = await client.expectOk("ledger.get", {});
+    const row = ledger.intents.find((entry) => entry.intent.id === intent.id);
+    assert.equal(row?.state, "interrupted");
+    assert.equal(row?.reason, "failure");
+    const entries = ledger.attention.filter((entry) => entry.sessionId === dispatched.id);
+    assert.deepEqual(
+      entries.map((entry) => [entry.band, entry.kind, entry.parked, entry.intentId]),
+      [["interrupted", "failure", true, intent.id]],
+    );
+    // Its onset is its own run's move, ahead of the core's record.
+    const { records: dispatchedRecords } = await client.expectOk("history.get", { sessionId: dispatched.id });
+    const dispatchedMove = dispatchedRecords.find(({ record }) =>
+      (record as { topic?: unknown }).topic === "playbook.trace" &&
+      (record as { payload?: { playbookId?: unknown } }).payload?.playbookId === "code" &&
+      (record as { payload?: { payload?: { to?: unknown } } }).payload?.payload?.to === "failed");
+    assert.ok(dispatchedMove, "the dispatched run's own move into its failure state is stored");
+    assert.ok(dispatchedRecords.some(({ record }) => record.type === "runtime_error" && record.timestamp > dispatchedMove.record.timestamp),
+      "the core's own record follows the move");
+    assert.equal(entries[0]?.since, dispatchedMove.record.timestamp);
+    assert.equal((await client.expectOk("session.list", {})).find((entry) => entry.id === dispatched.id)?.failed, true);
+  },
+);
+
+test(
+  "core-service-134: the core names the turn for its own failures within one, and none for one before its turn started",
+  { timeout: 180_000 },
+  async (t) => {
+    const harness = await startHarness(VALID_CONFIG, {
+      captainScript: async (turn, context, session) => {
+        if (turn.prompt.includes("explode")) throw new Error("the Captain exploded");
+        await session.emitStatus(`◇ turn ${turn.id}`);
+        await context.callCaptain(`route: ${turn.prompt}`, { visibility: "hidden" });
+        await context.callPlayer("dev.coder", `${turn.prompt}`);
+        await context.emitReply("Finished the scripted turn.");
+      },
+    });
+    const client = new Client(harness.service.port());
+    t.after(async () => {
+      client.close();
+      await harness.service.stop();
+    });
+    await client.open();
+    const project = await client.expectOk("project.register", { path: harness.projectDir });
+    const errorsOf = async (sessionId: string) =>
+      (await client.expectOk("history.get", { sessionId })).records.flatMap(({ record }) =>
+        record.type === "runtime_error" ? [record as unknown as { turnId: number | null; timestamp: number; message: string }] : []);
+
+    // A throw inside the turn: the runtime's record and the core's own
+    // both name it, and the session's own entry stands at the first.
+    const thrown = await client.expectOk("session.create", { projectId: project.id });
+    await client.expectOk("turn.submit", { sessionId: thrown.id, text: "explode it" });
+    await settledSession(client, thrown.id, 1);
+    const thrownErrors = await errorsOf(thrown.id);
+    assert.ok(thrownErrors.length >= 2, `the runtime and the core both record the throw; got ${JSON.stringify(thrownErrors)}`);
+    assert.deepEqual(thrownErrors.map((error) => error.turnId), thrownErrors.map(() => 1));
+    const standIn = (await client.expectOk("ledger.get", {})).attention.filter((entry) => entry.sessionId === thrown.id);
+    assert.deepEqual(standIn.map((entry) => [entry.band, entry.kind, entry.turnId, entry.since]),
+      [["interrupted", "failure", 1, thrownErrors[0]!.timestamp]]);
+
+    // An intent's turn finishes; a second intent's whitespace-only
+    // message then fails before its turn starts.
+    const later = await client.expectOk("session.create", { projectId: project.id });
+    const first = await client.expectOk("intent.queue", { projectId: project.id, text: "Tidy the changelog" });
+    await client.expectOk("turn.submit", { sessionId: later.id, text: first.text, intentId: first.id });
+    await settledSession(client, later.id, 1);
+    const second = await client.expectOk("intent.queue", { projectId: project.id, text: "Then the readme" });
+    await client.expectOk("turn.submit", { sessionId: later.id, text: "   ", intentId: second.id });
+    const deadline = Date.now() + 60_000;
+    let prestart: { turnId: number | null; message: string } | undefined;
+    while (!(prestart = (await errorsOf(later.id)).at(-1))) {
+      if (Date.now() > deadline) throw new Error("the pre-start failure was never recorded");
+      await sleep(50);
+    }
+    await harness.service["sessions"].settled(later.id);
+    assert.match(prestart.message, /must contain text/);
+    assert.equal(prestart.turnId, null, "a failure before any turn of its own started names none");
+    const ledger = await client.expectOk("ledger.get", {});
+    assert.equal(ledger.intents.find((entry) => entry.intent.id === first.id)?.state, "finished");
+    assert.deepEqual(
+      ledger.attention.filter((entry) => entry.sessionId === later.id).map((entry) => [entry.band, entry.kind, entry.intentId]),
+      [["finished", "finish", first.id]],
+    );
+    const queued = ledger.intents.find((entry) => entry.intent.id === second.id);
+    assert.equal(queued?.state, "queued");
+    assert.equal(queued?.next?.standing, "failed");
+    assert.equal((await client.expectOk("session.list", {})).find((entry) => entry.id === later.id)?.failed, true);
   },
 );
 

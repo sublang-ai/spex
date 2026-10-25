@@ -10,8 +10,11 @@
 // account unable to read the other's home, that the seat's token and
 // socket are readable by the hub and that seat alone, that a stop at
 // the lease's end kills a stubborn agent child within the unit's
-// timeout with the seat's files standing, and that `retire` leaves the
-// homes and removes the credentials (hub-4, hub-5, hub-6). Every
+// timeout with the seat's files standing, that the sweep's timer is
+// enabled and, with the hub's unit stopped, stops a seat whose lease
+// lapsed within two minutes of its expiry with its files standing, the
+// hub's next start recording that lease ended, and that `retire` leaves
+// the homes and removes the credentials (hub-4, hub-5, hub-6). Every
 // assertion prints one PASS or FAIL line naming hub-10 and the items
 // its clause cites; the exit status is 1 on any FAIL.
 //
@@ -54,6 +57,12 @@ const TLS_DIR = `${ETC}/lane-tls`;
 const TLS_CERT = `${TLS_DIR}/cert.pem`;
 const TLS_KEY = `${TLS_DIR}/key.pem`;
 const UNIT_DIR = "/etc/systemd/system";
+const UNITS = ["spex-hub.service", "spex-seat@.service", "spex-seat-reaper.service", "spex-seat-reaper.timer"];
+const SWEEP = "spex-seat-reaper.service";
+const SWEEP_TIMER = "spex-seat-reaper.timer";
+/** The sweep's bound while no hub runs: its minute and the seat unit's
+ * stop (hub-5). */
+const SWEEP_BOUND_MS = 120_000;
 const SUDOERS = "/etc/sudoers.d/spex-hub";
 const TMPFILES = "/etc/tmpfiles.d/spex-hub.conf";
 const NODE = "/usr/bin/node";
@@ -483,8 +492,7 @@ function installedTraces() {
     RUN_BASE,
     SUDOERS,
     TMPFILES,
-    `${UNIT_DIR}/spex-hub.service`,
-    `${UNIT_DIR}/spex-seat@.service`,
+    ...UNITS.map((unit) => `${UNIT_DIR}/${unit}`),
   ]
     .filter((path) => existsSync(path))
     .concat(["spex-hub"].filter((name) => passwd(name)))
@@ -500,6 +508,8 @@ function seatAccounts() {
 
 async function removePrevious() {
   info("--fresh: removing what an earlier install or lane left on this host");
+  await run("systemctl", ["disable", "--now", SWEEP_TIMER]);
+  await run("systemctl", ["stop", SWEEP], { timeoutMs: 180_000 });
   await run("systemctl", ["disable", "--now", "spex-hub.service"]);
   const units = (await run("systemctl", ["list-units", "--all", "--plain", "--no-legend", "spex-seat@*"])).stdout;
   for (const line of units.split("\n")) {
@@ -522,8 +532,7 @@ async function removePrevious() {
     RUN_BASE,
     SUDOERS,
     TMPFILES,
-    `${UNIT_DIR}/spex-hub.service`,
-    `${UNIT_DIR}/spex-seat@.service`,
+    ...UNITS.map((unit) => `${UNIT_DIR}/${unit}`),
   ]);
   await run("systemctl", ["daemon-reload"]);
   await run("systemctl", ["reset-failed"]);
@@ -577,7 +586,7 @@ async function install() {
   check(hasMode(STATE_DIR, "dir", 0o700, "spex-hub", "spex-hub"), "[hub-8]", "the hub's state directory is spex-hub's alone (0700)", describe(STATE_DIR));
   check(hasMode(HELPER, "file", 0o755, "root", "root"), "[hub-4]", "the helper is installed root:root 0755", describe(HELPER));
   check(hasMode(COMMAND, "file", 0o755, "root", "root"), "[hub-7]", "the spex-hub command is installed root:root 0755", describe(COMMAND));
-  for (const unit of ["spex-hub.service", "spex-seat@.service"]) {
+  for (const unit of UNITS) {
     check(hasMode(`${UNIT_DIR}/${unit}`, "file", 0o644, "root", "root"), "[hub-7]", `the unit ${unit} is installed root:root 0644`, describe(`${UNIT_DIR}/${unit}`));
   }
   const seatUnit = unitOf("1");
@@ -1030,6 +1039,138 @@ async function stopAtLeaseEnd() {
   );
 }
 
+async function sweepWhileNoHub() {
+  const [ada, bob] = PERSONS;
+  const account = `spex-${ada.id}`;
+  const home = `/home/${account}`;
+  const unit = unitOf(ada.id);
+  phase(`the sweep while no hub runs (hub-5, hub-10): ${unit}`);
+  const enabled = (await run("systemctl", ["is-enabled", SWEEP_TIMER])).stdout.trim();
+  const timerState = await activeState(SWEEP_TIMER);
+  check(
+    enabled === "enabled" && timerState === "active",
+    "[hub-5] [hub-7]",
+    `the sweep's timer ${SWEEP_TIMER} is enabled and active`,
+    `is-enabled ${enabled}; is-active ${timerState}`,
+  );
+  const sweepUser = await unitProperty(SWEEP, "User");
+  check(sweepUser === "", "[hub-5]", `systemd reads ${SWEEP} as root's, naming no User=`, `User=${sweepUser}`);
+
+  // The member admitted again on a lease the instance grants for 20 s:
+  // her seat, stopped at the last lease's end, starts anew.
+  const ticket = standin.ticket(ada, SHORT_LEASE_MS);
+  const answer = await admit(ca, JSON.stringify({ ticket }));
+  must(
+    answer.status === 200,
+    "[hub-2]",
+    `${ada.login} is admitted again on a lease of ${SHORT_LEASE_MS / 1000} s`,
+    `${answer.status} ${JSON.stringify(answer.body ?? answer.error)}`,
+  );
+  bearers.set(ada.id, answer.body.bearer);
+  const expiresAt = Date.parse(answer.body.lease_expires_at);
+  must((await activeState(unit)) === "active", "[hub-4]", `${unit} runs again`, await activeState(unit));
+  const listing = async () =>
+    (await run("find", [home, "-xdev", "-printf", "%y %m %u %p\\n"])).stdout.split("\n").filter(Boolean).sort();
+  const before = await listing();
+
+  const sweptSince = Math.floor(Date.now() / 1000);
+  const stopHub = await run("systemctl", ["stop", "spex-hub"], { timeoutMs: 180_000 });
+  const hubState = await activeState("spex-hub.service");
+  must(stopHub.code === 0 && hubState !== "active", "[hub-5]", "systemctl stop spex-hub stops the hub's unit", `exit ${stopHub.code}; ${hubState}`);
+  const table = digest(`${STATE_DIR}/leases.yaml`);
+  const running = await activeState(unit);
+  check(
+    running === "active" && Date.now() < expiresAt,
+    "[hub-5]",
+    `with no hub running, ${unit} runs on before its lease's end`,
+    `${running}, ${expiresAt - Date.now()} ms before the end`,
+  );
+
+  info(`waiting for the lease's end at ${answer.body.lease_expires_at} and the sweep's stop within ${SWEEP_BOUND_MS / 1000} s of it`);
+  let stoppedAt;
+  const stopped = await waitFor(
+    async () => {
+      const state = await activeState(unit);
+      if (state !== "inactive" && state !== "failed") return false;
+      stoppedAt = Date.now();
+      return true;
+    },
+    expiresAt - Date.now() + SWEEP_BOUND_MS,
+    500,
+  );
+  must(stopped, "[hub-5]", `${unit} stops with no hub running`, `still ${await activeState(unit)}`);
+  const afterS = (stoppedAt - expiresAt) / 1000;
+  check(
+    afterS >= 0 && afterS * 1000 <= SWEEP_BOUND_MS,
+    "[hub-5]",
+    `the sweep stopped the seat after its lease's end and within two minutes of it (${afterS.toFixed(1)} s after)`,
+    `${afterS.toFixed(1)} s`,
+  );
+  let sweepLine;
+  await waitFor(
+    async () => {
+      const journal = await run("journalctl", ["--no-pager", "-o", "cat", "-u", SWEEP, `--since=@${sweptSince}`], { timeoutMs: 60_000 });
+      sweepLine = journal.stdout.split("\n").find((line) => line.includes(`stopped the seat of ${ada.login} (${ada.id})`));
+      return sweepLine !== undefined;
+    },
+    15_000,
+    500,
+  );
+  check(sweepLine !== undefined, "[hub-5]", `the sweep's journal records the stop: ${sweepLine ?? "-"}`, "no such line");
+  check(
+    digest(`${STATE_DIR}/leases.yaml`) === table,
+    "[hub-5] [hub-8]",
+    "the sweep left the lease table as the stopped hub left it",
+    "leases.yaml changed",
+  );
+  // What the core's own graceful stop removes (core-service-39); every
+  // other path stands.
+  const coreRuntime = /\/\.spex\/(\.lease|local\/asset-staging|local\/uploads\/)/;
+  const after = await listing();
+  const lost = before.filter((line) => !after.includes(line) && !coreRuntime.test(line));
+  check(
+    lost.length === 0 && hasMode(home, "dir", 0o700, account, account),
+    "[hub-5]",
+    `the seat's files stand: every path of ${home} before the sweep's stop but the core's own lease and scratch is there after it`,
+    `lost ${lost.join("; ")}`,
+  );
+  check((await activeState(unitOf(bob.id))) === "active", "[hub-5]", `the other seat, its lease holding, runs on`, await activeState(unitOf(bob.id)));
+
+  // The hub's next start finds the stop it owes done.
+  const startedSince = Math.floor(Date.now() / 1000);
+  const start = await run("systemctl", ["start", "spex-hub"]);
+  must(start.code === 0, "[hub-5]", "systemctl start spex-hub starts the hub again", firstLine(start.stderr));
+  const serving = await waitFor(async () => (await probeHub(ca)) === 405, 30_000);
+  must(serving, "[hub-5]", "the restarted hub serves", `GET /admit answered ${await probeHub(ca)}`);
+  const endedLine = new RegExp(`the lease of ${ada.login} \\(${ada.id}\\) ended: its stop was still owed when the hub started; seat stopped`);
+  const ended = await waitFor(
+    async () =>
+      endedLine.test(
+        (await run("journalctl", ["--no-pager", "-o", "cat", "-u", "spex-hub.service", `--since=@${startedSince}`], { timeoutMs: 60_000 })).stdout,
+      ),
+    15_000,
+    500,
+  );
+  check(ended, "[hub-5] [hub-8]", "the hub's next start records that lease ended, its owed stop found done", "no such line in the hub's journal");
+  let lease;
+  try {
+    lease = JSON.parse(readFileSync(`${STATE_DIR}/leases.yaml`, "utf8"))[ada.id];
+  } catch {
+    lease = undefined;
+  }
+  check(lease !== undefined && lease.stop_owed === undefined && lease.bearer_hash === null, "[hub-8]", "the lease is recorded ended, its stop no longer owed", JSON.stringify(lease));
+  const status = await asUser("spex-hub", [COMMAND, "status"]);
+  echo(status);
+  const adaRow = status.stdout.split("\n").find((line) => line.startsWith(ada.id));
+  const bobRow = status.stdout.split("\n").find((line) => line.startsWith(bob.id));
+  check(
+    status.code === 0 && /stopped\s+ended/.test(adaRow ?? "") && /running\s+until/.test(bobRow ?? ""),
+    "[hub-6]",
+    "spex-hub status lists the swept seat stopped, its lease ended, and the other seat running",
+    `exit ${status.code}`,
+  );
+}
+
 async function retire() {
   phase("retire (hub-4, hub-6)");
   const kept = new Map();
@@ -1095,7 +1236,7 @@ async function retire() {
 
 async function noSecretsLogged() {
   phase("no secret in the logs (hub-8)");
-  const units = ["spex-hub.service", ...PERSONS.map((person) => unitOf(person.id))];
+  const units = ["spex-hub.service", SWEEP, ...PERSONS.map((person) => unitOf(person.id))];
   const journal = await run("journalctl", ["--no-pager", "-o", "cat", ...units.flatMap((unit) => ["-u", unit])], { timeoutMs: 60_000 });
   const values = [server.token, agentToken, ...bearers.values(), ...seatTokens.values()];
   const found = values.filter((value) => value && journal.stdout.includes(value)).length;
@@ -1153,6 +1294,7 @@ async function main() {
     await isolation();
     await relay();
     await stopAtLeaseEnd();
+    await sweepWhileNoHub();
     await retire();
     await noSecretsLogged();
   } catch (error) {

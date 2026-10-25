@@ -2061,28 +2061,6 @@ export class Store {
     return count;
   }
 
-  /** Runtime-error records inside a turn range, oldest first — the
-   * failure condition and its onset time (DR-035). */
-  runtimeErrors(
-    sessionId: string,
-    fromTurnId: number,
-    toTurnId: number | null,
-  ): { turnId: number | null; timestamp: number }[] {
-    const out: { turnId: number | null; timestamp: number }[] = [];
-    for (const entry of this.records.get(sessionId) ?? []) {
-      if (!hasPresentationHeader(entry.record)) continue;
-      if (entry.record.type !== "runtime_error") continue;
-      const turnId = entry.record.turnId;
-      // A null-turn error belongs to no turn range, exactly as the
-      // SQL `turn_id >= ?` excluded it — returning it for every
-      // intent's range would flip ledger verdicts.
-      if (turnId === null || turnId < fromTurnId) continue;
-      if (toTurnId !== null && turnId >= toTurnId) continue;
-      out.push({ turnId, timestamp: entry.record.timestamp });
-    }
-    return out;
-  }
-
   // -- records --------------------------------------------------------------
 
   private recordsOf(sessionId: string): StoredRecord[] {

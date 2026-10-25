@@ -31,6 +31,8 @@ test("run-view-98: the first task runs, settles, and accepts a follow-up", async
   const home = page.getByTestId("captain-home");
   await expect(home).toContainText("demo-project");
 
+  app.holdPlayer("dev.coder");
+  app.holdPlayer("dev.reviewer");
   await send(page, "Fix the token refresh in auth.ts");
 
   // The tab and the sidebar row carry the task as the title.
@@ -56,6 +58,7 @@ test("run-view-98: the first task runs, settles, and accepts a follow-up", async
   await expect(reviewer).toHaveCount(0);
   await expect(coder).toContainText(/editing/i);
   await expect(coder).toContainText(/Edit|Read/);
+  app.releasePlayer("dev.coder");
   await expect(reviewer).toBeVisible();
   await expect(page.locator('[data-testid^="player-pane-"]')).toHaveCount(2);
   expect(await page.locator('[data-testid^="player-pane-"]').evaluateAll(
@@ -68,6 +71,7 @@ test("run-view-98: the first task runs, settles, and accepts a follow-up", async
   await expect(box).toBeDisabled();
   await expect(page.getByRole("button", { name: "Send", exact: true })).toBeDisabled();
   await expect(page.getByTestId("queue-indicator")).toHaveCount(0);
+  app.releasePlayer("dev.reviewer");
   await expect(captain).toContainText("/code finished");
   await expect(box).toBeEnabled();
   await box.fill("Also add a test for expiry skew");
@@ -101,6 +105,30 @@ test("run-view-98: the first task runs, settles, and accepts a follow-up", async
   await expect(page.getByRole("button", { name: "New session", exact: true })).toHaveCount(0);
   await expect(tree).toContainText(/fix the token refresh/i);
   await expect(page.getByTestId(/^sidebar-mark-/).first()).toHaveAttribute("data-life", "idle");
+
+  // The tab switch above, a fresh page replay, and a restarted shell
+  // retain the same called lanes and their first-call order (run-view-7).
+  const laneIds = ["player-pane-dev.coder", "player-pane-dev.reviewer"];
+  const expectLanes = async () => {
+    await expect.poll(() => page.locator('[data-testid^="player-pane-"]').evaluateAll(
+      (panes) => panes.map((pane) => pane.getAttribute("data-testid")),
+    )).toEqual(laneIds);
+  };
+  await expectLanes();
+  await page.reload();
+  // A fresh page starts at New task; reopening the saved session from
+  // the sidebar is what reconstructs its view from persisted records.
+  await expect(page.getByTestId("start-composer")).toBeEnabled();
+  await tree.getByRole("treeitem", { name: /^Fix the token refresh in auth\.ts —/ }).click();
+  await expect(box).toBeEnabled();
+  await expectLanes();
+  await app.stop();
+  await expect(page.getByText(/reconnecting to the spex core/i).first()).toBeVisible();
+  await app.start();
+  await expect(page.getByText(/reconnecting to the spex core/i)).toHaveCount(0);
+  await expect(tab).toBeVisible();
+  await expect(box).toBeEnabled();
+  await expectLanes();
 });
 
 test("run-view-99: a player question parks the session until the Boss replies", async ({
@@ -194,19 +222,23 @@ test("run-view-118: a collapsed lane unfolds when its call opens", async ({
   // The follow-up runs the code narration again: the coder works in
   // view, then the nested review calls the reviewer and its lane
   // unfolds itself (run-view-7, run-view-117).
+  app.holdPlayer("dev.coder");
+  app.holdPlayer("dev.reviewer");
   await page.getByTestId("boss-composer").fill("Also add a test for expiry skew");
   await page.getByRole("button", { name: "Send", exact: true }).click();
   await expect(coder).toContainText("coder working");
   await expect(coder).toBeInViewport();
+  app.releasePlayer("dev.coder");
   await expect(reviewer).not.toHaveAttribute("data-collapsed", "true");
   await expect(page.getByRole("button", { name: "Collapse dev.reviewer" })).toBeVisible();
   await expect(reviewer).toContainText(/Review/);
+  app.releasePlayer("dev.reviewer");
   await expect(page.getByTestId("captain-pane").getByTestId("system-line")
     .filter({ hasText: "/code finished" })).toHaveCount(2);
 });
 
 // A pane appearing or brought into view leaves the reader's place
-// (run-view-174, DR-146): side by side and stacked, the reply sent from
+// (run-view-176, DR-146): side by side and stacked, the reply sent from
 // the keyboard calls the coder and then the reviewer, and neither the
 // page nor the split moves, the composer stays in the window, and focus
 // never enters the grid.
@@ -214,7 +246,7 @@ for (const layout of [
   { name: "side by side", width: 1024, height: 800 },
   { name: "stacked", width: 600, height: 500 },
 ] as const) {
-  test(`run-view-174: a lane appearing leaves the reader's place — ${layout.name}`, async ({
+  test(`run-view-176: a lane appearing leaves the reader's place — ${layout.name}`, async ({
     page,
     app,
   }) => {
@@ -228,9 +260,12 @@ for (const layout of [
     const box = page.getByTestId("boss-composer");
     await expect(box).toBeEnabled();
     await box.fill("Yes, migrate them too");
-    await box.press("Enter");
+    app.holdPlayer("dev.coder");
+    app.holdPlayer("dev.reviewer");
 
-    // Sampled every frame from here until the run finishes: what moved
+    // Watch before submitting, so even the first lane's arrival is
+    // sampled. The player gates keep each live phase until inspected.
+    // Sampled every frame until the run finishes: what moved
     // that a lane's arrival must not move.
     const watch = await page.evaluateHandle(() => {
       // Every box around the Captain column and the grid, up to the
@@ -260,6 +295,7 @@ for (const layout of [
       requestAnimationFrame(step);
       return seen;
     });
+    await box.press("Enter");
 
     const grid = page.getByTestId("player-grid");
     const inGrid = async (testId: string) => {
@@ -273,6 +309,7 @@ for (const layout of [
     await expect(coder).toContainText("coder working");
     await expect(reviewer).toHaveCount(0);
     await expect.poll(() => inGrid("player-pane-dev.coder")).toBe(true);
+    app.releasePlayer("dev.coder");
     await expect(reviewer).toContainText("reviewer working");
     await expect.poll(() => inGrid("player-pane-dev.reviewer")).toBe(true);
     // The two lanes overflow the grid, so showing the reviewer took the
@@ -281,6 +318,7 @@ for (const layout of [
     expect(await page.locator('[data-testid^="player-pane-"]').evaluateAll(
       (panes) => panes.map((pane) => pane.getAttribute("data-testid")),
     )).toEqual(["player-pane-dev.coder", "player-pane-dev.reviewer"]);
+    app.releasePlayer("dev.reviewer");
     await expect(page.getByTestId("captain-pane")).toContainText("/code finished");
 
     const seen = await watch.evaluate((state) => {
@@ -380,25 +418,39 @@ test.describe("a long active turn", () => {
     await open(page, app);
     await send(page, "/code add a hello world function");
     await expect(page.getByTestId("abort-button")).toBeVisible();
+    // The coder's long call is under way, so the layout is read in the
+    // long turn itself and the Abort below reaches a call in flight: on a
+    // loaded runner an abort landing before the turn's first call had
+    // begun missed it, leaving the call running past the core's stop
+    // bound when the fixture stopped the core.
+    await expect(page.getByTestId("player-pane-dev.coder")).toContainText(/editing/i, { timeout: 60_000 });
 
     await expect(page.getByTestId("boss-composer")).toBeDisabled();
     await expect(page.getByTestId("send-button")).toBeDisabled();
     await expect(page.getByTestId("queue-indicator")).toHaveCount(0);
 
     // The transcript keeps a readable share, and the action row is
-    // still in the window with the page unmoved (DR-041 §9).
-    const pane = (await page.getByTestId("captain-pane").boundingBox())!;
-    expect(pane.height).toBeGreaterThan(40);
-    for (const control of ["abort-button", "send-button"]) {
-      const rect = (await page.getByTestId(control).boundingBox())!;
-      expect(rect.y + rect.height, control).toBeLessThanOrEqual(700);
-    }
-    expect(
-      await page.evaluate(() => [
-        document.documentElement.scrollHeight,
-        document.documentElement.clientHeight,
-      ]),
-    ).toEqual([700, 700]);
+    // still in the window with the page unmoved (DR-041 §9), once the
+    // layout has settled around the running turn.
+    await expect(async () => {
+      const pane = (await page.getByTestId("captain-pane").boundingBox())!;
+      expect(pane.height).toBeGreaterThan(40);
+      for (const control of ["abort-button", "send-button"]) {
+        const rect = (await page.getByTestId(control).boundingBox())!;
+        expect(rect.y + rect.height, control).toBeLessThanOrEqual(700);
+      }
+      expect(
+        await page.evaluate(() => [
+          document.documentElement.scrollHeight,
+          document.documentElement.clientHeight,
+        ]),
+      ).toEqual([700, 700]);
+    }).toPass({ timeout: 30_000 });
+
+    // The turn ends here, where a loaded runner may take its time to
+    // settle the aborted call, not in the core's bounded stop at teardown.
+    await page.getByTestId("abort-button").click();
+    await expect(page.getByTestId("abort-button")).toHaveCount(0, { timeout: 60_000 });
   });
 });
 

@@ -835,10 +835,13 @@ export function applyRecord(
       // record's own data travels with it: where the runtime attached
       // a structured cause, the line draws as the failure card
       // instead (run-view-147, DR-075).
+      // Legacy errors naming no turn keep the latest turn as their
+      // transcript context. Attention for a failure between turns
+      // finds this line by its onset instead (run-view-91).
       pushCaptain(view, {
         kind: "error",
         ...plainFailure(String(r.message)),
-        turnId: r.turnId,
+        turnId: typeof r.turnId === "number" ? r.turnId : view.currentTurnId,
         at: r.timestamp,
         data: r.data,
       });

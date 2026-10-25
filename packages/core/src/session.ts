@@ -6,7 +6,7 @@ import { randomUUID } from "node:crypto";
 import { isAbsolute } from "node:path";
 import { pathToFileURL } from "node:url";
 import { isDeepStrictEqual } from "node:util";
-import { createTmuxPlayRuntime, type Captain, type PlayerAdapterImports } from "@sublang/cligent/tmux-play";
+import { createTmuxPlayRuntime, type Captain, type PlayerAdapterImports, type TmuxPlayRuntime } from "@sublang/cligent/tmux-play";
 import type { OwnerAssetStore, SessionTurnInput } from "@sublang/playbook/session-assets";
 import { openSessionHost, discardSessionUncertain, type SessionHostController } from "@sublang/playbook/session-host";
 import {
@@ -128,6 +128,10 @@ interface LiveSession {
   /** Ownership at this turn's start, before a possible human verdict. */
   turnIntentId?: string;
   operation?: Promise<void>;
+  /** The reason of an abort requested while the runtime had no turn to
+   * abort — during the lifecycle's preparation of the turn — applied as
+   * the runtime begins it (core-service-6). */
+  pendingAbort?: string;
 }
 
 /** The members a stored structure names: its playbooks, and its
@@ -659,9 +663,17 @@ export class SessionManager {
         // turn; only the shell supplies its reply and durable settlement.
         createHostRuntime: async (input: Parameters<typeof createTmuxPlayRuntime>[0]) => {
           const shell = input.captain;
-          return createTmuxPlayRuntime({...input, captain: {
+          const runtime: TmuxPlayRuntime = await createTmuxPlayRuntime({...input, captain: {
             async init(session) { await shell.init?.(session); await fixture?.init?.(session); },
             async handleBossTurn(turn,context) {
+              // The runtime has begun the turn: an abort requested before
+              // it had one to abort takes effect now, ahead of any call
+              // (core-service-6).
+              if (entry?.pendingAbort !== undefined) {
+                const reason = entry.pendingAbort;
+                entry.pendingAbort = undefined;
+                runtime.abortActiveTurn(reason);
+              }
               await fixture?.handleBossTurn(turn,{...context, emitReply: async () => {}});
               await shell.handleBossTurn(turn,context);
             },
@@ -680,6 +692,7 @@ export class SessionManager {
             // publishes none still advertises none.
             ...controlSurfaces(shell),
           }});
+          return runtime;
         },
         onStoredRecord: async (record) => {
           this.record(sessionId, record, entry);
@@ -687,7 +700,8 @@ export class SessionManager {
           // English, deliberately (core-service-111): the page matches
           // this record's text to phrase the failure itself, and the
           // reason is the runtime's own words.
-          if (entry && result?.status === "error") await this.appendError(entry, `The Captain's turn failed: ${result.error ?? result.finalText ?? "unknown error"}`);
+          const callTurn = (record.record as {turnId?: unknown}).turnId;
+          if (entry && result?.status === "error") await this.appendError(entry, `The Captain's turn failed: ${result.error ?? result.finalText ?? "unknown error"}`, typeof callTurn === "number" ? callTurn : null);
         },
         onCheckpoint: async () => {
           await this.store.refreshSession(sessionId, true);
@@ -820,9 +834,12 @@ export class SessionManager {
     }
   }
 
-  private async appendError(entry: LiveSession, message: string): Promise<void> {
+  /** Record a failure of the core's own, naming the turn it lies in, or
+   * none where it came before any turn of its own started
+   * (core-service-135). */
+  private async appendError(entry: LiveSession, message: string, turnId: number | null = null): Promise<void> {
     const afterSeq = this.store.maxSeq(entry.info.id);
-    await entry.controller.lease.append({type:"runtime_error", turnId:null, timestamp:this.now(), message});
+    await entry.controller.lease.append({type:"runtime_error", turnId, timestamp:this.now(), message});
     const added = await entry.controller.lease.readStream({afterSeq});
     for (const item of added.entries) this.record(entry.info.id, item, entry);
   }
@@ -1067,7 +1084,11 @@ export class SessionManager {
   private startTurn(entry: LiveSession, text: string | SessionTurnInput | undefined, restore: { input: string } | false, control?: { kind: "recovery" | "ending"; controlId: string }): void {
     this.assertAdmission();
     entry.turnIntentId = undefined;
+    entry.pendingAbort = undefined;
     entry.turnActive = true;
+    // Where this operation's own turn starts: a failure after it names
+    // that turn, one before it names none (core-service-135).
+    const operationSeq = this.store.maxSeq(entry.info.id);
     // A turn accepted while a run waits on the Boss's question answers
     // it or asks it back (DR-119), so the question the last settlement
     // read leaves now; this turn's own settlement reads the run afresh
@@ -1103,12 +1124,16 @@ export class SessionManager {
         // a runtime_error as well would misclassify it as failure.
         const stopped = this.intentionalStops.has(entry.info.id);
         if (!stopped) {
-          try { await this.appendError(entry, error instanceof Error ? error.message : String(error)); }
+          const started = this.store.getRecords(entry.info.id, {afterSeq: operationSeq})
+            .filter(({record}) => record.type === "turn_started").at(-1)?.record as {turn?: {id?: unknown}; turnId?: unknown} | undefined;
+          const turnId = started?.turn?.id ?? started?.turnId;
+          try { await this.appendError(entry, error instanceof Error ? error.message : String(error), typeof turnId === "number" ? turnId : null); }
           catch { /* The lifecycle retains incomplete evidence and ownership. */ }
         }
       } finally {
         this.options.cancelApprovals?.(entry.info.id);
         entry.turnActive = false;
+        entry.pendingAbort = undefined;
         entry.pendingIntentId = undefined;
         const turnId = this.store.listTurns(entry.info.id).at(-1)?.turnId;
         const intentId = entry.turnIntentId;
@@ -1167,9 +1192,18 @@ export class SessionManager {
   private stopActiveTurn(entry: LiveSession, reason: string): void {
     this.intentionalStops.add(entry.info.id);
     try {
+      // The runtime aborts only a turn it has begun, and it begins the
+      // turn after the shared lifecycle has prepared it — the lease
+      // marked, the repository reconciled — so an abort requested in
+      // that window would be lost and the first call would run its
+      // whole length under a live signal. The reason is held on the
+      // entry as well, and applied as the runtime begins the turn
+      // (core-service-6).
+      entry.pendingAbort = reason;
       (entry.runtime.abortActiveTurn as (reason?: string) => void)(reason);
       this.options.cancelApprovals?.(entry.info.id);
     } catch (error) {
+      entry.pendingAbort = undefined;
       this.intentionalStops.delete(entry.info.id);
       throw error;
     }

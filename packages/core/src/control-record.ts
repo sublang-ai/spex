@@ -229,6 +229,9 @@ export function restoreReports(
 ): RestoreReport[] {
   const reports: RestoreReport[] = [];
   const lastStart = new Map<number, number>();
+  // The first terminal after each turn id's latest start: the end of a
+  // report its recorded position alone names, which no marker matched.
+  const lastEnd = new Map<number, number>();
   let marked: string | undefined;
   for (const { seq, record } of records) {
     const input = restoringInput(record);
@@ -247,6 +250,7 @@ export function restoreReports(
         const turn = (record as { turn?: { id?: unknown; prompt?: unknown } }).turn;
         if (typeof turn?.id !== "number") break;
         lastStart.set(turn.id, seq);
+        lastEnd.delete(turn.id);
         if (marked !== undefined && turn.prompt === marked) reports.push({ turnId: turn.id, startSeq: seq });
         marked = undefined;
         break;
@@ -255,6 +259,7 @@ export function restoreReports(
       case "turn_aborted": {
         const report = reports.at(-1);
         if (report && report.turnId === turnId && report.endSeq === undefined) report.endSeq = seq;
+        if (typeof turnId === "number" && !lastEnd.has(turnId)) lastEnd.set(turnId, seq);
         break;
       }
       case "captain_telemetry": {
@@ -263,7 +268,8 @@ export function restoreReports(
         if (report && report.positionSeq === undefined) report.positionSeq = seq;
         else if (!report) {
           const startSeq = lastStart.get(turnId);
-          reports.push({ turnId, ...(startSeq !== undefined ? { startSeq } : {}), positionSeq: seq });
+          const endSeq = lastEnd.get(turnId);
+          reports.push({ turnId, ...(startSeq !== undefined ? { startSeq } : {}), ...(endSeq !== undefined ? { endSeq } : {}), positionSeq: seq });
         }
         break;
       }

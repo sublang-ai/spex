@@ -233,6 +233,11 @@ export interface CoreServiceOptions {
    * placement, and the catch-up's push is marked `at: "catch-up"`
    * (space-12). */
   spaceBeforeStep?: (event: SpaceStepEvent) => void | Promise<void>;
+  /** Test seam: awaited as a session's own lifecycle publishes its state
+   * — at a turn's acceptance and at the checkpoint that marks the turn
+   * begun, before the runtime has begun it — so a suite can hold a turn
+   * in that window (core-service-6). */
+  sessionStatePublished?: (session: import("./protocol.js").SessionInfo) => void | Promise<void>;
   /** Your own group's folder name for a new home; this device's user
    * name by default (storage-2). */
   own?: string;
@@ -764,6 +769,7 @@ export class CoreService {
       }
       this.broadcast({ type: "session.state", session });
       this.events.onSessionState?.(session);
+      await this.options.sessionStatePublished?.(session);
     };
     this.sessions.onLedgerChange = (projectId) => {
       this.queueLedgerChange([projectId]);

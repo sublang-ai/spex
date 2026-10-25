@@ -2337,7 +2337,7 @@ class RepositorySync {
     if (leaving !== null) held.push(readStorageTree(this.dir, leaving));
     const others: StorageTree[] = [];
     for (const placement of this.placementsNow()) {
-      if (placement.name === name) continue;
+      if (placement.name === name || this.runs.get(placement.name)?.remoteEmpty === true) continue;
       const spex = await commitOf(this.refOf(placement.name));
       if (spex !== null) others.push(...await this.reachedTrees(head, spex));
     }

@@ -287,7 +287,7 @@ When a client sends `space.leave` [[space-29](#space-29)], the core shall, as an
 | Case | Outcome |
 | --- | --- |
 | its instance signed out, another signed-in instance listing its host repository [[git-host-5](git-host.md#git-host-5)], and the clone holding no placement at that instance | nothing fetched or dropped: its remote renamed to the folder of the instance it follows [[space-60](#space-60)] and its file rewritten to that instance [[storage-36](storage.md#storage-36)] |
-| a unit that placement's `spex` or the clone holds is held by no remaining placement's `spex`, as the clone last fetched or pushed it or at their last shared commit — every unit, where none remains — and the leave is not `confirmed` | nothing dropped; the leave stopped `unreceived`, naming the count |
+| a unit that placement's `spex` or the clone holds is held by no remaining placement's `spex`, as the clone last fetched or pushed it or at their last shared commit — a placement whose last check found its host holding no `spex` holding none; every unit, where none remains — and the leave is not `confirmed` | nothing dropped; the leave stopped `unreceived`, naming the count |
 | the placement cannot be read, and the leave is not `confirmed` | nothing dropped; the leave stopped, saying that records pushed there since the last sync may be left behind |
 | it is the first placement | the clone moved with the drop [[storage-38](storage.md#storage-38)], a refusal of that move refusing the leave whole, naming the session or the instance, with Retry |
 
@@ -1108,6 +1108,7 @@ When an integration suite runs a real core on a scratch home signed in to two st
 - a path placement set by `space.remote.set` syncs last with no catalog read and no notice, and no merge drops it [[space-12](#space-12)] [[space-5](#space-5)] [[space-57](#space-57)] [[space-91](#space-91)];
 - a repository the first lists with no clone here reads as a row carrying its one listed placement, `attached` false and `absent`, with its members' count [[space-30](#space-30)];
 - the commit identity is the first's account, each remote holds its id in its own section, and `space.tree` reads `placements/<folder>.yaml` as a placement, shared [[space-32](#space-32)] [[space-23](#space-23)] [[space-35](#space-35)];
+- `space.leave` of the second, not confirmed, stops `unreceived` counting a unit changed here that no remaining placement holds and not one this device holds unchanged since its last shared commit with the first while a peer rewrote it there; of the first, once a Check found the second's host holding no `spex`, it counts every record unit whatever the second's tracking ref still names; each keeps the placement, and the second sent `confirmed` drops the first, moving the clone to its path at the second [[space-98](#space-98)] [[space-12](#space-12)];
 - no reply or broadcast holds a string under either stand-in's URL but that URL itself [[space-30](#space-30)] [[space-1](#space-1)].
 
 #### space-100

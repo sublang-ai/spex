@@ -203,7 +203,11 @@ async function administer(parsed: Parsed, io: Io): Promise<number> {
           },
         };
       } else if (request.op === "evict") {
-        answer = { ok: true, evicted: await book.evict(request.id) };
+        const result = await book.evict(request.id);
+        answer =
+          result.failure === undefined
+            ? { ok: true, evicted: result.found }
+            : { ok: true, evicted: result.found, failure: result.failure };
       } else {
         const result = await book.retire();
         answer = { ok: true, retired: result.seats, failures: result.failures };
@@ -231,6 +235,14 @@ async function administer(parsed: Parsed, io: Io): Promise<number> {
       io.err(`spex-hub: no seat ${parsed.positionals[0]}`);
       return 1;
     }
+    // A stop that failed is reported with its cause (hub-6).
+    if (answer.failure) {
+      io.out(`evicted seat ${parsed.positionals[0]}: its lease ended; its files stand`);
+      io.err(
+        `spex-hub: the seat did not stop: ${answer.failure}; the hub asks again at its next renewal round and at its next start`,
+      );
+      return 1;
+    }
     io.out(`evicted seat ${parsed.positionals[0]}: its lease ended and its seat stopped; its files stand`);
     return 0;
   }
@@ -241,6 +253,11 @@ async function administer(parsed: Parsed, io: Io): Promise<number> {
     `the server's record and its seat devices stay at the instance until a group Owner retires the server at ${state.instance}/account/servers`,
   );
   for (const failure of answer.failures) io.err(`spex-hub: ${failure}`);
+  // No hub serves a retired server, so recovery is this command again
+  // (hub-6).
+  if (answer.failures.length > 0) {
+    io.err("spex-hub: run retire again once the cause is fixed: each stop and wipe is asked again");
+  }
   return answer.failures.length ? 1 : 0;
 }
 

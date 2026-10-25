@@ -19,6 +19,7 @@ import type {
   QueueSchedule,
   StoredRecord,
 } from "./protocol.js";
+import { hasPresentationHeader } from "./protocol.js";
 import { controlKind, isStoppedTurnReason, restoredPosition, restoreReports, runsElsewhere } from "./control-record.js";
 import type { Store } from "./store.js";
 
@@ -56,11 +57,21 @@ export interface SessionConditions {
    * A run stands parked in its failure state. Unlike a question, a
    * later Boss turn does not clear this: a failure is resolved by the
    * run leaving that state — recovered or ended — and not by talking
-   * about something else (DR-062, dashboard-10). `cause` is the
-   * structured cause the runtime attached to that failure, where it
-   * attached one (DR-075).
+   * about something else (DR-062, dashboard-10). `turnId` is the turn
+   * the park lies in: the one its move named, or the one open when it
+   * was recorded where it named none, as a runtime_error naming none
+   * lies (core-service-49) — null where none was open; a run a restore
+   * re-stated keeps the park the stream showed (core-service-82).
+   * `cause` is the structured cause the runtime emitted beside that
+   * failure, where it emitted one (DR-075).
    */
   failure?: { since: number; turnId: number | null; cause?: FailureCause };
+  /** Every standing failure park, `failure` first, ordered by onset:
+   * each identified run's park, or the aggregate fallback park where no
+   * identified one stands. Each belongs to the intent whose turn range
+   * holds its turn (dashboard-33), so one park never stands for, or
+   * hides, another. */
+  failures?: { since: number; turnId: number | null; cause?: FailureCause }[];
   /** Latest structured failure cause, including an unparked failure. */
   failureCause?: FailureCause;
 }
@@ -191,7 +202,7 @@ function captainOwn(trace: { playbookId?: unknown; depth?: unknown }): boolean {
 }
 
 export function foldConditions(records: StoredRecord[]): SessionConditions {
-  const { restoredFailures: _restored, answers: _answers, ...conditions } = foldConditionsDetail(records);
+  const { restoredFailures: _restored, settledFailures: _settled, answers: _answers, ...conditions } = foldConditionsDetail(records);
   return conditions;
 }
 
@@ -263,10 +274,35 @@ export function failureStands(records: StoredRecord[]): boolean {
 
 function foldConditionsDetail(
   records: StoredRecord[],
-): SessionConditions & { restoredFailures: RestoredFailure[]; answers: Set<number> } {
+): SessionConditions & { restoredFailures: RestoredFailure[]; settledFailures: RestoredFailure[]; answers: Set<number> } {
   const restoredFailures: RestoredFailure[] = [];
+  // The engagement settling failed (dashboard-10): a run's own move into
+  // its failure state within a turn that then ended finished, its onset
+  // that move, kept as history as a runtime_error is — whatever the run
+  // does later, and whichever conversation is current. A turn a stop
+  // ended — the Boss's abort, or a restore's report, the stop of the
+  // turn it reports (core-service-82) — settles none, and a park a
+  // restore re-stated keeps the onset the stream showed, never a new one.
+  const settledFailures: RestoredFailure[] = [];
+  const reportEnds = new Set(restoreReports(records).flatMap((report) =>
+    report.endSeq === undefined ? [] : [report.endSeq]));
+  const parkSeqs = new Map<string, number>();
+  let fallbackSeq: number | undefined;
+  const settledSeqs = new Set<number>();
+  const settle = (seq: number | undefined, turnId: number, timestamp: number): void => {
+    if (seq === undefined || settledSeqs.has(seq)) return;
+    settledSeqs.add(seq);
+    settledFailures.push({ seq, turnId, timestamp });
+  };
   const answers = new Set<number>();
   const started = new Set<number>();
+  // The turn open so far (dashboard-10, core-service-49): a failure
+  // park naming no turn lies in it, as a runtime_error naming none does
+  // — null while none is open, so no intent's range holds it. A
+  // question keeps the turn its record named (DR-085).
+  let currentTurn: number | null = null;
+  const turnOf = (named: unknown): number | null =>
+    typeof named === "number" ? named : currentTurn;
   // The Captain shell's own move last traced, until the aggregate state
   // report that repeats it: that report is the shell's, not a run's.
   let captainMove: { from?: string; to?: string } | undefined;
@@ -278,6 +314,9 @@ function foldConditionsDetail(
   // not identify the machine which moved.
   const parkedQuestions = new Map<string, NonNullable<SessionConditions["question"]>>();
   const parkedFailures = new Map<string, NonNullable<SessionConditions["failure"]>>();
+  // The latest park of a turn, by the order the parks stood up.
+  const parkOfTurn = (turnId: number | null) =>
+    [...parkedFailures.values()].filter((park) => park.turnId === turnId).at(-1);
   // A cause belongs to the failure beside which the runtime emitted it;
   // it is never a session-global label. Hold an as-yet-unmatched cause
   // only until the next failure event consumes it, and retain a cause
@@ -305,9 +344,16 @@ function foldConditionsDetail(
       return;
     }
     if (latestFailure === "parked") {
-      const parked = [...parkedFailures.values()].at(-1);
+      // A cause the shell states beside a failure belongs to a park of
+      // the turn it arrives in (dashboard-10): where none stands yet, it
+      // waits for the turn's next failure event — never lent to another
+      // turn's park — unless a standing park already holds it, which is
+      // a re-statement.
+      const parked = parkOfTurn(currentTurn);
       if (parked && !parked.cause) parked.cause = read;
-      else if (parked && !isDeepStrictEqual(parked.cause, read)) {
+      else if (parked
+        ? !isDeepStrictEqual(parked.cause, read)
+        : ![...parkedFailures.values()].some((park) => isDeepStrictEqual(park.cause, read))) {
         pendingCause = read;
         pendingFromError = false;
       }
@@ -325,12 +371,17 @@ function foldConditionsDetail(
     pendingFromError = false;
   };
   for (const { seq, record } of records) {
+    // A turn ending closes the turn open (core-service-49): what follows
+    // naming no turn lies in none until the next starts.
+    if ((record.type === "turn_finished" || record.type === "turn_aborted") &&
+        (record as { turnId?: unknown }).turnId === currentTurn) currentTurn = null;
     switch (record.type) {
       case "turn_started": {
         // A turn starting while a question stands answers it or asks
         // back: a turn of the work that asked (DR-119).
         const turnId = (record as { turn?: { id?: unknown } }).turn?.id ??
           (record as { turnId?: unknown }).turnId;
+        if (typeof turnId === "number") currentTurn = turnId;
         if (typeof turnId === "number" && !started.has(turnId)) {
           started.add(turnId);
           if (parkedQuestions.size > 0 || fallbackQuestion !== undefined) answers.add(turnId);
@@ -357,13 +408,19 @@ function foldConditionsDetail(
         const read: FailureCause | undefined = readFailureCause(record) ??
           (pendingFromError ? undefined : pendingCause);
         unparkedFailureCause = read;
-        const parked = [...parkedFailures.values()].at(-1);
+        // A cause belongs to the failure beside which the runtime emitted
+        // it (dashboard-10, core-service-49): the latest park of the
+        // error's own turn — the one it names, or the one open when it
+        // was recorded where it names none — never a park of another turn,
+        // another intent's run among them.
+        const errorTurn = turnOf((record as { turnId?: unknown }).turnId);
+        const parked = parkOfTurn(errorTurn);
         if (parked) {
           if (read && !parked.cause) parked.cause = read;
           pendingCause = undefined;
           pendingFromError = false;
           latestFailure = "parked";
-        } else if (fallbackFailure) {
+        } else if (fallbackFailure && fallbackFailure.turnId === errorTurn) {
           if (read && !fallbackFailure.cause) fallbackFailure.cause = read;
           pendingCause = undefined;
           pendingFromError = false;
@@ -378,6 +435,15 @@ function foldConditionsDetail(
         }
         break;
       }
+      case "turn_finished": {
+        const turnId = (record as { turnId?: unknown }).turnId;
+        if (typeof turnId !== "number" || reportEnds.has(seq)) break;
+        for (const [runId, park] of parkedFailures) {
+          if (park.turnId === turnId) settle(parkSeqs.get(runId), turnId, park.since);
+        }
+        if (fallbackFailure?.turnId === turnId) settle(fallbackSeq, turnId, fallbackFailure.since);
+        break;
+      }
       case "captain_status":
         bearsCause((record as { data?: unknown }).data);
         break;
@@ -387,30 +453,54 @@ function foldConditionsDetail(
           // A restore states where every run now stands (core-service-82,
           // DR-088): whatever the stream last said of the interrupted
           // turn's runs gives way to the position the checkpoint holds.
-          const failedBefore = new Set(parkedFailures.keys());
+          const parkedBefore = new Map(parkedFailures);
+          const questionsBefore = new Map(parkedQuestions);
+          const seqsBefore = new Map(parkSeqs);
+          const failedBefore = new Set(parkedBefore.keys());
           parkedQuestions.clear();
           parkedFailures.clear();
+          parkSeqs.clear();
           pendingByRun.clear();
           fallbackQuestion = undefined;
           fallbackFailure = undefined;
+          fallbackSeq = undefined;
           pendingCause = undefined;
           pendingFromError = false;
-          const at = {
-            since: record.timestamp,
-            turnId: (record as { turnId?: number | null }).turnId ?? null,
-          };
-          if (typeof at.turnId === "number" && restored.runs.some((run) =>
+          const named = (record as { turnId?: number | null }).turnId ?? null;
+          const at = { since: record.timestamp, turnId: named };
+          const parkAt = { since: record.timestamp, turnId: turnOf(named) };
+          if (typeof parkAt.turnId === "number" && restored.runs.some((run) =>
             stateName(run.state) === "failed" && !failedBefore.has(run.sessionId))) {
-            restoredFailures.push({ seq, turnId: at.turnId, timestamp: record.timestamp });
+            restoredFailures.push({ seq, turnId: parkAt.turnId, timestamp: record.timestamp });
           }
           for (const run of restored.runs) {
             const state = stateName(run.state);
             const cause = readFailureCause(run);
-            if (state === "failed") parkedFailures.set(run.sessionId, { ...at, ...(cause ? { cause } : {}) });
+            if (state === "failed") {
+              // A run the stream already showed parked is no new failure
+              // of the restored turn (core-service-82): it keeps the park
+              // it had — its onset, its turn and its settlement — taking
+              // the checkpoint's cause only where that park had none. A
+              // run the restore first shows failed lies in the restored
+              // turn.
+              const kept = parkedBefore.get(run.sessionId);
+              const keptCause = kept?.cause ?? cause;
+              parkedFailures.set(run.sessionId, kept
+                ? { since: kept.since, turnId: kept.turnId, ...(keptCause ? { cause: keptCause } : {}) }
+                : { ...parkAt, ...(cause ? { cause } : {}) });
+              const keptSeq = kept ? seqsBefore.get(run.sessionId) : undefined;
+              if (keptSeq !== undefined) parkSeqs.set(run.sessionId, keptSeq);
+            }
             if (
               state === "awaitBossReply" ||
               pendingQuestionCount({ pendingBossQuestions: run.pendingBossQuestions }) > 0
-            ) parkedQuestions.set(run.sessionId, { ...at });
+            ) {
+              // A run the stream already showed waiting on the Boss keeps
+              // the question it had — its onset and its turn — as a
+              // re-stated failure park does: the restore raises no
+              // question of its own turn for it (core-service-82).
+              parkedQuestions.set(run.sessionId, questionsBefore.get(run.sessionId) ?? { ...at });
+            }
           }
           latestFailure = parkedFailures.size > 0
             ? "parked"
@@ -474,9 +564,11 @@ function foldConditionsDetail(
                 fallbackCause;
               parkedFailures.set(trace.sessionId, {
                 since: telemetry.timestamp,
-                turnId: telemetry.turnId,
+                turnId: turnOf(telemetry.turnId),
                 ...(traceCause ? { cause: traceCause } : {}),
               });
+              parkSeqs.set(trace.sessionId, seq);
+              fallbackSeq = undefined;
               pendingByRun.delete(trace.sessionId);
               pendingCause = undefined;
               pendingFromError = false;
@@ -484,6 +576,7 @@ function foldConditionsDetail(
             }
             else if (trace.payload?.from === "failed") {
               parkedFailures.delete(trace.sessionId);
+              parkSeqs.delete(trace.sessionId);
               pendingByRun.delete(trace.sessionId);
               latestFailure = parkedFailures.size > 0
                 ? "parked"
@@ -503,6 +596,7 @@ function foldConditionsDetail(
             // one of the two ways a failure stops summoning (DR-062).
             if (telemetry.turnId !== null) {
               parkedFailures.delete(trace.sessionId);
+              parkSeqs.delete(trace.sessionId);
               pendingByRun.delete(trace.sessionId);
               latestFailure = parkedFailures.size > 0
                 ? "parked"
@@ -555,9 +649,10 @@ function foldConditionsDetail(
           fallbackQuestion = undefined;
         }
         if (state === "failed" && parkedFailures.size === 0) {
+          if (!fallbackFailure) fallbackSeq = seq;
           fallbackFailure = fallbackFailure ?? {
             since: telemetry.timestamp,
-            turnId: telemetry.turnId,
+            turnId: turnOf(telemetry.turnId),
             ...(pendingCause ? { cause: pendingCause } : {}),
           };
           pendingCause = undefined;
@@ -567,6 +662,7 @@ function foldConditionsDetail(
           // As above, never let an aggregate report erase a different
           // run's identified failure park.
           fallbackFailure = undefined;
+          fallbackSeq = undefined;
           latestFailure = parkedFailures.size > 0
             ? "parked"
             : unparkedFailureCause
@@ -583,12 +679,16 @@ function foldConditionsDetail(
     values: Iterable<T>,
   ): T | undefined => [...values].sort((a, b) => a.since - b.since)[0];
   const question = firstByOnset(parkedQuestions.values()) ?? fallbackQuestion;
-  const failure = firstByOnset(parkedFailures.values()) ?? fallbackFailure;
+  const failures = parkedFailures.size > 0
+    ? [...parkedFailures.values()].sort((a, b) => a.since - b.since)
+    : fallbackFailure ? [fallbackFailure] : [];
+  const failure = failures[0];
   return {
     ...(question ? { question } : {}),
-    ...(failure ? { failure } : {}),
+    ...(failure ? { failure, failures } : {}),
     ...(unparkedFailureCause ? { failureCause: unparkedFailureCause } : {}),
     restoredFailures,
+    settledFailures,
     answers,
   };
 }
@@ -738,27 +838,83 @@ export function foldLedger(sources: LedgerSources): LedgerState {
     return conditions;
   };
   // The failures in a turn range, oldest first: every runtime error
-  // but an intentional stop's, and every restore that brought a run
-  // back in its failure state (dashboard-10, DR-088).
+  // but an intentional stop's, every run's own park in a turn that then
+  // ended finished, and every restore that brought a run back in its
+  // failure state (dashboard-10, DR-062, DR-088). A runtime error naming
+  // no turn lies in the turn open when it was recorded; one recorded with
+  // none open — the core's record of a failure from before a turn of its
+  // own started (core-service-135) — lies in no turn's range, and is listed
+  // naming no turn, for a session's own reading, only with `between` and
+  // once a turn has started (core-service-49). Each failure carries the
+  // start of the attempt it lies in — a restore's report starts its turn
+  // again under the same id — or, naming no turn, the end of the turn
+  // before it.
   const effectiveRuntimeErrors = (
     sessionId: string,
     fromTurnId: number,
     toTurnId: number | null,
+    between = false,
   ) => {
     const records = store.getRecords(sessionId);
     const ignored = stoppedTurnErrorSeqs(records);
     const inRange = (turnId: number) =>
       turnId >= fromTurnId && (toTurnId === null || turnId < toTurnId);
-    const errors = records.flatMap(({ seq, record }) => {
-      if (record.type !== "runtime_error" || ignored.has(seq)) return [];
-      const turnId = (record as { turnId?: unknown }).turnId;
-      if (typeof turnId !== "number" || !inRange(turnId)) return [];
-      return [{ seq, turnId, timestamp: record.timestamp }];
-    });
-    const restored = foldConditionsDetail(records).restoredFailures.filter(({ turnId }) => inRange(turnId));
-    return [...errors, ...restored]
-      .sort((a, b) => a.seq - b.seq)
-      .map(({ turnId, timestamp }) => ({ turnId, timestamp }));
+    const detail = foldConditionsDetail(records);
+    // The fold's own failures sit at a record's seq — a run's move, a
+    // restore's position — and take the attempt the walk reaches there.
+    const folded = new Map<number, { turnId: number; timestamp: number }>();
+    for (const failure of [...detail.settledFailures, ...detail.restoredFailures]) folded.set(failure.seq, failure);
+    const latestStart = new Map<number, number>();
+    let open: number | undefined;
+    let started = false;
+    let ended = -1;
+    const failures: { turnId: number | null; timestamp: number; attempt: number }[] = [];
+    for (const { seq, record } of records) {
+      // The fold's own failures are read as the conditions and the queue
+      // read them, whatever the record's header.
+      const fold = folded.get(seq);
+      if (fold) failures.push({ ...fold, attempt: latestStart.get(fold.turnId) ?? -1 });
+      // Otherwise a record without a presentation header is opaque and
+      // says nothing, as the session's summary reads it (core-service-10).
+      if (!hasPresentationHeader(record)) continue;
+      if (record.type === "turn_started") {
+        const turnId = (record as { turn?: { id?: unknown } }).turn?.id ??
+          (record as { turnId?: unknown }).turnId;
+        if (typeof turnId === "number") {
+          open = turnId;
+          started = true;
+          latestStart.set(turnId, seq);
+        }
+        continue;
+      }
+      if ((record.type === "turn_finished" || record.type === "turn_aborted") &&
+          (record as { turnId?: unknown }).turnId === open) {
+        open = undefined;
+        ended = seq;
+        continue;
+      }
+      if (record.type !== "runtime_error" || ignored.has(seq)) continue;
+      const named = (record as { turnId?: unknown }).turnId;
+      if (typeof named === "number") {
+        failures.push({ turnId: named, timestamp: record.timestamp, attempt: latestStart.get(named) ?? -1 });
+      } else if (named === null || named === undefined) {
+        if (open !== undefined) failures.push({ turnId: open, timestamp: record.timestamp, attempt: latestStart.get(open) ?? -1 });
+        else if (between && started) failures.push({ turnId: null, timestamp: record.timestamp, attempt: ended });
+      }
+    }
+    return failures.filter(({ turnId }) => turnId === null || inRange(turnId));
+  };
+  // The failure an entry stands on (core-service-49): its onset is the
+  // first failure recorded in the attempt its latest failure lies in —
+  // the runtime's turn-scoped record before the core's own, a run's move
+  // before the Captain's failed call — never a lost attempt's that the
+  // turn's restore started again.
+  const standingFailure = <T extends number | null>(
+    errors: readonly { turnId: T; timestamp: number; attempt: number }[],
+  ): { turnId: T; timestamp: number } | undefined => {
+    const latest = errors.at(-1);
+    if (!latest) return undefined;
+    return errors.find((error) => error.turnId === latest.turnId && error.attempt === latest.attempt) ?? latest;
   };
 
   const derived: DerivedIntent[] = [];
@@ -847,21 +1003,34 @@ export function foldLedger(sources: LedgerSources): LedgerState {
     // ever stands while its own turn is still open), so ranking
     // working above them would keep them out of the attention queue
     // for exactly as long as they summon the Boss.
-    const errors = effectiveRuntimeErrors(bound.sessionId, bound.turnId, endTurnId);
-    const lastError = errors[errors.length - 1];
-    // DR-062: where the failure parked a run, only that run leaving its
-    // failure state — recovered or ended — stops the summons. Where it
-    // parked none, nothing is stuck and the next Boss turn acknowledges
-    // it, which is the rule this fold has always had.
-    const parkedFailure = laneLive
-      ? sessionConditions(bound.sessionId).failure
-      : undefined;
+    const lastError = standingFailure(effectiveRuntimeErrors(bound.sessionId, bound.turnId, endTurnId)
+      .flatMap((failure) => failure.turnId === null ? [] : [{ ...failure, turnId: failure.turnId }]));
+    const conditions = laneLive ? sessionConditions(bound.sessionId) : {};
+    // A question belongs to the intent whose range holds its turn
+    // (dashboard-33); one naming no turn, to every one.
+    const owns = (turnId: number | null): boolean =>
+      turnId === null ||
+      (turnId >= bound.turnId && (endTurnId === null || turnId < endTurnId));
+    // DR-062: every standing park is tried against this intent's range
+    // by the turn it lies in (dashboard-10) — a park lying in a turn of
+    // it is this intent's, one lying in no turn no intent's. Where
+    // the failure parked a run here, only that run leaving its failure
+    // state — recovered or ended — stops the summons, the earliest such
+    // park giving the entry its cause; a run parked in another intent's
+    // range of the same conversation is that intent's summons alone,
+    // keeping no failure here standing, lending it no cause, and hiding
+    // no park of this intent's (dashboard-33). Where it parked none,
+    // nothing is stuck and the next Boss turn acknowledges it, which is
+    // the rule this fold has always had.
+    const ownedParks = (conditions.failures ?? []).filter((park) =>
+      park.turnId !== null && owns(park.turnId));
+    const parkedFailure = ownedParks[0];
     const parked = parkedFailure !== undefined;
-    const failureCause = laneLive
-      ? parked
-        ? parkedFailure.cause
-        : sessionConditions(bound.sessionId).failureCause
-      : undefined;
+    const failureCause = parked
+      ? parkedFailure.cause
+      : laneLive
+        ? conditions.failureCause
+        : undefined;
     const failureStands =
       lastError !== undefined &&
       (parked || !turns.some((turn) => turn.startedAt > lastError.timestamp));
@@ -889,10 +1058,6 @@ export function foldLedger(sources: LedgerSources): LedgerState {
       });
       continue;
     }
-    const conditions = laneLive ? sessionConditions(bound.sessionId) : {};
-    const owns = (turnId: number | null): boolean =>
-      turnId === null ||
-      (turnId >= bound.turnId && (endTurnId === null || turnId < endTurnId));
     const working =
       (laneLive || elsewhere !== undefined) && lastTurn !== undefined && lastTurn.endedAt === null;
     if (working) {
@@ -973,21 +1138,37 @@ export function foldLedger(sources: LedgerSources): LedgerState {
     const conditions = sessionConditions(lane.sessionId);
     const standsIn = (turnId: number | null): boolean =>
       turnId === null ? owned.size === 0 : !owned.has(turnId);
-    const errors = effectiveRuntimeErrors(lane.sessionId, 0, null);
-    const lastError = errors[errors.length - 1];
     // Where the failure parked a run, only that run leaving its failure
     // state stops the summons — the rule dashboard-4 already stated for
-    // a session failure, which this branch used to ignore (DR-062).
-    const parked = conditions.failure !== undefined;
+    // a session failure, which this branch used to ignore (DR-062). The
+    // park is the earliest standing one that stands in — lying in a turn
+    // no open intent's range owns, or in none while no intent owns any
+    // turn: a park an intent owns is that intent's summons, never the
+    // session's (dashboard-33).
+    const standInPark = (conditions.failures ?? []).find((park) => standsIn(park.turnId));
+    const parked = standInPark !== undefined;
     const standInCause = parked
-      ? conditions.failure?.cause
+      ? standInPark.cause
       : conditions.failureCause;
-    if (
-      lastError &&
-      standsIn(lastError.turnId) &&
-      (parked ||
-        !turns.some((turn) => turn.startedAt > lastError.timestamp))
-    ) {
+    // A failure lying in a turn stands first; one recorded with no turn
+    // open stands in as the session's own, naming no turn, only behind it
+    // and only until a later turn starts (core-service-49). The failure
+    // in a turn is the session's own only in a turn no open intent's
+    // range owns (dashboard-33): an intent's failure, however late, is
+    // that intent's summons alone, hiding no park of the session's own.
+    const failures = effectiveRuntimeErrors(lane.sessionId, 0, null, true);
+    const unanswered = (failure: { timestamp: number }) =>
+      !turns.some((turn) => turn.startedAt > failure.timestamp);
+    const inTurn = standingFailure(failures.filter((failure) =>
+      failure.turnId !== null && standsIn(failure.turnId)));
+    const between = standingFailure(failures.filter((failure) => failure.turnId === null));
+    const lastError =
+      inTurn && (parked || unanswered(inTurn))
+        ? inTurn
+        : between && standsIn(null) && unanswered(between)
+          ? between
+          : undefined;
+    if (lastError) {
       attention.push({
         band: "interrupted",
         kind: "failure",
