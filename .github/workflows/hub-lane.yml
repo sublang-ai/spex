@@ -53,8 +53,9 @@ jobs:
       # runner's toolcache belongs to the runner account. The newest
       # Node 22 — the hub's floor and the CI matrix's first version — is
       # taken from nodejs.org, checked against its signed sums, unpacked
-      # under /opt/nodejs and linked from /usr/bin, which the units name,
-      # and from /usr/local/bin, which sudo's PATH reads first.
+      # under /usr/lib/nodejs — root's alone, where the runner's /opt and
+      # /usr/local are not — and linked from /usr/bin, which the units
+      # name, and from /usr/local/bin, which sudo's PATH reads first.
       - name: Node 22 under root's own directories
         run: |
           set -euo pipefail
@@ -65,16 +66,16 @@ jobs:
           curl -fsSLO "$dist/$tarball"
           curl -fsSLO "$dist/SHASUMS256.txt"
           sha256sum --check --ignore-missing SHASUMS256.txt
-          sudo install -d -m 0755 -o root -g root /opt/nodejs
-          sudo tar -xJf "$tarball" -C /opt/nodejs --no-same-owner
+          sudo install -d -m 0755 -o root -g root /usr/lib/nodejs
+          sudo tar -xJf "$tarball" -C /usr/lib/nodejs --no-same-owner
           for tool in node npm npx; do
-            sudo ln -sfn "/opt/nodejs/node-$version-linux-x64/bin/$tool" "/usr/bin/$tool"
-            sudo ln -sfn "/opt/nodejs/node-$version-linux-x64/bin/$tool" "/usr/local/bin/$tool"
+            sudo ln -sfn "/usr/lib/nodejs/node-$version-linux-x64/bin/$tool" "/usr/bin/$tool"
+            sudo ln -sfn "/usr/lib/nodejs/node-$version-linux-x64/bin/$tool" "/usr/local/bin/$tool"
           done
           rm -f "$tarball" SHASUMS256.txt
           sudo -n node -p 'process.version'
           test "$(sudo -n sh -c 'command -v node')" = /usr/local/bin/node
-          test "$(readlink -f /usr/local/bin/node)" = "/opt/nodejs/node-$version-linux-x64/bin/node"
+          test "$(readlink -f /usr/local/bin/node)" = "/usr/lib/nodejs/node-$version-linux-x64/bin/node"
 
       # A release checkout outside any home, as LANE.md unpacks one.
       - name: The commit's tree outside any home

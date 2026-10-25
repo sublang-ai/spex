@@ -27,7 +27,7 @@ multipass delete spex-lane && multipass purge
 ## On CI
 
 Since [DR-149](../../../specs/decisions/149-the-privileged-lane-runs-on-ci.md) the lane runs on GitHub's Ubuntu runner by the workflow `.github/workflows/hub-lane.yml`: on a nightly schedule, on a push to `main` that touches `apps/hub/` or `apps/server/`, on a pull request that changes the workflow itself, and on request (`gh workflow run hub-lane.yml`).
-The workflow prepares the runner as the procedure above prepares a host — the newest Node 22 from nodejs.org under `/opt/nodejs`, linked from `/usr/bin` and `/usr/local/bin`; the commit's tree unpacked by `git archive` into `/usr/local/src/spex` — runs `privileged-lane.sh` as root, and keeps the lane's redacted output as the artifact `hub-lane-log`.
+The workflow prepares the runner as the procedure above prepares a host — the newest Node 22 from nodejs.org under `/usr/lib/nodejs`, linked from `/usr/bin` and `/usr/local/bin`; the commit's tree unpacked by `git archive` into `/usr/local/src/spex` — runs `privileged-lane.sh` as root, and keeps the lane's redacted output as the artifact `hub-lane-log`.
 It is no required check of a pull request.
 The procedure above stays the fallback for a host of one's own.
 
