@@ -9,6 +9,11 @@
 
 *Specs are the source.*
 
+Spex brings specs and AI workflows into one IDE. Reuse a spec and its
+skills or playbooks as a versioned **spec package**: find and publish
+packages on [Spex Space](https://spex.sublang.ai), and install them from
+the IDE. Space also offers optional project-record sharing and sync.
+
 ## Why Spex
 
 When programming shifts from code to specifications, four problems keep
@@ -42,6 +47,10 @@ Spex answers each with one systematic design:
    mental burden.
 
 ## Getting started
+
+Follow [Start using Spex](docs/getting-started.md) to open a project,
+install a spec package, use its skills and playbooks, and author and
+publish a workflow of your own.
 
 To set up a team or a workshop — where groups are made, who shares what, where a package publishes — read [docs/groups.md](docs/groups.md).
 
@@ -112,15 +121,15 @@ The Claude, Codex and OpenCode SDKs are pinned by `package-lock.json` to
 the releases Cligent tests; `npm ci` restores them, and is the app's own
 repair when one is missing.
 
-**First run.** The app opens on Projects. Add a project from the palette:
-register an existing repository, create a new one at a path, or "Try the
-Academy example", which seeds a sample project with a complete `specs/`
-tree built from [`demo/`](demo). Then write to the Captain — a request,
-or `/code …`; `/` in the composer lists the playbooks the starter config
-enables, including `/code`, `/review`, `/decide`, `/dev`, `/branch`,
-`/pr` and `/inspect`, and the quick-start card shows the first of them.
-Coding and design workflows commit in your repository, so Git needs `user.name` and
-`user.email`; the issue and PR panels and the Dashboard's Sources on a
+**First run.** A fresh home shows a welcome page. Choose **Add a local
+project** to select an existing Git repository, or expand **Create a new
+project…** in that flow to make one with a `specs/` scaffold. **Open the
+Academy example** opens the included sample project. Once a project is
+selected, describe your goal to the Captain; type `/` in the task field
+to see enabled playbooks and their descriptions, such as `/decide`,
+`/code`, and `/review`.
+Project creation and coding workflows make Git commits, so configure
+`user.name` and `user.email` first. The issue and PR panels and the Dashboard's Sources on a
 GitHub remote need `gh auth login`. Config and sessions live in the
 Spex home — `~/.spex`, or `SPEX_HOME` — in spex repositories under
 `workspace/`: each project's records in its own, and your config at
@@ -137,7 +146,7 @@ describes the retained originals and migration boundaries.
 
 **Playbooks come in spec packages.** Each spex repository has an
 environment: `spex.yaml` requests spec packages — specs with the skills
-and playbooks made from them — from the Git host's registry, a Git
+and playbooks made from them — from a Spex Space registry, a Git
 repository, or a folder in the working folder, and `spex.lock` pins what
 was resolved ([environments](specs/packages/environments.md)). Their
 skills and specs reach every agent Spex runs: a working folder's
@@ -149,11 +158,24 @@ they run offline, and every new environment requests it. **Playbooks**
 shows each environment's spec packages and the playbooks they export;
 enable one there by choosing a player for each of its roles.
 
-**Sharing through Spex Space.** Spex works offline; sign in on **Space**
-when you want to share. The host is [Spex Space](https://spex.sublang.ai) unless
+**Publish and install through Spex Space.** Browse public spec packages
+without an account; in **Playbooks → Add from registry**, search, choose
+a version and **Add**. Enable an installed playbook by choosing a player
+for each role; skills are exported for native agents separately. Author
+a workflow through **New playbook**, compile it, and use **Enable →
+Publish** after signing in with access to its claimed org. See the
+[package guide](docs/getting-started.md#install-and-use-a-package).
+Spec-only and ordinary skill packages need no playbook compilation;
+their archive-publishing path is in the
+[package and publishing guide](https://spex.sublang.ai/llms.txt). Registry
+search lists public packages; private packages require access and a
+known-name request in the project's environment.
+
+**Optional project-record sharing.** Sign in on **Space** when you want
+to sync records with a group. The default is [Spex Space](https://spex.sublang.ai) unless
 `SPEX_HOST_URL` names another when the home is first created. The desktop
-opens the host's sign-in page in your browser; the server shell shows a
-code to enter there. Spex then puts your own group's spex repository on
+opens the instance's sign-in page in your browser; the server shell links
+to the browser approval page. Spex then puts your own group's spex repository on
 the host, and a project's once you pick a group for it; the host's
 members of each spex repository see its records. Git receives the host's
 credential through Spex's own credential helper, run on the app's own
@@ -164,7 +186,11 @@ runtime, never through a remote URL, and the device's token stays in
 
 App releases on [GitHub Releases](https://github.com/sublang-ai/spex/releases)
 (`app-v*` tags) ship as source with a changelog: check out the tag and run
-the commands above.
+the commands above. The clone commands above follow current `main`;
+release tags keep their tagged behavior. In particular,
+`app-v0.9.0-beta.16` predates the current Space address default, so check
+the instance address before signing in. Existing homes keep their saved
+addresses.
 
 To use Spex from another machine, run the server shell instead. It serves
 the UI and the core on one port behind a token in the URL, binds loopback by
