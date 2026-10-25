@@ -53,8 +53,8 @@ Amends, under [DR-046](046-decision-record-evolution.md):
 ## Consequences
 
 - `hub` changes: the sweep and the lock in the lease's end (hub-5); the sweep's service and timer installed and enabled (hub-7); the locks under the state directory and the table read by the sweep (hub-8); the sweep run hermetically against a lease table with the fake helper and a fake service manager, and the admission and the renewal under the lock (hub-9); the lane asserting a lapsed seat stopped with the hub's unit stopped (hub-10).
-- Code: a sweep program beside the hub run by its unit, the lock in the hub's state module and used by both, the install script rendering the two units and enabling the timer, the deploy test holding them to the shared paths.
-- Acceptance: the privileged lane run on a Linux host with systemd before the change ships, recorded in `LANE.md` when made; this record is accepted ahead of that run.
+- Code: a sweep program beside the hub run by its unit, the lock in the hub's state module and used by both, the install script rendering the two units, enabling the timer and starting the sweep once, the deploy test holding them to the shared paths.
+- Acceptance: the install's own check — the sweep started once on the host it will run on, the install refused where it fails — gates every deployment, on the owner's direction that nothing simpler is needed; the lane's new phase runs at the lane's next pass, which `LANE.md` records then, and no run of it gates this change.
 
 ## References
 

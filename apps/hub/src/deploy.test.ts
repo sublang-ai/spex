@@ -608,4 +608,11 @@ test("the sweep's service runs the built sweep as root on the hub's state and he
   const reload = text.indexOf("\nsystemctl daemon-reload\n");
   const enable = text.indexOf("\nsystemctl enable --now spex-seat-reaper.timer\n");
   assert.ok(reload > 0 && enable > reload, "the timer is enabled and started once systemd has read its units");
+  // hub-7: the sweep run once on the host, the install refused where it
+  // fails, after the units are in place; the locks' directory made as
+  // the hub's own with the state directory (hub-8).
+  const check = text.indexOf("\nif ! systemctl start spex-seat-reaper.service; then\n");
+  assert.ok(check > enable, "the sweep is started once after its timer is enabled");
+  assert.match(text.slice(check), /^  refuse 70 "the sweep did not run on this host/m);
+  assert.match(text, /^install -d -m 0700 -o "\$HUB_USER" -g "\$HUB_GROUP" "\$STATE_DIR\/locks"$/m);
 });

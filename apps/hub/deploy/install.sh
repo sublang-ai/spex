@@ -26,8 +26,8 @@
 #     release does not build from source;
 #  3. creates the seats' group spex-seats, the hub's group spex-hub and
 #     its system account spex-hub with no login shell, its home the
-#     hub's state directory /var/lib/spex-hub, spex-hub 0700 (hub-8),
-#     and /etc/spex, root 0755;
+#     hub's state directory /var/lib/spex-hub, spex-hub 0700, with the
+#     seats' locks' directory under it (hub-8), and /etc/spex, root 0755;
 #  4. installs the built checkout as <prefix>/app, less .git and the
 #     checkout's local folders and files (.claude, .workshop-*,
 #     test-results, playwright-report, .env, .env.*); the helper
@@ -41,8 +41,9 @@
 #     deploy/spex-hub.sudoers as /etc/sudoers.d/spex-hub root:root 0440,
 #     checked with `visudo -cf` before it is put in place; then runs
 #     `systemctl daemon-reload`, enables and starts the sweep's timer
-#     (`systemctl enable --now spex-seat-reaper.timer`), and checks that
-#     sudo lets spex-hub run the helper;
+#     (`systemctl enable --now spex-seat-reaper.timer`), starts the sweep
+#     once and refuses where it does not run on this host, and checks
+#     that sudo lets spex-hub run the helper;
 #  5. makes /etc/spex/agents.env empty, root:spex-seats 0640, where it is
 #     absent, since every seat's unit names it, and prints the four
 #     files the administrator writes before `spex-hub attach` —
@@ -356,6 +357,9 @@ if ! getent passwd "$HUB_USER" >/dev/null; then
   echo "install.sh: created the account $HUB_USER"
 fi
 install -d -m 0700 -o "$HUB_USER" -g "$HUB_GROUP" "$STATE_DIR"
+# The seats' locks' directory is the hub's (hub-8): made here as the
+# hub's own, so the sweep finds it before the hub's first start.
+install -d -m 0700 -o "$HUB_USER" -g "$HUB_GROUP" "$STATE_DIR/locks"
 install -d -m 0755 -o root -g root "$ETC_DIR"
 
 # --- The built checkout, the helper and the fragments.
@@ -420,10 +424,18 @@ step="reloading systemd"
 systemctl daemon-reload
 step="enabling the sweep's timer"
 systemctl enable --now spex-seat-reaper.timer
+# The sweep run once, on the host it will run on: a unit that cannot
+# start under its sandbox, or a sweep that fails, refuses the install,
+# the installed files standing for the next run (hub-7, DR-148).
+step="checking the sweep runs on this host"
+if ! systemctl start spex-seat-reaper.service; then
+  journalctl --no-pager -u spex-seat-reaper.service -n 20 >&2 || true
+  refuse 70 "the sweep did not run on this host (its journal above): journalctl -u spex-seat-reaper.service"
+fi
 helper="$prefix/libexec/spex-seatctl"
 sudo -n -l -U "$HUB_USER" "$helper" stop 1 >/dev/null 2>&1 ||
   refuse 70 "sudo does not let $HUB_USER run $helper: check that /etc/sudoers reads $SUDOERS_DIR (@includedir $SUDOERS_DIR)"
-echo "install.sh: installed the helper, the units, the sweep's timer (enabled) and the sudoers fragment"
+echo "install.sh: installed the helper, the units, the sweep's timer (enabled, the sweep run once) and the sudoers fragment"
 
 # --- What the administrator does next.
 
