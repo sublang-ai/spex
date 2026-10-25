@@ -44,9 +44,19 @@ if (
 }
 
 const input = readFileSync(0, "utf8");
+const endAudit = command === "stop" && process.env.FAKE_LEASE_STATE
+  ? (() => {
+    const lease = JSON.parse(readFileSync(process.env.FAKE_LEASE_STATE, "utf8"))[id];
+    return {
+      leaseEnded: lease.bearer_hash === null && lease.stop_owed === true,
+      relayEnded: existsSync(join(process.env.FAKE_RELAY_END_DIR, id)),
+    };
+  })()
+  : {};
 record({
   argv,
   stdinSha256: input ? createHash("sha256").update(input.trim()).digest("hex") : null,
+  ...endAudit,
 });
 
 function script() {
