@@ -828,10 +828,9 @@ export function applyRecord(
       // record's own data travels with it: where the runtime attached
       // a structured cause, the line draws as the failure card
       // instead (run-view-147, DR-075).
-      // One naming no turn — every failure the core records of its own
-      // — is the latest turn's started before it, as the ledger counts
-      // it (core-service-49), so an attention entry finds its line
-      // (run-view-91).
+      // Legacy errors naming no turn keep the latest turn as their
+      // transcript context. Attention for a failure between turns
+      // finds this line by its onset instead (run-view-91).
       pushCaptain(view, {
         kind: "error",
         ...plainFailure(String(r.message)),

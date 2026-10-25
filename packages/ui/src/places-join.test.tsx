@@ -460,6 +460,42 @@ describe("dashboard-9: one attention queue across the places", () => {
   });
 });
 
+describe("run-view-96: an attention failure between turns focuses its line", () => {
+  test.each(["local", "seat"])("opens at its onset on %s", async (place) => {
+    const [fake, store, sessionId] = place === "local"
+      ? [local, useAppStore, "s-home"] as const
+      : [alpha, alphaStore, "s-alpha"] as const;
+    const failure: AttentionEntry = {
+      band: "interrupted", kind: "failure", title: "fix the build",
+      projectId: "p1", sessionId, since: 300,
+    };
+    const fold = ledger([failure], 1);
+    fake.answers["ledger.get"] = fold;
+    fake.answers["history.get"] = { records: [
+      { seq: 1, record: { type: "turn_started", turnId: 1, timestamp: 100,
+        turn: { id: 1, prompt: "fix the build", timestamp: 100 } } },
+      { seq: 2, record: { type: "turn_finished", turnId: 1, timestamp: 200 } },
+      { seq: 3, record: { type: "runtime_error", turnId: null, timestamp: 300,
+        message: "the input was refused" } },
+      { seq: 4, record: { type: "runtime_error", turnId: null, timestamp: 400,
+        message: "the later failure" } },
+    ] };
+    store.setState({ ledger: fold });
+
+    render(<App />);
+    fireEvent.click(document.querySelector<HTMLElement>('[data-surface="Dashboard"]')!);
+    fireEvent.click(within(screen.getByTestId(`attention-${sessionId}-failure`))
+      .getByRole("button", { name: /^Open fix the build/ }));
+    await settle();
+
+    expect(fake.command).toHaveBeenCalledWith("history.get", expect.objectContaining({ sessionId }));
+    expect(screen.getByText("the input was refused").closest("[data-focus-key]")
+      ?.getAttribute("data-focused")).toBe("1");
+    expect(screen.getByText("the later failure").closest("[data-focus-key]")
+      ?.getAttribute("data-focused")).not.toBe("1");
+  });
+});
+
 describe("run-view-168: a Dashboard link opens a project at its place", () => {
   /** Show the first seat on the Projects surface, from its session. */
   async function showSeat(): Promise<void> {

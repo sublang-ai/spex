@@ -235,6 +235,14 @@ While a session is live and no boss turn is active on it, when a client submits 
 - A submission for a session that is not live opens its runtime first [[core-service-73](#core-service-73)], then starts the turn as above.
 - A refused attachment handoff [[media-4](media.md#media-4)] starts no turn and leaves the already-live runtime owned as before.
 
+#### core-service-135
+
+When the core records a runtime failure of its own, it shall name the turn responsible for that failure:
+
+- a Captain call ending in error names that call's turn;
+- a turn, control or restore rejecting names the turn its attempt started, including a restore's report;
+- a rejection before its attempt started any turn names none.
+
 #### core-service-73
 
 While a session is not live, when a client submits Boss text for it, the core service shall request continuation through Playbook's shared lifecycle [[1]] with the current config projected onto the session's stored members [[core-service-92](#core-service-92)], restore the same logical session identity and checkpoint [[core-service-74](#core-service-74)], and report it live before starting the turn [[core-service-34](#core-service-34)], or refuse by these cases:
@@ -413,8 +421,9 @@ When a client sends `ledger.get`, the core service shall reply with the cross-pr
 
 - a failure entry or queue standing carries the structured cause the runtime attached to that failure — the `{ code, evidence }` the stream reports beside the failure it decided — read defensively, so a shape that is not a code with an optional evidence object is dropped rather than half-read and the entry or standing states no reason the runtime did not state ([DR-075](../decisions/075-a-failure-says-what-and-what-now.md));
 - the core neither interprets nor completes that cause: the words are the client's to give it [[run-view-147](run-view.md#run-view-147)];
-- a failure among an intent's turns, or a session's own, is a `runtime_error` record — one naming no turn lying in the latest turn started before it, as the session's summary counts it [[core-service-32](#core-service-32)], and in no turn's range where none had started, though the summary counts that one standing — or a run of the session moving into its failure state within a turn that then ended finished, its onset that move, whichever conversation is current; a move within a turn a stop ended — the Boss's abort [[core-service-6](#core-service-6)], or a restore's report, the stop of the turn it reports [[core-service-82](#core-service-82)] — raises none ([DR-062](../decisions/062-ending-a-failed-workflow.md));
-- a failure entry's onset is the first failure recorded in the attempt its latest failure lies in — from that turn's latest start before that failure, a restore's report starting the turn again.
+- a failure among an intent's turns, or a session's own, is a `runtime_error` record — one naming no turn lying in the turn open when it was recorded, the latest started and not yet ended, and in no turn's range where none was open, as the core records a failure from before a turn of its own started [[core-service-135](#core-service-135)] — or a run of the session moving into its failure state within a turn that then ended finished, its onset that move, whichever conversation is current; a move within a turn a stop ended — the Boss's abort [[core-service-6](#core-service-6)], or a restore's report, the stop of the turn it reports [[core-service-82](#core-service-82)] — raises none ([DR-062](../decisions/062-ending-a-failed-workflow.md));
+- a failure entry's onset is the first failure recorded in the attempt its latest failure lies in — from that turn's latest start before that failure, a restore's report starting the turn again — or, for an entry naming no turn, the first such record since the preceding turn ended;
+- a `runtime_error` naming no turn recorded where no turn was open, once a turn of the session has started, raises no intent's entry: it stands in as the session's own failure naming no turn where no open intent owns the session's turns, no failure lying in a turn stands, and no turn has started since — while the summary counts it in the latest turn started before it [[core-service-32](#core-service-32)].
 
 #### core-service-107
 
@@ -1004,20 +1013,30 @@ Where stored session streams raise a failure through a run moving into its failu
 | the aggregate state report alone reaching the failure state within a turn that then ends finished | no intent | one failure entry marked parked, at that report [[core-service-49](#core-service-49)] |
 | a `runtime_error` naming no turn within a turn that then ends finished | no intent | one interrupted-band failure entry, not marked parked, its onset the record's time and its turn and title the turn's [[core-service-49](#core-service-49)] |
 | the same, then a later Boss turn | no intent | no failure entry [[core-service-49](#core-service-49)] |
-| a `runtime_error` naming no turn after a dispatch turn ended finished, no later turn started | an intent | the intent interrupted on a failure, never finished, its entry naming that turn [[core-service-49](#core-service-49)] |
+| a `runtime_error` naming its turn after a dispatch turn ended finished, as the core records its settlement failing, no later turn started | an intent | the intent interrupted on a failure, never finished, its entry naming that turn [[core-service-49](#core-service-49)] |
+| a `runtime_error` naming no turn after a dispatch turn ended finished, as the core records a failure from before the next turn started | an intent | the intent finished awaiting its verdict and no failure entry [[core-service-49](#core-service-49)] |
+| the same after a turn ended finished, then a second failure naming no turn | no intent | one failure entry naming no turn, not marked parked, at the first record, titled with that turn [[core-service-49](#core-service-49)] |
+| the same, then a later Boss turn | no intent | no failure entry [[core-service-49](#core-service-49)] |
 | a turn-scoped `runtime_error`, the turn's abort, then one naming no turn for the same failure | no intent | one failure entry, at the turn-scoped record [[core-service-49](#core-service-49)] |
 | a run's move into its failure state, then a `runtime_error` naming no turn, within a turn that then ends finished | no intent | one failure entry marked parked, at the move [[core-service-49](#core-service-49)] |
 | the same, then a later Boss turn | no intent | that entry unchanged, onset, turn and title alike [[core-service-49](#core-service-49)] |
 | the same within a dispatch turn | an intent | the intent interrupted on a failure, its entry marked parked at the move [[core-service-49](#core-service-49)] |
 | a run's move and a `runtime_error` naming no turn within a turn cut off, then that turn's restore re-stating the run | no intent | one failure entry marked parked, at the lost attempt's record [[core-service-49](#core-service-49)] [[core-service-82](#core-service-82)] |
 | a `runtime_error` naming no turn before any turn started | no intent | no failure entry [[core-service-49](#core-service-49)], while the session's summary reads its failure standing [[core-service-32](#core-service-32)] |
-| a `runtime_error` naming no turn in a turn cut off, then that turn's restore, whose report records one of its own | no intent | one failure entry, at the report's record [[core-service-49](#core-service-49)] [[core-service-82](#core-service-82)] |
+| a `runtime_error` naming no turn in a turn cut off, then that turn's restore, whose report records one naming that turn | no intent | one failure entry, at the report's record [[core-service-49](#core-service-49)] [[core-service-82](#core-service-82)] |
+
+#### core-service-134
+
+When an integration suite drives a session's own failures over the protocol — a turn whose scripted Captain throws, then, in a later session, an intent's turn that finishes followed by a whitespace-only message dispatching a second intent, which fails before its turn starts — it shall verify the records the core writes and the ledger it folds:
+
+- the throw's runtime and core records both name its turn [[core-service-135](#core-service-135)], and the session's own failure entry names that turn at the runtime's record [[core-service-49](#core-service-49)];
+- the pre-start failure's record names no turn [[core-service-135](#core-service-135)], the first intent still reads finished awaiting its verdict with no failure entry for its session [[core-service-49](#core-service-49)], the second stays queued with the queue reading `failed` [[core-service-107](#core-service-107)], and the session's summary reads its failure standing [[core-service-32](#core-service-32)].
 
 #### core-service-133
 
 When an integration suite parks a real session's run on its coder's failure — the real `/code` coder's call failing before it touches the repository — once in a session bound to no intent and once in a turn dispatching an intent, it shall assert through `ledger.get` the entry the settled park raises [[core-service-49](#core-service-49)]:
 
-- the session's own entry is an interrupted-band failure marked parked, carrying the cause the runtime attached and naming no intent, its onset the run's move ahead of the stream's one `runtime_error`, which names no turn;
+- the session's own entry is an interrupted-band failure marked parked, carrying the cause the runtime attached and naming no intent, its onset the run's move ahead of the stream's one `runtime_error`, the core's record of the Captain's failed call, which names its turn [[core-service-135](#core-service-135)];
 - the intent reads interrupted on a failure, its entry marked parked at its run's move, and never finished awaiting a verdict, while its session's summary reads the failure standing [[core-service-32](#core-service-32)].
 
 #### core-service-55

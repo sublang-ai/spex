@@ -485,9 +485,9 @@ export function DashboardSurface({
   onStartIntent,
   onNavigate,
 }: {
-  /** Open a session; with a turnId, land at that turn's place. A
-   * seat's entry names its place, a local one none. */
-  onOpenSession: (sessionId: string, turnId?: number, place?: string) => void;
+  /** Open at the entry's core and turn, or its failure's onset where
+   * it names no turn. An omitted place means this computer. */
+  onOpenSession: (sessionId: string, turnId?: number, place?: string, focusAt?: number) => void;
   /** Open an intent record in its project's records reader. */
   onOpenIntent: (projectId: string, path: string, anchor: string) => void;
   /** Stage an intent's dispatch (the App wires this to the store's
@@ -689,9 +689,11 @@ export function DashboardSurface({
               now={now}
               // Opened and answered at its own core (dashboard-9).
               onOpen={() =>
-                isLocalPlace(place.place)
-                  ? onOpenSession(entry.sessionId, entry.turnId)
-                  : onOpenSession(entry.sessionId, entry.turnId, place.place.key)
+                entry.kind === "failure" && entry.turnId === undefined
+                  ? onOpenSession(entry.sessionId, undefined, place.place.key, entry.since)
+                  : isLocalPlace(place.place)
+                    ? onOpenSession(entry.sessionId, entry.turnId)
+                    : onOpenSession(entry.sessionId, entry.turnId, place.place.key)
               }
               onClose={(as) =>
                 entry.intentId
