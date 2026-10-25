@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
+
+# The sweep's timer (hub-5, DR-148): starts spex-seat-reaper.service a
+# minute after boot and a minute after each start, whether a hub runs or
+# not; the service manager starts no sweep while one still runs.
+# install.sh installs it beside the sweep's service and enables it.
+
+[Unit]
+Description=Spex seat sweep every minute
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=1min
+AccuracySec=5s
+
+[Install]
+WantedBy=timers.target

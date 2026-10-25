@@ -6,7 +6,9 @@
 # sudo and the seat helper, so the unit sets no NoNewPrivileges and no
 # capability bounding set, either of which would stop sudo. Stopping
 # or restarting the hub leaves the seats running and their leases
-# recorded. Its state directory is /var/lib/spex-hub, owner-only (hub-8).
+# recorded; a seat whose lease lapses meanwhile is stopped by the sweep's
+# timer, spex-seat-reaper.timer (DR-148). Its state directory is
+# /var/lib/spex-hub, owner-only (hub-8).
 # install.sh writes this unit for its prefix and node, in place of
 # /opt/spex and /usr/bin/node; its header holds the paths.
 
