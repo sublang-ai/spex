@@ -90,7 +90,7 @@ import {
 
 /** Git's own words, and the words the surface never uses for the
  * host's things, never lead on it (space-27). */
-const FORBIDDEN_WORDS = /\b(ours|theirs|HEAD|MERGE_HEAD)\b|origin\/spex|\b[Nn]amespace\b|\b[Ss]pace\b/;
+const FORBIDDEN_WORDS = /\b(ours|theirs|HEAD|MERGE_HEAD)\b|origin\/spex|\b[Nn]amespace\b/;
 
 /** Note any forbidden word in the surface's visible text (space-27), or
  * any of the journey's own `words`. It reads the Groups surface alone:
@@ -133,7 +133,7 @@ async function watch(page: Page, selector: string): Promise<() => Promise<string
 
 /** Open the Groups surface from the sidebar. */
 async function showGroups(page: Page): Promise<void> {
-  await nav(page, "Groups").click();
+  await nav(page, "Space").click();
   await expect(page.getByTestId("space-surface")).toBeVisible();
   await expect(page.getByTestId("space-header")).toBeVisible();
 }

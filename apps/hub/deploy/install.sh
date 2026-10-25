@@ -458,7 +458,7 @@ Spex is installed under $prefix. Before attaching, write these four as root:
 
   $ETC_DIR/server.env ($(written "$ETC_DIR/server.env")), root:root 0644, the server as the
   instance registered it, as NAME=value lines:
-      SPEX_HOST_URL=<the instance's URL, as attach's --instance, e.g. https://spex.pub>
+      SPEX_HOST_URL=<the instance's URL, as attach's --instance, e.g. https://spex.sublang.ai>
       SPEX_SERVER_ID=<the server's id, as the servers page showed it>
       SPEX_SERVER_NAME=<the server's name>
 

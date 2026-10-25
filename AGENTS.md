@@ -10,4 +10,4 @@
 
 ## Architecture invariants
 
-- "End users should only see the workshop group, their own personal groups, and projects." — the owner's rule; a spex.pub instance is the one thing a person signs in to and the only name they see ([DR-120](specs/decisions/120-the-instance-is-the-space.md)). Never name, link or path the Git host, its groups or its pages in a surface, response, key, folder or document.
+- "End users should only see the workshop group, their own personal groups, and projects." — the owner's rule; a Spex Space instance is the one thing a person signs in to and the only name they see ([DR-120](specs/decisions/120-the-instance-is-the-space.md)). Never name, link or path the Git host, its groups or its pages in a surface, response, key, folder or document.

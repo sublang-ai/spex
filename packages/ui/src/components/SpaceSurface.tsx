@@ -400,8 +400,8 @@ export function SpaceSurface({ onOpenSession, onOpenProject, onAddCredential }: 
   }, [groups]);
 
   const surfaceName = i18n._({
-    id: "Groups",
-    comment: "the surface: your groups on the Git host and their spex repositories",
+    id: "Space",
+    comment: "the Space destination: groups, projects and their shared records",
   });
   return (
     <section
@@ -415,14 +415,9 @@ export function SpaceSurface({ onOpenSession, onOpenProject, onAddCredential }: 
       <div role="status" aria-live="polite" className="sr-only" data-testid="space-live">
         {note}
       </div>
-      <h1 className="text-lg font-semibold">{surfaceName}</h1>
-      {spaceError ? (
-        <p role="alert" className="text-sm text-red-600 dark:text-red-400">
-          {i18n._("Couldn't read your groups: {reason}", { reason: spaceError })}
-        </p>
-      ) : null}
-      {groups ? (
-        <>
+      <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-3">
+        <h1 className="min-w-0 flex-1 text-lg font-semibold">{surfaceName}</h1>
+        {groups ? (
           <HomeHeader
             groups={groups}
             connected={connected}
@@ -433,6 +428,15 @@ export function SpaceSurface({ onOpenSession, onOpenProject, onAddCredential }: 
             issuesOpen={issuesOpen}
             onIssuesOpen={setIssuesOpen}
           />
+        ) : null}
+      </div>
+      {spaceError ? (
+        <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+          {i18n._("Couldn't read your groups: {reason}", { reason: spaceError })}
+        </p>
+      ) : null}
+      {groups ? (
+        <>
           <IssuesList
             groups={groups}
             connected={connected}
@@ -552,7 +556,11 @@ function HomeHeader({
       className={
         empty
           ? "hidden"
-          : `flex min-w-0 flex-col gap-2 rounded-lg border border-neutral-200 bg-white p-3 dark:border-neutral-800 dark:bg-neutral-900 ${
+          : `flex min-w-0 max-w-full flex-col gap-2 ${
+              groups.git.ok && listed
+                ? "ml-auto"
+                : "basis-full rounded-lg border border-neutral-200 bg-white p-3 dark:border-neutral-800 dark:bg-neutral-900"
+            } ${
               connected ? "" : "opacity-70"
             }`
       }

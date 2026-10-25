@@ -102,7 +102,7 @@ function signedOut(over: HomeOver = {}): GroupsState {
 describe("GROUPS: the header (space-1, space-2)", () => {
   test("space-66, space-1: signed in, the instance's heading reads its host name until a read names its display name, then its display name, Signed in as @login with Sign out and its read time; the header holds Refresh, and the surface ends in where the files are", async () => {
     await renderGroups(base({ instance: { displayName: null } }), { open: false });
-    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Groups");
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Space");
     // Before a read names it, the instance is named by its host name
     // (space-1).
     const section = screen.getByTestId(`space-instance-${ORIGIN}`);
@@ -1392,9 +1392,9 @@ describe("GROUPS: copy and fit (space-27, space-28)", () => {
 
   test("the sidebar entry and the surface read Groups", async () => {
     await renderGroups(base(), { open: false });
-    expect(screen.getByRole("region", { name: "Groups" })).toBeTruthy();
-    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Groups");
+    expect(screen.getByRole("region", { name: "Space" })).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Space");
     const { SURFACE_LABELS } = await import("./NavRail.js");
-    expect(SURFACE_LABELS.Space()).toBe("Groups");
+    expect(SURFACE_LABELS.Space()).toBe("Space");
   });
 });

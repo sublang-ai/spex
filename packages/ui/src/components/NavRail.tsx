@@ -52,7 +52,7 @@ export const SURFACES: readonly Surface[] = [
 ];
 
 /** What each surface is called on screen (DR-057, DR-103): the
- * Workspace reads "Projects" and Space reads "Groups" while every
+ * Workspace reads "Projects" and Space reads "Space" while every
  * identifier and state key keeps the internal name, so nothing stored
  * — the remembered surface among it — changes shape. Each label is a
  * thunk, never a string: a table read at module load would freeze the
@@ -61,7 +61,7 @@ export const SURFACE_LABELS: Record<Surface, () => string> = {
   Dashboard: () => i18n._("Dashboard"),
   Workspace: () => i18n._("Projects"),
   Playbooks: () => i18n._("Playbooks"),
-  Space: () => i18n._({ id: "Groups", comment: "the surface: your groups on the Git host and their spex repositories" }),
+  Space: () => i18n._({ id: "Space", comment: "the Space destination: groups, projects and their shared records" }),
   Settings: () => i18n._("Settings"),
 };
 
@@ -947,7 +947,7 @@ export function NavRail(props: NavRailProps) {
               data-testid="sidebar-workspace"
               onClick={() => onSurface("Workspace")}
               aria-current={surface === "Workspace" ? "page" : undefined}
-              className={`min-w-0 flex-1 rounded px-1 py-0.5 text-left text-xs font-semibold uppercase tracking-wide ${
+              className={`min-h-6 min-w-0 flex-1 rounded px-1 py-0.5 text-left text-xs font-semibold uppercase tracking-wide ${
                 surface === "Workspace"
                   ? "text-brand-700 dark:text-brand-300"
                   : "text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-300"

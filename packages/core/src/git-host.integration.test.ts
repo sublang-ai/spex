@@ -116,11 +116,13 @@ function refreshGrants(host: StandinHost): number {
 
 test("git-host-1: a new home takes SPEX_HOST_URL; a recorded host keeps itself", () => {
   assert.equal(hostUrlFor({}, null), DEFAULT_HOST_URL);
-  assert.equal(hostUrlFor({ SPEX_HOST_URL: "" }, undefined), "https://spex.pub");
-  assert.equal(hostUrlFor({ SPEX_HOST_URL: "  " }), "https://spex.pub");
+  assert.equal(hostUrlFor({ SPEX_HOST_URL: "" }, undefined), "https://spex.sublang.ai");
+  assert.equal(hostUrlFor({ SPEX_HOST_URL: "  " }), "https://spex.sublang.ai");
   assert.equal(hostUrlFor({ SPEX_HOST_URL: "http://127.0.0.1:4100/" }, null), "http://127.0.0.1:4100");
   assert.equal(hostUrlFor({ SPEX_HOST_URL: "http://127.0.0.1:4200" }, "http://127.0.0.1:4100"), "http://127.0.0.1:4100");
-  assert.equal(hostUrlFor({}, "https://spex.pub"), "https://spex.pub");
+  // Saved connections keep their identity across the product rename (DR-150).
+  assert.equal(hostUrlFor({ SPEX_HOST_URL: "https://spex.sublang.ai" }, "https://spex.pub"), "https://spex.pub");
+  assert.equal(hostUrlFor({}, null), "https://spex.sublang.ai");
   // Either way the result is the instance's canonical origin (DR-127).
   assert.equal(hostUrlFor({ SPEX_HOST_URL: " HTTPS://Spex.Pub:443/ " }, null), "https://spex.pub");
   assert.equal(hostUrlFor({}, "HTTP://LocalHost:4100/"), "http://localhost:4100");
@@ -1008,7 +1010,7 @@ test("git-host-6, git-host-7: creation answers created, pending or name taken; b
     const own = await t.client.create({ groupId: null, name: "ada-spex", description: "Ada's own records" });
     assert.equal(own.status === "created" && own.repository.group.kind, "user");
     // The own namespace's id names no group of the instance: the
-    // stand-in answers it 404, as spex.pub does (git-host-12).
+    // stand-in answers it 404, as Spex Space does (git-host-12).
     await assert.rejects(t.client.create({ groupId: "2001", name: "mine-spex", description: "" }), hostError("not_found", { words: "The group is not known." }));
     assert.deepEqual(t.host.script.creations.map((body) => (body as { group_id?: unknown }).group_id), ["2002", null, "2001"]);
 
@@ -1044,7 +1046,7 @@ test("git-host-8: members with the host's role names and no page", async () => {
     assert.deepEqual(Object.keys(answer), ["members"]);
     assert.ok(members.every((m) => Object.keys(m).sort().join() === "direct,displayName,id,login,role,via"), JSON.stringify(members));
 
-    // Every members route failing, as spex.pub's do while its service
+    // Every members route failing, as Spex Space's do while its service
     // identity's read fails, every other route answering (git-host-12):
     // a read holds the rest of the view, the count unknown (git-host-5).
     t.host.script.failMembers(true);
@@ -1083,7 +1085,7 @@ test("git-host-5, git-host-8: the host's roles, what it lets the person do per g
       { id: "owner", name: "Owner", mayPush: true },
     ]);
     assert.equal((await t.client.me()).canCreateGroup, true);
-    // The description says whether root groups can be made, as spex.pub's
+    // The description says whether root groups can be made, as Spex Space's
     // does, and the person's ability says the same (git-host-12).
     const description = async (): Promise<unknown> => (await fetch(`${t.host.url}/api/v1/host`)).json();
     assert.equal((await description() as { groups?: unknown }).groups, true);

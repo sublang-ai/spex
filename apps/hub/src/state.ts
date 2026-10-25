@@ -41,7 +41,7 @@ import { join } from "node:path";
 export const DEFAULT_STATE_DIR = "/var/lib/spex-hub";
 
 export interface HubState {
-  /** The instance's origin, e.g. `https://spex.pub`. */
+  /** The instance's origin, e.g. `https://spex.sublang.ai`. */
   instance: string;
   server_id: string;
   /** The server's name as the instance last answered it; null until

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// Release archives (spex.pub DR-016): a gzipped tarball rooted at
+// Release archives (Spex Space DR-016): a gzipped tarball rooted at
 // `<pkg>/` holding the declared release files and nothing else, each
 // with its owner-execute bit. Packing is deterministic, so one release
 // always packs to the same checksum; unpacking refuses a link or a

@@ -48,7 +48,7 @@ export function bareOf(host: StandinHost, key: string): string {
   return host.bareOf(folder === null ? key : key.slice(folder.length + 1));
 }
 
-/** Every row of the Groups state, as your own group and the instances'
+/** Every row of the Space state, as your own group and the instances'
  * headings hold them (space-30). */
 export function rowsOf(state: GroupsState): RepositoryState[] {
   return [...state.own.repositories, ...state.instances.flatMap((instance) => instance.groups.flatMap((group) => group.repositories))];
@@ -63,7 +63,7 @@ export function placementOf(row: RepositoryState, origin: string | null): Placem
   throw new Error(`no placement ${origin} on ${row.key}: ${JSON.stringify(row.placements.map((line) => line.instance))}`);
 }
 
-/** One repository's state out of the Groups state: under your own group
+/** One repository's state out of the Space state: under your own group
  * or an instance's heading. */
 export function repositoryOf(state: GroupsState, key: string): RepositoryState {
   const found = rowsOf(state).find((repository) => repository.key === key);
@@ -74,7 +74,7 @@ export function repositoryOf(state: GroupsState, key: string): RepositoryState {
 const describe = (state: GroupsState): string =>
   JSON.stringify(rowsOf(state).map((repository) => `${repository.key}:${JSON.stringify(repository.sync)}`));
 
-/** The entry the Groups state lists for the instance at `origin`, in any
+/** The entry the Space state lists for the instance at `origin`, in any
  * spelling of it (space-30). */
 export function instanceOf(state: GroupsState, origin: string): GroupsState["instances"][number] | undefined {
   const canonical = canonicalOrigin(origin);
@@ -213,7 +213,7 @@ class Client {
 
 function sleep(ms: number): Promise<void> { return new Promise((resolveSleep) => setTimeout(resolveSleep, ms)); }
 
-/** The Groups state's fields (space-30). */
+/** The Space state's fields (space-30). */
 const GROUPS_KEYS = ["defaultInstance", "diagnostics", "git", "home", "instances", "issues", "own", "signIn"];
 
 /** The fields a running sign-in may carry, and those a failed one does
@@ -302,7 +302,7 @@ export function assertGroupsState(state: GroupsState): void {
   // page — and none names the Git system behind it.
   const origins = [state.defaultInstance, ...state.instances.map((instance) => instance.origin)];
   const leaks = stringsOf({ ...state, signIn: null }).filter((text) => origins.some((origin) => text.startsWith(`${origin}/`)) || /gitlab/i.test(text));
-  assert.deepEqual(leaks, [], "the Groups state names nothing behind the instance");
+  assert.deepEqual(leaks, [], "the Space state names nothing behind the instance");
   // Your own group by its folder name, and whether that folder still
   // bears this device's user name; then every instance the home lists,
   // each with its account, its read and its groups (space-30).
@@ -553,7 +553,7 @@ playbooks:
 
   /** A `git` on the core's PATH that holds the first command whose
    * arguments hold `args` after `hold()` — one clone's `rev-parse
-   * --git-dir`, the read a Groups state makes of it, or a join's clone —
+   * --git-dir`, the read a Space state makes of it, or a join's clone —
    * until `release()`, then runs the real Git: a command caught in flight.
    * With `after`, the real Git runs first and its answer is held, so the
    * core awaits a command that already read the clone. Later matching

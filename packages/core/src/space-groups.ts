@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The Groups surface's view of the Git host (git-host-5, space-61,
+// The Space surface's view of the Git host (git-host-5, space-61,
 // DR-103): one read of the person, every group and every spex
 // repository the host lists, each with what decides its state — its
 // archived flag and the account's role as the host reports them, its
@@ -113,7 +113,7 @@ export async function readHostListing(client: GitHostClient, repository: HostRep
 }
 
 /** A spex repository's members' count, the account among them, or null
- * where the host fails to read its members — spex.pub fails every
+ * where the host fails to read its members — Spex Space fails every
  * members read while its service identity's does (git-host-5). An
  * answer that signs the device out, or a pair replaced meanwhile, fails
  * the whole read as any other failure does. */

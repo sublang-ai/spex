@@ -88,8 +88,8 @@ export function isRepositoryKey(value: unknown): value is string {
 }
 
 /** The instance folder, the group path in that instance and the name
- * of a key: `@spex.pub`, `acme/platform` and `a-spex` of
- * `@spex.pub/acme/platform/a-spex`; the instance null for a key outside
+ * of a key: `@spex.sublang.ai`, `acme/platform` and `a-spex` of
+ * `@spex.sublang.ai/acme/platform/a-spex`; the instance null for a key outside
  * every instance's folder, as your own group's and the local-only
  * clones' are (DR-127). */
 export function splitKey(key: string): { instance: string | null; group: string; name: string } {

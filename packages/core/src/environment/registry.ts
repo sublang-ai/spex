@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The registry source (environments-12): spex.pub's `/api/v1` for
-// format 2 (spex.pub DR-016, DR-017). The version index carries every
+// The registry source (environments-12): Spex Space's `/api/v1` for
+// format 2 (Spex Space DR-016, DR-017). The version index carries every
 // version with its dependencies and artifacts, so a dependency graph
 // resolves from indexes alone; a version resource is read only for a
 // version picked; files come by raw URL or the release archive, each
@@ -98,7 +98,7 @@ export interface RegistryOrg {
 export const ORGS_TIMEOUT_MS = 2_000;
 
 /** What resolving and installing read from a registry (environments-12),
- * served by spex.pub, the stand-in and the built-in spec package alike. */
+ * served by Spex Space, the stand-in and the built-in spec package alike. */
 export interface RegistrySource {
   /** The registry the lock names in a registry source. */
   readonly url: string;
@@ -233,7 +233,7 @@ export interface RegistryClientOptions {
   fetch?: typeof fetch;
 }
 
-/** spex.pub over HTTP (environments-12). */
+/** Spex Space over HTTP (environments-12). */
 export class RegistryClient implements RegistrySource {
   readonly url: string;
   private readonly token?: () => Promise<string | null>;

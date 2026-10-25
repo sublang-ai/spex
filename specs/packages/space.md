@@ -1,11 +1,11 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
 
-# space: The Groups Surface
+# space: The Space Surface
 
 ## Intent
 
-This package defines the Groups surface under [DR-103](../decisions/103-the-home-and-its-groups.md), the surface [DR-057](../decisions/057-space-surface.md) named Space, with the placements of [DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md): where the reader signs in to each instance, sees their groups at each with the spex repositories in each and where their code lives, syncs each spex repository's `spex` branch with every instance it is placed at between Boss turns, places it at another instance or removes it from one, reads each placement's members, repairs a project whose folder is missing on this device, and reads a clone as an annotated tree.
+This package defines the Space surface under [DR-103](../decisions/103-the-home-and-its-groups.md), named Space by [DR-150](../decisions/150-spex-space-product-and-destination.md), with the placements of [DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md): where the reader signs in to each instance, sees their groups at each with the spex repositories in each and where their code lives, syncs each spex repository's `spex` branch with every instance it is placed at between Boss turns, places it at another instance or removes it from one, reads each placement's members, repairs a project whose folder is missing on this device, and reads a clone as an annotated tree.
 An **instance** is a Git host the home has signed in to, listed in `home.yaml` by its origin with its account, its display name and its sign-out mark, the first it lists, or the origin the home was created with while it lists none, being the home's **default instance** [[storage-2](storage.md#storage-2)] ([DR-127](../decisions/127-a-home-signed-in-to-several-instances.md)); your **namespace** at an instance is where it lists spex repositories under your login there, and another account's where it lists them under theirs.
 A **spex repository** holds one project's or one group's records on its `spex` branch and is known by its key, the clone's path under `workspace/` [[storage-1](storage.md#storage-1)], `@<host>/<its path in the instance>` at an instance and `<own>/<name>-spex` in your own group's folder, and its **instance** is the one whose folder its key lies in, else the one the instances migration's receipt names for it, else the one its first placement's remote names [[storage-31](storage.md#storage-31)]; a **placement** of it is a host repository holding it at one instance, or the one remote the reader names, which has no instance, its clone holding each as a remote in the order added [[storage-34](storage.md#storage-34)], the first with an instance being its **key placement**, or **first placement**; the **host** of a placement, a group or a namespace is its instance, and of a sign-in or a command the instance it names; a **unit** is one whole-unit selection subject — a session bundle, an intent with its attachments, an authoring session, a group's own environment's two files, the configuration, `project.json`, or one other tracked file [[storage-11](storage.md#storage-11)]; a **choice** takes a unit whole from this device or from a placement's host; a **local** unit is one this device changed and an **incoming** unit one a placement's copy changed, each against their common ancestor with that placement.
 The core performs every Git operation and every call to an instance; the surface renders the core's state and runs neither itself.
@@ -16,7 +16,7 @@ The core performs every Git operation and every call to an instance; the surface
 
 #### space-1
 
-While the app is connected, the Groups surface — reached from the sidebar's Groups entry [[run-view-67](run-view.md#run-view-67)] — shall present the home in one header and one groups list holding a heading for each instance the home lists [[storage-2](storage.md#storage-2)] ([DR-127](../decisions/127-a-home-signed-in-to-several-instances.md)):
+While the app is connected, the Space surface — reached from the sidebar's Space entry [[run-view-67](run-view.md#run-view-67)] — shall present the home in one header and one groups list holding a heading for each instance the home lists [[storage-2](storage.md#storage-2)] ([DR-127](../decisions/127-a-home-signed-in-to-several-instances.md)):
 
 | Field | Content |
 | --- | --- |
@@ -61,13 +61,13 @@ While a spex repository's clone holds a placement, a placement file of it names 
 
 #### space-2
 
-The Groups surface shall re-read the core's state only on an event, never on a timer: when the surface opens, when the window regains focus, when the core announces a sync's end, a sign-in's end, a host read, a project added or removed, or a session, intent or configuration change, and when the reader activates Refresh, which also makes the core read every signed-in instance [[git-host-5](git-host.md#git-host-5)].
+The Space surface shall re-read the core's state only on an event, never on a timer: when the surface opens, when the window regains focus, when the core announces a sync's end, a sign-in's end, a host read, a project added or removed, or a session, intent or configuration change, and when the reader activates Refresh, which also makes the core read every signed-in instance [[git-host-5](git-host.md#git-host-5)].
 
 ### Signing In
 
 #### space-3
 
-The Groups surface shall offer the sign-in at an instance in one card holding a field captioned "Instance", which holds the default instance's origin [[storage-2](storage.md#storage-2)] until the reader edits it, and Sign in as its one primary control, starting the sign-in at the origin the field holds — the card standing as the header while the home lists no instance, titled "Not signed in" and reading "Sign in to see your groups and share each project's records with the people in them." and "Until you do, everything stays on this device and nothing is contacted.", and in place of "Add instance…" once the reader activates it [[space-1](#space-1)], with Cancel beside Sign in and Escape cancelling ([DR-103](../decisions/103-the-home-and-its-groups.md), [DR-127](../decisions/127-a-home-signed-in-to-several-instances.md)):
+The Space surface shall offer the sign-in at an instance in one card holding a field captioned "Instance", which holds the default instance's origin [[storage-2](storage.md#storage-2)] until the reader edits it, and Sign in as its one primary control, starting the sign-in at the origin the field holds — the card standing as the header while the home lists no instance, titled "Not signed in" and reading "Sign in to see your groups and share each project's records with the people in them." and "Until you do, everything stays on this device and nothing is contacted.", and in place of "Add instance…" once the reader activates it [[space-1](#space-1)], with Cancel beside Sign in and Escape cancelling ([DR-103](../decisions/103-the-home-and-its-groups.md), [DR-127](../decisions/127-a-home-signed-in-to-several-instances.md)):
 
 - "Sign in again" on a signed-out instance's heading starts the sign-in at that instance's origin, its flow reading on that heading as on the card;
 - the card opened from "Add instance…" also reads "Your own group's records will be kept there too." ([DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md));
@@ -164,7 +164,7 @@ When a sync of a spex repository reaches a placement's Check step [[space-12](#s
 
 #### space-61
 
-The Groups surface shall show each spex repository, and each of its placements, in exactly one of these states, a placement's read from the last answer of the instance governing it [[git-host-5](git-host.md#git-host-5)] and this device's files, and a clone holding a placement reading reachable where any placement it holds does, read-only where none does and one is read-only, and unreachable where every one it holds is ([DR-103](../decisions/103-the-home-and-its-groups.md), [DR-127](../decisions/127-a-home-signed-in-to-several-instances.md), [DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md)):
+The Space surface shall show each spex repository, and each of its placements, in exactly one of these states, a placement's read from the last answer of the instance governing it [[git-host-5](git-host.md#git-host-5)] and this device's files, and a clone holding a placement reading reachable where any placement it holds does, read-only where none does and one is read-only, and unreachable where every one it holds is ([DR-103](../decisions/103-the-home-and-its-groups.md), [DR-127](../decisions/127-a-home-signed-in-to-several-instances.md), [DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md)):
 
 | State | Holds while | Row reads | Control |
 | --- | --- | --- | --- |
@@ -325,7 +325,7 @@ When the core reports the home's diagnostics, it shall fold every diagnostic a f
 
 #### space-47
 
-When the user pairs a repair's spex repository with the folder proposed [[space-53](#space-53)] or with one he names, or declines to, the Groups surface shall settle that repair in place ([DR-065](../decisions/065-repairs-the-reader-answers.md)):
+When the user pairs a repair's spex repository with the folder proposed [[space-53](#space-53)] or with one he names, or declines to, the Space surface shall settle that repair in place ([DR-065](../decisions/065-repairs-the-reader-answers.md)):
 
 - pairing a folder the home already pairs with that spex repository sets that pair's folder, carrying the repair's recorded directories as aliases so every session recorded under them may continue [[storage-6](storage.md#storage-6)];
 - pairing a folder the home pairs with nothing writes the pair [[storage-6](storage.md#storage-6)], and where that folder is not one the repair records, attaches those recorded directories to it as aliases;
@@ -337,7 +337,7 @@ When the user pairs a repair's spex repository with the folder proposed [[space-
 
 #### space-48
 
-When pairing a repair's spex repository succeeds with every recorded folder attached [[space-47](#space-47)], the Groups surface shall replace that row with its outcome in the row's own place, keeping the reader on the surface ([DR-009](../decisions/009-at-hand-interaction.md)) ([DR-063](../decisions/063-space-setup-and-repair.md)):
+When pairing a repair's spex repository succeeds with every recorded folder attached [[space-47](#space-47)], the Space surface shall replace that row with its outcome in the row's own place, keeping the reader on the surface ([DR-009](../decisions/009-at-hand-interaction.md)) ([DR-063](../decisions/063-space-setup-and-repair.md)):
 
 - the outcome names the project and the folder it is now a project at, with the count of sessions listed where any ran there, and offers Open project, which is the only control here that leaves the surface;
 - the core no longer reports the repair, so the issues count leaves it out [[space-1](#space-1)], and the live region says how many issues are left as that count reads — declined repairs not among them [[space-49](#space-49)] — or that every issue is resolved where none is;
@@ -346,7 +346,7 @@ When pairing a repair's spex repository succeeds with every recorded folder atta
 
 #### space-49
 
-While a repair stands unanswered, the Groups surface shall count it as an issue [[space-1](#space-1)], only this device's reader's own act settling it ([DR-065](../decisions/065-repairs-the-reader-answers.md)):
+While a repair stands unanswered, the Space surface shall count it as an issue [[space-1](#space-1)], only this device's reader's own act settling it ([DR-065](../decisions/065-repairs-the-reader-answers.md)):
 
 - drawing a row, opening the list and re-reading the state settle nothing;
 - declining says this is not a project on this device: the row stands in the list, counts no more, and keeps the controls it had, so changing that answer is pairing the project rather than undoing anything;
@@ -381,7 +381,7 @@ While this device's reader has declined to pair a repair's spex repository, the 
 
 #### space-55
 
-While the issues list stands, the Groups surface shall tell a repair's three conditions apart by mark, by word and by weight, each named in the row's accessible description ([DR-065](../decisions/065-repairs-the-reader-answers.md)) ([DR-010](../decisions/010-interface-craft.md) §8):
+While the issues list stands, the Space surface shall tell a repair's three conditions apart by mark, by word and by weight, each named in the row's accessible description ([DR-065](../decisions/065-repairs-the-reader-answers.md)) ([DR-010](../decisions/010-interface-craft.md) §8):
 
 | Condition | Mark | Row |
 | --- | --- | --- |
@@ -622,7 +622,7 @@ When a sync completes a placement's turn through its Push, or through Refresh fo
 
 #### space-23
 
-While a spex repository's Explore tab is shown, the Groups surface shall present its clone as a read-only tree with a preview pane beside it, every entry annotated from the catalog [[storage-1](storage.md#storage-1)]:
+While a spex repository's Explore tab is shown, the Space surface shall present its clone as a read-only tree with a preview pane beside it, every entry annotated from the catalog [[storage-1](storage.md#storage-1)]:
 
 | Annotation | Content |
 | --- | --- |
@@ -651,7 +651,7 @@ When an entry is selected in the tree, the preview pane shall show it by type:
 
 #### space-25
 
-While the Explore tab is shown, the Groups surface shall present a "Stays on this device" panel listing every ignored family of the catalog [[storage-1](storage.md#storage-1)] with one plain reason each:
+While the Explore tab is shown, the Space surface shall present a "Stays on this device" panel listing every ignored family of the catalog [[storage-1](storage.md#storage-1)] with one plain reason each:
 
 | Family | Reason |
 | --- | --- |
@@ -677,12 +677,14 @@ When the user activates a reveal control — beside a spex repository's row, or 
 
 #### space-27
 
-User-facing copy on the surface shall say "mine" and "the host's", or "this device" and the display name of the placement's instance [[space-12](#space-12)], for a sync's sides and plain step names, never `ours`, `theirs`, `HEAD`, a remote-tracking branch such as `origin/spex` or `@<host>/spex`, `MERGE_HEAD` or a Git command as primary copy — the raw term surviving in a tooltip ([DR-010](../decisions/010-interface-craft.md) §2) — and shall say "instance" for an instance, "spex repository" and "group" for its things, and never "namespace", "remote" or "space" ([DR-127](../decisions/127-a-home-signed-in-to-several-instances.md), [DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md)).
+User-facing copy on the surface shall say "mine" and "the host's", or "this device" and the display name of the placement's instance [[space-12](#space-12)], for a sync's sides and plain step names, never `ours`, `theirs`, `HEAD`, a remote-tracking branch such as `origin/spex` or `@<host>/spex`, `MERGE_HEAD` or a Git command as primary copy — the raw term surviving in a tooltip ([DR-010](../decisions/010-interface-craft.md) §2) — and shall say "instance" for an instance, "spex repository" and "group" for its things, and never "namespace", "remote" or "space" for those objects — Space naming this IDE destination and Spex Space the hosted product ([DR-150](../decisions/150-spex-space-product-and-destination.md)) ([DR-127](../decisions/127-a-home-signed-in-to-several-instances.md), [DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md)).
 
 #### space-28
 
-The Groups surface shall fit its pane at every width down to the 320-pixel floor ([DR-041](../decisions/041-chrome-that-fits.md)):
+The Space surface shall fit its pane at every width down to the 320-pixel floor ([DR-041](../decisions/041-chrome-that-fits.md)):
 
+- while an instance is listed and Git runs, the existing Refresh and issues controls share the surface title row, wrapping within its width; the first sign-in and missing-Git cards keep their full row;
+- below 28rem a group heading keeps its own row above its actions, so the actions never squeeze the group name between them;
 - below 42rem an instance heading's at-a-glance read time yields, and below 20rem the header's fields and an instance heading's stack with the primary control last and full-width;
 - in each repository row and change row the label owns the slack and truncates with its title, the code remote and detail hiding below 28rem, the row's control keeping its accessible name;
 - the tree and preview stand side by side from 42rem and stack below it, the preview under the tree; the preview's box scrolls inside itself and the diff box scrolls sideways as a canvas;
@@ -709,7 +711,7 @@ Where the core runs as a seat [[core-service-125](core-service.md#core-service-1
 
 #### space-29
 
-The core shall expose Groups through these commands and one message, each reply validated against the command schema, `repository` naming a spex repository by its key, `instance` an instance by its origin, and `group` a group by its host id at that instance ([DR-127](../decisions/127-a-home-signed-in-to-several-instances.md)):
+The core shall expose the Space surface through these commands and one message, each reply validated against the command schema, `repository` naming a spex repository by its key, `instance` an instance by its origin, and `group` a group by its host id at that instance ([DR-127](../decisions/127-a-home-signed-in-to-several-instances.md)):
 
 | Command | Input | Result | Errors |
 | --- | --- | --- | --- |
@@ -1158,7 +1160,7 @@ When an integration suite runs a real core on a scratch home signed in to three 
 
 #### space-56
 
-Where the Groups surface renders over a home whose issues list holds three unanswered repairs, each proposing its recorded folder, when the reader declines the first, adds the third, lets the core deliver a re-read, activates Refresh, adds the second and then the declined first, the core reporting after each act what then remains, the test suite shall assert through the surface:
+Where the Space surface renders over a home whose issues list holds three unanswered repairs, each proposing its recorded folder, when the reader declines the first, adds the third, lets the core deliver a re-read, activates Refresh, adds the second and then the declined first, the core reporting after each act what then remains, the test suite shall assert through the surface:
 
 - the declined row keeps the first place, reading "not added", and the header's count falls to two issues [[space-55](#space-55)] [[space-49](#space-49)];
 - the third row gives way in its own place to an outcome naming the project, the folder it is now a project at and the sessions listed, the header's count reading one issue and the live region "1 issue left." [[space-48](#space-48)];
@@ -1170,7 +1172,7 @@ Where the Groups surface renders over a home whose issues list holds three unans
 
 #### space-70
 
-Where the Groups surface renders over a signed-in home whose host read says the person may create a group, may create a subgroup in a group `acme`, add members to it, rename it and delete it, may do none of these in a group `other` named "Other team", may rename and delete an empty group `empty`, and may add members to the repository `a-spex` and move it but do neither on `b-spex`, with the host's five roles of which Developer upward may push, the test suite shall assert through the surface:
+Where the Space surface renders over a signed-in home whose host read says the person may create a group, may create a subgroup in a group `acme`, add members to it, rename it and delete it, may do none of these in a group `other` named "Other team", may rename and delete an empty group `empty`, and may add members to the repository `a-spex` and move it but do neither on `b-spex`, with the host's five roles of which Developer upward may push, the test suite shall assert through the surface:
 
 - "New group" stands on the instance's heading, `acme`'s heading carries Members and "New subgroup", `other`'s Members alone, your own group's and your namespace's neither, and no heading carries Share; `acme`'s members panel, read on activation, carries Share and Remove on each of its own members and links no page, `other`'s lists its members with neither; `a-spex`'s members panel carries Share and Remove on its own members, a member held through `acme` reading "via acme" with no Remove, while `b-spex`'s carries neither [[space-1](#space-1)] [[space-62](#space-62)] [[space-72](#space-72)];
 - rendered again over a read that says the person may not create a group, the instance's heading holds no "New group" but the phrase "Groups are made by the people who run <display name>", in English and in Chinese, with no link and no control, and neither before a read is held [[space-1](#space-1)];
@@ -1185,7 +1187,7 @@ Where the Groups surface renders over a signed-in home whose host read says the 
 
 #### space-66
 
-Where the Groups surface renders over a signed-out home, when the reader signs in through each flow, the test suite shall assert through the surface:
+Where the Space surface renders over a signed-out home, when the reader signs in through each flow, the test suite shall assert through the surface:
 
 - signed out, the header is the "Not signed in" card with its two sentences, its "Instance" field holding the default instance's origin, and Sign in, showing no home path, Copy path, read time or Refresh, and your own group is headed "Your own group · named after your login at sign-in" with no path, its row reading "On this device only — shared once you sign in" with no control [[space-3](#space-3)] [[space-1](#space-1)];
 - in the device flow, the card reads "Continue in your browser:", the link "Open <host name> to sign in" whose href is the verification URL opening a new tab, and "Sign in there and approve; you return here signed in.", with no code shown; Sign in reads "Signing in…" disabled beside Cancel and no row carries a sign-in control [[space-3](#space-3)];
@@ -1200,7 +1202,7 @@ Where the Groups surface renders over a signed-out home, when the reader signs i
 
 #### space-95
 
-Where the Groups surface renders over a home signed in to two instances, with a project placed at each, a project at the first alone whose placement file names a repository the second lists, a local-only project, and your own group placed at both, the test suite shall assert through the surface ([DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md)):
+Where the Space surface renders over a home signed in to two instances, with a project placed at each, a project at the first alone whose placement file names a repository the second lists, a local-only project, and your own group placed at both, the test suite shall assert through the surface ([DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md)):
 
 - each row lists one line per placement with its instance's display name, its path, its state and its last sync, the named one reading "Not on this device" with Attach, and Members and "Move…" on the lines the view allows [[space-87](#space-87)];
 - "Place at…" stands on the project at one instance titled "Also place at <display name>", and on neither your own group's, a group's own nor the local-only project's, which offers "Pick a group"; "Leave…" is titled "Remove from <display name>" on that project, opens a choice on the placed project, and stands on neither your own group's nor the local-only project's [[space-88](#space-88)] [[space-89](#space-89)];
@@ -1218,12 +1220,12 @@ Where the Groups surface renders over a home signed in to two instances, with a 
 
 Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell on an empty home against a stand-in Git host whose device-flow approvals the harness scripts, the test suite shall assert the first start and the first sign-in through the page alone:
 
-- Groups reads the "Not signed in" card with its two sentences, its "Instance" field holding the stand-in's origin, and Sign in as its one primary control, no home path, read time or Refresh, and your own group alone beneath it headed "Your own group · named after your login at sign-in", its row reading "On this device only — shared once you sign in" with no control [[space-1](#space-1)] [[space-3](#space-3)];
+- Space reads the "Not signed in" card with its two sentences, its "Instance" field holding the stand-in's origin, and Sign in as its one primary control, no home path, read time or Refresh, and your own group alone beneath it headed "Your own group · named after your login at sign-in", its row reading "On this device only — shared once you sign in" with no control [[space-1](#space-1)] [[space-3](#space-3)];
 - a project added from the palette lists under your own group as "On this device only" with no control [[space-61](#space-61)];
 - Sign in shows "Open <host name> to sign in" linking to the verification URL that carries the code, and no code, the control reading "Signing in…" disabled until the harness approves the code the link carries; the instance's heading then reads the account and the header Refresh, your own group bears its login, and the surface ends in the line naming where this device's files are kept [[space-3](#space-3)] [[space-4](#space-4)] [[space-1](#space-1)];
 - Pick a group on the project's row offers the stand-in's groups, and picking one turns the row reachable with a sync time, the stand-in holding `<name>-spex` on its `spex` branch [[space-58](#space-58)] [[space-12](#space-12)];
 - a session then run from the Captain home appears under the repository's local changes by its title, its Open session control opens its tab, and Sync sends it [[space-7](#space-7)] [[space-12](#space-12)];
-- an intent queued while Groups is shown lists under local changes with Refresh never activated, and the instance's heading reads the time of the read [[space-2](#space-2)] [[space-1](#space-1)].
+- an intent queued while Space is shown lists under local changes with Refresh never activated, and the instance's heading reads the time of the read [[space-2](#space-2)] [[space-1](#space-1)].
 
 #### space-41
 
@@ -1235,7 +1237,7 @@ Where the harness boots the served shell signed in on a home whose spex reposito
 - with the peer's `spex` moved after the check, Sync ends "changed again" with the ahead count on the row, and a second Sync pushes [[space-15](#space-15)];
 - Stop during a check against a sleeping transport ends the check with its stopped state and Retry [[space-16](#space-16)];
 - Members lists the stand-in's members with their role names and no link [[space-62](#space-62)];
-- no visible text on the surface contains `ours`, `theirs`, `HEAD`, `origin/spex`, `@<host>/spex`, `namespace` or `space` [[space-27](#space-27)].
+- no visible text on the surface contains `ours`, `theirs`, `HEAD`, `origin/spex`, `@<host>/spex`, `namespace`, with Space reserved for the destination or hosted product [[space-27](#space-27)].
 
 #### space-42
 
@@ -1248,7 +1250,7 @@ Where the harness boots the served shell with the demo project registered and a 
 
 #### space-81
 
-Where the harness boots the served shell signed in at the stand-in host holding in `acme` a project's spex repository a peer pushed with `bob` as its other member, when a folder holding the same code is added and Groups picks that repository on the folder's row, once with the stand-in counting the members and once with it failing every members route, the test suite shall assert through the page in each case:
+Where the harness boots the served shell signed in at the stand-in host holding in `acme` a project's spex repository a peer pushed with `bob` as its other member, when a folder holding the same code is added and Space picks that repository on the folder's row, once with the stand-in counting the members and once with it failing every members route, the test suite shall assert through the page in each case:
 
 - the picker lists the repository with its group read as "Acme · acme", and with "2 members" only where the stand-in counted them [[space-58](#space-58)];
 - picking it says the notice in the picker beneath it with Cancel focused, and Escape closes the notice alone, the repository still local only and focus back on it [[space-57](#space-57)];
@@ -1260,7 +1262,7 @@ Where the harness boots the served shell signed in at the stand-in host, which b
 
 #### space-75
 
-Where the harness boots the served shell signed in at the stand-in host, whose remote URLs lie under its Git origin, with a project's spex repository synced in `acme` and another account's spex repository listed under `bob`, when the journey shows Groups with that project's members panel open, first in English and then in Chinese, the test suite shall assert that the Groups surface holds no link, and no text, title or accessible name holding a URL under the stand-in's URL or naming `gitlab`, while `bob`'s heading carries no control [[space-1](#space-1)] [[space-62](#space-62)].
+Where the harness boots the served shell signed in at the stand-in host, whose remote URLs lie under its Git origin, with a project's spex repository synced in `acme` and another account's spex repository listed under `bob`, when the journey shows Space with that project's members panel open, first in English and then in Chinese, the test suite shall assert that the Space surface holds no link, and no text, title or accessible name holding a URL under the stand-in's URL or naming `gitlab`, while `bob`'s heading carries no control [[space-1](#space-1)] [[space-62](#space-62)].
 
 #### space-80
 
@@ -1292,15 +1294,15 @@ Where the harness boots the served shell for two homes against two stand-in inst
 - a session run on the first page and synced lands on both stand-ins' `spex` branches [[space-12](#space-12)];
 - on the second page, the project joined from the first's `acme` names the second's placement with Attach; Attach shows the notice naming the second's display name and path, and Continue attaches it, its line reading synced [[space-90](#space-90)] [[space-87](#space-87)];
 - a session run on the second page and synced reaches both stand-ins, and the first page's Sync brings it [[space-12](#space-12)];
-- no visible text contains `@<host>/spex`, `remote`, `namespace` or `space`, and the new controls fit at the 320-pixel floor [[space-27](#space-27)] [[space-28](#space-28)].
+- no visible text contains `@<host>/spex`, `remote` or `namespace`, and the new controls fit at the 320-pixel floor [[space-27](#space-27)] [[space-28](#space-28)].
 
 #### space-43
 
-Where the harness boots the served shell signed in with a spex repository carrying local changes of every kind and a check ended in choices, when the journey shows Groups with its Sync tab and Explore tab at the widths 320, 480, 640, 800, 1024 and 1280 pixels, each at 800 and 400 pixels tall, with the sidebar collapsed and, from 480 pixels, open ([DR-041](../decisions/041-chrome-that-fits.md)), the test suite shall assert fit through the page, naming every offending element: the page scrolls in neither direction, no element outside the diff canvas is wider than its box, within every header, instance heading, group row, repository row, list row and picker row no two visible siblings overlap and every child lies inside its parent, and every control keeps its accessible name at every width [[space-28](#space-28)].
+Where the harness boots the served shell signed in with a spex repository carrying local changes of every kind and a check ended in choices, when the journey shows Space with its Sync tab and Explore tab at the widths 320, 480, 640, 800, 1024 and 1280 pixels, each at 800 and 400 pixels tall, with the sidebar collapsed and, from 480 pixels, open ([DR-041](../decisions/041-chrome-that-fits.md)), the test suite shall assert fit through the page, naming every offending element: the page scrolls in neither direction, no element outside the diff canvas is wider than its box, within every header, instance heading, group row, repository row, list row and picker row no two visible siblings overlap and every child lies inside its parent, and every control keeps its accessible name at every width [[space-28](#space-28)].
 
 #### space-44
 
-Where the harness boots the served shell signed in with a spex repository whose check ended in choices, when the Groups surface is scanned by axe-core at WCAG 2.1 AA in the light and the dark theme, the test suite shall assert no serious or critical violation, with the picker's radio groups, the tree, the groups list and the tabs named for assistive technology [[space-17](#space-17)] [[space-23](#space-23)] [[space-1](#space-1)].
+Where the harness boots the served shell signed in with a spex repository whose check ended in choices, when the Space surface is scanned by axe-core at WCAG 2.1 AA in the light and the dark theme, the test suite shall assert no serious or critical violation, with the picker's radio groups, the tree, the groups list and the tabs named for assistive technology [[space-17](#space-17)] [[space-23](#space-23)] [[space-1](#space-1)].
 
 #### space-36
 

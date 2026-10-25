@@ -56,13 +56,13 @@ const PORT = "(?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|65
 const INSTANCE_SEGMENT = `@${HOST_NAME}(?:_${PORT})?`;
 /** An instance's folder under `workspace/` (DR-127): `@`, its host in
  * lowercase, and `_<port>` where its origin names a port or its scheme
- * is `http` — `@spex.pub`, `@127.0.0.1_4100`. */
+ * is `http` — `@spex.sublang.ai`, `@127.0.0.1_4100`. */
 export const INSTANCE_FOLDER_PATTERN = new RegExp(`^${INSTANCE_SEGMENT}$`);
 /** A spex repository's key: its clone's path under `workspace/`, the
  * name ending in `-spex` (storage-1, projects-10). A clone at an
  * instance lies under that instance's folder, its key's first segment,
  * with at least its group's or its namespace's segment before its name
- * (`@spex.pub/acme/a-spex`, DR-127); every other segment is spelled as
+ * (`@spex.sublang.ai/acme/a-spex`, DR-127); every other segment is spelled as
  * the Git host spells its paths — letters, digits, `.`, `_` and `-`,
  * never starting with a dot or a hyphen — so a host's group or
  * repository name stands as a segment unchanged, and only an instance's
@@ -70,7 +70,7 @@ export const INSTANCE_FOLDER_PATTERN = new RegExp(`^${INSTANCE_SEGMENT}$`);
  * key. */
 export const REPOSITORY_KEY_PATTERN = new RegExp(`^(?:${INSTANCE_SEGMENT}/${KEY_SEGMENT}/)?(?:${KEY_SEGMENT}/)*${KEY_SEGMENT}-spex$`);
 export const repositoryKeySchema = z.string().regex(REPOSITORY_KEY_PATTERN);
-/** An instance a command names, by its origin as the Groups state
+/** An instance a command names, by its origin as the Space state
  * carries it (space-29, DR-127): the core reads it in any spelling and
  * refuses one the home does not list. */
 const instanceOriginSchema = z.string().min(1);
@@ -2048,11 +2048,11 @@ export type SpaceSyncPhase =
     }
   | { phase: "done"; at: number; sent: number; received: number; pushed: boolean };
 
-/** One spex repository as the Groups surface reads it (space-30,
+/** One spex repository as the Space surface reads it (space-30,
  * space-61, DR-128): one row per clone, with a line per placement. */
 export interface RepositoryState {
   /** The clone's path under `workspace/`, beginning with its instance's
-   * folder where it lies at an instance (`@spex.pub/acme/a-spex`,
+   * folder where it lies at an instance (`@spex.sublang.ai/acme/a-spex`,
    * DR-127); for a row the host lists in a group held as colliding,
    * `<folder>/<path>@<id>`, naming no clone (space-61). */
   key: string;
@@ -2233,7 +2233,7 @@ export interface GroupsState {
   issues: number;
 }
 
-/** An instance the home lists, as the Groups surface heads it (space-30,
+/** An instance the home lists, as the Space surface heads it (space-30,
  * DR-127). */
 export interface InstanceState {
   /** The instance's origin, naming it in every command. */

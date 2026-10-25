@@ -298,7 +298,7 @@ export function GroupsList({
     <section
       data-testid="space-groups"
       aria-label={i18n._({ id: "Your groups", comment: "the list of the home's groups and their spex repositories" })}
-      className="flex flex-col gap-3"
+      className="flex min-w-0 flex-col gap-4"
     >
       {section(ownEntry(groups))}
       {groups.instances.map((instance) => (
@@ -504,12 +504,12 @@ function GroupSection({
       role="group"
       aria-label={own ? name : group.login ?? group.fullPath}
       data-testid={own ? "space-own" : `space-group-${testKey}`}
-      className="@container flex min-w-0 flex-col gap-1"
+      className="@container flex min-w-0 flex-col gap-2"
     >
       {/* The name owns the slack; where the heading's controls leave it
           too little, they wrap beneath it (DR-041). */}
       <div className="flex min-w-0 flex-wrap items-center gap-1">
-        <Heading className="flex min-w-24 flex-1 basis-0 items-baseline gap-2 text-sm font-medium">
+        <Heading className="flex min-w-24 flex-1 basis-full items-baseline gap-2 text-sm font-medium @md:basis-0">
           <span className="min-w-0 truncate" title={own && ownBeside(groups) ? undefined : group.fullPath}>
             {name}
           </span>

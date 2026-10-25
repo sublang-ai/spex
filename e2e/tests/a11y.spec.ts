@@ -153,9 +153,9 @@ for (const theme of ["light", "dark"] as const) {
 
     // Groups: your own group with its spex repositories (space-30);
     // the picker and the tree are scanned by space-44.
-    await nav(page, "Groups").click();
+    await nav(page, "Space").click();
     await expect(page.getByTestId("space-groups")).toBeVisible();
-    found.push(...(await scan(page, "Groups")));
+    found.push(...(await scan(page, "Space")));
 
     await nav(page, "Settings").click();
     await expect(page.getByTestId("captain-section")).toBeVisible();

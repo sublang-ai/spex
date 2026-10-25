@@ -361,12 +361,12 @@ export function CaptainHome(props: CaptainHomeProps) {
             : [
                 {
                   label: i18n._({
-                    id: "Groups",
+                    id: "Space",
                     comment: "label of the first step on the welcome page at a team server: your groups on the Git host, whose spex repositories are the projects there",
                   }),
                   text: i18n._({
                     id: "Your projects here come from the spex repositories of your groups",
-                    comment: "the first step on the welcome page at a team server, beside its label Groups; \"here\" is that server",
+                    comment: "the first step on the welcome page at a team server, beside its label Space; \"here\" is that server",
                   }),
                 },
                 {
@@ -429,8 +429,8 @@ export function CaptainHome(props: CaptainHomeProps) {
                 className={WELCOME_SECONDARY}
               >
                 {i18n._({
-                  id: "Open Groups",
-                  comment: "secondary action of the welcome page at a team server: shows the Groups surface at that server",
+                  id: "Open Space",
+                  comment: "secondary action of the welcome page at a team server: shows the Space surface at that server",
                 })}
               </button>
             </>

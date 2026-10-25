@@ -157,7 +157,7 @@ export function available(over: Partial<PlaybookAvailability> & { id: string }):
 export function specPackage(over: Partial<EnvironmentPackage> & { name: string }): EnvironmentPackage {
   return {
     version: "1.0.0",
-    source: { kind: "registry", detail: "spex.pub" },
+    source: { kind: "registry", detail: "spex.sublang.ai" },
     direct: true,
     requiredBy: [],
     artifacts: [],

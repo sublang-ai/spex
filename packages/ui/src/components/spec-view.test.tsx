@@ -1688,7 +1688,7 @@ describe("spec-view-20: citation graph beside the outline", () => {
       "neutral-200": { light: "#e3ded5", dark: "#e3ded5" },
       "neutral-300": { light: "#d8d2c6", dark: "#d8d2c6" },
       "neutral-400": { light: "#a3a3a3", dark: "#a3a3a3" },
-      "neutral-500": { light: "#696969", dark: "#737373" },
+      "neutral-500": { light: "#696969", dark: "#949494" },
       "neutral-600": { light: "#525252", dark: "#525252" },
       "neutral-700": { light: "#404040", dark: "#404040" },
       "neutral-800": { light: "#262626", dark: "#262626" },

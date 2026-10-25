@@ -674,7 +674,7 @@ describe("run-view-171: a remote place holding no project shows the server welco
     const welcome = screen.getByTestId("welcome-home");
     expect(within(welcome).getByRole("heading", { level: 1 }).textContent).toBe("Work on gpu-box from this computer.");
     expect([...welcome.querySelectorAll("ol > li")].map((step) => step.textContent)).toEqual([
-      "GroupsYour projects here come from the spex repositories of your groups",
+      "SpaceYour projects here come from the spex repositories of your groups",
       "SeatAgents run on gpu-box as you, in folders the server allocates",
       "DeliveryAI builds and reviews changes, with a record of each step",
     ]);
@@ -688,7 +688,7 @@ describe("run-view-171: a remote place holding no project shows the server welco
     const primary = within(welcome).getByTestId("home-open-from-groups");
     const secondary = within(welcome).getByTestId("home-open-groups");
     expect(primary.textContent).toBe("Open a project from your groups");
-    expect(secondary.textContent).toBe("Open Groups");
+    expect(secondary.textContent).toBe("Open Space");
     expect(within(welcome).getAllByRole("button")).toEqual([primary, secondary]);
 
     // [run-view-171] [run-view-174] the primary action opens the palette,

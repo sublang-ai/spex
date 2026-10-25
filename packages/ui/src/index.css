@@ -7,7 +7,7 @@
    anchored at the design system's accent #890FBC (600) and deep
    #27063D (950); the wordmark's bright #A416EF is artwork-only and
    deliberately absent. Light neutrals shift to the system's warm
-   paper values; dark steps stay stock. */
+   paper values; dark surfaces stay stock, with muted ink lifted for contrast. */
 @theme {
   /* Each stack names the platforms' Simplified Chinese faces after its
      Latin faces (DR-078, localization-3): the brand faces still set
@@ -48,10 +48,10 @@
   accent-color: var(--color-brand-600);
 }
 
-/* Dark surfaces are stock, so muted text reverts to stock there. */
+/* Muted body text still meets AA on the dark cards and controls. */
 @media (prefers-color-scheme: dark) {
   :root {
-    --color-neutral-500: #737373;
+    --color-neutral-500: #949494;
   }
 }
 

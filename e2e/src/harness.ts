@@ -179,7 +179,7 @@ export interface AppOptions {
    * before the shell with its URL in `SPEX_HOST_URL`, so the new home
    * records it and signs in there by the device flow the served shell
    * runs (space-3). `registry` also starts a stand-in registry
-   * (environments-18) the host fronts at its own origin, as spex.pub
+   * (environments-18) the host fronts at its own origin, as Spex Space
    * serves both (DR-104); `share` points a second home at a host
    * another app started, and its `second` at that app's second instance
    * (space-96), which this home reaches only by a sign-in naming it,
@@ -1735,7 +1735,7 @@ export type SurfaceName =
 /** The sidebar entry for a surface, by its English name. */
 export function nav(
   page: Page,
-  name: "Dashboard" | "Projects" | "Playbooks" | "Groups" | "Settings",
+  name: "Dashboard" | "Projects" | "Playbooks" | "Space" | "Settings",
 ) {
   return page.getByRole("button", { name, exact: true });
 }

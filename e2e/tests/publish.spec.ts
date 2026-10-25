@@ -167,7 +167,7 @@ test("playbook-library-95: Publish from a project at the second instance reads t
   // <name>" with the second's display name in the control's place
   // (playbook-library-93).
   await open(page, app);
-  await nav(page, "Groups").click();
+  await nav(page, "Space").click();
   const secondSection = instanceSection(page, second);
   await secondSection.getByTestId("space-signout").click();
   await expect(secondSection.getByTestId("space-signin-again")).toHaveText("Sign in again");
