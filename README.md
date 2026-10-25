@@ -43,6 +43,9 @@ Spex answers each with one systematic design:
 
 ## Getting started
 
+New to the IDE? Follow [Start using Spex](docs/getting-started.md) to open
+your first project, set up an agent, and try a spec-first task.
+
 To set up a team or a workshop — where groups are made, who shares what, where a package publishes — read [docs/groups.md](docs/groups.md).
 
 Requires Node.js 22.19 or later. The desktop compiles playbooks on the Node
@@ -112,15 +115,15 @@ The Claude, Codex and OpenCode SDKs are pinned by `package-lock.json` to
 the releases Cligent tests; `npm ci` restores them, and is the app's own
 repair when one is missing.
 
-**First run.** The app opens on Projects. Add a project from the palette:
-register an existing repository, create a new one at a path, or "Try the
-Academy example", which seeds a sample project with a complete `specs/`
-tree built from [`demo/`](demo). Then write to the Captain — a request,
-or `/code …`; `/` in the composer lists the playbooks the starter config
-enables, including `/code`, `/review`, `/decide`, `/dev`, `/branch`,
-`/pr` and `/inspect`, and the quick-start card shows the first of them.
-Coding and design workflows commit in your repository, so Git needs `user.name` and
-`user.email`; the issue and PR panels and the Dashboard's Sources on a
+**First run.** A fresh home shows a welcome page. Choose **Add a local
+project** to select an existing Git repository, or expand **Create a new
+project…** in that flow to make one with a `specs/` scaffold. **Open the
+Academy example** opens the included sample project. Once a project is
+selected, describe your goal to the Captain; type `/` in the task field
+to see enabled playbooks and their descriptions, such as `/decide`,
+`/code`, and `/review`.
+Project creation and coding workflows make Git commits, so configure
+`user.name` and `user.email` first. The issue and PR panels and the Dashboard's Sources on a
 GitHub remote need `gh auth login`. Config and sessions live in the
 Spex home — `~/.spex`, or `SPEX_HOME` — in spex repositories under
 `workspace/`: each project's records in its own, and your config at
@@ -164,7 +167,11 @@ runtime, never through a remote URL, and the device's token stays in
 
 App releases on [GitHub Releases](https://github.com/sublang-ai/spex/releases)
 (`app-v*` tags) ship as source with a changelog: check out the tag and run
-the commands above.
+the commands above. The clone commands above follow current `main`;
+release tags keep their tagged behavior. In particular,
+`app-v0.9.0-beta.16` predates the current Space address default, so check
+the instance address before signing in. Existing homes keep their saved
+addresses.
 
 To use Spex from another machine, run the server shell instead. It serves
 the UI and the core on one port behind a token in the URL, binds loopback by
