@@ -70,7 +70,7 @@ const COPY = [
     close: "Close",
     headline: "Work on lab-3 from this computer.",
     openFromGroups: "Open a project from your groups",
-    openGroups: "Open Groups",
+    openGroups: "Open Space",
   },
   {
     locale: "zh-CN",
@@ -78,7 +78,7 @@ const COPY = [
     close: "关闭",
     headline: "从本机在 lab-3 上工作。",
     openFromGroups: "从群组打开项目",
-    openGroups: "打开群组",
+    openGroups: "打开空间",
   },
 ] as const;
 

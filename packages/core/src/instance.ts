@@ -15,7 +15,7 @@ import { INSTANCE_FOLDER_PATTERN } from "./protocol.js";
 
 /** The instance a new home records unless `SPEX_HOST_URL` names another
  * (git-host-1). */
-export const DEFAULT_HOST_URL = "https://spex.pub";
+export const DEFAULT_HOST_URL = "https://spex.sublang.ai";
 
 /** An instance's folder under `workspace/`, defined beside the key whose
  * first segment it may be. */
@@ -97,14 +97,14 @@ export function parseOrigin(value: string): InstanceOrigin {
 }
 
 /** The canonical origin a URL names (`OriginRefused` where it names
- * none): `HTTPS://Spex.Pub:443/` is `https://spex.pub`. */
+ * none): `HTTPS://Spex.Sublang.Ai:443/` is `https://spex.sublang.ai`. */
 export function canonicalOrigin(value: string): string {
   return parseOrigin(value).origin;
 }
 
 /** The folder under `workspace/` of the instance a URL names
- * (`OriginRefused` where it names none): `@spex.pub` for
- * `https://spex.pub`, `@127.0.0.1_4100` for `http://127.0.0.1:4100`,
+ * (`OriginRefused` where it names none): `@spex.sublang.ai` for
+ * `https://spex.sublang.ai`, `@127.0.0.1_4100` for `http://127.0.0.1:4100`,
  * `@localhost_80` for `http://localhost`. */
 export function instanceFolder(value: string): string {
   const { scheme, host, port } = parseOrigin(value);
@@ -117,8 +117,8 @@ export function isInstanceFolder(value: string): boolean {
   return INSTANCE_FOLDER_PATTERN.test(value);
 }
 
-/** The instance folder a key begins with — `@spex.pub` of
- * `@spex.pub/acme/a-spex` — or null for a key outside every instance's
+/** The instance folder a key begins with — `@spex.sublang.ai` of
+ * `@spex.sublang.ai/acme/a-spex` — or null for a key outside every instance's
  * folder, as your own group's and the local-only clones' are. */
 export function instanceSegmentOf(key: string): string | null {
   const at = key.indexOf("/");
@@ -130,7 +130,7 @@ export function instanceSegmentOf(key: string): string | null {
 /**
  * The instance a home names (git-host-1), as its canonical origin: a
  * home that already records one keeps it whatever the environment says;
- * a new home takes a nonempty `SPEX_HOST_URL`, else spex.pub. A URL the
+ * a new home takes a nonempty `SPEX_HOST_URL`, else spex.sublang.ai. A URL the
  * origin rule refuses throws `OriginRefused`.
  */
 export function hostUrlFor(env: NodeJS.ProcessEnv = process.env, existing?: string | null): string {

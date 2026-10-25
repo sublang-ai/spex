@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// A minimal ustar codec for release archives (DR-104, spex.pub DR-016):
+// A minimal ustar codec for release archives (DR-104, Spex Space DR-016):
 // the registry's archive is a gzipped tarball rooted at `<pkg>/`, and a
 // Git source's tree comes out of `git archive` as a tar. Writing is
 // deterministic — zero times and owners, entries in the given order —

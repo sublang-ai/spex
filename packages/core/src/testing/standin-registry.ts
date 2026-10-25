@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// A stand-in for spex.pub (environments-18): an in-process HTTP server
-// serving the format 2 interface (spex.pub DR-016, DR-017) — version
+// A stand-in for Spex Space (environments-18): an in-process HTTP server
+// serving the format 2 interface (Spex Space DR-016, DR-017) — version
 // index, version resources, raw files, release archives and search —
 // from a directory of releases, with a publish endpoint that validates
 // as the core's publishing does — the release checks and the fields the
@@ -111,7 +111,7 @@ export interface StandinRegistryScript {
    * bearer, or none, is answered 401. */
   setOrgs(reader: string, orgs: { name: string; path: string; role: string }[]): void;
   /** Answer every request presenting a bearer `reader` covers 401 with
-   * `code`, `token_revoked` unless given, as spex.pub answers a device
+   * `code`, `token_revoked` unless given, as Spex Space answers a device
    * signed out; null lifts every such refusal. */
   refuseTokens(reader: string | null, code?: string): void;
   /** Hold each orgs answer `ms` before sending it. */
@@ -143,7 +143,7 @@ function sendError(res: ServerResponse, status: number, code: string, message: s
   sendJson(res, status, { error: { code, message, ...(details ? { details } : {}) } });
 }
 
-/** The words spex.pub answers a refused bearer with, by its code. */
+/** The words Spex Space answers a refused bearer with, by its code. */
 const REFUSED_WORDS: Record<string, string> = {
   invalid_token: "The token is not known.",
   token_revoked: "This device was signed out.",
@@ -349,7 +349,7 @@ export async function startStandinRegistry(options: { dir: string }): Promise<St
       return;
     }
     // A refused bearer is answered 401 on every route, whatever it names
-    // and whether it exists, as spex.pub answers it.
+    // and whether it exists, as Spex Space answers it.
     const refused = refusal(caller);
     if (refused !== null) { sendError(res, 401, refused, REFUSED_WORDS[refused] ?? "The token was refused."); return; }
     const segments = url.pathname.split("/").filter(Boolean).map((segment) => decodeURIComponent(segment));

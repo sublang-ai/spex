@@ -4140,7 +4140,7 @@ export class CoreService {
     return this.space.ensureGroupRepository(key);
   }
 
-  /** A project was added, paired or removed: the Groups surface re-reads
+  /** A project was added, paired or removed: the Space surface re-reads
    * on its announcement (space-2). */
   private announceGroups(): void {
     this.space.publish().catch((error: unknown) => {

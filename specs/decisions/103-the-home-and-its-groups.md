@@ -5,6 +5,8 @@
 
 ## Status
 
+Amended by [DR-150](150-spex-space-product-and-destination.md) in the IDE destination's name: Space replaces Groups; group objects and their actions keep their names.
+
 Amended by [DR-144](144-bounded-session-storage.md) for bounded session roots, replay descriptors and session-owned chunks selected and published as one unit.
 
 Accepted (2026-10-04); revised in place through 2026-10-06 while still being worked on, by the owner's direction.

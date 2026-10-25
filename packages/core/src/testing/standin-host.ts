@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // The stand-in Git host (git-host-12): an in-process HTTP server on
-// 127.0.0.1 speaking spex.pub's sign-in routes (auth-69..75) and host
+// 127.0.0.1 speaking Spex Space's sign-in routes (auth-69..75) and host
 // routes (host-1..12) with their exact JSON shapes, over a directory of
 // bare Git repositories whose Git transport it serves through Git's own
 // `http-backend`. Tests and browser journeys script it: approvals,
@@ -20,7 +20,7 @@
 // servers (servers-5..7, DR-133), the servers listing and the tickets,
 // each call recorded with the bearer it carried, a server left out of
 // the listing, scripted faults of the listing or the ticket route alone,
-// and a ticket spent as a server's admission spends it. Like spex.pub
+// and a ticket spent as a server's admission spends it. Like Spex Space
 // (DR-120) it answers every path relative to the instance's root, keeps
 // no group of its own, hides the service identity a root creation adds
 // as an Owner, and answers no page URL. Several run at once as several
@@ -55,7 +55,7 @@ export interface StandinGroup {
   name: string;
   kind: "user" | "group";
   /** What the person may do there; unset, a group lets them do all four
-   * and the person's own group none, as spex.pub reports it. */
+   * and the person's own group none, as Spex Space reports it. */
   can?: StandinGroupCan;
   /** The group's own members, the person among them where listed; its
    * subgroups and repositories inherit them. */
@@ -329,7 +329,7 @@ export interface StandinScript {
   refuseMembers(message: string | null): void;
   /** While set, every members route — a read, an addition or a removal,
    * of a group or a spex repository — answers 502 `provider_unavailable`,
-   * as spex.pub does while its service identity's read of its container's
+   * as Spex Space does while its service identity's read of its container's
    * members fails (host-8); every other route answers. */
   failMembers(on: boolean): void;
   /** While set, renaming a group answers 403 `host_refused` with these
@@ -381,7 +381,7 @@ export interface StandinHostOptions {
 }
 
 /** The group the stand-in keeps every group of the instance in, as a
- * spex.pub deployment keeps its container on its Git system (DR-120): on
+ * Spex Space deployment keeps its container on its Git system (DR-120): on
  * its Git URLs and its disk alone, never in an answer's path. */
 export const STANDIN_STORAGE = "standin-storage";
 
@@ -394,7 +394,7 @@ const DEFAULT_ACCOUNTS: StandinPerson[] = [
   { id: "1004", login: "alan", displayName: null },
 ];
 
-/** The roles spex.pub reports for GitLab.com (host-14): those that read
+/** The roles Spex Space reports for GitLab.com (host-14): those that read
  * a private repository, least first, Developer upward pushing. */
 const DEFAULT_ROLES: StandinRole[] = [
   { id: "reporter", name: "Reporter", mayPush: false },
@@ -496,7 +496,7 @@ interface MembersPlace {
 /** A Git host group path a body may give (host-26). */
 const GROUP_PATH = /^[A-Za-z0-9_][A-Za-z0-9_.-]*$/;
 
-/** A group's path derived from its name as spex.pub derives it (host-26):
+/** A group's path derived from its name as Spex Space derives it (host-26):
  * lower-cased, each run outside letters, digits, `.`, `_` and `-` one
  * `-`, leading and trailing `-` and `.` dropped. */
 function groupPath(name: string): string {
@@ -598,7 +598,7 @@ function envelope(res: ServerResponse, status: number, code: string, message: st
   json(res, status, { error: { code, message } }, headers);
 }
 
-/** A servers route's scripted fault, answered as spex.pub answers it. */
+/** A servers route's scripted fault, answered as Spex Space answers it. */
 function serversFault(res: ServerResponse, fault: StandinServersFault): void {
   if (fault.code === "host_refused") return envelope(res, 403, "host_refused", fault.message);
   if (fault.code === "not_found") return envelope(res, 404, "not_found", "no server has this id");
@@ -683,7 +683,7 @@ function sameGroup(a: StandinGroup, b: StandinGroup): boolean {
  * Start the stand-in. `registry` names a stand-in registry
  * (environments-18) whose routes — `/api/v1/packages…`,
  * `/api/v1/search`, `/api/v1/account/orgs` and the raw files at
- * `/<org>/<pkg>/<version>/<path>` — the stand-in relays, as spex.pub
+ * `/<org>/<pkg>/<version>/<path>` — the stand-in relays, as Spex Space
  * serves the registry beside the host at one origin (DR-104): a journey
  * then signs in here and publishes and installs here
  * (playbook-library-95). Each relayed request names this instance and
@@ -1516,7 +1516,7 @@ export async function startStandinHost(opts: StandinHostOptions): Promise<Standi
   }
 
   /** A members route while the service identity's read fails (host-8,
-   * host-11): spex.pub's relay of a call made as the instance. */
+   * host-11): Spex Space's relay of a call made as the instance. */
   function membersUnavailable(res: ServerResponse): void {
     envelope(res, 502, "provider_unavailable", "The Git host could not be reached.");
   }
@@ -1530,7 +1530,7 @@ export async function startStandinHost(opts: StandinHostOptions): Promise<Standi
     if (groupId !== null && typeof groupId !== "string") return envelope(res, 400, "bad_request", "The group_id must be a string or null.");
     if (typeof description !== "string") return envelope(res, 400, "bad_request", "The description must be a string.");
     // The person's own group where none is named; an id names a group of
-    // the instance alone, the own namespace's answered 404 as spex.pub
+    // the instance alone, the own namespace's answered 404 as Spex Space
     // answers it (host-6).
     const group = groupId === null ? own() : script.groups.find((g) => g.kind === "group" && g.id === groupId);
     if (!group) return envelope(res, 404, "not_found", "The group is not known.");

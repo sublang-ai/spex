@@ -336,7 +336,7 @@ async function connectAs(user, path) {
 }
 
 // ---------------------------------------------------------------------------
-// The stand-in instance (spex.pub servers-7, -8): one server and its
+// The stand-in instance (Spex Space servers-7, -8): one server and its
 // tickets, served over http on the loopback, which attach admits there.
 
 async function startStandin(server) {

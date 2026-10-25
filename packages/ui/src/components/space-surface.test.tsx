@@ -1148,7 +1148,7 @@ describe("GROUPS: copy and roles (space-27, space-28, space-44)", () => {
 
   test("the surface, the groups, the tabs, the tree, the picker's groups and the live region are named for assistive technology", async () => {
     await renderGroups(repoState({ incoming: [SESSION_UNIT], conflicts: [CONFLICTS[0]], sync: { phase: "choices", placement: ORIGIN, savedCommit: null } }));
-    expect(screen.getByRole("region", { name: "Groups" })).toBeTruthy();
+    expect(screen.getByRole("region", { name: "Space" })).toBeTruthy();
     expect(screen.getByRole("region", { name: "Your groups" })).toBeTruthy();
     expect(screen.getByRole("group", { name: "Your own group" })).toBeTruthy();
     expect(screen.getByRole("tablist", { name: "Views of academy-spex" })).toBeTruthy();

@@ -1797,8 +1797,8 @@ msgstr "Name the group"
 
 #. Refusal of a sign-in: what the reader gave does not read as a URL at all
 #: src/space.ts
-msgid "Name the instance by its URL, such as https://spex.pub"
-msgstr "Name the instance by its URL, such as https://spex.pub"
+msgid "Name the instance by its URL, such as https://spex.sublang.ai"
+msgstr "Name the instance by its URL, such as https://spex.sublang.ai"
 
 #. A stopped transfer's message; {host} is the remote's host
 #. A stopped transfer's message; {host} is the remote's host

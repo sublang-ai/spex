@@ -7,7 +7,7 @@
 // by its name and its group, with "Open" where no seat is open at it
 // and "Close" where one is. The first Open for a server on this device
 // shows the instance's contract in the words its record fixes
-// (spex.pub DR-029), rendered in the page's language; "I understand"
+// (Spex Space DR-029), rendered in the page's language; "I understand"
 // sends `server.open` with consent and is remembered on this device, so
 // a later Open sends it at once. A refusal reads the core's relayed
 // cause beside its server. The listing is read as the surface opens,

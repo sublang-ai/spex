@@ -301,6 +301,10 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Changed
 
+- The collaboration destination is **Space**, and the public server product is
+  **Spex Space** at `spex.sublang.ai`. New homes use that address; existing
+  connections, groups and stored placements keep their identities.
+
 - First-run guidance now explains specs and playbooks in plain language,
   invites a goal, and makes local project setup and task start clearer in
   English and Chinese ([DR-143](specs/decisions/143-start-with-a-goal-and-explain-specs-plainly.md)).

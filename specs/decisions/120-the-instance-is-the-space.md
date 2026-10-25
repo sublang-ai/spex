@@ -5,6 +5,8 @@
 
 ## Status
 
+Product naming clarified by [DR-150](150-spex-space-product-and-destination.md): the server product is Spex Space, and the IDE destination is Space; the instance and group boundaries are unchanged.
+
 Accepted (2026-10-12) on the owner's correction of that day: "End users should only see the workshop group, their own personal groups, and projects."
 Supersedes [DR-118](118-the-host-page-a-first-group-is-made-on.md) whole: no link to the Git host's site stands at the groups list's head.
 Amended by [DR-129](129-content-size-is-not-permission.md) for explicit content-size rejections: their public report carries the instance-only cause and reported limit rather than raw transport words, with access unchanged and no membership guidance.

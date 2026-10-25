@@ -3107,8 +3107,8 @@ msgid "Give the player an id first."
 msgstr "Give the player an id first."
 
 #: src/lib/shortcuts.ts
-msgid "Go to Dashboard, Projects, Playbooks, Groups, Settings"
-msgstr "Go to Dashboard, Projects, Playbooks, Groups, Settings"
+msgid "Go to Dashboard, Projects, Playbooks, Space, Settings"
+msgstr "Go to Dashboard, Projects, Playbooks, Space, Settings"
 
 #. toggle: show the citation graph
 #: src/components/SpecView.tsx
@@ -3124,15 +3124,6 @@ msgstr "Group name"
 #: src/components/SpaceGroups.tsx
 msgid "Group records"
 msgstr "Group records"
-
-#. label of the first step on the welcome page at a team server: your groups on the Git host, whose spex repositories are the projects there
-#. the surface: your groups on the Git host and their spex repositories
-#. the surface: your groups on the Git host and their spex repositories
-#: src/components/CaptainHome.tsx
-#: src/components/NavRail.tsx
-#: src/components/SpaceSurface.tsx
-msgid "Groups"
-msgstr "Groups"
 
 #. on an instance's heading where the person may not create a group there; {name} is the instance's display name; no link, no control
 #: src/components/SpaceInstance.tsx
@@ -3276,7 +3267,7 @@ msgstr "Installing browser…"
 msgid "Installing…"
 msgstr "Installing…"
 
-#. the sign-in card's field caption: the URL of the instance to sign in to, held by its origin (https://spex.pub)
+#. the sign-in card's field caption: the URL of the instance to sign in to, held by its origin (https://spex.sublang.ai)
 #: src/components/SpaceSignIn.tsx
 msgid "Instance"
 msgstr "Instance"
@@ -4331,11 +4322,6 @@ msgstr "Open Enable"
 msgid "Open folder…"
 msgstr "Open folder…"
 
-#. secondary action of the welcome page at a team server: shows the Groups surface at that server
-#: src/components/CaptainHome.tsx
-msgid "Open Groups"
-msgstr "Open Groups"
-
 #: src/components/SpaceSignIn.tsx
 msgid "Open it again"
 msgstr "Open it again"
@@ -4369,6 +4355,11 @@ msgstr "Open Settings →"
 #: src/App.tsx
 msgid "Open Settings to see what's wrong"
 msgstr "Open Settings to see what's wrong"
+
+#. secondary action of the welcome page at a team server: shows the Space surface at that server
+#: src/components/CaptainHome.tsx
+msgid "Open Space"
+msgstr "Open Space"
 
 #: src/components/CaptainHome.tsx
 msgid "Open the Academy example"
@@ -5896,6 +5887,15 @@ msgstr "Sources: GitHub not connected · {records, plural, one {# open record} o
 msgid "Sources: Loading GitHub… · {records, plural, one {# open record} other {# open records}}"
 msgstr "Sources: Loading GitHub… · {records, plural, one {# open record} other {# open records}}"
 
+#. label of the first step on the welcome page at a team server: your groups on the Git host, whose spex repositories are the projects there
+#. the Space destination: groups, projects and their shared records
+#. the Space destination: groups, projects and their shared records
+#: src/components/CaptainHome.tsx
+#: src/components/NavRail.tsx
+#: src/components/SpaceSurface.tsx
+msgid "Space"
+msgstr "Space"
+
 #. the list of unanswered space issues (problems, not GitHub issues)
 #: src/components/SpaceSync.tsx
 msgid "space.issues"
@@ -7078,7 +7078,7 @@ msgstr "Your own group's records will be kept there too."
 msgid "your project"
 msgstr "your project"
 
-#. the first step on the welcome page at a team server, beside its label Groups; "here" is that server
+#. the first step on the welcome page at a team server, beside its label Space; "here" is that server
 #: src/components/CaptainHome.tsx
 msgid "Your projects here come from the spex repositories of your groups"
 msgstr "Your projects here come from the spex repositories of your groups"

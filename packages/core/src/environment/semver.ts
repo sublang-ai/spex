@@ -34,7 +34,7 @@ const VERSION_SOURCE =
 const VERSION_RE = new RegExp(`^${VERSION_SOURCE}$`);
 const REQUIREMENT_RE = new RegExp(`^([\\^~]?)(${VERSION_SOURCE})$`);
 
-/** The longest requirement string the registry accepts (spex.pub DR-013). */
+/** The longest requirement string the registry accepts (Spex Space DR-013). */
 export const MAX_REQUIREMENT_BYTES = 256;
 
 export class VersionError extends Error {

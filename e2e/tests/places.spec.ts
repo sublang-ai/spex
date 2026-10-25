@@ -137,7 +137,7 @@ test("run-view-173: one desktop opens two seats and reads its places, its joined
 
   // [run-view-173] [run-view-170] the Groups surface lists both servers
   // under the instance's heading, by name and group, each with Open.
-  await nav(page, "Groups").click();
+  await nav(page, "Space").click();
   const servers = instanceSection(page, host).getByTestId(`space-servers-${host.url}`);
   const rowOne = servers.getByTestId(`space-server-${one.place}`);
   const rowTwo = servers.getByTestId(`space-server-${two.place}`);
@@ -251,7 +251,7 @@ test("run-view-173: one desktop opens two seats and reads its places, its joined
 
   // [run-view-173] [run-view-169] after Close the seat's heading is gone
   // and its relay path refused.
-  await nav(page, "Groups").click();
+  await nav(page, "Space").click();
   await controlOne.click();
   await expect(controlOne).toHaveText("Open", { timeout: 30_000 });
   await expect(sidebar.getByTestId("sidebar-place-heading")).toHaveText(["This computer", "lab-2"]);

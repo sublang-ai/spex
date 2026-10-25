@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The instance's two routes for a server (spex.pub servers-7, -8),
+// The instance's two routes for a server (Spex Space servers-7, -8),
 // called with the server token as the bearer: redeeming a ticket and
 // renewing a lease.
 

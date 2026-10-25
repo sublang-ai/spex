@@ -149,8 +149,8 @@ they run offline, and every new environment requests it. **Playbooks**
 shows each environment's spec packages and the playbooks they export;
 enable one there by choosing a player for each of its roles.
 
-**Sharing through a Git host.** Spex works offline; sign in on **Groups**
-when you want to share. The host is [spex.pub](https://spex.pub) unless
+**Sharing through Spex Space.** Spex works offline; sign in on **Space**
+when you want to share. The host is [Spex Space](https://spex.sublang.ai) unless
 `SPEX_HOST_URL` names another when the home is first created. The desktop
 opens the host's sign-in page in your browser; the server shell shows a
 code to enter there. Spex then puts your own group's spex repository on

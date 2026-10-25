@@ -583,7 +583,7 @@ When a client sends `draft.defaults` for a project, the authoring store shall re
 
 | Field | Default |
 | --- | --- |
-| `org` | where the registry of the project's instance, or of the home's default instance [[storage-2](storage.md#storage-2)] where the project has none, lists orgs that instance's account may publish to [[environments-27](environments.md#environments-27)], the one whose path is the project's group — its spex repository key without any instance folder leading it [[storage-1](storage.md#storage-1)] and without the last segment — or an ancestor of it, else the first listed; where it lists none, the home is not signed in to that instance, or the registry gives no answer, the first `/`-separated segment of that key past any instance folder — `slbeta1` for `@spex.pub/slbeta1/workshop/graph-crate-spex` |
+| `org` | where the registry of the project's instance, or of the home's default instance [[storage-2](storage.md#storage-2)] where the project has none, lists orgs that instance's account may publish to [[environments-27](environments.md#environments-27)], the one whose path is the project's group — its spex repository key without any instance folder leading it [[storage-1](storage.md#storage-1)] and without the last segment — or an ancestor of it, else the first listed; where it lists none, the home is not signed in to that instance, or the registry gives no answer, the first `/`-separated segment of that key past any instance folder — `slbeta1` for `@spex.sublang.ai/slbeta1/workshop/graph-crate-spex` |
 | `license` | `Apache-2.0` where the working folder's `LICENSE`, past a byte order mark and leading whitespace, begins with "Apache License"; `MIT` where it begins with "MIT License"; else none |
 
 #### playbook-library-71
@@ -800,7 +800,7 @@ Where the Enable tab renders a compiled authoring session through a client whose
 | at Two | One signed in, Two signed out | "Sign in to publish at Two" |
 | local-only | One signed in, Two signed out | Publish |
 | local-only | One signed out, Two signed in | "Sign in to publish at One" |
-| local-only | none, the home created with `https://spex.pub` | "Sign in to publish at spex.pub" |
+| local-only | none, the home created with `https://spex.sublang.ai` | "Sign in to publish at spex.sublang.ai" |
 
 #### playbook-library-88
 

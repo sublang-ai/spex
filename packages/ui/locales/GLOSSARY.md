@@ -96,7 +96,7 @@ Product names and the role names Playbook defines stay as authored; everything e
 | Working… (a control's busy form) / working (a state) | 执行中… / 工作中 | |
 | Keep mine / Take host's / All mine / All host's | 保留本机 / 取平台版 / 全用本地 / 全用平台版 | Groups conflict choices |
 | Git host, the host | Git 托管平台, 托管平台 | where groups and spex repositories live; 平台 alone in a tight control ("检查平台") |
-| instance | 实例 | a spex.pub instance the home signs in to, known by its origin |
+| instance | 实例 | a Spex Space instance the home signs in to, known by its origin |
 | Add instance… / Another instance | 添加实例… / 另一个实例 | at the groups list's foot: the control opening the sign-in card for another instance, and its title, accessible name and the card's name |
 | Forget (an instance) | 忘记 | removes a signed-out instance from the home, every record kept; not 移除, which is Remove |
 | group | 群组 | a group on the Git host |

@@ -307,7 +307,7 @@ export function InstanceField({
       <span className="shrink-0 text-xs text-neutral-500">
         {i18n._({
           id: "Instance",
-          comment: "the sign-in card's field caption: the URL of the instance to sign in to, held by its origin (https://spex.pub)",
+          comment: "the sign-in card's field caption: the URL of the instance to sign in to, held by its origin (https://spex.sublang.ai)",
         })}
       </span>
       <input

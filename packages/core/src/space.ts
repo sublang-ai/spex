@@ -529,7 +529,7 @@ const signInRunning = (): string => i18n._({
 function originRuleRefusal(reason: OriginRefusal): string {
   switch (reason) {
     case "invalid":
-      return i18n._({ id: "Name the instance by its URL, such as https://spex.pub", comment: "Refusal of a sign-in: what the reader gave does not read as a URL at all" });
+      return i18n._({ id: "Name the instance by its URL, such as https://spex.sublang.ai", comment: "Refusal of a sign-in: what the reader gave does not read as a URL at all" });
     case "scheme":
       return i18n._({ id: "An instance's URL begins with https://, or http:// on this device", comment: "Refusal of a sign-in: the URL's scheme is neither https nor http; http is allowed for an instance on this device alone (localhost or 127.x)" });
     case "user":
@@ -4232,7 +4232,7 @@ class HostInstance {
   }
 }
 
-/** Every spex repository's machine and the Groups state they make. */
+/** Every spex repository's machine and the Space state they make. */
 export class SpaceManager {
   private readonly machines = new Map<string, RepositorySync>();
   /** Every instance the core has talked to this run, by canonical
@@ -7882,12 +7882,12 @@ export class SpaceManager {
     return this.state();
   }
 
-  /** The Groups state (space-30), every repository recomputed. */
+  /** The Space state (space-30), every repository recomputed. */
   async state(): Promise<GroupsState> {
     return this.assemble(true);
   }
 
-  /** The Groups state a client asks for (`space.get`, space-29). The
+  /** The Space state a client asks for (`space.get`, space-29). The
    * first ask after a start begins the read that start owes each
    * instance signed in with no full read of it begun since, as Refresh
    * does: once per instance, however many clients ask, and not awaited —

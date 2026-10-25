@@ -5,6 +5,8 @@
 
 ## Status
 
+Amended by [DR-150](150-spex-space-product-and-destination.md) in the default origin for new homes: `https://spex.sublang.ai`; saved origins are unchanged.
+
 Accepted (2026-10-20) on the owner's direction: a person may belong to groups at more than one spex.pub instance — the internal and the production instance today, an instance at JiHu GitLab [[1]] tomorrow — and must not need a home per instance.
 Extended by [DR-128](128-a-spex-repository-placed-at-several-instances.md), which places one spex repository at several of a home's instances, and amended by it in your own group's sign-in, in one remote per clone and in Forget: your own group is placed at every instance the home signs in to, a clone holds a remote per placement, a code clone uses the broker of any signed-in placement's instance at the code's origin, and Forget refuses while a placement at the instance follows no signed-in instance, your own group's file rewritten or left.
 Amends, under [DR-046](046-decision-record-evolution.md):
