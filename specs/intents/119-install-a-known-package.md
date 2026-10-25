@@ -31,3 +31,4 @@ Let a fresh user install a known private package from the IDE without searching 
 - Independent source, specification and integration-test review found no material issue; the root separately checked the implementation, tests and guide.
 - The initial UI attempt collected no tests before the fresh worktree's core build; the initial browser attempt used the wrong fixture file location, corrected to inspect the real environment request state.
 - The browser proof uses isolated registry and identity stand-ins; no live ordinary-user acceptance is claimed.
+- Follow-up source review corrected the guide to create a first-level publishing group through Space's instance-heading New group form before claiming its Path, including the administrator prerequisite when creation is unavailable; no tests or builds were rerun for this documentation change.

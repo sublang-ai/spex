@@ -82,9 +82,13 @@ implementing with `/code`. See [Approvals](approvals.md) for permissions.
 
 Publishing needs a claimed org you can publish to; manage claims on
 Space's [Your orgs](https://spex.sublang.ai/account/orgs) page.
-If you do not own a first-level group in Space, create one there, then
-claim its name. Your personal namespace alone does not qualify as an
-org. Choose **Private** on a new claim when the packages should be private.
+If you do not own a first-level group, open **Space** in Spex and choose
+**New group** under your signed-in publishing instance. Enter **Group name**
+and a lowercase **Path** such as `team-tools`, choose **Create**, then claim
+that **Path** in **Your orgs**. If **New group** is unavailable, ask the
+instance administrator to provide a first-level group you own.
+Your personal namespace alone does not qualify as an org. Choose **Private**
+on a new claim when the packages should be private.
 
 ### Publish a spec or skill package
 
