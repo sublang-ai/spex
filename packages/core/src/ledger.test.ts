@@ -1039,6 +1039,121 @@ test("core-service-132: a run's own park in a turn that ended finished summons a
   store.close();
 });
 
+/** A runtime_error naming no turn, as the core records every failure
+ * of its own (core-service-32): the Captain's call failing, a turn or a
+ * restore rejecting, a release failing. */
+function turnlessError(store: Store, sessionId: string, at: number, message = "The Captain's turn failed: boom"): void {
+  append(store, sessionId, { type: "runtime_error", turnId: null, timestamp: at, message });
+}
+
+test("core-service-132: a runtime_error naming no turn lies in the latest turn started before it", () => {
+  const { store, projectId } = newProjectStore();
+  const failuresOf = (ledger: LedgerState, sessionId: string) =>
+    entriesOf(ledger, sessionId).filter((entry) => entry.kind === "failure");
+
+  // Within a turn that then ends finished: the session's own failure,
+  // unparked, at the record's time, in that turn.
+  addSession(store, projectId, "s11");
+  beginTurn(store, "s11", 1, "tidy it", 1000);
+  turnlessError(store, "s11", 1100);
+  finishTurn(store, "s11", 1, 1200);
+  const own = [lane("s11", projectId, false)];
+  assert.deepEqual(entriesOf(fold(store, own), "s11").map((entry) => [entry.band, ...onsetOf(entry)]),
+    [["interrupted", "failure", undefined, undefined, 1, 1100, "tidy it"]]);
+  // A later Boss turn acknowledges it, as it does a turn-scoped one.
+  beginTurn(store, "s11", 2, "next", 2000);
+  finishTurn(store, "s11", 2, 2100);
+  assert.deepEqual(failuresOf(fold(store, own), "s11"), []);
+
+  // Written after a dispatch turn ended finished, before any later
+  // turn: the intent reads interrupted on a failure, never finished.
+  addSession(store, projectId, "s12");
+  queueIntent(store, projectId, "J");
+  beginTurn(store, "s12", 1, "do it", 3000);
+  stamp(store, "J", "s12", 1, 3000);
+  finishTurn(store, "s12", 1, 3100);
+  turnlessError(store, "s12", 3200, "Captain turn did not finish with one reply; session remains uncertain");
+  const dispatched = fold(store, [lane("s12", projectId, false)]);
+  assert.equal(stateOf(dispatched, "J").state, "interrupted");
+  assert.equal(stateOf(dispatched, "J").reason, "failure");
+  assert.deepEqual(entriesOf(dispatched, "s12").map((entry) => onsetOf({ ...entry, title: "" })),
+    [["failure", undefined, uid("J"), 1, 3200, ""]]);
+
+  // A throw records the runtime's turn-scoped error, the turn's abort,
+  // then the core's own: one failure, at the first of them.
+  addSession(store, projectId, "s13");
+  beginTurn(store, "s13", 1, "boom", 4000);
+  append(store, "s13", { type: "runtime_error", turnId: 1, timestamp: 4100, message: "boom" });
+  abortStoredTurn(store, "s13", 1, 4150, "boom");
+  turnlessError(store, "s13", 4200, "boom");
+  assert.deepEqual(failuresOf(fold(store, [lane("s13", projectId, false)]), "s13").map(onsetOf),
+    [["failure", undefined, undefined, 1, 4100, "boom"]]);
+
+  // A run's park followed by the core's record of the Captain's failed
+  // turn: one failure, parked, at the move.
+  addSession(store, projectId, "s14");
+  beginTurn(store, "s14", 1, "run", 5000);
+  moveRun(store, "s14", 1, 5100, "firstPhase", "failed");
+  turnlessError(store, "s14", 5150);
+  finishTurn(store, "s14", 1, 5200);
+  const parkedLane = [lane("s14", projectId, false)];
+  assert.deepEqual(failuresOf(fold(store, parkedLane), "s14").map(onsetOf),
+    [["failure", true, undefined, 1, 5100, "run"]]);
+  // A later Boss turn leaves it where it was: the record lies in the
+  // turn started before it, never the latest turn overall.
+  beginTurn(store, "s14", 2, "something else", 5300);
+  finishTurn(store, "s14", 2, 5400);
+  assert.deepEqual(failuresOf(fold(store, parkedLane), "s14").map(onsetOf),
+    [["failure", true, undefined, 1, 5100, "run"]]);
+
+  // The same within a dispatch turn: the intent's entry at the move.
+  addSession(store, projectId, "s17");
+  queueIntent(store, projectId, "K");
+  beginTurn(store, "s17", 1, "do it", 5500);
+  stamp(store, "K", "s17", 1, 5500);
+  moveRun(store, "s17", 1, 5600, "firstPhase", "failed");
+  turnlessError(store, "s17", 5650);
+  finishTurn(store, "s17", 1, 5700);
+  const owned = fold(store, [lane("s17", projectId, false)]);
+  assert.equal(stateOf(owned, "K").state, "interrupted");
+  assert.equal(stateOf(owned, "K").reason, "failure");
+  assert.deepEqual(entriesOf(owned, "s17").map((entry) => onsetOf({ ...entry, title: "" })),
+    [["failure", true, uid("K"), 1, 5600, ""]]);
+
+  // A move and the core's record in a turn cut off, then that turn's
+  // restore re-stating the run: the park stands, on the lost attempt's
+  // record, the report recording nothing of its own.
+  addSession(store, projectId, "s18");
+  beginTurn(store, "s18", 1, "carry on", 5800);
+  moveRun(store, "s18", 1, 5810, "firstPhase", "failed");
+  turnlessError(store, "s18", 5820);
+  restoreParked(store, "s18", 1, "carry on", 5900);
+  assert.deepEqual(failuresOf(fold(store, [lane("s18", projectId, false)]), "s18").map(onsetOf),
+    [["failure", true, undefined, 1, 5820, "carry on"]]);
+
+  // Before any turn started it lies in no range, though the summary
+  // reads the failure standing (core-service-32).
+  addSession(store, projectId, "s15");
+  turnlessError(store, "s15", 6000);
+  assert.deepEqual(failuresOf(fold(store, [lane("s15", projectId, false)]), "s15"), []);
+  assert.equal(failureStands(store.getRecords(uid("s15"))), true);
+
+  // A cut-off attempt's failure, then that turn's restore, whose report
+  // records a failure of its own: the report starts the turn again, so
+  // the entry stands on the report's record, never acknowledged by the
+  // report's own start.
+  addSession(store, projectId, "s16");
+  beginTurn(store, "s16", 1, "keep", 7000);
+  turnlessError(store, "s16", 7100, "lost attempt");
+  append(store, "s16", restoringRecord("keep", 7200) as unknown as Record<string, unknown>);
+  beginTurn(store, "s16", 1, "keep", 7210);
+  finishTurn(store, "s16", 1, 7220);
+  turnlessError(store, "s16", 7230, "the restore settled no readable checkpoint");
+  assert.deepEqual(failuresOf(fold(store, [lane("s16", projectId, false)]), "s16").map(onsetOf),
+    [["failure", undefined, undefined, 1, 7230, "keep"]]);
+  store.close();
+});
+
 test("DR-066: a project whose store refuses its acts raises no summons", async () => {
   const dir = scratchDir("spex-ledger-blocked-");
   const { store, projectId } = newProjectStore(dir);

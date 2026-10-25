@@ -1965,6 +1965,41 @@ describe("run-view-96/91: attention activation lands at the place", () => {
     expect(wrapper?.getAttribute("data-focused")).toBe("1");
   });
 
+  test("a failure the core recorded naming no turn focuses its line", () => {
+    // The core records every failure of its own naming no turn, here
+    // after the turn ended; the ledger counts it in that turn
+    // (core-service-49), and so does its line.
+    const TURN_SETTLED_FAILED = [
+      {
+        seq: 1,
+        record: {
+          type: "turn_started",
+          turnId: 6,
+          timestamp: 1,
+          turn: { id: 6, prompt: "go", timestamp: 1 },
+        },
+      },
+      {
+        seq: 2,
+        record: { type: "turn_finished", turnId: 6, timestamp: 2 },
+      },
+      {
+        seq: 3,
+        record: {
+          type: "runtime_error",
+          turnId: null,
+          timestamp: 3,
+          message: "the release failed",
+        },
+      },
+    ] as unknown as typeof FULL_RUN;
+    renderRunWith(TURN_SETTLED_FAILED, { focusTurn: 6 });
+    const wrapper = screen
+      .getByText("the release failed")
+      .closest("[data-focus-key]");
+    expect(wrapper?.getAttribute("data-focused")).toBe("1");
+  });
+
   test("a finish awaiting its verdict focuses the delivery card", async () => {
     useAppStore.setState({
       ledger: { intents: [FINISHED], attention: [], badge: 1 },

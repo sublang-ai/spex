@@ -19,6 +19,7 @@ import type {
   QueueSchedule,
   StoredRecord,
 } from "./protocol.js";
+import { hasPresentationHeader } from "./protocol.js";
 import { controlKind, isStoppedTurnReason, restoredPosition, restoreReports, runsElsewhere } from "./control-record.js";
 import type { Store } from "./store.js";
 
@@ -776,7 +777,12 @@ export function foldLedger(sources: LedgerSources): LedgerState {
   // The failures in a turn range, oldest first: every runtime error
   // but an intentional stop's, every run's own park in a turn that then
   // ended finished, and every restore that brought a run back in its
-  // failure state (dashboard-10, DR-062, DR-088).
+  // failure state (dashboard-10, DR-062, DR-088). A runtime error naming
+  // no turn lies in the latest turn started before it, as the session's
+  // summary counts it, and in none before any turn started
+  // (core-service-32, core-service-49). Each failure carries the start
+  // of the turn's attempt it lies in: a restore's report starts its turn
+  // again under the same id.
   const effectiveRuntimeErrors = (
     sessionId: string,
     fromTurnId: number,
@@ -786,18 +792,52 @@ export function foldLedger(sources: LedgerSources): LedgerState {
     const ignored = stoppedTurnErrorSeqs(records);
     const inRange = (turnId: number) =>
       turnId >= fromTurnId && (toTurnId === null || turnId < toTurnId);
-    const errors = records.flatMap(({ seq, record }) => {
-      if (record.type !== "runtime_error" || ignored.has(seq)) return [];
-      const turnId = (record as { turnId?: unknown }).turnId;
-      if (typeof turnId !== "number" || !inRange(turnId)) return [];
-      return [{ seq, turnId, timestamp: record.timestamp }];
-    });
     const detail = foldConditionsDetail(records);
-    const restored = detail.restoredFailures.filter(({ turnId }) => inRange(turnId));
-    const settled = detail.settledFailures.filter(({ turnId }) => inRange(turnId));
-    return [...errors, ...settled, ...restored]
-      .sort((a, b) => a.seq - b.seq)
-      .map(({ turnId, timestamp }) => ({ turnId, timestamp }));
+    // The fold's own failures sit at a record's seq — a run's move, a
+    // restore's position — and take the attempt the walk reaches there.
+    const folded = new Map<number, { turnId: number; timestamp: number }>();
+    for (const failure of [...detail.settledFailures, ...detail.restoredFailures]) folded.set(failure.seq, failure);
+    const latestStart = new Map<number, number>();
+    let current: number | undefined;
+    const failures: { turnId: number; timestamp: number; attempt: number }[] = [];
+    for (const { seq, record } of records) {
+      // The fold's own failures are read as the conditions and the queue
+      // read them, whatever the record's header.
+      const fold = folded.get(seq);
+      if (fold) failures.push({ ...fold, attempt: latestStart.get(fold.turnId) ?? -1 });
+      // Otherwise a record without a presentation header is opaque and
+      // says nothing, as the session's summary reads it (core-service-10).
+      if (!hasPresentationHeader(record)) continue;
+      if (record.type === "turn_started") {
+        const turnId = (record as { turn?: { id?: unknown } }).turn?.id ??
+          (record as { turnId?: unknown }).turnId;
+        if (typeof turnId === "number") {
+          current = turnId;
+          latestStart.set(turnId, seq);
+        }
+        continue;
+      }
+      if (record.type !== "runtime_error" || ignored.has(seq)) continue;
+      const named = (record as { turnId?: unknown }).turnId;
+      const turnId = typeof named === "number"
+        ? named
+        : named === null || named === undefined ? current : undefined;
+      if (turnId === undefined) continue;
+      failures.push({ turnId, timestamp: record.timestamp, attempt: latestStart.get(turnId) ?? -1 });
+    }
+    return failures.filter(({ turnId }) => inRange(turnId));
+  };
+  // The failure an entry stands on (core-service-49): its onset is the
+  // first failure recorded in the attempt its latest failure lies in —
+  // the runtime's turn-scoped record before the core's own, a run's move
+  // before the Captain's failed call — never a lost attempt's that the
+  // turn's restore started again.
+  const standingFailure = (
+    errors: readonly { turnId: number; timestamp: number; attempt: number }[],
+  ): { turnId: number; timestamp: number } | undefined => {
+    const latest = errors.at(-1);
+    if (!latest) return undefined;
+    return errors.find((error) => error.turnId === latest.turnId && error.attempt === latest.attempt) ?? latest;
   };
 
   const derived: DerivedIntent[] = [];
@@ -886,8 +926,7 @@ export function foldLedger(sources: LedgerSources): LedgerState {
     // ever stands while its own turn is still open), so ranking
     // working above them would keep them out of the attention queue
     // for exactly as long as they summon the Boss.
-    const errors = effectiveRuntimeErrors(bound.sessionId, bound.turnId, endTurnId);
-    const lastError = errors[errors.length - 1];
+    const lastError = standingFailure(effectiveRuntimeErrors(bound.sessionId, bound.turnId, endTurnId));
     // DR-062: where the failure parked a run, only that run leaving its
     // failure state — recovered or ended — stops the summons. Where it
     // parked none, nothing is stuck and the next Boss turn acknowledges
@@ -1012,8 +1051,7 @@ export function foldLedger(sources: LedgerSources): LedgerState {
     const conditions = sessionConditions(lane.sessionId);
     const standsIn = (turnId: number | null): boolean =>
       turnId === null ? owned.size === 0 : !owned.has(turnId);
-    const errors = effectiveRuntimeErrors(lane.sessionId, 0, null);
-    const lastError = errors[errors.length - 1];
+    const lastError = standingFailure(effectiveRuntimeErrors(lane.sessionId, 0, null));
     // Where the failure parked a run, only that run leaving its failure
     // state stops the summons — the rule dashboard-4 already stated for
     // a session failure, which this branch used to ignore (DR-062).

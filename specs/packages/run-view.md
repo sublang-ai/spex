@@ -1206,7 +1206,7 @@ Where fixture projects hold queues whose next intents span the published schedul
 
 #### run-view-96
 
-Where fixture streams hold one intent standing on a pending question, one holding an unacknowledged failure, and one finished awaiting its verdict, when each session is opened from its attention entry, the test suite shall assert the run view focuses the question's bubble, the failure's line, and the delivery card respectively [[run-view-91](#run-view-91)].
+Where fixture streams hold one intent standing on a pending question, one holding an unacknowledged failure — recorded naming its turn, and recorded naming none after that turn ended, as the core records its own — and one finished awaiting its verdict, when each session is opened from its attention entry, the test suite shall assert the run view focuses the question's bubble, the failure's line, and the delivery card respectively [[run-view-91](#run-view-91)].
 
 #### run-view-137
 
