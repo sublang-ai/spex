@@ -3,16 +3,17 @@
 
 # Start using Spex
 
-Spex brings your project's specs, AI conversations, and workflows into one
-IDE. Specs describe how the system should work and how to check it. A
-playbook coordinates AI work and review through a workflow written in
-plain language.
+Spex brings specs and AI workflows into one IDE. Specs describe how a
+system should work and how to check it. A playbook coordinates AI work
+and review through a workflow written in plain language.
 
-You can begin locally. Your coding agent's sign-in is separate from
-**Spex Space**, the optional service for sharing settings and project
-records with your groups.
+A **spec package** shares a spec and related skills or playbooks as a
+versioned package. Find and publish packages on
+[Spex Space](https://spex.sublang.ai); install them from the IDE. Public
+packages need no account to browse or install. Publishing and private
+packages require access. Project-record sync is optional.
 
-## Install from source
+## Open the IDE and a project
 
 Use macOS or Linux with Git, Node.js 22.19 or later, and a native build
 toolchain: Xcode Command Line Tools on macOS; Python 3, `make`, and `g++`
@@ -25,63 +26,92 @@ npm ci
 npm start
 ```
 
-These commands use current `main`. For a released version, choose an
-`app-v*` tag from [app releases](https://github.com/sublang-ai/spex/releases)
-and add `--branch <tag>` to the clone command. App releases provide
-source to build locally. For browser access to a Spex server, see the
-[README](../README.md#getting-started).
+These commands follow current `main`. For tagged app releases and server
+access, see the [README](../README.md#getting-started).
 
-## Choose a project
+Choose **Add a local project** for an existing Git repository, or expand
+**Create a new project…** and keep the specs scaffold enabled. **Open the
+Academy example** opens the included sample. Configure your Git name and
+email before creating projects or running workflows that commit changes.
 
-Configure your Git name and email before creating a project or running
-workflows that commit changes.
+Open **Settings → Agents**. Choose the Captain's adapter and model, save,
+and follow its readiness instructions. Check the players your playbooks
+use too. Coding-agent sign-in is separate from Space sign-in. Captain
+coordinates; players inspect files, implement, and review through playbooks.
 
-On the welcome page, choose **Add a local project**. Select an existing
-Git repository, or expand **Create a new project…** to create one. Keep
-the specs option enabled to start with a `specs/` scaffold. To explore
-an included sample instead, choose **Open the Academy example**.
+## Install and use a package
 
-## Make your agents ready
+1. In **Playbooks**, select your project's side, then **Add from registry**.
+2. Search for a public package, choose a version, and select **Add**. Spex resolves
+   and installs it. Use **Install** if files are missing, or **Resolve
+   again** if requests changed.
+3. Find an installed playbook under **Not enabled**, choose a player for
+   every role, and select **Enable**. Start a new task and type `/` to find
+   its command. Installing a package alone does not enable it.
 
-Open **Settings → Agents**. Check the Captain and the players used by
-your playbooks. Follow the readiness instructions for your chosen
-adapter: for example, sign in through `claude` or `codex` in a terminal,
-or set the corresponding API key. The SDKs installed with Spex do not
-sign you in.
+Private packages never appear in search. Sign in with access, add the
+known `org/name` and version request to the project's `spex.yaml`
+([request format](../specs/packages/environments.md#environments-2)), then
+select **Resolve again** in Playbooks.
 
-Choose the adapter and model, save, and check readiness again. The
-Captain handles your conversation; players carry out the playbook's
-roles, such as writing and reviewing changes.
+Skills need no role binding. Selected skills, and specs wrapped as skills,
+are exported to `.claude/skills/` for Claude Code and `.agents/skills/` for
+Codex, Gemini CLI, Kimi Code, and OpenCode. Use them through the native agent's
+own skill discovery. A spec-only or skill-only package has no playbook to
+enable. Generated playbook-launch skills are exported for Claude Code;
+run enabled playbooks through Spex's `/` menu with other agents.
+
+Commit the project's `spex.yaml` and `spex.lock` with its code to retain
+chosen package versions. **Add from folder** lets you try an existing
+package inside the project before publishing it.
 
 ## Try a spec-first task
 
-In your project, tell the Captain what you want and how you will judge
-completion. For example: “Help me define a small task list. Start by
-asking about its users and expected behavior.” Open **Specs** to read
-your project's specifications.
-
-Type `/` in the task field to see enabled playbooks and their
-descriptions. A first task might be:
+The bundled `sublang/playbooks` package supplies starter workflows. Open
+**Specs** to read your project, then describe your goal or use a command:
 
 ```text
-/decide Define the expected behavior of a small local task list, with acceptance checks.
+/decide Define a small local task list's behavior and acceptance checks.
 ```
 
-Follow the conversation and answer questions through the Captain.
-Review the resulting specs and Git changes before continuing to
-implementation with `/code`. Use `/review` when you want a review of
-work. See [Approvals and human decisions](approvals.md) for tool
-permissions and workflow questions.
+Answer questions through Captain. Review the specs and Git changes before
+implementing with `/code`. See [Approvals](approvals.md) for permissions.
 
-## Share when ready
+## Publish specs, skills, and playbooks
 
-Open **Space**, check the instance address, and choose **Sign in** to
-continue in your browser. Current source uses
-[Spex Space](https://spex.sublang.ai) as the default for a new home;
-`app-v0.9.0-beta.16` uses an earlier default. Existing homes keep their
-saved addresses.
+For a spec-only or ordinary skill package, prepare a package folder using
+the [package and publishing guide](https://spex.sublang.ai/llms.txt), then
+publish its archive through the documented HTTP API. No playbook compile
+is needed. The IDE's guided authoring and Publish controls currently
+belong to playbook authoring, not a generic spec/skill editor.
 
-Read the sharing notice before placing project records in a group:
-its members can see those records, including session attachments.
-Continue with [teams and workshops](groups.md) and
-[local storage and sync](storage.md).
+For a playbook, use the IDE:
+
+1. Open **Playbooks → New playbook**. Enter a lowercase id, **Org**, and
+   **License**. Publishing needs a claimed org you can publish to; manage
+   claims on Space's [Your orgs](https://spex.sublang.ai/account/orgs) page.
+2. Describe what the workflow does, who does what, and when it is done.
+   Inspect **Source**, or supply text with **Source → Paste → Use as source**.
+3. Select the answering agent in the conversation header, then **Compile**.
+   Its configured agent also runs the compiler unless the host overrides
+   that choice. Check the phases, **Gears**, and **Machine**.
+4. On **Enable**, choose the command and a player per role, then enable it
+   for the project. Try its command in a new task and review its work.
+5. Sign in through **Space** to the publishing instance. Return to the
+   author's **Enable** tab and select **Publish**. Review the package name,
+   version, and upload files, then confirm **Publish**. Success shows the
+   published version and package-page link.
+
+Only declared package artifacts are published; your whole project and its
+`specs/` directory are not uploaded automatically. Keep the authored package
+with your code. Another project can find a public release through **Add
+from registry**, then enable its playbooks or use its exported skills.
+
+## Optionally sync project records
+
+Package installation does not require placing project records in a group.
+Before sharing records, check the address on **Space** and read the sharing
+notice: group members can see records, including session attachments.
+Current source defaults to `https://spex.sublang.ai`; older releases may
+differ, and existing homes retain their saved addresses.
+See [groups](groups.md) and [storage and sync](storage.md).
