@@ -1116,16 +1116,14 @@ test.describe("committed queue rows and cards", () => {
   });
 });
 
-// The at-hand popovers and the composer's queue are chrome the sweep
-// above never opens, and both used to leave the window: the Captain's
-// agent editor above the top edge with nothing able to scroll it back,
-// the queue below the bottom with the page growing behind it. They are
-// measured here at the same widths and heights (run-view-105).
-test.describe("chrome the sweep does not open", () => {
+// An agent's settings editor measured where it hangs from a lane's
+// chip (run-view-105): its calls are short, so both lanes stand once
+// the first task's review has called the reviewer.
+test.describe("an agent's settings editor in the player grid", () => {
   let releaseDiscovery: (() => void) | undefined;
   test.use({ appOptions: {
     project: true,
-    agentDelayMs: 120_000,
+    agentDelayMs: 1500,
     discoverAgentModels: async () => {
       await new Promise<void>((resolve) => { releaseDiscovery = resolve; });
       return { status: "available", models: [{ id: "fixture-model", name: "Fixture model" }] };
@@ -1146,6 +1144,9 @@ test.describe("chrome the sweep does not open", () => {
     await open(page, app);
     await setRail(page, false);
     await send(page, TASK);
+    // The reviewer's lane stands once the nested review calls it
+    // (run-view-7), after the coder's: two lanes, the grid's last one
+    // reached by scrolling.
     await expect(page.getByTestId("player-pane-dev.reviewer")).toBeVisible();
     const panel = page.getByTestId("agent-settings-dev.reviewer");
 
@@ -1208,6 +1209,24 @@ test.describe("chrome the sweep does not open", () => {
     }
     expect(defects, defects.join("\n\n")).toEqual([]);
   });
+});
+
+// The at-hand popovers and the composer's queue are chrome the sweep
+// above never opens, and both used to leave the window: the Captain's
+// agent editor above the top edge with nothing able to scroll it back,
+// the queue below the bottom with the page growing behind it. They are
+// measured here at the same widths and heights (run-view-105).
+test.describe("chrome the sweep does not open", () => {
+  let releaseDiscovery: (() => void) | undefined;
+  test.use({ appOptions: {
+    project: true,
+    agentDelayMs: 120_000,
+    discoverAgentModels: async () => {
+      await new Promise<void>((resolve) => { releaseDiscovery = resolve; });
+      return { status: "available", models: [{ id: "fixture-model", name: "Fixture model" }] };
+    },
+  } });
+  test.afterEach(() => releaseDiscovery?.());
 
   test("run-view-105: the home's agent popover and the queue stay in the window", async ({
     page,

@@ -60,6 +60,7 @@ import {
   startStandinRegistry,
   stubSlcScriptedSource,
   type FakeScript,
+  type FakeRunOptions,
   type StandinHost,
   type StandinPerson,
   type StandinRegistry,
@@ -432,6 +433,35 @@ function adapterScript(options: AppOptions): FakeScript {
   };
 }
 
+/** Keep the demo's provider call open at its terminal event until the
+ * journey has inspected its live lane (release-31). Other calls pass
+ * through unchanged, including the Captain's hidden routing calls. */
+function heldDemoImports(
+  script: FakeScript,
+  wait: (playerId: string, signal?: AbortSignal) => Promise<void>,
+): ReturnType<typeof fakeAdapterImports>["imports"] {
+  type Adapter = new (...args: any[]) => {
+    run(prompt: string, options?: FakeRunOptions): AsyncIterable<{ type: string }>;
+  };
+  const imports = fakeAdapterImports(script).imports;
+  return Object.fromEntries(Object.entries(imports).map(([name, load]) => [name, async () => {
+    const Base = await (load as () => Promise<Adapter>)();
+    return class extends Base {
+      async *run(prompt: string, options?: FakeRunOptions) {
+        const playerId = prompt.startsWith("Implement:") ? "dev.coder"
+          : prompt.startsWith("Review the change") ? "dev.reviewer" : undefined;
+        for await (const event of super.run(prompt, options)) {
+          if (playerId && event.type === "done") {
+            await wait(playerId, options?.abortSignal);
+            if (options?.abortSignal?.aborted) return;
+          }
+          yield event;
+        }
+      }
+    };
+  }])) as unknown as ReturnType<typeof fakeAdapterImports>["imports"];
+}
+
 /** The compiled run's script behind the authoring agent's: a passing
  * compile's turn is answered with no registration proposed, so the
  * Register tab stands on its derived defaults. */
@@ -725,6 +755,10 @@ export interface App {
    * `authoring.hold`): one token per run, consumed when the run reads
    * it, so a token written before the run starts releases that run. */
   releaseCompile(id: string): void;
+  /** Hold the demo player's next completion until the journey releases
+   * it, leaving its prompt and streamed output available to inspect. */
+  holdPlayer(playerId: "dev.coder" | "dev.reviewer"): void;
+  releasePlayer(playerId: "dev.coder" | "dev.reviewer"): void;
   /** The app preferences file's text, empty when none was written. */
   readPrefs(): string;
   /** Stop the shell, keeping the root; `start` boots it again on the
@@ -955,6 +989,20 @@ async function arrangeApp(
     );
     env = { ...baseEnv, SPEX_SLC: `${process.execPath} ${stubPath}`, SPEX_NODE: process.execPath };
   }
+  const playerHolds = new Map<string, { promise: Promise<void>; release: () => void }>();
+  const waitForPlayer = async (playerId: string, signal?: AbortSignal) => {
+    const hold = playerHolds.get(playerId);
+    if (!hold || signal?.aborted) return;
+    let onAbort: (() => void) | undefined;
+    try {
+      await Promise.race([hold.promise, new Promise<void>((resolve) => {
+        onAbort = resolve;
+        signal?.addEventListener("abort", onAbort, { once: true });
+      })]);
+    } finally {
+      if (onAbort) signal?.removeEventListener("abort", onAbort);
+    }
+  };
   const shellOptions: ServerShellOptions = {
     host: "127.0.0.1",
     port: 0,
@@ -985,7 +1033,7 @@ async function arrangeApp(
             ? fakeAdapterImports(askingScript({ delayMs: options.agentDelayMs ?? 1 })).imports
             : options.realCaptain
             ? fakeAdapterImports({ fallback: { result: JSON.stringify({ action: "respond", text: "Acknowledged by the real Captain." }) } }).imports
-            : fakeAdapterImports(adapterScript(options)).imports,
+            : heldDemoImports(adapterScript(options), waitForPlayer),
           adapterRuntime: () => ({ usable: true }),
           discoverAgentModels: options.discoverAgentModels ?? (async (adapter) => fixtureModelDiscovery(adapter)),
           ...(options.realCaptain || options.park || options.failPlayer || options.ask || options.compiled ? {} : { captainFactory: async (_composed: unknown, sessionId: string) => demoCaptain(sessionId, { governedCompletion: options.governedCompletion }) }),
@@ -1147,6 +1195,18 @@ async function arrangeApp(
       // The playbook artifact of the spec package under development in
       // the project's working folder (environments-10).
       return join(projectDir, "spex-packages", id, "playbooks", "en", id);
+    },
+    holdPlayer(playerId) {
+      if (playerHolds.has(playerId)) throw new Error(`${playerId} is already held`);
+      let release!: () => void;
+      const promise = new Promise<void>((resolve) => { release = resolve; });
+      playerHolds.set(playerId, { promise, release });
+    },
+    releasePlayer(playerId) {
+      const hold = playerHolds.get(playerId);
+      if (!hold) throw new Error(`${playerId} is not held`);
+      playerHolds.delete(playerId);
+      hold.release();
     },
     releaseCompile(id) {
       if (!options.authoring?.hold) throw new Error("releaseCompile needs authoring.hold");
@@ -1863,12 +1923,12 @@ export function captainLines(page: Page, line: string) {
   return page.getByTestId("captain-pane").getByTestId("system-line").filter({ hasText: line });
 }
 
-/** A player's pane carries the output of a call it served: no longer
- * idle, and more than `least` characters of text. */
+/** A player's pane carries the output of a call it served: it stands,
+ * as a lane does from its first call (run-view-7), with more than
+ * `least` characters of text. */
 export async function expectEngaged(page: Page, playerId: string, least = 50): Promise<void> {
   const pane = page.getByTestId(`player-pane-${playerId}`);
   await expect(pane).toBeVisible();
-  await expect(pane).not.toContainText("Idle until the playbook calls");
   expect((await pane.innerText()).length, `${playerId}'s pane`).toBeGreaterThan(least);
 }
 

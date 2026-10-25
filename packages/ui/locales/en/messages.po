@@ -3196,10 +3196,6 @@ msgstr "idle"
 msgid "Idle — no conversation yet."
 msgstr "Idle — no conversation yet."
 
-#: src/components/PlayerPane.tsx
-msgid "Idle until the playbook calls {player}"
-msgstr "Idle until the playbook calls {player}"
-
 #: src/components/NavRail.tsx
 msgid "idle, held a failure"
 msgstr "idle, held a failure"

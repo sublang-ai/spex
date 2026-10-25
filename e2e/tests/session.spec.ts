@@ -31,6 +31,8 @@ test("run-view-98: the first task runs, settles, and accepts a follow-up", async
   const home = page.getByTestId("captain-home");
   await expect(home).toContainText("demo-project");
 
+  app.holdPlayer("dev.coder");
+  app.holdPlayer("dev.reviewer");
   await send(page, "Fix the token refresh in auth.ts");
 
   // The tab and the sidebar row carry the task as the title.
@@ -46,13 +48,22 @@ test("run-view-98: the first task runs, settles, and accepts a follow-up", async
   const machines = page.getByTestId("live-machines");
   await expect(machines).toContainText(/code/i);
 
-  // One pane per roster player; the coder streams and uses tools.
+  // A lane appears with its first call (run-view-7): the coder's
+  // while it streams and uses tools, the reviewer's only once the
+  // nested review calls it, after the coder's.
   const coder = page.getByTestId("player-pane-dev.coder");
   const reviewer = page.getByTestId("player-pane-dev.reviewer");
   await expect(coder).toBeVisible();
-  await expect(reviewer).toBeVisible();
+  await expect(coder).toContainText("coder working");
+  await expect(reviewer).toHaveCount(0);
   await expect(coder).toContainText(/editing/i);
   await expect(coder).toContainText(/Edit|Read/);
+  app.releasePlayer("dev.coder");
+  await expect(reviewer).toBeVisible();
+  await expect(page.locator('[data-testid^="player-pane-"]')).toHaveCount(2);
+  expect(await page.locator('[data-testid^="player-pane-"]').evaluateAll(
+    (panes) => panes.map((pane) => pane.getAttribute("data-testid")),
+  )).toEqual(["player-pane-dev.coder", "player-pane-dev.reviewer"]);
 
   // Input is unavailable while work runs, then the same composer accepts a follow-up.
   const box = page.getByTestId("boss-composer");
@@ -60,6 +71,7 @@ test("run-view-98: the first task runs, settles, and accepts a follow-up", async
   await expect(box).toBeDisabled();
   await expect(page.getByRole("button", { name: "Send", exact: true })).toBeDisabled();
   await expect(page.getByTestId("queue-indicator")).toHaveCount(0);
+  app.releasePlayer("dev.reviewer");
   await expect(captain).toContainText("/code finished");
   await expect(box).toBeEnabled();
   await box.fill("Also add a test for expiry skew");
@@ -93,6 +105,30 @@ test("run-view-98: the first task runs, settles, and accepts a follow-up", async
   await expect(page.getByRole("button", { name: "New session", exact: true })).toHaveCount(0);
   await expect(tree).toContainText(/fix the token refresh/i);
   await expect(page.getByTestId(/^sidebar-mark-/).first()).toHaveAttribute("data-life", "idle");
+
+  // The tab switch above, a fresh page replay, and a restarted shell
+  // retain the same called lanes and their first-call order (run-view-7).
+  const laneIds = ["player-pane-dev.coder", "player-pane-dev.reviewer"];
+  const expectLanes = async () => {
+    await expect.poll(() => page.locator('[data-testid^="player-pane-"]').evaluateAll(
+      (panes) => panes.map((pane) => pane.getAttribute("data-testid")),
+    )).toEqual(laneIds);
+  };
+  await expectLanes();
+  await page.reload();
+  // A fresh page starts at New task; reopening the saved session from
+  // the sidebar is what reconstructs its view from persisted records.
+  await expect(page.getByTestId("start-composer")).toBeEnabled();
+  await tree.getByRole("treeitem", { name: /^Fix the token refresh in auth\.ts —/ }).click();
+  await expect(box).toBeEnabled();
+  await expectLanes();
+  await app.stop();
+  await expect(page.getByText(/reconnecting to the spex core/i).first()).toBeVisible();
+  await app.start();
+  await expect(page.getByText(/reconnecting to the spex core/i)).toHaveCount(0);
+  await expect(tab).toBeVisible();
+  await expect(box).toBeEnabled();
+  await expectLanes();
 });
 
 test("run-view-99: a player question parks the session until the Boss replies", async ({
@@ -107,6 +143,10 @@ test("run-view-99: a player question parks the session until the Boss replies", 
   await expect(question).toContainText(/coder/i);
   const chip = page.getByTestId("state-chip");
   await expect(chip).toContainText(/wait/i);
+  // No call has reached a player: the Captain stands alone, with no
+  // grid and no divider (run-view-7).
+  await expect(page.getByTestId("player-grid")).toHaveCount(0);
+  await expect(page.getByTestId("captain-divider")).toHaveCount(0);
   const box = page.getByTestId("boss-composer");
   await expect(box).toHaveAttribute("placeholder", /reply to coder/i);
   // A question is visible before the Boss turn's checkpoint settles.
@@ -151,15 +191,16 @@ test("run-view-7: a lane's pane scrolls into view when its call opens", async ({
 });
 
 // A lane folds to a rail and returns for its call (run-view-118): the
-// reviewer's idle lane collapses while the session is parked on a
-// question, and unfolds itself when the nested review calls it.
+// reviewer's lane, left standing by the first task's review, collapses,
+// and unfolds itself when the follow-up's nested review calls it.
 test("run-view-118: a collapsed lane unfolds when its call opens", async ({
   page,
   app,
 }) => {
   await open(page, app);
-  await send(page, "ask before migrating");
-  await expect(page.getByTestId("question-bubble")).toBeVisible();
+  await send(page, "Fix the token refresh in auth.ts");
+  await expect(page.getByTestId("captain-pane")).toContainText("/code finished");
+  await expect(page.getByTestId("boss-composer")).toBeEnabled();
 
   const coder = page.getByTestId("player-pane-dev.coder");
   const reviewer = page.getByTestId("player-pane-dev.reviewer");
@@ -178,18 +219,118 @@ test("run-view-118: a collapsed lane unfolds when its call opens", async ({
   expect(name.y + name.height).toBeLessThanOrEqual(rail.y + rail.height + 1);
   expect((await coder.boundingBox())!.width).toBeGreaterThan(wholeWidth);
 
-  // The reply runs the code narration: the coder works in view, then
-  // the nested review calls the reviewer and its lane unfolds itself
-  // (run-view-7, run-view-117).
-  await page.getByTestId("boss-composer").fill("Yes, migrate them too");
+  // The follow-up runs the code narration again: the coder works in
+  // view, then the nested review calls the reviewer and its lane
+  // unfolds itself (run-view-7, run-view-117).
+  app.holdPlayer("dev.coder");
+  app.holdPlayer("dev.reviewer");
+  await page.getByTestId("boss-composer").fill("Also add a test for expiry skew");
   await page.getByRole("button", { name: "Send", exact: true }).click();
   await expect(coder).toContainText("coder working");
   await expect(coder).toBeInViewport();
+  app.releasePlayer("dev.coder");
   await expect(reviewer).not.toHaveAttribute("data-collapsed", "true");
   await expect(page.getByRole("button", { name: "Collapse dev.reviewer" })).toBeVisible();
   await expect(reviewer).toContainText(/Review/);
-  await expect(page.getByTestId("captain-pane")).toContainText("/code finished");
+  app.releasePlayer("dev.reviewer");
+  await expect(page.getByTestId("captain-pane").getByTestId("system-line")
+    .filter({ hasText: "/code finished" })).toHaveCount(2);
 });
+
+// A pane appearing or brought into view leaves the reader's place
+// (run-view-176, DR-146): side by side and stacked, the reply sent from
+// the keyboard calls the coder and then the reviewer, and neither the
+// page nor the split moves, the composer stays in the window, and focus
+// never enters the grid.
+for (const layout of [
+  { name: "side by side", width: 1024, height: 800 },
+  { name: "stacked", width: 600, height: 500 },
+] as const) {
+  test(`run-view-176: a lane appearing leaves the reader's place — ${layout.name}`, async ({
+    page,
+    app,
+  }) => {
+    await page.setViewportSize({ width: layout.width, height: layout.height });
+    await open(page, app);
+    await send(page, "ask before migrating");
+    await expect(page.getByTestId("question-bubble")).toBeVisible();
+    await expect(page.getByTestId("player-grid")).toHaveCount(0);
+    await expect(page.getByTestId("captain-divider")).toHaveCount(0);
+
+    const box = page.getByTestId("boss-composer");
+    await expect(box).toBeEnabled();
+    await box.fill("Yes, migrate them too");
+    app.holdPlayer("dev.coder");
+    app.holdPlayer("dev.reviewer");
+
+    // Watch before submitting, so even the first lane's arrival is
+    // sampled. The player gates keep each live phase until inspected.
+    // Sampled every frame until the run finishes: what moved
+    // that a lane's arrival must not move.
+    const watch = await page.evaluateHandle(() => {
+      // Every box around the Captain column and the grid, up to the
+      // page: none of them may move, whichever one could scroll.
+      const around: HTMLElement[] = [];
+      for (let el = document.querySelector<HTMLElement>('[data-testid="captain-column"]')!.parentElement; el; el = el.parentElement) {
+        around.push(el);
+      }
+      const start = around.map((el) => [el.scrollTop, el.scrollLeft]);
+      const seen = { boxScroll: 0, composerOut: 0, focusInGrid: 0, frames: 0, done: false };
+      const step = () => {
+        if (seen.done) return;
+        seen.frames += 1;
+        around.forEach((el, index) => {
+          const moved = Math.abs(el.scrollTop - start[index][0]) + Math.abs(el.scrollLeft - start[index][1]);
+          seen.boxScroll = Math.max(seen.boxScroll, moved);
+        });
+        const composer = document.querySelector<HTMLElement>('[data-testid="boss-composer"]');
+        if (composer) {
+          const rect = composer.getBoundingClientRect();
+          if (rect.top < -1 || rect.bottom > window.innerHeight + 1) seen.composerOut += 1;
+        }
+        const grid = document.querySelector('[data-testid="player-grid"]');
+        if (grid && grid.contains(document.activeElement)) seen.focusInGrid += 1;
+        requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+      return seen;
+    });
+    await box.press("Enter");
+
+    const grid = page.getByTestId("player-grid");
+    const inGrid = async (testId: string) => {
+      const g = await grid.boundingBox();
+      const p = await page.getByTestId(testId).boundingBox();
+      if (!g || !p) return false;
+      return p.x >= g.x - 1 && p.x < g.x + g.width - 20 && p.y >= g.y - 1 && p.y < g.y + g.height;
+    };
+    const coder = page.getByTestId("player-pane-dev.coder");
+    const reviewer = page.getByTestId("player-pane-dev.reviewer");
+    await expect(coder).toContainText("coder working");
+    await expect(reviewer).toHaveCount(0);
+    await expect.poll(() => inGrid("player-pane-dev.coder")).toBe(true);
+    app.releasePlayer("dev.coder");
+    await expect(reviewer).toContainText("reviewer working");
+    await expect.poll(() => inGrid("player-pane-dev.reviewer")).toBe(true);
+    // The two lanes overflow the grid, so showing the reviewer took the
+    // grid's own scroll (run-view-7).
+    expect(await grid.evaluate((el) => el.scrollWidth > el.clientWidth + 1 && el.scrollLeft > 0)).toBe(true);
+    expect(await page.locator('[data-testid^="player-pane-"]').evaluateAll(
+      (panes) => panes.map((pane) => pane.getAttribute("data-testid")),
+    )).toEqual(["player-pane-dev.coder", "player-pane-dev.reviewer"]);
+    app.releasePlayer("dev.reviewer");
+    await expect(page.getByTestId("captain-pane")).toContainText("/code finished");
+
+    const seen = await watch.evaluate((state) => {
+      state.done = true;
+      return { ...state };
+    });
+    expect(seen.frames).toBeGreaterThan(0);
+    expect(seen.boxScroll, "a box around the Captain column and the grid scrolled").toBe(0);
+    expect(seen.composerOut, "frames with the composer out of the window").toBe(0);
+    expect(seen.focusInGrid, "frames with focus inside the grid").toBe(0);
+  });
+}
 
 // Chrome that moves with no window resize behind it (run-view-121):
 // showing the sidebar narrows the panes, so the draft rewraps to more

@@ -4,9 +4,9 @@
 import {afterEach, beforeEach, expect, test} from "vitest";
 import {act, cleanup, fireEvent, render, screen} from "@testing-library/react";
 import {RunView} from "./RunView.js";
-import {initialSessionView, type SessionView} from "../state/reducer.js";
+import {applyRecords, initialSessionView, type SessionView} from "../state/reducer.js";
 import {useAppStore} from "../state/store.js";
-import {INITIAL_VISIBLE, PLAYERS} from "../fixtures/sample-run.js";
+import {CALLED_LANES, INITIAL_VISIBLE, PLAYERS} from "../fixtures/sample-run.js";
 
 const session = {
   id: "focus-session", projectId: "p1", projectPath: "/tmp/demo", createdAt: 0,
@@ -28,6 +28,12 @@ afterEach(() => {
   useAppStore.setState(previous, true);
 });
 
+/** A conversation whose lanes a call has reached, so each stands with
+ * its controls (run-view-7). */
+function lanesView(): SessionView {
+  return applyRecords(initialSessionView(PLAYERS), CALLED_LANES);
+}
+
 function collapseReviewer(): HTMLElement {
   fireEvent.click(screen.getByRole("button", {name: "Collapse dev.reviewer"}));
   const expand = screen.getByRole("button", {name: "Expand dev.reviewer"});
@@ -36,7 +42,7 @@ function collapseReviewer(): HTMLElement {
 }
 
 test.each(["question", "settlement"])("run-view-24: late %s preserves the selected lane control", (transition) => {
-  const before: SessionView = {...initialSessionView(PLAYERS),
+  const before: SessionView = {...lanesView(),
     ...(transition === "settlement" ? {...question, turnActive: true} : {})};
   const {rerender} = render(<RunView {...props} view={before} />);
   const expand = collapseReviewer();
@@ -49,7 +55,7 @@ test.each(["success", "refusal"])("run-view-24: delayed submission %s preserves 
   let resolve!: () => void;
   let reject!: (reason: Error) => void;
   const pending = new Promise<void>((done, fail) => {resolve = done; reject = fail;});
-  render(<RunView {...props} view={initialSessionView(PLAYERS)} onSubmit={() => pending} />);
+  render(<RunView {...props} view={lanesView()} onSubmit={() => pending} />);
   const field = screen.getByTestId("boss-composer");
   expect(document.activeElement).toBe(field);
   fireEvent.change(field, {target: {value: "Continue the review"}});
@@ -60,7 +66,7 @@ test.each(["success", "refusal"])("run-view-24: delayed submission %s preserves 
 });
 
 test("run-view-24: settlement restores available input when focus is unclaimed", () => {
-  const active = {...initialSessionView(PLAYERS), ...question, turnActive: true};
+  const active = {...lanesView(), ...question, turnActive: true};
   const {rerender} = render(<RunView {...props} view={active} />);
   collapseReviewer().blur();
   expect(document.activeElement).toBe(document.body);
@@ -71,7 +77,7 @@ test("run-view-24: settlement restores available input when focus is unclaimed",
 test("run-view-24: submission completion restores input when focus is unclaimed", async () => {
   let complete!: () => void;
   const pending = new Promise<void>((resolve) => {complete = resolve;});
-  render(<RunView {...props} view={initialSessionView(PLAYERS)} onSubmit={() => pending} />);
+  render(<RunView {...props} view={lanesView()} onSubmit={() => pending} />);
   const field = screen.getByTestId("boss-composer");
   fireEvent.change(field, {target: {value: "Continue the review"}});
   fireEvent.keyDown(field, {key: "Enter"});
@@ -90,7 +96,7 @@ test.each([false, true])("run-view-94: a busy Drop hands off temporary focus unl
     }}], attention: [], badge: 0},
     closeIntent: async () => {useAppStore.setState({ledger: {intents: [], attention: [], badge: 0}});},
   });
-  const active = {...initialSessionView(PLAYERS), turnActive: true};
+  const active = {...lanesView(), turnActive: true};
   const {rerender} = render(<RunView {...props} view={active} />);
   fireEvent.click(screen.getByTestId("working-drop"));
   await act(async () => {fireEvent.click(screen.getByRole("button", {name: "Drop"}));});

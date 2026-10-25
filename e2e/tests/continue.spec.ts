@@ -32,23 +32,24 @@ test("run-view-109: a message continues a settled session on the current setting
   await expect(page.getByTestId("history-notice")).toHaveCount(0);
   const box = page.getByTestId("boss-composer");
   await expect(box).toBeEnabled();
-  const coder = page.getByTestId("player-pane-dev.coder");
-  await expect(coder).toContainText("claude-opus-5-5");
+  // The real Captain answers without calling a player, so no lane
+  // stands (run-view-7): the Captain's own chip is the agent that ran.
+  const chip = page.getByTestId("agent-chip-captain");
+  await expect(chip).toContainText("claude-opus-5-5");
 
-  // Settings change between turns: the coder's model. The next message
-  // opens the runtime on the current settings (core-service-92), and
-  // the coder's pane wears the new model.
+  // Settings change between turns: the Captain's model. The next
+  // message opens the runtime on the current settings
+  // (core-service-92), and the Captain's chip wears the new model.
   await nav(page, "Settings").click();
-  await page.getByTestId("player-edit-dev.coder").click();
+  const section = page.getByTestId("captain-section");
+  await section.getByTestId("captain-edit").click();
   // The seeded pin is listed through an alias, so a hand-typed id goes
   // through the list's custom entry.
-  const row = page.getByTestId("player-row-dev.coder");
-  await row.getByTestId("agent-model-trigger").click();
-  await row.getByTestId("agent-model-listbox").getByRole("option", { name: "Custom model…" }).click();
-  const model = row.getByTestId("agent-model");
-  await model.fill("claude-sonnet-5");
-  await page.getByTestId("player-row-dev.coder").getByTestId("agent-save").click();
-  await expect(page.getByTestId("player-saved-dev.coder")).toHaveText("Saved ✓");
+  await section.getByTestId("agent-model-trigger").click();
+  await section.getByTestId("agent-model-listbox").getByRole("option", { name: "Custom model…" }).click();
+  await section.getByTestId("agent-model").fill("claude-sonnet-5");
+  await section.getByTestId("agent-save").click();
+  await expect(page.getByTestId("captain-saved")).toHaveText("Saved ✓");
   await nav(page, "Projects").click();
   await expect(box).toBeEnabled();
 
@@ -61,7 +62,7 @@ test("run-view-109: a message continues a settled session on the current setting
   await expect(finished).toHaveCount(2);
   await expect(page.getByRole("button", { name: "Send", exact: true })).toBeVisible();
   await expect(page.getByRole("tab", { name: /fix the token refresh/i })).toHaveCount(1);
-  await expect(coder).toContainText("claude-sonnet-5");
+  await expect(chip).toContainText("claude-sonnet-5");
   await expect(page.getByTestId("end-session")).toHaveCount(0);
 
   // The shell restarts underneath the page: the session lists idle

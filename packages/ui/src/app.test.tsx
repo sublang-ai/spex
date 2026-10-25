@@ -52,9 +52,9 @@ import {
   setClientForTests,
   useAppStore,
 } from "./state/store.js";
-import { initialSessionView, type SessionView } from "./state/reducer.js";
+import { applyRecords, initialSessionView, type SessionView } from "./state/reducer.js";
 import { keyLabel } from "./lib/shortcuts.js";
-import type { SessionInfo } from "@sublang/spex-core/protocol";
+import type { SessionInfo, TmuxPlayRecord } from "@sublang/spex-core/protocol";
 import { currentLocale } from "./i18n.js";
 import { groupsState, instanceState, namespace, repositoryRow } from "./fixtures/groups-state.js";
 
@@ -79,9 +79,14 @@ function session(over: Partial<SessionInfo> & { id: string }): SessionInfo {
   };
 }
 
-/** A loaded transcript; `question` parks it awaiting a Boss reply. */
+/** A loaded transcript whose lanes a call has reached, so each stands
+ * (run-view-7); `question` parks it awaiting a Boss reply. */
 function view(question?: string): SessionView {
-  const loaded = initialSessionView(PLAYERS);
+  const loaded = applyRecords(initialSessionView(PLAYERS), PLAYERS.map(({ id }, index) => ({
+    seq: 901 + index,
+    record: { type: "player_finished", turnId: 1, timestamp: 901 + index, playerId: id,
+      result: { status: "ok", playerId: id, turnId: 1 } } as unknown as TmuxPlayRecord,
+  })));
   loaded.loading = false;
   if (question) loaded.pendingQuestion = question;
   return loaded;
