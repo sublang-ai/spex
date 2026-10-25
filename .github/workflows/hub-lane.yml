@@ -107,6 +107,19 @@ jobs:
             echo "the lane wrote no log" > "$RUNNER_TEMP/lane-logs/none.txt"
           fi
 
+      # What the lane cannot say itself: the journals of the hub, the
+      # seats and the sweep, and the state and runtime directories, on a
+      # failure alone, their tail in the run's own log.
+      - name: Journals and state on failure
+        if: failure()
+        run: |
+          set -euo pipefail
+          sudo journalctl --no-pager -o short-iso -u spex-hub -u 'spex-seat@*' -u spex-seat-reaper.service -u spex-seat-reaper.timer > "$RUNNER_TEMP/lane-logs/journal.log" || true
+          sudo sh -c 'ls -la /var/lib/spex-hub /var/lib/spex-hub/locks /run/spex /run/spex/seats /run/spex/seats/* 2>&1; echo; systemctl list-units --all --no-pager "spex-*" 2>&1; echo; systemctl list-timers --all --no-pager 2>&1 | grep -i spex || true' > "$RUNNER_TEMP/lane-logs/state.log" || true
+          sudo chown -R "$(id -u):$(id -g)" "$RUNNER_TEMP/lane-logs"
+          echo "== state"; cat "$RUNNER_TEMP/lane-logs/state.log"
+          echo "== journal (tail)"; tail -n 120 "$RUNNER_TEMP/lane-logs/journal.log"
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
