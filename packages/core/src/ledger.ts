@@ -454,6 +454,7 @@ function foldConditionsDetail(
           // DR-088): whatever the stream last said of the interrupted
           // turn's runs gives way to the position the checkpoint holds.
           const parkedBefore = new Map(parkedFailures);
+          const questionsBefore = new Map(parkedQuestions);
           const seqsBefore = new Map(parkSeqs);
           const failedBefore = new Set(parkedBefore.keys());
           parkedQuestions.clear();
@@ -493,7 +494,13 @@ function foldConditionsDetail(
             if (
               state === "awaitBossReply" ||
               pendingQuestionCount({ pendingBossQuestions: run.pendingBossQuestions }) > 0
-            ) parkedQuestions.set(run.sessionId, { ...at });
+            ) {
+              // A run the stream already showed waiting on the Boss keeps
+              // the question it had — its onset and its turn — as a
+              // re-stated failure park does: the restore raises no
+              // question of its own turn for it (core-service-82).
+              parkedQuestions.set(run.sessionId, questionsBefore.get(run.sessionId) ?? { ...at });
+            }
           }
           latestFailure = parkedFailures.size > 0
             ? "parked"
