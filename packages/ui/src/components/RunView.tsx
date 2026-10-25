@@ -225,6 +225,7 @@ export function RunView({
   onDismissError,
   readinessHint,
   focusTurn,
+  focusAt,
   onFocusHandled,
 }: {
   session: SessionInfo;
@@ -255,6 +256,8 @@ export function RunView({
   /** Attention activation (run-view-91): land at this turn's place —
    * its question bubble, failure line, or delivery card. */
   focusTurn?: number;
+  /** The onset of a failure whose attention entry names no turn. */
+  focusAt?: number;
   onFocusHandled?: () => void;
 }) {
   const store = usePlaceStore();
@@ -441,6 +444,10 @@ export function RunView({
   // delivery card, the question bubble, or the failure line of the
   // named turn — a boss bubble as the last resort.
   const focusKey = useMemo(() => {
+    if (focusAt !== undefined) {
+      const index = view.captain.findIndex((line) => line.kind === "error" && line.at === focusAt);
+      return index < 0 ? undefined : `line-${index}`;
+    }
     if (focusTurn === undefined) return undefined;
     // Finished intents straight from the ledger count before their
     // card has folded into the delivered map, so the focus never
@@ -466,7 +473,7 @@ export function RunView({
     }
     return undefined;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [focusTurn, bound, delivered, dispatchTurns, view.captain]);
+  }, [focusTurn, focusAt, bound, delivered, dispatchTurns, view.captain]);
   // A pane is a player lane, not a moment (DR-032): the session's
   // bound roster is the pane set for the session's whole life, so a
   // call that ends leaves its transcript where the reader last saw it.

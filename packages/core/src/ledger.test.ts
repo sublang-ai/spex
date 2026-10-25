@@ -1046,7 +1046,7 @@ function turnlessError(store: Store, sessionId: string, at: number, message = "T
   append(store, sessionId, { type: "runtime_error", turnId: null, timestamp: at, message });
 }
 
-test("core-service-132: a runtime_error naming no turn lies in the latest turn started before it", () => {
+test("core-service-132: a runtime_error naming no turn belongs only to an open turn", () => {
   const { store, projectId } = newProjectStore();
   const failuresOf = (ledger: LedgerState, sessionId: string) =>
     entriesOf(ledger, sessionId).filter((entry) => entry.kind === "failure");
@@ -1072,12 +1072,40 @@ test("core-service-132: a runtime_error naming no turn lies in the latest turn s
   beginTurn(store, "s12", 1, "do it", 3000);
   stamp(store, "J", "s12", 1, 3000);
   finishTurn(store, "s12", 1, 3100);
-  turnlessError(store, "s12", 3200, "Captain turn did not finish with one reply; session remains uncertain");
+  append(store, "s12", { type: "runtime_error", turnId: 1, timestamp: 3200, message: "Captain turn did not finish with one reply; session remains uncertain" });
   const dispatched = fold(store, [lane("s12", projectId, false)]);
   assert.equal(stateOf(dispatched, "J").state, "interrupted");
   assert.equal(stateOf(dispatched, "J").reason, "failure");
   assert.deepEqual(entriesOf(dispatched, "s12").map((entry) => onsetOf({ ...entry, title: "" })),
     [["failure", undefined, uid("J"), 1, 3200, ""]]);
+
+  // A failure from before the next turn started — recorded naming no
+  // turn, with none open — lies in no intent's range: the intent
+  // finished in the turn before it stays finished, awaiting its verdict.
+  addSession(store, projectId, "s19");
+  queueIntent(store, projectId, "L");
+  beginTurn(store, "s19", 1, "do it", 3300);
+  stamp(store, "L", "s19", 1, 3300);
+  finishTurn(store, "s19", 1, 3400);
+  turnlessError(store, "s19", 3500, "session input must contain text or attachments");
+  const settledIntent = fold(store, [lane("s19", projectId, false)]);
+  assert.equal(stateOf(settledIntent, "L").state, "finished");
+  assert.deepEqual(entriesOf(settledIntent, "s19").map((entry) => [entry.band, entry.kind, entry.intentId]),
+    [["finished", "finish", uid("L")]]);
+
+  // With no intent it is the session's own failure, naming no turn and
+  // titled with its latest turn, until a later turn starts.
+  addSession(store, projectId, "s20");
+  beginTurn(store, "s20", 1, "tidy up", 3600);
+  finishTurn(store, "s20", 1, 3700);
+  turnlessError(store, "s20", 3800, "the release failed");
+  turnlessError(store, "s20", 3850, "the release failed again");
+  const unowned = [lane("s20", projectId, false)];
+  assert.deepEqual(failuresOf(fold(store, unowned), "s20").map((entry) => [entry.band, ...onsetOf(entry)]),
+    [["interrupted", "failure", undefined, undefined, undefined, 3800, "tidy up"]]);
+  beginTurn(store, "s20", 2, "again", 3900);
+  finishTurn(store, "s20", 2, 3950);
+  assert.deepEqual(failuresOf(fold(store, unowned), "s20"), []);
 
   // A throw records the runtime's turn-scoped error, the turn's abort,
   // then the core's own: one failure, at the first of them.
@@ -1148,7 +1176,7 @@ test("core-service-132: a runtime_error naming no turn lies in the latest turn s
   append(store, "s16", restoringRecord("keep", 7200) as unknown as Record<string, unknown>);
   beginTurn(store, "s16", 1, "keep", 7210);
   finishTurn(store, "s16", 1, 7220);
-  turnlessError(store, "s16", 7230, "the restore settled no readable checkpoint");
+  append(store, "s16", { type: "runtime_error", turnId: 1, timestamp: 7230, message: "the restore settled no readable checkpoint" });
   assert.deepEqual(failuresOf(fold(store, [lane("s16", projectId, false)]), "s16").map(onsetOf),
     [["failure", undefined, undefined, 1, 7230, "keep"]]);
   store.close();

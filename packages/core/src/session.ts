@@ -700,7 +700,8 @@ export class SessionManager {
           // English, deliberately (core-service-111): the page matches
           // this record's text to phrase the failure itself, and the
           // reason is the runtime's own words.
-          if (entry && result?.status === "error") await this.appendError(entry, `The Captain's turn failed: ${result.error ?? result.finalText ?? "unknown error"}`);
+          const callTurn = (record.record as {turnId?: unknown}).turnId;
+          if (entry && result?.status === "error") await this.appendError(entry, `The Captain's turn failed: ${result.error ?? result.finalText ?? "unknown error"}`, typeof callTurn === "number" ? callTurn : null);
         },
         onCheckpoint: async () => {
           await this.store.refreshSession(sessionId, true);
@@ -833,9 +834,12 @@ export class SessionManager {
     }
   }
 
-  private async appendError(entry: LiveSession, message: string): Promise<void> {
+  /** Record a failure of the core's own, naming the turn it lies in, or
+   * none where it came before any turn of its own started
+   * (core-service-135). */
+  private async appendError(entry: LiveSession, message: string, turnId: number | null = null): Promise<void> {
     const afterSeq = this.store.maxSeq(entry.info.id);
-    await entry.controller.lease.append({type:"runtime_error", turnId:null, timestamp:this.now(), message});
+    await entry.controller.lease.append({type:"runtime_error", turnId, timestamp:this.now(), message});
     const added = await entry.controller.lease.readStream({afterSeq});
     for (const item of added.entries) this.record(entry.info.id, item, entry);
   }
@@ -1082,6 +1086,9 @@ export class SessionManager {
     entry.turnIntentId = undefined;
     entry.pendingAbort = undefined;
     entry.turnActive = true;
+    // Where this operation's own turn starts: a failure after it names
+    // that turn, one before it names none (core-service-135).
+    const operationSeq = this.store.maxSeq(entry.info.id);
     // A turn accepted while a run waits on the Boss's question answers
     // it or asks it back (DR-119), so the question the last settlement
     // read leaves now; this turn's own settlement reads the run afresh
@@ -1117,7 +1124,10 @@ export class SessionManager {
         // a runtime_error as well would misclassify it as failure.
         const stopped = this.intentionalStops.has(entry.info.id);
         if (!stopped) {
-          try { await this.appendError(entry, error instanceof Error ? error.message : String(error)); }
+          const started = this.store.getRecords(entry.info.id, {afterSeq: operationSeq})
+            .filter(({record}) => record.type === "turn_started").at(-1)?.record as {turn?: {id?: unknown}; turnId?: unknown} | undefined;
+          const turnId = started?.turn?.id ?? started?.turnId;
+          try { await this.appendError(entry, error instanceof Error ? error.message : String(error), typeof turnId === "number" ? turnId : null); }
           catch { /* The lifecycle retains incomplete evidence and ownership. */ }
         }
       } finally {

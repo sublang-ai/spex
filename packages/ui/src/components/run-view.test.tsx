@@ -1965,9 +1965,9 @@ describe("run-view-96/91: attention activation lands at the place", () => {
     expect(wrapper?.getAttribute("data-focused")).toBe("1");
   });
 
-  test("a failure the core recorded naming no turn focuses its line", () => {
-    // The core records every failure of its own naming no turn, here
-    // after the turn ended; the ledger counts it in that turn
+  test("a failure recorded naming no turn while its turn was open focuses its line", () => {
+    // Earlier cores recorded every failure of their own naming no turn;
+    // the ledger counts one recorded while a turn was open in that turn
     // (core-service-49), and so does its line.
     const TURN_SETTLED_FAILED = [
       {
@@ -1981,16 +1981,16 @@ describe("run-view-96/91: attention activation lands at the place", () => {
       },
       {
         seq: 2,
-        record: { type: "turn_finished", turnId: 6, timestamp: 2 },
-      },
-      {
-        seq: 3,
         record: {
           type: "runtime_error",
           turnId: null,
-          timestamp: 3,
+          timestamp: 2,
           message: "the release failed",
         },
+      },
+      {
+        seq: 3,
+        record: { type: "turn_finished", turnId: 6, timestamp: 3 },
       },
     ] as unknown as typeof FULL_RUN;
     renderRunWith(TURN_SETTLED_FAILED, { focusTurn: 6 });
