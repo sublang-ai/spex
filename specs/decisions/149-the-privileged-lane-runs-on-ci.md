@@ -19,7 +19,7 @@ Extends [DR-145](145-merge-on-green.md) in what a pull request's run holds: the 
 
 ## Decision
 
-- A workflow of its own, the hub lane, runs the privileged lane as root on the Ubuntu runner: on a nightly schedule, on a push to `main` that touches the hub or the server shell the seats run, and on request.
+- A workflow of its own, the hub lane, runs the privileged lane as root on the Ubuntu runner: on a nightly schedule, on a push to `main` that touches the hub or the server shell the seats run, on a pull request that changes the workflow itself — so a change to the lane's own run is exercised before it merges, and a workflow new to the repository can run at all — and on request.
 - The runner is prepared as `LANE.md` prepares a host: the newest Node 22 from nodejs.org, checked against its sums, under root's own directories and linked where the units and sudo's path look; the commit's tree unpacked outside any home.
 - The lane's output, which redacts every secret, is kept as the run's artifact; the run's own log shows the PASS and FAIL lines.
 - The lane is no required check of a pull request and cancels no other run; a red lane is read on `main` within a day, as the nightly matrix is.
@@ -27,7 +27,7 @@ Extends [DR-145](145-merge-on-green.md) in what a pull request's run holds: the 
 
 ### Considered and declined
 
-- The lane as a pull request's required check: a quarter of an hour of privileged system changes on every push to a branch, against DR-145's lean run; a push to `main` touching the hub runs it within the hour instead.
+- The lane on every pull request touching the hub, required or not: a quarter of an hour of privileged system changes on every push to a branch, against DR-145's lean run, and `merge-on-green` waiting on it; a push to `main` touching the hub runs it within the hour instead.
 - The lane inside the CI workflow as another job: the CI workflow's audit names a pull request's jobs exactly, and the lane's triggers differ from the checks'.
 - The runner's own Node: it belongs to the runner account, which the install script refuses for a program root and every seat run.
 

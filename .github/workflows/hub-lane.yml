@@ -6,9 +6,10 @@
 # systemd with passwordless sudo — from the commit's tree unpacked
 # outside any home, as apps/hub/deploy/LANE.md has it by hand. It runs
 # on the nightly schedule, on a push to main that touches the hub or the
-# server shell it runs, and on request; it is no required check of a
-# pull request (DR-145). The lane's output, redacted of every secret,
-# is the run's artifact.
+# server shell it runs, on a pull request that changes this workflow
+# itself, and on request; it is no required check of a pull request
+# (DR-145). The lane's output, redacted of every secret, is the run's
+# artifact.
 name: Hub Lane
 
 on:
@@ -20,6 +21,11 @@ on:
     paths:
       - 'apps/hub/**'
       - 'apps/server/**'
+      - '.github/workflows/hub-lane.yml'
+  # A change to the lane's own workflow is exercised before it merges;
+  # no other pull request runs the lane.
+  pull_request:
+    paths:
       - '.github/workflows/hub-lane.yml'
   workflow_dispatch:
 

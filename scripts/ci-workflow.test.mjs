@@ -52,7 +52,7 @@ test("release-33: a pull request runs the reduced matrix, main and the nightly t
   assert.deepEqual(PULL_REQUEST_CHECKS.slice().sort(), onPullRequest.sort());
 });
 
-test("release-33: the hub lane runs nightly, on a push to main touching the hub and on request, never on a pull request, as root, keeping its output (release-36)", () => {
+test("release-33: the hub lane runs nightly, on a push to main touching the hub, on a pull request changing its workflow and on request, as root, keeping its output (release-36)", () => {
   // YAML reads the bare `on` key as the boolean true.
   const on = laneWorkflow.on ?? laneWorkflow[true];
   assert.ok(Array.isArray(on.schedule) && on.schedule.length === 1, "one nightly schedule");
@@ -60,7 +60,7 @@ test("release-33: the hub lane runs nightly, on a push to main touching the hub 
   assert.deepEqual(on.push.branches, ["main"]);
   assert.ok(on.push.paths.includes("apps/hub/**") && on.push.paths.includes("apps/server/**"), "a push to main touching the hub or the server shell");
   assert.ok("workflow_dispatch" in on, "runs on request");
-  assert.equal("pull_request" in on, false, "no pull request runs it");
+  assert.deepEqual(on.pull_request, { paths: [".github/workflows/hub-lane.yml"] }, "a pull request runs it only where it changes the lane's own workflow");
   assert.equal(laneWorkflow.concurrency["cancel-in-progress"], false);
   const jobs = Object.values(laneWorkflow.jobs);
   assert.equal(jobs.length, 1);
