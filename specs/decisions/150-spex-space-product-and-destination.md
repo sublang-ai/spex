@@ -19,7 +19,8 @@ An existing home's origin is part of the identity of its connections and stored 
 ## Decision
 
 - The server product is **Spex Space**; its source repository is `spex.space`.
-- The current production origin and new-home default are `https://spex.sublang.ai`.
+- `https://spex.sublang.ai` is the intended public origin of the existing internal Cloudflare deployment and remains the new-home default; server setup and the address cutover are pending.
+- The cutover reuses that deployment’s existing data and resources; instances keep distinct canonical origins.
 - The proposed future domain `spex.space` is not an endpoint until the owner acquires it and authorizes a separate cutover.
 - The IDE destination is **Space**; groups, subgroups, projects and their actions retain their meanings and names.
 - Saved origins, credentials, repository keys and placements remain unchanged; configuring another origin continues to use the existing sign-in flow.
