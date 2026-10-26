@@ -161,10 +161,13 @@ test("playbook-library-41: both sides listed, a built-in enabled in the project,
   await expect(code).toContainText("implement a coding intent in reviewed, one-commit phases");
   await expect(code.getByTestId("playbook-enabled-code")).toHaveText("Enabled in your own group");
   await expect(code.getByTestId("playbook-from-code")).toHaveText(/^from\s*sublang\/playbooks \d+\.\d+\.\d+$/);
-  await expect(code.getByTestId("role-binding-code-coder")).toHaveText("dev.coder");
+  await expect(code.getByTestId("role-binding-code-coder")).toHaveText("Ccoder");
+  await expect(code.getByTestId("role-binding-code-coder")).toHaveAttribute("title", /^dev\.coder · /);
   await expect(review).toContainText("/review");
-  await expect(review.getByTestId("role-binding-review-coder")).toHaveText("dev.coder");
-  await expect(review.getByTestId("role-binding-review-reviewer")).toHaveText("dev.reviewer");
+  await expect(review.getByTestId("role-binding-review-coder")).toHaveText("Ccoder");
+  await expect(review.getByTestId("role-binding-review-coder")).toHaveAttribute("title", /^dev\.coder · /);
+  await expect(review.getByTestId("role-binding-review-reviewer")).toHaveText("Rreviewer");
+  await expect(review.getByTestId("role-binding-review-reviewer")).toHaveAttribute("title", /^dev\.reviewer · /);
 
   // The project's side lists the same playbooks from its own
   // environment, none enabled in its config: those your own group

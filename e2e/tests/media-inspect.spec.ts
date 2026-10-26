@@ -36,7 +36,8 @@ test("playbook-library-34: existing homes explicitly enable Inspect and a browse
   expect(config.playbooks.code).toEqual(parse(before).playbooks.code);
   expect(config.captain).toEqual(parse(before).captain);
   const enabled = page.getByTestId("playbooks-enabled").getByTestId("playbook-card-inspect");
-  await expect(enabled.getByTestId("role-binding-inspect-inspector")).toHaveText("dev.inspector");
+  await expect(enabled.getByTestId("role-binding-inspect-inspector")).toHaveText("Iinspector");
+  await expect(enabled.getByTestId("role-binding-inspect-inspector")).toHaveAttribute("title", /^dev\.inspector · /);
   await enabled.getByTestId("stages-inspect").getByRole("button", { name: "State machine", exact: true }).click();
   await expect(page.getByTestId("pipeline-inspect")).toBeVisible();
 });
