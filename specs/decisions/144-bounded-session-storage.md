@@ -9,6 +9,7 @@ Accepted (2026-10-22) on the owner's direction to make runtime session files bou
 Amends [DR-045](045-unified-session-storage.md) and [DR-103](103-the-home-and-its-groups.md) in the portable session's files: Playbook's versioned root, replay descriptor and session-owned immutable chunks replace the monolithic manifest and replay for new sessions, with the semantic host API preserved.
 Amends [DR-111](111-the-core-coordinates-as-git-does.md) in a session unit's members and publication order: every chunk belongs to its session, dependencies precede their descriptor and root, and a chunk added since Save refuses that unit's replacement.
 Amends [DR-131](131-playbook-17-11-1-adoption.md) in the Playbook floor and built-in release, and permits its compiler-only nested Playbook dependency; the remaining dependency and SDK identities stay preserved.
+Amended by [DR-153](153-playbook-18-0-1-cligent-0-36-1-slc-0-19-1-adoption.md) in the Playbook floor, compiler dependency and built-in release alone; its bounded-storage decisions stand.
 
 ## Context
 

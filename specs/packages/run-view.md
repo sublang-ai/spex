@@ -120,7 +120,7 @@ When the session record stream delivers a player's failure — an error event, o
 
 #### run-view-177
 
-Wherever the run view names a session player — its lane's header and rail [[run-view-116](#run-view-116)], a delegation line [[run-view-178](#run-view-178)], a failure's recovery entries [[run-view-179](#run-view-179)] — it shall show the player's name beside its mark, with the player's full id in the tooltip ([DR-154](../decisions/154-players-named-delegated-and-recovered.md)):
+Wherever the run view names a session player — its lane's header and rail [[run-view-116](#run-view-116)], a delegation line [[run-view-178](#run-view-178)], a failure's recovery entries [[run-view-179](#run-view-179)] — it shall show the player's name beside its mark, with the player's full id in the tooltip ([DR-155](../decisions/155-players-named-delegated-and-recovered.md)):
 
 - the name is the id's last dot-separated segment — `dev.reviewer` reads reviewer, `alice` reads alice — and every player of the roster sharing that segment with another reads as its full id instead;
 - the mark is the Captain's letter-in-a-circle style holding the name's first letter uppercased, in one neutral colour for every player, while the Captain's "C" keeps the brand colour;
@@ -128,7 +128,7 @@ Wherever the run view names a session player — its lane's header and rail [[ru
 
 #### run-view-178
 
-When a session's records hold a player call — its first record a prompt — whose player no earlier call reached, or whose adapter or model differs from that player's previous call, the Captain pane shall show one delegation line at that record's place in the thread, outside every machine card, naming the player [[run-view-177](#run-view-177)] and what the call runs ([DR-154](../decisions/154-players-named-delegated-and-recovered.md)):
+When a session's records hold a player call — its first record a prompt — whose player no earlier call reached, or whose adapter or model differs from that player's previous call, the Captain pane shall show one delegation line at that record's place in the thread, outside every machine card, naming the player [[run-view-177](#run-view-177)] and what the call runs ([DR-155](../decisions/155-players-named-delegated-and-recovered.md)):
 
 | The call's model reads | Where |
 | --- | --- |
@@ -146,7 +146,7 @@ When a session's records hold a player call — its first record a prompt — wh
 
 #### run-view-179
 
-Where a failure line or card in the Captain pane [[run-view-2](#run-view-2)] [[run-view-147](#run-view-147)] belongs to an agent — the Captain for the Captain's own failed turn, a player for a cause naming it, directly or through a nested failure — the run view shall name that agent [[run-view-177](#run-view-177)] in the cause and offer its recovery entries by what the runtime said, as the runtime-message mapping of [[run-view-2](#run-view-2)] classifies it ([DR-154](../decisions/154-players-named-delegated-and-recovered.md)):
+Where a failure line or card in the Captain pane [[run-view-2](#run-view-2)] [[run-view-147](#run-view-147)] belongs to an agent — the Captain for the Captain's own failed turn, a player for a cause naming it, directly or through a nested failure — the run view shall name that agent [[run-view-177](#run-view-177)] in the cause and offer its recovery entries by what the runtime said, as the runtime-message mapping of [[run-view-2](#run-view-2)] classifies it ([DR-155](../decisions/155-players-named-delegated-and-recovered.md)):
 
 | The message is | Entries |
 | --- | --- |

@@ -2241,7 +2241,7 @@ export class CoreService {
   }
 
   /** Reseed your own group's config while it stands at the version the
-   * core seeded (core-service-137, DR-155); true where it was rewritten.
+   * core seeded (core-service-137, DR-156); true where it was rewritten.
    * A file no longer at that version loses its record for good. */
   private reseed(): boolean {
     const record = this.store.getPref<unknown>(SEED_PREF);

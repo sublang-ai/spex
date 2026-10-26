@@ -38,12 +38,12 @@ export function PublishControl(props: PublishProps) {
 }
 
 /** Publish beneath the form (playbook-library-93): an inline summary
- * of what would upload — name, version, files — confirmed with Publish
- * or left with Cancel; the outcome reads from the environment's state,
- * the published version with its page at the registry or the issues in
- * place. A home not signed in to the instance the publish goes to reads
- * "Sign in to publish at <name>" instead; nothing stands until the
- * Groups state says which instance that is. */
+ * of the destination and what would upload — name, version, files —
+ * confirmed with Publish or left with Cancel; the outcome reads from
+ * the environment's state, the published version with its page at the
+ * registry or the issues in place. A home not signed in to the instance
+ * the publish goes to reads "Sign in to publish at <name>" instead;
+ * nothing stands until the Groups state says which instance that is. */
 function PublishAttempt({
   repository,
   path,
@@ -135,6 +135,9 @@ function PublishAttempt({
     <div data-testid="publish" className="flex flex-col gap-2 border-t border-neutral-200 pt-3 dark:border-neutral-800">
       {preview ? (
         <div data-testid="publish-summary" className="flex flex-col gap-1 rounded border border-neutral-200 bg-neutral-50 px-2 py-1.5 text-xs dark:border-neutral-800 dark:bg-neutral-950">
+          <span data-testid="publish-target" className="[overflow-wrap:anywhere]">
+            {i18n._("Publish to {origin}", { origin: target.origin })}
+          </span>
           <span className="font-mono">
             {preview.name} {preview.version}
           </span>

@@ -147,7 +147,7 @@ export function stateLabel(
 export type RemedyKind = "sign-in";
 
 /** Which way back a failure offers from the agent it names
- * (run-view-179, DR-154): `settings` — the adapter itself failed or is
+ * (run-view-179, DR-155): `settings` — the adapter itself failed or is
  * wrong, so "Change ⟨name⟩ in Settings" beside any words of what to do
  * outside Spex; `outside` — only those words; `none` — not the agent's
  * to answer. A message no pattern matches offers both entries. */

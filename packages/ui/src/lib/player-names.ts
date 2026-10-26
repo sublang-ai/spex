@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// A player's name (run-view-177, DR-154): the last dot-separated
+// A player's name (run-view-177, DR-155): the last dot-separated
 // segment of its id — a dot is a naming habit, so no prefix is
 // assumed — and its full id where another player of the same roster
 // ends in the same segment. The full id is the tooltip's.

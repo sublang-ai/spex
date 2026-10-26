@@ -1,12 +1,12 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
 
-# DR-155: An Untouched Seed Follows the Credentials
+# DR-156: An Untouched Seed Follows the Credentials
 
 ## Status
 
 Accepted (2026-10-26) on the owner's direction for P0-2 on team servers.
-Amends [DR-153](153-the-seed-follows-playbooks-rule.md) in "nothing rewrites a seeded file afterwards": a seeded file no one has changed is rewritten when the credentials it was chosen from change; a file changed in any byte is never rewritten again.
+Amends [DR-154](154-the-seed-follows-playbooks-rule.md) in "nothing rewrites a seeded file afterwards": a seeded file no one has changed is rewritten when the credentials it was chosen from change; a file changed in any byte is never rewritten again.
 Amends [DR-132](132-team-servers.md) in "a seat's core reads that file into its process environment at start": the read, with the member's own credentials, comes before the seat seeds its config.
 The exclusive first create, the seed's text and its agreement with the `playbook` CLI under the same credentials and home stand.
 

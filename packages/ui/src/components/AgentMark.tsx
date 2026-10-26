@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// An agent's mark (run-view-177, DR-154): one letter in a circle. The
+// An agent's mark (run-view-177, DR-155): one letter in a circle. The
 // Captain keeps the brand colour; every player wears one neutral
 // colour, so a coder's "C" and the Captain's differ by colour and name.
 

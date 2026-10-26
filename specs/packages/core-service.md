@@ -63,7 +63,7 @@ On every load and reload:
 
 #### core-service-3
 
-Where no config file exists at the shared config path, when the core service starts, the core service shall write the installed playbook package's own seed for the core's environment and home to that path, adopt it as the active config, and report the seeding to connected clients ([DR-037](../decisions/037-playbook-12-adoption.md); [DR-153](../decisions/153-the-seed-follows-playbooks-rule.md)):
+Where no config file exists at the shared config path, when the core service starts, the core service shall write the installed playbook package's own seed for the core's environment and home to that path, adopt it as the active config, and report the seeding to connected clients ([DR-037](../decisions/037-playbook-12-adoption.md); [DR-154](../decisions/154-the-seed-follows-playbooks-rule.md)):
 
 - The text is what `@sublang/playbook/seed-config` returns for that environment and home, with every `playbooks.<id>.from` removed; the core chooses no adapter, model, effort or writable path itself.
 - That seed reads credentials alone — an agent's API key or token form in the environment, or the `.claude` and `.codex` folders in the home; on a seat, the environment its credentials were read into first [[core-service-126](#core-service-126)] — so the Captain's and each player's `adapter`, `model`, `effort` and `writablePaths` equal the `playbook` CLI's seed under the same credentials and home, while the two files may differ:
@@ -78,7 +78,7 @@ Where no config file exists at the shared config path, when the core service sta
 
 #### core-service-137
 
-Where the recorded seed names the shared config path [[storage-5](storage.md#storage-5)], when the core service starts, and on a seat when the member sets or removes an agent credential [[settings-48](settings.md#settings-48)], the core service shall reseed that file while it stands at the recorded version ([DR-155](../decisions/155-an-untouched-seed-follows-the-credentials.md)):
+Where the recorded seed names the shared config path [[storage-5](storage.md#storage-5)], when the core service starts, and on a seat when the member sets or removes an agent credential [[settings-48](settings.md#settings-48)], the core service shall reseed that file while it stands at the recorded version ([DR-156](../decisions/156-an-untouched-seed-follows-the-credentials.md)):
 
 | The file | Outcome |
 | --- | --- |
@@ -643,7 +643,7 @@ Where the core runs as a seat — started with a server's id and name, the admit
 
 #### core-service-126
 
-Where the core runs as a seat with a shared credential file [[core-service-125](#core-service-125)], when it starts — before it seeds or reseeds your own group's config [[core-service-3](#core-service-3)] [[core-service-137](#core-service-137)] ([DR-155](../decisions/155-an-untouched-seed-follows-the-credentials.md)) — and before each agent run, the core service shall read the file — `NAME=value` lines, the names of each agent's shared forms among them [[settings-49](settings.md#settings-49)] — into the environment its adapters inherit, so that a replaced value reaches the next run without a restart while a running agent process keeps the environment it started with ([DR-132](../decisions/132-team-servers.md)):
+Where the core runs as a seat with a shared credential file [[core-service-125](#core-service-125)], when it starts — before it seeds or reseeds your own group's config [[core-service-3](#core-service-3)] [[core-service-137](#core-service-137)] ([DR-156](../decisions/156-an-untouched-seed-follows-the-credentials.md)) — and before each agent run, the core service shall read the file — `NAME=value` lines, the names of each agent's shared forms among them [[settings-49](settings.md#settings-49)] — into the environment its adapters inherit, so that a replaced value reaches the next run without a restart while a running agent process keeps the environment it started with ([DR-132](../decisions/132-team-servers.md)):
 
 - for an agent the member set a credential of their own for [[settings-48](settings.md#settings-48)], the file's names for that agent are left out of the run's environment and the member's own put in, so the member's own wins whatever the agent's precedence;
 - an unreadable file leaves the environment as it was and is reported through readiness [[settings-49](settings.md#settings-49)], blocking nothing else;

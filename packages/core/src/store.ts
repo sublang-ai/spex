@@ -2408,7 +2408,7 @@ export class Store {
   }
 
   /** The config the core seeded here, by its path and the version it
-   * wrote (storage-5, DR-155); a preferences file that cannot be
+   * wrote (storage-5, DR-156); a preferences file that cannot be
    * written leaves the seed unrecorded, so it is never reseeded. */
   recordSeed(path: string, version: string): void {
     try { this.setPref(SEED_PREF, { path, version } satisfies SeedRecord); } catch { /* unrecorded */ }

@@ -1163,7 +1163,7 @@ export function SettingsSurface({
             <Rich
               text={configState.reseeded
                 // An untouched seed rewritten for the current sign-ins is
-                // an update, never a creation (settings-9, DR-155).
+                // an update, never a creation (settings-9, DR-156).
                 ? i18n._("Updated the starter config at <0>{path}</0> for the current sign-ins", {
                   path: summary.path,
                 })

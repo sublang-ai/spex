@@ -1,14 +1,14 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
 
-# DR-153: The Seed Follows Playbook's Rule
+# DR-154: The Seed Follows Playbook's Rule
 
 ## Status
 
 Accepted (2026-10-26) for the owner's P0-2 default configuration.
 Amends [DR-019](019-inline-agent-configuration.md) in §"Spex writes only blocks": the seed no longer keeps a single-vendor lineup of its own; its agents are the ones Playbook's seeding rule selects from this machine's credentials.
 Amends [DR-037](037-playbook-12-adoption.md) in its seeding: the first-run config is no longer the installed template copied as written, and the two hosts' files are no longer identical by construction; only their agent settings are.
-Amended by [DR-155](155-an-untouched-seed-follows-the-credentials.md): a seeded file still at the bytes the core wrote is reseeded when the credentials change; the exclusive first create and the text stand.
+Amended by [DR-156](156-an-untouched-seed-follows-the-credentials.md): a seeded file still at the bytes the core wrote is reseeded when the credentials change; the exclusive first create and the text stand.
 
 ## Context
 

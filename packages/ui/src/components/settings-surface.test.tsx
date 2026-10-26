@@ -449,7 +449,7 @@ describe("settings-9: a seeded starter config says so once", () => {
       "Created a starter config at /tmp/playbook.config.yaml",
     );
     unmount();
-    // A reseed reads as an update, never a creation (DR-155).
+    // A reseed reads as an update, never a creation (DR-156).
     useAppStore.setState({ configState: { ...CONFIG, seeded: false, reseeded: true } });
     const reseeded = render(<SettingsSurface />);
     expect(screen.getByTestId("config-seeded").textContent).toBe(

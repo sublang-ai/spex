@@ -722,7 +722,7 @@ export function relocateLegacyConfig(
   return true;
 }
 
-/** The seeded config this device recorded (storage-5, DR-155): the
+/** The seeded config this device recorded (storage-5, DR-156): the
  * file's path and the version of the bytes the core wrote there. */
 export const SEED_PREF = "config:seed";
 export interface SeedRecord { path: string; version: string }
@@ -734,7 +734,7 @@ export function isSeedRecord(value: unknown): value is SeedRecord {
 }
 
 /** Playbook's own seed for these credentials and this home, as Spex
- * writes it (core-service-3, DR-153). */
+ * writes it (core-service-3, DR-154). */
 function seedText(env: NodeJS.ProcessEnv, home: string): string {
   return starterText(seedConfigText({ env, homeDir: home }).text);
 }
@@ -742,7 +742,7 @@ function seedText(env: NodeJS.ProcessEnv, home: string): string {
 /**
  * Seed the shared config when absent: Playbook's own seed for these
  * credentials and this home, so the agents match the CLI's
- * (core-service-3, DR-153). Returns the version written, or null where
+ * (core-service-3, DR-154). Returns the version written, or null where
  * a file already stood; never overwrites.
  */
 export function seedConfig(
@@ -758,7 +758,7 @@ export function seedConfig(
 }
 
 /**
- * Reseed a seeded config no one has changed (core-service-137, DR-155):
+ * Reseed a seeded config no one has changed (core-service-137, DR-156):
  * while the file stands at `recorded`, the seed for these credentials
  * replaces it where it differs. `rewritten` carries the new version;
  * `edited` means the file is no longer the seed — absent, changed, or

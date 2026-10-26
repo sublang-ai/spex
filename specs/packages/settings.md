@@ -55,7 +55,7 @@ Where the Settings surface is open, the Settings surface shall present the share
 
 #### settings-52
 
-When the run view asks for Settings at an agent's row [[run-view-179](run-view.md#run-view-179)], the Settings surface shall open with that agent's row editor open and in view — the Captain's row, or that player's in the session-player roster [[settings-26](#settings-26)] — and shall leave every other row as it was ([DR-154](../decisions/154-players-named-delegated-and-recovered.md)):
+When the run view asks for Settings at an agent's row [[run-view-179](run-view.md#run-view-179)], the Settings surface shall open with that agent's row editor open and in view — the Captain's row, or that player's in the session-player roster [[settings-26](#settings-26)] — and shall leave every other row as it was ([DR-155](../decisions/155-players-named-delegated-and-recovered.md)):
 
 - a player the roster no longer holds opens Settings with no editor open;
 - the request is taken once, so returning to Settings later opens it as the reader left it.
@@ -200,7 +200,7 @@ While the Settings surface is open, when the shared config file changes on disk 
 Where the app starts on a machine whose own group holds no config file, while the core service has seeded the starter config there ([DR-004](../decisions/004-config-and-persistence.md)), the Settings surface shall display the starter's values as the current settings before any user save, and the displayed values shall equal the seeded file's content:
 
 - For that run the surface says it created a starter config at the file's path, so the file's origin is never a mystery.
-- Where the core instead rewrote an untouched seed for the current sign-ins [[core-service-137](core-service.md#core-service-137)], the surface says it updated the starter config at the file's path for the current sign-ins, never that it created one ([DR-155](../decisions/155-an-untouched-seed-follows-the-credentials.md)).
+- Where the core instead rewrote an untouched seed for the current sign-ins [[core-service-137](core-service.md#core-service-137)], the surface says it updated the starter config at the file's path for the current sign-ins, never that it created one ([DR-156](../decisions/156-an-untouched-seed-follows-the-credentials.md)).
 
 #### settings-46
 

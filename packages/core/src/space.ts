@@ -51,7 +51,7 @@ import type {
 } from "./protocol.js";
 import { CoreError } from "./session.js";
 import {
-  classifyHostTransportFailure, classifyTransportFailure, displayRemote, GitMissingError, hostErrorStatus, lastLines, remoteHost, membersDecide, noLongerShared,
+  classifyHostTransportFailure, classifyTransportFailure, displayRemote, GitMissingError, hostErrorStatus, failureSummary, remoteHost, membersDecide, noLongerShared,
   signInAgain, SpaceGit, validateRemoteUrl, withoutHostUrls, type GitFailure, type GitRun, type GitRunOptions,
 } from "./space-git.js";
 import {
@@ -617,7 +617,7 @@ function hostStop(step: SyncStep, error: unknown, host: string): SpaceStopped {
   if (error instanceof SpaceStopped) return error;
   const message = relayHostError(error, host);
   if (error instanceof CredentialChanged) return new SpaceStopped(step, { cause: "reauth", message, guidance: signInThenRetry(), retry: true }, false);
-  if (!(error instanceof HostError)) return new SpaceStopped(step, { cause: "git", message: lastLines(message), guidance: retryGuidance(), retry: true }, false);
+  if (!(error instanceof HostError)) return new SpaceStopped(step, { cause: "git", message: failureSummary(message), guidance: retryGuidance(), retry: true }, false);
   switch (error.kind) {
     case "reauth":
       return new SpaceStopped(step, { cause: "reauth", message, guidance: signInThenRetry(), retry: true });
@@ -1175,7 +1175,21 @@ function unitsHeldByNone(held: readonly StorageTree[], others: readonly StorageT
 class RepositorySync {
   git: SpaceGit;
   /** The running operation's progress, else the last one's outcome. */
-  phase: SpaceSyncPhase = { phase: "idle" };
+  private progress: SpaceSyncPhase = { phase: "idle" };
+  /** Logical changes, including a phase restored after a refused act;
+   * ordinary reads never invalidate one another merely by starting. */
+  private boundary = 0;
+  private listsRevision = 0;
+  get phase(): SpaceSyncPhase { return this.progress; }
+  set phase(next: SpaceSyncPhase) { this.progress = next; this.boundary += 1; }
+
+  private reading() {
+    return { generation: this.boundary, operation: this.current, git: this.git, repository: this.repository };
+  }
+  private stillReading(read: ReturnType<RepositorySync["reading"]>): boolean {
+    return read.generation === this.boundary && read.operation === this.current
+      && read.git === this.git && read.repository === this.repository;
+  }
   /** The clone's first placement's remote and recorded id as its last
    * read found them; every decision reads them again first. */
   facts: CloneFacts = { remote: null, id: null, remoteName: null };
@@ -1305,6 +1319,7 @@ class RepositorySync {
 
   /** The clone moved (space-59, space-60): this machine follows it. */
   rebind(repository: SpexRepository): void {
+    this.boundary += 1;
     this.repository = repository;
     this.git = this.makeGit(repository.dir);
   }
@@ -1478,7 +1493,7 @@ class RepositorySync {
    * refuses it. */
   private gitStep(args: string[]): GitRun {
     const run = this.git.runSync(args);
-    if (run.code !== 0) throw new Error(`git ${args.join(" ")} failed: ${lastLines(run.stderr)}`);
+    if (run.code !== 0) throw new Error(`git ${args.join(" ")} failed: ${failureSummary(run.stderr)}`);
     return run;
   }
 
@@ -1537,6 +1552,7 @@ class RepositorySync {
   /** The placements and the first one's facts, read again after a write
    * of a remote. */
   private settleFacts(): void {
+    this.boundary += 1;
     this.placements = this.placementsNow();
     this.facts = factsOf(this.placements);
   }
@@ -1809,7 +1825,7 @@ class RepositorySync {
     if (!names.includes(from) || names.includes(folder)) return false;
     const run = this.git.runSync(["remote", "rename", from, folder]);
     if (run.code !== 0) {
-      console.error(`spex: the remote of ${this.key} keeps its name: ${lastLines(run.stderr)}`);
+      console.error(`spex: the remote of ${this.key} keeps its name: ${failureSummary(run.stderr)}`);
       return false;
     }
     // A placement read before under its former name is found under this
@@ -1929,8 +1945,8 @@ class RepositorySync {
     // leaves the placement as it stood.
     const run = this.git.runSync(["remote", "remove", placement.name]);
     if (run.code !== 0) {
-      console.error(`spex: the remote ${placement.name} of ${this.key} stands: ${lastLines(run.stderr)}`);
-      return new SpaceStopped("check", { cause: "git", message: lastLines(run.stderr), guidance: retryGuidance(), retry: true }, false);
+      console.error(`spex: the remote ${placement.name} of ${this.key} stands: ${failureSummary(run.stderr)}`);
+      return new SpaceStopped("check", { cause: "git", message: failureSummary(run.stderr), guidance: retryGuidance(), retry: true }, false);
     }
     if (this.upstreamName === placement.name) this.upstreamName = null;
     this.host.store.dropPlacementPrefs(this.key, placement.name, first);
@@ -1989,54 +2005,65 @@ class RepositorySync {
   }
 
   private async readRepository(): Promise<RepositoryInfo> {
-    const version = await this.git.version();
-    if (!version.ok) return { git: version, root: false };
-    if (!existsSync(join(this.dir, ".git"))) return { git: version, root: false };
-    const top = await this.git.run(["rev-parse", "--show-toplevel"]);
-    if (top.code !== 0 || realPath(top.stdout.toString("utf8").trim()) !== realPath(this.dir)) return { git: version, root: false };
-    const branch = await this.git.run(["symbolic-ref", "-q", "--short", "HEAD"]);
-    const head = await this.git.run(["rev-parse", "-q", "--verify", "HEAD^{commit}"]);
-    // The placements in the order the clone's Git configuration holds
-    // them, each remote by its name and URL with the host's id in its own
-    // section, a deferred clone's at the top level (storage-34), in one
-    // read.
-    const store = this.host.store;
-    const configured = await this.git.run(["config", "-z", "--get-regexp", PLACEMENT_CONFIG_KEYS]);
-    const placements = configured.code === 0 ? placementsIn(configured.stdout.toString("utf8"), this.key, store.home, store.deferredMoves(), filedIn(this.dir), remoteOrderOf(this.dir)) : [];
-    const upstreamRead = await this.git.run(["config", "--get", `branch.${SPEX_BRANCH}.remote`]);
-    const upstreamName = upstreamRead.code === 0 ? upstreamRead.stdout.toString("utf8").trim() || null : null;
-    this.placements = placements;
-    this.facts = factsOf(placements);
-    this.upstreamName = upstreamName;
-    const origin = await this.git.run(["rev-parse", "-q", "--verify", `${this.remoteRef()}^{commit}`]);
-    // A clone removed while this read runs — a test's teardown, a Remove —
-    // reads as no clone rather than throwing past the reader (space-61).
-    const gitDirRead = await this.git.run(["rev-parse", "--git-dir"]);
-    if (gitDirRead.code !== 0) return { git: version, root: false };
-    const gitDir = resolve(this.dir, gitDirRead.stdout.toString("utf8").trim());
-    const mergePending = (await this.git.succeeds(["rev-parse", "-q", "--verify", "MERGE_HEAD"])) || existsSync(join(gitDir, "rebase-merge")) || existsSync(join(gitDir, "rebase-apply"));
-    this.mergePending = mergePending;
-    const originSpex = origin.code === 0 ? origin.stdout.toString("utf8").trim() : null;
-    // Each placement's `spex` as the clone holds it, the first's read
-    // above (space-61).
-    const spex = new Map<string, string | null>();
-    for (const [index, placement] of placements.entries()) {
-      if (index === 0) { spex.set(placement.name, originSpex); continue; }
-      const read = await this.git.run(["rev-parse", "-q", "--verify", `${this.refOf(placement.name)}^{commit}`]);
-      spex.set(placement.name, read.code === 0 ? read.stdout.toString("utf8").trim() : null);
+    for (;;) {
+      const read = this.reading();
+      const git = read.git;
+      const dir = read.repository.dir;
+      const key = read.repository.key;
+      const version = await git.version();
+      if (!version.ok) { if (!this.stillReading(read)) continue; return { git: version, root: false }; }
+      if (!existsSync(join(dir, ".git"))) { if (!this.stillReading(read)) continue; return { git: version, root: false }; }
+      const top = await git.run(["rev-parse", "--show-toplevel"]);
+      if (top.code !== 0 || realPath(top.stdout.toString("utf8").trim()) !== realPath(dir)) { if (!this.stillReading(read)) continue; return { git: version, root: false }; }
+      const branch = await git.run(["symbolic-ref", "-q", "--short", "HEAD"]);
+      const head = await git.run(["rev-parse", "-q", "--verify", "HEAD^{commit}"]);
+      // The placements in the order the clone's Git configuration holds
+      // them, each remote by its name and URL with the host's id in its own
+      // section, a deferred clone's at the top level (storage-34), in one
+      // read.
+      const store = this.host.store;
+      const configured = await git.run(["config", "-z", "--get-regexp", PLACEMENT_CONFIG_KEYS]);
+      const placements = configured.code === 0 ? placementsIn(configured.stdout.toString("utf8"), key, store.home, store.deferredMoves(), filedIn(dir), remoteOrderOf(dir)) : [];
+      const upstreamRead = await git.run(["config", "--get", `branch.${SPEX_BRANCH}.remote`]);
+      const upstreamName = upstreamRead.code === 0 ? upstreamRead.stdout.toString("utf8").trim() || null : null;
+      const facts = factsOf(placements);
+      const firstName = facts.remoteName ?? upstreamName ?? splitKey(key).instance ?? placementName(this.owner.instanceFolder());
+      const origin = await git.run(["rev-parse", "-q", "--verify", `${this.refOf(firstName)}^{commit}`]);
+      // A clone removed while this read runs — a test's teardown, a Remove —
+      // reads as no clone rather than throwing past the reader (space-61).
+      const gitDirRead = await git.run(["rev-parse", "--git-dir"]);
+      if (gitDirRead.code !== 0) { if (!this.stillReading(read)) continue; return { git: version, root: false }; }
+      const gitDir = resolve(dir, gitDirRead.stdout.toString("utf8").trim());
+      const mergePending = (await git.succeeds(["rev-parse", "-q", "--verify", "MERGE_HEAD"])) || existsSync(join(gitDir, "rebase-merge")) || existsSync(join(gitDir, "rebase-apply"));
+      const originSpex = origin.code === 0 ? origin.stdout.toString("utf8").trim() : null;
+      // Each placement's `spex` as the clone holds it, the first's read
+      // above (space-61).
+      const spex = new Map<string, string | null>();
+      for (const [index, placement] of placements.entries()) {
+        if (index === 0) { spex.set(placement.name, originSpex); continue; }
+        const read = await git.run(["rev-parse", "-q", "--verify", `${this.refOf(placement.name)}^{commit}`]);
+        spex.set(placement.name, read.code === 0 ? read.stdout.toString("utf8").trim() : null);
+      }
+      if (!this.stillReading(read)) continue;
+      if (JSON.stringify(this.placements) !== JSON.stringify(placements)
+        || this.upstreamName !== upstreamName || this.mergePending !== mergePending) this.boundary += 1;
+      this.placements = placements;
+      this.facts = facts;
+      this.upstreamName = upstreamName;
+      this.mergePending = mergePending;
+      return {
+        git: version,
+        root: true,
+        branch: branch.code === 0 ? branch.stdout.toString("utf8").trim() : null,
+        head: head.code === 0 ? head.stdout.toString("utf8").trim() : null,
+        remote: facts.remote,
+        id: facts.id,
+        placements,
+        upstream: upstreamName !== null && upstreamName === facts.remoteName,
+        spex,
+        mergePending,
+      };
     }
-    return {
-      git: version,
-      root: true,
-      branch: branch.code === 0 ? branch.stdout.toString("utf8").trim() : null,
-      head: head.code === 0 ? head.stdout.toString("utf8").trim() : null,
-      remote: this.facts.remote,
-      id: this.facts.id,
-      placements,
-      upstream: upstreamName !== null && upstreamName === this.facts.remoteName,
-      spex,
-      mergePending,
-    };
   }
 
   /** The ref holding a placement's `spex` as this clone last fetched or
@@ -2052,97 +2079,118 @@ class RepositorySync {
    * operation's own lists — a sync's plan, the picker's conflicts — stand
    * while it runs or waits for choices. */
   async state(recompute: boolean): Promise<MachineRead> {
-    return this.readState(recompute && !this.current && this.phase.phase !== "choices");
+    return this.readState(recompute);
   }
 
   private async readState(recompute: boolean): Promise<MachineRead> {
-    const repo = await this.readRepository();
-    if (recompute && repo.root && repo.head !== null) await this.refreshLists(repo.head, repo.spex);
-    const held = repo.root ? repo.placements : [];
-    // Each placement's line as this device holds it — its branch against
-    // its own `spex`, its lists against it, and this device's last sync
-    // and notice of it (space-8, space-61, storage-5) — its state, path,
-    // members and rights the owner's to read (overlay).
-    const lines: PlacementState[] = [];
-    if (repo.root) {
-      for (const placement of held) {
-        const run = this.runs.get(placement.name);
-        lines.push({
-          instance: placement.instance,
-          path: displayRemote(placement.url),
-          id: placement.id,
-          attached: true,
-          state: "reachable",
-          reason: null,
-          waiting: null,
-          members: null,
-          visibility: null,
-          can: { manageMembers: false, transfer: false },
-          branch: await this.branchOf(repo, placement.name, this.refOf(placement.name), repo.spex.get(placement.name) ?? null),
-          incoming: run?.lists.incoming ?? [],
-          conflicts: run?.lists.conflicts ?? [],
-          lastSync: this.lastSyncOf(placement.name),
-          noticed: this.noticedOf(placement.name),
-          outcome: run?.outcome ?? null,
-        });
+    for (;;) {
+      const read = this.reading();
+      const revision = this.listsRevision;
+      const repo = await this.readRepository();
+      if (!this.stillReading(read) || revision !== this.listsRevision) continue;
+      // Eligibility is checked here too: diff's lazy plan read cannot
+      // replace a running operation's plan or a retained choice.
+      let accepted = revision;
+      if (recompute && !read.operation && this.phase.phase !== "choices" && repo.root && repo.head !== null) {
+        const refreshed = await this.refreshLists(repo, read, revision);
+        if (refreshed === null) continue;
+        accepted = refreshed;
       }
+      // A transition or another list commit can precede this
+      // continuation. Validate before freezing the row, not after it.
+      if (!this.stillReading(read) || this.listsRevision !== accepted) continue;
+      const phase = this.phase;
+      const local = this.local;
+      const held = repo.root ? repo.placements : [];
+      // Every line belongs to this one snapshot; branch reads below await.
+      const snapshots = held.map((placement) => ({
+        placement,
+        run: this.runs.has(placement.name) ? { ...this.runs.get(placement.name)! } : undefined,
+        lastSync: this.lastSyncOf(placement.name),
+        noticed: this.noticedOf(placement.name),
+      }));
+      // Capture every line and row field before branch reads await. An
+      // older running snapshot stays coherent even if the operation ends
+      // while those immutable commit calculations are in flight.
+      const lines = snapshots.map<PlacementState>(({ placement, run, lastSync, noticed }) => ({
+        instance: placement.instance,
+        path: displayRemote(placement.url),
+        id: placement.id,
+        attached: true,
+        state: "reachable",
+        reason: null,
+        waiting: null,
+        members: null,
+        visibility: null,
+        can: { manageMembers: false, transfer: false },
+        branch: null,
+        incoming: run?.lists.incoming ?? [],
+        conflicts: run?.lists.conflicts ?? [],
+        lastSync,
+        noticed,
+        outcome: run?.outcome ?? null,
+      }));
+      const store = this.host.store;
+      // The placements its files name as they stand, held here or not, a
+      // file that does not read naming none (storage-36, storage-41), nor
+      // a group's own repository's naming one it does not hold (space-87).
+      const files = repo.root ? this.namedByFiles(held) : [];
+      // Its instance (storage-31), whose Git origin its code remote is
+      // read against first (space-1).
+      const instance = this.owner.cloneInstance(read.repository.key, held[0]?.name ?? null);
+      let code: string | null = null;
+      try {
+        const project = existsSync(read.repository.projectFile) ? readJsonFile(read.repository.projectFile) as { remote?: unknown } : undefined;
+        code = typeof project?.remote === "string" ? this.owner.codeRemoteAsShown(project.remote, instance) : null;
+      } catch { code = null; }
+      const remote = repo.root ? repo.remote : null;
+      const state: RepositoryState = {
+        key: read.repository.key,
+        instance,
+        // The instance governing it is the owner's to read (overlay).
+        governing: null,
+        name: splitKey(read.repository.key).name,
+        id: repo.root ? repo.id : null,
+        own: read.repository.key === store.home.own(),
+        code,
+        folder: store.home.folderOf(read.repository.key)?.path ?? null,
+        state: remote === null ? "local-only" : "reachable",
+        reason: null,
+        mergePending: repo.root ? repo.mergePending : false,
+        placements: lines,
+        // Each instance its files name, held here or not (space-62).
+        placedAt: files.map((file) => file.origin),
+        local,
+        // Every placement's conflicts, in the placements' order (space-30).
+        conflicts: lines.flatMap((line) => line.conflicts),
+        sync: phase,
+      };
+      if (repo.root) {
+        for (const [index, { placement, run }] of snapshots.entries()) {
+          lines[index].branch = await this.branchOf(repo, placement.name, repo.spex.get(placement.name) ?? null, run, read.git);
+        }
+      }
+      return { row: state, held, files };
     }
-    const store = this.host.store;
-    // The placements its files name as they stand, held here or not, a
-    // file that does not read naming none (storage-36, storage-41), nor
-    // a group's own repository's naming one it does not hold (space-87).
-    const files = repo.root ? this.namedByFiles(held) : [];
-    // Its instance (storage-31), whose Git origin its code remote is
-    // read against first (space-1).
-    const instance = this.owner.cloneInstance(this.key, this.facts.remoteName);
-    let code: string | null = null;
-    try {
-      const project = existsSync(this.repository.projectFile) ? readJsonFile(this.repository.projectFile) as { remote?: unknown } : undefined;
-      code = typeof project?.remote === "string" ? this.owner.codeRemoteAsShown(project.remote, instance) : null;
-    } catch { code = null; }
-    const remote = repo.root ? repo.remote : null;
-    const state: RepositoryState = {
-      key: this.key,
-      instance,
-      // The instance governing it is the owner's to read (overlay).
-      governing: null,
-      name: splitKey(this.key).name,
-      id: repo.root ? repo.id : null,
-      own: this.key === store.home.own(),
-      code,
-      folder: store.home.folderOf(this.key)?.path ?? null,
-      state: remote === null ? "local-only" : "reachable",
-      reason: null,
-      mergePending: repo.root ? repo.mergePending : false,
-      placements: lines,
-      // Each instance its files name, held here or not (space-62).
-      placedAt: files.map((file) => file.origin),
-      local: this.local,
-      // Every placement's conflicts, in the placements' order (space-30).
-      conflicts: lines.flatMap((line) => line.conflicts),
-      sync: this.phase,
-    };
-    return { row: state, held, files };
   }
 
-  /** The clone's `spex` against one placement's, by its remote's name
-   * and the ref holding that placement's `spex` (space-30, space-61):
+  /** The clone's `spex` against one placement's captured commit, by
+   * its remote's name (space-30, space-61):
    * ahead and behind once checked, and the last sync the clone holds
    * with it. */
-  private async branchOf(repo: Extract<RepositoryInfo, { root: true }>, name: string, ref: string, spex: string | null): Promise<PlacementBranch> {
-    const run = this.runs.get(name);
+  private async branchOf(repo: Extract<RepositoryInfo, { root: true }>, name: string, spex: string | null, run: PlacementRun | undefined, git: SpaceGit): Promise<PlacementBranch> {
     const checkedAt = run?.checkedAt ?? null;
     const remoteEmpty = run?.remoteEmpty ?? false;
     let ahead: number | null = null;
     let behind: number | null = null;
     if (repo.head && spex && checkedAt !== null) {
-      const counts = await this.git.run(["rev-list", "--left-right", "--count", `HEAD...${ref}`]);
+      const counts = await git.run(["rev-list", "--left-right", "--count", `${repo.head}...${spex}`]);
       if (counts.code === 0) {
         const [left, right] = counts.stdout.toString("utf8").trim().split(/\s+/).map((n) => Number.parseInt(n, 10));
         if (Number.isFinite(left) && Number.isFinite(right)) { ahead = left; behind = right; }
       }
     } else if (repo.head && remoteEmpty && checkedAt !== null) {
-      const count = await this.git.run(["rev-list", "--count", "HEAD"]);
+      const count = await git.run(["rev-list", "--count", repo.head]);
       ahead = count.code === 0 ? Number.parseInt(count.stdout.toString("utf8").trim(), 10) : null;
       behind = 0;
     }
@@ -2152,7 +2200,7 @@ class RepositorySync {
       checkedAt,
       hostEmpty: checkedAt !== null && remoteEmpty,
       unrelated: run?.unrelated ?? false,
-      agreed: repo.head ? await this.agreed(name, repo.head, spex) : null,
+      agreed: repo.head ? await this.agreed(name, repo.head, spex, git) : null,
     };
   }
 
@@ -2163,14 +2211,14 @@ class RepositorySync {
    * are one — with its commit time; none where the clone holds no `spex`
    * of it or none sharing its history. A failed read says none and is
    * read again next time. */
-  private async agreed(name: string, head: string, originSpex: string | null): Promise<Agreed | null> {
+  private async agreed(name: string, head: string, originSpex: string | null, git: SpaceGit): Promise<Agreed | null> {
     if (originSpex === null) return null;
     const pair = `${head} ${originSpex}`;
     const read = this.agreedRead.get(name);
     if (read?.pair === pair) return read.agreed;
     let shared: string | null = head;
     if (head !== originSpex) {
-      const base = await this.git.run(["merge-base", head, originSpex]);
+      const base = await git.run(["merge-base", head, originSpex]);
       // Exit 1 is no common ancestor: unrelated histories hold no sync.
       if (base.code === 1) shared = null;
       else if (base.code === 0) shared = base.stdout.toString("utf8").trim();
@@ -2178,7 +2226,7 @@ class RepositorySync {
     }
     let agreed: Agreed | null = null;
     if (shared !== null) {
-      const time = await this.git.run(["log", "-1", "--no-show-signature", "--format=%ct", shared]);
+      const time = await git.run(["log", "-1", "--no-show-signature", "--format=%ct", shared]);
       const seconds = time.code === 0 ? Number.parseInt(time.stdout.toString("utf8").trim(), 10) : Number.NaN;
       if (!Number.isFinite(seconds)) return null;
       agreed = { at: seconds * 1000, current: head === originSpex };
@@ -2195,35 +2243,65 @@ class RepositorySync {
    * `keepChoices`, a placement a sync left in choices keeps that sync's
    * plan and lists, which its picker and its choices' validation read
    * (space-9, space-18). */
-  private async refreshLists(head: string, spex: ReadonlyMap<string, string | null>, keepChoices = false): Promise<void> {
+  private async refreshLists(repo: Extract<RepositoryInfo, { root: true }>, read: ReturnType<RepositorySync["reading"]>, revision: number, keepChoices = false): Promise<number | null> {
+    if (repo.head === null || !this.stillReading(read) || revision !== this.listsRevision) return null;
+    const placements = repo.placements;
+    const runs = new Map<string, PlacementRun>(placements.map(({ name }) => [name, {
+      ...(this.runs.get(name) ?? { checkedAt: null, remoteEmpty: false, unrelated: false, lists: { local: [], incoming: [], conflicts: [] } }),
+    }]));
     try {
-      const kept = (placement: Placement): boolean => keepChoices && this.runs.get(placement.name)?.outcome?.kind === "choices";
-      if (keepChoices && this.placements.every(kept)) return;
+      const kept = (placement: Placement): boolean => keepChoices && runs.get(placement.name)?.outcome?.kind === "choices";
+      if (keepChoices && placements.every(kept)) return revision;
       const mine = await this.workingTree();
-      // The plan against `HEAD`, read once where some list needs it.
       let againstHead: { plan: LastPlan; lists: Lists; unrelated?: boolean } | undefined;
-      const headPlan = async (): Promise<{ plan: LastPlan; lists: Lists; unrelated?: boolean }> => (againstHead ??= await this.computeWorkingLists(head, mine, null));
-      for (const placement of this.placements) {
+      const headPlan = async () => (againstHead ??= await this.computeWorkingLists(repo.head!, mine, null));
+      const staged = new Map<string, Awaited<ReturnType<RepositorySync["computeWorkingLists"]>>>();
+      for (const placement of placements) {
         if (kept(placement)) continue;
-        const run = this.runOf(placement.name);
-        const computed = run.checkedAt === null
+        const run = runs.get(placement.name)!;
+        staged.set(placement.name, run.checkedAt === null
           ? await headPlan()
-          : await this.computeWorkingLists(head, mine, { run, ref: this.refOf(placement.name), spex: spex.get(placement.name) ?? null });
+          : await this.computeWorkingLists(repo.head, mine, { run, spex: repo.spex.get(placement.name) ?? null }));
+      }
+      const unchecked = placements.every((placement) => runs.get(placement.name)?.checkedAt === null);
+      const fallback = unchecked ? await headPlan() : undefined;
+      // No awaited work follows this check: all plans, lists and local
+      // units publish together. A later completed idle read wins without
+      // ordinary polling cancelling any read merely by starting.
+      if (!this.stillReading(read) || revision !== this.listsRevision) return null;
+      for (const [name, computed] of staged) {
+        const run = this.runOf(name);
         run.plan = computed.plan;
         run.lists = computed.lists;
         if (computed.unrelated !== undefined) run.unrelated = computed.unrelated;
       }
-      const unchecked = this.placements.every((placement) => this.runs.get(placement.name)?.checkedAt === null);
-      if (unchecked) this.unchecked = (await headPlan()).plan;
-      this.settleLocal(unchecked ? (await headPlan()).lists.local : undefined);
-    } catch (error) { console.error(`spex: space listing failed: ${error instanceof Error ? error.message : String(error)}`); }
+      if (fallback) this.unchecked = fallback.plan;
+      this.settleLocal(fallback?.lists.local, placements);
+      this.listsRevision += 1;
+      return this.listsRevision;
+    } catch (error) {
+      console.error(`spex: space listing failed: ${error instanceof Error ? error.message : String(error)}`);
+      return this.stillReading(read) && revision === this.listsRevision ? revision : null;
+    }
+  }
+
+  /** An operation's own final/Refresh listing shares the guarded commit
+   * path, while ordinary state reads keep its plans in place. */
+  private async refreshCurrentLists(keepChoices = false): Promise<void> {
+    for (;;) {
+      const read = this.reading();
+      const revision = this.listsRevision;
+      const repo = await this.readRepository();
+      if (!this.stillReading(read)) continue;
+      if (!repo.root || repo.head === null || (await this.refreshLists(repo, read, revision, keepChoices)) !== null) return;
+    }
   }
 
   /** The clone's local units (space-7): each unit local against some
    * placement checked, once, as the first such placement in order lists
    * it; else, given them, those local against `HEAD`. */
-  private settleLocal(againstHead?: SpaceUnit[]): void {
-    const checked = this.placements.flatMap((placement) => {
+  private settleLocal(againstHead?: SpaceUnit[], placements: readonly Placement[] = this.placements): void {
+    const checked = placements.flatMap((placement) => {
       const run = this.runs.get(placement.name);
       return run && run.checkedAt !== null ? [run] : [];
     });
@@ -2246,10 +2324,7 @@ class RepositorySync {
   /** Announce this clone's step; with `lists`, its lists recomputed from
    * the working tree first (space-29). */
   private async broadcast(lists: boolean): Promise<void> {
-    if (lists) {
-      const repo = await this.readRepository();
-      if (repo.root && repo.head !== null) await this.refreshLists(repo.head, repo.spex);
-    }
+    if (lists) await this.refreshCurrentLists();
     await this.owner.publish();
   }
 
@@ -2355,18 +2430,18 @@ class RepositorySync {
     } finally { rmSync(index, { force: true }); }
   }
 
-  /** The plan of the working tree `mine` against one placement — its run,
-   * the ref holding its `spex` and that `spex` as the clone holds it —
+  /** The plan of the working tree `mine` against one placement — its run
+   * and the captured commit of its `spex` as the clone holds it —
    * as its last check left it, or against `HEAD` before any check or for
    * none (space-33). */
-  private async computeWorkingLists(head: string, mine: string, against: { run: PlacementRun; ref: string; spex: string | null } | null): Promise<{ plan: LastPlan; lists: Lists; unrelated?: boolean }> {
+  private async computeWorkingLists(head: string, mine: string, against: { run: Pick<PlacementRun, "checkedAt" | "remoteEmpty">; spex: string | null } | null): Promise<{ plan: LastPlan; lists: Lists; unrelated?: boolean }> {
     let theirs = head;
     let base = head;
     let unrelated: boolean | undefined;
     if (against && against.run.checkedAt !== null) {
       if (against.run.remoteEmpty) { theirs = EMPTY_TREE; base = EMPTY_TREE; }
       else if (against.spex) {
-        const merged = await this.git.run(["merge-base", "HEAD", against.ref]);
+        const merged = await this.git.run(["merge-base", head, against.spex]);
         if (merged.code === 0) { theirs = against.spex; base = merged.stdout.toString("utf8").trim(); unrelated = false; }
         else unrelated = true;
       }
@@ -2379,7 +2454,7 @@ class RepositorySync {
 
   private async blob(oid: string): Promise<Buffer> {
     const run = await this.git.run(["cat-file", "blob", oid]);
-    if (run.code !== 0) throw new Error(`git cat-file ${oid} failed: ${lastLines(run.stderr)}`);
+    if (run.code !== 0) throw new Error(`git cat-file ${oid} failed: ${failureSummary(run.stderr)}`);
     return run.stdout;
   }
 
@@ -2646,7 +2721,7 @@ class RepositorySync {
         // origin (space-15, space-32).
         const failure: GitFailure = error instanceof SpaceStopped
           ? error.failure
-          : { cause: "git", message: lastLines(error instanceof Error ? error.message : String(error)), guidance: retryGuidance(), retry: true };
+          : { cause: "git", message: failureSummary(error instanceof Error ? error.message : String(error)), guidance: retryGuidance(), retry: true };
         this.phase = {
           phase: "stopped",
           op,
@@ -2661,8 +2736,7 @@ class RepositorySync {
           // Ended in choices, the placements so ended keep the sync's
           // plan; every other reads the working tree (space-9).
           if (ended) {
-            const repo = await this.readRepository();
-            if (repo.root && repo.head !== null) await this.refreshLists(repo.head, repo.spex, ended.phase === "choices");
+            await this.refreshCurrentLists(ended.phase === "choices");
           }
         } catch (error) { console.error(`spex: space listing failed: ${error instanceof Error ? error.message : String(error)}`); }
         if (ended) this.phase = ended;
@@ -2671,6 +2745,7 @@ class RepositorySync {
         catch (error) { console.error(`spex: space state failed: ${error instanceof Error ? error.message : String(error)}`); }
       }
     })();
+    this.boundary += 1;
     this.current = entry;
     return entry.work;
   }
@@ -2698,7 +2773,7 @@ class RepositorySync {
   private stopOn(name: string, placement: Placement | undefined, error: unknown): SpaceStopped {
     const stop = error instanceof SpaceStopped
       ? error
-      : new SpaceStopped(this.phase.phase === "running" ? this.phase.step : "check", { cause: "git", message: lastLines(error instanceof Error ? error.message : String(error)), guidance: retryGuidance(), retry: true }, true);
+      : new SpaceStopped(this.phase.phase === "running" ? this.phase.step : "check", { cause: "git", message: failureSummary(error instanceof Error ? error.message : String(error)), guidance: retryGuidance(), retry: true }, true);
     const failure = this.owner.placementFailure(this, stop.failure, placement);
     this.runOf(name).outcome = { kind: "stopped", step: stop.step, ...failure };
     return new SpaceStopped(stop.step, failure, stop.whole);
@@ -3461,7 +3536,7 @@ class RepositorySync {
     if (commit.code !== 0) {
       throw new SpaceStopped("save", {
         cause: "git",
-        message: lastLines(commit.stderr) || i18n._({
+        message: failureSummary(commit.stderr) || i18n._({
           id: "Git could not commit",
           comment: "A stopped save's message where git failed and printed nothing",
         }),
@@ -3474,7 +3549,7 @@ class RepositorySync {
     }
     const saved = commit.stdout.toString("utf8").trim();
     const moved = await this.git.run(["update-ref", `refs/heads/${SPEX_BRANCH}`, saved, head]);
-    if (moved.code !== 0) throw new SpaceStopped("save", { cause: "git", message: lastLines(moved.stderr), guidance: retryGuidance(), retry: true });
+    if (moved.code !== 0) throw new SpaceStopped("save", { cause: "git", message: failureSummary(moved.stderr), guidance: retryGuidance(), retry: true });
     return saved;
   }
 
@@ -3537,6 +3612,7 @@ class RepositorySync {
         run.remoteEmpty = true;
         run.unrelated = false;
         run.checkedAt = Date.now();
+        this.boundary += 1;
         return { empty: true, ...outcome };
       }
       if (heads.code !== 0) throw this.transportStop("check", heads, target, host !== undefined, held);
@@ -3544,6 +3620,7 @@ class RepositorySync {
       if (fetched.code !== 0) throw this.transportStop("check", fetched, target, host !== undefined, held);
       run.remoteEmpty = false;
       run.checkedAt = Date.now();
+      this.boundary += 1;
       return { empty: false, ...outcome };
     } finally {
       await credential?.dispose();
@@ -3610,7 +3687,7 @@ class RepositorySync {
     const originRef = this.refOf(name);
     const head = await this.git.ok(["rev-parse", "HEAD"]);
     const origin = await this.git.ok(["rev-parse", originRef]);
-    const merged = await this.git.run(["merge-base", "HEAD", originRef]);
+    const merged = await this.git.run(["merge-base", head, origin]);
     // The plan is the placement's it compares against (space-31,
     // space-33).
     const run = this.runOf(name);
@@ -3620,13 +3697,15 @@ class RepositorySync {
     // The trees are read where the clone lies now (DR-111).
     const trees: StorageTrees = { ours: readStorageTree(this.dir, head), theirs: readStorageTree(this.dir, origin), base: readStorageTree(this.dir, base) };
     const units = planStorageUnits(trees);
+    const lists = await this.describe(units, trees, { ours: head, theirs: origin, base });
     run.plan = { ours: head, oursTree: head, theirs: origin, base, units };
-    run.lists = await this.describe(units, trees, { ours: head, theirs: origin, base });
+    run.lists = lists;
     this.settleLocal();
+    this.listsRevision += 1;
     const local = units.filter((u) => u.choice === "ours" && u.changed.ours && !u.changed.theirs);
     const incoming = units.filter((u) => u.choice === "theirs");
     const conflicts = units.filter((u) => u.choice === "conflict");
-    if (await this.git.succeeds(["merge-base", "--is-ancestor", originRef, "HEAD"])) {
+    if (await this.git.succeeds(["merge-base", "--is-ancestor", origin, head])) {
       return { outcome: "nothing", counts: { sent: local.length, received: 0 } };
     }
     if (setUpSaves && conflicts.length > 0 && Object.keys(choices).length === 0 && await this.holdsNothingOfItsOwn(head, trees.ours, setUpSaves)) {
@@ -3981,7 +4060,7 @@ class RepositorySync {
     const args = ["diff", "--no-color", plan.base, side === "remote" ? plan.theirs : plan.oursTree, "--", path];
     const run = await this.git.run(args);
     if (run.code !== 0 && run.code !== 1) {
-      throw new CoreError("invalid_request", lastLines(run.stderr) || i18n._({
+      throw new CoreError("invalid_request", failureSummary(run.stderr) || i18n._({
         id: "Git could not diff",
         comment: "Refusal where git failed to diff and printed nothing",
       }));
@@ -6591,7 +6670,7 @@ export class SpaceManager {
       // then does its row read the clone's state (space-61, space-63).
       own(undefined);
     } catch (error) {
-      stop({ cause: "git", message: lastLines(error instanceof Error ? error.message : String(error)), guidance: retryGuidance(), retry: true });
+      stop({ cause: "git", message: failureSummary(error instanceof Error ? error.message : String(error)), guidance: retryGuidance(), retry: true });
     } finally {
       if (stage) rmSync(stage, { recursive: true, force: true });
       await this.publish();
@@ -6660,7 +6739,7 @@ export class SpaceManager {
           return stopped({
             ...(brokered && instance ? classifyHostTransportFailure(run, this.nameOf(instance)) : {
               cause: run.killed ?? "git",
-              message: lastLines(run.stderr) || i18n._({ id: "Git could not clone the code", comment: "A join's stop where git failed to clone the code and printed nothing" }),
+              message: failureSummary(run.stderr) || i18n._({ id: "Git could not clone the code", comment: "A join's stop where git failed to clone the code and printed nothing" }),
             }),
             guidance: chooseFolder(),
             retry: false,
@@ -6676,7 +6755,7 @@ export class SpaceManager {
       return undefined;
     } catch (error) {
       if (error instanceof SpaceStopped) return stopped({ ...error.failure, guidance: chooseFolder(), retry: false });
-      return stopped({ cause: "git", message: lastLines(error instanceof Error ? error.message : String(error)), guidance: retryGuidance(), retry: false });
+      return stopped({ cause: "git", message: failureSummary(error instanceof Error ? error.message : String(error)), guidance: retryGuidance(), retry: false });
     }
   }
 

@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
 
-# DR-154: Players Named, Delegated and Recovered
+# DR-155: Players Named, Delegated and Recovered
 
 ## Status
 

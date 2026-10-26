@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// run-view-180/181/182 (DR-154): players read by name and mark, each
+// run-view-180/181/182 (DR-155): players read by name and mark, each
 // call's delegation line rebuilt from its records, and a failure's ways
 // back to the agent it names.
 
