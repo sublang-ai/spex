@@ -750,7 +750,7 @@ test.describe("agent-local time yield points", () => {
     const defects: string[] = [];
 
     const reviewerCollapse = page.getByRole("button", {
-      name: "Collapse dev.reviewer",
+      name: "Collapse reviewer",
     });
     if (await reviewerCollapse.isVisible()) await reviewerCollapse.click();
     await expect(page.getByTestId("player-pane-dev.reviewer"))
@@ -759,7 +759,7 @@ test.describe("agent-local time yield points", () => {
     const divider = page.getByTestId("captain-divider");
     const coderPane = page.getByTestId("player-pane-dev.coder");
     const coderName = page.getByTestId("player-name-dev.coder");
-    const coderCollapse = page.getByRole("button", { name: "Collapse dev.coder" });
+    const coderCollapse = page.getByRole("button", { name: "Collapse coder" });
     const coderRunning = coderPane.getByTestId("player-running");
     const active = page.getByTestId("agent-active-dev.coder");
     const activeDescription = page.getByTestId(
@@ -1208,6 +1208,39 @@ test.describe("an agent's settings editor in the player grid", () => {
       }
     }
     expect(defects, defects.join("\n\n")).toEqual([]);
+  });
+});
+
+// A lane at its floor whose agent reading is longer than its header
+// holds (run-view-105, run-view-7): the coder runs at the starter
+// config's xhigh, and two lanes share a 1280px window's default split
+// beside the open sidebar.
+test.describe("a long agent reading at the pane floor", () => {
+  test.use({ appOptions: { project: true, agentDelayMs: 300 } });
+
+  test("run-view-105: a lane's header and transcript stay inside its pane", async ({
+    page,
+    app,
+  }) => {
+    await app.core.command("config.edit", {
+      op: { kind: "player.set", playerId: "dev.coder", patch: { effort: "xhigh" } },
+    });
+    await open(page, app);
+    await setRail(page, true);
+    await page.setViewportSize({ width: 1280, height: TALL });
+    await send(page, TASK);
+    await expect(page.getByTestId("captain-pane")).toContainText("/code finished");
+    const coder = page.getByTestId("player-pane-dev.coder");
+    await expect(page.getByTestId("player-pane-dev.reviewer")).toBeVisible();
+    const chip = coder.getByRole("button", { name: /coder settings: .*xhigh/ });
+    await expect(chip).toBeVisible();
+
+    const defects: string[] = [];
+    record("two lanes at 1280px, sidebar open", await measure(page), defects);
+    expect(defects, defects.join("\n")).toEqual([]);
+    // The reading yields the slack, ending in an ellipsis (run-view-7).
+    const reading = chip.locator("span.truncate").first();
+    expect(await reading.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
   });
 });
 

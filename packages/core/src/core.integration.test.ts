@@ -4621,6 +4621,116 @@ test("core-service-66: the home's own former config moves ahead of the XDG one, 
   await second.stop();
 });
 
+test("core-service-136: the first-run config takes the agents Playbook seeds for these credentials", async () => {
+  const { seedConfigText } = await import("@sublang/playbook/seed-config");
+  const agents = (text: string) => {
+    const top = parseYaml(text) as {
+      captain: Record<string, unknown>;
+      players: Record<string, Record<string, unknown>>;
+      playbooks: Record<string, Record<string, unknown>>;
+    };
+    const settings = (agent: Record<string, unknown>) => ({
+      adapter: agent.adapter,
+      model: agent.model,
+      effort: agent.effort,
+      writablePaths: (agent.permissions as { writablePaths?: unknown } | undefined)?.writablePaths,
+    });
+    return {
+      captain: settings(top.captain),
+      players: Object.fromEntries(Object.entries(top.players).map(([id, agent]) => [id, settings(agent)])),
+      froms: Object.values(top.playbooks).filter((block) => Object.hasOwn(block, "from")).length,
+    };
+  };
+  const rows: [string, NodeJS.ProcessEnv, Record<string, string>][] = [
+    ["claude only", { ANTHROPIC_API_KEY: "a" }, { captain: "claude", "dev.reviewer": "claude", "dev.coder": "claude" }],
+    ["codex only", { OPENAI_API_KEY: "o" }, { captain: "codex", "dev.reviewer": "codex", "dev.coder": "codex" }],
+    ["both", { ANTHROPIC_API_KEY: "a", OPENAI_API_KEY: "o" }, { captain: "claude", "dev.reviewer": "codex", "dev.coder": "claude" }],
+    ["neither", {}, { captain: "claude", "dev.reviewer": "claude", "dev.coder": "claude" }],
+  ];
+  for (const [row, credentials, expected] of rows) {
+    const dir = scratchDir("spex-seed-");
+    const home = join(dir, "home");
+    mkdirSync(home, { recursive: true });
+    const dataDir = join(dir, "state");
+    const env = { HOME: home, ...credentials };
+    const service = await CoreService.start({ token: "test", dataDir, env, home, own: OWN, watchConfig: false });
+    const seeded = readFileSync(ownConfig(dataDir), "utf8");
+    await service.stop();
+    const got = agents(seeded);
+    const cli = agents(seedConfigText({ env, homeDir: home }).text);
+    assert.deepEqual({ captain: got.captain, players: got.players }, { captain: cli.captain, players: cli.players }, `${row}: the CLI's agent settings`);
+    assert.equal(got.froms, 0, `${row}: no playbooks.<id>.from`);
+    assert.equal(got.captain.adapter, expected.captain, `${row}: the Captain`);
+    assert.equal(got.players["dev.reviewer"].adapter, expected["dev.reviewer"], `${row}: the reviewer`);
+    assert.equal(got.players["dev.coder"].adapter, expected["dev.coder"], `${row}: the coder`);
+    // A second start under the same credentials leaves it as it is.
+    const again = await CoreService.start({ token: "test", dataDir, env, home, own: OWN, watchConfig: false });
+    await again.stop();
+    assert.equal(readFileSync(ownConfig(dataDir), "utf8"), seeded, `${row}: unchanged`);
+  }
+});
+
+test("core-service-138: an untouched seed follows the credentials until it is changed once", async () => {
+  const dir = scratchDir("spex-reseed-");
+  const home = join(dir, "home");
+  mkdirSync(home, { recursive: true });
+  const dataDir = join(dir, "state");
+  const claude = { HOME: home, ANTHROPIC_API_KEY: "a" };
+  const both = { ...claude, OPENAI_API_KEY: "o" };
+  const codex = { HOME: home, OPENAI_API_KEY: "o" };
+  const start = async (env: NodeJS.ProcessEnv) => {
+    const service = await CoreService.start({ token: "test", dataDir, env, home, own: OWN, watchConfig: false });
+    const state = service.configStateSnapshot();
+    await service.stop();
+    return { text: readFileSync(ownConfig(dataDir), "utf8"), reseeded: state.status === "valid" && state.reseeded === true };
+  };
+  const reviewer = (text: string) => (parseYaml(text) as { players: Record<string, { adapter: string }> }).players["dev.reviewer"].adapter;
+  const coder = (text: string) => (parseYaml(text) as { players: Record<string, { adapter: string }> }).players["dev.coder"].adapter;
+
+  const first = await start(claude);
+  assert.equal(reviewer(first.text), "claude");
+  chmodSync(ownConfig(dataDir), 0o640);
+
+  // Codex added: the untouched seed becomes the both-credentials seed.
+  const added = await start(both);
+  assert.equal(reviewer(added.text), "codex", "the reviewer moves to codex");
+  assert.equal(coder(added.text), "claude");
+  assert.equal(statSync(ownConfig(dataDir)).mode & 0o777, 0o640, "its permission bits kept");
+  assert.equal(added.reseeded, true, "reported as reseeded");
+  assert.deepEqual(storedPrefs(dataDir)["config:seed"], {
+    path: ownConfig(dataDir),
+    version: createHash("sha256").update(added.text).digest("hex"),
+  }, "the recorded version follows it");
+
+  // Unchanged credentials: unchanged bytes.
+  const same = await start(both);
+  assert.equal(same.text, added.text);
+  assert.equal(same.reseeded, false);
+
+  // One edit, then no credential row rewrites it again.
+  appendFileSync(ownConfig(dataDir), "# mine now\n");
+  const edited = readFileSync(ownConfig(dataDir), "utf8");
+  assert.equal((await start(codex)).text, edited, "an edited config stays");
+  assert.equal(storedPrefs(dataDir)["config:seed"], undefined, "its record gone");
+  assert.equal((await start(claude)).text, edited);
+
+  // A config standing with no record is never reseeded.
+  const bare = scratchDir("spex-reseed-bare-");
+  const bareData = join(bare, "state");
+  const service = await CoreService.start({ token: "test", dataDir: bareData, env: claude, home, own: OWN, watchConfig: false });
+  await service.stop();
+  const prefsFile = join(bareData, "local", "prefs.json");
+  const prefs = JSON.parse(readFileSync(prefsFile, "utf8")) as { format: number; prefs: Record<string, unknown> };
+  delete prefs.prefs["config:seed"];
+  writeFileSync(prefsFile, JSON.stringify(prefs));
+  const unrecorded = readFileSync(ownConfig(bareData), "utf8");
+  for (const env of [codex, both, { HOME: home }]) {
+    const again = await CoreService.start({ token: "test", dataDir: bareData, env, home, own: OWN, watchConfig: false });
+    await again.stop();
+    assert.equal(readFileSync(ownConfig(bareData), "utf8"), unrecorded, "no record, no reseed");
+  }
+});
+
 test("core-service-66: a former config whose locator points into its own directory stays, reported, and no older one is published past it", async () => {
   const dir = scratchDir("spex-relocate-refused-");
   const home = join(dir, "home");

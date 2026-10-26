@@ -47,11 +47,18 @@ Where the Settings surface is open, the Settings surface shall display the capta
 
 #### settings-26
 
-Where the Settings surface is open, the Settings surface shall present the shared config's session-player roster ([DR-032](../decisions/032-session-players.md)) — each player's id, its agent with that adapter's readiness, and the `<playbook>.<role>` bindings it answers — and shall offer, per player, an agent editor with the fields of an inline agent block and a removal control:
+Where the Settings surface is open, the Settings surface shall present the shared config's session-player roster ([DR-032](../decisions/032-session-players.md)) — each player's name beside its mark, its id in the tooltip [[run-view-177](run-view.md#run-view-177)], its agent with that adapter's readiness, and the `<playbook>.<role>` bindings it answers — and shall offer, per player, an agent editor with the fields of an inline agent block and a removal control:
 
 - A player no binding names is listed and marked as bound to no role, because an unreferenced lane is legal and reaching no session.
 - A saved player edit is a merge patch altering only the fields the editor surfaced, preserving hand-written fields such as `instruction` and granular permissions.
 - A removal the shared-config write path refuses is reported in that path's own words beside the player, and writes nothing.
+
+#### settings-52
+
+When the run view asks for Settings at an agent's row [[run-view-179](run-view.md#run-view-179)], the Settings surface shall open with that agent's row editor open and in view — the Captain's row, or that player's in the session-player roster [[settings-26](#settings-26)] — and shall leave every other row as it was ([DR-155](../decisions/155-players-named-delegated-and-recovered.md)):
+
+- a player the roster no longer holds opens Settings with no editor open;
+- the request is taken once, so returning to Settings later opens it as the reader left it.
 
 #### settings-27
 
@@ -193,6 +200,7 @@ While the Settings surface is open, when the shared config file changes on disk 
 Where the app starts on a machine whose own group holds no config file, while the core service has seeded the starter config there ([DR-004](../decisions/004-config-and-persistence.md)), the Settings surface shall display the starter's values as the current settings before any user save, and the displayed values shall equal the seeded file's content:
 
 - For that run the surface says it created a starter config at the file's path, so the file's origin is never a mystery.
+- Where the core instead rewrote an untouched seed for the current sign-ins [[core-service-137](core-service.md#core-service-137)], the surface says it updated the starter config at the file's path for the current sign-ins, never that it created one ([DR-156](../decisions/156-an-untouched-seed-follows-the-credentials.md)).
 
 #### settings-46
 
@@ -382,9 +390,13 @@ When rendered editors exchange capability and browser preparation messages with 
 
 ### Roster Coverage
 
+#### settings-53
+
+Where Settings is asked for the Captain's row and, separately, for `dev.reviewer`'s and for a player the roster lacks, the test suite shall assert the asked row's editor opens in view while the others stay closed, the missing player opens none, and a later visit opens Settings as the reader left it [[settings-52](#settings-52)].
+
 #### settings-28
 
-Where the Settings surface renders a config whose roster holds a bound player and an unbound one, the test suite shall assert each player prints its id, its agent with the adapter's readiness, and the bindings it answers [[settings-26](#settings-26)]; that editing one writes a merge patch over that player alone [[settings-26](#settings-26)]; that a refused removal shows the write path's own words beside it [[settings-26](#settings-26)]; and that adding a player writes the named id with the seeded block from an untouched draft [[settings-27](#settings-27)].
+Where the Settings surface renders a config whose roster holds a bound player and an unbound one, the test suite shall assert each player prints its name and mark with its id in the tooltip, its agent with the adapter's readiness, and the bindings it answers [[settings-26](#settings-26)]; that editing one writes a merge patch over that player alone [[settings-26](#settings-26)]; that a refused removal shows the write path's own words beside it [[settings-26](#settings-26)]; and that adding a player writes the named id with the seeded block from an untouched draft [[settings-27](#settings-27)].
 
 ### External Edit Coverage
 
@@ -402,7 +414,7 @@ Where the Settings surface renders against fixture state, the test suite shall a
 - a saved Captain edit closes its editor and shows the transient Saved status on the Captain's row, and a notification select is disabled while its edit is in flight and ticks once it lands [[settings-6](#settings-6)];
 - the language control lists System, English and 简体中文, shows the home's stored choice, is disabled while a change is in flight, and ticks once the write lands, through the whole app re-rendering in the new language as well [[settings-37](#settings-37)];
 - the terminal theme editor stands last under its CLI-only name [[settings-6](#settings-6)];
-- a seeded config names the created file, and a loaded one says nothing [[settings-9](#settings-9)];
+- a seeded config names the created file, a reseeded one names the file it updated for the current sign-ins and never a creation, and a loaded one says nothing [[settings-9](#settings-9)];
 - the permission mode's description follows the selected mode, and the shortcut sheet lists the bindings with the platform's modifier [[settings-10](#settings-10)];
 - a missing config names the could-not-create remedy with a Retry that refreshes the app state, and never the fix-in-editor line [[settings-24](#settings-24)].
 

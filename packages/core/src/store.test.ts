@@ -372,7 +372,9 @@ test("storage-5: a preference write keeps what another writer wrote to the file 
   renameSync(`${file}.next`, file);
   assert.equal(store.getPref("viewed:a"), undefined, "a read follows the file");
   store.setPref("language", "zh");
-  const prefs = (JSON.parse(readFileSync(file, "utf8")) as { prefs: Record<string, unknown> }).prefs;
+  // The seed the home recorded as it opened (storage-5) stands aside.
+  const { "config:seed": seed, ...prefs } = (JSON.parse(readFileSync(file, "utf8")) as { prefs: Record<string, unknown> }).prefs;
+  assert.ok(seed, "the seed recorded as the home opened");
   assert.deepEqual(prefs, { "viewed:b": 4, language: "zh" }, "the cleared marker is not restored");
   store.close();
 });

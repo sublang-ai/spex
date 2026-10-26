@@ -72,7 +72,7 @@ test("run-view-115: busy Drop hands notice focus to the composer when the turn s
 test("run-view-115: Drop never takes back a lane control chosen while its notice stood", async () => {
   vi.useFakeTimers();
   const { field, settle } = await dropWhileBusy();
-  const control = screen.getByRole("button", { name: "Collapse dev.reviewer" });
+  const control = screen.getByRole("button", { name: "Collapse reviewer" });
   act(() => control.focus());
   settle();
   expect(document.activeElement).toBe(control);

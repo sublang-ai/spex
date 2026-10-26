@@ -24,7 +24,7 @@ import {
   type Dirent,
 } from "node:fs";
 import { spawnSync } from "node:child_process";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { createSessionStore, isUncertainTurnDiscardable, validateSessionContext, type SharedSessionStore, type SessionManifest, type SessionRecovery } from "@sublang/playbook/session-store";
 import { acquireRootLease, assertFormerLeaseReleased, type RootLease } from "./root-lease.js";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
@@ -42,7 +42,7 @@ import { needsBoundedSessionImport, stageBoundedHomeSessions, finishBoundedHomeS
 import { deferredMoves, migrateInstances, needsInstancesMigration, settleDeferred, type DeferredMove } from "./migrate-instances.js";
 import { gitEnvironment, initializeClone } from "./storage-git.js";
 import { instanceFolder, isInstanceFolder } from "./instance.js";
-import { seedConfig } from "./config.js";
+import { SEED_PREF, seedConfig, type SeedRecord } from "./config.js";
 import { createRequire } from "node:module";
 import { i18n } from "./i18n.js";
 import { isLanguage, type Language } from "./language.js";
@@ -102,6 +102,9 @@ export interface StoreOptions {
   legacyDbPath?: string;
   /** The environment Git and the host URL are read from. */
   env?: NodeJS.ProcessEnv;
+  /** The home whose agent sign-ins the config seed reads; defaults to
+   * the environment's `HOME` (core-service-3). */
+  home?: string;
   /** Your own group's folder name for a new home; this device's user
    * name by default (storage-2). */
   own?: string;
@@ -659,9 +662,14 @@ export class Store {
     // A config at a former location moves in first, so the starter
     // never shadows it (core-service-66).
     this.options.relocateConfig?.(config);
-    // The starter is the playbook CLI's own (core-service-3); where it
-    // cannot be read, the core reports the missing config itself.
-    try { this.seededConfig = seedConfig(config); } catch { /* reported as a missing config */ }
+    // The seed is the playbook CLI's own for these credentials
+    // (core-service-3); where it cannot be read, the core reports the
+    // missing config itself.
+    try {
+      const version = seedConfig(config, this.env, this.options.home ?? this.env.HOME ?? homedir());
+      this.seededConfig = version !== null;
+      if (version !== null) this.recordSeed(config, version);
+    } catch { /* reported as a missing config */ }
     const prepared = this.prepareRepository(dir, this.homeFile.own());
     const generatedBootstrap = empty && this.seededConfig && prepared
       && existsSync(join(dir, "spex.yaml")) && existsSync(join(dir, "spex.lock"));
@@ -2397,6 +2405,13 @@ export class Store {
     this.currentPrefs();
     if (this.prefsProblem) throw new StorageFormatError(this.prefsProblem.file, this.prefsProblem.reason);
     this.changePrefs((prefs) => { prefs.set(key, value); return true; });
+  }
+
+  /** The config the core seeded here, by its path and the version it
+   * wrote (storage-5, DR-156); a preferences file that cannot be
+   * written leaves the seed unrecorded, so it is never reseeded. */
+  recordSeed(path: string, version: string): void {
+    try { this.setPref(SEED_PREF, { path, version } satisfies SeedRecord); } catch { /* unrecorded */ }
   }
 
   getPref<T>(key: string): T | undefined {

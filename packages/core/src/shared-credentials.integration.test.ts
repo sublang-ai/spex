@@ -16,8 +16,9 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { dirname, join } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { codeCredentialsPath } from "./code-credentials.js";
 import type { LineSpawner } from "./compile.js";
@@ -91,6 +92,8 @@ async function startSeat(name: string, options: {
   shared?: string;
   projects?: number;
   config?: string;
+  /** Leave the config absent, so the seat seeds it. */
+  starter?: boolean;
   runCommand?: RunCommand;
   imports?: ReturnType<typeof fakeAdapterImports>["imports"];
   env?: Record<string, string>;
@@ -115,6 +118,7 @@ async function startSeat(name: string, options: {
   const home = await startHome(name, {
     dataDir,
     project: false,
+    ...(options.starter ? { starter: true } : {}),
     ...(options.env ? { env: options.env } : {}),
     extra: {
       seat: { ...SEAT, ...(options.shared !== undefined ? { sharedCredentialFile: options.shared } : {}) },
@@ -140,6 +144,69 @@ function filesHolding(dir: string, text: string): string[] {
   walk(dir);
   return found;
 }
+
+test("core-service-139: a seat seeds from its shared credentials, and its untouched seed follows the member's own", async (t) => {
+  const shared = join(scratch, "shared-codex-only.env");
+  writeShared(shared, "CODEX_ACCESS_TOKEN=codex-team\n");
+  const { home } = await startSeat("seat-seed", { shared, starter: true });
+  t.after(() => home.stop());
+  const agents = (): Record<string, string> => {
+    const top = parseYaml(readFileSync(home.configPath, "utf8")) as { captain: { adapter: string }; players: Record<string, { adapter: string }> };
+    return { captain: top.captain.adapter, ...Object.fromEntries(Object.entries(top.players).map(([id, player]) => [id, player.adapter])) };
+  };
+  // Read before the seed (core-service-126): every agent on codex
+  // (core-service-3), as the clone's first commit already records it.
+  for (const [id, adapter] of Object.entries(agents())) assert.equal(adapter, "codex", `${id} on codex`);
+  const clone = dirname(dirname(home.configPath));
+  const first = execFileSync("git", ["-C", clone, "rev-list", "--max-parents=0", "HEAD"], { encoding: "utf8" }).trim();
+  assert.equal(execFileSync("git", ["-C", clone, "show", `${first}:config/playbook.config.yaml`], { encoding: "utf8" }), readFileSync(home.configPath, "utf8"), "the first commit holds the codex seed");
+
+  // The member's own Claude credential: the untouched seed becomes the
+  // both-credentials one (core-service-137).
+  await home.client.expectOk("credential.set", { kind: "agent", name: "claude", values: { CLAUDE_CODE_OAUTH_TOKEN: "sk-mine" } });
+  const after = agents();
+  assert.equal(after["dev.reviewer"], "codex");
+  for (const id of ["captain", "dev.coder", "dev.analyst", "inspect.inspector"]) assert.equal(after[id], "claude", `${id} on claude`);
+});
+
+test("core-service-140: a seat whose start fails leaves no agent's form in the environment", async (t) => {
+  const shared = join(scratch, "shared-refused.env");
+  writeShared(shared, "CODEX_ACCESS_TOKEN=codex-team\n");
+  // Another core serves the home, so the seat's store is refused its lease.
+  const serving = await startHome("seat-refused-serving", { project: false });
+  t.after(() => serving.stop());
+  await assert.rejects(startHome("seat-refused", {
+    dataDir: serving.dataDir,
+    project: false,
+    extra: { seat: { ...SEAT, sharedCredentialFile: shared }, runCommand: validStatus },
+  }));
+  for (const name of FORMS) assert.equal(process.env[name], undefined, `${name} put back`);
+
+  // A stop whose lease cannot be released still puts the forms back.
+  const { home } = await startSeat("seat-stuck-lease", { shared });
+  assert.equal(process.env.CODEX_ACCESS_TOKEN, "codex-team");
+  chmodSync(home.dataDir, 0o500);
+  try { await assert.rejects(home.stop()); }
+  finally { chmodSync(home.dataDir, 0o700); }
+  for (const name of FORMS) assert.equal(process.env[name], undefined, `${name} put back at a failed stop`);
+
+  // A stop that fails before it reaches the store puts them back too:
+  // the media staging cannot be removed.
+  const { home: early } = await startSeat("seat-stuck-media", { shared });
+  assert.equal(process.env.CODEX_ACCESS_TOKEN, "codex-team");
+  const stuck = join(early.dataDir, "local", "asset-staging", "stuck");
+  mkdirSync(stuck, { recursive: true });
+  writeFileSync(join(stuck, "held"), "");
+  chmodSync(stuck, 0o500);
+  try { await assert.rejects(early.stop()); }
+  finally { chmodSync(stuck, 0o700); }
+  for (const name of FORMS) assert.equal(process.env[name], undefined, `${name} put back at a stop failing early`);
+  // The rest of that stop, past the harness's own once-only guard, the
+  // root lease released.
+  assert.equal(existsSync(join(early.dataDir, ".lease")), true, "the failed stop still holds the lease");
+  await early.service.stop();
+  assert.equal(existsSync(join(early.dataDir, ".lease")), false, "the root lease released");
+});
 
 test("core-service-127, core-service-126: the shared file's forms reach every run, and a value replaced between runs reaches the next while the running one keeps its own", async (t) => {
   const shared = join(scratch, "shared-replaced.env");

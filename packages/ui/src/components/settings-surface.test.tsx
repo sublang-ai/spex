@@ -247,7 +247,9 @@ describe("SET: the session-player roster", () => {
   test("each lane prints its id, its agent, and the roles it answers", () => {
     renderSettings();
     const row = screen.getByTestId("player-row-dev.coder");
-    expect(row.textContent).toContain("dev.coder");
+    // Its name and mark, its id in the tooltip (run-view-177).
+    expect(screen.getByTestId("player-name-dev.coder").textContent).toBe("Ccoder");
+    expect(screen.getByTestId("player-name-dev.coder").getAttribute("title")).toBe("dev.coder");
     // The lane's own agent, with the adapter's readiness (DR-032).
     expect(
       within(row).getByLabelText(
@@ -447,6 +449,13 @@ describe("settings-9: a seeded starter config says so once", () => {
       "Created a starter config at /tmp/playbook.config.yaml",
     );
     unmount();
+    // A reseed reads as an update, never a creation (DR-156).
+    useAppStore.setState({ configState: { ...CONFIG, seeded: false, reseeded: true } });
+    const reseeded = render(<SettingsSurface />);
+    expect(screen.getByTestId("config-seeded").textContent).toBe(
+      "Updated the starter config at /tmp/playbook.config.yaml for the current sign-ins",
+    );
+    reseeded.unmount();
     renderSettings();
     expect(screen.queryByTestId("config-seeded")).toBeNull();
   });
@@ -582,5 +591,44 @@ describe("settings-1, DR-095: the Captain's subagent effort", () => {
         op: expect.objectContaining({ kind: "captain.set", patch: expect.objectContaining({ subagentEffort: "high" }) }),
       })),
     );
+  });
+});
+
+describe("settings-53: Settings opened at an agent's row", () => {
+  function renderAt(agentRow: string, onAgentRowShown = vi.fn()) {
+    useAppStore.setState({
+      configState: CONFIG,
+      readiness: READINESS,
+      refreshReadiness: vi.fn(async () => {}),
+    });
+    Element.prototype.scrollIntoView = vi.fn();
+    return { onAgentRowShown, ...render(<SettingsSurface agentRow={agentRow} onAgentRowShown={onAgentRowShown} />) };
+  }
+  const expanded = (testId: string) => screen.getByTestId(testId).getAttribute("aria-expanded");
+
+  test("the Captain's row opens, every other stays closed", async () => {
+    const { onAgentRowShown } = renderAt("captain");
+    await vi.waitFor(() => expect(expanded("captain-edit")).toBe("true"));
+    expect(expanded("player-edit-dev.coder")).toBe("false");
+    expect(expanded("player-edit-dev.reviewer")).toBe("false");
+    expect(onAgentRowShown).toHaveBeenCalledTimes(1);
+  });
+
+  test("a player's row opens and comes into view", async () => {
+    renderAt("dev.reviewer");
+    await vi.waitFor(() => expect(expanded("player-edit-dev.reviewer")).toBe("true"));
+    expect(expanded("captain-edit")).toBe("false");
+    await vi.waitFor(() => expect(Element.prototype.scrollIntoView).toHaveBeenCalled());
+  });
+
+  test("a player the roster lacks opens no editor, and the ask is taken once", async () => {
+    const { onAgentRowShown, unmount } = renderAt("docs.reviewer");
+    await vi.waitFor(() => expect(onAgentRowShown).toHaveBeenCalledTimes(1));
+    expect(expanded("captain-edit")).toBe("false");
+    expect(expanded("player-edit-dev.coder")).toBe("false");
+    unmount();
+    // A later visit asks for nothing and opens as the reader left it.
+    render(<SettingsSurface />);
+    expect(expanded("player-edit-dev.reviewer")).toBe("false");
   });
 });

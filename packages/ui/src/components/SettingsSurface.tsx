@@ -54,6 +54,8 @@ import { Icon } from "./Icon.js";
 import { InlineConfirm } from "./InlineConfirm.js";
 import { Rich } from "./Rich.js";
 import { appVersion } from "../lib/version.js";
+import { PlayerName } from "./AgentMark.js";
+import { playerNamer } from "../lib/player-names.js";
 
 const NOTIFICATION_EVENTS = [
   "player_finished",
@@ -789,6 +791,8 @@ function PlayerRoster({
       );
   }
 
+  // Each player's name over this roster (run-view-177).
+  const names = playerNamer(players.map((player) => player.id));
   return (
     <section data-testid="players-section" className="flex flex-col gap-2">
       <div className="flex items-center gap-2">
@@ -803,7 +807,7 @@ function PlayerRoster({
           className="flex flex-col gap-2 rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm dark:border-neutral-800 dark:bg-neutral-900"
         >
           <div className="flex flex-wrap items-center gap-2">
-            <span className="font-mono font-medium">{player.id}</span>
+            <PlayerName id={player.id} name={names(player.id)} nameClassName="font-medium" testId={`player-name-${player.id}`} />
             <AgentChip
               agent={player.agent}
               readiness={readinessByAdapter.get(player.agent.adapter)}
@@ -983,11 +987,17 @@ function PlayerRoster({
 export function SettingsSurface({
   credentialHost,
   onCredentialHostShown,
+  agentRow,
+  onAgentRowShown,
 }: {
   /** On a seat, the code host its Groups row asked to take a credential
    * for: the Credentials section opens at it (settings-48). */
   credentialHost?: string;
   onCredentialHostShown?: () => void;
+  /** The agent a failure asked for — `captain` or a player id: its row
+   * editor opens in view (settings-52). */
+  agentRow?: string;
+  onAgentRowShown?: () => void;
 } = {}) {
   const store = usePlaceStore();
   // A seat's Settings carry its Credentials section (settings-48).
@@ -1005,6 +1015,24 @@ export function SettingsSurface({
   const [saved, setSaved] = useTransient(SAVED_MS);
   // The one open agent-row editor, the Captain's or a player's.
   const rows = useRowEditing();
+  // Asked for an agent's row (settings-52): its editor opens and comes
+  // into view once the config is read, and the ask is taken once.
+  const asked = useRef(agentRow);
+  const summaryForAsk = configState?.status === "valid" ? configState.summary : undefined;
+  useEffect(() => {
+    const agent = asked.current;
+    if (agent === undefined || !summaryForAsk) return;
+    asked.current = undefined;
+    onAgentRowShown?.();
+    const known = agent === "captain" || summaryForAsk.players.some((player) => player.id === agent);
+    if (!known) return;
+    rows.open(agent);
+    const testId = agent === "captain" ? "captain-row" : `player-row-${agent}`;
+    Array.from(document.querySelectorAll<HTMLElement>("[data-testid]"))
+      .find((element) => element.dataset.testid === testId)
+      ?.scrollIntoView?.({ block: "center" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [summaryForAsk]);
 
   if (!configState) {
     return (
@@ -1127,15 +1155,21 @@ export function SettingsSurface({
         <p className="mt-0.5 text-xs text-neutral-500">
           <span className="font-mono break-all" title={i18n._("Shared with the playbook CLI — edits made outside appear here")}>{summary.path}</span>
         </p>
-        {configState.seeded ? (
+        {configState.seeded || configState.reseeded ? (
           <p
             data-testid="config-seeded"
             className="mt-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-200"
           >
             <Rich
-              text={i18n._("Created a starter config at <0>{path}</0>", {
-                path: summary.path,
-              })}
+              text={configState.reseeded
+                // An untouched seed rewritten for the current sign-ins is
+                // an update, never a creation (settings-9, DR-156).
+                ? i18n._("Updated the starter config at <0>{path}</0> for the current sign-ins", {
+                  path: summary.path,
+                })
+                : i18n._("Created a starter config at <0>{path}</0>", {
+                  path: summary.path,
+                })}
               components={[<span className="font-mono" key="path" />]}
             />
           </p>

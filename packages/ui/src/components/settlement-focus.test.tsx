@@ -49,10 +49,10 @@ test("run-view-24: settlement preserves an explicitly collapsed lane's focus", (
   const { view, settle } = start(true);
   expect(view.pendingQuestion).toBeDefined();
   expect(view.turnActive).toBe(true);
-  const collapse = screen.getByRole("button", { name: "Collapse dev.reviewer" });
+  const collapse = screen.getByRole("button", { name: "Collapse reviewer" });
   act(() => collapse.focus());
   fireEvent.click(collapse);
-  const expand = screen.getByRole("button", { name: "Expand dev.reviewer" });
+  const expand = screen.getByRole("button", { name: "Expand reviewer" });
   expect(document.activeElement).toBe(expand);
   settle();
   expect(document.activeElement).toBe(expand);
@@ -105,7 +105,7 @@ test("run-view-24: settlement preserves the real agent editor's focused control"
 
 test("run-view-24: explicit new conversation arrival still focuses its composer", () => {
   const { rerender } = start();
-  const laneControl = screen.getByRole("button", { name: "Collapse dev.reviewer" });
+  const laneControl = screen.getByRole("button", { name: "Collapse reviewer" });
   act(() => laneControl.focus());
   expect(document.activeElement).toBe(laneControl);
   rerender(conversation(initialSessionView(PLAYERS), "new-conversation"));

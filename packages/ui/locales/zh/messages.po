@@ -1025,6 +1025,11 @@ msgstr "已加入“接下来” — 见项目概览。"
 msgid "Adding…"
 msgstr "添加中…"
 
+#. a failure's way back: open this agent's settings for this conversation
+#: src/components/RunView.tsx
+msgid "Adjust {agent}"
+msgstr "调整 {agent}"
+
 #. queued row standing: it runs once the current work ends
 #: src/components/QueuedIntentPresentation.tsx
 msgid "after current work"
@@ -1477,6 +1482,8 @@ msgstr "绕过：不弹出任何权限提示 — 仅限沙箱仓库"
 #. the Captain's avatar: one letter standing for Captain
 #. the Captain's avatar: one letter standing for Captain
 #. the Captain's avatar: one letter standing for Captain
+#. the Captain's avatar: one letter standing for Captain
+#: src/components/AgentMark.tsx
 #: src/components/CaptainHome.tsx
 #: src/components/CaptainPane.tsx
 msgid "C"
@@ -1552,6 +1559,7 @@ msgid "Cancelling browser setup…"
 msgstr "正在取消浏览器设置…"
 
 #. the agent that routes the Boss's message to a playbook
+#. the agent that routes the Boss's message to a playbook
 #. the session's controlling agent, by name
 #. the session's controlling agent, by name
 #. the session's controlling agent, by name
@@ -1559,6 +1567,7 @@ msgstr "正在取消浏览器设置…"
 #. the session's controlling agent, by name
 #: src/components/CaptainPane.tsx
 #: src/components/DraftConversation.tsx
+#: src/components/RunView.tsx
 #: src/components/SettingsSurface.tsx
 #: src/lib/session-agents.ts
 msgid "Captain"
@@ -1579,6 +1588,11 @@ msgstr "Captain 正在工作。请等待本轮结束。"
 #: src/components/Composer.tsx
 msgid "Captain is working…"
 msgstr "Captain 工作中…"
+
+#. a failure's way back: open this agent's row in Settings
+#: src/components/RunView.tsx
+msgid "Change {agent} in Settings"
+msgstr "在设置中修改 {agent}"
 
 #. draft state chip, at most 14 characters: the source changed after the last compile
 #: src/lib/drafts.ts
@@ -2991,6 +3005,14 @@ msgstr "此设备上运行其会话的文件夹"
 msgid "For example:"
 msgstr "例如："
 
+#: src/components/RunView.tsx
+msgid "For new sessions"
+msgstr "在新会话中生效"
+
+#: src/components/RunView.tsx
+msgid "For this conversation, from the next message"
+msgstr "仅限本对话，从下一条消息起生效"
+
 #. confirm: forget a folder whose records are gone from this device
 #. on a signed-out instance's heading: remove the instance from this home; nothing at it changes and every record stays
 #: src/components/SpaceInstance.tsx
@@ -3139,6 +3161,11 @@ msgstr "群组记录"
 #: src/components/SpaceInstance.tsx
 msgid "Groups are made by the people who run {name}"
 msgstr "群组由运营 {name} 的人创建"
+
+#. a delegation line: the Captain gave this call to the named player
+#: src/components/CaptainPane.tsx
+msgid "Handed to {player}"
+msgstr "交给 {player}"
 
 #: src/components/SpecView.tsx
 msgid "Hide {group} items"
@@ -6809,6 +6836,10 @@ msgstr "{age}由智能体更新"
 #: src/components/DraftSourceTab.tsx
 msgid "Updated {age} by you"
 msgstr "{age}由你更新"
+
+#: src/components/SettingsSurface.tsx
+msgid "Updated the starter config at <0>{path}</0> for the current sign-ins"
+msgstr "已按当前登录更新 <0>{path}</0> 的初始配置"
 
 #. the environment is being resolved again to run the built-in playbooks this app ships
 #: src/components/EnvironmentSection.tsx

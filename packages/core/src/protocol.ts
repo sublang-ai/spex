@@ -312,7 +312,7 @@ export interface ConfigSummary {
 }
 
 export type ConfigState =
-  | { status: "valid"; summary: ConfigSummary; seeded: boolean; missingPlayers?: MissingPlayer[] }
+  | { status: "valid"; summary: ConfigSummary; seeded: boolean; reseeded?: boolean; missingPlayers?: MissingPlayer[] }
   | { status: "invalid"; path: string; errors: string[] }
   | { status: "missing"; path: string };
 

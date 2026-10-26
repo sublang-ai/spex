@@ -16,6 +16,21 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Added
 
+- Players read by name ([DR-155](specs/decisions/155-players-named-delegated-and-recovered.md)).
+  A player reads as the last segment of its id — `dev.reviewer` as
+  reviewer — with a letter mark in one neutral colour beside the
+  Captain's "C", in its lane, Settings and the Playbooks surface, its
+  full id in the tooltip; two players ending alike read as their ids.
+  The Captain's thread says "Handed to reviewer · codex · gpt-6-sol"
+  the first time a player is called and whenever its adapter or model
+  changes, from the records of that call, so a reopened session reads
+  the same; activating the line brings the lane into view.
+- A failure names the agent it belongs to and offers the way back by
+  cause: "Adjust reviewer" opens that agent's own settings for the
+  conversation from its chip, and "Change reviewer in Settings" opens
+  its row in Settings for new sessions; a cause outside Spex keeps its
+  words of what to do there.
+
 - Groups and sharing from Spex ([DR-114](specs/decisions/114-groups-and-sharing-from-spex.md)).
   Signed in, "New group" heads the list where the instance says you may
   create one, and a group's heading carries "New subgroup" where you
@@ -313,6 +328,23 @@ and `npm start` (desktop) or `npm run start:server` (server).
   ([DR-148](specs/decisions/148-a-lapsed-seat-is-stopped-by-a-sweep.md)).
 
 ### Changed
+
+- A first-run config takes the agents Playbook seeds for this machine's
+  sign-ins ([DR-154](specs/decisions/154-the-seed-follows-playbooks-rule.md)):
+  with only Codex signed in, the Captain and every player run Codex; with
+  both Claude and Codex, `dev.reviewer` runs Codex and everything else
+  Claude; otherwise the starter is as before. Existing configs are not
+  changed.
+- A seeded config no one has changed follows the sign-ins it was chosen
+  from ([DR-156](specs/decisions/156-an-untouched-seed-follows-the-credentials.md)):
+  at each start, and on a team server when a member places or removes an
+  agent credential, it is rewritten as the seed for the sign-ins then. A
+  team server seeds from its shared sign-ins, so a Codex-only server starts
+  on Codex. The first change to the file, of any kind, ends this for good.
+- Require Playbook 18.1.0, the first release publishing its seed rule
+  ([DR-154](specs/decisions/154-the-seed-follows-playbooks-rule.md)).
+  The built-in playbooks stage as `sublang/playbooks` 18.1.0, unchanged
+  from 18.0.1.
 
 - Adopt Playbook 18.0.1 and stage its corrected CODE workflow: standalone
   documentation or status work without an unfinished IR task is new change
@@ -749,6 +781,10 @@ and `npm start` (desktop) or `npm run start:server` (server).
 - Your own group's environment requests a spec package by a path in its clone ([DR-125](specs/decisions/125-your-own-groups-path-sources-live-in-its-clone.md)): keep an unpublished skill, spec or playbook of your own in a folder of your own group's spex repository, request it by that path, and edit it in place; the sync carries the folder, as one unit, to every device, where it exports to your agents. A path under Spex's own folders, however it is cased, one the sync rules drop, one reached through a link, and a folder in or holding a Git repository of its own, or holding a link or a file the sync would drop or refuse to share, are refused before anything is written, and again at each resolution and install, so a file added later fails the next install on the device holding it, the last exports standing; a release holding a `uv.lock`, `Cargo.lock` or `*.tmp`, which the sync rules drop anywhere, cannot live there. Explore reads such a folder as a spec package. "Add from folder" on your own group's side asks for a folder inside its clone, and `environment.get` names that folder as `pathRoot`. A request your own group made by a path in a paired working folder reads as missing until its folder moves into the clone. A project's and another group's paths stay relative to the working folder.
 
 ### Fixed
+
+- A narrow player pane no longer spills its header and transcript past
+  its border: a long agent reading such as `claude-opus-5-5 @ xhigh` ends
+  in an ellipsis, its whole in the tooltip.
 
 - Publishing previews now show the destination instance before confirmation,
   for both local packages and authored playbooks.

@@ -118,6 +118,49 @@ When the session record stream delivers a player's failure — an error event, o
 - a text segment of the same call that is exactly the failure's words — a failure passed off as prose — gives way to the failure line;
 - the call's result line reads "✗ failed" with the words in its tooltip when its error repeats the failure line above it, and prints the error only where no line carries it.
 
+#### run-view-177
+
+Wherever the run view names a session player — its lane's header and rail [[run-view-116](#run-view-116)], a delegation line [[run-view-178](#run-view-178)], a failure's recovery entries [[run-view-179](#run-view-179)] — it shall show the player's name beside its mark, with the player's full id in the tooltip ([DR-155](../decisions/155-players-named-delegated-and-recovered.md)):
+
+- the name is the id's last dot-separated segment — `dev.reviewer` reads reviewer, `alice` reads alice — and every player of the roster sharing that segment with another reads as its full id instead;
+- the mark is the Captain's letter-in-a-circle style holding the name's first letter uppercased, in one neutral colour for every player, while the Captain's "C" keeps the brand colour;
+- the header still names the role its latest call served, before the name, where the role differs from the name.
+
+#### run-view-178
+
+When a session's records hold a player call — its first record a prompt — whose player no earlier call reached, or whose adapter or model differs from that player's previous call, the Captain pane shall show one delegation line at that record's place in the thread, outside every machine card, naming the player [[run-view-177](#run-view-177)] and what the call runs ([DR-155](../decisions/155-players-named-delegated-and-recovered.md)):
+
+| The call's model reads | Where |
+| --- | --- |
+| the model its `init` event reported | the call reported one |
+| the configured model | no report, and the call's role — the role its first record carries — resolves in the execution context it ran under to bindings agreeing on one model setting, else no binding names the role and the player's own setting stands |
+| "provider default" | no report, and that confirmed setting names no model |
+| nothing — adapter alone | no report, and the role is absent or resolves to bindings that disagree |
+
+- the adapter is the player's in that execution context: the `session_context` record its `contextSeq` names, else the latest before it;
+- two calls differ where their adapters or configured models differ, or where both reported a model and the reports differ — a call with no report never differs from one with a report by the report alone;
+- the session summary's latest model per agent is never read, so a later model change leaves earlier lines as they were;
+- activating the line brings the player's lane into view;
+- a call whose player recorded nothing puts no line, and its failure stands in the thread alone;
+- every line derives from stored records alone, so reopening the session shows the same lines.
+
+#### run-view-179
+
+Where a failure line or card in the Captain pane [[run-view-2](#run-view-2)] [[run-view-147](#run-view-147)] belongs to an agent — the Captain for the Captain's own failed turn, a player for a cause naming it, directly or through a nested failure — the run view shall name that agent [[run-view-177](#run-view-177)] in the cause and offer its recovery entries by what the runtime said, as the runtime-message mapping of [[run-view-2](#run-view-2)] classifies it ([DR-155](../decisions/155-players-named-delegated-and-recovered.md)):
+
+| The message is | Entries |
+| --- | --- |
+| an expired sign-in, or a rate limit | "Change ⟨name⟩ in Settings", beside the mapping's own words of what to do outside Spex |
+| a command not installed | none: the mapping's words alone |
+| an unknown adapter | "Change ⟨name⟩ in Settings" |
+| none the mapping knows | "Adjust ⟨name⟩" and "Change ⟨name⟩ in Settings" |
+| any other mapped message | none |
+
+- "Adjust ⟨name⟩" opens that agent's chip popover [[run-view-138](#run-view-138)], whose changes apply from the next message: for a player whose lane stands, the lane unfolds and comes into view, its chip is highlighted briefly and the popover opens from it; for a player with no lane, the same popover opens from the failure; for the Captain, from the Captain pane's chip;
+- "Adjust ⟨name⟩" is offered only where that agent's chip is, and never on history a session cannot continue;
+- "Change ⟨name⟩ in Settings" opens Settings at that agent's row editor [[settings-52](settings.md#settings-52)], where a change applies to new sessions;
+- nothing changes an agent's adapter or model without the reader.
+
 ### Pane Visibility
 
 #### run-view-7
@@ -133,7 +176,7 @@ The run view shall show one player pane for each player of the session's bound r
 - bringing a pane into view moves only the grid's own scroll offset — never the page, the Captain column, or the keyboard focus — so a question and the composer the Captain column shows stay where the reader left them;
 - a pane still lying beyond the grid's edge is said, not cut: the grid fades whichever edge hides one, and retires that edge's fade once nothing lies beyond it ([DR-041](../decisions/041-chrome-that-fits.md));
 - while no pane stands — before the session's first call, or for a roster with no players — the Captain column stands alone at the Captain home's reading width with no divider, a division with nothing on its far side reading as a pane that failed to load, and the first pane's arrival restores the divider at the split's setting;
-- the pane's header names the lane and the role its latest call served [[run-view-79](#run-view-79)] — "coder · dev.coder" — with the lane's agent chip beside it, which is also the control that tunes that agent for this session [[run-view-139](#run-view-139)] [[run-view-138](#run-view-138)];
+- the pane's header names the lane and the role its latest call served [[run-view-79](#run-view-79)] — "coder · dev.coder" — with the lane's agent chip beside it, which is also the control that tunes that agent for this session [[run-view-139](#run-view-139)] [[run-view-138](#run-view-138)] and owns the header's slack: a reading longer than the pane can hold ends in an ellipsis with its whole in its tooltip, so the header and the transcript never widen past the pane ([DR-041](../decisions/041-chrome-that-fits.md));
 - while the lane's call is open, the header carries "⟨role⟩ working · ⟨elapsed⟩" beside the running mark — the span since the call's prompt, ticking each second in the duration vocabulary [[run-view-145](#run-view-145)] — so a minutes-long call never reads as a hang ([DR-010](../decisions/010-interface-craft.md) §5); as the pane narrows, the live reading remains after the resting active-time phrase has yielded [[run-view-143](#run-view-143)], then yields before the lane identity and header controls at the pane floor ([DR-041](../decisions/041-chrome-that-fits.md)).
 
 #### run-view-116
@@ -932,6 +975,18 @@ While consecutive text deltas for the same player message are pending within one
 
 When the session record stream delivers a captain record whose kind is outside the glyph vocabulary of [[run-view-1](#run-view-1)], the Captain pane shall render the record's text as a plain line rather than dropping the record.
 
+#### run-view-180
+
+Where a session's records name `dev.reviewer`, `docs.reviewer` and `dev.coder`, the test suite shall assert `dev.coder`'s lane header and rail read coder with a "C" mark of the players' neutral colour, distinct from the Captain's, and its id in the tooltip, while each reviewer reads as its full id [[run-view-177](#run-view-177)].
+
+#### run-view-181
+
+Where a fixture stream calls `dev.coder` and then `dev.reviewer` twice, the second reviewer call after a context changing its model, with one call reporting its model in `init`, one bound to a role two bindings disagree on, and one whose setting names no model, the test suite shall assert, rendering it live and again from stored records, one delegation line per first call and per changed model at its call's place, each reading as the table of [[run-view-178](#run-view-178)] says — the reported model, the configured one, "provider default", or the adapter alone — earlier lines keeping their model after the change, the lines standing after the run's card closed, a failed delegation with no player record adding none, and activating a line scrolling the grid to that lane [[run-view-178](#run-view-178)].
+
+#### run-view-182
+
+Where failures arrive for the Captain's own turn and for causes naming `dev.reviewer` — an expired sign-in, a rate limit, a command not installed, an unknown adapter and an unrecognized message — the test suite shall assert each line names its agent by name and offers exactly the entries of [[run-view-179](#run-view-179)]'s table; that "Adjust reviewer" brings the reviewer's lane into view, highlights its chip and opens its popover there, and opens it from the failure where no lane stands; that "Adjust Captain" opens the popover from the Captain pane's chip and is absent where the Captain's chip is; and that "Change reviewer in Settings" asks for Settings at that player's row [[run-view-179](#run-view-179)].
+
 ### Pane Management
 
 #### run-view-18
@@ -1375,7 +1430,8 @@ Where the harness boots with the demo project registered and carrying closed wor
 - the collapsed sidebar's Dashboard badge prints "9+" with the count in the entry's accessible name [[run-view-108](#run-view-108)];
 - the Captain home's agent popover, opened at each height, lies inside the window both on opening and after model discovery grows its content, with its adapter picker reachable and the page unmoved [[run-view-32](#run-view-32)];
 - a disabled composer during a long turn keeps its primary control inside the window at every width and height [[run-view-106](#run-view-106)];
-- an agent's settings editor, opened from the narrowest player pane and again from the last pane of a sideways-scrolled grid, lies inside the box that must show it both on opening and after the grid scrolls with its fields reachable and the page unmoved, its model and effort stacked at 320 pixels and side by side at 900 [[run-view-138](#run-view-138)].
+- an agent's settings editor, opened from the narrowest player pane and again from the last pane of a sideways-scrolled grid, lies inside the box that must show it both on opening and after the grid scrolls with its fields reachable and the page unmoved, its model and effort stacked at 320 pixels and side by side at 900 [[run-view-138](#run-view-138)];
+- with the coder tuned to `xhigh` and two lanes sharing a 1280-pixel window's default split beside the open sidebar, no lane is wider than its pane, and the coder's agent reading ends in an ellipsis [[run-view-7](#run-view-7)].
 
 #### run-view-146
 

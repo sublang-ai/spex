@@ -217,7 +217,8 @@ function holdConversation(shown: boolean): SessionView {
 function foldedWords(): { captain: string[]; coder: string[] } {
   const view = useAppStore.getState().views.s1;
   return {
-    captain: view.captain.map((line) => line.text),
+    // A delegation line is a player's id, not a phrase (run-view-178).
+    captain: view.captain.filter((line) => line.kind !== "delegation").map((line) => line.text),
     coder: view.players["dev.coder"].segments.flatMap((segment) =>
       segment.kind === "error" ? [segment.message] : [],
     ),
@@ -902,7 +903,7 @@ describe("localization-11: a change of choice re-reads the core's prose", () => 
     expect(refolded.pendingQuestion).toBe("Which target?");
     expect(refolded.lastSeq).toBe(6);
     // Once, though both the read and the live stream carried it.
-    expect(refolded.captain.map((line) => line.text)).toEqual([
+    expect(refolded.captain.filter((line) => line.kind !== "delegation").map((line) => line.text)).toEqual([
       "fix the bug",
       "◆ 本轮已中止",
       "Which target?",
@@ -987,7 +988,7 @@ describe("localization-11: a change of choice re-reads the core's prose", () => 
     const view = useAppStore.getState().views.s1;
     expect(view).toBe(shown);
     expect(view.lastSeq).toBe(5);
-    expect(view.captain.map((line) => line.text)).toEqual([
+    expect(view.captain.filter((line) => line.kind !== "delegation").map((line) => line.text)).toEqual([
       "fix the bug",
       "◆ turn aborted",
       "The fix is in auth.ts.",
@@ -1012,7 +1013,7 @@ describe("localization-11: a change of choice re-reads the core's prose", () => 
       }),
     );
     await waitFor(() => expect(useAppStore.getState().views.s1).not.toBe(shown));
-    expect(useAppStore.getState().views.s1.captain.map((line) => line.text)).toEqual([
+    expect(useAppStore.getState().views.s1.captain.filter((line) => line.kind !== "delegation").map((line) => line.text)).toEqual([
       "fix the bug",
       "◆ turn aborted",
       "The fix is in auth.ts.",

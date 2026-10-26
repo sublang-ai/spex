@@ -205,10 +205,10 @@ test("run-view-118: a collapsed lane unfolds when its call opens", async ({
   const coder = page.getByTestId("player-pane-dev.coder");
   const reviewer = page.getByTestId("player-pane-dev.reviewer");
   const wholeWidth = (await coder.boundingBox())!.width;
-  await page.getByRole("button", { name: "Collapse dev.reviewer" }).click();
+  await page.getByRole("button", { name: "Collapse reviewer" }).click();
   // The rail: narrow, named within its box, its expand control focused
   // — and the coder's pane took the freed width (run-view-116).
-  await expect(page.getByRole("button", { name: "Expand dev.reviewer" })).toBeFocused();
+  await expect(page.getByRole("button", { name: "Expand reviewer" })).toBeFocused();
   await expect(reviewer).toHaveAttribute("data-collapsed", "true");
   const rail = (await reviewer.boundingBox())!;
   expect(rail.width).toBeLessThanOrEqual(40);
@@ -230,7 +230,7 @@ test("run-view-118: a collapsed lane unfolds when its call opens", async ({
   await expect(coder).toBeInViewport();
   app.releasePlayer("dev.coder");
   await expect(reviewer).not.toHaveAttribute("data-collapsed", "true");
-  await expect(page.getByRole("button", { name: "Collapse dev.reviewer" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Collapse reviewer" })).toBeVisible();
   await expect(reviewer).toContainText(/Review/);
   app.releasePlayer("dev.reviewer");
   await expect(page.getByTestId("captain-pane").getByTestId("system-line")

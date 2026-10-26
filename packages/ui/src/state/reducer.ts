@@ -6,6 +6,7 @@
 // protocol messages — no other inputs (RUN-13).
 
 import {
+  CAPTAIN_AGENT_ID,
   hasPresentationHeader,
   RESTORED_TOPIC,
   RESTORING_TOPIC,
@@ -139,7 +140,20 @@ export interface CaptainLine {
   /** boss: the user's own message, echoed into the thread (RUN-30).
    * question: a player asking the Boss — a first-class incoming
    * message, not a log line (RUN-9, DR-010 §1). */
-  kind: "status" | "speech" | "error" | "boss" | "question" | "machine" | "media";
+  kind: "status" | "speech" | "error" | "boss" | "question" | "machine" | "media" | "delegation";
+  /** A delegation line (run-view-178): the player one call went to and
+   * what that call runs — `model` is the configured model, `false` a
+   * confirmed provider default, absent where the call's role did not
+   * confirm one; `reported` is what its `init` event said it ran. */
+  delegation?: {
+    player: string;
+    adapter?: string;
+    model?: string | false;
+    reported?: string;
+  };
+  /** error lines: the agent whose own failure this is, where the
+   * record says so — the Captain's failed turn (run-view-179). */
+  agent?: string;
   attachments?: readonly MediaAsset[];
   evidence?: Extract<TmuxPlayRecord, { type: "playbook_evidence" }>;
   /** The settled frame a "machine" line carries (run-view-62). */
@@ -203,6 +217,22 @@ export interface SessionView {
    * the restore's report of a message already drawn (run-view-110). */
   restoring?: boolean;
   lastSeq: number;
+  /** Each recorded execution context's configuration, by its record's
+   * seq, and the latest one (run-view-178). */
+  executions: Record<number, unknown>;
+  latestExecution?: unknown;
+  /** Per player, its current call's delegation and the reading its
+   * previous call ended with (run-view-178). */
+  delegations: Record<string, DelegationTrack>;
+}
+
+/** One player's delegation bookkeeping (run-view-178). */
+interface DelegationTrack {
+  /** The open call: its reading, its line where it put one, and the
+   * thread line it stands after where it has not yet. */
+  call: { adapter?: string; model?: string | false; reported?: string; line?: CaptainLine; after?: CaptainLine; turnId: number | null; at: number };
+  /** What the player's previous call ran. */
+  previous?: DelegationReading;
 }
 
 export function initialSessionView(
@@ -224,6 +254,8 @@ export function initialSessionView(
     frames: [],
     settledRuns: [],
     lastSeq: 0,
+    executions: {},
+    delegations: {},
   };
 }
 
@@ -467,6 +499,148 @@ function applyAgentEvent(
 }
 
 /** Apply one record in stream order. Mutates and returns the view. */
+/** A model selection as an execution context records it: a pinned
+ * value, the provider's default (`false`), or unread. */
+function modelSelection(value: unknown): string | false | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const shape = value as { kind?: unknown; value?: unknown };
+  if (shape.kind === "value" && typeof shape.value === "string" && shape.value) return shape.value;
+  if (shape.kind === "provider-default") return false;
+  return undefined;
+}
+
+/** What one call of `playerId` serving `role` runs, read from the
+ * execution context it ran under (run-view-178): the player's adapter,
+ * and its model as the role's bindings set it — falling back to the
+ * player's own where no binding names that role — or no model where
+ * the role is absent or its bindings disagree. */
+function callSettings(
+  configuration: unknown,
+  playerId: string,
+  role: string | undefined,
+): { adapter?: string; model?: string | false } {
+  const config = configuration && typeof configuration === "object"
+    ? configuration as { players?: unknown; catalog?: unknown }
+    : undefined;
+  const player = Array.isArray(config?.players)
+    ? (config.players as unknown[]).find((entry) =>
+        !!entry && typeof entry === "object" && (entry as { id?: unknown }).id === playerId) as
+        { adapter?: unknown; model?: unknown } | undefined
+    : undefined;
+  const adapter = typeof player?.adapter === "string" ? player.adapter : undefined;
+  if (role === undefined || !player) return adapter ? { adapter } : {};
+  const models = new Set<string | false | undefined>();
+  const catalog = config?.catalog && typeof config.catalog === "object"
+    ? Object.values(config.catalog as Record<string, unknown>)
+    : [];
+  for (const playbook of catalog) {
+    const roles = playbook && typeof playbook === "object" ? (playbook as { roles?: unknown }).roles : undefined;
+    const binding = roles && typeof roles === "object" ? (roles as Record<string, unknown>)[role] : undefined;
+    if (!binding || typeof binding !== "object" || (binding as { playerId?: unknown }).playerId !== playerId) continue;
+    const bound = (binding as { model?: unknown }).model;
+    models.add(bound === undefined ? modelSelection(player.model) : modelSelection(bound));
+  }
+  if (models.size === 0) models.add(modelSelection(player.model));
+  const [model] = models;
+  return {
+    ...(adapter ? { adapter } : {}),
+    ...(models.size === 1 && model !== undefined ? { model } : {}),
+  };
+}
+
+type DelegationReading = { adapter?: string; model?: string | false; reported?: string };
+
+/** What one call ran, for comparing it with the player's previous one. */
+function delegationReading(call: DelegationTrack["call"]): DelegationReading {
+  return {
+    ...(call.adapter ? { adapter: call.adapter } : {}),
+    ...(call.model !== undefined ? { model: call.model } : {}),
+    ...(call.reported ? { reported: call.reported } : {}),
+  };
+}
+
+/** Two calls run the same where their adapter and configured model
+ * agree and, where both reported the model they ran, so do the
+ * reports: a call that has not reported is never told apart from one
+ * that has by the report alone, since a configured alias and the
+ * specific model it resolved to name one model. */
+function sameReading(a: DelegationReading | undefined, b: DelegationReading): boolean {
+  return a !== undefined && a.adapter === b.adapter && a.model === b.model &&
+    (a.reported === undefined || b.reported === undefined || a.reported === b.reported);
+}
+
+function delegationLine(
+  playerId: string,
+  call: DelegationTrack["call"],
+  turnId: number | null,
+  at: number,
+): CaptainLine {
+  return {
+    kind: "delegation",
+    text: playerId,
+    turnId,
+    at,
+    delegation: {
+      player: playerId,
+      ...(call.adapter ? { adapter: call.adapter } : {}),
+      ...(call.model !== undefined ? { model: call.model } : {}),
+      ...(call.reported ? { reported: call.reported } : {}),
+    },
+  };
+}
+
+/** A call's first record (run-view-178): the previous call's reading is
+ * settled, and the new call puts its line where it is the player's
+ * first or reads differently from the previous one. */
+function openDelegation(
+  view: SessionView,
+  playerId: string,
+  role: string | undefined,
+  contextSeq: unknown,
+  turnId: number | null,
+  at: number,
+): void {
+  const configuration = typeof contextSeq === "number" && Object.hasOwn(view.executions, contextSeq)
+    ? view.executions[contextSeq]
+    : view.latestExecution;
+  const track = view.delegations[playerId];
+  const previous = track ? delegationReading(track.call) : undefined;
+  const call: DelegationTrack["call"] = { ...callSettings(configuration, playerId, role), turnId, at };
+  if (!sameReading(previous, delegationReading(call))) {
+    call.line = delegationLine(playerId, call, turnId, at);
+    view.captain.push(call.line);
+  } else {
+    call.after = view.captain[view.captain.length - 1];
+  }
+  view.delegations[playerId] = { call, ...(previous ? { previous } : {}) };
+}
+
+/** The call's `init` named the model it ran (run-view-178): the line
+ * reads it, and whether the call needs a line at all is decided again
+ * against the player's previous call. */
+function reportDelegation(view: SessionView, playerId: string, reported: string): void {
+  const track = view.delegations[playerId];
+  if (!track) return;
+  const call = track.call;
+  call.reported = reported;
+  const differs = !sameReading(track.previous, delegationReading(call));
+  if (call.line) {
+    if (call.line.delegation) call.line.delegation.reported = reported;
+    if (!differs && track.previous) {
+      const index = view.captain.indexOf(call.line);
+      if (index >= 0) {
+        call.after = view.captain[index - 1];
+        view.captain.splice(index, 1);
+      }
+      call.line = undefined;
+    }
+  } else if (differs) {
+    call.line = delegationLine(playerId, call, call.turnId, call.at);
+    const anchorIndex = call.after ? view.captain.indexOf(call.after) : -1;
+    view.captain.splice(anchorIndex + 1, 0, call.line);
+  }
+}
+
 export function applyRecord(
   view: SessionView,
   seq: number,
@@ -489,6 +663,10 @@ export function applyRecord(
     case "session_context": {
       const graphs = contextGraphs(r);
       if (graphs) view.contexts[seq] = graphs;
+      if (r.configuration !== undefined) {
+        view.executions[seq] = r.configuration;
+        view.latestExecution = r.configuration;
+      }
       break;
     }
     case "turn_started": {
@@ -543,6 +721,7 @@ export function applyRecord(
       break;
     }
     case "player_prompt": {
+      openDelegation(view, String(r.playerId), role, r.contextSeq, r.turnId, r.timestamp);
       const target = player(view, String(r.playerId));
       target.running = true;
       target.turnUsage = undefined;
@@ -555,6 +734,10 @@ export function applyRecord(
       break;
     }
     case "player_event": {
+      const event = r.event as { type?: unknown; payload?: { reportedModel?: unknown } } | undefined;
+      if (event?.type === "init" && typeof event.payload?.reportedModel === "string" && event.payload.reportedModel) {
+        reportDelegation(view, String(r.playerId), event.payload.reportedModel);
+      }
       const target = player(view, String(r.playerId));
       const usage = applyAgentEvent(target, r.event as AgentEventLike, meta, {actorId: r.playerId, turnId: r.turnId});
       if (usage) target.turnUsage = usage;
@@ -625,6 +808,7 @@ export function applyRecord(
       if (result.status === "error") {
         pushCaptain(view, {
           kind: "error",
+          agent: CAPTAIN_AGENT_ID,
           ...plainFailure(
             result.error ??
               result.finalText ??
@@ -840,6 +1024,8 @@ export function applyRecord(
       // finds this line by its onset instead (run-view-91).
       pushCaptain(view, {
         kind: "error",
+        // The shell names the Captain's own failed turn in its words.
+        ...(/^\s*(?:error\s*:\s*)?The Captain's turn failed/i.test(String(r.message)) ? { agent: CAPTAIN_AGENT_ID } : {}),
         ...plainFailure(String(r.message)),
         turnId: typeof r.turnId === "number" ? r.turnId : view.currentTurnId,
         at: r.timestamp,

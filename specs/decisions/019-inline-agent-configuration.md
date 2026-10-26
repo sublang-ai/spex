@@ -13,6 +13,7 @@ Amended by [DR-052](052-runtime-model-options.md): model and tuning choices come
 Amended by [DR-093](093-a-players-subagent-model.md) in §"UX": the shared agent editor gains a subagent-model field where the adapter accepts one.
 Amended by [DR-095](095-a-subagents-effort-and-the-agents-own-model.md) in §"UX": the shared agent editor gains a subagent-effort field, and each model pairs with its effort on one row.
 Amended by [DR-141](141-project-start-explains-the-task-and-slash-discovery.md) on the project home before a session: Captain's identity and current agent chip sit by the task composer; the chip opens its in-place editor.
+Amended by [DR-154](154-the-seed-follows-playbooks-rule.md) in §"Spex writes only blocks": the seeded agents follow Playbook's credential-based seeding rule instead of a single-vendor lineup of Spex's own.
 
 ## Context
 

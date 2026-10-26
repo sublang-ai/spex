@@ -327,8 +327,10 @@ test("instances migration: every clone at the instance moves under its folder, i
     assert.deepEqual(await fileCredentialStore(root, "https://spex.pub").read(), { access: "ada-token", accessExpiresAt: 2, refresh: "ada-refresh" });
 
     // The sync preferences and the forge cache follow each moved clone;
-    // a clone that stays keeps its own.
-    assert.deepEqual(prefsIn(root), {
+    // a clone that stays keeps its own; the seed your own group's config
+    // took as the home opened stands aside (storage-5).
+    const { "config:seed": _seed, ...prefs } = prefsIn(root);
+    assert.deepEqual(prefs, {
       language: "en",
       [`sync:${FOLDER}/acme/platform/web-spex:last`]: { at: 1, sent: 1, received: 0 },
       [`sync:${FOLDER}/acme/platform/web-spex:noticed`]: true,

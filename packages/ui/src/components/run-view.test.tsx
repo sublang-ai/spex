@@ -338,7 +338,7 @@ describe("RUN-19: pane structure from the fixture stream", () => {
     // A call the core resolved no role for names the lane alone
     // (run-view-7).
     expect(screen.getByTestId("player-name-dev.coder").textContent).toBe(
-      "dev.coder",
+      "coder",
     );
     // Only what the shell can open wears a link's affordance.
     expect(screen.getByText("the SDK docs").tagName).toBe("A");
@@ -532,8 +532,9 @@ describe("RUN-37: the thread stays alive while a turn runs", () => {
       expect(indicator.textContent).toContain("coder working · 2m 13s");
       // The running lane's header names the role beside the lane and
       // says the same span, beside its mark (run-view-7).
+      // The role is the name again, so it reads once (run-view-177).
       expect(screen.getByTestId("player-name-dev.coder").textContent).toBe(
-        "coder · dev.coder",
+        "coder",
       );
       expect(screen.getByTestId("player-working").textContent).toBe(
         "coder working · 2m 13s",
@@ -629,7 +630,7 @@ describe("run-view-143/144: cumulative active time stays with its agent", () => 
     expect(document.body.textContent).not.toMatch(/[$≈]/);
 
     fireEvent.click(within(screen.getByTestId("player-pane-dev.coder"))
-      .getByRole("button", { name: "Collapse dev.coder" }));
+      .getByRole("button", { name: "Collapse coder" }));
     const rail = screen.getByTestId("player-pane-dev.coder");
     expect(rail.dataset.collapsed).toBe("true");
     expect(within(rail).getByTestId("player-name-dev.coder").title)
@@ -640,7 +641,7 @@ describe("run-view-143/144: cumulative active time stays with its agent", () => 
     expect(screen.getByTestId("agent-active-description-dev.coder").textContent)
       .toBe(activeDescription("<1s"));
 
-    fireEvent.click(within(rail).getByRole("button", { name: "Expand dev.coder" }));
+    fireEvent.click(within(rail).getByRole("button", { name: "Expand coder" }));
     expect(screen.getByTestId("agent-active-dev.coder").textContent)
       .toBe("active · <1s");
   });
@@ -2497,14 +2498,15 @@ describe("run-view-116/117: a lane folds to a rail and returns for its call", ()
 
   test("the header's control folds the pane to a rail, focus handed on", () => {
     renderRun(TURN_ONE_REVIEWED);
-    fireEvent.click(screen.getByRole("button", { name: "Collapse dev.reviewer" }));
+    fireEvent.click(screen.getByRole("button", { name: "Collapse reviewer" }));
     const rail = screen.getByTestId("player-pane-dev.reviewer");
     expect(rail.dataset.collapsed).toBe("true");
     // The rail names the lane and offers the way back (run-view-116).
     const name = within(rail).getByTestId("player-name-dev.reviewer");
-    expect(name.textContent).toBe("dev.reviewer");
+    expect(name.textContent).toBe("reviewer");
+    expect(within(rail).getByTestId("player-mark").textContent).toBe("R");
     expect(within(rail).queryByTestId("player-running")).toBeNull();
-    const expand = within(rail).getByRole("button", { name: "Expand dev.reviewer" });
+    const expand = within(rail).getByRole("button", { name: "Expand reviewer" });
     expect(document.activeElement).toBe(expand);
     expect(useAppStore.getState().collapsedLanes.s1).toEqual(["dev.reviewer"]);
 
@@ -2512,7 +2514,7 @@ describe("run-view-116/117: a lane folds to a rail and returns for its call", ()
     const pane = screen.getByTestId("player-pane-dev.reviewer");
     expect(pane.dataset.collapsed).toBeUndefined();
     expect(document.activeElement).toBe(
-      within(pane).getByRole("button", { name: "Collapse dev.reviewer" }),
+      within(pane).getByRole("button", { name: "Collapse reviewer" }),
     );
     expect(useAppStore.getState().collapsedLanes.s1).toEqual([]);
   });
@@ -2577,7 +2579,7 @@ describe("run-view-116/117: a lane folds to a rail and returns for its call", ()
     rerender(<RunView {...props} view={openReviewerCall(idle)} />);
     const pane = screen.getByTestId("player-pane-dev.reviewer");
     expect(pane.dataset.collapsed).toBeUndefined();
-    const collapse = within(pane).getByRole("button", { name: "Collapse dev.reviewer" });
+    const collapse = within(pane).getByRole("button", { name: "Collapse reviewer" });
     // The other session's set stands; the reader's focus — in the
     // composer, where the view put it — was not taken (run-view-117).
     expect(useAppStore.getState().collapsedLanes).toEqual({
@@ -2608,11 +2610,11 @@ describe("run-view-116/117: a lane folds to a rail and returns for its call", ()
     };
     const { rerender } = render(<RunView {...props} view={idle} />);
     act(() => {
-      screen.getByRole("button", { name: "Expand dev.reviewer" }).focus();
+      screen.getByRole("button", { name: "Expand reviewer" }).focus();
     });
     rerender(<RunView {...props} view={openReviewerCall(idle)} />);
     expect(document.activeElement).toBe(
-      screen.getByRole("button", { name: "Collapse dev.reviewer" }),
+      screen.getByRole("button", { name: "Collapse reviewer" }),
     );
   });
 });
@@ -4261,7 +4263,7 @@ describe("run-view-152: a chip names the model its runtime reported", () => {
   test("a folded lane's rail carries the reported reading", () => {
     render(runView({ ...SESSION, live: false, agentReportedModels: REPORTED }));
     fireEvent.click(within(screen.getByTestId("player-pane-dev.reviewer"))
-      .getByRole("button", { name: "Collapse dev.reviewer" }));
+      .getByRole("button", { name: "Collapse reviewer" }));
     const rail = screen.getByTestId("player-pane-dev.reviewer");
     expect(within(rail).getByTestId("player-name-dev.reviewer").title)
       .toBe("dev.reviewer · gpt-5.6-sol — set to provider default, runtime reports gpt-5.6-sol");

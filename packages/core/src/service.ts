@@ -43,6 +43,9 @@ import {
   missingPlayersOf,
   relocateLegacyConfig,
   resolveFormerConfigPaths,
+  isSeedRecord,
+  reseedConfig,
+  SEED_PREF,
   seedConfig,
   summarizeConfig,
   validateProjectConfig,
@@ -664,6 +667,9 @@ export class CoreService {
    * files has been published. */
   private configInputs?: ConfigInputs;
   private seeded = false;
+  /** An untouched seed rewritten for the current credentials this run
+   * (core-service-137), reported apart from a creation (settings-9). */
+  private reseeded = false;
   private readonly runCommand: RunCommand;
   private readonly forge: ForgeAdapter;
   /** Each running one-shot compile's own cancel handle, by playbook id:
@@ -712,6 +718,7 @@ export class CoreService {
     store: Store,
     /** The processes this core started (core-service-39). */
     private readonly startedProcesses: StartedProcesses,
+    seat?: { credentials: CodeCredentialStore; environment: SeatEnvironment },
   ) {
     this.options = options;
     if (options.seat) this.seat = options.seat;
@@ -720,8 +727,7 @@ export class CoreService {
     this.home = options.home ?? this.env.HOME ?? homedir();
     this.store = store;
     if (options.seat) {
-      const credentials = codeCredentialStore(store.dir);
-      const environment = new SeatEnvironment(process.env, options.seat.sharedCredentialFile, () => credentials.readAgents());
+      const { credentials, environment } = seat ?? CoreService.seatCredentials(options, store.dir);
       this.codeCredentials = credentials;
       this.seatEnvironment = environment;
       this.adapterImports = seatAdapterImports(options.adapterImports ?? DEFAULT_ADAPTER_IMPORTS, () => { environment.prepare(); });
@@ -1382,6 +1388,14 @@ export class CoreService {
     return started.run(() => CoreService.boot(options, started));
   }
 
+  /** A seat's credential store and the environment its runs inherit
+   * (core-service-126), for the seat's home. */
+  private static seatCredentials(options: CoreServiceOptions, dir: string): { credentials: CodeCredentialStore; environment: SeatEnvironment } {
+    const credentials = codeCredentialStore(dir);
+    const environment = new SeatEnvironment(process.env, options.seat?.sharedCredentialFile, () => credentials.readAgents());
+    return { credentials, environment };
+  }
+
   private static async boot(options: CoreServiceOptions, started: StartedProcesses): Promise<CoreService> {
     if (process.platform !== "darwin" && process.platform !== "linux") {
       throw new Error(i18n._({
@@ -1435,19 +1449,33 @@ export class CoreService {
     // clone the store makes requests the built-in spec package before
     // its first commit (storage-6, environments-11).
     const builtin = CoreService.shippedBuiltin(options);
-    const store = await Store.open({
-      ...(options.dataDir ? { dir: options.dataDir } : {}),
-      ...(machineIdentity !== undefined ? { machineIdentity } : {}),
-      ...(options.legacyDbPath ? { legacyDbPath: options.legacyDbPath } : {}),
-      ...(options.own ? { own: options.own } : {}),
-      env,
-      ...(options.dataDir ? { libraryDir: options.libraryDir ?? join(options.dataDir, "playbooks") } : {}),
-      ...(relocateConfig ? { relocateConfig } : {}),
-      ...(builtin ? { prepareRepository: (dir: string, _key: string, registryOrigin: string) => { prepareBuiltinEnvironment(dir, builtin, registryOrigin); } } : {}),
-    });
+    // A seat reads its credentials into the environment before the
+    // store seeds your own group's config from them (core-service-126,
+    // core-service-3).
+    const seat = options.seat && dataDir ? CoreService.seatCredentials(options, resolve(dataDir)) : undefined;
+    seat?.environment.prepare();
+    // A start that fails before the service stands puts the environment
+    // back, as a stop does (core-service-126).
+    let store: Store;
+    try {
+      store = await Store.open({
+        ...(options.dataDir ? { dir: options.dataDir } : {}),
+        ...(machineIdentity !== undefined ? { machineIdentity } : {}),
+        ...(options.legacyDbPath ? { legacyDbPath: options.legacyDbPath } : {}),
+        ...(options.own ? { own: options.own } : {}),
+        env: seat ? seat.environment.envFor(env) : env,
+        ...(options.home !== undefined ? { home: options.home } : {}),
+        ...(options.dataDir ? { libraryDir: options.libraryDir ?? join(options.dataDir, "playbooks") } : {}),
+        ...(relocateConfig ? { relocateConfig } : {}),
+        ...(builtin ? { prepareRepository: (dir: string, _key: string, registryOrigin: string) => { prepareBuiltinEnvironment(dir, builtin, registryOrigin); } } : {}),
+      });
+    } catch (error) { seat?.environment.restore(); throw error; }
     let service: CoreService;
-    try { service = new CoreService(options, store, started); }
-    catch (error) { store.close(); throw error; }
+    try { service = new CoreService(options, store, started, seat); }
+    catch (error) {
+      try { store.close(); } finally { seat?.environment.restore(); }
+      throw error;
+    }
     // A seat reads its credentials into the environment at start
     // (core-service-126).
     service.seatEnvironment?.prepare();
@@ -1462,8 +1490,13 @@ export class CoreService {
     service.relocateLegacyLibrary();
     // The store seeds your own group's config as the clone stands up;
     // the core reports that starter as its own seed (settings-9).
-    service.seeded = seedConfig(service.configPath) ||
+    const version = seedConfig(service.configPath, service.seedEnv(), service.home);
+    if (version !== null) store.recordSeed(service.configPath, version);
+    service.seeded = version !== null ||
       (service.configPath === store.ownRepository().configPath && store.seededConfig);
+    // An untouched seed follows the credentials it was chosen from
+    // (core-service-137).
+    if (service.reseed()) service.reseeded = true;
     if (service.options.dataDir) migrateManagedLibraryConfig(service.configPath, service.libraryDir(), service.options.dataDir);
     // An apply a crash interrupted is repaired from its marker before the
     // clone reopens (space-31); a failure stands as a blocking issue.
@@ -1830,12 +1863,12 @@ export class CoreService {
       // No draft is written once the authors have stopped; a scratch
       // home goes with its store, and the root lease is released.
       this.store.close();
-      // No run of this seat remains: the forms go back as the process
-      // started with them.
-      this.seatEnvironment?.restore();
       if (failure) throw failure.error;
     } finally {
       bound.clear();
+      // The forms go back as the process started with them, however far
+      // the stop got (core-service-126).
+      this.seatEnvironment?.restore();
     }
   }
 
@@ -2201,6 +2234,30 @@ export class CoreService {
     }
   }
 
+  /** The environment a seed reads: on a seat, the one its runs inherit
+   * (core-service-3, core-service-126). */
+  private seedEnv(): NodeJS.ProcessEnv {
+    return this.seatEnvironment ? this.seatEnvironment.envFor(this.env) : this.env;
+  }
+
+  /** Reseed your own group's config while it stands at the version the
+   * core seeded (core-service-137, DR-156); true where it was rewritten.
+   * A file no longer at that version loses its record for good. */
+  private reseed(): boolean {
+    const record = this.store.getPref<unknown>(SEED_PREF);
+    if (!isSeedRecord(record) || record.path !== this.configPath) return false;
+    let result: ReturnType<typeof reseedConfig>;
+    try { result = reseedConfig(this.configPath, record.version, this.seedEnv(), this.home); }
+    catch { return false; }
+    if (result.outcome === "edited") {
+      try { this.store.deletePref(SEED_PREF); } catch { /* the next start drops it */ }
+      return false;
+    }
+    if (result.outcome === "kept") return false;
+    this.store.recordSeed(this.configPath, result.version);
+    return true;
+  }
+
   /** Your own group's config state, recording each file read in `inputs`. */
   private async loadOwnConfig(inputs: ConfigInputs): Promise<{ state: ConfigState; composed: ComposedConfig | undefined }> {
     let nextState: ConfigState;
@@ -2222,6 +2279,7 @@ export class CoreService {
           status: "valid",
           summary: summarizeConfig(loaded),
           seeded: this.seeded,
+          ...(this.reseeded ? { reseeded: true } : {}),
           ...(missingPlayers.length > 0 ? { missingPlayers } : {}),
         };
       } catch (error) {
@@ -2579,6 +2637,10 @@ export class CoreService {
           const adapter = credentialAgent(command.name);
           const next = command.type === "credential.set" ? agentCredentialOf(adapter, command.values) : null;
           if (!credentials.replaceAgent(adapter, credentials.readAgent(adapter), next)) throw changedMeanwhile(codeCredentialsPath(this.store.dir));
+          // An untouched seed follows the member's credentials
+          // (core-service-137), read into the environment first.
+          this.seatEnvironment?.prepare();
+          if (this.reseed()) { this.reseeded = true; await this.reloadConfig(); }
           // The agent's credential class follows (settings-49): pushed
           // unless a newer change or a reload answers after it.
           const generation = this.reloadGeneration;

@@ -401,6 +401,7 @@ function sessionTooltip(
 
 function WorkspaceSurface({
   onNavigate,
+  onOpenAgentSettings,
   onOpenPalette,
   onOpenOwnProject,
   attentionBySession,
@@ -416,6 +417,8 @@ function WorkspaceSurface({
   onSpecViewState,
 }: {
   onNavigate: (surface: Surface) => void;
+  /** Settings at an agent's row (run-view-179, settings-52). */
+  onOpenAgentSettings: (agentId: string) => void;
   onOpenPalette: () => void;
   onOpenOwnProject: () => void;
   /** Per-project spec view state, held above the workspace so a
@@ -1032,6 +1035,7 @@ function WorkspaceSurface({
             error={runErrors[activeSession.id]}
             readOnly={!!activeSession.externalWriter || (!activeSession.live && !activeSession.continuable)}
             readinessHint={readinessHint}
+            onOpenAgentSettings={onOpenAgentSettings}
             onRecover={(action) => store.getState().recoverSession(activeSession.id, action)}
             onRetryLoad={() => {
               void loadPastSession(activeSession.id, true).catch(() => {});
@@ -1115,6 +1119,9 @@ export function App() {
   // credential for (space-103, settings-48), until that place's
   // Credentials section has opened at it.
   const [credentialAsk, setCredentialAsk] = useState<{ place: string; host: string }>();
+  // The agent a failure asked Settings to open at (run-view-179,
+  // settings-52), until that place's Settings has opened its row.
+  const [agentAsk, setAgentAsk] = useState<{ place: string; agent: string }>();
   /** Go to a surface on behalf of `store`'s place: Settings, Playbooks
    * and Groups open at that place (run-view-168). */
   const navigateFrom = (store: AppStore) => (next: Surface) => {
@@ -1650,6 +1657,8 @@ export function App() {
                     credentialAsk?.place === configured.place.key ? credentialAsk.host : undefined
                   }
                   onCredentialHostShown={() => setCredentialAsk(undefined)}
+                  agentRow={agentAsk?.place === configured.place.key ? agentAsk.agent : undefined}
+                  onAgentRowShown={() => setAgentAsk(undefined)}
                 />
               ) : (
                 <SpaceSurface
@@ -1682,6 +1691,10 @@ export function App() {
               <WorkspaceSurface
                 key={shown.place.key}
                 onNavigate={navigateFrom(shown)}
+                onOpenAgentSettings={(agent) => {
+                  setAgentAsk({ place: shown.place.key, agent });
+                  navigateFrom(shown)("Settings");
+                }}
                 onOpenPalette={openPalette}
                 // This computer's welcome adds a local project; a seat's
                 // greets the member with its server form, opening the
