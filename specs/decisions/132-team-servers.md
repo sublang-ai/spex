@@ -6,6 +6,7 @@
 ## Status
 
 Accepted (2026-10-21) on the owner's direction: a group shares a Linux server that runs Spex for its members, each in an OS account of their own, admitted by the group's live membership through the instance (spex.pub DR-029 [[1]]), with the administrator's agent sign-ins shared across the server; one desktop controls projects there and here at once ([DR-133](133-one-desktop-over-several-cores.md)); execution is owned per runtime ([DR-134](134-execution-ownership.md)); a seat whose lease lapsed while no hub ran is stopped by the service manager's sweep by [DR-148](148-a-lapsed-seat-is-stopped-by-a-sweep.md).
+Amended by [DR-155](155-an-untouched-seed-follows-the-credentials.md): a seat reads the shared file and the member's own credentials before it seeds its config, and an untouched seed follows them.
 Amends, under [DR-046](046-decision-record-evolution.md):
 
 - [DR-033](033-remote-gui-serving.md) in "a single-user deployment" and "one token, in the URL": a server is N single-user shells, one per member's OS account, behind one hub that admits a bearer in a header and no token in a URL; the single-user shell on a machine of one's own stands.

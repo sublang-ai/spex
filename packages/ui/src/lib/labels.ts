@@ -146,6 +146,13 @@ export function stateLabel(
  * matched on its phrase, which changes with the language. */
 export type RemedyKind = "sign-in";
 
+/** Which way back a failure offers from the agent it names
+ * (run-view-179, DR-154): `settings` — the adapter itself failed or is
+ * wrong, so "Change ⟨name⟩ in Settings" beside any words of what to do
+ * outside Spex; `outside` — only those words; `none` — not the agent's
+ * to answer. A message no pattern matches offers both entries. */
+export type RecoveryKind = "settings" | "outside" | "none";
+
 /** The runtime failures a person meets often enough to deserve a
  * plain phrase (DR-010 §2, run-view-2); the raw text rides the line's
  * tooltip. `step` is what the Boss does about it outside Spex, where
@@ -159,8 +166,10 @@ const KNOWN_FAILURES: {
   text: (match: RegExpExecArray) => string;
   step?: (match: RegExpExecArray) => string;
   stepKind?: RemedyKind;
+  recovery: RecoveryKind;
 }[] = [
   {
+    recovery: "none",
     test: /repository-effect reconciliation failed: (.+)/i,
     text: (m) =>
       i18n._("Couldn't reconcile the repository: {detail}", { detail: m[1] }),
@@ -173,19 +182,23 @@ const KNOWN_FAILURES: {
       ),
     step: () => i18n._("Sign in again with that agent's CLI"),
     stepKind: "sign-in",
+    recovery: "settings",
   },
   {
     test: /rate limit|\b429\b/i,
     text: () => i18n._("The provider rate-limited the call — it can be retried"),
+    recovery: "settings",
   },
   {
     test: /timed out|timeout/i,
     text: () => i18n._("The call timed out"),
+    recovery: "none",
   },
   {
     test: /exited (?:with code|on signal) (\S+)/i,
     text: (m) =>
       i18n._("The agent process exited unexpectedly ({code})", { code: m[1] }),
+    recovery: "none",
   },
   {
     test: /ENOENT|is not installed|could not resolve '([^']+)'/i,
@@ -197,6 +210,7 @@ const KNOWN_FAILURES: {
       m[1]
         ? i18n._("Install {command}", { command: m[1] })
         : i18n._("Install the missing command"),
+    recovery: "outside",
   },
   {
     test: /Unknown adapter "([^"]+)"/,
@@ -205,14 +219,24 @@ const KNOWN_FAILURES: {
         adapter: m[1],
       }),
     step: () => i18n._("Fix the adapter in Settings"),
+    recovery: "settings",
   },
   {
     test: /Unknown player:? "?([^"\s]+)"?/,
     text: (m) =>
       i18n._('No player named "{player}" — check the config', { player: m[1] }),
     step: () => i18n._("Fix the player in Settings"),
+    recovery: "none",
   },
 ];
+
+/** The way back a runtime message offers from the agent it failed
+ * (run-view-179): read from the one table above, the first match
+ * winning, and `unknown` where no pattern matches. */
+export function failureRecovery(raw: string): RecoveryKind | "unknown" {
+  const message = String(raw);
+  return KNOWN_FAILURES.find((entry) => entry.test.test(message))?.recovery ?? "unknown";
+}
 
 /** What the Boss does outside Spex about a known runtime message, or
  * nothing where nothing outside Spex answers it (run-view-147,

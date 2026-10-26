@@ -113,9 +113,9 @@ describe("run-view-147: the phrases and their evidence", () => {
       },
     };
     expect(causePhrase(cause)).toBe(
-      "dev.coder failed: The agent's sign-in has expired — in a terminal, sign in again with that agent's CLI",
+      "coder failed: The agent's sign-in has expired — in a terminal, sign in again with that agent's CLI",
     );
-    expect(causeStep(cause)).toBe("Sign in to dev.coder again");
+    expect(causeStep(cause)).toBe("Sign in to coder again");
   });
 
   test("an adapter message no pattern knows prints as itself, with no step", () => {
@@ -136,7 +136,7 @@ describe("run-view-147: the phrases and their evidence", () => {
       },
     };
     expect(causePhrase(cause)).toBe(
-      "dev.coder failed: Selected model is at capacity. Please try a different model.",
+      "coder failed: Selected model is at capacity. Please try a different model.",
     );
     // Nothing outside Spex answers a message nothing recognized.
     expect(causeStep(cause)).toBeUndefined();

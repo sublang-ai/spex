@@ -750,7 +750,7 @@ test.describe("agent-local time yield points", () => {
     const defects: string[] = [];
 
     const reviewerCollapse = page.getByRole("button", {
-      name: "Collapse dev.reviewer",
+      name: "Collapse reviewer",
     });
     if (await reviewerCollapse.isVisible()) await reviewerCollapse.click();
     await expect(page.getByTestId("player-pane-dev.reviewer"))
@@ -759,7 +759,7 @@ test.describe("agent-local time yield points", () => {
     const divider = page.getByTestId("captain-divider");
     const coderPane = page.getByTestId("player-pane-dev.coder");
     const coderName = page.getByTestId("player-name-dev.coder");
-    const coderCollapse = page.getByRole("button", { name: "Collapse dev.coder" });
+    const coderCollapse = page.getByRole("button", { name: "Collapse coder" });
     const coderRunning = coderPane.getByTestId("player-running");
     const active = page.getByTestId("agent-active-dev.coder");
     const activeDescription = page.getByTestId(

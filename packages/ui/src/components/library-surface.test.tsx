@@ -156,8 +156,9 @@ describe("playbook-library-1/38/39: enabled roles name the player that answers t
     await renderLibrary();
     // The role's own line says which session player answers it, and
     // the chip describes that lane's agent (DR-032).
-    expect(screen.getByTestId("role-binding-code-coder").textContent).toBe("dev.coder");
-    expect(screen.getByTestId("role-binding-code-coder").title).toBe("claude-opus-5 @ high");
+    expect(screen.getByTestId("role-binding-code-coder").textContent).toBe("Ccoder");
+    // Its name and mark, its id in the tooltip beside what it runs.
+    expect(screen.getByTestId("role-binding-code-coder").title).toBe("dev.coder · claude-opus-5 @ high");
     expect(
       screen.getByLabelText("dev.coder: claude · claude-opus-5 @ high (ready)"),
     ).toBeTruthy();

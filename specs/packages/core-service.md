@@ -63,10 +63,30 @@ On every load and reload:
 
 #### core-service-3
 
-Where no config file exists at the shared config path, when the core service starts, the core service shall write the installed playbook package's own starter template to that path, adopt it as the active config, and report the seeding to connected clients ([DR-037](../decisions/037-playbook-12-adoption.md)):
+Where no config file exists at the shared config path, when the core service starts, the core service shall write the installed playbook package's own seed for the core's environment and home to that path, adopt it as the active config, and report the seeding to connected clients ([DR-037](../decisions/037-playbook-12-adoption.md); [DR-153](../decisions/153-the-seed-follows-playbooks-rule.md)):
 
-- When seeding, the core service does not overwrite an existing config file.
-- The template is read from the installed package, so both hosts' first-run config is identical by construction.
+- The text is what `@sublang/playbook/seed-config` returns for that environment and home, with every `playbooks.<id>.from` removed; the core chooses no adapter, model, effort or writable path itself.
+- That seed reads credentials alone — an agent's API key or token form in the environment, or the `.claude` and `.codex` folders in the home; on a seat, the environment its credentials were read into first [[core-service-126](#core-service-126)] — so the Captain's and each player's `adapter`, `model`, `effort` and `writablePaths` equal the `playbook` CLI's seed under the same credentials and home, while the two files may differ:
+
+| Credentials | Seeded agents |
+| --- | --- |
+| Claude only, or neither | every agent as the template writes it, on `claude` |
+| Codex only | every agent on `codex` / `gpt-6-sol` with `writablePaths: ['.git']` |
+| both | `dev.reviewer` on `codex` / `gpt-6-sol` with `writablePaths: ['.git']`, every other agent as the template writes it |
+
+- The file is created exclusively, and the seed's version is recorded [[storage-5](storage.md#storage-5)]; an existing config file is never overwritten, and only the reseed of [[core-service-137](#core-service-137)] rewrites the seeded file afterwards.
+
+#### core-service-137
+
+Where the recorded seed names the shared config path [[storage-5](storage.md#storage-5)], when the core service starts, and on a seat when the member sets or removes an agent credential [[settings-48](settings.md#settings-48)], the core service shall reseed that file while it stands at the recorded version ([DR-155](../decisions/155-an-untouched-seed-follows-the-credentials.md)):
+
+| The file | Outcome |
+| --- | --- |
+| at the recorded version, the seed of [[core-service-3](#core-service-3)] for the environment and home now the same bytes | left as it is |
+| at the recorded version, that seed different | written as one versioned write, its permission bits kept, the new version recorded, adopted as the active config and reported as reseeded to connected clients |
+| at any other version, absent, or changed before the write | left as it is, and the record removed, so the file is never reseeded again |
+
+- A config with no record, or a record naming another path, is never reseeded.
 
 #### core-service-66
 
@@ -623,10 +643,11 @@ Where the core runs as a seat — started with a server's id and name, the admit
 
 #### core-service-126
 
-Where the core runs as a seat with a shared credential file [[core-service-125](#core-service-125)], when it starts and before each agent run, the core service shall read the file — `NAME=value` lines, the names of each agent's shared forms among them [[settings-49](settings.md#settings-49)] — into the environment its adapters inherit, so that a replaced value reaches the next run without a restart while a running agent process keeps the environment it started with ([DR-132](../decisions/132-team-servers.md)):
+Where the core runs as a seat with a shared credential file [[core-service-125](#core-service-125)], when it starts — before it seeds or reseeds your own group's config [[core-service-3](#core-service-3)] [[core-service-137](#core-service-137)] ([DR-155](../decisions/155-an-untouched-seed-follows-the-credentials.md)) — and before each agent run, the core service shall read the file — `NAME=value` lines, the names of each agent's shared forms among them [[settings-49](settings.md#settings-49)] — into the environment its adapters inherit, so that a replaced value reaches the next run without a restart while a running agent process keeps the environment it started with ([DR-132](../decisions/132-team-servers.md)):
 
 - for an agent the member set a credential of their own for [[settings-48](settings.md#settings-48)], the file's names for that agent are left out of the run's environment and the member's own put in, so the member's own wins whatever the agent's precedence;
 - an unreadable file leaves the environment as it was and is reported through readiness [[settings-49](settings.md#settings-49)], blocking nothing else;
+- a stop, and a start that fails before the service stands, put every form name back as the process started with it;
 - no value of the file is written anywhere or logged.
 
 ### Places
@@ -900,6 +921,27 @@ Where the core watches no config file and a playbook module's import or a readin
 | a compile asked while the config cannot be read as standing | the compile's failure recorded at the toolchain phase, no compiler run |
 | `config.edit` whose reload's composition is held while the file is edited twice more | the reply is the state standing after the edits or `conflict`, never the state before the edit |
 
+#### core-service-136
+
+Where the shared config path holds no file, the test suite shall start the core service once for each credential row of [[core-service-3](#core-service-3)] — Claude only, Codex only, both and neither, each with an explicit environment and a scratch home — and fail unless the seeded file's Captain and each player carry the `adapter`, `model`, `effort` and `writablePaths` that Playbook's seed — the one the `playbook` CLI writes — returns for that same environment and home, the both-credentials row placing `dev.reviewer` alone on `codex`, no `playbooks.<id>.from` remains, and a second start over the seeded file leaves its bytes unchanged [[core-service-3](#core-service-3)].
+
+
+#### core-service-138
+
+Where the core seeded the shared config path under Claude credentials alone, the test suite shall restart it on the same home and fail unless:
+
+- with Codex credentials added, the file becomes the both-credentials seed — `dev.reviewer` alone on `codex` — with its permission bits kept, the recorded version following it, and connected clients told it was reseeded [[core-service-137](#core-service-137)];
+- a restart with unchanged credentials leaves its bytes as they are [[core-service-137](#core-service-137)];
+- after one config edit, a restart under Codex credentials alone leaves the edited bytes as they are and the record gone, and so does a further restart under Claude alone [[core-service-137](#core-service-137)];
+- a config standing with no record is left as it is under every credential row [[core-service-137](#core-service-137)].
+
+#### core-service-139
+
+Where the core runs as a seat whose shared credential file holds `CODEX_ACCESS_TOKEN` alone, with no credential in the process environment or the home, the test suite shall start it on a fresh home and fail unless the seeded config, as the clone's first commit records it, carries every agent on `codex` [[core-service-126](#core-service-126)] [[core-service-3](#core-service-3)], and unless, after the member sets their own Claude credential, the untouched config becomes the both-credentials seed [[core-service-137](#core-service-137)].
+
+#### core-service-140
+
+Where the core runs as a seat whose shared credential file holds `CODEX_ACCESS_TOKEN`, with no credential in the process environment, the test suite shall fail unless a start on a home another core already serves is refused, a stop whose media staging cannot be removed fails, and a stop whose root lease cannot be released fails, each leaving no form name of any agent in the process environment [[core-service-126](#core-service-126)].
 ### Persistence Coverage
 
 #### core-service-22

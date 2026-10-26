@@ -32,6 +32,8 @@ export interface FailureContext {
   /** The parked run's advertised controls, as the session summary
    * publishes them (core-service-32). */
   actions?: readonly ParkedRunAction[];
+  /** How a player id reads over the session's roster (run-view-177). */
+  name?: (id: string) => string;
 }
 
 /** The card's three lines, derived once so the run view and its tests
@@ -54,12 +56,12 @@ export function failureCardLines(
   // The catalogue phrases the cause; a record from before the runtime
   // attached one falls back to the runtime's own words, spoken plain
   // (run-view-2).
-  const why = causePhrase(cause) ?? message ?? i18n._("No reason was reported");
+  const why = causePhrase(cause, context?.name) ?? message ?? i18n._("No reason was reported");
   // What now: the Boss step the cause carries, then what each
   // published control would do — a no-op named here is a control the
   // reader can see is pointless before pressing it (DR-075).
   const parts: string[] = [];
-  const bossStep = causeStep(cause);
+  const bossStep = causeStep(cause, context?.name);
   if (bossStep) parts.push(bossStep);
   for (const action of context?.actions ?? []) {
     const standing = standingLine(action);

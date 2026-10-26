@@ -494,6 +494,11 @@ The seats are then administered as $HUB_USER:
 A seat loads Spex's modules from $prefix/app as it needs them, so a seat that
 runs while install.sh replaces $prefix/app may load modules of the new version
 from then on: run install.sh while no seat runs, or evict the running seats first.
+
+A seat reads $ETC_DIR/agents.env before each agent run, but a member's
+untouched starter config picks its agents from those sign-ins only as the seat
+starts. After changing which agents it signs in, evict the running seats, so
+each picks again at its member's next admission.
 NEXT
 if systemctl is-active --quiet spex-hub; then
   echo

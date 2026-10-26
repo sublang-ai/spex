@@ -1025,6 +1025,11 @@ msgstr "Added to Up next — see the project's Overview."
 msgid "Adding…"
 msgstr "Adding…"
 
+#. a failure's way back: open this agent's settings for this conversation
+#: src/components/RunView.tsx
+msgid "Adjust {agent}"
+msgstr "Adjust {agent}"
+
 #. queued row standing: it runs once the current work ends
 #: src/components/QueuedIntentPresentation.tsx
 msgid "after current work"
@@ -1477,6 +1482,8 @@ msgstr "bypass: no permission prompts — sandboxed repos only"
 #. the Captain's avatar: one letter standing for Captain
 #. the Captain's avatar: one letter standing for Captain
 #. the Captain's avatar: one letter standing for Captain
+#. the Captain's avatar: one letter standing for Captain
+#: src/components/AgentMark.tsx
 #: src/components/CaptainHome.tsx
 #: src/components/CaptainPane.tsx
 msgid "C"
@@ -1552,6 +1559,7 @@ msgid "Cancelling browser setup…"
 msgstr "Cancelling browser setup…"
 
 #. the agent that routes the Boss's message to a playbook
+#. the agent that routes the Boss's message to a playbook
 #. the session's controlling agent, by name
 #. the session's controlling agent, by name
 #. the session's controlling agent, by name
@@ -1559,6 +1567,7 @@ msgstr "Cancelling browser setup…"
 #. the session's controlling agent, by name
 #: src/components/CaptainPane.tsx
 #: src/components/DraftConversation.tsx
+#: src/components/RunView.tsx
 #: src/components/SettingsSurface.tsx
 #: src/lib/session-agents.ts
 msgid "Captain"
@@ -1579,6 +1588,11 @@ msgstr "Captain is working. Wait for the turn to finish."
 #: src/components/Composer.tsx
 msgid "Captain is working…"
 msgstr "Captain is working…"
+
+#. a failure's way back: open this agent's row in Settings
+#: src/components/RunView.tsx
+msgid "Change {agent} in Settings"
+msgstr "Change {agent} in Settings"
 
 #. draft state chip, at most 14 characters: the source changed after the last compile
 #: src/lib/drafts.ts
@@ -2991,6 +3005,14 @@ msgstr "Folder its sessions run in on this device"
 msgid "For example:"
 msgstr "For example:"
 
+#: src/components/RunView.tsx
+msgid "For new sessions"
+msgstr "For new sessions"
+
+#: src/components/RunView.tsx
+msgid "For this conversation, from the next message"
+msgstr "For this conversation, from the next message"
+
 #. confirm: forget a folder whose records are gone from this device
 #. on a signed-out instance's heading: remove the instance from this home; nothing at it changes and every record stays
 #: src/components/SpaceInstance.tsx
@@ -3139,6 +3161,11 @@ msgstr "Group records"
 #: src/components/SpaceInstance.tsx
 msgid "Groups are made by the people who run {name}"
 msgstr "Groups are made by the people who run {name}"
+
+#. a delegation line: the Captain gave this call to the named player
+#: src/components/CaptainPane.tsx
+msgid "Handed to {player}"
+msgstr "Handed to {player}"
 
 #: src/components/SpecView.tsx
 msgid "Hide {group} items"
@@ -6805,6 +6832,10 @@ msgstr "Updated {age} by the agent"
 #: src/components/DraftSourceTab.tsx
 msgid "Updated {age} by you"
 msgstr "Updated {age} by you"
+
+#: src/components/SettingsSurface.tsx
+msgid "Updated the starter config at <0>{path}</0> for the current sign-ins"
+msgstr "Updated the starter config at <0>{path}</0> for the current sign-ins"
 
 #. the environment is being resolved again to run the built-in playbooks this app ships
 #: src/components/EnvironmentSection.tsx

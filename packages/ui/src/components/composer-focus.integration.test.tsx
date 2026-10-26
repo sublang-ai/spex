@@ -35,8 +35,8 @@ function lanesView(): SessionView {
 }
 
 function collapseReviewer(): HTMLElement {
-  fireEvent.click(screen.getByRole("button", {name: "Collapse dev.reviewer"}));
-  const expand = screen.getByRole("button", {name: "Expand dev.reviewer"});
+  fireEvent.click(screen.getByRole("button", {name: "Collapse reviewer"}));
+  const expand = screen.getByRole("button", {name: "Expand reviewer"});
   expect(document.activeElement).toBe(expand);
   return expand;
 }

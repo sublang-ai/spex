@@ -29,6 +29,8 @@ import {
 } from "./AgentActiveTime.js";
 import type { SessionAgent } from "../lib/session-agents.js";
 import { SourceChip } from "./DeliveryCard.js";
+import { AgentMark } from "./AgentMark.js";
+import { providerDefaultReading } from "../lib/session-agents.js";
 import type { IntentSource, MachineGraph } from "@sublang/spex-core/protocol";
 
 /** A node the thread hosts after a given line — the run view anchors
@@ -77,6 +79,9 @@ export function ThreadLine({
   source,
   readiness,
   failure,
+  names,
+  onShowLane,
+  recovery,
 }: {
   line: CaptainLine;
   graphs?: Record<string, MachineGraph | null>;
@@ -90,6 +95,13 @@ export function ThreadLine({
    * run's command and step, and the controls the summary publishes
    * (run-view-147). */
   failure?: FailureContext;
+  /** How a player id reads over the session's roster (run-view-177). */
+  names?: (id: string) => string;
+  /** A delegation line brings its player's lane into view
+   * (run-view-178). */
+  onShowLane?: (playerId: string) => void;
+  /** A failure's ways back to the agent it names (run-view-179). */
+  recovery?: ReactNode;
 }) {
   const time = new Date(line.at).toLocaleString(currentLocale());
   // A failure the runtime reported draws as the card, wherever the
@@ -121,7 +133,7 @@ export function ThreadLine({
           message={reported.message ?? line.raw ?? line.text}
           context={failure}
           count={line.count}
-          extra={readinessLink}
+          extra={readinessLink || recovery ? <>{readinessLink}{recovery}</> : undefined}
         />
       </div>
     );
@@ -238,8 +250,43 @@ export function ThreadLine({
             </span>
           ) : null}
           {readinessLink}
+          {recovery}
         </div>
       );
+    case "delegation": {
+      // Who a call went to and what it runs (run-view-178): a system
+      // line of its own, outside every machine card.
+      const delegation = line.delegation;
+      if (!delegation) return null;
+      const name = names?.(delegation.player) ?? delegation.player;
+      const model = delegation.reported ??
+        (delegation.model === false ? providerDefaultReading() : delegation.model);
+      const runs = [delegation.adapter, model].filter((part): part is string => !!part);
+      return (
+        <button
+          type="button"
+          data-testid={`delegation-line-${delegation.player}`}
+          onClick={() => onShowLane?.(delegation.player)}
+          title={`${delegation.player} · ${time}`}
+          className="flex items-center gap-1.5 self-start rounded text-left text-xs leading-5 text-neutral-600 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100"
+        >
+          <AgentMark player={name} size="sm" />
+          <span>
+            {i18n._({
+              id: "Handed to {player}",
+              values: { player: name },
+              comment: "a delegation line: the Captain gave this call to the named player",
+            })}
+            {runs.map((part) => (
+              <span key={part}>
+                <span aria-hidden="true" className="text-neutral-400"> · </span>
+                <span className="font-mono">{part}</span>
+              </span>
+            ))}
+          </span>
+        </button>
+      );
+    }
     default:
       return <SystemLine text={line.text} title={time} />;
   }
@@ -369,8 +416,18 @@ export function CaptainPane({
   focusKey,
   onFocusHandled,
   failure,
+  names,
+  onShowLane,
+  recovery,
 }: {
   view: SessionView;
+  /** How a player id reads over the session's roster (run-view-177). */
+  names?: (id: string) => string;
+  /** A delegation line brings its player's lane into view
+   * (run-view-178). */
+  onShowLane?: (playerId: string) => void;
+  /** A failure line's ways back to the agent it names (run-view-179). */
+  recovery?: (line: CaptainLine, index: number) => ReactNode;
   /** The core-folded completed active time for the Captain. */
   activeMs?: number;
   /** What the Captain is set to run, and the door to changing it for
@@ -596,6 +653,9 @@ export function CaptainPane({
                       }
                       readiness={readiness}
                       failure={failure?.(line)}
+                      names={names}
+                      onShowLane={onShowLane}
+                      recovery={recovery?.(line, index)}
                     />
                   </div>
                   {extras

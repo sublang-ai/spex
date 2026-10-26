@@ -30,6 +30,7 @@ import {
   validateProjectConfig,
   type LoadModule,
 } from "./config.js";
+import { sha256 } from "./files.js";
 import { defaultOwnName, Home } from "./home.js";
 import { executionConfig } from "./session.js";
 import { speak } from "./i18n.js";
@@ -821,11 +822,12 @@ test("command overrides land in captain options and duplicates are rejected", as
 test("seedConfig creates once and never overwrites", () => {
   const dir = scratchDir("spex-config-");
   const path = join(dir, "config", "playbook.config.yaml");
-  assert.equal(seedConfig(path), true);
+  const version = seedConfig(path);
   const seeded = readFileSync(path, "utf8");
+  assert.equal(version, sha256(seeded));
   assert.match(seeded, /playbooks:/);
   writeFileSync(path, "captain: claude\n");
-  assert.equal(seedConfig(path), false);
+  assert.equal(seedConfig(path), null);
   assert.equal(readFileSync(path, "utf8"), "captain: claude\n");
 });
 

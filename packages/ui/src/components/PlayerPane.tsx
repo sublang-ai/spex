@@ -25,6 +25,7 @@ import type { SessionAgent } from "../lib/session-agents.js";
 import { StoredMedia, assetReference, DeferredToolOutput } from "./StoredMedia.js";
 import { Markdown } from "./Markdown.js";
 import { RunningMark } from "./RunningMark.js";
+import { AgentMark } from "./AgentMark.js";
 
 const RENDER_WINDOW = 200;
 
@@ -384,6 +385,8 @@ export function PlayerPane({
   settingsPopover,
   collapsed = false,
   onCollapsedChange,
+  name = view.id,
+  chipHighlighted = false,
 }: {
   view: PlayerView;
   meta?: SessionInfo["players"][number];
@@ -402,6 +405,11 @@ export function PlayerPane({
   /** The lane stands as a rail (run-view-116). */
   collapsed?: boolean;
   onCollapsedChange?: (collapsed: boolean) => void;
+  /** The player's name over the session's roster (run-view-177). */
+  name?: string;
+  /** A failure's "Adjust" points at the chip before its popover opens
+   * (run-view-179). */
+  chipHighlighted?: boolean;
 }) {
   const [windowSize, setWindowSize] = useState(RENDER_WINDOW);
   const { scrollRef, contentRef, onScroll, newBelow, jump, revealAbove } = useStickToBottom(
@@ -411,7 +419,7 @@ export function PlayerPane({
   // call is open, how long the player has been at it — ticking, so a
   // minutes-long call never reads as a hang (DR-010 §5).
   const call = latestCall(view);
-  const who = call?.role ?? view.id;
+  const who = call?.role ?? name;
   const now = useClock(view.running);
   const activeDescription = activeMs === undefined
     ? undefined
@@ -425,6 +433,9 @@ export function PlayerPane({
   const railLabel = settings
     ? `${view.id} · ${agentReading(settings)}${reported ? ` — ${reported}` : ""}`
     : view.id;
+  // The role the latest call served reads before the name, unless it
+  // is the name again (run-view-177).
+  const role = call?.role && call.role !== name ? call.role : undefined;
   const railTitle = activeDescription
     ? `${railLabel} · ${activeDescription}`
     : railLabel;
@@ -470,8 +481,8 @@ export function PlayerPane({
       >
         <button
           {...toggleProps}
-          title={i18n._("Expand {player}", { player: view.id })}
-          aria-label={i18n._("Expand {player}", { player: view.id })}
+          title={i18n._("Expand {player}", { player: name })}
+          aria-label={i18n._("Expand {player}", { player: name })}
           aria-expanded={false}
         >
           <span aria-hidden="true">⇥</span>
@@ -486,12 +497,13 @@ export function PlayerPane({
             })}
           />
         ) : null}
+        <AgentMark player={name} size="sm" />
         <span
           data-testid={`player-name-${view.id}`}
           title={railTitle}
-          className="min-h-0 overflow-hidden text-ellipsis whitespace-nowrap font-mono text-sm font-semibold [writing-mode:vertical-rl]"
+          className="min-h-0 overflow-hidden text-ellipsis whitespace-nowrap text-sm font-semibold [writing-mode:vertical-rl]"
         >
-          {view.id}
+          {name}
         </span>
         {activeMs !== undefined ? (
           <AgentActiveTime agentId={view.id} ms={activeMs} visible={false} />
@@ -513,24 +525,29 @@ export function PlayerPane({
         aria-describedby={activeDescriptionId}
         className="flex items-center gap-2 border-b border-neutral-200 px-3 py-1.5 dark:border-neutral-800"
       >
+        <AgentMark player={name} />
         <span
           data-testid={`player-name-${view.id}`}
+          title={view.id}
           className="shrink-0 text-sm font-semibold"
         >
-          {call?.role ? (
+          {role ? (
             <>
-              {call.role}
+              {role}
               <span className="font-normal text-neutral-400"> · </span>
             </>
           ) : null}
-          <span className="font-mono">{view.id}</span>
+          {name}
         </span>
         {settings && onEditSettings ? (
           // The chip reads what this lane is set to run and is the
           // control that changes it for this session (run-view-139).
           // Its popover hangs from this box, so the panel arrives where
           // the hand is rather than at a fixed corner (run-view-138).
-          <span className="relative flex min-w-0 shrink">
+          <span
+            data-highlighted={chipHighlighted ? "1" : undefined}
+            className={`relative flex min-w-0 shrink rounded ${chipHighlighted ? "ring-2 ring-brand-400 dark:ring-brand-500" : ""}`}
+          >
             <AgentChipButton
               agent={settings}
               onOpen={onEditSettings}
@@ -607,8 +624,8 @@ export function PlayerPane({
         </span>
         <button
           {...toggleProps}
-          title={i18n._("Collapse {player}", { player: view.id })}
-          aria-label={i18n._("Collapse {player}", { player: view.id })}
+          title={i18n._("Collapse {player}", { player: name })}
+          aria-label={i18n._("Collapse {player}", { player: name })}
           aria-expanded
         >
           <span aria-hidden="true">⇤</span>

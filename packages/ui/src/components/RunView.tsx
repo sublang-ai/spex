@@ -44,10 +44,14 @@ import { WorkingLine } from "./WorkingLine.js";
 import { parkedRun } from "../lib/machine-frames.js";
 import type { FailureContext } from "./FailureCard.js";
 import {
+  causeAdapterMessage,
   causePhrase,
+  causePlayer,
   causeStep,
   readRecordFailure,
 } from "../lib/failure-catalogue.js";
+import { failureRecovery } from "../lib/labels.js";
+import { playerNamer } from "../lib/player-names.js";
 
 /** The cause the last failure the thread reported carried
  * (run-view-147): the notices say why from the same reading the card
@@ -195,6 +199,23 @@ export function SplitDivider({
  * reads as "more this way" (run-view-7, DR-041). Either edge can hide
  * one — the grid scrolls itself to the lane whose call opens — so each
  * is faded only while a pane lies beyond it. */
+/** Bring one lane's pane into the grid's view by the grid's own offset
+ * alone (run-view-7), answering the pane it found. */
+function scrollLaneIntoGrid(grid: HTMLElement, playerId: string): HTMLElement | undefined {
+  const pane = Array.from(
+    grid.querySelectorAll<HTMLElement>('[data-testid^="player-pane-"]'),
+  ).find((el) => el.dataset.testid === `player-pane-${playerId}`);
+  if (!pane) return undefined;
+  const box = grid.getBoundingClientRect();
+  const rect = pane.getBoundingClientRect();
+  if (rect.left < box.left - 1) {
+    grid.scrollLeft -= box.left - rect.left;
+  } else if (rect.right > box.right + 1) {
+    grid.scrollLeft += Math.min(rect.right - box.right, rect.left - box.left);
+  }
+  return pane;
+}
+
 function markGridEdges(box: HTMLElement): void {
   const before = box.scrollLeft > 1;
   const beyond = box.scrollLeft + box.clientWidth < box.scrollWidth - 1;
@@ -227,6 +248,7 @@ export function RunView({
   focusTurn,
   focusAt,
   onFocusHandled,
+  onOpenAgentSettings,
 }: {
   session: SessionInfo;
   view: SessionView;
@@ -259,6 +281,8 @@ export function RunView({
   /** The onset of a failure whose attention entry names no turn. */
   focusAt?: number;
   onFocusHandled?: () => void;
+  /** Open Settings at an agent's row (run-view-179, settings-52). */
+  onOpenAgentSettings?: (agentId: string) => void;
 }) {
   const store = usePlaceStore();
   const externalWriter = session.externalWriter;
@@ -288,6 +312,14 @@ export function RunView({
   // the reader touched is the object they get (run-view-138, DR-068).
   const [editingAgent, setEditingAgent] = useState<string | undefined>();
   const settingsAnchorRef = useRef<HTMLButtonElement>(null);
+  // A failure's "Adjust" (run-view-179): the chip it points at while
+  // its lane comes into view, and the failure line a player with no
+  // lane opens the same editor from.
+  const [highlightedChip, setHighlightedChip] = useState<string | undefined>();
+  const [failureEditor, setFailureEditor] = useState<{ agentId: string; line: number } | undefined>();
+  const failureAnchorRef = useRef<HTMLButtonElement>(null);
+  const adjustTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  useEffect(() => () => adjustTimers.current.forEach(clearTimeout), []);
   const captainSplit = store((state) => state.captainSplit);
   const setCaptainSplit = store((state) => state.setCaptainSplit);
   const ledger = store((state) => state.ledger);
@@ -506,21 +538,18 @@ export function RunView({
     shownLanes.current = lanes;
     const targets = [...(runningLanes ? runningLanes.split("\u0000") : []), ...appeared];
     if (!grid || targets.length === 0) return;
-    const box = grid.getBoundingClientRect();
-    for (const playerId of targets) {
-      const pane = Array.from(
-        grid.querySelectorAll<HTMLElement>('[data-testid^="player-pane-"]'),
-      ).find((el) => el.dataset.testid === `player-pane-${playerId}`);
-      if (!pane) continue;
-      const rect = pane.getBoundingClientRect();
-      if (rect.left < box.left - 1) {
-        grid.scrollLeft -= box.left - rect.left;
-      } else if (rect.right > box.right + 1) {
-        grid.scrollLeft += Math.min(rect.right - box.right, rect.left - box.left);
-      }
-    }
+    for (const playerId of targets) scrollLaneIntoGrid(grid, playerId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runningLanes, laneKey]);
+  /** The reader asked for a lane (run-view-178/179): the grid scrolls
+   * to it as above, and in the stacked form the column scrolls to the
+   * grid, since the reader's own act asked to go there. */
+  const showLane = (playerId: string): void => {
+    const grid = gridRef.current;
+    if (!grid) return;
+    const pane = scrollLaneIntoGrid(grid, playerId);
+    pane?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+  };
   // The fade must return with the content it hides (run-view-7): the
   // grid's box changes with the divider and the rail, and a lane
   // folding to a rail narrows the content under an unchanged box, so
@@ -547,6 +576,97 @@ export function RunView({
   // here rather than fetched: the chip needs no second source.
   const agentById = new Map(sessionAgents(session, configSummary).map((agent) => [agent.id, agent]));
   const settingsReadOnly = readOnly || !!externalWriter;
+  // Each player's name over this session's roster (run-view-177).
+  const names = playerNamer(session.players.map((player) => player.id));
+  const captainName = i18n._({
+    id: "Captain",
+    comment: "the agent that routes the Boss's message to a playbook",
+  });
+  const agentName = (agentId: string): string =>
+    agentId === CAPTAIN_AGENT_ID ? captainName : names(agentId);
+  /** "Adjust ⟨name⟩" (run-view-179): the agent's own chip editor, from
+   * its chip where it stands — a player's lane unfolds and comes into
+   * view and the chip is pointed at first — else from the failure. */
+  const adjust = (agentId: string, line: number): void => {
+    adjustTimers.current.forEach(clearTimeout);
+    adjustTimers.current = [];
+    setFailureEditor(undefined);
+    if (agentId === CAPTAIN_AGENT_ID) {
+      setEditingAgent(agentId);
+      return;
+    }
+    if (!lanes.includes(agentId)) {
+      setEditingAgent(undefined);
+      setFailureEditor({ agentId, line });
+      return;
+    }
+    setEditingAgent(undefined);
+    setLaneCollapsed(session.id, agentId, false);
+    setHighlightedChip(agentId);
+    adjustTimers.current.push(
+      setTimeout(() => showLane(agentId), 0),
+      setTimeout(() => setEditingAgent(agentId), 400),
+      setTimeout(() => setHighlightedChip(undefined), 1600),
+    );
+  };
+  /** A failure's ways back to the agent it names (run-view-179). */
+  const recovery = (line: CaptainLine, index: number): React.ReactNode => {
+    if (line.kind !== "error" && line.kind !== "status") return null;
+    const reported = readRecordFailure(line.data);
+    if (line.kind === "status" && !reported) return null;
+    const player = line.agent ? undefined : causePlayer(reported?.cause);
+    const agentId = line.agent ?? player;
+    if (!agentId) return null;
+    const said = player
+      ? causeAdapterMessage(reported?.cause) ?? reported?.message ?? line.raw ?? line.text
+      : line.raw ?? line.text;
+    const kind = failureRecovery(said);
+    const name = agentName(agentId);
+    const canAdjust = kind === "unknown" && agentById.has(agentId) && !settingsReadOnly;
+    const canChange = (kind === "unknown" || kind === "settings") && !!onOpenAgentSettings;
+    if (!canAdjust && !canChange) return null;
+    const open = failureEditor?.agentId === agentId && failureEditor.line === index;
+    const agent = agentById.get(agentId);
+    const entry = "shrink-0 font-medium text-brand-600 hover:underline dark:text-brand-300";
+    return (
+      <span className="relative inline-flex flex-wrap items-baseline gap-x-2">
+        {canAdjust ? (
+          <button
+            type="button"
+            data-testid={`failure-adjust-${agentId}`}
+            ref={open ? failureAnchorRef : undefined}
+            aria-expanded={open}
+            onClick={() => adjust(agentId, index)}
+            title={i18n._("For this conversation, from the next message")}
+            className={entry}
+          >
+            {i18n._({ id: "Adjust {agent}", values: { agent: name }, comment: "a failure's way back: open this agent's settings for this conversation" })}
+          </button>
+        ) : null}
+        {canChange ? (
+          <button
+            type="button"
+            data-testid={`failure-settings-${agentId}`}
+            onClick={() => onOpenAgentSettings?.(agentId)}
+            title={i18n._("For new sessions")}
+            className={entry}
+          >
+            {i18n._({ id: "Change {agent} in Settings", values: { agent: name }, comment: "a failure's way back: open this agent's row in Settings" })}
+          </button>
+        ) : null}
+        {open && agent ? (
+          <AgentSettingsPopover
+            agent={agent}
+            context={{ kind: "project", id: session.projectId }}
+            readOnly={settingsReadOnly}
+            anchorRef={failureAnchorRef}
+            onSave={(change) => setAgentSettings(session.id, agentId, change)}
+            onClose={() => setFailureEditor(undefined)}
+          />
+        ) : null}
+      </span>
+    );
+  };
   /** The props a pane needs to show its agent's chip and, while that
    * chip is the open one, the editor hanging from it. */
   const agentProps = (agentId: string) => {
@@ -611,6 +731,7 @@ export function RunView({
       parked.frame.transitions.length === failure.transitionCount &&
       (parked.frame.lastFired?.at ?? parked.frame.openedAt) === failure.transitionAt;
     return {
+      name: names,
       ...(command ? { command } : {}),
       ...(failure.step ? { step: failure.step } : {}),
       ...(current && session.parked?.actions ? { actions: session.parked.actions } : {}),
@@ -683,6 +804,9 @@ export function RunView({
             {...agentProps(CAPTAIN_AGENT_ID)}
             focusKey={focusKey}
             onFocusHandled={onFocusHandled}
+            names={names}
+            onShowLane={showLane}
+            recovery={recovery}
           />
           {!readOnly ? (
             // The working line (run-view-90) with its Drop
@@ -732,20 +856,20 @@ export function RunView({
               <p>{i18n._("The last turn failed. Send a message to pick it up.")}</p>
               {/* Why, and what to do about it outside Spex (DR-075):
                   the same catalogue phrase every other mention uses. */}
-              {causePhrase(failureCause) ? (
+              {causePhrase(failureCause, names) ? (
                 <p
                   data-testid="unparked-failure-why"
                   className="text-neutral-600 dark:text-neutral-400"
                 >
-                  {causePhrase(failureCause)}
+                  {causePhrase(failureCause, names)}
                 </p>
               ) : null}
-              {causeStep(failureCause) ? (
+              {causeStep(failureCause, names) ? (
                 <p
                   data-testid="unparked-failure-next"
                   className="text-neutral-600 dark:text-neutral-400"
                 >
-                  {causeStep(failureCause)}
+                  {causeStep(failureCause, names)}
                 </p>
               ) : null}
             </div>
@@ -875,6 +999,8 @@ export function RunView({
                   onCollapsedChange={(next) =>
                     setLaneCollapsed(session.id, playerId, next)
                   }
+                  name={names(playerId)}
+                  chipHighlighted={highlightedChip === playerId}
                 />
               ))}
             </div>

@@ -65,6 +65,8 @@ import { InlineConfirm } from "./InlineConfirm.js";
 import { Markdown } from "./Markdown.js";
 import { Rich } from "./Rich.js";
 import { AgentChip } from "./AgentChip.js";
+import { PlayerName } from "./AgentMark.js";
+import { playerNamer } from "../lib/player-names.js";
 import { AgentEditorPopover } from "./AgentEditor.js";
 import {
   GearsItems,
@@ -239,13 +241,29 @@ function BoundRole({
       className="relative flex min-w-0 max-w-full flex-wrap items-center gap-1"
     >
       <span className="font-mono">{role}:</span>
-      <span
-        data-testid={`role-binding-${entry.id}-${role}`}
-        className="font-mono text-neutral-700 dark:text-neutral-200"
-        title={binding?.display}
-      >
-        {binding?.playerId ?? i18n._({ id: "unbound", comment: "a required role no player answers yet" })}
-      </span>
+      {binding?.playerId ? (
+        <span
+          data-testid={`role-binding-${entry.id}-${role}`}
+          className="text-neutral-700 dark:text-neutral-200"
+          title={[binding.playerId, binding.display].filter(Boolean).join(" · ")}
+        >
+          {/* The player by its name and mark, its id in the tooltip
+              (run-view-177). */}
+          <PlayerName
+            id={[binding.playerId, binding.display].filter(Boolean).join(" · ")}
+            name={playerNamer(roster.map((player) => player.id))(binding.playerId)}
+            size="sm"
+          />
+        </span>
+      ) : (
+        <span
+          data-testid={`role-binding-${entry.id}-${role}`}
+          className="font-mono text-neutral-700 dark:text-neutral-200"
+          title={binding?.display}
+        >
+          {i18n._({ id: "unbound", comment: "a required role no player answers yet" })}
+        </span>
+      )}
       {lane ? (
         <AgentChip
           // The row says what the role effectively runs: a binding's

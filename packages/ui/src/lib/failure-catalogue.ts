@@ -22,6 +22,7 @@ import type { FailureCause } from "@sublang/spex-core/protocol";
 
 import { i18n } from "../i18n.js";
 import { failureRemedy, humanizeId, plainFailure } from "./labels.js";
+import { playerNamer } from "./player-names.js";
 
 // The codes this catalogue must cover are Playbook's own closed list,
 // reaching the interface as `PLAYBOOK_FAILURE_CODES` through the
@@ -35,9 +36,14 @@ export type Evidence = Record<string, unknown> | undefined;
 /** One code's words: the phrase that says why, and what the Boss can
  * do about it outside Spex. */
 export interface FailureRow {
-  phrase(evidence: Evidence): string;
-  bossStep?(evidence: Evidence): string | undefined;
+  phrase(evidence: Evidence, name?: PlayerNamer): string;
+  bossStep?(evidence: Evidence, name?: PlayerNamer): string | undefined;
 }
+
+/** How a player id reads (run-view-177): the roster's namer where the
+ * caller has one, else the id's own last segment. */
+export type PlayerNamer = (id: string) => string;
+const lone: PlayerNamer = playerNamer([]);
 
 // ---------------------------------------------------------------------------
 // Reading the evidence
@@ -122,9 +128,30 @@ const joined = (label: string, why: string): string =>
 const withDetail = (phrase: string, detail: string | undefined): string =>
   detail ? joined(phrase, detail) : phrase;
 
-/** The agent an evidence names, for a step that speaks to it. */
-const agentOf = (evidence: Evidence): string | undefined =>
-  text(evidence?.playerId) ?? text(evidence?.roleId);
+/** The agent an evidence names, for a step that speaks to it: a
+ * player by its name (run-view-177), a bare role as it came. */
+const agentOf = (evidence: Evidence, name: PlayerNamer = lone): string | undefined => {
+  const playerId = text(evidence?.playerId);
+  return playerId ? name(playerId) : text(evidence?.roleId);
+};
+
+/** The player a cause names, directly or through the nested failure
+ * that carries it (run-view-179). */
+export function causePlayer(cause: FailureCause | undefined): string | undefined {
+  if (!cause) return undefined;
+  if (cause.code === "player-failed") return text(cause.evidence?.playerId);
+  if (cause.code === "child-failed") return causePlayer(readCause(cause.evidence?.cause));
+  return undefined;
+}
+
+/** The adapter's own message a cause carries for its player, directly
+ * or through a nested failure. */
+export function causeAdapterMessage(cause: FailureCause | undefined): string | undefined {
+  if (!cause) return undefined;
+  if (cause.code === "player-failed") return errorMessage(cause.evidence?.error);
+  if (cause.code === "child-failed") return causeAdapterMessage(readCause(cause.evidence?.cause));
+  return undefined;
+}
 
 /** The adapter's own message, however the runtime attached it:
  * Playbook carries `{ name, message }` (Playbook DR-063 §1), and a
@@ -251,20 +278,20 @@ export const FAILURE_CATALOGUE: Record<string, FailureRow> = {
     // known runtime messages serves the thread's failure lines and
     // this catalogue alike; a message it does not know is printed as
     // itself rather than swallowed (run-view-147).
-    phrase: (evidence) => {
-      const who = agentOf(evidence);
+    phrase: (evidence, name) => {
+      const who = agentOf(evidence, name);
       return withDetail(
         who ? i18n._("{who} failed", { who }) : i18n._("An agent failed"),
         adapterSaid(evidence?.error),
       );
     },
-    bossStep: (evidence) => {
+    bossStep: (evidence, name) => {
       // A message no pattern matches answers to nothing outside Spex,
       // so it carries no step.
       const error = errorMessage(evidence?.error);
       const remedy = error ? failureRemedy(error) : undefined;
       if (!remedy) return undefined;
-      const who = agentOf(evidence);
+      const who = agentOf(evidence, name);
       // The remedy is recognized by its kind, never by its words: the
       // words are the catalog's and change with the language.
       return remedy.kind === "sign-in" && who
@@ -278,9 +305,9 @@ export const FAILURE_CATALOGUE: Record<string, FailureRow> = {
   "child-failed": {
     // The child's own cause is the reason this run failed, so it is
     // phrased rather than named (Playbook DR-063 §2).
-    phrase: (evidence) => {
+    phrase: (evidence, name) => {
       const playbookId = text(evidence?.playbookId);
-      const child = causePhrase(readCause(evidence?.cause));
+      const child = causePhrase(readCause(evidence?.cause), name);
       return withDetail(
         playbookId
           ? i18n._("/{playbookId} failed", { playbookId })
@@ -288,7 +315,7 @@ export const FAILURE_CATALOGUE: Record<string, FailureRow> = {
         child,
       );
     },
-    bossStep: (evidence) => causeStep(readCause(evidence?.cause)),
+    bossStep: (evidence, name) => causeStep(readCause(evidence?.cause), name),
   },
   "runtime-defect": {
     phrase: (evidence) =>
@@ -338,16 +365,16 @@ export function readRecordFailure(
 /** Why the run failed, in the catalogue's words. A code with no row —
  * which the coverage test forbids for every code Playbook exports —
  * reads as its own humanized id rather than as nothing. */
-export function causePhrase(cause: FailureCause | undefined): string | undefined {
+export function causePhrase(cause: FailureCause | undefined, name?: PlayerNamer): string | undefined {
   if (!cause) return undefined;
   const row = FAILURE_CATALOGUE[cause.code];
-  return row ? row.phrase(cause.evidence) : humanizeId(cause.code);
+  return row ? row.phrase(cause.evidence, name) : humanizeId(cause.code);
 }
 
 /** What the Boss does about it outside Spex, where anything answers it. */
-export function causeStep(cause: FailureCause | undefined): string | undefined {
+export function causeStep(cause: FailureCause | undefined, name?: PlayerNamer): string | undefined {
   if (!cause) return undefined;
-  return FAILURE_CATALOGUE[cause.code]?.bossStep?.(cause.evidence);
+  return FAILURE_CATALOGUE[cause.code]?.bossStep?.(cause.evidence, name);
 }
 
 // ---------------------------------------------------------------------------

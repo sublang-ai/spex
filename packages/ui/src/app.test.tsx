@@ -1676,10 +1676,10 @@ describe("run-view-135/136: a summons the session answers names its turn", () =>
     );
     // Why, and what to do about it outside Spex (run-view-135, DR-075).
     expect(screen.getByTestId("unparked-failure-why").textContent).toBe(
-      "dev.coder failed: The agent's sign-in has expired — in a terminal, sign in again with that agent's CLI",
+      "coder failed: The agent's sign-in has expired — in a terminal, sign in again with that agent's CLI",
     );
     expect(screen.getByTestId("unparked-failure-next").textContent).toBe(
-      "Sign in to dev.coder again",
+      "Sign in to coder again",
     );
     expect(screen.getByTestId("boss-composer")).toBeTruthy();
   });

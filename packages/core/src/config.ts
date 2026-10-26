@@ -44,8 +44,9 @@ import {
 } from "@sublang/cligent";
 import { KNOWN_PLAYER_ADAPTERS } from "@sublang/cligent/tmux-play";
 import { SUPPORTED_ARTIFACT_SCHEMAS } from "@sublang/playbook/xstate-runtime";
+import { seedConfigText } from "@sublang/playbook/seed-config";
 import { migrateConfigFileIfRetired } from "./config-migrate.js";
-import { sha256, type FileVersion } from "./files.js";
+import { readVersioned, sha256, VersionConflictError, writeVersionedBytes, type FileVersion } from "./files.js";
 import { defaultOwnName, recordedOwnName } from "./home.js";
 import { i18n } from "./i18n.js";
 import { canonicalWritablePath } from "./permission-paths.js";
@@ -547,9 +548,8 @@ export function playbookPackageRoot(
 }
 
 /**
- * The starter config is the playbook CLI's own (core-service-3): seeding
- * from the installed package's template keeps both hosts' first-run
- * config identical by construction, with nothing to keep in sync.
+ * The playbook CLI's starter template, the seed's structure and its
+ * default agents (core-service-3).
  */
 export function templatePath(env: NodeJS.ProcessEnv = process.env): string {
   return join(
@@ -722,15 +722,66 @@ export function relocateLegacyConfig(
   return true;
 }
 
+/** The seeded config this device recorded (storage-5, DR-155): the
+ * file's path and the version of the bytes the core wrote there. */
+export const SEED_PREF = "config:seed";
+export interface SeedRecord { path: string; version: string }
+
+export function isSeedRecord(value: unknown): value is SeedRecord {
+  return typeof value === "object" && value !== null
+    && typeof (value as SeedRecord).path === "string"
+    && typeof (value as SeedRecord).version === "string";
+}
+
+/** Playbook's own seed for these credentials and this home, as Spex
+ * writes it (core-service-3, DR-153). */
+function seedText(env: NodeJS.ProcessEnv, home: string): string {
+  return starterText(seedConfigText({ env, homeDir: home }).text);
+}
+
 /**
- * Seed the shared config from the bundled starter when absent.
- * Returns true when a file was created; never overwrites (CORE-3).
+ * Seed the shared config when absent: Playbook's own seed for these
+ * credentials and this home, so the agents match the CLI's
+ * (core-service-3, DR-153). Returns the version written, or null where
+ * a file already stood; never overwrites.
  */
-export function seedConfig(path: string): boolean {
-  if (existsSync(path)) return false;
+export function seedConfig(
+  path: string,
+  env: NodeJS.ProcessEnv = process.env,
+  home: string = env.HOME ?? homedir(),
+): string | null {
+  if (existsSync(path)) return null;
   mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, starterText(readFileSync(templatePath(), "utf8")), { flag: "wx" });
-  return true;
+  const text = seedText(env, home);
+  writeFileSync(path, text, { flag: "wx" });
+  return sha256(text);
+}
+
+/**
+ * Reseed a seeded config no one has changed (core-service-137, DR-155):
+ * while the file stands at `recorded`, the seed for these credentials
+ * replaces it where it differs. `rewritten` carries the new version;
+ * `edited` means the file is no longer the seed — absent, changed, or
+ * changed before the write — and is never reseeded again.
+ */
+export function reseedConfig(
+  path: string,
+  recorded: string,
+  env: NodeJS.ProcessEnv,
+  home: string,
+): { outcome: "kept" } | { outcome: "rewritten"; version: string } | { outcome: "edited" } {
+  const { version } = readVersioned(path);
+  if (version !== recorded) return { outcome: "edited" };
+  const text = seedText(env, home);
+  const next = sha256(text);
+  if (next === version) return { outcome: "kept" };
+  try {
+    writeVersionedBytes(path, text, version, statSync(path).mode & 0o777);
+  } catch (error) {
+    if (error instanceof VersionConflictError || (error as NodeJS.ErrnoException).code === "ENOENT") return { outcome: "edited" };
+    throw error;
+  }
+  return { outcome: "rewritten", version: next };
 }
 
 /**

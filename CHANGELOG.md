@@ -16,6 +16,21 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Added
 
+- Players read by name ([DR-154](specs/decisions/154-players-named-delegated-and-recovered.md)).
+  A player reads as the last segment of its id — `dev.reviewer` as
+  reviewer — with a letter mark in one neutral colour beside the
+  Captain's "C", in its lane, Settings and the Playbooks surface, its
+  full id in the tooltip; two players ending alike read as their ids.
+  The Captain's thread says "Handed to reviewer · codex · gpt-6-sol"
+  the first time a player is called and whenever its adapter or model
+  changes, from the records of that call, so a reopened session reads
+  the same; activating the line brings the lane into view.
+- A failure names the agent it belongs to and offers the way back by
+  cause: "Adjust reviewer" opens that agent's own settings for the
+  conversation from its chip, and "Change reviewer in Settings" opens
+  its row in Settings for new sessions; a cause outside Spex keeps its
+  words of what to do there.
+
 - Groups and sharing from Spex ([DR-114](specs/decisions/114-groups-and-sharing-from-spex.md)).
   Signed in, "New group" heads the list where the instance says you may
   create one, and a group's heading carries "New subgroup" where you
@@ -301,6 +316,18 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Changed
 
+- A first-run config takes the agents Playbook seeds for this machine's
+  sign-ins ([DR-153](specs/decisions/153-the-seed-follows-playbooks-rule.md)):
+  with only Codex signed in, the Captain and every player run Codex; with
+  both Claude and Codex, `dev.reviewer` runs Codex and everything else
+  Claude; otherwise the starter is as before. Existing configs are not
+  changed.
+- A seeded config no one has changed follows the sign-ins it was chosen
+  from ([DR-155](specs/decisions/155-an-untouched-seed-follows-the-credentials.md)):
+  at each start, and on a team server when a member places or removes an
+  agent credential, it is rewritten as the seed for the sign-ins then. A
+  team server seeds from its shared sign-ins, so a Codex-only server starts
+  on Codex. The first change to the file, of any kind, ends this for good.
 - The collaboration destination is **Space**, and the public server product is
   **Spex Space** at `spex.sublang.ai`. New homes use that address; existing
   connections, groups and stored placements keep their identities.

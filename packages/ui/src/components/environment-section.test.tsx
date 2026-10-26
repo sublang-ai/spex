@@ -230,7 +230,7 @@ describe("playbook-library-94: each side's environment", () => {
     expect(screen.getByTestId("playbook-from-triage").textContent).toBe("fromacme/triage 1.2.3");
     expect(screen.getByTestId("playbook-from-code").textContent).toBe("fromsublang/playbooks 17.4.1");
     // [playbook-library-1] the role's player and what it runs.
-    expect(screen.getByTestId("role-binding-triage-triager").textContent).toBe("dev.coder");
+    expect(screen.getByTestId("role-binding-triage-triager").textContent).toBe("Ccoder");
 
     // [playbook-library-1] your own group's side lists its own export
     // of the same playbooks, once each.
@@ -241,7 +241,7 @@ describe("playbook-library-94: each side's environment", () => {
     expect(screen.getAllByTestId("playbook-card-review")).toHaveLength(1);
     expect(screen.getByTestId("playbook-enabled-review").textContent).toBe("Enabled in your own group");
     expect(within(screen.getByTestId("playbooks-enabled")).getByTestId("playbook-card-review")).toBeTruthy();
-    expect(screen.getByTestId("role-binding-review-host").textContent).toBe("dev.reviewer");
+    expect(screen.getByTestId("role-binding-review-host").textContent).toBe("Rreviewer");
   });
 
   test("with no project chosen, your own group's side alone stands", async () => {
