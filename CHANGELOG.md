@@ -341,6 +341,10 @@ and `npm start` (desktop) or `npm run start:server` (server).
   agent credential, it is rewritten as the seed for the sign-ins then. A
   team server seeds from its shared sign-ins, so a Codex-only server starts
   on Codex. The first change to the file, of any kind, ends this for good.
+- Require Playbook 18.1.0, the first release publishing its seed rule
+  ([DR-154](specs/decisions/154-the-seed-follows-playbooks-rule.md)).
+  The built-in playbooks stage as `sublang/playbooks` 18.1.0, unchanged
+  from 18.0.1.
 
 - Adopt Playbook 18.0.1 and stage its corrected CODE workflow: standalone
   documentation or status work without an unfinished IR task is new change
