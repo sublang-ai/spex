@@ -754,6 +754,9 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Fixed
 
+- A narrow player pane no longer spills its header and transcript past
+  its border: a long agent reading such as `claude-opus-5-5 @ xhigh` ends
+  in an ellipsis, its whole in the tooltip.
 - Expired team-server leases now invalidate their bearer and close relays
   before stopping the seat, including renewal retries and retirement.
 

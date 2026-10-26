@@ -1211,6 +1211,39 @@ test.describe("an agent's settings editor in the player grid", () => {
   });
 });
 
+// A lane at its floor whose agent reading is longer than its header
+// holds (run-view-105, run-view-7): the coder runs at the starter
+// config's xhigh, and two lanes share a 1280px window's default split
+// beside the open sidebar.
+test.describe("a long agent reading at the pane floor", () => {
+  test.use({ appOptions: { project: true, agentDelayMs: 300 } });
+
+  test("run-view-105: a lane's header and transcript stay inside its pane", async ({
+    page,
+    app,
+  }) => {
+    await app.core.command("config.edit", {
+      op: { kind: "player.set", playerId: "dev.coder", patch: { effort: "xhigh" } },
+    });
+    await open(page, app);
+    await setRail(page, true);
+    await page.setViewportSize({ width: 1280, height: TALL });
+    await send(page, TASK);
+    await expect(page.getByTestId("captain-pane")).toContainText("/code finished");
+    const coder = page.getByTestId("player-pane-dev.coder");
+    await expect(page.getByTestId("player-pane-dev.reviewer")).toBeVisible();
+    const chip = coder.getByRole("button", { name: /coder settings: .*xhigh/ });
+    await expect(chip).toBeVisible();
+
+    const defects: string[] = [];
+    record("two lanes at 1280px, sidebar open", await measure(page), defects);
+    expect(defects, defects.join("\n")).toEqual([]);
+    // The reading yields the slack, ending in an ellipsis (run-view-7).
+    const reading = chip.locator("span.truncate").first();
+    expect(await reading.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
+  });
+});
+
 // The at-hand popovers and the composer's queue are chrome the sweep
 // above never opens, and both used to leave the window: the Captain's
 // agent editor above the top edge with nothing able to scroll it back,

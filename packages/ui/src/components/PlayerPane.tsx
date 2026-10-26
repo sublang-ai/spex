@@ -517,7 +517,7 @@ export function PlayerPane({
   return (
     <section
       data-testid={`player-pane-${view.id}`}
-      className="@container grid min-h-min min-w-[280px] flex-1 grid-rows-[auto_minmax(min-content,1fr)] rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900"
+      className="@container grid min-h-min min-w-[280px] flex-1 grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(min-content,1fr)] rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900"
     >
       {/* One line at any pane width: identity and controls remain;
           cumulative time yields before a live elapsed reading. */}
