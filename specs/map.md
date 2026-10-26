@@ -174,6 +174,7 @@ meta.md       The spec of specs
 | [DR-150](decisions/150-spex-space-product-and-destination.md) | 150-spex-space-product-and-destination.md | Spex Space naming, public-origin plan on the existing internal deployment, and unchanged saved instance identities |
 | [DR-151](decisions/151-publish-local-spec-packages.md) | 151-publish-local-spec-packages.md | Publish directly requested local spec packages from their environment rows with the existing preview and account, and show the current attempt's outcome |
 | [DR-152](decisions/152-install-a-known-package.md) | 152-install-a-known-package.md | Install a known public or private registry package by name and explicit version requirement through the existing environment installer |
+| [DR-153](decisions/153-playbook-18-0-1-cligent-0-36-1-slc-0-19-1-adoption.md) | 153-playbook-18-0-1-cligent-0-36-1-slc-0-19-1-adoption.md | Adopt the verified Playbook 18.0.1, Cligent 0.36.1 and slc 0.19.1 patches, preserving SDK identities and existing environment selections |
 
 ## Packages
 

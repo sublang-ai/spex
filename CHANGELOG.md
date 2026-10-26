@@ -301,6 +301,13 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Changed
 
+- Adopt Playbook 18.0.1 and stage its corrected CODE workflow: standalone
+  documentation or status work without an unfinished IR task is new change
+  work, with review of the exact commit still required. Existing environments
+  keep their selected built-in version until **Update** resolves the newer
+  release. Finish saved CODE deliveries with their original Playbook version,
+  or start a new run after upgrading.
+
 - The collaboration destination is **Space**, and the public server product is
   **Spex Space** at `spex.sublang.ai`. New homes use that address; existing
   connections, groups and stored placements keep their identities.
@@ -337,8 +344,8 @@ and `npm start` (desktop) or `npm run start:server` (server).
   Stop older Playbook CLIs and Spex shells sharing a home before any upgraded
   writer starts.
 
-- The app requires Cligent 0.36.0 and slc 0.19.0, keeping the locked agent
-  SDKs ([DR-130](specs/decisions/130-playbook-17-11-0-cligent-0-36-0-slc-0-19-0-adoption.md)).
+- The app requires Cligent 0.36.1 and slc 0.19.1, keeping the locked agent
+  SDKs ([DR-153](specs/decisions/153-playbook-18-0-1-cligent-0-36-1-slc-0-19-1-adoption.md)).
   Captain decision, Judge and reporting calls, and every compiler call, turn
   off, as far as each agent allows, the skills the agent finds by itself in
   its project and user skill folders, so the skills and specs Spex exports
