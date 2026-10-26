@@ -4745,6 +4745,10 @@ msgid "publish a reviewed branch as a pull request, wait for its checks, fix red
 msgstr "将经审阅的分支发布为 PR，等待其检查，经由 code 修复一次未通过的检查，然后合并"
 
 #: src/components/PublishControl.tsx
+msgid "Publish to {origin}"
+msgstr "发布到 {origin}"
+
+#: src/components/PublishControl.tsx
 msgid "Published {name} {version}"
 msgstr "已发布 {name} {version}"
 

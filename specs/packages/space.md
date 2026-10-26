@@ -63,6 +63,10 @@ While a spex repository's clone holds a placement, a placement file of it names 
 
 The Space surface shall re-read the core's state only on an event, never on a timer: when the surface opens, when the window regains focus, when the core announces a sync's end, a sign-in's end, a host read, a project added or removed, or a session, intent or configuration change, and when the reader activates Refresh, which also makes the core read every signed-in instance [[git-host-5](git-host.md#git-host-5)].
 
+#### space-106
+
+When a reply carrying Space state arrives, the UI shall apply it only if no newer state request or `space.state` broadcast has superseded its request, including replies to Sign out, Forget and declining a repair.
+
 ### Signing In
 
 #### space-3
@@ -506,7 +510,7 @@ When a sync or check step fails, the core shall stop — the placement alone for
 | Step | Cause | State left | Surface |
 | --- | --- | --- | --- |
 | Save | a staged path of an ignored family, or validation refusing a file | index reset, no commit, files untouched | the path or file and reason; "Nothing was saved" |
-| Save | `spex` moved while the Save validated — a commit from a terminal | no commit; that commit and every file stand | Git's last lines; Retry |
+| Save | `spex` moved while the Save validated — a commit from a terminal | no commit; that commit and every file stand | Git's cause-preserving summary; Retry |
 | Check, Push | the host unreachable, or the device offline | commits stand | "Could not reach <host>"; check the network; Retry |
 | Check, Push | the host asking to wait — its rate limit [[git-host-11](git-host.md#git-host-11)] | commits stand | "<host> asks to wait N seconds" (or "a moment"); "Retry waits, then runs the step."; Retry, which waits the time out before the step [[git-host-21](git-host.md#git-host-21)] |
 | Check, Push | Stop while a call of the step waits out the host's rate limit [[git-host-21](git-host.md#git-host-21)] | commits stand | "Stopped while waiting for <host>"; "Retry waits, then runs the step."; Retry |
@@ -523,10 +527,11 @@ When a sync or check step fails, the core shall stop — the placement alone for
 | Apply | a written unit changed since its base on the second cycle [[space-19](#space-19)] | no merge commit; its base stands, the units written before it left as local changes | "The space changed twice while syncing"; Retry |
 | Refresh | a diagnostic | the merge stands committed | the file and reason under issues |
 | Push | rejected as not fast-forward | merge committed, ahead shown | one automatic cycle from Check; a second rejection reads "The host changed again"; Retry |
-| any | Git's own error, or a failing system call such as a clone removed meanwhile, otherwise | that step's row | its last lines; Retry |
+| any | Git's own error, or a failing system call such as a clone removed meanwhile, otherwise | that step's row | its cause-preserving summary; Retry |
 
+- a generic Git failure summary keeps at most three nonempty lines: the first line containing `fatal:` or `error:` (case-insensitive), else the first line, followed by the final two other distinct lines in their original order; wrapping an already summarized failure preserves that cause and advice;
 - a report naming the host prints the display name of the placement's instance [[space-12](#space-12)], and a remote URL never with a credential ([DR-127](../decisions/127-a-home-signed-in-to-several-instances.md));
-- no line a report carries — Git's last lines and the host's `remote:` words alike — holds a URL under any listed instance's reported Git origin: every placement's remote, with or without `.git` and a trailing `/`, reads as its path in its instance, and any other URL under such an origin as the display name of the instance reporting that origin, the placement's where several do, the path placement's remote reading as itself with any embedded user removed, a code clone's lines naming the code's remote as the reader set it only outside all of them [[space-63](#space-63)] ([DR-120](../decisions/120-the-instance-is-the-space.md), [DR-127](../decisions/127-a-home-signed-in-to-several-instances.md));
+- no line a report carries — Git's summary and the host's `remote:` words alike — holds a URL under any listed instance's reported Git origin: every placement's remote, with or without `.git` and a trailing `/`, reads as its path in its instance, and any other URL under such an origin as the display name of the instance reporting that origin, the placement's where several do, the path placement's remote reading as itself with any embedded user removed, a code clone's lines naming the code's remote as the reader set it only outside all of them [[space-63](#space-63)] ([DR-120](../decisions/120-the-instance-is-the-space.md), [DR-127](../decisions/127-a-home-signed-in-to-several-instances.md));
 - an explicit content-size rejection carries only the instance, the size cause and a reported limit where readable, never its raw transport words, backing-system names or links ([DR-129](../decisions/129-content-size-is-not-permission.md));
 - the report stands until the next operation or Dismiss.
 
@@ -745,6 +750,7 @@ The core shall expose the Space surface through these commands and one message, 
 - "signed out" in an error means that the instance the command acts at is not signed in, and an `instance` the home does not list is refused `not_found`;
 - the device flow's `verificationUri` is the verification URL the host completed with the user code where it gave one [[git-host-3](git-host.md#git-host-3)], and `userCode` is carried for clients and tests, never shown by the surface [[space-3](#space-3)];
 - `space.state { state: GroupsState }` is broadcast to every client on each transition of any repository's machine [[space-31](#space-31)], on a sign-in's start and end, and when a full read of any instance starts or settles; long commands reply `accepted` at once and their outcome is state, never a hung reply ([DR-010](../decisions/010-interface-craft.md) §5);
+- each repository in a reply or broadcast carries its phase, placement lists and local units from one coherent reading: a read crossing an operation's progress or completion cannot pair an ending phase with earlier lists, and an older read cannot replace a newer completed plan [[space-8](#space-8)] [[space-33](#space-33)];
 - the interface re-pulls `space.get` when the surface mounts, on window focus, and — debounced — on `session.state`, `session.removed`, `intents.changed` and `config.state` while the surface is shown.
 
 #### space-30
@@ -883,7 +889,7 @@ The core shall invoke Git as a child process per step, never through a shell, fr
 - labels and diffs: `cat-file blob <oid>` per described file, `log -1 --format=%ct <rev> -- <paths>` for a side's change time, `diff --no-color <ancestor> <side> -- <path>` for `space.diff`;
 - apply: under a temporary `GIT_INDEX_FILE`, `read-tree HEAD`, `update-index -z --index-info` setting or removing each path of a unit taken from the host and `write-tree`, then that tree checked out into a private copy as at Save; `cat-file blob <oid>` per file of a unit written; `read-tree <tree>` and `update-index -q --refresh` on the clone's index; `merge-base --is-ancestor HEAD <remote>/spex` with `rev-parse <remote>/spex^{tree}`, `commit-tree <tree> -p HEAD -p <remote>/spex -m <message>` or none on a fast-forward, `update-ref refs/heads/spex <commit> <old HEAD>`;
 - push: `push -q <remote> spex`, `push -q -u <remote> spex` where no upstream is set, at the first placement;
-- stderr classification under `LC_ALL=C`: explicit content-size rejection wording from the instance → `size_limit` before a generic hook decline, a hook decline alone establishing no size cause ([DR-129](../decisions/129-content-size-is-not-permission.md)); "Could not resolve host", "Connection refused", "Network is unreachable" → unreachable; "Authentication failed", "could not read Username", "terminal prompts disabled", "Host key verification failed" → reauth; "Permission denied", "protected branch", "pre-receive hook declined", "You are not allowed" → refused; "Repository not found", "does not appear to be a git repository" → gone; "[rejected]" with "fetch first" or "non-fast-forward" → rejected; a killed child → timeout or stopped; anything else → `git` with the last lines, or, where Git printed an HTTP status on a transport to its instance's Git origin, the host's error with that status [[space-15](#space-15)]; public lines follow space-15's instance-only and URL rules.
+- stderr classification under `LC_ALL=C`: explicit content-size rejection wording from the instance → `size_limit` before a generic hook decline, a hook decline alone establishing no size cause ([DR-129](../decisions/129-content-size-is-not-permission.md)); "Could not resolve host", "Connection refused", "Network is unreachable" → unreachable; "Authentication failed", "could not read Username", "terminal prompts disabled", "Host key verification failed" → reauth; "Permission denied", "protected branch", "pre-receive hook declined", "You are not allowed" → refused; "Repository not found", "does not appear to be a git repository" → gone; "[rejected]" with "fetch first" or "non-fast-forward" → rejected; a killed child → timeout or stopped; anything else → `git` with the cause-preserving summary, or, where Git printed an HTTP status on a transport to its instance's Git origin, the host's error with that status [[space-15](#space-15)]; public lines follow space-15's instance-only and URL rules.
 - the instance's size rule follows transport, authentication, missing-repository and explicit access refusals (`403`, "Permission denied", "protected branch", "You are not allowed"), but precedes a bare hook decline; it recognizes a whole `remote:` sentence, case-insensitively: "You are attempting to check in one or more blobs which exceed the <limit> limit", with an optional single ASCII identifier and colon before it, and an optional final period or colon; `<limit>` is either a nonnegative quantity of at most twelve digits with an optional decimal of at most six digits followed by `byte`, `bytes`, `KB`, `KiB`, `MB`, `MiB`, `GB`, `GiB`, `TB` or `TiB`, allowing whitespace before the unit, or the words "size" or "file size"; a numeric limit is public only when every recognized sentence carries the same captured quantity and unit, absent or conflicting limits retaining the size cause without a numeric claim; quoted sentences, filenames and URLs alone establish no size rejection.
 
 #### space-33
@@ -896,6 +902,7 @@ The core shall compute one three-way plan per placement of each read or sync of 
 | remote | `<remote>/spex`, `<remote>` that placement's remote's name [[space-32](#space-32)]; `HEAD` itself before any check, and the empty tree where the host holds no `spex` |
 | ancestor | `merge-base(HEAD, <remote>/spex)`; `HEAD` before any check; the empty tree for a join; the plan withheld for unrelated histories without one |
 
+- a working-tree reading's plan and branch counts use the same captured commit identities for `HEAD` and each placement's `spex`, rather than resolving those names again after awaited work;
 - session choice titles, turn counts and activity read the selected revision through Playbook's shared history reader, with its chunk dependencies from that revision and no changes to the live session [[storage-11](storage.md#storage-11)];
 - units: `sessions/<uuid>.json` with `sessions/<uuid>.replay.json`, every file of `sessions/<uuid>.chunks/`, legacy `sessions/<uuid>.records.jsonl` where present and `sessions/<uuid>.assets/`, `intents/<uuid>.json` with `intents/<uuid>.assets/`, `authoring/<uuid>.json` with its records and assets, `spex.yaml` with `spex.lock` wherever a clone holds them [[storage-1](storage.md#storage-1)], a folder holding `meta.yaml` on any side with every file under it [[storage-11](storage.md#storage-11)], and each other tracked path alone; a bundle unit taken from a side needs every file of it on that side or none;
 - a unit is local where mine differs from the ancestor and remote does not, incoming where remote differs and mine does not, a conflict where both differ from the ancestor and from each other, and agreed otherwise;
@@ -1120,7 +1127,8 @@ When an integration suite runs a real core on a scratch home signed in to two st
 - the first answering 503 at Check reads its line unreachable while the second syncs, the row reachable; the first signed out reads its line unreachable with "Sign in again", and both signed out refuse the Sync naming the first's display name [[space-15](#space-15)] [[space-61](#space-61)] [[space-6](#space-6)] [[space-11](#space-11)];
 - `space.place` of the second project creating in a group of the second that refuses it for the account's rights shows its waiting phrase on the second's line while the first syncs, its state carrying the wait on that placement [[space-97](#space-97)] [[space-64](#space-64)] [[space-87](#space-87)] [[space-30](#space-30)]; one naming a name taken there, and one naming the first, at which the clone holds a placement, are each refused [[space-29](#space-29)];
 - Stop during the first's Check ends the sync with the second not run [[space-15](#space-15)] [[space-16](#space-16)];
-- a chosen unit refused by validation at the first's Apply, and a stale lock on the first's remote-tracking ref failing its fetch with Git's own error, each end the sync with the second not run [[space-15](#space-15)] [[space-31](#space-31)];
+- a chosen unit refused by validation at the first's Apply, and a stale lock on the first's remote-tracking ref failing its fetch with Git's own error, each end the sync with the second not run, the lock diagnostic naming the affected ref or file and its file-exists cause before recovery after removing the lock [[space-15](#space-15)] [[space-31](#space-31)];
+- a real Git failure nested through its command wrapper retains its primary cause and final advice within three nonempty lines, with the synthetic credential and instance's Git URL in the command context removed from the public summary [[space-15](#space-15)];
 - a file another process leaves invalid during the first's Apply stands as the refresh's finding while the first pushes and the second syncs [[space-15](#space-15)] [[space-20](#space-20)] [[space-31](#space-31)];
 - a repair marker planted with a half-written selection at the second, on the first's merge commit as its base, is finished by the next admission into the recorded merge [[space-67](#space-67)] [[space-19](#space-19)];
 - a placement whose `spex` shares no ancestor stops "Unrelated history" alone, and `space.sync` with `join` for it joins from the empty tree with every unit on both sides a choice [[space-13](#space-13)];
@@ -1157,6 +1165,10 @@ When an integration suite runs a real core on a scratch home signed in to three 
 - with the third signed out, `space.forget` of it is refused naming a project placed there, and naming a group's spex repository keyed under it whose creation the third left pending [[space-82](#space-82)] [[space-29](#space-29)].
 
 ### Surface Coverage
+
+#### space-107
+
+Where the Space surface uses the production store over a controlled command connection, when Sign out, Forget or declining a repair returns an older running-state reply after a completed-state broadcast, the test suite shall assert that the displayed completion is retained and an unsuperseded reply to each action still applies (verifying [[space-106](#space-106)]).
 
 #### space-56
 
@@ -1315,3 +1327,12 @@ Where the harness boots the served shell on an empty home against a stand-in hol
 #### space-104
 
 Where the core runs as a seat against the stand-in instance and the Git HTTP host, the test suite shall assert that a sign-in places your own group nowhere and offers no pick on it [[space-102](#space-102)], that a join allocates the folder at its path and pairs it, that a code clone failing for want of a credential leaves the records readable with the phrase and the host in the reply, and that a retry after `credential.set` clones into the same folder [[space-103](#space-103)].
+
+#### space-105
+
+Where a real core holds a repository at two stand-in instances, the test suite shall assert coherent repository readings across controlled Git and Check barriers:
+
+- a read held between its placement lines while Check finishes never pairs the ending phase with the first placement's earlier incoming list [[space-29](#space-29)] [[space-8](#space-8)];
+- a read begun before Check cannot replace its completed placement plan when that read resumes, with the retained remote diff still naming the incoming unit [[space-29](#space-29)] [[space-10](#space-10)];
+- an idle read held after capturing a tracking ref cannot replace the plan a later idle read completed after that ref advanced, with the retained remote diff still naming the incoming unit [[space-29](#space-29)] [[space-10](#space-10)];
+- a read whose captured branch names move while it waits computes its branch counts and three-way lists from the captured commits consistently [[space-33](#space-33)].

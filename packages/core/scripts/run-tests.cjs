@@ -9,10 +9,14 @@
 const { readdirSync } = require("fs");
 const { join, relative } = require("path");
 const { execFileSync } = require("child_process");
+const { availableParallelism } = require("os");
 
 const pattern = process.argv[2] || "\\.test\\.js$";
 const regex = new RegExp(pattern);
 const root = join(__dirname, "..");
+// Real-core cases also spawn Git; bound file workers to limit
+// subprocess contention, keeping Node's default on 1/2-CPU hosts.
+const concurrency = Math.min(2, Math.max(1, availableParallelism() - 1));
 
 function collect(dir) {
   const out = [];
@@ -42,7 +46,13 @@ if (files.length === 0) {
 // there once the restarted core's case joined it.
 execFileSync(
   process.execPath,
-  ["--test", "--test-timeout=1200000", "--test-force-exit", ...files],
+  [
+    "--test",
+    "--test-timeout=1200000",
+    "--test-force-exit",
+    `--test-concurrency=${concurrency}`,
+    ...files,
+  ],
   {
     stdio: "inherit",
     cwd: root,

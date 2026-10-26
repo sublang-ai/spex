@@ -108,7 +108,7 @@ test("playbook-library-95: Publish from a project at the second instance reads t
   await open(page, app);
   await openEnableTab(page);
 
-  // Publish shows the package, its version and the files it would
+  // Publish shows the destination, package, version and files it would
   // upload inline, then uploads them; the published version reads with
   // a link to its page at the second's registry, which holds the
   // release, uploaded as the account there, while the first's holds
@@ -116,6 +116,7 @@ test("playbook-library-95: Publish from a project at the second instance reads t
   const publish = page.getByTestId("publish");
   await publish.getByTestId("publish-button").click();
   const summary = publish.getByTestId("publish-summary");
+  await expect(summary.getByTestId("publish-target")).toHaveText(`Publish to ${second.url}`);
   await expect(summary).toContainText(`${PACKAGE} 0.1.0`);
   await expect(summary.getByTestId("publish-files")).toContainText("meta.yaml");
   await expect(summary.getByTestId("publish-files")).toContainText(`playbooks/en/${ID}/${ID}.md`);
@@ -208,6 +209,7 @@ test("playbook-library-114: a local spec-and-skill package publishes without a p
   await expect(page.getByTestId("env-package-sublang/playbooks").getByTestId("publish")).toHaveCount(0);
   await publish.getByTestId("publish-button").click();
   await expect(publish.getByTestId("publish-summary")).toContainText(`${name} 0.1.0`);
+  await expect(publish.getByTestId("publish-target")).toHaveText(`Publish to ${second.url}`);
   await expect(publish.getByTestId("publish-files")).toContainText(`specs/en/${id}.md`);
   await expect(publish.getByTestId("publish-files")).toContainText("skills/en/notes-summary/SKILL.md");
   await publish.getByTestId("publish-cancel").click();
@@ -225,6 +227,7 @@ test("playbook-library-114: a local spec-and-skill package publishes without a p
   await expect(row.getByTestId(`env-source-${name}`)).toHaveText(`path ${path}`);
 
   await publish.getByTestId("publish-button").click();
+  await expect(publish.getByTestId("publish-target")).toHaveText(`Publish to ${second.url}`);
   await publish.getByTestId("publish-confirm").click();
   await expect(publish.getByTestId("publish-done")).toContainText(`Published ${name} 0.1.0`);
   await expect(publish.getByTestId("publish-link")).toHaveAttribute("href", `${second.url}/${name}`);

@@ -49,7 +49,7 @@ export class GitMissingError extends Error {
 /** A Git command exited non-zero where success was required. */
 export class GitError extends Error {
   constructor(readonly args: string[], readonly run: GitRun) {
-    super(`git ${args.join(" ")} failed${run.code === null ? "" : ` (${run.code})`}: ${lastLines(run.stderr)}`);
+    super(`git ${args.join(" ")} failed${run.code === null ? "" : ` (${run.code})`}: ${failureSummary(run.stderr)}`);
     this.name = "GitError";
   }
 }
@@ -65,9 +65,14 @@ export interface GitFailure {
 export const DEFAULT_TRANSPORT_TIMEOUT_MS = 120_000;
 const KILL_GRACE_MS = 5_000;
 
-export function lastLines(text: string, count = 3): string {
+/** Keep the cause before the final advice, also when another Git
+ * wrapper summarizes this message again (space-15). */
+export function failureSummary(text: string): string {
   const lines = text.split("\n").map((line) => line.trimEnd()).filter((line) => line.length > 0);
-  return lines.slice(-count).join("\n");
+  if (lines.length === 0) return "";
+  const cause = lines.find((line) => /\b(?:fatal|error):/i.test(line)) ?? lines[0]!;
+  const tail = [...new Set(lines.filter((line) => line !== cause).reverse())].slice(0, 2).reverse();
+  return [cause, ...tail].join("\n");
 }
 
 /** The host a remote URL addresses, for the messages of space-15; a
@@ -324,7 +329,7 @@ export function classifyTransportFailure(run: GitRun, remote: string | null): Gi
   }
   return {
     cause: "git",
-    message: lastLines(text) || (run.code === null
+    message: failureSummary(text) || (run.code === null
       ? i18n._({
           id: "git exited with a signal",
           comment: "A stopped step's message where git failed and printed nothing, ended by a signal",

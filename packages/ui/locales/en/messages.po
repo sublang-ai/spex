@@ -4745,6 +4745,10 @@ msgid "publish a reviewed branch as a pull request, wait for its checks, fix red
 msgstr "publish a reviewed branch as a pull request, wait for its checks, fix red checks once through code, and merge it"
 
 #: src/components/PublishControl.tsx
+msgid "Publish to {origin}"
+msgstr "Publish to {origin}"
+
+#: src/components/PublishControl.tsx
 msgid "Published {name} {version}"
 msgstr "Published {name} {version}"
 

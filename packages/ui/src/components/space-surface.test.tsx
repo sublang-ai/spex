@@ -35,6 +35,7 @@ import {
   ORIGIN,
   SESSION_UNIT,
   SETTINGS_UNIT,
+  answer,
   base,
   calls,
   commandMock,
@@ -63,6 +64,42 @@ afterEach(() => {
 });
 
 describe("GROUPS: re-reads on events, never on a timer (space-2)", () => {
+  test.each([
+    { command: "space.signout", invoke: () => useAppStore.getState().spaceSignOut(ORIGIN) },
+    { command: "space.forget", invoke: () => useAppStore.getState().spaceForget(ORIGIN) },
+    { command: "space.repair.decline", invoke: () => useAppStore.getState().spaceRepairDecline("repair", true) },
+  ])("space-106: $command keeps a newer broadcast over its delayed reply and applies a current reply", async ({ command, invoke }) => {
+    const old = repoState({ sync: { phase: "running", op: "sync", step: "push", since: NOW, cancelable: true } });
+    const done = repoState({ sync: { phase: "done", at: NOW, sent: 1, received: 0, pushed: true } });
+    await renderGroups(old);
+    expect(syncControl().textContent).toBe("Syncing…");
+    let resolve!: (state: GroupsState) => void;
+    let response = new Promise<GroupsState>((settle) => { resolve = settle; });
+    commandMock.mockImplementation((type: string, fields: Record<string, unknown> = {}) =>
+      type === command ? response : answer(type, fields));
+    let pending!: Promise<void>;
+    act(() => { pending = invoke(); });
+    deliver(done);
+    await act(async () => {
+      resolve(old);
+      await pending;
+    });
+    expect(useAppStore.getState().space).toBe(done);
+    expect(syncControl().textContent).toBe("Sync");
+    expect(syncControl().disabled).toBe(false);
+
+    // No announcement overtakes this request: its reply still applies.
+    const current = repoState({ sync: { phase: "done", at: NOW + 1, sent: 2, received: 1, pushed: true } });
+    response = new Promise<GroupsState>((settle) => { resolve = settle; });
+    act(() => { pending = invoke(); });
+    await act(async () => {
+      resolve(current);
+      await pending;
+    });
+    expect(useAppStore.getState().space).toBe(current);
+    expect(syncControl().textContent).toBe("Sync");
+  });
+
   test("window focus re-reads; a space.state broadcast replaces the state wholesale, the opened repository staying open", async () => {
     await renderGroups(base({}, [repo({ state: "local-only", remote: null, branch: null })]));
     expect(calls("space.get")).toHaveLength(1);
