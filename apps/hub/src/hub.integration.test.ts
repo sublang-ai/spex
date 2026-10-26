@@ -1242,13 +1242,13 @@ test("an admission and a renewal wait on a seat's lock the sweep holds (hub-5, h
       () => Date.parse(recorded()?.expires_at ?? "") > Date.parse(held),
       "the renewal to be recorded once the lock is released",
     );
-    assert.match(hub.output(), /renewed the lease of pia \(4701\)/);
     relay.close();
     assert.ok(helperCalls(s).every((call) => !call.refused));
   } finally {
     assert.equal(await hub.stop(), 0);
     await standin.close();
   }
+  assert.match(hub.output(), /renewed the lease of pia \(4701\)/);
   assertNoSecret(hub.output(), secrets);
 });
 
