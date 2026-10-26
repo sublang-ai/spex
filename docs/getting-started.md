@@ -62,8 +62,7 @@ own skill discovery. A spec-only or skill-only package has no playbook to
 enable. Generated playbook-launch skills are exported for Claude Code;
 run enabled playbooks through Spex's `/` menu with other agents.
 
-Commit the project's `spex.yaml` and `spex.lock` with its code to retain
-chosen package versions. **Add from folder** lets you try an existing
+**Add from folder** lets you try an existing
 package inside the project before publishing it.
 
 ## Try a spec-first task
