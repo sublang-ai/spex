@@ -158,8 +158,10 @@ class Client {
    * took effect can arrive after it still reading the previous phase: a
    * reading that is not running settles the command only after one of
    * its own running readings, or where a read made after the reply
-   * agrees the machine no longer runs. */
-  async settle<T extends "space.sync" | "space.fetch" | "space.place" | "space.leave" | "space.attach">(type: T, fields: Omit<Extract<Command, { type: T }>, "type" | "id">, timeoutMs = 20_000): Promise<RepositoryState> {
+   * agrees the machine no longer runs. The completion watchdog covers
+   * every local and transport step, unlike the per-transport test limit;
+   * it shares the other Space observations' bounded 60-second budget. */
+  async settle<T extends "space.sync" | "space.fetch" | "space.place" | "space.leave" | "space.attach">(type: T, fields: Omit<Extract<Command, { type: T }>, "type" | "id">, timeoutMs = 60_000): Promise<RepositoryState> {
     const key = (fields as { repository: string }).repository;
     const from = this.messages.length;
     // The core runs in this process: its steps' `since` reads this clock.
