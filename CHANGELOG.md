@@ -77,28 +77,28 @@ and `npm start` (desktop) or `npm run start:server` (server).
   before the first new writer runs, after the home snapshot; an older
   binary reads the new lease as a foreign host's and refuses it.
 
-- Share a project's records through a Git host ([DR-103](specs/decisions/103-the-home-and-its-groups.md)).
-  Space becomes **Groups**: sign in to the host — spex.pub, or the one
-  `SPEX_HOST_URL` names when a home is created — through your browser,
+- Share a project's records through Spex Space ([DR-103](specs/decisions/103-the-home-and-its-groups.md)).
+  Sign in on **Space** to an instance — `spex.sublang.ai` by default, or the
+  address `SPEX_HOST_URL` names when a home is created — through your browser,
   opened by the desktop or linked by the server shell with no code to
   type, and Spex lists your
   groups and the spex repositories you can read in each, creates your
-  own group's on the host, and creates a project's in the group you pick.
-  The host's members of a spex repository see its records, with the
-  host's role names; Spex keeps no member list or access rule of its own. A step that needs rights you lack
-  waits for a member who has them, a rename or transfer on the host is
-  followed, and a spex repository the host stops listing turns
+  own group's at the instance, and creates a project's in the group you pick.
+  The instance's members of a spex repository see its records, with the
+  instance's role names; Spex keeps no member list or access rule of its own. A step that needs rights you lack
+  waits for a member who has them, a rename or transfer at the instance is
+  followed, and a spex repository the instance stops listing turns
   unreachable with nothing on the device deleted. Git receives the
-  host's credential through Spex's own credential helper on the app's
+  instance's credential through Spex's own credential helper on the app's
   runtime, never through a remote URL, and the device's token is kept
   in `local/credentials.yaml`, readable by you alone. An app that starts
-  signed in reads the host once something first shows your groups, so
-  they and Pick a group's choices need no Refresh, and when the host
-  signs this device out, Groups says so and offers to sign in again as
+  signed in reads the instance once something first shows your groups, so
+  they and Pick a group's choices need no Refresh, and when the instance
+  signs this device out, Space says so and offers to sign in again as
   the same account ([DR-106](specs/decisions/106-groups-after-a-restart-and-a-host-sign-out.md)).
 - Playbooks come in spec packages ([DR-104](specs/decisions/104-spec-package-format-and-client-environments.md)).
   Each spex repository has an environment: `spex.yaml` requests spec
-  packages from the Git host's registry, a Git repository or a folder in
+  packages from the instance's registry, a Git repository or a folder in
   the working folder, and `spex.lock` pins the versions, languages and
   files resolved, so every member and device installs the same. Installs
   go through one content-addressed store under the home, replace an
@@ -110,6 +110,14 @@ and `npm start` (desktop) or `npm run start:server` (server).
   enabling one by choosing a player for each role; a playbook you author
   is a spec package in the working folder, compiled there, enabled by
   path and published to the registry.
+- Publish a directly requested local spec package from its Playbooks row,
+  including spec-only and ordinary-skill packages, without authoring or
+  compiling a playbook ([DR-151](specs/decisions/151-publish-local-spec-packages.md)).
+- Add from registry offers **Add by name** for a known public or private
+  `org/name` and an explicit exact, caret or tilde version requirement
+  ([DR-152](specs/decisions/152-install-a-known-package.md)). Private packages
+  stay out of search and require access; the environment shows whether
+  installation completed.
 
 - Live tool approval controls for supported agents show the conversation or
   authoring draft, actor, operation, and complete requested action. Approve once
@@ -292,12 +300,17 @@ and `npm start` (desktop) or `npm run start:server` (server).
   bearer to the server itself; it reconnects to each seat every second,
   reads a seat speaking another protocol as mismatched, removes a seat
   whose lease ended, and adds each seat's badge to the dock's count.
-  The place selector switches Settings, Playbooks, Groups and environments
+  The place selector switches Settings, Playbooks, Space and environments
   between this computer and an open seat, keeping their state separate.
   Projects appear under their place; attention and approvals span the
   connected places, and a disconnected place leaves the others usable.
   A seat with no projects offers its groups; remote project and environment
   forms offer no folder picker or path on this computer.
+- Administrators can install the Linux team-server hub, helper and systemd
+  units from a source checkout ([DR-132](specs/decisions/132-team-servers.md)).
+  An independent sweep stops seats whose recorded leases expired, even
+  while the hub is down, retaining their files
+  ([DR-148](specs/decisions/148-a-lapsed-seat-is-stopped-by-a-sweep.md)).
 
 ### Changed
 
@@ -358,10 +371,13 @@ and `npm start` (desktop) or `npm run start:server` (server).
   published table.
 
 - A home can sign in to several instances, with each instance's account,
-  Groups listing and repository operations kept separate ([DR-127](specs/decisions/127-a-home-signed-in-to-several-instances.md)).
+  groups listing and repository operations kept separate ([DR-127](specs/decisions/127-a-home-signed-in-to-several-instances.md)).
   Existing homes and clones migrate to the instance-aware layout; a
-  refused credential signs out only its instance. The accepted repository-placement
-  design remains recorded separately ([DR-128](specs/decisions/128-a-spex-repository-placed-at-several-instances.md)).
+  refused credential signs out only its instance. A project's records can
+  be placed at several instances, with **Place at…**, **Attach** for a
+  placement another device named, and **Leave…**, which keeps its server copy.
+  Sync runs placement by placement, each with its own incoming changes,
+  choices and outcome ([DR-128](specs/decisions/128-a-spex-repository-placed-at-several-instances.md)).
 - Each environment searches, resolves and publishes at its own instance's
   registry; Git sources use that instance's broker. Installation can
   retrieve the locked version and checksum across the available registries,
@@ -387,9 +403,9 @@ and `npm start` (desktop) or `npm run start:server` (server).
   rounds, the hand-over between roles and the ending belong to the
   behaviors' prose, so a compiled run no longer parks on a reply that
   waited for a later round.
-- Groups names the instance alone ([DR-120](specs/decisions/120-the-instance-is-the-space.md)).
-  A spex.pub instance is the one thing you sign in to and the only name
-  you see: Groups lists your own group, the instance's groups you belong
+- Space names the instance alone ([DR-120](specs/decisions/120-the-instance-is-the-space.md)).
+  A Spex Space instance is the one thing you sign in to and the only name
+  you see: Space lists your own group, the instance's groups you belong
   to by their paths in it, and the spex repositories another person
   shares from their own group, under that person's login. Keys and
   workspace folders follow the paths the instance answers, so a clone
@@ -442,7 +458,7 @@ and `npm start` (desktop) or `npm run start:server` (server).
   oldest queued intent first, so rows no longer move or link, and every
   queued row's menu offers Start. Removing a project deletes its clone,
   asking again while it holds records the host has not received, and never
-  touches the working folder. Groups syncs each spex repository on its own,
+  touches the working folder. Space syncs each spex repository on its own,
   and `scripts/storage-git.mjs` takes `--repository <key>`.
 - The app previously adopted Playbook 17.9.0, slc 0.16.1 and Cligent 0.33.5 ([DR-121](specs/decisions/121-playbook-17-9-0-cligent-0-33-5-adoption.md), [DR-116](specs/decisions/116-playbook-17-8-0-slc-0-16-1-adoption.md), [DR-111](specs/decisions/111-the-core-coordinates-as-git-does.md), [DR-108](specs/decisions/108-the-root-lease-names-the-machine.md), [DR-105](specs/decisions/105-playbook-17-5-0-adoption.md), [DR-088](specs/decisions/088-playbook-17-slc-0-12-cligent-0-27-adoption.md),
   [DR-092](specs/decisions/092-playbook-17-1-slc-0-13-cligent-0-28-adoption.md),
@@ -798,7 +814,7 @@ and `npm start` (desktop) or `npm run start:server` (server).
   and stops when a nonignored subtree cannot be inspected. Git-ignored
   subtrees and genuinely missing folders retain their existing behavior.
 
-- Groups keeps Refresh busy through account setup and the complete read,
+- Space keeps Refresh busy through account setup and the complete read,
   then shows its outcome with a sanitized failure and Retry where needed.
   After signing out and back in, a new refresh waits for the older work
   and reads the current account; an older completion cannot clear it.
@@ -823,7 +839,7 @@ and `npm start` (desktop) or `npm run start:server` (server).
   On a seat, Git pushes from an agent's working folder use the member's
   saved token for that code host, without putting it in a remote or log.
 - Code addresses hosted by the instance no longer expose its backing
-  host in Groups, project status or cached forge guidance. After a restart,
+  host in Space, project status or cached forge guidance. After a restart,
   a remote reads neutrally until the instance's description arrives; its
   actual transport URL stays stored for Git.
 - A session whose current folder or stored-member configuration prevents
@@ -1122,7 +1138,7 @@ and `npm start` (desktop) or `npm run start:server` (server).
   unknown and goes on, and a first sync into a repository with an
   unknown count still says the sharing notice (git-host-5, space-57).
 - Picking a team's spex repository for a project's records, on its row
-  in Groups or as the project is added, no longer stops at "Read the
+  in Space or as the project is added, no longer stops at "Read the
   sharing notice before joining …" with nothing to read: where the
   repository has other members, or its count is unknown, the picker says
   the sharing notice beneath it, and Continue joins (space-57, space-58).
