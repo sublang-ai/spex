@@ -1047,8 +1047,8 @@ function placeState(
    * write drops its entry so the next push takes the act again. */
   const sentMarkers = new Map<string, number>();
 
-  /** The newest Space read's number (space-2): a `space.get` reply older
-   * than a `space.state` broadcast or a newer read is discarded. */
+  /** The newest Space state request's number (space-106): a state reply
+   * older than a `space.state` broadcast or a newer request is discarded. */
   let spaceReads = 0;
 
   /** The newest config announcement's number: a project's `config.get`
@@ -1896,7 +1896,7 @@ function placeState(
     spacePrivacyCollapsed: safeStorageGet(prefKey(SPACE_PRIVACY_KEY)) !== "0",
 
     async loadSpace(): Promise<void> {
-      // Replies apply in request order (space-2): a read that a newer
+      // Replies apply in request order (space-106): a read that a newer
       // read or a broadcast overtook is discarded, never applied.
       const read = (spaceReads += 1);
       try {
@@ -1939,14 +1939,16 @@ function placeState(
     },
 
     async spaceSignOut(instance: string): Promise<void> {
+      const read = (spaceReads += 1);
       const space = await getClient().command("space.signout", { instance });
-      spaceReads += 1;
+      if (read !== spaceReads) return;
       set({ space, spaceError: undefined, spaceReadAt: Date.now() });
     },
 
     async spaceForget(instance: string): Promise<void> {
+      const read = (spaceReads += 1);
       const space = await getClient().command("space.forget", { instance });
-      spaceReads += 1;
+      if (read !== spaceReads) return;
       set({ space, spaceError: undefined, spaceReadAt: Date.now() });
     },
 
@@ -1996,8 +1998,9 @@ function placeState(
     spaceUnshare: (target, login) => getClient().command("space.unshare", { ...target, login }),
 
     async spaceRepairDecline(repair: string, declined: boolean): Promise<void> {
+      const read = (spaceReads += 1);
       const space = await getClient().command("space.repair.decline", { repair, declined });
-      spaceReads += 1;
+      if (read !== spaceReads) return;
       set({ space, spaceError: undefined, spaceReadAt: Date.now() });
     },
 

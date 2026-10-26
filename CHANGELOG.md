@@ -729,6 +729,11 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 - Publishing previews now show the destination instance before confirmation,
   for both local packages and authored playbooks.
+- Preserve the actual Git failure and affected ref alongside bounded advice in Space errors.
+
+- Space status reads keep completed checks, incoming files and comparison
+  plans consistent. An older read cannot overwrite newer results, and
+  branch counts use the same captured commits as their comparison.
 
 - Expired team-server leases now invalidate their bearer and close relays
   before stopping the seat, including renewal retries and retirement.

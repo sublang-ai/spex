@@ -557,13 +557,15 @@ playbooks:
    * until `release()`, then runs the real Git: a command caught in flight.
    * With `after`, the real Git runs first and its answer is held, so the
    * core awaits a command that already read the clone. Later matching
-   * commands run at once. */
-  function holdingGit(args: string, options: { after?: boolean } = {}): { path: string; hold(): void; held(): Promise<string>; release(): void } {
+   * commands run at once. With `skipFirst`, the first match after
+   * `hold()` runs normally and the second is held. */
+  function holdingGit(args: string, options: { after?: boolean; skipFirst?: boolean } = {}): { path: string; hold(): void; held(): Promise<string>; release(): void } {
     const dir = mkdtempSync(join(scratch, "holding-git-"));
     const real = execFileSync("sh", ["-c", "command -v git"], { encoding: "utf8" }).trim();
     const hold = join(dir, "hold");
     const claimed = join(dir, "claimed");
     const held = join(dir, "held");
+    const skipped = join(dir, "skipped");
     const out = join(dir, "out");
     const err = join(dir, "err");
     // The held marker records the umask the command was spawned under.
@@ -572,6 +574,7 @@ playbooks:
       "#!/bin/sh",
       'case " $* " in',
       `  *" ${args} "*)`,
+      ...(options.skipFirst ? [`    if [ -e "${hold}" ] && mkdir "${skipped}" 2>/dev/null; then exec "${real}" "$@"; fi`] : []),
       options.after
         ? `    if mv "${hold}" "${claimed}" 2>/dev/null; then "${real}" "$@" > "${out}" 2> "${err}"; status=$?; ${wait}; cat "${out}"; cat "${err}" >&2; exit $status; fi ;;`
         : `    if mv "${hold}" "${claimed}" 2>/dev/null; then ${wait}; fi ;;`,
@@ -582,7 +585,10 @@ playbooks:
     chmodSync(join(dir, "git"), 0o755);
     return {
       path: `${dir}:${process.env.PATH ?? ""}`,
-      hold: () => writeFileSync(hold, ""),
+      hold: () => {
+        if (options.skipFirst) rmSync(skipped, { recursive: true, force: true });
+        writeFileSync(hold, "");
+      },
       held: async () => {
         for (let i = 0; i < 400 && !existsSync(held); i += 1) await sleep(25);
         assert.ok(existsSync(held), "the command reached Git");
