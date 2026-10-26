@@ -25,7 +25,7 @@ import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { canonicalOrigin } from "./instance.js";
-import { SpaceGit } from "./space-git.js";
+import { GitError, SpaceGit } from "./space-git.js";
 import type { GroupsState, RepositoryState, SpaceConflict, SpaceUnit } from "./protocol.js";
 import type { SpaceStepEvent } from "./space.js";
 import { holdingFetch } from "./testing/holding-fetch.js";
@@ -657,16 +657,25 @@ test("space-100, space-15, space-16, space-31: Stop during the first's Check, a 
   privateUrl.username = "summary-user";
   privateUrl.password = "summary-secret";
   const adapter = new SpaceGit(clone, { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1", LC_ALL: "C", LANG: "C" });
+  let gitAdvice: string | undefined;
   home.hooks.beforeStep = async (event) => {
     if (event.repository === key && event.step === "save") {
-      await adapter.ok(["-c", `spex.summary-context=${privateUrl.href}`, "fetch", "-q", "--no-tags", firstBare, `+refs/heads/spex:refs/remotes/${hostFolder(first)}/spex`]);
+      try {
+        await adapter.ok(["-c", `spex.summary-context=${privateUrl.href}`, "fetch", "-q", "--no-tags", firstBare, `+refs/heads/spex:refs/remotes/${hostFolder(first)}/spex`]);
+      } catch (error) {
+        assert.ok(error instanceof GitError);
+        gitAdvice = error.run.stderr.trimEnd().split("\n").at(-1);
+        throw error;
+      }
     }
   };
   const nested = await home.client.settle("space.sync", { repository: key }, 30_000);
   assert.ok(nested.sync.phase === "stopped" && nested.sync.step === "save" && nested.sync.cause === "git", JSON.stringify(nested.sync));
   assert.match(nested.sync.message, /cannot lock ref/i);
   assert.match(nested.sync.message, /File exists/i);
-  assert.match(nested.sync.message, /remove the file manually/i);
+  assert.ok(nested.sync.message.includes(`refs/remotes/${hostFolder(first)}/spex`), nested.sync.message);
+  assert.ok(gitAdvice, "the failed Git command supplied its diagnostic tail");
+  assert.ok(nested.sync.message.endsWith(gitAdvice), nested.sync.message);
   assert.ok(nested.sync.message.split("\n").filter(Boolean).length <= 3, nested.sync.message);
   assert.doesNotMatch(nested.sync.message, /summary-user|summary-secret|https?:\/\//i);
   assert.ok(!existsSync(join(clone, "nested-error.md")), "the failed fetch changed no working file");

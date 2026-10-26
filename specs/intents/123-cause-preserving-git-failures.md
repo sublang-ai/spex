@@ -32,3 +32,9 @@ Keep the actual Git failure and its affected ref or file visible alongside bound
 - The earlier coherent-reader run had 169 passes and six failures; this implementation does not waive that run or claim to repair its five timed cases.
 - The same frozen revised build subsequently passed all 175 cases, including the strengthened lock, nested-wrapper, redaction and recovery case, in 2219.08 seconds with two test files concurrently.
   This was a direct-Node scheduling diagnostic; the prior failures remain preserved, and the newly capped repository runner and final integration remain unverified.
+
+- PR256 CI on `881866c4` failed the nested-wrapper case on Ubuntu with Git 2.55.0 because its actual final advice differs from Apple Git's `remove the file manually`; the public summary retained the lock, ref and file-exists cause.
+  The core run had 889 passes, one failure and three existing skips; all four coherence cases passed, and the other CI jobs were still running when this failure was reviewed.
+  The test now captures the actual failed command's stderr tail from its existing `GitError`, rethrows that same error and checks the public summary retains that tail, with cause, ref, bounds, redaction and recovery assertions kept.
+  The corrected real-core case passed locally in 55.53 seconds after compilation, and the pre-push gate passed with no production-code or dependency changes.
+  Both Ubuntu jobs on the earlier head failed only the old advice assertion; their results remain preserved, and exact corrected-head CI is pending.
