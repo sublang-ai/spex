@@ -176,7 +176,7 @@ test("space-8, space-31, space-33, space-7, space-15, space-10, space-29: Check 
   assert.equal(git(clone, "config", "--get", `remote.${hostFolder(second)}.spexId`), placed.id);
 });
 
-test("space-61, space-87: with the first instance signed out, the first placement's line reads unreachable, Sign in again, while the second's reads reachable from the second's own read, with its path, members' count and rights there, and the row reads reachable through it", async (t) => {
+test("space-61, space-87: with the first instance signed out, the first placement's line reads unreachable, Sign in again, while the second's reads reachable from the second's own read, with its path, unknown members' count and rights there, and the row reads reachable through it", async (t) => {
   const { first, second, home, key, placed } = await placedAtBoth("line-states");
   t.after(() => home.stop());
   const before = repositoryOf(await refreshed(home), key);
@@ -187,7 +187,7 @@ test("space-61, space-87: with the first instance signed out, the first placemen
   const [atFirst, atSecond] = [placementOf(row, first.url), placementOf(row, second.url)];
   assert.deepEqual([atFirst.state, atFirst.reason], ["unreachable", "Sign in again"]);
   assert.deepEqual([atSecond.state, atSecond.reason, atSecond.path, atSecond.id, atSecond.can.manageMembers], ["reachable", null, "acme/atlas-spex", placed.id, true]);
-  assert.equal(typeof atSecond.members, "number");
+  assert.equal(atSecond.members, null, "the full view leaves membership unknown");
   assert.deepEqual([row.state, row.reason, row.governing], ["reachable", null, null]);
   // The row stands where its key lies, under the first's heading
   // (space-1).

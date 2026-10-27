@@ -1058,7 +1058,10 @@ test("git-host-8: members with the host's role names and no page", async () => {
     assert.deepEqual(held.groups.map((group) => group.fullPath), ["ada", "acme", "acme/research"]);
     assert.deepEqual(held.listings.map((listing) => [listing.repository.id, listing.branchPresent, listing.members]), [[repo.id, false, null]]);
     t.host.script.failMembers(false);
-    assert.deepEqual((await readHostView(t.client)).listings.map((listing) => listing.members), [3]);
+    const before = t.host.script.requests.length;
+    assert.deepEqual((await readHostView(t.client)).listings.map((listing) => listing.members), [null]);
+    assert.equal(t.host.script.requests.slice(before).filter((request) => /\/repositories\/[^/]+\/members$/.test(request.path)).length, 0, "full views do not enumerate healthy members either");
+    assert.equal((await t.client.members({ kind: "repository", id: repo.id })).members.length, 3, "explicit Members still reads the complete membership");
   } finally {
     await t.dispose();
   }

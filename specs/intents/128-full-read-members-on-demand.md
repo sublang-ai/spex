@@ -5,7 +5,7 @@
 
 ## Status
 
-Implemented and independently reviewed by GPT-6 Astra; targeted integration and required checks passed, with CI pending (2026-10-27).
+Implemented and independently reviewed by GPT-6 Astra; two stale CI assertions corrected and verified, with successor CI pending (2026-10-27).
 
 ## Intent
 
@@ -30,6 +30,10 @@ Keep full-view catalog and detail authority while omitting eager member enumerat
 - Required pre-push checks passed: spec lint, workspace build/catalog checks and e2e type checking.
   The one existing core-service-41 sentence advisory remains.
 - GPT-6 Astra independently reviewed the production change, specs, fixtures and browser assertions with no material finding.
+- Ubuntu Node 22 CI exposed two remaining full-view count assertions: a direct client read expected three members, and a placement read expected a numeric count.
+  The original failure is preserved; their expectations now remain unknown while direct membership still returns all three people.
+  Both corrected cases and required pre-push checks passed; GPT-6 Astra independently reviewed the test-only correction.
+- A bounded audit of numeric, type and mapped count assertions found no further stale full-view expectations; selected-target counts and UI fixtures representing known counts stay unchanged.
 This change reduces full-view work; it does not establish recovery from the live instance's observed rate limits.
 
 Implementation: GPT-6.1 Sol; coordination and review: GPT-6 Astra.
