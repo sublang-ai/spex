@@ -782,6 +782,10 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Fixed
 
+- Space Refresh keeps completed work when a rate-limited read is retried
+  once within the instance's wait bound, and stays busy until all started
+  requests settle.
+
 - A narrow player pane no longer spills its header and transcript past
   its border: a long agent reading such as `claude-opus-5-5 @ xhigh` ends
   in an ellipsis, its whole in the tooltip.

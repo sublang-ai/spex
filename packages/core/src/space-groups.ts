@@ -60,18 +60,37 @@ export interface HostView extends Omit<HostCatalog, "repositories"> {
 
 const DETAIL_CONCURRENCY = 4;
 
+/** Shared only by the work of one read. The wrapper also keeps an
+ * undefined rejection distinguishable from no failure. */
+interface ReadWork { failure?: { reason: unknown } }
+
+/** Observe the first failure immediately, but settle only after every
+ * started sibling has drained (git-host-5). */
+async function drainRead<T extends readonly unknown[]>(work: { [K in keyof T]: Promise<T[K]> }, state: ReadWork = {}): Promise<T> {
+  const answers = await Promise.all(work.map(async (promise) => {
+    try { return await promise; }
+    catch (reason) { state.failure ??= { reason }; }
+  }));
+  if (state.failure) throw state.failure.reason;
+  // Every result is present when no work failed; map preserves tuple order.
+  return answers as unknown as T;
+}
+
 /** Run `work` over `items`, at most `limit` at a time, in order. */
-async function mapLimit<T, R>(items: T[], limit: number, work: (item: T) => Promise<R>): Promise<R[]> {
+async function mapLimit<T, R>(items: T[], limit: number, work: (item: T, state: ReadWork) => Promise<R>): Promise<R[]> {
   const out: R[] = new Array(items.length);
   let next = 0;
+  const state: ReadWork = {};
   const lane = async (): Promise<void> => {
-    while (next < items.length) {
+    while (!state.failure && next < items.length) {
       const index = next;
       next += 1;
-      out[index] = await work(items[index]);
+      try { out[index] = await work(items[index], state); }
+      catch (reason) { state.failure ??= { reason }; }
     }
   };
   await Promise.all(Array.from({ length: Math.min(limit, items.length) }, lane));
+  if (state.failure) throw state.failure.reason;
   return out;
 }
 
@@ -85,25 +104,32 @@ async function mapLimit<T, R>(items: T[], limit: number, work: (item: T) => Prom
  * host.
  */
 export async function readHostView(client: GitHostClient, now: () => number = Date.now): Promise<HostView> {
-  const { repositories, ...catalog } = await readHostCatalog(client);
-  const listings = await mapLimit(repositories, DETAIL_CONCURRENCY, (repository) => readHostListing(client, repository));
+  const { repositories, ...catalog } = await readHostCatalog(client, true);
+  const listings = await mapLimit(repositories, DETAIL_CONCURRENCY, (repository, state) => readListing(client, repository, false, state, true));
   return { ...catalog, readAt: now(), listings };
 }
 
 /** Complete identity and namespace discovery, without unrelated detail
  * fanout (git-host-22). It is not a fresh full Groups view. */
-export async function readHostCatalog(client: GitHostClient): Promise<HostCatalog> {
+export async function readHostCatalog(client: GitHostClient, retryRead = false): Promise<HostCatalog> {
   const wait = { wait: true };
-  const [described, account, groups, repositories] = await Promise.all([
-    client.describe(wait), client.me(wait), client.groups(wait), client.repositories(wait),
-  ]);
+  const essentials = { ...wait, retryRead };
+  const [described, account, groups, repositories] = await drainRead([
+    client.describe(wait), client.me(essentials), client.groups(essentials), client.repositories(essentials),
+  ] as const);
   return { displayName: described.displayName, gitOrigin: described.gitOrigin, roles: described.roles, account, groups, repositories };
 }
 
 /** Enrich just one catalog entry; its detail is the latest target
  * authority. Full views retain their catalog's paths (git-host-5). */
 export async function readHostListing(client: GitHostClient, repository: HostRepository, target = false): Promise<HostListing> {
-  const [detail, members] = await Promise.all([client.repository(repository.id, { wait: true }), memberCount(client, repository.id)]);
+  return readListing(client, repository, target, {});
+}
+
+/** Full views share the failure with their detail scheduler, so it
+ * starts no queued repository while a failed pair drains. */
+async function readListing(client: GitHostClient, repository: HostRepository, target: boolean, state: ReadWork, retryRead = false): Promise<HostListing> {
+  const [detail, members] = await drainRead([client.repository(repository.id, { wait: true, retryRead }), memberCount(client, repository.id)] as const, state);
   return {
     repository: target ? detail : repository,
     readOnly: detail.readOnly ?? (detail.archived ? { reason: "archived", message: "" } : null),

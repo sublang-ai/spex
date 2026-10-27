@@ -2370,6 +2370,132 @@ test("git-host-5: full reads expose running and failure with only local rows, pr
   assert.deepEqual(instanceOf(await home.client.expectOk("space.signout", { instance: host.url }), host.url)?.read, { phase: "idle" });
 });
 
+// A failed branch must not complete the public lifecycle before its
+// already-started sibling responses arrive. Fault only these fixture reads.
+for (const outcome of ["recover", "changed-credential"] as const) {
+  test(`git-host-5, git-host-21: a full read's bounded GET recovery ${outcome} retains progress and settles publicly`, async (t) => {
+    const host = await startHost();
+    const home = await startHome(`read-retry-${outcome}`, { host, project: false, extra: { signIn: "browser", hostHoldMaxMs: 1_000 } });
+    t.after(() => home.stop());
+    const signed = home.client.mark();
+    await signIn(home, host);
+    await home.client.waitRepository(signed, HOST_OWN, (row) => row.sync.phase === "done");
+    const before = instanceOf(await home.client.expectOk("space.get", {}), host.url);
+    if (outcome === "recover") for (let i = 0; i < 5; i += 1) host.script.addRepository({ group: "acme", name: `recover-${i}-spex` });
+    const target = host.script.repositories[outcome === "recover" ? 4 : 0].id;
+    const client = clientAt(home, host), original = client.fetchImpl;
+    const calls = new Map<string, number>();
+    let page: string | undefined;
+    let faultReturned!: () => void;
+    const fault = new Promise<void>((resolve) => { faultReturned = resolve; });
+    client.fetchImpl = async (input, init) => {
+      const response = await original(input, init);
+      const url = new URL(input instanceof Request ? input.url : String(input)), path = url.pathname + url.search;
+      calls.set(path, (calls.get(path) ?? 0) + 1);
+      if (outcome === "recover" && url.pathname === "/api/v1/host/repositories" && url.search && page === undefined) page = path;
+      if ((path === `/api/v1/host/repositories/${target}` || path === page) && calls.get(path) === 1) {
+        faultReturned();
+        return Response.json({ error: { code: "rate_limited", message: "Read after the hold" } }, { status: 429, headers: { "Retry-After": "1" } });
+      }
+      return response;
+    };
+    t.after(() => { client.fetchImpl = original; });
+    const from = home.client.mark();
+    await home.client.expectOk("space.refresh", {});
+    if (outcome === "changed-credential") {
+      await fault;
+      const stored = await client.credentials.read();
+      assert.ok(stored);
+      assert.ok(client.credentials.replace(stored, { ...stored, refresh: `${stored.refresh}-replacement` }));
+      const failed = instanceOf(await home.client.waitSpace(from, (state) => instanceOf(state, host.url)?.read.phase === "failed"), host.url);
+      assert.deepEqual(failed?.read, { phase: "failed", message: "The sign-in changed meanwhile; try again" });
+      assert.equal(failed?.readAt, before?.readAt, "a conservative continuity refusal keeps the previous complete view");
+      assert.equal(calls.get(`/api/v1/host/repositories/${target}`), 1, "no old-credential retry reaches the instance");
+    } else {
+      const read = instanceOf(await home.client.waitSpace(from, (state) => instanceOf(state, host.url)?.read.phase === "idle" && (instanceOf(state, host.url)?.readAt ?? 0) > (before?.readAt ?? 0)), host.url);
+      assert.deepEqual(read?.read, { phase: "idle" });
+      for (const path of ["/api/v1/host", "/api/v1/host/me", "/api/v1/host/groups", "/api/v1/host/repositories"]) assert.equal(calls.get(path), 1, `${path} was not restarted`);
+      assert.ok(page);
+      assert.equal(calls.get(page), 2, "only the failed catalog page is replayed");
+      assert.equal(calls.get(`/api/v1/host/repositories/${target}`), 2, "only the failed detail is replayed");
+      const healthy = host.script.repositories[0].id;
+      assert.equal(calls.get(`/api/v1/host/repositories/${healthy}`), 1, "completed details survive the later hold");
+      assert.equal(calls.get(`/api/v1/host/repositories/${target}/members`), 1, "member counts are not retried");
+    }
+  });
+}
+
+for (const stage of ["catalog", "details"] as const) {
+  test(`git-host-5: a failed ${stage} read drains started siblings before Refresh can start another read`, async (t) => {
+    const host = await startHost();
+    const home = await startHome(`read-drain-${stage}`, { host, project: false, extra: { signIn: "browser", hostHoldMaxMs: 0 } });
+    t.after(() => home.stop());
+    const signed = home.client.mark();
+    await signIn(home, host);
+    await home.client.waitRepository(signed, HOST_OWN, (row) => row.sync.phase === "done");
+    const before = instanceOf(await home.client.expectOk("space.get", {}), host.url);
+    // More than one detail wave: queued repositories must remain unsent.
+    if (stage === "details") for (let i = 0; i < 6; i += 1) host.script.addRepository({ group: "acme", name: `drain-${i}-spex` });
+    const firstId = host.script.repositories[0].id;
+    const laterId = host.script.repositories[1]?.id;
+    const detailPath = /^\/api\/v1\/host\/repositories\/([^/]+)(\/members)?$/;
+    const details: string[] = [];
+    let fourStarted!: () => void;
+    const firstWave = new Promise<void>((resolve) => { fourStarted = resolve; });
+    let faultReturned!: () => void;
+    const faultSeen = new Promise<void>((resolve) => { faultReturned = resolve; });
+    const client = clientAt(home, host);
+    const original = client.fetchImpl;
+    const errorAnswer = (status: number): Response => Response.json({ error: { code: status === 429 ? "rate_limited" : "provider_unavailable", message: "Fixture read failure" } }, { status, headers: { "Retry-After": "28" } });
+    let held!: ReturnType<ReturnType<typeof holdingFetch>["hold"]>;
+    const holds = holdingFetch(async (input, init) => {
+      const response = await original(input, init);
+      const path = new URL(input instanceof Request ? input.url : String(input)).pathname;
+      if (stage === "catalog" && path === "/api/v1/host/repositories") {
+        await held.reached;
+        faultReturned();
+        return errorAnswer(429);
+      }
+      const detail = detailPath.exec(path);
+      if (stage === "details" && detail && !detail[2]) {
+        details.push(detail[1]);
+        if (details.length === 4) fourStarted();
+        if (detail[1] === firstId) {
+          await firstWave;
+          faultReturned();
+          return errorAnswer(429);
+        }
+        // Release healthy lanes after the first failure is observed:
+        // they must stop instead of taking more queued repositories.
+        await faultSeen;
+        await settled();
+        // One later failure is held too and must not replace the 429.
+        if (detail[1] === laterId) return errorAnswer(503);
+      }
+      return response;
+    });
+    held = holds.hold((path) => stage === "catalog" ? path === "/api/v1/host/groups" : path === `/api/v1/host/repositories/${firstId}/members` || path === `/api/v1/host/repositories/${laterId}`);
+    client.fetchImpl = holds.fetch;
+    t.after(() => { held.release(); client.fetchImpl = original; });
+    const requests = host.script.requests.length, from = home.client.mark();
+    await home.client.expectOk("space.refresh", {});
+    await Promise.all([held.reached, faultSeen]);
+    await settled();
+    const running = instanceOf(await home.client.expectOk("space.get", {}), host.url);
+    assert.deepEqual(running?.read, { phase: "running" }, "the first failure waits for its started siblings");
+    assert.equal(running?.readAt, before?.readAt);
+    await home.client.expectOk("space.refresh", {});
+    assert.deepEqual(instanceOf(await home.client.expectOk("space.get", {}), host.url)?.read, { phase: "running" });
+    assert.equal(host.script.requests.slice(requests).filter((request) => request.path === "/api/v1/host").length, 1, "duplicate Refresh joins the draining read");
+    if (stage === "details") assert.equal(details.length, 4, "a failure starts no queued repository detail");
+    held.release();
+    const failed = await home.client.waitSpace(from, (state) => instanceOf(state, host.url)?.read.phase === "failed");
+    assert.deepEqual(instanceOf(failed, host.url)?.read, { phase: "failed", message: `${HOST_NAME} asks to wait 28 seconds` });
+    assert.equal(instanceOf(failed, host.url)?.readAt, before?.readAt, "the failed read keeps the prior view's time");
+    if (stage === "details") assert.equal(details.length, 4, "draining starts no later detail wave");
+  });
+}
+
 test("git-host-5: signed-in startup publishes a failed first read even with only local rows", async (t) => {
   const host = await startHost();
   const first = await startHome("startup-read-outcome", { host, project: false, extra: { signIn: "browser" } });
