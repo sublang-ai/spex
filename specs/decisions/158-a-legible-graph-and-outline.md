@@ -6,8 +6,8 @@
 ## Status
 
 Accepted (2026-10-27).
-Amends [DR-026](026-data-graphics-craft.md) §1 (edge width no longer carries a count), §4 (a label without room waits for inspection or the selection), §5 (direction reads under the selection; the resting backbone is undirected), §6 (unlinked packages leave the arrangement for a row of their own), §7 (the selection hides the edges it does not touch, besides dimming) and §8 (the split's bounds are pixel floors).
-Amends [DR-027](027-linked-views-contract.md)'s selection voice (its isolation hides the edges it does not touch and draws its own directed).
+Amends [DR-026](026-data-graphics-craft.md) §1 (edge width no longer carries a count), §4 (a label without room waits for inspection or the selection; the camera is bounded by the fitted frame rather than the layout), §5 (direction reads under the selection; the resting backbone is undirected), §6 (unlinked packages leave the arrangement for a row of their own), §7 (the selection hides the edges it does not touch, besides dimming; the card answers hover and keyboard focus alone) and §8 (the split's bounds are pixel floors; the graph pane's controls stand above it and its key below).
+Amends [DR-027](027-linked-views-contract.md)'s selection voice (its isolation hides the edges it does not touch and draws its own directed), rule 3 (the graph reveals a node the relationship panel covers, and the camera returns after the selection) and the footer's place (in the outline pane).
 
 ## Context
 
@@ -18,29 +18,49 @@ Amends [DR-027](027-linked-views-contract.md)'s selection voice (its isolation h
   - width reads no count: at `2·√n` capped at 6px every pair of nine or more citations draws equally thick, so 58 citations and one look alike, and the counts are reached only by hovering edge after edge.
 - The outline beside it shows "external / internal / test" as counts in filter-like pills with the group word repeated on every row, the `##` headings in their raw uppercased English, backlinks behind a toggle, and a file rollup that counts a citation of an absent ID as outbound while the graph drops it — the two projections disagree on the same pair.
 - The split is bounded only by share (25–65%), so a graph beside the outline can be 168px wide.
+- In use, three more things got in the way:
+  - the omitted lines were explained by one legend sentence, with no way to see or change how many were drawn;
+  - a click focuses the node, so its card stayed beside the relationship list after the pointer left, and the list moved to whichever corner covered the fewest neighbors — often over the selection itself — growing with the neighbor count;
+  - the legend row mixed keys, the omission note and the fit button, the unlinked row carried a caption no other part of the canvas has, and `meta · map` under the graph read as the graph's own.
+- The stacked graph narrows with the window: with the 224px rail open it is 328px wide at a 600px window and 48px at 320px.
 
 ## Decision
 
-1. **The overview draws the backbone; the selection draws the detail.**
-   At rest the graph draws one undirected line per package pair whose citations in both directions total at least six, plus each package's heaviest pair, so no linked package looks unlinked; the arrangement settles over those pairs alone, so clusters show.
+1. **The overview draws the backbone; the reader sets how much.**
+   At rest the graph draws one undirected line per package pair whose citations in both directions total at least a threshold, plus each package's heaviest pair — a tie going to the partner first by name — so no linked package looks unlinked; a node with no line therefore has no cross-package citation.
+   A control above the graph sets the threshold from 1 to the largest pair total, with a last stop drawing the heaviest pairs alone, and states the pairs it draws out of all citing pairs.
+   The default is the lowest threshold whose backbone holds at most 1.5 pairs per linked package; the last stop holds at most one per package, so a default always exists.
+   The arrangement settles once over the default backbone, so moving the control changes which lines draw and never moves a node — it is a visibility filter, not the density control DR-026 declines.
+   While a package is selected the control is disabled and states the selection's pair count; the threshold lasts while the view stays open.
    Backbone lines are a mid-gray at uniform width, clearing DR-026 §3's 3:1 floor in both themes.
-   A selected package's citations all draw, directed and of uniform width — what it cites in the interaction hue, what cites it in ink — with every other edge hidden and every other mark dimmed; the legend says the overview omits the weaker relationships.
-   The threshold and the heaviest-pair rule are a starting point, held to fixtures of sparse, dense and evenly weighted trees.
+   A selected package's citations all draw, directed and of uniform width — what it cites in the interaction hue, what cites it in ink — with every other edge hidden and every other mark dimmed.
 2. **Counts are written, not encoded in width.**
    Edge width stops carrying the citation count: past its cap it already could not.
-   Under the selection each neighbor's name carries `←N` (it cites the selection N times) and `→N` (the selection cites it N times); where the names do not all find room, a relationship list in the graph lists every neighbor by total count, scrolling and keyboard-reachable.
-3. **Names are placed, not imposed.**
+   Under the selection each neighbor's name carries `←N` (it cites the selection N times) and `→N` (the selection cites it N times).
+   A relationship panel stands in the graph's top-right corner for every selection: the package's item total and citation counts under its name, column heads in the two edge hues reading the two directions, then every neighbor by total count, bounded to about eight rows or 45% of the canvas and scrolling inside; an entry focused or hovered lifts its node and edges, and activating one selects that package.
+3. **The panel never hides the selection, and the camera comes back.**
+   When the selected node with its name lies outside the viewport less the panel, the camera pans the least that brings it clear — never zooming, never counting as the reader's move; deselecting returns the camera to where it stood before the first such pan, unless the reader moved it meanwhile.
+   The camera is bounded by the fitted frame rather than the layout: the view overlaps the frame by at least half its own size on each axis, which a sparse tree satisfies too and which leaves room for any reveal pan.
+   The panel spans at most 45% of the canvas height, so a node at its top moves down by at most 0.45H plus a gap; with about 120px for the node, its name and the edge clearance, the canvas needs H ≥ 261px, and the graph pane's floor keeps it at 438px or more.
+   The pan is vertical when it must be, so the node never meets the panel whatever the graph's width.
+4. **Inspection cards answer inspection.**
+   A node's card shows on hover or keyboard focus alone; a click that focuses the node does not hold it once the pointer leaves, and the selection's own summary rides the panel.
+5. **Names are placed, not imposed.**
    Each name takes the first free place around its node — below, above, right, left, then below or above flush with its rim — clearing other circles by 5px, other names, and the canvas edge by 10px, the larger package placing first and fewer edge crossings preferred; a name with no place waits for hover, focus or the selection, and the node's accessible name always carries it.
-4. **Unlinked packages stand apart, honestly.**
-   A package with no cross-package citation either way sits in a captioned row at the canvas's foot, outside the arrangement and the fit; node radii keep a 2.4 ratio across the tree.
-5. **One citation index serves both projections.**
+6. **Unlinked packages stand apart, quietly.**
+   A package with no cross-package citation either way sits in one row at the canvas's foot, outside the arrangement and the fit, in the same scale and spacing as the rest and with no rule or caption; its card says it has no citations with other packages; node radii keep a 2.4 ratio across the tree.
+7. **One citation index serves both projections.**
    Pair counts, the graph's in and out totals and the outline's file rollups come from one index keyed by item ID; a citation of an absent ID counts in no total and is carried as a muted "unresolved N" on its file row at every width.
-6. **The outline reads as a table.**
+8. **The outline reads as a table.**
    Group names read in full (External behavior, Internal behavior, Tests) with a one-line definition on each filter; package rows carry numerals in aligned columns under one pinned heading row, a zero as a dash; a group filtered off hides its column with a status line restoring it; section headings read as the localized group name with their count, topics keep their author's words as sub-headings, and the per-row group word retires.
    An item's citation summary raises a card listing up to five items in each direction and opens the item onto its citation block; backlinks list directly.
-7. **The split holds pixel floors.**
+9. **The split holds pixel floors, and the window holds the graph's.**
    The panes stand side by side only while the box holds a 320px graph beside a 28rem outline, stacking otherwise, and the divider never takes either below its floor.
-
+   The desktop window refuses a width below 600px, so the stacked graph keeps its 320px.
+   A browser cannot be held, so the graph's drawing keeps 320px and scrolls sideways in its own box where the pane is narrower — the one place DR-041 lets content scroll sideways — while the controls, the panel and the key stay in view; a selection first scrolls the drawing to its node, then pans as item 3 states.
+10. **The graph pane is layered, and the tree's documents belong to the outline.**
+    Above the graph stand only controls that change the picture — the threshold and the fit, named "Fit to window"; below it a key that is never a control and does not change with the selection: the two role treatments and what size counts, the selection's hues read off the panel's column heads.
+    `map.md` and `meta.md` stand in a footer of the outline pane, outside its scroll, named by file and purpose, through search and filters and in the empty and legacy trees alike.
 Considered and declined for now:
 
 - re-laying the selection's neighbors in a ring around it — it reads best in the prototype but moves marks the camera contract keeps still, so it waits on this decision's results;
@@ -48,6 +68,7 @@ Considered and declined for now:
 
 ## Consequences
 
-- spec-view-1, 2, 3, 4, 19, 20, 22, 23, 24, 25, 26, 28 and 61 change; spec-view-60 adds the citation summary card; the tests spec-view-21, 37, 38, 40 and 56 follow, and spec-view-65 covers the outline's columns and filters.
-- DR-026's "arrows hidden at rest" refusal stands for directed drawing: the resting backbone draws no direction because it draws pairs, not citations.
+- spec-view-1, 2, 3, 4, 7, 19, 20, 22, 23, 24, 25, 26, 27, 28, 43, 59 and 61 change; spec-view-60 adds the citation summary card and spec-view-66 the graph's threshold control; the tests spec-view-21, 37, 38, 40, 41 and 56 follow, and spec-view-65 covers the outline's columns and filters.
+- app-shell-40 holds the desktop window's minimum width, which the fresh-install smoke reads back.
+- DR-026's "arrows hidden at rest" refusal stands for directed drawing: the resting backbone draws no direction because it draws pairs, not citations; its refusal of density sliders stands, since the threshold never moves a node.
 - The localization catalogs gain the full group names, their short forms and definitions, and the new graph and outline wording.

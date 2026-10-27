@@ -7,7 +7,7 @@
 
 Accepted.
 Extends [DR-009](009-at-hand-interaction.md) and [DR-026](026-data-graphics-craft.md); amends DR-026 §4 (the presentation may fill the pane within a stated bound) and §7 (inspection never takes the emphasis).
-The selection's voice under "One voice per axis" is amended by [DR-158](158-a-legible-graph-and-outline.md): its isolation also hides the edges it does not touch and draws its own directed.
+The selection's voice under "One voice per axis", rule 3's reveal and the footer's place are amended by [DR-158](158-a-legible-graph-and-outline.md): its isolation also hides the edges it does not touch and draws its own directed, the graph also pans a node the relationship panel covers and returns the camera after the selection, and `meta` and `map` stand in the outline pane's footer.
 
 ## Context
 

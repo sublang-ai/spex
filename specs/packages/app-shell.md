@@ -21,6 +21,10 @@ While a Spex instance is running, when the user launches Spex again, the app sha
 
 ### Notifications and Attention
 
+#### app-shell-40
+
+While the main window is open, the app shall refuse to narrow it below 600px, so the spec view's stacked graph keeps its 320px floor beside the open sidebar ([DR-158](../decisions/158-a-legible-graph-and-outline.md)).
+
 #### app-shell-3
 
 Where the shared config file's notification preferences enable an event kind, when a project session emits an event of that kind — a finished turn (`turn_finished`), a question awaiting the Boss's reply (`awaitBossReply`), or a failure — the app shall post a native desktop notification naming the project and the event:
@@ -263,7 +267,7 @@ Where the host is macOS with Apple's command-line tools installed, when the sour
 
 #### app-shell-35
 
-Where the fresh-install smoke ([DR-086](../decisions/086-tests-in-tiers.md)) has cloned the committed tree into a scratch directory and installed it with `npm ci` on an empty npm cache, when the smoke runs that clone's root `npm start` with the acceptance variable naming a screenshot, the smoke user-data variable naming a scratch directory whose Spex home stores English as its language, and a scratch Spex home, the smoke shall assert the guarded launch in its installed shape: the command builds the workspaces, rebuilds the native module for Electron, launches the app, and returns zero after restoring the module for Node [[app-shell-26](#app-shell-26)]; the app took its lock and its state under the scratch directories, the developer's own Spex untouched [[app-shell-24](#app-shell-24)]; and the render exited clean with the screenshot written.
+Where the fresh-install smoke ([DR-086](../decisions/086-tests-in-tiers.md)) has cloned the committed tree into a scratch directory and installed it with `npm ci` on an empty npm cache, when the smoke runs that clone's root `npm start` with the acceptance variable naming a screenshot, the smoke user-data variable naming a scratch directory whose Spex home stores English as its language, and a scratch Spex home, the smoke shall assert the guarded launch in its installed shape: the command builds the workspaces, rebuilds the native module for Electron, launches the app, and returns zero after restoring the module for Node [[app-shell-26](#app-shell-26)]; the app took its lock and its state under the scratch directories, the developer's own Spex untouched [[app-shell-24](#app-shell-24)]; the render exited clean with the screenshot written; and the render reported the main window's minimum width as 600px [[app-shell-40](#app-shell-40)].
 
 #### app-shell-38
 
