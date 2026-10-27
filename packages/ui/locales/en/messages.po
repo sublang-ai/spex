@@ -2883,10 +2883,10 @@ msgstr "exported skills"
 msgid "Exporting…"
 msgstr "Exporting…"
 
-#. item group: External Behavior, short
+#. item group: External Behavior, abbreviated for a narrow column
 #: src/lib/spec-view-model.ts
-msgid "External"
-msgstr "External"
+msgid "Ext"
+msgstr "Ext"
 
 #. item group: External Behavior, inside a phrase
 #: src/lib/spec-view-model.ts
@@ -3367,6 +3367,11 @@ msgstr "Installing…"
 msgid "Instance"
 msgstr "Instance"
 
+#. item group: Internal Behavior, abbreviated for a narrow column
+#: src/lib/spec-view-model.ts
+msgid "Int"
+msgstr "Int"
+
 #. catalog family: one intent's file
 #. chip on a queued message: it carries a queued intent
 #: src/components/Composer.tsx
@@ -3401,11 +3406,6 @@ msgstr "Intents"
 #: src/components/SettingsSurface.tsx
 msgid "Interface language"
 msgstr "Interface language"
-
-#. item group: Internal Behavior, short
-#: src/lib/spec-view-model.ts
-msgid "Internal"
-msgstr "Internal"
 
 #. item group: Internal Behavior, inside a phrase
 #: src/lib/spec-view-model.ts
@@ -6377,7 +6377,11 @@ msgstr "Terminal pane theme (CLI only)"
 msgid "test"
 msgstr "test"
 
-#. item group: Verification
+#. item group: Verification, abbreviated for a narrow column
+#: src/lib/spec-view-model.ts
+msgid "Test"
+msgstr "Test"
+
 #. item group: Verification
 #: src/lib/spec-view-model.ts
 msgid "Tests"

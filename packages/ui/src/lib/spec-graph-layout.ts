@@ -770,7 +770,8 @@ function boxesMeet(a: LabelBox, b: LabelBox, margin: number): boolean {
 }
 
 /** Places each requested label at the first of four places around its
- * node — below, above, right, left — that keeps clear of every other
+ * node — below, above, right, left, the first two also flush with the
+ * rim on either side — that keeps clear of every other
  * circle, every label already placed, and the canvas edge, preferring
  * the place that crosses the fewest drawn segments (spec-view-22).
  * Forced labels go first and stand at their best place even where
@@ -801,6 +802,19 @@ export function placeLabels(
       { x: place.x + place.r + side, y: place.y - h / 2, width: w, height: h },
       { x: place.x - place.r - side - w, y: place.y - h / 2, width: w, height: h },
     ];
+    // Near the canvas's side a centred name would cross its edge, so
+    // the places below and above are tried again flush with the
+    // circle's rim on either side, still hanging from their node.
+    if (w > 2 * place.r) {
+      const below = place.y + place.r + LABEL_GAP - 2;
+      const above = place.y - place.r - LABEL_GAP - h + 2;
+      for (const y of [below, above]) {
+        candidates.push(
+          { x: place.x - place.r, y, width: w, height: h },
+          { x: place.x + place.r - w, y, width: w, height: h },
+        );
+      }
+    }
     let best: LabelBox | undefined;
     let bestCost = Infinity;
     for (const box of candidates) {

@@ -97,7 +97,7 @@ const GRAPH_FLOOR_PX = 320;
 const OUTLINE_FLOOR_REM = 28;
 const DIVIDER_PX = 17;
 
-const COUNT_CELL = "w-10 shrink-0 text-right @md:w-[4.5rem]";
+const COUNT_CELL = "w-7 shrink-0 text-right @xs:w-10 @md:w-[4.5rem]";
 /** The cross-package rollup's column (spec-view-19). */
 const ROLLUP_CELL =
   "hidden w-24 shrink-0 whitespace-nowrap text-right @md:block";
@@ -335,6 +335,9 @@ export function SpecView(props: SpecViewProps) {
   // Backlinks and cross-file per-file citation rollups (SPECV-19).
   const citations = useMemo(() => buildCitationModel(tree.files), [tree]);
   const totals = useMemo(() => treeCounts(tree.files), [tree]);
+  // The unresolved slot is held on every row only where some package
+  // has one, so a clean tree spends no width on it (spec-view-19).
+  const anyUnresolved = citations.unresolved.size > 0;
   const searching = viewState.search.trim().length > 0;
   const search = useMemo(
     () => searchDigest(tree.files, viewState),
@@ -1212,7 +1215,7 @@ export function SpecView(props: SpecViewProps) {
       <li key={key} data-testid={`file-${key}`} className="@container">
         <div
           title={rollup ? i18n._("Citations: {summary}", { summary: rollup }) : undefined}
-          className={`flex items-center gap-2 rounded px-1 py-1 ${
+          className={`flex items-center gap-1 rounded px-1 py-1 @xs:gap-2 ${
             dimmed ? "opacity-50" : ""
           } ${
             selected
@@ -1331,6 +1334,7 @@ export function SpecView(props: SpecViewProps) {
           </span>
           {/* Never yields: a package whose only citations name absent
               items must not look uncited (spec-view-19, spec-view-1). */}
+          {anyUnresolved ? (
           <span className={`${UNRESOLVED_CELL} whitespace-nowrap text-xs`}>
             {unresolved > 0 ? (
               <span
@@ -1352,6 +1356,7 @@ export function SpecView(props: SpecViewProps) {
               </span>
             ) : null}
           </span>
+          ) : null}
         </div>
         {expanded ? (
           <div className="ml-[7px] flex flex-col gap-1 border-l border-neutral-200 py-1 pl-4 dark:border-neutral-800">
@@ -1823,7 +1828,7 @@ export function SpecView(props: SpecViewProps) {
               // scrolls in the padded surface root, so the heading row
               // rides up over that padding rather than letting rows
               // show above it.
-              className={`sticky ${graphful ? "top-0" : "-top-6"} z-[1] flex items-end gap-2 border-b border-neutral-200 bg-neutral-50 px-1 pb-1 pt-0.5 text-xs leading-tight text-neutral-500 dark:border-neutral-800 dark:bg-neutral-950`}
+              className={`sticky ${graphful ? "top-0" : "-top-6"} z-[1] flex items-end gap-1 @xs:gap-2 border-b border-neutral-200 bg-neutral-50 px-1 pb-1 pt-0.5 text-xs leading-tight text-neutral-500 dark:border-neutral-800 dark:bg-neutral-950`}
             >
               <span className="min-w-0 flex-1" />
               {GROUP_ORDER.filter((group) => viewState.filters[group]).map(
@@ -1858,7 +1863,9 @@ export function SpecView(props: SpecViewProps) {
                   })}
                 </span>
               </span>
-              <span aria-hidden="true" className={UNRESOLVED_CELL} />
+              {anyUnresolved ? (
+                <span aria-hidden="true" className={UNRESOLVED_CELL} />
+              ) : null}
             </div>
           ) : null;
 

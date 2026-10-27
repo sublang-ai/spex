@@ -50,9 +50,12 @@ export const GROUP_NAME: Record<SpecGroup, () => string> = {
 /** A group's short name, where a narrow outline has no room for the
  * full one (spec-view-2). */
 export const GROUP_SHORT: Record<SpecGroup, () => string> = {
-  external: () => i18n._({ id: "External", comment: "item group: External Behavior, short" }),
-  internal: () => i18n._({ id: "Internal", comment: "item group: Internal Behavior, short" }),
-  test: () => i18n._({ id: "Tests", comment: "item group: Verification" }),
+  external: () =>
+    i18n._({ id: "Ext", comment: "item group: External Behavior, abbreviated for a narrow column" }),
+  internal: () =>
+    i18n._({ id: "Int", comment: "item group: Internal Behavior, abbreviated for a narrow column" }),
+  test: () =>
+    i18n._({ id: "Test", comment: "item group: Verification, abbreviated for a narrow column" }),
 };
 
 /** What each group holds, in one line — a filter's title

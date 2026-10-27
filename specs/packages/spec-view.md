@@ -163,7 +163,7 @@ While the graph renders a node, the spec view shall present the package by the e
 
 - the node's area carries its package's item count, within a bounded size range, and states that count as a numeral on the node;
 - a package cited by a peer is filled solid, and a package no peer cites is drawn as a ring on a tinted fill — neither treatment using the hues reserved for interaction, status, or item groups;
-- the node's basename labels it, haloed in the surface color where edges pass beneath, at the first of four places — below, above, right of, left of the node — that keeps 5px from every other circle, clears every other label, and keeps 10px inside the canvas, larger packages placing first and a place crossing fewer drawn edges preferred;
+- the node's basename labels it, haloed in the surface color where edges pass beneath, at the first of its places around the node — below, above, right of, left of it, then below or above flush with its rim on either side — that keeps 5px from every other circle, clears every other label, and keeps 10px inside the canvas, larger packages placing first and a place crossing fewer drawn edges preferred;
 - a label with no such place stays hidden until its node takes hover, keyboard focus, or the selection [[spec-view-25](#spec-view-25)], and the node's accessible name carries the basename always;
 - the numeral and the label never render below their legible floor, the fitted view included [[spec-view-27](#spec-view-27)] [[spec-view-28](#spec-view-28)].
 

@@ -1213,16 +1213,16 @@ export function SpecGraph({
         </span>
         {selectedName ? (
           <>
-            <span className="flex items-center gap-1.5 whitespace-nowrap">
-              <span className="h-0.5 w-4 bg-brand-600 dark:bg-brand-400" />
+            <span className="flex min-w-0 items-center gap-1.5">
+              <span className="h-0.5 w-4 shrink-0 bg-brand-600 dark:bg-brand-400" />
               {i18n._({
                 id: "→N: {name} cites it N times",
                 values: { name: selectedName },
                 comment: "graph legend: purple edges and →N count what the selected package cites",
               })}
             </span>
-            <span className="flex items-center gap-1.5 whitespace-nowrap">
-              <span className="h-0.5 w-4 bg-neutral-700 dark:bg-neutral-200" />
+            <span className="flex min-w-0 items-center gap-1.5">
+              <span className="h-0.5 w-4 shrink-0 bg-neutral-700 dark:bg-neutral-200" />
               {i18n._({
                 id: "←N: it cites {name} N times",
                 values: { name: selectedName },

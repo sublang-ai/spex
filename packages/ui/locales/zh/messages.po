@@ -2883,9 +2883,9 @@ msgstr "导出的技能"
 msgid "Exporting…"
 msgstr "导出中…"
 
-#. item group: External Behavior, short
+#. item group: External Behavior, abbreviated for a narrow column
 #: src/lib/spec-view-model.ts
-msgid "External"
+msgid "Ext"
 msgstr "对外"
 
 #. item group: External Behavior, inside a phrase
@@ -3367,6 +3367,11 @@ msgstr "安装中…"
 msgid "Instance"
 msgstr "实例"
 
+#. item group: Internal Behavior, abbreviated for a narrow column
+#: src/lib/spec-view-model.ts
+msgid "Int"
+msgstr "内部"
+
 #. catalog family: one intent's file
 #. chip on a queued message: it carries a queued intent
 #: src/components/Composer.tsx
@@ -3401,11 +3406,6 @@ msgstr "意图"
 #: src/components/SettingsSurface.tsx
 msgid "Interface language"
 msgstr "界面语言"
-
-#. item group: Internal Behavior, short
-#: src/lib/spec-view-model.ts
-msgid "Internal"
-msgstr "内部"
 
 #. item group: Internal Behavior, inside a phrase
 #: src/lib/spec-view-model.ts
@@ -6377,7 +6377,11 @@ msgstr "终端窗格主题（仅 CLI）"
 msgid "test"
 msgstr "测试"
 
-#. item group: Verification
+#. item group: Verification, abbreviated for a narrow column
+#: src/lib/spec-view-model.ts
+msgid "Test"
+msgstr "测试"
+
 #. item group: Verification
 #: src/lib/spec-view-model.ts
 msgid "Tests"

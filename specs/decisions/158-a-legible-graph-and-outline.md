@@ -30,7 +30,7 @@ Amends [DR-027](027-linked-views-contract.md)'s selection voice (its isolation h
    Edge width stops carrying the citation count: past its cap it already could not.
    Under the selection each neighbor's name carries `←N` (it cites the selection N times) and `→N` (the selection cites it N times); where the names do not all find room, a relationship list in the graph lists every neighbor by total count, scrolling and keyboard-reachable.
 3. **Names are placed, not imposed.**
-   Each name takes the first of four places around its node — below, above, right, left — clearing other circles by 5px, other names, and the canvas edge by 10px, the larger package placing first and fewer edge crossings preferred; a name with no place waits for hover, focus or the selection, and the node's accessible name always carries it.
+   Each name takes the first free place around its node — below, above, right, left, then below or above flush with its rim — clearing other circles by 5px, other names, and the canvas edge by 10px, the larger package placing first and fewer edge crossings preferred; a name with no place waits for hover, focus or the selection, and the node's accessible name always carries it.
 4. **Unlinked packages stand apart, honestly.**
    A package with no cross-package citation either way sits in a captioned row at the canvas's foot, outside the arrangement and the fit; node radii keep a 2.4 ratio across the tree.
 5. **One citation index serves both projections.**
