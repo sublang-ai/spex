@@ -1160,44 +1160,45 @@ test("git-host-24, space-83, git-host-5, git-host-21: Refresh reads each instanc
   await sleep(300);
   assert.deepEqual([meReads(first) - readsBefore[0], meReads(second) - readsBefore[1]], [1, 1], "one read of each instance since the start");
 
-  // A 429 from the first holds the first's read alone (git-host-21): a
-  // Refresh's read of the second reaches it at once, while the first's
-  // waits out the seconds the first asked for, then is held. The hold
-  // outlasts by far what a loaded runner takes from the 429 to the next
-  // Refresh's reads, so the order of the two reads, not the runner's
-  // speed, decides the assertions below.
+  // One eligible 429 holds the first's full read while the second's
+  // new view completes; the first then recovers inside this same Refresh
+  // (git-host-5, git-host-21), retaining its old view until then.
   const holdSeconds = 10;
   const holdMs = holdSeconds * 1_000;
-  const sentBeforeLimit = first.script.requests.length;
-  first.script.rateLimit(1, String(holdSeconds));
-  let mark = again.client.mark();
-  await again.client.expectOk("space.refresh", {});
-  const limited = await again.client.waitSpace(mark, (state) => instanceOf(state, first.url)?.read.phase === "failed" && instanceOf(state, second.url)?.read.phase === "idle" && (instanceOf(state, second.url)?.readAt ?? null) !== null, 30_000);
-  assert.deepEqual(instanceOf(limited, first.url)?.read, { phase: "failed", message: `${HOST_NAME} asks to wait ${holdSeconds} seconds` });
-  assert.equal(instanceOf(limited, first.url)?.readAt, atFirst?.readAt, "the first's view keeps its time");
-  // The hold runs from the 429, which the stand-in gives the first host
-  // request it is asked after the limit, not from a request of the same
-  // read that arrived after it.
-  const limitedRequest = first.script.requests.slice(sentBeforeLimit).find((request) => request.path.startsWith("/api/v1/host/"));
-  assert.ok(limitedRequest, "the first was asked once the limit stood");
-  const answered = limitedRequest.at;
-  const secondReadAt = instanceOf(limited, second.url)?.readAt ?? 0;
-  mark = again.client.mark();
-  const asked = performance.now();
+  const beforeLimit = await again.client.expectOk("space.get", {});
+  const firstReadAt = instanceOf(beforeLimit, first.url)?.readAt ?? 0;
+  const secondReadAt = instanceOf(beforeLimit, second.url)?.readAt ?? 0;
   const sentFirst = first.script.requests.length;
   const sentSecond = second.script.requests.length;
+  first.script.rateLimit(1, String(holdSeconds));
+  const mark = again.client.mark();
+  const asked = performance.now();
   await again.client.expectOk("space.refresh", {});
+  const waiting = await again.client.waitSpace(mark, (state) =>
+    instanceOf(state, first.url)?.read.phase === "running" && instanceOf(state, first.url)?.readAt === firstReadAt
+    && instanceOf(state, second.url)?.read.phase === "idle" && (instanceOf(state, second.url)?.readAt ?? 0) > secondReadAt, 30_000);
+  assert.equal(instanceOf(waiting, first.url)?.readAt, firstReadAt, "the held first read keeps its previous view's time");
+  assert.deepEqual(rowsUnder(waiting, first.url, "acme"), [[alphaKey, "absent", first.url]], "the first's previous rows stand during recovery");
+  assert.deepEqual(rowsUnder(waiting, second.url, "acme"), [[betaKey, "absent", second.url]], "the second's fresh rows arrive independently");
+  // The hold runs from the first authenticated request after the fault.
+  // Other catalog calls may already be in flight, so identify the replay
+  // by that request's path instead of counting all requests.
+  const limitedRequest = first.script.requests.slice(sentFirst).find((request) => request.path.startsWith("/api/v1/host/"));
+  assert.ok(limitedRequest, "the first was asked once the limit stood");
+  const answered = limitedRequest.at;
   const waited = await again.client.waitSpace(mark, (state) => state.instances.every((instance) => instance.read.phase === "idle")
-    && (instanceOf(state, first.url)?.readAt ?? 0) > (atFirst?.readAt ?? 0) && (instanceOf(state, second.url)?.readAt ?? 0) > secondReadAt, holdMs + 60_000);
+    && (instanceOf(state, first.url)?.readAt ?? 0) > firstReadAt && (instanceOf(state, second.url)?.readAt ?? 0) > secondReadAt, holdMs + 60_000);
+  const replay = first.script.requests.slice(first.script.requests.indexOf(limitedRequest) + 1).find((request) => request.path === limitedRequest.path);
+  assert.ok(replay, "the failed request is replayed inside the same Refresh");
   const reachedSecond = second.script.requests[sentSecond]?.at ?? Infinity;
-  const reachedFirst = first.script.requests[sentFirst]?.at ?? -Infinity;
-  // At once: the second's read reaches it well inside the first's hold —
-  // two seconds short of its end, so a hold wrongly shared with the
-  // second cannot pass by jitter — before the first's own read, which
-  // waits that hold out — whatever the runner's speed within the hold.
+  const reachedFirst = replay.at;
+  // At once: the second reaches its instance at least two seconds before
+  // the first's hold ends; the matching replay reaches the first only
+  // after its own hold, not after another instance's.
   assert.ok(reachedSecond < answered + holdMs - 2_000, `the second was read at once, ${Math.round(reachedSecond - asked)} ms after the ask and ${Math.round(reachedSecond - answered)} ms into the first's ${holdSeconds} s hold`);
   assert.ok(reachedFirst >= answered + holdMs - 100, `the first waited out its hold, reached ${Math.round(reachedFirst - answered)} ms after its 429`);
-  assert.ok(reachedFirst > reachedSecond, "the second was read before the first");
+  assert.ok(reachedFirst > reachedSecond, "the second was read before the first's replay");
+  assert.deepEqual(rowsUnder(waited, first.url, "acme"), [[alphaKey, "absent", first.url]]);
   assert.deepEqual(rowsUnder(waited, second.url, "acme"), [[betaKey, "absent", second.url]]);
 });
 

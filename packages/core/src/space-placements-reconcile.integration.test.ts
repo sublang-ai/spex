@@ -324,12 +324,12 @@ test("git-host-21, space-16, space-15, space-60: a placement beside the first wh
   assert.deepEqual(both.placements.map((line) => [line.instance, line.outcome?.kind]), [[first.url, "synced"], [second.url, "synced"]], JSON.stringify(both.sync));
   await signOut(home, second);
 
-  // The third asks to wait as long as a hold lasts: its read fails and
-  // its calls are held, its view kept (git-host-21, git-host-5). It
-  // answers every call reaching it 429 — its read sends several at
-  // once — so no number of calls spends the limit, and the Check's call
-  // meets the hold however late it comes.
-  third.script.rateLimit(Infinity, "120");
+  // An over-bound 121 s answer makes the full read fail without replay,
+  // while its shared hold stays capped at 120 s (git-host-21). This
+  // fixture establishes the hold promptly so the selected Check's Stop
+  // is tested independently of full-read recovery. Every call reaching
+  // the third answers 429, so the Check meets the hold however late it comes.
+  third.script.rateLimit(Infinity, "121");
   let mark = home.client.mark();
   await home.client.expectOk("space.refresh", {});
   await home.client.waitSpace(mark, (state) => instanceOf(state, third.url)?.read.phase === "failed", 30_000);
