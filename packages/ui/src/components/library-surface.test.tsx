@@ -759,11 +759,14 @@ describe("playbook-library-22/23/45: a listed playbook wears its pipeline as a r
       expect(screen.getByTestId("item-CODE-1")).toBeTruthy(),
     );
 
-    // A row is the ID chip in its group colour, the group word, and
-    // the first line — the body waits behind the toggle.
+    // A row is the ID chip in its group colour and the first line,
+    // under its section's heading — a Gears section outside the
+    // package grammar heads by its own words — and the body waits
+    // behind the toggle.
+    expect(screen.getByTestId("section-CODE-1").textContent).toBe("Coder · 2");
     const second = screen.getByTestId("item-CODE-2");
     expect(second.textContent).toContain("CODE-2");
-    expect(second.textContent).toContain("external");
+    expect(second.textContent).not.toContain("external");
     expect(second.textContent).toContain("The reviewer shall read it.");
     expect(second.textContent).not.toContain("the review names the commit");
     const toggle = screen.getByTestId("item-toggle-CODE-2");

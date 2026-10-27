@@ -70,6 +70,11 @@ msgstr "— 在 {path} 生成"
 msgid "— seeds a sample project"
 msgstr "— 生成一个示例项目"
 
+#. list separator
+#: src/components/SpecView.tsx
+msgid ", "
+msgstr "、"
+
 #: src/App.tsx
 msgid ", {count, plural, one {# spec item} other {# spec items}}"
 msgstr "，{count} 个规约条目"
@@ -174,6 +179,10 @@ msgstr "{count, plural, other {，# 次}}"
 #: src/components/SpaceGroups.tsx
 msgid "{count, plural, one {# change} other {# changes}}"
 msgstr "{count, plural, other {# 项更改}}"
+
+#: src/components/SpecView.tsx
+msgid "{count, plural, one {# citation names an item} other {# citations name items}} absent from the tree"
+msgstr "{count, plural, other {未解析引用 # 条}}：指向的条目不存在"
 
 #: src/components/SpecGraph.tsx
 msgid "{count, plural, one {# citation} other {# citations}}"
@@ -326,6 +335,10 @@ msgstr "{first} 和 {second}"
 msgid "{folder} holds a folder of yours by that name"
 msgstr "{folder} 中已有你放置的同名文件夹"
 
+#: src/components/SpecView.tsx
+msgid "{group} ({count})"
+msgstr "「{group}」{count} 条"
+
 #. what failed, then what the agent said about it
 #: src/lib/failure-catalogue.ts
 msgid "{head} — {said}"
@@ -467,6 +480,14 @@ msgstr "{name}，有会话在等待你的回复"
 #: src/components/NavRail.tsx
 msgid "{name}, a session is waiting for your verdict"
 msgstr "{name}，有会话在等待你的裁定"
+
+#: src/components/SpecGraph.tsx
+msgid "{name}: cites {selected} {in}, cited by {selected} {out}"
+msgstr "{name}：引用 {selected} {in} 次，被 {selected} 引用 {out} 次"
+
+#: src/components/SpecGraph.tsx
+msgid "{name}'s relationships"
+msgstr "{name} 的关系"
 
 #: src/components/SpecView.tsx
 msgid "{packages, plural, one {# package} other {# packages}} · {items} items"
@@ -684,6 +705,16 @@ msgstr "← 返回"
 msgid "← Back to {surface}"
 msgstr "← 返回{surface}"
 
+#. graph legend: ink edges and ←N count what cites the selected package
+#: src/components/SpecGraph.tsx
+msgid "←N: it cites {name} N times"
+msgstr "←N：它引用 {name} N 次"
+
+#. graph legend: purple edges and →N count what the selected package cites
+#: src/components/SpecGraph.tsx
+msgid "→N: {name} cites it N times"
+msgstr "→N：{name} 引用它 N 次"
+
 #. act: jump to the end of the transcript; ↓ stays as it is
 #. act: jump to the end of the transcript; ↓ stays as it is
 #. jump to the newest entry; the arrow is part of the pill
@@ -861,6 +892,11 @@ msgstr "中止失败：{reason}"
 #: src/components/DraftConversation.tsx
 msgid "Aborting…"
 msgstr "中止中…"
+
+#. outline column heading, first line: citations between packages
+#: src/components/SpecView.tsx
+msgid "across packages"
+msgstr "跨包"
 
 #: src/components/ProjectGroup.tsx
 msgid "Actions for {title}"
@@ -1226,11 +1262,6 @@ msgstr "仅允许此次"
 #: src/state/reducer.ts
 msgid "Approved once; native execution is reported separately."
 msgstr "已允许此次操作；原生执行结果将单独报告。"
-
-#. graph legend: an arrow points from the citing package to the cited one
-#: src/components/SpecGraph.tsx
-msgid "arrow — cites"
-msgstr "箭头 — 引用"
 
 #: src/components/AuthoringWorkspace.tsx
 msgid "as the last run left them, not compiled"
@@ -1726,8 +1757,21 @@ msgid "Choose which session player answers {role}"
 msgstr "选择由哪个会话 Player 担任 {role}"
 
 #: src/components/SpecView.tsx
+msgid "Citations across packages: cites · cited by"
+msgstr "跨包引用：引用 · 被引用"
+
+#: src/components/SpecItemRows.tsx
+msgid "Citations of {id}"
+msgstr "{id} 的引用"
+
+#: src/components/SpecView.tsx
 msgid "Citations: {summary}"
 msgstr "引用：{summary}"
+
+#. summary card heading over the items citing this one
+#: src/components/CitationPreview.tsx
+msgid "cited by"
+msgstr "被引用"
 
 #. how many items cite this one
 #. how many items cite this one
@@ -1741,9 +1785,16 @@ msgid "cited by packages"
 msgstr "被规约包引用"
 
 #. row label over the items this one cites
+#. row label over the items this one cites
+#: src/components/CitationPreview.tsx
 #: src/components/SpecItemRows.tsx
 msgid "cites"
 msgstr "引用"
+
+#. outline column heading, second line: citations out and in
+#: src/components/SpecView.tsx
+msgid "cites · cited by"
+msgstr "引用 · 被引用"
 
 #. how many items this one cites
 #: src/lib/spec-view-model.ts
@@ -2832,17 +2883,20 @@ msgstr "导出的技能"
 msgid "Exporting…"
 msgstr "导出中…"
 
+#. item group: External Behavior, short
+#: src/lib/spec-view-model.ts
+msgid "External"
+msgstr "对外"
+
 #. item group: External Behavior, inside a phrase
 #: src/lib/spec-view-model.ts
-msgid "external"
-msgstr "外部"
+msgid "external behavior"
+msgstr "对外行为"
 
-#. item group: External Behavior
-#. item group: External Behavior
-#: src/components/SpecGraph.tsx
-#: src/components/SpecView.tsx
-msgid "External"
-msgstr "外部"
+#. item group: External Behavior, standing alone
+#: src/lib/spec-view-model.ts
+msgid "External behavior"
+msgstr "对外行为"
 
 #: src/components/TrustedMedia.tsx
 msgid "External reference"
@@ -3168,8 +3222,8 @@ msgid "Handed to {player}"
 msgstr "交给 {player}"
 
 #: src/components/SpecView.tsx
-msgid "Hide {group} items"
-msgstr "隐藏{group}条目"
+msgid "Hidden: {groups}"
+msgstr "已隐藏：{groups}"
 
 #: src/components/SpaceSync.tsx
 msgid "Hide diff"
@@ -3203,6 +3257,10 @@ msgstr "历史，无法继续"
 #: src/components/SettingsSurface.tsx
 msgid "Host name"
 msgstr "主机名"
+
+#: src/lib/spec-view-model.ts
+msgid "How the package behaves inside, hidden from its users"
+msgstr "使用者看不到的实现行为"
 
 #. accepting a team server's contract, which opens the seat
 #: src/components/SpaceServers.tsx
@@ -3344,17 +3402,20 @@ msgstr "意图"
 msgid "Interface language"
 msgstr "界面语言"
 
-#. item group: Internal Behavior, inside a phrase
+#. item group: Internal Behavior, short
 #: src/lib/spec-view-model.ts
-msgid "internal"
-msgstr "内部"
-
-#. item group: Internal Behavior
-#. item group: Internal Behavior
-#: src/components/SpecGraph.tsx
-#: src/components/SpecView.tsx
 msgid "Internal"
 msgstr "内部"
+
+#. item group: Internal Behavior, inside a phrase
+#: src/lib/spec-view-model.ts
+msgid "internal behavior"
+msgstr "内部行为"
+
+#. item group: Internal Behavior, standing alone
+#: src/lib/spec-view-model.ts
+msgid "Internal behavior"
+msgstr "内部行为"
 
 #. draft state chip, at most 14 characters: Spex closed while the draft compiled
 #: src/lib/drafts.ts
@@ -4506,6 +4567,11 @@ msgstr "归属未知"
 msgid "Package"
 msgstr "打包"
 
+#. graph caption over the packages that cite nothing and that nothing cites
+#: src/components/SpecGraph.tsx
+msgid "Packages without citations"
+msgstr "无引用关系的包"
+
 #: src/components/SpaceGroups.tsx
 msgid "Pairs it with its folder on this device"
 msgstr "将它与此设备上的文件夹配对"
@@ -5521,6 +5587,10 @@ msgstr "搜索中…"
 msgid "Seat"
 msgstr "席位"
 
+#: src/components/CitationPreview.tsx
+msgid "See all {count}"
+msgstr "查看全部 {count} 条"
+
 #: src/components/CaptainHome.tsx
 msgid "See how to start"
 msgstr "查看如何开始"
@@ -5741,13 +5811,14 @@ msgstr "与 playbook CLI 共用 — 在外部所做的编辑会显示在这里"
 msgid "Show {count} of {rest} earlier entries"
 msgstr "显示更早的 {rest} 条中的 {count} 条"
 
-#: src/components/SpecView.tsx
-msgid "Show {group} items"
-msgstr "显示{group}条目"
-
 #: src/components/DraftConversation.tsx
 msgid "Show {shown} of {total} earlier entries"
 msgstr "显示更早的 {total} 条中的 {shown} 条"
+
+#. turn every item group back on
+#: src/components/SpecView.tsx
+msgid "Show all"
+msgstr "全部显示"
 
 #: src/components/NavRail.tsx
 msgid "Show all {count} sessions in {project}"
@@ -6308,10 +6379,13 @@ msgstr "测试"
 
 #. item group: Verification
 #. item group: Verification
-#: src/components/SpecGraph.tsx
-#: src/components/SpecView.tsx
+#: src/lib/spec-view-model.ts
 msgid "Tests"
 msgstr "测试"
+
+#: src/lib/spec-view-model.ts
+msgid "Tests verifying the two kinds above"
+msgstr "验证上面两类行为的测试"
 
 #: src/components/SpaceSync.tsx
 msgid "That folder already belongs to {owner}."
@@ -6433,6 +6507,11 @@ msgstr "无法加载意图台账：{reason}"
 #: src/components/EnvironmentSection.tsx
 msgid "The original text stands"
 msgstr "保留原文"
+
+#. graph legend: resting lines show only the strongest package pairs
+#: src/components/SpecGraph.tsx
+msgid "the overview omits weaker relationships — select a package for all"
+msgstr "全览省略了较弱的关系，选中包可看全部"
 
 #: src/App.tsx
 msgid "The project's spec packages ({keys})"
@@ -6790,6 +6869,18 @@ msgstr "历史互不相关"
 msgid "Unrelated history"
 msgstr "历史互不相关"
 
+#. this citation names an item absent from the tree
+#. this citation names an item absent from the tree
+#: src/components/CitationPreview.tsx
+#: src/components/SpecItemRows.tsx
+msgid "unresolved"
+msgstr "未解析"
+
+#. how many of a package's citations name items absent from the tree
+#: src/components/SpecView.tsx
+msgid "unresolved {count}"
+msgstr "未解析 {count}"
+
 #: src/components/SpaceSignIn.tsx
 msgid "Until you do, everything stays on this device and nothing is contacted."
 msgstr "在此之前，一切都只保存在此设备上，不会联系任何服务。"
@@ -6990,6 +7081,10 @@ msgstr "等待你的裁定"
 msgid "What should change?"
 msgstr "想做什么改动？"
 
+#: src/lib/spec-view-model.ts
+msgid "What the package promises its users — people or other packages"
+msgstr "包对使用者（人或其他包）承诺的行为"
+
 #: src/components/CaptainHome.tsx
 msgid "What would you change in {project}?"
 msgstr "你想对 {project} 做什么改动？"
@@ -7018,11 +7113,6 @@ msgstr "本设备上哪个文件夹是 {name}？"
 #: src/lib/space.ts
 msgid "which process is writing right now"
 msgstr "当前正在写入的进程"
-
-#. graph legend: an edge's width counts its citations
-#: src/components/SpecGraph.tsx
-msgid "width — citations"
-msgstr "宽度 — 引用数"
 
 #. headline of the welcome page at a team server where you have no project yet; {server} is the server's name
 #: src/components/CaptainHome.tsx

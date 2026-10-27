@@ -311,21 +311,23 @@ describe("SPECV-1/2: outline shape and file nodes", () => {
     // The package-identifier chip is the basename (SPECV-11).
     expect(within(auth).getByText("auth")).toBeTruthy();
     expect(within(auth).getByText("How users sign in.")).toBeTruthy();
-    expect(within(auth).getByLabelText("3 external items")).toBeTruthy();
-    expect(within(auth).getByLabelText("1 internal items")).toBeTruthy();
-    expect(within(auth).getByLabelText("1 test items")).toBeTruthy();
+    // Counts are numerals in group columns, each naming its group in
+    // full for assistive technology (spec-view-2).
+    expect(within(auth).getByLabelText("3 external behavior items").textContent).toBe("3");
+    expect(within(auth).getByLabelText("1 internal behavior items").textContent).toBe("1");
+    expect(within(auth).getByLabelText("1 test items").textContent).toBe("1");
     // Header totals across the collection.
     expect(screen.getByText("3 packages · 10 items")).toBeTruthy();
     // Files default collapsed: no item rows yet.
     expect(screen.queryByTestId("item-AUTH-2")).toBeNull();
   });
 
-  test("zero counts stay, muted; a root file needs no directory", () => {
+  test("zero counts stay, as a dash; a root file needs no directory", () => {
     render(<Harness />);
     const courses = screen.getByTestId(`file-${CAT}`);
-    // Zero renders muted, not absent.
-    expect(within(courses).getByLabelText("0 internal items")).toBeTruthy();
-    expect(within(courses).getByLabelText("0 test items")).toBeTruthy();
+    // Zero renders as a muted dash, not absent (spec-view-2).
+    expect(within(courses).getByLabelText("0 internal behavior items").textContent).toBe("—");
+    expect(within(courses).getByLabelText("0 test items").textContent).toBe("—");
     const guard = screen.getByTestId(`file-${GUARD}`);
     expect(within(guard).getByText("guard")).toBeTruthy();
     expect(
@@ -351,11 +353,16 @@ describe("SPECV-2: expanded file keeps document order with sections and topics",
   test("items render in document order under section and topic labels", () => {
     render(<Harness />);
     fireEvent.click(screen.getByTestId(`file-toggle-${AUTH}`));
-    const external = screen.getByText("External Behavior");
+    // Sections head by their group's name and count; topics keep the
+    // author's words (spec-view-2).
+    const external = screen.getByTestId("section-AUTH-2");
     const signIn = screen.getByText("Sign-In");
     const recovery = screen.getByText("Recovery");
-    const internal = screen.getByText("Internal Behavior");
-    const verification = screen.getByText("Verification");
+    const internal = screen.getByTestId("section-AUTH-8");
+    const verification = screen.getByTestId("section-AUTH-10");
+    expect(external.textContent).toBe("External behavior · 3");
+    expect(internal.textContent).toBe("Internal behavior · 1");
+    expect(verification.textContent).toBe("Tests · 1");
     const a2 = screen.getByTestId("item-AUTH-2");
     const a1 = screen.getByTestId("item-AUTH-1");
     const a3 = screen.getByTestId("item-AUTH-3");
@@ -414,28 +421,34 @@ describe("SPECV-3: item rows", () => {
     expect(screen.getByText("credentials").tagName).toBe("STRONG");
   });
 
-  test("collapsed rows carry a complete muted citation-count hint", () => {
+  test("rows carry a complete muted citation summary and no group word", () => {
     render(<Harness />);
     fireEvent.click(screen.getByTestId(`file-toggle-${AUTH}`));
     fireEvent.click(screen.getByTestId(`file-toggle-${CAT}`));
     // Outbound and inbound: CAT-1 cites AUTH-2 and is cited by
     // GUARD-5 and GUARD-3.
-    expect(screen.getByTestId("item-toggle-CAT-1").textContent).toContain(
+    expect(screen.getByTestId("cite-summary-CAT-1").textContent).toBe(
       "cites 1 · cited by 2",
     );
     // Inbound only, intra-file citers included (unlike the file
     // rollup): AUTH-1 ← AUTH-2, AUTH-10, GUARD-1.
-    expect(screen.getByTestId("item-toggle-AUTH-1").textContent).toContain(
+    expect(screen.getByTestId("cite-summary-AUTH-1").textContent).toBe(
       "cited by 3",
     );
     // Outbound only, dead target included.
-    expect(screen.getByTestId("item-toggle-AUTH-10").textContent).toContain(
+    expect(screen.getByTestId("cite-summary-AUTH-10").textContent).toBe(
       "cites 2",
     );
-    // No citations either way: no hint.
-    expect(screen.getByTestId("item-toggle-AUTH-3").textContent).not.toContain(
-      "cite",
-    );
+    // No citations either way: no summary.
+    expect(screen.queryByTestId("cite-summary-AUTH-3")).toBeNull();
+    // The section heading names the group; the row repeats no group
+    // word (spec-view-3).
+    expect(
+      within(screen.getByTestId("item-AUTH-2")).queryByText("external behavior"),
+    ).toBeNull();
+    // The summary stands expanded too.
+    fireEvent.click(screen.getByTestId("item-toggle-CAT-1"));
+    expect(screen.getByTestId("cite-summary-CAT-1")).toBeTruthy();
   });
 
   test("clicking the ID chip copies the ID, ticks, and narrates", async () => {
@@ -592,17 +605,15 @@ describe("SPECV-19/37: citation rows and backlinks", () => {
     expect(screen.queryByTestId("cites-AUTH-1")).toBeNull();
   });
 
-  test("backlinks group on the cited target, collapsed by count", () => {
+  test("backlinks list on the cited target, every entry at once", () => {
     render(<Harness />);
     fireEvent.click(screen.getByTestId(`file-toggle-${AUTH}`));
     fireEvent.click(screen.getByTestId("item-toggle-AUTH-8"));
-    // AUTH-8 is cited by GUARD-5 and GUARD-6.
+    // AUTH-8 is cited by GUARD-5 and GUARD-6, listed without a toggle
+    // (spec-view-19).
     const citedBy = screen.getByTestId("inbound-AUTH-8");
     expect(citedBy.textContent).toContain("cited by 2");
-    expect(citedBy.getAttribute("aria-expanded")).toBe("false");
-    expect(screen.queryByTestId("link-AUTH-8-GUARD-5")).toBeNull();
-    fireEvent.click(citedBy);
-    expect(citedBy.getAttribute("aria-expanded")).toBe("true");
+    expect(citedBy.querySelector("[aria-expanded]")).toBeNull();
     // Entries are named by the citing item ID.
     expect(screen.getByTestId("link-AUTH-8-GUARD-5")).toBeTruthy();
     expect(screen.getByTestId("link-AUTH-8-GUARD-6")).toBeTruthy();
@@ -644,6 +655,11 @@ describe("SPECV-19/37: citation rows and backlinks", () => {
     render(<Harness />);
     fireEvent.click(screen.getByTestId(`file-toggle-${AUTH}`));
     fireEvent.click(screen.getByTestId("item-toggle-AUTH-10"));
+    // The outbound row marks it unresolved where it stands
+    // (spec-view-19).
+    expect(screen.getByTestId("unresolved-AUTH-10-AUTH-99").textContent).toBe(
+      "unresolved",
+    );
     fireEvent.click(screen.getByTestId("link-AUTH-10-AUTH-99"));
     expect(screen.getByText("not found")).toBeTruthy();
     expect(screen.queryByTestId("item-AUTH-99")).toBeNull();
@@ -878,27 +894,163 @@ describe("SPECV-61: the citation preview", () => {
 });
 
 describe("SPECV-2/19: cross-file rollups on every file row", () => {
-  test("collapsed rows carry the rollup; intra-file citations never count", () => {
+  test("collapsed rows carry the rollup; intra-file and dead citations never count", () => {
     render(<Harness />);
     // All rows are collapsed — the rollups render regardless.
-    // auth out: only AUTH-10 → AUTH-99 (dead counts; both AUTH-1 cites
-    // are intra-file). in: CAT-1 → AUTH-2, GUARD-1 → AUTH-1,
-    // GUARD-5/GUARD-6 → AUTH-8.
+    // auth out: none — AUTH-10 → AUTH-99 names an absent item and both
+    // AUTH-1 cites are intra-file. in: CAT-1 → AUTH-2, GUARD-1 →
+    // AUTH-1, GUARD-5/GUARD-6 → AUTH-8.
     const auth = screen.getByTestId(`rollup-${AUTH}`);
-    expect(auth.textContent).toBe("cites 1 · cited by 4");
-    expect(auth.getAttribute("aria-label")).toBe(
-      `Citations: ${auth.textContent}`,
+    expect(auth.textContent).toBe("— · 4");
+    expect(auth.getAttribute("aria-label")).toBe("Citations: cited by 4");
+    // The dead citation stands apart, never yielding (spec-view-19).
+    const unresolved = screen.getByTestId(`unresolved-${AUTH}`);
+    expect(unresolved.getAttribute("aria-label")).toBe(
+      "1 citation names an item absent from the tree",
     );
-    expect(screen.getByTestId(`rollup-${CAT}`).textContent).toBe(
-      "cites 1 · cited by 2",
-    );
+    expect(unresolved.textContent).toContain("⚠1");
+    expect(unresolved.textContent).toContain("unresolved 1");
+    expect(screen.queryByTestId(`unresolved-${CAT}`)).toBeNull();
+    expect(screen.getByTestId(`rollup-${CAT}`).textContent).toBe("1 · 2");
     // guard's inbound is all intra-file: outbound side only.
-    expect(screen.getByTestId(`rollup-${GUARD}`).textContent).toBe("cites 5");
+    expect(screen.getByTestId(`rollup-${GUARD}`).textContent).toBe("5 · —");
     // Expansion keeps the rollup on the row.
     fireEvent.click(screen.getByTestId(`file-toggle-${AUTH}`));
-    expect(screen.getByTestId(`rollup-${AUTH}`).textContent).toBe(
-      "cites 1 · cited by 4",
+    expect(screen.getByTestId(`rollup-${AUTH}`).textContent).toBe("— · 4");
+  });
+});
+
+// spec-view-65: the outline reads as a table under its filters.
+describe("spec-view-65: columns and filters", () => {
+  test("one heading row names the columns; a filtered group leaves them, said once", () => {
+    render(<Harness />);
+    const heads = screen.getByTestId("outline-columns");
+    expect(within(heads).getByLabelText("External behavior")).toBeTruthy();
+    expect(within(heads).getByLabelText("Internal behavior")).toBeTruthy();
+    expect(within(heads).getByLabelText("Tests")).toBeTruthy();
+    expect(heads.className).toContain("sticky");
+    // The toggles: full names, a definition each, pressed as a
+    // filled control with a check (spec-view-4).
+    const internal = screen.getByTestId("filter-internal");
+    expect(internal.textContent).toContain("Internal behavior");
+    expect(internal.getAttribute("title")).toBe(
+      "How the package behaves inside, hidden from its users",
     );
+    expect(internal.getAttribute("aria-pressed")).toBe("true");
+    expect(screen.queryByTestId("hidden-groups")).toBeNull();
+
+    fireEvent.click(internal);
+    // The column leaves the rows and the heading row; every package
+    // stays (spec-view-2, spec-view-4).
+    expect(screen.queryByTestId("column-internal")).toBeNull();
+    expect(screen.queryByTestId(`count-${AUTH}-internal`)).toBeNull();
+    expect(screen.getByTestId(`count-${AUTH}-external`)).toBeTruthy();
+    expect(screen.getByTestId(`file-${GUARD}`)).toBeTruthy();
+    const hidden = screen.getByTestId("hidden-groups");
+    expect(hidden.textContent).toContain("Hidden: Internal behavior (3)");
+
+    fireEvent.click(screen.getByTestId("filter-test"));
+    expect(screen.getByTestId("hidden-groups").textContent).toContain(
+      "Internal behavior (3), Tests (2)",
+    );
+    fireEvent.click(screen.getByTestId("show-all-groups"));
+    expect(screen.queryByTestId("hidden-groups")).toBeNull();
+    expect(screen.getByTestId("column-internal")).toBeTruthy();
+    expect(screen.getByTestId("filter-test").getAttribute("aria-pressed")).toBe("true");
+  });
+});
+
+// spec-view-60: the summary card behind an item's citation summary.
+describe("spec-view-60: the citation summary card", () => {
+  afterEach(() => vi.useRealTimers());
+
+  test("hover or focus raises the summary; activation opens the citation block", () => {
+    vi.useFakeTimers();
+    render(<Harness />);
+    fireEvent.click(screen.getByTestId(`file-toggle-${CAT}`));
+    const summary = screen.getByTestId("cite-summary-CAT-1");
+    fireEvent.mouseEnter(summary);
+    act(() => vi.advanceTimersByTime(HOVER_INTENT_MS));
+    const card = screen.getByTestId("citation-summary");
+    expect(within(card).getByTestId("summary-cites").textContent).toContain(
+      "AUTH-2",
+    );
+    expect(within(card).getByTestId("summary-cited-by").textContent).toContain(
+      "GUARD-5",
+    );
+    expect(within(card).getByTestId("summary-cited-by").textContent).toContain(
+      "The suite shall sweep the map.",
+    );
+    expect(summary.getAttribute("aria-describedby")).toBe(PREVIEW_CARD_ID);
+    fireEvent.mouseLeave(summary);
+    expect(screen.queryByTestId("citation-summary")).toBeNull();
+
+    // Keyboard focus raises it at once; Escape drops it and keeps
+    // focus on the summary.
+    act(() => summary.focus());
+    expect(screen.getByTestId("citation-summary")).toBeTruthy();
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByTestId("citation-summary")).toBeNull();
+    expect(document.activeElement).toBe(summary);
+
+    // Activation expands the item and lands focus on its citations.
+    fireEvent.click(summary);
+    expect(
+      screen.getByTestId("item-toggle-CAT-1").getAttribute("aria-expanded"),
+    ).toBe("true");
+    expect(document.activeElement).toBe(screen.getByTestId("citations-CAT-1"));
+  });
+
+  test("a long direction lists five and counts the rest", () => {
+    vi.useFakeTimers();
+    const many = Array.from({ length: 7 }, (_, i) => ({
+      id: `fan-${i + 1}`,
+      group: "external" as const,
+      section: "External Behavior",
+      firstLine: `Fan ${i + 1} shall cite the hub.`,
+      text: `Fan ${i + 1} shall cite the hub ([hub-1](hub.md#hub-1)).`,
+      cites: ["hub-1"],
+    }));
+    const tree: SpecTreeState = {
+      ...TREE,
+      files: [
+        {
+          path: "specs/packages/hub.md",
+          key: "hub",
+          dir: "",
+          basename: "hub",
+          title: "Hub",
+          intent: "The hub.",
+          notices: [],
+          items: [
+            {
+              id: "hub-1",
+              group: "external",
+              section: "External Behavior",
+              firstLine: "The hub shall answer.",
+              text: "The hub shall answer.",
+              cites: [],
+            },
+          ],
+        },
+        {
+          path: "specs/packages/fan.md",
+          key: "fan",
+          dir: "",
+          basename: "fan",
+          title: "Fan",
+          intent: "The fans.",
+          notices: [],
+          items: many,
+        },
+      ],
+    };
+    render(<Harness tree={tree} />);
+    fireEvent.click(screen.getByTestId("file-toggle-hub"));
+    act(() => screen.getByTestId("cite-summary-hub-1").focus());
+    const citedBy = screen.getByTestId("summary-cited-by");
+    expect(citedBy.querySelectorAll("li")).toHaveLength(5);
+    expect(citedBy.textContent).toContain("See all 7");
   });
 });
 
@@ -1009,12 +1161,7 @@ describe("DR-010 §7: accessible names and affordances", () => {
     expect(screen.getByRole("button", { name: "auth" })).toBeTruthy();
     fireEvent.click(screen.getByTestId(`file-toggle-${AUTH}`));
     // Section/topic labels are no longer aria-hidden.
-    expect(
-      screen
-        .getByText("External Behavior")
-        .closest("li")
-        ?.getAttribute("aria-hidden"),
-    ).toBeNull();
+    expect(screen.getByTestId("section-AUTH-2").getAttribute("aria-hidden")).toBeNull();
     expect(
       screen.getByText("Sign-In").closest("li")?.getAttribute("aria-hidden"),
     ).toBeNull();
@@ -1423,9 +1570,13 @@ describe("spec-view-20: citation graph beside the outline", () => {
     items,
   });
 
-  // Differing item counts, a reciprocally citing pair
-  // (billing <-> session), and a package no citation reaches
-  // (glossary) — the shapes spec-view-38 and spec-view-40 name.
+  // Differing item counts, a heavy and a light pair (billing → auth
+  // twice, session → auth once), a reciprocally citing pair
+  // (billing <-> session), a citation of an absent ID (billing-2 →
+  // auth-99), and a package no citation reaches (glossary) — the
+  // shapes spec-view-38 and spec-view-40 name. The backbone holds each
+  // package's heaviest pair, so auth–session is the light pair it
+  // leaves out.
   const GRAPH_TREE: SpecTreeState = {
     present: true,
     legacy: false,
@@ -1437,7 +1588,7 @@ describe("spec-view-20: citation graph beside the outline", () => {
       file("auth", [item("auth-1", "external")]),
       file("billing", [
         item("billing-1", "external", ["auth-1"]),
-        item("billing-2", "external", ["auth-1"]),
+        item("billing-2", "external", ["auth-1", "auth-99"]),
         item("billing-3", "internal", ["session-1"]),
       ]),
       file("session", [
@@ -1495,6 +1646,8 @@ describe("spec-view-20: citation graph beside the outline", () => {
   const radiusOf = (name: string) => Number(circleOf(name).getAttribute("r"));
   const edge = (from: string, to: string) =>
     screen.getByTestId(`graph-edge-${from}--${to}`);
+  const pair = (a: string, b: string) =>
+    screen.getByTestId(`graph-pair-${a}--${b}`);
   /** The graph pane's share of the split, as the style carries it. */
   const graphPaneShare = () => {
     const pane = screen.getByTestId("spec-graph").parentElement as HTMLElement;
@@ -1514,13 +1667,15 @@ describe("spec-view-20: citation graph beside the outline", () => {
     expect(screen.getByTestId("filter-external")).toBeTruthy();
 
     // One node per file, one directed edge per citing -> cited pair
-    // (spec-view-20).
+    // (spec-view-20), drawn once a package is selected (spec-view-23).
     for (const name of ["auth", "billing", "session", "glossary"]) {
       expect(node(name)).toBeTruthy();
     }
+    fireEvent.click(node("auth"));
     expect(edge("billing", "auth")).toBeTruthy();
     expect(edge("session", "auth")).toBeTruthy();
     expect(screen.queryByTestId("graph-edge-auth--billing")).toBeNull();
+    fireEvent.click(screen.getByLabelText("Spec package citation graph"));
 
     // Choosing a node expands that file in the outline without
     // taking the outline off screen (spec-view-20).
@@ -1603,7 +1758,7 @@ describe("spec-view-20: citation graph beside the outline", () => {
   });
 
   // spec-view-38: the encodings, and the legend that keys them.
-  test("node area counts items, edge width counts citations, direction reads at rest", () => {
+  test("node area counts items; the backbone rests undirected; the selection draws its own", () => {
     const restore = sized();
     showGraph();
 
@@ -1627,37 +1782,61 @@ describe("spec-view-20: citation graph beside the outline", () => {
       expect(cls).not.toMatch(/brand|sky|fuchsia|teal|emerald|amber|red/);
     }
 
-    // Width carries the citation count on an absolute scale — a
-    // weight-2 edge measures the same in every tree (spec-view-23).
-    const heavy = Number(edge("billing", "auth").getAttribute("stroke-width"));
-    const light = Number(edge("session", "auth").getAttribute("stroke-width"));
-    expect(heavy).toBeCloseTo(2 * Math.SQRT2, 5);
-    expect(light).toBeCloseTo(2, 5);
-    expect(heavy).toBeGreaterThan(light);
+    // At rest only the backbone draws: one undirected line per pair,
+    // of uniform width, with no glyph; the light pair stays out, and
+    // no directed edge draws (spec-view-23).
+    const heavy = pair("auth", "billing");
+    const reciprocal = pair("billing", "session");
+    expect(heavy.getAttribute("data-weight")).toBe("2");
+    expect(reciprocal.getAttribute("data-weight")).toBe("2");
+    for (const line of [heavy, reciprocal]) {
+      expect(line.getAttribute("stroke-width")).toBe("2");
+      expect(line.getAttribute("marker-end")).toBeNull();
+    }
+    expect(screen.queryByTestId("graph-pair-auth--session")).toBeNull();
+    expect(document.querySelector('[data-testid^="graph-edge-"]')).toBeNull();
 
-    // Direction reads at rest, through a glyph whose size never
-    // follows the edge's width (spec-view-23).
-    expect(edge("session", "auth").getAttribute("marker-end")).toBeTruthy();
-    const marker = document.querySelector("#spec-graph-arrow");
-    expect(marker?.getAttribute("markerUnits")).toBe("userSpaceOnUse");
-    const markerWidth = marker?.getAttribute("markerWidth");
-    expect(
-      document
-        .querySelector("#spec-graph-arrow-emphasis")
-        ?.getAttribute("markerWidth"),
-    ).toBe(markerWidth);
+    // Selected, billing's pairs draw directed in two hues, all one
+    // width, each ending in the same constant-size glyph; the pair it
+    // does not touch draws nothing (spec-view-23, spec-view-25).
+    fireEvent.click(node("billing"));
+    const own = edge("billing", "auth");
+    const citer = edge("session", "billing");
+    expect(own.getAttribute("data-direction")).toBe("cites");
+    expect(own.getAttribute("class")).toContain("stroke-brand-600");
+    expect(citer.getAttribute("data-direction")).toBe("cited");
+    expect(citer.getAttribute("class")).toContain("stroke-neutral-700");
+    for (const line of [own, citer, edge("billing", "session")]) {
+      expect(line.getAttribute("stroke-width")).toBe("2");
+      expect(line.getAttribute("marker-end")).toBeTruthy();
+    }
+    expect(screen.queryByTestId("graph-edge-session--auth")).toBeNull();
+    expect(screen.queryByTestId("graph-pair-auth--billing")).toBeNull();
+    for (const id of ["#spec-graph-arrow-cites", "#spec-graph-arrow-cited"]) {
+      const marker = document.querySelector(id);
+      expect(marker?.getAttribute("markerUnits")).toBe("userSpaceOnUse");
+      expect(marker?.getAttribute("markerWidth")).toBe("10");
+    }
 
     // The reciprocal pair draws as two offset edges, never one edge
     // with two heads (spec-view-23).
-    const forward = edge("billing", "session");
-    const back = edge("session", "billing");
     const midpoint = (line: Element) => [
       (Number(line.getAttribute("x1")) + Number(line.getAttribute("x2"))) / 2,
       (Number(line.getAttribute("y1")) + Number(line.getAttribute("y2"))) / 2,
     ];
-    const [ax, ay] = midpoint(forward);
-    const [bx, by] = midpoint(back);
-    expect(Math.hypot(ax - bx, ay - by)).toBeGreaterThan(10);
+    const [ax, ay] = midpoint(edge("billing", "session"));
+    const [bx, by] = midpoint(citer);
+    expect(Math.hypot(ax - bx, ay - by)).toBeGreaterThan(5);
+
+    // Counts ride the neighbors' names, agreeing with the outline's
+    // rollups, the absent ID counted in neither (spec-view-25,
+    // spec-view-19).
+    expect(screen.getByTestId("graph-label-auth").textContent).toBe("auth →2");
+    expect(screen.getByTestId("graph-label-session").textContent).toBe(
+      "session ←1 →1",
+    );
+    expect(screen.getByTestId("rollup-billing").textContent).toBe("3 · 1");
+    expect(screen.getByTestId("unresolved-billing")).toBeTruthy();
 
     // Every channel and affordance in use is keyed (spec-view-24).
     const graph = screen.getByTestId("spec-graph");
@@ -1665,13 +1844,61 @@ describe("spec-view-20: citation graph beside the outline", () => {
       "cited by packages",
       "not cited by packages",
       "size — items",
-      "width — citations",
-      "arrow — cites",
+      "→N: billing cites it N times",
+      "←N: it cites billing N times",
     ]) {
       expect(within(graph).getByText(key)).toBeTruthy();
     }
+    fireEvent.click(screen.getByLabelText("Spec package citation graph"));
+    expect(
+      within(graph).getByText(
+        "the overview omits weaker relationships — select a package for all",
+      ),
+    ).toBeTruthy();
     expect(within(graph).getByText(/click opens/)).toBeTruthy();
     expect(screen.getByTestId("graph-fit")).toBeTruthy();
+    restore();
+  });
+
+  // spec-view-38: a neighborhood too crowded for its names lists them.
+  test("a crowded selection lists every neighbor, most first, and focus lifts one", () => {
+    const restore = sized({ width: 330, height: 300 });
+    const spokes = Array.from({ length: 14 }, (_, i) =>
+      file(`spoke-${String(i + 1).padStart(2, "0")}`, [
+        item(`spoke-${String(i + 1).padStart(2, "0")}-1`, "external", ["hub-1"]),
+      ]),
+    );
+    // The heavier spokes cite the hub from a second item too.
+    for (const spoke of spokes.slice(0, 3)) {
+      spoke.items.push(item(`${spoke.basename}-2`, "external", ["hub-1"]));
+    }
+    const tree: SpecTreeState = {
+      ...GRAPH_TREE,
+      files: [file("hub", [item("hub-1", "external")]), ...spokes],
+    };
+    render(<Harness tree={tree} />);
+    fireEvent.click(node("hub"));
+    const list = screen.getByTestId("graph-relationships");
+    const entries = within(list).getAllByRole("listitem");
+    expect(entries).toHaveLength(14);
+    // Most first: the three spokes citing twice lead.
+    expect(entries[0].textContent).toContain("spoke-01");
+    expect(entries[0].textContent).toContain("←2");
+    expect(entries[13].textContent).toContain("←1");
+    // Focus lifts the entry's node.
+    act(() => (entries[5] as HTMLElement).focus());
+    const name = entries[5].getAttribute("data-testid")!.replace("graph-relationship-", "");
+    expect(screen.getByTestId(`graph-halo-${name}`)).toBeTruthy();
+    act(() => (entries[5] as HTMLElement).blur());
+
+    // A name without a place shows once its node takes keyboard focus
+    // (spec-view-22).
+    const unnamed = spokes
+      .map((spoke) => spoke.basename)
+      .find((spoke) => !screen.queryByTestId(`graph-label-${spoke}`));
+    expect(unnamed).toBeTruthy();
+    fireEvent.focus(node(unnamed!));
+    expect(screen.getByTestId(`graph-label-${unnamed}`)).toBeTruthy();
     restore();
   });
 
@@ -1733,7 +1960,7 @@ describe("spec-view-20: citation graph beside the outline", () => {
 
     const citedCircle = circleOf("auth").getAttribute("class") ?? "";
     const uncitedCircle = circleOf("glossary").getAttribute("class") ?? "";
-    const edgeLine = edge("billing", "auth").getAttribute("class") ?? "";
+    const edgeLine = pair("auth", "billing").getAttribute("class") ?? "";
     const label =
       screen.getByTestId("graph-label-auth").getAttribute("class") ?? "";
     const numeral =
@@ -1771,41 +1998,57 @@ describe("spec-view-20: citation graph beside the outline", () => {
 
     const first = render(<Harness tree={GRAPH_TREE} />);
     const settled = positions();
-    // A package no citation reaches still holds a place in the
-    // layout (spec-view-28).
+    // A package no citation reaches stands in the foot row, under its
+    // caption and below every arranged node (spec-view-28).
     const glossary = settled[3];
-    expect(Number.isFinite(glossary[0])).toBe(true);
-    expect(Number.isFinite(glossary[1])).toBe(true);
+    expect(node("glossary").getAttribute("data-foot")).toBe("true");
+    expect(screen.getByTestId("graph-foot").textContent).toBe(
+      "Packages without citations",
+    );
+    for (const [, y] of settled.slice(0, 3)) {
+      expect(glossary[1]).toBeGreaterThan(y);
+    }
 
-    // The solved presentation: nothing overlaps, and every node keeps
-    // its activation-target floor (spec-view-28).
-    const marks = ["auth", "billing", "session", "glossary"].map((name) => {
-      const circle = circleOf(name);
-      const label = screen.getByTestId(`graph-label-${name}`);
-      return {
-        name,
-        x: Number(circle.getAttribute("cx")),
-        y: Number(circle.getAttribute("cy")),
-        r: Number(circle.getAttribute("r")),
-        // The rendered label's own box, as the solve measured it.
-        half: Math.max(
-          Number(circle.getAttribute("r")),
-          (label.textContent?.length ?? 0) * 3.2,
-        ),
-      };
+    // Every node keeps its activation-target floor (spec-view-28), and
+    // every shown name keeps 5px from other circles, clears the other
+    // names, and keeps 10px inside the canvas (spec-view-22). jsdom
+    // measures text at 6.4px a character.
+    const names = ["auth", "billing", "session", "glossary"];
+    const circles = names.map((name) => ({
+      name,
+      x: Number(circleOf(name).getAttribute("cx")),
+      y: Number(circleOf(name).getAttribute("cy")),
+      r: Number(circleOf(name).getAttribute("r")),
+    }));
+    for (const circle of circles) expect(circle.r).toBeGreaterThanOrEqual(12);
+    const boxes = names.flatMap((name) => {
+      const label = screen.queryByTestId(`graph-label-${name}`);
+      if (!label) return [];
+      const width = (label.textContent?.length ?? 0) * 6.4;
+      const x = Number(label.getAttribute("x"));
+      const y = Number(label.getAttribute("y"));
+      return [{ name, x0: x - width / 2, x1: x + width / 2, y0: y - 12, y1: y + 4 }];
     });
-    for (const mark of marks) expect(mark.r).toBeGreaterThanOrEqual(12);
-    for (let i = 0; i < marks.length; i++) {
-      for (let j = i + 1; j < marks.length; j++) {
-        const a = marks[i];
-        const b = marks[j];
-        const apart =
-          Math.abs(a.x - b.x) >= a.half + b.half ||
-          Math.abs(a.y - b.y) >= a.r + b.r + 6 + 12;
+    expect(boxes.length).toBe(4);
+    for (const box of boxes) {
+      expect(box.x0).toBeGreaterThanOrEqual(10 - 0.01);
+      expect(box.y0).toBeGreaterThanOrEqual(10 - 0.01);
+      expect(box.x1).toBeLessThanOrEqual(800 - 10 + 0.01);
+      expect(box.y1).toBeLessThanOrEqual(600 - 10 + 0.01);
+      for (const circle of circles) {
+        if (circle.name === box.name) continue;
+        const nx = Math.max(box.x0, Math.min(circle.x, box.x1));
+        const ny = Math.max(box.y0, Math.min(circle.y, box.y1));
         expect(
-          apart,
-          `${a.name} and ${b.name} overlap in the solved picture`,
-        ).toBe(true);
+          Math.hypot(circle.x - nx, circle.y - ny) - circle.r,
+          `${box.name}'s name crowds ${circle.name}`,
+        ).toBeGreaterThanOrEqual(5 - 0.01);
+      }
+      for (const other of boxes) {
+        if (other === box) continue;
+        const apart =
+          box.x1 <= other.x0 || other.x1 <= box.x0 || box.y1 <= other.y0 || other.y1 <= box.y0;
+        expect(apart, `${box.name} and ${other.name} overlap`).toBe(true);
       }
     }
 
@@ -1879,8 +2122,8 @@ describe("spec-view-20: citation graph beside the outline", () => {
     expect(within(card).getByText("billing")).toBeTruthy();
     expect(within(card).getByText(/3 items in total/)).toBeTruthy();
     // The breakdown is a list in the outline's count grammar.
-    expect(within(card).getByLabelText("2 external items")).toBeTruthy();
-    expect(within(card).getByLabelText("1 internal items")).toBeTruthy();
+    expect(within(card).getByLabelText("2 external behavior items")).toBeTruthy();
+    expect(within(card).getByLabelText("1 internal behavior items")).toBeTruthy();
     expect(within(card).getByLabelText("0 test items")).toBeTruthy();
     expect(within(card).getByText(/cites 3 · cited by 1/)).toBeTruthy();
     fireEvent.keyDown(node("billing"), { key: "Enter" });
@@ -2010,9 +2253,14 @@ describe("spec-view-20: citation graph beside the outline", () => {
     const restore = sized();
     showGraph();
     const graphPane = screen.getByTestId("spec-graph").parentElement as HTMLElement;
-    const outlinePane = screen.getByTestId("file-toggle-auth").closest("div.flex.min-h-40");
+    const outlinePane = screen.getByTestId("file-toggle-auth").closest("div.flex.min-w-0.flex-1");
     expect(outlinePane).not.toBeNull();
-    expect(graphPane.className).toContain("min-h-72");
+    expect(graphPane.className).toContain("min-h-[34rem]");
+    // Side by side only above both floors, and the share clamped to
+    // them whatever was persisted (spec-view-20).
+    expect(graphPane.className).toContain(
+      "@min-[49rem]:w-[clamp(320px,var(--graph-share),calc(100%-28rem-17px))]",
+    );
     // The stacked split scrolls as one, so a floor that outgrows the
     // surface is reachable instead of clipped by the root.
     const split = graphPane.parentElement as HTMLElement;

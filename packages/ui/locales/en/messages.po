@@ -70,6 +70,11 @@ msgstr "— seeds {path}"
 msgid "— seeds a sample project"
 msgstr "— seeds a sample project"
 
+#. list separator
+#: src/components/SpecView.tsx
+msgid ", "
+msgstr ", "
+
 #: src/App.tsx
 msgid ", {count, plural, one {# spec item} other {# spec items}}"
 msgstr ", {count, plural, one {# spec item} other {# spec items}}"
@@ -174,6 +179,10 @@ msgstr "{count, plural, one {, # time} other {, # times}}"
 #: src/components/SpaceGroups.tsx
 msgid "{count, plural, one {# change} other {# changes}}"
 msgstr "{count, plural, one {# change} other {# changes}}"
+
+#: src/components/SpecView.tsx
+msgid "{count, plural, one {# citation names an item} other {# citations name items}} absent from the tree"
+msgstr "{count, plural, one {# citation names an item} other {# citations name items}} absent from the tree"
 
 #: src/components/SpecGraph.tsx
 msgid "{count, plural, one {# citation} other {# citations}}"
@@ -326,6 +335,10 @@ msgstr "{first} and {second}"
 msgid "{folder} holds a folder of yours by that name"
 msgstr "{folder} holds a folder of yours by that name"
 
+#: src/components/SpecView.tsx
+msgid "{group} ({count})"
+msgstr "{group} ({count})"
+
 #. what failed, then what the agent said about it
 #: src/lib/failure-catalogue.ts
 msgid "{head} — {said}"
@@ -467,6 +480,14 @@ msgstr "{name}, a session is waiting for your reply"
 #: src/components/NavRail.tsx
 msgid "{name}, a session is waiting for your verdict"
 msgstr "{name}, a session is waiting for your verdict"
+
+#: src/components/SpecGraph.tsx
+msgid "{name}: cites {selected} {in}, cited by {selected} {out}"
+msgstr "{name}: cites {selected} {in}, cited by {selected} {out}"
+
+#: src/components/SpecGraph.tsx
+msgid "{name}'s relationships"
+msgstr "{name}'s relationships"
 
 #: src/components/SpecView.tsx
 msgid "{packages, plural, one {# package} other {# packages}} · {items} items"
@@ -684,6 +705,16 @@ msgstr "← Back"
 msgid "← Back to {surface}"
 msgstr "← Back to {surface}"
 
+#. graph legend: ink edges and ←N count what cites the selected package
+#: src/components/SpecGraph.tsx
+msgid "←N: it cites {name} N times"
+msgstr "←N: it cites {name} N times"
+
+#. graph legend: purple edges and →N count what the selected package cites
+#: src/components/SpecGraph.tsx
+msgid "→N: {name} cites it N times"
+msgstr "→N: {name} cites it N times"
+
 #. act: jump to the end of the transcript; ↓ stays as it is
 #. act: jump to the end of the transcript; ↓ stays as it is
 #. jump to the newest entry; the arrow is part of the pill
@@ -861,6 +892,11 @@ msgstr "abort failed: {reason}"
 #: src/components/DraftConversation.tsx
 msgid "Aborting…"
 msgstr "Aborting…"
+
+#. outline column heading, first line: citations between packages
+#: src/components/SpecView.tsx
+msgid "across packages"
+msgstr "across packages"
 
 #: src/components/ProjectGroup.tsx
 msgid "Actions for {title}"
@@ -1226,11 +1262,6 @@ msgstr "Approve once"
 #: src/state/reducer.ts
 msgid "Approved once; native execution is reported separately."
 msgstr "Approved once; native execution is reported separately."
-
-#. graph legend: an arrow points from the citing package to the cited one
-#: src/components/SpecGraph.tsx
-msgid "arrow — cites"
-msgstr "arrow — cites"
 
 #: src/components/AuthoringWorkspace.tsx
 msgid "as the last run left them, not compiled"
@@ -1726,8 +1757,21 @@ msgid "Choose which session player answers {role}"
 msgstr "Choose which session player answers {role}"
 
 #: src/components/SpecView.tsx
+msgid "Citations across packages: cites · cited by"
+msgstr "Citations across packages: cites · cited by"
+
+#: src/components/SpecItemRows.tsx
+msgid "Citations of {id}"
+msgstr "Citations of {id}"
+
+#: src/components/SpecView.tsx
 msgid "Citations: {summary}"
 msgstr "Citations: {summary}"
+
+#. summary card heading over the items citing this one
+#: src/components/CitationPreview.tsx
+msgid "cited by"
+msgstr "cited by"
 
 #. how many items cite this one
 #. how many items cite this one
@@ -1741,9 +1785,16 @@ msgid "cited by packages"
 msgstr "cited by packages"
 
 #. row label over the items this one cites
+#. row label over the items this one cites
+#: src/components/CitationPreview.tsx
 #: src/components/SpecItemRows.tsx
 msgid "cites"
 msgstr "cites"
+
+#. outline column heading, second line: citations out and in
+#: src/components/SpecView.tsx
+msgid "cites · cited by"
+msgstr "cites · cited by"
 
 #. how many items this one cites
 #: src/lib/spec-view-model.ts
@@ -2832,17 +2883,20 @@ msgstr "exported skills"
 msgid "Exporting…"
 msgstr "Exporting…"
 
-#. item group: External Behavior, inside a phrase
+#. item group: External Behavior, short
 #: src/lib/spec-view-model.ts
-msgid "external"
-msgstr "external"
-
-#. item group: External Behavior
-#. item group: External Behavior
-#: src/components/SpecGraph.tsx
-#: src/components/SpecView.tsx
 msgid "External"
 msgstr "External"
+
+#. item group: External Behavior, inside a phrase
+#: src/lib/spec-view-model.ts
+msgid "external behavior"
+msgstr "external behavior"
+
+#. item group: External Behavior, standing alone
+#: src/lib/spec-view-model.ts
+msgid "External behavior"
+msgstr "External behavior"
 
 #: src/components/TrustedMedia.tsx
 msgid "External reference"
@@ -3168,8 +3222,8 @@ msgid "Handed to {player}"
 msgstr "Handed to {player}"
 
 #: src/components/SpecView.tsx
-msgid "Hide {group} items"
-msgstr "Hide {group} items"
+msgid "Hidden: {groups}"
+msgstr "Hidden: {groups}"
 
 #: src/components/SpaceSync.tsx
 msgid "Hide diff"
@@ -3203,6 +3257,10 @@ msgstr "history, can't be continued"
 #: src/components/SettingsSurface.tsx
 msgid "Host name"
 msgstr "Host name"
+
+#: src/lib/spec-view-model.ts
+msgid "How the package behaves inside, hidden from its users"
+msgstr "How the package behaves inside, hidden from its users"
 
 #. accepting a team server's contract, which opens the seat
 #: src/components/SpaceServers.tsx
@@ -3344,17 +3402,20 @@ msgstr "Intents"
 msgid "Interface language"
 msgstr "Interface language"
 
-#. item group: Internal Behavior, inside a phrase
+#. item group: Internal Behavior, short
 #: src/lib/spec-view-model.ts
-msgid "internal"
-msgstr "internal"
-
-#. item group: Internal Behavior
-#. item group: Internal Behavior
-#: src/components/SpecGraph.tsx
-#: src/components/SpecView.tsx
 msgid "Internal"
 msgstr "Internal"
+
+#. item group: Internal Behavior, inside a phrase
+#: src/lib/spec-view-model.ts
+msgid "internal behavior"
+msgstr "internal behavior"
+
+#. item group: Internal Behavior, standing alone
+#: src/lib/spec-view-model.ts
+msgid "Internal behavior"
+msgstr "Internal behavior"
 
 #. draft state chip, at most 14 characters: Spex closed while the draft compiled
 #: src/lib/drafts.ts
@@ -4506,6 +4567,11 @@ msgstr "ownership unknown"
 msgid "Package"
 msgstr "Package"
 
+#. graph caption over the packages that cite nothing and that nothing cites
+#: src/components/SpecGraph.tsx
+msgid "Packages without citations"
+msgstr "Packages without citations"
+
 #: src/components/SpaceGroups.tsx
 msgid "Pairs it with its folder on this device"
 msgstr "Pairs it with its folder on this device"
@@ -5521,6 +5587,10 @@ msgstr "Searching…"
 msgid "Seat"
 msgstr "Seat"
 
+#: src/components/CitationPreview.tsx
+msgid "See all {count}"
+msgstr "See all {count}"
+
 #: src/components/CaptainHome.tsx
 msgid "See how to start"
 msgstr "See how to start"
@@ -5741,13 +5811,14 @@ msgstr "Shared with the playbook CLI — edits made outside appear here"
 msgid "Show {count} of {rest} earlier entries"
 msgstr "Show {count} of {rest} earlier entries"
 
-#: src/components/SpecView.tsx
-msgid "Show {group} items"
-msgstr "Show {group} items"
-
 #: src/components/DraftConversation.tsx
 msgid "Show {shown} of {total} earlier entries"
 msgstr "Show {shown} of {total} earlier entries"
+
+#. turn every item group back on
+#: src/components/SpecView.tsx
+msgid "Show all"
+msgstr "Show all"
 
 #: src/components/NavRail.tsx
 msgid "Show all {count} sessions in {project}"
@@ -6308,10 +6379,13 @@ msgstr "test"
 
 #. item group: Verification
 #. item group: Verification
-#: src/components/SpecGraph.tsx
-#: src/components/SpecView.tsx
+#: src/lib/spec-view-model.ts
 msgid "Tests"
 msgstr "Tests"
+
+#: src/lib/spec-view-model.ts
+msgid "Tests verifying the two kinds above"
+msgstr "Tests verifying the two kinds above"
 
 #: src/components/SpaceSync.tsx
 msgid "That folder already belongs to {owner}."
@@ -6433,6 +6507,11 @@ msgstr "The ledger could not be loaded: {reason}"
 #: src/components/EnvironmentSection.tsx
 msgid "The original text stands"
 msgstr "The original text stands"
+
+#. graph legend: resting lines show only the strongest package pairs
+#: src/components/SpecGraph.tsx
+msgid "the overview omits weaker relationships — select a package for all"
+msgstr "the overview omits weaker relationships — select a package for all"
 
 #: src/App.tsx
 msgid "The project's spec packages ({keys})"
@@ -6790,6 +6869,18 @@ msgstr "unrelated history"
 msgid "Unrelated history"
 msgstr "Unrelated history"
 
+#. this citation names an item absent from the tree
+#. this citation names an item absent from the tree
+#: src/components/CitationPreview.tsx
+#: src/components/SpecItemRows.tsx
+msgid "unresolved"
+msgstr "unresolved"
+
+#. how many of a package's citations name items absent from the tree
+#: src/components/SpecView.tsx
+msgid "unresolved {count}"
+msgstr "unresolved {count}"
+
 #: src/components/SpaceSignIn.tsx
 msgid "Until you do, everything stays on this device and nothing is contacted."
 msgstr "Until you do, everything stays on this device and nothing is contacted."
@@ -6990,6 +7081,10 @@ msgstr "waiting for your verdict"
 msgid "What should change?"
 msgstr "What should change?"
 
+#: src/lib/spec-view-model.ts
+msgid "What the package promises its users — people or other packages"
+msgstr "What the package promises its users — people or other packages"
+
 #: src/components/CaptainHome.tsx
 msgid "What would you change in {project}?"
 msgstr "What would you change in {project}?"
@@ -7018,11 +7113,6 @@ msgstr "Which folder on this device is {name}?"
 #: src/lib/space.ts
 msgid "which process is writing right now"
 msgstr "which process is writing right now"
-
-#. graph legend: an edge's width counts its citations
-#: src/components/SpecGraph.tsx
-msgid "width — citations"
-msgstr "width — citations"
 
 #. headline of the welcome page at a team server where you have no project yet; {server} is the server's name
 #: src/components/CaptainHome.tsx

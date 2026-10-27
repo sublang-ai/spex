@@ -453,8 +453,12 @@ async function assertSurfaceMatrix(
           const split = half.parentElement!;
           const box = split.parentElement!;
           const paneBox = pane.getBoundingClientRect();
+          const outline = split.lastElementChild as HTMLElement;
           return {
             pane: paneBox.height,
+            width: paneBox.width,
+            outlineWidth: outline.getBoundingClientRect().width,
+            rem: Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16,
             svg: svg?.getBoundingClientRect().height ?? 0,
             others,
             besideOutline: paneBox.width < split.getBoundingClientRect().width - 1,
@@ -462,6 +466,18 @@ async function assertSurfaceMatrix(
             floor: Number.parseFloat(getComputedStyle(half).minHeight) || 0,
           };
         });
+        // Beside the outline, the graph keeps 320px and the outline
+        // 28rem; a box holding less stacks them (spec-view-20).
+        if (fill.besideOutline) {
+          expect(fill.width, `the graph beside the outline is ${fill.width}px wide`).toBeGreaterThanOrEqual(319);
+          expect(
+            fill.outlineWidth,
+            `the outline beside the graph is ${fill.outlineWidth}px wide`,
+          ).toBeGreaterThanOrEqual(28 * fill.rem - 1);
+        }
+        // The package rows' columns hold under their heading row, and a
+        // nonzero unresolved count stays shown (spec-view-2, spec-view-1).
+        await expect(page.getByTestId("outline-columns")).toBeVisible();
         const owed = Math.max(fill.floor, fill.besideOutline ? fill.box : 0);
         expect(
           fill.pane,

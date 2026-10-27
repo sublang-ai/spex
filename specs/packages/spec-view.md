@@ -70,7 +70,7 @@ While an expanded item carries citations or is cited, the spec view shall presen
 When an item's citation summary [[spec-view-3](#spec-view-3)] takes a settled hover or keyboard focus, the spec view shall answer with one summary card at hand ([DR-158](../decisions/158-a-legible-graph-and-outline.md)) rather than a native tooltip:
 
 - the card lists, under a cites heading and a cited-by heading, up to five items in each direction — each by its ID chip in its group color and its first line — and closes a longer direction with a line counting them all;
-- the card opens, closes, stands one at a time with the citation preview, describes its summary, holds nothing focusable, and lies inside the outline's scrolling box as [[spec-view-61](#spec-view-61)] states for an entry's card, its height bounded with the rest scrolling inside it;
+- the card opens, closes, stands one at a time with the citation preview, describes its summary, holds nothing focusable, and lies inside the outline's scrolling box as [[spec-view-61](#spec-view-61)] states for an entry's card, each listed item on one line so its height stays bounded;
 - activating the summary expands the item if collapsed, scrolls its citation block into view, and moves focus onto that block, and Escape on the summary closes the card with focus staying on the summary.
 
 #### spec-view-61
@@ -90,7 +90,7 @@ When a citation entry takes a settled hover or keyboard focus — an entry of an
 When a group filter toggle is activated, the spec view shall hide or restore that group's items while keeping every package node in the outline ([DR-011](../decisions/011-project-workspace.md), [DR-158](../decisions/158-a-legible-graph-and-outline.md)):
 
 - a package whose items are all filtered away stays visible and, when expanded, states that no items are in the active groups;
-- the three group toggles carry each group's full name, a one-line definition of the group in their title, and project-wide item counts in the group colors, expose their pressed state via aria-pressed — pressed as a filled control with a check, unpressed as an outline alone — and default to all-on;
+- the three group toggles carry each group's full name — its short name below 28rem, as the column headings do [[spec-view-2](#spec-view-2)] — a one-line definition of the group in their title, and project-wide item counts in the group colors, expose their pressed state via aria-pressed — pressed as a filled control with a check, unpressed as an outline alone — and default to all-on;
 - while any group is off, a status line under the toggles states each hidden group and its item count and offers one control turning every group back on.
 
 ### Search

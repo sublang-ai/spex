@@ -6,12 +6,14 @@
 // citing→cited pair. Under meta-14 every peer reliance is a citation,
 // so this graph is the complete architecture.
 //
-// Every encoding here answers DR-026: node area counts items and says
-// so with a numeral, edge width counts citations on an absolute
-// scale, direction reads at rest through constant-size glyphs, the
-// two roles are achromatic so brand purple stays interaction's alone,
-// and every channel is keyed by the legend. Layout and camera come
-// from d3-force and d3-zoom; the rendering stays ours.
+// Every encoding here answers DR-026 as DR-158 amends it: node area
+// counts items and says so with a numeral; at rest the backbone draws
+// one undirected line per strong pair, and a selection draws its own
+// citations directed, with the counts written beside its neighbors'
+// names rather than encoded in width; the two roles are achromatic so
+// brand purple stays interaction's alone; names take a free place or
+// wait; and every channel is keyed by the legend. Layout and camera
+// come from d3-force and d3-zoom; the rendering stays ours.
 
 import {
   useCallback,
@@ -28,17 +30,20 @@ import type { SpecFileInfo } from "@sublang/spex-core/protocol";
 import {
   buildGraphModel,
   createSimulation,
-  edgeWidth,
+  placeLabels,
   presentLayout,
   settle,
+  EDGE_WIDTH,
+  FOOT_CAPTION,
   GRAPH_GROUP_ORDER,
   LABEL_FONT_SIZE,
-  LABEL_GAP,
   type GraphEdge,
   type GraphNode,
+  type GraphPair,
+  type LabelRequest,
   type Placement,
 } from "../lib/spec-graph-layout.js";
-import { GROUP_WORD, type SpecGroup } from "../lib/spec-view-model.js";
+import { GROUP_NAME, GROUP_WORD, type SpecGroup } from "../lib/spec-view-model.js";
 import { i18n } from "../i18n.js";
 
 export {
@@ -90,11 +95,6 @@ const GROUP_TEXT: Record<SpecGroup, string> = {
   internal: "text-fuchsia-700 dark:text-fuchsia-300",
   test: "text-teal-700 dark:text-teal-300",
 };
-const GROUP_LABEL: Record<SpecGroup, () => string> = {
-  external: () => i18n._({ id: "External", comment: "item group: External Behavior" }),
-  internal: () => i18n._({ id: "Internal", comment: "item group: Internal Behavior" }),
-  test: () => i18n._({ id: "Tests", comment: "item group: Verification" }),
-};
 
 /** Ink at text-grade contrast on both grounds. The roles are
  * achromatic by design (DR-026 §2): the palette's hues are spoken for
@@ -108,18 +108,27 @@ const INK_STROKE = "stroke-neutral-700 dark:stroke-neutral-200";
 const TINT_FILL = "fill-neutral-100 dark:fill-neutral-800";
 const SURFACE_FILL = "fill-neutral-50 dark:fill-neutral-950";
 const SURFACE_STROKE = "stroke-neutral-50 dark:stroke-neutral-950";
+/** The resting backbone: a mid-gray clearing the 3:1 floor on both
+ * grounds (spec-view-39). */
 const EDGE_STROKE = "stroke-neutral-500";
-/** One step stronger than its edge in each theme, so the glyph reads
- * as a mark rather than a thickening. */
-const ARROW_FILL = "fill-neutral-600 dark:fill-neutral-400";
 const EMPHASIS_STROKE = "stroke-brand-600 dark:stroke-brand-400";
 const EMPHASIS_FILL = "fill-brand-600 dark:fill-brand-400";
+/** What cites the selection: ink, so the interaction hue stays with
+ * the selection's own citations (spec-view-23). */
+const CITER_STROKE = "stroke-neutral-700 dark:stroke-neutral-200";
+const CITER_FILL = "fill-neutral-700 dark:fill-neutral-200";
+const CITER_TEXT = "fill-neutral-700 dark:fill-neutral-200";
 
-/** Opacity of a mark outside the emphasized neighborhood. Only this
+/** Opacity of a mark outside the selection's neighborhood. Only this
  * transient state may fall under the contrast floor (spec-view-39). */
-const DIM_OPACITY = 0.18;
+const DIM_OPACITY = 0.15;
+/** A selection edge while the relationship list lifts another
+ * neighbor's (spec-view-25). */
+const UNLIFTED_OPACITY = 0.3;
 
-type Emphasis = { kind: "node" | "edge"; id: string } | null;
+/** What the pointer or keyboard inspects: a node, a directed edge
+ * ("source--target"), or a backbone pair ("a--b"). */
+type Inspection = { kind: "node" | "edge" | "pair"; id: string } | null;
 
 let measureCanvas: CanvasRenderingContext2D | null | undefined;
 
@@ -194,7 +203,7 @@ export function SpecGraph({
 
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [transform, setTransform] = useState<ZoomTransform>(zoomIdentity);
-  const [hover, setHover] = useState<Emphasis>(null);
+  const [hover, setHover] = useState<Inspection>(null);
   const [keyFocus, setKeyFocus] = useState<string | null>(null);
   // Bumped by simulation ticks: node positions live on the datum
   // objects the simulation mutates, so a counter is what tells React
@@ -306,34 +315,45 @@ export function SpecGraph({
     [model, selectedKey],
   );
 
-  // Hover reads a mark's numbers; it never dims the picture. Isolation
-  // is what a deliberate choice buys — selection, or the keyboard
-  // focus that stands in for it (spec-view-25), so the two gestures
-  // never look alike.
-  const emphasis: Emphasis = useMemo(() => {
-    if (keyFocus) return { kind: "node", id: keyFocus };
-    if (selectedName) return { kind: "node", id: selectedName };
-    return null;
-  }, [keyFocus, selectedName]);
+  // The selection alone isolates; hover and keyboard focus inspect and
+  // leave the picture whole (spec-view-25).
+  const selectionEdges = useMemo(
+    () =>
+      selectedName
+        ? model.edges.filter(
+            (edge) =>
+              edge.sourceKey === selectedName || edge.targetKey === selectedName,
+          )
+        : [],
+    [model, selectedName],
+  );
+
+  /** Each neighbor's counts against the selection: `in` its citations
+   * of the selection, `out` the selection's citations of it. */
+  const neighbors = useMemo(() => {
+    const counts = new Map<string, { in: number; out: number }>();
+    for (const edge of selectionEdges) {
+      const out = edge.sourceKey === selectedName;
+      const other = out ? edge.targetKey : edge.sourceKey;
+      const entry = counts.get(other) ?? { in: 0, out: 0 };
+      if (out) entry.out += edge.weight;
+      else entry.in += edge.weight;
+      counts.set(other, entry);
+    }
+    return counts;
+  }, [selectionEdges, selectedName]);
 
   const neighborhood = useMemo(() => {
-    if (!emphasis) return null;
-    const set = new Set<string>();
-    if (emphasis.kind === "node") {
-      set.add(emphasis.id);
-      for (const edge of model.edges) {
-        if (edge.sourceKey === emphasis.id) set.add(edge.targetKey);
-        if (edge.targetKey === emphasis.id) set.add(edge.sourceKey);
-      }
-    } else {
-      const [source, target] = emphasis.id.split("--");
-      set.add(source);
-      set.add(target);
-    }
-    return set;
-  }, [emphasis, model]);
+    if (!selectedName) return null;
+    return new Set([selectedName, ...neighbors.keys()]);
+  }, [selectedName, neighbors]);
 
-  const setHoverSoon = useCallback((next: Emphasis) => {
+  /** The neighbor the relationship list lifts, while one of its
+   * entries holds focus or the pointer (spec-view-25). */
+  const [lifted, setLifted] = useState<string | null>(null);
+  useEffect(() => setLifted(null), [selectedName]);
+
+  const setHoverSoon = useCallback((next: Inspection) => {
     if (hoverTimer.current) clearTimeout(hoverTimer.current);
     hoverTimer.current = setTimeout(() => setHover(next), HOVER_DELAY_MS);
   }, []);
@@ -366,6 +386,9 @@ export function SpecGraph({
     // carries no button at all, which counts as primary.
     if (event.button) return;
     event.stopPropagation();
+    // A foot-row package stands outside the arrangement, so there is
+    // nothing for a drag to move (spec-view-28).
+    if (!node.linked) return;
     heldScale.current = presentation.scale;
     dragging.current = {
       node,
@@ -518,6 +541,12 @@ export function SpecGraph({
     );
   }, [hover, model]);
 
+  const cardPair = useMemo((): GraphPair | null => {
+    if (hover?.kind !== "pair") return null;
+    const [a, b] = hover.id.split("--");
+    return model.pairs.find((pair) => pair.a === a && pair.b === b) ?? null;
+  }, [hover, model]);
+
   const nodeAt = (basename: string): GraphNode | undefined =>
     model.nodes.find((node) => node.basename === basename);
 
@@ -526,7 +555,9 @@ export function SpecGraph({
       ? cardNode
       : cardEdge
         ? nodeAt(cardEdge.targetKey)
-        : null;
+        : cardPair
+          ? nodeAt(cardPair.b)
+          : null;
     const place = anchor ? placeOf(anchor.key) : undefined;
     if (!place) return null;
     const [x, y] = transform.apply([place.x, place.y]);
@@ -547,7 +578,7 @@ export function SpecGraph({
         ? current
         : { width: box.width, height: box.height },
     );
-  }, [cardNode, cardEdge, size.width, size.height]);
+  }, [cardNode, cardEdge, cardPair, size.width, size.height]);
   const place = anchor ? cardPlacement(anchor, size, cardBox) : null;
 
   // --- Render ----------------------------------------------------------------
@@ -559,6 +590,174 @@ export function SpecGraph({
   const dimOf = (name: string): number =>
     neighborhood && !neighborhood.has(name) && name !== inspected
       ? DIM_OPACITY
+      : 1;
+
+  /** A line between two placed marks, trimmed to their rims and moved
+   * off the centre line by `spread` along the pair's canonical
+   * perpendicular, so a reciprocal pair's two edges land on opposite
+   * sides instead of both flipping with their own heading. */
+  const lineBetween = (
+    from: string,
+    to: string,
+    spread: number,
+    headRoom: number,
+  ) => {
+    const sourceNode = nodeAt(from);
+    const targetNode = nodeAt(to);
+    const source = sourceNode ? placeOf(sourceNode.key) : undefined;
+    const target = targetNode ? placeOf(targetNode.key) : undefined;
+    if (!source || !target) return null;
+    const dx = target.x - source.x;
+    const dy = target.y - source.y;
+    const length = Math.sqrt(dx * dx + dy * dy) || 1;
+    const ux = dx / length;
+    const uy = dy / length;
+    const forward = from < to;
+    const ox = (forward ? -uy : uy) * spread;
+    const oy = (forward ? ux : -ux) * spread;
+    return {
+      x1: source.x + ux * source.r + ox,
+      y1: source.y + uy * source.r + oy,
+      x2: target.x - ux * (target.r + headRoom) + ox,
+      y2: target.y - uy * (target.r + headRoom) + oy,
+    };
+  };
+
+  // At rest the backbone draws one undirected line per strong pair;
+  // with a selection, only its own citations draw, directed
+  // (spec-view-23).
+  const backbone = selectedName
+    ? []
+    : model.pairs
+        .filter((pair) => pair.backbone)
+        .map((pair) => ({ pair, line: lineBetween(pair.a, pair.b, 0, 0) }));
+  const directed = selectionEdges.map((edge) => ({
+    edge,
+    // A reciprocal pair separates by a fixed offset: width is uniform,
+    // so the gap need not follow it.
+    line: lineBetween(edge.sourceKey, edge.targetKey, edge.offset * 3.5, 1),
+  }));
+  const segments = [
+    ...backbone.map(({ line }) => line),
+    ...directed.map(({ line }) => line),
+  ]
+    .filter((line): line is NonNullable<typeof line> => line !== null)
+    .map(({ x1, y1, x2, y2 }) => [x1, y1, x2, y2] as const);
+
+  /** A neighbor's label carries its counts against the selection —
+   * `←N` its citations of it, `→N` the selection's of it
+   * (spec-view-25). */
+  const labelParts = (name: string, label: string) => {
+    const counts = neighbors.get(name);
+    return {
+      label,
+      cited: counts && counts.in > 0 ? ` ←${counts.in}` : "",
+      cites: counts && counts.out > 0 ? ` →${counts.out}` : "",
+    };
+  };
+
+  // Names are placed around the picture as drawn: the selection's
+  // first and always, then its neighbors, then the rest by size; a
+  // name with no free place waits (spec-view-22). An inspected name
+  // without a place joins last, over the rest, so a hover never moves
+  // another name.
+  const labelBoxes = useMemo(() => {
+    const request = (node: GraphNode, forced: boolean): LabelRequest[] => {
+      const place = placeOf(node.key);
+      if (!place) return [];
+      const parts = labelParts(node.basename, place.label);
+      const text = `${parts.label}${parts.cited}${parts.cites}`;
+      return [
+        {
+          key: node.key,
+          width: text === place.label ? place.labelWidth : measureLabel(text),
+          forced,
+          priority: (neighborhood?.has(node.basename) ? 1e6 : 0) + node.items,
+          bottom: node.linked ? presentation.footTop : undefined,
+        },
+      ];
+    };
+    const boxes = placeLabels(
+      model.nodes.flatMap((node) => request(node, node.basename === selectedName)),
+      presentation.places,
+      segments,
+      size,
+    );
+    const looked = inspected ? nodeAt(inspected) : undefined;
+    if (looked && !boxes.has(looked.key)) {
+      const [box] = placeLabels(
+        request(looked, true),
+        presentation.places,
+        segments,
+        size,
+      ).values();
+      if (box) boxes.set(looked.key, box);
+    }
+    return boxes;
+    // segments, labelParts and nodeAt follow from the dependencies
+    // listed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [model, presentation, size, selectedName, inspected, neighbors, neighborhood]);
+
+  /** Neighbors whose names found no place: the relationship list
+   * names them all (spec-view-25). */
+  const crowded =
+    selectedName !== null &&
+    [...neighbors.keys()].some((name) => {
+      const node = nodeAt(name);
+      return node !== undefined && !labelBoxes.has(node.key);
+    });
+  const relationships = [...neighbors.entries()].sort(
+    (a, b) =>
+      b[1].in + b[1].out - (a[1].in + a[1].out) || (a[0] < b[0] ? -1 : 1),
+  );
+
+  // The list stands in the pane's corner holding the fewest of the
+  // neighborhood's marks, so it hides as little of the selection as
+  // it can without moving a mark (spec-view-25).
+  const listCorner = (() => {
+    const width = Math.min(208, size.width - 16);
+    const height = size.height * 0.45;
+    const corners = [
+      { key: "top-right", x: size.width - 8 - width, y: 8 },
+      { key: "top-left", x: 8, y: 8 },
+      { key: "bottom-right", x: size.width - 8 - width, y: size.height - 8 - height },
+      { key: "bottom-left", x: 8, y: size.height - 8 - height },
+    ] as const;
+    const covered = (corner: (typeof corners)[number]) => {
+      let count = 0;
+      for (const name of neighborhood ?? []) {
+        const at = nodeAt(name);
+        const place = at ? placeOf(at.key) : undefined;
+        if (!place) continue;
+        const [x, y] = transform.apply([place.x, place.y]);
+        if (
+          x + place.r >= corner.x &&
+          x - place.r <= corner.x + width &&
+          y + place.r >= corner.y &&
+          y - place.r <= corner.y + height
+        ) {
+          count += 1;
+        }
+      }
+      return count;
+    };
+    return corners.reduce((best, corner) =>
+      covered(corner) < covered(best) ? corner : best,
+    ).key;
+  })();
+  const LIST_CORNER: Record<typeof listCorner, string> = {
+    "top-right": "right-2 top-2",
+    "top-left": "left-2 top-2",
+    "bottom-right": "right-2 bottom-20",
+    "bottom-left": "left-2 bottom-20",
+  };
+
+  const edgeOpacity = (edge: GraphEdge): number =>
+    lifted &&
+    edge.sourceKey !== lifted &&
+    edge.targetKey !== lifted
+      ? UNLIFTED_OPACITY
       : 1;
 
   return (
@@ -581,107 +780,114 @@ export function SpecGraph({
         }}
       >
         <defs>
-          {/* Constant-size glyphs: markerUnits="userSpaceOnUse" is what
-              decouples the arrowhead from the edge's width, so weight
-              can ride the stroke without the heads turning ugly
-              (spec-view-23). */}
+          {/* Constant-size glyphs: markerUnits="userSpaceOnUse" keeps
+              the head the same at any stroke (spec-view-23). One per
+              hue, since a marker cannot inherit its line's color. */}
           <marker
-            id="spec-graph-arrow"
+            id="spec-graph-arrow-cites"
             viewBox="0 0 10 10"
             refX="9"
             refY="5"
             markerUnits="userSpaceOnUse"
-            markerWidth="11"
-            markerHeight="11"
-            orient="auto-start-reverse"
-          >
-            <path d="M 0 0 L 10 5 L 0 10 z" className={ARROW_FILL} />
-          </marker>
-          <marker
-            id="spec-graph-arrow-emphasis"
-            viewBox="0 0 10 10"
-            refX="9"
-            refY="5"
-            markerUnits="userSpaceOnUse"
-            markerWidth="11"
-            markerHeight="11"
+            markerWidth="10"
+            markerHeight="10"
             orient="auto-start-reverse"
           >
             <path d="M 0 0 L 10 5 L 0 10 z" className={EMPHASIS_FILL} />
+          </marker>
+          <marker
+            id="spec-graph-arrow-cited"
+            viewBox="0 0 10 10"
+            refX="9"
+            refY="5"
+            markerUnits="userSpaceOnUse"
+            markerWidth="10"
+            markerHeight="10"
+            orient="auto-start-reverse"
+          >
+            <path d="M 0 0 L 10 5 L 0 10 z" className={CITER_FILL} />
           </marker>
         </defs>
 
         <g
           transform={`translate(${transform.x},${transform.y}) scale(${transform.k})`}
         >
-          {model.edges.map((edge) => {
-            const source = placeOf((edge.source as GraphNode)?.key ?? "");
-            const target = placeOf((edge.target as GraphNode)?.key ?? "");
-            if (!source || !target) return null;
-            const id = `${edge.sourceKey}--${edge.targetKey}`;
-            const inFocus =
-              emphasis !== null &&
-              (emphasis.kind === "edge"
-                ? emphasis.id === id
-                : emphasis.id === edge.sourceKey ||
-                  emphasis.id === edge.targetKey);
-            const dim =
-              neighborhood !== null &&
-              !(
-                neighborhood.has(edge.sourceKey) &&
-                neighborhood.has(edge.targetKey)
-              );
-            const dx = target.x - source.x;
-            const dy = target.y - source.y;
-            const length = Math.sqrt(dx * dx + dy * dy) || 1;
-            const ux = dx / length;
-            const uy = dy / length;
-            // Straight lines: curvature carries no meaning here, and a
-            // reciprocal pair separates by a perpendicular offset
-            // instead (spec-view-23). The perpendicular is taken along
-            // the pair's canonical direction, so the two edges of a
-            // reciprocal pair land on opposite sides instead of both
-            // flipping with their own heading.
-            const forward = edge.sourceKey < edge.targetKey;
-            const px = forward ? -uy : uy;
-            const py = forward ? ux : -ux;
-            // The offset scales with the marks, so a reciprocal pair
-            // separates by the same proportion at any pane size.
-            const spread = edge.offset * presentation.scale * 0.45;
-            const ox = px * spread;
-            const oy = py * spread;
-            const x1 = source.x + ux * source.r + ox;
-            const y1 = source.y + uy * source.r + oy;
-            const x2 = target.x - ux * (target.r + 1) + ox;
-            const y2 = target.y - uy * (target.r + 1) + oy;
+          {presentation.footTop !== undefined ? (
+            // The foot row's caption and rule: what stands below them
+            // cites nothing and nothing cites it (spec-view-28).
+            <g data-testid="graph-foot" className="pointer-events-none">
+              <line
+                x1={8}
+                x2={Math.max(8, size.width - 8)}
+                y1={presentation.footTop}
+                y2={presentation.footTop}
+                strokeWidth={1}
+                className="stroke-neutral-200 dark:stroke-neutral-800"
+              />
+              <text
+                x={12}
+                y={presentation.footTop + FOOT_CAPTION - 5}
+                fontSize={LABEL_FONT_SIZE}
+                className="fill-neutral-600 dark:fill-neutral-400"
+              >
+                {i18n._({
+                  id: "Packages without citations",
+                  comment: "graph caption over the packages that cite nothing and that nothing cites",
+                })}
+              </text>
+            </g>
+          ) : null}
+
+          {backbone.map(({ pair, line }) => {
+            if (!line) return null;
+            const id = `${pair.a}--${pair.b}`;
             return (
-              <g key={id}>
+              <g key={`pair-${id}`}>
                 <line
-                  data-testid={`graph-edge-${id}`}
-                  data-weight={edge.weight}
-                  x1={x1}
-                  y1={y1}
-                  x2={x2}
-                  y2={y2}
-                  strokeWidth={edgeWidth(edge.weight)}
+                  data-testid={`graph-pair-${id}`}
+                  data-weight={pair.total}
+                  {...line}
+                  strokeWidth={EDGE_WIDTH}
                   strokeLinecap="round"
-                  className={inFocus ? EMPHASIS_STROKE : EDGE_STROKE}
-                  opacity={dim ? DIM_OPACITY : 1}
-                  markerEnd={
-                    inFocus
-                      ? "url(#spec-graph-arrow-emphasis)"
-                      : "url(#spec-graph-arrow)"
-                  }
+                  className={EDGE_STROKE}
                 />
                 {/* A wide invisible companion makes the thin line a
                     reachable hover target for its card. */}
                 <line
-                  x1={x1}
-                  y1={y1}
-                  x2={x2}
-                  y2={y2}
+                  {...line}
                   stroke="transparent"
-                  strokeWidth={Math.max(12, edgeWidth(edge.weight) + 8)}
+                  strokeWidth={12}
+                  className="cursor-pointer"
+                  onMouseEnter={() => setHoverSoon({ kind: "pair", id })}
+                  onMouseLeave={clearHover}
+                />
+              </g>
+            );
+          })}
+
+          {directed.map(({ edge, line }) => {
+            if (!line) return null;
+            const id = `${edge.sourceKey}--${edge.targetKey}`;
+            const own = edge.sourceKey === selectedName;
+            return (
+              <g key={`edge-${id}`} opacity={edgeOpacity(edge)}>
+                <line
+                  data-testid={`graph-edge-${id}`}
+                  data-weight={edge.weight}
+                  data-direction={own ? "cites" : "cited"}
+                  {...line}
+                  strokeWidth={EDGE_WIDTH}
+                  className={own ? EMPHASIS_STROKE : CITER_STROKE}
+                  markerEnd={
+                    own
+                      ? "url(#spec-graph-arrow-cites)"
+                      : "url(#spec-graph-arrow-cited)"
+                  }
+                />
+                <line
+                  {...line}
+                  stroke="transparent"
+                  strokeWidth={12}
                   className="cursor-pointer"
                   onMouseEnter={() => setHoverSoon({ kind: "edge", id })}
                   onMouseLeave={clearHover}
@@ -693,7 +899,8 @@ export function SpecGraph({
           {model.nodes.map((node) => {
             const dim = dimOf(node.basename);
             const selected = node.basename === selectedName;
-            const focused = node.basename === keyFocus;
+            const focused =
+              node.basename === keyFocus || node.basename === lifted;
             const place = placeOf(node.key);
             if (!place) return null;
             const matched = searching && matchedKeys?.has(node.key);
@@ -709,6 +916,7 @@ export function SpecGraph({
                 data-role={node.cited ? "cited" : "uncited"}
                 data-items={node.items}
                 data-match={matched ? "true" : undefined}
+                data-foot={node.linked ? undefined : "true"}
                 tabIndex={0}
                 role="button"
                 aria-label={i18n._(
@@ -816,13 +1024,15 @@ export function SpecGraph({
               painted over, whatever the node order (spec-view-22). */}
           {model.nodes.map((node) => {
             const place = placeOf(node.key);
-            if (!place) return null;
+            const box = labelBoxes.get(node.key);
+            if (!place || !box) return null;
+            const parts = labelParts(node.basename, place.label);
             return (
               <text
                 key={`label-${node.key}`}
                 data-testid={`graph-label-${node.basename}`}
-                x={place.x}
-                y={place.y + place.r + LABEL_GAP + LABEL_FONT_SIZE * 0.8}
+                x={box.x + box.width / 2}
+                y={box.y + LABEL_FONT_SIZE}
                 textAnchor="middle"
                 fontSize={LABEL_FONT_SIZE}
                 paintOrder="stroke"
@@ -831,15 +1041,74 @@ export function SpecGraph({
                 opacity={dimOf(node.basename)}
                 className={`pointer-events-none fill-neutral-700 dark:fill-neutral-300 ${SURFACE_STROKE}`}
               >
-                {place.label}
+                {parts.label}
+                {parts.cited ? (
+                  <tspan fontWeight={600} className={CITER_TEXT}>
+                    {parts.cited}
+                  </tspan>
+                ) : null}
+                {parts.cites ? (
+                  <tspan fontWeight={600} className={EMPHASIS_FILL}>
+                    {parts.cites}
+                  </tspan>
+                ) : null}
               </text>
             );
           })}
         </g>
       </svg>
 
+      {/* The relationship list: where a neighbor's name finds no
+          place, every neighbor is named here with both counts, most
+          first, and an entry focused or hovered lifts its node and
+          edges (spec-view-25). */}
+      {crowded ? (
+        <div
+          data-testid="graph-relationships"
+          data-corner={listCorner}
+          className={`absolute ${LIST_CORNER[listCorner]} z-[5] flex max-h-[45%] w-52 max-w-[calc(100%-1rem)] flex-col rounded-lg border border-neutral-200 bg-white/95 text-xs shadow-md dark:border-neutral-700 dark:bg-neutral-900/95`}
+        >
+          <div className="shrink-0 border-b border-neutral-200 px-2.5 py-1.5 font-medium text-neutral-700 dark:border-neutral-700 dark:text-neutral-200">
+            {i18n._("{name}'s relationships", { name: selectedName ?? "" })}
+          </div>
+          <ul
+            aria-label={i18n._("{name}'s relationships", { name: selectedName ?? "" })}
+            className="min-h-0 overflow-y-auto py-1"
+          >
+            {relationships.map(([name, counts]) => (
+              <li
+                key={name}
+                data-testid={`graph-relationship-${name}`}
+                tabIndex={0}
+                aria-label={i18n._("{name}: cites {selected} {in}, cited by {selected} {out}", {
+                  name,
+                  selected: selectedName ?? "",
+                  in: counts.in,
+                  out: counts.out,
+                })}
+                onFocus={() => setLifted(name)}
+                onBlur={() => setLifted((now) => (now === name ? null : now))}
+                onMouseEnter={() => setLifted(name)}
+                onMouseLeave={() => setLifted((now) => (now === name ? null : now))}
+                className="flex items-center gap-2 px-2.5 py-1 outline-none hover:bg-neutral-100 focus:bg-brand-50 focus:ring-1 focus:ring-inset focus:ring-brand-600 dark:hover:bg-neutral-800 dark:focus:bg-brand-950 dark:focus:ring-brand-400"
+              >
+                <span className="min-w-0 flex-1 truncate font-mono text-neutral-700 dark:text-neutral-200">
+                  {name}
+                </span>
+                <span className="shrink-0 tabular-nums font-semibold text-neutral-700 dark:text-neutral-200">
+                  {counts.in > 0 ? `←${counts.in}` : ""}
+                </span>
+                <span className="w-9 shrink-0 text-right tabular-nums font-semibold text-brand-600 dark:text-brand-300">
+                  {counts.out > 0 ? `→${counts.out}` : ""}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
       {/* Details at hand rather than a native tooltip (spec-view-26). */}
-      {place && (cardNode || cardEdge) ? (
+      {place && (cardNode || cardEdge || cardPair) ? (
         <div
           ref={cardRef}
           data-testid="graph-card"
@@ -868,7 +1137,7 @@ export function SpecGraph({
                     })}
                   >
                     <span className={GROUP_TEXT[group]}>
-                      {GROUP_LABEL[group]()}
+                      {GROUP_NAME[group]()}
                     </span>
                     <span
                       className={
@@ -900,6 +1169,31 @@ export function SpecGraph({
                 })}
               </div>
             </>
+          ) : cardPair ? (
+            <>
+              <div className="font-medium text-neutral-900 dark:text-neutral-100">
+                {cardPair.a} ↔ {cardPair.b}
+              </div>
+              <ul className="mt-1 space-y-0.5 text-neutral-600 dark:text-neutral-300">
+                {(
+                  [
+                    [cardPair.a, cardPair.b, cardPair.ab],
+                    [cardPair.b, cardPair.a, cardPair.ba],
+                  ] as const
+                ).map(([from, to, count]) => (
+                  <li key={from} className="flex justify-between gap-3">
+                    <span className="min-w-0 truncate">
+                      {from} → {to}
+                    </span>
+                    <span className="shrink-0 tabular-nums">
+                      {i18n._("{count, plural, one {# citation} other {# citations}}", {
+                        count,
+                      })}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </>
           ) : null}
         </div>
       ) : null}
@@ -917,18 +1211,34 @@ export function SpecGraph({
         <span className="whitespace-nowrap">
           {i18n._({ id: "size — items", comment: "graph legend: a node's size counts its items" })}
         </span>
-        <span className="whitespace-nowrap">
-          {i18n._({
-            id: "width — citations",
-            comment: "graph legend: an edge's width counts its citations",
-          })}
-        </span>
-        <span className="whitespace-nowrap">
-          {i18n._({
-            id: "arrow — cites",
-            comment: "graph legend: an arrow points from the citing package to the cited one",
-          })}
-        </span>
+        {selectedName ? (
+          <>
+            <span className="flex items-center gap-1.5 whitespace-nowrap">
+              <span className="h-0.5 w-4 bg-brand-600 dark:bg-brand-400" />
+              {i18n._({
+                id: "→N: {name} cites it N times",
+                values: { name: selectedName },
+                comment: "graph legend: purple edges and →N count what the selected package cites",
+              })}
+            </span>
+            <span className="flex items-center gap-1.5 whitespace-nowrap">
+              <span className="h-0.5 w-4 bg-neutral-700 dark:bg-neutral-200" />
+              {i18n._({
+                id: "←N: it cites {name} N times",
+                values: { name: selectedName },
+                comment: "graph legend: ink edges and ←N count what cites the selected package",
+              })}
+            </span>
+          </>
+        ) : (
+          <span className="flex items-center gap-1.5">
+            <span className="h-0.5 w-4 shrink-0 bg-neutral-500" />
+            {i18n._({
+              id: "the overview omits weaker relationships — select a package for all",
+              comment: "graph legend: resting lines show only the strongest package pairs",
+            })}
+          </span>
+        )}
         <button
           type="button"
           data-testid="graph-fit"

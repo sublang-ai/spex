@@ -3,15 +3,14 @@
 
 // The outline's item rows (SPECV-3/SPECV-19), lifted out of the spec
 // view so a second surface can draw the same rows: a row is an ID chip
-// in its group colour, the group word, and the item's first line,
-// expanding to the body with its citations. Everything the spec view
+// in its group colour and the item's first line under its section's
+// group heading, expanding to the body with its citations. Everything the spec view
 // alone owns — group filters, search reveals, the copy tick, the Edit
 // control, inbound backlinks — is optional, so the Playbooks card can
 // draw a parsed Gears artifact with nothing but items, an index, and a
 // jump (PBLIB-22).
 
 import {
-  useState,
   type FocusEvent as ReactFocusEvent,
   type MouseEvent as ReactMouseEvent,
   type ReactNode,
@@ -25,7 +24,8 @@ import {
   citationSummary,
   groupOf,
   itemMatches,
-  GROUP_WORD,
+  sectionGroup,
+  GROUP_NAME,
   type CitationModel,
   type ItemLocation,
   type SpecGroup,
@@ -60,6 +60,18 @@ export function itemDomId(id: string, prefix = "specv"): string {
   return `${prefix}-item-${id}`;
 }
 
+/** The DOM id of an expanded item's citation block, where its summary
+ * hands focus (spec-view-60). */
+export function citationsDomId(id: string, prefix = "specv"): string {
+  return `${prefix}-cites-${id}`;
+}
+
+/** The link key a summary's card rides, so the one card machine tells
+ * a summary from an entry (spec-view-60). */
+export function summaryKey(id: string): string {
+  return `summary:${id}`;
+}
+
 // ---------------------------------------------------------------------------
 // One expanded file's items in document order, grouped under their
 // verbatim `##` section headings with `###` topics as nested labels
@@ -88,6 +100,7 @@ export function SpecItemRows({
   preview,
   onEditItem,
   editFailure,
+  onOpenCitations,
 }: {
   items: SpecItemInfo[];
   /** DOM-id scope for the rows; the spec view keeps the default. */
@@ -125,6 +138,9 @@ export function SpecItemRows({
   onEditItem?: (item: SpecItemInfo) => void;
   /** The last failed open, keyed by the control that asked. */
   editFailure?: { anchor: string; message: string } | null;
+  /** Open an item onto its citation block, where the host offers the
+   * summary card (spec-view-60); without it the summary is a hint. */
+  onOpenCitations?: (id: string) => void;
 }) {
   if (items.length === 0) return null;
   const query = search ?? "";
@@ -132,14 +148,31 @@ export function SpecItemRows({
   const rows: ReactNode[] = [];
   let previousSection: string | undefined;
   let previousTopic: string | undefined;
+  // A section heads its items by its group's name and count, a
+  // section outside the package grammar by its own words; a topic is
+  // the author's own sub-heading beneath it (spec-view-2).
+  const sectionCounts = new Map<string, number>();
+  for (const item of items) {
+    if (item.section) {
+      sectionCounts.set(item.section, (sectionCounts.get(item.section) ?? 0) + 1);
+    }
+  }
   for (const item of items) {
     if (item.section && item.section !== previousSection) {
+      const group = sectionGroup(item.section);
       rows.push(
         <li
           key={`section-${item.id}`}
-          className="mt-1 text-xs font-semibold uppercase tracking-wide text-neutral-500"
+          data-testid={`section-${item.id}`}
+          className={`mt-2 text-xs font-semibold ${
+            group ? GROUP_TEXT[group] : "text-neutral-500"
+          }`}
         >
-          {item.section}
+          {group ? GROUP_NAME[group]() : item.section}
+          <span className="font-normal text-neutral-500">
+            {" · "}
+            {sectionCounts.get(item.section)}
+          </span>
         </li>,
       );
       previousTopic = undefined;
@@ -149,7 +182,8 @@ export function SpecItemRows({
       rows.push(
         <li
           key={`topic-${item.id}`}
-          className="ml-2 text-xs font-medium text-neutral-500"
+          data-testid={`topic-${item.id}`}
+          className="ml-1 mt-1.5 text-sm font-medium text-neutral-700 dark:text-neutral-300"
         >
           {item.topic}
         </li>,
@@ -185,6 +219,9 @@ export function SpecItemRows({
             ? editFailure.message
             : undefined
         }
+        onOpenCitations={
+          onOpenCitations ? () => onOpenCitations(item.id) : undefined
+        }
       />,
     );
   }
@@ -210,6 +247,7 @@ function ItemRow({
   preview,
   onEdit,
   editFailure,
+  onOpenCitations,
 }: {
   item: SpecItemInfo;
   idPrefix?: string;
@@ -238,15 +276,16 @@ function ItemRow({
   onEdit?: () => void;
   /** Why the last Edit from this row could not open (DR-010 §5). */
   editFailure?: string;
+  /** Expand onto the citation block (spec-view-60). */
+  onOpenCitations?: () => void;
 }) {
   const group = item.group;
-  // The outbound row lists the item's citations in document order;
-  // the backlink group renders collapsed by count and expands to jump
-  // links (SPECV-19). Whether it is open is cosmetic and local.
-  const [inboundOpen, setInboundOpen] = useState(false);
-  // Collapsed rows keep a muted citation-count hint (SPECV-3) —
-  // complete in both directions, unlike the cross-file file rollup.
+  // The row keeps a muted citation summary, collapsed or expanded
+  // (spec-view-3) — complete in both directions, unlike the cross-file
+  // file rollup — and where the host holds the card it is the
+  // summary card's control (spec-view-60).
   const hint = citationSummary(item.cites.length, inbound.length);
+  const summaryLinkKey = summaryKey(item.id);
 
   // Citation entries color by the TARGET's group and raise the card at
   // hand instead of the browser's slow native tooltip (spec-view-61);
@@ -279,6 +318,15 @@ function ItemRow({
         {notFoundKey === linkKey ? (
           <span className="text-xs text-neutral-500">
             {i18n._({ id: "not found", comment: "the cited item is not in this tree" })}
+          </span>
+        ) : targetGroup === undefined && itemIndex.size > 0 ? (
+          // A citation the tree cannot resolve says so where it
+          // stands (spec-view-19).
+          <span
+            data-testid={`unresolved-${item.id}-${target}`}
+            className="text-xs text-neutral-500"
+          >
+            {i18n._({ id: "unresolved", comment: "this citation names an item absent from the tree" })}
           </span>
         ) : null}
       </span>
@@ -330,11 +378,6 @@ function ItemRow({
             {i18n._({ id: "copy failed", comment: "the item's ID could not be copied" })}
           </span>
         ) : null}
-        {/* The group word duplicates the chip's color and accessible
-            name, so it hides first below @md (spec-view-55). */}
-        <span className={`hidden shrink-0 text-xs @md:inline ${GROUP_TEXT[group]}`}>
-          {GROUP_WORD[group]()}
-        </span>
         <button
           type="button"
           data-testid={`item-toggle-${item.id}`}
@@ -346,7 +389,7 @@ function ItemRow({
           <span className="truncate" title={item.firstLine}>
             {item.firstLine}
           </span>
-          {hint ? (
+          {hint && !(onOpenCitations && preview) ? (
             // An at-a-glance extra (spec-view-55): the expanded row's
             // citation rows carry the counts, so it hides first.
             <span className="hidden shrink-0 text-xs text-neutral-500 @md:inline">
@@ -354,6 +397,30 @@ function ItemRow({
             </span>
           ) : null}
         </button>
+        {hint && onOpenCitations && preview ? (
+          // Its own control, so it can raise the summary card and open
+          // the citation block; an at-a-glance extra that hides first
+          // in a narrow row (spec-view-55, spec-view-60).
+          <button
+            type="button"
+            data-testid={`cite-summary-${item.id}`}
+            onClick={() => {
+              preview.close();
+              onOpenCitations();
+            }}
+            onMouseEnter={(event) =>
+              preview.hover(event.currentTarget, summaryLinkKey, summaryLinkKey)
+            }
+            onMouseLeave={preview.close}
+            onFocus={(event) =>
+              preview.focus(event.currentTarget, summaryLinkKey, summaryLinkKey)
+            }
+            onBlur={preview.close}
+            className="-my-1 hidden shrink-0 rounded px-1 py-1 text-xs text-neutral-500 hover:text-neutral-700 hover:underline @md:inline dark:hover:text-neutral-300"
+          >
+            {hint}
+          </button>
+        ) : null}
         {despiteFilter ? (
           <span className="rounded bg-amber-50 px-1.5 py-0.5 text-xs text-amber-700 dark:bg-amber-950 dark:text-amber-300">
             {i18n._("shown despite filter")}
@@ -422,7 +489,14 @@ function ItemRow({
               row read down a single label column, their entries
               wrapping in the slack beside it (spec-view-19). */}
           {item.cites.length > 0 || inbound.length > 0 ? (
-            <div className="flex flex-col gap-1 text-xs">
+            <div
+              id={citationsDomId(item.id, idPrefix)}
+              data-testid={`citations-${item.id}`}
+              // The summary hands focus here (spec-view-60).
+              tabIndex={-1}
+              aria-label={i18n._("Citations of {id}", { id: item.id })}
+              className="flex flex-col gap-1 rounded text-xs outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+            >
               {item.cites.length > 0 ? (
                 <div
                   data-testid={`cites-${item.id}`}
@@ -437,25 +511,22 @@ function ItemRow({
                 </div>
               ) : null}
               {inbound.length > 0 ? (
-                <div className="flex items-start gap-2">
-                  <button
-                    type="button"
-                    data-testid={`inbound-${item.id}`}
-                    aria-expanded={inboundOpen}
-                    onClick={() => setInboundOpen((open) => !open)}
-                    className="w-20 shrink-0 text-left text-neutral-500 hover:text-neutral-600 dark:hover:text-neutral-300"
-                  >
+                // Every backlink listed, never behind a toggle
+                // (spec-view-19).
+                <div
+                  data-testid={`inbound-${item.id}`}
+                  className="flex items-start gap-2"
+                >
+                  <span className="w-20 shrink-0 text-neutral-500">
                     {i18n._({
                       id: "cited by {in}",
                       values: { in: inbound.length },
                       comment: "how many items cite this one",
                     })}
-                  </button>
-                  {inboundOpen ? (
-                    <span className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
-                      {inbound.map(citation)}
-                    </span>
-                  ) : null}
+                  </span>
+                  <span className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+                    {inbound.map(citation)}
+                  </span>
                 </div>
               ) : null}
             </div>

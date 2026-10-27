@@ -31,7 +31,12 @@ import type {
 } from "@sublang/spex-core/protocol";
 import { SpecEditor } from "./SpecEditor.js";
 import { SpecGraph } from "./SpecGraph.js";
-import { CitationPreview, useCitationPreview } from "./CitationPreview.js";
+import {
+  CitationPreview,
+  CitationSummaryCard,
+  useCitationPreview,
+  type SummaryEntry,
+} from "./CitationPreview.js";
 
 import {
   ancestorKeys,
@@ -53,7 +58,10 @@ import {
   searchDigest,
   treeCounts,
   visibleFileItems,
+  GROUP_DEFINITION,
+  GROUP_NAME,
   GROUP_ORDER,
+  GROUP_SHORT,
   GROUP_WORD,
   MAX_GRAPH_WIDTH,
   MIN_GRAPH_WIDTH,
@@ -69,25 +77,39 @@ import { Markdown } from "./Markdown.js";
 import { RecordRow } from "./RecordRow.js";
 import { Rich } from "./Rich.js";
 import {
+  citationsDomId,
   itemDomId,
   SpecItemRows,
   GROUP_CHIP,
+  GROUP_TEXT,
   LINK_CLASS,
 } from "./SpecItemRows.js";
 
 export { initialSpecViewState };
 export type { SpecViewState };
 
-/** Filter toggle labels (DR-015); thunks, read at render, so the
- * table never freezes the language it was imported in. */
-const FILTER_LABEL: Record<SpecGroup, () => string> = {
-  external: () => i18n._({ id: "External", comment: "item group: External Behavior" }),
-  internal: () => i18n._({ id: "Internal", comment: "item group: Internal Behavior" }),
-  test: () => i18n._({ id: "Tests", comment: "item group: Verification" }),
-};
+/** A package row's count columns and their heading cells share one
+ * width, so the numerals align under their names (spec-view-2): room
+ * for four digits and a separator, and for a full name on two lines. */
+/** The split's pixel floors (spec-view-20): the graph's width, the
+ * outline's in rem, and the divider between them. */
+const GRAPH_FLOOR_PX = 320;
+const OUTLINE_FLOOR_REM = 28;
+const DIVIDER_PX = 17;
 
-const MUTED_CHIP =
-  "bg-neutral-100 text-neutral-500 dark:bg-neutral-800 dark:text-neutral-500";
+const COUNT_CELL = "w-10 shrink-0 text-right @md:w-[4.5rem]";
+/** The cross-package rollup's column (spec-view-19). */
+const ROLLUP_CELL =
+  "hidden w-24 shrink-0 whitespace-nowrap text-right @md:block";
+/** The unresolved count's slot, held on every row so the columns
+ * before it never shift (spec-view-19). */
+const UNRESOLVED_CELL = "w-7 shrink-0 text-right @md:w-16";
+
+/** A count as the columns print it: tabular numerals with the
+ * locale's separators, a zero as a dash (spec-view-2). */
+function countText(count: number): string {
+  return count === 0 ? "—" : count.toLocaleString(i18n.locale);
+}
 
 const COPY_BUTTON_CLASS =
   "rounded-md border border-neutral-300 px-2 py-0.5 text-xs text-neutral-600 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800";
@@ -269,6 +291,9 @@ export function SpecView(props: SpecViewProps) {
   const [jumpOrigins, setJumpOrigins] = useState<readonly string[]>([]);
   const [reader, setReader] = useState<ReaderState | null>(null);
   const [pendingJump, setPendingJump] = useState<string>();
+  // An item whose summary was activated: once expanded, its citation
+  // block scrolls into view and takes focus (spec-view-60).
+  const [pendingCitations, setPendingCitations] = useState<string>();
   const [copiedId, setCopiedId] = useTransient(1500);
   const [copyFailedId, setCopyFailedId] = useTransient(2000);
   const [notFoundKey, setNotFoundKey] = useTransient(2000);
@@ -391,6 +416,16 @@ export function SpecView(props: SpecViewProps) {
     setPendingJump(undefined);
   }, [pendingJump, setFlashId]);
 
+  useEffect(() => {
+    if (!pendingCitations) return;
+    const element = document.getElementById(citationsDomId(pendingCitations));
+    if (element && typeof element.scrollIntoView === "function") {
+      element.scrollIntoView({ block: "nearest" });
+    }
+    element?.focus({ preventScroll: true });
+    setPendingCitations(undefined);
+  }, [pendingCitations]);
+
   // Chevron overrides are search-scoped: they die with the search so a
   // cleared box restores the persisted expansion untouched.
   useEffect(() => {
@@ -432,6 +467,26 @@ export function SpecView(props: SpecViewProps) {
       ? viewState.expandedItems.filter((entry) => entry !== id)
       : [...viewState.expandedItems, id];
     onViewState({ ...viewState, expandedItems: next });
+  }
+
+  /** A summary's activation: the item opens onto its citation block
+   * (spec-view-60). */
+  function openCitations(id: string) {
+    if (!expandedItems.has(id)) {
+      onViewState({
+        ...viewState,
+        expandedItems: [...viewState.expandedItems, id],
+      });
+    }
+    setPendingCitations(id);
+  }
+
+  /** Every group back on, from the hidden-groups line (spec-view-4). */
+  function showAllGroups() {
+    onViewState({
+      ...viewState,
+      filters: { external: true, internal: true, test: true },
+    });
   }
 
   function setAllItems(file: SpecFileInfo, expand: boolean) {
@@ -1137,17 +1192,23 @@ export function SpecView(props: SpecViewProps) {
       allIds.length > 0 && allIds.every((id) => expandedItems.has(id));
     // Cross-file citation rollup, carried on every file row —
     // collapsed included — so the outline reads as a dependency map at
-    // a glance; intra-file wiring never counts (SPECV-19).
+    // a glance; intra-file wiring never counts, and a citation of an
+    // absent ID stands apart as the unresolved count (SPECV-19).
     const fileCites = citations.rollups.get(key);
     const rollup = fileCites
       ? citationSummary(fileCites.out, fileCites.in)
       : undefined;
+    const unresolved = citations.unresolved.get(key) ?? 0;
+    const unresolvedSays = i18n._(
+      "{count, plural, one {# citation names an item} other {# citations name items}} absent from the tree",
+      { count: unresolved },
+    );
 
     return (
       // The row fits its own width (spec-view-1, DR-041): the intent
       // yields first, the identifier chip then truncates, and below
-      // @md the counts print numbers alone with the rollup riding the
-      // row's title.
+      // @md the rollup rides the row's title while an unresolved count
+      // stays as a compact mark.
       <li key={key} data-testid={`file-${key}`} className="@container">
         <div
           title={rollup ? i18n._("Citations: {summary}", { summary: rollup }) : undefined}
@@ -1208,18 +1269,31 @@ export function SpecView(props: SpecViewProps) {
             {/* Collapsed keeps the truncated intent; expanded yields
              * to the full prose block below. */}
             {file.intent && !expanded ? (
+              // The first thing to yield: below 28rem it leaves the row
+              // rather than standing as a fragment (spec-view-1).
               <span
-                className="min-w-0 flex-1 truncate text-xs text-neutral-500 dark:text-neutral-400"
+                className="hidden min-w-0 flex-1 truncate text-xs text-neutral-500 @md:inline dark:text-neutral-400"
                 title={linksAsText(file.intent)}
               >
                 {linksAsText(file.intent)}
               </span>
             ) : null}
           </button>
-          <span className="flex shrink-0 items-center gap-1">
-            {GROUP_ORDER.map((group) => (
+          {searching && !search.fileKeys.has(key) && selected ? (
+            <span
+              data-testid={`retained-${key}`}
+              className="shrink-0 rounded-full bg-brand-50 px-1.5 py-0.5 text-xs text-brand-700 dark:bg-brand-950 dark:text-brand-300"
+            >
+              {i18n._("shown despite search")}
+            </span>
+          ) : null}
+          {/* Numerals in aligned columns under the heading row, one
+              column per group still on (spec-view-2). */}
+          {GROUP_ORDER.filter((group) => viewState.filters[group]).map(
+            (group) => (
               <span
                 key={group}
+                data-testid={`count-${key}-${group}`}
                 aria-label={i18n._("{count} {group} items", {
                   count: counts[group],
                   group: GROUP_WORD[group](),
@@ -1228,31 +1302,53 @@ export function SpecView(props: SpecViewProps) {
                   count: counts[group],
                   group: GROUP_WORD[group](),
                 })}
-                className={`whitespace-nowrap rounded-full px-1.5 py-0.5 text-xs ${
-                  counts[group] > 0 && viewState.filters[group]
-                    ? GROUP_CHIP[group]
-                    : MUTED_CHIP
+                className={`${COUNT_CELL} text-xs tabular-nums ${
+                  counts[group] > 0
+                    ? `font-semibold ${GROUP_TEXT[group]}`
+                    : "text-neutral-400 dark:text-neutral-600"
                 }`}
               >
-                {counts[group]}
-                <span className="hidden @md:inline"> {GROUP_WORD[group]()}</span>
+                {countText(counts[group])}
               </span>
-            ))}
-            {searching && !search.fileKeys.has(key) && selected ? (
+            ),
+          )}
+          <span
+            data-testid={`rollup-${key}`}
+            aria-label={
+              rollup ? i18n._("Citations: {summary}", { summary: rollup }) : undefined
+            }
+            className={`${ROLLUP_CELL} whitespace-nowrap text-xs tabular-nums text-neutral-500`}
+          >
+            {fileCites ? (
+              <>
+                {countText(fileCites.out)}
+                <span aria-hidden="true" className="text-neutral-400 dark:text-neutral-600"> · </span>
+                {countText(fileCites.in)}
+              </>
+            ) : (
+              <span className="text-neutral-400 dark:text-neutral-600">—</span>
+            )}
+          </span>
+          {/* Never yields: a package whose only citations name absent
+              items must not look uncited (spec-view-19, spec-view-1). */}
+          <span className={`${UNRESOLVED_CELL} whitespace-nowrap text-xs`}>
+            {unresolved > 0 ? (
               <span
-                data-testid={`retained-${key}`}
-                className="shrink-0 rounded-full bg-brand-50 px-1.5 py-0.5 text-xs text-brand-700 dark:bg-brand-950 dark:text-brand-300"
+                data-testid={`unresolved-${key}`}
+                aria-label={unresolvedSays}
+                title={unresolvedSays}
+                className="text-neutral-500"
               >
-                {i18n._("shown despite search")}
-              </span>
-            ) : null}
-            {rollup ? (
-              <span
-                data-testid={`rollup-${key}`}
-                aria-label={i18n._("Citations: {summary}", { summary: rollup })}
-                className="ml-1 hidden whitespace-nowrap text-xs text-neutral-500 @md:inline"
-              >
-                {rollup}
+                <span className="text-amber-700 @md:hidden dark:text-amber-400">
+                  ⚠{unresolved}
+                </span>
+                <span className="hidden @md:inline">
+                  {i18n._({
+                    id: "unresolved {count}",
+                    values: { count: unresolved },
+                    comment: "how many of a package's citations name items absent from the tree",
+                  })}
+                </span>
               </span>
             ) : null}
           </span>
@@ -1363,6 +1459,7 @@ export function SpecView(props: SpecViewProps) {
               copyFailedId={copyFailedId}
               flashId={flashId}
               notFoundKey={notFoundKey}
+              onOpenCitations={openCitations}
               onToggleItem={toggleItem}
               onCopy={copyText}
               onJump={jumpTo}
@@ -1452,7 +1549,26 @@ export function SpecView(props: SpecViewProps) {
   const previewLocation = preview.open
     ? itemIndex.get(preview.open.target)
     : undefined;
-  const previewCard = preview.open ? (
+  // A summary's card lists the item's citations both ways; an entry's
+  // previews the one item it names (spec-view-60, spec-view-61).
+  const summaryOf = preview.open?.key.startsWith("summary:")
+    ? itemIndex.get(preview.open.key.slice("summary:".length))
+    : undefined;
+  const entry = (id: string): SummaryEntry => {
+    const location = itemIndex.get(id);
+    return {
+      id,
+      item: location?.item,
+      chipClass: location ? GROUP_CHIP[location.group] : undefined,
+    };
+  };
+  const previewCard = !preview.open ? null : summaryOf ? (
+    <CitationSummaryCard
+      open={preview.open}
+      cites={summaryOf.item.cites.map(entry)}
+      citedBy={(citations.inbound.get(summaryOf.item.id) ?? []).map(entry)}
+    />
+  ) : (
     <CitationPreview
       open={preview.open}
       item={previewLocation?.item}
@@ -1460,7 +1576,7 @@ export function SpecView(props: SpecViewProps) {
         previewLocation ? GROUP_CHIP[previewLocation.group] : undefined
       }
     />
-  ) : null;
+  );
 
   /** Reveal: the one write a selection is allowed to make beyond its
    * own axis, and additive only — it opens and scrolls, never
@@ -1586,32 +1702,35 @@ export function SpecView(props: SpecViewProps) {
             {GROUP_ORDER.map((group) => {
               const on = viewState.filters[group];
               return (
+                // A switch, not a count: pressed is a filled control with
+                // a check, unpressed an outline alone; the title says
+                // what the group holds (spec-view-4).
                 <button
                   key={group}
                   type="button"
                   data-testid={`filter-${group}`}
                   aria-pressed={on}
-                  title={
-                    on
-                      ? i18n._("Hide {group} items", { group: GROUP_WORD[group]() })
-                      : i18n._("Show {group} items", { group: GROUP_WORD[group]() })
-                  }
+                  title={GROUP_DEFINITION[group]()}
                   onClick={() => toggleFilter(group)}
-                  className={`rounded-full border px-2.5 py-0.5 text-xs ${
+                  className={`flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs ${
                     on
-                      ? `border-transparent ${GROUP_CHIP[group]}`
-                      : "border-neutral-200 text-neutral-500 dark:border-neutral-700 dark:text-neutral-500"
+                      ? `border-current font-medium ${GROUP_CHIP[group]}`
+                      : "border-neutral-300 text-neutral-500 dark:border-neutral-700 dark:text-neutral-400"
                   }`}
                 >
-                  {FILTER_LABEL[group]()}{" "}
+                  <span aria-hidden="true" className={`text-[10px] ${on ? "" : "invisible"}`}>
+                    ✓
+                  </span>
+                  <span className="@md:hidden">{GROUP_SHORT[group]()}</span>
+                  <span className="hidden @md:inline">{GROUP_NAME[group]()}</span>
                   <span
                     aria-label={i18n._("{count} {group} items", {
                       count: totals.perGroup[group],
                       group: GROUP_WORD[group](),
                     })}
-                    className={on ? "font-semibold" : "opacity-60"}
+                    className={`tabular-nums ${on ? "font-semibold" : ""}`}
                   >
-                    {totals.perGroup[group]}
+                    {totals.perGroup[group].toLocaleString(i18n.locale)}
                   </span>
                 </button>
               );
@@ -1659,6 +1778,90 @@ export function SpecView(props: SpecViewProps) {
           </div>
         );
 
+        // What a filter hides is said where the filters stand, with
+        // one way back (spec-view-4).
+        const hiddenGroups = GROUP_ORDER.filter(
+          (group) => !viewState.filters[group],
+        );
+        const hiddenLine =
+          hiddenGroups.length > 0 ? (
+            <div
+              data-testid="hidden-groups"
+              className="flex shrink-0 flex-wrap items-center gap-x-2 pb-2 text-xs text-neutral-500"
+            >
+              <span>
+                {i18n._("Hidden: {groups}", {
+                  groups: hiddenGroups
+                    .map((group) =>
+                      i18n._("{group} ({count})", {
+                        group: GROUP_NAME[group](),
+                        count: totals.perGroup[group],
+                      }),
+                    )
+                    .join(i18n._({ id: ", ", comment: "list separator" })),
+                })}
+              </span>
+              <button
+                type="button"
+                data-testid="show-all-groups"
+                onClick={showAllGroups}
+                className={LINK_CLASS}
+              >
+                {i18n._({ id: "Show all", comment: "turn every item group back on" })}
+              </button>
+            </div>
+          ) : null;
+
+        // One heading row over the package rows' columns, pinned while
+        // they scroll (spec-view-2). The chevron and name take the
+        // slack, so the cells line up with the rows' own.
+        const columnHeads =
+          tree.files.length > 0 ? (
+            <div
+              data-testid="outline-columns"
+              // Pinned at the scroll box's own edge: alone, the outline
+              // scrolls in the padded surface root, so the heading row
+              // rides up over that padding rather than letting rows
+              // show above it.
+              className={`sticky ${graphful ? "top-0" : "-top-6"} z-[1] flex items-end gap-2 border-b border-neutral-200 bg-neutral-50 px-1 pb-1 pt-0.5 text-xs leading-tight text-neutral-500 dark:border-neutral-800 dark:bg-neutral-950`}
+            >
+              <span className="min-w-0 flex-1" />
+              {GROUP_ORDER.filter((group) => viewState.filters[group]).map(
+                (group) => (
+                  <span
+                    key={group}
+                    data-testid={`column-${group}`}
+                    title={GROUP_NAME[group]()}
+                    aria-label={GROUP_NAME[group]()}
+                    className={`${COUNT_CELL} ${GROUP_TEXT[group]}`}
+                  >
+                    <span className="@md:hidden">{GROUP_SHORT[group]()}</span>
+                    <span className="hidden @md:inline">{GROUP_NAME[group]()}</span>
+                  </span>
+                ),
+              )}
+              <span
+                data-testid="column-rollup"
+                title={i18n._("Citations across packages: cites · cited by")}
+                className={ROLLUP_CELL}
+              >
+                <span className="block">
+                  {i18n._({
+                    id: "across packages",
+                    comment: "outline column heading, first line: citations between packages",
+                  })}
+                </span>
+                <span className="block">
+                  {i18n._({
+                    id: "cites · cited by",
+                    comment: "outline column heading, second line: citations out and in",
+                  })}
+                </span>
+              </span>
+              <span aria-hidden="true" className={UNRESOLVED_CELL} />
+            </div>
+          ) : null;
+
         const decisionsBranch =
           tree.decisions.length > 0 ? renderDecisions() : null;
         const outline =
@@ -1673,26 +1876,35 @@ export function SpecView(props: SpecViewProps) {
         // (spec-view-20). Both panes scroll independently, and the
         // graph's own affordances live on the graph pane.
         const share = dragSplit ?? viewState.graphWidth;
+        /** The share bounded by the panes' pixel floors — a 320px graph,
+         * a 28rem outline beside the divider — within the persisted
+         * share's own range (spec-view-20). */
+        const boundShare = (fraction: number): number => {
+          const width = splitRef.current?.getBoundingClientRect().width ?? 0;
+          const rem = parseFloat(
+            getComputedStyle(document.documentElement).fontSize || "16",
+          ) || 16;
+          const low = width > 0 ? Math.max(MIN_GRAPH_WIDTH, GRAPH_FLOOR_PX / width) : MIN_GRAPH_WIDTH;
+          const high =
+            width > 0
+              ? Math.min(MAX_GRAPH_WIDTH, 1 - (OUTLINE_FLOOR_REM * rem + DIVIDER_PX) / width)
+              : MAX_GRAPH_WIDTH;
+          return Math.min(Math.max(low, high), Math.max(low, fraction));
+        };
         const commitSplit = (fraction: number) => {
-          const clamped = Math.min(
-            MAX_GRAPH_WIDTH,
-            Math.max(MIN_GRAPH_WIDTH, fraction),
-          );
           setDragSplit(null);
-          onViewState({ ...viewState, graphWidth: clamped });
+          onViewState({ ...viewState, graphWidth: boundShare(fraction) });
         };
         const fractionAt = (clientX: number): number | null => {
           const box = splitRef.current?.getBoundingClientRect();
           if (!box || !box.width) return null;
-          return Math.min(
-            MAX_GRAPH_WIDTH,
-            Math.max(MIN_GRAPH_WIDTH, (clientX - box.left) / box.width),
-          );
+          return boundShare((clientX - box.left) / box.width);
         };
 
         return graphful ? (
           // The split answers its own pane's width, not the window's
-          // (DR-041): side by side from the @2xl step, stacked below
+          // (DR-041): side by side while it holds both pixel floors
+          // (spec-view-20), stacked below
           // it. Each half keeps a readable floor and the split itself
           // scrolls when the surface cannot hold both, so neither is
           // squeezed to nothing under the root's clip (spec-view-59).
@@ -1704,14 +1916,17 @@ export function SpecView(props: SpecViewProps) {
           // scrolls, as it does for the outline's floor.
           <div
             ref={outlineBoxRef}
-            className="@container relative flex min-h-0 flex-1 items-start overflow-y-auto"
+            className="@container/split relative flex min-h-0 flex-1 items-start overflow-y-auto"
           >
           <div
             ref={splitRef}
-            className="flex min-h-full w-full flex-col gap-4 @2xl:h-full @2xl:flex-row @2xl:gap-0"
+            className="flex min-h-full w-full flex-col gap-4 @min-[49rem]:h-full @min-[49rem]:flex-row @min-[49rem]:gap-0"
           >
+            {/* Side by side only while the box holds a 320px graph
+                beside a 28rem outline; the share is clamped between
+                those floors whatever was persisted (spec-view-20). */}
             <div
-              className="flex min-h-72 flex-1 flex-col @2xl:h-full @2xl:w-[var(--graph-share)] @2xl:flex-none"
+              className="flex min-h-[34rem] flex-1 flex-col @min-[49rem]:h-full @min-[49rem]:w-[clamp(320px,var(--graph-share),calc(100%-28rem-17px))] @min-[49rem]:flex-none"
               style={{ ["--graph-share" as string]: `${share * 100}%` }}
             >
               <SpecGraph
@@ -1734,7 +1949,7 @@ export function SpecView(props: SpecViewProps) {
               aria-valuemax={Math.round(MAX_GRAPH_WIDTH * 100)}
               tabIndex={0}
               data-testid="graph-split"
-              className="group hidden shrink-0 cursor-col-resize items-stretch px-2 @2xl:flex"
+              className="group hidden shrink-0 cursor-col-resize items-stretch px-2 @min-[49rem]:flex"
               onPointerDown={(event) => {
                 (event.currentTarget as Element).setPointerCapture?.(
                   event.pointerId,
@@ -1763,15 +1978,18 @@ export function SpecView(props: SpecViewProps) {
             >
               <span className="w-px bg-neutral-200 transition-colors group-hover:bg-brand-600 dark:bg-neutral-800 dark:group-hover:bg-brand-400" />
             </div>
-            <div className="flex min-h-40 min-w-0 flex-1 flex-col">
+            <div className="@container flex min-h-[22rem] min-w-0 flex-1 flex-col @min-[49rem]:min-h-40">
               {outlineControls}
-              <ul
-                data-testid="specs-outline"
-                className="relative flex min-h-0 flex-col overflow-y-auto pr-1"
-              >
-                {outline}
-                {decisionsBranch}
-              </ul>
+              {hiddenLine}
+              {/* Its own scroll box only beside the graph; stacked, the
+                  split scrolls as one and the heading row pins to it. */}
+              <div className="relative min-h-0 pr-1 @min-[49rem]/split:overflow-y-auto">
+                {columnHeads}
+                <ul data-testid="specs-outline" className="flex flex-col">
+                  {outline}
+                  {decisionsBranch}
+                </ul>
+              </div>
             </div>
           </div>
           {/* The card belongs to the box that scrolls the split, so it
@@ -1779,8 +1997,10 @@ export function SpecView(props: SpecViewProps) {
           {previewCard}
           </div>
         ) : (
-          <div className="flex flex-col">
+          <div className="@container flex flex-col">
             {outlineControls}
+            {hiddenLine}
+            {columnHeads}
             <ul data-testid="specs-outline" className="flex flex-col">
               {outline}
               {decisionsBranch}
