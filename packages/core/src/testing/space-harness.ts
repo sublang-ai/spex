@@ -98,6 +98,7 @@ class Client {
     await this.waitFor((m) => m.type === "hello");
   }
   close(): void { this.socket.close(); }
+  sendRaw(text: string): void { this.socket.send(text); }
   async command<T extends Command["type"]>(type: T, fields: Omit<Extract<Command, { type: T }>, "type" | "id">): Promise<{ ok: true; result: CommandResults[T] } | { ok: false; error: { code: string; message: string } }> {
     const id = `c${(this.nextId += 1)}`;
     this.socket.send(JSON.stringify({ type, id, ...fields }));

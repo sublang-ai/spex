@@ -208,6 +208,11 @@ default, and prints an SSH tunnel line; a public bind needs
 npm run start:server     # prints http://127.0.0.1:8137/?token=...
 ```
 
+The [package CLI](packages/cli/README.md#use-a-running-spex-server) can
+attach to that local server for project registration, Space sign-in,
+package search, installation and publication. It uses the server's
+existing home and credentials; scaffold and lint still run on their own.
+
 Options take the `--name=value` or `--name value` form after `--` —
 `--host`, `--port` (default 8137), `--token` or `SPEX_TOKEN`, `--data-dir`
 or `SPEX_HOME`, `--tls-cert`/`--tls-key`, and `--insecure` — e.g.

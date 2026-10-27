@@ -10,7 +10,8 @@
 *The essential spec layer AI agents need to build software reliably.*
 
 Scaffolds a `specs/` directory so AI coding agents can read and follow
-your project's requirements and design.
+your project's requirements and design. It also attaches to a running local
+Spex server for project, Space sign-in and package operations.
 
 ## Install
 
@@ -23,6 +24,68 @@ Or run once without installing:
 ```sh
 npx @sublang/spex scaffold
 ```
+
+## Use a running Spex server
+
+These commands require Node.js 22 or later and a local Spex App server from
+0.9.0-beta.18 or later, with attached CLI version 1 support and a matching
+protocol.
+Start the server from a Spex checkout with `npm run start:server`. Copy its
+private access URL into `SPEX_SERVER_URL`, or pass it with `--server` on a
+command. Keep the URL private: it grants access to that server's home.
+The CLI connects only to literal loopback addresses; it starts no server and
+stores no separate credentials or package state.
+
+```sh
+export SPEX_SERVER_URL='<access URL printed by the local server>'
+spex project add /absolute/path/to/project
+cd /absolute/path/to/project
+spex project list
+spex auth login --instance https://spex.sublang.ai
+spex auth status
+spex package search toolkit
+spex package status
+```
+
+Open the displayed sign-in URL and approve with the displayed code when asked.
+The CLI waits for that sign-in's result. Sign-in success does not mean the
+later catalog read or records Sync succeeded.
+Package commands select the registered project at the exact current working
+directory; run from its root, or pass `--project <registered-folder>`.
+An unmatched folder is an error, never an implicit project registration.
+
+```sh
+spex package add my-org/toolkit --version '^1.0.0'
+spex package install
+spex package resolve
+spex package remove my-org/toolkit
+```
+
+`install` uses the existing lock. `resolve` selects versions again and installs.
+For a package you are authoring inside the project, request its relative folder:
+
+```sh
+spex package add my-org/toolkit --path packages/toolkit
+spex package publish packages/toolkit --dry-run
+spex package publish packages/toolkit
+```
+
+`add` requires exactly one of `--version` or `--path`. Core validates package
+folders and performs resolution, installation and native exports.
+Publishing requires the server's Space sign-in and an eligible claimed org.
+The dry run shows the actual destination, identity, version and declared files
+without uploading; a later direct publish performs its own current checks.
+The explicit publish command uploads without an interactive confirmation.
+It reports the server's actual publication receipt.
+
+Commands wait for their own terminal result, normally for up to ten minutes.
+Use `--timeout <positive-seconds>` to change that observation limit.
+A rejection exits 1. A lost connection or timeout after dispatch exits 2 with
+an unknown result: the operation may still complete. Inspect its state before
+manually retrying; the CLI never reconnects or resends mutations.
+Ctrl+C exits 130: package work may continue, while sign-in requests cancellation
+of its own attempt where still connected. Neither promises rollback.
+Use `spex --help` for command forms. Scaffold and lint remain usable without a server.
 
 ## Usage
 

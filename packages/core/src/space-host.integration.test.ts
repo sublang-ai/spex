@@ -12,6 +12,9 @@
 // hermetic, on loopback alone, in a file budget of its own.
 
 import { test } from "node:test";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
+import { WebSocket } from "ws";
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
@@ -26,7 +29,7 @@ import { seedHistorySession } from "./testing/demo.js";
 import { holdingFetch, samePair, settled } from "./testing/holding-fetch.js";
 import { bareOf, clonePath, createSpaceHarness, hostFolder, hostKey, instanceOf, OWN, OWN_KEY, ownClone, placementOf, prefsOf, repositoryOf, rowsOf } from "./testing/space-harness.js";
 import { STANDIN_STORAGE, type StandinHost } from "./testing/standin-host.js";
-import type { GroupsState, RepositoryState } from "./protocol.js";
+import type { GroupsState, RepositoryState, ServerMessage } from "./protocol.js";
 
 const fixture = createSpaceHarness();
 const { scratch, git, gitFolder, bareRepo, addFolder, sleep, startHome, startHost, signIn, runTurn, holdingGit, turnRecords } = fixture;
@@ -2939,4 +2942,129 @@ test("git-host-8, git-host-16, git-host-17: a group's members with their source;
   assert.equal(zhExisting, `${HOST_NAME} 拒绝了：Member already exists`);
   const zhTaken = await home.client.expectError("space.group.create", { instance: host.url, name: "Acme", path: "acme", parent: null }, "invalid_request");
   assert.equal(zhTaken, `Acme 在 ${HOST_NAME} 上已被占用；请另选一个名称`);
+});
+
+
+test("space-110: reported sign-in owns its completion and matched cancellation", { timeout: 60_000 }, async (t) => {
+  const host = await startHost();
+  const home = await startHome("reported-signin", { host, extra: { signIn: "browser" } });
+  t.after(() => home.stop());
+  const hello = home.client.messages.find((message) => message.type === "hello");
+  assert.ok(hello?.type === "hello" && hello.protocolVersion === 28 && hello.attachedCliVersion === 1);
+  const begin = async (target: typeof home) => {
+    const from = target.client.mark();
+    const start = await target.client.expectOk("space.signin.start", { url: host.url, reportCompletion: true });
+    const reply = target.client.messages.slice(from).find((message) => message.type === "reply");
+    assert.ok(reply?.type === "reply");
+    return { start, id: reply.id, from };
+  };
+  const completed = (target: typeof home, id: string, from: number) => target.client.waitFor((message) => message.type === "space.signin.completed" && message.id === id, 30_000);
+  const first = await begin(home);
+  const outsider = new WebSocket(`ws://127.0.0.1:${home.service.port()}/?token=test`);
+  t.after(() => outsider.close());
+  await new Promise<void>((resolve, reject) => { outsider.once("open", resolve); outsider.once("error", reject); });
+  const foreign = new Promise<ServerMessage>((resolve) => outsider.on("message", (bytes) => {
+    const message = JSON.parse(String(bytes)) as ServerMessage;
+    if (message.type === "reply" && message.id === "foreign-cancel") resolve(message);
+  }));
+  outsider.send(JSON.stringify({ type: "space.signin.cancel", id: "foreign-cancel", startId: first.id }));
+  const foreignReply = await foreign;
+  assert.ok(foreignReply.type === "reply" && foreignReply.ok);
+  assert.deepEqual(foreignReply.result, { stopped: false });
+  assert.deepEqual(await home.client.expectOk("space.signin.cancel", { startId: first.id }), { stopped: true });
+  const stopped = await completed(home, first.id, first.from);
+  assert.ok(stopped.type === "space.signin.completed" && !stopped.ok && stopped.error.code === "aborted");
+  const second = await begin(home);
+  assert.deepEqual(await home.client.expectOk("space.signin.cancel", { startId: first.id }), { stopped: false });
+  assert.equal(second.start.flow, "browser");
+  const redirect = await fetch(second.start.flow === "browser" ? second.start.url : "", { redirect: "manual" });
+  await (await fetch(redirect.headers.get("location") ?? "")).text();
+  const success = await completed(home, second.id, second.from);
+  assert.ok(success.type === "space.signin.completed" && success.ok);
+  assert.deepEqual(success.account, { id: "1001", login: LOGIN, displayName: "Ada Lovelace" });
+  const replyAt = home.client.messages.findIndex((message) => message.type === "reply" && message.id === second.id);
+  const completionAt = home.client.messages.indexOf(success);
+  assert.ok(replyAt >= second.from && completionAt > replyAt);
+  assert.deepEqual(await home.client.expectOk("space.signin.cancel", { startId: second.id }), { stopped: false });
+  await home.client.waitSpace(second.from, (state) => state.signIn.phase === "idle");
+  host.script.browser = "deny";
+  const denied = await begin(home);
+  const refused = await fetch(denied.start.flow === "browser" ? denied.start.url : "", { redirect: "manual" });
+  await (await fetch(refused.headers.get("location") ?? "")).text();
+  const denial = await completed(home, denied.id, denied.from);
+  assert.ok(denial.type === "space.signin.completed" && !denial.ok && denial.error.code === "invalid_request");
+  host.script.deviceInterval = 1;
+  host.script.deviceExpiresIn = 1;
+  const expiring = await startHome("reported-expiry", { host, extra: { signIn: "device" } });
+  t.after(() => expiring.stop());
+  const expiry = await begin(expiring);
+  const expired = await completed(expiring, expiry.id, expiry.from);
+  assert.ok(expired.type === "space.signin.completed" && !expired.ok && expired.error.code === "invalid_request");
+});
+
+test("space-110: pending sign-in cancels before its start reply and later auth survives catalog failure", { timeout: 60_000 }, async (t) => {
+  const host = await startHost();
+  let holdDevice = true;
+  let deviceReached!: () => void;
+  let releaseDevice!: () => void;
+  const deviceArrived = new Promise<void>((resolve) => { deviceReached = resolve; });
+  const deviceGate = new Promise<void>((resolve) => { releaseDevice = resolve; });
+  // A real forwarding instance refuses only catalog groups, after the
+  // sign-in's person lookup; authentication itself remains successful.
+  const front = createServer(async (request, response) => {
+    try {
+      if (request.url === "/api/v1/auth/device" && holdDevice) {
+        deviceReached();
+        await deviceGate;
+      }
+      if (request.url?.startsWith("/api/v1/host/groups")) {
+        response.writeHead(503, { "content-type": "application/json" });
+        response.end(JSON.stringify({ error: { code: "provider_unavailable", message: "Catalog unavailable" } }));
+        return;
+      }
+      const chunks: Buffer[] = [];
+      for await (const chunk of request) chunks.push(Buffer.from(chunk));
+      const headers: Record<string, string> = {};
+      for (const name of ["content-type", "authorization"]) {
+        const value = request.headers[name];
+        if (typeof value === "string") headers[name] = value;
+      }
+      const upstream = await fetch(`${host.url}${request.url}`, { method: request.method, headers,
+        ...(chunks.length ? { body: Buffer.concat(chunks) as unknown as BodyInit } : {}), redirect: "manual" });
+      const outgoing: Record<string, string> = {};
+      for (const name of ["content-type", "location"]) {
+        const value = upstream.headers.get(name);
+        if (value) outgoing[name] = value;
+      }
+      response.writeHead(upstream.status, outgoing);
+      response.end(Buffer.from(await upstream.arrayBuffer()));
+    } catch {
+      response.writeHead(502).end();
+    }
+  });
+  await new Promise<void>((resolve) => front.listen(0, "127.0.0.1", resolve));
+  const origin = `http://127.0.0.1:${(front.address() as AddressInfo).port}`;
+  const home = await startHome("reported-catalog-failure", { host, extra: { signIn: "device" } });
+  t.after(async () => { releaseDevice(); await home.stop(); await new Promise<void>((resolve) => { front.close(() => resolve()); front.closeAllConnections(); }); });
+  const early = home.client.mark();
+  home.client.sendRaw(JSON.stringify({ type: "space.signin.start", id: "starting", url: origin, reportCompletion: true }));
+  await deviceArrived;
+  assert.deepEqual(await home.client.expectOk("space.signin.cancel", { startId: "starting" }), { stopped: true });
+  holdDevice = false;
+  releaseDevice();
+  const cancelled = await home.client.waitFor((message) => message.type === "space.signin.completed" && message.id === "starting");
+  assert.ok(cancelled.type === "space.signin.completed" && !cancelled.ok && cancelled.error.code === "aborted");
+  const earlyReply = home.client.messages.findIndex((message) => message.type === "reply" && message.id === "starting");
+  assert.ok(earlyReply >= early && home.client.messages.indexOf(cancelled) > earlyReply);
+  const from = home.client.mark();
+  const start = await home.client.expectOk("space.signin.start", { url: origin, reportCompletion: true });
+  const reply = home.client.messages.slice(from).find((message) => message.type === "reply");
+  assert.ok(reply?.type === "reply");
+  assert.equal(start.flow, "device");
+  host.script.approveDevice(start.flow === "device" ? start.userCode : "");
+  const completion = await home.client.waitFor((message) => message.type === "space.signin.completed" && message.id === reply.id, 30_000);
+  assert.ok(completion.type === "space.signin.completed" && completion.ok && completion.instance === origin);
+  const state = await home.client.waitSpace(from, (current) => instanceOf(current, origin)?.read.phase === "failed");
+  assert.equal(instanceOf(state, origin)?.signedIn, true);
+  assert.equal(home.client.messages.slice(from).filter((message) => message.type === "space.signin.completed" && message.id === reply.id).length, 1);
 });

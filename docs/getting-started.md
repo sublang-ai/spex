@@ -65,6 +65,35 @@ run enabled playbooks through Spex's `/` menu with other agents.
 **Add from folder** lets you try an existing
 package inside the project before publishing it.
 
+## Use the package CLI
+
+With Spex CLI 4.1 or later and app beta.18 or later, you can do the same
+package operations from a terminal. In the Spex checkout, run
+`npm run start:server` and keep it running. In another terminal, set its
+private access URL, then select your project:
+
+```sh
+npm install -g @sublang/spex
+export SPEX_SERVER_URL='<private access URL printed by the server>'
+spex project add /absolute/path/to/project
+cd /absolute/path/to/project
+spex package search toolkit
+spex package add my-org/toolkit --version '^1.0.0'
+spex package status
+```
+
+For private packages or publishing, run
+`spex auth login --instance https://spex.sublang.ai` and follow its browser
+instructions; use your team's instance address when it differs.
+For your own package, run `spex package publish packages/toolkit --dry-run`
+to inspect the destination and files, then omit `--dry-run` to publish.
+Only use the placeholder package name after replacing it with a real one.
+Keep the access URL private. If a command loses its connection, inspect
+the result before retrying: work may still finish.
+Enable and run playbooks in the IDE as described above.
+See the [CLI guide](../packages/cli/README.md) for local-folder packages,
+locked installation, resolution and observation limits.
+
 ## Try a spec-first task
 
 The bundled `sublang/playbooks` package supplies starter workflows. Open

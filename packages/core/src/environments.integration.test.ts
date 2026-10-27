@@ -35,6 +35,7 @@ import { createSpaceHarness, instanceOf, ownClone, rowsOf } from "./testing/spac
 import { STANDIN_STORAGE } from "./testing/standin-host.js";
 import { makeRelease, startStandinRegistry } from "./testing/standin-registry.js";
 import { stubSlcSource } from "./testing/stub-slc.js";
+import { holdingFetch } from "./testing/holding-fetch.js";
 
 const OWN = "tester";
 const UNREACHABLE = "http://127.0.0.1:9";
@@ -524,7 +525,9 @@ test("environments-24: a playbook authored in a project compiles, is requested b
   // The dry run names what would go, then the upload.
   const preview = await core.client.expectOk("environment.publish", { repository: project.id, path: "spex-packages/triage", dryRun: true });
   const declared = (await readRelease(folder)).files;
-  assert.deepEqual(preview.preview, { name: `${ORG}/triage`, version: "0.1.0", files: declared.map((file) => file.path).sort() });
+  assert.equal(preview.preview?.instance.origin, registry.url);
+  assert.ok(preview.preview?.instance.name);
+  assert.deepEqual(preview.preview, { instance: preview.preview?.instance, name: `${ORG}/triage`, version: "0.1.0", files: declared.map((file) => file.path).sort() });
   assert.ok(!preview.preview?.files.some((path) => path.includes("node_modules")), "engine links never upload");
   assert.deepEqual(preview.preview?.files.filter(ownedByCompiler), [], "the compiler's own files never upload");
   assert.ok(preview.preview?.files.includes("playbooks/en/triage/triage.registry.mjs"), "the compiled module uploads");
@@ -810,7 +813,7 @@ test("environments-33 through real cores: a skill your own group requests by a p
   assert.equal(readFileSync(join(userA, ".claude", "skills", "notes", "SKILL.md"), "utf8"), skill("Write it down, then read it back."));
   // Publishing reads the same folder by the same path.
   const preview = await a.client.expectOk("environment.publish", { repository: ownKey, path: "mine/notes", dryRun: true });
-  assert.deepEqual(preview.preview, { name: `${OWN}/notes`, version: "0.1.0", files: ["meta.yaml", "skills/en/notes/SKILL.md"] });
+  assert.deepEqual(preview.preview, { instance: { origin: "https://spex.sublang.ai", name: "spex.sublang.ai" }, name: `${OWN}/notes`, version: "0.1.0", files: ["meta.yaml", "skills/en/notes/SKILL.md"] });
 
   // A file added later that the sync would drop fails the next install
   // before anything is installed: the state names it, and the exports
@@ -2131,4 +2134,107 @@ test("instance package sources keep transport locators out of state and broadcas
   assert.deepEqual(readFileSync(join(clone, "spex.yaml")), requests);
   assert.deepEqual(readFileSync(join(clone, "spex.lock")), locked);
   assert.deepEqual(readFileSync(join(clone, "config/playbook.config.yaml")), config);
+});
+
+
+test("environments-36: terminal waits retain their own conflict beside immediate UI work", async (t) => {
+  const registry = await startStandinRegistry({ dir: scratchDir("spex-wait-registry-") });
+  t.after(() => registry.close());
+  const release = await makeRelease(join(scratchDir("spex-wait-release-"), "wait-kit"), {
+    format: 2, org: "acme", name: "wait-kit", version: "1.0.0", description: "A waiting skill", license: "Apache-2.0",
+    artifacts: { "wait-kit": { kind: "skill", language: "en" } },
+  }, { "skills/en/wait-kit/SKILL.md": "---\nname: wait-kit\ndescription: A waiting skill\n---\nRead the fixture.\n" });
+  await publishRelease(new RegistryClient({ url: registry.url }), release);
+  const held = holdingFetch();
+  const dir = scratchDir("spex-wait-core-");
+  const core = await startCore(dir, { hostUrl: registry.url, extra: { registryFetch: held.fetch } });
+  t.after(() => core.stop());
+  const working = gitFolder(join(dir, "project"));
+  const { id: key } = await core.client.expectOk("project.register", { path: working });
+  const gate = held.hold((path) => path.endsWith("/acme/wait-kit"));
+  t.after(gate.release);
+  const pending = core.client.command("environment.request", { repository: key, name: "acme/wait-kit", request: { kind: "registry", version: "1.0.0" }, wait: true });
+  await gate.reached;
+  const mark = core.client.mark();
+  assert.deepEqual(await core.client.expectOk("environment.request", { repository: key, name: "acme/missing", request: { kind: "registry", version: "1.0.0" } }), { accepted: true });
+  gate.release();
+  const first = await pending;
+  assert.ok(!first.ok && first.error.code === "conflict", JSON.stringify(first));
+  await core.client.environment(key, mark, (state) => state.busy === null && state.conflicts !== null);
+  assert.deepEqual(await core.client.expectOk("environment.remove", { repository: key, name: "acme/missing", wait: true }), { completed: true });
+  assert.deepEqual(await core.client.expectOk("environment.install", { repository: key, wait: true }), { completed: true });
+  assert.deepEqual(await core.client.expectOk("environment.resolve", { repository: key, wait: true }), { completed: true });
+  const requestFile = join(clonePath(core.dataDir, key), "spex.yaml");
+  const requested = parseYaml(readFileSync(requestFile, "utf8"));
+  requested.packages["acme/wait-kit"] = { version: "^2.0.0" };
+  writeFileSync(requestFile, stringifyYaml(requested));
+  await core.client.expectError("environment.install", { repository: key, wait: true }, "invalid_request");
+  await core.client.expectError("environment.resolve", { repository: key, wait: true }, "invalid_request");
+});
+
+test("environments-37: publication waits return their own receipt and disconnect never replays an upload", async (t) => {
+  const registry = await startStandinRegistry({ dir: scratchDir("spex-publish-wait-registry-") });
+  t.after(() => registry.close());
+  const dir = scratchDir("spex-publish-wait-core-");
+  signedInHome(join(dir, "state"), registry.url, "fixture-publisher");
+  registry.script.setOrgs("fixture-publisher", [{ name: "acme", path: "acme", role: "owner" }]);
+  const held = holdingFetch();
+  const core = await startCore(dir, { hostUrl: registry.url, extra: { registryFetch: held.fetch } });
+  t.after(() => core.stop());
+  const working = gitFolder(join(dir, "project"));
+  const { id: key } = await core.client.expectOk("project.register", { path: working });
+  const folder = join(working, "tools", "receipt");
+  const manifest = { format: 2, org: "acme", name: "receipt", version: "1.0.0", description: "A receipt", license: "Apache-2.0", artifacts: { receipt: { kind: "skill", language: "en" } } };
+  await makeRelease(folder, manifest, { "skills/en/receipt/SKILL.md": "---\nname: receipt\ndescription: A receipt\n---\nRead the fixture.\n" });
+  const preview = await core.client.expectOk("environment.publish", { repository: key, path: "tools/receipt", dryRun: true });
+  assert.equal(preview.preview?.instance.origin, registry.url);
+  assert.ok(preview.preview?.instance.name);
+  assert.equal(registry.script.requests.filter((request) => request.startsWith("PUT ")).length, 0);
+  const published = await core.client.expectOk("environment.publish", { repository: key, path: "tools/receipt", wait: true });
+  assert.deepEqual(published, { completed: true, published: { instance: preview.preview?.instance, name: "acme/receipt", version: "1.0.0", url: `${registry.url}/acme/receipt` } });
+  await core.client.expectError("environment.publish", { repository: key, path: "tools/receipt", wait: true }, "invalid_request");
+  const state = await core.client.expectOk("environment.get", { repository: key });
+  assert.equal(state.published?.version, "1.0.0", "a previous publication does not turn the failed wait into success");
+  writeFileSync(join(folder, "meta.yaml"), stringifyYaml({ ...manifest, version: "2.0.0" }));
+  const detached = new Client(core.service.port());
+  await detached.open();
+  const gate = held.hold((path, status) => path.endsWith("/acme/receipt/2.0.0") && status === 201);
+  t.after(gate.release);
+  const mark = core.client.mark();
+  detached.sendRaw(JSON.stringify({ type: "environment.publish", id: "detached-publish", repository: key, path: "tools/receipt", wait: true }));
+  await gate.reached;
+  detached.close();
+  gate.release();
+  await core.client.environment(key, mark, (current) => current.busy === null && current.published?.version === "2.0.0");
+  assert.equal(registry.script.requests.filter((request) => request === "PUT /api/v1/packages/acme/receipt/2.0.0").length, 1);
+});
+
+
+test("environments-36: shutdown closes write and upload admission after awaited preflight", async (t) => {
+  const registry = await startStandinRegistry({ dir: scratchDir("spex-preflight-registry-") });
+  t.after(() => registry.close());
+  const dir = scratchDir("spex-preflight-core-");
+  signedInHome(join(dir, "state"), registry.url, "fixture-publisher");
+  registry.script.setOrgs("fixture-publisher", [{ name: "acme", path: "acme", role: "owner" }]);
+  const core = await startCore(dir, { hostUrl: registry.url });
+  t.after(() => core.stop());
+  const working = gitFolder(join(dir, "project"));
+  const { id: key } = await core.client.expectOk("project.register", { path: working });
+  const release = skillRelease("acme", "late");
+  await makeRelease(join(working, "tools", "late"), release.manifest, release.files);
+  const requestsPath = join(clonePath(core.dataDir, key), "spex.yaml");
+  const before = readFileSync(requestsPath);
+  const manager = managerOf(core);
+  // Both real operations yield in read-only preflight before write/run
+  // admission. Stop wins that boundary without replacing an implementation.
+  const request = manager.request(key, "acme/late", { version: "1.0.0" }, true);
+  const publish = manager.publish(key, "tools/late", false, true);
+  const rejected = Promise.all([
+    assert.rejects(request, refusedWith("aborted")),
+    assert.rejects(publish, refusedWith("aborted")),
+  ]);
+  await manager.stop();
+  await rejected;
+  assert.deepEqual(readFileSync(requestsPath), before);
+  assert.equal(registry.script.requests.filter((entry) => entry.startsWith("PUT ")).length, 0);
 });

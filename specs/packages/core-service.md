@@ -24,7 +24,7 @@ When started on a native platform other than macOS or Linux, the core service sh
 
 Where the core service is started by a host shell, when startup completes, the core service shall accept WebSocket connections on its endpoint — a loopback-only socket the service binds itself by default, or a shell-supplied HTTP server the service attaches to, leaving binding and transport security to that shell ([DR-033](../decisions/033-remote-gui-serving.md)) — at the path `/`, and on the relay paths of its open seats [[core-service-129](#core-service-129)], refusing any other path, and report the endpoint address to the host:
 
-- When a client connects, the core service sends a hello message carrying the protocol version before any other message, so clients can detect a protocol mismatch before issuing commands.
+- When a client connects, the core service sends a hello message carrying the protocol version and `attachedCliVersion: 1` before any other message, so clients can detect a protocol mismatch and attached-CLI support before issuing commands; the optional marker is additive under protocol 28 and changes no ordinary command behavior ([DR-157](../decisions/157-a-cli-attached-to-the-local-core.md)).
 
 #### core-service-24
 
@@ -1288,6 +1288,10 @@ Where the core runs as a seat against a stand-in instance with a fixture adapter
 #### core-service-130
 
 Where a stand-in instance answers the servers routes and a stand-in hub admits a ticket and relays to a second core as a seat, the integration suite shall assert the places [[core-service-128](#core-service-128)] [[core-service-129](#core-service-129)]: `server.list` names the server; `server.open` without consent asks nothing; with it, the seat's entry is written owner-only and the reply carries no bearer; the relay path admits the local token and refuses a wrong one and a foreign origin; the relayed hello is the seat's and a `project.list` round-trips; a seat whose hello carries another version reads mismatched alone; the attention count includes the seat's badge; a lease-end close and `server.close` each remove the path and the entry and announce `server.state`; no frame to the client carries the bearer; a restarted core reopens the seat.
+
+#### core-service-141
+
+When a protocol integration client connects to the real core, the suite shall assert hello carries protocol 28 and `attachedCliVersion: 1` before other messages and ordinary commands retain their existing replies [[core-service-1](#core-service-1)].
 
 ## References
 

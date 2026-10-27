@@ -32,6 +32,7 @@ import { isDeferredClone } from "./migrate-instances.js";
 import { deletePlacementFile, filedIn, keyPlacement, LEGACY_CREATED_KEY, LEGACY_ID_KEY, moveLegacyIds, PATH_PLACEMENT, PLACEMENT_CONFIG_KEYS, PLACEMENTS_DIR, placementCreatedKey, placementFileEverHeld, placementFilePath, placementIdKey, placementsIn, readPlacementFiles, readPlacements, writePlacementFile, type HistoryRun, type Placement, type PlacementFile, type PlacementPrefKind } from "./placements.js";
 import type {
   GroupsState,
+  SignInCompletion,
   InstanceGroupState,
   InstanceState,
   PlacementBranch,
@@ -4311,6 +4312,17 @@ class HostInstance {
   }
 }
 
+interface SignInReporter {
+  owner: object;
+  id: string;
+  complete: (outcome: SignInCompletion) => void;
+}
+interface ReportedSignIn extends SignInReporter {
+  flow?: { cancel(): void };
+  settled: boolean;
+  cancelled: boolean;
+}
+
 /** Every spex repository's machine and the Space state they make. */
 export class SpaceManager {
   private readonly machines = new Map<string, RepositorySync>();
@@ -4328,6 +4340,7 @@ export class SpaceManager {
    * (git-host-5): spent on that ask. */
   private startRead = true;
   private flow?: { cancel(): void };
+  private flowReport?: ReportedSignIn;
   /** Steps at an instance waiting for a member with the rights
    * (space-64), by the clone's key, then by the origin of the instance
    * each waits at — one per placement (DR-128); asked again at that
@@ -5058,37 +5071,49 @@ export class SpaceManager {
    * its origin (git-host-2, git-host-3): its shape goes back at once, and
    * its end sets the home up for the account there (space-4). At most
    * one sign-in runs, whichever instance it names. */
-  async signInStart(url: string): Promise<{ flow: "browser"; url: string } | { flow: "device"; userCode: string; verificationUri: string; expiresAt: number }> {
+  async signInStart(url: string, reporter?: SignInReporter): Promise<{ flow: "browser"; url: string } | { flow: "device"; userCode: string; verificationUri: string; expiresAt: number }> {
     const origin = this.signInOrigin(url);
-    if (this.flow || this.signInState.phase === "running" || [...this.instances.values()].some((entry) => entry.client.signingIn())) {
+    if (this.flow || (this.flowReport && !this.flowReport.settled) || this.signInState.phase === "running" || [...this.instances.values()].some((entry) => entry.client.signingIn())) {
       throw new CoreError("busy", signInRunning());
     }
     const instance = this.instanceAt(origin);
     const client = instance.client;
     const kind = this.host.signInFlow;
     const admit = (account: HostAccount): HostError | null => this.admitAccount(origin, account);
+    // A reported request owns cancellation even while its initial
+    // device request or browser listener is still being prepared.
+    const report: ReportedSignIn | undefined = reporter ? { ...reporter, settled: false, cancelled: false } : undefined;
+    this.flowReport = report;
     let started: { kind: "browser"; flow: BrowserSignIn } | { kind: "device"; flow: DeviceSignIn };
     try {
       started = kind === "browser"
         ? { kind, flow: await client.startBrowserSignIn({ pages: callbackPages(), admit }) }
         : { kind, flow: await client.startDeviceSignIn({ admit }) };
     } catch (error) {
-      if (error instanceof SignInBusyError) throw new CoreError("busy", signInRunning());
+      if (error instanceof SignInBusyError) {
+        const busy = new CoreError("busy", signInRunning());
+        this.completeSignIn(report, { error: busy });
+        throw busy;
+      }
       const failure = signInFailure(error, this.nameOf(instance));
       this.signInState = failure ? { phase: "failed", instance: origin, ...failure } : { phase: "idle" };
       void this.publish();
-      throw new CoreError("invalid_request", failure?.message ?? relayHostError(error, this.nameOf(instance)));
+      const refusal = new CoreError(report?.cancelled ? "aborted" : "invalid_request", failure?.message ?? relayHostError(error, this.nameOf(instance)));
+      this.completeSignIn(report, { error: refusal });
+      throw refusal;
     }
     const flow = started.flow;
     this.flow = flow;
+    if (report) report.flow = flow;
+    if (report?.cancelled || this.stopping) flow.cancel();
     // The flow names the origin it signs in to (space-30).
     this.signInState = started.kind === "browser"
       ? { phase: "running", instance: origin, flow: "browser", since: Date.now() }
       : { phase: "running", instance: origin, flow: "device", userCode: started.flow.userCode, verificationUri: started.flow.verificationUri, since: Date.now() };
     void this.publish();
     void flow.done.then(
-      (account) => this.signedInAs(origin, account),
-      (error: unknown) => this.signInEnded(origin, error),
+      (account) => this.signedInAs(origin, account, report),
+      (error: unknown) => this.signInEnded(origin, error, report),
     );
     return started.kind === "browser"
       ? { flow: "browser", url: started.flow.url }
@@ -5108,11 +5133,26 @@ export class SpaceManager {
   }
 
   /** Stop the running sign-in; false where none runs. */
-  signInCancel(): boolean {
+  signInCancel(owner?: object, startId?: string): boolean {
     const flow = this.flow;
+    if (startId !== undefined) {
+      const report = this.flowReport;
+      if (!report || report.owner !== owner || report.id !== startId || report.settled || report.cancelled) return false;
+      if (report.flow && report.flow !== flow) return false;
+      report.cancelled = true;
+      report.flow?.cancel();
+      return true;
+    }
     if (!flow) return false;
     flow.cancel();
     return true;
+  }
+
+  private completeSignIn(report: ReportedSignIn | undefined, outcome: SignInCompletion): void {
+    if (!report || report.settled) return;
+    report.settled = true;
+    if (this.flowReport === report) this.flowReport = undefined;
+    report.complete(outcome);
   }
 
   /** A sign-in's token is stored (git-host-2): its account is written
@@ -5120,10 +5160,11 @@ export class SpaceManager {
    * stands, signed in again where one does — and the home is set up for
    * it there (space-4), that instance's earlier work and view ended and
    * every other instance's left as they stand (git-host-5). */
-  private async signedInAs(origin: string, account: HostAccount): Promise<void> {
+  private async signedInAs(origin: string, account: HostAccount, report?: ReportedSignIn): Promise<void> {
     this.flow = undefined;
     try {
       this.host.store.signIn(origin, account);
+      this.completeSignIn(report, { account: { id: account.id, login: account.login, displayName: account.displayName } });
       const instance = this.instanceAt(origin);
       instance.accountGeneration += 1;
       instance.hostSignedOut = undefined;
@@ -5135,6 +5176,7 @@ export class SpaceManager {
       await this.publish();
       await this.setUp(instance);
     } catch (error) {
+      this.completeSignIn(report, { error });
       console.error(`spex: setting the home up for the account failed: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       this.signInState = { phase: "idle" };
@@ -5142,9 +5184,11 @@ export class SpaceManager {
     }
   }
 
-  private signInEnded(origin: string, error: unknown): void {
+  private signInEnded(origin: string, error: unknown, report?: ReportedSignIn): void {
     this.flow = undefined;
     const failure = signInFailure(error, this.nameOf(this.instanceAt(origin)));
+    this.completeSignIn(report, { error: new CoreError(failure ? "invalid_request" : "aborted",
+      failure?.message ?? relayHostError(error, this.nameOf(this.instanceAt(origin)))) });
     this.signInState = failure ? { phase: "failed", instance: origin, ...failure } : { phase: "idle" };
     void this.publish();
   }

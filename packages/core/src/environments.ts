@@ -97,7 +97,7 @@ import {
 import { i18n } from "./i18n.js";
 import { canonicalOrigin } from "./instance.js";
 import type { PlaybookModules } from "./config.js";
-import type { EnvironmentPackage, EnvironmentRequest, EnvironmentRequestSummary, EnvironmentState, PublishPreview } from "./protocol.js";
+import type { EnvironmentPackage, EnvironmentRequest, EnvironmentRequestSummary, EnvironmentState, PublishedPackage, PublishPreview } from "./protocol.js";
 import { CoreError } from "./session.js";
 import type { Store } from "./store.js";
 
@@ -897,28 +897,35 @@ export class EnvironmentManager {
   /** Write `spex.yaml` under the version read, its refusals as replies:
    * the edit's own, or a conflict where the file changed meanwhile or
    * the clone is gone. */
-  private async writeRequest(dir: string, name: string, request: Request | null): Promise<void> {
-    try { await setRequest(join(dir, "spex.yaml"), name, request); }
-    catch (error) {
-      if (error instanceof RequestsError) throw new CoreError("invalid_request", listed(error.issues.map((issue) => issue.message)));
-      if (error instanceof VersionConflictError) throw conflictError(error);
-      throw error;
-    }
+  private async writeRequest(key: string, dir: string, name: string, request: Request | null): Promise<void> {
+    // Preflight is read-only and may outlive stop; admit and track only
+    // the actual write so shutdown cannot finish while it still runs.
+    if (this.stopped) throw stoppingError();
+    await this.run(key, async () => {
+      try { await setRequest(join(dir, "spex.yaml"), name, request); }
+      catch (error) {
+        if (error instanceof RequestsError) throw new CoreError("invalid_request", listed(error.issues.map((issue) => issue.message)));
+        if (error instanceof VersionConflictError) throw conflictError(error);
+        throw error;
+      }
+    });
   }
 
   /** `environment.request` (environments-15): refused before any write;
    * written; then resolved and installed, the outcome broadcast. The
    * returned promise settles once installed; the reply does not wait. */
-  async request(key: string, name: string, request: Request): Promise<{ done: Promise<void> }> {
+  async request(key: string, name: string, request: Request, strict = false): Promise<{ done: Promise<void> }> {
+    if (strict && this.stopped) throw stoppingError();
     const dir = this.cloneDir(key);
     await this.refuseRequest(key, name, request);
-    await this.writeRequest(dir, name, request);
+    await this.writeRequest(key, dir, name, request);
     this.announce(key);
-    return { done: this.settle(key, "resolve", false) };
+    return { done: this.settle(key, "resolve", strict) };
   }
 
   /** `environment.remove` (environments-15). */
-  async remove(key: string, name: string): Promise<{ done: Promise<void> }> {
+  async remove(key: string, name: string, strict = false): Promise<{ done: Promise<void> }> {
+    if (strict && this.stopped) throw stoppingError();
     const dir = this.cloneDir(key);
     const current = readRequestsAt(join(dir, "spex.yaml"));
     if (!current?.requests.packages[name]) {
@@ -928,9 +935,9 @@ export class EnvironmentManager {
         values: { name },
       }));
     }
-    await this.writeRequest(dir, name, null);
+    await this.writeRequest(key, dir, name, null);
     this.announce(key);
-    return { done: this.settle(key, "resolve", false) };
+    return { done: this.settle(key, "resolve", strict) };
   }
 
   /** Request a spec package unless it is requested so already: the
@@ -944,7 +951,7 @@ export class EnvironmentManager {
     try { current = readRequestsAt(join(dir, "spex.yaml"))?.requests.packages[name]; }
     catch (error) { throw new CoreError("invalid_request", failurePhrase("resolve", error)); }
     if (current !== undefined && toRequestValue(current) === toRequestValue(request)) return false;
-    await this.writeRequest(dir, name, request);
+    await this.writeRequest(key, dir, name, request);
     this.announce(key);
     return true;
   }
@@ -1010,15 +1017,15 @@ export class EnvironmentManager {
   }
 
   /** `environment.resolve` (environments-5). */
-  resolveLater(key: string): Promise<void> {
+  resolveLater(key: string, strict = false): Promise<void> {
     this.cloneDir(key);
-    return this.settle(key, "resolve", false);
+    return this.settle(key, "resolve", strict);
   }
 
   /** `environment.install` (environments-7). */
-  installLater(key: string): Promise<void> {
+  installLater(key: string, strict = false): Promise<void> {
     this.cloneDir(key);
-    return this.settle(key, "install", false);
+    return this.settle(key, "install", strict);
   }
 
   /** A sync applied a lock (environments-8, environments-17): install
@@ -1087,7 +1094,8 @@ export class EnvironmentManager {
    * environment's instance, else the default instance's, uploaded to as
    * that instance's account (environments-10, environments-17,
    * DR-127). */
-  async publish(key: string, path: string, dryRun = false): Promise<{ done: Promise<void>; preview: PublishPreview }> {
+  async publish(key: string, path: string, dryRun = false, strict = false): Promise<{ done: Promise<PublishedPackage | undefined>; preview: PublishPreview }> {
+    if (strict && this.stopped) throw stoppingError();
     this.cloneDir(key);
     const root = this.pathRoot(key);
     if (root === null) {
@@ -1140,17 +1148,22 @@ export class EnvironmentManager {
     }
     // What the upload would hold: the declared release files, in the
     // archive's order (playbook-library-93).
-    const preview: PublishPreview = { name: `${manifest.org}/${manifest.name}`, version: manifest.version, files: [...files].sort() };
-    if (dryRun) return { done: Promise.resolve(), preview };
+    const preview: PublishPreview = { instance: { origin: target.origin, name: this.options.instanceName(target.origin) }, name: `${manifest.org}/${manifest.name}`, version: manifest.version, files: [...files].sort() };
+    if (dryRun) return { done: Promise.resolve(undefined), preview };
+    if (this.stopped) throw stoppingError();
     const done = this.run(key, async (step) => {
       const state = this.cloneState(key);
       step("publishing");
       try {
         const published = await publishRelease(target.source, folder);
-        state.published = { name: published.name, version: published.version, url: `${target.origin}/${manifest.org}/${manifest.name}` };
+        const receipt: PublishedPackage = { instance: preview.instance, name: published.name, version: published.version, url: `${target.origin}/${published.name}` };
+        state.published = { name: receipt.name, version: receipt.version, url: receipt.url };
         state.error = null;
+        return receipt;
       } catch (error) {
         state.error = failurePhrase("publish", error);
+        if (strict) throw new CoreError("invalid_request", state.error);
+        return undefined;
       }
     });
     return { done, preview };
