@@ -5,7 +5,7 @@
 // DR-103): one read of the person, every group and every spex
 // repository the host lists, each with what decides its state — its
 // archived flag and the account's role as the host reports them, its
-// `spex` branch, and its members' count — held as the home's current
+// `spex` branch, with member counts unknown — held as the home's current
 // view until the next read. A host repository is one by its instance's
 // Git origin and its id (DR-127): clones are matched to listings by the id
 // in their Git configuration beside a remote under that Git origin, else
@@ -36,7 +36,7 @@ export interface HostListing {
   readOnly: { reason: "archived" | "access"; message: string } | null;
   /** Whether the host holds its `spex` branch. */
   branchPresent: boolean;
-  /** How many members the host reports, the account among them. */
+  /** How many members a selected read reports; full views leave it unknown. */
   members: number | null;
 }
 
@@ -98,10 +98,9 @@ async function mapLimit<T, R>(items: T[], limit: number, work: (item: T, state: 
  * Read the host in one pass (git-host-5): its name, Git origin and
  * roles, the person, every group, every spex repository across its
  * pages — each as the host says what the person may do there — and for
- * each repository its read-only and branch state and its members'
- * count. A members read the host fails leaves that count unknown;
- * any other failure fails the whole read, so a view is never half a
- * host.
+ * each repository its read-only and branch state. Member counts stay
+ * unknown without enumerating members; a catalog or detail failure
+ * fails the whole read, so a view is never half a host.
  */
 export async function readHostView(client: GitHostClient, now: () => number = Date.now): Promise<HostView> {
   const { repositories, ...catalog } = await readHostCatalog(client, true);
@@ -127,9 +126,12 @@ export async function readHostListing(client: GitHostClient, repository: HostRep
 }
 
 /** Full views share the failure with their detail scheduler, so it
- * starts no queued repository while a failed pair drains. */
-async function readListing(client: GitHostClient, repository: HostRepository, target: boolean, state: ReadWork, retryRead = false): Promise<HostListing> {
-  const [detail, members] = await drainRead([client.repository(repository.id, { wait: true, retryRead }), memberCount(client, repository.id)] as const, state);
+ * starts no queued repository while a failed detail drains. */
+async function readListing(client: GitHostClient, repository: HostRepository, target: boolean, state: ReadWork, fullRead = false): Promise<HostListing> {
+  const [detail, members] = await drainRead([
+    client.repository(repository.id, { wait: true, retryRead: fullRead }),
+    fullRead ? Promise.resolve(null) : memberCount(client, repository.id),
+  ] as const, state);
   return {
     repository: target ? detail : repository,
     readOnly: detail.readOnly ?? (detail.archived ? { reason: "archived", message: "" } : null),
@@ -140,7 +142,7 @@ async function readListing(client: GitHostClient, repository: HostRepository, ta
 
 /** A spex repository's members' count, the account among them, or null
  * where the host fails to read its members — Spex Space fails every
- * members read while its service identity's does (git-host-5). An
+ * members read while its service identity's does (git-host-22). An
  * answer that signs the device out, or a pair replaced meanwhile, fails
  * the whole read as any other failure does. */
 async function memberCount(client: GitHostClient, id: string): Promise<number | null> {

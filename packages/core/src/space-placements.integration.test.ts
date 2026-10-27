@@ -164,7 +164,7 @@ test("git-host-26, git-host-5, space-87, space-61, space-1, space-29, space-30, 
   assert.equal(absent.state, "absent");
   assert.equal(absent.placements.length, 1);
   const listed = absent.placements[0];
-  assert.deepEqual({ instance: listed.instance, path: listed.path, id: listed.id, attached: listed.attached, state: listed.state, members: listed.members }, { instance: secondOrigin, path: "workshop/atlas-spex", id: there.id, attached: false, state: "absent", members: 2 });
+  assert.deepEqual({ instance: listed.instance, path: listed.path, id: listed.id, attached: listed.attached, state: listed.state, members: listed.members }, { instance: secondOrigin, path: "workshop/atlas-spex", id: there.id, attached: false, state: "absent", members: null });
 
   // That device's file reaches this clone through the first: a peer's
   // commit the next Sync merges (storage-36, storage-41: read as the
@@ -220,7 +220,7 @@ test("git-host-26, git-host-5, space-87, space-61, space-1, space-29, space-30, 
   const attached = await home.client.expectOk("space.get", {});
   const held = repositoryOf(attached, key);
   assert.deepEqual(held.placements.map((line) => [line.instance, line.attached, line.state]), [[firstOrigin, true, "reachable"], [secondOrigin, true, "reachable"]]);
-  assert.deepEqual({ path: placementOf(held, second.url).path, members: placementOf(held, second.url).members }, { path: "workshop/atlas-spex", members: 2 });
+  assert.deepEqual({ path: placementOf(held, second.url).path, members: placementOf(held, second.url).members }, { path: "workshop/atlas-spex", members: null });
   assert.deepEqual(entryAt(attached, second.url, "workshop").placed, [{ key, name: "atlas-spex" }]);
   assert.deepEqual(entryAt(attached, first.url, "acme").repositories.map((repository) => repository.key), [key]);
   assert.ok(!rowsOf(attached).some((repository) => repository.key === absentKey), "no row of its own");

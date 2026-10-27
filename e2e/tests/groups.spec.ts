@@ -540,16 +540,15 @@ test.describe("a folder joining a team's project", () => {
       await expect(page.getByTestId(`space-repo-state-${localKey}`)).toHaveText("On this device only");
 
       // Pick a group lists the team's project for the same code, with
-      // its group read as its heading reads and its members' count
-      // where the host read one (space-58).
+      // its group read as its heading reads and no member count from
+      // the full read (space-58).
       await page.getByTestId(`space-row-pick-${localKey}`).click();
       const picker = page.getByTestId(`space-picker-${localKey}`);
       const section = await pickSection(picker, host);
       const listed = section.getByTestId(`space-pick-repo-${key}`);
       await expect(listed).toContainText("demo-project-spex");
       await expect(section.getByTestId(`space-pick-listed-group-${key}`)).toHaveText(PICKED_AS[HOST_GROUP]!);
-      if (unknown) await expect(listed).not.toContainText("member");
-      else await expect(listed).toContainText("2 members");
+      await expect(listed).not.toContainText("member");
 
       // Picking it says the notice in the picker, beneath it, Cancel
       // focused; Escape closes the notice alone and sends nothing, focus
