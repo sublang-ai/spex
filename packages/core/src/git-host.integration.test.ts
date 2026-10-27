@@ -1351,6 +1351,106 @@ test("git-host-11: each failure the host answers is a kind with the host's words
 // ---------------------------------------------------------------------------
 // git-host-21: the host's rate limit holds every call
 
+test("git-host-21: an opted-in GET recovers once and preserves the second failure and excluded calls", async (t) => {
+  for (const scenario of ["success", "second429", "absent", "invalid", "zero", "overcap", "members", "selected", "write"] as const) {
+    await t.test(scenario, async () => {
+      const s = await setup({ holdMaxMs: 1_000 });
+      try {
+        await browserSignIn(s.client);
+        const id = s.host.script.addRepository({ group: "acme", name: "retry-spex" }).id;
+        const retryAfter = scenario === "absent" ? null : scenario === "invalid" ? "later" : scenario === "zero" ? "0" : scenario === "overcap" ? "2" : "1";
+        const before = s.host.script.requests.length;
+        const credentialFile = credentialsPath(s.home);
+        const unchanged = statSync(credentialFile, { bigint: true });
+        s.host.script.rateLimit(scenario === "second429" ? 2 : 1, retryAfter);
+        const options = { wait: true, retryRead: true };
+        const pending = scenario === "members" ? s.client.members({ kind: "repository", id }, options)
+          : scenario === "selected" ? s.client.repository(id, { wait: true })
+          : scenario === "write" ? s.client.prepareBranch(id, options)
+          : s.client.groups(options);
+        if (scenario === "success") {
+          assert.equal((await pending as unknown[]).length, 3);
+          const after = statSync(credentialFile, { bigint: true });
+          assert.equal(after.ino, unchanged.ino, "retry continuity never replaces the auth file");
+          assert.equal(after.mtimeNs, unchanged.mtimeNs, "retry continuity never rewrites the auth file");
+        } else {
+          await assert.rejects(pending, hostError("rate_limited", { retryAfter: retryAfter ?? undefined }));
+        }
+        assert.equal(s.host.script.requests.length - before, scenario === "success" || scenario === "second429" ? 2 : 1);
+      } finally { await s.dispose(); }
+    });
+  }
+});
+
+test("git-host-21: the retry returns its second response's words and retry time", async () => {
+  const s = await setup();
+  try {
+    await browserSignIn(s.client);
+    let attempts = 0;
+    const client = new GitHostClient({ url: s.host.url, label: "Spex on test", credentials: fileCredentialStore(s.home, s.host.url), fetch: async (input, init) => {
+      const response = await fetch(input, init);
+      if (new URL(String(input)).pathname !== "/api/v1/host/groups") return response;
+      attempts += 1;
+      return Response.json({ error: { code: "rate_limited", message: attempts === 1 ? "First refusal" : "Second refusal" } }, { status: 429, headers: { "Retry-After": attempts === 1 ? "1" : "2" } });
+    } });
+    await assert.rejects(client.groups({ wait: true, retryRead: true }), hostError("rate_limited", { words: "Second refusal", retryAfter: "2" }));
+    assert.equal(attempts, 2);
+  } finally { await s.dispose(); }
+});
+
+test("git-host-21: abort or credential replacement during the retry hold sends no replay", async (t) => {
+  for (const change of ["abort", "replace", "signout"] as const) await t.test(change, async () => {
+    const s = await setup();
+    try {
+      await browserSignIn(s.client);
+      const store = fileCredentialStore(s.home, s.host.url), original = await store.read();
+      assert.ok(original);
+      let held!: () => void;
+      const holding = new Promise<void>((resolve) => { held = resolve; });
+      const client = new GitHostClient({ url: s.host.url, label: "Spex on test", credentials: store, onHold: held });
+      const stop = new AbortController();
+      s.host.script.rateLimit(1, "1");
+      const before = s.host.script.requests.length;
+      const pending = client.groups({ wait: true, retryRead: true, signal: stop.signal });
+      const refused = assert.rejects(pending, change === "abort" ? HostWaitStopped : CredentialChanged);
+      await holding;
+      if (change === "abort") stop.abort();
+      else assert.ok(store.replace(original, change === "signout" ? null : { ...original, access: "replacement-fixture-access" }));
+      await refused;
+      assert.equal(s.host.script.requests.length - before, 1, "no request uses the old bearer after the hold");
+      if (change === "replace") assert.equal((await store.read())?.access, "replacement-fixture-access", "refusal preserves the replacement pair");
+    } finally { await s.dispose(); }
+  });
+});
+
+test("git-host-21, git-host-4: the one token-expired refresh spans the rate-limit replay", async (t) => {
+  for (const expired of ["before429", "after429"] as const) await t.test(expired, async () => {
+    const s = await setup();
+    try {
+      await browserSignIn(s.client);
+      let attempts = 0;
+      if (expired === "before429") s.host.script.expireAccess();
+      const before = refreshGrants(s.host);
+      const client = new GitHostClient({ url: s.host.url, label: "Spex on test", credentials: fileCredentialStore(s.home, s.host.url), fetch: async (input, init) => {
+        const response = await fetch(input, init);
+        if (new URL(String(input)).pathname !== "/api/v1/host/groups") return response;
+        attempts += 1;
+        if (attempts === (expired === "before429" ? 2 : 1)) {
+          if (expired === "after429") s.host.script.expireAccess();
+          return Response.json({ error: { code: "rate_limited", message: "Read later" } }, { status: 429, headers: { "Retry-After": "1" } });
+        }
+        if (expired === "before429" && attempts === 3) return Response.json({ error: { code: "token_expired", message: "Expired again" } }, { status: 401 });
+        return response;
+      } });
+      const pending = client.groups({ wait: true, retryRead: true });
+      if (expired === "before429") await assert.rejects(pending, hostError("reauth"));
+      else assert.equal((await pending).length, 3);
+      assert.equal(refreshGrants(s.host) - before, 1, "429 never resets the normal refresh budget");
+      assert.equal(attempts, 3);
+    } finally { await s.dispose(); }
+  });
+});
+
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const two = (n: number): string => String(n).padStart(2, "0");

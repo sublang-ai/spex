@@ -238,7 +238,12 @@ export class HostWaitStopped extends Error {
  * call made while the hold stands is refused at once as `rate_limited`
  * with the seconds that remain.
  */
-export interface HostCallOptions { signal?: AbortSignal; wait?: boolean }
+export interface HostCallOptions {
+  signal?: AbortSignal;
+  wait?: boolean;
+  /** Full-view essentials alone opt into one bounded 429 GET replay. */
+  retryRead?: boolean;
+}
 
 /** The pair a step used was no longer the stored one when its answer
  * came (git-host-4, git-host-10, storage-19): nothing was stored or
@@ -375,6 +380,8 @@ export function fileCredentialStore(homeDir: string, hostUrl: string): Credentia
     replace: (expected, next) => {
       const doc = load() ?? { format: 1, hosts: {} };
       if (!samePair(entryOf(doc), expected)) return false;
+      // The same-pair CAS is also a synchronous, write-free continuity check.
+      if (samePair(expected, next)) return true;
       return save(doc, next);
     },
     removeMalformed: () => {
@@ -1095,16 +1102,37 @@ export class GitHostClient {
     const waits = options.signal !== undefined || options.wait === true;
     if (!waits) this.refuseWhileHeld();
     let credential = await this.current(waits);
-    let answer = await this.send(method, path, { body, bearer: credential.access, ...options });
-    if (answer.status === 401 && codeOf(answer) === "token_expired") {
-      credential = await this.refresh(credential, waits);
-      answer = await this.send(method, path, { body, bearer: credential.access, ...options });
+    let refreshed = false;
+    let replayed = false;
+    const retryableRead = options.retryRead === true && waits && method === "GET"
+      && /^\/api\/v1\/host\/(?:me|groups|repositories(?:\?[^/]*|\/[^/?]+)?)$/.test(path);
+    const unchanged = (): void => {
+      if (options.signal?.aborted) throw new HostWaitStopped();
+      if (!this.credentials.replace(credential, credential)) throw new CredentialChanged();
+    };
+    for (;;) {
+      const answer = await this.send(method, path, {
+        body, bearer: credential.access, ...options,
+        ...(replayed ? { beforeSend: unchanged } : {}),
+      });
+      if (!refreshed && answer.status === 401 && codeOf(answer) === "token_expired") {
+        if (replayed) unchanged();
+        credential = await this.refresh(credential, waits);
+        refreshed = true;
+        continue;
+      }
+      const seconds = answer.status === 429 ? retryAfterSeconds(answer.retryAfter, this.now()) : null;
+      if (!replayed && retryableRead
+        && seconds !== null && seconds > 0 && seconds * 1000 <= this.holdMaxMs) {
+        replayed = true;
+        continue;
+      }
+      if (answer.status === 401 || REAUTH_CODES.has(codeOf(answer) ?? "")) {
+        throw this.signOutLocally(credential, new HostError("reauth", { code: codeOf(answer), words: wordsOf(answer), status: answer.status }));
+      }
+      if (answer.status < 200 || answer.status >= 300) throw answerError(answer);
+      return answer;
     }
-    if (answer.status === 401 || REAUTH_CODES.has(codeOf(answer) ?? "")) {
-      throw this.signOutLocally(credential, new HostError("reauth", { code: codeOf(answer), words: wordsOf(answer), status: answer.status }));
-    }
-    if (answer.status < 200 || answer.status >= 300) throw answerError(answer);
-    return answer;
   }
 
   /** The pair a call presents, refreshed first near its expiry; the
@@ -1206,9 +1234,10 @@ export class GitHostClient {
   /** One request to the host. A call carrying a signal, or asked to
    * wait, waits out the host's rate limit first; any other is refused
    * while it holds (git-host-21). */
-  private async send(method: string, path: string, init: { body?: unknown; bearer?: string } & HostCallOptions): Promise<Answer> {
+  private async send(method: string, path: string, init: { body?: unknown; bearer?: string; beforeSend?: () => void } & HostCallOptions): Promise<Answer> {
     if (init.signal !== undefined || init.wait === true) await this.waitOut(init.signal);
     else this.refuseWhileHeld();
+    init.beforeSend?.();
     const headers: Record<string, string> = { accept: "application/json" };
     if (init.body !== undefined) headers["content-type"] = "application/json";
     if (init.bearer !== undefined) headers.authorization = `Bearer ${init.bearer}`;
