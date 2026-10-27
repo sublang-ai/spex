@@ -74,7 +74,7 @@ before(() => {
   const generated = readFileSync(join(ROOT, "dist/generated-protocol.js"), "utf8");
   assert(!/\bimport\b/.test(generated)); assert(generated.length < 1000);
   const prefix = join(SCRATCH, "prefix");
-  npm(["install", "--global", "--prefix", prefix, "--offline", "--ignore-scripts", "--no-audit", "--no-fund", join(SCRATCH, packed.filename)], SCRATCH);
+  npm(["install", "--global", "--prefix", prefix, "--ignore-scripts", "--no-audit", "--no-fund", join(SCRATCH, packed.filename)], SCRATCH);
   CLI = join(prefix, process.platform === "win32" ? "node_modules" : "lib/node_modules", "@sublang/spex/dist/cli.js");
 });
 after(() => rmSync(SCRATCH, { recursive: true, force: true }));
