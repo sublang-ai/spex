@@ -33,6 +33,9 @@ import { resolveRevealTarget } from "./reveal-path.js";
 let service: CoreService | undefined;
 let window: BrowserWindow | undefined;
 let quitting = false;
+/** The main window's narrowest width: the spec view's stacked graph
+ * keeps its 320px floor beside the open sidebar (app-shell-40). */
+const MAIN_WINDOW_MIN_WIDTH = 600;
 
 /**
  * The shell's tongue at this moment (app-shell-29, localization-2):
@@ -262,6 +265,9 @@ async function main(): Promise<void> {
   window = new BrowserWindow({
     width: 1440,
     height: 900,
+    // Below 600px the spec view's stacked graph would fall under its
+    // 320px floor beside the open sidebar (app-shell-40).
+    minWidth: MAIN_WINDOW_MIN_WIDTH,
     title: "Spex",
     // First paint matches the UI's page surface (DR-013) so launch
     // and reload never flash stock white.
@@ -357,6 +363,10 @@ async function main(): Promise<void> {
         title: document.title,
       })`,
     )) as { rootChildren: number; bodyText: string; title: string };
+    // The window's floor, read back from the window itself so the
+    // smoke can hold it (app-shell-40).
+    const [minimumWidth] = window.getMinimumSize();
+    Object.assign(state, { minimumWidth });
     const image = await window.webContents.capturePage();
     const { writeFileSync } = await import("node:fs");
     writeFileSync(acceptancePath, image.toPNG());
