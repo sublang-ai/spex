@@ -172,16 +172,15 @@ While the graph renders a node, the spec view shall present the package by the e
 While the graph renders, the spec view shall draw the citations between packages by the encodings of [DR-026](../decisions/026-data-graphics-craft.md) as [DR-158](../decisions/158-a-legible-graph-and-outline.md) amends them:
 
 - with no package selected, it draws the backbone alone: one undirected line per package pair whose citations in both directions total at least the threshold of [[spec-view-66](#spec-view-66)], and per package its heaviest pair — a tie going to the pair whose partner sorts first by name — in a mid-gray of uniform width with no direction glyph, so a linked package always draws a line and a node with none has no cross-file citation;
-- with a package selected, it draws every citing→cited pair touching that package as a directed edge of uniform width ending in a glyph of constant size at the cited node's rim — the package's own citations in the interaction hue, its citers' in ink — a reciprocal pair as two offset edges, and no other edge;
+- with a package selected, it draws every citing→cited pair touching that package as a directed edge of uniform width ending in a glyph of constant size at the cited node's rim — the package's own citations in the interaction hue, its citers' in ink — a reciprocal pair as two offset edges, and no other edge, every edge meeting the selected node outside its halo so the halo covers no glyph;
 - an edge's width carries no count; pair counts come from the citation index the outline's rollups share [[spec-view-19](#spec-view-19)], so a citation of an ID absent from the tree counts in no pair.
 
 #### spec-view-24
 
 While the graph renders, the spec view shall key every channel it encodes below the graph, as text that is no control and that the selection leaves unchanged ([DR-026](../decisions/026-data-graphics-craft.md), [DR-158](../decisions/158-a-legible-graph-and-outline.md)):
 
-- the key names the two role treatments as cited by and not cited by other packages, and what node size counts [[spec-view-22](#spec-view-22)];
-- the selection's two edge hues and its neighbors' counts are read off the relationship panel's column heads [[spec-view-25](#spec-view-25)], and what the overview omits off its threshold control [[spec-view-66](#spec-view-66)];
-- the pointer and keyboard affordances of [[spec-view-25](#spec-view-25)] and [[spec-view-27](#spec-view-27)] ride the key as a tip that yields first in a narrow pane.
+- the key names the two role treatments as cited by and not cited by other packages [[spec-view-22](#spec-view-22)], and nothing else;
+- node size is read off the numeral each node states [[spec-view-22](#spec-view-22)], the selection's two edge hues and its neighbors' counts off the relationship panel's column heads [[spec-view-25](#spec-view-25)], and what the overview omits off its threshold sentence [[spec-view-66](#spec-view-66)].
 
 #### spec-view-25
 
@@ -191,6 +190,7 @@ While the graph renders, the spec view shall emphasize by the selection [[spec-v
 - each neighbor's label then carries its counts — `←N` for the neighbor's citations of the selected package, `→N` for the selected package's citations of the neighbor — each in its edge's hue;
 - a relationship panel stands at the graph's top-right corner for every selection, never moving with the marks: the package's name, then its item total and its citation counts out and in, then column heads reading the two directions in their edge hues — what cites it, `←`, and what it cites, `→` — over every neighbor in descending order of its total with both counts;
 - the panel spans at most eight entries or 45% of the canvas height, whichever is less, scrolling inside past that, and spans at most 208px or the visible width less 16px;
+- a control in the panel's header collapses it to that header and expands it again, named for what it does, and the panel stays as the reader left it across selections while the view stays open;
 - each entry is reachable by keyboard and, while focused or hovered, lifts its node and its edges, and activating one selects that package [[spec-view-42](#spec-view-42)];
 - hover and keyboard focus are inspection: they show the details card [[spec-view-26](#spec-view-26)] and the focus ring and lift the inspected mark and its label to full strength — never dimming others, isolating, or selecting — and a click's focus is no inspection once the pointer leaves;
 - keyboard focus reaches every node, with Enter selecting [[spec-view-42](#spec-view-42)];
@@ -212,7 +212,7 @@ While the graph renders, the spec view shall move a camera over a fixed layout r
 - the camera fits the whole layout with padding when the graph opens — the fitted frame; when the tree, the pane size, or the toggle changes, the base fit recomputes and the reader's own pan and zoom re-compose over it, so a resize never discards their navigation;
 - a reveal pan [[spec-view-43](#spec-view-43)] never counts as the reader's own camera move, and clearing the selection returns the camera to where it stood before the first reveal pan since the last clear, unless the reader moved the camera meanwhile;
 - the camera pans by drag and zooms toward the pointer between the fitted frame and a detail limit, bounded so the view overlaps the fitted frame on each axis by at least half the view's own extent;
-- a labeled control, "Fit to window", returns the camera to the fitted frame.
+- an icon control in the canvas's bottom-right corner, named "Fit to window" by its title and accessible name, returns the camera to the fitted frame, disabled while the camera stands there.
 
 #### spec-view-28
 
@@ -228,13 +228,15 @@ When the graph builds its picture, the spec view shall settle a deterministic ar
 
 #### spec-view-66
 
-While the graph renders, the spec view shall stand above it a threshold control setting the backbone's minimum pair total [[spec-view-23](#spec-view-23)] ([DR-158](../decisions/158-a-legible-graph-and-outline.md)):
+While the graph renders, the spec view shall stand above it a sentence setting the backbone's minimum pair total [[spec-view-23](#spec-view-23)] ([DR-158](../decisions/158-a-legible-graph-and-outline.md)):
 
-- the control reads its threshold, that each package keeps at least one line, and the pairs drawn out of all citing pairs, its stops running from 1 to the largest pair total and then a last stop drawing each package's heaviest pair alone;
+- the sentence reads "Only pairs with ≥ N citations", N a number field whose stops run from 1 to the largest pair total and then a last stop drawing each package's heaviest pair alone, and adds "all pairs" at the first stop and "each package's strongest only" at the last;
+- the field's up and down arrows, its arrow keys, and Home and End step to the next stop that draws a different set of lines, skipping every stop drawing what its neighbor below draws, an arrow disabled at its end;
+- a typed number takes effect on Enter or leaving the field, clamped to the stops and shown as the lowest stop drawing the same lines;
 - its default is the lowest stop whose backbone holds at most 1.5 pairs per linked package, the last stop when no other does;
-- moving it changes only which lines draw, never a node's position [[spec-view-28](#spec-view-28)], and its value lasts while the view stays open, the default returning when the view reopens;
-- while a package is selected it is disabled and reads the selected package's pair count, and clearing the selection restores the value it held;
-- beside it stands the camera's fit control [[spec-view-27](#spec-view-27)], and nothing else stands there.
+- stepping changes only which lines draw, never a node's position [[spec-view-28](#spec-view-28)], and its value lasts while the view stays open, the default returning when the view reopens;
+- while a package is selected the sentence yields to the selected package's pair count, the line keeping its height, and clearing the selection restores the value it held;
+- nothing else stands above the graph.
 
 #### spec-view-29
 
@@ -361,7 +363,7 @@ The spec view shall scroll each of its forms — the outline beside the graph, t
 
 - each such box is a positioned box, so the screen-reader-only text, the graph's own card [[spec-view-26](#spec-view-26)], and a citation's preview [[spec-view-61](#spec-view-61)] are contained by the box they belong to rather than being carried by the page;
 - each half of the graph split [[spec-view-20](#spec-view-20)] keeps a readable floor — the graph's at least 320px wide beside the outline, the outline's package tree never squeezed to nothing by its own filter row, the graph half holding one floor beside or below the outline with its drawing surface filling the half rather than resting at an svg's default — and the split scrolls as one where the surface cannot hold both floors, so what does not fit is reached rather than clipped away;
-- where the graph pane is narrower than 320px, the graph's drawing keeps 320px and scrolls sideways inside its own box, faded at the edge it scrolls past, while the threshold and fit controls, the relationship panel and the key stay within the pane's visible width.
+- where the graph pane is narrower than 320px, the graph's drawing keeps 320px and scrolls sideways inside its own box, faded at the edge it scrolls past, while the threshold sentence, the fit control, the relationship panel and the key stay within the pane's visible width.
 
 ## Internal Behavior
 
@@ -515,11 +517,11 @@ Where a fixture tree carries packages of differing item counts, pairs of light a
 
 - node areas are ordered by item count with each count stated on its node [[spec-view-22](#spec-view-22)], and the cited and uncited role treatments are distinguished without the reserved hues [[spec-view-22](#spec-view-22)];
 - at rest, only the backbone's pairs draw, each as one line of uniform width with no direction glyph, and a light pair outside it draws nothing [[spec-view-23](#spec-view-23)], every node with no line carrying no cross-file citation [[spec-view-23](#spec-view-23)];
-- the threshold control defaults to the lowest stop holding at most 1.5 pairs per linked package — the last stop for a tree whose every pair totals one — and its drawn and total pair counts agree with the lines drawn; moving it to 1 draws every pair while no node moves, and a selection disables it, stating the selection's pair count, until clearing restores its value [[spec-view-66](#spec-view-66)];
+- the threshold sentence defaults to the lowest stop holding at most 1.5 pairs per linked package — the last stop for a tree whose every pair totals one; stepping down reaches 1, drawing every pair while no node moves, each step changing the lines drawn, a typed stop drawing the same lines as a lower one reads as that lower one, and a selection replaces the sentence with the selection's pair count until clearing restores its value [[spec-view-66](#spec-view-66)];
 - with a package selected, its pairs draw as directed edges of uniform width with a constant-size glyph, its own and its citers' in their two hues, the reciprocal pair as two offset edges, and no other edge draws [[spec-view-23](#spec-view-23)] [[spec-view-25](#spec-view-25)];
 - each neighbor's label carries its `←N` and `→N`, the counts agreeing with the outline's rollups and the absent-ID citation counted in neither [[spec-view-25](#spec-view-25)] [[spec-view-23](#spec-view-23)];
-- the relationship panel stands at the canvas's top-right for the selection, naming every neighbor by descending total under its two column heads within its bounded height, focusing an entry lifts its node, and activating one selects that package [[spec-view-25](#spec-view-25)];
-- the key names the two roles and the size channel, holds no control, and reads the same under a selection [[spec-view-24](#spec-view-24)].
+- the relationship panel stands at the canvas's top-right for the selection, naming every neighbor by descending total under its two column heads within its bounded height, focusing an entry lifts its node, activating one selects that package, and collapsing it leaves its header alone, still collapsed for the next selection [[spec-view-25](#spec-view-25)];
+- the key names the two roles alone, holds no control, and reads the same under a selection [[spec-view-24](#spec-view-24)], while the fit icon stands in the canvas, disabled at the fitted frame and enabled once the camera moves [[spec-view-27](#spec-view-27)].
 
 #### spec-view-39
 
@@ -590,4 +592,4 @@ Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-
 - the package rows' count columns and their pinned heading row hold a long package name and four-digit counts without overlap, the headings reading their short names below 28rem and a nonzero unresolved count staying shown [[spec-view-2](#spec-view-2)] [[spec-view-1](#spec-view-1)];
 - a package node at each edge of the graph pane answers, on taking focus, with a card lying wholly inside that pane [[spec-view-26](#spec-view-26)];
 - selecting the package nearest the fitted frame's top-right corner, with packages along the foot, shows the node and its label clear of the relationship panel at every size without zooming, the view overlapping the fitted frame by at least half on each axis, and clearing the selection returns the camera to the fitted frame [[spec-view-43](#spec-view-43)] [[spec-view-25](#spec-view-25)] [[spec-view-27](#spec-view-27)];
-- at 320 pixels with the sidebar collapsed, only the graph's drawing scrolls sideways, the threshold and fit controls, the panel and the key lying inside the pane's visible width, and after a selection the node and the panel both lie in it [[spec-view-59](#spec-view-59)] [[spec-view-43](#spec-view-43)].
+- at 320 pixels with the sidebar collapsed, only the graph's drawing scrolls sideways, the threshold sentence, the fit control, the panel and the key lying inside the pane's visible width, and after a selection the node and the panel both lie in it [[spec-view-59](#spec-view-59)] [[spec-view-43](#spec-view-43)].
