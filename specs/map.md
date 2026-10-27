@@ -51,8 +51,8 @@ meta.md       The spec of specs
 | [DR-023](decisions/023-runtime-compatibility-from-cligent.md) | 023-runtime-compatibility-from-cligent.md | Runtime compatibility from cligent: playbook 4.0 / cligent 0.18 floor, no Spex-declared agent SDKs, live-run supply becomes an app-shell concern |
 | [DR-024](decisions/024-app-supplied-agent-runtimes.md) | 024-app-supplied-agent-runtimes.md | App-supplied agent runtimes: desktop declares the claude/codex/opencode SDKs at `*`; readiness probes availability through cligent with per-tree repairs; executable diagnosis by DR-090 |
 | [DR-025](decisions/025-playbook-7-adoption.md) | 025-playbook-7-adoption.md | Playbook 7 adoption: code/review/decide built-ins (dev added by DR-037), single-role CODE, controller Captain, cligent 0.20 floor |
-| [DR-026](decisions/026-data-graphics-craft.md) | 026-data-graphics-craft.md | Data-graphics craft: keyed honest encodings, computed contrast, content-driven density, d3 engine with live drag, permanent outline + graph toggle, design-check gate |
-| [DR-027](decisions/027-linked-views-contract.md) | 027-linked-views-contract.md | Linked-views contract: shared axes with a seven-rule coupling card, solved density, root-less outline with a decisions branch, intents to the Dashboard |
+| [DR-026](decisions/026-data-graphics-craft.md) | 026-data-graphics-craft.md | Data-graphics craft: keyed honest encodings, computed contrast, content-driven density, d3 engine with live drag, permanent outline + graph toggle, design-check gate; edge width, labels, direction at rest, isolated packages, emphasis and split bounds amended by DR-158 |
+| [DR-027](decisions/027-linked-views-contract.md) | 027-linked-views-contract.md | Linked-views contract: shared axes with a seven-rule coupling card, solved density, root-less outline with a decisions branch, intents to the Dashboard; the selection hiding untouched edges by DR-158 |
 | [DR-028](decisions/028-run-machine-view.md) | 028-run-machine-view.md | Run machines drawn: live statechart cards in the Captain pane, machine graph over the artifacts contract, trace-folded frames, captain failures surfaced whole |
 | [DR-029](decisions/029-session-history-home.md) | 029-session-history-home.md | Sessions in the sidebar: Dashboard-first attention, projects with their sessions as the navigator, tabs as the working set, titled sessions over session.list; the attention queue joined across cores by DR-133 |
 | [DR-030](decisions/030-workspace-chrome.md) | 030-workspace-chrome.md | Workspace chrome: two-state rail collapse, the divider idiom as house law, chrome state as preference, collapse never hiding a duty |
@@ -180,6 +180,7 @@ meta.md       The spec of specs
 | [DR-156](decisions/156-an-untouched-seed-follows-the-credentials.md) | 156-an-untouched-seed-follows-the-credentials.md | An untouched seed follows the credentials: a seat reads its credentials before seeding; a seeded file still at its recorded version is reseeded at start and on a seat's agent-credential change; any change ends that; amends DR-154 and DR-132 |
 
 | [DR-157](decisions/157-a-cli-attached-to-the-local-core.md) | 157-a-cli-attached-to-the-local-core.md | A thin CLI attached explicitly to the local core, opt-in request-specific outcomes, matched sign-in cancellation, and observation-only interruption |
+| [DR-158](decisions/158-a-legible-graph-and-outline.md) | 158-a-legible-graph-and-outline.md | A legible graph and outline: an undirected backbone at rest, the selection's citations directed with counts beside names, placed labels, unlinked packages in a row, one citation index, a table-like outline with full group names, pixel split floors; amends DR-026 and DR-027 |
 
 ## Packages
 
