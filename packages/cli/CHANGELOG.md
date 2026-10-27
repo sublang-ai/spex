@@ -10,6 +10,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.1.0] - 2026-10-27
+
+### Added
+
+- Attach to a running compatible local Spex server for project
+  registration, Space sign-in/status and package search, add, remove,
+  install, resolve, status and publish. Use `--server` or `SPEX_SERVER_URL`;
+  scaffold and lint continue to work without a server.
+- Package commands wait for their own result, with actual destination
+  and receipt for publication. Connection loss and observation timeout
+  report an unknown outcome without automatic replay.
+
 ## [4.0.1] - 2026-10-21
 
 ### Fixed
@@ -363,7 +375,8 @@ into this release. npm users upgrade straight from 0.3.0.
 - Integration tests exercising the CLI binary end-to-end
 - RELEASE spec package with package hygiene and pre-release checks
 
-[Unreleased]: https://github.com/sublang-ai/spex/compare/cli-v4.0.1...HEAD
+[Unreleased]: https://github.com/sublang-ai/spex/compare/cli-v4.1.0...HEAD
+[4.1.0]: https://github.com/sublang-ai/spex/compare/cli-v4.0.1...cli-v4.1.0
 [4.0.1]: https://github.com/sublang-ai/spex/compare/cli-v4.0.0...cli-v4.0.1
 [4.0.0]: https://github.com/sublang-ai/spex/compare/v3.0.0...cli-v4.0.0
 [3.0.0]: https://github.com/sublang-ai/spex/compare/v2.1.1...v3.0.0

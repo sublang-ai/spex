@@ -179,10 +179,13 @@ meta.md       The spec of specs
 | [DR-155](decisions/155-players-named-delegated-and-recovered.md) | 155-players-named-delegated-and-recovered.md | Players named by their id's last segment with a neutral letter mark everywhere, a delegation line per first call or changed model rebuilt from each call's records, failure entries to the agent's popover or Settings row by cause; amends DR-032 and DR-075 |
 | [DR-156](decisions/156-an-untouched-seed-follows-the-credentials.md) | 156-an-untouched-seed-follows-the-credentials.md | An untouched seed follows the credentials: a seat reads its credentials before seeding; a seeded file still at its recorded version is reseeded at start and on a seat's agent-credential change; any change ends that; amends DR-154 and DR-132 |
 
+| [DR-157](decisions/157-a-cli-attached-to-the-local-core.md) | 157-a-cli-attached-to-the-local-core.md | A thin CLI attached explicitly to the local core, opt-in request-specific outcomes, matched sign-in cancellation, and observation-only interruption |
+
 ## Packages
 
 | File | Summary |
 | --- | --- |
+| [attached-cli.md](packages/attached-cli.md) | Local-server CLI connection, project selection, Space authentication and package operations with correlated outcomes |
 | [app-shell.md](packages/app-shell.md) | Desktop shell: guarded source launch and ABI restoration; single-instance window, quit on a signal, notifications, dock badge, core-in-main over WebSocket, packaging, supplied compiler, scaffold CLI and agent SDKs; packaged-app acceptance |
 | [core-service.md](packages/core-service.md) | Headless core: WebSocket protocol, the root lease by machine identity, shared session lifecycle/recovery/deletion, per-agent summary folds, scoped storage diagnostics, config, records and readiness |
 | [dashboard.md](packages/dashboard.md) | Dashboard as the intent ledger: two-band attention queue, Running band, per-project History/Now/Up next/Sources groups, one-gesture capture, and shared queued-intent standing presentation; one deterministic core fold |

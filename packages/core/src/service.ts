@@ -8,6 +8,7 @@
 // (CORE-13), and record channels filtered by visibility at this
 // boundary (CORE-8/14).
 
+import { canonicalOrigin } from "./instance.js";
 import { ApprovalBroker } from "./approvals.js";
 import {
   cpSync,
@@ -60,6 +61,7 @@ import {
   parseCommand,
   PACKAGE_LICENSE_PATTERN,
   PROTOCOL_VERSION,
+  ATTACHED_CLI_VERSION,
   type AdapterName,
   type Channel,
   type Command,
@@ -2434,6 +2436,7 @@ export class CoreService {
       this.send(socket, {
         type: "hello",
         protocolVersion: PROTOCOL_VERSION,
+        attachedCliVersion: ATTACHED_CLI_VERSION,
         coreVersion: CORE_VERSION,
       });
       this.send(socket, {type: "approval.state", state: this.approvals.snapshot()});
@@ -2495,8 +2498,13 @@ export class CoreService {
       return;
     }
     const command = parsed.command;
+    // Only reported sign-in needs a second message; fence it behind its
+    // start reply even when a controlled provider settles immediately.
+    let releaseReply: (() => void) | undefined;
+    const replySent = command.type === "space.signin.start" && command.reportCompletion
+      ? new Promise<void>((resolve) => { releaseReply = resolve; }) : undefined;
     try {
-      const result = await this.execute(client, command);
+      const result = await this.execute(client, command, replySent);
       this.send(client.socket, {
         type: "reply",
         id: command.id,
@@ -2515,6 +2523,8 @@ export class CoreService {
           ...(failure.details ? { details: failure.details } : {}),
         },
       });
+    } finally {
+      releaseReply?.();
     }
   }
 
@@ -2540,6 +2550,7 @@ export class CoreService {
   private async execute(
     client: ClientState,
     command: Command,
+    replySent?: Promise<void>,
   ): Promise<unknown> {
     if (this.stopping && ["session.create", "turn.submit", "session.restore", "session.control"].includes(command.type)) {
       throw new CoreError("busy", i18n._({id: "The core is stopping.", comment: "Refusal during core shutdown"}));
@@ -3597,9 +3608,23 @@ export class CoreService {
       case "space.refresh":
         return this.requireSpace().refresh();
       case "space.signin.start":
-        return this.requireSpace().signInStart(command.url);
+        return this.requireSpace().signInStart(command.url, command.reportCompletion ? {
+          owner: client,
+          id: command.id,
+          complete: (outcome) => {
+            void (replySent ?? Promise.resolve()).then(() => {
+              const identity = { type: "space.signin.completed" as const, id: command.id, instance: canonicalOrigin(command.url) };
+              if ("account" in outcome) this.send(client.socket, { ...identity, ok: true, account: outcome.account });
+              else {
+                const failure = coreErrorOf(outcome.error);
+                this.send(client.socket, { ...identity, ok: false, error: { code: failure.code, message: failure.message,
+                  ...(failure.details ? { details: failure.details } : {}) } });
+              }
+            });
+          },
+        } : undefined);
       case "space.signin.cancel":
-        return { stopped: this.requireSpace().signInCancel() };
+        return { stopped: this.requireSpace().signInCancel(client, command.startId) };
       // Each command names the instance it acts at by its origin
       // (space-29, DR-127).
       case "space.signout":
@@ -3805,27 +3830,40 @@ export class CoreService {
       case "environment.get":
         return this.environments.state(command.repository);
       case "environment.request": {
-        const { done } = await this.environments.request(command.repository, command.name, toRequest(command.request));
+        const { done } = await this.environments.request(command.repository, command.name, toRequest(command.request), command.wait === true);
+        if (command.wait) { await done; return { completed: true }; }
         void done.catch(() => {});
         return { accepted: true };
       }
       case "environment.remove": {
-        const { done } = await this.environments.remove(command.repository, command.name);
+        const { done } = await this.environments.remove(command.repository, command.name, command.wait === true);
+        if (command.wait) { await done; return { completed: true }; }
         void done.catch(() => {});
         return { accepted: true };
       }
-      case "environment.resolve":
-        void this.environments.resolveLater(command.repository).catch(() => {});
+      case "environment.resolve": {
+        const done = this.environments.resolveLater(command.repository, command.wait === true);
+        if (command.wait) { await done; return { completed: true }; }
+        void done.catch(() => {});
         return { accepted: true };
-      case "environment.install":
-        void this.environments.installLater(command.repository).catch(() => {});
+      }
+      case "environment.install": {
+        const done = this.environments.installLater(command.repository, command.wait === true);
+        if (command.wait) { await done; return { completed: true }; }
+        void done.catch(() => {});
         return { accepted: true };
+      }
       case "environment.search":
         return { packages: await this.environments.search(command.repository, command.query) };
       case "environment.publish": {
         // A dry run replies the inline summary and uploads nothing
         // (playbook-library-93); the upload reports through state.
-        const { done, preview } = await this.environments.publish(command.repository, command.path, command.dryRun === true);
+        const { done, preview } = await this.environments.publish(command.repository, command.path, command.dryRun === true, command.wait === true);
+        if (command.wait && !command.dryRun) {
+          const published = await done;
+          if (!published) throw new CoreError("internal", "Publication completed without a receipt");
+          return { completed: true, published };
+        }
         void done.catch(() => {});
         return command.dryRun === true ? { accepted: true, preview } : { accepted: true };
       }

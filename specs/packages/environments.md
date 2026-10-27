@@ -255,6 +255,16 @@ When a client sends `environment.request` for a spex repository with a spec pack
 - every command starts at once, beside any operation still running on the environment, and none waits for or refuses another;
 - once the core stops, no operation starts, and a request or install its caller awaits is refused before any write.
 
+#### environments-35
+
+When an environment mutation requests `wait: true`, the core shall send that request's correlated reply only after its own operation settles, without changing concurrent-operation admission or the default immediate replies [[environments-15](#environments-15)] [[environments-17](#environments-17)] ([DR-157](../decisions/157-a-cli-attached-to-the-local-core.md)):
+
+- Success returns `{ completed: true }`; publication adds `published: { instance: { origin, name }, name, version, url }` from its actual upload destination and result [[environments-10](#environments-10)].
+- A refusal uses the existing error envelope and code, preserving `conflict` for changed inputs and `invalid_request` for resolution, stale-lock, install or registry failures, with `aborted` when the manager has stopped and the existing safe error explanations [[environments-5](#environments-5)] [[environments-7](#environments-7)].
+- Completion is captured from the invocation, never inferred from aggregate state or another operation's `published` value.
+- A dry run remains an immediate preview and uploads nothing even when `wait` is supplied [[environments-17](#environments-17)].
+- Disconnect ends delivery only: the core neither replays nor cancels or rolls back work already dispatched.
+
 ## Internal Behavior
 
 #### environments-16
@@ -284,14 +294,14 @@ The core shall expose environments through these commands and one message, each 
 | Command | Input | Result | Errors |
 | --- | --- | --- | --- |
 | `environment.get` | `{ repository }` | `EnvironmentState` [[environments-14](#environments-14)] | `not_found` |
-| `environment.request` | `{ repository, name, request }` | `{ accepted: true }` | `invalid_request`, `not_found`, `conflict` |
-| `environment.remove` | `{ repository, name }` | `{ accepted: true }` | `invalid_request`, `not_found`, `conflict` |
-| `environment.resolve` | `{ repository }` | `{ accepted: true }` | `not_found` |
-| `environment.install` | `{ repository }` | `{ accepted: true }` | `not_found` |
+| `environment.request` | `{ repository, name, request, wait? }` | `{ accepted: true }`, or terminal reply with `wait: true` [[environments-35](#environments-35)] | `invalid_request`, `not_found`, `conflict`; terminal wait also `aborted` |
+| `environment.remove` | `{ repository, name, wait? }` | `{ accepted: true }`, or terminal reply with `wait: true` [[environments-35](#environments-35)] | `invalid_request`, `not_found`, `conflict`; terminal wait also `aborted` |
+| `environment.resolve` | `{ repository, wait? }` | `{ accepted: true }`, or terminal reply with `wait: true` [[environments-35](#environments-35)] | `not_found`; terminal wait also `invalid_request`, `conflict`, `aborted` |
+| `environment.install` | `{ repository, wait? }` | `{ accepted: true }`, or terminal reply with `wait: true` [[environments-35](#environments-35)] | `not_found`; terminal wait also `invalid_request`, `conflict`, `aborted` |
 | `environment.search` | `{ repository, query }`, searching the registry of `repository`'s environment ([DR-127](../decisions/127-a-home-signed-in-to-several-instances.md)) | `{ packages: [{ name, description, versions }] }` | `invalid_request` (signed out of that registry's instance and the registry refusing), `not_found` |
-| `environment.publish` | `{ repository, path, dryRun? }`, `path` naming a folder inside the environment's path root [[environments-2](#environments-2)] | `{ accepted: true }`, a dry run uploading nothing and adding `preview: { name, version, files }` | `invalid_request` (no path root on this device; outside it; not a release; no `description` or `license`; not signed in at the instance it publishes to [[environments-10](#environments-10)]) |
+| `environment.publish` | `{ repository, path, dryRun?, wait? }`, `path` naming a folder inside the environment's path root [[environments-2](#environments-2)] | `{ accepted: true }`, a dry run uploading nothing and adding `preview: { instance: { origin, name }, name, version, files }`, where `instance` is the server-resolved publication destination; `wait: true` returns its terminal receipt [[environments-35](#environments-35)] | `invalid_request` (no path root on this device; outside it; not a release; no `description` or `license`; not signed in at the instance it publishes to [[environments-10](#environments-10)]), `not_found`, `aborted` |
 
-- `environment.state { repository, state: EnvironmentState }` is broadcast after every resolve, install, publish, sync-applied lock and pairing's export [[environments-31](#environments-31)]; a long command replies `accepted` at once and reports through state, never a hung reply ([DR-010](../decisions/010-interface-craft.md) §5).
+- `environment.state { repository, state: EnvironmentState }` is broadcast after every resolve, install, publish, sync-applied lock and pairing's export [[environments-31](#environments-31)]; a long command without `wait: true` replies `accepted` at once and reports through state ([DR-010](../decisions/010-interface-craft.md) §5).
 
 #### environments-18
 
@@ -396,6 +406,14 @@ When an integration suite, through a real core on a scratch home signed in to tw
 - with the first's registry answering `token_revoked` to the first's tokens, a resolution in the local-only project signs the first instance alone out, the second staying signed in and its project's resolution and install succeeding [[environments-12](#environments-12)];
 - with the first signed out and your own group's own repository following the second by its remote, a start finding your own group's `spex.yaml` and `spex.lock` gone requests the built-in spec package there, its lock recording the second's origin [[environments-11](#environments-11)];
 - the first then forgotten, your own group's environment, whose own repository was created at the first and now syncs with the second, resolves at the second's registry, its lock recording the second's origin, and a publish from it lands there [[environments-5](#environments-5)] [[environments-10](#environments-10)].
+
+#### environments-36
+
+When real protocol clients run delayed and overlapping environment mutations in immediate and terminal-wait modes, the integration suite shall assert unchanged immediate acceptance, request-specific success and failure, conflict/stale-lock refusal and continued execution without replay after disconnect, and shutdown refusing post-preflight writes/uploads [[environments-15](#environments-15)] [[environments-35](#environments-35)].
+
+#### environments-37
+
+When a real protocol client previews and publishes to a controlled registry in terminal-wait mode, the integration suite shall assert actual instance/name/version/files in the upload-free preview, the actual publication receipt on success and a later failure despite a preceding successful `published` state [[environments-17](#environments-17)] [[environments-35](#environments-35)].
 
 ## References
 

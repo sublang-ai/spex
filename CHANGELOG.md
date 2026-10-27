@@ -16,6 +16,13 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Added
 
+- The package CLI can attach to an explicitly selected local Spex server
+  for project registration, Space sign-in, package search, installation
+  and publication. Package commands report their own completion and
+  publication destination; a disconnected client reports uncertainty
+  without replaying the operation. Existing UI commands remain unchanged
+  ([DR-157](specs/decisions/157-a-cli-attached-to-the-local-core.md)).
+
 - Players read by name ([DR-155](specs/decisions/155-players-named-delegated-and-recovered.md)).
   A player reads as the last segment of its id — `dev.reviewer` as
   reviewer — with a letter mark in one neutral colour beside the

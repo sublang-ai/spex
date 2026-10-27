@@ -14,6 +14,7 @@ import type { SessionRecord as RuntimeRecord } from "@sublang/playbook/session-a
 import { LANGUAGES, type Language } from "./language.js";
 
 export const PROTOCOL_VERSION = 28;
+export const ATTACHED_CLI_VERSION = 1;
 
 /** The compile pipeline's phases and their human names, shared so the
  * core's thread lines and the UI's band name a phase alike. */
@@ -426,7 +427,12 @@ export interface InvalidPlaybookEntry {
 }
 
 /** What `environment.publish` would upload (playbook-library-93). */
+export interface PublishDestination { origin: string; name: string }
+export interface PublishedPackage { instance: PublishDestination; name: string; version: string; url: string }
+export type EnvironmentMutationResult = { accepted: true } | { completed: true };
+
 export interface PublishPreview {
+  instance: PublishDestination;
   name: string;
   version: string;
   /** Release paths, in upload order. */
@@ -1282,20 +1288,21 @@ export const commandSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("environment.request"),
     id,
+    wait: z.boolean().optional(),
     repository: repositoryKeySchema,
     name: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*\/[a-z0-9]+(?:-[a-z0-9]+)*$/),
     request: environmentRequestSchema,
   }).strict(),
-  z.object({ type: z.literal("environment.remove"), id, repository: repositoryKeySchema, name: z.string().min(1) }).strict(),
-  z.object({ type: z.literal("environment.resolve"), id, repository: repositoryKeySchema }).strict(),
-  z.object({ type: z.literal("environment.install"), id, repository: repositoryKeySchema }).strict(),
+  z.object({ type: z.literal("environment.remove"), id, wait: z.boolean().optional(), repository: repositoryKeySchema, name: z.string().min(1) }).strict(),
+  z.object({ type: z.literal("environment.resolve"), id, wait: z.boolean().optional(), repository: repositoryKeySchema }).strict(),
+  z.object({ type: z.literal("environment.install"), id, wait: z.boolean().optional(), repository: repositoryKeySchema }).strict(),
   /** A search names the environment it adds to: the registry of
    * `repository`'s environment answers it (environments-17, DR-127). */
   z.object({ type: z.literal("environment.search"), id, repository: repositoryKeySchema, query: z.string().max(200) }).strict(),
   /** `dryRun` runs the checks and replies the inline summary — name,
    * version and the files it would upload — uploading nothing
    * (playbook-library-93). */
-  z.object({ type: z.literal("environment.publish"), id, repository: repositoryKeySchema, path: z.string().min(1), dryRun: z.boolean().optional() }).strict(),
+  z.object({ type: z.literal("environment.publish"), id, repository: repositoryKeySchema, path: z.string().min(1), dryRun: z.boolean().optional(), wait: z.boolean().optional() }).strict(),
   z.object({ type: z.literal("environment.playbooks"), id, projectId: repositoryKeySchema.optional() }).strict(),
   // Groups (space-29, DR-103): the core performs every Git operation,
   // one spex repository at a time, `repository` naming it by its key
@@ -1304,8 +1311,8 @@ export const commandSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("space.get"), id }).strict(),
   z.object({ type: z.literal("space.refresh"), id }).strict(),
   /** `url`: the instance's URL as the reader gave it, held by its origin. */
-  z.object({ type: z.literal("space.signin.start"), id, url: z.string().min(1) }).strict(),
-  z.object({ type: z.literal("space.signin.cancel"), id }).strict(),
+  z.object({ type: z.literal("space.signin.start"), id, url: z.string().min(1), reportCompletion: z.boolean().optional() }).strict(),
+  z.object({ type: z.literal("space.signin.cancel"), id, startId: z.string().min(1).optional() }).strict(),
   z.object({ type: z.literal("space.signout"), id, instance: instanceOriginSchema }).strict(),
   /** `instance`: the signed-out instance to remove from the home (space-82). */
   z.object({ type: z.literal("space.forget"), id, instance: instanceOriginSchema }).strict(),
@@ -1587,12 +1594,14 @@ export interface CommandResults {
   /** The choice after the write, as `language.state` carries it. */
   "language.set": { language: Language | null };
   "environment.get": EnvironmentState;
-  "environment.request": { accepted: true };
-  "environment.remove": { accepted: true };
-  "environment.resolve": { accepted: true };
-  "environment.install": { accepted: true };
+  "environment.request": EnvironmentMutationResult;
+  "environment.remove": EnvironmentMutationResult;
+  "environment.resolve": EnvironmentMutationResult;
+  "environment.install": EnvironmentMutationResult;
   "environment.search": { packages: { name: string; description: string | null; versions: string[] }[] };
-  "environment.publish": { accepted: true; preview?: PublishPreview };
+  "environment.publish":
+    | { accepted: true; preview?: PublishPreview; completed?: never; published?: never }
+    | { completed: true; published: PublishedPackage; accepted?: never; preview?: never };
   "environment.playbooks": {
     project: PlaybookAvailability[] | null;
     own: PlaybookAvailability[];
@@ -2320,6 +2329,7 @@ export interface HelloMessage {
   type: "hello";
   protocolVersion: number;
   coreVersion: string;
+  attachedCliVersion?: typeof ATTACHED_CLI_VERSION;
 }
 
 export type ReplyMessage =
@@ -2413,6 +2423,19 @@ export interface EnvironmentStateMessage {
   state: EnvironmentState;
 }
 
+export type SignInCompletion =
+  | { account: { id: string; login: string; displayName: string | null } }
+  | { error: unknown };
+
+export type SpaceSignInCompletedMessage = {
+  type: "space.signin.completed";
+  id: string;
+  instance: string;
+} & (
+  | { ok: true; account: { id: string; login: string; displayName: string | null } }
+  | { ok: false; error: { code: ErrorCode; message: string; details?: Record<string, unknown> } }
+);
+
 export interface SpaceStateMessage {
   type: "space.state";
   state: GroupsState;
@@ -2486,6 +2509,7 @@ export type ServerMessage =
   | CompileProgressMessage
   | IntentsChangedMessage
   | LanguageStateMessage
+  | SpaceSignInCompletedMessage
   | SpaceStateMessage
   | ServerStateMessage
   | EnvironmentStateMessage

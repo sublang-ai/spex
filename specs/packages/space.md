@@ -710,20 +710,38 @@ Where the core runs as a seat [[core-service-125](core-service.md#core-service-1
 - a retry — a join of the same repository again — after the credential is placed runs the code clone alone, into the same folder;
 - a folder already allocated for that repository is reused, never a second one made.
 
+#### space-108
+
+When `space.signin.start` requests `reportCompletion: true`, the core shall report that attempt's terminal outcome to its initiating connection as `space.signin.completed` with the start request's `id` and instance, independently of aggregate Space state ([DR-157](../decisions/157-a-cli-attached-to-the-local-core.md)):
+
+- The ordinary start reply precedes completion, including an immediately settling attempt [[git-host-3](git-host.md#git-host-3)].
+- Success is `{ ok: true, account: { id, login, displayName } }` only after token acceptance and the home account update [[git-host-2](git-host.md#git-host-2)]; it claims no later catalog/setup or Sync outcome.
+- Failure is `{ ok: false, error: { code, message, details? } }` using the existing error codes and safe explanations; an accepted stop is `aborted`.
+- Disconnect neither replays the start nor cancels or revokes sign-in; completion references are released after settlement with no persistent operation store.
+- Starts without `reportCompletion` retain their existing replies, state and setup behavior.
+
+#### space-109
+
+When `space.signin.cancel` names a `startId`, the core shall stop only the still-running sign-in begun by that request on the same connection, retaining the existing sign-in commit and cancellation boundaries [[git-host-2](git-host.md#git-host-2)] [[git-host-3](git-host.md#git-host-3)]:
+
+- A mismatch, foreign connection or committed/replaced attempt returns `{ stopped: false }` and changes nothing.
+- A matched stop returns `{ stopped: true }` and a reported attempt completes with `aborted` [[space-108](#space-108)].
+- Omitting `startId` retains the existing current-flow cancellation behavior.
+
 ## Internal Behavior
 
 ### Protocol
 
 #### space-29
 
-The core shall expose the Space surface through these commands and one message, each reply validated against the command schema, `repository` naming a spex repository by its key, `instance` an instance by its origin, and `group` a group by its host id at that instance ([DR-127](../decisions/127-a-home-signed-in-to-several-instances.md)):
+The core shall expose the Space surface through these commands and messages, each reply validated against the command schema, `repository` naming a spex repository by its key, `instance` an instance by its origin, and `group` a group by its host id at that instance ([DR-127](../decisions/127-a-home-signed-in-to-several-instances.md)):
 
 | Command | Input | Result | Errors |
 | --- | --- | --- | --- |
 | `space.get` | — | `GroupsState` [[space-30](#space-30)] | — |
 | `space.refresh` | — | `{ accepted: true }` | `invalid_request` (no instance signed in) |
-| `space.signin.start` | `{ url }` — the instance's URL as the reader gave it, held by its origin [[storage-2](storage.md#storage-2)] | `{ flow: "browser", url } \| { flow: "device", userCode, verificationUri, expiresAt }` | `busy` (a sign-in in flight at any instance), `invalid_request` (a URL the origin rule refuses, naming the rule [[git-host-2](git-host.md#git-host-2)]) |
-| `space.signin.cancel` | — | `{ stopped: boolean }` | — |
+| `space.signin.start` | `{ url, reportCompletion? }` — the instance's URL as the reader gave it, held by its origin [[storage-2](storage.md#storage-2)] | `{ flow: "browser", url } \| { flow: "device", userCode, verificationUri, expiresAt }` | `busy` (a sign-in in flight at any instance), `invalid_request` (a URL the origin rule refuses, naming the rule [[git-host-2](git-host.md#git-host-2)]) |
+| `space.signin.cancel` | `{ startId? }`, matched as [[space-109](#space-109)] states | `{ stopped: boolean }` | — |
 | `space.signout` | `{ instance }` | `GroupsState` | `invalid_request` (signed out), `conflict` (the stored sign-in changed meanwhile [[git-host-10](git-host.md#git-host-10)]) |
 | `space.forget` | `{ instance }` | `GroupsState` | `invalid_request` (signed in; a clone still of that instance or a placement still at it, naming each such spex repository or the session refusing its follow [[space-82](#space-82)]) |
 | `space.pick` | `{ repository, choice: { kind: "join", instance, hostId } \| { kind: "create", instance, groupId: string \| null, name }, noticed?: boolean }` — `instance` the one the choice is at; `name` without its `-spex` suffix, which the core appends; `groupId` a group's host id there, null for your namespace there | `{ accepted: true }` after the creation or the join is accepted at the host, the push following as state | `invalid_request` (not local only; an instance other than the clone's where its key lies under one [[space-58](#space-58)]; malformed name; the name taken at the host; a repository another clone here holds; a group, or a repository in a group, held as colliding [[space-61](#space-61)], with that cause; the notice not seen for a join into a repository with other members [[space-57](#space-57)]), `not_found` (a spex repository, or a group of the instance, the view does not list — your namespace's id among them [[git-host-6](git-host.md#git-host-6)]), `conflict` (a remote set meanwhile [[space-21](#space-21)]) |
@@ -1336,3 +1354,7 @@ Where a real core holds a repository at two stand-in instances, the test suite s
 - a read begun before Check cannot replace its completed placement plan when that read resumes, with the retained remote diff still naming the incoming unit [[space-29](#space-29)] [[space-10](#space-10)];
 - an idle read held after capturing a tracking ref cannot replace the plan a later idle read completed after that ref advanced, with the retained remote diff still naming the incoming unit [[space-29](#space-29)] [[space-10](#space-10)];
 - a read whose captured branch names move while it waits computes its branch counts and three-way lists from the captured commits consistently [[space-33](#space-33)].
+
+#### space-110
+
+When real protocol clients exercise reported sign-in completion against a controlled instance, the integration suite shall assert start-before-completion ordering, committed success independent of a later setup failure, denial/expiry/stop, cancellation during the initial awaited start, legacy start behavior and stale or foreign-connection cancellation leaving a replacement attempt untouched [[space-108](#space-108)] [[space-109](#space-109)].
