@@ -782,9 +782,11 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Fixed
 
-- Space Refresh keeps completed work when a rate-limited read is retried
-  once within the instance's wait bound, and stays busy until all started
-  requests settle.
+- Space Refresh keeps completed work through repeated rate limits within
+  a fixed two-minute recovery deadline for each eligible read, and stays
+  busy until started requests settle. Full views leave member counts
+  unknown without enumerating members; selected checks and Members still
+  read them when needed.
 
 - A narrow player pane no longer spills its header and transcript past
   its border: a long agent reading such as `claude-opus-5-5 @ xhigh` ends

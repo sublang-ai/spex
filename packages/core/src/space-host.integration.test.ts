@@ -2380,7 +2380,7 @@ test("git-host-5: full reads expose running and failure with only local rows, pr
 for (const outcome of ["recover", "changed-credential"] as const) {
   test(`git-host-5, git-host-21: a full read's bounded GET recovery ${outcome} retains progress and settles publicly`, async (t) => {
     const host = await startHost();
-    const home = await startHome(`read-retry-${outcome}`, { host, project: false, extra: { signIn: "browser", hostHoldMaxMs: 1_000 } });
+    const home = await startHome(`read-retry-${outcome}`, { host, project: false, extra: { signIn: "browser", hostHoldMaxMs: 2_500 } });
     t.after(() => home.stop());
     const signed = home.client.mark();
     await signIn(home, host);
@@ -2398,7 +2398,8 @@ for (const outcome of ["recover", "changed-credential"] as const) {
       const url = new URL(input instanceof Request ? input.url : String(input)), path = url.pathname + url.search;
       calls.set(path, (calls.get(path) ?? 0) + 1);
       if (outcome === "recover" && url.pathname === "/api/v1/host/repositories" && url.search && page === undefined) page = path;
-      if ((path === `/api/v1/host/repositories/${target}` || path === page) && calls.get(path) === 1) {
+      const refusals = outcome === "recover" && path === `/api/v1/host/repositories/${target}` ? 2 : 1;
+      if ((path === `/api/v1/host/repositories/${target}` || path === page) && (calls.get(path) ?? 0) <= refusals) {
         faultReturned();
         return Response.json({ error: { code: "rate_limited", message: "Read after the hold" } }, { status: 429, headers: { "Retry-After": "1" } });
       }
@@ -2422,7 +2423,7 @@ for (const outcome of ["recover", "changed-credential"] as const) {
       for (const path of ["/api/v1/host", "/api/v1/host/me", "/api/v1/host/groups", "/api/v1/host/repositories"]) assert.equal(calls.get(path), 1, `${path} was not restarted`);
       assert.ok(page);
       assert.equal(calls.get(page), 2, "only the failed catalog page is replayed");
-      assert.equal(calls.get(`/api/v1/host/repositories/${target}`), 2, "only the failed detail is replayed");
+      assert.equal(calls.get(`/api/v1/host/repositories/${target}`), 3, "only the repeatedly throttled detail is replayed");
       const healthy = host.script.repositories[0].id;
       assert.equal(calls.get(`/api/v1/host/repositories/${healthy}`), 1, "completed details survive the later hold");
       assert.equal(calls.get(`/api/v1/host/repositories/${target}/members`), undefined, "full reads enumerate no members");
