@@ -10,12 +10,12 @@
 // counts items and says so with a numeral; at rest the backbone draws
 // one undirected line per strong pair, and a selection draws its own
 // citations directed, with the counts written beside its neighbors'
-// names and in a panel rather than encoded in width; the two roles are
+// names and in a list rather than encoded in width; the two roles are
 // achromatic so brand purple stays interaction's alone; names take a
 // free place or wait; and every channel is keyed below the picture.
 // The pane is layered: controls that change the picture above it, a
-// key that changes nothing below it, and one fixed panel for the
-// selection. Layout and camera come from d3-force and d3-zoom; the
+// key that changes nothing below it, and one package card, floating
+// beside an inspected node and pinned for the selection. Layout and camera come from d3-force and d3-zoom; the
 // rendering stays ours.
 
 import {
@@ -92,6 +92,81 @@ export function cardPlacement(
  * and half its stroke. */
 const HALO_REACH = 6;
 
+type Box = { x0: number; y0: number; x1: number; y1: number };
+
+/** What a floating package card would rather not cover, mildest first:
+ * the pinned card, the selected node and its name, the inspected
+ * node's own name, the inspected node itself (spec-view-26). */
+export type CardObstacles = {
+  pinned: Box | null;
+  selection: readonly Box[];
+  label: Box | null;
+  node: Box;
+};
+
+const overlaps = (a: Box, b: Box) =>
+  a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;
+
+/** Lexicographic order on scores, telling sub-pixel noise from a
+ * real difference. */
+function ranksBefore(a: readonly number[], b: readonly number[]): boolean {
+  for (let i = 0; i < a.length; i++) {
+    const delta = (a[i] ?? 0) - (b[i] ?? 0);
+    if (Math.abs(delta) > 1e-6) return delta < 0;
+  }
+  return false;
+}
+
+const overlapArea = (a: Box, b: Box) =>
+  Math.max(0, Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0)) *
+  Math.max(0, Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0));
+
+/**
+ * Where a node's floating card stands: above or below the node, wholly
+ * inside `view`, at the place that covers least by the order of
+ * yielding — the pinned card gives way first, the node itself last
+ * (spec-view-26). Each place is scored by what it covers, gravest
+ * first; ties go to the place covering less of the node, then to the
+ * one nearest centred on it, below before above. Returns the card's
+ * top-left corner.
+ */
+export function floatingCardPlacement(
+  card: { width: number; height: number },
+  view: Box,
+  obstacles: CardObstacles,
+  gap: number,
+): { left: number; top: number } {
+  const { node, label, selection, pinned } = obstacles;
+  const centre = (node.x0 + node.x1) / 2;
+  const lefts = [centre - card.width / 2];
+  for (const box of [pinned, label, ...selection]) {
+    if (box) lefts.push(box.x0 - gap - card.width, box.x1 + gap);
+  }
+  const tops = [node.y1 + gap, node.y0 - gap - card.height];
+  const clamp = (value: number, min: number, max: number) =>
+    Math.min(Math.max(value, min), Math.max(max, min));
+  type Scored = { left: number; top: number; key: number[] };
+  let best: Scored | null = null;
+  for (const [side, rawTop] of tops.entries()) {
+    for (const rawLeft of lefts) {
+      const left = clamp(rawLeft, view.x0 + gap, view.x1 - gap - card.width);
+      const top = clamp(rawTop, view.y0 + gap, view.y1 - gap - card.height);
+      const box = { x0: left, y0: top, x1: left + card.width, y1: top + card.height };
+      const key = [
+        overlaps(box, node) ? 1 : 0,
+        label && overlaps(box, label) ? 1 : 0,
+        selection.some((mark) => overlaps(box, mark)) ? 1 : 0,
+        pinned && overlaps(box, pinned) ? 1 : 0,
+        overlapArea(box, node),
+        Math.abs(left + card.width / 2 - centre),
+        side,
+      ];
+      if (!best || ranksBefore(key, best.key)) best = { left, top, key };
+    }
+  }
+  return { left: best!.left, top: best!.top };
+}
+
 /** Where edges stop short of a ringed node's rim: past the halo or
  * focus ring with a little air, so no ring covers a glyph
  * (spec-view-23). */
@@ -127,8 +202,6 @@ export function boundCamera(
     ? transform
     : zoomIdentity.translate(x, y).scale(transform.k);
 }
-
-type Box = { x0: number; y0: number; x1: number; y1: number };
 
 /**
  * The least move that brings `box` inside `view` and clear of `panel`,
@@ -180,6 +253,88 @@ const GROUP_TEXT: Record<SpecGroup, string> = {
   internal: "text-fuchsia-700 dark:text-fuchsia-300",
   test: "text-teal-700 dark:text-teal-300",
 };
+
+/** The card's two counts in the selection's two edge hues, so the
+ * card keys them (spec-view-26); text-grade on the card's ground. */
+const CITES_TEXT = "text-brand-600 dark:text-brand-300";
+const CITED_TEXT = "text-neutral-700 dark:text-neutral-200";
+
+/**
+ * A package card's lines, the same floating or pinned: the name on one
+ * line; the item total and both citation counts on at most two; then
+ * one line per item group, a zero included (spec-view-26). Text cut to
+ * its line keeps its whole in the DOM and the hover hint, and a count
+ * is never the part cut.
+ */
+function PackageLines({ node }: { node: GraphNode }) {
+  const items = i18n._("{count, plural, one {# item} other {# items}}", {
+    count: node.items,
+  });
+  const cites = i18n._({
+    id: "cites → {count}",
+    comment: "package card: how many citations this package makes of others",
+    values: { count: node.outbound },
+  });
+  const cited = i18n._({
+    id: "← cited by {count}",
+    comment: "package card: how many citations other packages make of this one",
+    values: { count: node.inbound },
+  });
+  const none = i18n._("No citations with other packages");
+  const totals = node.linked ? `${items} · ${cites} · ${cited}` : `${items} · ${none}`;
+  return (
+    <>
+      <div
+        title={node.basename}
+        className="truncate font-medium text-neutral-900 dark:text-neutral-100"
+      >
+        {node.basename}
+      </div>
+      <div
+        data-testid="graph-card-totals"
+        title={totals}
+        className="mt-0.5 line-clamp-2 text-neutral-600 dark:text-neutral-300"
+      >
+        {items}
+        {" · "}
+        {node.linked ? (
+          <>
+            <span className={`whitespace-nowrap font-medium ${CITES_TEXT}`}>{cites}</span>
+            {" · "}
+            <span className={`whitespace-nowrap font-medium ${CITED_TEXT}`}>{cited}</span>
+          </>
+        ) : (
+          none
+        )}
+      </div>
+      <ul className="mt-1 space-y-0.5">
+        {GRAPH_GROUP_ORDER.map((group) => (
+          <li
+            key={group}
+            className="flex justify-between gap-3"
+            aria-label={i18n._("{count} {group} items", {
+              count: node.groups[group],
+              group: GROUP_WORD[group](),
+            })}
+          >
+            <span title={GROUP_NAME[group]()} className={`min-w-0 truncate ${GROUP_TEXT[group]}`}>
+              {GROUP_NAME[group]()}
+            </span>
+            <span
+              className={`shrink-0 tabular-nums ${
+                node.groups[group] === 0
+                  ? "text-neutral-500 dark:text-neutral-500"
+                  : "text-neutral-700 dark:text-neutral-200"
+              }`}
+            >
+              {node.groups[group]}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
 
 /** Ink at text-grade contrast on both grounds. The roles are
  * achromatic by design (DR-026 §2): the palette's hues are spoken for
@@ -412,6 +567,9 @@ export function SpecGraph({
   });
   const [hover, setHover] = useState<Inspection>(null);
   const [keyFocus, setKeyFocus] = useState<string | null>(null);
+  /** A focused node whose card Escape closed: it stays closed until
+   * focus moves on, the selection's clearing included (spec-view-25). */
+  const [dismissed, setDismissed] = useState<string | null>(null);
   // Bumped by simulation ticks: node positions live on the datum
   // objects the simulation mutates, so a counter is what tells React
   // a settled frame changed.
@@ -566,8 +724,8 @@ export function SpecGraph({
     return new Set([selectedName, ...neighbors.keys()]);
   }, [selectedName, neighbors]);
 
-  /** The neighbor the relationship panel lifts, while one of its
-   * entries holds focus or the pointer (spec-view-25). */
+  /** The neighbor the citation list lifts, while one of its entries
+   * holds focus or the pointer (spec-view-25). */
   const [lifted, setLifted] = useState<string | null>(null);
   useEffect(() => setLifted(null), [selectedName]);
 
@@ -708,13 +866,19 @@ export function SpecGraph({
   const onSurfaceKeyDown = (event: ReactKeyboardEvent) => {
     switch (event.key) {
       case "Escape":
-        // The card first, then the selection it sits over
-        // (spec-view-25).
-        if (hover) {
+        // A floating card first, then the selection it sits over, the
+        // pointer's and the keyboard's alike; focus stays where it is
+        // and its card stays closed (spec-view-25).
+        if (hover && cardSource === "hover") {
           event.preventDefault();
           clearHover();
+        } else if (cardSource === "focus" && keyFocus) {
+          event.preventDefault();
+          setDismissed(keyFocus);
         } else if (selectedName) {
           event.preventDefault();
+          clearHover();
+          if (keyFocus) setDismissed(keyFocus);
           onClearSelection?.();
         }
         return;
@@ -753,10 +917,18 @@ export function SpecGraph({
 
   // --- Card (spec-view-26) --------------------------------------------------
 
+  // The selected node's card is already pinned, so it never floats a
+  // second one (spec-view-26).
   const cardNode = useMemo(() => {
-    const id = hover?.kind === "node" ? hover.id : keyFocus;
-    return id ? model.nodes.find((node) => node.basename === id) ?? null : null;
-  }, [hover, keyFocus, model]);
+    const id =
+      hover?.kind === "node"
+        ? hover.id
+        : keyFocus !== dismissed
+          ? keyFocus
+          : null;
+    if (!id || id === selectedName) return null;
+    return model.nodes.find((node) => node.basename === id) ?? null;
+  }, [hover, keyFocus, dismissed, selectedName, model]);
 
   const cardEdge = useMemo(() => {
     if (hover?.kind !== "edge") return null;
@@ -774,20 +946,28 @@ export function SpecGraph({
     return model.pairs.find((pair) => pair.a === a && pair.b === b) ?? null;
   }, [hover, model]);
 
+  /** Whose gesture holds the floating card: the pointer's, which
+   * Escape closes by dropping the hover, or a keyboard focus's, which
+   * it closes in place. */
+  const cardSource: "hover" | "focus" | null =
+    cardEdge || cardPair || (cardNode && hover?.kind === "node")
+      ? "hover"
+      : cardNode
+        ? "focus"
+        : null;
+
   const nodeAt = (basename: string): GraphNode | undefined =>
     model.nodes.find((node) => node.basename === basename);
 
-  // The card stands in the visible frame, so a drawing scrolled
+  // A line's card stands in the visible frame, so a drawing scrolled
   // sideways beneath it is read back to the frame's own pixels
-  // (spec-view-59).
+  // (spec-view-59). A node's card is placed by what it covers, below.
   const cardAnchor = (): { left: number; top: number } | null => {
-    const anchor = cardNode
-      ? cardNode
-      : cardEdge
-        ? nodeAt(cardEdge.targetKey)
-        : cardPair
-          ? nodeAt(cardPair.b)
-          : null;
+    const anchor = cardEdge
+      ? nodeAt(cardEdge.targetKey)
+      : cardPair
+        ? nodeAt(cardPair.b)
+        : null;
     const place = anchor ? placeOf(anchor.key) : undefined;
     if (!place) return null;
     const [x, y] = transform.apply([place.x, place.y]);
@@ -796,11 +976,11 @@ export function SpecGraph({
 
   const anchor = cardAnchor();
 
-  // The card's height varies with its group rows, and its width with
-  // a narrow pane, so both are read back rather than assumed.
+  // The card's height varies with its lines, and its width with a
+  // narrow pane, so both are read back rather than assumed.
   const cardRef = useRef<HTMLDivElement>(null);
   const [cardBox, setCardBox] = useState(CARD_SIZE);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const box = cardRef.current?.getBoundingClientRect();
     if (!box || box.width <= 0 || box.height <= 0) return;
     setCardBox((current) =>
@@ -809,9 +989,6 @@ export function SpecGraph({
         : { width: box.width, height: box.height },
     );
   }, [cardNode, cardEdge, cardPair, size.width, size.height]);
-  const place = anchor
-    ? cardPlacement(anchor, { width: visible.width, height: size.height }, cardBox)
-    : null;
 
   // --- Threshold (spec-view-66) ----------------------------------------------
 
@@ -843,9 +1020,10 @@ export function SpecGraph({
   const thresholdText = `${thresholdBefore ?? ""}${threshold}${thresholdAfter ?? ""}${
     thresholdNote ? ` ${thresholdNote}` : ""
   }`;
-  /** The panel's state, lasting across selections while the view stays
-   * open (spec-view-25). */
-  const [panelOpen, setPanelOpen] = useState(true);
+  /** Whether the citation list is open: closed at first, then as the
+   * reader left it across selections while the view stays open
+   * (spec-view-25). */
+  const [listOpen, setListOpen] = useState(false);
   /** The fit control rests while the camera already shows the fitted
    * frame (spec-view-27). */
   const atFit =
@@ -1061,6 +1239,96 @@ export function SpecGraph({
     // Reveal on the selection's change alone, not on every frame.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedName]);
+
+  /** The pinned card's box in frame pixels, read back after each
+   * render: the floating card yields to it, and a change of its size
+   * while the selection holds — the list opening or closing, the
+   * language, the canvas — reveals again (spec-view-43). The list's
+   * state rides along with the size, standing in for it where layout
+   * is not measured. */
+  const [pinnedBox, setPinnedBox] = useState<Box | null>(null);
+  const pinnedShape = useRef<string | null>(null);
+  useLayoutEffect(() => {
+    const card = panelRef.current;
+    const frame = frameRef.current;
+    if (!card || !frame) {
+      pinnedShape.current = null;
+      setPinnedBox((now) => (now ? null : now));
+      return;
+    }
+    const box = card.getBoundingClientRect();
+    const origin = frame.getBoundingClientRect();
+    const next = {
+      x0: box.left - origin.left,
+      y0: box.top - origin.top,
+      x1: box.right - origin.left,
+      y1: box.bottom - origin.top,
+    };
+    setPinnedBox((now) =>
+      now &&
+      now.x0 === next.x0 &&
+      now.y0 === next.y0 &&
+      now.x1 === next.x1 &&
+      now.y1 === next.y1
+        ? now
+        : next,
+    );
+    const shape = `${box.width}x${box.height}:${listOpen}`;
+    const before = pinnedShape.current;
+    pinnedShape.current = shape;
+    if (before !== null && before !== shape) reveal();
+  });
+
+  // --- Card placement (spec-view-26) -----------------------------------------
+
+  const toFrame = (x: number, y: number): [number, number] => {
+    const [fx, fy] = transform.apply([x, y]);
+    return [fx - visible.left, fy];
+  };
+  /** A node as drawn, its ring included, in frame pixels. */
+  const markBox = (node: GraphNode): Box | null => {
+    const at = placeOf(node.key);
+    if (!at) return null;
+    const [cx, cy] = toFrame(at.x, at.y);
+    const r = (at.r + HALO_REACH) * transform.k;
+    return { x0: cx - r, y0: cy - r, x1: cx + r, y1: cy + r };
+  };
+  const nameBox = (node: GraphNode): Box | null => {
+    const label = labelBoxes.get(node.key);
+    if (!label) return null;
+    const [x0, y0] = toFrame(label.x, label.y);
+    const [x1, y1] = toFrame(label.x + label.width, label.y + label.height);
+    return { x0, y0, x1, y1 };
+  };
+  const cardMark = cardNode ? markBox(cardNode) : null;
+  const place = cardNode
+    ? cardMark
+      ? floatingCardPlacement(
+          cardBox,
+          { x0: 0, y0: 0, x1: visible.width, y1: size.height },
+          {
+            pinned: pinnedBox,
+            selection: selectedNode
+              ? [markBox(selectedNode), nameBox(selectedNode)].filter(
+                  (box): box is Box => box !== null,
+                )
+              : [],
+            label: nameBox(cardNode),
+            node: cardMark,
+          },
+          CARD_GAP,
+        )
+      : null
+    : anchor
+      ? (() => {
+          const at = cardPlacement(
+            anchor,
+            { width: visible.width, height: size.height },
+            cardBox,
+          );
+          return { left: at.left - Math.min(cardBox.width, visible.width) / 2, top: at.top };
+        })()
+      : null;
 
   const edgeOpacity = (edge: GraphEdge): number =>
     lifted &&
@@ -1279,7 +1547,11 @@ export function SpecGraph({
                       if (pressedRef.current !== node.basename) setKeyFocus(node.basename);
                       pressedRef.current = null;
                     }}
-                    onBlur={() => setKeyFocus((now) => (now === node.basename ? null : now))}
+                    onBlur={() => {
+                      setKeyFocus((now) => (now === node.basename ? null : now));
+                      // A closed card closes for this stay of focus only.
+                      setDismissed((now) => (now === node.basename ? null : now));
+                    }}
                     onClick={() => {
                       // A release that moved the node was a drag, not a
                       // choice: it must not also open the file.
@@ -1449,127 +1721,116 @@ export function SpecGraph({
           </svg>
         </button>
 
-        {/* The relationship panel: fixed at the top-right for every
-            selection, naming the package's totals and every neighbor
-            with both counts, most first, under heads in the two edge
-            hues; an entry focused or hovered lifts its node and edges,
-            and activating one selects it (spec-view-25). */}
+        {/* The selection's package card, pinned at the top-right: the
+            card's own lines, then the control opening the citation
+            list — every neighbor with both counts, most first, under
+            heads in the two edge hues; an entry focused or hovered
+            lifts its node and edges, and activating one selects it.
+            Only the list scrolls (spec-view-25). */}
         {selectedNode ? (
           <div
             ref={panelRef}
-            data-testid="graph-relationships"
-            className="absolute right-2 top-2 z-[5] flex max-h-[45%] w-56 max-w-[calc(100%-1rem)] flex-col rounded-lg border border-neutral-200 bg-white/95 text-xs shadow-md dark:border-neutral-700 dark:bg-neutral-900/95"
+            data-testid="graph-selection-card"
+            role="group"
+            aria-label={selectedNode.basename}
+            className="absolute right-2 top-2 z-[5] flex max-h-[45%] w-56 max-w-[calc(100%-1rem)] flex-col overflow-hidden rounded-lg border border-neutral-200 bg-white text-xs shadow-md dark:border-neutral-700 dark:bg-neutral-900"
           >
-            <div
-              className={`shrink-0 px-2.5 py-1.5 ${
-                panelOpen ? "border-b border-neutral-200 dark:border-neutral-700" : ""
-              }`}
-            >
-              <div className="flex items-center gap-1">
-                <div className="min-w-0 flex-1 truncate font-medium text-neutral-800 dark:text-neutral-100">
-                  {i18n._("{name}'s relationships", { name: selectedNode.basename })}
-                </div>
+            <div className="shrink-0 px-2.5 py-2">
+              <PackageLines node={selectedNode} />
+            </div>
+            {relationships.length > 0 ? (
+              <>
                 <button
                   type="button"
-                  data-testid="graph-relationships-toggle"
-                  aria-expanded={panelOpen}
-                  aria-controls="graph-relationships-list"
+                  data-testid="graph-citations-toggle"
+                  aria-expanded={listOpen}
+                  aria-controls="graph-citations"
                   aria-label={
-                    panelOpen
-                      ? i18n._("Collapse relationships")
-                      : i18n._("Expand relationships")
+                    listOpen
+                      ? i18n._("Collapse {name}'s citation list", { name: selectedNode.basename })
+                      : i18n._("Expand {name}'s citation list", { name: selectedNode.basename })
                   }
-                  title={
-                    panelOpen
-                      ? i18n._("Collapse relationships")
-                      : i18n._("Expand relationships")
-                  }
-                  onClick={() => setPanelOpen((open) => !open)}
-                  className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-100"
+                  onClick={() => setListOpen((open) => !open)}
+                  className="flex w-full shrink-0 items-center gap-1 border-t border-neutral-200 px-2.5 py-1.5 text-left text-neutral-600 outline-none hover:bg-neutral-100 hover:text-neutral-800 focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-brand-600 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800 dark:hover:text-neutral-100 dark:focus-visible:ring-brand-400"
                 >
+                  <span className="min-w-0 flex-1 truncate">
+                    {i18n._({
+                      id: "Citation list ({count, plural, one {# package} other {# packages}})",
+                      comment: "package card: opens the list of packages sharing citations with the selected one",
+                      values: { count: relationships.length },
+                    })}
+                  </span>
                   <svg
-                    viewBox="0 0 10 6"
-                    className={`h-1.5 w-2.5 transition-transform motion-reduce:transition-none ${
-                      panelOpen ? "" : "-rotate-90"
+                    viewBox="0 0 6 10"
+                    className={`h-2.5 w-1.5 shrink-0 transition-transform motion-reduce:transition-none ${
+                      listOpen ? "rotate-90" : ""
                     }`}
                     aria-hidden="true"
                   >
-                    <path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.5" />
+                    <path d="M1 1l4 4-4 4" fill="none" stroke="currentColor" strokeWidth="1.5" />
                   </svg>
                 </button>
-              </div>
-              <div
-                data-testid="graph-relationships-summary"
-                className="mt-0.5 text-neutral-600 dark:text-neutral-400"
-              >
-                {i18n._("{count, plural, one {# item} other {# items}}", {
-                  count: selectedNode.items,
-                })}
-                {" · "}
-                {i18n._("cites {out} · cited by {in}", {
-                  out: selectedNode.outbound,
-                  in: selectedNode.inbound,
-                })}
-              </div>
-            </div>
-            {panelOpen && relationships.length > 0 ? (
-              <>
-                <div
-                  aria-hidden="true"
-                  className="flex shrink-0 items-center gap-2 px-2.5 pt-1 text-[11px] text-neutral-500 dark:text-neutral-400"
-                >
-                  <span className="min-w-0 flex-1" />
-                  <span className="flex w-10 shrink-0 justify-end whitespace-nowrap font-medium text-brand-600 dark:text-brand-300">
-                    {i18n._({
-                      id: "cites →",
-                      comment: "graph panel column head: how often the selected package cites each one",
-                    })}
-                  </span>
-                  <span className="flex w-12 shrink-0 justify-end whitespace-nowrap font-medium text-neutral-700 dark:text-neutral-200">
-                    {i18n._({
-                      id: "← cited by",
-                      comment: "graph panel column head: how often each package cites the selected one",
-                    })}
-                  </span>
-                </div>
-                <ul
-                  id="graph-relationships-list"
-                  aria-label={i18n._("{name}'s relationships", { name: selectedNode.basename })}
-                  className="max-h-48 min-h-0 overflow-y-auto py-1"
-                >
-                  {relationships.map(([name, counts]) => {
-                    const neighbor = nodeAt(name);
-                    return (
-                      <li key={name} data-testid={`graph-relationship-${name}`}>
-                        <button
-                          type="button"
-                          aria-label={i18n._("{name}: cites {selected} {in}, cited by {selected} {out}", {
-                            name,
-                            selected: selectedNode.basename,
-                            in: counts.in,
-                            out: counts.out,
-                          })}
-                          onFocus={() => setLifted(name)}
-                          onBlur={() => setLifted((now) => (now === name ? null : now))}
-                          onMouseEnter={() => setLifted(name)}
-                          onMouseLeave={() => setLifted((now) => (now === name ? null : now))}
-                          onClick={() => neighbor && onOpenFile(neighbor.key)}
-                          className="flex w-full items-center gap-2 px-2.5 py-1 text-left outline-none hover:bg-neutral-100 focus:bg-brand-50 focus:ring-1 focus:ring-inset focus:ring-brand-600 dark:hover:bg-neutral-800 dark:focus:bg-brand-950 dark:focus:ring-brand-400"
-                        >
-                          <span className="min-w-0 flex-1 truncate font-mono text-neutral-700 dark:text-neutral-200">
-                            {name}
-                          </span>
-                          <span className="w-10 shrink-0 text-right tabular-nums font-semibold text-brand-600 dark:text-brand-300">
-                            {counts.out > 0 ? `→${counts.out}` : ""}
-                          </span>
-                          <span className="w-12 shrink-0 text-right tabular-nums font-semibold text-neutral-700 dark:text-neutral-200">
-                            {counts.in > 0 ? `←${counts.in}` : ""}
-                          </span>
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
+                {listOpen ? (
+                  <>
+                    <div
+                      aria-hidden="true"
+                      className="flex shrink-0 items-center gap-2 px-2.5 pt-1 text-[11px] text-neutral-500 dark:text-neutral-400"
+                    >
+                      <span className="min-w-0 flex-1" />
+                      <span className={`flex w-10 shrink-0 justify-end whitespace-nowrap font-medium ${CITES_TEXT}`}>
+                        {i18n._({
+                          id: "cites →",
+                          comment: "graph citation list column head: how often the selected package cites each one",
+                        })}
+                      </span>
+                      <span className={`flex w-12 shrink-0 justify-end whitespace-nowrap font-medium ${CITED_TEXT}`}>
+                        {i18n._({
+                          id: "← cited by",
+                          comment: "graph citation list column head: how often each package cites the selected one",
+                        })}
+                      </span>
+                    </div>
+                    <ul
+                      id="graph-citations"
+                      data-testid="graph-citations"
+                      aria-label={i18n._("{name}'s citation list", { name: selectedNode.basename })}
+                      className="min-h-0 flex-1 overflow-y-auto py-1"
+                    >
+                      {relationships.map(([name, counts]) => {
+                        const neighbor = nodeAt(name);
+                        return (
+                          <li key={name} data-testid={`graph-citation-${name}`}>
+                            <button
+                              type="button"
+                              aria-label={i18n._("{name}: cites {selected} {in}, cited by {selected} {out}", {
+                                name,
+                                selected: selectedNode.basename,
+                                in: counts.in,
+                                out: counts.out,
+                              })}
+                              onFocus={() => setLifted(name)}
+                              onBlur={() => setLifted((now) => (now === name ? null : now))}
+                              onMouseEnter={() => setLifted(name)}
+                              onMouseLeave={() => setLifted((now) => (now === name ? null : now))}
+                              onClick={() => neighbor && onOpenFile(neighbor.key)}
+                              className="flex w-full items-center gap-2 px-2.5 py-1 text-left outline-none hover:bg-neutral-100 focus:bg-brand-50 focus:ring-1 focus:ring-inset focus:ring-brand-600 dark:hover:bg-neutral-800 dark:focus:bg-brand-950 dark:focus:ring-brand-400"
+                            >
+                              <span className="min-w-0 flex-1 truncate font-mono text-neutral-700 dark:text-neutral-200">
+                                {name}
+                              </span>
+                              <span className={`w-10 shrink-0 text-right tabular-nums font-semibold ${CITES_TEXT}`}>
+                                {counts.out > 0 ? `→${counts.out}` : ""}
+                              </span>
+                              <span className={`w-12 shrink-0 text-right tabular-nums font-semibold ${CITED_TEXT}`}>
+                                {counts.in > 0 ? `←${counts.in}` : ""}
+                              </span>
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </>
+                ) : null}
               </>
             ) : null}
           </div>
@@ -1581,53 +1842,11 @@ export function SpecGraph({
             ref={cardRef}
             data-testid="graph-card"
             role="tooltip"
-            className="pointer-events-none absolute z-10 w-56 max-w-full -translate-x-1/2 rounded-lg border border-neutral-200 bg-white p-2.5 text-xs shadow-lg dark:border-neutral-700 dark:bg-neutral-900"
+            className="pointer-events-none absolute z-10 w-56 max-w-[calc(100%-1rem)] rounded-lg border border-neutral-200 bg-white p-2.5 text-xs shadow-lg dark:border-neutral-700 dark:bg-neutral-900"
             style={{ left: place.left, top: place.top }}
           >
             {cardNode ? (
-              <>
-                <div className="font-medium text-neutral-900 dark:text-neutral-100">
-                  {cardNode.basename}
-                </div>
-                <div className="mt-1 text-neutral-600 dark:text-neutral-300">
-                  {i18n._("{count, plural, one {# item} other {# items}} in total", {
-                    count: cardNode.items,
-                  })}
-                </div>
-                <ul className="mt-1 space-y-0.5">
-                  {GRAPH_GROUP_ORDER.map((group) => (
-                    <li
-                      key={group}
-                      className="flex justify-between gap-3"
-                      aria-label={i18n._("{count} {group} items", {
-                        count: cardNode.groups[group],
-                        group: GROUP_WORD[group](),
-                      })}
-                    >
-                      <span className={GROUP_TEXT[group]}>
-                        {GROUP_NAME[group]()}
-                      </span>
-                      <span
-                        className={
-                          cardNode.groups[group] === 0
-                            ? "text-neutral-500 dark:text-neutral-500"
-                            : "text-neutral-700 dark:text-neutral-200"
-                        }
-                      >
-                        {cardNode.groups[group]}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-                <div className="mt-1.5 border-t border-neutral-200 pt-1.5 text-neutral-600 dark:border-neutral-700 dark:text-neutral-300">
-                  {cardNode.linked
-                    ? i18n._("cites {out} · cited by {in}", {
-                        out: cardNode.outbound,
-                        in: cardNode.inbound,
-                      })
-                    : i18n._("No citations with other packages")}
-                </div>
-              </>
+              <PackageLines node={cardNode} />
             ) : cardEdge ? (
               <>
                 <div className="font-medium text-neutral-900 dark:text-neutral-100">

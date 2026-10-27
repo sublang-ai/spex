@@ -12,7 +12,7 @@
 
 import type { Locator, Page } from "@playwright/test";
 
-import { test, expect, open, nav } from "../src/harness";
+import { test, expect, open, openTranslated, nav } from "../src/harness";
 
 const FLOOR = 320;
 const SHORT = 400;
@@ -355,11 +355,11 @@ test.describe("the Specs surface at its floor", () => {
       await node.blur();
     }
 
-    // The relationship panel stands at the top-right; selecting the
+    // The pinned package card stands at the top-right; selecting the
     // package nearest that corner moves the camera the least that
     // clears it — no zoom, half the view still over the fitted frame —
-    // and clearing returns the fit (spec-view-43, spec-view-25,
-    // spec-view-27).
+    // again once its citation list opens, and clearing returns the fit
+    // (spec-view-43, spec-view-25, spec-view-27).
     const layer = pane.locator("svg > g").first();
     const frame = page.getByTestId("graph-frame");
     const frameBox = await boxOf(frame);
@@ -382,20 +382,29 @@ test.describe("the Specs surface at its floor", () => {
     const name = (await chosen.getAttribute("data-testid"))!.replace("graph-node-", "");
     await chosen.focus();
     await chosen.press("Enter");
-    const panel = page.getByTestId("graph-relationships");
+    const panel = page.getByTestId("graph-selection-card");
     await expect(panel).toBeVisible();
-    await expectRevealed(page, name);
-    const camera = await layer.getAttribute("transform");
-    const [, tx, ty, k] = /translate\(([-\d.e]+),([-\d.e]+)\) scale\(([-\d.e]+)\)/.exec(camera!)!.map(Number);
-    expect(k, "the reveal zoomed").toBe(1);
     const svgBox = await boxOf(pane.locator("svg").first());
-    for (const [shift, span] of [
-      [tx, svgBox.width],
-      [ty, svgBox.height],
-    ]) {
-      const overlap = Math.min(span, span - shift) - Math.max(0, -shift);
-      expect(overlap, "the view left the fitted frame").toBeGreaterThanOrEqual(span / 2 - 0.5);
-    }
+    const expectCamera = async () => {
+      const camera = await layer.getAttribute("transform");
+      const [, tx, ty, k] = /translate\(([-\d.e]+),([-\d.e]+)\) scale\(([-\d.e]+)\)/.exec(camera!)!.map(Number);
+      expect(k, "the reveal zoomed").toBe(1);
+      for (const [shift, span] of [
+        [tx, svgBox.width],
+        [ty, svgBox.height],
+      ]) {
+        const overlap = Math.min(span, span - shift) - Math.max(0, -shift);
+        expect(overlap, "the view left the fitted frame").toBeGreaterThanOrEqual(span / 2 - 0.5);
+      }
+    };
+    await expect(page.getByTestId("graph-citations")).toHaveCount(0);
+    await expectRevealed(page, name);
+    await expectCamera();
+    await panel.getByTestId("graph-citations-toggle").click();
+    await expect(page.getByTestId("graph-citations")).toBeVisible();
+    await expectRevealed(page, name);
+    await expectCamera();
+    await panel.getByTestId("graph-citations-toggle").click();
     await pane.locator("svg").first().press("Escape");
     await expect(panel).toHaveCount(0);
     await expect(layer).toHaveAttribute("transform", "translate(0,0) scale(1)");
@@ -433,13 +442,13 @@ test.describe("the Specs surface at its floor", () => {
 });
 
 /** The selected node and its circle lie in the graph's visible frame,
- * clear of the relationship panel (spec-view-43). */
+ * clear of the pinned package card (spec-view-43). */
 async function expectRevealed(page: Page, name: string): Promise<void> {
   await expect
     .poll(async () => {
       const [frame, panel, circle] = await Promise.all([
         boxOf(page.getByTestId("graph-frame")),
-        boxOf(page.getByTestId("graph-relationships")),
+        boxOf(page.getByTestId("graph-selection-card")),
         boxOf(page.getByTestId(`graph-node-${name}`)),
       ]);
       const label = page.getByTestId(`graph-label-${name}`);
@@ -454,8 +463,125 @@ async function expectRevealed(page: Page, name: string): Promise<void> {
             mark.y >= panel.y + panel.height ||
             mark.y + mark.height <= panel.y),
       );
-    }, { message: `${name} lies under the panel or outside the frame` })
+    }, { message: `${name} lies under the pinned card or outside the frame` })
     .toBe(true);
+}
+
+/** The pinned card and a floating card at the browser's floor, in
+ * each language: the card's lines hold their line counts, so its
+ * height stays in bounds whatever the words (spec-view-56). */
+for (const copy of [
+  { locale: "en-US", lang: "en", specs: "Specs", collapse: "Collapse the sidebar", show: "Show the sidebar" },
+  { locale: "zh-CN", lang: "zh", specs: "规约", collapse: "折叠侧栏", show: "显示侧栏" },
+]) {
+  test.describe(`the package cards at the floor (${copy.locale})`, () => {
+    test.use({ locale: copy.locale, appOptions: { project: true } });
+
+    test(`spec-view-56: the pinned card and a floating card fit 320 by 400 (${copy.locale})`, async ({
+      page,
+      app,
+    }) => {
+      if (copy.lang === "en") await open(page, app);
+      else await openTranslated(page, app);
+      await page.setViewportSize({ width: 1280, height: 800 });
+      const rail = page.getByRole("button", { name: copy.collapse });
+      if (await rail.isVisible()) await rail.click();
+      await expect(page.getByRole("button", { name: copy.show })).toBeVisible();
+      await page.getByRole("tab", { name: copy.specs }).click();
+      const graphToggle = page.getByTestId("view-graph");
+      if ((await graphToggle.getAttribute("aria-pressed")) !== "true") {
+        await graphToggle.click();
+      }
+      await page.setViewportSize({ width: FLOOR, height: SHORT });
+      const pane = page.getByTestId("spec-graph");
+      await pane.scrollIntoViewIfNeeded();
+      const frame = page.getByTestId("graph-frame");
+      const nodes = page.getByTestId(/^graph-node-/);
+
+      // Select the package with the most neighbors, so the open list is
+      // as long as the tree allows, and open it.
+      const names = await nodes.evaluateAll((elements) =>
+        elements
+          .filter((element) => element.getAttribute("data-foot") !== "true")
+          .map((element) => element.getAttribute("data-testid")!.replace("graph-node-", "")),
+      );
+      expect(names.length).toBeGreaterThan(1);
+      let chosen = names[0]!;
+      let most = -1;
+      for (const name of names) {
+        await page.getByTestId(`graph-node-${name}`).focus();
+        await page.getByTestId(`graph-node-${name}`).press("Enter");
+        const count = await page.getByTestId("graph-citations-toggle").textContent().catch(() => "");
+        const n = Number(/\d+/.exec(count ?? "")?.[0] ?? 0);
+        if (n > most) [most, chosen] = [n, name];
+      }
+      await page.getByTestId(`graph-node-${chosen}`).focus();
+      await page.getByTestId(`graph-node-${chosen}`).press("Enter");
+      const card = page.getByTestId("graph-selection-card");
+      const toggle = card.getByTestId("graph-citations-toggle");
+      if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
+      await expect(page.getByTestId("graph-citations")).toBeVisible();
+
+      // The pinned card lies in the visible canvas within 45% of its
+      // height, its own lines whole, and the selection clear of it
+      // (spec-view-25).
+      const frameBox = await boxOf(frame);
+      const cardBox = await boxOf(card);
+      expectInside(cardBox, frameBox, "the pinned card");
+      expect(cardBox.height, "the pinned card is taller than 45% of the canvas").toBeLessThanOrEqual(
+        frameBox.height * 0.45 + TOLERANCE,
+      );
+      const lines = await boxOf(card.locator(":scope > div").first());
+      expect(lines.y + lines.height, "the card's own lines are clipped").toBeLessThanOrEqual(
+        cardBox.y + cardBox.height + TOLERANCE,
+      );
+      expect(
+        await card.locator(":scope > div").first().evaluate((element) => element.scrollHeight - element.clientHeight),
+        "the card's own lines overflow",
+      ).toBeLessThanOrEqual(TOLERANCE);
+      await expectRevealed(page, chosen);
+
+      // Another node mid-canvas, taking hover and then focus, raises a
+      // card wholly in the canvas, fitting the larger side above or
+      // below the node and covering none of its circle (spec-view-26).
+      const centre = { x: frameBox.x + frameBox.width / 2, y: frameBox.y + frameBox.height / 2 };
+      const middle = await nodes.evaluateAll(
+        (elements, at) =>
+          elements
+            .map((element) => {
+              const box = element.getBoundingClientRect();
+              return {
+                name: element.getAttribute("data-testid")!.replace("graph-node-", ""),
+                d: Math.hypot(box.x + box.width / 2 - at.x, box.y + box.height / 2 - at.y),
+              };
+            })
+            .filter((entry) => entry.name !== at.chosen)
+            .sort((a, b) => a.d - b.d)[0]!.name,
+        { ...centre, chosen },
+      );
+      const other = page.getByTestId(`graph-node-${middle}`);
+      const circle = other.locator("circle:not([data-testid])");
+      for (const raise of ["hover", "focus"] as const) {
+        if (raise === "hover") await circle.hover();
+        else await other.focus();
+        const floating = page.getByTestId("graph-card");
+        await expect(floating).toBeVisible();
+        const [floatBox, mark, canvas] = await Promise.all([boxOf(floating), boxOf(circle), boxOf(frame)]);
+        expectInside(floatBox, canvas, `the ${raise} card for ${middle}`);
+        const room = Math.max(mark.y - canvas.y, canvas.y + canvas.height - (mark.y + mark.height));
+        expect(floatBox.height, `the ${raise} card outgrows the room beside ${middle}`).toBeLessThanOrEqual(room - 8);
+        const covers =
+          floatBox.x < mark.x + mark.width &&
+          mark.x < floatBox.x + floatBox.width &&
+          floatBox.y < mark.y + mark.height &&
+          mark.y < floatBox.y + floatBox.height;
+        expect(covers, `the ${raise} card covers ${middle}'s circle`).toBe(false);
+        if (raise === "hover") await page.getByTestId("graph-legend").hover();
+        else await other.blur();
+        await expect(floating).toHaveCount(0);
+      }
+    });
+  });
 }
 
 test.describe("a labelled Sources row", () => {

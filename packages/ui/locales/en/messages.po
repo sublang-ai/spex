@@ -222,10 +222,6 @@ msgstr "{count, plural, one {# issue} other {# issues}} left."
 msgid "{count, plural, one {# item} other {# items}}"
 msgstr "{count, plural, one {# item} other {# items}}"
 
-#: src/components/SpecGraph.tsx
-msgid "{count, plural, one {# item} other {# items}} in total"
-msgstr "{count, plural, one {# item} other {# items}} in total"
-
 #: src/components/SpaceGroups.tsx
 msgid "{count, plural, one {# local change} other {# local changes}}"
 msgstr "{count, plural, one {# local change} other {# local changes}}"
@@ -500,8 +496,8 @@ msgid "{name}: cites {selected} {in}, cited by {selected} {out}"
 msgstr "{name}: cites {selected} {in}, cited by {selected} {out}"
 
 #: src/components/SpecGraph.tsx
-msgid "{name}'s relationships"
-msgstr "{name}'s relationships"
+msgid "{name}'s citation list"
+msgstr "{name}'s citation list"
 
 #: src/components/SpecView.tsx
 msgid "{packages, plural, one {# package} other {# packages}} · {items} items"
@@ -719,10 +715,15 @@ msgstr "← Back"
 msgid "← Back to {surface}"
 msgstr "← Back to {surface}"
 
-#. graph panel column head: how often each package cites the selected one
+#. graph citation list column head: how often each package cites the selected one
 #: src/components/SpecGraph.tsx
 msgid "← cited by"
 msgstr "← cited by"
+
+#. package card: how many citations other packages make of this one
+#: src/components/SpecGraph.tsx
+msgid "← cited by {count}"
+msgstr "← cited by {count}"
 
 #. act: jump to the end of the transcript; ↓ stays as it is
 #. act: jump to the end of the transcript; ↓ stays as it is
@@ -1765,6 +1766,11 @@ msgstr "Choose which agent answers"
 msgid "Choose which session player answers {role}"
 msgstr "Choose which session player answers {role}"
 
+#. package card: opens the list of packages sharing citations with the selected one
+#: src/components/SpecGraph.tsx
+msgid "Citation list ({count, plural, one {# package} other {# packages}})"
+msgstr "Citation list ({count, plural, one {# package} other {# packages}})"
+
 #: src/components/SpecView.tsx
 msgid "Citations across packages: cites · cited by"
 msgstr "Citations across packages: cites · cited by"
@@ -1810,15 +1816,19 @@ msgstr "cites · cited by"
 msgid "cites {out}"
 msgstr "cites {out}"
 
-#: src/components/SpecGraph.tsx
 #: src/lib/spec-view-model.ts
 msgid "cites {out} · cited by {in}"
 msgstr "cites {out} · cited by {in}"
 
-#. graph panel column head: how often the selected package cites each one
+#. graph citation list column head: how often the selected package cites each one
 #: src/components/SpecGraph.tsx
 msgid "cites →"
 msgstr "cites →"
+
+#. package card: how many citations this package makes of others
+#: src/components/SpecGraph.tsx
+msgid "cites → {count}"
+msgstr "cites → {count}"
 
 #: src/components/AgentSettings.tsx
 msgid "Clear the fast-mode choice; this adapter does not accept it."
@@ -1896,6 +1906,10 @@ msgstr "Code not on a remote"
 msgid "code remote"
 msgstr "code remote"
 
+#: src/components/SpecGraph.tsx
+msgid "Collapse {name}'s citation list"
+msgstr "Collapse {name}'s citation list"
+
 #: src/components/PlayerPane.tsx
 msgid "Collapse {player}"
 msgstr "Collapse {player}"
@@ -1927,10 +1941,6 @@ msgstr "Collapse image {name}"
 #: src/lib/shortcuts.ts
 msgid "Collapse or show the sidebar"
 msgstr "Collapse or show the sidebar"
-
-#: src/components/SpecGraph.tsx
-msgid "Collapse relationships"
-msgstr "Collapse relationships"
 
 #: src/components/NavRail.tsx
 msgid "Collapse the sidebar"
@@ -2845,6 +2855,10 @@ msgstr "Existing project"
 msgid "Existing specs: {packages, plural, one {# package} other {# packages}} · {items, plural, one {# item} other {# items}}"
 msgstr "Existing specs: {packages, plural, one {# package} other {# packages}} · {items, plural, one {# item} other {# items}}"
 
+#: src/components/SpecGraph.tsx
+msgid "Expand {name}'s citation list"
+msgstr "Expand {name}'s citation list"
+
 #: src/components/PlayerPane.tsx
 msgid "Expand {player}"
 msgstr "Expand {player}"
@@ -2872,10 +2886,6 @@ msgstr "Expand image"
 #: src/components/TrustedMedia.tsx
 msgid "Expand image {name}"
 msgstr "Expand image {name}"
-
-#: src/components/SpecGraph.tsx
-msgid "Expand relationships"
-msgstr "Expand relationships"
 
 #. tab: browse the files of a spex repository
 #: src/components/SpaceSurface.tsx

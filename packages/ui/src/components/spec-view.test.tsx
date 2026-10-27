@@ -30,7 +30,13 @@ import {
   type SpecViewState,
 } from "./SpecView.js";
 import { zoomIdentity } from "d3-zoom";
-import { boundCamera, buildGraphModel, cardPlacement, revealShift } from "./SpecGraph.js";
+import {
+  boundCamera,
+  buildGraphModel,
+  cardPlacement,
+  floatingCardPlacement,
+  revealShift,
+} from "./SpecGraph.js";
 import { HOVER_INTENT_MS, PREVIEW_CARD_ID } from "./CitationPreview.js";
 import { editorDirty } from "../lib/spec-view-model.js";
 import type { SpecTreeState } from "@sublang/spex-core/protocol";
@@ -1924,12 +1930,16 @@ describe("spec-view-20: citation graph beside the outline", () => {
     expect(screen.getByTestId("rollup-billing").textContent).toBe("3 · 1");
     expect(screen.getByTestId("unresolved-billing")).toBeTruthy();
 
-    // The panel's heads read the two hues; the key names the roles
-    // alone, holds no control, and reads the same either way
-    // (spec-view-24, spec-view-25).
-    const panel = screen.getByTestId("graph-relationships");
-    expect(within(panel).getByText("← cited by").className).toContain("text-neutral-700");
-    expect(within(panel).getByText("cites →").className).toContain("text-brand-600");
+    // The pinned card's second line keys the two hues, and so do the
+    // list's heads once it opens; the key names the roles alone, holds
+    // no control, and reads the same either way (spec-view-24,
+    // spec-view-25, spec-view-26).
+    const pinned = screen.getByTestId("graph-selection-card");
+    expect(within(pinned).getByText("cites → 3").className).toContain("text-brand-600");
+    expect(within(pinned).getByText("← cited by 1").className).toContain("text-neutral-700");
+    fireEvent.click(within(pinned).getByTestId("graph-citations-toggle"));
+    expect(within(pinned).getByText("← cited by").className).toContain("text-neutral-700");
+    expect(within(pinned).getByText("cites →").className).toContain("text-brand-600");
     const legend = screen.getByTestId("graph-legend");
     const selectedKey = legend.textContent;
     expect(legend.textContent).toBe("cited by other packagesnot cited by other packages");
@@ -1949,9 +1959,9 @@ describe("spec-view-20: citation graph beside the outline", () => {
     restore();
   });
 
-  // spec-view-38: the panel names every neighbor, whatever room the
-  // names found.
-  test("the panel lists every neighbor, most first; focus lifts one and activation selects it", () => {
+  // spec-view-38: the citation list names every neighbor, whatever room
+  // the names found.
+  test("the citation list opens to every neighbor, most first; focus lifts one and activation selects it", () => {
     const restore = sized({ width: 330, height: 300 });
     const spokes = Array.from({ length: 14 }, (_, i) =>
       file(`spoke-${String(i + 1).padStart(2, "0")}`, [
@@ -1968,10 +1978,19 @@ describe("spec-view-20: citation graph beside the outline", () => {
     };
     render(<Harness tree={tree} />);
     fireEvent.click(node("hub"));
-    const list = screen.getByTestId("graph-relationships");
-    expect(within(list).getByTestId("graph-relationships-summary").textContent).toBe(
-      "1 item · cites 0 · cited by 17",
+    // The pinned card reads like any card, and its list starts closed
+    // behind a control naming the neighbor count (spec-view-25,
+    // spec-view-26).
+    const card = screen.getByTestId("graph-selection-card");
+    expect(within(card).getByTestId("graph-card-totals").textContent).toBe(
+      "1 item · cites → 0 · ← cited by 17",
     );
+    expect(screen.queryByTestId("graph-citations")).toBeNull();
+    const toggle = screen.getByRole("button", { name: "Expand hub's citation list" });
+    expect(toggle.textContent).toBe("Citation list (14 packages)");
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(toggle);
+    const list = screen.getByRole("list", { name: "hub's citation list" });
     const entries = within(list).getAllByRole("listitem");
     expect(entries).toHaveLength(14);
     // Most first: the three spokes citing twice lead.
@@ -1981,7 +2000,7 @@ describe("spec-view-20: citation graph beside the outline", () => {
     // Focus lifts the entry's node.
     const entry = within(entries[5]).getByRole("button");
     act(() => entry.focus());
-    const name = entries[5].getAttribute("data-testid")!.replace("graph-relationship-", "");
+    const name = entries[5].getAttribute("data-testid")!.replace("graph-citation-", "");
     const ring = screen.getByTestId(`graph-halo-${name}`);
     // Its edge stops outside the ring it now wears (spec-view-23).
     const spokeEdge = screen.getByTestId(`graph-edge-${name}--hub`);
@@ -1995,6 +2014,10 @@ describe("spec-view-20: citation graph beside the outline", () => {
     );
     act(() => entry.blur());
 
+    // Each entry names both counts against the selection, so a hidden
+    // label hides no count (spec-view-25).
+    expect(entry.getAttribute("aria-label")).toBe(`${name}: cites hub 1, cited by hub 0`);
+
     // A name without a place shows once its node takes keyboard focus
     // (spec-view-22).
     const unnamed = spokes
@@ -2005,26 +2028,144 @@ describe("spec-view-20: citation graph beside the outline", () => {
     expect(screen.getByTestId(`graph-label-${unnamed}`)).toBeTruthy();
     act(() => (node(unnamed!) as unknown as HTMLElement).blur());
 
-    // Activating an entry selects that package (spec-view-25).
+    // Activating an entry selects that package, and the list stays
+    // open for it (spec-view-25).
     fireEvent.click(within(entries[0]).getByRole("button"));
     expect(screen.getByTestId("graph-halo-spoke-01")).toBeTruthy();
     expect(screen.queryByTestId("graph-halo-hub")).toBeNull();
-
-    // Collapsed, the panel keeps its header alone, and stays collapsed
-    // for the next selection until expanded (spec-view-25).
-    const toggle = screen.getByRole("button", { name: "Collapse relationships" });
-    expect(toggle.getAttribute("aria-expanded")).toBe("true");
-    fireEvent.click(toggle);
-    const collapsed = screen.getByTestId("graph-relationships");
-    expect(within(collapsed).queryAllByRole("listitem")).toHaveLength(0);
-    expect(within(collapsed).getByText("spoke-01's relationships")).toBeTruthy();
-    fireEvent.click(node("hub"));
-    expect(within(screen.getByTestId("graph-relationships")).queryAllByRole("listitem")).toHaveLength(0);
-    fireEvent.click(screen.getByRole("button", { name: "Expand relationships" }));
     expect(
-      within(screen.getByTestId("graph-relationships")).getAllByRole("listitem"),
-    ).toHaveLength(14);
+      within(screen.getByRole("list", { name: "spoke-01's citation list" })).getAllByRole("listitem"),
+    ).toHaveLength(1);
+
+    // Closed, the list stays closed for the next selection until opened
+    // (spec-view-25).
+    const close = screen.getByRole("button", { name: "Collapse spoke-01's citation list" });
+    expect(close.getAttribute("aria-expanded")).toBe("true");
+    fireEvent.click(close);
+    expect(screen.queryByTestId("graph-citations")).toBeNull();
+    expect(within(screen.getByTestId("graph-selection-card")).getByText("spoke-01")).toBeTruthy();
+    fireEvent.click(node("hub"));
+    expect(screen.queryByTestId("graph-citations")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Expand hub's citation list" }));
+    expect(within(screen.getByTestId("graph-citations")).getAllByRole("listitem")).toHaveLength(14);
     restore();
+  });
+
+  // spec-view-41: one card per package, and Escape's ladder for the
+  // pointer and the keyboard.
+  test("the selected node floats no second card, and Escape closes a card before the selection", () => {
+    const restore = sized();
+    vi.useFakeTimers();
+    showGraph();
+    const hover = (name: string) => {
+      fireEvent.mouseEnter(node(name));
+      act(() => vi.advanceTimersByTime(200));
+    };
+
+    // Selected, the package's card is pinned alone; hovering or
+    // focusing its node raises no second one (spec-view-26).
+    fireEvent.click(node("auth"));
+    fireEvent.mouseLeave(node("auth"));
+    expect(screen.getByTestId("graph-selection-card")).toBeTruthy();
+    expect(screen.queryByTestId("graph-card")).toBeNull();
+    hover("auth");
+    expect(screen.queryByTestId("graph-card")).toBeNull();
+    fireEvent.mouseLeave(node("auth"));
+    act(() => (node("auth") as unknown as HTMLElement).focus());
+    expect(screen.queryByTestId("graph-card")).toBeNull();
+    act(() => (node("auth") as unknown as HTMLElement).blur());
+
+    // The pointer: the hovered card first, then the selection
+    // (spec-view-25).
+    const surface = screen.getByLabelText("Spec package citation graph");
+    hover("billing");
+    expect(within(screen.getByTestId("graph-card")).getByText("billing")).toBeTruthy();
+    fireEvent.keyDown(surface, { key: "Escape" });
+    expect(screen.queryByTestId("graph-card")).toBeNull();
+    expect(screen.getByTestId("graph-halo-auth")).toBeTruthy();
+    fireEvent.keyDown(surface, { key: "Escape" });
+    expect(screen.queryByTestId("graph-halo-auth")).toBeNull();
+    fireEvent.mouseLeave(node("billing"));
+
+    // The keyboard: the focused node's card closes with focus kept,
+    // then the selection clears, and that card stays closed until
+    // focus moves on (spec-view-25).
+    fireEvent.click(node("auth"));
+    const billing = node("billing") as unknown as HTMLElement;
+    act(() => billing.focus());
+    expect(within(screen.getByTestId("graph-card")).getByText("billing")).toBeTruthy();
+    fireEvent.keyDown(billing, { key: "Escape" });
+    expect(screen.queryByTestId("graph-card")).toBeNull();
+    expect(document.activeElement).toBe(billing);
+    expect(screen.getByTestId("graph-halo-auth")).toBeTruthy();
+    fireEvent.keyDown(billing, { key: "Escape" });
+    expect(screen.queryByTestId("graph-halo-auth")).toBeNull();
+    expect(document.activeElement).toBe(billing);
+    expect(screen.queryByTestId("graph-card")).toBeNull();
+    const session = node("session") as unknown as HTMLElement;
+    act(() => {
+      billing.blur();
+      session.focus();
+    });
+    expect(within(screen.getByTestId("graph-card")).getByText("session")).toBeTruthy();
+    vi.useRealTimers();
+    restore();
+  });
+
+  // spec-view-26: a floating card yields the pinned card first and its
+  // own node last.
+  test("a floating card covers the least by the order of yielding", () => {
+    const view = { x0: 0, y0: 0, x1: 400, y1: 400 };
+    const card = { width: 200, height: 100 };
+    const covers = (at: { left: number; top: number }, box: { x0: number; y0: number; x1: number; y1: number }) =>
+      at.left < box.x1 && box.x0 < at.left + card.width && at.top < box.y1 && box.y0 < at.top + card.height;
+    const node = { x0: 180, y0: 180, x1: 220, y1: 220 };
+    const label = { x0: 170, y0: 225, x1: 230, y1: 241 };
+
+    // Room for it: it covers nothing — here above, the label lying
+    // below.
+    const free = floatingCardPlacement(card, view, { pinned: null, selection: [], label, node }, 8);
+    expect(covers(free, node) || covers(free, label)).toBe(false);
+
+    // Every place costs the pinned card or more: it covers that alone.
+    const wide = { x0: 0, y0: 0, x1: 400, y1: 172 };
+    const pinnedOnly = floatingCardPlacement(
+      card,
+      view,
+      { pinned: wide, selection: [{ x0: 0, y0: 249, x1: 400, y1: 400 }], label, node },
+      8,
+    );
+    expect(covers(pinnedOnly, wide)).toBe(true);
+    expect(covers(pinnedOnly, node) || covers(pinnedOnly, label)).toBe(false);
+
+    // Every place costs the selection or more: it covers the selection
+    // and keeps clear of the node and its label.
+    const above = { x0: 0, y0: 0, x1: 400, y1: 172 };
+    const below = { x0: 0, y0: 249, x1: 400, y1: 400 };
+    const selectionToo = floatingCardPlacement(
+      card,
+      view,
+      { pinned: null, selection: [above, below], label, node },
+      8,
+    );
+    expect(covers(selectionToo, above) || covers(selectionToo, below)).toBe(true);
+    expect(covers(selectionToo, node) || covers(selectionToo, label)).toBe(false);
+
+    // Every place costs its own label or more: it covers the label and
+    // never the node, and no place costing less was passed over.
+    const tall = { x0: 150, y0: 110, x1: 250, y1: 290 };
+    const tight = { x0: 0, y0: 0, x1: 400, y1: 300 };
+    const labelled = { x0: 120, y0: 60, x1: 280, y1: 100 };
+    const yielded = floatingCardPlacement(
+      card,
+      tight,
+      { pinned: null, selection: [], label: labelled, node: tall },
+      8,
+    );
+    expect(covers(yielded, tall)).toBe(false);
+    expect(covers(yielded, labelled)).toBe(true);
+    expect(yielded.top).toBeGreaterThanOrEqual(8);
+    expect(yielded.top + card.height).toBeLessThanOrEqual(300 - 8);
   });
 
   // spec-view-39: contrast as a computed composite, not a judgement.
@@ -2044,6 +2185,9 @@ describe("spec-view-20: citation graph beside the outline", () => {
       "neutral-600": { light: "#525252", dark: "#525252" },
       "neutral-700": { light: "#404040", dark: "#404040" },
       "neutral-800": { light: "#262626", dark: "#262626" },
+      "neutral-900": { light: "#171717", dark: "#171717" },
+      white: { light: "#ffffff", dark: "#ffffff" },
+      "brand-300": { light: "#d4a4f4", dark: "#d4a4f4" },
       "neutral-950": { light: "#0a0a0a", dark: "#0a0a0a" },
       "brand-400": { light: "#bb6ee9", dark: "#bb6ee9" },
       "brand-600": { light: "#890fbc", dark: "#890fbc" },
@@ -2067,19 +2211,19 @@ describe("spec-view-20: citation graph beside the outline", () => {
      * wins there, the bare utility elsewhere. */
     const paint = (
       classes: string,
-      property: "fill" | "stroke" | "text",
+      property: "fill" | "stroke" | "text" | "bg",
       theme: "light" | "dark",
-    ) => {
+    ): string => {
       const pattern = new RegExp(
-        `(^|\\s)${theme === "dark" ? "dark:" : ""}${property}-(neutral|brand)-(\\d+)`,
+        `(^|\\s)${theme === "dark" ? "dark:" : ""}${property}-((neutral|brand)-(\\d+)|white)(?=\\s|$)`,
         "g",
       );
       const matches = [...classes.matchAll(pattern)];
       const last = matches[matches.length - 1];
       if (!last && theme === "dark") return paint(classes, property, "light");
       if (!last) throw new Error(`no ${property} token in "${classes}"`);
-      const token = TOKENS[`${last[2]}-${last[3]}`];
-      if (!token) throw new Error(`unknown token ${last[2]}-${last[3]}`);
+      const token = TOKENS[last[2]!];
+      if (!token) throw new Error(`unknown token ${last[2]}`);
       return token[theme];
     };
 
@@ -2094,7 +2238,21 @@ describe("spec-view-20: citation graph beside the outline", () => {
       screen.getByText("cited by other packages").parentElement?.getAttribute("class") ??
       "";
 
+    // The package card's two counts read against the card's own ground
+    // (spec-view-26).
+    act(() => (node("auth") as unknown as HTMLElement).focus());
+    const totals = screen.getByTestId("graph-card-totals");
+    const citesCount = within(totals).getByText(/^cites →/).className;
+    const citedCount = within(totals).getByText(/^← cited by/).className;
+    const cardGround = screen.getByTestId("graph-card").className;
+    act(() => (node("auth") as unknown as HTMLElement).blur());
+
     for (const theme of ["light", "dark"] as const) {
+      for (const count of [citesCount, citedCount]) {
+        expect(
+          ratio(paint(count, "text", theme), paint(cardGround, "bg", theme)),
+        ).toBeGreaterThanOrEqual(4.5);
+      }
       const ground = SURFACE[theme];
       // Graphical marks: the 3:1 non-text floor (WCAG 1.4.11).
       expect(ratio(paint(citedCircle, "fill", theme), ground)).toBeGreaterThanOrEqual(3);
@@ -2135,8 +2293,8 @@ describe("spec-view-20: citation graph beside the outline", () => {
     }
     act(() => (node("glossary") as unknown as HTMLElement).focus());
     expect(
-      within(screen.getByTestId("graph-card")).getByText("No citations with other packages"),
-    ).toBeTruthy();
+      within(screen.getByTestId("graph-card")).getByTestId("graph-card-totals").textContent,
+    ).toBe("1 item · No citations with other packages");
     act(() => (node("glossary") as unknown as HTMLElement).blur());
 
     // Every node keeps its activation-target floor (spec-view-28), and
@@ -2257,12 +2415,27 @@ describe("spec-view-20: citation graph beside the outline", () => {
     act(() => (node("billing") as unknown as HTMLElement).focus());
     const card = screen.getByTestId("graph-card");
     expect(within(card).getByText("billing")).toBeTruthy();
-    expect(within(card).getByText(/3 items in total/)).toBeTruthy();
-    // The breakdown is a list in the outline's count grammar.
+    expect(within(card).getByTestId("graph-card-totals").textContent).toBe(
+      "3 items · cites → 3 · ← cited by 1",
+    );
+    // The breakdown is a list in the outline's count grammar, a zero
+    // included.
     expect(within(card).getByLabelText("2 external behavior items")).toBeTruthy();
     expect(within(card).getByLabelText("1 internal behavior items")).toBeTruthy();
     expect(within(card).getByLabelText("0 test items")).toBeTruthy();
-    expect(within(card).getByText(/cites 3 · cited by 1/)).toBeTruthy();
+    // The pinned card reads the same lines in the same order
+    // (spec-view-26).
+    const lines = (box: Element) => [
+      box.children[0]?.textContent,
+      box.children[1]?.textContent,
+      ...[...(box.children[2]?.querySelectorAll("li") ?? [])].map((line) => line.textContent),
+    ];
+    const floating = lines(card);
+    act(() => (node("billing") as unknown as HTMLElement).blur());
+    fireEvent.click(node("billing"));
+    expect(lines(screen.getByTestId("graph-selection-card").children[0]!)).toEqual(floating);
+    fireEvent.click(node("auth"));
+    act(() => (node("billing") as unknown as HTMLElement).focus());
     fireEvent.keyDown(node("billing"), { key: "Enter" });
     expect(
       screen.getByTestId("file-toggle-billing").getAttribute("aria-expanded"),

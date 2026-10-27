@@ -222,10 +222,6 @@ msgstr "{count, plural, other {剩余 # 个问题}}。"
 msgid "{count, plural, one {# item} other {# items}}"
 msgstr "{count} 个条目"
 
-#: src/components/SpecGraph.tsx
-msgid "{count, plural, one {# item} other {# items}} in total"
-msgstr "共 {count, plural, other {# 个条目}}"
-
 #: src/components/SpaceGroups.tsx
 msgid "{count, plural, one {# local change} other {# local changes}}"
 msgstr "{count, plural, other {# 项本地更改}}"
@@ -500,8 +496,8 @@ msgid "{name}: cites {selected} {in}, cited by {selected} {out}"
 msgstr "{name}：引用 {selected} {in} 次，被 {selected} 引用 {out} 次"
 
 #: src/components/SpecGraph.tsx
-msgid "{name}'s relationships"
-msgstr "{name} 的关系"
+msgid "{name}'s citation list"
+msgstr "{name} 的引用列表"
 
 #: src/components/SpecView.tsx
 msgid "{packages, plural, one {# package} other {# packages}} · {items} items"
@@ -719,10 +715,15 @@ msgstr "← 返回"
 msgid "← Back to {surface}"
 msgstr "← 返回{surface}"
 
-#. graph panel column head: how often each package cites the selected one
+#. graph citation list column head: how often each package cites the selected one
 #: src/components/SpecGraph.tsx
 msgid "← cited by"
 msgstr "← 被引用"
+
+#. package card: how many citations other packages make of this one
+#: src/components/SpecGraph.tsx
+msgid "← cited by {count}"
+msgstr "← 被引用 {count}"
 
 #. act: jump to the end of the transcript; ↓ stays as it is
 #. act: jump to the end of the transcript; ↓ stays as it is
@@ -1765,6 +1766,11 @@ msgstr "选择由哪个智能体答复"
 msgid "Choose which session player answers {role}"
 msgstr "选择由哪个会话 Player 担任 {role}"
 
+#. package card: opens the list of packages sharing citations with the selected one
+#: src/components/SpecGraph.tsx
+msgid "Citation list ({count, plural, one {# package} other {# packages}})"
+msgstr "引用列表（{count} 个包）"
+
 #: src/components/SpecView.tsx
 msgid "Citations across packages: cites · cited by"
 msgstr "跨包引用：引用 · 被引用"
@@ -1810,15 +1816,19 @@ msgstr "引用 · 被引用"
 msgid "cites {out}"
 msgstr "引用 {out}"
 
-#: src/components/SpecGraph.tsx
 #: src/lib/spec-view-model.ts
 msgid "cites {out} · cited by {in}"
 msgstr "引用 {out} · 被引用 {in}"
 
-#. graph panel column head: how often the selected package cites each one
+#. graph citation list column head: how often the selected package cites each one
 #: src/components/SpecGraph.tsx
 msgid "cites →"
 msgstr "引用 →"
+
+#. package card: how many citations this package makes of others
+#: src/components/SpecGraph.tsx
+msgid "cites → {count}"
+msgstr "引用 → {count}"
 
 #: src/components/AgentSettings.tsx
 msgid "Clear the fast-mode choice; this adapter does not accept it."
@@ -1896,6 +1906,10 @@ msgstr "代码不在远程仓库"
 msgid "code remote"
 msgstr "代码远程仓库"
 
+#: src/components/SpecGraph.tsx
+msgid "Collapse {name}'s citation list"
+msgstr "收起 {name} 的引用列表"
+
 #: src/components/PlayerPane.tsx
 msgid "Collapse {player}"
 msgstr "折叠 {player}"
@@ -1927,10 +1941,6 @@ msgstr "收起图片 {name}"
 #: src/lib/shortcuts.ts
 msgid "Collapse or show the sidebar"
 msgstr "折叠或显示侧栏"
-
-#: src/components/SpecGraph.tsx
-msgid "Collapse relationships"
-msgstr "收起关系"
 
 #: src/components/NavRail.tsx
 msgid "Collapse the sidebar"
@@ -2845,6 +2855,10 @@ msgstr "已有项目"
 msgid "Existing specs: {packages, plural, one {# package} other {# packages}} · {items, plural, one {# item} other {# items}}"
 msgstr "已有规约：{packages} 个规约包 · {items} 个条目"
 
+#: src/components/SpecGraph.tsx
+msgid "Expand {name}'s citation list"
+msgstr "展开 {name} 的引用列表"
+
 #: src/components/PlayerPane.tsx
 msgid "Expand {player}"
 msgstr "展开 {player}"
@@ -2872,10 +2886,6 @@ msgstr "展开图片"
 #: src/components/TrustedMedia.tsx
 msgid "Expand image {name}"
 msgstr "展开图片 {name}"
-
-#: src/components/SpecGraph.tsx
-msgid "Expand relationships"
-msgstr "展开关系"
 
 #. tab: browse the files of a spex repository
 #: src/components/SpaceSurface.tsx
