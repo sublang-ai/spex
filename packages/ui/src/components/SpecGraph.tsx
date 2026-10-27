@@ -254,34 +254,24 @@ const GROUP_TEXT: Record<SpecGroup, string> = {
   test: "text-teal-700 dark:text-teal-300",
 };
 
-/** The card's two counts in the selection's two edge hues, so the
- * card keys them (spec-view-26); text-grade on the card's ground. */
-const CITES_TEXT = "text-brand-600 dark:text-brand-300";
-const CITED_TEXT = "text-neutral-700 dark:text-neutral-200";
-
 /**
  * A package card's lines, the same floating or pinned: the name on one
- * line; the item total and both citation counts on at most two; then
- * one line per item group, a zero included (spec-view-26). Text cut to
- * its line keeps its whole in the DOM and the hover hint, and a count
- * is never the part cut.
+ * line; the item total and both citation counts in ink, in the item
+ * rows' own grammar, on at most two; then one line per item group, its
+ * count in a column just past the longest name (spec-view-26). Color
+ * is the groups' alone, so the interaction hue never reads as a fourth
+ * group. Text cut to its line keeps its whole in the DOM and the hover
+ * hint, and a count is never the part cut.
  */
 function PackageLines({ node }: { node: GraphNode }) {
   const items = i18n._("{count, plural, one {# item} other {# items}}", {
     count: node.items,
   });
-  const cites = i18n._({
-    id: "cites → {count}",
-    comment: "package card: how many citations this package makes of others",
-    values: { count: node.outbound },
-  });
-  const cited = i18n._({
-    id: "← cited by {count}",
-    comment: "package card: how many citations other packages make of this one",
-    values: { count: node.inbound },
-  });
-  const none = i18n._("No citations with other packages");
-  const totals = node.linked ? `${items} · ${cites} · ${cited}` : `${items} · ${none}`;
+  const totals = `${items} · ${
+    node.linked
+      ? i18n._("cites {out} · cited by {in}", { out: node.outbound, in: node.inbound })
+      : i18n._("No citations with other packages")
+  }`;
   return (
     <>
       <div
@@ -295,23 +285,13 @@ function PackageLines({ node }: { node: GraphNode }) {
         title={totals}
         className="mt-0.5 line-clamp-2 text-neutral-600 dark:text-neutral-300"
       >
-        {items}
-        {" · "}
-        {node.linked ? (
-          <>
-            <span className={`whitespace-nowrap font-medium ${CITES_TEXT}`}>{cites}</span>
-            {" · "}
-            <span className={`whitespace-nowrap font-medium ${CITED_TEXT}`}>{cited}</span>
-          </>
-        ) : (
-          none
-        )}
+        {totals}
       </div>
-      <ul className="mt-1 space-y-0.5">
+      <ul className="mt-1 grid grid-cols-[minmax(0,max-content)_max-content] gap-x-4 gap-y-0.5">
         {GRAPH_GROUP_ORDER.map((group) => (
           <li
             key={group}
-            className="flex justify-between gap-3"
+            className="col-span-2 grid grid-cols-subgrid"
             aria-label={i18n._("{count} {group} items", {
               count: node.groups[group],
               group: GROUP_WORD[group](),
@@ -321,18 +301,36 @@ function PackageLines({ node }: { node: GraphNode }) {
               {GROUP_NAME[group]()}
             </span>
             <span
-              className={`shrink-0 tabular-nums ${
+              className={`text-right tabular-nums ${
                 node.groups[group] === 0
                   ? "text-neutral-500 dark:text-neutral-500"
                   : "text-neutral-700 dark:text-neutral-200"
               }`}
             >
-              {node.groups[group]}
+              {node.groups[group] === 0 ? "—" : node.groups[group]}
             </span>
           </li>
         ))}
       </ul>
     </>
+  );
+}
+
+/** A short run of a selection edge with its arrowhead, keying its hue
+ * in the sentence above the graph (spec-view-66). */
+function LineSample({ own }: { own: boolean }) {
+  return (
+    <svg viewBox="0 0 18 8" className="h-2 w-[18px] shrink-0" aria-hidden="true">
+      <line
+        x1="0"
+        y1="4"
+        x2="13"
+        y2="4"
+        strokeWidth={EDGE_WIDTH}
+        className={own ? EMPHASIS_STROKE : CITER_STROKE}
+      />
+      <path d="M 11 0.5 L 18 4 L 11 7.5 z" className={own ? EMPHASIS_FILL : CITER_FILL} />
+    </svg>
   );
 }
 
@@ -1354,12 +1352,30 @@ export function SpecGraph({
         className="flex h-9 shrink-0 items-center gap-1.5 overflow-hidden whitespace-nowrap pb-2 text-xs text-neutral-600 dark:text-neutral-400"
       >
         {selectedNode ? (
-          <span data-testid="graph-threshold-selection" className="min-w-0 truncate">
-            {i18n._("showing all {count} pairs of {name}", {
-              count: neighbors.size,
-              name: selectedNode.basename,
-            })}
-          </span>
+          <>
+            <span data-testid="graph-threshold-selection" className="min-w-0 truncate">
+              {i18n._("showing all {count} pairs of {name}", {
+                count: neighbors.size,
+                name: selectedNode.basename,
+              })}
+            </span>
+            {/* The selection's two edge hues, keyed by samples of the
+                edges themselves rather than by colored text
+                (spec-view-66, spec-view-24). */}
+            <span
+              data-testid="graph-selection-key"
+              className="ml-2 flex shrink-0 items-center gap-1.5"
+            >
+              <span data-testid="graph-key-cites" className="flex items-center gap-1">
+                <LineSample own />
+                {i18n._("cites")}
+              </span>
+              <span data-testid="graph-key-cited" className="ml-1.5 flex items-center gap-1">
+                <LineSample own={false} />
+                {i18n._("cited by")}
+              </span>
+            </span>
+          </>
         ) : model.pairs.length > 0 ? (
           <span
             data-testid="graph-threshold-sentence"
@@ -1777,17 +1793,11 @@ export function SpecGraph({
                       className="flex shrink-0 items-center gap-2 px-2.5 pt-1 text-[11px] text-neutral-500 dark:text-neutral-400"
                     >
                       <span className="min-w-0 flex-1" />
-                      <span className={`flex w-10 shrink-0 justify-end whitespace-nowrap font-medium ${CITES_TEXT}`}>
-                        {i18n._({
-                          id: "cites →",
-                          comment: "graph citation list column head: how often the selected package cites each one",
-                        })}
+                      <span className="flex w-10 shrink-0 justify-end whitespace-nowrap">
+                        {i18n._("cites")}
                       </span>
-                      <span className={`flex w-12 shrink-0 justify-end whitespace-nowrap font-medium ${CITED_TEXT}`}>
-                        {i18n._({
-                          id: "← cited by",
-                          comment: "graph citation list column head: how often each package cites the selected one",
-                        })}
+                      <span className="flex w-12 shrink-0 justify-end whitespace-nowrap">
+                        {i18n._("cited by")}
                       </span>
                     </div>
                     <ul
@@ -1818,12 +1828,18 @@ export function SpecGraph({
                               <span className="min-w-0 flex-1 truncate font-mono text-neutral-700 dark:text-neutral-200">
                                 {name}
                               </span>
-                              <span className={`w-10 shrink-0 text-right tabular-nums font-semibold ${CITES_TEXT}`}>
-                                {counts.out > 0 ? `→${counts.out}` : ""}
-                              </span>
-                              <span className={`w-12 shrink-0 text-right tabular-nums font-semibold ${CITED_TEXT}`}>
-                                {counts.in > 0 ? `←${counts.in}` : ""}
-                              </span>
+                              {[counts.out, counts.in].map((count, i) => (
+                                <span
+                                  key={i}
+                                  className={`${i ? "w-12" : "w-10"} shrink-0 text-right tabular-nums ${
+                                    count > 0
+                                      ? "text-neutral-700 dark:text-neutral-200"
+                                      : "text-neutral-500 dark:text-neutral-500"
+                                  }`}
+                                >
+                                  {count > 0 ? count : "—"}
+                                </span>
+                              ))}
                             </button>
                           </li>
                         );
@@ -1842,7 +1858,7 @@ export function SpecGraph({
             ref={cardRef}
             data-testid="graph-card"
             role="tooltip"
-            className="pointer-events-none absolute z-10 w-56 max-w-[calc(100%-1rem)] rounded-lg border border-neutral-200 bg-white p-2.5 text-xs shadow-lg dark:border-neutral-700 dark:bg-neutral-900"
+            className="pointer-events-none absolute z-10 w-max max-w-[min(14rem,calc(100%-1rem))] rounded-lg border border-neutral-200 bg-white p-2.5 text-xs shadow-lg dark:border-neutral-700 dark:bg-neutral-900"
             style={{ left: place.left, top: place.top }}
           >
             {cardNode ? (

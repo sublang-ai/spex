@@ -715,16 +715,6 @@ msgstr "← Back"
 msgid "← Back to {surface}"
 msgstr "← Back to {surface}"
 
-#. graph citation list column head: how often each package cites the selected one
-#: src/components/SpecGraph.tsx
-msgid "← cited by"
-msgstr "← cited by"
-
-#. package card: how many citations other packages make of this one
-#: src/components/SpecGraph.tsx
-msgid "← cited by {count}"
-msgstr "← cited by {count}"
-
 #. act: jump to the end of the transcript; ↓ stays as it is
 #. act: jump to the end of the transcript; ↓ stays as it is
 #. jump to the newest entry; the arrow is part of the pill
@@ -1785,6 +1775,7 @@ msgstr "Citations: {summary}"
 
 #. summary card heading over the items citing this one
 #: src/components/CitationPreview.tsx
+#: src/components/SpecGraph.tsx
 msgid "cited by"
 msgstr "cited by"
 
@@ -1802,6 +1793,7 @@ msgstr "cited by other packages"
 #. row label over the items this one cites
 #. row label over the items this one cites
 #: src/components/CitationPreview.tsx
+#: src/components/SpecGraph.tsx
 #: src/components/SpecItemRows.tsx
 msgid "cites"
 msgstr "cites"
@@ -1816,19 +1808,10 @@ msgstr "cites · cited by"
 msgid "cites {out}"
 msgstr "cites {out}"
 
+#: src/components/SpecGraph.tsx
 #: src/lib/spec-view-model.ts
 msgid "cites {out} · cited by {in}"
 msgstr "cites {out} · cited by {in}"
-
-#. graph citation list column head: how often the selected package cites each one
-#: src/components/SpecGraph.tsx
-msgid "cites →"
-msgstr "cites →"
-
-#. package card: how many citations this package makes of others
-#: src/components/SpecGraph.tsx
-msgid "cites → {count}"
-msgstr "cites → {count}"
 
 #: src/components/AgentSettings.tsx
 msgid "Clear the fast-mode choice; this adapter does not accept it."

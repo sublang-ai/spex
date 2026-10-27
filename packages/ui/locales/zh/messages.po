@@ -715,16 +715,6 @@ msgstr "← 返回"
 msgid "← Back to {surface}"
 msgstr "← 返回{surface}"
 
-#. graph citation list column head: how often each package cites the selected one
-#: src/components/SpecGraph.tsx
-msgid "← cited by"
-msgstr "← 被引用"
-
-#. package card: how many citations other packages make of this one
-#: src/components/SpecGraph.tsx
-msgid "← cited by {count}"
-msgstr "← 被引用 {count}"
-
 #. act: jump to the end of the transcript; ↓ stays as it is
 #. act: jump to the end of the transcript; ↓ stays as it is
 #. jump to the newest entry; the arrow is part of the pill
@@ -1769,7 +1759,7 @@ msgstr "选择由哪个会话 Player 担任 {role}"
 #. package card: opens the list of packages sharing citations with the selected one
 #: src/components/SpecGraph.tsx
 msgid "Citation list ({count, plural, one {# package} other {# packages}})"
-msgstr "引用列表（{count} 个包）"
+msgstr "引用列表（{count} 个规约包）"
 
 #: src/components/SpecView.tsx
 msgid "Citations across packages: cites · cited by"
@@ -1785,6 +1775,7 @@ msgstr "引用：{summary}"
 
 #. summary card heading over the items citing this one
 #: src/components/CitationPreview.tsx
+#: src/components/SpecGraph.tsx
 msgid "cited by"
 msgstr "被引用"
 
@@ -1802,6 +1793,7 @@ msgstr "被其他包引用"
 #. row label over the items this one cites
 #. row label over the items this one cites
 #: src/components/CitationPreview.tsx
+#: src/components/SpecGraph.tsx
 #: src/components/SpecItemRows.tsx
 msgid "cites"
 msgstr "引用"
@@ -1816,19 +1808,10 @@ msgstr "引用 · 被引用"
 msgid "cites {out}"
 msgstr "引用 {out}"
 
+#: src/components/SpecGraph.tsx
 #: src/lib/spec-view-model.ts
 msgid "cites {out} · cited by {in}"
 msgstr "引用 {out} · 被引用 {in}"
-
-#. graph citation list column head: how often the selected package cites each one
-#: src/components/SpecGraph.tsx
-msgid "cites →"
-msgstr "引用 →"
-
-#. package card: how many citations this package makes of others
-#: src/components/SpecGraph.tsx
-msgid "cites → {count}"
-msgstr "引用 → {count}"
 
 #: src/components/AgentSettings.tsx
 msgid "Clear the fast-mode choice; this adapter does not accept it."

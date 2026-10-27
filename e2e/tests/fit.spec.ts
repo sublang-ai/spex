@@ -445,7 +445,7 @@ async function assertSurfaceMatrix(
         // 150px an svg falls back to, so the half is measured against
         // the box it owes its height to, never against itself.
         const fill = await page.getByTestId("spec-graph").evaluate((pane) => {
-          const svg = pane.querySelector("svg");
+          const svg = pane.querySelector("svg[role=application]");
           const others = Array.from(pane.children)
             .filter((child) => !child.contains(svg))
             .reduce((sum, child) => sum + child.getBoundingClientRect().height, 0);

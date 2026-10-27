@@ -360,7 +360,7 @@ test.describe("the Specs surface at its floor", () => {
     // clears it — no zoom, half the view still over the fitted frame —
     // again once its citation list opens, and clearing returns the fit
     // (spec-view-43, spec-view-25, spec-view-27).
-    const layer = pane.locator("svg > g").first();
+    const layer = pane.locator("svg[role=application] > g");
     const frame = page.getByTestId("graph-frame");
     const frameBox = await boxOf(frame);
     const corner = await nodes.evaluateAll(
@@ -384,7 +384,7 @@ test.describe("the Specs surface at its floor", () => {
     await chosen.press("Enter");
     const panel = page.getByTestId("graph-selection-card");
     await expect(panel).toBeVisible();
-    const svgBox = await boxOf(pane.locator("svg").first());
+    const svgBox = await boxOf(pane.locator("svg[role=application]"));
     const expectCamera = async () => {
       const camera = await layer.getAttribute("transform");
       const [, tx, ty, k] = /translate\(([-\d.e]+),([-\d.e]+)\) scale\(([-\d.e]+)\)/.exec(camera!)!.map(Number);
@@ -405,7 +405,7 @@ test.describe("the Specs surface at its floor", () => {
     await expectRevealed(page, name);
     await expectCamera();
     await panel.getByTestId("graph-citations-toggle").click();
-    await pane.locator("svg").first().press("Escape");
+    await pane.locator("svg[role=application]").press("Escape");
     await expect(panel).toHaveCount(0);
     await expect(layer).toHaveAttribute("transform", "translate(0,0) scale(1)");
 
@@ -436,7 +436,7 @@ test.describe("the Specs surface at its floor", () => {
     expect(panelBox.x).toBeGreaterThanOrEqual(narrow.x - 0.5);
     expect(panelBox.x + panelBox.width).toBeLessThanOrEqual(narrow.x + narrow.width + 0.5);
     await expectRevealed(page, name);
-    await pane.locator("svg").first().press("Escape");
+    await pane.locator("svg[role=application]").press("Escape");
     await pageDoesNotScroll(page);
   });
 });

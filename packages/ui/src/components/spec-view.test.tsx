@@ -1930,16 +1930,22 @@ describe("spec-view-20: citation graph beside the outline", () => {
     expect(screen.getByTestId("rollup-billing").textContent).toBe("3 · 1");
     expect(screen.getByTestId("unresolved-billing")).toBeTruthy();
 
-    // The pinned card's second line keys the two hues, and so do the
-    // list's heads once it opens; the key names the roles alone, holds
-    // no control, and reads the same either way (spec-view-24,
-    // spec-view-25, spec-view-26).
+    // The sentence above the graph keys the two hues with samples of
+    // the edges themselves, while the pinned card states its counts in
+    // ink; the key below names the roles alone, holds no control, and
+    // reads the same either way (spec-view-24, spec-view-26,
+    // spec-view-66).
+    const sample = (id: string) =>
+      screen.getByTestId(id).querySelector("line")!.getAttribute("class") ?? "";
+    expect(sample("graph-key-cites")).toContain("stroke-brand-600");
+    expect(sample("graph-key-cited")).toContain("stroke-neutral-700");
+    expect(screen.getByTestId("graph-key-cites").textContent).toBe("cites");
+    expect(screen.getByTestId("graph-key-cited").textContent).toBe("cited by");
     const pinned = screen.getByTestId("graph-selection-card");
-    expect(within(pinned).getByText("cites → 3").className).toContain("text-brand-600");
-    expect(within(pinned).getByText("← cited by 1").className).toContain("text-neutral-700");
-    fireEvent.click(within(pinned).getByTestId("graph-citations-toggle"));
-    expect(within(pinned).getByText("← cited by").className).toContain("text-neutral-700");
-    expect(within(pinned).getByText("cites →").className).toContain("text-brand-600");
+    const totals = within(pinned).getByTestId("graph-card-totals");
+    expect(totals.textContent).toBe("3 items · cites 3 · cited by 1");
+    expect(totals.className).not.toMatch(/brand/);
+    expect(totals.querySelector("span")).toBeNull();
     const legend = screen.getByTestId("graph-legend");
     const selectedKey = legend.textContent;
     expect(legend.textContent).toBe("cited by other packagesnot cited by other packages");
@@ -1983,20 +1989,24 @@ describe("spec-view-20: citation graph beside the outline", () => {
     // spec-view-26).
     const card = screen.getByTestId("graph-selection-card");
     expect(within(card).getByTestId("graph-card-totals").textContent).toBe(
-      "1 item · cites → 0 · ← cited by 17",
+      "1 item · cites 0 · cited by 17",
     );
     expect(screen.queryByTestId("graph-citations")).toBeNull();
     const toggle = screen.getByRole("button", { name: "Expand hub's citation list" });
     expect(toggle.textContent).toBe("Citation list (14 packages)");
+    // The list's heads name the two directions and its counts read in
+    // ink, a zero as a dash (spec-view-25).
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
     fireEvent.click(toggle);
     const list = screen.getByRole("list", { name: "hub's citation list" });
     const entries = within(list).getAllByRole("listitem");
     expect(entries).toHaveLength(14);
     // Most first: the three spokes citing twice lead.
-    expect(entries[0].textContent).toContain("spoke-01");
-    expect(entries[0].textContent).toContain("←2");
-    expect(entries[13].textContent).toContain("←1");
+    expect(entries[0].textContent).toBe("spoke-01—2");
+    expect(entries[13].textContent).toMatch(/—1$/);
+    const heads = list.previousElementSibling as HTMLElement;
+    expect(heads.textContent).toBe("citescited by");
+    expect(heads.innerHTML).not.toMatch(/brand/);
     // Focus lifts the entry's node.
     const entry = within(entries[5]).getByRole("button");
     act(() => entry.focus());
@@ -2238,20 +2248,17 @@ describe("spec-view-20: citation graph beside the outline", () => {
       screen.getByText("cited by other packages").parentElement?.getAttribute("class") ??
       "";
 
-    // The package card's two counts read against the card's own ground
-    // (spec-view-26).
-    act(() => (node("auth") as unknown as HTMLElement).focus());
-    const totals = screen.getByTestId("graph-card-totals");
-    const citesCount = within(totals).getByText(/^cites →/).className;
-    const citedCount = within(totals).getByText(/^← cited by/).className;
-    const cardGround = screen.getByTestId("graph-card").className;
-    act(() => (node("auth") as unknown as HTMLElement).blur());
+    // The selection's line samples clear the 3:1 non-text floor on the
+    // surface (spec-view-66).
+    fireEvent.click(node("auth"));
+    const samples = ["graph-key-cites", "graph-key-cited"].map(
+      (id) => screen.getByTestId(id).querySelector("line")!.getAttribute("class") ?? "",
+    );
+    fireEvent.click(screen.getByLabelText("Spec package citation graph"));
 
     for (const theme of ["light", "dark"] as const) {
-      for (const count of [citesCount, citedCount]) {
-        expect(
-          ratio(paint(count, "text", theme), paint(cardGround, "bg", theme)),
-        ).toBeGreaterThanOrEqual(4.5);
+      for (const stroke of samples) {
+        expect(ratio(paint(stroke, "stroke", theme), SURFACE[theme])).toBeGreaterThanOrEqual(3);
       }
       const ground = SURFACE[theme];
       // Graphical marks: the 3:1 non-text floor (WCAG 1.4.11).
@@ -2416,7 +2423,7 @@ describe("spec-view-20: citation graph beside the outline", () => {
     const card = screen.getByTestId("graph-card");
     expect(within(card).getByText("billing")).toBeTruthy();
     expect(within(card).getByTestId("graph-card-totals").textContent).toBe(
-      "3 items · cites → 3 · ← cited by 1",
+      "3 items · cites 3 · cited by 1",
     );
     // The breakdown is a list in the outline's count grammar, a zero
     // included.
@@ -2450,7 +2457,7 @@ describe("spec-view-20: citation graph beside the outline", () => {
 
     // The camera zooms and returns to the fitted whole (spec-view-27).
     const layer = () =>
-      screen.getByTestId("spec-graph").querySelector("svg > g") as SVGGElement;
+      screen.getByTestId("spec-graph").querySelector("svg[role=application] > g") as SVGGElement;
     const scaleOf = (element: SVGGElement) =>
       Number(/scale\(([-\d.]+)\)/.exec(element.getAttribute("transform") ?? "")?.[1]);
     const fitted = scaleOf(layer());
