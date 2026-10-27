@@ -813,7 +813,7 @@ test("environments-33 through real cores: a skill your own group requests by a p
   assert.equal(readFileSync(join(userA, ".claude", "skills", "notes", "SKILL.md"), "utf8"), skill("Write it down, then read it back."));
   // Publishing reads the same folder by the same path.
   const preview = await a.client.expectOk("environment.publish", { repository: ownKey, path: "mine/notes", dryRun: true });
-  assert.deepEqual(preview.preview, { name: `${OWN}/notes`, version: "0.1.0", files: ["meta.yaml", "skills/en/notes/SKILL.md"] });
+  assert.deepEqual(preview.preview, { instance: { origin: "https://spex.sublang.ai", name: "spex.sublang.ai" }, name: `${OWN}/notes`, version: "0.1.0", files: ["meta.yaml", "skills/en/notes/SKILL.md"] });
 
   // A file added later that the sync would drop fails the next install
   // before anything is installed: the state names it, and the exports
