@@ -29,7 +29,8 @@ import {
   initialSpecViewState,
   type SpecViewState,
 } from "./SpecView.js";
-import { cardPlacement } from "./SpecGraph.js";
+import { zoomIdentity } from "d3-zoom";
+import { boundCamera, buildGraphModel, cardPlacement, revealShift } from "./SpecGraph.js";
 import { HOVER_INTENT_MS, PREVIEW_CARD_ID } from "./CitationPreview.js";
 import { editorDirty } from "../lib/spec-view-model.js";
 import type { SpecTreeState } from "@sublang/spex-core/protocol";
@@ -1211,11 +1212,12 @@ describe("SPECV-6/7: meta.md routing", () => {
   test("the footer offers meta and map directly", async () => {
     const onReadRecord = vi.fn().mockResolvedValue("# meta\n\nGlossary.");
     render(<Harness onReadRecord={onReadRecord} />);
-    // The footer carries the two tree-wide documents and nothing
-    // else (spec-view-7).
-    expect(screen.getByTestId("records-map").textContent).toBe("map");
+    // The outline pane's footer carries the two tree-wide documents,
+    // each named by its file and use, and nothing else (spec-view-7).
+    expect(screen.getByTestId("records-footer").textContent).toBe(
+      "map.md index·meta.md spec format",
+    );
     const meta = screen.getByTestId("records-meta");
-    expect(meta.textContent).toBe("meta");
     fireEvent.click(meta);
     expect(onReadRecord).toHaveBeenCalledWith("meta.md");
     await screen.findByText("Glossary.");
@@ -1225,6 +1227,12 @@ describe("SPECV-6/7: meta.md routing", () => {
     // Back lands on the meta control (DR-010 §6).
     fireEvent.click(screen.getByText("← Back"));
     expect(document.activeElement).toBe(screen.getByTestId("records-meta"));
+    // A search that narrows the outline to nothing leaves the footer
+    // standing (spec-view-7).
+    fireEvent.change(screen.getByLabelText("Filter items by ID or text"), {
+      target: { value: "no item reads like this" },
+    });
+    expect(screen.getByTestId("records-map")).toBeTruthy();
   });
 
   test("an item-body link resolving to meta.md opens the reader", async () => {
@@ -1288,6 +1296,9 @@ describe("spec-view-7/45: records in their places", () => {
       ],
     };
     render(<Harness tree={fileLess} />);
+    // The outline pane's footer stands here too (spec-view-7).
+    expect(screen.getByTestId("records-meta")).toBeTruthy();
+    expect(screen.getByTestId("records-map")).toBeTruthy();
     const branch = screen.getByTestId("decisions-branch");
     fireEvent.click(screen.getByTestId("decisions-toggle"));
     expect(within(branch).getByText("Scaffold localization")).toBeTruthy();
@@ -1575,8 +1586,8 @@ describe("spec-view-20: citation graph beside the outline", () => {
   // (billing <-> session), a citation of an absent ID (billing-2 →
   // auth-99), and a package no citation reaches (glossary) — the
   // shapes spec-view-38 and spec-view-40 name. The backbone holds each
-  // package's heaviest pair, so auth–session is the light pair it
-  // leaves out.
+  // package's heaviest pair, so auth–session is the light pair a
+  // threshold of two leaves out.
   const GRAPH_TREE: SpecTreeState = {
     present: true,
     legacy: false,
@@ -1783,8 +1794,17 @@ describe("spec-view-20: citation graph beside the outline", () => {
     }
 
     // At rest only the backbone draws: one undirected line per pair,
-    // of uniform width, with no glyph; the light pair stays out, and
-    // no directed edge draws (spec-view-23).
+    // of uniform width, with no glyph, and no directed edge draws. Three
+    // pairs among three linked packages fit the budget at the first
+    // stop, so the default draws them all (spec-view-23, spec-view-66).
+    const threshold = screen.getByTestId("graph-threshold") as HTMLInputElement;
+    const counted = () => screen.getByTestId("graph-threshold-count").textContent;
+    const drawn = () =>
+      document.querySelectorAll('[data-testid^="graph-pair-"]').length;
+    expect(threshold.value).toBe("1");
+    expect(threshold.max).toBe("3");
+    expect(counted()).toBe("each package keeps one · showing 3 / 3 pairs");
+    expect(drawn()).toBe(3);
     const heavy = pair("auth", "billing");
     const reciprocal = pair("billing", "session");
     expect(heavy.getAttribute("data-weight")).toBe("2");
@@ -1793,13 +1813,41 @@ describe("spec-view-20: citation graph beside the outline", () => {
       expect(line.getAttribute("stroke-width")).toBe("2");
       expect(line.getAttribute("marker-end")).toBeNull();
     }
-    expect(screen.queryByTestId("graph-pair-auth--session")).toBeNull();
     expect(document.querySelector('[data-testid^="graph-edge-"]')).toBeNull();
+
+    // Raised to two, the light pair leaves while each package keeps its
+    // heaviest; no node moves; the last stop draws the heaviest pairs
+    // alone (spec-view-23, spec-view-66).
+    const at = (name: string) => [circleOf(name).getAttribute("cx"), circleOf(name).getAttribute("cy")];
+    const before = ["auth", "billing", "session"].map(at);
+    fireEvent.change(threshold, { target: { value: "2" } });
+    expect(screen.queryByTestId("graph-pair-auth--session")).toBeNull();
+    expect(counted()).toBe("each package keeps one · showing 2 / 3 pairs");
+    expect(drawn()).toBe(2);
+    expect(["auth", "billing", "session"].map(at)).toEqual(before);
+    fireEvent.change(threshold, { target: { value: "3" } });
+    expect(screen.getByTestId("graph-threshold-value").textContent).toBe(
+      "each package's heaviest pair only",
+    );
+    expect(drawn()).toBe(2);
+    // Every node without a line has no cross-file citation.
+    const lined = new Set(
+      [...document.querySelectorAll('[data-testid^="graph-pair-"]')].flatMap((line) =>
+        line.getAttribute("data-testid")!.replace("graph-pair-", "").split("--"),
+      ),
+    );
+    for (const name of ["auth", "billing", "session", "glossary"]) {
+      expect(lined.has(name)).toBe(node(name).getAttribute("data-foot") !== "true");
+    }
 
     // Selected, billing's pairs draw directed in two hues, all one
     // width, each ending in the same constant-size glyph; the pair it
     // does not touch draws nothing (spec-view-23, spec-view-25).
     fireEvent.click(node("billing"));
+    // A selection disables the threshold and states its own pairs; the
+    // value returns once it clears (spec-view-66).
+    expect(threshold.disabled).toBe(true);
+    expect(counted()).toBe("showing all 2 pairs of billing");
     const own = edge("billing", "auth");
     const citer = edge("session", "billing");
     expect(own.getAttribute("data-direction")).toBe("cites");
@@ -1838,30 +1886,34 @@ describe("spec-view-20: citation graph beside the outline", () => {
     expect(screen.getByTestId("rollup-billing").textContent).toBe("3 · 1");
     expect(screen.getByTestId("unresolved-billing")).toBeTruthy();
 
-    // Every channel and affordance in use is keyed (spec-view-24).
-    const graph = screen.getByTestId("spec-graph");
-    for (const key of [
-      "cited by packages",
-      "not cited by packages",
-      "size — items",
-      "→N: billing cites it N times",
-      "←N: it cites billing N times",
-    ]) {
-      expect(within(graph).getByText(key)).toBeTruthy();
+    // The panel's heads read the two hues; the key names the roles and
+    // size, holds no control, and reads the same either way
+    // (spec-view-24, spec-view-25).
+    const panel = screen.getByTestId("graph-relationships");
+    expect(within(panel).getByText("← cited by").className).toContain("text-neutral-700");
+    expect(within(panel).getByText("cites →").className).toContain("text-brand-600");
+    const legend = screen.getByTestId("graph-legend");
+    const selectedKey = legend.textContent;
+    for (const key of ["cited by other packages", "not cited by other packages", "size = items"]) {
+      expect(within(legend).getByText(key)).toBeTruthy();
     }
+    expect(legend.querySelector("button, input, a")).toBeNull();
     fireEvent.click(screen.getByLabelText("Spec package citation graph"));
-    expect(
-      within(graph).getByText(
-        "the overview omits weaker relationships — select a package for all",
-      ),
-    ).toBeTruthy();
-    expect(within(graph).getByText(/click opens/)).toBeTruthy();
-    expect(screen.getByTestId("graph-fit")).toBeTruthy();
+    expect(legend.textContent).toBe(selectedKey);
+    expect(threshold.disabled).toBe(false);
+    expect(threshold.value).toBe("3");
+    expect(within(legend).getByText(/click opens/)).toBeTruthy();
+    // Above the picture stand the threshold and the fit, and nothing
+    // else (spec-view-66).
+    const toolbar = screen.getByTestId("graph-toolbar");
+    expect(toolbar.querySelectorAll("button, input")).toHaveLength(2);
+    expect(within(toolbar).getByText("Fit to window")).toBeTruthy();
     restore();
   });
 
-  // spec-view-38: a neighborhood too crowded for its names lists them.
-  test("a crowded selection lists every neighbor, most first, and focus lifts one", () => {
+  // spec-view-38: the panel names every neighbor, whatever room the
+  // names found.
+  test("the panel lists every neighbor, most first; focus lifts one and activation selects it", () => {
     const restore = sized({ width: 330, height: 300 });
     const spokes = Array.from({ length: 14 }, (_, i) =>
       file(`spoke-${String(i + 1).padStart(2, "0")}`, [
@@ -1879,6 +1931,9 @@ describe("spec-view-20: citation graph beside the outline", () => {
     render(<Harness tree={tree} />);
     fireEvent.click(node("hub"));
     const list = screen.getByTestId("graph-relationships");
+    expect(within(list).getByTestId("graph-relationships-summary").textContent).toBe(
+      "1 item · cites 0 · cited by 17",
+    );
     const entries = within(list).getAllByRole("listitem");
     expect(entries).toHaveLength(14);
     // Most first: the three spokes citing twice lead.
@@ -1886,10 +1941,11 @@ describe("spec-view-20: citation graph beside the outline", () => {
     expect(entries[0].textContent).toContain("←2");
     expect(entries[13].textContent).toContain("←1");
     // Focus lifts the entry's node.
-    act(() => (entries[5] as HTMLElement).focus());
+    const entry = within(entries[5]).getByRole("button");
+    act(() => entry.focus());
     const name = entries[5].getAttribute("data-testid")!.replace("graph-relationship-", "");
     expect(screen.getByTestId(`graph-halo-${name}`)).toBeTruthy();
-    act(() => (entries[5] as HTMLElement).blur());
+    act(() => entry.blur());
 
     // A name without a place shows once its node takes keyboard focus
     // (spec-view-22).
@@ -1897,8 +1953,14 @@ describe("spec-view-20: citation graph beside the outline", () => {
       .map((spoke) => spoke.basename)
       .find((spoke) => !screen.queryByTestId(`graph-label-${spoke}`));
     expect(unnamed).toBeTruthy();
-    fireEvent.focus(node(unnamed!));
+    act(() => (node(unnamed!) as unknown as HTMLElement).focus());
     expect(screen.getByTestId(`graph-label-${unnamed}`)).toBeTruthy();
+    act(() => (node(unnamed!) as unknown as HTMLElement).blur());
+
+    // Activating an entry selects that package (spec-view-25).
+    fireEvent.click(within(entries[0]).getByRole("button"));
+    expect(screen.getByTestId("graph-halo-spoke-01")).toBeTruthy();
+    expect(screen.queryByTestId("graph-halo-hub")).toBeNull();
     restore();
   });
 
@@ -1966,7 +2028,7 @@ describe("spec-view-20: citation graph beside the outline", () => {
     const numeral =
       node("auth").querySelectorAll("text")[0].getAttribute("class") ?? "";
     const legend =
-      screen.getByText("size — items").parentElement?.getAttribute("class") ??
+      screen.getByText("size = items").parentElement?.getAttribute("class") ??
       "";
 
     for (const theme of ["light", "dark"] as const) {
@@ -1998,16 +2060,21 @@ describe("spec-view-20: citation graph beside the outline", () => {
 
     const first = render(<Harness tree={GRAPH_TREE} />);
     const settled = positions();
-    // A package no citation reaches stands in the foot row, under its
-    // caption and below every arranged node (spec-view-28).
+    // A package no citation reaches stands in the foot row, with no
+    // caption, below every arranged node, and its card says why
+    // (spec-view-28, spec-view-26).
     const glossary = settled[3];
     expect(node("glossary").getAttribute("data-foot")).toBe("true");
-    expect(screen.getByTestId("graph-foot").textContent).toBe(
-      "Packages without citations",
-    );
+    expect(screen.queryByText("Packages without citations")).toBeNull();
+    expect(document.querySelector("svg line[stroke-width='1']")).toBeNull();
     for (const [, y] of settled.slice(0, 3)) {
       expect(glossary[1]).toBeGreaterThan(y);
     }
+    act(() => (node("glossary") as unknown as HTMLElement).focus());
+    expect(
+      within(screen.getByTestId("graph-card")).getByText("No citations with other packages"),
+    ).toBeTruthy();
+    act(() => (node("glossary") as unknown as HTMLElement).blur());
 
     // Every node keeps its activation-target floor (spec-view-28), and
     // every shown name keeps 5px from other circles, clears the other
@@ -2115,9 +2182,16 @@ describe("spec-view-20: citation graph beside the outline", () => {
     expect(screen.queryByTestId("graph-halo-glossary")).toBeNull();
     fireEvent.mouseLeave(node("glossary"));
 
+    // A press focuses its node too, but no card follows it once the
+    // pointer leaves: only a keyboard's focus inspects (spec-view-26).
+    fireEvent.pointerDown(node("billing"));
+    act(() => (node("billing") as unknown as HTMLElement).focus());
+    expect(screen.queryByTestId("graph-card")).toBeNull();
+    act(() => (node("billing") as unknown as HTMLElement).blur());
+
     // Keyboard focus reaches a node, shows its card, and Enter opens
     // it (spec-view-25, spec-view-26).
-    fireEvent.focus(node("billing"));
+    act(() => (node("billing") as unknown as HTMLElement).focus());
     const card = screen.getByTestId("graph-card");
     expect(within(card).getByText("billing")).toBeTruthy();
     expect(within(card).getByText(/3 items in total/)).toBeTruthy();
@@ -2130,7 +2204,7 @@ describe("spec-view-20: citation graph beside the outline", () => {
     expect(
       screen.getByTestId("file-toggle-billing").getAttribute("aria-expanded"),
     ).toBe("true");
-    fireEvent.blur(node("billing"));
+    act(() => (node("billing") as unknown as HTMLElement).blur());
 
     // Escape dismisses the selection once no hover holds the
     // emphasis (spec-view-25).
@@ -2314,6 +2388,80 @@ describe("spec-view-55/26: nothing outgrows the pane it is drawn in", () => {
     expect(
       cardPlacement({ left: 100, top: 40 }, { width: 300, height: 120 }, { width: 224, height: 220 }).top,
     ).toBe(8);
+  });
+
+  // spec-view-27: the camera is bounded by the fitted frame, never by
+  // how far the layout reaches.
+  test("the camera keeps half its view over the fitted frame", () => {
+    const frame = { width: 400, height: 300 };
+    // At the fit the bound is half the frame each way.
+    const far = boundCamera(zoomIdentity.translate(900, -900), frame);
+    expect([far.x, far.y]).toEqual([200, -150]);
+    const inside = zoomIdentity.translate(120, -60);
+    expect(boundCamera(inside, frame)).toBe(inside);
+    // Zoomed in, the view is smaller and still reaches the frame's
+    // far edge, keeping half of itself over it.
+    const zoomed = boundCamera(zoomIdentity.translate(-5000, 0).scale(2), frame);
+    expect(zoomed.x).toBe(200 - 800);
+    const view = { x0: -zoomed.x / 2, x1: (400 - zoomed.x) / 2 };
+    expect(Math.min(400, view.x1) - Math.max(0, view.x0)).toBe((view.x1 - view.x0) / 2);
+  });
+
+  // spec-view-43: the reveal clears the panel by the least move.
+  test("a node under the panel moves below it, or left where that is shorter", () => {
+    const view = { x0: 0, y0: 0, x1: 400, y1: 440 };
+    const panel = { x0: 192, y0: 8, x1: 392, y1: 205 };
+    // In the top-right corner, under the panel: down past it.
+    expect(revealShift({ x0: 300, y0: 20, x1: 380, y1: 120 }, view, panel, 5)).toEqual({
+      dx: 0,
+      dy: 190,
+    });
+    // At the panel's left edge, stepping left is the shorter way.
+    expect(revealShift({ x0: 180, y0: 100, x1: 230, y1: 150 }, view, panel, 5)).toEqual({
+      dx: -43,
+      dy: 0,
+    });
+    // Already clear: no move.
+    expect(revealShift({ x0: 20, y0: 300, x1: 100, y1: 380 }, view, panel, 5)).toBeNull();
+    // Outside the view with no panel: the least move into it.
+    expect(revealShift({ x0: -50, y0: 100, x1: 30, y1: 150 }, view, null, 5)).toEqual({
+      dx: 55,
+      dy: 0,
+    });
+  });
+
+  // spec-view-66: a tree whose every pair totals one falls back to
+  // each package's heaviest pair.
+  test("the default threshold keeps within 1.5 pairs a package", () => {
+    const names = ["a", "b", "c", "d", "e"];
+    const files = names.map((name) => ({
+      path: `specs/packages/${name}.md`,
+      key: name,
+      dir: "",
+      basename: name,
+      title: name,
+      intent: "",
+      notices: [],
+      items: [
+        {
+          id: `${name}-1`,
+          group: "external" as const,
+          section: "External Behavior",
+          firstLine: "",
+          text: "",
+          cites: names.filter((other) => other > name).map((other) => `${other}-1`),
+        },
+      ],
+    }));
+    const model = buildGraphModel(files, (text) => text.length * 6.4);
+    expect(model.pairs).toHaveLength(10);
+    expect(model.maxTotal).toBe(1);
+    // Ten pairs exceed 7.5 at the first stop, so the last stop holds.
+    expect(model.defaultThreshold).toBe(2);
+    const floor = model.pairs.filter((pair) => pair.backbone);
+    expect(floor.length).toBeLessThanOrEqual(names.length);
+    // Ties go to the partner first by name: e's heaviest is a–e.
+    expect(floor.some((pair) => pair.a === "a" && pair.b === "e")).toBe(true);
   });
 });
 

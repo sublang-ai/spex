@@ -209,6 +209,10 @@ msgid "{count, plural, one {# issue} other {# issues}} left."
 msgstr "{count, plural, other {剩余 # 个问题}}。"
 
 #: src/components/SpecGraph.tsx
+msgid "{count, plural, one {# item} other {# items}}"
+msgstr "{count} 个条目"
+
+#: src/components/SpecGraph.tsx
 msgid "{count, plural, one {# item} other {# items}} in total"
 msgstr "共 {count, plural, other {# 个条目}}"
 
@@ -705,15 +709,10 @@ msgstr "← 返回"
 msgid "← Back to {surface}"
 msgstr "← 返回{surface}"
 
-#. graph legend: ink edges and ←N count what cites the selected package
+#. graph panel column head: how often each package cites the selected one
 #: src/components/SpecGraph.tsx
-msgid "←N: it cites {name} N times"
-msgstr "←N：它引用 {name} N 次"
-
-#. graph legend: purple edges and →N count what the selected package cites
-#: src/components/SpecGraph.tsx
-msgid "→N: {name} cites it N times"
-msgstr "→N：{name} 引用它 N 次"
+msgid "← cited by"
+msgstr "← 被引用"
 
 #. act: jump to the end of the transcript; ↓ stays as it is
 #. act: jump to the end of the transcript; ↓ stays as it is
@@ -1781,8 +1780,8 @@ msgid "cited by {in}"
 msgstr "被引用 {in}"
 
 #: src/components/SpecGraph.tsx
-msgid "cited by packages"
-msgstr "被规约包引用"
+msgid "cited by other packages"
+msgstr "被其他包引用"
 
 #. row label over the items this one cites
 #. row label over the items this one cites
@@ -1805,6 +1804,11 @@ msgstr "引用 {out}"
 #: src/lib/spec-view-model.ts
 msgid "cites {out} · cited by {in}"
 msgstr "引用 {out} · 被引用 {in}"
+
+#. graph panel column head: how often the selected package cites each one
+#: src/components/SpecGraph.tsx
+msgid "cites →"
+msgstr "它引用 →"
 
 #: src/components/AgentSettings.tsx
 msgid "Clear the fast-mode choice; this adapter does not accept it."
@@ -2632,6 +2636,14 @@ msgstr "例如 Apache-2.0"
 msgid "e.g. triage"
 msgstr "例如 triage"
 
+#: src/components/SpecGraph.tsx
+msgid "each package keeps one · showing {drawn} / {total} pairs"
+msgstr "每个包至少一条 · 显示 {drawn} / {total} 对"
+
+#: src/components/SpecGraph.tsx
+msgid "each package's heaviest pair only"
+msgstr "仅每包最强一对"
+
 #. editor mode: the plain text field
 #. open the whole-file editor on the source
 #. open this file in the editor
@@ -3024,8 +3036,8 @@ msgstr "已完成 — 确认？"
 
 #. control: show the whole graph at once
 #: src/components/SpecGraph.tsx
-msgid "Fit"
-msgstr "全览"
+msgid "Fit to window"
+msgstr "适应窗口"
 
 #: src/lib/labels.ts
 msgid "Fix the adapter in Settings"
@@ -3626,6 +3638,11 @@ msgstr "旧版会话附属文件"
 msgid "License"
 msgstr "许可证"
 
+#. graph control: draw package pairs with at least this many citations
+#: src/components/SpecGraph.tsx
+msgid "Lines ≥"
+msgstr "连线 ≥"
+
 #. compile phase: slc links the machine
 #: src/lib/compile-log.ts
 msgid "Link"
@@ -3719,6 +3736,11 @@ msgstr "产生了多次提交"
 msgid "manifest"
 msgstr "清单"
 
+#. spec view footer link: the tree's index file
+#: src/components/SpecView.tsx
+msgid "map.md index"
+msgstr "map.md 索引"
+
 #: src/components/DashboardSurface.tsx
 msgid "Mark {title} reviewed"
 msgstr "将 {title} 标记为已审阅"
@@ -3751,6 +3773,11 @@ msgstr "{name} 的成员"
 #: src/components/Composer.tsx
 msgid "Message the Captain…"
 msgstr "给 Captain 发消息…"
+
+#. spec view footer link: the file defining how specs are written
+#: src/components/SpecView.tsx
+msgid "meta.md spec format"
+msgstr "meta.md 规约格式"
 
 #. a file family that stays on this device
 #: src/lib/space.ts
@@ -3982,6 +4009,10 @@ msgstr "尚未使用任何适配器 — 为 Captain 或某个规程角色指定�
 msgid "no automatic check for this adapter — verify sign-in yourself"
 msgstr "此适配器无自动检查 — 请自行确认登录状态"
 
+#: src/components/SpecGraph.tsx
+msgid "No citations with other packages"
+msgstr "与其他包无引用关系"
+
 #: src/components/SettingsSurface.tsx
 msgid "No config file"
 msgstr "没有配置文件"
@@ -4138,8 +4169,8 @@ msgid "Not checked yet"
 msgstr "尚未检查"
 
 #: src/components/SpecGraph.tsx
-msgid "not cited by packages"
-msgstr "未被规约包引用"
+msgid "not cited by other packages"
+msgstr "未被其他包引用"
 
 #: src/lib/client.ts
 msgid "not connected"
@@ -4566,11 +4597,6 @@ msgstr "归属未知"
 #: src/lib/compile-log.ts
 msgid "Package"
 msgstr "打包"
-
-#. graph caption over the packages that cite nothing and that nothing cites
-#: src/components/SpecGraph.tsx
-msgid "Packages without citations"
-msgstr "无引用关系的包"
 
 #: src/components/SpaceGroups.tsx
 msgid "Pairs it with its folder on this device"
@@ -5863,6 +5889,10 @@ msgstr "显示侧栏（{keys}）"
 msgid "Show the whole graph (0)"
 msgstr "显示完整图谱（0）"
 
+#: src/components/SpecGraph.tsx
+msgid "showing all {count} pairs of {name}"
+msgstr "显示 {name} 的全部 {count} 对"
+
 #: src/components/SpaceExplorer.tsx
 msgid "Showing the first {lines} lines; the file is longer."
 msgstr "仅显示前 {lines} 行；文件更长。"
@@ -5946,10 +5976,10 @@ msgstr "登录 {host}"
 msgid "Signs this device out of {host}; every record stays here"
 msgstr "让此设备退出 {host}；所有记录仍保留在此"
 
-#. graph legend: a node's size counts its items
+#. graph key: a node's size counts its items
 #: src/components/SpecGraph.tsx
-msgid "size — items"
-msgstr "大小 — 条目数"
+msgid "size = items"
+msgstr "大小 = 条目数"
 
 #. a spec package's artifact kind: an Agent Skills folder
 #: src/lib/environments.ts
@@ -6511,11 +6541,6 @@ msgstr "无法加载意图台账：{reason}"
 #: src/components/EnvironmentSection.tsx
 msgid "The original text stands"
 msgstr "保留原文"
-
-#. graph legend: resting lines show only the strongest package pairs
-#: src/components/SpecGraph.tsx
-msgid "the overview omits weaker relationships — select a package for all"
-msgstr "全览省略了较弱的关系，选中包可看全部"
 
 #: src/App.tsx
 msgid "The project's spec packages ({keys})"

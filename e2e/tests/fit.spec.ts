@@ -440,14 +440,14 @@ async function assertSurfaceMatrix(
         await expect(page.getByTestId("specv-live")).toBeVisible();
         // The graph half fills the split's box beside the outline, or
         // its own floor where that is taller, and the drawing surface
-        // fills the half less its legend (spec-view-59). A pane whose height
+        // fills the half less its controls and key (spec-view-59). A pane whose height
         // fails to resolve is exactly as tall as its legend plus the
         // 150px an svg falls back to, so the half is measured against
         // the box it owes its height to, never against itself.
         const fill = await page.getByTestId("spec-graph").evaluate((pane) => {
           const svg = pane.querySelector("svg");
           const others = Array.from(pane.children)
-            .filter((child) => child !== svg)
+            .filter((child) => !child.contains(svg))
             .reduce((sum, child) => sum + child.getBoundingClientRect().height, 0);
           const half = pane.parentElement!;
           const split = half.parentElement!;

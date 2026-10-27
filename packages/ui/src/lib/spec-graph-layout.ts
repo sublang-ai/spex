@@ -50,9 +50,9 @@ export const MARK_SCALE_FLOOR = 12;
 export const MARK_CAP_FRACTION = 0.15;
 /** Every edge's width, in pixels: width carries no count (DR-158). */
 export const EDGE_WIDTH = 2;
-/** A pair whose citations in both directions total this many belongs
- * to the resting backbone (spec-view-23). */
-export const BACKBONE_MIN = 6;
+/** The default threshold draws at most this many backbone pairs per
+ * linked package (spec-view-66). */
+export const BACKBONE_BUDGET = 1.5;
 /** Label size and the gap under a node's rim, in pixels. */
 export const LABEL_FONT_SIZE = 12;
 export const LABEL_GAP = 6;
@@ -71,8 +71,9 @@ export const LABEL_CIRCLE_CLEARANCE = 5;
 export const LABEL_EDGE_CLEARANCE = 10;
 /** A label's box height as placement reserves it. */
 export const LABEL_HEIGHT = LABEL_FONT_SIZE + 4;
-/** The foot row's caption line, above its marks (spec-view-28). */
-export const FOOT_CAPTION = 18;
+/** The gap between the arrangement and the foot row: the picture's
+ * own spacing, with no rule or caption between (spec-view-28). */
+export const FOOT_GAP = 12;
 /** How far the two axis scales may differ — bounded fill, never the
  * unbounded stretch DR-026 §4 condemned. */
 export const ASPECT_RELAXATION = 1.25;
@@ -146,7 +147,11 @@ export interface GraphPair {
   ab: number;
   ba: number;
   total: number;
-  /** Drawn at rest: heavy enough, or some package's heaviest pair. */
+  /** Some package's heaviest pair: drawn at every threshold, so no
+   * linked package looks unlinked (spec-view-23). */
+  floor: boolean;
+  /** Drawn at the default threshold — the pairs the arrangement
+   * settles over (spec-view-28). */
   backbone: boolean;
 }
 
@@ -156,6 +161,11 @@ export interface GraphModel {
   edges: GraphEdge[];
   /** Every pair, undirected — what the resting backbone draws. */
   pairs: GraphPair[];
+  /** The threshold's stops run 1..maxTotal, then maxTotal + 1 — the
+   * last stop, drawing the floor pairs alone (spec-view-66). */
+  maxTotal: number;
+  /** The lowest stop within the budget (spec-view-66). */
+  defaultThreshold: number;
 }
 
 export function buildGraphModel(
@@ -239,6 +249,7 @@ export function buildGraphModel(
       ab: 0,
       ba: 0,
       total: 0,
+      floor: false,
       backbone: false,
     };
     if (forward) pair.ab += weight;
@@ -247,25 +258,58 @@ export function buildGraphModel(
     pairsByKey.set(pairKey, pair);
   }
 
-  // The backbone: every heavy pair, and each package's heaviest, so no
-  // linked package looks unlinked at rest (spec-view-23). Ties go to
-  // the pair sorting first, keeping the picture a function of the tree.
+  // Each package's heaviest pair stands at every threshold, so no
+  // linked package looks unlinked at rest; a tie goes to the partner
+  // sorting first, keeping the picture a function of the tree
+  // (spec-view-23).
   const pairs = [...pairsByKey.values()];
   const heaviest = new Map<string, GraphPair>();
   for (const pair of pairs) {
-    for (const end of [pair.a, pair.b]) {
+    for (const [end, partner] of [
+      [pair.a, pair.b],
+      [pair.b, pair.a],
+    ]) {
       const held = heaviest.get(end);
-      if (!held || pair.total > held.total) heaviest.set(end, pair);
+      const heldPartner = held ? (held.a === end ? held.b : held.a) : "";
+      if (
+        !held ||
+        pair.total > held.total ||
+        (pair.total === held.total && partner < heldPartner)
+      ) {
+        heaviest.set(end, pair);
+      }
     }
   }
-  for (const pair of pairs) {
-    pair.backbone =
-      pair.total >= BACKBONE_MIN ||
-      heaviest.get(pair.a) === pair ||
-      heaviest.get(pair.b) === pair;
-  }
+  for (const pair of heaviest.values()) pair.floor = true;
 
-  return { nodes, edges, pairs };
+  const maxTotal = pairs.reduce((max, pair) => Math.max(max, pair.total), 0);
+  const linked = nodes.filter((node) => node.linked).length;
+  const defaultThreshold = lowestWithin(pairs, maxTotal, linked * BACKBONE_BUDGET);
+  for (const pair of pairs) pair.backbone = drawnAt(pair, defaultThreshold);
+
+  return { nodes, edges, pairs, maxTotal, defaultThreshold };
+}
+
+/** Whether a pair draws at rest at this threshold (spec-view-23). */
+export function drawnAt(pair: GraphPair, threshold: number): boolean {
+  return pair.floor || pair.total >= threshold;
+}
+
+/** The lowest stop drawing no more than `budget` pairs. The last stop
+ * draws the floor pairs alone — at most one per linked package, under
+ * any budget of 1.5 per package — so one always qualifies
+ * (spec-view-66). */
+function lowestWithin(
+  pairs: readonly GraphPair[],
+  maxTotal: number,
+  budget: number,
+): number {
+  for (let stop = 1; stop <= maxTotal; stop++) {
+    let drawn = 0;
+    for (const pair of pairs) if (drawnAt(pair, stop)) drawn += 1;
+    if (drawn <= budget) return stop;
+  }
+  return maxTotal + 1;
 }
 
 // --- Arrangement ------------------------------------------------------------
@@ -328,8 +372,9 @@ function forceSeparation(margin: number): Force<GraphNode, GraphEdge> {
 export function createSimulation(
   model: GraphModel,
 ): Simulation<GraphNode, GraphEdge> {
-  // The arrangement follows the backbone alone, so the clusters it
-  // draws show; weak pairs would only knot them together (DR-158).
+  // The arrangement follows the default backbone alone, so the
+  // clusters it draws show and the reader's threshold never moves a
+  // node; weak pairs would only knot them together (DR-158).
   const links: GraphEdge[] = model.pairs
     .filter((pair) => pair.backbone)
     .map((pair) => ({
@@ -399,8 +444,8 @@ export interface Presentation {
   places: Map<string, Placement>;
   /** The one solved mark scale (pixels per unit radius). */
   scale: number;
-  /** Where the foot row begins, its caption line included; absent
-   * when every package is linked (spec-view-28). */
+  /** Where the foot row begins; absent when every package is linked
+   * (spec-view-28). */
   footTop?: number;
   /** Presentation pixels back to model space — what a drag needs, so
    * the pointer can address the arrangement the simulation holds. */
@@ -477,12 +522,12 @@ function pairContactScale(a: SolveMark, b: SolveMark): number {
   return Math.max(vertical, horizontal);
 }
 
-/** The foot row's height at a mark scale: its caption, its tallest
- * circle, and the label hung beneath (spec-view-28). */
+/** The foot row's height at a mark scale: the gap above it, its
+ * tallest circle, and the label hung beneath (spec-view-28). */
 function footHeight(foot: readonly GraphNode[], scale: number): number {
   if (foot.length === 0) return 0;
   const tallest = Math.max(...foot.map((node) => node.unit * scale));
-  return FOOT_CAPTION + 2 * tallest + LABEL_GAP + LABEL_HEIGHT + FIT_PADDING;
+  return FOOT_GAP + 2 * tallest + LABEL_GAP + LABEL_HEIGHT + FIT_PADDING;
 }
 
 /** Maps a settled arrangement onto the pane and solves the picture's
@@ -672,7 +717,7 @@ export function presentLayout(
   if (foot.length > 0) {
     footTop = arranged.length > 0 ? height : FIT_PADDING;
     const tallest = Math.max(...foot.map((node) => node.unit * scale));
-    const cy = footTop + FOOT_CAPTION + tallest;
+    const cy = footTop + FOOT_GAP + tallest;
     const slots = foot.map((node) =>
       Math.max(2 * node.unit * scale, labels.get(node.key)!.width),
     );

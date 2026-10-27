@@ -1123,6 +1123,42 @@ export function SpecView(props: SpecViewProps) {
     );
   }
 
+  /** The tree's two documents, in the outline pane's footer outside
+   * its scroll, named by file and use; every tree form carries the
+   * same footer (spec-view-7). */
+  const recordsFooter = (placement: string): ReactNode => (
+    <div
+      data-testid="records-footer"
+      className={`flex flex-wrap items-center gap-x-1.5 border-neutral-200 text-xs text-neutral-500 dark:border-neutral-800 ${placement}`}
+    >
+      <button
+        id="specv-records-map"
+        type="button"
+        data-testid="records-map"
+        onClick={() => openRecord(MAP_RECORD, "specv-records-map")}
+        className="hover:text-neutral-700 dark:hover:text-neutral-300"
+      >
+        {i18n._({
+          id: "map.md index",
+          comment: "spec view footer link: the tree's index file",
+        })}
+      </button>
+      <span aria-hidden="true">·</span>
+      <button
+        id="specv-records-meta"
+        type="button"
+        data-testid="records-meta"
+        onClick={() => openRecord(META_RECORD, "specv-records-meta")}
+        className="hover:text-neutral-700 dark:hover:text-neutral-300"
+      >
+        {i18n._({
+          id: "meta.md spec format",
+          comment: "spec view footer link: the file defining how specs are written",
+        })}
+      </button>
+    </div>
+  );
+
   // A legacy layout — user/dev/test group directories or a
   // compositions/ collection — renders migration guidance instead of
   // a tree (SPECV-18).
@@ -1150,28 +1186,9 @@ export function SpecView(props: SpecViewProps) {
         </p>
         {copyCommand("npx @sublang/spex scaffold --update")}
         {/* A legacy tree parses no packages, but its records are read
-            all the same and stay reachable (spec-view-18). */}
-        <div className="flex items-center justify-center gap-1.5 border-t border-neutral-200 pt-3 text-xs text-neutral-500 dark:border-neutral-800">
-          <button
-            id="specv-records-meta"
-            type="button"
-            data-testid="records-meta"
-            onClick={() => openRecord(META_RECORD, "specv-records-meta")}
-            className="hover:text-neutral-700 dark:hover:text-neutral-300"
-          >
-            meta
-          </button>
-          <span aria-hidden="true">·</span>
-          <button
-            id="specv-records-map"
-            type="button"
-            data-testid="records-map"
-            onClick={() => openRecord(MAP_RECORD, "specv-records-map")}
-            className="hover:text-neutral-700 dark:hover:text-neutral-300"
-          >
-            map
-          </button>
-        </div>
+            all the same and stay reachable, through the same footer
+            (spec-view-18, spec-view-7). */}
+        {recordsFooter("justify-center border-t pt-3")}
         {tree.decisions.length > 0 ? (
           <ul className="flex flex-col text-left">{renderDecisions()}</ul>
         ) : null}
@@ -1997,6 +2014,7 @@ export function SpecView(props: SpecViewProps) {
                   {decisionsBranch}
                 </ul>
               </div>
+              {recordsFooter("mt-auto shrink-0 border-t pt-2")}
             </div>
           </div>
           {/* The card belongs to the box that scrolls the split, so it
@@ -2012,45 +2030,27 @@ export function SpecView(props: SpecViewProps) {
               {outline}
               {decisionsBranch}
             </ul>
+            {tree.files.length === 0 ? (
+              <div className="text-sm text-neutral-500">
+                {i18n._("specs/ is present but holds no spec files yet.")}
+              </div>
+            ) : null}
             {previewCard}
+            {/* Below the outline's scroll, held at the surface's foot
+                while it scrolls (spec-view-7). */}
+            {recordsFooter(
+              "sticky -bottom-6 z-[1] -mx-6 mt-2 border-t bg-neutral-50 px-6 py-2 dark:bg-neutral-950",
+            )}
           </div>
         );
       })()}
-      {tree.files.length === 0 ? (
-        <div className="text-sm text-neutral-500">
-          {i18n._("specs/ is present but holds no spec files yet.")}
-        </div>
-      ) : null}
 
-      {/* The footer keeps only the two tree-wide documents; the
-          decision records live in the outline now (spec-view-7). */}
-      <div className="mt-2 flex shrink-0 items-center gap-1.5 border-t border-neutral-200 pt-2 text-xs text-neutral-500 dark:border-neutral-800">
-        <button
-          id="specv-records-meta"
-          type="button"
-          data-testid="records-meta"
-          onClick={() => openRecord(META_RECORD, "specv-records-meta")}
-          className="hover:text-neutral-700 dark:hover:text-neutral-300"
-        >
-          meta
-        </button>
-        <span aria-hidden="true">·</span>
-        <button
-          id="specv-records-map"
-          type="button"
-          data-testid="records-map"
-          onClick={() => openRecord(MAP_RECORD, "specv-records-map")}
-          className="hover:text-neutral-700 dark:hover:text-neutral-300"
-        >
-          map
-        </button>
-      </div>
       {jumpOrigins.length > 0 ? (
         <button
           type="button"
           data-testid="jump-back"
           onClick={popJumpOrigin}
-          className="sticky bottom-2 z-10 self-center rounded-full border border-neutral-300 bg-white px-3 py-1 text-xs text-neutral-600 shadow-md hover:bg-neutral-50 dark:border-neutral-600 dark:bg-neutral-900 dark:text-neutral-300 dark:hover:bg-neutral-800"
+          className="sticky bottom-12 z-10 self-center rounded-full border border-neutral-300 bg-white px-3 py-1 text-xs text-neutral-600 shadow-md hover:bg-neutral-50 dark:border-neutral-600 dark:bg-neutral-900 dark:text-neutral-300 dark:hover:bg-neutral-800"
         >
           {i18n._("back to {id}", { id: jumpOrigins[jumpOrigins.length - 1] })}
         </button>

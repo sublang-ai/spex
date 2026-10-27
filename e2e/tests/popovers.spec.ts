@@ -354,8 +354,109 @@ test.describe("the Specs surface at its floor", () => {
       );
       await node.blur();
     }
+
+    // The relationship panel stands at the top-right; selecting the
+    // package nearest that corner moves the camera the least that
+    // clears it — no zoom, half the view still over the fitted frame —
+    // and clearing returns the fit (spec-view-43, spec-view-25,
+    // spec-view-27).
+    const layer = pane.locator("svg > g").first();
+    const frame = page.getByTestId("graph-frame");
+    const frameBox = await boxOf(frame);
+    const corner = await nodes.evaluateAll(
+      (elements, at) =>
+        elements
+          .map((element, index) => {
+            const box = element.getBoundingClientRect();
+            return {
+              index,
+              d: Math.hypot(at.right - (box.x + box.width / 2), box.y + box.height / 2 - at.top),
+              foot: element.getAttribute("data-foot") === "true",
+            };
+          })
+          .filter((entry) => !entry.foot)
+          .sort((a, b) => a.d - b.d)[0].index,
+      { right: frameBox.x + frameBox.width, top: frameBox.y },
+    );
+    const chosen = nodes.nth(corner);
+    const name = (await chosen.getAttribute("data-testid"))!.replace("graph-node-", "");
+    await chosen.focus();
+    await chosen.press("Enter");
+    const panel = page.getByTestId("graph-relationships");
+    await expect(panel).toBeVisible();
+    await expectRevealed(page, name);
+    const camera = await layer.getAttribute("transform");
+    const [, tx, ty, k] = /translate\(([-\d.e]+),([-\d.e]+)\) scale\(([-\d.e]+)\)/.exec(camera!)!.map(Number);
+    expect(k, "the reveal zoomed").toBe(1);
+    const svgBox = await boxOf(pane.locator("svg").first());
+    for (const [shift, span] of [
+      [tx, svgBox.width],
+      [ty, svgBox.height],
+    ]) {
+      const overlap = Math.min(span, span - shift) - Math.max(0, -shift);
+      expect(overlap, "the view left the fitted frame").toBeGreaterThanOrEqual(span / 2 - 0.5);
+    }
+    await pane.locator("svg").first().press("Escape");
+    await expect(panel).toHaveCount(0);
+    await expect(layer).toHaveAttribute("transform", "translate(0,0) scale(1)");
+
+    // At the browser's floor with the sidebar collapsed, only the
+    // drawing scrolls sideways; the controls, the panel and the key
+    // stay in the pane's visible width, and a selection brings its node
+    // into it clear of the panel (spec-view-59, spec-view-43).
+    await page.setViewportSize({ width: FLOOR, height: SHORT });
+    const scroller = page.getByTestId("graph-scroller");
+    await expect(scroller).toBeVisible();
+    const scroll = await scroller.evaluate((element) => ({
+      width: element.scrollWidth,
+      client: element.clientWidth,
+    }));
+    expect(scroll.client, "the graph is wider than the floor it was measured at").toBeLessThan(320);
+    expect(scroll.width).toBeGreaterThanOrEqual(320);
+    await pageDoesNotScroll(page);
+    const narrow = await boxOf(frame);
+    for (const id of ["graph-toolbar", "graph-legend"]) {
+      const box = await boxOf(page.getByTestId(id));
+      expect(box.x, `${id} starts left of the pane`).toBeGreaterThanOrEqual(narrow.x - 0.5);
+      expect(box.x + box.width, `${id} runs past the pane`).toBeLessThanOrEqual(narrow.x + narrow.width + 0.5);
+    }
+    await chosen.focus();
+    await chosen.press("Enter");
+    await expect(panel).toBeVisible();
+    const panelBox = await boxOf(panel);
+    expect(panelBox.x).toBeGreaterThanOrEqual(narrow.x - 0.5);
+    expect(panelBox.x + panelBox.width).toBeLessThanOrEqual(narrow.x + narrow.width + 0.5);
+    await expectRevealed(page, name);
+    await pane.locator("svg").first().press("Escape");
+    await pageDoesNotScroll(page);
   });
 });
+
+/** The selected node and its circle lie in the graph's visible frame,
+ * clear of the relationship panel (spec-view-43). */
+async function expectRevealed(page: Page, name: string): Promise<void> {
+  await expect
+    .poll(async () => {
+      const [frame, panel, circle] = await Promise.all([
+        boxOf(page.getByTestId("graph-frame")),
+        boxOf(page.getByTestId("graph-relationships")),
+        boxOf(page.getByTestId(`graph-node-${name}`)),
+      ]);
+      const label = page.getByTestId(`graph-label-${name}`);
+      const marks = [circle];
+      if (await label.count()) marks.push(await boxOf(label));
+      return marks.every(
+        (mark) =>
+          mark.x >= frame.x - 0.5 &&
+          mark.x + mark.width <= frame.x + frame.width + 0.5 &&
+          (mark.x + mark.width <= panel.x ||
+            mark.x >= panel.x + panel.width ||
+            mark.y >= panel.y + panel.height ||
+            mark.y + mark.height <= panel.y),
+      );
+    }, { message: `${name} lies under the panel or outside the frame` })
+    .toBe(true);
+}
 
 test.describe("a labelled Sources row", () => {
   test.use({ appOptions: { project: true, forge: true } });

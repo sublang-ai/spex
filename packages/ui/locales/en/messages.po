@@ -209,6 +209,10 @@ msgid "{count, plural, one {# issue} other {# issues}} left."
 msgstr "{count, plural, one {# issue} other {# issues}} left."
 
 #: src/components/SpecGraph.tsx
+msgid "{count, plural, one {# item} other {# items}}"
+msgstr "{count, plural, one {# item} other {# items}}"
+
+#: src/components/SpecGraph.tsx
 msgid "{count, plural, one {# item} other {# items}} in total"
 msgstr "{count, plural, one {# item} other {# items}} in total"
 
@@ -705,15 +709,10 @@ msgstr "← Back"
 msgid "← Back to {surface}"
 msgstr "← Back to {surface}"
 
-#. graph legend: ink edges and ←N count what cites the selected package
+#. graph panel column head: how often each package cites the selected one
 #: src/components/SpecGraph.tsx
-msgid "←N: it cites {name} N times"
-msgstr "←N: it cites {name} N times"
-
-#. graph legend: purple edges and →N count what the selected package cites
-#: src/components/SpecGraph.tsx
-msgid "→N: {name} cites it N times"
-msgstr "→N: {name} cites it N times"
+msgid "← cited by"
+msgstr "← cited by"
 
 #. act: jump to the end of the transcript; ↓ stays as it is
 #. act: jump to the end of the transcript; ↓ stays as it is
@@ -1781,8 +1780,8 @@ msgid "cited by {in}"
 msgstr "cited by {in}"
 
 #: src/components/SpecGraph.tsx
-msgid "cited by packages"
-msgstr "cited by packages"
+msgid "cited by other packages"
+msgstr "cited by other packages"
 
 #. row label over the items this one cites
 #. row label over the items this one cites
@@ -1805,6 +1804,11 @@ msgstr "cites {out}"
 #: src/lib/spec-view-model.ts
 msgid "cites {out} · cited by {in}"
 msgstr "cites {out} · cited by {in}"
+
+#. graph panel column head: how often the selected package cites each one
+#: src/components/SpecGraph.tsx
+msgid "cites →"
+msgstr "cites →"
 
 #: src/components/AgentSettings.tsx
 msgid "Clear the fast-mode choice; this adapter does not accept it."
@@ -2632,6 +2636,14 @@ msgstr "e.g. Apache-2.0"
 msgid "e.g. triage"
 msgstr "e.g. triage"
 
+#: src/components/SpecGraph.tsx
+msgid "each package keeps one · showing {drawn} / {total} pairs"
+msgstr "each package keeps one · showing {drawn} / {total} pairs"
+
+#: src/components/SpecGraph.tsx
+msgid "each package's heaviest pair only"
+msgstr "each package's heaviest pair only"
+
 #. editor mode: the plain text field
 #. open the whole-file editor on the source
 #. open this file in the editor
@@ -3024,8 +3036,8 @@ msgstr "finished — confirm?"
 
 #. control: show the whole graph at once
 #: src/components/SpecGraph.tsx
-msgid "Fit"
-msgstr "Fit"
+msgid "Fit to window"
+msgstr "Fit to window"
 
 #: src/lib/labels.ts
 msgid "Fix the adapter in Settings"
@@ -3626,6 +3638,11 @@ msgstr "legacy session sidecar"
 msgid "License"
 msgstr "License"
 
+#. graph control: draw package pairs with at least this many citations
+#: src/components/SpecGraph.tsx
+msgid "Lines ≥"
+msgstr "Lines ≥"
+
 #. compile phase: slc links the machine
 #: src/lib/compile-log.ts
 msgid "Link"
@@ -3719,6 +3736,11 @@ msgstr "Made more than one commit"
 msgid "manifest"
 msgstr "manifest"
 
+#. spec view footer link: the tree's index file
+#: src/components/SpecView.tsx
+msgid "map.md index"
+msgstr "map.md index"
+
 #: src/components/DashboardSurface.tsx
 msgid "Mark {title} reviewed"
 msgstr "Mark {title} reviewed"
@@ -3751,6 +3773,11 @@ msgstr "Members of {name}"
 #: src/components/Composer.tsx
 msgid "Message the Captain…"
 msgstr "Message the Captain…"
+
+#. spec view footer link: the file defining how specs are written
+#: src/components/SpecView.tsx
+msgid "meta.md spec format"
+msgstr "meta.md spec format"
 
 #. a file family that stays on this device
 #: src/lib/space.ts
@@ -3982,6 +4009,10 @@ msgstr "No adapters in use yet — assign agents to the Captain or a playbook ro
 msgid "no automatic check for this adapter — verify sign-in yourself"
 msgstr "no automatic check for this adapter — verify sign-in yourself"
 
+#: src/components/SpecGraph.tsx
+msgid "No citations with other packages"
+msgstr "No citations with other packages"
+
 #: src/components/SettingsSurface.tsx
 msgid "No config file"
 msgstr "No config file"
@@ -4138,8 +4169,8 @@ msgid "Not checked yet"
 msgstr "Not checked yet"
 
 #: src/components/SpecGraph.tsx
-msgid "not cited by packages"
-msgstr "not cited by packages"
+msgid "not cited by other packages"
+msgstr "not cited by other packages"
 
 #: src/lib/client.ts
 msgid "not connected"
@@ -4566,11 +4597,6 @@ msgstr "ownership unknown"
 #: src/lib/compile-log.ts
 msgid "Package"
 msgstr "Package"
-
-#. graph caption over the packages that cite nothing and that nothing cites
-#: src/components/SpecGraph.tsx
-msgid "Packages without citations"
-msgstr "Packages without citations"
 
 #: src/components/SpaceGroups.tsx
 msgid "Pairs it with its folder on this device"
@@ -5863,6 +5889,10 @@ msgstr "Show the sidebar ({keys})"
 msgid "Show the whole graph (0)"
 msgstr "Show the whole graph (0)"
 
+#: src/components/SpecGraph.tsx
+msgid "showing all {count} pairs of {name}"
+msgstr "showing all {count} pairs of {name}"
+
 #: src/components/SpaceExplorer.tsx
 msgid "Showing the first {lines} lines; the file is longer."
 msgstr "Showing the first {lines} lines; the file is longer."
@@ -5946,10 +5976,10 @@ msgstr "Signs in to {host}"
 msgid "Signs this device out of {host}; every record stays here"
 msgstr "Signs this device out of {host}; every record stays here"
 
-#. graph legend: a node's size counts its items
+#. graph key: a node's size counts its items
 #: src/components/SpecGraph.tsx
-msgid "size — items"
-msgstr "size — items"
+msgid "size = items"
+msgstr "size = items"
 
 #. a spec package's artifact kind: an Agent Skills folder
 #: src/lib/environments.ts
@@ -6511,11 +6541,6 @@ msgstr "The ledger could not be loaded: {reason}"
 #: src/components/EnvironmentSection.tsx
 msgid "The original text stands"
 msgstr "The original text stands"
-
-#. graph legend: resting lines show only the strongest package pairs
-#: src/components/SpecGraph.tsx
-msgid "the overview omits weaker relationships — select a package for all"
-msgstr "the overview omits weaker relationships — select a package for all"
 
 #: src/App.tsx
 msgid "The project's spec packages ({keys})"
