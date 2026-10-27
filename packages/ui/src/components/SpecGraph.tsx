@@ -38,6 +38,7 @@ import {
   placeLabels,
   presentLayout,
   settle,
+  stopAt,
   EDGE_WIDTH,
   GRAPH_GROUP_ORDER,
   LABEL_FONT_SIZE,
@@ -52,6 +53,7 @@ import { i18n } from "../i18n.js";
 
 export {
   buildGraphModel,
+  stopAt,
   type GraphEdge,
   type GraphNode,
 } from "../lib/spec-graph-layout.js";
@@ -89,6 +91,10 @@ export function cardPlacement(
 /** How far the selection halo reaches past a node's rim: its offset
  * and half its stroke. */
 const HALO_REACH = 6;
+
+/** Where the selection's edges stop short of its rim: past the halo
+ * with a little air, so the halo never covers a glyph (spec-view-23). */
+const HALO_CLEARANCE = HALO_REACH + 2;
 
 /** What a reveal leaves between the selected node and the frame's
  * edge or the panel (spec-view-43). */
@@ -246,35 +252,108 @@ function prefersReducedMotion(): boolean {
 }
 
 /**
- * Text whose box holds the widest of its forms, so a change of state
- * never rewraps the controls above the graph: their height is the
- * canvas's, and a canvas that changes height moves every node
- * (spec-view-66). The other forms stand invisible in the same cell.
+ * The threshold's number field: up and down through the stops that
+ * change the picture, by its arrows, the arrow keys, Home and End, or a
+ * typed number taking the stop that draws the same lines
+ * (spec-view-66).
  */
-function Steady({
-  shown,
-  sizes,
-  className,
-  testId,
+function ThresholdField({
+  stops,
+  value,
+  onChange,
+  valueText,
 }: {
-  shown: string;
-  sizes: readonly string[];
-  className?: string;
-  testId?: string;
+  stops: readonly number[];
+  value: number;
+  onChange: (stop: number) => void;
+  valueText: string;
 }) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const index = stops.indexOf(value);
+  const first = stops[0] ?? 1;
+  const last = stops[stops.length - 1] ?? 1;
+  const step = (by: number) => {
+    const next = stops[Math.min(Math.max(index + by, 0), stops.length - 1)];
+    if (next !== undefined && next !== value) onChange(next);
+  };
+  const commit = () => {
+    if (draft === null) return;
+    setDraft(null);
+    const typed = Number.parseInt(draft, 10);
+    if (Number.isFinite(typed)) onChange(stopAt(stops, typed));
+  };
+  const arrow =
+    "flex h-3.5 w-4 items-center justify-center text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800 disabled:pointer-events-none disabled:opacity-35 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-100";
   return (
-    <span className={`inline-grid ${className ?? ""}`}>
-      <span data-testid={testId} className="col-start-1 row-start-1">
-        {shown}
+    <span className="inline-flex h-7 shrink-0 items-stretch overflow-hidden rounded-md border border-neutral-300 bg-white focus-within:border-brand-600 focus-within:ring-1 focus-within:ring-brand-600 dark:border-neutral-700 dark:bg-neutral-900 dark:focus-within:border-brand-400 dark:focus-within:ring-brand-400">
+      <input
+        type="text"
+        inputMode="numeric"
+        role="spinbutton"
+        data-testid="graph-threshold"
+        aria-label={i18n._({
+          id: "Minimum citations per pair",
+          comment: "graph threshold field: the fewest citations a drawn package pair has",
+        })}
+        aria-valuemin={first}
+        aria-valuemax={last}
+        aria-valuenow={value}
+        aria-valuetext={valueText}
+        value={draft ?? String(value)}
+        size={Math.max(2, String(last).length)}
+        onChange={(event) => setDraft(event.currentTarget.value.replace(/[^0-9]/g, ""))}
+        onBlur={commit}
+        onKeyDown={(event) => {
+          const moves: Record<string, () => void> = {
+            ArrowUp: () => step(1),
+            ArrowDown: () => step(-1),
+            Home: () => onChange(first),
+            End: () => onChange(last),
+            Enter: commit,
+          };
+          const move = moves[event.key];
+          if (!move) return;
+          event.preventDefault();
+          if (event.key !== "Enter") setDraft(null);
+          move();
+        }}
+        className="w-8 bg-transparent px-1 text-center text-sm tabular-nums text-neutral-800 outline-none dark:text-neutral-100"
+      />
+      <span className="flex flex-col border-l border-neutral-300 dark:border-neutral-700">
+        <button
+          type="button"
+          tabIndex={-1}
+          data-testid="graph-threshold-up"
+          aria-label={i18n._("Raise the threshold")}
+          disabled={value >= last}
+          onClick={() => step(1)}
+          className={arrow}
+        >
+          <svg viewBox="0 0 10 6" className="h-1.5 w-2.5" aria-hidden="true">
+            <path d="M1 5l4-4 4 4" fill="none" stroke="currentColor" strokeWidth="1.5" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          tabIndex={-1}
+          data-testid="graph-threshold-down"
+          aria-label={i18n._("Lower the threshold")}
+          disabled={value <= first}
+          onClick={() => step(-1)}
+          className={`${arrow} border-t border-neutral-300 dark:border-neutral-700`}
+        >
+          <svg viewBox="0 0 10 6" className="h-1.5 w-2.5" aria-hidden="true">
+            <path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.5" />
+          </svg>
+        </button>
       </span>
-      {sizes.map((size, i) => (
-        <span key={i} aria-hidden="true" className="invisible col-start-1 row-start-1">
-          {size}
-        </span>
-      ))}
     </span>
   );
 }
+
+/** Stands in for the number field while the sentence is translated, so
+ * each language keeps its own word order around it. */
+const FIELD_MARK = "\u0001";
 
 export interface SpecGraphProps {
   files: readonly SpecFileInfo[];
@@ -736,33 +815,42 @@ export function SpecGraph({
   // --- Threshold (spec-view-66) ----------------------------------------------
 
   /** The reader's stop, or null for the default; it lasts while the
-   * view stays open, and a selection only disables it. */
+   * view stays open, and a selection only sets it aside. */
   const [chosen, setChosen] = useState<number | null>(null);
-  const lastStop = model.maxTotal + 1;
-  const threshold = Math.min(lastStop, Math.max(1, chosen ?? model.defaultThreshold));
+  const threshold = stopAt(model.stops, chosen ?? model.defaultThreshold);
   const drawnPairs = model.pairs.filter((pair) => drawnAt(pair, threshold));
-  const thresholdText = (stop: number) =>
-    stop === lastStop
-      ? i18n._("each package's heaviest pair only")
-      : i18n._("{count, plural, one {# citation} other {# citations}}", { count: stop });
-  const restPairsText = (drawn: number) =>
-    i18n._("each package keeps one · showing {drawn} / {total} pairs", {
-      drawn,
-      total: model.pairs.length,
-    });
-  const selectionPairsText = (name: string, count: number) =>
-    i18n._("showing all {count} pairs of {name}", { count, name });
-  /** The widest a selection's count can read, so selecting never
-   * rewraps the controls and resizes the canvas under the nodes. */
-  const widestSelection = useMemo(() => {
-    let widest = "";
-    for (const node of model.nodes) {
-      const text = selectionPairsText(node.basename, model.pairs.length);
-      if (measureLabel(text) > measureLabel(widest)) widest = text;
-    }
-    return widest;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [model]);
+  const firstStop = model.stops[0] ?? 1;
+  const lastStop = model.stops[model.stops.length - 1] ?? 1;
+  /** At its ends the sentence says what the number cannot: everything,
+   * or each package's strongest pair alone. */
+  const thresholdNote =
+    threshold === firstStop
+      ? i18n._({ id: "(all pairs)", comment: "graph threshold at its lowest: every pair draws" })
+      : threshold === lastStop
+        ? i18n._({
+            id: "(each package's strongest only)",
+            comment: "graph threshold at its highest: only each package's heaviest pair draws",
+          })
+        : null;
+  const [thresholdBefore, thresholdAfter] = i18n
+    ._({
+      id: "Only pairs with ≥ {field} {count, plural, one {citation} other {citations}}",
+      comment: "graph threshold sentence; {field} is the number field holding {count}",
+      values: { field: FIELD_MARK, count: threshold },
+    })
+    .split(FIELD_MARK);
+  const thresholdText = `${thresholdBefore ?? ""}${threshold}${thresholdAfter ?? ""}${
+    thresholdNote ? ` ${thresholdNote}` : ""
+  }`;
+  /** The panel's state, lasting across selections while the view stays
+   * open (spec-view-25). */
+  const [panelOpen, setPanelOpen] = useState(true);
+  /** The fit control rests while the camera already shows the fitted
+   * frame (spec-view-27). */
+  const atFit =
+    Math.abs(transform.k - 1) < 1e-3 &&
+    Math.abs(transform.x) < 0.5 &&
+    Math.abs(transform.y) < 0.5;
 
   // --- Render ----------------------------------------------------------------
 
@@ -798,11 +886,14 @@ export function SpecGraph({
     const forward = from < to;
     const ox = (forward ? -uy : uy) * spread;
     const oy = (forward ? ux : -ux) * spread;
+    // The selection's halo stands off its rim; its edges stop outside it.
+    const start = source.r + (from === selectedName ? HALO_CLEARANCE : 0);
+    const end = target.r + headRoom + (to === selectedName ? HALO_CLEARANCE : 0);
     return {
-      x1: source.x + ux * source.r + ox,
-      y1: source.y + uy * source.r + oy,
-      x2: target.x - ux * (target.r + headRoom) + ox,
-      y2: target.y - uy * (target.r + headRoom) + oy,
+      x1: source.x + ux * start + ox,
+      y1: source.y + uy * start + oy,
+      x2: target.x - ux * end + ox,
+      y2: target.y - uy * end + oy,
     };
   };
 
@@ -982,63 +1073,44 @@ export function SpecGraph({
       data-testid="spec-graph"
       className="@container relative flex min-h-0 flex-1 flex-col"
     >
-      {/* Above the picture, only what changes it: the threshold and
-          the fit (spec-view-66). */}
+      {/* Above the picture, only the sentence that changes it; a
+          selection sets it aside for its own count, on a line of fixed
+          height so the canvas — and every node — stays put
+          (spec-view-66). */}
       <div
         data-testid="graph-toolbar"
-        className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 pb-2 text-xs text-neutral-600 dark:text-neutral-400"
+        className="flex h-9 shrink-0 items-center gap-1.5 overflow-hidden whitespace-nowrap pb-2 text-xs text-neutral-600 dark:text-neutral-400"
       >
-        <label className="flex items-center gap-1.5 whitespace-nowrap">
-          <span>
-            {i18n._({
-              id: "Lines ≥",
-              comment: "graph control: draw package pairs with at least this many citations",
+        {selectedNode ? (
+          <span data-testid="graph-threshold-selection" className="min-w-0 truncate">
+            {i18n._("showing all {count} pairs of {name}", {
+              count: neighbors.size,
+              name: selectedNode.basename,
             })}
           </span>
-          <input
-            type="range"
-            data-testid="graph-threshold"
-            min={1}
-            max={lastStop}
-            step={1}
-            value={threshold}
-            disabled={selectedName !== null || model.pairs.length === 0}
-            aria-valuetext={
-              threshold === lastStop
-                ? i18n._("each package's heaviest pair only")
-                : i18n._("{count, plural, one {# citation} other {# citations}}", {
-                    count: threshold,
-                  })
-            }
-            onChange={(event) => setChosen(Number(event.currentTarget.value))}
-            className="w-20 accent-brand-600 disabled:opacity-50 dark:accent-brand-400"
-          />
-          <Steady
-            testId="graph-threshold-value"
-            className="tabular-nums"
-            shown={thresholdText(threshold)}
-            sizes={[thresholdText(lastStop), thresholdText(model.maxTotal)]}
-          />
-        </label>
-        <Steady
-          testId="graph-threshold-count"
-          className="min-w-0"
-          shown={
-            selectedNode
-              ? selectionPairsText(selectedNode.basename, neighbors.size)
-              : restPairsText(drawnPairs.length)
-          }
-          sizes={[restPairsText(model.pairs.length), widestSelection]}
-        />
-        <button
-          type="button"
-          data-testid="graph-fit"
-          title={i18n._("Show the whole graph (0)")}
-          onClick={applyFit}
-          className="ml-auto rounded border border-neutral-300 px-1.5 py-0.5 text-neutral-600 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
-        >
-          {i18n._({ id: "Fit to window", comment: "control: show the whole graph at once" })}
-        </button>
+        ) : model.pairs.length > 0 ? (
+          <span
+            data-testid="graph-threshold-sentence"
+            aria-label={thresholdText}
+            className="flex min-w-0 items-center gap-1.5"
+          >
+            <span className="shrink-0">{thresholdBefore?.trim()}</span>
+            <ThresholdField
+              stops={model.stops}
+              value={threshold}
+              onChange={setChosen}
+              valueText={thresholdText}
+            />
+            <span className="flex min-w-0 gap-1">
+              <span className="shrink-0">{thresholdAfter?.trim()}</span>
+              {thresholdNote ? (
+                <span className="min-w-0 truncate text-neutral-500 dark:text-neutral-500">
+                  {thresholdNote}
+                </span>
+              ) : null}
+            </span>
+          </span>
+        ) : null}
       </div>
 
       <div ref={frameRef} data-testid="graph-frame" className="relative flex min-h-0 flex-1">
@@ -1349,6 +1421,30 @@ export function SpecGraph({
           />
         ) : null}
 
+        {/* The fit, where maps keep it: a corner icon, resting while the
+            camera already shows the fitted frame (spec-view-27). */}
+        <button
+          type="button"
+          data-testid="graph-fit"
+          aria-label={i18n._({ id: "Fit to window", comment: "control: show the whole graph at once" })}
+          aria-keyshortcuts="0"
+          title={i18n._("Fit to window (0)")}
+          disabled={atFit}
+          onClick={applyFit}
+          className="absolute bottom-2 right-2 z-[5] flex h-7 w-7 items-center justify-center rounded-md border border-neutral-300 bg-white/95 text-neutral-700 shadow-sm hover:bg-neutral-100 disabled:pointer-events-none disabled:opacity-40 dark:border-neutral-700 dark:bg-neutral-900/95 dark:text-neutral-200 dark:hover:bg-neutral-800"
+        >
+          <svg viewBox="0 0 16 16" className="h-4 w-4" aria-hidden="true">
+            <path
+              d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </button>
+
         {/* The relationship panel: fixed at the top-right for every
             selection, naming the package's totals and every neighbor
             with both counts, most first, under heads in the two edge
@@ -1360,9 +1456,43 @@ export function SpecGraph({
             data-testid="graph-relationships"
             className="absolute right-2 top-2 z-[5] flex max-h-[45%] w-52 max-w-[calc(100%-1rem)] flex-col rounded-lg border border-neutral-200 bg-white/95 text-xs shadow-md dark:border-neutral-700 dark:bg-neutral-900/95"
           >
-            <div className="shrink-0 border-b border-neutral-200 px-2.5 py-1.5 dark:border-neutral-700">
-              <div className="truncate font-medium text-neutral-800 dark:text-neutral-100">
-                {i18n._("{name}'s relationships", { name: selectedNode.basename })}
+            <div
+              className={`shrink-0 px-2.5 py-1.5 ${
+                panelOpen ? "border-b border-neutral-200 dark:border-neutral-700" : ""
+              }`}
+            >
+              <div className="flex items-center gap-1">
+                <div className="min-w-0 flex-1 truncate font-medium text-neutral-800 dark:text-neutral-100">
+                  {i18n._("{name}'s relationships", { name: selectedNode.basename })}
+                </div>
+                <button
+                  type="button"
+                  data-testid="graph-relationships-toggle"
+                  aria-expanded={panelOpen}
+                  aria-controls="graph-relationships-list"
+                  aria-label={
+                    panelOpen
+                      ? i18n._("Collapse relationships")
+                      : i18n._("Expand relationships")
+                  }
+                  title={
+                    panelOpen
+                      ? i18n._("Collapse relationships")
+                      : i18n._("Expand relationships")
+                  }
+                  onClick={() => setPanelOpen((open) => !open)}
+                  className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-100"
+                >
+                  <svg
+                    viewBox="0 0 10 6"
+                    className={`h-1.5 w-2.5 transition-transform motion-reduce:transition-none ${
+                      panelOpen ? "" : "-rotate-90"
+                    }`}
+                    aria-hidden="true"
+                  >
+                    <path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.5" />
+                  </svg>
+                </button>
               </div>
               <div
                 data-testid="graph-relationships-summary"
@@ -1378,7 +1508,7 @@ export function SpecGraph({
                 })}
               </div>
             </div>
-            {relationships.length > 0 ? (
+            {panelOpen && relationships.length > 0 ? (
               <>
                 <div
                   aria-hidden="true"
@@ -1399,6 +1529,7 @@ export function SpecGraph({
                   </span>
                 </div>
                 <ul
+                  id="graph-relationships-list"
                   aria-label={i18n._("{name}'s relationships", { name: selectedNode.basename })}
                   className="max-h-48 min-h-0 overflow-y-auto py-1"
                 >
@@ -1547,13 +1678,6 @@ export function SpecGraph({
         <span className="flex items-center gap-1.5 whitespace-nowrap">
           <span className="h-2.5 w-2.5 rounded-full border-2 border-neutral-700 bg-neutral-100 dark:border-neutral-200 dark:bg-neutral-800" />
           {i18n._("not cited by other packages")}
-        </span>
-        <span className="whitespace-nowrap">
-          {i18n._({ id: "size = items", comment: "graph key: a node's size counts its items" })}
-        </span>
-        {/* A tip, not a key: it yields first in a narrow pane (DR-041). */}
-        <span className="ml-auto hidden whitespace-nowrap @md:inline">
-          {i18n._("click opens · drag moves · scroll zooms")}
         </span>
       </div>
     </div>

@@ -107,10 +107,20 @@ msgstr "· {age}检查过"
 msgid "· reads better as a conversation"
 msgstr "· 以对话形式阅读更佳"
 
+#. graph threshold at its lowest: every pair draws
+#: src/components/SpecGraph.tsx
+msgid "(all pairs)"
+msgstr "（全部）"
+
 #. effort choice: leave the adapter's own default
 #: src/components/AgentEditor.tsx
 msgid "(default)"
 msgstr "（默认）"
+
+#. graph threshold at its highest: only each package's heaviest pair draws
+#: src/components/SpecGraph.tsx
+msgid "(each package's strongest only)"
+msgstr "（每个包只留最强一条）"
 
 #: src/components/Markdown.tsx
 msgid "[external image blocked: {alt}]"
@@ -1826,10 +1836,6 @@ msgstr "清除搜索"
 msgid "Clear the search (Escape)"
 msgstr "清除搜索（Esc）"
 
-#: src/components/SpecGraph.tsx
-msgid "click opens · drag moves · scroll zooms"
-msgstr "单击打开 · 拖动移动 · 滚动缩放"
-
 #: src/state/store.ts
 msgid "client not connected"
 msgstr "客户端未连接"
@@ -1921,6 +1927,10 @@ msgstr "收起图片 {name}"
 #: src/lib/shortcuts.ts
 msgid "Collapse or show the sidebar"
 msgstr "折叠或显示侧栏"
+
+#: src/components/SpecGraph.tsx
+msgid "Collapse relationships"
+msgstr "收起关系"
 
 #: src/components/NavRail.tsx
 msgid "Collapse the sidebar"
@@ -2636,14 +2646,6 @@ msgstr "例如 Apache-2.0"
 msgid "e.g. triage"
 msgstr "例如 triage"
 
-#: src/components/SpecGraph.tsx
-msgid "each package keeps one · showing {drawn} / {total} pairs"
-msgstr "每个包至少一条 · 显示 {drawn} / {total} 对"
-
-#: src/components/SpecGraph.tsx
-msgid "each package's heaviest pair only"
-msgstr "仅每包最强一对"
-
 #. editor mode: the plain text field
 #. open the whole-file editor on the source
 #. open this file in the editor
@@ -2871,6 +2873,10 @@ msgstr "展开图片"
 msgid "Expand image {name}"
 msgstr "展开图片 {name}"
 
+#: src/components/SpecGraph.tsx
+msgid "Expand relationships"
+msgstr "展开关系"
+
 #. tab: browse the files of a spex repository
 #: src/components/SpaceSurface.tsx
 msgid "Explore"
@@ -3038,6 +3044,10 @@ msgstr "已完成 — 确认？"
 #: src/components/SpecGraph.tsx
 msgid "Fit to window"
 msgstr "适应窗口"
+
+#: src/components/SpecGraph.tsx
+msgid "Fit to window (0)"
+msgstr "适应窗口（0）"
 
 #: src/lib/labels.ts
 msgid "Fix the adapter in Settings"
@@ -3638,11 +3648,6 @@ msgstr "旧版会话附属文件"
 msgid "License"
 msgstr "许可证"
 
-#. graph control: draw package pairs with at least this many citations
-#: src/components/SpecGraph.tsx
-msgid "Lines ≥"
-msgstr "连线 ≥"
-
 #. compile phase: slc links the machine
 #: src/lib/compile-log.ts
 msgid "Link"
@@ -3710,6 +3715,10 @@ msgstr "本地更改（{count}）"
 #: src/components/SpaceMembers.tsx
 msgid "Login at {host}"
 msgstr "{host} 上的用户名"
+
+#: src/components/SpecGraph.tsx
+msgid "Lower the threshold"
+msgstr "降低门槛"
 
 #: src/lib/drafts.ts
 msgid "Lowercase letters and digits in words joined by single hyphens, at most 64 characters"
@@ -3783,6 +3792,11 @@ msgstr "meta.md 规约格式"
 #: src/lib/space.ts
 msgid "migration receipts and inputs"
 msgstr "迁移回执与输入文件"
+
+#. graph threshold field: the fewest citations a drawn package pair has
+#: src/components/SpecGraph.tsx
+msgid "Minimum citations per pair"
+msgstr "每对关系的最少引用数"
 
 #: src/components/EnvironmentSection.tsx
 msgid "Missing on this device: {path}"
@@ -4398,6 +4412,11 @@ msgstr "每个状态行为一条规范规约条目 — 编译器的中间阶段"
 msgid "One spec item per state behavior, from the last compile"
 msgstr "每个状态行为一条规约条目，来自上次编译"
 
+#. graph threshold sentence; {field} is the number field holding {count}
+#: src/components/SpecGraph.tsx
+msgid "Only pairs with ≥ {field} {count, plural, one {citation} other {citations}}"
+msgstr "只显示 ≥ {field} {count, plural, other {条引用的关系}}"
+
 #. open a seat on a team server
 #. open this authoring session's workspace
 #: src/components/LibrarySurface.tsx
@@ -4938,6 +4957,10 @@ msgstr "排队提交失败：{reason}"
 #: src/components/ForgeItemRow.tsx
 msgid "Queuing…"
 msgstr "排队中…"
+
+#: src/components/SpecGraph.tsx
+msgid "Raise the threshold"
+msgstr "提高门槛"
 
 #. act: ask the agents whether they are ready now
 #: src/components/CaptainHome.tsx
@@ -5886,10 +5909,6 @@ msgid "Show the sidebar ({keys})"
 msgstr "显示侧栏（{keys}）"
 
 #: src/components/SpecGraph.tsx
-msgid "Show the whole graph (0)"
-msgstr "显示完整图谱（0）"
-
-#: src/components/SpecGraph.tsx
 msgid "showing all {count} pairs of {name}"
 msgstr "显示 {name} 的全部 {count} 对"
 
@@ -5975,11 +5994,6 @@ msgstr "登录 {host}"
 #: src/components/SpaceInstance.tsx
 msgid "Signs this device out of {host}; every record stays here"
 msgstr "让此设备退出 {host}；所有记录仍保留在此"
-
-#. graph key: a node's size counts its items
-#: src/components/SpecGraph.tsx
-msgid "size = items"
-msgstr "大小 = 条目数"
 
 #. a spec package's artifact kind: an Agent Skills folder
 #: src/lib/environments.ts

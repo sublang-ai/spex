@@ -166,6 +166,9 @@ export interface GraphModel {
   maxTotal: number;
   /** The lowest stop within the budget (spec-view-66). */
   defaultThreshold: number;
+  /** The stops that each draw a different set of lines, ascending:
+   * the lowest of every run drawing the same pairs (spec-view-66). */
+  stops: number[];
 }
 
 export function buildGraphModel(
@@ -287,12 +290,42 @@ export function buildGraphModel(
   const defaultThreshold = lowestWithin(pairs, maxTotal, linked * BACKBONE_BUDGET);
   for (const pair of pairs) pair.backbone = drawnAt(pair, defaultThreshold);
 
-  return { nodes, edges, pairs, maxTotal, defaultThreshold };
+  return {
+    nodes,
+    edges,
+    pairs,
+    maxTotal,
+    defaultThreshold,
+    stops: distinctStops(pairs, maxTotal),
+  };
 }
 
 /** Whether a pair draws at rest at this threshold (spec-view-23). */
 export function drawnAt(pair: GraphPair, threshold: number): boolean {
   return pair.floor || pair.total >= threshold;
+}
+
+/** The stops a step can land on: 1, then each stop drawing fewer
+ * pairs than the one below it. Drawing only shrinks as the stop
+ * rises, so an equal count is an equal set (spec-view-66). */
+function distinctStops(pairs: readonly GraphPair[], maxTotal: number): number[] {
+  const stops: number[] = [];
+  let previous = -1;
+  for (let stop = 1; stop <= maxTotal + 1; stop++) {
+    let drawn = 0;
+    for (const pair of pairs) if (drawnAt(pair, stop)) drawn += 1;
+    if (drawn !== previous) stops.push(stop);
+    previous = drawn;
+  }
+  return stops;
+}
+
+/** The stop drawing what `value` draws: the highest stop not above it,
+ * after clamping to the stops' range (spec-view-66). */
+export function stopAt(stops: readonly number[], value: number): number {
+  let found = stops[0] ?? 1;
+  for (const stop of stops) if (stop <= value) found = stop;
+  return found;
 }
 
 /** The lowest stop drawing no more than `budget` pairs. The last stop
