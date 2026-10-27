@@ -1058,7 +1058,10 @@ test("git-host-8: members with the host's role names and no page", async () => {
     assert.deepEqual(held.groups.map((group) => group.fullPath), ["ada", "acme", "acme/research"]);
     assert.deepEqual(held.listings.map((listing) => [listing.repository.id, listing.branchPresent, listing.members]), [[repo.id, false, null]]);
     t.host.script.failMembers(false);
-    assert.deepEqual((await readHostView(t.client)).listings.map((listing) => listing.members), [3]);
+    const before = t.host.script.requests.length;
+    assert.deepEqual((await readHostView(t.client)).listings.map((listing) => listing.members), [null]);
+    assert.equal(t.host.script.requests.slice(before).filter((request) => /\/repositories\/[^/]+\/members$/.test(request.path)).length, 0, "full views do not enumerate healthy members either");
+    assert.equal((await t.client.members({ kind: "repository", id: repo.id })).members.length, 3, "explicit Members still reads the complete membership");
   } finally {
     await t.dispose();
   }
@@ -1351,14 +1354,14 @@ test("git-host-11: each failure the host answers is a kind with the host's words
 // ---------------------------------------------------------------------------
 // git-host-21: the host's rate limit holds every call
 
-test("git-host-21: an opted-in GET recovers once and preserves the second failure and excluded calls", async (t) => {
+test("git-host-21: an opted-in GET recovers repeated throttles within its deadline and preserves excluded calls", async (t) => {
   for (const scenario of ["success", "second429", "absent", "invalid", "zero", "overcap", "members", "selected", "write"] as const) {
     await t.test(scenario, async () => {
-      const s = await setup({ holdMaxMs: 1_000 });
+      const s = await setup({ holdMaxMs: 2_500 });
       try {
         await browserSignIn(s.client);
         const id = s.host.script.addRepository({ group: "acme", name: "retry-spex" }).id;
-        const retryAfter = scenario === "absent" ? null : scenario === "invalid" ? "later" : scenario === "zero" ? "0" : scenario === "overcap" ? "2" : "1";
+        const retryAfter = scenario === "absent" ? null : scenario === "invalid" ? "later" : scenario === "zero" ? "0" : scenario === "overcap" ? "3" : "1";
         const before = s.host.script.requests.length;
         const credentialFile = credentialsPath(s.home);
         const unchanged = statSync(credentialFile, { bigint: true });
@@ -1368,7 +1371,7 @@ test("git-host-21: an opted-in GET recovers once and preserves the second failur
           : scenario === "selected" ? s.client.repository(id, { wait: true })
           : scenario === "write" ? s.client.prepareBranch(id, options)
           : s.client.groups(options);
-        if (scenario === "success") {
+        if (scenario === "success" || scenario === "second429") {
           assert.equal((await pending as unknown[]).length, 3);
           const after = statSync(credentialFile, { bigint: true });
           assert.equal(after.ino, unchanged.ino, "retry continuity never replaces the auth file");
@@ -1376,26 +1379,38 @@ test("git-host-21: an opted-in GET recovers once and preserves the second failur
         } else {
           await assert.rejects(pending, hostError("rate_limited", { retryAfter: retryAfter ?? undefined }));
         }
-        assert.equal(s.host.script.requests.length - before, scenario === "success" || scenario === "second429" ? 2 : 1);
+        const requests = s.host.script.requests.slice(before);
+        assert.ok(requests.every(r => r.path === (scenario === "members" ? `/api/v1/host/repositories/${id}/members`
+          : scenario === "selected" ? `/api/v1/host/repositories/${id}`
+          : scenario === "write" ? `/api/v1/host/repositories/${id}/spex-branch` : "/api/v1/host/groups")));
+        assert.equal(requests.length, scenario === "second429" ? 3 : scenario === "success" ? 2 : 1);
       } finally { await s.dispose(); }
     });
   }
 });
 
-test("git-host-21: the retry returns its second response's words and retry time", async () => {
-  const s = await setup();
-  try {
-    await browserSignIn(s.client);
-    let attempts = 0;
-    const client = new GitHostClient({ url: s.host.url, label: "Spex on test", credentials: fileCredentialStore(s.home, s.host.url), fetch: async (input, init) => {
-      const response = await fetch(input, init);
-      if (new URL(String(input)).pathname !== "/api/v1/host/groups") return response;
-      attempts += 1;
-      return Response.json({ error: { code: "rate_limited", message: attempts === 1 ? "First refusal" : "Second refusal" } }, { status: 429, headers: { "Retry-After": attempts === 1 ? "1" : "2" } });
-    } });
-    await assert.rejects(client.groups({ wait: true, retryRead: true }), hostError("rate_limited", { words: "Second refusal", retryAfter: "2" }));
-    assert.equal(attempts, 2);
-  } finally { await s.dispose(); }
+test("git-host-21: changing delays recover, and an over-budget refusal keeps its latest words and retry time", async (t) => {
+  for (const outcome of ["recover", "exhausted"] as const) await t.test(outcome, async () => {
+    const s = await setup();
+    try {
+      await browserSignIn(s.client);
+      let attempts = 0;
+      const client = new GitHostClient({ url: s.host.url, label: "Spex on test", credentials: fileCredentialStore(s.home, s.host.url),
+        holdMaxMs: outcome === "recover" ? 4_500 : 1_500, fetch: async (input, init) => {
+        const response = await fetch(input, init);
+        if (new URL(String(input)).pathname !== "/api/v1/host/groups") return response;
+        attempts += 1;
+        if (outcome === "recover" && attempts > 2) return response;
+        return Response.json({ error: { code: "rate_limited", message: attempts === 1 ? "First refusal" : "Second refusal" } }, { status: 429, headers: { "Retry-After": attempts === 1 ? "1" : "2" } });
+      } });
+      if (outcome === "recover") {
+        assert.equal((await client.groups({ wait: true, retryRead: true })).length, 3);
+        const requests = s.host.script.requests.filter(r => r.path === "/api/v1/host/groups");
+        assert.ok(requests[1].at - requests[0].at >= 1_000, "the first Retry-After is respected");
+        assert.ok(requests[2].at - requests[1].at >= 2_000, "the changing Retry-After is respected");
+      } else await assert.rejects(client.groups({ wait: true, retryRead: true }), hostError("rate_limited", { words: "Second refusal", retryAfter: "2" }));
+    } finally { await s.dispose(); }
+  });
 });
 
 test("git-host-21: abort or credential replacement during the retry hold sends no replay", async (t) => {
@@ -1407,9 +1422,10 @@ test("git-host-21: abort or credential replacement during the retry hold sends n
       assert.ok(original);
       let held!: () => void;
       const holding = new Promise<void>((resolve) => { held = resolve; });
-      const client = new GitHostClient({ url: s.host.url, label: "Spex on test", credentials: store, onHold: held });
+      let holds = 0;
+      const client = new GitHostClient({ url: s.host.url, label: "Spex on test", credentials: store, onHold: () => { if (++holds === 2) held(); } });
       const stop = new AbortController();
-      s.host.script.rateLimit(1, "1");
+      s.host.script.rateLimit(2, "1");
       const before = s.host.script.requests.length;
       const pending = client.groups({ wait: true, retryRead: true, signal: stop.signal });
       const refused = assert.rejects(pending, change === "abort" ? HostWaitStopped : CredentialChanged);
@@ -1417,8 +1433,69 @@ test("git-host-21: abort or credential replacement during the retry hold sends n
       if (change === "abort") stop.abort();
       else assert.ok(store.replace(original, change === "signout" ? null : { ...original, access: "replacement-fixture-access" }));
       await refused;
-      assert.equal(s.host.script.requests.length - before, 1, "no request uses the old bearer after the hold");
+      assert.equal(s.host.script.requests.slice(before).filter(r => r.path === "/api/v1/host/groups").length, 2, "no request uses the old bearer after the second hold");
       if (change === "replace") assert.equal((await store.read())?.access, "replacement-fixture-access", "refusal preserves the replacement pair");
+    } finally { await s.dispose(); }
+  });
+});
+
+test("git-host-21: the fixed recovery deadline bounds shared holds and in-flight replays without masking other failures", async (t) => {
+  for (const outcome of ["shared-hold", "deadline", "timeout", "refused", "unavailable", "reauth"] as const) await t.test(outcome, async () => {
+    const s = await setup();
+    try {
+      await browserSignIn(s.client);
+      let firstHold!: () => void, entered!: () => void, release!: () => void;
+      const held = new Promise<void>((resolve) => { firstHold = resolve; });
+      const competingEntered = new Promise<void>((resolve) => { entered = resolve; });
+      const competingReleased = new Promise<void>((resolve) => { release = resolve; });
+      let attempts = 0, competing = true, transportAborted = false;
+      const client = new GitHostClient({ url: s.host.url, label: "Spex on test", credentials: fileCredentialStore(s.home, s.host.url),
+        holdMaxMs: 3_500, requestTimeoutMs: outcome === "timeout" ? 100 : 30_000, onHold: firstHold,
+        fetch: async (input, init) => {
+          const response = await fetch(input, init);
+          const path = new URL(String(input)).pathname;
+          if (outcome === "shared-hold" && path === "/api/v1/host/me" && competing) {
+            competing = false; entered(); await competingReleased;
+            return Response.json({ error: { code: "rate_limited", message: "Other request's hold" } }, { status: 429, headers: { "Retry-After": "4" } });
+          }
+          if (path !== "/api/v1/host/groups") return response;
+          attempts += 1;
+          if (attempts === 1) return Response.json({ error: { code: "rate_limited", message: "Initial throttle" } }, { status: 429, headers: { "Retry-After": "1" } });
+          if (outcome === "deadline" || outcome === "timeout") {
+            return new Promise<Response>((_resolve, reject) => {
+              const signal = init?.signal;
+              assert.ok(signal);
+              const aborted = () => { transportAborted = true; reject(signal.reason); };
+              signal.addEventListener("abort", aborted, { once: true });
+              if (signal.aborted) aborted();
+            });
+          }
+          if (outcome === "shared-hold") return response;
+          const [status, code] = outcome === "refused" ? [403, "host_refused"]
+            : outcome === "unavailable" ? [503, "provider_unavailable"] : [401, "invalid_token"];
+          return Response.json({ error: { code, message: "Intervening refusal" } }, { status });
+        } });
+      if (outcome === "shared-hold") {
+        const other = client.me({ wait: true });
+        const otherFailure = assert.rejects(other, hostError("rate_limited", { retryAfter: "4" }));
+        await competingEntered;
+        const pending = client.groups({ wait: true, retryRead: true });
+        const refused = assert.rejects(pending, hostError("rate_limited", { retryAfter: "1", words: "Initial throttle" }));
+        await held; await sleep(100); release(); await otherFailure;
+        let followingSettled = false;
+        const following = client.me({ wait: true }).finally(() => { followingSettled = true; });
+        await refused;
+        assert.equal(followingSettled, false, "this recovery ends before the extended origin hold releases other waiters");
+        assert.equal(attempts, 1, "the extended hold admits no replay before this request's deadline");
+        await following;
+      } else {
+        const kind = outcome === "deadline" ? "rate_limited" : outcome === "refused" ? "host_refused"
+          : outcome === "reauth" ? "reauth" : "unreachable";
+        await assert.rejects(client.groups({ wait: true, retryRead: true }), hostError(kind,
+          outcome === "deadline" ? { retryAfter: "1", words: "Initial throttle" }
+            : outcome === "timeout" ? {} : { words: "Intervening refusal" }));
+        if (outcome === "deadline" || outcome === "timeout") assert.equal(transportAborted, true);
+      }
     } finally { await s.dispose(); }
   });
 });
@@ -1439,15 +1516,69 @@ test("git-host-21, git-host-4: the one token-expired refresh spans the rate-limi
           if (expired === "after429") s.host.script.expireAccess();
           return Response.json({ error: { code: "rate_limited", message: "Read later" } }, { status: 429, headers: { "Retry-After": "1" } });
         }
-        if (expired === "before429" && attempts === 3) return Response.json({ error: { code: "token_expired", message: "Expired again" } }, { status: 401 });
+        if (attempts === 3) return Response.json({ error: { code: "rate_limited", message: "Read later again" } }, { status: 429, headers: { "Retry-After": "1" } });
+        if (expired === "before429" && attempts === 4) return Response.json({ error: { code: "token_expired", message: "Expired again" } }, { status: 401 });
         return response;
       } });
       const pending = client.groups({ wait: true, retryRead: true });
       if (expired === "before429") await assert.rejects(pending, hostError("reauth"));
       else assert.equal((await pending).length, 3);
       assert.equal(refreshGrants(s.host) - before, 1, "429 never resets the normal refresh budget");
-      assert.equal(attempts, 3);
+      assert.equal(attempts, 4);
     } finally { await s.dispose(); }
+  });
+});
+
+test("git-host-21, git-host-4: a recovery leaves a held shared refresh on Stop or deadline while its other caller stores the granted pair", async (t) => {
+  for (const outcome of ["abort", "deadline"] as const) await t.test(outcome, async () => {
+    const s = await setup();
+    let release: (() => void) | undefined;
+    let releaseExpired: (() => void) | undefined;
+    try {
+      await browserSignIn(s.client);
+      const store = fileCredentialStore(s.home, s.host.url), original = await store.read();
+      assert.ok(original);
+      let groups = 0, sharedExpired!: () => void;
+      const observed = new Promise<void>((resolve) => { sharedExpired = resolve; });
+      const expiredReleased = new Promise<void>((resolve) => { releaseExpired = resolve; });
+      const holds = holdingFetch(async (input, init) => {
+        const response = await fetch(input, init);
+        const path = new URL(String(input)).pathname;
+        if (path === "/api/v1/host/groups" && ++groups === 1) {
+          s.host.script.expireAccess();
+          return Response.json({ error: { code: "rate_limited", message: "Initial throttle" } }, { status: 429, headers: { "Retry-After": "1" } });
+        }
+        if (path === "/api/v1/host/repositories" && response.status === 401) {
+          // This actual expired answer arrived before refresh rotated the pair.
+          sharedExpired(); await expiredReleased;
+        }
+        return response;
+      });
+      const client = new GitHostClient({ url: s.host.url, label: "Spex on test", credentials: store, fetch: holds.fetch, holdMaxMs: 3_500 });
+      const gate = holds.hold((path) => path === "/api/v1/auth/token");
+      release = gate.release;
+      const stop = new AbortController(), before = refreshGrants(s.host);
+      s.host.script.expireAccess();
+      let sharedSettled = false;
+      const shared = client.repositories({ wait: true }).finally(() => { sharedSettled = true; });
+      shared.catch(() => undefined);
+      await observed;
+      const pending = client.groups({ wait: true, retryRead: true, signal: stop.signal });
+      const refused = assert.rejects(pending, outcome === "abort" ? HostWaitStopped
+        : hostError("rate_limited", { retryAfter: "1", words: "Initial throttle" }));
+      await gate.reached;
+      releaseExpired!(); await settled();
+      if (outcome === "abort") stop.abort();
+      await refused;
+      assert.equal(sharedSettled, false, "the departing caller never cancels the other caller's refresh wait");
+      assert.ok(samePair(await store.read(), original), "no granted credential is stored while its answer remains held");
+      gate.release();
+      assert.deepEqual(await shared, []);
+      assert.equal(refreshGrants(s.host) - before, 1, "both callers use the same single refresh");
+      assert.equal(groups, 2, "the departed recovery sends no later replay");
+      assert.ok(!samePair(await store.read(), original), "the shared refresh safely stores its granted pair after release");
+      assert.equal(statSync(credentialsPath(s.home)).mode & 0o777, 0o600);
+    } finally { releaseExpired?.(); release?.(); await s.dispose(); }
   });
 });
 

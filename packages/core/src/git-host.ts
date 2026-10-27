@@ -241,8 +241,17 @@ export class HostWaitStopped extends Error {
 export interface HostCallOptions {
   signal?: AbortSignal;
   wait?: boolean;
-  /** Full-view essentials alone opt into one bounded 429 GET replay. */
+  /** Full-view essentials alone opt into deadline-bounded 429 GET recovery. */
   retryRead?: boolean;
+}
+
+/** Only this request's recovery deadline expired, not its ordinary timeout. */
+class ReadRecoveryExpired extends Error {}
+
+interface ReadRecovery {
+  until: number;
+  signal: AbortSignal;
+  latest: Answer;
 }
 
 /** The pair a step used was no longer the stored one when its answer
@@ -418,7 +427,7 @@ export interface GitHostClientOptions {
   /** Called when an answer of 429 sets the instant the calls are held
    * until (git-host-21), with that instant in Unix milliseconds. */
   onHold?: (until: number) => void;
-  /** Test seam (git-host-21): the longest a rate limit holds the calls;
+  /** Test seam (git-host-21): the hold and per-request recovery bounds;
    * 120 s by default. */
   holdMaxMs?: number;
   /** On a seat (git-host-27): the server's id and the admitted person's
@@ -1103,35 +1112,53 @@ export class GitHostClient {
     if (!waits) this.refuseWhileHeld();
     let credential = await this.current(waits);
     let refreshed = false;
-    let replayed = false;
+    let recovery: ReadRecovery | undefined;
     const retryableRead = options.retryRead === true && waits && method === "GET"
       && /^\/api\/v1\/host\/(?:me|groups|repositories(?:\?[^/]*|\/[^/?]+)?)$/.test(path);
     const unchanged = (): void => {
       if (options.signal?.aborted) throw new HostWaitStopped();
       if (!this.credentials.replace(credential, credential)) throw new CredentialChanged();
     };
-    for (;;) {
-      const answer = await this.send(method, path, {
-        body, bearer: credential.access, ...options,
-        ...(replayed ? { beforeSend: unchanged } : {}),
-      });
-      if (!refreshed && answer.status === 401 && codeOf(answer) === "token_expired") {
-        if (replayed) unchanged();
-        credential = await this.refresh(credential, waits);
-        refreshed = true;
-        continue;
+    try {
+      for (;;) {
+        const answer = await this.send(method, path, {
+          body, bearer: credential.access, ...options,
+          ...(recovery ? { beforeSend: unchanged, recovery } : {}),
+        });
+        if (!refreshed && answer.status === 401 && codeOf(answer) === "token_expired") {
+          if (recovery) {
+            unchanged();
+            if (recovery.signal.aborted || this.now() >= recovery.until) throw new ReadRecoveryExpired();
+            const signal = options.signal ? AbortSignal.any([recovery.signal, options.signal]) : recovery.signal;
+            let expired!: () => void;
+            try {
+              // A shared refresh keeps its own authority; this caller's wait is bounded.
+              credential = await Promise.race([this.refresh(credential, waits), new Promise<never>((_resolve, reject) => {
+                expired = () => reject(options.signal?.aborted ? new HostWaitStopped() : new ReadRecoveryExpired());
+                signal.addEventListener("abort", expired, { once: true });
+                if (signal.aborted) expired();
+              })]);
+            } finally { signal.removeEventListener("abort", expired); }
+          } else credential = await this.refresh(credential, waits);
+          refreshed = true;
+          continue;
+        }
+        const seconds = answer.status === 429 ? retryAfterSeconds(answer.retryAfter, this.now()) : null;
+        if (answer.status === 429 && retryableRead) {
+          recovery ??= { until: this.now() + this.holdMaxMs, signal: AbortSignal.timeout(this.holdMaxMs), latest: answer };
+          recovery.latest = answer;
+          if (seconds !== null && seconds > 0 && seconds * 1000 <= recovery.until - this.now()) continue;
+        }
+        if (answer.status === 401 || REAUTH_CODES.has(codeOf(answer) ?? "")) {
+          throw this.signOutLocally(credential, new HostError("reauth", { code: codeOf(answer), words: wordsOf(answer), status: answer.status }));
+        }
+        if (answer.status < 200 || answer.status >= 300) throw answerError(answer);
+        return answer;
       }
-      const seconds = answer.status === 429 ? retryAfterSeconds(answer.retryAfter, this.now()) : null;
-      if (!replayed && retryableRead
-        && seconds !== null && seconds > 0 && seconds * 1000 <= this.holdMaxMs) {
-        replayed = true;
-        continue;
-      }
-      if (answer.status === 401 || REAUTH_CODES.has(codeOf(answer) ?? "")) {
-        throw this.signOutLocally(credential, new HostError("reauth", { code: codeOf(answer), words: wordsOf(answer), status: answer.status }));
-      }
-      if (answer.status < 200 || answer.status >= 300) throw answerError(answer);
-      return answer;
+    } catch (error) {
+      if (!(error instanceof ReadRecoveryExpired) || !recovery) throw error;
+      unchanged();
+      throw answerError(recovery.latest);
     }
   }
 
@@ -1193,14 +1220,17 @@ export class GitHostClient {
   /** Wait out the host's rate limit (git-host-21): until the instant it
    * holds, again where a later answer moves it on meanwhile; `signal`
    * ends the wait. The timer keeps no process alive. */
-  private async waitOut(signal?: AbortSignal): Promise<void> {
+  private async waitOut(signal?: AbortSignal, recovery?: ReadRecovery): Promise<void> {
     for (;;) {
       if (signal?.aborted) throw new HostWaitStopped();
+      if (recovery && (recovery.signal.aborted || this.now() >= recovery.until)) throw new ReadRecoveryExpired();
       const ms = this.holdUntil - this.now();
       if (ms <= 0) return;
       try {
-        await sleep(ms, undefined, { ref: false, ...(signal ? { signal } : {}) });
+        const waiting = recovery ? AbortSignal.any([recovery.signal, ...(signal ? [signal] : [])]) : signal;
+        await sleep(ms, undefined, { ref: false, ...(waiting ? { signal: waiting } : {}) });
       } catch {
+        if (!signal?.aborted && recovery?.signal.aborted) throw new ReadRecoveryExpired();
         throw new HostWaitStopped();
       }
     }
@@ -1234,8 +1264,8 @@ export class GitHostClient {
   /** One request to the host. A call carrying a signal, or asked to
    * wait, waits out the host's rate limit first; any other is refused
    * while it holds (git-host-21). */
-  private async send(method: string, path: string, init: { body?: unknown; bearer?: string; beforeSend?: () => void } & HostCallOptions): Promise<Answer> {
-    if (init.signal !== undefined || init.wait === true) await this.waitOut(init.signal);
+  private async send(method: string, path: string, init: { body?: unknown; bearer?: string; beforeSend?: () => void; recovery?: ReadRecovery } & HostCallOptions): Promise<Answer> {
+    if (init.signal !== undefined || init.wait === true) await this.waitOut(init.signal, init.recovery);
     else this.refuseWhileHeld();
     init.beforeSend?.();
     const headers: Record<string, string> = { accept: "application/json" };
@@ -1243,16 +1273,19 @@ export class GitHostClient {
     if (init.bearer !== undefined) headers.authorization = `Bearer ${init.bearer}`;
     let response: Response;
     let raw: string;
+    const timeout = AbortSignal.timeout(this.requestTimeoutMs);
+    const transport = init.recovery ? AbortSignal.any([timeout, init.recovery.signal]) : timeout;
     try {
       response = await this.fetchImpl(`${this.url}${path}`, {
         method,
         headers,
         body: init.body === undefined ? undefined : JSON.stringify(init.body),
         redirect: "manual",
-        signal: AbortSignal.timeout(this.requestTimeoutMs),
+        signal: transport,
       });
       raw = await response.text();
     } catch {
+      if (init.recovery?.signal.aborted && transport.reason === init.recovery.signal.reason) throw new ReadRecoveryExpired();
       throw new HostError("unreachable", { code: null, words: null });
     }
     const retryAfter = response.headers.get("retry-after");

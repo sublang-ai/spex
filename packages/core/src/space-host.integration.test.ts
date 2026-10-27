@@ -817,12 +817,12 @@ test("space-37, space-92, storage-5: a repository listed with no clone here read
   const absent = repositoryOf(signed, hostKey(host, "acme/team-spex"));
   assert.deepEqual([absent.state, absent.id, absent.code, absent.folder], ["absent", team.id, code, null]);
   // Its one listed placement, on no clone here: attached to no remote,
-  // not on this device, with its members' count (space-30, space-92).
+  // not on this device, with its count unknown (space-30, space-92).
   assert.equal(absent.placements.length, 1, JSON.stringify(absent.placements));
   const listedLine = placementOf(absent, host.url);
   assert.deepEqual(
     [listedLine.path, listedLine.id, listedLine.attached, listedLine.state, listedLine.members, listedLine.visibility, listedLine.branch, listedLine.lastSync, listedLine.outcome],
-    ["acme/team-spex", team.id, false, "absent", 2, "internal", null, null, null],
+    ["acme/team-spex", team.id, false, "absent", null, "internal", null, null, null],
   );
   assert.equal(absent.mergePending, false);
   // Members, as the host names them, read on each ask (space-62).
@@ -879,16 +879,20 @@ test("git-host-14, space-37: with every members route failing at the stand-in, a
   t.after(() => home.stop());
   const signedIn = home.client.mark();
   const signed = await signIn(home, host);
-  // Counted while the stand-in answers: the account alone (git-host-5).
-  assert.equal(placementOf(repositoryOf(signed, hostKey(host, "acme/solo-spex")), host.url).members, 1);
-  assert.equal(placementOf(repositoryOf(signed, hostKey(host, "acme/pal-spex")), host.url).members, 1);
+  // Full-view counts stay unknown even while members would answer (git-host-5).
+  assert.equal(placementOf(repositoryOf(signed, hostKey(host, "acme/solo-spex")), host.url).members, null);
+  assert.equal(placementOf(repositoryOf(signed, hostKey(host, "acme/pal-spex")), host.url).members, null);
   await home.client.waitRepository(signedIn, HOST_OWN, (repository) => repository.sync.phase === "done", 30_000);
 
-  // The stand-in fails every members route, every other answering, as
-  // spex.pub does while its service identity's read fails: a Refresh
-  // holds its read, each count unknown and the rest as listed
-  // (git-host-5).
+  // Explicit Members and the selected Check still enumerate members.
+  const explicit = await home.client.expectOk("space.members", { repository: HOST_OWN });
+  assert.equal(explicit.members.length, 1, "explicit Members still reads the account");
+  const selected = await home.client.settle("space.sync", { repository: HOST_OWN });
+  assert.equal(placementOf(selected, host.url).members, 1, "selected Check still counts its members");
+  // Even when every members route fails, Refresh reads the complete
+  // catalog and details without requesting a member count (git-host-5).
   host.script.failMembers(true);
+  const requests = host.script.requests.length;
   const before = instanceOf(await home.client.expectOk("space.get", {}), host.url)?.readAt ?? 0;
   const fromRead = home.client.mark();
   await home.client.expectOk("space.refresh", {});
@@ -900,6 +904,7 @@ test("git-host-14, space-37: with every members route failing at the stand-in, a
     [hostKey(host, "acme/pal-spex"), "absent", null],
   ]);
   assert.equal(repositoryOf(read, hostKey(host, "acme/solo-spex")).id, solo.id);
+  assert.equal(host.script.requests.slice(requests).filter((request) => /\/repositories\/[^/]+\/members$/.test(request.path)).length, 0, "Refresh enumerates no repository members");
   // A members read is the host's failure, relayed (git-host-11).
   await home.client.expectError("space.members", { repository: HOST_OWN }, "invalid_request", new RegExp(`^Could not reach ${HOST_NAME}`));
 
@@ -2375,7 +2380,7 @@ test("git-host-5: full reads expose running and failure with only local rows, pr
 for (const outcome of ["recover", "changed-credential"] as const) {
   test(`git-host-5, git-host-21: a full read's bounded GET recovery ${outcome} retains progress and settles publicly`, async (t) => {
     const host = await startHost();
-    const home = await startHome(`read-retry-${outcome}`, { host, project: false, extra: { signIn: "browser", hostHoldMaxMs: 1_000 } });
+    const home = await startHome(`read-retry-${outcome}`, { host, project: false, extra: { signIn: "browser", hostHoldMaxMs: 2_500 } });
     t.after(() => home.stop());
     const signed = home.client.mark();
     await signIn(home, host);
@@ -2393,7 +2398,8 @@ for (const outcome of ["recover", "changed-credential"] as const) {
       const url = new URL(input instanceof Request ? input.url : String(input)), path = url.pathname + url.search;
       calls.set(path, (calls.get(path) ?? 0) + 1);
       if (outcome === "recover" && url.pathname === "/api/v1/host/repositories" && url.search && page === undefined) page = path;
-      if ((path === `/api/v1/host/repositories/${target}` || path === page) && calls.get(path) === 1) {
+      const refusals = outcome === "recover" && path === `/api/v1/host/repositories/${target}` ? 2 : 1;
+      if ((path === `/api/v1/host/repositories/${target}` || path === page) && (calls.get(path) ?? 0) <= refusals) {
         faultReturned();
         return Response.json({ error: { code: "rate_limited", message: "Read after the hold" } }, { status: 429, headers: { "Retry-After": "1" } });
       }
@@ -2417,10 +2423,10 @@ for (const outcome of ["recover", "changed-credential"] as const) {
       for (const path of ["/api/v1/host", "/api/v1/host/me", "/api/v1/host/groups", "/api/v1/host/repositories"]) assert.equal(calls.get(path), 1, `${path} was not restarted`);
       assert.ok(page);
       assert.equal(calls.get(page), 2, "only the failed catalog page is replayed");
-      assert.equal(calls.get(`/api/v1/host/repositories/${target}`), 2, "only the failed detail is replayed");
+      assert.equal(calls.get(`/api/v1/host/repositories/${target}`), 3, "only the repeatedly throttled detail is replayed");
       const healthy = host.script.repositories[0].id;
       assert.equal(calls.get(`/api/v1/host/repositories/${healthy}`), 1, "completed details survive the later hold");
-      assert.equal(calls.get(`/api/v1/host/repositories/${target}/members`), 1, "member counts are not retried");
+      assert.equal(calls.get(`/api/v1/host/repositories/${target}/members`), undefined, "full reads enumerate no members");
     }
   });
 }
@@ -2474,7 +2480,7 @@ for (const stage of ["catalog", "details"] as const) {
       }
       return response;
     });
-    held = holds.hold((path) => stage === "catalog" ? path === "/api/v1/host/groups" : path === `/api/v1/host/repositories/${firstId}/members` || path === `/api/v1/host/repositories/${laterId}`);
+    held = holds.hold((path) => stage === "catalog" ? path === "/api/v1/host/groups" : path === `/api/v1/host/repositories/${laterId}`);
     client.fetchImpl = holds.fetch;
     t.after(() => { held.release(); client.fetchImpl = original; });
     const requests = host.script.requests.length, from = home.client.mark();

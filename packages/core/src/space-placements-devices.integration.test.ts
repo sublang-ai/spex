@@ -121,7 +121,7 @@ test("space-93, space-99, space-90, space-87, space-29, space-61, space-62, spac
   assert.equal((await one.client.settle("space.sync", { repository: key }, 30_000)).sync.phase, "done");
   let row = await one.client.repository(key);
   assert.deepEqual(lines(row), [[firstOrigin, true, "reachable"], [secondOrigin, false, "absent"]]);
-  assert.deepEqual([placementOf(row, second.url).id, placementOf(row, second.url).path, placementOf(row, second.url).members], [there.id, "acme/atlas-spex", 2]);
+  assert.deepEqual([placementOf(row, second.url).id, placementOf(row, second.url).path, placementOf(row, second.url).members], [there.id, "acme/atlas-spex", null]);
   assert.equal(git(there.bare, "rev-parse", "spex"), peerHead, "nothing carried to the second");
   assert.equal(pushesTo(second, "acme/atlas-spex"), 0);
   assert.equal(configOf(oneClone, `remote.${secondFolder}.url`), null);
