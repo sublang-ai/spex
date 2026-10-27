@@ -1919,7 +1919,7 @@ describe("spec-view-20: citation graph beside the outline", () => {
     // spec-view-19).
     expect(screen.getByTestId("graph-label-auth").textContent).toBe("auth →2");
     expect(screen.getByTestId("graph-label-session").textContent).toBe(
-      "session ←1 →1",
+      "session →1 ←1",
     );
     expect(screen.getByTestId("rollup-billing").textContent).toBe("3 · 1");
     expect(screen.getByTestId("unresolved-billing")).toBeTruthy();
@@ -1982,7 +1982,17 @@ describe("spec-view-20: citation graph beside the outline", () => {
     const entry = within(entries[5]).getByRole("button");
     act(() => entry.focus());
     const name = entries[5].getAttribute("data-testid")!.replace("graph-relationship-", "");
-    expect(screen.getByTestId(`graph-halo-${name}`)).toBeTruthy();
+    const ring = screen.getByTestId(`graph-halo-${name}`);
+    // Its edge stops outside the ring it now wears (spec-view-23).
+    const spokeEdge = screen.getByTestId(`graph-edge-${name}--hub`);
+    expect(
+      Math.hypot(
+        Number(spokeEdge.getAttribute("x1")) - Number(ring.getAttribute("cx")),
+        Number(spokeEdge.getAttribute("y1")) - Number(ring.getAttribute("cy")),
+      ),
+    ).toBeGreaterThan(
+      Number(ring.getAttribute("r")) + Number(ring.getAttribute("stroke-width")) / 2,
+    );
     act(() => entry.blur());
 
     // A name without a place shows once its node takes keyboard focus

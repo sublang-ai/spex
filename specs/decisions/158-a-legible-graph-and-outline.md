@@ -38,10 +38,10 @@ Amends [DR-027](027-linked-views-contract.md)'s selection voice (its isolation h
    The arrangement settles once over the default backbone, so moving the control changes which lines draw and never moves a node — it is a visibility filter, not the density control DR-026 declines.
    While a package is selected the sentence yields to the selection's pair count; the threshold lasts while the view stays open.
    Backbone lines are a mid-gray at uniform width, clearing DR-026 §3's 3:1 floor in both themes.
-   A selected package's citations all draw, directed and of uniform width — what it cites in the interaction hue, what cites it in ink — ending clear of the selection's halo, with every other edge hidden and every other mark dimmed.
+   A selected package's citations all draw, directed and of uniform width — what it cites in the interaction hue, what cites it in ink — ending clear of any ring a node wears — the selection's halo or the focus ring, with every other edge hidden and every other mark dimmed.
 2. **Counts are written, not encoded in width.**
    Edge width stops carrying the citation count: past its cap it already could not.
-   Under the selection each neighbor's name carries `←N` (it cites the selection N times) and `→N` (the selection cites it N times).
+   Under the selection each neighbor's name carries `→N` (the selection cites it N times) and `←N` (it cites the selection N times), cites before cited by as every other count in the view reads.
    A relationship panel stands in the graph's top-right corner for every selection: the package's item total and citation counts under its name, column heads in the two edge hues reading the two directions, then every neighbor by total count, bounded to about eight rows or 45% of the canvas and scrolling inside; an entry focused or hovered lifts its node and edges, and activating one selects that package.
    The panel collapses to its header line and expands again, and stays as the reader left it across selections while the view stays open.
 3. **The panel never hides the selection, and the camera comes back.**

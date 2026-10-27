@@ -1818,7 +1818,7 @@ msgstr "引用 {out} · 被引用 {in}"
 #. graph panel column head: how often the selected package cites each one
 #: src/components/SpecGraph.tsx
 msgid "cites →"
-msgstr "它引用 →"
+msgstr "引用 →"
 
 #: src/components/AgentSettings.tsx
 msgid "Clear the fast-mode choice; this adapter does not accept it."

@@ -92,8 +92,9 @@ export function cardPlacement(
  * and half its stroke. */
 const HALO_REACH = 6;
 
-/** Where the selection's edges stop short of its rim: past the halo
- * with a little air, so the halo never covers a glyph (spec-view-23). */
+/** Where edges stop short of a ringed node's rim: past the halo or
+ * focus ring with a little air, so no ring covers a glyph
+ * (spec-view-23). */
 const HALO_CLEARANCE = HALO_REACH + 2;
 
 /** What a reveal leaves between the selected node and the frame's
@@ -886,9 +887,12 @@ export function SpecGraph({
     const forward = from < to;
     const ox = (forward ? -uy : uy) * spread;
     const oy = (forward ? ux : -ux) * spread;
-    // The selection's halo stands off its rim; its edges stop outside it.
-    const start = source.r + (from === selectedName ? HALO_CLEARANCE : 0);
-    const end = target.r + headRoom + (to === selectedName ? HALO_CLEARANCE : 0);
+    // A ring — the selection's halo or the focus ring — stands off its
+    // node's rim; edges stop outside it.
+    const ringed = (name: string) =>
+      name === selectedName || name === keyFocus || name === lifted;
+    const start = source.r + (ringed(from) ? HALO_CLEARANCE : 0);
+    const end = target.r + headRoom + (ringed(to) ? HALO_CLEARANCE : 0);
     return {
       x1: source.x + ux * start + ox,
       y1: source.y + uy * start + oy,
@@ -917,8 +921,8 @@ export function SpecGraph({
     .map(({ x1, y1, x2, y2 }) => [x1, y1, x2, y2] as const);
 
   /** A neighbor's label carries its counts against the selection —
-   * `←N` its citations of it, `→N` the selection's of it
-   * (spec-view-25). */
+   * `→N` the selection's citations of it, then `←N` its citations of
+   * the selection, in the order every other count reads (spec-view-25). */
   const labelParts = (name: string, label: string) => {
     const counts = neighbors.get(name);
     return {
@@ -938,7 +942,7 @@ export function SpecGraph({
       const place = placeOf(node.key);
       if (!place) return [];
       const parts = labelParts(node.basename, place.label);
-      const text = `${parts.label}${parts.cited}${parts.cites}`;
+      const text = `${parts.label}${parts.cites}${parts.cited}`;
       return [
         {
           key: node.key,
@@ -1390,14 +1394,14 @@ export function SpecGraph({
                     className={`pointer-events-none fill-neutral-700 dark:fill-neutral-300 ${SURFACE_STROKE}`}
                   >
                     {parts.label}
-                    {parts.cited ? (
-                      <tspan fontWeight={600} className={CITER_TEXT}>
-                        {parts.cited}
-                      </tspan>
-                    ) : null}
                     {parts.cites ? (
                       <tspan fontWeight={600} className={EMPHASIS_FILL}>
                         {parts.cites}
+                      </tspan>
+                    ) : null}
+                    {parts.cited ? (
+                      <tspan fontWeight={600} className={CITER_TEXT}>
+                        {parts.cited}
                       </tspan>
                     ) : null}
                   </text>
@@ -1454,7 +1458,7 @@ export function SpecGraph({
           <div
             ref={panelRef}
             data-testid="graph-relationships"
-            className="absolute right-2 top-2 z-[5] flex max-h-[45%] w-52 max-w-[calc(100%-1rem)] flex-col rounded-lg border border-neutral-200 bg-white/95 text-xs shadow-md dark:border-neutral-700 dark:bg-neutral-900/95"
+            className="absolute right-2 top-2 z-[5] flex max-h-[45%] w-56 max-w-[calc(100%-1rem)] flex-col rounded-lg border border-neutral-200 bg-white/95 text-xs shadow-md dark:border-neutral-700 dark:bg-neutral-900/95"
           >
             <div
               className={`shrink-0 px-2.5 py-1.5 ${
@@ -1515,16 +1519,16 @@ export function SpecGraph({
                   className="flex shrink-0 items-center gap-2 px-2.5 pt-1 text-[11px] text-neutral-500 dark:text-neutral-400"
                 >
                   <span className="min-w-0 flex-1" />
-                  <span className="shrink-0 font-medium text-neutral-700 dark:text-neutral-200">
-                    {i18n._({
-                      id: "← cited by",
-                      comment: "graph panel column head: how often each package cites the selected one",
-                    })}
-                  </span>
-                  <span className="w-12 shrink-0 text-right font-medium text-brand-600 dark:text-brand-300">
+                  <span className="flex w-10 shrink-0 justify-end whitespace-nowrap font-medium text-brand-600 dark:text-brand-300">
                     {i18n._({
                       id: "cites →",
                       comment: "graph panel column head: how often the selected package cites each one",
+                    })}
+                  </span>
+                  <span className="flex w-12 shrink-0 justify-end whitespace-nowrap font-medium text-neutral-700 dark:text-neutral-200">
+                    {i18n._({
+                      id: "← cited by",
+                      comment: "graph panel column head: how often each package cites the selected one",
                     })}
                   </span>
                 </div>
@@ -1555,11 +1559,11 @@ export function SpecGraph({
                           <span className="min-w-0 flex-1 truncate font-mono text-neutral-700 dark:text-neutral-200">
                             {name}
                           </span>
-                          <span className="shrink-0 tabular-nums font-semibold text-neutral-700 dark:text-neutral-200">
-                            {counts.in > 0 ? `←${counts.in}` : ""}
-                          </span>
-                          <span className="w-12 shrink-0 text-right tabular-nums font-semibold text-brand-600 dark:text-brand-300">
+                          <span className="w-10 shrink-0 text-right tabular-nums font-semibold text-brand-600 dark:text-brand-300">
                             {counts.out > 0 ? `→${counts.out}` : ""}
+                          </span>
+                          <span className="w-12 shrink-0 text-right tabular-nums font-semibold text-neutral-700 dark:text-neutral-200">
+                            {counts.in > 0 ? `←${counts.in}` : ""}
                           </span>
                         </button>
                       </li>
