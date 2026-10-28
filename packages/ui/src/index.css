@@ -142,3 +142,9 @@ body {
 .markdown td {
   @apply border border-neutral-300 px-2 py-1 dark:border-neutral-700;
 }
+
+/* A dispatch line, a return line or a call reached from its other end
+   lights briefly, so the reader sees where they landed (run-view-181). */
+[data-flash="1"] {
+  @apply rounded ring-2 ring-brand-400 dark:ring-brand-500;
+}

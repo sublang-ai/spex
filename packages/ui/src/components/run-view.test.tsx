@@ -529,7 +529,7 @@ describe("RUN-37: the thread stays alive while a turn runs", () => {
     try {
       renderRun(entries);
       const indicator = screen.getByTestId("working-indicator");
-      expect(indicator.textContent).toContain("coder working · 2m 13s");
+      expect(indicator.textContent).toContain("coder running · 2m 13s");
       // The running lane's header names the role beside the lane and
       // says the same span, beside its mark (run-view-7).
       // The role is the name again, so it reads once (run-view-177).
@@ -537,14 +537,14 @@ describe("RUN-37: the thread stays alive while a turn runs", () => {
         "coder",
       );
       expect(screen.getByTestId("player-working").textContent).toBe(
-        "coder working · 2m 13s",
+        "coder running · 2m 13s",
       );
       act(() => {
         vi.advanceTimersByTime(1_000);
       });
-      expect(indicator.textContent).toContain("coder working · 2m 14s");
+      expect(indicator.textContent).toContain("coder running · 2m 14s");
       expect(screen.getByTestId("player-working").textContent).toBe(
-        "coder working · 2m 14s",
+        "coder running · 2m 14s",
       );
     } finally {
       vi.useRealTimers();
@@ -830,7 +830,7 @@ describe("run-view-143/144: cumulative active time stays with its agent", () => 
       prompt(1_700_000_000_027, "dev.reviewer");
       done(1_700_000_000_028, 5, 1, "dev.reviewer");
       expect(within(screen.getByTestId("player-pane-dev.reviewer"))
-        .getByTestId("player-working").textContent).toContain("working");
+        .getByTestId("player-working").textContent).toContain("running");
       expect(screen.queryByTestId("agent-active-dev.reviewer")).toBeNull();
       expect(screen.queryByTestId("agent-active-description-dev.reviewer")).toBeNull();
       finish(1_700_000_000_029, "dev.reviewer");
@@ -1112,7 +1112,7 @@ describe("run-view-66: the machine call tree from the trace", () => {
     renderRun(MACHINE_STOPPED);
     expect(screen.getAllByTestId(/^machine-card-/)).toHaveLength(1);
     expect(screen.getByTestId("machine-outcome-t-halt").textContent).toBe(
-      "stopped",
+      "aborted",
     );
   });
 
@@ -1169,7 +1169,9 @@ describe("run-view-60/76/81: the card's words and its fit to the pane", () => {
     const caption = within(running).getByTestId(
       "machine-caption-t-code-firstPhase",
     );
-    expect(caption.textContent).toBe("coder · dev.coder");
+    // The player reads by its name (run-view-177), and a name that is
+    // the role again reads once.
+    expect(caption.textContent).toBe("coder");
     expect(caption.getAttribute("font-size")).toBe("12");
     cleanup();
 
@@ -1193,7 +1195,7 @@ describe("run-view-60/76/81: the card's words and its fit to the pane", () => {
             payload: {
               stateId: "firstPhase",
               roleId: "coder",
-              playerId: "security.compliance.reviewer.lane",
+              playerId: "security-compliance-reviewer-lane",
             },
           },
         } as unknown as TmuxPlayRecord,
@@ -1205,7 +1207,7 @@ describe("run-view-60/76/81: the card's words and its fit to the pane", () => {
       within(state).getByTestId("machine-caption-t-code-firstPhase").textContent,
     ).toBe("coder");
     expect(state.querySelector("title")!.textContent).toContain(
-      "coder · security.compliance.reviewer.lane",
+      "coder · security-compliance-reviewer-lane",
     );
     expect(Number(state.querySelector("rect")!.getAttribute("width"))).toBeLessThanOrEqual(240);
   });
@@ -3493,10 +3495,10 @@ describe("run-view-131: the failed-workflow notice and its recovery request", ()
     // core's record the card would go on running the coder's call the
     // process died in, and no notice would stand.
     const interrupted = applyRecords(initialSessionView(PLAYERS), MACHINE_INTERRUPTED);
-    expect(interrupted.frames.map((frame) => [frame.active, frame.activePlayer?.running])).toEqual([["firstPhase", true]]);
+    expect(interrupted.frames.map((frame) => [frame.active, frame.activePlayers?.[0]?.running])).toEqual([["firstPhase", true]]);
     expect(interrupted.players["dev.coder"]?.running).toBe(true);
     const view = applyRecords(initialSessionView(PLAYERS), [...MACHINE_INTERRUPTED, ...machineRestored()]);
-    expect(view.frames.map((frame) => [frame.traceSessionId, frame.active, frame.activePlayer])).toEqual([["t-stop", "failed", undefined]]);
+    expect(view.frames.map((frame) => [frame.traceSessionId, frame.active, frame.activePlayers])).toEqual([["t-stop", "failed", undefined]]);
     // The call the process died in no longer runs on its lane either
     // (run-view-74): no running mark, no working reading.
     expect(Object.values(view.players).filter((lane) => lane.running)).toEqual([]);
@@ -3818,11 +3820,11 @@ describe("run-view-133: at rest the chip reads the leaf, not the last reporter",
     expect(view.fsmState).toBe("hub");
     const { rerender } = render(<RunView {...props(view)} />);
     const parked = screen.getByTestId("state-chip");
-    expect(parked.textContent).toBe("needs attention");
+    expect(parked.textContent).toBe("failed");
     expect(parked.className).toContain("red");
     expect(parked.getAttribute("title")).toBe("state: failed");
     rerender(<RunView {...props(viewOf(MACHINE_ANSWERED))} />);
-    expect(screen.getByTestId("state-chip").textContent).toBe("needs attention");
+    expect(screen.getByTestId("state-chip").textContent).toBe("failed");
     rerender(<RunView {...props(viewOf(MACHINE_ANSWERED, MACHINE_RECOVERED))} />);
     const chip = screen.getByTestId("state-chip");
     expect(chip.textContent).toBe("first phase");

@@ -69,12 +69,12 @@ describe("widenLayout", () => {
       layout,
       graph,
       frame({
-        activePlayer: {
+        activePlayers: [{
           stateId: "awaitBossReply",
           role: "coder",
           playerId: "dev.coder.with.a.long.lane.name",
           running: true,
-        },
+        }],
       }),
     );
     expect(after.nodes.get("awaitBossReply")!.width).toBeGreaterThan(
@@ -92,12 +92,12 @@ describe("stateCaption and fitCaption", () => {
       stateCaption(
         node,
         frame({
-          activePlayer: {
+          activePlayers: [{
             stateId: "runFirstPhase",
             role: "coder",
             playerId: "dev.coder",
             running: true,
-          },
+          }],
         }),
       ),
     ).toEqual({ text: "coder · dev.coder", role: "coder" });

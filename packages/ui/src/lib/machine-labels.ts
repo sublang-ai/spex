@@ -16,7 +16,7 @@ import type {
   MachineLayout,
   MachinePlacement,
 } from "./machine-frames.js";
-import { ROW_GAP, STATE_W } from "./machine-frames.js";
+import { ROW_GAP, STATE_W, playerAt } from "./machine-frames.js";
 import { humanizeId } from "./labels.js";
 
 /** State names, captions, and exit labels: 13 / 12 / 11px — the
@@ -33,9 +33,9 @@ export const EXIT_PX = 11;
 const EM_PER_CHAR = 0.54;
 
 /** The name's inset on either side, and the caption's — the running
- * mark takes the caption's left inset. */
+ * mark, or the performer's mark, takes the caption's left inset. */
 const NAME_INSET = 24;
-const CAPTION_INSET = 28;
+const CAPTION_INSET = 48;
 
 /** No box grows past this: a longer caption falls back to its role,
  * and a longer name is trimmed with its whole in the title. */
@@ -70,6 +70,8 @@ export function statePath(id: string): string {
 export function stateCaption(
   node: MachineGraphNode,
   frame: MachineFrame,
+  /** The name of the player the step's calls reach (run-view-185). */
+  performer?: string,
 ): { text: string; role?: string } | undefined {
   const call = [...frame.calls].reverse().find((c) => c.stateId === node.id);
   if (call) {
@@ -81,16 +83,19 @@ export function stateCaption(
       }),
     };
   }
-  const player =
-    frame.activePlayer && frame.activePlayer.stateId === node.id
-      ? frame.activePlayer
-      : undefined;
+  const player = playerAt(frame, node.id);
+  const name = performer ?? player?.playerId;
   if (player) {
-    return player.playerId && player.playerId !== player.role
-      ? { text: `${player.role} · ${player.playerId}`, role: player.role }
+    return name && name !== player.role
+      ? { text: `${player.role} · ${name}`, role: player.role }
       : { text: player.role, role: player.role };
   }
-  if (node.role) return { text: humanizeId(node.role) };
+  if (node.role) {
+    return performer && performer !== node.role
+      ? { text: `${node.role} · ${performer}`, role: node.role }
+      : { text: humanizeId(node.role) };
+  }
+  if (performer) return { text: performer };
   return node.parent ? { text: stateName(node.parent) } : undefined;
 }
 
@@ -137,6 +142,7 @@ export function widenLayout(
   layout: MachineLayout,
   graph: MachineGraph,
   frame: MachineFrame,
+  performer?: (node: MachineGraphNode) => string | undefined,
 ): MachineLayout {
   const columnOf = (place: MachinePlacement): number =>
     Math.round(place.x / (STATE_W + ROW_GAP));
@@ -145,7 +151,7 @@ export function widenLayout(
     const place = layout.nodes.get(node.id);
     if (!place) continue;
     const column = columnOf(place);
-    const need = labelWidth(stateName(node.id), stateCaption(node, frame)?.text);
+    const need = labelWidth(stateName(node.id), stateCaption(node, frame, performer?.(node))?.text);
     widths.set(column, Math.max(widths.get(column) ?? STATE_W, need));
   }
   const columns = [...widths.keys()].sort((a, b) => a - b);

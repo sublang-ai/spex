@@ -27,25 +27,33 @@ export interface MachineFrame {
   playbookId: string;
   depth: number;
   parentSessionId?: string;
-  /** Active state id (single-region machines; the trace's value). */
+  /** Active state id: a single-region machine's state, or the
+   * parallel state a machine stands in (the trace's value). */
   active: string | null;
+  /** Every leaf state active at once, where a parallel state holds
+   * more than one (run-view-184) — each the trace's own state id. */
+  activeStates?: string[];
   /** Every state the run has visited, in first-visit order. */
   visited: string[];
   /** Observed transitions, in order. */
   transitions: MachineTransition[];
   /** The edge fired last, for the flash (owner::event derived). */
   lastFired?: { from: string; to: string; event: string; at: number };
-  /** The player the active state runs, when the trace attributes one. */
-  /** The call a state is running: the playbook-local role it invokes
-   * and, where the host resolved one, the session player answering it
-   * (DR-032). A card names both, because the role is what the machine
-   * asked for and the player is who is actually talking. */
-  activePlayer?: {
+  /** The calls the active states are running, one per state: the
+   * playbook-local role each invokes and, where the host resolved one,
+   * the session player answering it (DR-032). A card names both,
+   * because the role is what the machine asked for and the player is
+   * who is actually talking; a parallel state runs several at once
+   * (run-view-184). */
+  activePlayers?: {
     stateId: string;
     role: string;
     playerId?: string;
     running: boolean;
-  };
+  }[];
+  /** The player each state's latest call reached, by state id — the
+   * mark a step wears on the card after its call (run-view-185). */
+  stepPlayers?: Record<string, string>;
   /** The nested run this frame's active state is delegating to, while
    * the call is open (run-view-63). */
   delegating?: { stateId: string; playbookId: string };
@@ -57,12 +65,46 @@ export interface MachineFrame {
   callerStateId?: string;
   /** Park/failure coloring hints from the trace's state tags. */
   activeTags: string[];
+  /** The cause code the runtime gave the failure the run moved to its
+   * failure state with — `aborted` where the Boss stopped it
+   * (run-view-186). */
+  failureCode?: string;
   /** Runs this frame called that have settled, in invocation order
    * (run-view-62); each carries its own settled calls in turn. */
   settledCalls: MachineFrame[];
   outcome?: "done" | "failed" | "stopped";
   openedAt: number;
   closedAt?: number;
+}
+
+/** The trace's own id for a drawn state: a nested state's graph id
+ * carries its parent's path, and the trace names it by its last
+ * segment, as Playbook's state metadata does. */
+export function traceStateId(nodeId: string): string {
+  const dot = nodeId.lastIndexOf(".");
+  return dot >= 0 ? nodeId.slice(dot + 1) : nodeId;
+}
+
+/** Whether a frame stands in a drawn state: its one state, or one of
+ * the leaves a parallel state holds active (run-view-184). */
+export function standsIn(frame: MachineFrame, nodeId: string): boolean {
+  if (frame.active === nodeId) return true;
+  return frame.activeStates?.includes(traceStateId(nodeId)) ?? false;
+}
+
+/** Whether the run has been in a drawn state. */
+export function hasVisited(frame: MachineFrame, nodeId: string): boolean {
+  return frame.visited.includes(nodeId) ||
+    (nodeId.includes(".") && frame.visited.includes(traceStateId(nodeId)));
+}
+
+/** The call a drawn state is running, where it runs one. */
+export function playerAt(
+  frame: MachineFrame,
+  nodeId: string,
+): NonNullable<MachineFrame["activePlayers"]>[number] | undefined {
+  const id = frame.activePlayers?.some((entry) => entry.stateId === nodeId) ? nodeId : traceStateId(nodeId);
+  return frame.activePlayers?.find((entry) => entry.stateId === id);
 }
 
 /** A closed frame as it settles into the thread (run-view-62). */
@@ -136,8 +178,33 @@ function stateValue(value: unknown): string | undefined {
     const shaped = value as { value?: unknown; stateId?: unknown };
     if (typeof shaped.value === "string") return shaped.value || undefined;
     if (typeof shaped.stateId === "string") return shaped.stateId || undefined;
+    // A parallel machine's value is the object of its regions under
+    // the one parallel state it stands in: the state is that key.
+    if (!("value" in shaped) && !("stateId" in shaped)) {
+      const keys = Object.keys(value);
+      if (keys.length === 1) return keys[0];
+    }
   }
   return undefined;
+}
+
+/** The leaf states a parallel machine's value holds active at once,
+ * where it holds more than one (run-view-184): the strings at the
+ * value's leaves — the trace's own ids, as its calls name them. The
+ * reported active ids are no substitute, since they list the parallel
+ * state and its regions beside the leaves. */
+function activeLeaves(value: unknown): string[] | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const leaves: string[] = [];
+  const walk = (node: unknown): void => {
+    if (typeof node === "string") {
+      if (node) leaves.push(node);
+    } else if (node && typeof node === "object") {
+      for (const child of Object.values(node)) walk(child);
+    }
+  };
+  walk(value);
+  return leaves.length > 1 ? leaves : undefined;
 }
 
 function stateTags(value: unknown): string[] {
@@ -223,7 +290,7 @@ function settleFrame(
             // Still running when its caller ended: unfinished.
             outcome: child.outcome ?? "stopped",
             closedAt: at,
-            activePlayer: undefined,
+            activePlayers: undefined,
             delegating: undefined,
           }),
         ),
@@ -234,7 +301,7 @@ function settleFrame(
     ...frame,
     outcome: frame.outcome ?? outcome,
     closedAt: at,
-    activePlayer: undefined,
+    activePlayers: undefined,
     delegating: undefined,
   });
   const stillOpen = remaining.filter((f) => !orphaned.has(f.traceSessionId));
@@ -350,7 +417,7 @@ export function foldRestored(
         ? [...base.visited, active]
         : base.visited,
       activeTags: stateTags(run.state),
-      activePlayer: undefined,
+      activePlayers: undefined,
       delegating,
       calls: delegating && !base.calls.some((call) =>
         call.stateId === delegating.stateId &&
@@ -455,13 +522,21 @@ export function foldTrace(
           at,
         },
       ];
-      const visited = frame.visited.includes(to)
-        ? frame.visited
-        : [...frame.visited, to];
+      const leaves = activeLeaves(body.to);
+      const visited = [...frame.visited];
+      for (const id of [to, ...(leaves ?? [])]) {
+        if (!visited.includes(id)) visited.push(id);
+      }
       const status = stateStatus(body.state);
+      const standing = new Set([to, ...(leaves ?? [])]);
+      const players = frame.activePlayers?.filter((entry) => standing.has(entry.stateId));
+      const lastError = body.lastError as { cause?: { code?: unknown } } | undefined;
+      const failureCode = to === FAILURE_STATE_ID ? asString(lastError?.cause?.code) : undefined;
       const moved: MachineFrame = {
         ...frame,
         active: to,
+        activeStates: leaves,
+        failureCode,
         visited,
         transitions,
         activeTags: stateTags(body.state),
@@ -475,11 +550,8 @@ export function foldTrace(
               },
             }
           : {}),
-        // A player attributed to a previous state is stale once the
-        // machine moves on.
-        ...(frame.activePlayer && frame.activePlayer.stateId !== to
-          ? { activePlayer: undefined }
-          : {}),
+        // A player attributed to a state the machine left is stale.
+        activePlayers: players?.length ? players : undefined,
       };
       const outcome = outcomeOf(status);
       return outcome ? close(moved, outcome) : withFrame(moved);
@@ -492,20 +564,21 @@ export function foldTrace(
       if (!stateId || !role) return withFrame(frame);
       return withFrame({
         ...frame,
-        activePlayer: {
-          stateId,
-          role,
-          ...(playerId ? { playerId } : {}),
-          running: true,
-        },
+        activePlayers: [
+          ...(frame.activePlayers ?? []).filter((entry) => entry.stateId !== stateId),
+          { stateId, role, ...(playerId ? { playerId } : {}), running: true },
+        ],
+        ...(playerId ? { stepPlayers: { ...frame.stepPlayers, [stateId]: playerId } } : {}),
       });
     }
     case "player.call.finished": {
       const frame = opened();
-      if (!frame.activePlayer) return withFrame(frame);
+      const stateId = asString(body.stateId);
+      if (!frame.activePlayers) return withFrame(frame);
       return withFrame({
         ...frame,
-        activePlayer: { ...frame.activePlayer, running: false },
+        activePlayers: frame.activePlayers.map((entry) =>
+          stateId === undefined || entry.stateId === stateId ? { ...entry, running: false } : entry),
       });
     }
     case "playbook.call.started": {

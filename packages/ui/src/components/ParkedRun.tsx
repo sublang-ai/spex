@@ -98,6 +98,7 @@ export function ParkedRun({
   connected,
   turnActive,
   onControl,
+  aborted = false,
 }: {
   /** Which park the run stands in: the failure a recovery answers, or
    * the reply it waits for (run-view-128). */
@@ -121,6 +122,9 @@ export function ParkedRun({
   connected: boolean;
   turnActive: boolean;
   onControl(control: ParkedControl): Promise<void>;
+  /** The failure park is the Boss's own stop: the run reads aborted,
+   * not failed (run-view-186). */
+  aborted?: boolean;
 }) {
   const [pending, setPending] = useState<string>();
   const [confirming, setConfirming] = useState(false);
@@ -171,7 +175,9 @@ export function ParkedRun({
     }
   }
 
-  const tone = failed
+  const tone = failed && aborted
+    ? "border-neutral-300 bg-neutral-50 text-neutral-700 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300"
+    : failed
     ? "border-red-300 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300"
     : "border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200";
   // Drop and its confirm carry fixed short words, so they hold their
@@ -179,7 +185,9 @@ export function ParkedRun({
   // the runtime's, yields (DR-041).
   const fixed = "shrink-0";
   const controlFrame = `rounded-md border px-2.5 py-1 font-medium disabled:opacity-40 ${
-    failed
+    failed && aborted
+      ? "border-neutral-300 hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800"
+      : failed
       ? "border-red-300 hover:bg-red-100 dark:border-red-800 dark:hover:bg-red-900"
       : "border-amber-300 hover:bg-amber-100 dark:border-amber-700 dark:hover:bg-amber-900"
   }`;
@@ -257,6 +265,7 @@ export function ParkedRun({
       }
       data-testid="failed-workflow"
       data-reason={reason}
+      data-aborted={aborted ? "true" : undefined}
       title={
         [
           playbookId
@@ -286,7 +295,11 @@ export function ParkedRun({
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
         <div className="min-w-0 flex-1 basis-40">
           <p data-testid="failed-workflow-what">
-            {failed
+            {failed && aborted
+              ? command
+                ? i18n._("The /{command} workflow is aborted.", { command })
+                : i18n._("The workflow is aborted.")
+              : failed
               ? command
                 ? i18n._(
                     "The /{command} workflow failed and is waiting for you.",

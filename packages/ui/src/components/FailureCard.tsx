@@ -45,8 +45,17 @@ export function failureCardLines(
 ): { what: string; why: string; next?: string; title?: string } {
   const step = context?.step ? stateName(context.step) : undefined;
   const command = context?.command ? `/${context.command}` : undefined;
-  const what =
-    command && step
+  // The Boss's own stop is no failure (run-view-186).
+  const aborted = cause?.code === "aborted";
+  const what = aborted
+    ? command && step
+      ? i18n._("{command} aborted at {step}", { command, step })
+      : command
+        ? i18n._("{command} aborted", { command })
+        : step
+          ? i18n._("Aborted at {step}", { step })
+          : i18n._("The workflow was aborted")
+    : command && step
       ? i18n._("{command} failed at {step}", { command, step })
       : command
         ? i18n._("{command} failed", { command })
@@ -110,11 +119,17 @@ export function FailureCard({
   extra?: ReactNode;
 }) {
   const lines = failureCardLines(cause, message, context);
+  const aborted = cause?.code === "aborted";
   return (
     <div
       data-testid="failure-card"
+      data-aborted={aborted ? "true" : undefined}
       title={lines.title}
-      className="mx-auto flex max-w-[90%] flex-col gap-0.5 rounded border border-red-300 bg-red-50 px-2 py-1 text-xs text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300"
+      className={`mx-auto flex max-w-[90%] flex-col gap-0.5 rounded border px-2 py-1 text-xs ${
+        aborted
+          ? "border-neutral-300 bg-neutral-50 text-neutral-700 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300"
+          : "border-red-300 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300"
+      }`}
     >
       <div className="flex flex-wrap items-baseline gap-x-2">
         <span

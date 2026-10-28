@@ -54,7 +54,7 @@ test("run-view-98: the first task runs, settles, and accepts a follow-up", async
   const coder = page.getByTestId("player-pane-dev.coder");
   const reviewer = page.getByTestId("player-pane-dev.reviewer");
   await expect(coder).toBeVisible();
-  await expect(coder).toContainText("coder working");
+  await expect(coder).toContainText("coder running");
   await expect(reviewer).toHaveCount(0);
   await expect(coder).toContainText(/editing/i);
   await expect(coder).toContainText(/Edit|Read/);
@@ -179,7 +179,7 @@ test("run-view-7: a lane's pane scrolls into view when its call opens", async ({
   await send(page, "Fix the token refresh in auth.ts");
   const grid = page.getByTestId("player-grid");
   const coder = page.getByTestId("player-pane-dev.coder");
-  await expect(coder).toContainText("coder working");
+  await expect(coder).toContainText("coder running");
   await expect
     .poll(async () => {
       const g = await grid.boundingBox();
@@ -226,7 +226,7 @@ test("run-view-118: a collapsed lane unfolds when its call opens", async ({
   app.holdPlayer("dev.reviewer");
   await page.getByTestId("boss-composer").fill("Also add a test for expiry skew");
   await page.getByRole("button", { name: "Send", exact: true }).click();
-  await expect(coder).toContainText("coder working");
+  await expect(coder).toContainText("coder running");
   await expect(coder).toBeInViewport();
   app.releasePlayer("dev.coder");
   await expect(reviewer).not.toHaveAttribute("data-collapsed", "true");
@@ -306,11 +306,11 @@ for (const layout of [
     };
     const coder = page.getByTestId("player-pane-dev.coder");
     const reviewer = page.getByTestId("player-pane-dev.reviewer");
-    await expect(coder).toContainText("coder working");
+    await expect(coder).toContainText("coder running");
     await expect(reviewer).toHaveCount(0);
     await expect.poll(() => inGrid("player-pane-dev.coder")).toBe(true);
     app.releasePlayer("dev.coder");
-    await expect(reviewer).toContainText("reviewer working");
+    await expect(reviewer).toContainText("reviewer running");
     await expect.poll(() => inGrid("player-pane-dev.reviewer")).toBe(true);
     // The two lanes overflow the grid, so showing the reviewer took the
     // grid's own scroll (run-view-7).

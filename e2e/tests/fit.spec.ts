@@ -691,7 +691,11 @@ async function assertSurfaceMatrix(
           record(where, found, defects);
           // (iv) Names hold at every size: the first measurement of
           // this sidebar state is the reference.
-          reference = compareNames(where, found, reference, defects);
+          // A turn kept in flight keeps adding its calls' delegation and
+          // return lines (run-view-178, run-view-184): conversation, not
+          // chrome, so they are not held to the first size.
+          const chrome = { ...found, names: found.names.filter((name) => !/Handed to |← /u.test(name)) };
+          reference = compareNames(where, chrome, reference, defects);
         }
       }
     }

@@ -26,6 +26,8 @@ import { StoredMedia, assetReference, DeferredToolOutput } from "./StoredMedia.j
 import { Markdown } from "./Markdown.js";
 import { RunningMark } from "./RunningMark.js";
 import { AgentMark } from "./AgentMark.js";
+import { callPlace } from "./CallLines.js";
+import type { StepCall, StepCallState } from "../lib/step-calls.js";
 
 const RENDER_WINDOW = 200;
 
@@ -123,11 +125,35 @@ export function toolLabel(name: string): string {
 /** One transcript segment as the pane draws it (run-view-3/4):
  * exported so the authoring thread renders the agent's segments with
  * the same cards (playbook-library-53). */
-export function Segment({ segment }: { segment: TranscriptSegment }) {
+export function Segment({
+  segment,
+  call,
+  onShowDispatch,
+}: {
+  segment: TranscriptSegment;
+  /** The traced call a prompt began, whose step it names (run-view-181). */
+  call?: StepCall;
+  onShowDispatch?: (callKey: string) => void;
+}) {
   const [expanded, setExpanded] = useState(false);
   switch (segment.kind) {
-    case "prompt":
+    case "prompt": {
+      const place = call ? callPlace(call) : undefined;
       return (
+        <div data-call-block={segment.callKey} className="flex flex-col gap-1">
+        {call && place ? (
+          // Which playbook's which step this call runs, leading back to
+          // the Captain's delegation line (run-view-181).
+          <button
+            type="button"
+            data-testid={`call-label-${segment.seq}`}
+            onClick={() => onShowDispatch?.(call.key)}
+            title={place.full}
+            className="self-start rounded text-left text-xs font-medium text-neutral-700 hover:text-brand-600 dark:text-neutral-300 dark:hover:text-brand-300"
+          >
+            {place.short}
+          </button>
+        ) : null}
         <details
           title={timeTitle(segment.at)}
           className="rounded border border-neutral-200 bg-neutral-100/60 px-2 py-1 text-xs text-neutral-600 dark:border-neutral-800 dark:bg-neutral-900/60 dark:text-neutral-400"
@@ -160,7 +186,9 @@ export function Segment({ segment }: { segment: TranscriptSegment }) {
             {segment.text}
           </pre>
         </details>
+        </div>
       );
+    }
     case "text":
       return (
         <div>
@@ -336,13 +364,13 @@ export function Segment({ segment }: { segment: TranscriptSegment }) {
               segment.status === "ok"
                 ? "text-emerald-700 dark:text-emerald-400"
                 : segment.status === "aborted"
-                  ? "text-amber-600 dark:text-amber-400"
+                  ? "text-neutral-600 dark:text-neutral-400"
                   : "text-red-600 dark:text-red-400"
             }
           >
             {segment.status === "ok"
               ? i18n._({
-                  id: "✓ finished",
+                  id: "✓ done",
                   comment: "how a player's call ended; ✓ stays as it is",
                 })
               : segment.status === "aborted"
@@ -387,6 +415,8 @@ export function PlayerPane({
   onCollapsedChange,
   name = view.id,
   chipHighlighted = false,
+  calls,
+  onShowDispatch,
 }: {
   view: PlayerView;
   meta?: SessionInfo["players"][number];
@@ -410,6 +440,9 @@ export function PlayerPane({
   /** A failure's "Adjust" points at the chip before its popover opens
    * (run-view-179). */
   chipHighlighted?: boolean;
+  /** The traced calls the lane's call labels read (run-view-181). */
+  calls?: StepCallState;
+  onShowDispatch?: (callKey: string) => void;
 }) {
   const [windowSize, setWindowSize] = useState(RENDER_WINDOW);
   const { scrollRef, contentRef, onScroll, newBelow, jump, revealAbove } = useStickToBottom(
@@ -513,11 +546,19 @@ export function PlayerPane({
   }
 
   const segments = view.segments.slice(-windowSize);
+  // The lane's frame wears its status (run-view-186): running while its
+  // call is open, failed where its last call failed.
+  const lastResult = [...view.segments].reverse().find((segment) => segment.kind === "result");
+  const laneTone = view.running
+    ? "border-emerald-400 dark:border-emerald-700"
+    : lastResult?.kind === "result" && lastResult.status === "error"
+      ? "border-red-300 dark:border-red-900"
+      : "border-neutral-200 dark:border-neutral-800";
 
   return (
     <section
       data-testid={`player-pane-${view.id}`}
-      className="@container grid min-h-min min-w-[280px] flex-1 grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(min-content,1fr)] rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900"
+      className={`@container grid min-h-min min-w-[280px] flex-1 grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(min-content,1fr)] rounded-lg border bg-white dark:bg-neutral-900 ${laneTone}`}
     >
       {/* One line at any pane width: identity and controls remain;
           cumulative time yields before a live elapsed reading. */}
@@ -599,14 +640,14 @@ export function PlayerPane({
               {call ? (
                 <span
                   data-testid="player-working"
-                  title={i18n._("{who} working since {since}", {
+                  title={i18n._("{who} running since {since}", {
                     who,
                     since: absoluteTitle(call.at),
                   })}
                   className="hidden whitespace-nowrap text-xs text-neutral-500 @md:inline dark:text-neutral-400"
                 >
                   {i18n._({
-                    id: "{who} working · {span}",
+                    id: "{who} running · {span}",
                     values: { who, span: duration(now - call.at) },
                     comment: "who is at work and how long the open call has run",
                   })}
@@ -657,7 +698,14 @@ export function PlayerPane({
               </button>
             ) : null}
             {segments.map((segment) => (
-              <Segment key={segment.seq} segment={segment} />
+              <Segment
+                key={segment.seq}
+                segment={segment}
+                call={segment.kind === "prompt" && segment.callKey
+                  ? calls?.calls.find((entry) => entry.key === segment.callKey)
+                  : undefined}
+                onShowDispatch={onShowDispatch}
+              />
             ))}
           </div>
         </div>
