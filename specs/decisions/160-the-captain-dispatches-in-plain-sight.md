@@ -27,14 +27,17 @@ Amends [DR-075](075-a-failure-says-what-and-what-now.md) in its wording alone: a
 - Its outcome is the first `outcome.accepted` of its trace session, after the call finished, whose source is the call's state, until a later call of that same state in that session starts; a call of another state, a parallel sibling's, never takes or cuts off another's outcome.
 - The transition's source is not read: in a parallel machine it is an object, not a state.
 - The repository identity is read from the transition just before that outcome, and only where that transition accepted that one outcome: a transition accepting several shows each outcome's words and no identity on any of them.
-- A transition's outcomes are collected until the same trace session's next trace record of another type — the order Playbook emits a transition in — so another run's records and the state telemetry between them end nothing, and a collection never ended names no identity.
+- A transition's outcomes are collected until the same trace session's next trace record of another type — the order Playbook emits a transition in — each trace session collecting its own, so another run's records and the state telemetry between them end nothing, and a collection never ended names no identity.
+- An outcome no call takes still counts: a transition accepting it beside another names no identity.
 - A call back but not yet judged reads "judging" only while an outcome can still come; once its run ends, moves to its failure state, its step is called again or the turn ends, it reads "unconfirmed", never judging for good.
 - A call whose run fails before its outcome is accepted — the judgment or the runtime failing, not the Boss's stop — reads "failed" on its line, beside the failure card.
+- A call still open when the turn ends or a restore moves the runs to their recorded position is one the process died in: it is open no more and takes no prompt.
 - A player's prompt record, which carries no call id, is matched to that player's earliest open call not yet matched, since one player's calls run one at a time and each prompt follows its call's start.
 
 ### In the thread
 
 - Every call puts a delegation line at its start: "(C) Handed to coder · Merge the proposals"; the model joins it at the player's first call or a changed model, as before.
+- A line's accessible name reads its parts apart; the dots between them are drawn only.
 - Every call that came back or was stopped puts a return line: "← coder committed fd39684 · 40s · ⟨the reply's first line⟩", the whole reply a click away; before the outcome is accepted it reads "← coder handed back" marked "judging".
 - A failed call puts no return line: its failure card says what happened.
 - A call that asks the Boss reads "← coder asks you", waiting for him, without the question's words: the question reaches him in the Captain's words alone ([DR-085](085-boss-talks-through-captain.md)).
@@ -45,12 +48,13 @@ Amends [DR-075](075-a-failure-says-what-and-what-now.md) in its wording alone: a
 
 - A lane's call names its playbook and step — "decide › Merge the proposals", with the whole path from the root run in its tooltip and the round where the run walks the step again — and leads back to its delegation line.
 - A step a player runs wears that player's mark and name on the card; a running one wears the mark as its running mark.
+- A step not called yet wears the player the configuration recorded with its run's context binds, never a binding made since.
 - A run standing in a parallel state shows each active step running with its own call, the leaves read from the state value: the runtime's active ids also list the parallel state and its regions.
 
 ### One status vocabulary
 
 - Run, card, lane, chip, notice and return line say where they stand in five words and five colours: running, done, aborted, failed, waiting for you; the Captain's own "deciding" stays.
-- A run the Boss stopped — the runtime parks it in its failure state with the `aborted` cause — reads aborted on its card, its notice, its failure card and the chip, in neutral colours, and the runtime's error repeating the stop adds no failure line.
+- A run the Boss stopped — the runtime parks it in its failure state with the `aborted` cause — reads aborted on its card, its notice, its failure card and the chip, in neutral colours, and the runtime's error repeating the stop adds no failure line; only the reasons the core stops a turn with — the Boss's abort, Spex closing — are read as a stop, a runtime failure ending its turn with its own error keeping its line.
 - The runtime's advertised actions stand on that notice as on any failure park ([DR-074](074-a-parked-run-survives.md), [DR-075](075-a-failure-says-what-and-what-now.md)).
 
 ### The words of the steps

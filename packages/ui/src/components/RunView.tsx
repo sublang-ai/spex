@@ -795,7 +795,15 @@ export function RunView({
     names,
     stepPlayer: (frame: MachineFrame, stateId: string, role: string | undefined) =>
       frame.stepPlayers?.[stateId] ??
-      (role ? boundPlayer(activityView.latestExecution, frame.playbookId, role) : undefined),
+      // A step not called yet reads the binding its run started with,
+      // not one the session made since.
+      (role
+        ? boundPlayer(
+            "historicalExecution" in frame ? frame.historicalExecution : activityView.latestExecution,
+            frame.playbookId,
+            role,
+          )
+        : undefined),
     aborted: abortedPark,
   };
 

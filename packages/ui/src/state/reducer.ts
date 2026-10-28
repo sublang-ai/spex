@@ -361,6 +361,20 @@ export function resolvePlayerId(
   return Object.keys(view.players).find((id) => id === player) ?? player;
 }
 
+/** The configuration recorded with a record's context, if any. */
+function recordedExecution(view: SessionView, contextSeq: unknown): { recorded: boolean; configuration?: unknown } {
+  return typeof contextSeq === "number" && Object.hasOwn(view.executions, contextSeq)
+    ? { recorded: true, configuration: view.executions[contextSeq] }
+    : { recorded: false };
+}
+
+/** The reasons the core stops a turn with — the Boss's abort and Spex
+ * closing (core's `isStoppedTurnReason`) — as against a runtime failure
+ * ending its turn with its own error. */
+function stoppedReason(reason: unknown): boolean {
+  return reason === "aborted by the Boss" || reason === "interrupted when Spex closed";
+}
+
 /** Abort reasons are runtime plumbing; put the known ones in words.
  * An unknown reason is the runtime's own prose — data, printed as it
  * came (localization-4). */
@@ -739,7 +753,7 @@ export function applyRecord(
       // carried the same reason just before it is no failure of its own
       // (run-view-186).
       const last = view.captain[view.captain.length - 1];
-      if (r.reason && last?.kind === "error" && last.turnId === r.turnId &&
+      if (stoppedReason(r.reason) && last?.kind === "error" && last.turnId === r.turnId &&
         (last.raw ?? last.text) === String(r.reason)) {
         view.captain.pop();
       }
@@ -966,9 +980,12 @@ export function applyRecord(
         // The call the process died in no longer runs: no lane reads as
         // working on it (run-view-74, run-view-7).
         for (const lane of Object.values(view.players)) lane.running = false;
+        closeTurn(view.stepCalls);
         const graphs = typeof r.contextSeq === "number" ? view.contexts[r.contextSeq] : undefined;
+        const execution = recordedExecution(view, r.contextSeq);
         const bind = (frame: MachineFrame): void => {
           if (!("historicalGraph" in frame)) frame.historicalGraph = graphs?.[frame.playbookId] ?? null;
+          if (!("historicalExecution" in frame) && execution.recorded) frame.historicalExecution = execution.configuration;
           for (const child of frame.settledCalls) bind(child);
         };
         for (const frame of [...fold.open, ...fold.closed]) bind(frame);
@@ -1036,8 +1053,10 @@ export function applyRecord(
           r.turnId,
         );
         const graphs = typeof r.contextSeq === "number" ? view.contexts[r.contextSeq] : undefined;
+        const execution = recordedExecution(view, r.contextSeq);
         const bind = (frame: MachineFrame): void => {
           if (!("historicalGraph" in frame)) frame.historicalGraph = graphs?.[frame.playbookId] ?? null;
+          if (!("historicalExecution" in frame) && execution.recorded) frame.historicalExecution = execution.configuration;
           for (const child of frame.settledCalls) bind(child);
         };
         for (const frame of fold.open) bind(frame);

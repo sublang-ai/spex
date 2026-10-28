@@ -51,7 +51,9 @@ export function firstLine(text: string | undefined): string | undefined {
   return line ? plain || line : undefined;
 }
 
-const SEP = <span aria-hidden="true" className="text-neutral-400"> · </span>;
+// Only the dot is hidden from assistive technology: the spaces around
+// it stay, so a line's parts never run together in its accessible name.
+const SEP = <span className="text-neutral-400"> <span aria-hidden="true">·</span> </span>;
 
 /** A call leaving for its player (run-view-178): the player, the step,
  * and — at the player's first call or a changed model — what it runs. */
@@ -79,15 +81,19 @@ export function DispatchLine({
     ? [delegation.adapter, model].filter((part): part is string => !!part)
     : [];
   const place = call ? callPlace(call) : undefined;
+  const handed = i18n._({
+    id: "Handed to {player}",
+    values: { player: name },
+    comment: "a delegation line: the Captain gave this call to the named player",
+  });
+  // Read as it is drawn, its parts apart: the dots between them are
+  // drawn only.
+  const spoken = [handed, ...(call ? [stepLabel(call)] : []), ...runs].join(", ");
   const body = (
     <>
       <AgentMark player={name} size="sm" />
       <span>
-        {i18n._({
-          id: "Handed to {player}",
-          values: { player: name },
-          comment: "a delegation line: the Captain gave this call to the named player",
-        })}
+        {handed}
         {call ? (
           <>
             {SEP}
@@ -111,6 +117,7 @@ export function DispatchLine({
       type="button"
       data-testid={`delegation-line-${delegation.player}`}
       data-call-dispatch={line.callKey}
+      aria-label={spoken}
       onClick={onShow}
       title={`${delegation.player} · ${time}`}
       className={`${className} hover:text-neutral-900 dark:hover:text-neutral-100`}
@@ -187,6 +194,11 @@ export function ReturnLine({
               ink: STATUS_INK.done,
               state: "unconfirmed",
             };
+  const spoken = [
+    [head, ...(call.identities ?? [])].join(" "),
+    ...(tag ? [tag.word] : []),
+    ...(span ? [span] : []),
+  ].join(", ");
   // A question reaches the Boss in the Captain's words alone (DR-085):
   // its line says that the player asks, never what.
   const first = call.outcome === QUESTION_OUTCOME ? undefined : firstLine(call.finalText);
@@ -234,6 +246,7 @@ export function ReturnLine({
             {lane ? (
               <button
                 type="button"
+                aria-label={spoken}
                 onClick={(event) => {
                   event.preventDefault();
                   onShow?.();
@@ -253,7 +266,7 @@ export function ReturnLine({
           </div>
         </details>
       ) : lane ? (
-        <button type="button" onClick={onShow} className="text-left hover:text-neutral-900 dark:hover:text-neutral-100">
+        <button type="button" aria-label={spoken} onClick={onShow} className="text-left hover:text-neutral-900 dark:hover:text-neutral-100">
           {words}
         </button>
       ) : (

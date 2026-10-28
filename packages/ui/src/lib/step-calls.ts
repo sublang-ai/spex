@@ -10,7 +10,8 @@
 
 import { effectIdentities } from "./step-words.js";
 
-export type StepCallStatus = "running" | "returned" | "aborted" | "failed";
+/** `lost`: the process died in the call, which never finished. */
+export type StepCallStatus = "running" | "returned" | "aborted" | "failed" | "lost";
 
 export interface StepCall {
   /** The trace session and its call id. */
@@ -48,15 +49,26 @@ export interface StepCallState {
   calls: StepCall[];
   /** Each trace session's playbook and caller, for a call's path. */
   runs: Record<string, { playbookId: string; parentSessionId?: string }>;
-  /** The transition whose accepted outcomes are still being collected:
-   * the records of one transition arrive together, its outcomes
-   * straight after it, and the run's next record of another type ends
-   * them (Playbook's `enqueueTransitionEmission`). */
-  batch?: { sessionId: string; output: unknown; keys: string[]; ends?: boolean; fails?: boolean };
+  /** Each run's transition whose accepted outcomes are still being
+   * collected: the records of one transition arrive together, its
+   * outcomes straight after it, and the run's next record of another
+   * type ends them (Playbook's `enqueueTransitionEmission`). Another
+   * run's transition between them leaves this run's collecting. */
+  batches: Record<string, Batch>;
+}
+
+interface Batch {
+  output: unknown;
+  /** The calls its outcomes went to. */
+  keys: string[];
+  /** Every outcome it accepted, whether or not a call took it. */
+  outcomes: number;
+  ends?: boolean;
+  fails?: boolean;
 }
 
 export function initialStepCalls(): StepCallState {
-  return { calls: [], runs: {} };
+  return { calls: [], runs: {}, batches: {} };
 }
 
 const asString = (value: unknown): string | undefined =>
@@ -66,16 +78,17 @@ export function callKey(sessionId: string, callId: string): string {
   return `${sessionId}#${callId}`;
 }
 
-/** The batch's identities go to its one outcome's call: a transition
- * that accepted several outcomes names no identity for any of them. */
-function seal(state: StepCallState): void {
-  const batch = state.batch;
-  state.batch = undefined;
+/** A run's batch's identities go to its one outcome's call: a
+ * transition that accepted several outcomes — a call taking one or not —
+ * names no identity for any of them. */
+function seal(state: StepCallState, sessionId: string): void {
+  const batch = state.batches[sessionId];
   if (!batch) return;
+  delete state.batches[sessionId];
   // A transition that ended the run, or moved it to its failure state,
   // leaves every call it did not accept an outcome for owed none.
-  if (batch.ends) closeRun(state, batch.sessionId, batch.fails);
-  if (batch.keys.length !== 1) return;
+  if (batch.ends) closeRun(state, sessionId, batch.fails);
+  if (batch.outcomes !== 1 || batch.keys.length !== 1) return;
   const call = state.calls.find((entry) => entry.key === batch.keys[0]);
   if (!call) return;
   const identities = effectIdentities(call.playbookId, call.stateId, batch.output);
@@ -117,7 +130,7 @@ export function foldCallTrace(state: StepCallState, payload: unknown, at: number
   };
   // Only the same run's next record of another type ends a batch:
   // another run's records, or the state telemetry, may come between.
-  if (state.batch?.sessionId === sessionId && type !== "outcome.accepted") seal(state);
+  if (type !== "outcome.accepted") seal(state, sessionId);
   const body = (trace.payload ?? {}) as Record<string, unknown>;
   const callId = asString(trace.callId);
   switch (type) {
@@ -166,13 +179,15 @@ export function foldCallTrace(state: StepCallState, payload: unknown, at: number
       // A failure the Boss's own stop caused fails no call (run-view-187).
       const cause = (body.lastError as { cause?: { code?: unknown } } | undefined)?.cause?.code;
       const fails = active.includes("failed") && cause !== "aborted";
-      state.batch = { sessionId, output: event?.output, keys: [], ...(ends ? { ends } : {}), ...(fails ? { fails } : {}) };
+      state.batches[sessionId] = { output: event?.output, keys: [], outcomes: 0, ...(ends ? { ends } : {}), ...(fails ? { fails } : {}) };
       return;
     }
     case "outcome.accepted": {
       const source = asString(body.source);
       const outcome = asString(body.acceptedOutcome);
       if (!source || !outcome) return;
+      const batch = state.batches[sessionId];
+      if (batch) batch.outcomes += 1;
       // The latest call of that step, if it still waits for one: a
       // later call of the step closes the earlier, and another step's
       // calls — a parallel branch's — never take it.
@@ -181,11 +196,10 @@ export function foldCallTrace(state: StepCallState, payload: unknown, at: number
         .find((entry) => entry.sessionId === sessionId && entry.stateId === source);
       if (!call || call.status !== "returned" || call.outcome !== undefined || call.closed) return;
       call.outcome = outcome;
-      if (state.batch?.sessionId === sessionId) state.batch.keys.push(call.key);
+      batch?.keys.push(call.key);
       return;
     }
     case "session.disposed":
-      seal(state);
       closeRun(state, sessionId);
       return;
     default:
@@ -193,9 +207,19 @@ export function foldCallTrace(state: StepCallState, payload: unknown, at: number
   }
 }
 
-/** The turn ended: no call is owed an outcome any more. */
+/** The turn ended, or a restore moved the runs to their recorded
+ * position: no call is owed an outcome any more, and a call still
+ * open is one the process died in — it runs no more and takes no later
+ * prompt (run-view-74). */
 export function closeTurn(state: StepCallState): void {
+  // A collection the turn's end cut off names no identity.
+  state.batches = {};
   closeRun(state);
+  for (const call of state.calls) {
+    if (call.status !== "running") continue;
+    call.status = "lost";
+    call.closed = true;
+  }
 }
 
 /** The call a player's prompt record begins: the earliest open call

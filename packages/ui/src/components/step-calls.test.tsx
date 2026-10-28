@@ -80,9 +80,12 @@ function committed(entries: readonly Entry[], source: string): string {
 }
 
 function mount(entries: readonly Entry[], session: Partial<SessionInfo> = {}) {
+  return mountView(fold(entries), session);
+}
+
+function mountView(view: SessionView, session: Partial<SessionInfo> = {}) {
   setClientForTests({ command: vi.fn(async () => ({})) } as never);
   useAppStore.setState({ collapsedLanes: {}, configState: undefined, ledger: undefined, stagedIntents: {} } as never);
-  const view = fold(entries);
   return render(
     <RunView
       session={{ ...SESSION, ...session }}
@@ -171,15 +174,6 @@ describe("run-view-190: a /dev run that decides before it codes, live and stored
     expect(within(line).queryAllByTestId("return-identity")).toHaveLength(0);
   });
 
-  test("reopened, the run draws the same lines, labels and cards", () => {
-    const shape = (view: SessionView) => ({
-      lines: view.captain.map((line) => [line.kind, line.callKey, line.delegation?.showRuns]),
-      calls: view.stepCalls.calls,
-      frames: view.frames,
-    });
-    expect(shape(fold(RUN))).toEqual(shape(fold(RUN)));
-  });
-
   test("activating a delegation line brings its lane to that call, and the call's label leads back", () => {
     mount(RUN);
     fireEvent.click(screen.getAllByTestId("delegation-line-dev.coder")[1]);
@@ -189,6 +183,31 @@ describe("run-view-190: a /dev run that decides before it codes, live and stored
     fireEvent.click(label);
     const dispatch = screen.getAllByTestId("delegation-line-dev.coder")[1];
     expect(dispatch.dataset.flash).toBe("1");
+  });
+
+  test("records taken one at a time, as live, draw what the stored session draws", () => {
+    let live = initialSessionView(PLAYERS);
+    for (const entry of RUN) live = applyRecords(live, [{ ...entry }]);
+    const shape = (view: SessionView) => ({
+      lines: view.captain.map((line) => [line.kind, line.callKey, line.delegation?.showRuns]),
+      calls: view.stepCalls.calls,
+      frames: view.frames,
+    });
+    expect(shape(live)).toEqual(shape(fold(RUN)));
+    const drawn = () => [...texts(/^delegation-line-/), ...texts(/^return-line-/), ...texts(/^call-label-/)];
+    mount(RUN);
+    const stored = drawn();
+    cleanup();
+    mountView(live);
+    expect(drawn()).toEqual(stored);
+  });
+
+  test("a line's parts stay apart in its accessible name", () => {
+    mount(RUN);
+    expect(screen.getByRole("button", { name: "Handed to coder, Merge the proposals" }).dataset.testid)
+      .toBe("delegation-line-dev.coder");
+    const merged = committed(RUN, "synthesizeCommit");
+    expect(screen.getByRole("button", { name: `← coder committed ${merged}, <1s` })).toBeTruthy();
   });
 });
 
@@ -255,6 +274,10 @@ const accepted = (seq: number, s: string, p: string, source: string, outcome: st
 const emitted = (seq: number, s: string, p: string) => traced(seq, s, p, "status.emitted", { message: "→" });
 const promptOf = (seq: number, playerId: string) => rec(seq, { type: "player_prompt", playerId, prompt: "go" });
 const finishOf = (seq: number, playerId: string) => rec(seq, { type: "player_finished", playerId, result: { status: "ok" } });
+
+/** A record read under the session context recorded at `contextSeq`. */
+const inContext = (entry: Entry, contextSeq: number): Entry =>
+  ({ ...entry, record: { ...entry.record, contextSeq } as unknown as TmuxPlayRecord });
 
 const returnState = () => screen.getAllByTestId(/^return-line-/).map((line) => [line.dataset.testid, line.dataset.state, within(line).getByTestId("return-head").textContent]);
 
@@ -400,5 +423,87 @@ describe("run-view-192: outcomes reach their own calls", () => {
     expect(screen.getByTestId("delegation-line-dev.coder").textContent).toContain("Handed to coder · draft notes");
     expect(within(screen.getByTestId("return-line-dev.coder")).getByTestId("return-head").textContent).toBe("← coder notes drafted");
     expect(screen.queryAllByTestId("return-identity")).toHaveLength(0);
+  });
+});
+
+describe("run-view-192: batches, lost calls and stops kept apart", () => {
+  test("another run's transition between a transition and its outcome leaves its commit to its own call", () => {
+    sequence = 0;
+    mount([
+      rec(1, { type: "turn_started", turn: { id: 1, prompt: "/code" } }),
+      started(2, "c", "code", "firstPhase", "coder", "dev.coder", "player-1"), promptOf(3, "dev.coder"), finishOf(4, "dev.coder"),
+      ended(5, "c", "code", "firstPhase", "player-1"),
+      moved(6, "c", "code", "firstPhase", "reviewNewIntentPhase", { latestCommit: "abcdef0123456789" }),
+      moved(7, "r", "review", "start", "firstReview"),
+      traced(8, "r", "review", "session.disposed", { state: { status: "active" } }),
+      accepted(9, "c", "code", "firstPhase", "directCommit"), emitted(10, "c", "code"),
+    ], { turnActive: true });
+    const line = screen.getByTestId("return-line-dev.coder");
+    expect(within(line).getByTestId("return-head").textContent).toBe("← coder committed");
+    expect(within(line).getAllByTestId("return-identity").map((node) => node.textContent)).toEqual(["abcdef0"]);
+  });
+
+  test("a transition accepting an outcome no call takes beside one a call takes names no commit", () => {
+    sequence = 0;
+    mount([
+      rec(1, { type: "turn_started", turn: { id: 1, prompt: "/code" } }),
+      started(2, "c", "code", "firstPhase", "coder", "dev.coder", "player-1"), promptOf(3, "dev.coder"), finishOf(4, "dev.coder"),
+      ended(5, "c", "code", "firstPhase", "player-1"),
+      moved(6, "c", "code", "firstPhase", "reviewNewIntentPhase", { latestCommit: "abcdef0123456789" }),
+      accepted(7, "c", "code", "firstPhase", "directCommit"), accepted(8, "c", "code", "otherBranch", "done"), emitted(9, "c", "code"),
+    ]);
+    expect(within(screen.getByTestId("return-line-dev.coder")).getByTestId("return-head").textContent).toBe("← coder committed");
+    expect(screen.queryAllByTestId("return-identity")).toHaveLength(0);
+  });
+
+  test("a call the process died in runs no more after the restore, and the player's next prompt goes to its next call", () => {
+    sequence = 0;
+    const view = fold([
+      rec(1, { type: "turn_started", turn: { id: 1, prompt: "/code" } }),
+      started(2, "c", "code", "firstPhase", "coder", "dev.coder", "player-1"),
+      rec(3, { type: "captain_telemetry", topic: "spex.session.restored", payload: { runs: [] } }),
+      started(4, "c2", "code", "firstPhase", "coder", "dev.coder", "player-1"), promptOf(5, "dev.coder"),
+    ]);
+    expect(view.stepCalls.calls.map((call) => [call.key, call.status, call.promptSeq])).toEqual([
+      ["c#player-1", "lost", undefined],
+      ["c2#player-1", "running", 5],
+    ]);
+  });
+
+  test("a runtime failure ending its turn with its own error keeps its failure line", () => {
+    sequence = 0;
+    const view = fold([
+      rec(1, { type: "turn_started", turn: { id: 1, prompt: "/code" } }),
+      rec(2, { type: "runtime_error", message: "provider unreachable" }),
+      rec(3, { type: "turn_aborted", reason: "provider unreachable" }),
+    ]);
+    expect(view.captain.map((line) => line.kind)).toEqual(["boss", "error", "status"]);
+  });
+
+
+  test("a step not called yet wears the player its run was bound to, not a later binding", () => {
+    const graph = {
+      initial: "firstReview",
+      nodes: [
+        { id: "firstReview", kind: "state", tags: [], role: "reviewer" },
+        { id: "fixFindings", kind: "state", tags: [], role: "coder" },
+        { id: "done", kind: "final", tags: [] },
+      ],
+      edges: [
+        { id: "e1", from: "firstReview", to: "fixFindings", event: "hasFindings" },
+        { id: "e2", from: "fixFindings", to: "done", event: "committed" },
+      ],
+    };
+    const bound = (coder: string) => ({ catalog: { review: { roles: { coder: { playerId: coder }, reviewer: { playerId: "dev.reviewer" } } } } });
+    sequence = 0;
+    mount([
+      rec(1, { type: "session_context", contextVersion: 1, graphs: [{ playbookId: "review", graph }], configuration: bound("dev.coder") }),
+      rec(2, { type: "turn_started", turn: { id: 1, prompt: "/review" } }),
+      inContext(started(3, "r", "review", "firstReview", "reviewer", "dev.reviewer", "player-1"), 1),
+      rec(4, { type: "session_context", contextVersion: 1, graphs: [{ playbookId: "review", graph }], configuration: bound("dev.other") }),
+    ]);
+    const marks = screen.getAllByTestId(/^machine-performer-/).map((mark) => mark.dataset.player);
+    expect(marks).toContain("dev.coder");
+    expect(marks).not.toContain("dev.other");
   });
 });

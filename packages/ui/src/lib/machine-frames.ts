@@ -24,6 +24,9 @@ export interface MachineFrame {
   traceSessionId: string;
   /** Frozen definition from this run's recorded context; null means observed only. */
   historicalGraph?: MachineGraph | null;
+  /** The configuration recorded with this run's context, binding its
+   * roles to players then; absent where none was recorded. */
+  historicalExecution?: unknown;
   playbookId: string;
   depth: number;
   parentSessionId?: string;

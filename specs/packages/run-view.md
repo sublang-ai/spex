@@ -141,6 +141,7 @@ When a session's records hold a player call — its traced start [[run-view-183]
 - two calls differ where their adapters or configured models differ, or where both reported a model and the reports differ — a call with no report never differs from one with a report by the report alone;
 - the session summary's latest model per agent is never read, so a later model change leaves earlier lines as they were;
 - activating the line brings the player's lane into view at the call's own entry [[run-view-186](#run-view-186)];
+- the line's accessible name reads its parts in order, each set apart, the dots between them drawn only;
 - a traced call that failed before its player recorded anything still puts its line, which leads nowhere, its failure standing in the thread [[run-view-147](#run-view-147)];
 - every line derives from stored records alone, so reopening the session shows the same lines.
 
@@ -168,11 +169,12 @@ While trace records fold into the run view's state [[run-view-14](#run-view-14)]
 | Concern | Rule |
 | --- | --- |
 | its outcome | the first `outcome.accepted` of its trace session after the call finished whose source is the call's state, until a later call of that state in that session starts; a call of another state never takes or cuts off another's outcome, and a transition's source is not read |
-| a transition's outcomes | the `outcome.accepted` records following that transition's `fsm.transition`, until the same trace session's next trace record of another type; another session's records and the state telemetry between them end nothing |
-| its repository identity | the fields the step table names for its step [[run-view-188](#run-view-188)] in the event output of the transition that accepted its outcome, each a revision read short, and only where that transition's outcomes are collected and are that one outcome |
+| a transition's outcomes | the `outcome.accepted` records following that transition's `fsm.transition`, until the same trace session's next trace record of another type; each trace session collects its own, so another session's records — its transitions and its disposal among them — and the state telemetry between them end nothing, and the turn's end ends a collection with no identity |
+| its repository identity | the fields the step table names for its step [[run-view-188](#run-view-188)] in the event output of the transition that accepted its outcome, each a revision read short, and only where that transition's collection ended and held that one `outcome.accepted` alone, one no call took counting |
 | judging | the call came back with no outcome yet, and none of these has happened: its run ended or moved to its failure state with the transition that did so collected, its trace session was disposed, a later call of its state started, the turn ended |
 | unconfirmed | the call came back, and one of those happened with no outcome matched |
 | failed | the call came back, and its run moved to its failure state, with a cause other than the Boss's stop, before an outcome was matched |
+| lost | the call never finished when the turn ended or a restore moved the runs to their recorded position [[run-view-74](#run-view-74)]: the process died in it, so it is open no more, takes no prompt record and puts no return line |
 | its lane entry | the earliest of its player's open calls not yet matched takes that player's next prompt record, since one player's calls run one at a time and each prompt follows its call's start |
 
 - every matching reads stored records alone, so a reopened session holds the calls the live one held.
@@ -192,6 +194,7 @@ When a traced call [[run-view-183](#run-view-183)] finishes having come back or 
 
 - a failed call puts no return line, its failure standing in the thread [[run-view-147](#run-view-147)];
 - activating the line brings the player's lane into view at that call [[run-view-186](#run-view-186)];
+- the line's accessible name reads its head with its identity, its mark and its duration in order, each set apart, the dots between them drawn only;
 - the reply reads in the language the player wrote it in.
 
 ### Pane Visibility
@@ -639,7 +642,7 @@ While a machine card is live, the Captain pane shall show the run's state throug
 
 #### run-view-185
 
-While a machine card is drawn, every state whose calls reach a player shall wear that player's mark and name [[run-view-177](#run-view-177)] — the player its latest call reached, else the player the run's configuration binds its role to — the mark standing at the head of the state's caption and serving as its running mark while that call runs ([DR-031](../decisions/031-machine-call-tree.md), [DR-160](../decisions/160-the-captain-dispatches-in-plain-sight.md)):
+While a machine card is drawn, every state whose calls reach a player shall wear that player's mark and name [[run-view-177](#run-view-177)] — the player its latest call reached, else the player the configuration recorded with the run's context binds its role to, so a run reopened after the bindings changed keeps its own — the mark standing at the head of the state's caption and serving as its running mark while that call runs ([DR-031](../decisions/031-machine-call-tree.md), [DR-160](../decisions/160-the-captain-dispatches-in-plain-sight.md)):
 
 - while a run stands in a parallel state, each step the state's value holds active — the value's leaves, never the parallel state or its regions the runtime's active ids also list — stands active with its own call and its own player, so two players proposing at once read as two running steps;
 - a step drawn from the trace alone, where no definition is served [[run-view-64](#run-view-64)], is matched by the calls the run made from it.
@@ -705,7 +708,7 @@ When the session record stream delivers a captain turn result reporting an error
 
 #### run-view-187
 
-Where a playbook run stands in its recoverable failure state with the runtime's `aborted` cause — the Boss stopped it — the run view shall read that run as aborted rather than failed, in quiet colours, on its machine card [[run-view-61](#run-view-61)], its failure card [[run-view-147](#run-view-147)] — "/⟨command⟩ aborted at ⟨step⟩" — and its parked-run notice [[run-view-128](#run-view-128)] — "The /⟨command⟩ workflow is aborted." — the notice keeping the controls the session summary publishes for it, and shall show no failure line for the runtime's error repeating the turn's abort reason just before the turn's aborted line ([DR-160](../decisions/160-the-captain-dispatches-in-plain-sight.md)).
+Where a playbook run stands in its recoverable failure state with the runtime's `aborted` cause — the Boss stopped it — the run view shall read that run as aborted rather than failed, in quiet colours, on its machine card [[run-view-61](#run-view-61)], its failure card [[run-view-147](#run-view-147)] — "/⟨command⟩ aborted at ⟨step⟩" — and its parked-run notice [[run-view-128](#run-view-128)] — "The /⟨command⟩ workflow is aborted." — the notice keeping the controls the session summary publishes for it, and shall show no failure line for the runtime's error repeating the turn's abort reason just before the turn's aborted line, where that reason is one the core stops a turn with — the Boss's abort or Spex closing — a runtime failure ending its turn with its own error keeping its line ([DR-160](../decisions/160-the-captain-dispatches-in-plain-sight.md)).
 
 #### run-view-188
 
@@ -1105,14 +1108,15 @@ Where failures arrive for the Captain's own turn and for causes naming `dev.revi
 
 #### run-view-190
 
-Where a fixture stream recorded from the real runtime on substitute agents runs `/dev`, whose analyst picks deciding before coding, through `decide` — the coder's and the reviewer's proposals in parallel, the reviewer's ending later, the coder merging and committing, its nested review passing — and then `code`, whose commit its own review passes, the test suite shall assert, rendering it live and again from stored records with the same result:
+Where a fixture stream recorded from the real runtime on substitute agents runs `/dev`, whose analyst picks deciding before coding, through `decide` — the coder's and the reviewer's proposals in parallel, the reviewer's ending later, the coder merging and committing, its nested review passing — and then `code`, whose commit its own review passes, the test suite shall assert, rendering it from its records taken one at a time, as live, and again from the stored records at once, with the same lines, labels and cards:
 
 - one delegation line per call naming its player and step, the model only at each player's first call [[run-view-178](#run-view-178)] [[run-view-188](#run-view-188)];
 - one return line per call with its outcome's words, the merge's and the code step's commits matching the receipts their transitions carry and the reviews' evaluated revisions likewise, and the merge's reply's first line [[run-view-183](#run-view-183)] [[run-view-184](#run-view-184)];
 - before the merge's outcome arrives, its line reads "← coder handed back" marked "judging" with no commit [[run-view-183](#run-view-183)] [[run-view-184](#run-view-184)];
 - the coder's lane names its three calls "decide › Propose a design", "decide › Merge the proposals" and "code › Implement", the merge's tooltip naming "dev › decide › Merge the proposals" [[run-view-186](#run-view-186)];
 - while both proposals run, the `decide` card holds both proposal steps active, each wearing its own player's running mark, and the thread shows one chip per proposal [[run-view-185](#run-view-185)] [[run-view-37](#run-view-37)];
-- activating a delegation line brings the lane into view, and activating the call's place lights its delegation line [[run-view-178](#run-view-178)] [[run-view-186](#run-view-186)].
+- activating a delegation line brings the lane into view, and activating the call's place lights its delegation line [[run-view-178](#run-view-178)] [[run-view-186](#run-view-186)];
+- the merge's delegation line is named "Handed to coder, Merge the proposals" and its return line "← coder committed ⟨commit⟩, ⟨duration⟩" [[run-view-178](#run-view-178)] [[run-view-184](#run-view-184)];
 - rendered with Chinese resolved, the merge's delegation line reads "交给 coder · 合并方案", its return line "← coder 已提交", and the coder's lane "decide › 写方案", "decide › 合并方案" and "code › 实现" [[run-view-188](#run-view-188)].
 
 #### run-view-191
@@ -1134,6 +1138,11 @@ Where synthetic trace streams pose what a recording cannot, the test suite shall
 | a call comes back asking the Boss | its line reads "← coder asks you", marked "waiting for you", without the question's words |
 | a traced call fails before its player records anything | its delegation line stands and leads nowhere, no lane appears, and no return line follows [[run-view-178](#run-view-178)] |
 | a playbook the step table does not list | its step and outcome read as their ids' words and no commit is named [[run-view-188](#run-view-188)] |
+| another run's transition and disposal come between a transition and its outcome | the line names its own transition's commit |
+| a transition accepts an outcome no call takes beside one a call takes | the line reads its outcome's words and names no commit |
+| the process dies in a call and a restore follows | the call runs no more, and its player's next prompt goes to that player's next call |
+| a runtime failure ends its turn with its own error | its failure line stands [[run-view-187](#run-view-187)] |
+| a run's step not called yet, the bindings changed since the run started | the step wears the player the run's context bound [[run-view-185](#run-view-185)] |
 
 ### Pane Management
 
