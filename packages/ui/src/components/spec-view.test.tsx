@@ -415,7 +415,12 @@ describe("SPECV-2: expanded file keeps document order with sections and topics",
     expect(
       screen.getByTestId("item-toggle-AUTH-10").getAttribute("aria-expanded"),
     ).toBe("true");
-    expect(screen.getByText("Collapse all")).toBeTruthy();
+    expect(screen.getByText("Collapse all items")).toBeTruthy();
+    // The items bar stands between the intent and the items, stating
+    // the count and naming each control for its object (spec-view-2).
+    const bar = screen.getByTestId(`items-bar-${AUTH}`);
+    expect(bar.textContent).toMatch(/^\d+ items/);
+    expect(within(bar).getByTestId(`expand-all-${AUTH}`)).toBeTruthy();
   });
 });
 
@@ -733,10 +738,10 @@ describe("citation entries: target-group color, hit target", () => {
     // hand now, never in a native title (spec-view-61).
     expect(g1.className).toContain("text-sky-700");
     expect(g1.getAttribute("title")).toBeNull();
-    // GUARD-5 is internal: fuchsia.
+    // GUARD-5 is internal: lime.
     expect(
       screen.getByTestId("link-GUARD-3-GUARD-5").className,
-    ).toContain("text-fuchsia-700");
+    ).toContain("text-lime-800");
     // Hit target grows by padding, density kept by negative margin
     // (DR-010 §7).
     expect(g1.className).toContain("py-1");
@@ -759,7 +764,7 @@ describe("citation entries: target-group color, hit target", () => {
     fireEvent.click(screen.getByTestId("inbound-AUTH-8"));
     expect(
       screen.getByTestId("link-AUTH-8-GUARD-5").className,
-    ).toContain("text-fuchsia-700");
+    ).toContain("text-lime-800");
   });
 });
 
@@ -1076,15 +1081,35 @@ describe("SPECV-6: jump return chip", () => {
     // A second hop stacks: AUTH-2 → AUTH-1.
     fireEvent.click(screen.getByTestId("link-AUTH-2-AUTH-1"));
     expect(screen.getByTestId("jump-back").textContent).toBe(
-      "back to AUTH-2",
+      "←back to AUTH-2",
     );
     // Pop lands back on AUTH-2 and uncovers the older origin.
     fireEvent.click(screen.getByTestId("jump-back"));
     expect(document.activeElement).toBe(screen.getByTestId("item-AUTH-2"));
-    expect(screen.getByTestId("jump-back").textContent).toBe("back to CAT-1");
-    fireEvent.click(screen.getByTestId("jump-back"));
+    expect(screen.getByTestId("jump-back").textContent).toBe("←back to CAT-1");
+    // Alt+Left walks back as the control does (spec-view-6).
+    fireEvent.keyDown(window, { key: "ArrowLeft", altKey: true });
     expect(document.activeElement).toBe(screen.getByTestId("item-CAT-1"));
     // The stack is empty: the chip leaves.
+    expect(screen.queryByTestId("jump-back")).toBeNull();
+  });
+
+  test("a jump from a package's intent returns to that package", () => {
+    const tree: SpecTreeState = {
+      ...TREE,
+      files: TREE.files.map((file) =>
+        file.basename === "courses"
+          ? { ...file, intent: "What the catalog lists; see [AUTH-2](../identity/auth.md#auth-2)." }
+          : file,
+      ),
+    };
+    render(<Harness tree={tree} />);
+    fireEvent.click(screen.getByTestId(`file-toggle-${CAT}`));
+    const link = within(screen.getByTestId(`file-${CAT}`)).getByRole("link", { name: "AUTH-2" });
+    fireEvent.click(link);
+    expect(screen.getByTestId("jump-back").textContent).toBe("←back to courses's intent");
+    // The pointer's back button walks back too (spec-view-6).
+    fireEvent.mouseUp(window, { button: 3 });
     expect(screen.queryByTestId("jump-back")).toBeNull();
   });
 
@@ -1443,6 +1468,29 @@ describe("SPECV-8: freshness and failure states", () => {
     expect(onRefresh).toHaveBeenCalled();
   });
 
+  test("a requested re-read turns its icon, then says the tree was read again", () => {
+    vi.useFakeTimers();
+    try {
+      const onRefresh = vi.fn();
+      const { rerender } = render(<Harness onRefresh={onRefresh} />);
+      fireEvent.click(screen.getByRole("button", { name: "Refresh specs" }));
+      const icon = () => screen.getByTestId("specs-refresh").querySelector("svg")!;
+      // However fast the read lands, the icon turns at least 0.6s
+      // (spec-view-8).
+      rerender(<Harness onRefresh={onRefresh} tree={{ ...TREE, readAt: TREE.readAt + 1 }} />);
+      expect(icon().getAttribute("class")).toContain("animate-spin");
+      act(() => vi.advanceTimersByTime(300));
+      expect(icon().getAttribute("class")).toContain("animate-spin");
+      act(() => vi.advanceTimersByTime(300));
+      expect(icon().getAttribute("class")).not.toContain("animate-spin");
+      expect(screen.getByTestId("specs-read-age").textContent).toBe("read again");
+      act(() => vi.advanceTimersByTime(2000));
+      expect(screen.getByTestId("specs-read-age").textContent).toBe("read just now");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   test("a load error renders a red strip with Retry", () => {
     const onRefresh = vi.fn();
     render(<Harness error="specs read failed" onRefresh={onRefresh} />);
@@ -1727,24 +1775,27 @@ describe("spec-view-20: citation graph beside the outline", () => {
       fireEvent.click(toggle);
       expect(toggle.getAttribute("aria-expanded")).toBe("true");
 
-      // The graph's toggle heads the filter row and says what it does
+      // The graph's toggle heads the graph's own line while it shows,
+      // the filter row while it is hidden, and says what it does
       // (spec-view-20).
       const graph = screen.getByTestId("view-graph");
       expect(graph.getAttribute("aria-label")).toBe("Hide the citation graph");
       expect(graph.getAttribute("aria-pressed")).toBe("true");
-      expect(graph.parentElement).toBe(screen.getByTestId("filter-external").parentElement);
+      expect(graph.parentElement).toBe(screen.getByTestId("graph-toolbar"));
+      expect(graph.parentElement!.firstElementChild).toBe(graph);
       fireEvent.click(graph);
-      expect(screen.getByTestId("view-graph").getAttribute("aria-label")).toBe(
-        "Show the citation graph",
-      );
+      const shown = screen.getByTestId("view-graph");
+      expect(shown.getAttribute("aria-label")).toBe("Show the citation graph");
+      expect(shown.parentElement).toBe(screen.getByTestId("filter-external").parentElement);
+      expect(shown.parentElement!.firstElementChild).toBe(shown);
 
       // Each filter leads with a checkbox, filled when pressed and
       // empty when not (spec-view-4).
       const box = () => screen.getByTestId("filter-box-internal");
-      expect(box().className).toContain("bg-fuchsia-700");
+      expect(box().className).toContain("bg-lime-700");
       expect(box().querySelector("svg")).toBeTruthy();
       fireEvent.click(screen.getByTestId("filter-internal"));
-      expect(box().className).not.toContain("bg-fuchsia-700");
+      expect(box().className).not.toContain("bg-lime-700");
       expect(box().querySelector("svg")).toBeNull();
     } finally {
       restore();
@@ -1876,7 +1927,7 @@ describe("spec-view-20: citation graph beside the outline", () => {
     expect(citedFill).toContain("fill-neutral-700");
     expect(uncitedFill).toContain("stroke-neutral-700");
     for (const cls of [citedFill, uncitedFill]) {
-      expect(cls).not.toMatch(/brand|sky|fuchsia|teal|emerald|amber|red/);
+      expect(cls).not.toMatch(/brand|sky|lime|teal|emerald|amber|red/);
     }
 
     // At rest only the backbone draws: one undirected line per pair,

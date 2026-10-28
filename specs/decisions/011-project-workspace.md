@@ -6,6 +6,7 @@
 ## Status
 
 The first-project entry from the welcome page is amended by [DR-136](136-the-first-project-picker-leads-with-a-folder.md).
+The dev (internal) group's hue is amended by [DR-158](158-a-legible-graph-and-outline.md): lime rather than fuchsia, which stood too near brand purple.
 
 Amended by [DR-065](065-repairs-the-reader-answers.md): a Space repair adds the project it names from the folder it has checked, so the palette is no longer the only place a project is added; it remains where projects are browsed, chosen and created.
 

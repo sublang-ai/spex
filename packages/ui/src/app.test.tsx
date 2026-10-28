@@ -367,6 +367,15 @@ describe("run-view-70: the sidebar navigates, the tabs hold what is open", () =>
     expect(screen.getByTestId("sidebar-session-old-5")).toBeTruthy();
   });
 
+  test("a project's Specs entry shows that project with its Specs tab", () => {
+    render(<App />);
+    fireEvent.click(screen.getByTestId("sidebar-disclose-p2"));
+    fireEvent.click(screen.getByTestId("sidebar-specs-p2"));
+    // The specs are a sidebar's step away (run-view-67).
+    expect(useAppStore.getState().currentProjectId).toBe("p2");
+    expect(useAppStore.getState().workspaceTabs.p2).toBe("specs");
+  });
+
   test("disclosing another project leaves the workspace where it is", () => {
     render(<App />);
     fireEvent.click(screen.getByTestId("sidebar-disclose-p2"));

@@ -6,8 +6,9 @@
 ## Status
 
 Accepted (2026-10-27).
-Amends [DR-026](026-data-graphics-craft.md) §1 (edge width no longer carries a count), §4 (a label without room waits for inspection or the selection; the camera is bounded by the fitted frame rather than the layout), §5 (direction reads under the selection; the resting backbone is undirected), §6 (unlinked packages leave the arrangement for a row of their own), §2 (one hue outside the reserved sets, orange, joins the budget for the selection's own citations), §7 (the selection hides the edges it does not touch, besides dimming; the card answers hover and keyboard focus alone) and §8 (the split's bounds are pixel floors; the threshold stands above the graph, the fit in its corner and the key below, with no gesture tips).
-Amends [DR-013](013-sublang-brand.md)'s interaction hue on the spec view: its selection and pressed controls wear ink, brand purple keeping to links and the focus ring.
+Amends [DR-026](026-data-graphics-craft.md) §1 (edge width no longer carries a count), §4 (a label without room waits for inspection or the selection; the camera is bounded by the fitted frame rather than the layout), §5 (direction reads under the selection; the resting backbone is undirected), §6 (unlinked packages leave the arrangement for a row of their own), §2 (one hue outside the reserved sets, orange, joins the budget for the selection's own citations, and the internal group's hue is lime), §7 (the selection hides the edges it does not touch, besides dimming; the card answers hover and keyboard focus alone) and §8 (the split's bounds are pixel floors; the threshold stands above the graph, the fit in its corner and the key below, with no gesture tips).
+Amends [DR-013](013-sublang-brand.md)'s interaction hue on the spec view: its selection and pressed controls wear ink, brand purple keeping to links, text actions and the focus ring.
+Amends [DR-011](011-project-workspace.md) and [DR-015](015-reference-content.md) in the internal group's hue: lime rather than fuchsia.
 Amends [DR-027](027-linked-views-contract.md)'s selection voice (its isolation hides the edges it does not touch and draws its own directed), rule 3 (the graph reveals a node the pinned package card covers, and the camera returns after the selection) and the footer's place (in the outline pane).
 
 ## Context
@@ -66,7 +67,9 @@ Amends [DR-027](027-linked-views-contract.md)'s selection voice (its isolation h
    Pair counts, the graph's in and out totals and the outline's file rollups come from one index keyed by item ID; a citation of an absent ID counts in no total and is carried as a neutral warning mark after the row's rollup at every width, its count in the mark's name — a quality warning, not a property every package has, so it holds no column.
 8. **The outline reads as a table.**
    Group names read in full (External behavior, Internal behavior, Tests) with a one-line definition on each filter; package rows carry numerals in aligned columns under one pinned heading row, a zero as a dash, an expanded package's row pinned beneath it while its contents scroll so its name stays in sight; a group filtered off hides its column with a status line restoring it; section headings read as the localized group name with their count, topics keep their author's words as sub-headings, and the per-row group word retires.
-   The filters lead with checkboxes, so they read as filters rather than tags; the graph's toggle is an icon at the head of the filter row, beside the graph it shows or hides, named for that act.
+   The filters lead with checkboxes, so they read as filters rather than tags; the graph's toggle is an icon heading the graph's own line while it shows and the outline's filter row while it is hidden, named for its act.
+   An expanded package sets an items bar between its intent and its items, stating the item count and holding "Expand all items" and "Edit spec file", so neither reads as acting on the intent above it.
+   Every in-view jump records the place it left, a package's intent included, and the head of the outline offers the walk back, as do Alt+Left and the pointer's back button: a reader cannot tell an item citation, which jumps in place, from a record link, which opens the reader with its own Back, so both must come back.
    A package row is one target across its width, with a pointer cursor and a hover tint over all of it and its focus ring on the whole row for the keyboard alone; activating the selected row while expanded collapses it, as file trees do.
    An item's citation summary raises a card listing up to five items in each direction and opens the item onto its citation block; backlinks list directly.
 9. **The split holds pixel floors, and the window holds the graph's.**
@@ -77,10 +80,10 @@ Amends [DR-027](027-linked-views-contract.md)'s selection voice (its isolation h
     Above the graph stands only the threshold sentence; the fit is an icon in the canvas's bottom-right corner, as maps place it, named "Fit to window" by its title and accessible name and inert while the camera rests on the fitted frame.
     Below the graph a key that is never a control and does not change with the selection names only the two role treatments: the numerals state what size counts, the selection's sentence the selection's hues, and the gestures are the conventional ones, so no tip states them.
     `map.md` and `meta.md` stand in a footer of the outline pane, outside its scroll, named by file and purpose, through search and filters and in the empty and legacy trees alike.
-11. **Color on the spec view is the item groups'.**
-    Brand purple `#890FBC` and the internal group's fuchsia stand about ten degrees of hue apart, so purple selection, pressed controls and citation lines read as a fourth group or as the internal one.
-    Hue on this surface therefore marks the item groups alone, with two exceptions: the selection's own citations in orange — outside every reserved set and far from sky, fuchsia and teal — keyed by its line sample, and brand purple for links and the keyboard focus ring as everywhere else.
-    The selected row, the selected node's halo, the search's match rings and pressed controls wear ink; what cites the selection stays ink, distinct from orange by hue rather than by a lighter gray that would read as de-emphasis.
+11. **The item groups' hues keep clear of interaction purple.**
+    Brand purple `#890FBC` and the internal group's former fuchsia stood about thirteen degrees of hue apart, so purple links, text actions, the sidebar's selected project and the citation lines all read as the internal group.
+    The internal group takes lime — about 90° from the tests' teal, 77° from emerald status, 68° from orange and 160° from brand purple — at a text-grade step holding 6.45:1 on the paper surface; links and text actions keep brand purple, since a reader must find them.
+    The selection's own citations draw in orange, a hue outside every reserved set and keyed by its line sample; the selected row, the selected node's halo, the search's match rings and pressed controls wear ink, so purple on the view means something to activate or keyboard focus.
 Considered and declined for now:
 
 - re-laying the selection's neighbors in a ring around it — it reads best in the prototype but moves marks the camera contract keeps still, so it waits on this decision's results;

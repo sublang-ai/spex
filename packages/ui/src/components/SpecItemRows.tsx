@@ -35,19 +35,19 @@ import { i18n } from "../i18n.js";
 import { Markdown } from "./Markdown.js";
 
 // Group colors keep DR-011's three hues under DR-015's section-kind
-// groups: external sky, internal fuchsia, test teal — outside the
+// groups: external sky, internal lime, test teal — outside the
 // status palette (DR-010 §8 with DR-013: emerald, amber, red, brand
 // purple keep their meanings). Color is never the only channel: every
 // chip and count carries the group word and an aria-label.
 export const GROUP_CHIP: Record<SpecGroup, string> = {
   external: "text-sky-700 bg-sky-50 dark:text-sky-300 dark:bg-sky-950",
   internal:
-    "text-fuchsia-700 bg-fuchsia-50 dark:text-fuchsia-300 dark:bg-fuchsia-950",
+    "text-lime-800 bg-lime-50 dark:text-lime-300 dark:bg-lime-950",
   test: "text-teal-700 bg-teal-50 dark:text-teal-300 dark:bg-teal-950",
 };
 export const GROUP_TEXT: Record<SpecGroup, string> = {
   external: "text-sky-700 dark:text-sky-400",
-  internal: "text-fuchsia-700 dark:text-fuchsia-400",
+  internal: "text-lime-800 dark:text-lime-400",
   test: "text-teal-700 dark:text-teal-400",
 };
 

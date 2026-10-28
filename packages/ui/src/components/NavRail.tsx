@@ -110,6 +110,8 @@ export interface NavPlace {
   onPickProject(projectId: string): void;
   onActivateSession(sessionId: string): void;
   onNewSession(projectId: string): void;
+  /** Show that project with its Specs tab (run-view-67). */
+  onOpenSpecs(projectId: string): void;
   /** Delete an idle session this core owns (DR-038); rejects with
    * the core's reason, which the row shows. */
   onDeleteSession(sessionId: string): Promise<void>;
@@ -384,6 +386,15 @@ export function NavRail(props: NavRailProps) {
           activate: () => setShowAll((current) => ({ ...current, [projectKey]: true })),
         });
       }
+      rows.push({
+        key: placed(place, `p:${project.id}`),
+        kind: "action",
+        place,
+        projectRow,
+        projectId: project.id,
+        label: "",
+        activate: () => place.onOpenSpecs(project.id),
+      });
       rows.push({
         key: placed(place, `n:${project.id}`),
         kind: "action",
@@ -831,6 +842,21 @@ export function NavRail(props: NavRailProps) {
                 {i18n._("all {count}…", { count: bucket.idle.length })}
               </div>
             ) : null}
+            {/* The project's specs, a sidebar's step away (run-view-67). */}
+            <div
+              role="treeitem"
+              aria-selected={false}
+              data-row={placed(place, `p:${project.id}`)}
+              data-testid={placed(place, `sidebar-specs-${project.id}`)}
+              tabIndex={focused === placed(place, `p:${project.id}`) ? 0 : -1}
+              onFocus={() => setFocusKey(placed(place, `p:${project.id}`))}
+              onClick={() => place.onOpenSpecs(project.id)}
+              aria-label={i18n._("Specs of {project}", { project: project.name })}
+              className={`${rowClass(false)} pl-6 text-neutral-500`}
+            >
+              <Icon name="file" className="h-3 w-3 shrink-0" />
+              {i18n._({ id: "Specs", comment: "the spec view's own heading" })}
+            </div>
             <div
               role="treeitem"
               aria-selected={false}

@@ -108,9 +108,14 @@ const UNRESOLVED_CELL = "flex w-4 shrink-0 justify-end";
  * (spec-view-4). */
 const FILTER_BOX: Record<SpecGroup, string> = {
   external: "border-sky-700 bg-sky-700 dark:border-sky-400 dark:bg-sky-400",
-  internal: "border-fuchsia-700 bg-fuchsia-700 dark:border-fuchsia-400 dark:bg-fuchsia-400",
+  internal: "border-lime-700 bg-lime-700 dark:border-lime-400 dark:bg-lime-400",
   test: "border-teal-700 bg-teal-700 dark:border-teal-400 dark:bg-teal-400",
 };
+
+/** How long a requested re-read turns its icon at least, and how long
+ * the label then says so (spec-view-8). */
+const REFRESH_TURN_MS = 600;
+const REFRESH_SAID_MS = 2000;
 
 /** A count as the columns print it: tabular numerals with the
  * locale's separators, a zero as a dash (spec-view-2). */
@@ -232,9 +237,21 @@ const ORIGIN_NAMES: Record<RecordOrigin["surface"], () => string> = {
 type LinkSource = {
   sourcePath: string;
   itemId?: string;
+  /** The package whose intent holds the link, when an intent does. */
+  intentOf?: string;
   focusId: string;
   noteKey: string;
 };
+
+/** Where an in-view jump left from: an item, or a package's intent
+ * (spec-view-6). */
+type JumpOrigin = { item: string } | { intent: string };
+
+function originOf(source: LinkSource): JumpOrigin | undefined {
+  if (source.itemId) return { item: source.itemId };
+  if (source.intentOf) return { intent: source.intentOf };
+  return undefined;
+}
 
 /** The DOM id of a package row's toggle, where focus returns from a
  * record its intent opened (DR-010 §6). */
@@ -310,7 +327,30 @@ export function SpecView(props: SpecViewProps) {
   >(new Map());
   // Jump origins, newest last: every in-view jump pushes its citing
   // item so the floating chip can walk back one level at a time.
-  const [jumpOrigins, setJumpOrigins] = useState<readonly string[]>([]);
+  const [jumpOrigins, setJumpOrigins] = useState<readonly JumpOrigin[]>([]);
+  // A requested re-read acknowledged however fast it lands: the icon
+  // turns for at least REFRESH_TURN_MS, then the label says the tree
+  // was read again for REFRESH_SAID_MS (spec-view-8).
+  const [refresh, setRefresh] = useState<"idle" | "reading" | "done">("idle");
+  const refreshFrom = useRef<{ at: number; readAt: number }>({ at: 0, readAt: 0 });
+  const startRefresh = () => {
+    refreshFrom.current = { at: Date.now(), readAt: tree.readAt };
+    setRefresh("reading");
+    props.onRefresh();
+  };
+  const readLanded = tree.readAt !== refreshFrom.current.readAt || props.error !== undefined;
+  useEffect(() => {
+    if (refresh === "reading" && !props.loading && readLanded) {
+      const left = Math.max(0, REFRESH_TURN_MS - (Date.now() - refreshFrom.current.at));
+      const timer = setTimeout(() => setRefresh("done"), left);
+      return () => clearTimeout(timer);
+    }
+    if (refresh === "done") {
+      const timer = setTimeout(() => setRefresh("idle"), REFRESH_SAID_MS);
+      return () => clearTimeout(timer);
+    }
+    return undefined;
+  }, [refresh, props.loading, readLanded]);
   const [reader, setReader] = useState<ReaderState | null>(null);
   const [pendingJump, setPendingJump] = useState<string>();
   // An item whose summary was activated: once expanded, its citation
@@ -608,11 +648,11 @@ export function SpecView(props: SpecViewProps) {
     return true;
   }
 
-  /** Citation jump (DR-011): land on the target, remembering the
-   * citing item so the floating chip can walk back — never navigate;
-   * a dead ID says "not found" next to the clicked link. A package's
-   * intent cites from no item, so its jump leaves no return. */
-  function jumpTo(linkKey: string, targetId: string, originId?: string) {
+  /** Citation jump (DR-011): land on the target, remembering the place
+   * it left — a citing item, or a package's intent — so the return
+   * control can walk back; never navigate. A dead ID says "not found"
+   * next to the clicked link (spec-view-6). */
+  function jumpTo(linkKey: string, targetId: string, origin?: JumpOrigin | string) {
     // The jump answers the entry the card was previewing: the card
     // has nothing left to say (spec-view-61).
     preview.close();
@@ -621,16 +661,53 @@ export function SpecView(props: SpecViewProps) {
       setLiveNote(i18n._("{id} not found", { id: targetId }));
       return;
     }
-    if (originId) setJumpOrigins((stack) => [...stack, originId]);
+    if (origin) {
+      const place = typeof origin === "string" ? { item: origin } : origin;
+      setJumpOrigins((stack) => [...stack, place]);
+    }
   }
 
-  /** The floating chip pops one origin and lands back on it. */
+  /** The return pops one origin and lands back on it: an item as a
+   * jump lands, an intent on its package's row (spec-view-6). */
   function popJumpOrigin() {
     const origin = jumpOrigins[jumpOrigins.length - 1];
     if (!origin) return;
     setJumpOrigins((stack) => stack.slice(0, -1));
-    revealTarget(origin);
+    if ("item" in origin) {
+      revealTarget(origin.item);
+    } else {
+      revealFile(origin.intent);
+      requestAnimationFrame(() =>
+        document.getElementById(fileDomId(origin.intent))?.focus({ preventScroll: true }),
+      );
+    }
   }
+
+  // Alt+Left and the pointer's back button walk back too, while there
+  // is somewhere to return to (spec-view-6).
+  const popRef = useRef(popJumpOrigin);
+  popRef.current = popJumpOrigin;
+  const canReturn = jumpOrigins.length > 0;
+  useEffect(() => {
+    if (!canReturn) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.altKey && event.key === "ArrowLeft" && !event.metaKey && !event.ctrlKey) {
+        event.preventDefault();
+        popRef.current();
+      }
+    };
+    const onPointer = (event: MouseEvent) => {
+      if (event.button !== 3) return;
+      event.preventDefault();
+      popRef.current();
+    };
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("mouseup", onPointer);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("mouseup", onPointer);
+    };
+  }, [canReturn]);
 
   /** Swap to the records reader; returnFocusId names the DOM id that
    * takes focus back when the reader closes (§6) — absent on the
@@ -770,6 +847,7 @@ export function SpecView(props: SpecViewProps) {
   function intentSource(fileKey: string): LinkSource {
     return {
       sourcePath: `packages/${fileKey}.md`,
+      intentOf: fileKey,
       focusId: fileDomId(fileKey),
       noteKey: `intent:${fileKey}`,
     };
@@ -788,7 +866,7 @@ export function SpecView(props: SpecViewProps) {
     const candidates = linkItemTargets(anchor.textContent ?? "", href);
     const target = candidates.find((c) => itemIndex.has(c)) ?? candidates[0];
     if (target && itemIndex.has(target)) {
-      jumpTo(`${source.noteKey}:${target}`, target, source.itemId);
+      jumpTo(`${source.noteKey}:${target}`, target, originOf(source));
       return;
     }
     // The citing file's specs/-relative path anchors the href
@@ -812,7 +890,7 @@ export function SpecView(props: SpecViewProps) {
     // is citation-shaped too. The source's prefix keeps the note off
     // the identically keyed citation rows.
     if (target) {
-      jumpTo(`${source.noteKey}:${target}`, target, source.itemId);
+      jumpTo(`${source.noteKey}:${target}`, target, originOf(source));
       return;
     }
     // Anything else (sibling spec files, map.md) is inert: no
@@ -1317,7 +1395,7 @@ export function SpecView(props: SpecViewProps) {
             // The row wears this button's focus ring; the app-wide
             // outline would frame the name alone.
             style={{ outline: "none" }}
-            className="flex min-w-0 flex-1 items-center gap-2 rounded text-left"
+            className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded text-left"
           >
             {/* The package identifier is the basename (META-10). */}
             <span
@@ -1454,8 +1532,19 @@ export function SpecView(props: SpecViewProps) {
                 {file.path}: {file.error}
               </div>
             ) : null}
+            {/* The items bar: between the intent and the items, so its
+                controls read as acting on the items and the file, never
+                on the intent above (spec-view-2). */}
             {(allIds.length > 0 && items.length > 0) || canEdit ? (
-              <div className="flex flex-wrap items-center gap-3">
+              <div
+                data-testid={`items-bar-${key}`}
+                className="my-1 flex flex-wrap items-center gap-x-4 gap-y-1 border-y border-neutral-200 py-1.5 dark:border-neutral-800"
+              >
+                <span className="mr-auto text-xs text-neutral-500">
+                  {i18n._("{count, plural, one {# item} other {# items}}", {
+                    count: allIds.length,
+                  })}
+                </span>
                 {allIds.length > 0 && items.length > 0 ? (
                   <button
                     type="button"
@@ -1466,9 +1555,13 @@ export function SpecView(props: SpecViewProps) {
                         : i18n._("Expand all items in {name}", { name: file.basename })
                     }
                     onClick={() => setAllItems(file, !allExpanded)}
-                    className={`text-xs ${LINK_CLASS}`}
+                    className={`flex items-center gap-1 text-xs ${LINK_CLASS}`}
                   >
-                    {allExpanded ? i18n._("Collapse all") : i18n._("Expand all")}
+                    <Icon
+                      name="caretDown"
+                      className={`h-3.5 w-3.5 ${allExpanded ? "rotate-180" : ""}`}
+                    />
+                    {allExpanded ? i18n._("Collapse all items") : i18n._("Expand all items")}
                   </button>
                 ) : null}
                 {canEdit ? (
@@ -1479,9 +1572,10 @@ export function SpecView(props: SpecViewProps) {
                     onClick={() =>
                       openEditor(`file:${key}`, `packages/${key}.md`)
                     }
-                    className={`text-xs ${LINK_CLASS}`}
+                    className={`flex items-center gap-1 text-xs ${LINK_CLASS}`}
                   >
-                    {i18n._({ id: "Edit", comment: "open this file in the editor" })}
+                    <Icon name="edit" className="h-3.5 w-3.5" />
+                    {i18n._({ id: "Edit spec file", comment: "open this package's spec file in the editor" })}
                   </button>
                 ) : null}
                 {openFailure?.anchor === `file:${key}` ? (
@@ -1715,18 +1809,24 @@ export function SpecView(props: SpecViewProps) {
         <span className="ml-auto flex items-center gap-1.5">
           <button
             type="button"
+            data-testid="specs-refresh"
             aria-label={i18n._("Refresh specs")}
             title={i18n._("Re-read the specs/ tree")}
-            disabled={props.loading}
-            onClick={props.onRefresh}
-            className="flex h-6 w-6 items-center justify-center rounded text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 disabled:opacity-40 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
+            disabled={props.loading || refresh !== "idle"}
+            onClick={startRefresh}
+            className="flex h-6 w-6 items-center justify-center rounded text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 disabled:opacity-60 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
           >
-            <Icon name="refresh" />
+            <Icon
+              name="refresh"
+              className={`h-4 w-4 ${props.loading || refresh === "reading" ? "animate-spin" : ""}`}
+            />
           </button>
-          <span className="text-xs text-neutral-500">
-            {props.loading
+          <span data-testid="specs-read-age" className="text-xs text-neutral-500">
+            {props.loading || refresh === "reading"
               ? i18n._({ id: "reading…", comment: "the specs tree is being re-read" })
-              : i18n._("read {age}", { age: relativeReadTime(tree.readAt, now) })}
+              : refresh === "done"
+                ? i18n._({ id: "read again", comment: "the specs tree was just re-read on request" })
+                : i18n._("read {age}", { age: relativeReadTime(tree.readAt, now) })}
           </span>
         </span>
       </div>
@@ -1745,35 +1845,59 @@ export function SpecView(props: SpecViewProps) {
         // Item filters and search govern the outline alone, so they
         // ride inside its pane rather than over the whole surface
         // (spec-view-29).
+        // One toggle, not a mode set: the outline never leaves, so there
+        // is no state where nothing is shown. It heads the graph's own
+        // line while the graph shows and the outline's filter row while
+        // it is hidden, named for its act (spec-view-20).
+        const graphToggle = (
+          <button
+            type="button"
+            data-testid="view-graph"
+            aria-pressed={viewState.graph}
+            aria-label={
+              viewState.graph
+                ? i18n._("Hide the citation graph")
+                : i18n._("Show the citation graph")
+            }
+            title={
+              viewState.graph
+                ? i18n._("Hide the citation graph")
+                : i18n._("Show the citation graph")
+            }
+            onClick={() => onViewState({ ...viewState, graph: !viewState.graph })}
+            className={`flex h-6 w-6 shrink-0 items-center justify-center rounded ${
+              viewState.graph
+                ? "bg-neutral-200 text-neutral-800 hover:bg-neutral-300 dark:bg-neutral-800 dark:text-neutral-100 dark:hover:bg-neutral-700"
+                : "text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
+            }`}
+          >
+            <Icon name="sidebar" />
+          </button>
+        );
+        // The walk back from in-view jumps, at the outline's head where
+        // the reader looks after landing (spec-view-6).
+        const lastOrigin = jumpOrigins[jumpOrigins.length - 1];
+        const jumpBack = lastOrigin ? (
+          <button
+            type="button"
+            data-testid="jump-back"
+            onClick={popJumpOrigin}
+            title={i18n._("Return (Alt+Left)")}
+            className={`mb-2 flex shrink-0 items-center gap-1 self-start rounded px-1 py-0.5 text-xs ${LINK_CLASS}`}
+          >
+            <span aria-hidden="true">←</span>
+            {"item" in lastOrigin
+              ? i18n._("back to {id}", { id: lastOrigin.item })
+              : i18n._("back to {name}'s intent", {
+                  name:
+                    tree.files.find((file) => file.key === lastOrigin.intent)?.basename ??
+                    lastOrigin.intent,
+                })}
+          </button>
+        ) : null;
         const outlineControls = (
           <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 pb-2">
-            {/* One toggle, not a mode set: the outline never leaves, so
-                there is no state where nothing is shown. It heads the
-                filter row, beside the graph it shows or hides, and is
-                named for that act (spec-view-20). */}
-            <button
-              type="button"
-              data-testid="view-graph"
-              aria-pressed={viewState.graph}
-              aria-label={
-                viewState.graph
-                  ? i18n._("Hide the citation graph")
-                  : i18n._("Show the citation graph")
-              }
-              title={
-                viewState.graph
-                  ? i18n._("Hide the citation graph")
-                  : i18n._("Show the citation graph")
-              }
-              onClick={() => onViewState({ ...viewState, graph: !viewState.graph })}
-              className={`flex h-6 w-6 shrink-0 items-center justify-center rounded ${
-                viewState.graph
-                  ? "bg-neutral-200 text-neutral-800 hover:bg-neutral-300 dark:bg-neutral-800 dark:text-neutral-100 dark:hover:bg-neutral-700"
-                  : "text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
-              }`}
-            >
-              <Icon name="sidebar" />
-            </button>
+            {graphful ? null : graphToggle}
             {GROUP_ORDER.map((group) => {
               const on = viewState.filters[group];
               return (
@@ -2013,6 +2137,7 @@ export function SpecView(props: SpecViewProps) {
                 searching={searching}
                 onClearSelection={() => setGraphSelection(null)}
                 onOpenFile={selectFile}
+                toggle={graphToggle}
               />
             </div>
             {/* The reader sets the balance, within bounds that keep
@@ -2057,6 +2182,7 @@ export function SpecView(props: SpecViewProps) {
             </div>
             <div className="@container flex min-h-[22rem] min-w-0 flex-1 flex-col @min-[49rem]:min-h-40">
               {outlineControls}
+              {jumpBack}
               {hiddenLine}
               {/* Its own scroll box only beside the graph; stacked, the
                   split scrolls as one and the heading row pins to it. */}
@@ -2077,6 +2203,7 @@ export function SpecView(props: SpecViewProps) {
         ) : (
           <div className="@container flex flex-col">
             {outlineControls}
+            {jumpBack}
             {hiddenLine}
             {columnHeads}
             <ul data-testid="specs-outline" className="flex flex-col">
@@ -2098,16 +2225,6 @@ export function SpecView(props: SpecViewProps) {
         );
       })()}
 
-      {jumpOrigins.length > 0 ? (
-        <button
-          type="button"
-          data-testid="jump-back"
-          onClick={popJumpOrigin}
-          className="sticky bottom-12 z-10 self-center rounded-full border border-neutral-300 bg-white px-3 py-1 text-xs text-neutral-600 shadow-md hover:bg-neutral-50 dark:border-neutral-600 dark:bg-neutral-900 dark:text-neutral-300 dark:hover:bg-neutral-800"
-        >
-          {i18n._("back to {id}", { id: jumpOrigins[jumpOrigins.length - 1] })}
-        </button>
-      ) : null}
     </div>
   );
 }

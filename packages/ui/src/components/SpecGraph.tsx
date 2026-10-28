@@ -27,6 +27,7 @@ import {
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
+  type ReactNode,
 } from "react";
 import { select } from "d3-selection";
 import { zoom as d3Zoom, zoomIdentity, type ZoomBehavior, type ZoomTransform } from "d3-zoom";
@@ -250,7 +251,7 @@ export function revealShift(
  * its group word. */
 const GROUP_TEXT: Record<SpecGroup, string> = {
   external: "text-sky-700 dark:text-sky-300",
-  internal: "text-fuchsia-700 dark:text-fuchsia-300",
+  internal: "text-lime-800 dark:text-lime-300",
   test: "text-teal-700 dark:text-teal-300",
 };
 
@@ -347,7 +348,7 @@ function LineSample({ own }: { own: boolean }) {
 
 /** Ink at text-grade contrast on both grounds. The roles are
  * achromatic by design (DR-026 §2): the palette's hues are spoken for
- * — brand purple is interaction, sky/fuchsia/teal are the item
+ * — brand purple is interaction, sky/lime/teal are the item
  * groups, emerald/amber/red are status — and a gray *category* would
  * collide with the dim treatment, so the two roles differ by fill
  * treatment instead: solid ink where peers cite, ink ring on a tinted
@@ -538,6 +539,9 @@ export interface SpecGraphProps {
   onOpenFile: (fileKey: string) => void;
   /** Activating empty space clears the selection. */
   onClearSelection?: () => void;
+  /** The control hiding the graph, heading its own line
+   * (spec-view-20). */
+  toggle?: ReactNode;
 }
 
 export function SpecGraph({
@@ -547,6 +551,7 @@ export function SpecGraph({
   searching = false,
   onOpenFile,
   onClearSelection,
+  toggle,
 }: SpecGraphProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   /** The pane's visible frame: what the panel, the card and the fades
@@ -1366,6 +1371,7 @@ export function SpecGraph({
         data-testid="graph-toolbar"
         className="flex h-9 shrink-0 items-center gap-1.5 overflow-hidden whitespace-nowrap pb-2 text-xs text-neutral-600 dark:text-neutral-400"
       >
+        {toggle}
         {selectedNode ? (
           <>
             <span data-testid="graph-threshold-selection" className="min-w-0 truncate">

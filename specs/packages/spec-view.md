@@ -32,13 +32,12 @@ While an item row is displayed in a file row narrower than 28rem, the spec view 
 
 While a file node is displayed, the spec view shall present the package's header and expanded contents ([DR-158](../decisions/158-a-legible-graph-and-outline.md)):
 
-- the header shows the package-identifier chip, the file's intent — truncated to one line only while the node is collapsed, that line reading each link by its text — and the package's item count per group as a numeral in a fixed-width, right-aligned column in the fixed group colors — external sky, internal fuchsia, test teal ([DR-015](../decisions/015-reference-content.md)) — a zero reading as a muted dash, every count carrying its group's full name in its accessible name and title, and color never the only channel ([DR-010](../decisions/010-interface-craft.md) §7, §8);
+- the header shows the package-identifier chip, the file's intent — truncated to one line only while the node is collapsed, that line reading each link by its text — and the package's item count per group as a numeral in a fixed-width, right-aligned column in the fixed group colors — external sky, internal lime, test teal ([DR-015](../decisions/015-reference-content.md), [DR-158](../decisions/158-a-legible-graph-and-outline.md)) — a zero reading as a muted dash, every count carrying its group's full name in its accessible name and title, and color never the only channel ([DR-010](../decisions/010-interface-craft.md) §7, §8);
 - one heading row stands above the outline's rows and stays while they scroll, naming each count column by its group's full name — "External behavior", "Internal behavior", "Tests" — and the rollup's column "cites · cited by" on the same line, its title naming them cross-package citations [[spec-view-19](#spec-view-19)]; below 28rem the count headings read "External", "Internal" and "Tests", their full names riding their titles and accessible names;
 - a count column whose group filter is off leaves the rows and the heading row [[spec-view-4](#spec-view-4)];
 - while an expanded package's contents scroll under the heading row, its header stays pinned beneath that row until the next package's header takes its place;
 - expanded, the node shows the file's intent in full — rendered as item bodies are [[spec-view-3](#spec-view-3)], its links jumping as [[spec-view-6](#spec-view-6)] states — followed by its items in document order — never sorted by ID [[meta-12](../meta.md#meta-12)] — headed wherever the file's `##` section changes between consecutive items by that section's group full name and item count in the group's color, a section outside the package grammar heading by its own words, and wherever the `###` topic changes by the topic's own words as a sub-heading beneath the section's, along with any file consistency notices;
-- expanded, the node offers a per-file control that expands or collapses every item body at once;
-- expanded, the node offers an Edit control opening the file in the editor [[spec-view-48](#spec-view-48)].
+- expanded, the node sets an items bar between its intent and its items, stating the package's item count and holding the package's two controls, each named for what it acts on: one expanding or collapsing every item body at once, and one editing the spec file, opening it in the editor [[spec-view-48](#spec-view-48)].
 
 ### Items
 
@@ -114,7 +113,7 @@ While the spec view's filter box contains text, the spec view shall narrow the o
 When a local link inside the view is activated, the spec view shall resolve it against the citing file's `specs/`-relative path and act by target ([DR-011](../decisions/011-project-workspace.md)):
 
 - an item citation or a backlink expands the target item's ancestors, reveals the target even when its group filter is toggled off or an active search excludes it — marking it as shown despite the filter or search — and scrolls to and briefly highlights it, without leaving the view and without writing the package selection [[spec-view-42](#spec-view-42)];
-- after an in-view jump, the view offers a one-step return to the citing item, its keyboard reach and announcement already legislated ([DR-010](../decisions/010-interface-craft.md) §6, §7);
+- every in-view jump — from an item's body, a backlink, or a package's intent — records the place it left, and the view offers a return walking back through successive jumps one at a time: a control at the head of the outline naming the place it returns to, Alt+Left, and the pointer's back button, its keyboard reach and announcement already legislated ([DR-010](../decisions/010-interface-craft.md) §6, §7);
 - a cited ID that does not exist in the tree shows a transient "not found" note beside the activated link and does not navigate;
 - a link resolving to a decision or intent record's exact path, or to the tree's own `meta.md`, opens that record in the records reader [[spec-view-7](#spec-view-7)];
 - an item citation inside a rendered body is a focusable link, so the keyboard reaches it and the preview it raises [[spec-view-61](#spec-view-61)] without activating it;
@@ -127,7 +126,7 @@ When a local link inside the view is activated, the spec view shall resolve it a
 While the spec tree renders, the spec view shall keep the outline permanent and add the citation graph beside it while the graph toggle is on ([DR-026](../decisions/026-data-graphics-craft.md), [DR-158](../decisions/158-a-legible-graph-and-outline.md)):
 
 - the toggle defaults on and persists with the rest of the project's view state;
-- the toggle is an icon control at the head of the outline's filter row, its title and accessible name saying what it does — showing or hiding the citation graph — with its pressed state exposed;
+- the toggle is an icon control standing at the head of the graph's own line above the drawing while the graph shows, and at the head of the outline's filter row while it is hidden, its title and accessible name saying what it does — showing or hiding the citation graph — with its pressed state exposed;
 - the graph is directed, carrying one node per spec file and one edge per citing→cited file pair;
 - one selection serves both projections [[spec-view-42](#spec-view-42)], revealed in both when it changes [[spec-view-43](#spec-view-43)], and neither projection ever leaves the screen for it ([DR-009](../decisions/009-at-hand-interaction.md));
 - the two panes stand side by side only while the split's box holds a 320px graph beside a 28rem outline, and stack otherwise;
@@ -319,7 +318,7 @@ While an editor stands for a project, the spec view shall keep its path, text as
 
 #### spec-view-8
 
-While the spec view renders a read tree, the spec view shall show a manual refresh control labeled with the last read time in relative terms (e.g. "just now", "2m ago") — a save's re-read [[spec-view-50](#spec-view-50)] moving that label like any read — requesting a re-read and acknowledging the read in flight when the control is activated ([DR-010](../decisions/010-interface-craft.md) §3, §5).
+While the spec view renders a read tree, the spec view shall show a manual refresh control labeled with the last read time in relative terms (e.g. "just now", "2m ago") — a save's re-read [[spec-view-50](#spec-view-50)] moving that label like any read — requesting a re-read and acknowledging it when the control is activated — its icon turning for at least 0.6 seconds however fast the read, and the label then stating for 2 seconds that the tree was read again before the relative time returns ([DR-010](../decisions/010-interface-craft.md) §3, §5).
 
 ### Empty and Degraded States
 
@@ -500,15 +499,18 @@ Where a fixture tree carries a package item citing a peer's item, an intra-file 
 - outbound rows mark the absent-ID entry unresolved, and backlinks list every entry without a toggle [[spec-view-19](#spec-view-19)];
 - every file node, collapsed included, carries the rollup counting cross-file citations only, the absent-ID citation counted in neither direction and shown as the file's unresolved count [[spec-view-19](#spec-view-19)];
 - a settled hover or keyboard focus on an item's citation summary raises the summary card listing at most five items per direction with a line counting the rest, Escape closes it with focus kept, and activating the summary expands the item and moves focus onto its citation block [[spec-view-60](#spec-view-60)];
-- an in-view jump lands from an outbound row and from a backlink, and afterwards the one-step return restores the citing item [[spec-view-6](#spec-view-6)];
+- an in-view jump lands from an outbound row, from a backlink and from a package's intent, and the return control at the outline's head, Alt+Left and the pointer's back button each walk back one jump to the place it left, successive jumps returning in reverse order [[spec-view-6](#spec-view-6)];
 - a jump target excluded by an active search is revealed and marked [[spec-view-6](#spec-view-6)].
 
 #### spec-view-65
 
-Where a fixture tree carries packages under every section kind with a topic heading and a group holding no item in some package, the test suite shall assert the outline's columns and filters:
+Where a fixture tree carries packages under every section kind with a topic heading and a group holding no item in some package, the test suite shall assert the outline's columns, filters and controls:
 
 - each package row carries its counts as numerals in group-colored columns with a zero reading as a dash, each count's accessible name carrying its group's full name, under one heading row naming each column [[spec-view-2](#spec-view-2)];
 - an expanded package heads its items by each section's group full name and count and its topics by their own words, and no item row carries a group word [[spec-view-2](#spec-view-2)] [[spec-view-3](#spec-view-3)];
+- an expanded package's items bar states its item count and holds the expand-all control and the edit control, each named for the items or the spec file it acts on [[spec-view-2](#spec-view-2)];
+- the graph's toggle heads the graph's own line while the graph shows and the outline's filter row while it is hidden [[spec-view-20](#spec-view-20)];
+- activating the refresh control turns its icon for at least 0.6 seconds and then states for 2 seconds that the tree was read again [[spec-view-8](#spec-view-8)];
 - the toggles carry the full names and definitions with aria-pressed, each led by its checkbox filled when pressed and empty when not, and turning a group off removes its column and heading, keeps every package standing, and raises the status line whose control turns every group back on [[spec-view-4](#spec-view-4)].
 
 ### Graph Coverage

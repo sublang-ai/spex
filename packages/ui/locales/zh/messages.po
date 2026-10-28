@@ -215,6 +215,7 @@ msgid "{count, plural, one {# issue} other {# issues}} left."
 msgstr "{count, plural, other {剩余 # 个问题}}。"
 
 #: src/components/SpecGraph.tsx
+#: src/components/SpecView.tsx
 msgid "{count, plural, one {# item} other {# items}}"
 msgstr "{count} 个条目"
 
@@ -1372,6 +1373,10 @@ msgstr "自动：智能体在仓库内自主工作，并启用适配器自带的
 msgid "back to {id}"
 msgstr "返回 {id}"
 
+#: src/components/SpecView.tsx
+msgid "back to {name}'s intent"
+msgstr "返回 {name} 的介绍"
+
 #: src/components/AuthoringWorkspace.tsx
 msgid "Back to the playbook list — the session stays as it is"
 msgstr "返回规程列表 — 会话保持原样"
@@ -1907,8 +1912,8 @@ msgid "Collapse {run}"
 msgstr "折叠 {run}"
 
 #: src/components/SpecView.tsx
-msgid "Collapse all"
-msgstr "全部折叠"
+msgid "Collapse all items"
+msgstr "收起全部条目"
 
 #: src/components/SpecView.tsx
 msgid "Collapse all items in {name}"
@@ -2644,7 +2649,6 @@ msgstr "例如 triage"
 #. open the whole-file editor on the source
 #. open this file in the editor
 #. open this file in the editor
-#. open this file in the editor
 #. row menu item: edit this intent's text and files
 #: src/components/DraftSourceTab.tsx
 #: src/components/ProjectGroup.tsx
@@ -2673,6 +2677,11 @@ msgstr "编辑 {path}"
 #: src/components/ProjectGroup.tsx
 msgid "Edit intent text"
 msgstr "编辑意图文本"
+
+#. open this package's spec file in the editor
+#: src/components/SpecView.tsx
+msgid "Edit spec file"
+msgstr "编辑规约文件"
 
 #: src/components/SettingsSurface.tsx
 msgid "Edit the Captain"
@@ -2856,8 +2865,8 @@ msgid "Expand {run}"
 msgstr "展开 {run}"
 
 #: src/components/SpecView.tsx
-msgid "Expand all"
-msgstr "全部展开"
+msgid "Expand all items"
+msgstr "展开全部条目"
 
 #: src/components/SpecView.tsx
 msgid "Expand all items in {name}"
@@ -4981,6 +4990,11 @@ msgstr "{age}读取"
 msgid "Read {age}"
 msgstr "{age}已读取"
 
+#. the specs tree was just re-read on request
+#: src/components/SpecView.tsx
+msgid "read again"
+msgstr "已重新读取"
+
 #. a spex repository's state: the host lets this account only read it
 #: src/lib/space.ts
 msgid "Read-only"
@@ -5482,6 +5496,10 @@ msgstr "重试浏览器支持检查"
 #: src/components/SpaceSync.tsx
 msgid "Retrying…"
 msgstr "重试中…"
+
+#: src/components/SpecView.tsx
+msgid "Return (Alt+Left)"
+msgstr "返回（Alt+←）"
 
 #. the built-in /review playbook's intent, as its registry entry states it
 #: src/lib/playbook-intent.ts
@@ -6082,11 +6100,17 @@ msgstr "规约包需求"
 #. tab name: the project's spec packages
 #. the spec view's own heading
 #. the spec view's own heading
+#. the spec view's own heading
 #: src/App.tsx
 #: src/components/CaptainHome.tsx
+#: src/components/NavRail.tsx
 #: src/components/SpecView.tsx
 msgid "Specs"
 msgstr "规约"
+
+#: src/components/NavRail.tsx
+msgid "Specs of {project}"
+msgstr "{project} 的规约"
 
 #: src/components/CaptainHome.tsx
 msgid "Specs use an older format"

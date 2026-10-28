@@ -180,7 +180,7 @@ meta.md       The spec of specs
 | [DR-156](decisions/156-an-untouched-seed-follows-the-credentials.md) | 156-an-untouched-seed-follows-the-credentials.md | An untouched seed follows the credentials: a seat reads its credentials before seeding; a seeded file still at its recorded version is reseeded at start and on a seat's agent-credential change; any change ends that; amends DR-154 and DR-132 |
 
 | [DR-157](decisions/157-a-cli-attached-to-the-local-core.md) | 157-a-cli-attached-to-the-local-core.md | A thin CLI attached explicitly to the local core, opt-in request-specific outcomes, matched sign-in cancellation, and observation-only interruption |
-| [DR-158](decisions/158-a-legible-graph-and-outline.md) | 158-a-legible-graph-and-outline.md | A legible graph and outline: an undirected backbone at a reader-set threshold, the selection's citations directed with counts beside names and in a fixed panel the camera reveals past, placed labels, unlinked packages in a row, one citation index, a table-like outline with full group names, color for the item groups alone with the selection's citations in orange, pixel split floors and a 600px desktop window; amends DR-013, DR-026 and DR-027 |
+| [DR-158](decisions/158-a-legible-graph-and-outline.md) | 158-a-legible-graph-and-outline.md | A legible graph and outline: an undirected backbone at a reader-set threshold, the selection's citations directed with counts beside names and in a fixed panel the camera reveals past, placed labels, unlinked packages in a row, one citation index, a table-like outline with full group names, the internal group in lime and the selection's citations in orange, pixel split floors and a 600px desktop window; amends DR-011, DR-013, DR-015, DR-026 and DR-027 |
 
 ## Packages
 

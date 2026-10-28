@@ -1525,6 +1525,12 @@ export function App() {
       state.setWorkspaceTab(projectId, "start");
       showPlace(store);
     },
+    onOpenSpecs: (projectId) => {
+      const state = store.getState();
+      state.setCurrentProject(projectId);
+      state.setWorkspaceTab(projectId, "specs");
+      showPlace(store);
+    },
     onDeleteSession: (sessionId) => store.getState().deleteSession(sessionId),
   }));
 

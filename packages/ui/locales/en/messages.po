@@ -215,6 +215,7 @@ msgid "{count, plural, one {# issue} other {# issues}} left."
 msgstr "{count, plural, one {# issue} other {# issues}} left."
 
 #: src/components/SpecGraph.tsx
+#: src/components/SpecView.tsx
 msgid "{count, plural, one {# item} other {# items}}"
 msgstr "{count, plural, one {# item} other {# items}}"
 
@@ -1372,6 +1373,10 @@ msgstr "auto: the agent works on its own inside the repo, with the adapter's own
 msgid "back to {id}"
 msgstr "back to {id}"
 
+#: src/components/SpecView.tsx
+msgid "back to {name}'s intent"
+msgstr "back to {name}'s intent"
+
 #: src/components/AuthoringWorkspace.tsx
 msgid "Back to the playbook list — the session stays as it is"
 msgstr "Back to the playbook list — the session stays as it is"
@@ -1907,8 +1912,8 @@ msgid "Collapse {run}"
 msgstr "Collapse {run}"
 
 #: src/components/SpecView.tsx
-msgid "Collapse all"
-msgstr "Collapse all"
+msgid "Collapse all items"
+msgstr "Collapse all items"
 
 #: src/components/SpecView.tsx
 msgid "Collapse all items in {name}"
@@ -2644,7 +2649,6 @@ msgstr "e.g. triage"
 #. open the whole-file editor on the source
 #. open this file in the editor
 #. open this file in the editor
-#. open this file in the editor
 #. row menu item: edit this intent's text and files
 #: src/components/DraftSourceTab.tsx
 #: src/components/ProjectGroup.tsx
@@ -2673,6 +2677,11 @@ msgstr "Edit {path}"
 #: src/components/ProjectGroup.tsx
 msgid "Edit intent text"
 msgstr "Edit intent text"
+
+#. open this package's spec file in the editor
+#: src/components/SpecView.tsx
+msgid "Edit spec file"
+msgstr "Edit spec file"
 
 #: src/components/SettingsSurface.tsx
 msgid "Edit the Captain"
@@ -2856,8 +2865,8 @@ msgid "Expand {run}"
 msgstr "Expand {run}"
 
 #: src/components/SpecView.tsx
-msgid "Expand all"
-msgstr "Expand all"
+msgid "Expand all items"
+msgstr "Expand all items"
 
 #: src/components/SpecView.tsx
 msgid "Expand all items in {name}"
@@ -4981,6 +4990,11 @@ msgstr "read {age}"
 msgid "Read {age}"
 msgstr "Read {age}"
 
+#. the specs tree was just re-read on request
+#: src/components/SpecView.tsx
+msgid "read again"
+msgstr "read again"
+
 #. a spex repository's state: the host lets this account only read it
 #: src/lib/space.ts
 msgid "Read-only"
@@ -5482,6 +5496,10 @@ msgstr "Retry browser support check"
 #: src/components/SpaceSync.tsx
 msgid "Retrying…"
 msgstr "Retrying…"
+
+#: src/components/SpecView.tsx
+msgid "Return (Alt+Left)"
+msgstr "Return (Alt+Left)"
 
 #. the built-in /review playbook's intent, as its registry entry states it
 #: src/lib/playbook-intent.ts
@@ -6082,11 +6100,17 @@ msgstr "spec package requests"
 #. tab name: the project's spec packages
 #. the spec view's own heading
 #. the spec view's own heading
+#. the spec view's own heading
 #: src/App.tsx
 #: src/components/CaptainHome.tsx
+#: src/components/NavRail.tsx
 #: src/components/SpecView.tsx
 msgid "Specs"
 msgstr "Specs"
+
+#: src/components/NavRail.tsx
+msgid "Specs of {project}"
+msgstr "Specs of {project}"
 
 #: src/components/CaptainHome.tsx
 msgid "Specs use an older format"
