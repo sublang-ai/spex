@@ -6,6 +6,7 @@
 ## Status
 
 Accepted (2026-10-21) on the owner's direction: one locally running Spex controls different projects at once, on this computer and on the seats the person holds on team servers ([DR-132](132-team-servers.md)).
+Amended by [DR-159](159-projects-in-groups-opened-where-you-work.md) in "The relay" and "Remote projects": a seat opens by the first act that needs it, the contract shown by that act; the open starts the seat's sign-in at the space and names where to approve it; and the welcome page and the project palette offer the groups' projects at every place.
 Amends, under [DR-046](046-decision-record-evolution.md):
 
 - [DR-002](002-desktop-app-architecture.md) in "everything it knows arrives through the protocol" and "the single seam between core and UI": the UI holds one connection per core, every connection over the same protocol, and merges nothing but what this record names.

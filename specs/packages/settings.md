@@ -250,6 +250,10 @@ While the agent editor [[settings-1](#settings-1)] stands open as an anchored po
 - that box bounds the popover's width and height, and the editor scrolls its own content when the box is the shorter of the two;
 - an anchor too near an edge for the popover's side moves the popover along that edge instead of past it, because what leaves a pane to the left or above it never becomes scrollable.
 
+#### settings-54
+
+The Settings surface's header shall name the place shown — "This computer", or the server's name where the selector names a seat [[run-view-168](run-view.md#run-view-168)] — beneath its title, and shall show the config file's path `~`-shortened under the user's home directory with the full path in its title, saying "Shared with the playbook CLI — edits made outside appear here" in that title alone and naming no spex repository ([DR-159](../decisions/159-projects-in-groups-opened-where-you-work.md)).
+
 ### Credentials on a Seat
 
 #### settings-48
@@ -448,3 +452,7 @@ Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-
 #### settings-50
 
 Where the core runs as a seat with fixture shared files — present, absent and unreadable — a fake status command answering valid and expired, and a member's own credential set for one agent, the test suite shall assert each class and phrase of [[settings-49](#settings-49)] delivered over the protocol, and that `credential.set`, `credential.list` and `credential.remove` write, list without a secret and remove the member's credentials with the file owner-only [[settings-48](#settings-48)].
+
+#### settings-55
+
+Where the Settings surface renders over the local store and over a seat store whose place is named "lab-1", the test suite shall assert that the header reads "This computer" at the local place and "lab-1" at the seat's, that the config path reads `~`-shortened under the user's home with the full path and the CLI sentence in its title alone, and that no spex repository is named in the header [[settings-54](#settings-54)].
