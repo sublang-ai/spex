@@ -5109,8 +5109,8 @@ msgstr "plan the development path for a request: direct implementation, or a dur
 
 #. a step: the analyst chooses which workflows the request takes
 #: src/lib/step-words.ts
-msgid "Plan the path"
-msgstr "Plan the path"
+msgid "Choose the approach"
+msgstr "Choose the approach"
 
 #. a spec package's artifact kind: a playbook
 #: src/lib/environments.ts

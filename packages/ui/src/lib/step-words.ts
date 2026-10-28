@@ -18,7 +18,7 @@ type Words = () => string;
 /** Each built-in step a player runs, by playbook and state id. */
 const STEPS: Record<string, Record<string, Words>> = {
   dev: {
-    planAnalysis: () => i18n._({ id: "Plan the path", comment: "a step: the analyst chooses which workflows the request takes" }),
+    planAnalysis: () => i18n._({ id: "Choose the approach", comment: "a step: the analyst chooses which workflows the request takes" }),
   },
   decide: {
     askCoderProposal: () => i18n._({ id: "Propose a design", comment: "a step: a player writes its own design proposal" }),

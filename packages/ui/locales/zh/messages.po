@@ -5109,8 +5109,8 @@ msgstr "为请求规划开发路径：直接实现，或先形成持久的决策
 
 #. a step: the analyst chooses which workflows the request takes
 #: src/lib/step-words.ts
-msgid "Plan the path"
-msgstr "规划路径"
+msgid "Choose the approach"
+msgstr "判断怎么做"
 
 #. a spec package's artifact kind: a playbook
 #: src/lib/environments.ts

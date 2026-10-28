@@ -106,7 +106,7 @@ describe("run-view-190: a /dev run that decides before it codes, live and stored
   test("a delegation line per call, naming its step, and the model at each player's first call", () => {
     mount(RUN);
     expect(texts(/^delegation-line-/)).toEqual([
-      "AHanded to analyst · Plan the path · claude · claude-opus-5-5",
+      "AHanded to analyst · Choose the approach · claude · claude-opus-5-5",
       "CHanded to coder · Propose a design · claude · claude-opus-5-5",
       "RHanded to reviewer · Propose a design · codex · gpt-6-sol",
       "CHanded to coder · Merge the proposals",

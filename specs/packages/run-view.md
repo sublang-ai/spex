@@ -716,7 +716,7 @@ Wherever the run view names a traced call's step or outcome [[run-view-178](#run
 
 | Playbook | Step | Words | Repository fields |
 | --- | --- | --- | --- |
-| dev | planAnalysis | Plan the path | — |
+| dev | planAnalysis | Choose the approach | — |
 | decide | askCoderProposal, askReviewerProposal | Propose a design | — |
 | decide | synthesizeCommit | Merge the proposals | latestCommit |
 | code | firstPhase | Implement | latestCommit |
