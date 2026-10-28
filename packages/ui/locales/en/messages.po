@@ -194,10 +194,6 @@ msgstr "{count, plural, one {# change} other {# changes}}"
 msgid "{count, plural, one {# citation names an item} other {# citations name items}} absent from the tree"
 msgstr "{count, plural, one {# citation names an item} other {# citations name items}} absent from the tree"
 
-#: src/components/SpecGraph.tsx
-msgid "{count, plural, one {# citation} other {# citations}}"
-msgstr "{count, plural, one {# citation} other {# citations}}"
-
 #: src/components/SpaceExplorer.tsx
 msgid "{count, plural, one {# entry} other {# entries}}"
 msgstr "{count, plural, one {# entry} other {# entries}}"
@@ -241,6 +237,11 @@ msgstr "{count, plural, one {# needs you} other {# need you}}"
 #: src/components/NavRail.tsx
 msgid "{count, plural, one {# needs your attention} other {# need your attention}}"
 msgstr "{count, plural, one {# needs your attention} other {# need your attention}}"
+
+#. graph sentence while a package is selected: the packages its lines reach
+#: src/components/SpecGraph.tsx
+msgid "{count, plural, one {# package} other {# packages}} sharing citations with {name}"
+msgstr "{count, plural, one {# package} other {# packages}} sharing citations with {name}"
 
 #: src/App.tsx
 msgid "{count, plural, one {# playbook} other {# playbooks}}"
@@ -344,6 +345,11 @@ msgstr "{first} and {second}"
 #: src/components/EnvironmentSection.tsx
 msgid "{folder} holds a folder of yours by that name"
 msgstr "{folder} holds a folder of yours by that name"
+
+#. graph edge card: one package's citations of another
+#: src/components/SpecGraph.tsx
+msgid "{from} cites {to} {count, plural, one {# time} other {# times}}"
+msgstr "{from} cites {to} {count, plural, one {# time} other {# times}}"
 
 #: src/components/SpecView.tsx
 msgid "{group} ({count})"
@@ -5900,10 +5906,6 @@ msgstr "Show the sidebar"
 #: src/components/NavRail.tsx
 msgid "Show the sidebar ({keys})"
 msgstr "Show the sidebar ({keys})"
-
-#: src/components/SpecGraph.tsx
-msgid "showing all {count} pairs of {name}"
-msgstr "showing all {count} pairs of {name}"
 
 #: src/components/SpaceExplorer.tsx
 msgid "Showing the first {lines} lines; the file is longer."

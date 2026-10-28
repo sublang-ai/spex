@@ -254,6 +254,17 @@ const GROUP_TEXT: Record<SpecGroup, string> = {
   test: "text-teal-700 dark:text-teal-300",
 };
 
+/** One direction of a pair as a sentence — "a cites b 4 times" —
+ * since an arrow between two names reads as nothing in particular
+ * (spec-view-26). */
+function citesTimes(from: string, to: string, count: number): string {
+  return i18n._({
+    id: "{from} cites {to} {count, plural, one {# time} other {# times}}",
+    comment: "graph edge card: one package's citations of another",
+    values: { from, to, count },
+  });
+}
+
 /**
  * A package card's lines, the same floating or pinned: the name on one
  * line; the item total and both citation counts in ink, in the item
@@ -1354,9 +1365,10 @@ export function SpecGraph({
         {selectedNode ? (
           <>
             <span data-testid="graph-threshold-selection" className="min-w-0 truncate">
-              {i18n._("showing all {count} pairs of {name}", {
-                count: neighbors.size,
-                name: selectedNode.basename,
+              {i18n._({
+                id: "{count, plural, one {# package} other {# packages}} sharing citations with {name}",
+                comment: "graph sentence while a package is selected: the packages its lines reach",
+                values: { count: neighbors.size, name: selectedNode.basename },
               })}
             </span>
             {/* The selection's two edge hues, keyed by samples of the
@@ -1864,48 +1876,29 @@ export function SpecGraph({
             {cardNode ? (
               <PackageLines node={cardNode} />
             ) : cardEdge ? (
-              <>
-                <div className="font-medium text-neutral-900 dark:text-neutral-100">
-                  {cardEdge.sourceKey} → {cardEdge.targetKey}
-                </div>
-                <div className="mt-1 text-neutral-600 dark:text-neutral-300">
-                  {i18n._("{count, plural, one {# citation} other {# citations}}", {
-                    count: cardEdge.weight,
-                  })}
-                </div>
-              </>
+              <div className="text-neutral-900 dark:text-neutral-100">
+                {citesTimes(cardEdge.sourceKey, cardEdge.targetKey, cardEdge.weight)}
+              </div>
             ) : cardPair ? (
-              <>
-                <div className="font-medium text-neutral-900 dark:text-neutral-100">
-                  {cardPair.a} ↔ {cardPair.b}
-                </div>
-                <ul className="mt-1 space-y-0.5 text-neutral-600 dark:text-neutral-300">
-                  {(
-                    [
-                      [cardPair.a, cardPair.b, cardPair.ab],
-                      [cardPair.b, cardPair.a, cardPair.ba],
-                    ] as const
-                  ).map(([from, to, count]) => (
-                    <li key={from} className="flex justify-between gap-3">
-                      <span className="min-w-0 truncate">
-                        {from} → {to}
-                      </span>
-                      <span className="shrink-0 tabular-nums">
-                        {i18n._("{count, plural, one {# citation} other {# citations}}", {
-                          count,
-                        })}
-                      </span>
-                    </li>
+              <ul className="space-y-0.5 text-neutral-900 dark:text-neutral-100">
+                {(
+                  [
+                    [cardPair.a, cardPair.b, cardPair.ab],
+                    [cardPair.b, cardPair.a, cardPair.ba],
+                  ] as const
+                )
+                  .filter(([, , count]) => count > 0)
+                  .map(([from, to, count]) => (
+                    <li key={from}>{citesTimes(from, to, count)}</li>
                   ))}
-                </ul>
-              </>
+              </ul>
             ) : null}
           </div>
         ) : null}
       </div>
 
       {/* The key: what the marks mean, never a control, the same under
-          a selection (spec-view-24). */}
+          a selection (spec-view-26). */}
       <div
         data-testid="graph-legend"
         className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 px-1 pt-2 text-xs text-neutral-600 dark:text-neutral-400"

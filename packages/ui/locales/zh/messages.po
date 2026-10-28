@@ -194,10 +194,6 @@ msgstr "{count, plural, other {# 项更改}}"
 msgid "{count, plural, one {# citation names an item} other {# citations name items}} absent from the tree"
 msgstr "{count, plural, other {未解析引用 # 条}}：指向的条目不存在"
 
-#: src/components/SpecGraph.tsx
-msgid "{count, plural, one {# citation} other {# citations}}"
-msgstr "{count, plural, other {# 条引用}}"
-
 #: src/components/SpaceExplorer.tsx
 msgid "{count, plural, one {# entry} other {# entries}}"
 msgstr "{count, plural, other {# 项}}"
@@ -241,6 +237,11 @@ msgstr "{count, plural, other {# 项需要你}}"
 #: src/components/NavRail.tsx
 msgid "{count, plural, one {# needs your attention} other {# need your attention}}"
 msgstr "{count, plural, other {# 项需要关注}}"
+
+#. graph sentence while a package is selected: the packages its lines reach
+#: src/components/SpecGraph.tsx
+msgid "{count, plural, one {# package} other {# packages}} sharing citations with {name}"
+msgstr "与 {name} 有引用关系的 {count} 个规约包"
 
 #: src/App.tsx
 msgid "{count, plural, one {# playbook} other {# playbooks}}"
@@ -344,6 +345,11 @@ msgstr "{first} 和 {second}"
 #: src/components/EnvironmentSection.tsx
 msgid "{folder} holds a folder of yours by that name"
 msgstr "{folder} 中已有你放置的同名文件夹"
+
+#. graph edge card: one package's citations of another
+#: src/components/SpecGraph.tsx
+msgid "{from} cites {to} {count, plural, one {# time} other {# times}}"
+msgstr "{from} 引用 {to} {count} 次"
 
 #: src/components/SpecView.tsx
 msgid "{group} ({count})"
@@ -5900,10 +5906,6 @@ msgstr "显示侧栏"
 #: src/components/NavRail.tsx
 msgid "Show the sidebar ({keys})"
 msgstr "显示侧栏（{keys}）"
-
-#: src/components/SpecGraph.tsx
-msgid "showing all {count} pairs of {name}"
-msgstr "显示 {name} 的全部 {count} 对"
 
 #: src/components/SpaceExplorer.tsx
 msgid "Showing the first {lines} lines; the file is longer."

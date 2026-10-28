@@ -1671,6 +1671,40 @@ describe("spec-view-20: citation graph beside the outline", () => {
     return parseFloat(pane.style.getPropertyValue("--graph-share"));
   };
 
+  test("a line's card says who cites whom how many times", () => {
+    vi.useFakeTimers();
+    const restore = sized();
+    try {
+      showGraph();
+      const hoverLine = (line: Element) => {
+        // The wide invisible companion beside the line takes the hover.
+        fireEvent.mouseEnter(line.nextElementSibling as Element);
+        act(() => vi.advanceTimersByTime(200));
+        return screen.getByTestId("graph-card").textContent;
+      };
+
+      // A backbone line names each direction that carries citations
+      // as a sentence, no arrows (spec-view-26).
+      const backbone = document.querySelector('[data-testid^="graph-pair-"]')!;
+      const [a, b] = backbone.getAttribute("data-testid")!.replace("graph-pair-", "").split("--");
+      const text = hoverLine(backbone)!;
+      expect(text).not.toMatch(/[→↔]/);
+      expect(text).toMatch(new RegExp(`${a} cites ${b} \\d+ times?|${b} cites ${a} \\d+ times?`));
+      fireEvent.mouseLeave(backbone.nextElementSibling as Element);
+
+      // A directed line under the selection reads the same way.
+      fireEvent.click(node("billing"));
+      const own = edge("billing", "auth");
+      const weight = Number(own.getAttribute("data-weight"));
+      expect(hoverLine(own)).toBe(
+        `billing cites auth ${weight} ${weight === 1 ? "time" : "times"}`,
+      );
+    } finally {
+      restore();
+      vi.useRealTimers();
+    }
+  });
+
   test("the toggle adds the graph beside the outline and keeps one selection", () => {
     const restore = sized();
     render(<Harness tree={GRAPH_TREE} />);
@@ -1875,7 +1909,7 @@ describe("spec-view-20: citation graph beside the outline", () => {
     // value returns once it clears (spec-view-66).
     expect(screen.queryByTestId("graph-threshold")).toBeNull();
     expect(screen.getByTestId("graph-threshold-selection").textContent).toBe(
-      "showing all 2 pairs of billing",
+      "2 packages sharing citations with billing",
     );
     const own = edge("billing", "auth");
     const citer = edge("session", "billing");
