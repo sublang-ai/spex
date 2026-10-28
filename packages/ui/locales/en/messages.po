@@ -3212,11 +3212,6 @@ msgstr "Give the player an id first."
 msgid "Go to Dashboard, Projects, Playbooks, Space, Settings"
 msgstr "Go to Dashboard, Projects, Playbooks, Space, Settings"
 
-#. toggle: show the citation graph
-#: src/components/SpecView.tsx
-msgid "Graph"
-msgstr "Graph"
-
 #. the field naming a new group on the Git host
 #: src/components/SpaceMembers.tsx
 msgid "Group name"
@@ -3248,6 +3243,10 @@ msgstr "Hide diff"
 #: src/components/NavRail.tsx
 msgid "Hide sessions in {project}"
 msgstr "Hide sessions in {project}"
+
+#: src/components/SpecView.tsx
+msgid "Hide the citation graph"
+msgstr "Hide the citation graph"
 
 #. tab note: a conversation this core cannot continue
 #. tab note: a conversation this core cannot continue
@@ -5887,8 +5886,8 @@ msgid "Show sessions in {project}"
 msgstr "Show sessions in {project}"
 
 #: src/components/SpecView.tsx
-msgid "Show the citation graph beside the outline"
-msgstr "Show the citation graph beside the outline"
+msgid "Show the citation graph"
+msgstr "Show the citation graph"
 
 #: src/components/DraftConversation.tsx
 msgid "Show the message"
@@ -6908,11 +6907,6 @@ msgstr "Unrelated history"
 #: src/components/SpecItemRows.tsx
 msgid "unresolved"
 msgstr "unresolved"
-
-#. how many of a package's citations name items absent from the tree
-#: src/components/SpecView.tsx
-msgid "unresolved {count}"
-msgstr "unresolved {count}"
 
 #: src/components/SpaceSignIn.tsx
 msgid "Until you do, everything stays on this device and nothing is contacted."

@@ -7,6 +7,7 @@
 
 Accepted; the logo recolor is reverted by owner decision (2026-07-23) — the Logo bullet below records the standing rule.
 Amended by [DR-078](078-the-interface-speaks-the-readers-language.md) in scope: each type stack names the platforms' Simplified Chinese faces after its Latin faces; the brand faces stand.
+Amended by [DR-158](158-a-legible-graph-and-outline.md) on the spec view: its selection and pressed controls wear ink, brand purple keeping to links and the focus ring there, since the purple stands too near the internal group's fuchsia.
 
 ## Context
 

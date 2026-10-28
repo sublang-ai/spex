@@ -61,7 +61,7 @@ While an expanded item carries citations or is cited, the spec view shall presen
 - inbound citations render as backlink rows on the cited target, every entry listed and named by the citing item ID;
 - the two rows stand in one block under the body, their labels in one column and their entries wrapping in the slack beside it;
 - every file node, collapsed included, carries a rollup counting the file's inbound and outbound cross-file item citations — those whose source and target items live in different files — from one citation index keyed by item ID that the graph's counts share [[spec-view-23](#spec-view-23)], while item rows and backlink groups keep every citation regardless of file;
-- a citation of an ID absent from the tree counts in neither direction: its file node carries a muted unresolved count beside the rollup at every width, whose title and accessible name state that those citations name items absent from the tree;
+- a citation of an ID absent from the tree counts in neither direction: its file node carries a neutral warning mark in a narrow slot after the rollup at every width, under no heading, whose title and accessible name state how many citations name items absent from the tree;
 - a record link in an item body stays a plain link, handled per [[spec-view-6](#spec-view-6)].
 
 ### Citation Previews
@@ -91,7 +91,7 @@ When a citation entry takes a settled hover or keyboard focus — an entry of an
 When a group filter toggle is activated, the spec view shall hide or restore that group's items while keeping every package node in the outline ([DR-011](../decisions/011-project-workspace.md), [DR-158](../decisions/158-a-legible-graph-and-outline.md)):
 
 - a package whose items are all filtered away stays visible and, when expanded, states that no items are in the active groups;
-- the three group toggles carry each group's full name — its short name below 28rem, as the column headings do [[spec-view-2](#spec-view-2)] — a one-line definition of the group in their title, and project-wide item counts in the group colors, expose their pressed state via aria-pressed — pressed as a filled control with a check, unpressed as an outline alone — and default to all-on;
+- the three group toggles carry each group's full name — its short name below 28rem, as the column headings do [[spec-view-2](#spec-view-2)] — a one-line definition of the group in their title, and project-wide item counts in the group colors, expose their pressed state via aria-pressed — each led by a checkbox, pressed as a box filled in the group's color holding a check, unpressed as an empty box beside a muted name — and default to all-on;
 - while any group is off, a status line under the toggles states each hidden group and its item count and offers one control turning every group back on.
 
 ### Search
@@ -127,6 +127,7 @@ When a local link inside the view is activated, the spec view shall resolve it a
 While the spec tree renders, the spec view shall keep the outline permanent and add the citation graph beside it while the graph toggle is on ([DR-026](../decisions/026-data-graphics-craft.md), [DR-158](../decisions/158-a-legible-graph-and-outline.md)):
 
 - the toggle defaults on and persists with the rest of the project's view state;
+- the toggle is an icon control at the head of the outline's filter row, its title and accessible name saying what it does — showing or hiding the citation graph — with its pressed state exposed;
 - the graph is directed, carrying one node per spec file and one edge per citing→cited file pair;
 - one selection serves both projections [[spec-view-42](#spec-view-42)], revealed in both when it changes [[spec-view-43](#spec-view-43)], and neither projection ever leaves the screen for it ([DR-009](../decisions/009-at-hand-interaction.md));
 - the two panes stand side by side only while the split's box holds a 320px graph beside a 28rem outline, and stack otherwise;
@@ -136,12 +137,12 @@ While the spec tree renders, the spec view shall keep the outline permanent and 
 
 While the spec tree renders, the spec view shall hold one selection — a single package or none — written only by its own gestures and lasting the session, with the graph on screen or not ([DR-027](../decisions/027-linked-views-contract.md)):
 
-- selecting gestures: activating a package row in the outline by click or Enter, and activating a graph node by click or Enter; re-activating the selected package re-selects it and re-fires its reveal [[spec-view-43](#spec-view-43)];
-- a package row follows the tree idiom: the row is the single focusable, selectable target carrying aria-expanded and the selection's marking, its chevron — a pointer target of at least 24px — and the Left/Right arrow keys arrange only, and arranging never selects, deselects, or moves the camera;
+- selecting gestures: activating a package row in the outline by click or Enter, and activating a graph node by click or Enter; re-activating the selected package re-selects it and re-fires its reveal [[spec-view-43](#spec-view-43)], except that activating the selected package's row while it is expanded collapses it, the selection standing;
+- a package row follows the tree idiom: the row is the single focusable, selectable target across its full width — a pointer cursor and a hover tint over all of it, its focus ring around the whole row and shown for keyboard focus alone — carrying aria-expanded and the selection's marking, its chevron — a pointer target of at least 24px — and the Left/Right arrow keys arrange only, and arranging never selects, deselects, or moves the camera;
 - the query and the lens never write the selection [[spec-view-4](#spec-view-4)] [[spec-view-5](#spec-view-5)];
 - an in-view citation jump navigates items and never moves the package selection [[spec-view-6](#spec-view-6)];
 - clearing gestures: Escape once the focused widget has nothing left to dismiss — search box, records list, floating card — from either pane, and a graph-canvas press released within the drag threshold;
-- the outline marks the selected row in the interaction hue, its outline drawn whole inside the row; the graph marks its node with the solid halo and isolates its neighborhood [[spec-view-25](#spec-view-25)].
+- the outline marks the selected row in ink — a tinted fill and an ink outline drawn whole inside the row — and the graph marks its node with the solid ink halo and isolates its neighborhood [[spec-view-25](#spec-view-25)], neither mark in the interaction hue.
 
 #### spec-view-43
 
@@ -174,7 +175,7 @@ While the graph renders a node, the spec view shall present the package by the e
 While the graph renders, the spec view shall draw the citations between packages by the encodings of [DR-026](../decisions/026-data-graphics-craft.md) as [DR-158](../decisions/158-a-legible-graph-and-outline.md) amends them:
 
 - with no package selected, it draws the backbone alone: one undirected line per package pair whose citations in both directions total at least the threshold of [[spec-view-66](#spec-view-66)], and per package its heaviest pair — a tie going to the pair whose partner sorts first by name — in a mid-gray of uniform width with no direction glyph, so a linked package always draws a line and a node with none has no cross-file citation;
-- with a package selected, it draws every citing→cited pair touching that package as a directed edge of uniform width ending in a glyph of constant size at the cited node's rim — the package's own citations in the interaction hue, its citers' in ink — a reciprocal pair as two offset edges, and no other edge, every edge meeting a ringed node — the selection's halo or the focus ring of [[spec-view-25](#spec-view-25)] — outside that ring so no ring covers a glyph;
+- with a package selected, it draws every citing→cited pair touching that package as a directed edge of uniform width ending in a glyph of constant size at the cited node's rim — the package's own citations in orange — a hue outside the reserved sets — its citers' in ink — a reciprocal pair as two offset edges, and no other edge, every edge meeting a ringed node — the selection's halo or the focus ring of [[spec-view-25](#spec-view-25)] — outside that ring so no ring covers a glyph;
 - an edge's width carries no count; pair counts come from the citation index the outline's rollups share [[spec-view-19](#spec-view-19)], so a citation of an ID absent from the tree counts in no pair.
 
 #### spec-view-24
@@ -240,7 +241,7 @@ While the graph renders, the spec view shall stand above it a sentence setting t
 - a typed number takes effect on Enter or leaving the field, clamped to the stops and shown as the lowest stop drawing the same lines;
 - its default is the lowest stop whose backbone holds at most 1.5 pairs per linked package, the last stop when no other does;
 - stepping changes only which lines draw, never a node's position [[spec-view-28](#spec-view-28)], and its value lasts while the view stays open, the default returning when the view reopens;
-- while a package is selected the sentence yields to how many packages share citations with the selected one, followed by two line samples, each with its arrowhead, naming the selection's citations in the interaction hue and its citers' in ink [[spec-view-23](#spec-view-23)], the line keeping its height, and clearing the selection restores the value it held;
+- while a package is selected the sentence yields to how many packages share citations with the selected one, followed by two line samples, each with its arrowhead, naming the selection's citations in orange and its citers' in ink [[spec-view-23](#spec-view-23)], the line keeping its height, and clearing the selection restores the value it held;
 - nothing else stands above the graph.
 
 #### spec-view-29
@@ -508,7 +509,7 @@ Where a fixture tree carries packages under every section kind with a topic head
 
 - each package row carries its counts as numerals in group-colored columns with a zero reading as a dash, each count's accessible name carrying its group's full name, under one heading row naming each column [[spec-view-2](#spec-view-2)];
 - an expanded package heads its items by each section's group full name and count and its topics by their own words, and no item row carries a group word [[spec-view-2](#spec-view-2)] [[spec-view-3](#spec-view-3)];
-- the toggles carry the full names and definitions with aria-pressed, and turning a group off removes its column and heading, keeps every package standing, and raises the status line whose control turns every group back on [[spec-view-4](#spec-view-4)].
+- the toggles carry the full names and definitions with aria-pressed, each led by its checkbox filled when pressed and empty when not, and turning a group off removes its column and heading, keeps every package standing, and raises the status line whose control turns every group back on [[spec-view-4](#spec-view-4)].
 
 ### Graph Coverage
 

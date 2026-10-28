@@ -915,8 +915,10 @@ describe("SPECV-2/19: cross-file rollups on every file row", () => {
     expect(unresolved.getAttribute("aria-label")).toBe(
       "1 citation names an item absent from the tree",
     );
-    expect(unresolved.textContent).toContain("⚠1");
-    expect(unresolved.textContent).toContain("unresolved 1");
+    // A neutral mark in a narrow slot: no column, no status hue.
+    expect(unresolved.textContent).toBe("!");
+    expect(unresolved.getAttribute("title")).toBe("1 citation names an item absent from the tree");
+    expect(unresolved.className).not.toMatch(/amber|orange|red|brand/);
     expect(screen.queryByTestId(`unresolved-${CAT}`)).toBeNull();
     expect(screen.getByTestId(`rollup-${CAT}`).textContent).toBe("1 · 2");
     // guard's inbound is all intra-file: outbound side only.
@@ -1705,6 +1707,50 @@ describe("spec-view-20: citation graph beside the outline", () => {
     }
   });
 
+  test("a package row is one target; the selected row folds; the graph toggle names its act", () => {
+    const restore = sized();
+    try {
+      render(<Harness tree={GRAPH_TREE} />);
+      const toggle = screen.getByTestId("file-toggle-auth");
+      // A click on the row's counts acts as its button does
+      // (spec-view-42).
+      fireEvent.click(screen.getByTestId("file-row-auth").lastElementChild!);
+      expect(toggle.getAttribute("aria-current")).toBe("true");
+      expect(toggle.getAttribute("aria-expanded")).toBe("true");
+      expect(screen.getByTestId("file-row-auth").className).toContain("cursor-pointer");
+      expect(screen.getByTestId("file-row-auth").className).not.toMatch(/(^|\s)(bg|ring)-brand/);
+      // Activating the selected, expanded row folds it, the selection
+      // standing (spec-view-42).
+      fireEvent.click(toggle);
+      expect(toggle.getAttribute("aria-expanded")).toBe("false");
+      expect(toggle.getAttribute("aria-current")).toBe("true");
+      fireEvent.click(toggle);
+      expect(toggle.getAttribute("aria-expanded")).toBe("true");
+
+      // The graph's toggle heads the filter row and says what it does
+      // (spec-view-20).
+      const graph = screen.getByTestId("view-graph");
+      expect(graph.getAttribute("aria-label")).toBe("Hide the citation graph");
+      expect(graph.getAttribute("aria-pressed")).toBe("true");
+      expect(graph.parentElement).toBe(screen.getByTestId("filter-external").parentElement);
+      fireEvent.click(graph);
+      expect(screen.getByTestId("view-graph").getAttribute("aria-label")).toBe(
+        "Show the citation graph",
+      );
+
+      // Each filter leads with a checkbox, filled when pressed and
+      // empty when not (spec-view-4).
+      const box = () => screen.getByTestId("filter-box-internal");
+      expect(box().className).toContain("bg-fuchsia-700");
+      expect(box().querySelector("svg")).toBeTruthy();
+      fireEvent.click(screen.getByTestId("filter-internal"));
+      expect(box().className).not.toContain("bg-fuchsia-700");
+      expect(box().querySelector("svg")).toBeNull();
+    } finally {
+      restore();
+    }
+  });
+
   test("the toggle adds the graph beside the outline and keeps one selection", () => {
     const restore = sized();
     render(<Harness tree={GRAPH_TREE} />);
@@ -1914,7 +1960,13 @@ describe("spec-view-20: citation graph beside the outline", () => {
     const own = edge("billing", "auth");
     const citer = edge("session", "billing");
     expect(own.getAttribute("data-direction")).toBe("cites");
-    expect(own.getAttribute("class")).toContain("stroke-brand-600");
+    // Orange for its own citations, ink for its citers, and the
+    // selection's halo in ink — no interaction purple on the marks
+    // (spec-view-23, spec-view-42).
+    expect(own.getAttribute("class")).toContain("stroke-orange-700");
+    expect(screen.getByTestId("graph-halo-billing").getAttribute("class")).toContain(
+      "stroke-neutral-700",
+    );
     expect(citer.getAttribute("data-direction")).toBe("cited");
     expect(citer.getAttribute("class")).toContain("stroke-neutral-700");
     for (const line of [own, citer, edge("billing", "session")]) {
@@ -1971,7 +2023,7 @@ describe("spec-view-20: citation graph beside the outline", () => {
     // spec-view-66).
     const sample = (id: string) =>
       screen.getByTestId(id).querySelector("line")!.getAttribute("class") ?? "";
-    expect(sample("graph-key-cites")).toContain("stroke-brand-600");
+    expect(sample("graph-key-cites")).toContain("stroke-orange-700");
     expect(sample("graph-key-cited")).toContain("stroke-neutral-700");
     expect(screen.getByTestId("graph-key-cites").textContent).toBe("cites");
     expect(screen.getByTestId("graph-key-cited").textContent).toBe("cited by");
@@ -2235,6 +2287,8 @@ describe("spec-view-20: citation graph beside the outline", () => {
       "neutral-950": { light: "#0a0a0a", dark: "#0a0a0a" },
       "brand-400": { light: "#bb6ee9", dark: "#bb6ee9" },
       "brand-600": { light: "#890fbc", dark: "#890fbc" },
+      "orange-400": { light: "#fb923c", dark: "#fb923c" },
+      "orange-700": { light: "#c2410c", dark: "#c2410c" },
     };
     const SURFACE = { light: "#f7f4ef", dark: "#0a0a0a" };
 
@@ -2259,7 +2313,7 @@ describe("spec-view-20: citation graph beside the outline", () => {
       theme: "light" | "dark",
     ): string => {
       const pattern = new RegExp(
-        `(^|\\s)${theme === "dark" ? "dark:" : ""}${property}-((neutral|brand)-(\\d+)|white)(?=\\s|$)`,
+        `(^|\\s)${theme === "dark" ? "dark:" : ""}${property}-((neutral|brand|orange)-(\\d+)|white)(?=\\s|$)`,
         "g",
       );
       const matches = [...classes.matchAll(pattern)];

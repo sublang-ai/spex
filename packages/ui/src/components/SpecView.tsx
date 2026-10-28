@@ -101,9 +101,16 @@ const COUNT_CELL = "w-7 shrink-0 text-right @xs:w-10 @md:w-[4.5rem]";
 /** The cross-package rollup's column (spec-view-19). */
 const ROLLUP_CELL =
   "hidden w-24 shrink-0 whitespace-nowrap text-right @md:block";
-/** The unresolved count's slot, held on every row so the columns
- * before it never shift (spec-view-19). */
-const UNRESOLVED_CELL = "w-7 shrink-0 text-right @md:w-16";
+/** The unresolved mark's narrow slot, under no heading and held on
+ * every row so the columns before it never shift (spec-view-19). */
+const UNRESOLVED_CELL = "flex w-4 shrink-0 justify-end";
+/** A pressed filter's checkbox, filled in its group's color
+ * (spec-view-4). */
+const FILTER_BOX: Record<SpecGroup, string> = {
+  external: "border-sky-700 bg-sky-700 dark:border-sky-400 dark:bg-sky-400",
+  internal: "border-fuchsia-700 bg-fuchsia-700 dark:border-fuchsia-400 dark:bg-fuchsia-400",
+  test: "border-teal-700 bg-teal-700 dark:border-teal-400 dark:bg-teal-400",
+};
 
 /** A count as the columns print it: tabular numerals with the
  * locale's separators, a zero as a dash (spec-view-2). */
@@ -1253,19 +1260,22 @@ export function SpecView(props: SpecViewProps) {
         {/* Expanded, the header pins beneath the heading row while its
             contents scroll, so the package's name stays in sight; the
             selection's outline is drawn inside the row so no scroll box
-            clips it (spec-view-2, spec-view-42). */}
+            clips it (spec-view-2, spec-view-42). The whole row is the
+            package's one target: a click anywhere on it acts as its
+            button does, and the button's keyboard focus rings the row. */}
         <div
           data-testid={`file-row-${key}`}
+          onClick={() => activateFile(key)}
           title={rollup ? i18n._("Citations: {summary}", { summary: rollup }) : undefined}
           style={expanded ? { top: graphful ? headHeight : `calc(${headHeight}px - 1.5rem)` } : undefined}
-          className={`flex items-center gap-1 rounded px-1 py-1 @xs:gap-2 ${
+          className={`flex cursor-pointer items-center gap-1 rounded px-1 py-1 @xs:gap-2 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-inset has-[:focus-visible]:ring-brand-600 dark:has-[:focus-visible]:ring-brand-400 ${
             expanded ? "sticky z-[1]" : ""
           } ${dimmed ? "opacity-50" : ""} ${
             selected
-              ? "bg-brand-50 ring-1 ring-inset ring-brand-600 dark:bg-brand-950 dark:ring-brand-400"
+              ? "bg-neutral-200 ring-1 ring-inset ring-neutral-700 dark:bg-neutral-800 dark:ring-neutral-300"
               : expanded
-                ? "bg-neutral-50 dark:bg-neutral-950"
-                : ""
+                ? "bg-neutral-50 hover:bg-neutral-100 dark:bg-neutral-950 dark:hover:bg-neutral-900"
+                : "hover:bg-neutral-100 dark:hover:bg-neutral-900"
           }`}
         >
           {/* The chevron arranges and nothing else; it is a pointer
@@ -1294,7 +1304,6 @@ export function SpecView(props: SpecViewProps) {
             aria-expanded={expanded}
             aria-current={selected ? "true" : undefined}
             aria-label={file.basename}
-            onClick={() => selectFile(key)}
             onKeyDown={(event) => {
               // Arranging by keyboard, never selecting (spec-view-42).
               if (event.key === "ArrowRight" && !expanded) {
@@ -1305,7 +1314,10 @@ export function SpecView(props: SpecViewProps) {
                 toggleFile(key);
               }
             }}
-            className="flex min-w-0 flex-1 items-center gap-2 rounded text-left hover:bg-neutral-50 dark:hover:bg-neutral-900"
+            // The row wears this button's focus ring; the app-wide
+            // outline would frame the name alone.
+            style={{ outline: "none" }}
+            className="flex min-w-0 flex-1 items-center gap-2 rounded text-left"
           >
             {/* The package identifier is the basename (META-10). */}
             <span
@@ -1330,7 +1342,7 @@ export function SpecView(props: SpecViewProps) {
           {searching && !search.fileKeys.has(key) && selected ? (
             <span
               data-testid={`retained-${key}`}
-              className="shrink-0 rounded-full bg-brand-50 px-1.5 py-0.5 text-xs text-brand-700 dark:bg-brand-950 dark:text-brand-300"
+              className="shrink-0 rounded-full bg-white px-1.5 py-0.5 text-xs text-neutral-700 dark:bg-neutral-900 dark:text-neutral-200"
             >
               {i18n._("shown despite search")}
             </span>
@@ -1380,27 +1392,23 @@ export function SpecView(props: SpecViewProps) {
           {/* Never yields: a package whose only citations name absent
               items must not look uncited (spec-view-19, spec-view-1). */}
           {anyUnresolved ? (
-          <span className={`${UNRESOLVED_CELL} whitespace-nowrap text-xs`}>
-            {unresolved > 0 ? (
-              <span
-                data-testid={`unresolved-${key}`}
-                aria-label={unresolvedSays}
-                title={unresolvedSays}
-                className="text-neutral-500"
-              >
-                <span className="text-amber-700 @md:hidden dark:text-amber-400">
-                  ⚠{unresolved}
+            <span className={UNRESOLVED_CELL}>
+              {unresolved > 0 ? (
+                // A quality warning, not a property every package has:
+                // a neutral mark whose name carries the count, so it
+                // stays apart from every hue the page uses
+                // (spec-view-19, spec-view-1).
+                <span
+                  data-testid={`unresolved-${key}`}
+                  role="img"
+                  aria-label={unresolvedSays}
+                  title={unresolvedSays}
+                  className="flex h-3.5 w-3.5 items-center justify-center rounded-full border border-neutral-400 text-[9px] font-bold leading-none text-neutral-500 dark:border-neutral-500 dark:text-neutral-400"
+                >
+                  !
                 </span>
-                <span className="hidden @md:inline">
-                  {i18n._({
-                    id: "unresolved {count}",
-                    values: { count: unresolved },
-                    comment: "how many of a package's citations name items absent from the tree",
-                  })}
-                </span>
-              </span>
-            ) : null}
-          </span>
+              ) : null}
+            </span>
           ) : null}
         </div>
         {expanded ? (
@@ -1653,6 +1661,14 @@ export function SpecView(props: SpecViewProps) {
     revealFile(fileKey);
   };
 
+  /** A package row's activation: the selected row, expanded, folds
+   * as a file tree's does, the selection standing; otherwise it
+   * selects (spec-view-42). */
+  const activateFile = (fileKey: string) => {
+    if (graphSelection === fileKey && isFileExpanded(fileKey)) toggleFile(fileKey);
+    else selectFile(fileKey);
+  };
+
   return (
     <div
       ref={surfaceRef}
@@ -1697,24 +1713,6 @@ export function SpecView(props: SpecViewProps) {
           )}
         </span>
         <span className="ml-auto flex items-center gap-1.5">
-          {/* One toggle, not a mode set: the outline never leaves, so
-              there is no state where nothing is shown (spec-view-20). */}
-          <button
-            type="button"
-            data-testid="view-graph"
-            aria-pressed={viewState.graph}
-            title={i18n._("Show the citation graph beside the outline")}
-            onClick={() =>
-              onViewState({ ...viewState, graph: !viewState.graph })
-            }
-            className={`rounded border px-2 py-0.5 text-xs ${
-              viewState.graph
-                ? "border-brand-600 bg-brand-50 text-brand-700 dark:border-brand-400 dark:bg-brand-950 dark:text-brand-300"
-                : "border-neutral-300 text-neutral-600 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
-            }`}
-          >
-            {i18n._({ id: "Graph", comment: "toggle: show the citation graph" })}
-          </button>
           <button
             type="button"
             aria-label={i18n._("Refresh specs")}
@@ -1748,13 +1746,41 @@ export function SpecView(props: SpecViewProps) {
         // ride inside its pane rather than over the whole surface
         // (spec-view-29).
         const outlineControls = (
-          <div className="flex shrink-0 flex-wrap items-center gap-2 pb-2">
+          <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 pb-2">
+            {/* One toggle, not a mode set: the outline never leaves, so
+                there is no state where nothing is shown. It heads the
+                filter row, beside the graph it shows or hides, and is
+                named for that act (spec-view-20). */}
+            <button
+              type="button"
+              data-testid="view-graph"
+              aria-pressed={viewState.graph}
+              aria-label={
+                viewState.graph
+                  ? i18n._("Hide the citation graph")
+                  : i18n._("Show the citation graph")
+              }
+              title={
+                viewState.graph
+                  ? i18n._("Hide the citation graph")
+                  : i18n._("Show the citation graph")
+              }
+              onClick={() => onViewState({ ...viewState, graph: !viewState.graph })}
+              className={`flex h-6 w-6 shrink-0 items-center justify-center rounded ${
+                viewState.graph
+                  ? "bg-neutral-200 text-neutral-800 hover:bg-neutral-300 dark:bg-neutral-800 dark:text-neutral-100 dark:hover:bg-neutral-700"
+                  : "text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
+              }`}
+            >
+              <Icon name="sidebar" />
+            </button>
             {GROUP_ORDER.map((group) => {
               const on = viewState.filters[group];
               return (
-                // A switch, not a count: pressed is a filled control with
-                // a check, unpressed an outline alone; the title says
-                // what the group holds (spec-view-4).
+                // A filter, read as one: a checkbox filled in the
+                // group's color with a check when pressed, an empty box
+                // beside a muted name when not; the title says what the
+                // group holds (spec-view-4).
                 <button
                   key={group}
                   type="button"
@@ -1762,14 +1788,20 @@ export function SpecView(props: SpecViewProps) {
                   aria-pressed={on}
                   title={GROUP_DEFINITION[group]()}
                   onClick={() => toggleFilter(group)}
-                  className={`flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs ${
-                    on
-                      ? `border-current font-medium ${GROUP_CHIP[group]}`
-                      : "border-neutral-300 text-neutral-500 dark:border-neutral-700 dark:text-neutral-400"
+                  className={`flex items-center gap-1.5 rounded py-0.5 text-xs ${
+                    on ? `font-medium ${GROUP_TEXT[group]}` : "text-neutral-500 dark:text-neutral-400"
                   }`}
                 >
-                  <span aria-hidden="true" className={`text-[10px] ${on ? "" : "invisible"}`}>
-                    ✓
+                  <span
+                    aria-hidden="true"
+                    data-testid={`filter-box-${group}`}
+                    className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-[3px] border ${
+                      on ? FILTER_BOX[group] : "border-neutral-400 bg-white dark:border-neutral-500 dark:bg-neutral-900"
+                    }`}
+                  >
+                    {on ? (
+                      <Icon name="check" className="h-3 w-3 text-white dark:text-neutral-950" />
+                    ) : null}
                   </span>
                   <span className="@md:hidden">{GROUP_SHORT[group]()}</span>
                   <span className="hidden @md:inline">{GROUP_NAME[group]()}</span>
@@ -1778,7 +1810,7 @@ export function SpecView(props: SpecViewProps) {
                       count: totals.perGroup[group],
                       group: GROUP_WORD[group](),
                     })}
-                    className={`tabular-nums ${on ? "font-semibold" : ""}`}
+                    className="tabular-nums"
                   >
                     {totals.perGroup[group].toLocaleString(i18n.locale)}
                   </span>

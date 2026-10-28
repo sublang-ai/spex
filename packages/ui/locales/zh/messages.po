@@ -3212,11 +3212,6 @@ msgstr "请先为该 Player 设置 id。"
 msgid "Go to Dashboard, Projects, Playbooks, Space, Settings"
 msgstr "前往仪表盘、项目、规程、空间、设置"
 
-#. toggle: show the citation graph
-#: src/components/SpecView.tsx
-msgid "Graph"
-msgstr "图谱"
-
 #. the field naming a new group on the Git host
 #: src/components/SpaceMembers.tsx
 msgid "Group name"
@@ -3248,6 +3243,10 @@ msgstr "隐藏差异"
 #: src/components/NavRail.tsx
 msgid "Hide sessions in {project}"
 msgstr "隐藏 {project} 中的会话"
+
+#: src/components/SpecView.tsx
+msgid "Hide the citation graph"
+msgstr "隐藏引用图谱"
 
 #. tab note: a conversation this core cannot continue
 #. tab note: a conversation this core cannot continue
@@ -5887,8 +5886,8 @@ msgid "Show sessions in {project}"
 msgstr "显示 {project} 的会话"
 
 #: src/components/SpecView.tsx
-msgid "Show the citation graph beside the outline"
-msgstr "在大纲旁显示引用图谱"
+msgid "Show the citation graph"
+msgstr "显示引用图谱"
 
 #: src/components/DraftConversation.tsx
 msgid "Show the message"
@@ -6908,11 +6907,6 @@ msgstr "历史互不相关"
 #: src/components/SpecItemRows.tsx
 msgid "unresolved"
 msgstr "未解析"
-
-#. how many of a package's citations name items absent from the tree
-#: src/components/SpecView.tsx
-msgid "unresolved {count}"
-msgstr "未解析 {count}"
 
 #: src/components/SpaceSignIn.tsx
 msgid "Until you do, everything stays on this device and nothing is contacted."

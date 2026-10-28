@@ -338,9 +338,9 @@ function LineSample({ own }: { own: boolean }) {
         x2="13"
         y2="4"
         strokeWidth={EDGE_WIDTH}
-        className={own ? EMPHASIS_STROKE : CITER_STROKE}
+        className={own ? CITES_STROKE : CITER_STROKE}
       />
-      <path d="M 11 0.5 L 18 4 L 11 7.5 z" className={own ? EMPHASIS_FILL : CITER_FILL} />
+      <path d="M 11 0.5 L 18 4 L 11 7.5 z" className={own ? CITES_FILL : CITER_FILL} />
     </svg>
   );
 }
@@ -360,10 +360,14 @@ const SURFACE_STROKE = "stroke-neutral-50 dark:stroke-neutral-950";
 /** The resting backbone: a mid-gray clearing the 3:1 floor on both
  * grounds (spec-view-39). */
 const EDGE_STROKE = "stroke-neutral-500";
-const EMPHASIS_STROKE = "stroke-brand-600 dark:stroke-brand-400";
-const EMPHASIS_FILL = "fill-brand-600 dark:fill-brand-400";
-/** What cites the selection: ink, so the interaction hue stays with
- * the selection's own citations (spec-view-23). */
+/** The selection's own citations: orange, a hue outside every
+ * reserved set and far from the item groups' (DR-158 §11). */
+const CITES_STROKE = "stroke-orange-700 dark:stroke-orange-400";
+const CITES_FILL = "fill-orange-700 dark:fill-orange-400";
+/** Keyboard focus: the app's one focus hue (DR-013). */
+const FOCUS_STROKE = "stroke-brand-600 dark:stroke-brand-400";
+/** What cites the selection: ink, apart from orange by hue rather
+ * than by a lighter gray reading as de-emphasis (spec-view-23). */
 const CITER_STROKE = "stroke-neutral-700 dark:stroke-neutral-200";
 const CITER_FILL = "fill-neutral-700 dark:fill-neutral-200";
 const CITER_TEXT = "fill-neutral-700 dark:fill-neutral-200";
@@ -1453,7 +1457,7 @@ export function SpecGraph({
                 markerHeight="10"
                 orient="auto-start-reverse"
               >
-                <path d="M 0 0 L 10 5 L 0 10 z" className={EMPHASIS_FILL} />
+                <path d="M 0 0 L 10 5 L 0 10 z" className={CITES_FILL} />
               </marker>
               <marker
                 id="spec-graph-arrow-cited"
@@ -1511,7 +1515,7 @@ export function SpecGraph({
                       data-direction={own ? "cites" : "cited"}
                       {...line}
                       strokeWidth={EDGE_WIDTH}
-                      className={own ? EMPHASIS_STROKE : CITER_STROKE}
+                      className={own ? CITES_STROKE : CITER_STROKE}
                       markerEnd={
                         own
                           ? "url(#spec-graph-arrow-cites)"
@@ -1608,9 +1612,9 @@ export function SpecGraph({
                     onPointerUp={endDrag}
                     onPointerCancel={endDrag}
                   >
-                    {/* Selection, keyboard focus, and search marking are
-                        the only brand marks on the canvas, so none can be
-                        mistaken for a category (DR-026 §2) — and they are
+                    {/* Selection and search marking wear ink and keyboard
+                        focus the focus hue, so none can be mistaken for a
+                        category (DR-158 §11) — and they are
                         separate rings, so a marked package still shows
                         plainly whether it is the selected one. */}
 
@@ -1622,7 +1626,7 @@ export function SpecGraph({
                         r={place.r + 5}
                         fill="none"
                         strokeWidth={focused ? 3 : 2}
-                        className={EMPHASIS_STROKE}
+                        className={focused ? FOCUS_STROKE : INK_STROKE}
                       />
                     )}
                     <circle
@@ -1666,7 +1670,7 @@ export function SpecGraph({
                         fill="none"
                         strokeWidth={2}
                         strokeDasharray="4 3"
-                        className={`pointer-events-none ${EMPHASIS_STROKE}`}
+                        className={`pointer-events-none ${INK_STROKE}`}
                       />
                     );
                   })
@@ -1695,7 +1699,7 @@ export function SpecGraph({
                   >
                     {parts.label}
                     {parts.cites ? (
-                      <tspan fontWeight={600} className={EMPHASIS_FILL}>
+                      <tspan fontWeight={600} className={CITES_FILL}>
                         {parts.cites}
                       </tspan>
                     ) : null}
