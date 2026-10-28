@@ -35,13 +35,15 @@ interface Pending {
 const DEFAULT_TIMEOUT_MS = 30_000;
 
 /** The commands whose reply waits on more than the core. A seat's open
- * reads the instance's listing, asks it for a ticket and waits for the
- * server's admission, which may start the seat for thirty seconds; its
- * close ends that relay. The page waits for either as long as the
- * admission may take (run-view-170, core-service-128). */
+ * reads the instance's listing, asks it for a ticket and waits ninety
+ * seconds for the server's admission, which may make the seat's account
+ * and start it; its close, queued behind an open of the same place,
+ * ends that relay. The page waits for either longer than the core waits
+ * on the admission, so it waits as long as the admission may take
+ * (run-view-170, core-service-128). */
 const COMMAND_TIMEOUT_MS: Partial<Record<Command["type"], number>> = {
-  "server.open": 90_000,
-  "server.close": 90_000,
+  "server.open": 120_000,
+  "server.close": 120_000,
 };
 
 export class SpexCommandError extends Error {

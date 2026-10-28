@@ -50,6 +50,7 @@ const ALPHA: SeatState = {
   place: "https://spex.pub#41",
   leaseExpiresAt: Date.now() + 3_600_000,
   relay: "open",
+  signIn: { state: "signedIn" },
 };
 const BETA: SeatState = { ...ALPHA, serverId: "42", name: "gpu-box", place: "https://spex.pub#42" };
 

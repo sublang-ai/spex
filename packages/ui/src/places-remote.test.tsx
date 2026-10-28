@@ -72,6 +72,7 @@ const ALPHA: SeatState = {
   place: `${SPEX}#41`,
   leaseExpiresAt: Date.now() + 3_600_000,
   relay: "open",
+  signIn: { state: "signedIn" },
 };
 const BETA: SeatState = { ...ALPHA, serverId: "42", name: "gpu-box", place: `${SPEX}#42` };
 
@@ -730,6 +731,57 @@ describe("run-view-171: a remote place holding no project shows the server welco
     await settle();
     expect(document.querySelector('[data-surface="Settings"]')!.getAttribute("aria-current")).toBe("page");
     expect(shownPlace()).toBe("gpu-box");
+  });
+});
+
+describe("run-view-171: a seat whose sign-in at its instance runs", () => {
+  /** The approval page of the seat's running sign-in (core-service-142). */
+  const APPROVE = `${SPEX}/login/device?user_code=WDJB-MJHT`;
+  const signingIn: SeatState = {
+    ...BETA,
+    signIn: { state: "running", verificationUri: APPROVE, expiresAt: Date.now() + 600_000 },
+  };
+
+  test("the server welcome page reads Signing in to <instance>… with the approval's link above its actions", async () => {
+    useAppStore.setState({ seats: [ALPHA, signingIn] });
+    render(<App />);
+    await settle();
+    fireEvent.click(headingOf("gpu-box"));
+    await settle();
+    const welcome = screen.getByTestId("welcome-home");
+    // [run-view-174] the sign-in named with the instance and the server,
+    // its approval a link.
+    const line = within(welcome).getByTestId("home-seat-signin");
+    expect(line.textContent).toBe("Signing in to spex.pub… approve Spex on gpu-box in your browser");
+    const link = within(line).getByRole("link");
+    expect(link.textContent).toBe("approve Spex on gpu-box in your browser");
+    expect(link.getAttribute("href")).toBe(APPROVE);
+    // [run-view-174] above the actions.
+    const primary = within(welcome).getByTestId("home-open-from-groups");
+    expect(line.compareDocumentPosition(primary) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(within(welcome).getAllByRole("button")).toEqual([primary, within(welcome).getByTestId("home-open-groups")]);
+    // Signed in, the line goes.
+    act(() => useAppStore.setState({ seats: [ALPHA, BETA] }));
+    expect(within(welcome).queryByTestId("home-seat-signin")).toBeNull();
+  });
+
+  test("the palette reads Signing in to <instance>… under that seat's groups until its sign-in completes", async () => {
+    useAppStore.setState({ seats: [ALPHA, signingIn] });
+    render(<App />);
+    fireEvent.keyDown(window, { key: "p", metaKey: true });
+    await settle();
+    const palette = screen.getByTestId("project-palette");
+    const note = (): string => within(palette).getByTestId(`palette-groups-note-${BETA.place}`).textContent ?? "";
+    // [run-view-168] where the seat's sign-in runs, and where it is not
+    // yet read, the palette says it signs in at the instance.
+    expect(note()).toBe("Signing in to spex.pub…");
+    act(() => useAppStore.setState({ seats: [ALPHA, { ...BETA, signIn: { state: "pending" } }] }));
+    expect(note()).toBe("Signing in to spex.pub…");
+    // The other seat, signed in, lists its groups' projects.
+    expect(within(within(palette).getByTestId(`palette-groups-${ALPHA.place}`)).getAllByRole("button")).toHaveLength(2);
+    // Signed in, with nothing it lacks: nothing more to open.
+    act(() => useAppStore.setState({ seats: [ALPHA, BETA] }));
+    expect(note()).toBe("Nothing more to open from your groups");
   });
 });
 

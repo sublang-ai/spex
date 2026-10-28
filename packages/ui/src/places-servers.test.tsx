@@ -7,10 +7,15 @@
 // with its Environments — and Groups between this computer's store and
 // a seat's, each surface reading and acting at the place it names; this
 // computer's Groups surface lists each server an instance lets the
-// person open, under that instance's heading, with Open or Close by
-// whether a seat is open there; the first Open on this device shows the
-// instance's contract and sends `server.open` with consent only on "I
-// understand", a later Open sending it at once; Close sends
+// person open, under that instance's heading, with Connect, or
+// "Connected" and Disconnect, by whether a seat is open there; the
+// first Connect on this device shows the instance's contract and sends
+// `server.open` with consent only on "I understand", a later Connect
+// sending it at once; while the open runs the line says so, and past
+// ten seconds that a seat's first start can take a minute; a seat whose
+// sign-in runs reads the approval's link, the desktop asked to open it
+// once per flow, and one whose sign-in failed reads its cause with
+// "Sign in again", sending `server.signin`; Disconnect sends
 // `server.close`; a refusal reads the core's cause in place; and the
 // page waits for an open or a close as long as the admission may take.
 // A new playbook asked for from a seat's Captain home opens Playbooks at
@@ -58,6 +63,7 @@ const ALPHA: SeatState = {
   place: `${SPEX}#41`,
   leaseExpiresAt: Date.now() + 3_600_000,
   relay: "open",
+  signIn: { state: "signedIn" },
 };
 const BETA: SeatState = { ...ALPHA, serverId: "42", name: "gpu-box", place: `${SPEX}#42` };
 
@@ -409,7 +415,7 @@ describe("run-view-168: a new playbook asked for at a seat", () => {
 });
 
 describe("run-view-170: the servers under each instance's heading", () => {
-  test("each server by its name and group, Open or Close by whether a seat is open there", async () => {
+  test("each server by its name and group, Connect, or Connected and Disconnect, by whether a seat is open there", async () => {
     const servers = await openGroups();
     // [run-view-170] the listing is the local core's, read as the
     // surface opens.
@@ -422,15 +428,18 @@ describe("run-view-170: the servers under each instance's heading", () => {
       `space-server-${BETA.place}`,
       `space-server-${LAB_BOX}`,
     ]);
-    // [run-view-170] by name and group; "Close" where a seat is open,
-    // "Open" where none is.
+    // [run-view-170] by name and group; "Connected" with Disconnect
+    // where a seat is open and signed in, Connect where none is.
     expect(row(ALPHA.place).textContent).toContain("build-box");
     expect(row(ALPHA.place).textContent).toContain("acme/infra");
-    expect(control(ALPHA.place).textContent).toBe("Close");
-    expect(control(BETA.place).textContent).toBe("Close");
+    expect(screen.getByTestId(`space-server-connected-${ALPHA.place}`).textContent).toBe("Connected");
+    expect(control(ALPHA.place).textContent).toBe("Disconnect");
+    expect(screen.getByTestId(`space-server-connected-${BETA.place}`).textContent).toBe("Connected");
+    expect(control(BETA.place).textContent).toBe("Disconnect");
     expect(row(LAB_BOX).textContent).toContain("lab-box");
     expect(row(LAB_BOX).textContent).toContain("acme/lab");
-    expect(control(LAB_BOX).textContent).toBe("Open");
+    expect(control(LAB_BOX).textContent).toBe("Connect");
+    expect(screen.queryByTestId(`space-server-connected-${LAB_BOX}`)).toBeNull();
     // [run-view-170] one instance's failure stands under its own
     // heading, hiding no other's servers.
     const lab = screen.getByRole("group", { name: "Lab" });
@@ -439,11 +448,11 @@ describe("run-view-170: the servers under each instance's heading", () => {
     expect(within(instance).queryByRole("alert")).toBeNull();
   });
 
-  test("the first Open shows the contract and sends server.open with consent only on I understand; a later Open sends at once", async () => {
+  test("the first Connect shows the contract and sends server.open with consent only on I understand; a later Connect sends at once", async () => {
     await openGroups();
 
     fireEvent.click(control(LAB_BOX));
-    // [run-view-171] the first Open shows the instance's contract, in
+    // [run-view-171] the first Connect shows the instance's contract, in
     // the words its record fixes, and sends nothing.
     const contract = screen.getByTestId(`space-server-contract-${LAB_BOX}`);
     expect(within(contract).getByText(CONTRACT)).toBeTruthy();
@@ -475,17 +484,17 @@ describe("run-view-170: the servers under each instance's heading", () => {
       `spex.serverContract:${LAB_BOX}`,
     ]);
     // [run-view-170] the listing is read again after the open, the
-    // server now reading Close.
+    // server now reading Disconnect.
     expect(callsOf(local, "server.list")).toHaveLength(2);
-    await waitFor(() => expect(control(LAB_BOX).textContent).toBe("Close"));
+    await waitFor(() => expect(control(LAB_BOX).textContent).toBe("Disconnect"));
 
-    // [run-view-170] once its seat is closed, a later Open on this
+    // [run-view-170] once its seat is closed, a later Connect on this
     // device sends server.open at once, with no contract.
     local.answers["server.close"] = { closed: true };
     local.answers["server.list"] = listing({ "43": false });
     fireEvent.click(control(LAB_BOX));
     await settle();
-    await waitFor(() => expect(control(LAB_BOX).textContent).toBe("Open"));
+    await waitFor(() => expect(control(LAB_BOX).textContent).toBe("Connect"));
     fireEvent.click(control(LAB_BOX));
     await settle();
     expect(screen.queryByTestId(`space-server-contract-${LAB_BOX}`)).toBeNull();
@@ -509,7 +518,7 @@ describe("run-view-170: the servers under each instance's heading", () => {
     expect(callsOf(local, "server.open")).toEqual([{ instance: SPEX, serverId: "43", consented: true }]);
   });
 
-  test("Close sends server.close for the server's seat and reads the listing again", async () => {
+  test("Disconnect sends server.close for the server's seat and reads the listing again", async () => {
     await openGroups();
     local.answers["server.close"] = { closed: true };
     local.answers["server.list"] = {
@@ -518,13 +527,13 @@ describe("run-view-170: the servers under each instance's heading", () => {
     };
     fireEvent.click(control(ALPHA.place));
     await settle();
-    // [run-view-170] Close sends server.close, with no contract, to the
+    // [run-view-170] Disconnect sends server.close, with no contract, to the
     // local core alone.
     expect(callsOf(local, "server.close")).toEqual([{ instance: SPEX, serverId: "41" }]);
     expect(commandsOf(alpha)).not.toContain("server.close");
     expect(screen.queryByTestId(`space-server-contract-${ALPHA.place}`)).toBeNull();
     expect(callsOf(local, "server.list")).toHaveLength(2);
-    await waitFor(() => expect(control(ALPHA.place).textContent).toBe("Open"));
+    await waitFor(() => expect(control(ALPHA.place).textContent).toBe("Connect"));
   });
 
   test("a refusal reads the core's relayed cause beside its server", async () => {
@@ -542,7 +551,7 @@ describe("run-view-170: the servers under each instance's heading", () => {
     expect(refusal.textContent).toBe("No longer shared with you");
     expect(within(row(ALPHA.place)).queryByRole("alert")).toBeNull();
     // A refused open leaves the server as it stood, the listing unread.
-    expect(control(LAB_BOX).textContent).toBe("Open");
+    expect(control(LAB_BOX).textContent).toBe("Connect");
     expect(callsOf(local, "server.list")).toHaveLength(1);
     // A refused close reads its cause in place as well.
     local.answers["server.close"] = () => {
@@ -551,6 +560,127 @@ describe("run-view-170: the servers under each instance's heading", () => {
     fireEvent.click(control(ALPHA.place));
     await settle();
     expect(within(row(ALPHA.place)).getByRole("alert").textContent).toBe("No seat is open on this server");
+  });
+});
+
+/** The approval page of a seat's running sign-in (core-service-142). */
+const APPROVE = `${SPEX}/login/device?user_code=WDJB-MJHT`;
+const running = (uri = APPROVE): SeatState["signIn"] => ({ state: "running", verificationUri: uri, expiresAt: Date.now() + 600_000 });
+
+/** The local core's `server.state`, as its store lands it. */
+function serverState(...seats: SeatState[]): void {
+  act(() => useAppStore.setState({ seats }));
+}
+
+describe("run-view-170: a server's line while its seat opens and signs in", () => {
+  test("while server.open runs the line reads Connecting to <server>…, and past ten seconds that the seat's first start can take a minute", async () => {
+    await openGroups();
+    // Understood on this device before: Connect sends at once.
+    kept.set(`spex.serverContract:${LAB_BOX}`, "1");
+    let answer: (value: unknown) => void = () => {};
+    local.answers["server.open"] = () => new Promise((resolve) => (answer = resolve));
+    local.answers["server.list"] = listing({ "43": true });
+    vi.useFakeTimers();
+    try {
+      fireEvent.click(control(LAB_BOX));
+      await act(async () => {
+        await Promise.resolve();
+      });
+      // [run-view-170] the open runs: the line says so, Connect waits.
+      const line = (): string => screen.getByTestId(`space-server-connecting-${LAB_BOX}`).textContent ?? "";
+      expect(line()).toBe("Connecting to lab-box…");
+      expect(control(LAB_BOX).disabled).toBe(true);
+      act(() => vi.advanceTimersByTime(9_999));
+      expect(line()).toBe("Connecting to lab-box…");
+      // [run-view-170] past ten seconds, a seat's first start can take a
+      // minute.
+      act(() => vi.advanceTimersByTime(1));
+      expect(line()).toBe("Connecting to lab-box… the first start of your seat can take a minute");
+      answer({ place: LAB_BOX, leaseExpiresAt: Date.now() + 3_600_000 });
+      await act(async () => {
+        for (let tick = 0; tick < 20; tick += 1) await Promise.resolve();
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+    // The open landed: the line no longer says it runs.
+    await waitFor(() => expect(control(LAB_BOX).textContent).toBe("Disconnect"));
+    expect(screen.queryByTestId(`space-server-connecting-${LAB_BOX}`)).toBeNull();
+    expect(callsOf(local, "server.open")).toEqual([{ instance: SPEX, serverId: "43", consented: true }]);
+  });
+
+  test("a seat whose sign-in runs reads Approve Spex on <server> in your browser with the approval's link until it completes", async () => {
+    await openGroups();
+    serverState({ ...ALPHA, signIn: running() }, BETA);
+    // [run-view-170] the approval's link on the server's line, in place
+    // of Connected, Disconnect offered beside it.
+    const link = screen.getByTestId(`space-server-approve-${ALPHA.place}`) as HTMLAnchorElement;
+    expect(link.textContent).toBe("Approve Spex on build-box in your browser");
+    expect(link.getAttribute("href")).toBe(APPROVE);
+    expect(link.getAttribute("target")).toBe("_blank");
+    expect(screen.queryByTestId(`space-server-connected-${ALPHA.place}`)).toBeNull();
+    expect(control(ALPHA.place).textContent).toBe("Disconnect");
+    // The other seat, signed in, reads Connected.
+    expect(screen.getByTestId(`space-server-connected-${BETA.place}`).textContent).toBe("Connected");
+    // Pending reads Connected; signed in, the link goes.
+    serverState({ ...ALPHA, signIn: { state: "pending" } }, BETA);
+    expect(screen.getByTestId(`space-server-connected-${ALPHA.place}`).textContent).toBe("Connected");
+    serverState({ ...ALPHA, signIn: { state: "signedIn" } }, BETA);
+    expect(screen.queryByTestId(`space-server-approve-${ALPHA.place}`)).toBeNull();
+    expect(screen.getByTestId(`space-server-connected-${ALPHA.place}`).textContent).toBe("Connected");
+  });
+
+  test("on the desktop the shell is asked to open each flow's page once; the served page leaves it as the link", async () => {
+    const openExternal = vi.fn(async (_url: string) => true);
+    (window as unknown as { spexNative?: unknown }).spexNative = { openExternal };
+    try {
+      await openGroups();
+      serverState({ ...ALPHA, signIn: { state: "pending" } }, BETA);
+      // [run-view-170] the flow starts: the shell opens its page once.
+      serverState({ ...ALPHA, signIn: running() }, BETA);
+      expect(openExternal.mock.calls).toEqual([[APPROVE]]);
+      serverState({ ...ALPHA, signIn: running() }, BETA);
+      serverState({ ...ALPHA, relay: "closed", signIn: running() }, BETA);
+      expect(openExternal).toHaveBeenCalledTimes(1);
+      // The link opens it again through the shell.
+      fireEvent.click(screen.getByTestId(`space-server-approve-${ALPHA.place}`));
+      expect(openExternal.mock.calls).toEqual([[APPROVE], [APPROVE]]);
+      // A second flow, after a failure: its own page, once.
+      const again = `${SPEX}/login/device?user_code=KQXF-ZPLN`;
+      serverState({ ...ALPHA, signIn: { state: "failed", cause: "The sign-in expired before it was approved" } }, BETA);
+      serverState({ ...ALPHA, signIn: running(again) }, BETA);
+      expect(openExternal.mock.calls).toEqual([[APPROVE], [APPROVE], [again]]);
+    } finally {
+      delete (window as unknown as { spexNative?: unknown }).spexNative;
+    }
+    // The served page, with no bridge, opens nothing: the link stands.
+    cleanup();
+    const third = `${SPEX}/login/device?user_code=MNBV-CXZL`;
+    await openGroups();
+    serverState({ ...BETA, signIn: { state: "pending" } }, ALPHA);
+    serverState({ ...BETA, signIn: running(third) }, ALPHA);
+    expect(openExternal.mock.calls.map(([uri]) => uri)).not.toContain(third);
+    expect(screen.getByTestId(`space-server-approve-${BETA.place}`).getAttribute("href")).toBe(third);
+  });
+
+  test("a seat whose sign-in failed reads its cause with Sign in again, which sends server.signin to the local core alone", async () => {
+    await openGroups();
+    serverState({ ...ALPHA, signIn: { state: "failed", cause: "The sign-in was denied at spex.pub" } }, BETA);
+    // [run-view-170] the seat's cause, as one sentence, beside Sign in again.
+    expect(screen.getByTestId(`space-server-signin-error-${ALPHA.place}`).textContent).toBe("The sign-in was denied at spex.pub.");
+    expect(screen.queryByTestId(`space-server-connected-${ALPHA.place}`)).toBeNull();
+    const again = screen.getByTestId(`space-server-signin-${ALPHA.place}`);
+    expect(again.textContent).toBe("Sign in again");
+    local.answers["server.signin"] = { started: true };
+    fireEvent.click(again);
+    await settle();
+    // [run-view-171] the seat's sign-in started afresh, at the local core.
+    expect(callsOf(local, "server.signin")).toEqual([{ instance: SPEX, serverId: "41" }]);
+    expect(commandsOf(alpha)).not.toContain("server.signin");
+    // Its outcome follows as state: the flow runs, its link shown.
+    serverState({ ...ALPHA, signIn: running() }, BETA);
+    expect(screen.queryByTestId(`space-server-signin-${ALPHA.place}`)).toBeNull();
+    expect(screen.getByTestId(`space-server-approve-${ALPHA.place}`)).toBeTruthy();
   });
 });
 
@@ -574,7 +704,7 @@ class SilentSocket extends EventTarget {
 }
 
 describe("run-view-170: the page waits for an open as long as the admission may take", () => {
-  test("server.open and server.close outwait a seat's thirty-second start, where another command times out", async () => {
+  test("server.open and server.close outwait the core's ninety-second wait on the admission, where another command times out", async () => {
     vi.useFakeTimers();
     try {
       const socket = new SilentSocket();
@@ -600,10 +730,10 @@ describe("run-view-170: the page waits for an open as long as the admission may 
       await vi.advanceTimersByTimeAsync(30_000);
       // A reply the core composes itself is awaited thirty seconds.
       expect(read.state).toBe("timeout");
-      // [run-view-170] an open waits on the server's admission, a seat
-      // starting there within thirty seconds: still awaited at sixty,
-      // and so is a close.
-      await vi.advanceTimersByTimeAsync(30_000);
+      // [run-view-170] an open waits on the server's admission, which the
+      // core awaits ninety seconds (core-service-128): still awaited at a
+      // hundred, and so is a close queued behind it.
+      await vi.advanceTimersByTimeAsync(70_000);
       expect(open.state).toBe("pending");
       expect(close.state).toBe("pending");
       const [, opened, closed] = socket.sent;

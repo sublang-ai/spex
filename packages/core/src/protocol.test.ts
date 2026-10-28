@@ -311,12 +311,16 @@ test("core-service-128: the server commands name a server by its instance and it
   // Without consent the open still parses: the core refuses it itself.
   assert.ok(parseCommand({ type: "server.open", id: "s3", instance: "https://spex.pub", serverId: "srv_1" }).ok);
   assert.ok(parseCommand({ type: "server.close", id: "s4", instance: "https://spex.pub", serverId: "srv_1" }).ok);
+  // The seat's sign-in started again (core-service-142).
+  assert.ok(parseCommand({ type: "server.signin", id: "s10", instance: "https://spex.pub", serverId: "srv_1" }).ok);
   for (const command of [
     { type: "server.list", id: "s5", instance: "https://spex.pub" },
     { type: "server.open", id: "s6", instance: "https://spex.pub", consented: true },
     { type: "server.open", id: "s7", instance: "https://spex.pub", serverId: "", consented: true },
     { type: "server.open", id: "s8", instance: "https://spex.pub", serverId: "srv_1", consented: "yes" },
     { type: "server.close", id: "s9", instance: "https://spex.pub", serverId: "srv_1", consented: true },
+    { type: "server.signin", id: "s11", instance: "https://spex.pub" },
+    { type: "server.signin", id: "s12", instance: "https://spex.pub", serverId: "srv_1", consented: true },
   ]) {
     assert.ok(!parseCommand(command).ok, JSON.stringify(command));
   }

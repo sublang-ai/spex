@@ -109,6 +109,12 @@ export interface StandinHub {
    * present — the ticket spent and the lease kept under the bearer
    * minted. */
   misanswer(count: number, alter: (answer: SeatAnswer) => SeatAnswer): void;
+  /** Answer the next `count` admissions `ms` after their ticket's
+   * redemption, as a hub starting a seat answers once it stands. */
+  delay(count: number, ms: number): void;
+  /** Close every relay as a restarting hub does, each lease kept: the
+   * member's side with `1001`, so a watch reconnects. */
+  drop(): void;
   /** End every lease minted so far: each relay closed with `4401`, each
    * bearer refused `401` from here on (hub-3, hub-5). */
   endLeases(): void;
@@ -184,6 +190,7 @@ export async function startStandinHub(options: StandinHubOptions = {}): Promise<
   const upgrades: StandinUpgrade[] = [];
   const refusals: { status: number; code: string; message: string }[] = [];
   const misanswers: ((answer: SeatAnswer) => SeatAnswer)[] = [];
+  const delays: number[] = [];
   /** Each bearer minted, by itself. */
   const leases = new Map<string, Lease>();
   const relays = new Set<Relay>();
@@ -224,6 +231,9 @@ export async function startStandinHub(options: StandinHubOptions = {}): Promise<
         admissions.push({ ticket, status: answer.status, endpoint: null, bearer: null });
         return json(res, answer.status, { error: { code: answer.code, message: answer.message } });
       }
+      // A seat starting: the answer waits as the test scripted it.
+      const wait = delays.shift();
+      if (wait !== undefined) await new Promise((resolveWait) => setTimeout(resolveWait, wait));
       const minted = randomBytes(32).toString("base64url");
       leases.set(minted, { person: answer.person.id, expiresAt: Date.parse(answer.leaseExpiresAt), ended: false });
       const seatAnswer = { endpoint: `wss://${host}/seats/${answer.person.id}`, bearer: minted };
@@ -323,6 +333,16 @@ export async function startStandinHub(options: StandinHubOptions = {}): Promise<
     helloVersion: (version) => { rewriteHello = version; },
     misanswer: (count, alter) => {
       for (let i = 0; i < count; i += 1) misanswers.push(alter);
+    },
+    delay: (count, ms) => {
+      for (let i = 0; i < count; i += 1) delays.push(ms);
+    },
+    drop: () => {
+      for (const relay of [...relays]) {
+        relays.delete(relay);
+        if (relay.client) closeSocket(relay.client, 1001);
+        closeSocket(relay.upstream, 1000);
+      }
     },
     endLeases: () => {
       for (const lease of leases.values()) lease.ended = true;
