@@ -1828,6 +1828,11 @@ msgstr "cites {out}"
 msgid "cites {out} · cited by {in}"
 msgstr "cites {out} · cited by {in}"
 
+#. graph key after the selection sentence: the line hue of the packages citing the selected one
+#: src/components/SpecGraph.tsx
+msgid "cites it"
+msgstr "cites it"
+
 #: src/components/AgentSettings.tsx
 msgid "Clear the fast-mode choice; this adapter does not accept it."
 msgstr "Clear the fast-mode choice; this adapter does not accept it."
@@ -3510,6 +3515,11 @@ msgstr "Issues ({count})"
 msgid "it can't run now"
 msgstr "it can't run now"
 
+#. graph key after the selection sentence: the line hue of the packages the selected one cites
+#: src/components/SpecGraph.tsx
+msgid "it cites"
+msgstr "it cites"
+
 #: src/components/DraftRegisterTab.tsx
 msgid "It gives no player for {roles}."
 msgstr "It gives no player for {roles}."
@@ -5133,10 +5143,10 @@ msgstr "Records pushed to {name} since the last sync may be left behind. Remove 
 msgid "Recover them from your editor's history, if it keeps one"
 msgstr "Recover them from your editor's history, if it keeps one"
 
-#. spec view footer: the records beside the specs
+#. spec view footer's label, before the records beside the specs
 #: src/components/SpecView.tsx
-msgid "Reference"
-msgstr "Reference"
+msgid "Reference:"
+msgstr "Reference:"
 
 #. re-read the groups and the Git host
 #. sync step: re-reading the spex repository

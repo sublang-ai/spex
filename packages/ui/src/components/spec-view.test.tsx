@@ -1302,7 +1302,7 @@ describe("SPECV-6/7: meta.md routing", () => {
     // two tree-wide documents, each named by its file and use
     // (spec-view-7).
     expect(screen.getByTestId("records-footer").textContent).toBe(
-      "Referencedecision records 1·map.md index·meta.md spec format",
+      "Reference:decision records 1·map.md index·meta.md spec format",
     );
     const meta = screen.getByTestId("records-meta");
     fireEvent.click(meta);
@@ -2177,13 +2177,11 @@ describe("spec-view-20: citation graph beside the outline", () => {
     const [bx, by] = midpoint(citer);
     expect(Math.hypot(ax - bx, ay - by)).toBeGreaterThan(5);
 
-    // Counts ride the neighbors' names, agreeing with the outline's
-    // rollups, the absent ID counted in neither (spec-view-25,
-    // spec-view-19).
-    expect(screen.getByTestId("graph-label-auth").textContent).toBe("auth →2");
-    expect(screen.getByTestId("graph-label-session").textContent).toBe(
-      "session →1 ←1",
-    );
+    // A neighbor's name carries no count: the edge says the direction
+    // (spec-view-25); the outline's rollup leaves the absent ID
+    // uncounted (spec-view-23).
+    expect(screen.getByTestId("graph-label-auth").textContent).toBe("auth");
+    expect(screen.getByTestId("graph-label-session").textContent).toBe("session");
     expect(screen.getByTestId("rollup-billing").textContent).toBe("3 · 1");
     expect(screen.getByTestId("unresolved-billing")).toBeTruthy();
 
@@ -2196,8 +2194,8 @@ describe("spec-view-20: citation graph beside the outline", () => {
       screen.getByTestId(id).querySelector("line")!.getAttribute("class") ?? "";
     expect(sample("graph-key-cites")).toContain("stroke-orange-700");
     expect(sample("graph-key-cited")).toContain("stroke-neutral-700");
-    expect(screen.getByTestId("graph-key-cites").textContent).toBe("cites");
-    expect(screen.getByTestId("graph-key-cited").textContent).toBe("cited by");
+    expect(screen.getByTestId("graph-key-cites").textContent).toBe("it cites");
+    expect(screen.getByTestId("graph-key-cited").textContent).toBe("cites it");
     const pinned = screen.getByTestId("graph-selection-card");
     const totals = within(pinned).getByTestId("graph-card-totals");
     expect(totals.textContent).toBe("3 items · cites 3 · cited by 1");
@@ -2929,6 +2927,19 @@ describe("spec-view-55/26: nothing outgrows the pane it is drawn in", () => {
     });
     // Already clear: no move.
     expect(revealShift({ x0: 20, y0: 300, x1: 100, y1: 380 }, view, panel, 5)).toBeNull();
+    // A neighbor below the view: of the moves clearing the panel, the
+    // one keeping the neighbor in view wins — left, not down.
+    expect(
+      revealShift({ x0: 300, y0: 20, x1: 380, y1: 120 }, view, panel, 5, {
+        x0: 200, y0: 20, x1: 380, y1: 400,
+      }),
+    ).toEqual({ dx: -193, dy: 0 });
+    // No pan keeps the reach in view: the selection's own move stands.
+    expect(
+      revealShift({ x0: 300, y0: 20, x1: 380, y1: 120 }, view, panel, 5, {
+        x0: 150, y0: 20, x1: 380, y1: 1000,
+      }),
+    ).toEqual({ dx: 0, dy: 190 });
     // Outside the view with no panel: the least move into it.
     expect(revealShift({ x0: -50, y0: 100, x1: 30, y1: 150 }, view, null, 5)).toEqual({
       dx: 55,

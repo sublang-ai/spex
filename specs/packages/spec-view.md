@@ -147,7 +147,7 @@ While the spec tree renders, the spec view shall hold one selection — a single
 When the selection changes to a package, the spec view shall reveal it in both projections, additively ([DR-027](../decisions/027-linked-views-contract.md), [DR-158](../decisions/158-a-legible-graph-and-outline.md)):
 
 - in the outline, the package and its ancestors open and its row scrolls to the top of the rows clear of the heading row — writing the search's transient overlay while a search runs [[spec-view-5](#spec-view-5)], and re-firing after the search clears so the restore never hides the selection;
-- in the graph, where the drawing scrolls sideways in its own box [[spec-view-59](#spec-view-59)], the box first scrolls the node into its visible width; then, only when the node and its label lie outside the viewport less the pinned package card's measured box [[spec-view-25](#spec-view-25)], the camera pans the least that brings them clear of both — downward past the card where nothing shorter clears it — and the pan neither zooms nor counts as the reader moving the camera [[spec-view-27](#spec-view-27)];
+- in the graph, where the drawing scrolls sideways in its own box [[spec-view-59](#spec-view-59)], the box first scrolls the node into its visible width; then, only when the node and its label lie outside the viewport less the pinned package card's measured box [[spec-view-25](#spec-view-25)], the camera pans the least that brings them clear of both — downward past the card where nothing shorter clears it — preferring, where one exists, the least such pan that also keeps every neighbor the selection's lines reach and its label in view, and the pan neither zooms nor counts as the reader moving the camera [[spec-view-27](#spec-view-27)];
 - while the selection holds, the graph's reveal runs again by the same rule whenever the pinned card's measured box changes — its citation list opening or closing, the language, the canvas;
 - reveal only opens and scrolls; it never collapses, clears, or closes anything.
 
@@ -181,14 +181,14 @@ While the graph renders, the spec view shall draw the citations between packages
 While the graph renders, the spec view shall key every channel it encodes below the graph, as text that is no control and that the selection leaves unchanged ([DR-026](../decisions/026-data-graphics-craft.md), [DR-158](../decisions/158-a-legible-graph-and-outline.md)):
 
 - the key names the two role treatments as cited by and not cited by other packages [[spec-view-22](#spec-view-22)], and nothing else;
-- node size is read off the numeral each node states [[spec-view-22](#spec-view-22)], the selection's two edge hues off the line samples in its sentence above the graph [[spec-view-66](#spec-view-66)], each neighbor's counts off its label or the citation list [[spec-view-25](#spec-view-25)], and what the overview omits off its threshold sentence [[spec-view-66](#spec-view-66)].
+- node size is read off the numeral each node states [[spec-view-22](#spec-view-22)], the selection's two edge hues off the line samples in its sentence above the graph [[spec-view-66](#spec-view-66)], each neighbor's counts off the citation list [[spec-view-25](#spec-view-25)] or its line's card [[spec-view-26](#spec-view-26)], and what the overview omits off its threshold sentence [[spec-view-66](#spec-view-66)].
 
 #### spec-view-25
 
 While the graph renders, the spec view shall emphasize by the selection [[spec-view-42](#spec-view-42)] alone, never moving or resizing a mark ([DR-027](../decisions/027-linked-views-contract.md), [DR-158](../decisions/158-a-legible-graph-and-outline.md)):
 
 - the selected package keeps its own marks and its citation neighbors at full strength, every other node and label dims, and only the selection's edges draw [[spec-view-23](#spec-view-23)];
-- each neighbor's label then carries its counts — `→N` for the selected package's citations of the neighbor, then `←N` for the neighbor's citations of the selected package, the order every other count in the view reads — each in its edge's hue;
+- each neighbor's label carries its name alone, the edge's glyph and hue stating the direction;
 - the selected package's card [[spec-view-26](#spec-view-26)] stands pinned at the graph's top-right corner, never moving with the marks, ending — where the selection has neighbors — in a control naming their number that opens and closes the citation list, named for what it does with its state exposed;
 - the citation list carries column heads naming the two directions in the order every other count reads — what it cites, then what cites it — over every neighbor in descending order of its total with both counts, each entry's accessible name carrying both counts against the selected package;
 - the list starts closed and stays open or closed as the reader left it across selections while the view stays open;
@@ -239,7 +239,7 @@ While the graph renders, the spec view shall stand above it a sentence setting t
 - a typed number takes effect on Enter or leaving the field, clamped to the stops and shown as the lowest stop drawing the same lines;
 - its default is the lowest stop whose backbone holds at most 1.5 pairs per linked package, the last stop when no other does;
 - stepping changes only which lines draw, never a node's position [[spec-view-28](#spec-view-28)], and its value lasts while the view stays open, the default returning when the view reopens;
-- while a package is selected the sentence yields to how many packages share citations with the selected one, followed by two line samples, each with its arrowhead, naming the selection's citations in orange and its citers' in ink [[spec-view-23](#spec-view-23)], the line keeping its height, and clearing the selection restores the value it held;
+- while a package is selected the sentence yields to how many packages share citations with the selected one, followed by two line samples, each with its arrowhead, naming the selection's citations in orange and its citers' in ink, each worded against the sentence's named package — what it cites, what cites it [[spec-view-23](#spec-view-23)], the line keeping its height, and clearing the selection restores the value it held;
 - nothing else stands above the graph.
 
 #### spec-view-29
@@ -526,7 +526,7 @@ Where a fixture tree carries packages of differing item counts, pairs of light a
 - at rest, only the backbone's pairs draw, each as one line of uniform width with no direction glyph, and a light pair outside it draws nothing [[spec-view-23](#spec-view-23)], every node with no line carrying no cross-file citation [[spec-view-23](#spec-view-23)];
 - the threshold sentence defaults to the lowest stop holding at most 1.5 pairs per linked package — the last stop for a tree whose every pair totals one; stepping down reaches 1, drawing every pair while no node moves, each step changing the lines drawn, a typed stop drawing the same lines as a lower one reads as that lower one, and a selection replaces the sentence with the count of packages sharing citations with it and its two line samples in the edges' hues until clearing restores its value [[spec-view-66](#spec-view-66)];
 - with a package selected, its pairs draw as directed edges of uniform width with a constant-size glyph, its own and its citers' in their two hues, the reciprocal pair as two offset edges, and no other edge draws [[spec-view-23](#spec-view-23)] [[spec-view-25](#spec-view-25)];
-- each neighbor's label carries its `←N` and `→N`, the counts agreeing with the outline's rollups and the absent-ID citation counted in neither [[spec-view-25](#spec-view-25)] [[spec-view-23](#spec-view-23)];
+- each neighbor's label carries its name alone [[spec-view-25](#spec-view-25)], the line samples word both directions against the selected package the sentence names [[spec-view-66](#spec-view-66)], and the outline's rollups leave the absent-ID citation uncounted [[spec-view-23](#spec-view-23)];
 - the selection's package card stands pinned at the canvas's top-right with its counts in ink and its citation list closed; opened, the list names every neighbor by descending total under its two column heads within the card's bounded height, focusing an entry lifts its node, activating one selects that package and leaves the list open, and a list closed stays closed for the next selection [[spec-view-25](#spec-view-25)];
 - the key names the two roles alone, holds no control, and reads the same under a selection [[spec-view-24](#spec-view-24)], while the fit icon stands in the canvas, disabled at the fitted frame and enabled once the camera moves [[spec-view-27](#spec-view-27)].
 

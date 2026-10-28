@@ -1273,8 +1273,8 @@ export function SpecView(props: SpecViewProps) {
       data-testid="records-footer"
       className={`flex flex-wrap items-center gap-x-1.5 border-neutral-200 text-xs text-neutral-500 dark:border-neutral-800 ${placement}`}
     >
-      <span className="mr-1">
-        {i18n._({ id: "Reference", comment: "spec view footer: the records beside the specs" })}
+      <span className="-mr-0.5">
+        {i18n._({ id: "Reference:", comment: "spec view footer's label, before the records beside the specs" })}
       </span>
       {tree.decisions.length > 0 ? (
         <>

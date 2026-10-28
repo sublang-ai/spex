@@ -1828,6 +1828,11 @@ msgstr "引用 {out}"
 msgid "cites {out} · cited by {in}"
 msgstr "引用 {out} · 被引用 {in}"
 
+#. graph key after the selection sentence: the line hue of the packages citing the selected one
+#: src/components/SpecGraph.tsx
+msgid "cites it"
+msgstr "引用它"
+
 #: src/components/AgentSettings.tsx
 msgid "Clear the fast-mode choice; this adapter does not accept it."
 msgstr "清除快速模式选择；该适配器不接受。"
@@ -3510,6 +3515,11 @@ msgstr "问题（{count}）"
 msgid "it can't run now"
 msgstr "当前无法执行"
 
+#. graph key after the selection sentence: the line hue of the packages the selected one cites
+#: src/components/SpecGraph.tsx
+msgid "it cites"
+msgstr "它引用"
+
 #: src/components/DraftRegisterTab.tsx
 msgid "It gives no player for {roles}."
 msgstr "它没有为 {roles} 指定 Player。"
@@ -5133,10 +5143,10 @@ msgstr "上次同步后推送到 {name} 的记录可能会被留下。仍要移�
 msgid "Recover them from your editor's history, if it keeps one"
 msgstr "若编辑器保留历史，可从中恢复"
 
-#. spec view footer: the records beside the specs
+#. spec view footer's label, before the records beside the specs
 #: src/components/SpecView.tsx
-msgid "Reference"
-msgstr "参考"
+msgid "Reference:"
+msgstr "参考："
 
 #. re-read the groups and the Git host
 #. sync step: re-reading the spex repository

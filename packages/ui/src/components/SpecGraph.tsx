@@ -9,8 +9,8 @@
 // Every encoding here answers DR-026 as DR-158 amends it: node area
 // counts items and says so with a numeral; at rest the backbone draws
 // one undirected line per strong pair, and a selection draws its own
-// citations directed, with the counts written beside its neighbors'
-// names and in a list rather than encoded in width; the two roles are
+// citations directed, its counts said in its card's list and its
+// lines' cards rather than encoded in width or beside names; the two roles are
 // achromatic so brand purple stays interaction's alone; names take a
 // free place or wait; and every channel is keyed below the picture.
 // The pane is layered: controls that change the picture above it, a
@@ -209,14 +209,17 @@ export function boundCamera(
  * each by `gap` (spec-view-43). The panel stands in the view's
  * top-right corner, so the box clears it by passing below it or to its
  * left; of the moves that fit, the shortest wins, and where none fits
- * the move below the panel still keeps the two apart. Null when the
- * box already stands clear.
+ * the move below the panel still keeps the two apart. Given a `reach`
+ * — the selection's neighbors as drawn — the least move that also
+ * keeps the whole reach in view wins wherever one exists. Null when
+ * no move is wanted.
  */
 export function revealShift(
   box: Box,
   view: Box,
   panel: Box | null,
   gap: number,
+  reach?: Box,
 ): { dx: number; dy: number } | null {
   const into = (lo: number, hi: number, min: number, max: number) =>
     lo < min ? Math.min(min - lo, max - hi) : hi > max ? Math.max(max - hi, min - lo) : 0;
@@ -230,11 +233,25 @@ export function revealShift(
     box.x0 + dx - gap >= panel.x1 ||
     box.y1 + dy + gap <= panel.y0 ||
     box.y0 + dy - gap >= panel.y1;
-  const fits = (dx: number, dy: number) =>
-    box.x0 + dx >= view.x0 + gap - 0.5 &&
-    box.x1 + dx <= view.x1 - gap + 0.5 &&
-    box.y0 + dy >= view.y0 + gap - 0.5 &&
-    box.y1 + dy <= view.y1 - gap + 0.5;
+  const within = (b: Box, dx: number, dy: number) =>
+    b.x0 + dx >= view.x0 + gap - 0.5 &&
+    b.x1 + dx <= view.x1 - gap + 0.5 &&
+    b.y0 + dy >= view.y0 + gap - 0.5 &&
+    b.y1 + dy <= view.y1 - gap + 0.5;
+  const fits = (dx: number, dy: number) => within(box, dx, dy);
+  if (reach) {
+    const xs = [0, inside.dx, into(reach.x0, reach.x1, view.x0 + gap, view.x1 - gap)];
+    const ys = [0, inside.dy, into(reach.y0, reach.y1, view.y0 + gap, view.y1 - gap)];
+    if (panel) {
+      xs.push(panel.x0 - gap - box.x1);
+      ys.push(panel.y1 + gap - box.y0);
+    }
+    const best = xs
+      .flatMap((dx) => ys.map((dy) => ({ dx, dy })))
+      .filter(({ dx, dy }) => fits(dx, dy) && clear(dx, dy) && within(reach, dx, dy))
+      .sort((a, b) => Math.hypot(a.dx, a.dy) - Math.hypot(b.dx, b.dy))[0];
+    if (best) return best.dx === 0 && best.dy === 0 ? null : best;
+  }
   if (clear(inside.dx, inside.dy)) {
     return inside.dx === 0 && inside.dy === 0 ? null : inside;
   }
@@ -1119,18 +1136,6 @@ export function SpecGraph({
     .filter((line): line is NonNullable<typeof line> => line !== null)
     .map(({ x1, y1, x2, y2 }) => [x1, y1, x2, y2] as const);
 
-  /** A neighbor's label carries its counts against the selection —
-   * `→N` the selection's citations of it, then `←N` its citations of
-   * the selection, in the order every other count reads (spec-view-25). */
-  const labelParts = (name: string, label: string) => {
-    const counts = neighbors.get(name);
-    return {
-      label,
-      cited: counts && counts.in > 0 ? ` ←${counts.in}` : "",
-      cites: counts && counts.out > 0 ? ` →${counts.out}` : "",
-    };
-  };
-
   // Names are placed around the picture as drawn: the selection's
   // first and always, then its neighbors, then the rest by size; a
   // name with no free place waits (spec-view-22). An inspected name
@@ -1140,12 +1145,10 @@ export function SpecGraph({
     const request = (node: GraphNode, forced: boolean): LabelRequest[] => {
       const place = placeOf(node.key);
       if (!place) return [];
-      const parts = labelParts(node.basename, place.label);
-      const text = `${parts.label}${parts.cites}${parts.cited}`;
       return [
         {
           key: node.key,
-          width: text === place.label ? place.labelWidth : measureLabel(text),
+          width: place.labelWidth,
           forced,
           priority: (neighborhood?.has(node.basename) ? 1e6 : 0) + node.items,
           bottom: node.linked ? presentation.footTop : undefined,
@@ -1230,7 +1233,22 @@ export function SpecGraph({
         }
       : null;
     const view = { x0: left, y0: 0, x1: left + width, y1: size.height };
-    const shift = revealShift(box, view, panel, REVEAL_GAP);
+    // The neighbors its lines reach stay in view too, where a pan
+    // allows (spec-view-43).
+    const reach = { ...box };
+    for (const name of neighbors.keys()) {
+      const other = nodeAt(name);
+      const at = other && placeOf(other.key);
+      if (!at) continue;
+      const [nx, ny] = t.apply([at.x, at.y]);
+      const nr = at.r * t.k;
+      const named = labelBoxes.get(other.key);
+      reach.x0 = Math.min(reach.x0, nx - nr, named ? t.applyX(named.x) : Infinity);
+      reach.y0 = Math.min(reach.y0, ny - nr, named ? t.applyY(named.y) : Infinity);
+      reach.x1 = Math.max(reach.x1, nx + nr, named ? t.applyX(named.x + named.width) : -Infinity);
+      reach.y1 = Math.max(reach.y1, ny + nr, named ? t.applyY(named.y + named.height) : -Infinity);
+    }
+    const shift = revealShift(box, view, panel, REVEAL_GAP, reach);
     if (!shift) return;
     if (!revealRef.current.saved) {
       revealRef.current = { saved: t, moved: false };
@@ -1388,15 +1406,23 @@ export function SpecGraph({
                 (spec-view-66, spec-view-24). */}
             <span
               data-testid="graph-selection-key"
-              className="ml-2 flex shrink-0 items-center gap-1.5"
+              // The key keeps its words and the sentence yields first;
+              // only a pane too narrow for the key alone truncates it.
+              className="ml-2 flex min-w-0 max-w-[calc(100%-2.5rem)] shrink-0 items-center gap-1.5"
             >
-              <span data-testid="graph-key-cites" className="flex items-center gap-1">
+              <span data-testid="graph-key-cites" className="flex min-w-0 items-center gap-1">
                 <LineSample own />
-                {i18n._("cites")}
+                <span className="truncate">{i18n._({
+                  id: "it cites",
+                  comment: "graph key after the selection sentence: the line hue of the packages the selected one cites",
+                })}</span>
               </span>
-              <span data-testid="graph-key-cited" className="ml-1.5 flex items-center gap-1">
+              <span data-testid="graph-key-cited" className="ml-1.5 flex min-w-0 items-center gap-1">
                 <LineSample own={false} />
-                {i18n._("cited by")}
+                <span className="truncate">{i18n._({
+                  id: "cites it",
+                  comment: "graph key after the selection sentence: the line hue of the packages citing the selected one",
+                })}</span>
               </span>
             </span>
           </>
@@ -1692,7 +1718,6 @@ export function SpecGraph({
                 const place = placeOf(node.key);
                 const box = labelBoxes.get(node.key);
                 if (!place || !box) return null;
-                const parts = labelParts(node.basename, place.label);
                 return (
                   <text
                     key={`label-${node.key}`}
@@ -1707,17 +1732,7 @@ export function SpecGraph({
                     opacity={dimOf(node.basename)}
                     className={`pointer-events-none fill-neutral-700 dark:fill-neutral-300 ${SURFACE_STROKE}`}
                   >
-                    {parts.label}
-                    {parts.cites ? (
-                      <tspan fontWeight={600} className={CITES_FILL}>
-                        {parts.cites}
-                      </tspan>
-                    ) : null}
-                    {parts.cited ? (
-                      <tspan fontWeight={600} className={CITER_TEXT}>
-                        {parts.cited}
-                      </tspan>
-                    ) : null}
+                    {place.label}
                   </text>
                 );
               })}

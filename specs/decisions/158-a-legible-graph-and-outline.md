@@ -44,7 +44,8 @@ Amends [DR-027](027-linked-views-contract.md)'s selection voice (its isolation h
    A selected package's citations all draw, directed and of uniform width — what it cites in orange, what cites it in ink — ending clear of any ring a node wears — the selection's halo or the focus ring, with every other edge hidden and every other mark dimmed.
 2. **Counts are written, not encoded in width.**
    Edge width stops carrying the citation count: past its cap it already could not.
-   Under the selection each neighbor's name carries `→N` (the selection cites it N times) and `←N` (it cites the selection N times), cites before cited by as every other count in the view reads.
+   Under the selection a neighbor's name carries no count: beside the neighbor's name an arrow reads from the neighbor's side, the reverse of what it meant, while the edge's glyph and hue already say the direction.
+   The counts live in the selection's citation list and each line's card, and the line samples word both directions against the selected package the sentence before them names — what it cites, what cites it.
    One package card states a package wherever it shows: its name; its item total, what it cites and what cites it, in ink and in the outline's own count grammar, or that it has no citations with other packages; then its items by group, each count beside its group's name, a zero as a dash.
    Color in the card is the item groups' alone: the interaction hue there would read as a fourth group beside the internal one, and an arrow beside a count names no line the card stands on. A line's card says the same in a sentence — "a cites b 4 times", one per direction carrying citations — rather than an arrow between two names.
    Hover or keyboard focus raises the card beside its node; a selection pins the same card in the graph's top-right corner, and the selected node raises no second one.
