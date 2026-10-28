@@ -12,6 +12,7 @@ Extends [DR-069](069-key-phrases-not-sentences.md): a failure's cause is a phras
 Requires Playbook 14.1, whose [DR-063](https://github.com/sublang-ai/playbook/blob/main/specs/decisions/063-failures-explain-themselves.md) attaches a closed `{ code, evidence }` cause to every parked failure and a standing to every advertised action.
 Amended by [DR-117](117-the-earlier-steps-fold-behind-one-control.md) in the notice's layout alone: the actions resuming from an earlier step fold behind one secondary control; one control per advertised action, each with its standing, stands.
 Amended by [DR-155](155-players-named-delegated-and-recovered.md) in "what now": a failure naming its agent offers that agent's popover and its Settings row by cause.
+Amended by [DR-160](160-the-captain-dispatches-in-plain-sight.md) in wording alone: a failure the Boss's own stop caused reads aborted, not failed.
 
 ## Context
 
