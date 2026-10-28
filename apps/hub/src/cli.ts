@@ -13,9 +13,9 @@ import { createInterface } from "node:readline";
 import { attach } from "./attach.js";
 import { DEFAULT_HELPER, DEFAULT_SUDO, type HelperConfig } from "./helper.js";
 import {
+  ADMIT_TIMEOUT_MS,
   askHub,
   RENEW_INTERVAL_MS,
-  SEAT_TIMEOUT_MS,
   startHub,
   type ControlAnswer,
   type ControlRequest,
@@ -48,7 +48,7 @@ export class UsageError extends Error {}
 const COMMON = ["state-dir", "run-dir", "helper", "sudo"];
 const FLAGS: Record<string, string[]> = {
   attach: ["instance", "server-id", "address", "tls-cert", "tls-key", "token-file", ...COMMON],
-  serve: ["host", "port", "renew-interval-ms", "seat-timeout-ms", ...COMMON],
+  serve: ["host", "port", "renew-interval-ms", "admit-timeout-ms", ...COMMON],
   status: COMMON,
   evict: COMMON,
   retire: COMMON,
@@ -184,7 +184,7 @@ async function administer(parsed: Parsed, io: Io): Promise<number> {
         stateDir,
         runDir: parsed.flags.get("run-dir") ?? DEFAULT_RUN_DIR,
         helper: helperConfig(parsed.flags),
-        seatTimeoutMs: SEAT_TIMEOUT_MS,
+        admitTimeoutMs: ADMIT_TIMEOUT_MS,
         log: () => {},
       },
       state,
@@ -301,7 +301,7 @@ export async function run(argv: string[], io: Io): Promise<number> {
         host: flags.get("host") || undefined,
         port: integer(flags, "port", 0, 65535),
         renewIntervalMs: integer(flags, "renew-interval-ms", 1, 2 ** 31 - 1) ?? RENEW_INTERVAL_MS,
-        seatTimeoutMs: integer(flags, "seat-timeout-ms", 1, 10 * 60 * 1000) ?? SEAT_TIMEOUT_MS,
+        admitTimeoutMs: integer(flags, "admit-timeout-ms", 1, 10 * 60 * 1000) ?? ADMIT_TIMEOUT_MS,
         log,
       });
       const state = hub.book.state;

@@ -22,7 +22,7 @@ import { type HelperConfig } from "./helper.js";
 import { connectSeat, readSeatToken } from "./seat.js";
 import { SeatBook, type SeatStatus } from "./seats.js";
 import {
-  bearerMatches,
+  bearerAdmitted,
   controlPath,
   ensureStateDir,
   PERSON_ID,
@@ -30,7 +30,9 @@ import {
 } from "./state.js";
 
 export const RENEW_INTERVAL_MS = 30 * 60 * 1000;
-export const SEAT_TIMEOUT_MS = 30 * 1000;
+/** One bound for an admission, from its ticket's redemption to its
+ * answer (hub-2). */
+export const ADMIT_TIMEOUT_MS = 60 * 1000;
 const MAX_ADMIT_BODY = 16 * 1024;
 
 export interface HubOptions {
@@ -42,7 +44,7 @@ export interface HubOptions {
   /** The port to bind; the address's own by default. */
   port?: number;
   renewIntervalMs: number;
-  seatTimeoutMs: number;
+  admitTimeoutMs: number;
   log: (line: string) => void;
 }
 
@@ -163,7 +165,7 @@ export async function startHub(options: HubOptions): Promise<RunningHub> {
       stateDir: options.stateDir,
       runDir: options.runDir,
       helper: options.helper,
-      seatTimeoutMs: options.seatTimeoutMs,
+      admitTimeoutMs: options.admitTimeoutMs,
       log: options.log,
     },
     state,
@@ -222,7 +224,7 @@ export async function startHub(options: HubOptions): Promise<RunningHub> {
     }
     const presented = /^Bearer ([A-Za-z0-9_-]{43})$/.exec(req.headers.authorization ?? "")?.[1];
     const lease = book.lease(id);
-    if (!presented || !lease?.bearer_hash || !bearerMatches(presented, lease.bearer_hash)) {
+    if (!presented || !lease || !bearerAdmitted(presented, lease.bearer_hashes)) {
       refuseUpgrade(socket, 401);
       return;
     }

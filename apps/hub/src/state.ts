@@ -4,8 +4,9 @@
 // The hub's own state (hub-1, hub-8): one owner-only directory holding
 // `state.yaml` — the instance, the server's id, name, address and
 // token, and the TLS pair's paths — and `leases.yaml` — each seat's
-// lease as `{<person id>: {login, expires_at, bearer_hash, stop_owed}}`,
-// `stop_owed` present from a lease's admission until a stop succeeds
+// lease as `{<person id>: {login, expires_at, bearer_hashes, stop_owed}}`,
+// `bearer_hashes` the last eight admissions' bearers' hashes in order
+// and `stop_owed` present from a lease's admission until a stop succeeds
 // after its end — and, under `locks/`, which the hub makes, a lock per
 // seat shared with the sweep, which alone clears one whose holder is
 // gone (DR-148). Both files are written in
@@ -61,15 +62,20 @@ export interface Lease {
   /** The instance's expiry, as it answered it; a lease ended early
    * carries the time it ended. */
   expires_at: string;
-  /** SHA-256 (hex) of the bearer the last admission issued; null when
-   * the lease ended or no bearer was issued. */
-  bearer_hash: string | null;
+  /** SHA-256 (hex) of each bearer the lease's last eight admissions
+   * issued, oldest first (hub-2, hub-8): one per device, so a second
+   * device's admission ends no relay; empty once the lease ends. */
+  bearer_hashes: string[];
   /** True from a lease's admission until the helper's stop succeeds
    * after its end (hub-5, hub-8); absent otherwise. */
   stop_owed?: true;
 }
 
 export type Leases = Record<string, Lease>;
+
+/** How many admissions' bearers a lease keeps: a ninth drops the
+ * oldest (hub-8, DR-159). */
+export const MAX_BEARERS = 8;
 
 /** A person's permanent account id at the instance, as the helper
  * admits it (hub-4). */
@@ -130,6 +136,20 @@ function stringOrNull(value: unknown): value is string | null {
   return value === null || typeof value === "string";
 }
 
+/** A lease entry's bearers' hashes: `bearer_hashes` as the hub writes
+ * it, or the one `bearer_hash` (a string, or null for none) of a table
+ * an earlier hub wrote, so a restart over that table continues its
+ * leases (hub-8); undefined where neither is well formed. */
+function bearerHashesOf(entry: Record<string, unknown>): string[] | undefined {
+  if (entry.bearer_hashes !== undefined) {
+    const hashes = entry.bearer_hashes;
+    if (!Array.isArray(hashes) || !hashes.every((hash) => typeof hash === "string")) return undefined;
+    return (hashes as string[]).slice(-MAX_BEARERS);
+  }
+  if (!stringOrNull(entry.bearer_hash)) return undefined;
+  return entry.bearer_hash === null ? [] : [entry.bearer_hash];
+}
+
 export function readState(dir: string): HubState | undefined {
   const file = statePath(dir);
   const value = readJson(file);
@@ -176,13 +196,14 @@ function leasesOf(value: unknown, file: string): Leases {
   if (!isRecord(value)) throw new Error(`${file} is not the hub's lease table`);
   const leases: Leases = {};
   for (const [id, entry] of Object.entries(value)) {
+    const hashes = isRecord(entry) ? bearerHashesOf(entry) : undefined;
     if (
       !PERSON_ID.test(id) ||
       !isRecord(entry) ||
       typeof entry.login !== "string" ||
       typeof entry.expires_at !== "string" ||
       !Number.isFinite(Date.parse(entry.expires_at)) ||
-      !stringOrNull(entry.bearer_hash) ||
+      hashes === undefined ||
       (entry.stop_owed !== undefined && typeof entry.stop_owed !== "boolean")
     ) {
       throw new Error(`${file} holds a malformed lease for ${JSON.stringify(id)}`);
@@ -190,7 +211,7 @@ function leasesOf(value: unknown, file: string): Leases {
     leases[id] = {
       login: entry.login,
       expires_at: entry.expires_at,
-      bearer_hash: entry.bearer_hash,
+      bearer_hashes: hashes,
       ...(entry.stop_owed === true ? { stop_owed: true } : {}),
     };
   }
@@ -279,6 +300,20 @@ export function bearerMatches(bearer: string, hash: string): boolean {
   const presented = Buffer.from(sha256(bearer), "hex");
   const stored = Buffer.from(hash, "hex");
   return presented.length === stored.length && timingSafeEqual(presented, stored);
+}
+
+/** Whether a presented bearer is any of a lease's (hub-3), every hash
+ * compared, so the answer's time tells not which one matched. */
+export function bearerAdmitted(bearer: string, hashes: readonly string[]): boolean {
+  let admitted = false;
+  for (const hash of hashes) admitted = bearerMatches(bearer, hash) || admitted;
+  return admitted;
+}
+
+/** A lease's hashes with a new admission's appended, the oldest dropped
+ * past the last eight (hub-8). */
+export function withBearer(hashes: readonly string[], hash: string): string[] {
+  return [...hashes, hash].slice(-MAX_BEARERS);
 }
 
 // --- The lock per seat (hub-5, hub-8, DR-148) -------------------------------

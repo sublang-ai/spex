@@ -14,9 +14,13 @@
 // starts a seat. An admission records its lease and starts the seat, and
 // a renewal records its expiry, under the seat's lock, which the sweep
 // holds while it reads that lease again and stops the seat; the book
-// makes the locks' directory, which the sweep never does (DR-148).
+// makes the locks' directory, which the sweep never does (DR-148). An
+// admission is answered within one bound from its ticket's redemption,
+// its every step — its turn, the lock, `create`, `start` and the seat's
+// socket — given the time left, and each admission's bearer stands
+// beside the lease's earlier ones, the last eight kept (DR-159).
 
-import { runHelper, type HelperConfig } from "./helper.js";
+import { HelperTimeout, runHelper, type HelperConfig } from "./helper.js";
 import { readAdmission, redeemTicket, renewLease, type Admission } from "./instance.js";
 import { probeSeat, readTurnActive, waitForSeat } from "./seat.js";
 import {
@@ -27,6 +31,7 @@ import {
   mintSecret,
   readLeases,
   sha256,
+  withBearer,
   writeLeases,
   writeState,
   type HubState,
@@ -38,19 +43,19 @@ import {
 /** The close code a relay ends with when its seat's lease ends (hub-3). */
 export const LEASE_ENDED = 4401;
 
-/** How long an admission waits for a seat's lock the sweep holds: past
- * the seat unit's stop timeout (hub-5). */
-const ADMIT_LOCK_WAIT_MS = 60_000;
-/** How long a renewal waits for it; one not recorded is renewed again at
- * the next round. */
+/** How long a renewal waits for a seat's lock the sweep holds; one not
+ * recorded is renewed again at the next round. An admission waits for
+ * it as long as its own bound leaves (hub-2, hub-5). */
 const RENEW_LOCK_WAIT_MS = 35_000;
 
 export interface SeatBookOptions {
   stateDir: string;
   runDir: string;
   helper: HelperConfig;
-  /** How long a started seat may take to listen (hub-2). */
-  seatTimeoutMs: number;
+  /** How long an admission may take from its ticket's redemption to its
+   * answer: the seat's lock, its account's creation, its unit's start
+   * and its socket together (hub-2). */
+  admitTimeoutMs: number;
   log: (line: string) => void;
 }
 
@@ -146,7 +151,7 @@ export class SeatBook {
           this.schedule(id);
           return;
         }
-        if (!current.stop_owed && current.bearer_hash === null) return;
+        if (!current.stop_owed && current.bearer_hashes.length === 0) return;
         await this.endLocked(id, "it expired");
       });
     }, Math.max(wait, 0));
@@ -156,7 +161,7 @@ export class SeatBook {
 
   /** Continue the recorded leases (hub-5): schedule each one's end, and
    * ask the stop of every lease that ended while no hub ran — its stop
-   * still owed, its bearer never voided, or its seat found running. */
+   * still owed, its bearers never voided, or its seat found running. */
   async resume(): Promise<void> {
     for (const id of Object.keys(this.leases)) {
       const lease = this.leases[id];
@@ -168,7 +173,7 @@ export class SeatBook {
       await this.serial(id, async () => {
         const current = this.leases[id];
         if (!current || leaseActive(current) || this.closed) return;
-        if (current.stop_owed || current.bearer_hash !== null || (await probeSeat(this.options.runDir, id))) {
+        if (current.stop_owed || current.bearer_hashes.length > 0 || (await probeSeat(this.options.runDir, id))) {
           await this.endLocked(id, "its stop was still owed when the hub started");
         }
       });
@@ -229,7 +234,10 @@ export class SeatBook {
       writeState(this.options.stateDir, this.state);
     }
     const { person } = admission;
-    return this.serial(person.id, async () => {
+    // One bound from the ticket's redemption to the answer, every step's
+    // wait cut to the time left (hub-2).
+    const deadline = Date.now() + this.options.admitTimeoutMs;
+    const admitted = this.serial(person.id, async () => {
       if (this.closed) {
         return { status: 503, body: refusal("hub_stopping", "the hub is stopping") };
       }
@@ -240,29 +248,56 @@ export class SeatBook {
       if (this.retiring) {
         return { status: 503, body: refusal("server_retiring", "this hub is retiring its server") };
       }
+      // Its turn came past its bound, behind the person's earlier
+      // operations: answered already, it records nothing (hub-2).
+      const left = deadline - Date.now();
+      if (left <= 0) return this.late(person.id);
       // The lease is recorded and the seat started under the seat's lock,
       // so the sweep stops no seat admitted meanwhile (hub-5).
-      const lock = await this.lock(person.id, ADMIT_LOCK_WAIT_MS);
+      const lock = await this.lock(person.id, left);
       if (!lock) {
-        this.options.log(`seat ${person.id} was not admitted: its lock stayed held for ${ADMIT_LOCK_WAIT_MS / 1000} seconds`);
+        this.options.log(
+          `seat ${person.id} was not admitted: its lock stayed held for ${Math.round(left / 1000)} seconds`,
+        );
         return {
           status: 503,
           body: refusal("seat_unavailable", `seat ${person.id} is held by a stop in progress`),
         };
       }
       try {
-        return await this.admitLocked(person, admission.lease_expires_at);
+        return await this.admitLocked(person, admission.lease_expires_at, deadline);
       } finally {
         lock.release();
       }
     });
+    // The person's turn may come late, behind a stop or a renewal: the
+    // answer comes at the bound all the same (hub-2).
+    let timer: NodeJS.Timeout | undefined;
+    const bound = new Promise<AdmitAnswer>((resolveBound) => {
+      timer = setTimeout(() => resolveBound(this.late(person.id)), Math.max(deadline - Date.now(), 0));
+    });
+    try {
+      return await Promise.race([admitted, bound]);
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
-  /** An admission's lease recorded and its seat started, the seat's lock
-   * held (hub-2, hub-4, hub-5). */
+  /** The answer of an admission its bound ran out on (hub-2). */
+  private late(id: string): AdmitAnswer {
+    const seconds = Math.round(this.options.admitTimeoutMs / 1000);
+    return {
+      status: 503,
+      body: refusal("seat_unavailable", `seat ${id} did not open within ${seconds} seconds`),
+    };
+  }
+
+  /** An admission's lease recorded and its seat started by `deadline`,
+   * the seat's lock held (hub-2, hub-4, hub-5). */
   private async admitLocked(
     person: Admission["person"],
     leaseExpiresAt: string,
+    deadline: number,
   ): Promise<AdmitAnswer> {
     // Checked again past the lock's wait, for `retire` or the hub's close
     // may have begun meanwhile; from here the lease is recorded before
@@ -278,41 +313,45 @@ export class SeatBook {
     // starts late still stops at the lease's end (hub-2).
     // A seat is wanted running: its stop is owed from here until one
     // succeeds after the lease's end, whether or not it starts (hub-8).
+    // The earlier admissions' bearers stand while the lease lasts, so a
+    // second device ends no relay (hub-2, hub-3).
     this.leases[person.id] = {
       login: person.login,
       expires_at: leaseExpiresAt,
-      bearer_hash: prior && leaseActive(prior) ? prior.bearer_hash : null,
+      bearer_hashes: prior && leaseActive(prior) ? prior.bearer_hashes : [],
       stop_owed: true,
     };
     this.save();
     this.schedule(person.id);
     const { runDir } = this.options;
+    const left = () => deadline - Date.now();
     if (!(await probeSeat(runDir, person.id))) {
       try {
         // `create` is idempotent (hub-4): asked before every start, so a
-        // creation that failed is asked again.
-        await runHelper(this.options.helper, "create", person.id);
-        await runHelper(this.options.helper, "start", person.id, mintSecret());
+        // creation that failed is asked again. Each call is given the
+        // admission's time left (hub-2).
+        await runHelper(this.options.helper, "create", person.id, undefined, left());
+        await runHelper(this.options.helper, "start", person.id, mintSecret(), left());
       } catch (error) {
         this.options.log(`seat ${person.id} did not start: ${(error as Error).message}`);
-        return {
-          status: 503,
-          body: refusal("seat_unavailable", `seat ${person.id} could not be started`),
-        };
+        return error instanceof HelperTimeout || left() <= 0
+          ? this.late(person.id)
+          : { status: 503, body: refusal("seat_unavailable", `seat ${person.id} could not be started`) };
       }
-      if (!(await waitForSeat(runDir, person.id, this.options.seatTimeoutMs))) {
-        this.options.log(`seat ${person.id} did not listen within ${this.options.seatTimeoutMs} ms`);
-        return {
-          status: 503,
-          body: refusal(
-            "seat_unavailable",
-            `seat ${person.id} did not start within ${Math.round(this.options.seatTimeoutMs / 1000)} seconds`,
-          ),
-        };
+      if (!(await waitForSeat(runDir, person.id, left()))) {
+        this.options.log(`seat ${person.id} did not listen within the admission's ${this.options.admitTimeoutMs} ms`);
+        return this.late(person.id);
       }
     }
+    // An answer past the bound was given already: no bearer is minted
+    // that no client holds (hub-2).
+    if (left() <= 0) {
+      this.options.log(`seat ${person.id} opened past the admission's ${this.options.admitTimeoutMs} ms`);
+      return this.late(person.id);
+    }
     const bearer = mintSecret();
-    this.leases[person.id].bearer_hash = sha256(bearer);
+    const lease = this.leases[person.id];
+    lease.bearer_hashes = withBearer(lease.bearer_hashes, sha256(bearer));
     this.save();
     this.options.log(`admitted ${person.login} (${person.id}) until ${leaseExpiresAt}`);
     return {
@@ -395,7 +434,7 @@ export class SeatBook {
     this.timers.delete(id);
     const now = new Date();
     if (Date.parse(lease.expires_at) > now.getTime()) lease.expires_at = now.toISOString();
-    lease.bearer_hash = null;
+    lease.bearer_hashes = [];
     lease.stop_owed = true;
     this.save();
     for (const relay of this.relays.get(id) ?? []) relay.close(LEASE_ENDED, "lease ended");

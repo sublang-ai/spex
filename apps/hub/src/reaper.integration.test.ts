@@ -136,7 +136,7 @@ function startSeat(s: Scenario, id: string): number {
 interface Lease {
   login: string;
   expires_at: string;
-  bearer_hash: string | null;
+  bearer_hashes: string[];
   stop_owed?: true;
 }
 
@@ -145,7 +145,7 @@ function lease(login: string, fromNowMs: number): Lease {
   return {
     login,
     expires_at: new Date(Date.now() + fromNowMs).toISOString(),
-    bearer_hash: fromNowMs > 0 ? randomBytes(32).toString("hex") : null,
+    bearer_hashes: fromNowMs > 0 ? [randomBytes(32).toString("hex")] : [],
     stop_owed: true,
   };
 }

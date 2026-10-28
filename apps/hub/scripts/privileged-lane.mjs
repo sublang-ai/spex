@@ -431,7 +431,9 @@ function admit(ca, body) {
       },
     );
     req.on("error", (error) => resolveAdmit({ status: 0, error: error.message }));
-    req.setTimeout(60_000, () => req.destroy(new Error("no answer within 60 s")));
+    // Longer than the hub's one bound for an admission, sixty seconds
+    // from the ticket's redemption (hub-2), so the hub's answer is read.
+    req.setTimeout(90_000, () => req.destroy(new Error("no answer within 90 s")));
     req.end(body);
   });
 }
@@ -767,6 +769,14 @@ async function admitBoth() {
       `${entry?.line ?? "no account"}; groups ${groups.join(",")}`,
     );
     check(hasMode(`/home/${account}`, "dir", 0o700, account, account), "[hub-4]", `${account}'s home is readable by that account alone (0700)`, describe(`/home/${account}`));
+    // Made empty, the host's login skeleton not copied (DR-159).
+    const skeleton = [".bashrc", ".profile", ".bash_logout"].filter((name) => stat(`/home/${account}/${name}`) !== undefined);
+    check(
+      skeleton.length === 0,
+      "[hub-4]",
+      `${account}'s home holds no login skeleton: no .bashrc, .profile or .bash_logout`,
+      `found ${skeleton.join(", ")}`,
+    );
     const unit = unitOf(person.id);
     const state = await activeState(unit);
     const user = await unitProperty(unit, "User");
@@ -1158,7 +1168,12 @@ async function sweepWhileNoHub() {
   } catch {
     lease = undefined;
   }
-  check(lease !== undefined && lease.stop_owed === undefined && lease.bearer_hash === null, "[hub-8]", "the lease is recorded ended, its stop no longer owed", JSON.stringify(lease));
+  check(
+    lease !== undefined && lease.stop_owed === undefined && Array.isArray(lease.bearer_hashes) && lease.bearer_hashes.length === 0,
+    "[hub-8]",
+    "the lease is recorded ended, every bearer dropped and its stop no longer owed",
+    JSON.stringify(lease),
+  );
   const status = await asUser("spex-hub", [COMMAND, "status"]);
   echo(status);
   const adaRow = status.stdout.split("\n").find((line) => line.startsWith(ada.id));
