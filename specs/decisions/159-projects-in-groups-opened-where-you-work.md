@@ -14,6 +14,7 @@ Amends, under [DR-046](046-decision-record-evolution.md):
 - [DR-133](133-one-desktop-over-several-cores.md) in "The relay" and "Remote projects": a seat opens by the first act that needs it, the contract shown by that act; the open starts the seat's sign-in at the space and names where to approve it; the welcome page and the project palette offer the groups' projects at every place.
 - [DR-135](135-a-welcome-page-before-the-first-project.md) and [DR-137](137-specs-first-welcome-and-distinct-project-paths.md) in the welcome page's actions: a signed-in home's page also opens a project from the member's groups, and one not signed in leads to the sign-in.
 - [DR-065](065-repairs-the-reader-answers.md) in a repair's naming: by the project and its group, the folder it remembers secondary.
+- [DR-041](041-chrome-that-fits.md) in its label budget: a menu's entry, and a row's act this record fixes as a whole phrase — "Add to a group…", "Merge histories…", "Not on this computer", "Open on <server>" among them — may exceed fourteen characters and wraps within its row.
 - [DR-132](132-team-servers.md) in "A client presents a ticket": every admission mints a bearer of its own, those of the person's earlier admissions standing while the lease lasts; and in "The helper creates the account on first admission": the account is made without the host's login skeleton, and one bound covers the whole admission — the account, the unit and the seat's socket — which the client's wait exceeds.
 
 ## Context
