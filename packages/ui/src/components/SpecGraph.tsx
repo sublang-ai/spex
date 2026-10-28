@@ -210,9 +210,10 @@ export function boundCamera(
  * top-right corner, so the box clears it by passing below it or to its
  * left; of the moves that fit, the shortest wins, and where none fits
  * the move below the panel still keeps the two apart. Given a `reach`
- * — the selection's neighbors as drawn — the least move that also
- * keeps the whole reach in view wins wherever one exists. Null when
- * no move is wanted.
+ * — the selection's neighbors as drawn — a neighbor outside the view
+ * wants a move too, and the least move keeping the box clear and the
+ * whole reach in view wins wherever one exists. Null when no move is
+ * wanted.
  */
 export function revealShift(
   box: Box,

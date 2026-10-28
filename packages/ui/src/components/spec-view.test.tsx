@@ -2934,6 +2934,18 @@ describe("spec-view-55/26: nothing outgrows the pane it is drawn in", () => {
         x0: 200, y0: 20, x1: 380, y1: 400,
       }),
     ).toEqual({ dx: -193, dy: 0 });
+    // A selection already clear still pans the least that brings a
+    // neighbor past the view's edge in; with the reach in view, no move.
+    expect(
+      revealShift({ x0: 200, y0: 250, x1: 240, y1: 300 }, { x0: 0, y0: 0, x1: 400, y1: 400 }, panel, 5, {
+        x0: 150, y0: 250, x1: 420, y1: 300,
+      }),
+    ).toEqual({ dx: -25, dy: 0 });
+    expect(
+      revealShift({ x0: 200, y0: 250, x1: 240, y1: 300 }, { x0: 0, y0: 0, x1: 400, y1: 400 }, panel, 5, {
+        x0: 150, y0: 250, x1: 380, y1: 300,
+      }),
+    ).toBeNull();
     // No pan keeps the reach in view: the selection's own move stands.
     expect(
       revealShift({ x0: 300, y0: 20, x1: 380, y1: 120 }, view, panel, 5, {
