@@ -6483,8 +6483,18 @@ export class SpaceManager {
   async join(named: string, hostId: string, folder?: string): Promise<{ accepted: true }> {
     const at = this.instanceAt(this.namedInstance(named));
     if (!this.signedInAt(at)) throw new CoreError("invalid_request", signInFirst());
-    const atView = at.view ?? await this.readHost(at).catch((error: unknown) => { throw new CoreError("invalid_request", relayHostError(error, this.nameOf(at))); });
-    const found = atView.listings.find((entry) => entry.repository.id === hostId);
+    const read = (): Promise<HostView> => this.readHost(at).catch((error: unknown) => { throw new CoreError("invalid_request", relayHostError(error, this.nameOf(at))); });
+    const held = at.view;
+    let atView = held ?? await read();
+    let found = atView.listings.find((entry) => entry.repository.id === hostId);
+    // A host id the instance's last read lacks is looked up in a fresh
+    // read of it — the read Refresh makes, held and published — before
+    // the open is refused, so a project shared since that read opens
+    // without a Refresh (space-63, DR-159).
+    if (!found && held) {
+      atView = await read();
+      found = atView.listings.find((entry) => entry.repository.id === hostId);
+    }
     if (!found) throw new CoreError("not_found", noLongerShared());
     const { instance, view, listing } = this.rowOf(at, atView, found);
     // A group named like a login holds no folder of its own (space-61).

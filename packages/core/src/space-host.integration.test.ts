@@ -998,6 +998,42 @@ test("space-63: two joins of one repository publish one clone; the later finds i
   assert.equal(git(clone, "symbolic-ref", "--short", "HEAD"), "spex");
 });
 
+test("space-37, space-63: a join naming a host id the last read lacks, the stand-in having listed it since, reads the instance afresh and runs; one the fresh read lacks too is refused not_found", async (t) => {
+  const host = await startHost();
+  const home = await startHome("join-afresh", { host, project: false, extra: { signIn: "browser" } });
+  t.after(() => home.stop());
+  const signedIn = home.client.mark();
+  await signIn(home, host);
+  await home.client.waitRepository(signedIn, HOST_OWN, (repository) => repository.sync.phase === "done", 30_000);
+  // The sign-in's read is held, its set-up settled.
+  await home.client.waitSpace(signedIn, (state) => {
+    const at = instanceOf(state, host.url);
+    return at?.read.phase === "idle" && at.readAt !== null;
+  }, 30_000);
+  const key = hostKey(host, "acme/late-spex");
+  // Shared since the sign-in's read: the stand-in lists it, the core's
+  // last read does not, and no Refresh follows.
+  const code = codeRepository("late");
+  const late = host.script.addRepository({ group: "acme", name: "late-spex", project: { format: 1, name: "late", remote: code } });
+  const before = await home.client.expectOk("space.get", {});
+  assert.ok(!rowsOf(before).some((repository) => repository.key === key), "the last read lacks it");
+  const readAt = instanceOf(before, host.url)?.readAt ?? 0;
+  assert.ok(readAt > 0, "a read is held");
+  const folder = join(mkdtempSync(join(scratch, "late-")), "late");
+  const from = home.client.mark();
+  assert.deepEqual(await home.client.expectOk("space.join", { instance: host.url, hostId: late.id, folder }), { accepted: true });
+  // The fresh read is held and published: the Groups state lists it with
+  // a later read time (space-63).
+  const listedNow = await home.client.waitSpace(from, (state) => rowsOf(state).some((repository) => repository.key === key));
+  assert.ok((instanceOf(listedNow, host.url)?.readAt ?? 0) > readAt, "a fresh read of the instance is held");
+  assert.equal(repositoryOf(listedNow, key).id, late.id);
+  const joined = await home.client.waitRepository(from, key, (repository) => repository.state === "reachable" && repository.folder !== null && repository.sync.phase === "idle");
+  assert.equal(joined.folder, folder);
+  assert.ok(existsSync(join(folder, "README.md")), "the code is cloned");
+  // A host id the fresh read lacks too is refused (space-63).
+  await home.client.expectError("space.join", { instance: host.url, hostId: "999999" }, "not_found", /^No longer shared with you$/);
+});
+
 test("space-37: a join's clone child runs owner-only while the core's own umask stays as it was, and the clone it writes stays private", async (t) => {
   const host = await startHost();
   const listed = host.script.addRepository({ group: "acme", name: "private-spex" });
