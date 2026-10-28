@@ -21,8 +21,11 @@ import type { AgentPatch } from "../lib/config-ops.js";
 import { keyLabel } from "../lib/shortcuts.js";
 import { playbookIntent } from "../lib/playbook-intent.js";
 import { treeCounts } from "../lib/spec-view-model.js";
-import { isLocalPlace, placeLabel, type StagedIntent } from "../state/store.js";
+import { isLocalPlace, placeLabel, useAppStore, type StagedIntent } from "../state/store.js";
 import { usePlaceStore } from "../state/place-context.js";
+import { usePlaces } from "../state/places.js";
+import { instanceNameAt } from "../lib/instances.js";
+import { ApprovalLink } from "./SpaceServers.js";
 import { SlashMenuList, slashMatches } from "./SlashMenu.js";
 import { AgentChip, agentChipText, fastModeWord, readinessWord } from "./AgentChip.js";
 import { AgentEditorPopover } from "./AgentEditor.js";
@@ -162,11 +165,15 @@ const WELCOME_SECONDARY =
 function WelcomeFrame({
   headline,
   steps,
+  notice,
   actions,
   children,
 }: {
   headline: string;
   steps: WelcomeStep[];
+  /** A line standing above the actions: the server form's sign-in while
+   * the seat's runs (run-view-174). */
+  notice?: ReactNode;
   actions: ReactNode;
   children?: ReactNode;
 }) {
@@ -196,7 +203,8 @@ function WelcomeFrame({
             </li>
           ))}
         </ol>
-        <div className="mt-8 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
+        {notice ? <div className="mt-6 max-w-lg text-sm leading-6 text-neutral-700 dark:text-neutral-200">{notice}</div> : null}
+        <div className={`${notice ? "mt-4" : "mt-8"} flex flex-col items-start gap-3 sm:flex-row sm:items-center`}>
           {actions}
         </div>
         {children}
@@ -231,6 +239,11 @@ export function CaptainHome(props: CaptainHomeProps) {
   // allocating every folder (run-view-169, run-view-174).
   const openAcademyExample = store((state) => state.openAcademyExample);
   const local = isLocalPlace(store.place);
+  // A seat's sign-in at its instance, as the local core's `server.state`
+  // names it, and the instance as this computer's Groups names it
+  // (run-view-174, core-service-142).
+  const seat = usePlaces((state) => (local ? undefined : state.seats.find((entry) => entry.seat.place === store.place.key)?.seat));
+  const localGroups = useAppStore((state) => state.space);
   const [seeding, setSeeding] = useState(false);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const chipRef = useRef<HTMLButtonElement>(null);
@@ -340,8 +353,26 @@ export function CaptainHome(props: CaptainHomeProps) {
       text: i18n._("AI builds and reviews changes, with a record of each step"),
     };
     const server = placeLabel(store.place);
+    // While the seat's sign-in at its instance runs, the server form says
+    // so above its actions, with the page where the person approves it
+    // (run-view-174, core-service-142).
+    const signingIn = seat?.signIn?.state === "running" ? seat.signIn : undefined;
     return (
       <WelcomeFrame
+        notice={
+          signingIn && seat ? (
+            <p data-testid="home-seat-signin">
+              <Rich
+                text={i18n._({
+                  id: "Signing in to {instance}… <0>approve Spex on {server} in your browser</0>",
+                  values: { instance: instanceNameAt(localGroups, seat.instance), server },
+                  comment: "the welcome page at a team server while the seat signs in at the instance; the tagged run links the instance's page where the person approves the device named \"Spex on <server>\"; {instance} is the instance's name, {server} the server's",
+                })}
+                components={[<ApprovalLink key="approve" href={signingIn.verificationUri} testId="home-seat-approve" />]}
+              />
+            </p>
+          ) : undefined
+        }
         headline={
           local
             ? i18n._("Write clear specs. Build with playbooks.")

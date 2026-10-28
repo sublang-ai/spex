@@ -7,8 +7,9 @@
 // seat — a plain served core signed in at the same instance as the same
 // person, holding no project — while this computer shows an ordinary
 // project start. The team group holds a spex repository the seat has
-// not joined. In English and in Chinese, the journey opens the seat
-// from the Groups surface and activates the server's heading in the
+// not joined. In English and in Chinese, the journey connects the seat
+// from its server's line on the Groups surface — reading Connected, the
+// seat signed in already — and activates the server's heading in the
 // sidebar, and reads through the page: the welcome page in its server
 // form naming the server, with no local-folder action and no Academy
 // action, fitting the desktop and the 320px sidebar floor; its primary
@@ -67,7 +68,8 @@ const COPY = [
   {
     locale: "en-US",
     lang: "en",
-    close: "Close",
+    disconnect: "Disconnect",
+    connected: "Connected",
     headline: "Work on lab-3 from this computer.",
     openFromGroups: "Open a project from your groups",
     openGroups: "Open Space",
@@ -75,7 +77,8 @@ const COPY = [
   {
     locale: "zh-CN",
     lang: "zh",
-    close: "关闭",
+    disconnect: "断开连接",
+    connected: "已连接",
     headline: "从本机在 lab-3 上工作。",
     openFromGroups: "从群组打开项目",
     openGroups: "打开空间",
@@ -113,14 +116,18 @@ for (const copy of COPY) {
       // This computer shows its ordinary project start.
       await expect(page.getByTestId("project-task-start")).toBeVisible();
 
-      // The seat opened from the Groups surface (run-view-170).
+      // The seat connected from its server's line on the Groups surface
+      // (run-view-170): signed in at the same instance, it reads
+      // Connected with no sign-in to approve (core-service-142).
       await surfaceEntry(page, "Space").click();
       const control = instanceSection(page, host)
         .getByTestId(`space-servers-${host.url}`)
         .getByTestId(`space-server-control-${lab.place}`);
       await control.click();
       await page.getByTestId(`space-server-consent-${lab.place}`).click();
-      await expect(control).toHaveText(copy.close, { timeout: 30_000 });
+      await expect(control).toHaveText(copy.disconnect, { timeout: 30_000 });
+      await expect(page.getByTestId(`space-server-connected-${lab.place}`)).toHaveText(copy.connected, { timeout: 30_000 });
+      await expect(page.getByTestId(`space-server-approve-${lab.place}`)).toHaveCount(0);
 
       // [run-view-175] [run-view-168] the server's heading in the sidebar
       // shows that place on the Projects surface.

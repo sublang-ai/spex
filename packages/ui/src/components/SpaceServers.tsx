@@ -2,26 +2,72 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // The team servers an instance lists (run-view-170, core-service-128,
-// DR-133): on this computer's Groups surface, under each signed-in
-// instance's heading, every server the instance lets the person open,
-// by its name and its group, with "Open" where no seat is open at it
-// and "Close" where one is. The first Open for a server on this device
-// shows the instance's contract in the words its record fixes
-// (Spex Space DR-029), rendered in the page's language; "I understand"
-// sends `server.open` with consent and is remembered on this device, so
-// a later Open sends it at once. A refusal reads the core's relayed
-// cause beside its server. The listing is read as the surface opens,
-// again after an open or a close lands and whenever the open seats
-// change; the seat's endpoint and bearer stay in the local core.
+// DR-133, DR-159): on this computer's Groups surface, under each
+// signed-in instance's heading, every server the instance lets the
+// person open, by its name and its group, with Connect where no seat is
+// open at it and "Connected" with Disconnect where one is. The first
+// Connect for a server on this device shows the instance's contract in
+// the words its record fixes (Spex Space DR-029), rendered in the page's
+// language; "I understand" sends `server.open` with consent and is
+// remembered on this device, so a later Connect sends it at once. While
+// the open runs the line says so, and past ten seconds that a seat's
+// first start can take a minute; once the seat is open and until its
+// sign-in at the instance completes (core-service-142), the line links
+// the page where the person approves it, the desktop having opened it,
+// and a sign-in that failed reads its cause with "Sign in again". A
+// refusal reads the core's relayed cause beside its server. The listing
+// is read as the surface opens, again after an open or a close lands
+// and whenever the open seats change; the seat's endpoint and bearer
+// stay in the local core.
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import type { InstanceState, ServerInfo, ServerListing } from "@sublang/spex-core/protocol";
 
 import { i18n } from "../i18n.js";
 import { instanceName } from "../lib/instances.js";
+import { openExternalBridge } from "../lib/space.js";
 import { usePlaceStore } from "../state/place-context.js";
 import { safeStorageGet, safeStorageSet } from "../state/store.js";
+import { signInAgainLabel } from "./SpaceSignIn.js";
 import { PRIMARY, SECONDARY, type Note } from "./SpaceSurface.js";
+
+/** How long an open runs before the line says a seat's first start can
+ * take a minute (run-view-170). */
+const SLOW_OPEN_MS = 10_000;
+
+const LINK_CLASS = "text-brand-600 hover:underline dark:text-brand-300";
+
+/** The line that links the page where the person approves a seat's
+ * sign-in (run-view-170, run-view-174): on the desktop it opens through
+ * the bridge, as the shell opened it (app-shell-37); on the served page
+ * the link's own target. */
+export function ApprovalLink({ href, testId, children }: { href: string; testId: string; children?: ReactNode }) {
+  return (
+    <a
+      data-testid={testId}
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      className={LINK_CLASS}
+      onClick={(event) => {
+        const open = openExternalBridge();
+        if (!open) return;
+        event.preventDefault();
+        void open(href).catch(() => false);
+      }}
+    >
+      {children}
+    </a>
+  );
+}
+
+/** "Approve Spex on <server> in your browser" (run-view-170). */
+export const approveLabel = (server: string): string =>
+  i18n._({
+    id: "Approve Spex on {server} in your browser",
+    values: { server },
+    comment: "a team server's line while its seat signs in at the instance: links the instance's page where the person approves the device named \"Spex on <server>\"; {server} is the server's name",
+  });
 
 /** A server's place, `<instance origin>#<server id>` (core-service-128). */
 function serverPlace(server: ServerInfo): string {
@@ -128,8 +174,10 @@ export function InstanceServers({
   );
 }
 
-/** One server (run-view-170): its name and group, Open or Close, the
- * contract beneath it on its first Open here, and a refusal's cause. */
+/** One server (run-view-170): its name and group, Connect or
+ * "Connected" with Disconnect, the contract beneath it on its first
+ * Connect here, the open while it runs, the seat's sign-in until it
+ * completes, and a refusal's cause. */
 function ServerRow({
   instance,
   server,
@@ -145,10 +193,24 @@ function ServerRow({
 }) {
   const store = usePlaceStore();
   const place = serverPlace(server);
+  // The seat open there as the local core's `server.state` names it,
+  // with its sign-in at the instance (core-service-142).
+  const seat = store((state) => state.seats.find((entry) => entry.place === place));
   const [asking, setAsking] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [acting, setActing] = useState<"open" | "close" | "signin">();
+  const busy = acting !== undefined;
+  const [slow, setSlow] = useState(false);
   const [refusal, setRefusal] = useState<string>();
   const controlRef = useRef<HTMLButtonElement>(null);
+
+  // An open still running past ten seconds says a seat's first start
+  // can take a minute (run-view-170).
+  useEffect(() => {
+    setSlow(false);
+    if (acting !== "open") return;
+    const timer = setTimeout(() => setSlow(true), SLOW_OPEN_MS);
+    return () => clearTimeout(timer);
+  }, [acting]);
 
   /** Focus left with the contract's controls returns to the server's
    * own control, never to the page (DR-010 §6). */
@@ -159,17 +221,23 @@ function ServerRow({
     }, 0);
 
   /** Send the open — always with consent, the contract having been
-   * shown on this device — or the close; a refusal's cause stands
-   * beside the server, a landed act reads the listing again. */
-  const send = async (act: "open" | "close") => {
-    setBusy(true);
+   * shown on this device — the close, or the seat's sign-in again; a
+   * refusal's cause stands beside the server, a landed open or close
+   * reads the listing again. */
+  const send = async (act: "open" | "close" | "signin") => {
+    setActing(act);
     setRefusal(undefined);
     try {
       const client = store.getClient();
+      const target = { instance: server.instance, serverId: server.id };
       if (act === "open") {
-        await client.command("server.open", { instance: server.instance, serverId: server.id, consented: true });
+        await client.command("server.open", { ...target, consented: true });
+      } else if (act === "close") {
+        await client.command("server.close", target);
       } else {
-        await client.command("server.close", { instance: server.instance, serverId: server.id });
+        // The outcome follows as the seat's `signIn` (core-service-142).
+        await client.command("server.signin", target);
+        return;
       }
       onChanged();
     } catch (cause) {
@@ -177,7 +245,7 @@ function ServerRow({
       setRefusal(message);
       onNote(message);
     } finally {
-      setBusy(false);
+      setActing(undefined);
       refocus();
     }
   };
@@ -199,6 +267,42 @@ function ServerRow({
 
   const name = server.name;
   const host = instanceName(instance);
+  const signIn = server.open ? seat?.signIn : undefined;
+  // What the line reads beside the server (run-view-170): the open while
+  // it runs, the seat's sign-in until it completes, else "Connected"
+  // where a seat is open.
+  let status: ReactNode = null;
+  if (acting === "open") {
+    status = (
+      <span data-testid={`space-server-connecting-${place}`} role="status" className="text-xs text-neutral-500">
+        {slow
+          ? i18n._({
+              id: "Connecting to {server}… the first start of your seat can take a minute",
+              values: { server: name },
+              comment: "a team server's line while its seat opens, past ten seconds; {server} is the server's name",
+            })
+          : i18n._({
+              id: "Connecting to {server}…",
+              values: { server: name },
+              comment: "a team server's line while its seat opens; {server} is the server's name",
+            })}
+      </span>
+    );
+  } else if (signIn?.state === "running") {
+    status = (
+      <span className="text-xs">
+        <ApprovalLink href={signIn.verificationUri} testId={`space-server-approve-${place}`}>
+          {approveLabel(name)}
+        </ApprovalLink>
+      </span>
+    );
+  } else if (server.open && signIn?.state !== "failed") {
+    status = (
+      <span data-testid={`space-server-connected-${place}`} className="text-xs text-neutral-500">
+        {i18n._({ id: "Connected", comment: "a team server's line where a seat is open at it" })}
+      </span>
+    );
+  }
   return (
     <li data-testid={`space-server-${place}`} data-open={server.open ? "1" : "0"} className="flex min-w-0 flex-col gap-1">
       <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm">
@@ -206,6 +310,7 @@ function ServerRow({
         <span className="min-w-0 truncate text-xs text-neutral-500" title={server.group}>
           {server.group}
         </span>
+        {status}
         <button
           ref={controlRef}
           type="button"
@@ -215,10 +320,32 @@ function ServerRow({
           onClick={() => (server.open ? void send("close") : open())}
         >
           {server.open
-            ? i18n._({ id: "Close", comment: "close the seat open on a team server" })
-            : i18n._({ id: "Open", comment: "open a seat on a team server" })}
+            ? i18n._({ id: "Disconnect", comment: "close the seat open on a team server" })
+            : i18n._({ id: "Connect", comment: "open a seat on a team server" })}
         </button>
       </div>
+      {signIn?.state === "failed" ? (
+        // The seat's sign-in failed: its cause, as the seat said it, and
+        // the sign-in started afresh (run-view-170, core-service-142).
+        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+          <p role="alert" data-testid={`space-server-signin-error-${place}`} className="min-w-0 text-xs text-red-600 dark:text-red-400">
+            {i18n._({
+              id: "{cause}.",
+              values: { cause: signIn.cause.replace(/[.。]\s*$/, "") },
+              comment: "the sign-in's cause, a phrase the core sends without its final stop, as one sentence",
+            })}
+          </p>
+          <button
+            type="button"
+            data-testid={`space-server-signin-${place}`}
+            className={SECONDARY}
+            disabled={!connected || busy}
+            onClick={() => void send("signin")}
+          >
+            {signInAgainLabel()}
+          </button>
+        </div>
+      ) : null}
       {asking ? (
         <div
           data-testid={`space-server-contract-${place}`}

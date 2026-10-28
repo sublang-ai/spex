@@ -30,6 +30,16 @@
 // mismatched seat's counts no more. A close with the lease-end code, or
 // the seat refusing the bearer, removes the seat as a close does.
 //
+// The seat's sign-in (core-service-142, DR-159): at a relay's first
+// hello, and at `server.signin`, a connection of the core's own reads
+// the seat's Groups state as any client does and, where the seat is not
+// signed in at its instance, starts the seat's sign-in there — the
+// device flow, the seat's request naming the server and the person —
+// carrying it as the seat's `signIn` in `server.state`: pending, running
+// with the page where the person approves it, signed in, or failed with
+// the seat's cause. Nothing starts a flow again on its own; the seat's
+// app token stays on the server.
+//
 // The bearer and the endpoint never leave this module and the seats
 // file: no reply, event, error message or log line carries either, nor
 // the ticket.
@@ -37,18 +47,20 @@
 import { request } from "node:https";
 import { getCACertificates, rootCertificates, type TLSSocket } from "node:tls";
 import { WebSocket, type RawData } from "ws";
-import { CredentialChanged, HostError, type GitHostClient, type HostServer, type HostTicket } from "./git-host.js";
+import { BROWSER_SIGN_IN_TIMEOUT_MS, CredentialChanged, HostError, type GitHostClient, type HostServer, type HostTicket } from "./git-host.js";
 import { i18n } from "./i18n.js";
 import { canonicalOrigin } from "./instance.js";
-import { PROTOCOL_VERSION, type SeatRelayState, type SeatState, type ServerInfo, type ServerListing } from "./protocol.js";
+import { PROTOCOL_VERSION, type SeatRelayState, type SeatSignIn, type SeatState, type ServerInfo, type ServerListing } from "./protocol.js";
 import { fileSeatStore, placeOf, splitPlace, type SeatEntry, type SeatStore } from "./seats.js";
 import { CoreError } from "./session.js";
 import { noLongerShared } from "./space-git.js";
 import { couldNotReach, relayHostError } from "./space-groups.js";
 
-/** The longest an admission may take: the hub waits up to thirty
- * seconds for a seat to start before it answers (hub-2). */
-const ADMIT_TIMEOUT_MS = 45_000;
+/** The longest an admission is awaited (core-service-128): the hub's
+ * one bound covers the whole admission — the seat's account, its unit
+ * and its socket — at sixty seconds (hub-2); this waits longer, so no
+ * admission the hub still runs is one this core gave up on. */
+const ADMIT_TIMEOUT_MS = 90_000;
 /** The most of an admission's answer read. */
 const ANSWER_MAX_BYTES = 64 * 1024;
 /** The watch reconnects as a client does: every second (core-service-129). */
@@ -60,6 +72,8 @@ const SEAT_HANDSHAKE_MS = 30_000;
 const LEASE_END = 4401;
 /** The ids of the watch's own `ledger.get` commands. */
 const WATCH_ID = "spex-watch-ledger";
+/** The ids of the sign-in connection's own commands (core-service-142). */
+const SIGNIN_ID = "spex-seat-signin";
 
 /** What the places need of the core (DR-133). */
 export interface PlacesHost {
@@ -83,6 +97,9 @@ export interface PlacesHost {
   /** CA certificates, PEM, trusted beside the system's at a server's
    * address: a test's fixture CA. */
   certificateAuthorities?: readonly string[];
+  /** A test's scale of the admission's wait, 1 by default: a suite
+   * stands a fraction of a second in for each of its seconds. */
+  admitTimeScale?: number;
 }
 
 /** An admission the server answered (hub-2), held by the seats file
@@ -247,9 +264,10 @@ function admittedFrom(json: unknown, address: URL): Admitted {
  * `POST <address>/admit` with `{ticket}` over TLS, verified against
  * `ca`, on a connection of its own. A refusal throws with its status and
  * the server's words; a certificate that does not verify throws
- * untrusted, the ticket never sent; no answer throws unreachable.
+ * untrusted, the ticket never sent; no answer within `waitMs` throws
+ * unreachable.
  */
-function admitAt(address: string, ticket: string, ca: string[] | undefined): Promise<Admitted> {
+function admitAt(address: string, ticket: string, ca: string[] | undefined, waitMs: number): Promise<Admitted> {
   let target: URL;
   try { target = new URL("/admit", address); } catch { return Promise.reject(new AdmissionFailed("unreachable")); }
   if (target.protocol !== "https:") return Promise.reject(new AdmissionFailed("unreachable"));
@@ -269,7 +287,7 @@ function admitAt(address: string, ticket: string, ca: string[] | undefined): Pro
     const req = request(target, {
       method: "POST",
       agent: false,
-      timeout: ADMIT_TIMEOUT_MS,
+      timeout: waitMs,
       ...(ca ? { ca } : {}),
       headers: { "content-type": "application/json", accept: "application/json", "content-length": Buffer.byteLength(body) },
     }, (res) => {
@@ -303,7 +321,10 @@ interface Pipe { client: WebSocket; upstream: WebSocket }
 
 /** An open seat's relay (core-service-129): the entry it connects with,
  * its state, its watch, the seat's last read badge and the client
- * connections piped to the seat. */
+ * connections piped to the seat; and the seat's sign-in at its instance
+ * (core-service-142) — its state, held in memory alone, the connection
+ * reading or running it, the id of the flow that connection started and
+ * whether the relay's first hello asked it. */
 interface Relay {
   entry: SeatEntry;
   state: SeatRelayState;
@@ -312,6 +333,46 @@ interface Relay {
   badge: number;
   pipes: Set<Pipe>;
   ended: boolean;
+  signIn: SeatSignIn;
+  signInSocket?: WebSocket;
+  signInFlow?: string;
+  signInAsked: boolean;
+}
+
+/** Whether a seat's Groups state lists the instance at `origin` signed
+ * in (core-service-142). */
+function signedInThere(groups: unknown, origin: string): boolean {
+  if (!isRecord(groups) || !Array.isArray(groups.instances)) return false;
+  return groups.instances.some((instance: unknown) => {
+    if (!isRecord(instance) || instance.signedIn !== true || typeof instance.origin !== "string") return false;
+    try {
+      return canonicalOrigin(instance.origin) === origin;
+    } catch {
+      return false;
+    }
+  });
+}
+
+/** A started sign-in's reply as the seat's `signIn` reads it
+ * (core-service-142): the device flow's page with the code carried in
+ * it and its expiry; a browser flow's page, which lasts as long as such
+ * a flow does; null for anything else. */
+function runningOf(result: unknown): SeatSignIn | null {
+  if (!isRecord(result)) return null;
+  if (result.flow === "device" && typeof result.verificationUri === "string" && typeof result.expiresAt === "number") {
+    return { state: "running", verificationUri: result.verificationUri, expiresAt: result.expiresAt };
+  }
+  if (result.flow === "browser" && typeof result.url === "string") {
+    return { state: "running", verificationUri: result.url, expiresAt: Date.now() + BROWSER_SIGN_IN_TIMEOUT_MS };
+  }
+  return null;
+}
+
+/** A refusal's words from the seat — a reply's or a completion's error —
+ * as the seat's one-sentence cause; null where it carries none. */
+function causeOf(message: Record<string, unknown>): string | null {
+  const error = message.error;
+  return isRecord(error) && typeof error.message === "string" && error.message.length > 0 ? error.message : null;
 }
 
 /** The badge a relay adds to the attention count: the seat's last read
@@ -413,6 +474,8 @@ export class Places {
   private readonly queues = new Map<string, Promise<unknown>>();
   private anchors?: string[] | null;
   private stopping = false;
+  /** The sign-ins the core read or started, numbering their commands. */
+  private signIns = 0;
 
   constructor(private readonly host: PlacesHost) {
     this.store = fileSeatStore(host.homeDir);
@@ -454,6 +517,7 @@ export class Places {
         place,
         leaseExpiresAt: entry.leaseExpiresAt,
         relay: this.relays.get(place)?.state ?? "closed",
+        signIn: this.relays.get(place)?.signIn ?? { state: "pending" },
       });
     }
     return out;
@@ -490,10 +554,12 @@ export class Places {
    * `server.open` (core-service-128): with the person's consent, the
    * server's name, group and address read from the instance's listing —
    * a server it does not name no longer shared, no ticket asked — a
-   * ticket asked for, presented at that address, and the seat kept, its
-   * relay started and announced; the reply carries the place and the
-   * expiry alone. Without consent nothing is asked. A seat opens none:
-   * the service refuses it before this (core-service-125).
+   * ticket asked for, presented at that address, the admission awaited
+   * ninety seconds, and the seat kept, its relay started and announced,
+   * the relay's first hello starting the seat's sign-in
+   * (core-service-142); the reply carries the place and the expiry
+   * alone. Without consent nothing is asked. A seat opens none: the
+   * service refuses it before this (core-service-125).
    */
   async open(input: { instance: string; serverId: string; consented?: boolean }): Promise<{ place: string; leaseExpiresAt: number }> {
     if (input.consented !== true) throw new CoreError("invalid_request", consentFirst());
@@ -528,7 +594,7 @@ export class Places {
       const name = listed.name;
       let admitted: Admitted;
       try {
-        admitted = await admitAt(listed.address, ticket.ticket, this.trust());
+        admitted = await admitAt(listed.address, ticket.ticket, this.trust(), ADMIT_TIMEOUT_MS * (this.host.admitTimeScale ?? 1));
       } catch (error) {
         if (error instanceof AdmissionFailed) throw new CoreError("invalid_request", admissionFailure(error, name, host));
         throw error;
@@ -559,6 +625,22 @@ export class Places {
       this.announce();
       return { closed: true as const };
     });
+  }
+
+  /**
+   * `server.signin` (core-service-128, core-service-142): the seat's
+   * Groups state read anew, its sign-in started where it is not signed
+   * in; none while a read or a flow of this core's own runs there. A
+   * place with no seat open is refused.
+   */
+  signIn(input: { instance: string; serverId: string }): { started: boolean } {
+    let place: string;
+    try { place = placeOf(canonicalOrigin(input.instance), input.serverId); } catch { throw new CoreError("not_found", noSeatOpen()); }
+    const relay = this.relays.get(place);
+    if (!relay || relay.ended) throw new CoreError("not_found", noSeatOpen());
+    if (relay.signInSocket) return { started: false };
+    this.seatSignIn(place, relay);
+    return { started: true };
   }
 
   /** The core stops: every relay ends, every seat kept in its file to be
@@ -650,7 +732,7 @@ export class Places {
    */
   private startRelay(place: string, entry: SeatEntry): void {
     this.stopRelay(place);
-    const relay: Relay = { entry, state: "connecting", badge: 0, pipes: new Set(), ended: false };
+    const relay: Relay = { entry, state: "connecting", badge: 0, pipes: new Set(), ended: false, signIn: { state: "pending" }, signInAsked: false };
     this.relays.set(place, relay);
     this.watch(place, relay);
   }
@@ -658,7 +740,9 @@ export class Places {
   /** The relay of a seat ends here: at its close, at a new admission of
    * the same place, at its lease's end and at the core's stop — its
    * watch and every piped connection closed with `code`
-   * (core-service-129). */
+   * (core-service-129), and its sign-in's connection with them, a flow
+   * it started still running at the seat cancelled there, so a later
+   * open finds none in its way (core-service-142). */
   private stopRelay(place: string, code = 1000): void {
     const relay = this.relays.get(place);
     if (!relay) return;
@@ -666,6 +750,13 @@ export class Places {
     this.relays.delete(place);
     if (relay.timer) clearTimeout(relay.timer);
     if (relay.watch) closeSocket(relay.watch, 1000);
+    const signIn = relay.signInSocket;
+    if (signIn) {
+      if (relay.signInFlow && signIn.readyState === WebSocket.OPEN) {
+        signIn.send(JSON.stringify({ type: "space.signin.cancel", id: `${relay.signInFlow}-cancel`, startId: relay.signInFlow }));
+      }
+      closeSocket(signIn, 1000);
+    }
     for (const pipe of [...relay.pipes]) {
       closeSocket(pipe.client, code);
       closeSocket(pipe.upstream, 1000);
@@ -721,6 +812,9 @@ export class Places {
         }
         this.relayState(relay, "open");
         askBadge();
+        // The relay's first hello starts the seat's sign-in; a watch
+        // reconnecting starts none (core-service-142).
+        if (!relay.signInAsked) this.seatSignIn(place, relay);
         return;
       }
       if (message.type === "intents.changed") {
@@ -762,6 +856,111 @@ export class Places {
     relay.state = state;
     this.announce();
     if (counted(relay) !== before) this.host.attentionChanged?.();
+  }
+
+  // -- the seat's sign-in (core-service-142) ----------------------------------
+
+  /**
+   * The seat's sign-in at its instance: a connection of the core's own
+   * to the seat, as any client's, reads the seat's Groups state and,
+   * where the seat's instance is not signed in there, starts the seat's
+   * sign-in at the instance's origin over that connection — the device
+   * flow, the seat's request naming the server and the person
+   * (git-host-27) — and hears its end there. Every state is announced;
+   * the connection closes with the outcome, and one that closes before
+   * it reads the seat out of reach. Nothing here starts a flow again on
+   * its own: only a relay's first hello and `server.signin` call this.
+   */
+  private seatSignIn(place: string, relay: Relay): void {
+    const at = splitPlace(place);
+    if (relay.ended || relay.signInSocket || !at) return;
+    relay.signInAsked = true;
+    const unreachable: SeatSignIn = { state: "failed", cause: couldNotReach(relay.entry.name) };
+    const failed = (message: Record<string, unknown>): SeatSignIn => {
+      const cause = causeOf(message);
+      return cause === null ? unreachable : { state: "failed", cause };
+    };
+    this.signInState(relay, { state: "pending" });
+    const socket = connectSeat(relay.entry, this.trust(), () => undefined);
+    if (!socket) {
+      this.signInState(relay, unreachable);
+      return;
+    }
+    relay.signInSocket = socket;
+    this.signIns += 1;
+    const readId = `${SIGNIN_ID}-read-${this.signIns}`;
+    const startId = `${SIGNIN_ID}-start-${this.signIns}`;
+    let greeted = false;
+    let settled = false;
+    const settle = (state: SeatSignIn | null): void => {
+      settled = true;
+      if (relay.signInSocket === socket) relay.signInSocket = undefined;
+      relay.signInFlow = undefined;
+      if (state) this.signInState(relay, state);
+      closeSocket(socket, 1000);
+    };
+    socket.on("message", (data, isBinary) => {
+      if (settled || relay.ended || relay.signInSocket !== socket) return;
+      // Past the hello the connection reads its own replies alone; the
+      // seat's broadcasts are not parsed.
+      if (greeted && (isBinary || !String(data).includes(SIGNIN_ID))) return;
+      const message = messageOf(data, isBinary);
+      if (!message) return;
+      if (!greeted) {
+        if (message.type !== "hello") return;
+        greeted = true;
+        // A seat speaking another protocol version is the watch's to
+        // mark (core-service-129); nothing is asked of it.
+        if (message.protocolVersion !== PROTOCOL_VERSION) {
+          settle(null);
+          return;
+        }
+        socket.send(JSON.stringify({ type: "space.get", id: readId }));
+        return;
+      }
+      if (message.type === "reply" && message.id === readId) {
+        if (message.ok !== true) settle(failed(message));
+        else if (signedInThere(message.result, at.origin)) settle({ state: "signedIn" });
+        else {
+          relay.signInFlow = startId;
+          socket.send(JSON.stringify({ type: "space.signin.start", id: startId, url: at.origin, reportCompletion: true }));
+        }
+        return;
+      }
+      if (message.type === "reply" && message.id === startId) {
+        if (message.ok !== true) {
+          settle(failed(message));
+          return;
+        }
+        const running = runningOf(message.result);
+        if (running) this.signInState(relay, running);
+        else {
+          // A start no page answers: the flow is cancelled at the seat.
+          socket.send(JSON.stringify({ type: "space.signin.cancel", id: `${startId}-cancel`, startId }));
+          settle(unreachable);
+        }
+        return;
+      }
+      if (message.type === "space.signin.completed" && message.id === startId) {
+        settle(message.ok === true ? { state: "signedIn" } : failed(message));
+      }
+    });
+    socket.on("close", () => {
+      if (relay.signInSocket === socket) relay.signInSocket = undefined;
+      if (settled || relay.ended) return;
+      // Closed before the outcome: the seat's answer is out of reach,
+      // and the person may start the sign-in again (core-service-142).
+      relay.signInFlow = undefined;
+      this.signInState(relay, unreachable);
+    });
+  }
+
+  /** The seat's sign-in moved: kept on its relay and announced
+   * (core-service-128). */
+  private signInState(relay: Relay, state: SeatSignIn): void {
+    if (relay.ended || JSON.stringify(relay.signIn) === JSON.stringify(state)) return;
+    relay.signIn = state;
+    this.announce();
   }
 
   /**

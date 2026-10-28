@@ -148,6 +148,8 @@ msgid "{annotation} · {count, plural, one {# entry} other {# entries}}"
 msgstr "{annotation} · {count, plural, other {# 项}}"
 
 #. the sign-in's cause, a phrase the core sends without its final stop, as one sentence
+#. the sign-in's cause, a phrase the core sends without its final stop, as one sentence
+#: src/components/SpaceServers.tsx
 #: src/components/SpaceSignIn.tsx
 msgid "{cause}."
 msgstr "{cause}。"
@@ -1270,6 +1272,11 @@ msgstr "应用中…"
 msgid "Approve once"
 msgstr "仅允许此次"
 
+#. a team server's line while its seat signs in at the instance: links the instance's page where the person approves the device named "Spex on <server>"; {server} is the server's name
+#: src/components/SpaceServers.tsx
+msgid "Approve Spex on {server} in your browser"
+msgstr "在浏览器中批准 {server} 上的 Spex"
+
 #: src/state/reducer.ts
 msgid "Approved once; native execution is reported separately."
 msgstr "已允许此次操作；原生执行结果将单独报告。"
@@ -1863,11 +1870,6 @@ msgstr "将它的代码重新克隆到 {place} 上它的文件夹中"
 msgid "Cloning code…"
 msgstr "克隆代码中…"
 
-#. close the seat open on a team server
-#: src/components/SpaceServers.tsx
-msgid "Close"
-msgstr "关闭"
-
 #: src/lib/shortcuts.ts
 msgid "Close the focused session tab"
 msgstr "关闭当前会话标签页"
@@ -2103,9 +2105,19 @@ msgstr "确认命令、意图、Player 以及启用位置"
 msgid "Confirming…"
 msgstr "确认中…"
 
+#. open a seat on a team server
+#: src/components/SpaceServers.tsx
+msgid "Connect"
+msgstr "连接"
+
 #: src/components/CaptainHome.tsx
 msgid "Connect to read project specs"
 msgstr "连接后可查看项目规约"
+
+#. a team server's line where a seat is open at it
+#: src/components/SpaceServers.tsx
+msgid "Connected"
+msgstr "已连接"
 
 #. banner: a team server's seat answered but its state failed to load; {server} is the server's name
 #: src/App.tsx
@@ -2115,6 +2127,16 @@ msgstr "已连接 {server}，但{reason}"
 #: src/App.tsx
 msgid "Connected, but {reason}"
 msgstr "已连接，但{reason}"
+
+#. a team server's line while its seat opens; {server} is the server's name
+#: src/components/SpaceServers.tsx
+msgid "Connecting to {server}…"
+msgstr "正在连接 {server}…"
+
+#. a team server's line while its seat opens, past ten seconds; {server} is the server's name
+#: src/components/SpaceServers.tsx
+msgid "Connecting to {server}… the first start of your seat can take a minute"
+msgstr "正在连接 {server}… 你的席位首次启动可能需要一分钟"
 
 #. the page is reaching for the core
 #: src/components/CaptainHome.tsx
@@ -2522,6 +2544,11 @@ msgstr "丢弃未保存的更改？"
 #: src/components/SessionRecovery.tsx
 msgid "Discarding…"
 msgstr "丢弃中…"
+
+#. close the seat open on a team server
+#: src/components/SpaceServers.tsx
+msgid "Disconnect"
+msgstr "断开连接"
 
 #. act: close the error strip
 #. close the error strip above the composer
@@ -4454,10 +4481,8 @@ msgstr "每个状态行为一条规约条目，来自上次编译"
 msgid "Only pairs with ≥ {field} {count, plural, one {citation} other {citations}}"
 msgstr "只显示 ≥ {field} {count, plural, other {条引用的关系}}"
 
-#. open a seat on a team server
 #. open this authoring session's workspace
 #: src/components/LibrarySurface.tsx
-#: src/components/SpaceServers.tsx
 msgid "Open"
 msgstr "打开"
 
@@ -6030,6 +6055,16 @@ msgstr "已以 @{login} 登录"
 #: src/components/SpaceInstance.tsx
 msgid "Signed out of {host}"
 msgstr "已退出 {host} 的登录"
+
+#. project palette: under a team server's groups while the seat signs in at the instance, before which it lists nothing; {instance} is the instance's name
+#: src/components/ProjectPalette.tsx
+msgid "Signing in to {instance}…"
+msgstr "正在登录 {instance}…"
+
+#. the welcome page at a team server while the seat signs in at the instance; the tagged run links the instance's page where the person approves the device named "Spex on <server>"; {instance} is the instance's name, {server} the server's
+#: src/components/CaptainHome.tsx
+msgid "Signing in to {instance}… <0>approve Spex on {server} in your browser</0>"
+msgstr "正在登录 {instance}… <0>请在浏览器中批准 {server} 上的 Spex</0>"
 
 #. the Sign in control, while the sign-in runs
 #: src/components/SpaceSignIn.tsx

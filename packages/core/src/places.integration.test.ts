@@ -24,7 +24,15 @@
 // and the entry; no frame to the client carries the bearer; and an
 // endpoint or a bearer no connection can present is refused at the
 // admission and, held in the file, stops neither the core's start nor a
-// client's connection.
+// client's connection. The admission's wait outlasts a hub answering
+// after seventy seconds and ends unreachable at ninety. The seat's
+// sign-in (core-service-142), against a core in seat mode: the open
+// starts it once — pending, running with the instance's page, signed
+// in once approved, failed with the seat's cause where denied —
+// `server.signin` starting a second flow after a failure and none while
+// one runs, nothing restarting it on its own, a seat signed in before
+// the open reading signed in with no flow, and no app token of the
+// seat's in any frame to the client.
 
 import { test, type TestContext } from "node:test";
 import assert from "node:assert/strict";
@@ -33,6 +41,7 @@ import { dirname } from "node:path";
 import { inspect } from "node:util";
 import { WebSocket } from "ws";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
+import { credentialsPath } from "./git-host.js";
 import { PROTOCOL_VERSION, type SeatState, type ServerMessage } from "./protocol.js";
 import { seatsPath } from "./seats.js";
 import { createSpaceHarness, instanceOf } from "./testing/space-harness.js";
@@ -63,10 +72,13 @@ async function startHub(host: StandinHost, id = SERVER, name = "lab-1", seat?: H
 }
 
 /** A second core standing as the person's seat: a plain core whose
- * endpoint the stand-in hub relays to, with its token. */
-async function startSeat(t: TestContext, name: string): Promise<Home & { project: string }> {
-  const seat = await startHome(name);
+ * endpoint the stand-in hub relays to, with its token, signed in at the
+ * instance as the person, so its sign-in reads signed in with no flow
+ * started (core-service-142). */
+async function startSeat(t: TestContext, name: string, host: StandinHost): Promise<Home & { project: string }> {
+  const seat = await startHome(name, { host });
   t.after(() => seat.stop());
+  await signIn(seat, host);
   const { key } = await fixture.addFolder(seat, seat.projectDir);
   return { ...seat, project: key };
 }
@@ -254,10 +266,11 @@ test("core-service-130, storage-45: server.open asks nothing without consent; wi
   assert.ok(opened.leaseExpiresAt > Date.now() + 50 * 60_000, "the lease the hub answered, an hour ahead");
 
   // Announced to every client: the seat by its instance, server, name,
-  // group, place, expiry and relay state — connecting, its watch not yet
-  // having read the seat's hello.
+  // group, place, expiry, relay state — connecting, its watch not yet
+  // having read the seat's hello — and its sign-in, pending until then
+  // (core-service-142).
   const seats = await seatsAfter(() => home.client.messages, from, (state) => state.length === 1);
-  assert.deepEqual(seats, [{ instance: host.url, serverId: SERVER, name: "lab-1", group: "acme", place, leaseExpiresAt: opened.leaseExpiresAt, relay: "connecting" }]);
+  assert.deepEqual(seats, [{ instance: host.url, serverId: SERVER, name: "lab-1", group: "acme", place, leaseExpiresAt: opened.leaseExpiresAt, relay: "connecting", signIn: { state: "pending" } }]);
   assert.deepEqual((await home.client.expectOk("server.list", {})).servers, [{ instance: host.url, id: SERVER, name: "lab-1", group: "acme", open: true }]);
 
   // Close: the entry removed — the file with its last one — and announced.
@@ -279,7 +292,7 @@ test("core-service-130, storage-45: server.open asks nothing without consent; wi
 
 test("core-service-130, core-service-128: a restarted core over the same home reopens the seat from its file through its watch without a new admission, and a seat refusing the bearer at the reopening is removed as a close removes it", async (t) => {
   const host = await startHost();
-  const seat = await startSeat(t, "places-restart-seat");
+  const seat = await startSeat(t, "places-restart-seat", host);
   const hub = await startHub(host, SERVER, "lab-1", seat);
   const extra = { serverCertificateAuthorities: [hub.ca] };
   const first = await startHome("places-restart", { host, project: false, extra });
@@ -293,14 +306,17 @@ test("core-service-130, core-service-128: a restarted core over the same home re
   assert.ok(existsSync(seatsPath(first.dataDir)), "the seat stands in its file across the stop");
   await until(() => hub.relays() === 0, "the stopped core's watch closed");
   const watches = hub.upgrades.length;
+  const requests = host.script.deviceRequests.length;
 
   const again = await startHome("places-restart", { host, project: false, extra, dataDir: first.dataDir });
   let againStopped = false;
   t.after(async () => { if (!againStopped) await again.stop(); });
   // Read from the file and reopened through the watch: open again
-  // (core-service-128, core-service-129).
-  const seats = await seatsAfter(() => again.client.messages, 0, (state) => state[0]?.relay === "open");
-  assert.deepEqual(seats, [{ instance: host.url, serverId: SERVER, name: "lab-1", group: "acme", place: opened.place, leaseExpiresAt: opened.leaseExpiresAt, relay: "open" }]);
+  // (core-service-128, core-service-129); the seat, signed in already,
+  // reads signed in with no flow started (core-service-142).
+  const seats = await seatsAfter(() => again.client.messages, 0, (state) => state[0]?.relay === "open" && state[0].signIn.state === "signedIn");
+  assert.deepEqual(seats, [{ instance: host.url, serverId: SERVER, name: "lab-1", group: "acme", place: opened.place, leaseExpiresAt: opened.leaseExpiresAt, relay: "open", signIn: { state: "signedIn" } }]);
+  assert.equal(host.script.deviceRequests.length, requests, "no sign-in was started at the seat");
   assert.ok(hub.upgrades.length > watches, "the watch reconnected the seat");
   assert.ok(hub.upgrades.every((upgrade) => upgrade.status === 101 && upgrade.authorization && !upgrade.origin), "every upgrade presented the bearer and no Origin (hub-3)");
   assert.deepEqual((await again.client.expectOk("server.list", {})).servers, [{ instance: host.url, id: SERVER, name: "lab-1", group: "acme", open: true }]);
@@ -443,8 +459,10 @@ test("storage-46: the seats file is written owner-only under an owner-only local
   const again = await startHome("places-seats-file", { host, project: false, extra, dataDir: first.dataDir });
   t.after(() => again.stop());
   const seats = await seatsAfter(() => again.client.messages, 0, (state) => state.length === 2);
-  // The hub relays to no seat here: each relay reads connecting or closed.
-  assert.deepEqual(seats.map(({ relay: _relay, ...seat }) => seat), [
+  // The hub relays to no seat here: each relay reads connecting or
+  // closed, its sign-in pending.
+  assert.deepEqual(seats.map((seat) => seat.signIn), [{ state: "pending" }, { state: "pending" }]);
+  assert.deepEqual(seats.map(({ relay: _relay, signIn: _signIn, ...seat }) => seat), [
     { instance: host.url, serverId: SERVER, name: "lab-1", group: "acme", place: one, leaseExpiresAt: openedOne.leaseExpiresAt },
     { instance: host.url, serverId: "srv_lab2", name: "lab-2", group: "acme", place: two, leaseExpiresAt: openedTwo.leaseExpiresAt },
   ], "every entry read back at the next start (storage-46)");
@@ -488,7 +506,7 @@ test("storage-46: the seats file is written owner-only under an owner-only local
 test("core-service-130: the relay path admits the local token from the origins / admits and refuses a wrong token and a foreign origin; the relayed hello and a project.list are the seat's; no frame to the client carries the bearer", async (t) => {
   const logs = captureLogs(t);
   const host = await startHost();
-  const seat = await startSeat(t, "places-relay-seat");
+  const seat = await startSeat(t, "places-relay-seat", host);
   const hub = await startHub(host, SERVER, "lab-1", seat);
   const home = await startHome("places-relay", { host, project: false, extra: { serverCertificateAuthorities: [hub.ca] } });
   t.after(() => home.stop());
@@ -509,6 +527,10 @@ test("core-service-130: the relay path admits the local token from the origins /
   assert.deepEqual(states().slice(0, 2), ["connecting", "open"]);
   const [admission] = hub.admissions;
   assert.ok(admission?.bearer && admission.endpoint);
+  // The seat's sign-in read through a connection of the core's own,
+  // which closes once the seat reads signed in (core-service-142).
+  await seatsAfter(() => home.client.messages, from, (seats) => seats[0]?.signIn.state === "signedIn");
+  await until(() => hub.relays() === 1, "the sign-in's connection to the seat closed");
 
   // Admitted as / is (core-service-24): the local token, from no Origin
   // or the packaged renderer's; a wrong or missing token, a foreign
@@ -559,7 +581,7 @@ test("core-service-130: the relay path admits the local token from the origins /
 
 test("core-service-130: a seat whose hello carries another protocol version reads mismatched alone, its watch reconnecting no more", async (t) => {
   const host = await startHost();
-  const seat = await startSeat(t, "places-mismatch-seat");
+  const seat = await startSeat(t, "places-mismatch-seat", host);
   const hub = await startHub(host, SERVER, "lab-1", seat);
   const other = await startHub(host, "srv_lab2", "lab-2", seat);
   other.helloVersion(PROTOCOL_VERSION + 1);
@@ -568,8 +590,11 @@ test("core-service-130: a seat whose hello carries another protocol version read
   await signIn(home, host);
   await home.client.expectOk("server.open", { instance: host.url, serverId: SERVER, consented: true });
   await home.client.expectOk("server.open", { instance: host.url, serverId: "srv_lab2", consented: true });
-  const seats = await seatsAfter(() => home.client.messages, 0, (state) => state.length === 2 && state[0]?.relay === "open" && state[1]?.relay === "mismatched");
+  const seats = await seatsAfter(() => home.client.messages, 0, (state) => state.length === 2 && state[0]?.relay === "open" && state[0].signIn.state === "signedIn" && state[1]?.relay === "mismatched");
   assert.deepEqual(seats.map((one) => [one.serverId, one.relay]), [[SERVER, "open"], ["srv_lab2", "mismatched"]]);
+  // Nothing is asked of a seat speaking another version: its sign-in
+  // stays pending (core-service-142).
+  assert.deepEqual(seats[1]?.signIn, { state: "pending" });
   // The mismatched watch stops reconnecting; the other seat stays open.
   const asked = other.upgrades.length;
   await new Promise((resolveWait) => setTimeout(resolveWait, 1_500));
@@ -582,7 +607,7 @@ test("core-service-130: a seat whose hello carries another protocol version read
 
 test("core-service-130: the attention count is this core's badge plus each open seat's last read badge, re-read on the seat's intents.changed", async (t) => {
   const host = await startHost();
-  const seat = await startSeat(t, "places-attention-seat");
+  const seat = await startSeat(t, "places-attention-seat", host);
   const hub = await startHub(host, SERVER, "lab-1", seat);
   const home = await startHome("places-attention", { host, extra: { serverCertificateAuthorities: [hub.ca] } });
   t.after(() => home.stop());
@@ -623,8 +648,8 @@ test("core-service-130: the attention count is this core's badge plus each open 
 
 test("core-service-130: a seat's last read badge still counts while its watch is down, and no more once a reconnect reads it mismatched, the shell told, the other seat's badge counted on", async (t) => {
   const host = await startHost();
-  const seat = await startSeat(t, "places-turned-seat");
-  const turning = await startSeat(t, "places-turned-other");
+  const seat = await startSeat(t, "places-turned-seat", host);
+  const turning = await startSeat(t, "places-turned-other", host);
   const hub = await startHub(host, SERVER, "lab-1", seat);
   const other = await startHub(host, "srv_lab2", "lab-2", turning);
   const home = await startHome("places-turned", { host, project: false, extra: { serverCertificateAuthorities: [hub.ca] } });
@@ -668,7 +693,7 @@ test("core-service-130: a seat's last read badge still counts while its watch is
 
 test("core-service-130: a lease-end close and server.close each remove the relay path and the entry and announce server.state", async (t) => {
   const host = await startHost();
-  const seat = await startSeat(t, "places-ends-seat");
+  const seat = await startSeat(t, "places-ends-seat", host);
   const hub = await startHub(host, SERVER, "lab-1", seat);
   const home = await startHome("places-ends", { host, project: false, extra: { serverCertificateAuthorities: [hub.ca] } });
   t.after(() => home.stop());
@@ -717,7 +742,7 @@ test("core-service-130: a lease-end close and server.close each remove the relay
 test("core-service-128, core-service-129: an admission whose endpoint or bearer no connection can present is refused and writes nothing; a seats file holding one still starts the core, the seat reading closed and never reconnecting, and a client at its relay path is closed while the core serves on", async (t) => {
   const logs = captureLogs(t);
   const host = await startHost();
-  const seat = await startSeat(t, "places-unusable-seat");
+  const seat = await startSeat(t, "places-unusable-seat", host);
   const hub = await startHub(host, SERVER, "lab-1", seat);
   host.script.servers.push({ id: "srv_lab2", name: "lab-2", group: "acme", address: hub.url });
   const extra = { serverCertificateAuthorities: [hub.ca] };
@@ -799,4 +824,191 @@ test("core-service-128, core-service-129: an admission whose endpoint or bearer 
     assert.ok(!frames.includes(admission.bearer) && !logged.includes(admission.bearer), "no frame or log carries a bearer");
     assert.ok(!frames.includes(admission.endpoint) && !logged.includes(admission.endpoint), "no frame or log carries an endpoint");
   }
+});
+
+test("core-service-130, core-service-128: the admission's wait outlasts a stand-in hub answering after seventy seconds and ends unreachable at ninety, writing nothing", async (t) => {
+  // Each second of the admission's wait stands as 25 ms here, the hub's
+  // delays scaled alike.
+  const scale = 1 / 40;
+  const host = await startHost();
+  const hub = await startHub(host);
+  const home = await startHome("places-admit-wait", { host, project: false, extra: { serverCertificateAuthorities: [hub.ca], serverAdmitTimeScale: scale } });
+  t.after(() => home.stop());
+  await signIn(home, host);
+  const open = { instance: host.url, serverId: SERVER, consented: true };
+  const file = seatsPath(home.dataDir);
+
+  // The hub answers seventy seconds after the ticket's redemption — a
+  // first seat's account and unit made meanwhile: the seat is kept.
+  hub.delay(1, 70_000 * scale);
+  const opened = await home.client.expectOk("server.open", open);
+  assert.equal(opened.place, `${host.url}#${SERVER}`);
+  assert.ok(existsSync(file), "the seat answered within the wait is kept");
+  assert.deepEqual(await home.client.expectOk("server.close", { instance: host.url, serverId: SERVER }), { closed: true });
+
+  // A hub answering past ninety seconds: the open ends unreachable at
+  // ninety, before the hub's answer, and writes nothing.
+  hub.delay(1, 150_000 * scale);
+  const started = Date.now();
+  await home.client.expectError("server.open", open, "invalid_request", /^Could not reach lab-1$/);
+  const waited = Date.now() - started;
+  assert.ok(waited >= 90_000 * scale, `waited ${waited} ms, under the ninety seconds`);
+  assert.ok(waited < 150_000 * scale, `waited ${waited} ms, past the hub's answer`);
+  assert.equal(existsSync(file), false, "an admission given up on writes no seat");
+});
+
+/** A core standing as the person's seat in seat mode for `serverId` —
+ * its sign-in the device flow naming the server and the person
+ * (core-service-125) — not signed in, and a stand-in hub relaying to
+ * it. */
+async function startSeatMode(t: TestContext, host: StandinHost, serverId: string, name: string): Promise<{ seat: Home; hub: StandinHub }> {
+  const seat = await startHome(`places-${name}-seat`, { host, project: false, extra: { seat: { serverId, serverName: name, personId: "1001" } } });
+  t.after(() => seat.stop());
+  const hub = await startHub(host, serverId, name, seat);
+  return { seat, hub };
+}
+
+/** The `signIn` states a place's seat read in each `server.state` from
+ * `from` on, each change once. */
+function signInsOf(messages: ServerMessage[], from: number, place: string): SeatState["signIn"][] {
+  const states = messages.slice(from).flatMap((m) => (m.type === "server.state" ? m.seats.filter((seat) => seat.place === place).map((seat) => seat.signIn) : []));
+  return states.filter((state, index) => index === 0 || JSON.stringify(state) !== JSON.stringify(states[index - 1]));
+}
+
+/** The seat's app token at an instance, as its credentials file holds it. */
+function seatToken(seat: Home, origin: string): { access: string; refresh: string } {
+  const doc = parseYaml(readFileSync(credentialsPath(seat.dataDir), "utf8")) as { hosts: Record<string, { access: string; refresh: string }> };
+  const token = doc.hosts[origin];
+  assert.ok(token?.access && token.refresh, "the seat holds its app token");
+  return token;
+}
+
+/** The newest device code waiting at the instance once the place's seat
+ * reads its flow running from `from` on. */
+async function runningCode(home: Home, host: StandinHost, from: number): Promise<string> {
+  await seatsAfter(() => home.client.messages, from, (seats) => seats[0]?.signIn.state === "running");
+  const code = host.script.pendingDevices().at(-1);
+  assert.ok(code, "the seat's flow waits at the instance");
+  return code;
+}
+
+test("core-service-130, core-service-142: the open starts the seat's sign-in — pending, running with the stand-in's page, signed in once approved — server.signin starts none while it runs, a seat signed in before the open reads signed in with no flow, and no app token reaches the client", async (t) => {
+  const host = await startHost();
+  const { seat, hub } = await startSeatMode(t, host, SERVER, "lab-1");
+  const home = await startHome("places-signin", { host, project: false, extra: { serverCertificateAuthorities: [hub.ca] } });
+  t.after(() => home.stop());
+  await signIn(home, host);
+  const place = `${host.url}#${SERVER}`;
+  const target = { instance: host.url, serverId: SERVER };
+  const requests = host.script.deviceRequests.length;
+
+  // The open: the seat's hello read, its Groups state lists the instance
+  // not signed in, and the core starts the seat's sign-in there once,
+  // the seat's own request naming the server and the person
+  // (git-host-27).
+  const from = home.client.mark();
+  await home.client.expectOk("server.open", { ...target, consented: true });
+  const code = await runningCode(home, host, from);
+  assert.deepEqual(host.script.deviceRequests.slice(requests), [{ label: "Spex on lab-1", serverId: SERVER, personId: "1001" }]);
+  const flow = (await seatsAfter(() => home.client.messages, from, (seats) => seats[0]?.signIn.state === "running"))[0]?.signIn;
+  assert.ok(flow?.state === "running");
+  // Running with the instance's page, the code carried in it.
+  assert.equal(flow.verificationUri, `${host.url}/login/device?user_code=${encodeURIComponent(code)}`);
+  assert.ok(flow.expiresAt > Date.now(), "the flow's expiry is ahead");
+  assert.deepEqual(Object.keys(flow).sort(), ["expiresAt", "state", "verificationUri"]);
+
+  // While it runs, server.signin starts none.
+  assert.deepEqual(await home.client.expectOk("server.signin", target), { started: false });
+  assert.equal(host.script.deviceRequests.length, requests + 1, "no second flow while one runs");
+
+  // Approved at the instance: signed in.
+  host.script.approveDevice(code);
+  await seatsAfter(() => home.client.messages, from, (seats) => seats[0]?.signIn.state === "signedIn");
+  assert.deepEqual(signInsOf(home.client.messages, from, place).map((state) => state.state), ["pending", "running", "signedIn"]);
+  assert.equal(instanceOf(await seat.client.expectOk("space.get", {}), host.url)?.signedIn, true, "the seat itself reads signed in");
+  assert.equal(host.script.deviceRequests.length, requests + 1, "one flow for one open");
+
+  // Closed and opened again, the seat signed in already: signed in with
+  // no flow started.
+  await home.client.expectOk("server.close", target);
+  const again = home.client.mark();
+  await home.client.expectOk("server.open", { ...target, consented: true });
+  await seatsAfter(() => home.client.messages, again, (seats) => seats[0]?.signIn.state === "signedIn");
+  assert.deepEqual(signInsOf(home.client.messages, again, place).map((state) => state.state), ["pending", "signedIn"]);
+  // server.signin of a seat signed in reads it anew and starts no flow.
+  const anew = home.client.mark();
+  assert.deepEqual(await home.client.expectOk("server.signin", target), { started: true });
+  await seatsAfter(() => home.client.messages, anew, (seats) => seats[0]?.signIn.state === "signedIn");
+  assert.equal(host.script.deviceRequests.length, requests + 1, "no flow for a seat signed in");
+  // A place with no seat open is refused.
+  await home.client.expectError("server.signin", { instance: host.url, serverId: "srv_none" }, "not_found", /^No seat is open on this server$/);
+
+  // Nothing of the seat's app token reached the client: the four states
+  // alone.
+  const { access, refresh } = seatToken(seat, host.url);
+  const frames = JSON.stringify(home.client.messages);
+  assert.ok(!frames.includes(access) && !frames.includes(refresh), "no frame carries the seat's app token");
+  for (const state of signInsOf(home.client.messages, 0, place)) {
+    assert.ok(["pending", "running", "signedIn", "failed"].includes(state.state), JSON.stringify(state));
+  }
+});
+
+test("core-service-130, core-service-142: a denied sign-in reads failed with the seat's cause and nothing restarts it on its own; server.signin starts a second flow; a close cancels a flow still running, so the next open starts afresh", async (t) => {
+  const host = await startHost();
+  const { seat, hub } = await startSeatMode(t, host, SERVER, "lab-1");
+  const home = await startHome("places-signin-denied", { host, project: false, extra: { serverCertificateAuthorities: [hub.ca] } });
+  t.after(() => home.stop());
+  await signIn(home, host);
+  const place = `${host.url}#${SERVER}`;
+  const target = { instance: host.url, serverId: SERVER };
+  const requests = host.script.deviceRequests.length;
+
+  // Denied at the instance: failed, with the seat's own cause.
+  const from = home.client.mark();
+  await home.client.expectOk("server.open", { ...target, consented: true });
+  host.script.denyDevice(await runningCode(home, host, from));
+  const failed = (await seatsAfter(() => home.client.messages, from, (seats) => seats[0]?.signIn.state === "failed"))[0]?.signIn;
+  assert.ok(failed?.state === "failed");
+  assert.match(failed.cause, /^The sign-in was denied at /);
+  const seatState = await seat.client.expectOk("space.get", {});
+  assert.ok(seatState.signIn.phase === "failed" && seatState.signIn.message === failed.cause, "the cause is the seat's own sentence");
+  assert.deepEqual(Object.keys(failed).sort(), ["cause", "state"]);
+
+  // Nothing restarts it on its own: the watch, dropped and reconnected,
+  // reads the seat's hello again and starts no flow.
+  const dropped = home.client.mark();
+  hub.drop();
+  await seatsAfter(() => home.client.messages, dropped, (seats) => seats[0]?.relay === "closed");
+  await seatsAfter(() => home.client.messages, dropped, (seats) => seats[0]?.relay === "open");
+  await new Promise((resolveWait) => setTimeout(resolveWait, 500));
+  assert.equal(host.script.deviceRequests.length, requests + 1, "a failure is not restarted on its own");
+  assert.ok(signInsOf(home.client.messages, dropped, place).every((state) => state.state === "failed"), "the seat still reads failed");
+
+  // server.signin starts a second flow after the failure.
+  const retried = home.client.mark();
+  assert.deepEqual(await home.client.expectOk("server.signin", target), { started: true });
+  const second = await runningCode(home, host, retried);
+  assert.equal(host.script.deviceRequests.length, requests + 2);
+  assert.deepEqual(host.script.deviceRequests.slice(requests).map((request) => [request.serverId, request.personId]), [[SERVER, "1001"], [SERVER, "1001"]]);
+
+  // A close while that flow runs cancels it at the seat, so the next
+  // open finds no sign-in in its way and starts afresh.
+  await home.client.expectOk("server.close", target);
+  let phase = "running";
+  for (let tries = 0; tries < 200 && phase === "running"; tries += 1) {
+    phase = (await seat.client.expectOk("space.get", {})).signIn.phase;
+    if (phase === "running") await new Promise((resolveWait) => setTimeout(resolveWait, 25));
+  }
+  assert.notEqual(phase, "running", "the seat's flow ended with the close");
+  const last = home.client.mark();
+  await home.client.expectOk("server.open", { ...target, consented: true });
+  const third = await runningCode(home, host, last);
+  assert.notEqual(third, second);
+  assert.equal(host.script.deviceRequests.length, requests + 3);
+  host.script.approveDevice(third);
+  await seatsAfter(() => home.client.messages, last, (seats) => seats[0]?.signIn.state === "signedIn");
+  assert.deepEqual(signInsOf(home.client.messages, last, place).map((state) => state.state), ["pending", "running", "signedIn"]);
+  const { access, refresh } = seatToken(seat, host.url);
+  const frames = JSON.stringify(home.client.messages);
+  assert.ok(!frames.includes(access) && !frames.includes(refresh), "no frame carries the seat's app token");
 });

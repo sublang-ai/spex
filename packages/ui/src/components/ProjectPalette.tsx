@@ -76,6 +76,9 @@ export interface PalettePlace {
   groups?: GroupsState;
   /** Whether the seat's connection is open, so its groups can be read. */
   connected?: boolean;
+  /** The instance's name while the seat's sign-in there has not
+   * completed (run-view-168, core-service-142). */
+  signingIn?: string;
   /** Open a spex repository of the member's groups at the seat:
    * `space.join` with no folder, the seat allocating one (space-103). */
   onJoin?: (instance: string, hostId: string) => Promise<void>;
@@ -875,13 +878,19 @@ export function ProjectPalette(props: ProjectPaletteProps) {
                 );
               })}
               {rows.length === 0 && !query ? (
-                <div className="px-4 py-1 text-xs text-neutral-500">
-                  {seat.groups
+                <div data-testid={`palette-groups-note-${seat.key}`} className="px-4 py-1 text-xs text-neutral-500">
+                  {seat.signingIn !== undefined
                     ? i18n._({
-                        id: "Nothing more to open from your groups",
-                        comment: "project palette: a team server's groups list no spex repository it lacks",
+                        id: "Signing in to {instance}…",
+                        values: { instance: seat.signingIn },
+                        comment: "project palette: under a team server's groups while the seat signs in at the instance, before which it lists nothing; {instance} is the instance's name",
                       })
-                    : i18n._("Reading your groups…")}
+                    : seat.groups
+                      ? i18n._({
+                          id: "Nothing more to open from your groups",
+                          comment: "project palette: a team server's groups list no spex repository it lacks",
+                        })
+                      : i18n._("Reading your groups…")}
                 </div>
               ) : null}
             </div>

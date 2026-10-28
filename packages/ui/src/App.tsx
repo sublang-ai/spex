@@ -22,7 +22,7 @@ import {
   useAppStore,
   type AppStore,
 } from "./state/store.js";
-import { usePlaces } from "./state/places.js";
+import { signingInAt, usePlaces } from "./state/places.js";
 import {
   PlaceStoreContext,
   useEachPlace,
@@ -1149,6 +1149,9 @@ export function App() {
     connection: state.connection,
   }));
   const local = placeStates[0]!.value;
+  // The seats the local core holds, each with its sign-in at its
+  // instance (core-service-142): the palette says where one still runs.
+  const seatStates = useAppStore((state) => state.seats);
   // The badge and every dot re-source from the one core-side ledger
   // fold (DR-035, dashboard-9/10): each place's dots from its own, the
   // badge summing every place's (dashboard-9). A place speaking another
@@ -1600,6 +1603,9 @@ export function App() {
             // with no folder (run-view-169, space-103).
             groups: value.space,
             connected: value.connection === "open",
+            // Its sign-in at its instance not yet complete, the palette
+            // says it signs in there (run-view-168, core-service-142).
+            signingIn: signingInAt(seatStates, local.space, store.place.key),
             onJoin: (instance, hostId) => store.getState().spaceJoin(instance, hostId),
             onReadGroups: () => {
               if (store.getState().connection === "open") {

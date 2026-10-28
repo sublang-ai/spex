@@ -110,3 +110,5 @@ Product names and the role names Playbook defines stay as authored; everything e
 | Leave… / Remove from <instance> / Leaving… | 移除… / 从 <实例> 移除 / 移除中… | stop keeping the records at one instance; nothing at it changes; not 删除 (Delete), 退出 (Sign out) or 忘记 (Forget) |
 | authoring (session) | 编写（会话） | a playbook being written in a draft |
 | Queue (the capture control) | 加入队列 | |
+| server / seat | 服务器 / 席位 | a team server, and the member's own place on it |
+| Connect / Connected / Disconnect | 连接 / 已连接 / 断开连接 | a team server's line: open a seat there, one open, close it |

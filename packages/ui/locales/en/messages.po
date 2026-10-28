@@ -148,6 +148,8 @@ msgid "{annotation} · {count, plural, one {# entry} other {# entries}}"
 msgstr "{annotation} · {count, plural, one {# entry} other {# entries}}"
 
 #. the sign-in's cause, a phrase the core sends without its final stop, as one sentence
+#. the sign-in's cause, a phrase the core sends without its final stop, as one sentence
+#: src/components/SpaceServers.tsx
 #: src/components/SpaceSignIn.tsx
 msgid "{cause}."
 msgstr "{cause}."
@@ -1270,6 +1272,11 @@ msgstr "Applying…"
 msgid "Approve once"
 msgstr "Approve once"
 
+#. a team server's line while its seat signs in at the instance: links the instance's page where the person approves the device named "Spex on <server>"; {server} is the server's name
+#: src/components/SpaceServers.tsx
+msgid "Approve Spex on {server} in your browser"
+msgstr "Approve Spex on {server} in your browser"
+
 #: src/state/reducer.ts
 msgid "Approved once; native execution is reported separately."
 msgstr "Approved once; native execution is reported separately."
@@ -1863,11 +1870,6 @@ msgstr "Clones its code again into its folder on {place}"
 msgid "Cloning code…"
 msgstr "Cloning code…"
 
-#. close the seat open on a team server
-#: src/components/SpaceServers.tsx
-msgid "Close"
-msgstr "Close"
-
 #: src/lib/shortcuts.ts
 msgid "Close the focused session tab"
 msgstr "Close the focused session tab"
@@ -2103,9 +2105,19 @@ msgstr "Confirm the command, intent, players and where to enable it"
 msgid "Confirming…"
 msgstr "Confirming…"
 
+#. open a seat on a team server
+#: src/components/SpaceServers.tsx
+msgid "Connect"
+msgstr "Connect"
+
 #: src/components/CaptainHome.tsx
 msgid "Connect to read project specs"
 msgstr "Connect to read project specs"
+
+#. a team server's line where a seat is open at it
+#: src/components/SpaceServers.tsx
+msgid "Connected"
+msgstr "Connected"
 
 #. banner: a team server's seat answered but its state failed to load; {server} is the server's name
 #: src/App.tsx
@@ -2115,6 +2127,16 @@ msgstr "Connected to {server}, but {reason}"
 #: src/App.tsx
 msgid "Connected, but {reason}"
 msgstr "Connected, but {reason}"
+
+#. a team server's line while its seat opens; {server} is the server's name
+#: src/components/SpaceServers.tsx
+msgid "Connecting to {server}…"
+msgstr "Connecting to {server}…"
+
+#. a team server's line while its seat opens, past ten seconds; {server} is the server's name
+#: src/components/SpaceServers.tsx
+msgid "Connecting to {server}… the first start of your seat can take a minute"
+msgstr "Connecting to {server}… the first start of your seat can take a minute"
 
 #. the page is reaching for the core
 #: src/components/CaptainHome.tsx
@@ -2522,6 +2544,11 @@ msgstr "Discard unsaved changes?"
 #: src/components/SessionRecovery.tsx
 msgid "Discarding…"
 msgstr "Discarding…"
+
+#. close the seat open on a team server
+#: src/components/SpaceServers.tsx
+msgid "Disconnect"
+msgstr "Disconnect"
 
 #. act: close the error strip
 #. close the error strip above the composer
@@ -4454,10 +4481,8 @@ msgstr "One spec item per state behavior, from the last compile"
 msgid "Only pairs with ≥ {field} {count, plural, one {citation} other {citations}}"
 msgstr "Only pairs with ≥ {field} {count, plural, one {citation} other {citations}}"
 
-#. open a seat on a team server
 #. open this authoring session's workspace
 #: src/components/LibrarySurface.tsx
-#: src/components/SpaceServers.tsx
 msgid "Open"
 msgstr "Open"
 
@@ -6030,6 +6055,16 @@ msgstr "Signed in as @{login}"
 #: src/components/SpaceInstance.tsx
 msgid "Signed out of {host}"
 msgstr "Signed out of {host}"
+
+#. project palette: under a team server's groups while the seat signs in at the instance, before which it lists nothing; {instance} is the instance's name
+#: src/components/ProjectPalette.tsx
+msgid "Signing in to {instance}…"
+msgstr "Signing in to {instance}…"
+
+#. the welcome page at a team server while the seat signs in at the instance; the tagged run links the instance's page where the person approves the device named "Spex on <server>"; {instance} is the instance's name, {server} the server's
+#: src/components/CaptainHome.tsx
+msgid "Signing in to {instance}… <0>approve Spex on {server} in your browser</0>"
+msgstr "Signing in to {instance}… <0>approve Spex on {server} in your browser</0>"
 
 #. the Sign in control, while the sign-in runs
 #: src/components/SpaceSignIn.tsx

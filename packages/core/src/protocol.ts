@@ -1435,6 +1435,8 @@ export const commandSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("server.list"), id }).strict(),
   z.object({ type: z.literal("server.open"), id, instance: instanceOriginSchema, serverId: z.string().min(1), consented: z.boolean().optional() }).strict(),
   z.object({ type: z.literal("server.close"), id, instance: instanceOriginSchema, serverId: z.string().min(1) }).strict(),
+  /** The seat's sign-in at its instance started again (core-service-142). */
+  z.object({ type: z.literal("server.signin"), id, instance: instanceOriginSchema, serverId: z.string().min(1) }).strict(),
   // Authoring sessions (DR-058, core-service-96): each in the spex
   // repository of the project `projectId` names; one activity per
   // session, Boss messages queue while a turn or compile runs.
@@ -1648,6 +1650,11 @@ export interface CommandResults {
    * its endpoint or its bearer (core-service-128). */
   "server.open": { place: string; leaseExpiresAt: number };
   "server.close": { closed: true };
+  /** Whether the seat's Groups state is read anew, and its sign-in
+   * started where it is not signed in; false while a read or a flow of
+   * this core's own runs there (core-service-142). The outcome follows
+   * as `server.state`. */
+  "server.signin": { started: boolean };
   "draft.list": DraftInfo[];
   /** The org and license a new playbook of the project starts from,
    * null where no license is derived (playbook-library-103). */
@@ -2198,10 +2205,23 @@ export interface ServerListing { servers: ServerInfo[]; failures: { instance: st
  * protocol version. */
 export type SeatRelayState = "connecting" | "open" | "closed" | "mismatched";
 
+/** A seat's sign-in at its instance (core-service-142): pending until
+ * the seat's hello and its Groups state are read; running while the
+ * seat's flow waits for the person's approval at `verificationUri`, the
+ * instance's page with the code carried in it, until `expiresAt` in
+ * Unix milliseconds; signed in once the seat's Groups state lists its
+ * instance signed in; failed with the seat's one-sentence cause. Nothing
+ * of the seat's app token. */
+export type SeatSignIn =
+  | { state: "pending" }
+  | { state: "running"; verificationUri: string; expiresAt: number }
+  | { state: "signedIn" }
+  | { state: "failed"; cause: string };
+
 /** An open seat (core-service-128, DR-133): its instance's origin, its
  * server's id there, the server's name and group, its place, the lease's
- * expiry in Unix milliseconds, and its relay's state. Never its endpoint
- * or its bearer. */
+ * expiry in Unix milliseconds, its relay's state and its sign-in at the
+ * instance (core-service-142). Never its endpoint or its bearer. */
 export interface SeatState {
   instance: string;
   serverId: string;
@@ -2212,6 +2232,7 @@ export interface SeatState {
   place: string;
   leaseExpiresAt: number;
   relay: SeatRelayState;
+  signIn: SeatSignIn;
 }
 
 /** The home, its groups and their spex repositories (space-30,

@@ -294,6 +294,10 @@ export interface CoreServiceOptions {
    * system's when the core presents a ticket at a team server's address;
    * a stand-in hub's fixture CA. */
   serverCertificateAuthorities?: readonly string[];
+  /** Test seam (core-service-128): the scale of the ninety seconds an
+   * admission is awaited, 1 by default, so a suite stands a fraction of
+   * a second in for each second. */
+  serverAdmitTimeScale?: number;
 }
 
 /** A seat's facts (core-service-125). */
@@ -921,6 +925,7 @@ export class CoreService {
       broadcast: (seats) => this.broadcast({ type: "server.state", seats }),
       attentionChanged: () => this.events.onLedgerChange?.(),
       ...(options.serverCertificateAuthorities ? { certificateAuthorities: options.serverCertificateAuthorities } : {}),
+      ...(options.serverAdmitTimeScale !== undefined ? { admitTimeScale: options.serverAdmitTimeScale } : {}),
     });
     // Authoring sessions live in the spex repository of their project
     // (storage-23); their spec packages in its working folder
@@ -2565,8 +2570,8 @@ export class CoreService {
       }));
     }
     // A seat holds no seats of its own (core-service-125): its
-    // `server.open` is refused before anything is asked; `server.list`
-    // and `server.close` answer as on any core.
+    // `server.open` is refused before anything is asked; `server.list`,
+    // `server.close` and `server.signin` answer as on any core.
     if (this.seat && command.type === "server.open") {
       throw new CoreError("invalid_request", i18n._({
         id: "A seat opens no server",
@@ -3598,6 +3603,8 @@ export class CoreService {
         return this.places.open({ instance: command.instance, serverId: command.serverId, ...(command.consented !== undefined ? { consented: command.consented } : {}) });
       case "server.close":
         return this.places.close({ instance: command.instance, serverId: command.serverId });
+      case "server.signin":
+        return this.places.signIn({ instance: command.instance, serverId: command.serverId });
       // Groups (space-29): the core performs every Git operation, one
       // spex repository at a time; long commands reply accepted and
       // report as state.

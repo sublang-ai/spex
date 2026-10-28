@@ -62,6 +62,15 @@ export function instanceName(instance: InstanceState): string {
   return instance.displayName ?? instance.host;
 }
 
+/** How the surface names the instance at an origin: as the home's
+ * Groups state names it, its host name where the state lists none — a
+ * seat's instance, named where its sign-in runs (run-view-168,
+ * run-view-174). */
+export function instanceNameAt(state: GroupsState | undefined, origin: string): string {
+  const instance = state ? instanceOf(state, origin) : undefined;
+  return instance ? instanceName(instance) : hostNameOf(origin);
+}
+
 /** Your namespace at an instance: the entry keyed by your login there
  * (space-1). */
 export function namespaceOf(instance: InstanceState): InstanceGroupState | undefined {
