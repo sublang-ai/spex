@@ -41,8 +41,8 @@ test("spec-view-54: a record edits through the page, and an item's Edit lands on
   await page.getByRole("tab", { name: "Specs" }).click();
   await expect(page.getByTestId("specv-live")).toBeVisible();
 
-  // DR-000 from the decisions branch, then its reader's Edit.
-  await page.getByTestId("decisions-toggle").click();
+  // DR-000 from the decision records' list, then its reader's Edit.
+  await page.getByTestId("records-decisions").click();
   await page.getByTestId("record-DR-000").click();
   const reader = page.getByTestId("record-reader");
   await expect(reader).toContainText("Product Scope");
@@ -91,10 +91,11 @@ test("spec-view-54: a record edits through the page, and an item's Edit lands on
     ),
   ).toBe(after);
   await expect(page.getByTestId("specs-tab-unsaved")).toHaveCount(0);
-  await page.getByRole("button", { name: "← Back" }).click();
+  await page.getByRole("button", { name: "← Back to decision records" }).click();
   await expect(page.getByTestId("record-DR-000")).toContainText(
     "Product Scope, Edited",
   );
+  await page.getByTestId("records-back").click();
 
   // From an expanded item: the package file opens with the caret on
   // the item's heading line, scrolled into view, and a clean Cancel
@@ -209,10 +210,11 @@ test("spec-view-46: the Specs tab reads the seeded tree", async ({ page, app }) 
   await open(page, app);
   await page.getByRole("tab", { name: "Specs" }).click();
 
-  // The outline: packages and the decisions branch.
+  // The outline holds the packages; the decision records stand in the
+  // footer's reference line.
   const outline = page.getByTestId("specv-live");
   await expect(outline).toBeVisible();
-  await expect(page.getByTestId("decisions-branch")).toBeVisible();
+  await expect(page.getByTestId("records-decisions")).toBeVisible();
   const files = page.getByTestId(/^file-/);
   await expect(files.first()).toBeVisible();
   const count = await files.count();

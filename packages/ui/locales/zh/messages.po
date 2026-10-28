@@ -253,6 +253,7 @@ msgid "{count, plural, one {# playbook} other {# playbooks}}"
 msgstr "{count, plural, other {# 个规程}}"
 
 #: src/components/SpaceExplorer.tsx
+#: src/components/SpecView.tsx
 msgid "{count, plural, one {# record} other {# records}}"
 msgstr "{count, plural, other {# 条记录}}"
 
@@ -719,12 +720,16 @@ msgid "/path/to/new-project"
 msgstr "/path/to/new-project"
 
 #: src/components/SpecView.tsx
-msgid "← Back"
-msgstr "← 返回"
-
-#: src/components/SpecView.tsx
 msgid "← Back to {surface}"
 msgstr "← 返回{surface}"
+
+#: src/components/SpecView.tsx
+msgid "← Back to decision records"
+msgstr "← 返回决策记录"
+
+#: src/components/SpecView.tsx
+msgid "← Back to specs"
+msgstr "← 返回规约"
 
 #. act: jump to the end of the transcript; ↓ stays as it is
 #. act: jump to the end of the transcript; ↓ stays as it is
@@ -2358,14 +2363,14 @@ msgstr "仪表盘"
 msgid "deciding"
 msgstr "决策中"
 
-#. outline branch holding the decision records
+#. heading of the decision records' list
 #: src/components/SpecView.tsx
-msgid "decisions"
+msgid "Decision records"
 msgstr "决策记录"
 
 #: src/components/SpecView.tsx
-msgid "Decisions, {count} records"
-msgstr "决策记录，共 {count} 条"
+msgid "decision records {count}"
+msgstr "决策记录 {count}"
 
 #. confirm: delete the group on the Git host
 #. confirm: delete this session for good
@@ -2648,6 +2653,10 @@ msgstr "例如 Apache-2.0"
 #: src/components/LibrarySurface.tsx
 msgid "e.g. triage"
 msgstr "例如 triage"
+
+#: src/components/SpecView.tsx
+msgid "Each record states a design decision's context and reasons; spec items cite them by their DR number."
+msgstr "每条记录写下一个设计决定的背景和理由；规约条目以 DR 编号引用它们。"
 
 #. editor mode: the plain text field
 #. open the whole-file editor on the source
@@ -3005,6 +3014,10 @@ msgstr "{name} 中的文件"
 msgid "Files must be 100 MiB or smaller."
 msgstr "每个文件不得超过 100 MiB。"
 
+#: src/components/SpecView.tsx
+msgid "Filter — number or title…"
+msgstr "筛选 — 编号或标题…"
+
 #: src/components/DashboardSurface.tsx
 msgid "Filter by project"
 msgstr "按项目筛选"
@@ -3012,6 +3025,10 @@ msgstr "按项目筛选"
 #: src/components/DashboardSurface.tsx
 msgid "Filter by project (visibility only)"
 msgstr "按项目筛选（仅影响显示）"
+
+#: src/components/SpecView.tsx
+msgid "Filter decision records by number or title"
+msgstr "按编号或标题筛选决策记录"
 
 #: src/components/SpecView.tsx
 msgid "Filter items — ID or text…"
@@ -3975,14 +3992,9 @@ msgstr "新项目路径"
 msgid "new session"
 msgstr "新会话"
 
-#: src/components/NavRail.tsx
 #: src/components/RunView.tsx
 msgid "New session"
 msgstr "新建会话"
-
-#: src/components/NavRail.tsx
-msgid "New session in {project}"
-msgstr "在 {project} 中新建会话"
 
 #: src/components/SpaceSurface.tsx
 msgid "New sessions stay on this device"
@@ -3994,12 +4006,17 @@ msgid "New subgroup"
 msgstr "新建子群组"
 
 #: src/App.tsx
+#: src/components/NavRail.tsx
 msgid "New task"
 msgstr "新任务"
 
 #: src/App.tsx
 msgid "New task ({keys})"
 msgstr "新任务（{keys}）"
+
+#: src/components/NavRail.tsx
+msgid "New task in {project}"
+msgstr "在 {project} 中开始新任务"
 
 #: src/components/SourcesTabs.tsx
 msgid "Next page"
@@ -4036,6 +4053,10 @@ msgstr "与其他包无引用关系"
 #: src/components/SettingsSurface.tsx
 msgid "No config file"
 msgstr "没有配置文件"
+
+#: src/components/SpecView.tsx
+msgid "No decision record matches."
+msgstr "没有匹配的决策记录。"
 
 #: src/components/SpaceSync.tsx
 msgid "No difference"
@@ -4550,6 +4571,10 @@ msgstr "打开以重试或放弃该运行。"
 #: src/components/SpecView.tsx
 msgid "Opened {id}"
 msgstr "已打开 {id}"
+
+#: src/components/SpecView.tsx
+msgid "Opened the decision records"
+msgstr "已打开决策记录"
 
 #. the instance's contract, in the words its record fixes, shown before a seat's first open on this device; {server} is the server's name, {instance} the instance's; Devices is the instance's page of devices
 #: src/components/SpaceServers.tsx
@@ -5107,6 +5132,11 @@ msgstr "上次同步后推送到 {name} 的记录可能会被留下。仍要移�
 #: src/lib/failure-catalogue.ts
 msgid "Recover them from your editor's history, if it keeps one"
 msgstr "若编辑器保留历史，可从中恢复"
+
+#. spec view footer: the records beside the specs
+#: src/components/SpecView.tsx
+msgid "Reference"
+msgstr "参考"
 
 #. re-read the groups and the Git host
 #. sync step: re-reading the spex repository

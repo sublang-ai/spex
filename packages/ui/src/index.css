@@ -55,6 +55,15 @@
   }
 }
 
+/* A control a reader can activate says so under the pointer; the
+   utility layer still wins where a control asks for another cursor. */
+@layer base {
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]) {
+    cursor: pointer;
+  }
+}
+
 /* Focus shows by control kind (DR-013). A control that is only
    momentarily focused takes a thin brand outline. A text field does
    not: a composer holds focus for a whole session, and a ring around

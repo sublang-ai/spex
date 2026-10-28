@@ -253,6 +253,7 @@ msgid "{count, plural, one {# playbook} other {# playbooks}}"
 msgstr "{count, plural, one {# playbook} other {# playbooks}}"
 
 #: src/components/SpaceExplorer.tsx
+#: src/components/SpecView.tsx
 msgid "{count, plural, one {# record} other {# records}}"
 msgstr "{count, plural, one {# record} other {# records}}"
 
@@ -719,12 +720,16 @@ msgid "/path/to/new-project"
 msgstr "/path/to/new-project"
 
 #: src/components/SpecView.tsx
-msgid "← Back"
-msgstr "← Back"
-
-#: src/components/SpecView.tsx
 msgid "← Back to {surface}"
 msgstr "← Back to {surface}"
+
+#: src/components/SpecView.tsx
+msgid "← Back to decision records"
+msgstr "← Back to decision records"
+
+#: src/components/SpecView.tsx
+msgid "← Back to specs"
+msgstr "← Back to specs"
 
 #. act: jump to the end of the transcript; ↓ stays as it is
 #. act: jump to the end of the transcript; ↓ stays as it is
@@ -2358,14 +2363,14 @@ msgstr "Dashboard"
 msgid "deciding"
 msgstr "deciding"
 
-#. outline branch holding the decision records
+#. heading of the decision records' list
 #: src/components/SpecView.tsx
-msgid "decisions"
-msgstr "decisions"
+msgid "Decision records"
+msgstr "Decision records"
 
 #: src/components/SpecView.tsx
-msgid "Decisions, {count} records"
-msgstr "Decisions, {count} records"
+msgid "decision records {count}"
+msgstr "decision records {count}"
 
 #. confirm: delete the group on the Git host
 #. confirm: delete this session for good
@@ -2648,6 +2653,10 @@ msgstr "e.g. Apache-2.0"
 #: src/components/LibrarySurface.tsx
 msgid "e.g. triage"
 msgstr "e.g. triage"
+
+#: src/components/SpecView.tsx
+msgid "Each record states a design decision's context and reasons; spec items cite them by their DR number."
+msgstr "Each record states a design decision's context and reasons; spec items cite them by their DR number."
 
 #. editor mode: the plain text field
 #. open the whole-file editor on the source
@@ -3005,6 +3014,10 @@ msgstr "Files in {name}"
 msgid "Files must be 100 MiB or smaller."
 msgstr "Files must be 100 MiB or smaller."
 
+#: src/components/SpecView.tsx
+msgid "Filter — number or title…"
+msgstr "Filter — number or title…"
+
 #: src/components/DashboardSurface.tsx
 msgid "Filter by project"
 msgstr "Filter by project"
@@ -3012,6 +3025,10 @@ msgstr "Filter by project"
 #: src/components/DashboardSurface.tsx
 msgid "Filter by project (visibility only)"
 msgstr "Filter by project (visibility only)"
+
+#: src/components/SpecView.tsx
+msgid "Filter decision records by number or title"
+msgstr "Filter decision records by number or title"
 
 #: src/components/SpecView.tsx
 msgid "Filter items — ID or text…"
@@ -3975,14 +3992,9 @@ msgstr "New project path"
 msgid "new session"
 msgstr "new session"
 
-#: src/components/NavRail.tsx
 #: src/components/RunView.tsx
 msgid "New session"
 msgstr "New session"
-
-#: src/components/NavRail.tsx
-msgid "New session in {project}"
-msgstr "New session in {project}"
 
 #: src/components/SpaceSurface.tsx
 msgid "New sessions stay on this device"
@@ -3994,12 +4006,17 @@ msgid "New subgroup"
 msgstr "New subgroup"
 
 #: src/App.tsx
+#: src/components/NavRail.tsx
 msgid "New task"
 msgstr "New task"
 
 #: src/App.tsx
 msgid "New task ({keys})"
 msgstr "New task ({keys})"
+
+#: src/components/NavRail.tsx
+msgid "New task in {project}"
+msgstr "New task in {project}"
 
 #: src/components/SourcesTabs.tsx
 msgid "Next page"
@@ -4036,6 +4053,10 @@ msgstr "No citations with other packages"
 #: src/components/SettingsSurface.tsx
 msgid "No config file"
 msgstr "No config file"
+
+#: src/components/SpecView.tsx
+msgid "No decision record matches."
+msgstr "No decision record matches."
 
 #: src/components/SpaceSync.tsx
 msgid "No difference"
@@ -4550,6 +4571,10 @@ msgstr "Open to retry or drop the run."
 #: src/components/SpecView.tsx
 msgid "Opened {id}"
 msgstr "Opened {id}"
+
+#: src/components/SpecView.tsx
+msgid "Opened the decision records"
+msgstr "Opened the decision records"
 
 #. the instance's contract, in the words its record fixes, shown before a seat's first open on this device; {server} is the server's name, {instance} the instance's; Devices is the instance's page of devices
 #: src/components/SpaceServers.tsx
@@ -5107,6 +5132,11 @@ msgstr "Records pushed to {name} since the last sync may be left behind. Remove 
 #: src/lib/failure-catalogue.ts
 msgid "Recover them from your editor's history, if it keeps one"
 msgstr "Recover them from your editor's history, if it keeps one"
+
+#. spec view footer: the records beside the specs
+#: src/components/SpecView.tsx
+msgid "Reference"
+msgstr "Reference"
 
 #. re-read the groups and the Git host
 #. sync step: re-reading the spex repository

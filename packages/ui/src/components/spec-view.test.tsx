@@ -715,7 +715,7 @@ describe("SPECV-19/37: citation rows and backlinks", () => {
     fireEvent.click(screen.getByRole("link", { name: "index" }));
     expect(onReadRecord).toHaveBeenCalledWith("map.md");
     await screen.findByText("Decided.");
-    fireEvent.click(screen.getByText("← Back"));
+    fireEvent.click(screen.getByTestId("reader-back"));
     // A DR citation swaps to the records reader.
     fireEvent.click(screen.getByTestId(`file-chevron-${AUTH}`));
     fireEvent.click(screen.getByTestId("item-toggle-AUTH-8"));
@@ -1191,7 +1191,7 @@ describe("DR-010 §6: focus follows", () => {
     fireEvent.click(screen.getByTestId("item-toggle-AUTH-8"));
     fireEvent.click(screen.getByRole("link", { name: "DR-011" }));
     await screen.findByText("Decided.");
-    fireEvent.click(screen.getByText("← Back"));
+    fireEvent.click(screen.getByTestId("reader-back"));
     expect(document.activeElement).toBe(screen.getByTestId("item-AUTH-8"));
   });
 
@@ -1200,9 +1200,7 @@ describe("DR-010 §6: focus follows", () => {
 describe("DR-010 §7: accessible names and affordances", () => {
   test("section and topic labels are exposed; toggles carry names", () => {
     render(<Harness />);
-    expect(
-      screen.getByRole("button", { name: "Decisions, 1 records" }),
-    ).toBeTruthy();
+    expect(screen.getByRole("button", { name: "decision records 1" })).toBeTruthy();
     expect(
       screen.getByRole("button", { name: "Toggle identity/" }),
     ).toBeTruthy();
@@ -1259,10 +1257,11 @@ describe("SPECV-6/7: meta.md routing", () => {
   test("the footer offers meta and map directly", async () => {
     const onReadRecord = vi.fn().mockResolvedValue("# meta\n\nGlossary.");
     render(<Harness onReadRecord={onReadRecord} />);
-    // The outline pane's footer carries the two tree-wide documents,
-    // each named by its file and use, and nothing else (spec-view-7).
+    // The outline pane's footer carries the decision records and the
+    // two tree-wide documents, each named by its file and use
+    // (spec-view-7).
     expect(screen.getByTestId("records-footer").textContent).toBe(
-      "map.md index·meta.md spec format",
+      "Referencedecision records 1·map.md index·meta.md spec format",
     );
     const meta = screen.getByTestId("records-meta");
     fireEvent.click(meta);
@@ -1272,7 +1271,7 @@ describe("SPECV-6/7: meta.md routing", () => {
       within(screen.getByTestId("record-reader")).getByText("meta.md"),
     ).toBeTruthy();
     // Back lands on the meta control (DR-010 §6).
-    fireEvent.click(screen.getByText("← Back"));
+    fireEvent.click(screen.getByTestId("reader-back"));
     expect(document.activeElement).toBe(screen.getByTestId("records-meta"));
     // A search that narrows the outline to nothing leaves the footer
     // standing (spec-view-7).
@@ -1295,43 +1294,53 @@ describe("SPECV-6/7: meta.md routing", () => {
 });
 
 describe("spec-view-7/45: records in their places", () => {
-  test("the decisions branch stands last and opens the reader", async () => {
-    const onReadRecord = vi
-      .fn()
-      .mockResolvedValue("# Record body\n\nHello from the record.");
+  test("the footer's decision records open their list, a record its reader", async () => {
+    const onReadRecord = vi.fn().mockImplementation(async (path: string) =>
+      path === "map.md"
+        ? "| [DR-011](decisions/011-project-workspace.md) | 011-project-workspace.md | The workspace in one line |"
+        : "# Record body\n\nHello from the record.",
+    );
     render(<Harness onReadRecord={onReadRecord} />);
-    // Decisions are a branch of the outline, and intents are nowhere
-    // in the view — they belong to the Dashboard (spec-view-7).
-    const branch = screen.getByTestId("decisions-branch");
-    fireEvent.click(screen.getByTestId("decisions-toggle"));
-    expect(within(branch).getByText("Project workspace")).toBeTruthy();
+    // No record stands in the outline, and intents are nowhere in the
+    // view — they belong to the Dashboard (spec-view-7).
+    expect(screen.queryByTestId("record-DR-011")).toBeNull();
     expect(screen.queryByText("IR-016")).toBeNull();
-    // Each row is the one record row (dashboard-40): the identifier
-    // chip the package rows wear, the title, pointer, named as an
-    // opener.
-    const row = screen.getByTestId("record-DR-011");
+    fireEvent.click(screen.getByTestId(`file-toggle-${AUTH}`));
+    fireEvent.click(screen.getByTestId("records-decisions"));
+    const list = screen.getByTestId("records-list");
+    expect(document.activeElement).toBe(screen.getByTestId("records-back"));
+    // Each row is the one record row (dashboard-40), its summary from
+    // map.md beneath (spec-view-7).
+    const row = within(list).getByTestId("record-DR-011");
     expect(row.getAttribute("aria-label")).toBe("Open DR-011: Project workspace");
     expect(row.getAttribute("title")).toBe("Open DR-011");
     expect(row.className).toContain("cursor-pointer");
     expect(within(row).getByText("DR-011").className).toContain("font-mono");
-    expect(within(row).getByText("DR-011").className).toContain("bg-neutral-100");
-    // Last in the outline, after every package.
-    const rows = screen.getAllByTestId(/^(file-|decisions-branch)/);
-    expect(rows[rows.length - 1]).toBe(branch);
-    fireEvent.click(within(branch).getByText("Project workspace"));
-    expect(onReadRecord).toHaveBeenCalledWith(
-      "decisions/011-project-workspace.md",
+    expect((await screen.findByTestId("record-summary-DR-011")).textContent).toBe(
+      "The workspace in one line",
     );
-    // The open narrates through the live region.
+    // The filter narrows by ID and title.
+    fireEvent.change(screen.getByTestId("records-filter"), { target: { value: "011" } });
+    expect(within(list).getByTestId("record-DR-011")).toBeTruthy();
+    fireEvent.click(row);
+    expect(onReadRecord).toHaveBeenCalledWith("decisions/011-project-workspace.md");
     expect(liveText()).toBe("Opened DR-011");
     await screen.findByText("Hello from the record.");
-    expect(screen.getByText("DR-011")).toBeTruthy();
-    // Back returns to the tree.
-    fireEvent.click(screen.getByText("← Back"));
-    expect(screen.getByTestId(`file-${AUTH}`)).toBeTruthy();
+    // The reader's Back returns to the list, its filter standing.
+    const back = screen.getByTestId("reader-back");
+    expect(back.textContent).toBe("← Back to decision records");
+    fireEvent.click(back);
+    expect((screen.getByTestId("records-filter") as HTMLInputElement).value).toBe("011");
+    expect(document.activeElement).toBe(screen.getByTestId("record-DR-011"));
+    // The list's Back returns to the specs as they were: the package
+    // stood expanded beneath it all along.
+    fireEvent.click(screen.getByTestId("records-back"));
+    expect(screen.queryByTestId("records-list")).toBeNull();
+    expect(document.activeElement).toBe(screen.getByTestId("records-decisions"));
+    expect(screen.getByTestId(`file-toggle-${AUTH}`).getAttribute("aria-expanded")).toBe("true");
   });
 
-  test("the branch stands on a file-less tree and narrows with search", () => {
+  test("a file-less tree still reaches its decision records, newest first", () => {
     // Records outlive their packages: a tree with no package files
     // still reaches its decisions (spec-view-7).
     const fileLess: SpecTreeState = {
@@ -1346,26 +1355,16 @@ describe("spec-view-7/45: records in their places", () => {
     // The outline pane's footer stands here too (spec-view-7).
     expect(screen.getByTestId("records-meta")).toBeTruthy();
     expect(screen.getByTestId("records-map")).toBeTruthy();
-    const branch = screen.getByTestId("decisions-branch");
-    fireEvent.click(screen.getByTestId("decisions-toggle"));
-    expect(within(branch).getByText("Scaffold localization")).toBeTruthy();
-    expect(within(branch).getByText("Project workspace")).toBeTruthy();
-
-    // A search narrows the branch by record ID and title, the way it
-    // narrows packages (spec-view-5).
-    fireEvent.change(screen.getByLabelText("Filter items by ID or text"), {
-      target: { value: "DR-011" },
-    });
-    expect(screen.queryByTestId("record-DR-001")).toBeNull();
-    expect(screen.getByTestId("record-DR-011")).toBeTruthy();
-
-    // A group filter is a lens on items and leaves the branch whole
-    // (spec-view-7).
-    // The branch is still open from before the search.
-    fireEvent.click(screen.getByTestId("search-clear"));
-    fireEvent.click(screen.getByTestId("filter-external"));
+    fireEvent.click(screen.getByTestId("records-decisions"));
+    const rows = within(screen.getByTestId("records-list")).getAllByTestId(/^record-DR-/);
+    expect(rows.map((row) => row.getAttribute("data-testid"))).toEqual([
+      "record-DR-011",
+      "record-DR-001",
+    ]);
+    // The list's own filter narrows by ID and title (spec-view-7).
+    fireEvent.change(screen.getByTestId("records-filter"), { target: { value: "scaffold" } });
+    expect(screen.queryByTestId("record-DR-011")).toBeNull();
     expect(screen.getByTestId("record-DR-001")).toBeTruthy();
-    expect(screen.getByTestId("record-DR-011")).toBeTruthy();
   });
 
   test("spec-view-57: a record asked from another surface names it on Back and hands the origin back", async () => {
@@ -1428,11 +1427,11 @@ describe("spec-view-7/45: records in their places", () => {
         onReturn={onReturn}
       />,
     );
-    fireEvent.click(screen.getByTestId("decisions-toggle"));
+    fireEvent.click(screen.getByTestId("records-decisions"));
     fireEvent.click(screen.getByTestId("record-DR-011"));
     await screen.findByText("Picked here.");
     const back = screen.getByTestId("reader-back");
-    expect(back.textContent).toBe("← Back");
+    expect(back.textContent).toBe("← Back to decision records");
     // The reader takes focus on Back, and closing hands it back to the
     // invoking row (DR-010 §6).
     expect(document.activeElement).toBe(back);
@@ -2889,7 +2888,7 @@ describe("spec-view-53: the editor", () => {
     screen.getByRole("textbox", { name: /^Edit / }) as HTMLTextAreaElement;
 
   async function openRecordEditor() {
-    fireEvent.click(screen.getByTestId("decisions-toggle"));
+    fireEvent.click(screen.getByTestId("records-decisions"));
     fireEvent.click(screen.getByTestId("record-DR-011"));
     await screen.findByText("Accepted");
     fireEvent.click(screen.getByTestId("reader-edit"));
@@ -2934,7 +2933,7 @@ describe("spec-view-53: the editor", () => {
     expect(screen.queryByTestId(`file-edit-${AUTH}`)).toBeNull();
     fireEvent.click(screen.getByTestId("item-toggle-AUTH-2"));
     expect(screen.queryByTestId("item-edit-AUTH-2")).toBeNull();
-    fireEvent.click(screen.getByTestId("decisions-toggle"));
+    fireEvent.click(screen.getByTestId("records-decisions"));
     fireEvent.click(screen.getByTestId("record-DR-011"));
     await screen.findByText("Accepted");
     expect(screen.queryByTestId("reader-edit")).toBeNull();
@@ -2961,7 +2960,7 @@ describe("spec-view-53: the editor", () => {
     expect(screen.queryByTestId("editor-confirm")).toBeNull();
     expect(screen.getByTestId("record-reader")).toBeTruthy();
     expect(screen.getByText("Accepted")).toBeTruthy();
-    expect(document.activeElement).toBe(screen.getByText("← Back"));
+    expect(document.activeElement).toBe(screen.getByTestId("reader-back"));
     expect(onWriteSpec).not.toHaveBeenCalled();
   });
 
@@ -3086,6 +3085,8 @@ describe("spec-view-53: the editor", () => {
   test("a conflict's Reload asks first, then replaces the draft with the file as it is", async () => {
     const onReadRecord = vi
       .fn<(path: string) => Promise<{ markdown: string; version: string }>>()
+      // The list's map.md read comes first (spec-view-7).
+      .mockResolvedValueOnce({ markdown: "", version: "v-map" })
       .mockResolvedValueOnce({ markdown: DR_TEXT, version: "v-dr" })
       .mockResolvedValueOnce({ markdown: `${DR_TEXT}\nTheirs.\n`, version: "v-dr-2" });
     const onWriteSpec = vi.fn(async () => {
@@ -3101,7 +3102,7 @@ describe("spec-view-53: the editor", () => {
     expect(confirm.textContent).toContain("Reload from disk");
     fireEvent.click(within(confirm).getByText("Reload"));
     await waitFor(() => expect(field().value).toBe(`${DR_TEXT}\nTheirs.\n`));
-    expect(onReadRecord).toHaveBeenCalledTimes(2);
+    expect(onReadRecord).toHaveBeenCalledTimes(3);
     expect(screen.queryByTestId("editor-conflict")).toBeNull();
     expect(screen.queryByTestId("editor-dirty")).toBeNull();
     // The next save carries the reloaded token.

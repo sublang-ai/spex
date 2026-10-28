@@ -61,18 +61,8 @@ const PATHS: Record<string, ReactNode> = {
     </>
   ),
   // A left pane folding left, or opening right (spec-view-20).
-  paneFold: (
-    <>
-      <rect x="2.5" y="3" width="11" height="10" rx="1.5" />
-      <path d="M6.5 3v10M10.5 6.5 9 8l1.5 1.5" />
-    </>
-  ),
-  paneOpen: (
-    <>
-      <rect x="2.5" y="3" width="11" height="10" rx="1.5" />
-      <path d="M6.5 3v10M9.5 6.5 11 8l-1.5 1.5" />
-    </>
-  ),
+  paneFold: <path d="M8 4 4 8l4 4M12 4 8 8l4 4" />,
+  paneOpen: <path d="M4 4l4 4-4 4M8 4l4 4-4 4" />,
   // Every row at once, apart from one row's disclosure chevron.
   expandAll: <path d="M5 6 8 3l3 3M5 10l3 3 3-3" />,
   collapseAll: <path d="M5 3l3 3 3-3M5 13l3-3 3 3" />,

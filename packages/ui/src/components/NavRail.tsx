@@ -860,13 +860,13 @@ export function NavRail(props: NavRailProps) {
               tabIndex={focused === placed(place, `n:${project.id}`) ? 0 : -1}
               onFocus={() => setFocusKey(placed(place, `n:${project.id}`))}
               onClick={() => place.onNewSession(project.id)}
-              aria-label={i18n._("New session in {project}", {
+              aria-label={i18n._("New task in {project}", {
                 project: project.name,
               })}
               className={`${rowClass(false)} pl-6 text-neutral-500`}
             >
               <Icon name="plus" className="h-3 w-3 shrink-0" />
-              {i18n._("New session")}
+              {i18n._("New task")}
             </div>
           </div>
         ) : null}
