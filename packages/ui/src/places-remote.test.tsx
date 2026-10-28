@@ -13,8 +13,12 @@
 // its Credentials section with that host. The project palette opens a
 // seat's project by naming it among the member's groups there, sending
 // that seat's core a join with no folder, lists a seat's failed code
-// clone as joinable again, and reads a seat's groups as it connects.
-// A remote place's repair row offers neither a folder nor its
+// clone as joinable again, and reads a seat's groups as it connects;
+// this computer's "From your groups" stands before each seat's, one
+// opening into the folder the shell's picker took or a path named in
+// place, and this computer's welcome page opens the palette there while
+// signed in and leads to the Space surface's sign-in while not
+// (run-view-168, run-view-172). A remote place's repair row offers neither a folder nor its
 // proposal's "Add project", its environment's folder request no picker
 // — its folder named relative to its project alone — and its draft's
 // source neither a picked file nor a pasted path; the Academy example
@@ -872,7 +876,10 @@ describe("run-view-171: opening a group's project at a seat", () => {
     expect(screen.queryByTestId(`palette-project-${FAILED_KEY}@${ALPHA.place}`)).toBeNull();
     expect(screen.queryByTestId(`palette-join-${FAILED_KEY}@${ALPHA.place}`)).toBeNull();
     const again = screen.getByTestId(`palette-join-again-${FAILED_KEY}@${ALPHA.place}`);
-    expect(again.textContent).toContain("beta-spex");
+    // [run-view-168] named as its code is, never as its spex repository
+    // (DR-159).
+    expect(again.textContent).toContain("beta");
+    expect(again.textContent).not.toContain("beta-spex");
     expect(again.textContent).toContain("Join again");
     fireEvent.click(again);
     await settle();
@@ -906,6 +913,168 @@ describe("run-view-171: opening a group's project at a seat", () => {
     await settle();
     expect(callsOf(beta, "space.get")).toHaveLength(1);
     expect(callsOf(alpha, "space.get")).toEqual([]);
+  });
+});
+
+describe("run-view-171: opening a group's project on this computer", () => {
+  /** The palette's "From your groups" sections, by their places' keys,
+   * in the order they stand. */
+  const sectionsOf = (palette: HTMLElement): (string | null)[] =>
+    within(palette)
+      .getAllByRole("group")
+      .map((group) => group.getAttribute("data-testid"));
+
+  test("the palette lists this computer's groups' projects before each seat's, one opening into the folder the shell's picker takes", async () => {
+    render(<App />);
+    fireEvent.keyDown(window, { key: "p", metaKey: true });
+    await settle();
+    const palette = screen.getByTestId("project-palette");
+    // [run-view-168] "From your groups" for this computer, before each
+    // seat's "From your groups on <server>".
+    const here = within(palette).getByTestId("palette-groups-local");
+    expect(screen.getByRole("group", { name: "From your groups" })).toBe(here);
+    expect(sectionsOf(palette)).toEqual([
+      "palette-groups-local",
+      `palette-groups-${ALPHA.place}`,
+      `palette-groups-${BETA.place}`,
+    ]);
+    // [run-view-168] what this computer lacks, named as its code is with
+    // its group: a clone here whose code found no folder is paired from
+    // its Space row instead (space-63).
+    expect(within(here).getAllByRole("button").map((button) => button.getAttribute("data-testid"))).toEqual([
+      `palette-join-${ABSENT_KEY}`,
+    ]);
+    const row = within(here).getByTestId(`palette-join-${ABSENT_KEY}`);
+    expect(row.textContent).toContain("alpha");
+    expect(row.textContent).not.toContain("alpha-spex");
+    expect(row.textContent).toContain("acme");
+    fireEvent.click(row);
+    await settle();
+    // [run-view-171] [run-view-168] the act opens the shell's picker and
+    // sends `space.join` with the folder it took to this computer's core
+    // alone, as the Space row's Join does (space-63).
+    expect(pickDirectory).toHaveBeenCalledTimes(1);
+    expect(callsOf(local, "space.join")).toEqual([{ instance: SPEX, hostId: "101", folder: "/work/alpha" }]);
+    expect(callsOf(alpha, "space.join")).toEqual([]);
+    expect(callsOf(beta, "space.join")).toEqual([]);
+    // Accepted, the palette closes; the join reports on the Space row.
+    expect(screen.queryByTestId("project-palette")).toBeNull();
+  });
+
+  test("a picker closed with no folder sends nothing; a refusal reads the core's words in the palette", async () => {
+    pickDirectory.mockResolvedValueOnce(null);
+    local.answers["space.join"] = () => {
+      throw new SpexCommandError("invalid_request", "/work/alpha is a project already");
+    };
+    render(<App />);
+    fireEvent.keyDown(window, { key: "p", metaKey: true });
+    await settle();
+    fireEvent.click(screen.getByTestId(`palette-join-${ABSENT_KEY}`));
+    await settle();
+    expect(pickDirectory).toHaveBeenCalledTimes(1);
+    expect(callsOf(local, "space.join")).toEqual([]);
+    expect(screen.getByTestId("project-palette")).toBeTruthy();
+    fireEvent.click(screen.getByTestId(`palette-join-${ABSENT_KEY}`));
+    await settle();
+    expect(callsOf(local, "space.join")).toEqual([{ instance: SPEX, hostId: "101", folder: "/work/alpha" }]);
+    expect(screen.getByTestId("palette-error").textContent).toBe("/work/alpha is a project already");
+  });
+
+  test("with no picker, the folder is named in place beneath the row, a refusal kept beside it", async () => {
+    delete (window as unknown as { spexNative?: unknown }).spexNative;
+    local.answers["space.join"] = (fields?: Record<string, unknown>) => {
+      if (fields?.folder === "/taken") throw new SpexCommandError("invalid_request", "/taken is a project already");
+      return { accepted: true };
+    };
+    render(<App />);
+    fireEvent.keyDown(window, { key: "p", metaKey: true });
+    await settle();
+    const row = screen.getByTestId(`palette-join-${ABSENT_KEY}`);
+    expect(row.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(row);
+    // [run-view-168] the act asks for the folder in place (space-63).
+    const field = screen.getByTestId(`palette-join-folder-${ABSENT_KEY}-path`);
+    expect(row.getAttribute("aria-expanded")).toBe("true");
+    expect(document.activeElement).toBe(field);
+    expect(screen.getByLabelText("Folder its sessions run in on this device")).toBe(field);
+    // Escape leaves the field alone, the palette standing.
+    fireEvent.keyDown(field, { key: "Escape" });
+    expect(screen.queryByTestId(`palette-join-folder-${ABSENT_KEY}`)).toBeNull();
+    expect(screen.getByTestId("project-palette")).toBeTruthy();
+    expect(document.activeElement).toBe(row);
+    fireEvent.click(row);
+    const again = screen.getByTestId(`palette-join-folder-${ABSENT_KEY}-path`);
+    fireEvent.keyDown(again, { key: "Enter" });
+    expect(screen.getByTestId(`palette-join-folder-${ABSENT_KEY}-error`).textContent).toBe("Name the folder on this device.");
+    expect(callsOf(local, "space.join")).toEqual([]);
+    fireEvent.change(again, { target: { value: "/taken" } });
+    fireEvent.keyDown(again, { key: "Enter" });
+    await settle();
+    expect(screen.getByTestId(`palette-join-folder-${ABSENT_KEY}-error`).textContent).toBe("/taken is a project already");
+    expect(screen.getByTestId("project-palette")).toBeTruthy();
+    fireEvent.change(again, { target: { value: "~/work/alpha" } });
+    fireEvent.click(screen.getByTestId(`palette-join-folder-${ABSENT_KEY}-open`));
+    await settle();
+    // [run-view-171] [run-view-168] the join carries the folder named, to
+    // this computer's core alone.
+    expect(callsOf(local, "space.join")).toEqual([
+      { instance: SPEX, hostId: "101", folder: "/taken" },
+      { instance: SPEX, hostId: "101", folder: "~/work/alpha" },
+    ]);
+    expect(callsOf(alpha, "space.join")).toEqual([]);
+    expect(screen.queryByTestId("project-palette")).toBeNull();
+  });
+
+  test("this computer's welcome page opens the palette at its groups' projects while signed in", async () => {
+    useAppStore.setState({ projects: [], currentProjectId: undefined });
+    render(<App />);
+    await settle();
+    const welcome = screen.getByTestId("welcome-home");
+    // [run-view-172] beside the local-project and Academy actions.
+    const open = within(welcome).getByTestId("home-open-from-groups");
+    expect(open.textContent).toBe("Open a project from your groups");
+    expect(within(welcome).getAllByRole("button").map((button) => button.getAttribute("data-testid"))).toEqual([
+      "home-add-project",
+      "home-academy",
+      "home-open-from-groups",
+    ]);
+    expect(within(welcome).queryByTestId("home-sign-in")).toBeNull();
+    vi.mocked(Element.prototype.scrollIntoView).mockClear();
+    fireEvent.click(open);
+    await settle();
+    // [run-view-172] [run-view-168] the palette opens at this computer's
+    // "From your groups": in view, its first project highlighted and
+    // focused, so Enter opens it.
+    const palette = screen.getByTestId("project-palette");
+    expect(within(palette).queryByTestId("palette-own-project")).toBeNull();
+    const row = within(palette).getByTestId(`palette-join-${ABSENT_KEY}`);
+    expect(document.activeElement).toBe(row);
+    expect(row.className).toContain("bg-neutral-100");
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
+    fireEvent.click(row);
+    await settle();
+    expect(callsOf(local, "space.join")).toEqual([{ instance: SPEX, hostId: "101", folder: "/work/alpha" }]);
+  });
+
+  test("this computer's welcome page leads to the Space surface's sign-in while signed in nowhere", async () => {
+    local.answers["space.get"] = groupsState();
+    useAppStore.setState({ projects: [], currentProjectId: undefined });
+    render(<App />);
+    await settle();
+    const welcome = screen.getByTestId("welcome-home");
+    // [run-view-172] signed in nowhere, "Sign in to your Space" in place
+    // of the groups' projects.
+    const signIn = within(welcome).getByTestId("home-sign-in");
+    expect(signIn.textContent).toBe("Sign in to your Space");
+    expect(within(welcome).queryByTestId("home-open-from-groups")).toBeNull();
+    fireEvent.click(signIn);
+    await settle();
+    // [run-view-172] the Space surface at this computer, its sign-in card
+    // standing (space-3).
+    expect(document.querySelector('[data-surface="Space"]')!.getAttribute("aria-current")).toBe("page");
+    expect(shownPlace()).toBe("This computer");
+    const card = screen.getByTestId("space-signin-card");
+    expect(within(card).getByRole("heading", { level: 2 }).textContent).toBe("Not signed in");
   });
 });
 

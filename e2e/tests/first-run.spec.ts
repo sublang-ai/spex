@@ -9,7 +9,7 @@ import { join } from "node:path";
 import type { Page } from "@playwright/test";
 import { seedDemoProject } from "@sublang/spex-core/testing";
 
-import { test, expect, open, openTranslated, nav, git, clonePath } from "../src/harness";
+import { test, expect, open, openTranslated, nav, git, clonePath, surfaceEntry } from "../src/harness";
 import { expectOnboardingFit } from "../src/fit";
 
 test.use({ appOptions: { config: "none" } });
@@ -28,6 +28,7 @@ const ONBOARDING = [
     lang: "en",
     headline: "Write clear specs. Build with playbooks.",
     addProject: "Add a local project",
+    signIn: "Sign in to your Space",
     chooseFolder: "Choose a project folder…",
     newFolder: "New folder path",
     guidance: "Describe your goal. AI helps write specs for how the system should work and how to check it, then follows playbooks to build and review changes.",
@@ -41,6 +42,7 @@ const ONBOARDING = [
     lang: "zh",
     headline: "写清规约，按规程开发。",
     addProject: "添加本地项目",
+    signIn: "登录你的空间",
     chooseFolder: "选择项目文件夹…",
     newFolder: "新文件夹路径",
     guidance: "说说你的目标。AI 帮你把系统该做什么、怎样检查结果写成规约，再按规程开发和审阅。",
@@ -72,6 +74,10 @@ for (const copy of ONBOARDING) {
       await expect(welcome.getByRole("heading", { level: 1 })).toHaveText(copy.headline);
       await expect(welcome.getByTestId("home-add-project")).toHaveText(copy.addProject);
       await expect(welcome.getByTestId("home-academy")).toBeVisible();
+      // [run-view-172] signed in nowhere, the welcome page leads to the
+      // sign-in beside its two ways in.
+      await expect(welcome.getByTestId("home-sign-in")).toHaveText(copy.signIn);
+      await expect(welcome.getByTestId("home-open-from-groups")).toHaveCount(0);
       await expect(page.getByTestId("start-composer")).toHaveCount(0);
       await expect(page.getByTestId("captain-settings")).toHaveCount(0);
       if (copy.lang === "zh") await shoot(page, "welcome");
@@ -141,6 +147,20 @@ for (const copy of ONBOARDING) {
     });
   });
 }
+
+test("run-view-97: signed in nowhere, the welcome page's Sign in to your Space shows the Space surface's sign-in", async ({
+  page,
+  app,
+}) => {
+  await open(page, app);
+  const welcome = page.getByTestId("welcome-home");
+  // [run-view-172] the sign-in card of the Space surface (space-3).
+  await welcome.getByTestId("home-sign-in").click();
+  await expect(surfaceEntry(page, "Space")).toHaveAttribute("aria-current", "page");
+  const card = page.getByTestId("space-signin-card");
+  await expect(card.getByRole("heading", { level: 2 })).toHaveText("Not signed in");
+  await expect(card.getByTestId("space-signin-instance")).toBeVisible();
+});
 
 test("run-view-42, projects-42: the browser add form keeps paths distinct and owns its keys", async ({
   page,

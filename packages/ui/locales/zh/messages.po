@@ -1575,6 +1575,7 @@ msgstr "无法连接 {endpoint} 上的 Spex 核心 — 每秒重试中。网页�
 #. leave the editor without changing anything
 #. leave the editor without changing anything
 #. leave the editor without changing anything
+#. leave the editor without changing anything
 #. stop the running compile
 #: src/components/AgentEditor.tsx
 #: src/components/AgentSettings.tsx
@@ -1583,6 +1584,7 @@ msgstr "无法连接 {endpoint} 上的 Spex 核心 — 每秒重试中。网页�
 #: src/components/DraftSourceTab.tsx
 #: src/components/InlineConfirm.tsx
 #: src/components/ProjectGroup.tsx
+#: src/components/ProjectPalette.tsx
 #: src/components/PublishControl.tsx
 #: src/components/SpaceGroups.tsx
 #: src/components/SpaceInstance.tsx
@@ -3117,6 +3119,7 @@ msgstr "请在编辑器中修复该文件；Spex 会实时重新加载。"
 msgid "Fix the player in Settings"
 msgstr "在设置中修复 Player"
 
+#: src/components/ProjectPalette.tsx
 #: src/components/SpaceGroups.tsx
 msgid "Folder for its code on this device"
 msgstr "此设备上存放其代码的文件夹"
@@ -3129,6 +3132,7 @@ msgstr "{folder} 内的文件夹"
 msgid "Folder inside it (optional)"
 msgstr "其中的文件夹（可选）"
 
+#: src/components/ProjectPalette.tsx
 #: src/components/SpaceGroups.tsx
 msgid "Folder its sessions run in on this device"
 msgstr "此设备上运行其会话的文件夹"
@@ -3213,6 +3217,11 @@ msgstr "来自本次更改前的编译"
 #: src/components/SpaceSync.tsx
 msgid "From the host ({count})"
 msgstr "来自托管平台（{count}）"
+
+#. project palette: heading over the projects of the member's groups this computer can open
+#: src/components/ProjectPalette.tsx
+msgid "From your groups"
+msgstr "来自你的群组"
 
 #. project palette: heading over the spex repositories of the member's groups a team server can open; {place} is the server's name
 #: src/components/ProjectPalette.tsx
@@ -3602,6 +3611,7 @@ msgstr "将两段历史合并为一段？有差异的内容会让你选择。"
 #. the Join control, while the join runs
 #. the Join control, while the join runs
 #. the Join control, while the join runs
+#. the Join control, while the join runs
 #: src/components/ProjectPalette.tsx
 #: src/components/SpaceGroups.tsx
 #: src/components/SpacePlacements.tsx
@@ -3921,6 +3931,7 @@ msgstr "移动中…"
 msgid "Name"
 msgstr "名称"
 
+#: src/components/ProjectPalette.tsx
 #: src/components/SpaceGroups.tsx
 #: src/components/SpaceSync.tsx
 msgid "Name the folder on this device."
@@ -4360,7 +4371,7 @@ msgstr "{project} 中没有需要关注的内容。"
 msgid "Nothing is repeated"
 msgstr "不会重复任何工作"
 
-#. project palette: a team server's groups list no spex repository it lacks
+#. project palette: a place's groups list no spex repository it lacks
 #: src/components/ProjectPalette.tsx
 msgid "Nothing more to open from your groups"
 msgstr "你的群组中没有更多可打开的项目"
@@ -4514,7 +4525,8 @@ msgstr "打开 {title} — {reason}"
 msgid "Open {title} — running in {project}"
 msgstr "打开 {title} — 正在 {project} 中运行"
 
-#. primary action of the welcome page at a team server: opens the project palette listing your groups' projects there
+#. welcome page action: opens the project palette at the projects of your groups that place can open
+#. welcome page action: opens the project palette at the projects of your groups that place can open
 #: src/components/CaptainHome.tsx
 msgid "Open a project from your groups"
 msgstr "从群组打开项目"
@@ -4531,6 +4543,11 @@ msgstr "打开“启用”"
 #: src/components/SpaceSync.tsx
 msgid "Open folder…"
 msgstr "打开文件夹…"
+
+#. project palette: open a project of the member's groups on this computer, cloning it into the folder named beside
+#: src/components/ProjectPalette.tsx
+msgid "Open here"
+msgstr "在本机打开"
 
 #: src/components/SpaceSignIn.tsx
 msgid "Open it again"
@@ -6041,6 +6058,11 @@ msgstr "登录 {name} 后发布"
 #: src/components/SpaceSignIn.tsx
 msgid "Sign in to see your groups and share each project's records with the people in them."
 msgstr "登录后即可查看你的群组，并与群组中的成员共享各项目的记录。"
+
+#. welcome page action while this computer is signed in to no instance: shows the Space surface, where the sign-in is
+#: src/components/CaptainHome.tsx
+msgid "Sign in to your Space"
+msgstr "登录你的空间"
 
 #. sign this device out of the instance whose heading carries it
 #: src/components/SpaceInstance.tsx
