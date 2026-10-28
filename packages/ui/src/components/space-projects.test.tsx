@@ -92,6 +92,10 @@ const WORDS = {
     notOnLab: "Not on lab-1",
     keepOnLab: "Keep what's on lab-1",
     labFiles: "Spex keeps lab-1's files in ~/.spex",
+    keepLabVersion: "Keep lab-1's version of the unit? The host's version stays in Git history.",
+    nothingFromLab: "Nothing to send from lab-1",
+    signOutLab: "Signs lab-1 out of Spex Example; every record stays there",
+    cancel: "Cancel",
     labSignIn: ["Sign in to see your groups and open their projects on lab-1.", "Until you do, nothing on lab-1 is contacted."],
     exempt: ["Add to a group…", "Merge histories…"],
   },
@@ -134,6 +138,10 @@ const WORDS = {
     notOnLab: "不在 lab-1 上",
     keepOnLab: "保留 lab-1 上的",
     labFiles: "Spex 将 lab-1 的文件保存在 ~/.spex",
+    keepLabVersion: "保留这 1 个单元的 lab-1 版本？托管平台的版本仍留在 Git 历史中。",
+    nothingFromLab: "lab-1 没有要发送的内容",
+    signOutLab: "让 lab-1 退出 Spex Example；所有记录仍保留在那里",
+    cancel: "取消",
     labSignIn: ["登录后即可查看你的群组，并在 lab-1 上打开其中的项目。", "在此之前，lab-1 上不会联系任何服务。"],
     exempt: ["加入群组…", "合并历史…"],
   },
@@ -601,6 +609,17 @@ describe.each(["en", "zh"] as const)("space-113: the Space surface reads as proj
     fireEvent.click(screen.getByTestId(`space-row-resolve-${ALPHA_KEY}`));
     const picker = screen.getByTestId(`space-row-resolve-picker-${ALPHA_KEY}`);
     expect(within(picker).getByLabelText(new RegExp(`^${words.keepOnLab}`))).toBeTruthy();
+    // Apply's confirm, every choice keeping the seat's side, names it.
+    fireEvent.click(within(picker).getByTestId("space-all-mine"));
+    fireEvent.click(within(picker).getByTestId("space-apply"));
+    expect(within(picker).getByTestId("space-apply-confirm").textContent).toContain(words.keepLabVersion);
+    fireEvent.keyDown(within(picker).getByRole("button", { name: words.cancel }), { key: "Escape" });
+    // The Sync tab's local changes name it.
+    fireEvent.click(screen.getByTestId(`space-repo-${ALPHA_KEY}`));
+    const panel = await screen.findByTestId("space-repository");
+    expect(within(panel).getByText(words.nothingFromLab)).toBeTruthy();
+    // The instance's Sign out names it in its title.
+    expect(screen.getByTestId("space-signout").getAttribute("title")).toBe(words.signOutLab);
     // "Spex keeps lab-1's files in <home>".
     expect(screen.getByTestId("space-home").textContent).toBe(words.labFiles);
     // Its "Add instance…" card says nothing of your own group's records.

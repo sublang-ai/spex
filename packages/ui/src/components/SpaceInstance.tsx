@@ -28,6 +28,7 @@ import { usePlaceStore } from "../state/place-context.js";
 import { isLocalPlace } from "../state/store.js";
 import { i18n } from "../i18n.js";
 import { hostNameOf, instanceName, instanceOf, originOf } from "../lib/instances.js";
+import { seatName } from "../lib/space.js";
 import { absoluteTitle, relativeAge } from "../lib/time.js";
 import { GroupNameEditor } from "./SpaceMembers.js";
 import { InstanceField, signInAgainLabel, signInLines, signingInLabel, type SignInFlow } from "./SpaceSignIn.js";
@@ -223,6 +224,9 @@ function InstanceHeading({
   const byHost = !instance.signedIn && instance.hostSignedOut && !flowing && signIn.failure === undefined;
   const readAt = instance.readAt;
   const signedInAs = i18n._("Signed in as @{login}", { login: instance.account.login });
+  // At a seat's place the server is named where this device would be
+  // (space-112).
+  const seat = seatName(store.place);
 
   return (
     <div
@@ -292,7 +296,15 @@ function InstanceHeading({
               data-testid="space-signout"
               className={`${SECONDARY} w-full whitespace-nowrap @xs:w-auto`}
               disabled={!connected || signingOut}
-              title={i18n._("Signs this device out of {host}; every record stays here", { host: name })}
+              title={
+                seat === undefined
+                  ? i18n._("Signs this device out of {host}; every record stays here", { host: name })
+                  : i18n._({
+                      id: "Signs {place} out of {host}; every record stays there",
+                      values: { place: seat, host: name },
+                      comment: "Sign out's title on a team server's Space; {place} is the server's name, {host} the instance's display name",
+                    })
+              }
               onClick={() => void signOut()}
             >
               {signingOut
@@ -313,11 +325,19 @@ function InstanceHeading({
               data-testid="space-forget"
               className={`${SECONDARY} self-start whitespace-nowrap @xs:self-auto`}
               disabled={!connected || forgetting || (here && flowing)}
-              title={i18n._({
-                id: "Forgets {host} on this device; every record stays here",
-                values: { host: name },
-                comment: "Forget's title on a signed-out instance's heading; {host} is the instance's display name, or its host name before any read",
-              })}
+              title={
+                seat === undefined
+                  ? i18n._({
+                      id: "Forgets {host} on this device; every record stays here",
+                      values: { host: name },
+                      comment: "Forget's title on a signed-out instance's heading; {host} is the instance's display name, or its host name before any read",
+                    })
+                  : i18n._({
+                      id: "Forgets {host} on {place}; every record stays there",
+                      values: { host: name, place: seat },
+                      comment: "Forget's title on a team server's Space; {host} is the instance's display name, {place} the server's name",
+                    })
+              }
               onClick={() => void forget()}
             >
               {i18n._({
@@ -386,10 +406,16 @@ function InstanceHeading({
       ) : null}
       {byHost ? (
         <p data-testid="space-signed-out-by-host" className="min-w-0 break-words text-sm text-neutral-600 dark:text-neutral-300">
-          {i18n._("{site} signed this device out. Sign in again to continue as @{login}.", {
-            site: instance.host,
-            login: instance.account.login,
-          })}
+          {seat === undefined
+            ? i18n._("{site} signed this device out. Sign in again to continue as @{login}.", {
+                site: instance.host,
+                login: instance.account.login,
+              })
+            : i18n._({
+                id: "{site} signed {place} out. Sign in again to continue as @{login}.",
+                values: { site: instance.host, place: seat, login: instance.account.login },
+                comment: "a signed-out instance's heading on a team server's Space; {site} is its host name, {place} the server's name",
+              })}
         </p>
       ) : null}
       {creating && instance.signedIn ? (

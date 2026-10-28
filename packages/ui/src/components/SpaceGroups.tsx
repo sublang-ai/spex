@@ -111,6 +111,7 @@ import {
   rowName,
   rowPhrase,
   sameRemote,
+  seatName,
 } from "../lib/space.js";
 import { InlineConfirm } from "./InlineConfirm.js";
 import { AddInstance, InstanceSection } from "./SpaceInstance.js";
@@ -1332,7 +1333,7 @@ function RepositoryRow({
             tone: "idle" as const,
             act: undefined,
           }
-        : rowPhrase(repo, now, dismissed, nameOf);
+        : rowPhrase(repo, now, dismissed, nameOf, seatName(store.place));
 
   // Where its code lives (space-1, space-40): a project's code remote as
   // read, "Code not on a remote" where `project.json` names none, nothing

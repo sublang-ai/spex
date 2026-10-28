@@ -193,6 +193,11 @@ msgstr "{count, plural, other {# 项}}"
 msgid "{count, plural, one {# file uploads:} other {# files upload:}}"
 msgstr "{count, plural, other {将上传 # 个文件：}}"
 
+#. a session's node in the Explore tab on a team server's Space; {place} is the server's name
+#: src/components/SpaceExplorer.tsx
+msgid "{count, plural, one {# file} other {# files}} — the manifest, the records and, where {place} ran it, its provider hints."
+msgstr "{count, plural, other {# 个文件}} — 清单、记录，以及 {place} 运行过时留下的服务商提示。"
+
 #: src/components/SpaceExplorer.tsx
 msgid "{count, plural, one {# file} other {# files}} — the manifest, the records and, where this device ran it, its provider hints."
 msgstr "{count, plural, other {# 个文件}} — 清单、记录，以及本设备运行过时留下的服务商提示。"
@@ -275,6 +280,11 @@ msgstr "{count, plural, other {# 个单元}}尚未到达其他任何实例。仍
 #: src/lib/failure-catalogue.ts
 msgid "{count, plural, one {Changed # file without committing} other {Changed # files without committing}}"
 msgstr "{count, plural, other {改动了 # 个文件却未提交}}"
+
+#. Apply's confirm on a team server's Space, every choice keeping the server's side; {place} is the server's name
+#: src/components/SpaceSync.tsx
+msgid "{count, plural, one {Keep {place}'s version of the unit? The host's version stays in Git history.} other {Keep {place}'s version of all # units? The host's version stays in Git history.}}"
+msgstr "{count, plural, other {保留这 # 个单元的 {place} 版本？托管平台的版本仍留在 Git 历史中。}}"
 
 #: src/components/SpaceSync.tsx
 msgid "{count, plural, one {Keep this device's version of the unit? The host's version stays in Git history.} other {Keep this device's version of all # units? The host's version stays in Git history.}}"
@@ -496,6 +506,11 @@ msgstr "{packages, plural, other {# 个规约包}} · {items} 个条目"
 msgid "{path} — needs you"
 msgstr "{path} — 需要你处理"
 
+#. a folder repair's outcome on a team server's Space; {place} is the server's name
+#: src/components/SpaceSync.tsx
+msgid "{path} · forgotten on {place}"
+msgstr "{path} · 已在 {place} 上忘记"
+
 #: src/components/SpaceSync.tsx
 msgid "{path} · forgotten on this device"
 msgstr "{path} · 已在此设备上忘记"
@@ -507,6 +522,16 @@ msgstr "{path} 不在规约树中"
 #: src/state/store.ts
 msgid "{path} is not the root of a git work tree. To start a new repository there, use Create instead."
 msgstr "{path} 不是 git 工作树的根目录。若要在此新建仓库，请改用“新建”。"
+
+#. a diff's heading on a team server's Space: the server's version against the common ancestor; {place} is the server's name
+#: src/components/SpaceSync.tsx
+msgid "{place} against the common ancestor"
+msgstr "{place} 相对共同祖先的差异"
+
+#. why credentials stay on a team server's seat; {place} is the server's name
+#: src/lib/space.ts
+msgid "{place}'s sign-in to each instance"
+msgstr "{place} 在每个实例上的登录凭据"
 
 #: src/components/MachineCard.tsx
 msgid "{playbookId} machine drawing"
@@ -559,6 +584,11 @@ msgstr "{seconds} 秒"
 msgid "{server} speaks a different protocol version than this window — it needs the same Spex release as this app."
 msgstr "{server} 与此窗口的协议版本不一致 — 它需要运行与本应用相同的 Spex 版本。"
 
+#. a signed-out instance's heading on a team server's Space; {site} is its host name, {place} the server's name
+#: src/components/SpaceInstance.tsx
+msgid "{site} signed {place} out. Sign in again to continue as @{login}."
+msgstr "{site} 已让 {place} 退出登录。重新登录即可以 @{login} 继续。"
+
 #: src/components/SpaceInstance.tsx
 msgid "{site} signed this device out. Sign in again to continue as @{login}."
 msgstr "{site} 已让此设备退出登录。重新登录即可以 @{login} 继续。"
@@ -602,6 +632,11 @@ msgstr "在该规程的模块旁未找到 {stage}"
 #: src/lib/space.ts
 msgid "{state} · last synced {at}"
 msgstr "{state} · 上次同步于 {at}"
+
+#. a read-only row's title on a team server's Space: new sessions stay on the server; {place} is the server's name
+#: src/lib/space.ts
+msgid "{state} · new sessions stay on {place}"
+msgstr "{state} · 新会话留在 {place} 上"
 
 #: src/lib/space.ts
 msgid "{state} · new sessions stay on this device"
@@ -3173,6 +3208,11 @@ msgstr "忘记文件夹"
 msgid "Forget this folder here? The folder stays on disk."
 msgstr "在此忘记这个文件夹？文件夹会保留在磁盘上。"
 
+#. Forget's title on a team server's Space; {host} is the instance's display name, {place} the server's name
+#: src/components/SpaceInstance.tsx
+msgid "Forgets {host} on {place}; every record stays there"
+msgstr "在 {place} 上忘记 {host}；所有记录仍保留在那里"
+
 #. Forget's title on a signed-out instance's heading; {host} is the instance's display name, or its host name before any read
 #: src/components/SpaceInstance.tsx
 msgid "Forgets {host} on this device; every record stays here"
@@ -3590,6 +3630,11 @@ msgstr "它的文件不在本机"
 #: src/components/SpecView.tsx
 msgid "Its specs/ tree holds an earlier layout's directories: the user/, dev/, test/ or items/ groups, or an interactions/ or compositions/ collection."
 msgstr "它的 specs/ 目录树保留着早期布局的目录：user/、dev/、test/ 或 items/ 分组，或 interactions/、compositions/ 集合。"
+
+#. a folder repair's evidence on a team server's Space; {place} is the server's name
+#: src/components/SpaceSync.tsx
+msgid "Its spex repository is not on {place}."
+msgstr "它的 spex 仓库不在 {place} 上。"
 
 #: src/components/SpaceSync.tsx
 msgid "Its spex repository is not on this device."
@@ -4076,6 +4121,11 @@ msgstr "新会话"
 msgid "New session"
 msgstr "新建会话"
 
+#. a read-only repository's note on a team server's Space: new sessions stay on the server; {place} is the server's name
+#: src/components/SpaceSurface.tsx
+msgid "New sessions stay on {place}"
+msgstr "新会话留在 {place} 上"
+
 #: src/components/SpaceSurface.tsx
 msgid "New sessions stay on this device"
 msgstr "新会话留在此设备上"
@@ -4435,6 +4485,11 @@ msgstr "队列为空 — 写下下一个意图…"
 #: src/components/DashboardSurface.tsx
 msgid "Nothing running."
 msgstr "没有正在运行的工作。"
+
+#. a Sync tab's local changes on a team server's Space, none standing; {place} is the server's name
+#: src/components/SpaceSync.tsx
+msgid "Nothing to send from {place}"
+msgstr "{place} 没有要发送的内容"
 
 #: src/components/SpaceSync.tsx
 msgid "Nothing to send from this device"
@@ -5600,6 +5655,11 @@ msgstr "恢复中…"
 msgid "Resume from an earlier step…"
 msgstr "从更早的步骤继续…"
 
+#. why provider hints stay on a team server's seat; {place} is the server's name
+#: src/lib/space.ts
+msgid "resume tokens for {place}'s agent conversations; they work nowhere else"
+msgstr "{place} 上智能体对话的续接令牌；在别处无效"
+
 #: src/lib/space.ts
 msgid "resume tokens for this machine's agent conversations; they work nowhere else"
 msgstr "本机智能体对话的续接令牌；在别处无效"
@@ -6187,6 +6247,11 @@ msgstr "登录中…"
 msgid "Signing out…"
 msgstr "退出中…"
 
+#. Sign out's title on a team server's Space; {place} is the server's name, {host} the instance's display name
+#: src/components/SpaceInstance.tsx
+msgid "Signs {place} out of {host}; every record stays there"
+msgstr "让 {place} 退出 {host}；所有记录仍保留在那里"
+
 #: src/components/SpaceInstance.tsx
 #: src/components/SpaceSignIn.tsx
 msgid "Signs in to {host}"
@@ -6451,6 +6516,11 @@ msgstr "状态"
 msgid "Stays here"
 msgstr "仅留本机"
 
+#. the Explore tab's panel of what never syncs, on a team server's Space; {place} is the server's name
+#: src/components/SpaceExplorer.tsx
+msgid "Stays on {place} ({count} kinds)"
+msgstr "仅留在 {place}（{count} 类）"
+
 #: src/components/SpaceExplorer.tsx
 msgid "Stays on this device ({count} kinds)"
 msgstr "仅留在本设备（{count} 类）"
@@ -6655,6 +6725,11 @@ msgstr "该文件夹在本机，且是一个 git 仓库。添加为项目吗？"
 #: src/components/SpaceSync.tsx
 msgid "That folder is here but is not a git repository."
 msgstr "该文件夹在本机，但不是 git 仓库。"
+
+#. a repair's evidence on a team server's Space; {place} is the server's name
+#: src/components/SpaceSync.tsx
+msgid "That folder is no longer on {place}."
+msgstr "该文件夹已不在 {place} 上。"
 
 #: src/components/SpaceSync.tsx
 msgid "That folder is no longer on this device."
@@ -7356,6 +7431,11 @@ msgstr "项目所在位置"
 #: src/lib/space.ts
 msgid "where you last stopped reading in each session"
 msgstr "每个会话中你上次读到的位置"
+
+#. why where projects live stays on a team server's seat; {place} is the server's name
+#: src/lib/space.ts
+msgid "where your working folders are on {place}, in the home file"
+msgstr "你的工作文件夹在 {place} 上的位置，记在主目录文件中"
 
 #: src/lib/space.ts
 msgid "where your working folders are on this machine, in the home file"

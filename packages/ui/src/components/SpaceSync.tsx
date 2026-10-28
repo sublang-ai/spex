@@ -82,6 +82,7 @@ function DiffBox({
 }) {
   const store = usePlaceStore();
   const spaceDiff = store((state) => state.spaceDiff);
+  const seat = seatName(store.place);
   const [patches, setPatches] = useState<{ path: string; patch: string; truncated: boolean }[]>();
   const [error, setError] = useState<string>();
 
@@ -128,7 +129,13 @@ function DiffBox({
     >
       <span className="text-xs text-neutral-500">
         {side === "mine"
-          ? i18n._("This device against the common ancestor")
+          ? seat === undefined
+            ? i18n._("This device against the common ancestor")
+            : i18n._({
+                id: "{place} against the common ancestor",
+                values: { place: seat },
+                comment: "a diff's heading on a team server's Space: the server's version against the common ancestor; {place} is the server's name",
+              })
           : i18n._("The host's version against the common ancestor")}
       </span>
       {patches.map(({ path, patch, truncated }) => (
@@ -671,8 +678,10 @@ function RepairRow({
   const removeProject = store((state) => state.removeProject);
   const decline = store((state) => state.spaceRepairDecline);
   // A remote place's core allocates every project's folder (space-103,
-  // run-view-169): no folder is named there, picked or typed.
+  // run-view-169): no folder is named there, picked or typed; its words
+  // name the server where they would name this device (space-112).
   const local = isLocalPlace(store.place);
+  const seat = seatName(store.place);
   const proposal = repair.proposal;
   const recorded = repair.directories[0] ?? "";
   const folderRepair = repair.kind === "folder";
@@ -747,7 +756,16 @@ function RepairRow({
     setRefusal(undefined);
     try {
       await removeProject(repair.repository, true);
-      onResolved(repair.key, i18n._("{path} · forgotten on this device", { path: name }));
+      onResolved(
+        repair.key,
+        seat === undefined
+          ? i18n._("{path} · forgotten on this device", { path: name })
+          : i18n._({
+              id: "{path} · forgotten on {place}",
+              values: { path: name, place: seat },
+              comment: "a folder repair's outcome on a team server's Space; {place} is the server's name",
+            }),
+      );
     } catch (cause) {
       setRefusal((cause as Error).message);
     } finally {
@@ -769,11 +787,23 @@ function RepairRow({
 
   const checkedRecorded = (repair.checked ?? []).find((entry) => entry.path === recorded);
   const evidence = folderRepair
-    ? i18n._("Its spex repository is not on this device.")
+    ? seat === undefined
+      ? i18n._("Its spex repository is not on this device.")
+      : i18n._({
+          id: "Its spex repository is not on {place}.",
+          values: { place: seat },
+          comment: "a folder repair's evidence on a team server's Space; {place} is the server's name",
+        })
     : proposal && local
       ? i18n._("That folder is here and is a git repository. Add it as a project?")
       : checkedRecorded?.here === false
-        ? i18n._("That folder is no longer on this device.")
+        ? seat === undefined
+          ? i18n._("That folder is no longer on this device.")
+          : i18n._({
+              id: "That folder is no longer on {place}.",
+              values: { place: seat },
+              comment: "a repair's evidence on a team server's Space; {place} is the server's name",
+            })
         : checkedRecorded?.claimedBy
           ? i18n._("That folder already belongs to {owner}.", {
               owner: checkedRecorded.claimedBy,
@@ -1564,7 +1594,13 @@ export function SyncTab({
         </h2>
         {repo.local.length === 0 ? (
           <p className="text-sm text-neutral-500">
-            {i18n._("Nothing to send from this device")}
+            {seatName(store.place) === undefined
+              ? i18n._("Nothing to send from this device")
+              : i18n._({
+                  id: "Nothing to send from {place}",
+                  values: { place: seatName(store.place)! },
+                  comment: "a Sync tab's local changes on a team server's Space, none standing; {place} is the server's name",
+                })}
           </p>
         ) : (
           <UnitList
@@ -1873,10 +1909,16 @@ export function ConflictsPicker({
             <InlineConfirm
               question={
                 remoteCount === 0
-                  ? i18n._(
-                      "{count, plural, one {Keep this device's version of the unit? The host's version stays in Git history.} other {Keep this device's version of all # units? The host's version stays in Git history.}}",
-                      { count: total },
-                    )
+                  ? seat === undefined
+                    ? i18n._(
+                        "{count, plural, one {Keep this device's version of the unit? The host's version stays in Git history.} other {Keep this device's version of all # units? The host's version stays in Git history.}}",
+                        { count: total },
+                      )
+                    : i18n._({
+                        id: "{count, plural, one {Keep {place}'s version of the unit? The host's version stays in Git history.} other {Keep {place}'s version of all # units? The host's version stays in Git history.}}",
+                        values: { count: total, place: seat },
+                        comment: "Apply's confirm on a team server's Space, every choice keeping the server's side; {place} is the server's name",
+                      })
                   : i18n._(
                       "Replace {count, plural, one {# unit} other {# units}} with the host's version? The other version stays in Git history; a replaced session loses its local resume hints and where you stopped reading.",
                       { count: remoteCount },

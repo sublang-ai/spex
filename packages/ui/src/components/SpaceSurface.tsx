@@ -760,7 +760,13 @@ function RepositoryPanel({
         ) : null}
         {repo.state === "read-only" ? (
           <span data-testid="space-read-only-note" className="text-xs text-neutral-500">
-            {i18n._("New sessions stay on this device")}
+            {seat === undefined
+              ? i18n._("New sessions stay on this device")
+              : i18n._({
+                  id: "New sessions stay on {place}",
+                  values: { place: seat },
+                  comment: "a read-only repository's note on a team server's Space: new sessions stay on the server; {place} is the server's name",
+                })}
           </span>
         ) : null}
       </div>

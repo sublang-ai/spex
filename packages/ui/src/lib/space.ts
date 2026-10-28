@@ -341,12 +341,14 @@ export interface RowPhrase extends LinePhrase {
  * line alone (space-61, space-64).
  * Outcomes the reader dismissed and those that need nothing of him —
  * synced, behind — leave the state's phrase. `nameOf` names an
- * instance by its origin, the path placement's by null. */
+ * instance by its origin, the path placement's by null; `seat` names
+ * the server at a seat's place (space-112). */
 export function rowPhrase(
   repo: RepositoryState,
   now: number,
   dismissed: string | undefined,
   nameOf: (origin: string | null) => string,
+  seat?: string,
 ): RowPhrase {
   const sync = repo.sync;
   if (sync.phase === "running") {
@@ -398,7 +400,13 @@ export function rowPhrase(
   const last = lastSyncOf(repo);
   const title =
     repo.state === "read-only"
-      ? i18n._("{state} · new sessions stay on this device", { state: text })
+      ? seat === undefined
+        ? i18n._("{state} · new sessions stay on this device", { state: text })
+        : i18n._({
+            id: "{state} · new sessions stay on {place}",
+            values: { state: text, place: seat },
+            comment: "a read-only row's title on a team server's Space: new sessions stay on the server; {place} is the server's name",
+          })
       : last && repo.state !== "reachable"
         ? i18n._("{state} · last synced {at}", { state: text, at: absoluteTitle(last.at) })
         : last
@@ -619,15 +627,21 @@ export function familyName(family: string): string {
   return FAMILY_LABELS[family]?.() ?? family;
 }
 
-/** Every ignored family with its one plain reason (space-25); read at
- * render, never at module load. */
-export function staysHere(): readonly { family: string; reason: string }[] {
+/** Every ignored family with its one plain reason (space-25), the
+ * server named where this machine would be at a seat's place
+ * (space-112); read at render, never at module load. */
+export function staysHere(seat?: string): readonly { family: string; reason: string }[] {
   return [
     {
       family: i18n._({ id: "provider hints", comment: "a file family that stays on this device" }),
-      reason: i18n._(
-        "resume tokens for this machine's agent conversations; they work nowhere else",
-      ),
+      reason:
+        seat === undefined
+          ? i18n._("resume tokens for this machine's agent conversations; they work nowhere else")
+          : i18n._({
+              id: "resume tokens for {place}'s agent conversations; they work nowhere else",
+              values: { place: seat },
+              comment: "why provider hints stay on a team server's seat; {place} is the server's name",
+            }),
     },
     {
       family: i18n._({ id: "leases and locks", comment: "a file family that stays on this device" }),
@@ -642,7 +656,14 @@ export function staysHere(): readonly { family: string; reason: string }[] {
     },
     {
       family: i18n._({ id: "where projects live", comment: "a file family that stays on this device" }),
-      reason: i18n._("where your working folders are on this machine, in the home file"),
+      reason:
+        seat === undefined
+          ? i18n._("where your working folders are on this machine, in the home file")
+          : i18n._({
+              id: "where your working folders are on {place}, in the home file",
+              values: { place: seat },
+              comment: "why where projects live stays on a team server's seat; {place} is the server's name",
+            }),
     },
     {
       family: i18n._({ id: "preferences", comment: "a file family that stays on this device" }),
@@ -650,7 +671,14 @@ export function staysHere(): readonly { family: string; reason: string }[] {
     },
     {
       family: i18n._({ id: "credentials", comment: "a file family that stays on this device" }),
-      reason: i18n._("this device's sign-in to each instance"),
+      reason:
+        seat === undefined
+          ? i18n._("this device's sign-in to each instance")
+          : i18n._({
+              id: "{place}'s sign-in to each instance",
+              values: { place: seat },
+              comment: "why credentials stay on a team server's seat; {place} is the server's name",
+            }),
     },
     {
       family: i18n._({

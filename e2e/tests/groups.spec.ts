@@ -1716,7 +1716,7 @@ test.describe("three instances", () => {
     },
   });
 
-  test("space-88, space-89, space-98, space-87, space-1, space-4, space-57, storage-38, space-28: your own group placed at each later instance waits for Continue; Place at… opens the choice of two instances and places the project at the third; Leave… stops for records no other placement received, then leaves the first, the clone moving under the third, and the last, leaving it on this device only", async ({
+  test("space-88, space-89, space-98, space-87, space-1, space-4, space-57, storage-38, space-28: your own group placed at each later instance waits for Continue; Place at… opens the choice of two instances and places the project at the third; Leave… stops for records no other placement received, then leaves the first, the clone moving under the third, and the last, the row then reading On this computer only with Add to a group…", async ({
     page,
     app,
   }) => {
@@ -1726,7 +1726,7 @@ test.describe("three instances", () => {
     const third = app.hosts[2]!;
     const KEY = hostKey(first, TEAM_PATH);
     const MOVED_KEY = hostKey(third, NAMESPACE_PATH);
-    // On this device only, under your own group's folder, which bears
+    // On this computer only, under your own group's folder, which bears
     // your login (storage-38, space-59).
     const LOCAL_KEY = `${HOST_LOGIN}/demo-project-spex`;
     // The home signed in at the second and the third, your own group
@@ -2050,7 +2050,7 @@ test.describe("one Git backend", () => {
     },
   });
 
-  test("space-1, space-88, space-89, storage-38: a host repository both of two instances over one Git backend list is one placement — your namespace at the second names the project's row and your own group's in one line each, with no control, and Place at… offers the third alone; placed there, leaving the first while it still lists that host repository keeps the opened row, its tabs and focus on the moved clone, not on the row of no clone standing under the former key", async ({
+  test("space-1, space-88, space-89, storage-38: a host repository both of two instances over one Git backend list is one placement — no quiet line names the project's row or your own group's at either instance, your namespace at the second heading nothing, and Place at… offers the third alone; placed there, leaving the first while it still lists that host repository keeps the opened row, its tabs and focus on the moved clone, not on the row of no clone standing under the former key", async ({
     page,
     app,
   }) => {

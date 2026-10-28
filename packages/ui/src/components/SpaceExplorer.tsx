@@ -34,6 +34,7 @@ import {
   prettyJson,
   previewKindOf,
   sessionPartName,
+  seatName,
   staysHere,
   withheldPhrase,
 } from "../lib/space.js";
@@ -166,12 +167,14 @@ function entrySize(entry: SpaceEntry): string | undefined {
 }
 
 /** The "Stays on this device" panel (space-25): every ignored family
- * with its reason; folded state is chrome preference (DR-030). */
+ * with its reason, the server named at a seat's place (space-112);
+ * folded state is chrome preference (DR-030). */
 function PrivacyPanel() {
   const store = usePlaceStore();
   const collapsed = store((state) => state.spacePrivacyCollapsed);
   const setCollapsed = store((state) => state.setSpacePrivacyCollapsed);
-  const families = staysHere();
+  const seat = seatName(store.place);
+  const families = staysHere(seat);
   return (
     <div
       data-testid="space-privacy"
@@ -186,7 +189,13 @@ function PrivacyPanel() {
         onClick={() => setCollapsed(!collapsed)}
       >
         <Icon name={collapsed ? "caretRight" : "caretDown"} className="h-3.5 w-3.5" />
-        {i18n._("Stays on this device ({count} kinds)", { count: families.length })}
+        {seat === undefined
+          ? i18n._("Stays on this device ({count} kinds)", { count: families.length })
+          : i18n._({
+              id: "Stays on {place} ({count} kinds)",
+              values: { place: seat, count: families.length },
+              comment: "the Explore tab's panel of what never syncs, on a team server's Space; {place} is the server's name",
+            })}
       </button>
       {collapsed ? null : (
         <dl id="space-privacy-list" className="mt-2 grid grid-cols-1 gap-x-4 gap-y-1 text-xs @md:grid-cols-[auto_1fr]">
@@ -718,6 +727,9 @@ function PreviewPane({
   onOpenSession(sessionId: string): void;
   onNote: Note;
 }) {
+  // At a seat's place the server is named where this device would be
+  // (space-112).
+  const seat = seatName(usePlaceStore().place);
   const { node } = row;
   if (node.kind === "session") {
     return (
@@ -740,10 +752,16 @@ function PreviewPane({
           }
         />
         <p className="text-sm text-neutral-500">
-          {i18n._(
-            "{count, plural, one {# file} other {# files}} — the manifest, the records and, where this device ran it, its provider hints.",
-            { count: node.children.length },
-          )}
+          {seat === undefined
+            ? i18n._(
+                "{count, plural, one {# file} other {# files}} — the manifest, the records and, where this device ran it, its provider hints.",
+                { count: node.children.length },
+              )
+            : i18n._({
+                id: "{count, plural, one {# file} other {# files}} — the manifest, the records and, where {place} ran it, its provider hints.",
+                values: { count: node.children.length, place: seat },
+                comment: "a session's node in the Explore tab on a team server's Space; {place} is the server's name",
+              })}
         </p>
       </>
     );
