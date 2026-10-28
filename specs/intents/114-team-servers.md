@@ -5,7 +5,7 @@
 
 ## Status
 
-Done (2026-10-23), begun 2026-10-21, after execution ownership and beside spex.pub's servers.
+Implemented (2026-10-23), begun 2026-10-21, after execution ownership and beside spex.pub's servers; the live acceptance with two members on a real Linux server is still owed, waiting on the operator, so the intent is not done.
 
 ## Intent
 
@@ -20,7 +20,8 @@ Implement [DR-132](../decisions/132-team-servers.md): seat mode in the core and 
 - [x] The server shell's seat flags: the token from a file, the device label, the server and person ids, the shared file, the socket.
 - [x] The hub: TLS, admission by ticket, the bearer in a header, the relay to the seat, leases renewed at the instance and kept across restarts, the helper calls, `attach`, `status`, `evict` and `retire`.
 - [x] The helper, the units, the sudoers fragment and the install script over a source release.
-- [x] The privileged lane on Linux and the live acceptance with two members.
+- [x] The privileged lane on Linux.
+- [ ] The live acceptance with two members on a real Linux server, the checks of [DR-132](../decisions/132-team-servers.md) recorded.
 
 ## Tasks
 
