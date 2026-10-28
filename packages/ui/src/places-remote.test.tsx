@@ -4,10 +4,10 @@
 // run-view-171: the remote rules (run-view-169, space-103, settings-48,
 // DR-133). The local store and two seat stores, each over a fake client
 // of its own, with the shell's picker and reveal present: this
-// computer's Groups rows ask the picker for a Join's folder, offer
-// "Choose folder…" for a clone whose code found none and reveal a
-// clone's path, while a seat's offer none of these — its Join and its
-// "Join again" send `space.join` with no folder to that seat's core
+// computer's Space rows ask the picker for an "Open here"'s folder,
+// offer "Choose folder…" for a clone whose code found none and reveal a
+// clone's path, while a seat's offer none of these — its "Open here"
+// and its "Try again" send `space.join` with no folder to that seat's core
 // alone, and a code clone that failed for want of the member's
 // credential offers "Add a credential", opening the seat's Settings at
 // its Credentials section with that host. The project palette opens a
@@ -395,16 +395,22 @@ describe("run-view-171: a remote place offers no picker, reveal or path entry", 
     goTo("Space");
     await settle();
 
-    // This computer: Join asks the shell's picker for the folder, and
-    // sends it.
-    fireEvent.click(screen.getByTestId(`space-row-join-${ABSENT_KEY}`));
+    // This computer: "Open here" asks the shell's picker for the folder,
+    // the picker opened by the act itself, and sends it (space-111,
+    // space-63).
+    const openHere = screen.getByTestId(`space-row-open-${ABSENT_KEY}`);
+    expect(openHere.textContent).toBe("Open here");
+    expect(openHere.getAttribute("data-entry")).toBe(`space-row-open-here-${ABSENT_KEY}`);
+    fireEvent.click(openHere);
     await settle();
     expect(pickDirectory).toHaveBeenCalledTimes(1);
     expect(callsOf(local, "space.join")).toEqual([{ instance: SPEX, hostId: "101", folder: "/work/alpha" }]);
     // A clone whose code found no folder offers "Choose folder…"
     // (space-63), and its clone's path is revealed.
-    expect(screen.getByTestId(`space-row-folder-${FAILED_KEY}`).textContent).toBe("Choose folder…");
-    expect(screen.queryByTestId(`space-row-join-again-${FAILED_KEY}`)).toBeNull();
+    const folder = screen.getByTestId(`space-row-open-${FAILED_KEY}`);
+    expect(folder.textContent).toBe("Choose folder…");
+    expect(folder.getAttribute("data-entry")).toBe(`space-row-folder-${FAILED_KEY}`);
+    expect(screen.queryByText("Try again")).toBeNull();
     expect(screen.queryByTestId(`space-row-credential-${FAILED_KEY}`)).toBeNull();
     fireEvent.click(screen.getByTestId(`space-repo-${FAILED_KEY}`));
     expect(screen.getByTestId("space-clone-path-reveal")).toBeTruthy();
@@ -413,18 +419,21 @@ describe("run-view-171: a remote place offers no picker, reveal or path entry", 
     pick("build-box");
     await settle();
     expect(shownPlace()).toBe("build-box");
-    fireEvent.click(screen.getByTestId(`space-row-join-${ABSENT_KEY}`));
+    fireEvent.click(screen.getByTestId(`space-row-open-${ABSENT_KEY}`));
     await settle();
-    // [run-view-171] [run-view-169] a remote place's Join asks no
-    // picker and opens no path entry; it sends `space.join` with no
+    // [run-view-171] [run-view-169] a remote place's "Open here" asks
+    // no picker and opens no path entry; it sends `space.join` with no
     // folder to that place's core alone.
     expect(pickDirectory).toHaveBeenCalledTimes(1);
     expect(screen.queryByTestId(`space-join-${ABSENT_KEY}`)).toBeNull();
     expect(callsOf(alpha, "space.join")).toEqual([{ instance: SPEX, hostId: "101" }]);
     expect(callsOf(local, "space.join")).toHaveLength(1);
     expect(callsOf(beta, "space.join")).toEqual([]);
-    // [run-view-169] no "Choose folder…" there (space-63, space-103).
-    expect(screen.queryByTestId(`space-row-folder-${FAILED_KEY}`)).toBeNull();
+    // [run-view-169] no "Choose folder…" there (space-63, space-103):
+    // "Try again" instead.
+    expect(screen.getByTestId(`space-row-open-${FAILED_KEY}`).getAttribute("data-entry")).toBe(
+      `space-row-join-again-${FAILED_KEY}`,
+    );
     expect(screen.queryByText("Choose folder…")).toBeNull();
     // [run-view-169] no reveal of a path on the server; its copy stays.
     fireEvent.click(screen.getByTestId(`space-repo-${FAILED_KEY}`));
@@ -500,7 +509,12 @@ describe("run-view-171: a remote place offers no picker, reveal or path entry", 
     await settle();
     fireEvent.click(screen.getByTestId("space-issues"));
     const there = screen.getByTestId("space-repair");
-    expect(there.textContent).toContain("infra-spex");
+    // Named by the project and its group, the folder it remembers
+    // secondary (space-46).
+    expect(within(there).getByTestId("space-repair-title").textContent).toBe(
+      "infra in acme: its folder on this computer is missing",
+    );
+    expect(within(there).getByTestId("space-repair-folder").textContent).toBe("/code/infra · 2 sessions ran there");
     // [run-view-171] [run-view-169] a remote place's repair row offers
     // no folder: neither its proposal's "Add project" nor "Choose
     // folder…", no path editor and no picker (space-47, space-103).
@@ -513,7 +527,7 @@ describe("run-view-171: a remote place offers no picker, reveal or path entry", 
     expect(within(there).queryByText("Open folder…")).toBeNull();
     expect(pathEntries(there)).toEqual([]);
     // Declining names no folder, and stands.
-    expect(within(there).getByTestId("space-repair-decline").textContent).toBe("Don't add");
+    expect(within(there).getByTestId("space-repair-decline").textContent).toBe("Not on this computer");
     expect(pickDirectory).not.toHaveBeenCalled();
     expect(callsOf(alpha, "project.rebind")).toEqual([]);
   });
@@ -1079,19 +1093,20 @@ describe("run-view-171: opening a group's project on this computer", () => {
 });
 
 describe("run-view-169: a seat's code clone that failed for want of a credential", () => {
-  test("the row offers Join again and Add a credential, and they act", async () => {
+  test("the row offers Try again and Add a credential, and they act", async () => {
     render(<App />);
     goTo("Space");
     pick("build-box");
     await settle();
 
-    // [run-view-171] [run-view-169] the row offers Join again in place
+    // [run-view-171] [run-view-169] the row offers "Try again" in place
     // of "Choose folder…", and Add a credential (space-63, space-103).
-    const again = screen.getByTestId(`space-row-join-again-${FAILED_KEY}`);
-    expect(again.textContent).toBe("Join again");
+    const again = screen.getByTestId(`space-row-open-${FAILED_KEY}`);
+    expect(again.textContent).toBe("Try again");
+    expect(again.getAttribute("data-entry")).toBe(`space-row-join-again-${FAILED_KEY}`);
     const add = screen.getByTestId(`space-row-credential-${FAILED_KEY}`);
     expect(add.textContent).toBe("Add a credential");
-    // [run-view-171] [run-view-169] Join again sends the join again,
+    // [run-view-171] [run-view-169] "Try again" sends the join again,
     // with no folder, to the seat alone.
     fireEvent.click(again);
     await settle();
@@ -1127,9 +1142,13 @@ describe("run-view-169: a seat's code clone that failed for want of a credential
     render(<App />);
     goTo("Space");
     await settle();
-    expect(screen.queryByTestId(`space-row-join-again-${FAILED_KEY}`)).toBeNull();
+    // This computer pairs a folder instead (space-63): "Choose folder…",
+    // no "Try again" and no "Add a credential".
+    const open = screen.getByTestId(`space-row-open-${FAILED_KEY}`);
+    expect(open.textContent).toBe("Choose folder…");
+    expect(open.getAttribute("data-entry")).toBe(`space-row-folder-${FAILED_KEY}`);
+    expect(screen.queryByText("Try again")).toBeNull();
     expect(screen.queryByTestId(`space-row-credential-${FAILED_KEY}`)).toBeNull();
-    expect(screen.getByTestId(`space-row-folder-${FAILED_KEY}`)).toBeTruthy();
   });
 });
 

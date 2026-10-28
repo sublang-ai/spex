@@ -1,21 +1,23 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The Groups surface (DR-103, DR-127; DR-057 named it Space): the home
+// The Space surface (DR-103, DR-127, DR-159; DR-057 named it): the home
 // at a glance in one header — while the home lists no instance, the
 // sign-in card; while any is signed in, Refresh, reading each; the
 // issues and Git's presence (space-1, space-3) — over the groups list,
-// your own group and then each instance under its heading, each group
-// with its spex repositories as rows (space-61), and at this computer,
-// under each signed-in instance, the team servers it lists with Open or
-// Close (run-view-170). The surface reads the store of the place the
-// selector names (run-view-168). Activating a row opens that
-// repository's Sync and Explore tabs beneath the list, the row followed
-// by its folder where a Leave moves its clone (storage-38). The surface
-// renders the core's state and runs no Git and no call to the host
-// itself: every action is a command, a repository named by its key,
-// whose outcome arrives as state (space-29), and the state is re-read
-// only on an event, never on a timer (space-2).
+// your own records and then each instance under its heading, its groups
+// as a tree with their projects as rows (space-61), and at this
+// computer, under each group, the team servers it lists with Connect or
+// "Connected" (run-view-170). The surface reads the store of the place
+// the selector names (run-view-168), and at a seat's place names the
+// server wherever it would name this device (space-112). Activating a
+// row's name opens that repository's Sync and Explore tabs beneath the
+// list, "Explore records" its Explore tab, the row followed by its
+// folder where a Leave moves its clone (storage-38). The surface renders
+// the core's state and runs no Git and no call to the host itself: every
+// action is a command, a repository named by its key, whose outcome
+// arrives as state (space-29), and the state is re-read only on an
+// event, never on a timer (space-2).
 
 import {
   useCallback,
@@ -31,20 +33,24 @@ import { usePlaceStore } from "../state/place-context.js";
 import { isLocalPlace } from "../state/store.js";
 import { i18n } from "../i18n.js";
 import { useClock } from "../lib/useClock.js";
-import { allRepositories, anySignedIn } from "../lib/instances.js";
+import { allRepositories, anySignedIn, standingOf } from "../lib/instances.js";
 import { instanceNameAt, placementAt } from "../lib/placements.js";
 import {
   STEP_LINES,
   STEP_NAMES,
   cloneHere,
   clonePath,
+  isGroupRepository,
+  notHerePhrase,
   repositoryStatePhrase,
   revealBridge,
   revealLabel,
+  rowName,
+  seatName,
   tildify,
 } from "../lib/space.js";
 import { Icon } from "./Icon.js";
-import { IssuesList, SyncTab } from "./SpaceSync.js";
+import { ChoicesContext, IssuesList, SyncTab, createChoices, forgetCompleted } from "./SpaceSync.js";
 import { ExploreTab } from "./SpaceExplorer.js";
 import { GroupsList, statusDot } from "./SpaceGroups.js";
 import { removedFrom } from "./SpacePlacementActs.js";
@@ -54,9 +60,11 @@ import { useServers } from "./SpaceServers.js";
 export interface SpaceSurfaceProps {
   /** Open a session as its tab (space-7, run-view-68). */
   onOpenSession(sessionId: string): void;
-  /** Open the repaired project, the one control here that leaves the
-   * surface (space-48). */
-  onOpenProject(projectId: string): void;
+  /** Show a project on the Projects surface: the repaired one, the one
+   * control of a repair that leaves the surface (space-48), and a row's
+   * "Show" or "Show on <server>", at the place named — the one shown
+   * where none is (space-111). */
+  onOpenProject(projectId: string, place?: string): void;
   /** Open this place's Credentials section at a code host whose clone
    * failed for want of the member's credential (space-103, settings-48). */
   onAddCredential?(host: string): void;
@@ -97,19 +105,21 @@ export function syncRefusal(
 }
 
 /** Focus once a row's Leave has run (DR-010 §6): only focus the Leave
- * left with its row — on the name of the row under `from`, its key when
- * Remove was asked, where Remove parked it, which a row of no clone
- * standing under that key since keeps, or nowhere, its row moved — goes
- * to its Leave…, else its Sync, else its "Pick a group" where the last
- * Leave left it local only, else its name. */
+ * left with its row — on the name or the "More" of the row under
+ * `from`, its key when Remove was asked, where Remove parked it, which
+ * a row of no clone standing under that key since keeps, or nowhere, its
+ * row moved — goes to its "Add to a group…" where the last Leave left it
+ * in no group, else its "More", which holds Leave…, else its name. */
 function focusAfterLeave(key: string, from: string = key): void {
   const row = document.querySelector(`[data-testid="space-row-${key}"]`);
   const name = row?.querySelector<HTMLElement>(`[data-testid="space-repo-${key}"]`);
   if (!row || !name) return;
-  const parked = document.querySelector(`[data-testid="space-repo-${from}"]`);
+  const parked = [`space-repo-${from}`, `space-row-more-${from}`, `space-row-more-${key}`].map((id) =>
+    document.querySelector(`[data-testid="${id}"]`),
+  );
   const active = document.activeElement;
-  if (active && active !== document.body && active !== name && active !== parked) return;
-  const target = [`space-row-leave-${key}`, `space-row-sync-${key}`, `space-row-pick-${key}`]
+  if (active && active !== document.body && active !== name && !parked.includes(active)) return;
+  const target = [`space-row-pick-${key}`, `space-row-more-${key}`]
     .map((id) => row.querySelector<HTMLButtonElement>(`[data-testid="${id}"]`))
     .find((control) => control !== null && !control.disabled);
   (target ?? name).focus();
@@ -255,6 +265,7 @@ export function SpaceSurface({ onOpenSession, onOpenProject, onAddCredential }: 
   const spaceRefresh = store((state) => state.spaceRefresh);
   const seats = store((state) => state.seats);
   const connected = connection === "open";
+  const seat = seatName(store.place);
   const now = useClock(true, 30_000);
   // The servers each signed-in instance lists (run-view-170), at this
   // computer alone, whose core holds the seats: read as the surface
@@ -263,11 +274,14 @@ export function SpaceSurface({ onOpenSession, onOpenProject, onAddCredential }: 
   const signedIn = groups?.instances.filter((instance) => instance.signedIn).map((instance) => instance.origin) ?? [];
   const servers = useServers(
     connected && isLocalPlace(store.place) && signedIn.length > 0
-      ? JSON.stringify([signedIn, seats.map((seat) => seat.place)])
+      ? JSON.stringify([signedIn, seats.map((entry) => entry.place)])
       : undefined,
   );
 
   const [selected, setSelected] = useState<string>();
+  // The opened row's tab: its name opens Sync, "Explore records" Explore
+  // (space-1).
+  const [tab, setTab] = useState<SpaceTab>("sync");
   const [issuesOpen, setIssuesOpen] = useState(false);
   // The reader's own Refresh (space-2), counted: it lets the issues
   // list lay itself out afresh (space-48, space-55) and an open members
@@ -284,6 +298,13 @@ export function SpaceSurface({ onOpenSession, onOpenProject, onAddCredential }: 
 
   const onNote = useCallback<Note>((text) => setNote(text), []);
   const signIn = useSignIn(groups, onNote);
+  // The conflicts' choices the surface's pickers share — beneath a row
+  // and in its Sync tab — until that repository's sync completes
+  // (space-14, space-17).
+  const [choices] = useState(createChoices);
+  useEffect(() => {
+    if (groups) forgetCompleted(choices, store.place.key, allRepositories(groups));
+  }, [groups, choices, store]);
 
   // The state is read on events only (space-2): the surface opening,
   // the window regaining focus, and Refresh; the core's broadcasts —
@@ -404,92 +425,112 @@ export function SpaceSurface({ onOpenSession, onOpenProject, onAddCredential }: 
     comment: "the Space destination: groups, projects and their shared records",
   });
   return (
-    <section
-      data-testid="space-surface"
-      aria-label={surfaceName}
-      // The surface root is the box the surface scrolls in, positioned
-      // so what it holds is contained by it (DR-041 §9); its width is
-      // the container every step queries.
-      className="@container relative flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-y-auto overflow-x-hidden p-4"
-    >
-      <div role="status" aria-live="polite" className="sr-only" data-testid="space-live">
-        {note}
-      </div>
-      <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-3">
-        <h1 className="min-w-0 flex-1 text-lg font-semibold">{surfaceName}</h1>
-        {groups ? (
-          <HomeHeader
-            groups={groups}
-            connected={connected}
-            signIn={signIn}
-            refreshing={refreshing}
-            refreshError={refreshError}
-            onRefresh={() => void refresh()}
-            issuesOpen={issuesOpen}
-            onIssuesOpen={setIssuesOpen}
-          />
-        ) : null}
-      </div>
-      {spaceError ? (
-        <p role="alert" className="text-sm text-red-600 dark:text-red-400">
-          {i18n._("Couldn't read your groups: {reason}", { reason: spaceError })}
-        </p>
-      ) : null}
-      {groups ? (
-        <>
-          <IssuesList
-            groups={groups}
-            connected={connected}
-            open={issuesOpen}
-            refreshes={refreshes}
-            onOpenProject={onOpenProject}
-            onNote={onNote}
-          />
-          {groups.git.ok ? (
-            <GroupsList
+    <ChoicesContext.Provider value={choices}>
+      <section
+        data-testid="space-surface"
+        aria-label={surfaceName}
+        // The surface root is the box the surface scrolls in, positioned
+        // so what it holds is contained by it (DR-041 §9); its width is
+        // the container every step queries.
+        className="@container relative flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-y-auto overflow-x-hidden p-4"
+      >
+        <div role="status" aria-live="polite" className="sr-only" data-testid="space-live">
+          {note}
+        </div>
+        <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-3">
+          <h1 className="min-w-0 flex-1 text-lg font-semibold">{surfaceName}</h1>
+          {groups ? (
+            <HomeHeader
               groups={groups}
-              now={now}
-              selected={selected}
               connected={connected}
-              refreshes={refreshes}
-              dismissed={dismissed}
               signIn={signIn}
-              servers={servers.listing}
-              onServersChanged={servers.reload}
-              onAddCredential={onAddCredential}
-              onSelect={(key) => setSelected((current) => (current === key ? undefined : key))}
-              onNote={onNote}
+              refreshing={refreshing}
+              refreshError={refreshError}
+              onRefresh={() => void refresh()}
+              issuesOpen={issuesOpen}
+              onIssuesOpen={setIssuesOpen}
             />
           ) : null}
-          {repo && groups.git.ok ? (
-            <RepositoryPanel
-              key={repo.key}
+        </div>
+        {spaceError ? (
+          <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+            {i18n._("Couldn't read your groups: {reason}", { reason: spaceError })}
+          </p>
+        ) : null}
+        {groups ? (
+          <>
+            <IssuesList
               groups={groups}
-              repo={repo}
-              now={now}
               connected={connected}
-              dismissed={dismissed[repo.key]}
-              onDismiss={(phase) => setDismissed((was) => ({ ...was, [repo.key]: phase }))}
-              onOpenSession={onOpenSession}
+              open={issuesOpen}
+              refreshes={refreshes}
+              onOpenProject={onOpenProject}
               onNote={onNote}
             />
-          ) : null}
-          {anySignedIn(groups) ? (
-            // Where this device's files are, said once and quietly at
-            // the foot (space-1): selectable, the full path in its title.
-            <p
-              data-testid="space-home"
-              title={groups.home}
-              className="min-w-0 select-text break-all text-xs text-neutral-500"
-            >
-              {i18n._("Spex keeps this device's files in {path}", { path: tildify(groups.home) })}
-            </p>
-          ) : null}
-        </>
-      ) : !spaceError ? (
-        <p className="text-sm text-neutral-500">{i18n._("Reading your groups…")}</p>
-      ) : null}
-    </section>
+            {groups.git.ok ? (
+              <GroupsList
+                groups={groups}
+                now={now}
+                selected={selected}
+                connected={connected}
+                refreshes={refreshes}
+                dismissed={dismissed}
+                signIn={signIn}
+                servers={servers.listing}
+                onAddCredential={onAddCredential}
+                onSelect={(key) => {
+                  setTab("sync");
+                  setSelected((current) => (current === key ? undefined : key));
+                }}
+                onExplore={(key) => {
+                  setTab("explore");
+                  setSelected(key);
+                  setTimeout(() => document.getElementById("space-tab-explore")?.focus(), 0);
+                }}
+                onOpenProject={onOpenProject}
+                onNote={onNote}
+              />
+            ) : null}
+            {repo && groups.git.ok ? (
+              <RepositoryPanel
+                key={repo.key}
+                groups={groups}
+                repo={repo}
+                now={now}
+                tab={tab}
+                onTab={setTab}
+                connected={connected}
+                refreshes={refreshes}
+                dismissed={dismissed[repo.key]}
+                onDismiss={(phase) => setDismissed((was) => ({ ...was, [repo.key]: phase }))}
+                onOpenSession={onOpenSession}
+                onNote={onNote}
+              />
+            ) : null}
+            {anySignedIn(groups) ? (
+              // Where this place's files are, said once and quietly at the
+              // foot (space-1), naming the server at a seat's (space-112):
+              // selectable, the full path in its title.
+              <p
+                data-testid="space-home"
+                title={groups.home}
+                className="min-w-0 select-text break-all text-xs text-neutral-500"
+              >
+                {seat === undefined
+                  ? i18n._("Spex keeps this device's files in {path}", { path: tildify(groups.home) })
+                  : i18n._({
+                      id: "Spex keeps {place}'s files in {path}",
+                      values: { place: seat, path: tildify(groups.home) },
+                      comment: "the foot of a team server's Space: where its seat keeps its files; {place} is the server's name, {path} the home's path there",
+                    })}
+              </p>
+            ) : null}
+          </>
+        ) : !spaceError ? (
+          <p className="text-sm text-neutral-500">{i18n._("Reading your groups…")}</p>
+        ) : null}
+      </section>
+    </ChoicesContext.Provider>
   );
 }
 
@@ -614,7 +655,10 @@ function RepositoryPanel({
   groups,
   repo,
   now,
+  tab,
+  onTab: setTab,
   connected,
+  refreshes,
   dismissed,
   onDismiss,
   onOpenSession,
@@ -623,14 +667,24 @@ function RepositoryPanel({
   groups: GroupsState;
   repo: RepositoryState;
   now: number;
+  tab: SpaceTab;
+  onTab(tab: SpaceTab): void;
   connected: boolean;
+  refreshes: number;
   /** The sync phase the reader dismissed on its Sync tab. */
   dismissed?: string;
   onDismiss(phase: string): void;
   onOpenSession(sessionId: string): void;
   onNote: Note;
 }) {
-  const [tab, setTab] = useState<SpaceTab>("sync");
+  const store = usePlaceStore();
+  const seat = seatName(store.place);
+  // The row's name and whether it is a project's, as its group reads it
+  // (space-1).
+  const standing = standingOf(groups, repo.key);
+  const group = standing && !standing.own ? standing.group : { fullPath: groups.own.name };
+  const name = rowName(group, repo);
+  const movable = !isGroupRepository(group, repo);
 
   const onTabKey = (event: KeyboardEvent<HTMLElement>) => {
     if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
@@ -670,7 +724,7 @@ function RepositoryPanel({
     <section
       id="space-repository"
       data-testid="space-repository"
-      aria-label={repo.name}
+      aria-label={name}
       // The explorer fills the pane and scrolls inside itself, keeping a
       // floor of 24rem, so a long groups list — a line per placement
       // beneath each row (space-87) — scrolls the surface instead of
@@ -690,8 +744,8 @@ function RepositoryPanel({
               data-tone={dot.tone}
               className={`inline-block h-2 w-2 shrink-0 rounded-full ${dot.className}`}
             />
-            <span className="min-w-0 truncate font-medium">{repo.name}</span>
-            <span className="min-w-0 truncate text-xs text-neutral-500">{repositoryStatePhrase(repo, now)}</span>
+            <span className="min-w-0 truncate font-medium">{name}</span>
+            <span className="min-w-0 truncate text-xs text-neutral-500">{repositoryStatePhrase(repo, now, seat)}</span>
           </Field>
           {absent ? null : <PathControls path={root} testId="space-clone-path" onNote={onNote} compact />}
         </div>
@@ -706,13 +760,19 @@ function RepositoryPanel({
         ) : null}
         {repo.state === "read-only" ? (
           <span data-testid="space-read-only-note" className="text-xs text-neutral-500">
-            {i18n._("New sessions stay on this device")}
+            {seat === undefined
+              ? i18n._("New sessions stay on this device")
+              : i18n._({
+                  id: "New sessions stay on {place}",
+                  values: { place: seat },
+                  comment: "a read-only repository's note on a team server's Space: new sessions stay on the server; {place} is the server's name",
+                })}
           </span>
         ) : null}
       </div>
       <div
         role="tablist"
-        aria-label={i18n._("Views of {name}", { name: repo.name })}
+        aria-label={i18n._("Views of {name}", { name })}
         className="flex flex-wrap items-center gap-1 border-b border-neutral-200 pb-1 dark:border-neutral-800"
       >
         {tabButton("sync", i18n._({ id: "Sync", comment: "tab and control: send and bring back changes" }))}
@@ -731,15 +791,19 @@ function RepositoryPanel({
             now={now}
             connected={connected}
             dismissed={dismissed}
+            movable={movable}
+            rowName={name}
+            refreshes={refreshes}
             onDismiss={onDismiss}
             onOpenSession={onOpenSession}
             onNote={onNote}
           />
         ) : absent ? (
-          <p className="text-sm text-neutral-500">{i18n._("Not on this device")}</p>
+          <p className="text-sm text-neutral-500">{notHerePhrase(seat)}</p>
         ) : (
           <ExploreTab
             repo={repo}
+            name={name}
             root={root}
             connected={connected}
             onOpenSession={onOpenSession}

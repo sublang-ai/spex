@@ -1696,7 +1696,9 @@ export function App() {
                   onOpenSession={(sessionId) =>
                     openSessionAndShow(sessionId, undefined, configured.place.key)
                   }
-                  onOpenProject={(projectId) => pickProject(projectId, configured.place.key)}
+                  // A row's "Show on <server>" names the seat's place
+                  // (space-111); everything else opens at the place shown.
+                  onOpenProject={(projectId, place) => pickProject(projectId, place ?? configured.place.key)}
                   // A failed code clone's host opens this place's
                   // Credentials section at it (space-103, settings-48).
                   onAddCredential={(host) => {
