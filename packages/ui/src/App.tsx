@@ -971,7 +971,7 @@ function WorkspaceSurface({
           tree={specTrees[project.id]}
           loading={!specTrees[project.id] && !specErrors[project.id]}
           error={specErrors[project.id]}
-          onRefresh={() => void loadSpecs(project.id)}
+          onRefresh={() => loadSpecs(project.id)}
           onReadRecord={(path) => readSpecRecord(project.id, path)}
           onWriteSpec={(path, content, baseVersion) =>
             writeSpec(project.id, path, content, baseVersion)

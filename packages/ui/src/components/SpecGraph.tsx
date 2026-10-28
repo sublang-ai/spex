@@ -882,6 +882,9 @@ export function SpecGraph({
   }, []);
 
   const onSurfaceKeyDown = (event: ReactKeyboardEvent) => {
+    // A modified arrow belongs to someone else — Alt+Left walks a
+    // jump back (spec-view-6).
+    if (event.key.startsWith("Arrow") && (event.altKey || event.metaKey || event.ctrlKey)) return;
     switch (event.key) {
       case "Escape":
         // A floating card first, then the selection it sits over, the

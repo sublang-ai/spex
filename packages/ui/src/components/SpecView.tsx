@@ -184,7 +184,8 @@ export interface SpecViewProps {
   loading?: boolean;
   /** Load failure; rendered with a Retry (DR-010 §5). */
   error?: string;
-  onRefresh: () => void;
+  /** Settles once the re-read has landed or failed (spec-view-8). */
+  onRefresh: () => Promise<void> | void;
   /** Fetch one file's text (specs.read) — a bare string is a read
    * that carries no token. */
   onReadRecord: (path: string) => Promise<string | SpecRead>;
@@ -241,6 +242,9 @@ type LinkSource = {
   intentOf?: string;
   focusId: string;
   noteKey: string;
+  /** The records reader's body: an item citation leaves the reader,
+   * a record link keeps its Back (spec-view-7). */
+  inReader?: true;
 };
 
 /** Where an in-view jump left from: an item, or a package's intent
@@ -351,20 +355,26 @@ export function SpecView(props: SpecViewProps) {
   // item so the floating chip can walk back one level at a time.
   const [jumpOrigins, setJumpOrigins] = useState<readonly JumpOrigin[]>([]);
   // A requested re-read acknowledged however fast it lands: the icon
-  // turns for at least REFRESH_TURN_MS, then the label says the tree
-  // was read again for REFRESH_SAID_MS (spec-view-8).
+  // turns for at least REFRESH_TURN_MS, then — the read having
+  // succeeded — the label says the tree was read again for
+  // REFRESH_SAID_MS; a failure stops the turn and leaves its error
+  // standing (spec-view-8). Only the latest request settles it.
   const [refresh, setRefresh] = useState<"idle" | "reading" | "done">("idle");
-  const refreshFrom = useRef<{ at: number; readAt: number }>({ at: 0, readAt: 0 });
+  const refreshFrom = useRef({ at: 0, request: 0 });
+  const [refreshSettled, setRefreshSettled] = useState(0);
   const startRefresh = () => {
-    refreshFrom.current = { at: Date.now(), readAt: tree.readAt };
+    const request = refreshFrom.current.request + 1;
+    refreshFrom.current = { at: Date.now(), request };
     setRefresh("reading");
-    props.onRefresh();
+    const settle = () => setRefreshSettled(request);
+    void Promise.resolve(props.onRefresh()).then(settle, settle);
   };
-  const readLanded = tree.readAt !== refreshFrom.current.readAt || props.error !== undefined;
+  const readLanded = refreshSettled === refreshFrom.current.request;
   useEffect(() => {
-    if (refresh === "reading" && !props.loading && readLanded) {
+    if (refresh === "reading" && readLanded) {
       const left = Math.max(0, REFRESH_TURN_MS - (Date.now() - refreshFrom.current.at));
-      const timer = setTimeout(() => setRefresh("done"), left);
+      const next = props.error === undefined ? "done" : "idle";
+      const timer = setTimeout(() => setRefresh(next), left);
       return () => clearTimeout(timer);
     }
     if (refresh === "done") {
@@ -372,7 +382,7 @@ export function SpecView(props: SpecViewProps) {
       return () => clearTimeout(timer);
     }
     return undefined;
-  }, [refresh, props.loading, readLanded]);
+  }, [refresh, readLanded, props.error]);
   const [reader, setReader] = useState<ReaderState | null>(null);
   // The decision records' list, standing over the specs like the
   // reader; its filter and each record's summary from map.md
@@ -740,19 +750,25 @@ export function SpecView(props: SpecViewProps) {
 
   // Alt+Left and the pointer's back button walk back too, while there
   // is somewhere to return to (spec-view-6).
+  // Not while a record, the records' list or the editor stands over
+  // the specs, nor from a text field, where Alt+Left moves by word.
   const popRef = useRef(popJumpOrigin);
   popRef.current = popJumpOrigin;
+  const returnHeld = useRef(false);
+  returnHeld.current = Boolean(reader || recordsOpen || editor);
   const canReturn = jumpOrigins.length > 0;
   useEffect(() => {
     if (!canReturn) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.altKey && event.key === "ArrowLeft" && !event.metaKey && !event.ctrlKey) {
-        event.preventDefault();
-        popRef.current();
-      }
+      if (!event.altKey || event.key !== "ArrowLeft" || event.metaKey || event.ctrlKey) return;
+      if (event.defaultPrevented || returnHeld.current) return;
+      const target = event.target as HTMLElement | null;
+      if (target?.closest?.("input, textarea, select, [contenteditable]:not([contenteditable='false'])")) return;
+      event.preventDefault();
+      popRef.current();
     };
     const onPointer = (event: MouseEvent) => {
-      if (event.button !== 3) return;
+      if (event.button !== 3 || event.defaultPrevented || returnHeld.current) return;
       event.preventDefault();
       popRef.current();
     };
@@ -936,6 +952,11 @@ export function SpecView(props: SpecViewProps) {
     const candidates = linkItemTargets(anchor.textContent ?? "", href);
     const target = candidates.find((c) => itemIndex.has(c)) ?? candidates[0];
     if (target && itemIndex.has(target)) {
+      if (source.inReader) {
+        readerReturnId.current = null;
+        setReader(null);
+        setRecordsOpen(false);
+      }
       jumpTo(`${source.noteKey}:${target}`, target, originOf(source));
       return;
     }
@@ -951,7 +972,8 @@ export function SpecView(props: SpecViewProps) {
       MAP_RECORD,
     ]);
     if (record) {
-      openRecord(record, source.focusId);
+      if (source.inReader) openRecord(record, undefined, reader?.origin);
+      else openRecord(record, source.focusId);
       return;
     }
     // A citation-shaped link that is neither a live item nor a
@@ -1135,7 +1157,21 @@ export function SpecView(props: SpecViewProps) {
             </button>
           </div>
         ) : (
-          <div className="relative overflow-x-auto">
+          <div
+            className="relative overflow-x-auto"
+            data-testid="reader-body"
+            onClick={(event) =>
+              followLink(
+                {
+                  sourcePath: reader.record.path,
+                  focusId: "",
+                  noteKey: "reader",
+                  inReader: true,
+                },
+                event,
+              )
+            }
+          >
             <Markdown text={reader.markdown ?? ""} hideComments />
           </div>
         )}
@@ -1878,6 +1914,9 @@ export function SpecView(props: SpecViewProps) {
 
   return (
     <div className="relative flex min-h-0 w-full flex-1 flex-col">
+      {/* Outside the inert specs, so it speaks for whatever stands
+          over them too (DR-010 §7). */}
+      {liveRegion}
       {overlay ? (
         <div className="absolute inset-0 z-20 flex flex-col bg-neutral-50 dark:bg-neutral-950">
           {overlay}
@@ -1915,7 +1954,6 @@ export function SpecView(props: SpecViewProps) {
             : "relative mx-auto flex w-full min-h-0 max-w-3xl flex-1 flex-col gap-3 overflow-y-auto p-6"
         }
       >
-        {liveRegion}
         <div className="flex flex-wrap items-center gap-2">
           <h1 className="text-lg font-semibold">
             {props.projectName ?? i18n._({ id: "Specs", comment: "the spec view's own heading" })}

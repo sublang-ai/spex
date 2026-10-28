@@ -266,7 +266,7 @@ function Harness({
   tree?: SpecTreeState;
   loading?: boolean;
   error?: string;
-  onRefresh?: () => void;
+  onRefresh?: () => Promise<void> | void;
   onReadRecord?: (
     path: string,
   ) => Promise<string | { markdown: string; version?: string }>;
@@ -1108,6 +1108,47 @@ describe("SPECV-6: jump return chip", () => {
     expect(screen.queryByTestId("jump-back")).toBeNull();
   });
 
+  test("the record holds the latest twenty places; a search or a fold clears it", () => {
+    render(<Harness />);
+    fireEvent.click(screen.getByTestId(`file-toggle-${CAT}`));
+    fireEvent.click(screen.getByTestId("item-toggle-CAT-1"));
+    // Alternating sources, so no jump repeats the place just recorded.
+    for (let hop = 0; hop < 11; hop += 1) {
+      fireEvent.click(screen.getByTestId("link-CAT-1-AUTH-2"));
+      fireEvent.click(screen.getByTestId("link-AUTH-2-AUTH-1"));
+    }
+    expect(screen.getByTestId("jump-back").textContent).toBe(
+      "←back to AUTH-2(20 steps)",
+    );
+    // Changing the search ends the excursion (spec-view-6).
+    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "form" } });
+    expect(screen.queryByTestId("jump-back")).toBeNull();
+    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "" } });
+    fireEvent.click(screen.getByTestId("link-CAT-1-AUTH-2"));
+    expect(screen.getByTestId("jump-back")).toBeTruthy();
+    // So does folding a package (spec-view-6).
+    fireEvent.click(screen.getByTestId(`file-chevron-${CAT}`));
+    expect(screen.queryByTestId("jump-back")).toBeNull();
+  });
+
+  test("Alt+Left leaves a text field's own caret and the records over the specs alone", async () => {
+    render(<Harness onReadRecord={async () => "# Record body"} />);
+    fireEvent.click(screen.getByTestId(`file-toggle-${CAT}`));
+    fireEvent.click(screen.getByTestId("item-toggle-CAT-1"));
+    fireEvent.click(screen.getByTestId("link-CAT-1-AUTH-2"));
+    // In the search field Alt+Left moves by word, not back (spec-view-6).
+    const search = screen.getByRole("searchbox");
+    expect(fireEvent.keyDown(search, { key: "ArrowLeft", altKey: true })).toBe(true);
+    expect(screen.getByTestId("jump-back")).toBeTruthy();
+    // With the records' list standing over the specs, neither the key
+    // nor the pointer's back button reaches beneath it (spec-view-6).
+    fireEvent.click(screen.getByTestId("records-decisions"));
+    fireEvent.keyDown(window, { key: "ArrowLeft", altKey: true });
+    fireEvent.mouseUp(window, { button: 3 });
+    fireEvent.click(screen.getByTestId("records-back"));
+    expect(screen.getByTestId("jump-back").textContent).toBe("←back to CAT-1");
+  });
+
   test("a jump from a package's intent returns to that package", () => {
     const tree: SpecTreeState = {
       ...TREE,
@@ -1340,6 +1381,38 @@ describe("spec-view-7/45: records in their places", () => {
     expect(screen.getByTestId(`file-toggle-${AUTH}`).getAttribute("aria-expanded")).toBe("true");
   });
 
+  test("links inside the reader keep the view's semantics", async () => {
+    const onReadRecord = vi.fn().mockImplementation(async (path: string) =>
+      path === "map.md"
+        ? ""
+        : "# Record body\n\nSee [DR-011](011-project-workspace.md), [AUTH-1](../packages/identity/auth.md#auth-1) and [the map](../elsewhere.md).",
+    );
+    render(<Harness onReadRecord={onReadRecord} />);
+    fireEvent.click(screen.getByTestId("records-decisions"));
+    fireEvent.click(screen.getByTestId("record-DR-011"));
+    const body = await screen.findByTestId("reader-body");
+    await within(body).findByText("DR-011");
+    // The one live region stands outside the inert specs, so the
+    // reader's announcements reach a screen reader (DR-010 §7).
+    expect(screen.getByTestId("specv-live").closest("[inert]")).toBeNull();
+    expect(liveText()).toBe("Opened DR-011");
+    // Any other local link stays inert, the browser never following.
+    expect(fireEvent.click(within(body).getByText("the map"))).toBe(false);
+    expect(screen.getByTestId("record-reader")).toBeTruthy();
+    // A record link opens in the reader, its Back still leading to the
+    // list (spec-view-7).
+    expect(fireEvent.click(within(body).getByText("DR-011"))).toBe(false);
+    expect(onReadRecord).toHaveBeenLastCalledWith("decisions/011-project-workspace.md");
+    expect(screen.getByTestId("reader-back").textContent).toBe("← Back to decision records");
+    // An item citation leaves the reader and the list, landing on the
+    // item (spec-view-7).
+    const again = await screen.findByTestId("reader-body");
+    fireEvent.click(await within(again).findByText("AUTH-1"));
+    expect(screen.queryByTestId("record-reader")).toBeNull();
+    expect(screen.queryByTestId("records-list")).toBeNull();
+    expect(document.activeElement).toBe(screen.getByTestId("item-AUTH-1"));
+  });
+
   test("a file-less tree still reaches its decision records, newest first", () => {
     // Records outlive their packages: a tree with no package files
     // still reaches its decisions (spec-view-7).
@@ -1481,16 +1554,17 @@ describe("SPECV-8: freshness and failure states", () => {
     expect(onRefresh).toHaveBeenCalled();
   });
 
-  test("a requested re-read turns its icon, then says the tree was read again", () => {
+  test("a requested re-read turns its icon, then says the tree was read again", async () => {
     vi.useFakeTimers();
     try {
-      const onRefresh = vi.fn();
+      const onRefresh = vi.fn(async () => {});
       const { rerender } = render(<Harness onRefresh={onRefresh} />);
       fireEvent.click(screen.getByRole("button", { name: "Refresh specs" }));
       const icon = () => screen.getByTestId("specs-refresh").querySelector("svg")!;
       // However fast the read lands, the icon turns at least 0.6s
       // (spec-view-8).
       rerender(<Harness onRefresh={onRefresh} tree={{ ...TREE, readAt: TREE.readAt + 1 }} />);
+      await act(async () => {});
       expect(icon().getAttribute("class")).toContain("animate-spin");
       act(() => vi.advanceTimersByTime(300));
       expect(icon().getAttribute("class")).toContain("animate-spin");
@@ -1499,6 +1573,40 @@ describe("SPECV-8: freshness and failure states", () => {
       expect(screen.getByTestId("specs-read-age").textContent).toBe("read again");
       act(() => vi.advanceTimersByTime(2000));
       expect(screen.getByTestId("specs-read-age").textContent).toBe("read just now");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test("a failed re-read stops turning with its error and says nothing was read", async () => {
+    vi.useFakeTimers();
+    try {
+      let fail: () => void = () => {};
+      const onRefresh = vi.fn(
+        () => new Promise<void>((resolve) => (fail = resolve)),
+      );
+      const { rerender } = render(<Harness onRefresh={onRefresh} />);
+      fireEvent.click(screen.getByRole("button", { name: "Refresh specs" }));
+      const icon = () => screen.getByTestId("specs-refresh").querySelector("svg")!;
+      rerender(<Harness onRefresh={onRefresh} error="specs read failed" />);
+      await act(async () => fail());
+      act(() => vi.advanceTimersByTime(600));
+      // The turn stops; only the error speaks (spec-view-8).
+      expect(icon().getAttribute("class")).not.toContain("animate-spin");
+      expect(screen.getByTestId("specs-read-age").textContent).toBe("read just now");
+      // A retry slower than the turn's floor keeps turning until it
+      // lands, then says the tree was read again (spec-view-8).
+      let land: () => void = () => {};
+      onRefresh.mockImplementation(() => new Promise<void>((resolve) => (land = resolve)));
+      fireEvent.click(screen.getByRole("button", { name: "Refresh specs" }));
+      rerender(<Harness onRefresh={onRefresh} />);
+      act(() => vi.advanceTimersByTime(1500));
+      expect(icon().getAttribute("class")).toContain("animate-spin");
+      expect(screen.getByTestId("specs-read-age").textContent).not.toBe("read again");
+      await act(async () => land());
+      act(() => vi.advanceTimersByTime(0));
+      expect(icon().getAttribute("class")).not.toContain("animate-spin");
+      expect(screen.getByTestId("specs-read-age").textContent).toBe("read again");
     } finally {
       vi.useRealTimers();
     }

@@ -666,11 +666,14 @@ export function NavRail(props: NavRailProps) {
               title={PROJECT_ATTENTION_WORDS[worst]()}
             />
           ) : null}
-          {/* The project's specs, a sidebar's step away: shown on the
-              current project, revealed on hover or focus elsewhere, and
-              reachable by Tab regardless (run-view-67). */}
+          {/* The project's specs, a sidebar's step away for the
+              pointer: shown on the current project, revealed on hover
+              or the row's focus elsewhere; outside the tree's one tab
+              stop, as the disclosure is, the keyboard reaching the
+              specs by the Specs shortcut (run-view-67). */}
           <button
             type="button"
+            tabIndex={-1}
             data-testid={placed(place, `sidebar-specs-${project.id}`)}
             aria-label={i18n._("Open the specs of {project}", { project: project.name })}
             title={i18n._("Open the specs of {project}", { project: project.name })}
@@ -678,7 +681,6 @@ export function NavRail(props: NavRailProps) {
               event.stopPropagation();
               place.onOpenSpecs(project.id);
             }}
-            onKeyDown={stop}
             className={`-my-1 flex h-6 w-6 shrink-0 items-center justify-center rounded text-neutral-500 hover:bg-neutral-200 hover:text-neutral-800 focus:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 dark:text-neutral-400 dark:hover:bg-neutral-700 dark:hover:text-neutral-100 ${
               project.id === place.currentProjectId ? "" : "opacity-0"
             }`}

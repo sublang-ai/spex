@@ -374,6 +374,8 @@ describe("run-view-70: the sidebar navigates, the tabs hold what is open", () =>
     expect(screen.getByTestId("sidebar-specs-p1").className).not.toContain("opacity-0");
     expect(screen.getByTestId("sidebar-specs-p2").className).toContain("opacity-0");
     expect(screen.getByTestId("sidebar-specs-p2").className).toContain("group-hover:opacity-100");
+    // A pointer control outside the tree's one tab stop (run-view-67).
+    expect(screen.getByTestId("sidebar-specs-p2").tabIndex).toBe(-1);
     fireEvent.click(screen.getByTestId("sidebar-specs-p2"));
     // The specs are a sidebar's step away (run-view-67).
     expect(useAppStore.getState().currentProjectId).toBe("p2");
