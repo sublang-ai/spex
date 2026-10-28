@@ -467,6 +467,70 @@ async function expectRevealed(page: Page, name: string): Promise<void> {
     .toBe(true);
 }
 
+/** A package selected on the graph lands in the outline under its
+ * heading row, outlined whole, and its header stays in sight while
+ * its contents scroll (spec-view-56). */
+test.describe("the outline beside a selection", () => {
+  test.use({ appOptions: { project: true } });
+
+  test("spec-view-56: a selected package's row lands clear of the heading row and stays pinned", async ({
+    page,
+    app,
+  }) => {
+    await open(page, app);
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.getByRole("tab", { name: "Specs" }).click();
+    const graphToggle = page.getByTestId("view-graph");
+    if ((await graphToggle.getAttribute("aria-pressed")) !== "true") await graphToggle.click();
+
+    // The package with the most items, so its contents outrun the box.
+    const nodes = page.getByTestId(/^graph-node-/);
+    const name = await nodes.evaluateAll((elements) => {
+      let best = { name: "", items: -1 };
+      for (const element of elements) {
+        const items = Number(element.textContent?.match(/\d+/)?.[0] ?? 0);
+        if (items > best.items) {
+          best = { name: element.getAttribute("data-testid")!.replace("graph-node-", ""), items };
+        }
+      }
+      return best.name;
+    });
+    await page.getByTestId(`graph-node-${name}`).focus();
+    await page.getByTestId(`graph-node-${name}`).press("Enter");
+
+    // The outline keys a package by its path; the row the selection
+    // marks is the one to measure.
+    const row = page.locator('[data-testid^="file-row-"]:has(button[aria-current="true"])');
+    const scroller = page.getByTestId("specs-outline").locator("..");
+    const settled = () =>
+      row.evaluate((element) => {
+        const h = document.querySelector('[data-testid="outline-columns"]')!.getBoundingClientRect();
+        const r = element.getBoundingClientRect();
+        const s = document.querySelector('[data-testid="specs-outline"]')!.parentElement!.getBoundingClientRect();
+        return { gap: r.top - h.bottom, left: r.left - s.left, right: s.right - r.right };
+      });
+    // The reveal lands the row wholly below the heading row, with its
+    // selection outline inside the scroll box (spec-view-43, spec-view-42).
+    await expect
+      .poll(async () => (await settled()).gap, { message: "the selected row lands directly under the heading row" })
+      .toBeGreaterThanOrEqual(-TOLERANCE);
+    await expect.poll(async () => (await settled()).gap).toBeLessThanOrEqual(TOLERANCE);
+    const landed = await settled();
+    expect(landed.left, "the row's outline starts inside the scroll box").toBeGreaterThanOrEqual(-TOLERANCE);
+    expect(landed.right, "the row's outline ends inside the scroll box").toBeGreaterThanOrEqual(-TOLERANCE);
+    const ring = await row.evaluate((element) => getComputedStyle(element).boxShadow);
+    expect(ring, "the selection outline is drawn inside the row").toContain("inset");
+
+    // Partway through the package, its header stays beneath the
+    // heading row (spec-view-2).
+    const pkg = await boxOf(row.locator(".."));
+    await scroller.evaluate((element, by) => element.scrollBy(0, by), pkg.height / 2);
+    await expect
+      .poll(async () => Math.abs((await settled()).gap), { message: "the package's header stays pinned" })
+      .toBeLessThanOrEqual(TOLERANCE);
+  });
+});
+
 /** The pinned card and a floating card at the browser's floor, in
  * each language: the card's lines hold their line counts, so its
  * height stays in bounds whatever the words (spec-view-56). */

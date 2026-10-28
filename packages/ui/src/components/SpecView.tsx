@@ -270,6 +270,21 @@ export function SpecView(props: SpecViewProps) {
   // permanent and the graph joins it under one persisted toggle. The
   // selection is shared, so both projections point at one file.
   const [graphSelection, setGraphSelection] = useState<string | null>(null);
+  // The heading row's measured height: an expanded package's header
+  // pins beneath it, and a revealed row lands clear of it (spec-view-2,
+  // spec-view-43).
+  const [headHeight, setHeadHeight] = useState(0);
+  const headObserver = useRef<ResizeObserver | null>(null);
+  const headRef = useCallback((element: HTMLDivElement | null) => {
+    headObserver.current?.disconnect();
+    headObserver.current = null;
+    if (!element) return;
+    const measure = () => setHeadHeight(element.getBoundingClientRect().height);
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    headObserver.current = new ResizeObserver(measure);
+    headObserver.current.observe(element);
+  }, []);
   // The split's live fraction while the divider is under the pointer;
   // committed to the view state on release.
   const splitRef = useRef<HTMLDivElement | null>(null);
@@ -1229,15 +1244,28 @@ export function SpecView(props: SpecViewProps) {
       // yields first, the identifier chip then truncates, and below
       // @md the rollup rides the row's title while an unresolved count
       // stays as a compact mark.
-      <li key={key} data-testid={`file-${key}`} className="@container">
+      <li
+        key={key}
+        data-testid={`file-${key}`}
+        className="@container"
+        style={{ scrollMarginTop: headHeight }}
+      >
+        {/* Expanded, the header pins beneath the heading row while its
+            contents scroll, so the package's name stays in sight; the
+            selection's outline is drawn inside the row so no scroll box
+            clips it (spec-view-2, spec-view-42). */}
         <div
+          data-testid={`file-row-${key}`}
           title={rollup ? i18n._("Citations: {summary}", { summary: rollup }) : undefined}
+          style={expanded ? { top: graphful ? headHeight : `calc(${headHeight}px - 1.5rem)` } : undefined}
           className={`flex items-center gap-1 rounded px-1 py-1 @xs:gap-2 ${
-            dimmed ? "opacity-50" : ""
-          } ${
+            expanded ? "sticky z-[1]" : ""
+          } ${dimmed ? "opacity-50" : ""} ${
             selected
-              ? "bg-brand-50 ring-1 ring-brand-600 dark:bg-brand-950 dark:ring-brand-400"
-              : ""
+              ? "bg-brand-50 ring-1 ring-inset ring-brand-600 dark:bg-brand-950 dark:ring-brand-400"
+              : expanded
+                ? "bg-neutral-50 dark:bg-neutral-950"
+                : ""
           }`}
         >
           {/* The chevron arranges and nothing else; it is a pointer
@@ -1840,12 +1868,13 @@ export function SpecView(props: SpecViewProps) {
         const columnHeads =
           tree.files.length > 0 ? (
             <div
+              ref={headRef}
               data-testid="outline-columns"
               // Pinned at the scroll box's own edge: alone, the outline
               // scrolls in the padded surface root, so the heading row
               // rides up over that padding rather than letting rows
               // show above it.
-              className={`sticky ${graphful ? "top-0" : "-top-6"} z-[1] flex items-end gap-1 @xs:gap-2 border-b border-neutral-200 bg-neutral-50 px-1 pb-1 pt-0.5 text-xs leading-tight text-neutral-500 dark:border-neutral-800 dark:bg-neutral-950`}
+              className={`sticky ${graphful ? "top-0" : "-top-6"} z-[2] flex items-end gap-1 @xs:gap-2 border-b border-neutral-200 bg-neutral-50 px-1 pb-1 pt-0.5 text-xs leading-tight text-neutral-500 dark:border-neutral-800 dark:bg-neutral-950`}
             >
               <span className="min-w-0 flex-1" />
               {GROUP_ORDER.filter((group) => viewState.filters[group]).map(
@@ -1867,18 +1896,10 @@ export function SpecView(props: SpecViewProps) {
                 title={i18n._("Citations across packages: cites · cited by")}
                 className={ROLLUP_CELL}
               >
-                <span className="block">
-                  {i18n._({
-                    id: "across packages",
-                    comment: "outline column heading, first line: citations between packages",
-                  })}
-                </span>
-                <span className="block">
-                  {i18n._({
-                    id: "cites · cited by",
-                    comment: "outline column heading, second line: citations out and in",
-                  })}
-                </span>
+                {i18n._({
+                  id: "cites · cited by",
+                  comment: "outline column heading: citations between packages, out and in",
+                })}
               </span>
               {anyUnresolved ? (
                 <span aria-hidden="true" className={UNRESOLVED_CELL} />

@@ -64,7 +64,7 @@ Amends [DR-027](027-linked-views-contract.md)'s selection voice (its isolation h
 7. **One citation index serves both projections.**
    Pair counts, the graph's in and out totals and the outline's file rollups come from one index keyed by item ID; a citation of an absent ID counts in no total and is carried as a muted "unresolved N" on its file row at every width.
 8. **The outline reads as a table.**
-   Group names read in full (External behavior, Internal behavior, Tests) with a one-line definition on each filter; package rows carry numerals in aligned columns under one pinned heading row, a zero as a dash; a group filtered off hides its column with a status line restoring it; section headings read as the localized group name with their count, topics keep their author's words as sub-headings, and the per-row group word retires.
+   Group names read in full (External behavior, Internal behavior, Tests) with a one-line definition on each filter; package rows carry numerals in aligned columns under one pinned heading row, a zero as a dash, an expanded package's row pinned beneath it while its contents scroll so its name stays in sight; a group filtered off hides its column with a status line restoring it; section headings read as the localized group name with their count, topics keep their author's words as sub-headings, and the per-row group word retires.
    An item's citation summary raises a card listing up to five items in each direction and opens the item onto its citation block; backlinks list directly.
 9. **The split holds pixel floors, and the window holds the graph's.**
    The panes stand side by side only while the box holds a 320px graph beside a 28rem outline, stacking otherwise, and the divider never takes either below its floor.

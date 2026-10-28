@@ -899,11 +899,6 @@ msgstr "中止失败：{reason}"
 msgid "Aborting…"
 msgstr "中止中…"
 
-#. outline column heading, first line: citations between packages
-#: src/components/SpecView.tsx
-msgid "across packages"
-msgstr "跨包"
-
 #: src/components/ProjectGroup.tsx
 msgid "Actions for {title}"
 msgstr "{title} 的操作"
@@ -1804,7 +1799,7 @@ msgstr "被其他包引用"
 msgid "cites"
 msgstr "引用"
 
-#. outline column heading, second line: citations out and in
+#. outline column heading: citations between packages, out and in
 #: src/components/SpecView.tsx
 msgid "cites · cited by"
 msgstr "引用 · 被引用"

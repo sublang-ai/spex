@@ -899,11 +899,6 @@ msgstr "abort failed: {reason}"
 msgid "Aborting…"
 msgstr "Aborting…"
 
-#. outline column heading, first line: citations between packages
-#: src/components/SpecView.tsx
-msgid "across packages"
-msgstr "across packages"
-
 #: src/components/ProjectGroup.tsx
 msgid "Actions for {title}"
 msgstr "Actions for {title}"
@@ -1804,7 +1799,7 @@ msgstr "cited by other packages"
 msgid "cites"
 msgstr "cites"
 
-#. outline column heading, second line: citations out and in
+#. outline column heading: citations between packages, out and in
 #: src/components/SpecView.tsx
 msgid "cites · cited by"
 msgstr "cites · cited by"
