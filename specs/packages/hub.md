@@ -111,6 +111,14 @@ Where a stand-in instance answers the servers routes, a fake helper at a configu
 - an admission waits on a seat's lock the sweep holds and goes through once it is released, waits on one whose holder no longer runs until the sweep clears it, and the renewal of a lease records its expiry under that lock [[hub-5](#hub-5)];
 - no bearer or token appears in the hub's output or logs [[hub-8](#hub-8)].
 
+#### hub-11
+
+Where the local simulation runs the hub on one macOS or Linux host with no root and no service manager — a stand-in instance whose front answers the servers routes, the hub attached and serving the fixture TLS pair, a fake helper starting the real server shell in seat mode as the current user per admitted person, and a served shell per member whose core trusts that certificate — the suite shall assert over real connections:
+
+- a member's core, signed in by the device flow, lists the server, and its open is admitted with the seat started through the helper and listening on its socket in the run directory beside its token [[hub-2](#hub-2)] [[hub-4](#hub-4)];
+- the member's relay of the seat opens and the seat's core answers `session.list` through it [[hub-3](#hub-3)];
+- `retire` at the stop stops and wipes the seat, and no process of the hub, the seat or the member's shell remains [[hub-6](#hub-6)].
+
 #### hub-10
 
 Where the privileged lane runs on a Linux host with systemd and sudo, the suite shall install the hub with its helper and units, admit two members, and assert that each seat runs as its own account unable to read the other's home, that the seat's token and socket are readable by the hub and that seat alone, that a stop at the lease's end kills a stubborn agent child within the unit's timeout with the seat's files standing but the core's own lease and scratch, that the sweep's timer is enabled [[hub-7](#hub-7)] and, with the hub's unit stopped, stops a seat whose lease lapsed within two minutes of its expiry with its files standing, the hub's next start recording that lease ended, and that `retire` leaves the homes and removes the credentials [[hub-4](#hub-4)] [[hub-5](#hub-5)] [[hub-6](#hub-6)].
