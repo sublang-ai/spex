@@ -418,12 +418,15 @@ function PreviewBody({
 
 export function ExploreTab({
   repo,
+  name,
   root,
   connected,
   onOpenSession,
   onNote,
 }: {
   repo: RepositoryState;
+  /** The row's name, which the tree is named by (space-1). */
+  name: string;
   /** The clone's absolute path, every entry's path relative to it. */
   root: string;
   connected: boolean;
@@ -598,7 +601,7 @@ export function ExploreTab({
           ) : (
             <ul
               role="tree"
-              aria-label={i18n._("Files in {name}", { name: repo.name })}
+              aria-label={i18n._("Files in {name}", { name })}
               data-testid="space-tree"
               className="min-h-0 flex-1 overflow-y-auto p-1"
               onKeyDown={onTreeKeyDown}

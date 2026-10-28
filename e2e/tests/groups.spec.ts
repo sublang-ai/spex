@@ -138,8 +138,9 @@ async function showGroups(page: Page): Promise<void> {
   await expect(page.getByTestId("space-header")).toBeVisible();
 }
 
-/** Activate a spex repository's row, opening its Sync and Explore tabs
- * beneath the groups list (space-1). */
+/** Activate a spex repository's row by its name, opening its Sync and
+ * Explore tabs beneath the groups list, the Sync tab carrying its
+ * placements' lines (space-1, space-87). */
 async function openRepository(page: Page, key: string): Promise<void> {
   const row = page.getByTestId(`space-repo-${key}`);
   if ((await row.getAttribute("aria-expanded")) !== "true") await row.click();
@@ -147,12 +148,54 @@ async function openRepository(page: Page, key: string): Promise<void> {
   await expect(page.getByTestId("space-repository")).toBeVisible();
 }
 
-/** How a picker reads each of the stand-in's entries (space-58,
- * space-78): as the list reads them, your namespace by your login, a
- * group by its name, then its path after the separator where the two
- * differ (space-1). */
+/** A menu's entry (space-1, space-111): its trigger opened where the
+ * menu is not standing. Escape closes it again. */
+async function menuEntry(page: Page, trigger: string, entry: string): Promise<Locator> {
+  const menu = page.getByTestId(`${trigger}-menu`);
+  if ((await menu.count()) === 0) await page.getByTestId(trigger).click();
+  await expect(menu).toBeVisible();
+  return menu.getByTestId(entry);
+}
+
+/** Activate a menu's entry: its trigger opened, the entry clicked. */
+async function menuAct(page: Page, trigger: string, entry: string): Promise<void> {
+  await (await menuEntry(page, trigger, entry)).click();
+  await expect(page.getByTestId(`${trigger}-menu`)).toHaveCount(0);
+}
+
+/** A row's act from its one overflow control, "More" (space-1):
+ * `sync`, `members`, `explore`, `move`, `place`, `leave`. */
+async function rowAct(page: Page, key: string, act: string): Promise<void> {
+  await menuAct(page, `space-row-more-${key}`, `space-row-${act}-${key}`);
+}
+
+/** A row's "More" entry by its act, the menu left standing. */
+function rowEntry(page: Page, key: string, act: string): Promise<Locator> {
+  return menuEntry(page, `space-row-more-${key}`, `space-row-${act}-${key}`);
+}
+
+/** A group heading's act from its "More" (space-1): `members`,
+ * `subgroup`, `rename`, `delete`. */
+async function groupAct(page: Page, path: string, act: string): Promise<void> {
+  await menuAct(page, `space-group-more-${path}`, `space-group-${act}-${path}`);
+}
+
+/** Close whatever menu stands, by Escape. */
+async function closeMenu(page: Page): Promise<void> {
+  await page.keyboard.press("Escape");
+  await expect(page.locator('[role="menu"]')).toHaveCount(0);
+}
+
+/** A row's one phrase (space-87). */
+const phraseOf = (page: Page, key: string): Locator => page.getByTestId(`space-repo-state-${key}`);
+
+/** How a group picker reads each of the stand-in's entries (space-58):
+ * as the list reads them, your namespace "Only you", a group by its
+ * name, then its path after the separator where the two differ
+ * (space-1). The move picker reads your namespace by your login
+ * (space-78). */
 const PICKED_AS: Record<string, string> = {
-  [HOST_LOGIN]: HOST_LOGIN,
+  [HOST_LOGIN]: "Only you",
   [HOST_GROUP]: `Acme · ${HOST_GROUP}`,
   [`${HOST_GROUP}/research`]: `Research · ${HOST_GROUP}/research`,
 };
@@ -229,8 +272,8 @@ test.describe("first start", () => {
     // Not signed in: the header is one card saying what signing in
     // brings, its "Instance" field holding the stand-in's origin, Sign in
     // its one primary control, with no home path, read time or Refresh;
-    // your own group stands alone beneath, called so, its row with no
-    // control (space-1, space-3).
+    // your own records stand alone beneath under "Only you", their row
+    // with no control but its overflow (space-1, space-3).
     await expect(header.getByTestId("space-signin-card").getByRole("heading", { level: 2 })).toHaveText("Not signed in");
     await expect(header.getByTestId("space-signin-body")).toHaveText(
       "Sign in to see your groups and share each project's records with the people in them." +
@@ -249,19 +292,22 @@ test.describe("first start", () => {
     const groups = page.getByTestId("space-groups");
     await expect(groups.locator('[data-testid^="space-instance-"]')).toHaveCount(0);
     await expect(groups.locator('[data-testid^="space-group-"]')).toHaveCount(0);
-    const own = groups.getByRole("group", { name: "Your own group" });
-    await expect(own).toHaveAttribute("data-testid", "space-own");
-    await expect(own.getByRole("heading", { level: 2 })).toHaveText("Your own group · named after your login at sign-in");
-    const ownRow = own.locator('[data-testid^="space-row-"]');
+    const own = groups.getByTestId("space-own");
+    await expect(own).toHaveAttribute("role", "group");
+    await expect(own).toHaveAttribute("aria-label", "Only you");
+    await expect(own.getByRole("heading", { level: 2 })).toHaveText("Only you · named after your login at sign-in");
+    const ownRow = own.locator('li[data-testid^="space-row-"]');
     await expect(ownRow).toHaveCount(1);
-    await expect(ownRow.locator('[data-testid^="space-repo-state-"]')).toHaveText("On this device only — shared once you sign in");
-    await expect(ownRow.locator('button:not([data-testid^="space-repo-"])')).toHaveCount(0);
+    await expect(ownRow.locator('button[data-testid^="space-repo-"]')).toHaveText("Your sessions");
+    await expect(ownRow.locator('[data-testid^="space-repo-state-"]')).toHaveText("On this computer only — synced once you sign in");
+    // No control but the row's name and its overflow (space-61).
+    const controls = 'button:not([data-testid^="space-repo-"]):not([data-testid^="space-row-more-"])';
+    await expect(ownRow.locator(controls)).toHaveCount(0);
     // Nothing was contacted.
     expect(host.script.requests.filter((request) => request.path.startsWith("/api/"))).toEqual([]);
 
-    // A project added from the palette lists under your own group as
-    // "On this device only", with no control while signed out
-    // (space-61).
+    // A project added from the palette lists under "Only you" as "On
+    // this computer only", with no control while signed out (space-61).
     seedDemoProject(app.projectDir);
     await page.getByTestId("sidebar").getByRole("button", { name: "Add a local project" }).click();
     const palette = page.getByRole("dialog", { name: /Add a project|Choose a project/ });
@@ -271,15 +317,17 @@ test.describe("first start", () => {
     await showGroups(page);
     const localKey = "e2e/demo-project-spex";
     await expect(page.getByTestId(`space-row-${localKey}`)).toBeVisible();
-    await expect(page.getByTestId(`space-repo-state-${localKey}`)).toHaveText("On this device only");
-    await expect(page.getByTestId(`space-row-${localKey}`).locator('button:not([data-testid^="space-repo-"])')).toHaveCount(0);
+    await expect(page.getByTestId(`space-repo-${localKey}`)).toHaveText("demo-project");
+    await expect(page.getByTestId(`space-repo-state-${localKey}`)).toHaveText("On this computer only");
+    await expect(page.getByTestId(`space-row-${localKey}`).locator(controls)).toHaveCount(0);
 
     // Sign in links the page that carries the code, named by its host
     // name, and shows no code, reading "Signing in…" until the stand-in
     // approves; then the instance's heading reads the account with Sign
-    // out and the header Refresh, your own group bears its login, your
-    // namespace stands under the instance, and the surface ends in where
-    // this device's files are (space-3, space-4, space-1).
+    // out and the header Refresh, your own records bear the login, your
+    // namespace — listing your own group's repository alone — heads
+    // nothing under the instance, and the surface ends in where this
+    // device's files are (space-3, space-4, space-1).
     await header.getByTestId("space-signin").click();
     await expect(header.getByTestId("space-signin-link")).toHaveText(`Open ${new URL(host.url).hostname} to sign in`);
     await expect(header.getByTestId("space-signin-body")).toContainText("Sign in there and approve; you return here signed in.");
@@ -297,21 +345,21 @@ test.describe("first start", () => {
     await expect(header.getByTestId("space-refresh")).toHaveAttribute("title", "Reads each signed-in instance again");
     await expect(page.getByTestId("space-home")).toHaveText(/^Spex keeps this device's files in /);
     await expect(page.getByTestId("space-home")).toHaveAttribute("title", app.dataDir);
-    await expect(own.getByRole("heading", { level: 2 })).toHaveText(`Your own group · ${HOST_LOGIN}`);
-    await expect(instance.getByTestId(`space-group-@${HOST_LOGIN}`)).toBeVisible();
-    await expect(instance.getByTestId(`space-group-@${HOST_LOGIN}`).getByRole("heading", { level: 3 })).toHaveText(HOST_LOGIN);
-    await expect(page.getByTestId(`space-repo-${OWN_KEY}`)).toHaveAccessibleName(`${HOST_LOGIN}-spex`);
+    await expect(own.getByRole("heading", { level: 2 })).toHaveText(`Only you · @${HOST_LOGIN}`);
+    await expect(instance.getByTestId(`space-group-@${HOST_LOGIN}`)).toHaveCount(0);
+    await expect(page.getByTestId(`space-repo-${OWN_KEY}`)).toHaveAccessibleName("Your sessions");
     const projectKey = `${HOST_LOGIN}/demo-project-spex`;
-    await expect(page.getByTestId(`space-repo-state-${projectKey}`)).toHaveText("On this device only");
+    await expect(page.getByTestId(`space-repo-state-${projectKey}`)).toHaveText("On this computer only");
     // Your own group's spex repository stands on the host, pushed.
     await expect.poll(() => host.script.repositories.map((repo) => `${repo.group.fullPath}/${repo.path}`)).toContain(OWN_KEY);
     await expect.poll(() => headOf(bareOf(host, OWN_KEY), "spex"), { timeout: 30_000 }).toMatch(/^[0-9a-f]{40}$/);
 
-    // Pick a group offers, under the stand-in's display name, your
-    // namespace by your login and its groups, each by its name and its
+    // "Add to a group…" offers, under the stand-in's display name, your
+    // namespace as "Only you" and its groups, each by its name and its
     // path; picking the team's turns the row reachable with a sync time,
     // the stand-in holding `<name>-spex` on its `spex` branch (space-58,
     // space-12).
+    await expect(page.getByTestId(`space-row-pick-${projectKey}`)).toHaveText("Add to a group…");
     await page.getByTestId(`space-row-pick-${projectKey}`).click();
     const picker = page.getByTestId(`space-picker-${projectKey}`);
     await expect(picker).toBeVisible();
@@ -324,15 +372,21 @@ test.describe("first start", () => {
     await section.getByTestId(`space-pick-group-${HOST_GROUP}`).click();
     await expect(page.getByTestId(`space-repo-state-${TEAM_KEY}`)).toHaveText("Synced just now", { timeout: 30_000 });
     await expect(page.getByTestId(`space-row-${TEAM_KEY}`)).toHaveAttribute("data-state", "reachable");
-    // Beneath the row, its one placement's line names the stand-in by its
+    await expect(page.getByTestId(`space-repo-${TEAM_KEY}`)).toHaveText("demo-project");
+    // No placement's line on the row: in its Sync tab, the row's name
+    // opening it, its one placement's line names the stand-in by its
     // display name and the repository's path there, and says what the
     // sync did there (space-87, space-12).
-    const line = page.getByTestId(`space-row-${TEAM_KEY}`).getByTestId(`space-line-${host.url}`);
+    await expect(page.getByTestId(`space-row-${TEAM_KEY}`).locator('[data-testid^="space-line-"]')).toHaveCount(0);
+    await openRepository(page, TEAM_KEY);
+    const line = placementLine(page, TEAM_KEY, host);
     await expect(line).toHaveAttribute("data-state", "reachable");
     await expect(line.getByTestId("space-line-instance")).toHaveText("Stand-in Git host");
     await expect(line.getByTestId("space-line-at")).toHaveText(TEAM_PATH);
     await expect(line.getByTestId("space-line-state")).toHaveText(/^Synced just now/);
-    await expect(page.getByTestId(`space-row-sync-${TEAM_KEY}`)).toHaveText("Sync");
+    // "Sync now" stands in the row's overflow (space-1).
+    await expect(await rowEntry(page, TEAM_KEY, "sync")).toHaveText("Sync now");
+    await closeMenu(page);
     const clone = clonePath(app.dataDir, TEAM_KEY);
     expect(git(bareOf(host, TEAM_KEY), "rev-parse", "spex")).toBe(git(clone, "rev-parse", "spex"));
 
@@ -367,12 +421,18 @@ test.describe("first start", () => {
     await expect(page.getByTestId("captain-pane")).toContainText("Fix the token refresh in auth.ts");
     await showGroups(page);
     await openRepository(page, TEAM_KEY);
-    const labels = await watch(page, `[data-testid="space-row-sync-${TEAM_KEY}"]`);
-    await page.getByTestId(`space-row-sync-${TEAM_KEY}`).click();
+    // "Sync now" sends it, the row's phrase naming each step in flight
+    // and then its last sync (space-12, space-87).
+    const phrases = await watch(page, `[data-testid="space-repo-state-${TEAM_KEY}"]`);
+    await rowAct(page, TEAM_KEY, "sync");
     const done = panel.getByTestId("space-done-line");
     await expect(done).toHaveText(/^Synced just now · [1-9]\d* sent · 0 received$/);
-    await expect(page.getByTestId(`space-row-sync-${TEAM_KEY}`)).toHaveText("Sync");
-    expect(await labels()).toEqual(["Sync", "Syncing…", "Sync"]);
+    await expect(phraseOf(page, TEAM_KEY)).toHaveText("Synced just now");
+    const seen = await phrases();
+    expect(seen.at(-1)).toBe("Synced just now");
+    expect(inStepOrder(seen.slice(1, -1)), seen.join(" → ")).toBe(true);
+    await expect(await rowEntry(page, TEAM_KEY, "sync")).toHaveText("Sync now");
+    await closeMenu(page);
     await expect(panel.getByTestId("space-sync-tab")).toContainText("Nothing to send from this device");
     const tracked = git(bareOf(host, TEAM_KEY), "ls-tree", "-r", "--name-only", "spex").split("\n");
     expect(tracked).toContain(`sessions/${sessionId}.json`);
@@ -537,16 +597,17 @@ test.describe("a folder joining a team's project", () => {
       expect(localKey).toBe(`${HOST_LOGIN}/demo-project-spex`);
       await open(page, app);
       await showGroups(page);
-      await expect(page.getByTestId(`space-repo-state-${localKey}`)).toHaveText("On this device only");
+      await expect(page.getByTestId(`space-repo-state-${localKey}`)).toHaveText("On this computer only");
 
-      // Pick a group lists the team's project for the same code, with
-      // its group read as its heading reads and no member count from
-      // the full read (space-58).
+      // "Add to a group…" lists the team's project for the same code,
+      // by its name, with its group read as its heading reads and no
+      // member count from the full read (space-58).
       await page.getByTestId(`space-row-pick-${localKey}`).click();
       const picker = page.getByTestId(`space-picker-${localKey}`);
       const section = await pickSection(picker, host);
       const listed = section.getByTestId(`space-pick-repo-${key}`);
-      await expect(listed).toContainText("demo-project-spex");
+      await expect(listed).toContainText("demo-project");
+      await expect(listed).not.toContainText("-spex");
       await expect(section.getByTestId(`space-pick-listed-group-${key}`)).toHaveText(PICKED_AS[HOST_GROUP]!);
       await expect(listed).not.toContainText("member");
 
@@ -612,8 +673,8 @@ test.describe("organizing", () => {
     const list = page.getByTestId("space-groups");
 
     // "New group" stands on the instance's heading; Create names the
-    // group, which stands with its full path as the editor closes
-    // (space-1, space-68).
+    // group, which stands by its name as the editor closes, its full
+    // path naming its section (space-1, space-68).
     const newGroup = list.getByTestId(`space-instance-${host.url}`).getByTestId("space-instance-heading").getByTestId("space-new-group");
     await expect(newGroup).toHaveText("New group");
     await newGroup.click();
@@ -623,26 +684,27 @@ test.describe("organizing", () => {
     await top.getByTestId("space-new-group-editor-create").click();
     await expect(top).toBeHidden();
     const platform = list.getByTestId("space-group-platform");
-    await expect(platform.getByRole("heading")).toContainText("Platform");
-    await expect(platform.getByRole("heading")).toContainText("platform");
+    await expect(platform.getByRole("heading")).toHaveText("Platform");
+    await expect(platform).toHaveAttribute("aria-label", "platform");
     expect(standinGroup("platform")?.name).toBe("Platform");
 
-    // "New subgroup" on `acme`'s heading creates inside it, the subgroup
-    // listed under its full path (space-1, space-68).
-    await list.getByTestId(`space-group-subgroup-${HOST_GROUP}`).click();
+    // "New subgroup" in `acme`'s heading's "More" creates inside it, the
+    // subgroup standing within `acme` under its full path (space-1,
+    // space-68).
+    await groupAct(page, HOST_GROUP, "subgroup");
     const sub = list.getByTestId(`space-subgroup-${HOST_GROUP}`);
     await expect(sub).toContainText("Group name");
     await sub.getByTestId(`space-subgroup-${HOST_GROUP}-name`).fill("Design Team");
     await sub.getByTestId(`space-subgroup-${HOST_GROUP}-create`).click();
     await expect(sub).toBeHidden();
     const SUBGROUP = `${HOST_GROUP}/design-team`;
-    const design = list.getByTestId(`space-group-${SUBGROUP}`);
-    await expect(design.getByRole("heading")).toContainText("Design Team");
-    await expect(design.getByRole("heading")).toContainText(SUBGROUP);
+    const design = list.getByTestId(`space-group-${HOST_GROUP}`).getByTestId(`space-group-${SUBGROUP}`);
+    await expect(design.getByRole("heading")).toHaveText("Design Team");
+    await expect(design).toHaveAttribute("aria-label", SUBGROUP);
     expect(standinGroup(SUBGROUP)?.name).toBe("Design Team");
 
     // A project added from the palette is offered, under the stand-in's
-    // display name, your login and then every group by its name, its
+    // display name, "Only you" and then every group by its name, its
     // path after it where the two differ, and picked into the new
     // subgroup: `<name>-spex` stands there on the stand-in's `spex`
     // (space-58).
@@ -668,9 +730,10 @@ test.describe("organizing", () => {
     await expect(design.getByTestId(`space-repo-state-${picked}`)).toHaveText("Synced just now", { timeout: 30_000 });
     expect(headOf(bareOf(host, picked), "spex")).toMatch(/^[0-9a-f]{40}$/);
 
-    // Share on the subgroup stands in the members panel its heading's
-    // Members opens, listing the person who created it (space-69).
-    await design.getByTestId(`space-group-members-${SUBGROUP}`).click();
+    // Share on the subgroup stands in the members panel Members in its
+    // heading's "More" opens, listing the person who created it
+    // (space-69).
+    await groupAct(page, SUBGROUP, "members");
     const PANEL = `group:${SUBGROUP}`;
     const members = design.getByTestId(`space-members-${PANEL}`);
     await expect(members.getByTestId(`space-member-${HOST_LOGIN}`)).toContainText("Owner");
@@ -718,7 +781,7 @@ test.describe("organizing", () => {
     // collapsed, the subgroup editor and Share open (space-28).
     await setRail(page, false);
     await page.setViewportSize({ width: 320, height: TALL });
-    await list.getByTestId(`space-group-subgroup-${HOST_GROUP}`).click();
+    await groupAct(page, HOST_GROUP, "subgroup");
     await expect(sub).toBeVisible();
     await share.click();
     await expect(editor).toBeVisible();
@@ -786,15 +849,16 @@ test.describe("the instance alone", () => {
     };
     const scan = async (where: string): Promise<void> => {
       const surface = page.getByTestId("space-surface");
-      // bob's own group stands under his login, under the instance, its
-      // heading carrying no control (space-1).
+      // bob's own group stands under "Shared by @bob", under the
+      // instance, its heading carrying no control (space-1).
       const bob = surface.getByTestId(`space-instance-${host.url}`).getByTestId("space-group-@bob");
+      await expect(bob.getByRole("heading", { level: 3 })).toHaveText(where === "English" ? "Shared by @bob" : "@bob 共享的");
       await expect(bob.getByTestId(`space-row-${hostKey(host, "bob/notes-spex")}`)).toBeVisible();
-      await expect(bob.getByTestId("space-group-members-bob")).toHaveCount(0);
-      await expect(bob.getByTestId("space-group-subgroup-bob")).toHaveCount(0);
-      // The project's placement's members panel, opened from its line,
-      // links no page (space-62, space-87).
-      const line = surface.getByTestId(`space-row-${TEAM_KEY}`).getByTestId(`space-line-${host.url}`);
+      await expect(bob.getByTestId("space-group-more-bob")).toHaveCount(0);
+      // The project's placement's members panel, opened from its line in
+      // the row's Sync tab, links no page (space-62, space-87).
+      await openRepository(page, TEAM_KEY);
+      const line = placementLine(page, TEAM_KEY, host);
       const members = line.getByTestId(`space-members-${TEAM_KEY}@${host.url}`);
       if (!(await members.isVisible())) await line.getByTestId("space-line-members").click();
       await expect(members.getByTestId(`space-member-${HOST_LOGIN}`)).toBeVisible();
@@ -877,7 +941,7 @@ test.describe("undo", () => {
     // stand-in refuses stands in the editor with its words and the name
     // kept, and the next one renames it (space-76).
     host.script.refuseGroupRename("Renames are paused for this group.");
-    await platform.getByTestId("space-group-rename-platform").click();
+    await groupAct(page, "platform", "rename");
     const editor = platform.getByTestId("space-rename-platform");
     const name = editor.getByTestId("space-rename-platform-name");
     const path = editor.getByTestId("space-rename-platform-path");
@@ -892,19 +956,21 @@ test.describe("undo", () => {
     host.script.refuseGroupRename(null);
     await editor.getByTestId("space-rename-platform-save").click();
     const renamed = list.getByTestId("space-group-core-platform");
-    await expect(renamed.getByRole("heading")).toContainText("Core Platform");
-    await expect(renamed.getByRole("heading")).toContainText("core-platform");
+    await expect(renamed.getByRole("heading")).toHaveText("Core Platform");
+    await expect(renamed).toHaveAttribute("aria-label", "core-platform");
     await expect(list.getByTestId("space-group-platform")).toHaveCount(0);
     expect(standinGroup("core-platform")?.name).toBe("Core Platform");
 
-    // acme, holding the project, carries no Delete; the renamed group's
-    // asks with Keep focused, a deletion the stand-in refuses stands
-    // beneath its heading, and a second Delete removes it (space-1,
-    // space-77).
+    // acme, holding the project, carries no Delete in its "More"; the
+    // renamed group's asks with Keep focused, a deletion the stand-in
+    // refuses stands beneath its heading, and a second Delete removes it
+    // (space-1, space-77).
     await expect(list.getByTestId(`space-group-${HOST_GROUP}`).getByTestId(`space-row-${TEAM_KEY}`)).toBeVisible();
-    await expect(list.getByTestId(`space-group-delete-${HOST_GROUP}`)).toHaveCount(0);
+    await expect(await menuEntry(page, `space-group-more-${HOST_GROUP}`, `space-group-members-${HOST_GROUP}`)).toBeVisible();
+    await expect(page.getByTestId(`space-group-delete-${HOST_GROUP}`)).toHaveCount(0);
+    await closeMenu(page);
     host.script.refuseGroupDelete("Deletions are paused for this group.");
-    await renamed.getByTestId("space-group-delete-core-platform").click();
+    await groupAct(page, "core-platform", "delete");
     const confirm = renamed.getByTestId("space-group-confirm-core-platform");
     await expect(confirm).toContainText("Delete core-platform?");
     await expect(confirm.getByRole("button", { name: "Keep" })).toBeFocused();
@@ -913,39 +979,41 @@ test.describe("undo", () => {
     await expect(renamed.getByTestId("space-group-refusal-core-platform")).toContainText("Deletions are paused for this group.");
     expect(standinGroup("core-platform")).toBeTruthy();
     host.script.refuseGroupDelete(null);
-    await renamed.getByTestId("space-group-delete-core-platform").click();
+    await groupAct(page, "core-platform", "delete");
     await renamed.getByTestId("space-group-confirm-core-platform").getByRole("button", { name: "Delete" }).click();
     await expect(renamed).toHaveCount(0);
     expect(standinGroup("core-platform")).toBeUndefined();
 
-    // Move… on the project's placement line offers your login and every
-    // group but acme, each read as the pick reads it; a move the
-    // stand-in refuses stands in the picker, and a move into
-    // acme/research lists the row there at once, its key unchanged
-    // (space-78, space-87).
+    // "Move…" in the project's "More" offers your login and every group
+    // but acme, each read as the pick reads it; a move the stand-in
+    // refuses stands in the picker, and a move into acme/research lists
+    // the row there at once, its key unchanged (space-78, space-1).
     const RESEARCH = `${HOST_GROUP}/research`;
     host.script.refuseTransfer("Moves are paused for this project.");
-    const move = list.getByTestId(`space-row-${TEAM_KEY}`).getByTestId(`space-line-${host.url}`).getByTestId("space-line-move");
+    const move = await rowEntry(page, TEAM_KEY, "move");
     await expect(move).toHaveText("Move…");
     await expect(move).toHaveAttribute("aria-label", "Move to another group");
     await move.click();
     const picker = list.getByTestId(`space-move-${TEAM_KEY}@${host.url}`);
-    await expect(picker.locator('[data-testid^="space-move-group-"]')).toHaveText([PICKED_AS[HOST_LOGIN]!, PICKED_AS[RESEARCH]!]);
+    await expect(picker.locator('[data-testid^="space-move-group-"]')).toHaveText([HOST_LOGIN, PICKED_AS[RESEARCH]!]);
     await clean("the move picker");
     await picker.getByTestId(`space-move-group-${RESEARCH}`).click();
     await expect(picker.getByRole("alert")).toContainText("Moves are paused for this project.");
+    const research = list.getByTestId(`space-group-${RESEARCH}`);
     await expect(list.getByTestId(`space-group-${HOST_GROUP}`).getByTestId(`space-row-${TEAM_KEY}`)).toBeVisible();
+    await expect(research.getByTestId(`space-row-${TEAM_KEY}`)).toHaveCount(0);
     host.script.refuseTransfer(null);
     await picker.getByTestId(`space-move-group-${RESEARCH}`).click();
-    const research = list.getByTestId(`space-group-${RESEARCH}`);
+    // acme/research stands within acme (space-1): the row stands under
+    // it alone.
     await expect(research.getByTestId(`space-row-${TEAM_KEY}`)).toBeVisible();
-    await expect(list.getByTestId(`space-group-${HOST_GROUP}`).getByTestId(`space-row-${TEAM_KEY}`)).toHaveCount(0);
+    await expect(list.getByTestId(`space-row-${TEAM_KEY}`)).toHaveCount(1);
     await expect(picker).toHaveCount(0);
     expect(existsSync(clonePath(app.dataDir, TEAM_KEY))).toBe(true);
 
-    // The row's Sync then moves the clone under acme/research's folder
-    // (space-78).
-    await research.getByTestId(`space-row-sync-${TEAM_KEY}`).click();
+    // The row's "Sync now" then moves the clone under acme/research's
+    // folder (space-78).
+    await rowAct(page, TEAM_KEY, "sync");
     const MOVED = hostKey(host, `${RESEARCH}/demo-project-spex`);
     await expect(research.getByTestId(`space-repo-state-${MOVED}`)).toHaveText("Synced just now", { timeout: 30_000 });
     expect(existsSync(clonePath(app.dataDir, MOVED))).toBe(true);
@@ -956,11 +1024,11 @@ test.describe("undo", () => {
     // collapsed, the rename editor and the move picker open (space-28).
     await setRail(page, false);
     await page.setViewportSize({ width: 320, height: TALL });
-    await research.getByTestId(`space-group-rename-${RESEARCH}`).click();
+    await groupAct(page, RESEARCH, "rename");
     await expect(research.getByTestId(`space-rename-${RESEARCH}`)).toBeVisible();
-    const movedLine = research.getByTestId(`space-row-${MOVED}`).getByTestId(`space-line-${host.url}`);
-    await movedLine.getByTestId("space-line-move").click();
-    await expect(movedLine.getByTestId(`space-move-${MOVED}@${host.url}`)).toBeVisible();
+    const movedRow = research.getByTestId(`space-row-${MOVED}`);
+    await rowAct(page, MOVED, "move");
+    await expect(movedRow.getByTestId(`space-move-${MOVED}@${host.url}`)).toBeVisible();
     const defects: string[] = [];
     record(
       "Groups undo · 320",
@@ -968,7 +1036,7 @@ test.describe("undo", () => {
       defects,
     );
     expect(defects, defects.join("\n")).toEqual([]);
-    await movedLine.getByTestId(`space-move-cancel-${MOVED}@${host.url}`).click();
+    await movedRow.getByTestId(`space-move-cancel-${MOVED}@${host.url}`).click();
     await research.getByTestId(`space-rename-${RESEARCH}-cancel`).click();
     await page.setViewportSize({ width: 1280, height: TALL });
 
@@ -979,9 +1047,9 @@ test.describe("undo", () => {
     await expect(page.locator("html")).toHaveAttribute("lang", "zh");
     await surfaceEntry(page, "Space").click();
     await expect(page.getByTestId("space-surface")).toBeVisible();
-    await page.getByTestId(`space-row-${MOVED}`).getByTestId(`space-line-${host.url}`).getByTestId("space-line-move").click();
+    await rowAct(page, MOVED, "move");
     const zhPicker = page.getByTestId(`space-move-${MOVED}@${host.url}`);
-    await expect(zhPicker).toHaveAttribute("aria-label", "将 demo-project-spex 移到另一个群组");
+    await expect(zhPicker).toHaveAttribute("aria-label", "将 demo-project 移到另一个群组");
     await expect(zhPicker.getByTestId(`space-move-group-${entryKey(HOST_LOGIN)}`)).toHaveText(HOST_LOGIN);
     await clean("the move picker in Chinese");
   });
@@ -1133,16 +1201,19 @@ test.describe("a second instance", () => {
     await expect(secondHeading.getByTestId("space-groups-made-by")).toHaveText(`Groups are made by the people who run ${SECOND_HOST_NAME}`);
     await expect(secondHeading.getByTestId("space-new-group")).toHaveCount(0);
     for (const section of [firstSection, secondSection]) {
-      await expect(section.getByTestId(`space-group-${HOST_GROUP}`).getByRole("heading", { level: 3 })).toHaveText(PICKED_AS[HOST_GROUP]!);
+      await expect(section.getByTestId(`space-group-${HOST_GROUP}`).getByRole("heading", { level: 3 }).first()).toHaveText(
+        /^Acme( · \d+ members?)?$/,
+      );
     }
     await expect(firstRow).toBeVisible();
     await expect(secondSection.getByTestId(`space-row-${FIRST_KEY}`)).toHaveCount(0);
 
-    // "Pick a group" on the row on this device only offers, under each
-    // instance's display name, your namespace there by its login and its
-    // groups; picking the second's `acme` creates `<name>-spex` at the
-    // second, on its `spex` branch, and the row stands reachable beneath
-    // the second's `acme`; the first holds nothing of it (space-58).
+    // "Add to a group…" on the row on this computer only offers, under
+    // each instance's display name, your namespace there as "Only you"
+    // and its groups; picking the second's `acme` creates `<name>-spex`
+    // at the second, on its `spex` branch, and the row stands reachable
+    // beneath the second's `acme`; the first holds nothing of it
+    // (space-58).
     await list.getByTestId("space-own").getByTestId(`space-row-pick-${local.key}`).click();
     const picker = list.getByTestId(`space-picker-${local.key}`);
     await expect(picker.locator('[data-testid^="space-pick-instance-"]')).toHaveCount(2);
@@ -1154,7 +1225,7 @@ test.describe("a second instance", () => {
       PICKED_AS[`${HOST_GROUP}/research`]!,
     ]);
     await expect(secondPick.locator('[data-testid^="space-pick-group-"]')).toHaveText([
-      SECOND_PERSON.login,
+      "Only you",
       PICKED_AS[HOST_GROUP]!,
       PICKED_AS[`${HOST_GROUP}/research`]!,
     ]);
@@ -1167,8 +1238,9 @@ test.describe("a second instance", () => {
     expect(headOf(bareOf(second, SECOND_KEY), "spex")).toBe(git(clone, "rev-parse", "spex"));
     expect(first.script.repositories.some((repo) => repo.path === "atlas-spex")).toBe(false);
 
-    // The row's Sync then pushes what changed here to the second, with
-    // the second's credential (space-12).
+    // The row's "Sync now" then pushes what changed here to the second,
+    // with the second's credential, its phrase naming each step and then
+    // its last sync (space-12, space-87).
     await expect
       .poll(async () => (await app.core.command("project.list", {})).find((project) => project.path === local.dir)?.id, { timeout: 30_000 })
       .toBe(SECOND_KEY);
@@ -1177,27 +1249,28 @@ test.describe("a second instance", () => {
     const panel = page.getByTestId("space-repository");
     await expect(panel.getByTestId("space-local-list").getByTestId(`space-unit-mine-intents/${queued.id}`)).toContainText("Queued at the second instance");
     const pushes = second.script.transportCredentials.length;
-    const sync = secondRow.getByTestId(`space-row-sync-${SECOND_KEY}`);
-    const labels = await watch(page, `[data-testid="space-row-sync-${SECOND_KEY}"]`);
-    await sync.click();
+    const phrases = await watch(page, `[data-testid="space-repo-state-${SECOND_KEY}"]`);
+    await rowAct(page, SECOND_KEY, "sync");
     const bare = bareOf(second, SECOND_KEY);
     await expect
       .poll(() => git(bare, "ls-tree", "-r", "--name-only", "spex").split("\n"), { timeout: 30_000 })
       .toContain(`intents/${queued.id}.json`);
-    await expect(sync).toHaveText("Sync");
-    expect(await labels()).toEqual(["Sync", "Syncing…", "Sync"]);
     await expect(panel.getByTestId("space-done-line")).toHaveText(/^Synced just now · [1-9]\d* sent · 0 received$/);
+    await expect(phraseOf(page, SECOND_KEY)).toHaveText("Synced just now");
+    const seen = await phrases();
+    expect(inStepOrder(seen.slice(1, -1)), seen.join(" → ")).toBe(true);
+    await expect(await rowEntry(page, SECOND_KEY, "sync")).toHaveText("Sync now");
+    await closeMenu(page);
     expect(git(bare, "rev-parse", "spex")).toBe(git(clone, "rev-parse", "spex"));
     expect(second.script.transportCredentials.slice(pushes).some((entry) => entry.instance === second.url && entry.push)).toBe(true);
     await page.getByTestId(`space-repo-${SECOND_KEY}`).click();
     await expect(page.getByTestId("space-repository")).toHaveCount(0);
 
-    // "Move…" on that row's placement line offers the second's groups
-    // alone: your namespace there, then every group but the row's own
-    // (space-78, space-87).
-    const secondLine = secondRow.getByTestId(`space-line-${second.url}`);
-    await secondLine.getByTestId("space-line-move").click();
-    const mover = secondLine.getByTestId(`space-move-${SECOND_KEY}@${second.url}`);
+    // "Move…" in that row's "More" offers the second's groups alone:
+    // your namespace there by its login, then every group but the row's
+    // own (space-78, space-1).
+    await rowAct(page, SECOND_KEY, "move");
+    const mover = secondRow.getByTestId(`space-move-${SECOND_KEY}@${second.url}`);
     await expect(mover.locator('[data-testid^="space-move-group-"]')).toHaveText([
       SECOND_PERSON.login,
       PICKED_AS[`${HOST_GROUP}/research`]!,
@@ -1249,30 +1322,30 @@ test.describe("a second instance", () => {
     await page.keyboard.press("Escape");
     await expect(card).toHaveCount(0);
 
-    // "Place at…" on the first's project opens the second's picker
-    // beneath the row, and "Leave…" its inline confirm: each fits at the
-    // floor, measured with the rows and lines (space-88, space-89,
+    // "Place at…" in the first's project's "More" opens the second's
+    // picker beneath the row, and "Leave…" its inline confirm: each fits
+    // at the floor, measured with the rows (space-88, space-89,
     // space-28).
-    const placeControl = firstRow.getByTestId(`space-row-place-${FIRST_KEY}`);
-    await expect(placeControl).toHaveAccessibleName(`Also place at ${SECOND_HOST_NAME}`);
+    await expect(await rowEntry(page, FIRST_KEY, "place")).toHaveAccessibleName(`Also place at ${SECOND_HOST_NAME}`);
+    await closeMenu(page);
     const placePicker = firstRow.getByTestId(`space-place-${FIRST_KEY}`);
     await fit(
       "Groups · Place at… open · 320",
       async () => {
-        await placeControl.click();
+        await rowAct(page, FIRST_KEY, "place");
         await expect(placePicker).toBeVisible();
       },
       PLACEMENT_ROWS,
     );
     await placePicker.getByTestId(`space-pick-cancel-${FIRST_KEY}`).click();
     await expect(placePicker).toHaveCount(0);
-    const leaveControl = firstRow.getByTestId(`space-row-leave-${FIRST_KEY}`);
-    await expect(leaveControl).toHaveAccessibleName("Remove from Stand-in Git host");
+    await expect(await rowEntry(page, FIRST_KEY, "leave")).toHaveAccessibleName("Remove from Stand-in Git host");
+    await closeMenu(page);
     const leaveConfirm = firstRow.getByTestId(`space-leave-confirm-${FIRST_KEY}`);
     await fit(
       "Groups · Leave… asking · 320",
       async () => {
-        await leaveControl.click();
+        await rowAct(page, FIRST_KEY, "leave");
         await expect(leaveConfirm).toBeVisible();
       },
       PLACEMENT_ROWS,
@@ -1315,10 +1388,10 @@ const SENT_LINE = /^Synced just now · [1-9]\d* sent · 0 received$/;
  * `spex` named by its instance, and "remote". */
 const PLACEMENT_WORDS = new RegExp(`${FORBIDDEN_WORDS.source}|@[^\\s/]+\\/spex|\\b[Rr]emote\\b`);
 
-/** A project's rows and lines, what they open, and the lines a group
- * shows for a row placed in it, measured at the floor (space-28,
+/** A project's rows and lines, what they open, and the Sync tab's lines
+ * where the row's tabs stand open, measured at the floor (space-28,
  * space-1). */
-const PLACED_ROWS = [...PLACEMENT_ROWS, '[data-testid^="space-placed-"]'];
+const PLACED_ROWS = [...PLACEMENT_ROWS, '[data-testid^="space-lines-"]'];
 
 test.describe("placed at two instances", () => {
   // Signed in at the first stand-in with the demo project registered,
@@ -1372,7 +1445,9 @@ test.describe("placed at two instances", () => {
     await open(page, app);
     await showGroups(page);
     const row = instanceSection(page, first).getByTestId(`space-group-${HOST_GROUP}`).getByTestId(`space-row-${KEY}`);
-    const lines = row.getByTestId(`space-lines-${KEY}`).locator(":scope > li");
+    // The placements' lines stand in the row's Sync tab (space-87).
+    await openRepository(page, KEY);
+    const lines = page.getByTestId(`space-lines-${KEY}`).locator(":scope > li");
     const firstLine = placementLine(page, KEY, first);
     const secondLine = placementLine(page, KEY, second);
     await expect(row).toHaveAttribute("data-state", "reachable");
@@ -1381,12 +1456,12 @@ test.describe("placed at two instances", () => {
     await expect(firstLine.getByTestId("space-line-at")).toHaveText(TEAM_PATH);
     await scan(page, "page one, placed at the first");
 
-    // "Place at…" on the project's row, the second the one instance to
-    // offer, is titled and named for it, and opens the second's picker
-    // alone beneath the row — your namespace and its groups there,
-    // `workshop` among them — which fits at the floor (space-88,
+    // "Place at…" in the project's "More", the second the one instance
+    // to offer, is titled and named for it, and opens the second's
+    // picker alone beneath the row — your namespace and its groups
+    // there, `workshop` among them — which fits at the floor (space-88,
     // space-28).
-    const place = row.getByTestId(`space-row-place-${KEY}`);
+    const place = await rowEntry(page, KEY, "place");
     await expect(place).toHaveText("Place at…");
     await expect(place).toHaveAttribute("title", `Also place at ${SECOND_HOST_NAME}`);
     await expect(place).toHaveAccessibleName(`Also place at ${SECOND_HOST_NAME}`);
@@ -1400,17 +1475,17 @@ test.describe("placed at two instances", () => {
     await scan(page, "page one, the Place picker");
     await fit(page, "page one · Place at… open · 320");
 
-    // Picking `workshop` creates `<name>-spex` there, "Place at…"
-    // reading "Placing…" until the placement is made and synced; the row
-    // then names both placements, in the order added, each by its
+    // Picking `workshop` creates `<name>-spex` there; once the placement
+    // is made and synced "Place at…" offers nothing more, and the Sync
+    // tab names both placements, in the order added, each by its
     // instance's display name and its path there (space-88, space-97,
     // space-87).
-    const placing = await watch(page, `[data-testid="space-row-place-${KEY}"]`);
     await section.getByTestId(`space-pick-group-${WORKSHOP}`).click();
     await expect(picker).toHaveCount(0);
     await expect(secondLine).toBeVisible({ timeout: 30_000 });
-    await expect(place).toHaveCount(0, { timeout: 30_000 });
-    expect(await placing()).toEqual(["Place at…", "Placing…"]);
+    await expect(await rowEntry(page, KEY, "explore")).toBeVisible();
+    await expect(page.getByTestId(`space-row-place-${KEY}`)).toHaveCount(0, { timeout: 30_000 });
+    await closeMenu(page);
     await expect(lines).toHaveCount(2);
     expect(await lines.evaluateAll((items) => items.map((item) => item.getAttribute("data-testid")))).toEqual([
       `space-line-${first.url}`,
@@ -1438,10 +1513,9 @@ test.describe("placed at two instances", () => {
 
     // Continue pushes there with the second's credential, the line then
     // reading what went, the notice recorded for that placement; the
-    // second's `workshop`, whose listing holds the placement, shows one
-    // line naming the row and the group it stands under — its name, its
-    // path beside it, as the list heads it — with no control, and no
-    // Delete (space-57, space-12, space-1, space-77).
+    // second's `workshop`, whose listing holds the placement, stands no
+    // row and no line for it, and offers no Delete (space-57, space-12,
+    // space-1, space-77).
     const pushes = second.script.transportCredentials.length;
     await notice.getByRole("button", { name: "Continue" }).click();
     await expect(notice).toHaveCount(0);
@@ -1453,11 +1527,12 @@ test.describe("placed at two instances", () => {
     expect(second.script.transportCredentials.slice(pushes).some((entry) => entry.instance === second.url && entry.push)).toBe(true);
     expect(placementOf(repositoryOf(await app.core.command("space.get", {}), KEY), second.url).noticed).toBe(true);
     const workshop = instanceSection(page, second).getByTestId(`space-group-${WORKSHOP}`);
-    const placed = workshop.getByTestId(`space-placed-${KEY}`);
-    await expect(placed).toHaveText(`demo-project-spex stands under Acme · ${HOST_GROUP} at Stand-in Git host`);
-    await expect(placed.getByRole("button")).toHaveCount(0);
+    await expect(workshop).toBeVisible();
+    await expect(workshop.locator('[data-testid^="space-placed-"]')).toHaveCount(0);
     await expect(workshop.locator('[data-testid^="space-row-"]')).toHaveCount(0);
-    await expect(workshop.getByTestId(`space-group-delete-${WORKSHOP}`)).toHaveCount(0);
+    await expect(await menuEntry(page, `space-group-more-${WORKSHOP}`, `space-group-members-${WORKSHOP}`)).toBeVisible();
+    await expect(page.getByTestId(`space-group-delete-${WORKSHOP}`)).toHaveCount(0);
+    await closeMenu(page);
     await scan(page, "page one, placed at both");
     await fit(page, "page one · placed at both · 320");
 
@@ -1477,7 +1552,7 @@ test.describe("placed at two instances", () => {
     const firstSessionRow = page.getByTestId("space-local-list").locator('[data-testid^="space-unit-mine-sessions/"]');
     await expect(firstSessionRow).toContainText(FIRST_HOME_TURN);
     const firstSession = (await firstSessionRow.getAttribute("data-testid"))!.replace("space-unit-mine-sessions/", "");
-    await row.getByTestId(`space-row-sync-${KEY}`).click();
+    await rowAct(page, KEY, "sync");
     for (const line of [firstLine, secondLine]) {
       await expect(line.getByTestId("space-line-state")).toHaveText(SENT_LINE, { timeout: 30_000 });
     }
@@ -1502,18 +1577,22 @@ test.describe("placed at two instances", () => {
       await open(page2, other);
       await showGroups(page2);
 
-      // The project, joined from the first's `acme` with its code cloned
-      // into the folder the page names, names the second's placement as
-      // not on this device, with Attach (space-63, space-87).
+      // The project, opened here from the first's `acme` with its code
+      // cloned into the folder the page names, names the second's
+      // placement as not on this device, with Attach (space-111,
+      // space-63, space-87).
       const row2 = instanceSection(page2, first).getByTestId(`space-group-${HOST_GROUP}`).getByTestId(`space-row-${KEY}`);
       await expect(row2).toHaveAttribute("data-state", "absent");
-      await row2.getByTestId(`space-row-join-${KEY}`).click();
+      const openHere = row2.getByTestId(`space-row-open-${KEY}`);
+      await expect(openHere).toHaveText("Open here");
+      await openHere.click();
       const folder = join(other.home, "work", "demo-project");
       const editor = page2.getByTestId(`space-join-${KEY}`);
       await editor.getByTestId(`space-join-${KEY}-path`).fill(folder);
-      await editor.getByRole("button", { name: "Join", exact: true }).click();
+      await editor.getByRole("button", { name: "Open here", exact: true }).click();
       await expect(row2).toHaveAttribute("data-state", "reachable", { timeout: 30_000 });
       expect(git(folder, "remote", "get-url", "origin")).toBe(app.codeOrigin);
+      await openRepository(page2, KEY);
       const firstLine2 = placementLine(page2, KEY, first);
       const secondLine2 = placementLine(page2, KEY, second);
       await expect(firstLine2).toHaveAttribute("data-attached", "true");
@@ -1547,7 +1626,7 @@ test.describe("placed at two instances", () => {
       // recorded for that placement (space-90, space-99, space-87).
       const attaching = await watch(
         page2,
-        `[data-testid="space-row-${KEY}"] [data-testid="space-line-${second.url}"] [data-testid="space-line-attach"]`,
+        `[data-testid="space-lines-${KEY}"] [data-testid="space-line-${second.url}"] [data-testid="space-line-attach"]`,
       );
       await attach.click();
       await notice2.getByRole("button", { name: "Continue" }).click();
@@ -1574,7 +1653,7 @@ test.describe("placed at two instances", () => {
       const secondSessionRow = page2.getByTestId("space-local-list").locator('[data-testid^="space-unit-mine-sessions/"]');
       await expect(secondSessionRow).toContainText(SECOND_HOME_TURN);
       const secondSession = (await secondSessionRow.getAttribute("data-testid"))!.replace("space-unit-mine-sessions/", "");
-      await row2.getByTestId(`space-row-sync-${KEY}`).click();
+      await rowAct(page2, KEY, "sync");
       for (const line of [firstLine2, secondLine2]) {
         await expect(line.getByTestId("space-line-state")).toHaveText(SENT_LINE, { timeout: 30_000 });
       }
@@ -1585,10 +1664,11 @@ test.describe("placed at two instances", () => {
       }
       await scan(page2, "page two, a session synced to both");
 
-      // The first page's Sync brings it: its first line reads what came,
-      // and the session lists in the first page's sidebar by its title
-      // (space-12).
-      await row.getByTestId(`space-row-sync-${KEY}`).click();
+      // The first page's "Sync now" brings it: its first line reads what
+      // came, and the session lists in the first page's sidebar by its
+      // title (space-12).
+      await openRepository(page, KEY);
+      await rowAct(page, KEY, "sync");
       await expect(firstLine.getByTestId("space-line-state")).toHaveText(/^Synced just now · \d+ sent · [1-9]\d* received$/, {
         timeout: 30_000,
       });
@@ -1616,8 +1696,6 @@ test.describe("placed at two instances", () => {
 /** The project's spex repository in your namespace there, by its path
  * in the instance (space-88). */
 const NAMESPACE_PATH = `${HOST_LOGIN}/demo-project-spex`;
-/** Your own group's spex repository's name (space-4). */
-const OWN_NAME = `${HOST_LOGIN}-spex`;
 /** The session run before the leaves, by the first turn that titles it. */
 const LEAVE_TURN = "Write the release notes before the move";
 
@@ -1673,23 +1751,26 @@ test.describe("three instances", () => {
     const list = page.getByTestId("space-groups");
 
     // Your own group is placed at every instance the home signed in to,
-    // in your namespace there, in the order signed in; its row offers
-    // neither "Place at…" nor "Leave…", and each namespace, the first's
-    // among them, shows one line naming it under your own group, with no
-    // control (space-4, space-88, space-89, space-87, space-1).
+    // in your namespace there, in the order signed in, its lines in its
+    // Sync tab; its "More" offers neither "Place at…" nor "Leave…", and
+    // each namespace, listing your own group's repository alone, heads
+    // nothing (space-4, space-88, space-89, space-87, space-1).
     const ownRow = list.getByTestId("space-own").getByTestId(`space-row-${OWN_KEY}`);
-    const ownLines = ownRow.getByTestId(`space-lines-${OWN_KEY}`).locator(":scope > li");
+    await expect(ownRow.getByTestId(`space-repo-${OWN_KEY}`)).toHaveText("Your sessions");
+    await openRepository(page, OWN_KEY);
+    const ownLines = page.getByTestId(`space-lines-${OWN_KEY}`).locator(":scope > li");
     await expect(ownLines).toHaveCount(3, { timeout: 30_000 });
     expect(await testIds(ownLines)).toEqual([`space-line-${first.url}`, `space-line-${second.url}`, `space-line-${third.url}`]);
     for (const host of [first, second, third]) {
       await expect(placementLine(page, OWN_KEY, host).getByTestId("space-line-at")).toHaveText(OWN_KEY);
     }
-    await expect(ownRow.getByTestId(`space-row-place-${OWN_KEY}`)).toHaveCount(0);
-    await expect(ownRow.getByTestId(`space-row-leave-${OWN_KEY}`)).toHaveCount(0);
+    await expect(await rowEntry(page, OWN_KEY, "explore")).toBeVisible();
+    await expect(page.getByTestId(`space-row-place-${OWN_KEY}`)).toHaveCount(0);
+    await expect(page.getByTestId(`space-row-leave-${OWN_KEY}`)).toHaveCount(0);
+    await closeMenu(page);
     for (const host of [first, second, third]) {
-      const placed = instanceSection(page, host).getByTestId(`space-group-@${HOST_LOGIN}`).getByTestId(`space-placed-${OWN_KEY}`);
-      await expect(placed).toHaveText(`${OWN_NAME} stands under your own group`);
-      await expect(placed.getByRole("button")).toHaveCount(0);
+      await expect(instanceSection(page, host).getByTestId(`space-group-@${HOST_LOGIN}`)).toHaveCount(0);
+      await expect(instanceSection(page, host).locator('[data-testid^="space-placed-"]')).toHaveCount(0);
     }
 
     // Each placement after the first waits for the sharing notice, its
@@ -1728,18 +1809,21 @@ test.describe("three instances", () => {
       }
     }
 
-    // "Place at…" on the project's row, synced in the first's `acme`,
+    // "Place at…" in the project's "More", synced in the first's `acme`,
     // offers the two instances it holds no placement at: it opens the
     // choice of them in place, each by its display name, titled and
     // named "Also place at <display name>", focus on the first; Escape
-    // closes it, choosing nothing (space-88, space-28).
+    // closes it, choosing nothing, focus back on the row's "More"
+    // (space-88, space-28).
     const row = instanceSection(page, first).getByTestId(`space-group-${HOST_GROUP}`).getByTestId(`space-row-${KEY}`);
-    const lines = row.getByTestId(`space-lines-${KEY}`).locator(":scope > li");
+    await openRepository(page, KEY);
+    const lines = page.getByTestId(`space-lines-${KEY}`).locator(":scope > li");
     const firstLine = placementLine(page, KEY, first);
     const thirdLine = placementLine(page, KEY, third);
+    const more = page.getByTestId(`space-row-more-${KEY}`);
     await expect(row).toHaveAttribute("data-state", "reachable");
     expect(await testIds(lines)).toEqual([`space-line-${first.url}`]);
-    const place = row.getByTestId(`space-row-place-${KEY}`);
+    const place = await rowEntry(page, KEY, "place");
     await expect(place).toHaveText("Place at…");
     await expect(place).toHaveAccessibleName("Place at…");
     await expect(place).not.toHaveAttribute("title");
@@ -1759,18 +1843,17 @@ test.describe("three instances", () => {
     await expect(offered.nth(0)).toBeFocused();
     await page.keyboard.press("Escape");
     await expect(choice).toHaveCount(0);
-    await expect(place).toBeFocused();
-    await place.click();
+    await expect(more).toBeFocused();
+    await rowAct(page, KEY, "place");
     await expect(choice).toBeVisible();
     await fit("Groups · the Place choice open · 320");
 
     // The third chosen opens its picker alone beneath the row — your
     // namespace and its groups there — and picking your namespace
     // creates `<name>-spex` there with no notice, its only member being
-    // the account; "Place at…" reads "Placing…" until the placement is
-    // made and synced, the third's line then reading what went, and
-    // "Place at…" names the second alone (space-88, space-97, space-57,
-    // space-87).
+    // the account; once the placement is made and synced the third's
+    // line reads what went, and "Place at…" names the second alone
+    // (space-88, space-97, space-57, space-87).
     await choice.getByTestId(`space-place-instance-${third.url}`).click();
     const picker = row.getByTestId(`space-place-${KEY}`);
     await expect(picker).toHaveAttribute("aria-label", `Also place at ${THIRD_HOST_NAME}`);
@@ -1782,30 +1865,29 @@ test.describe("three instances", () => {
       PICKED_AS[`${HOST_GROUP}/research`]!,
     ]);
     await expect(picker.getByTestId(`space-pick-name-${KEY}`)).toHaveValue("demo-project");
-    const placing = await watch(page, `[data-testid="space-row-place-${KEY}"]`);
     await section.getByTestId(`space-pick-group-${entryKey(HOST_LOGIN)}`).click();
     await expect(picker).toHaveCount(0);
     await expect(thirdLine.getByTestId("space-line-state")).toHaveText(SENT_LINE, { timeout: 30_000 });
-    await expect(place).toHaveText("Place at…", { timeout: 30_000 });
-    expect(await placing()).toEqual(["Place at…", "Placing…", "Place at…"]);
     expect(await testIds(lines)).toEqual([`space-line-${first.url}`, `space-line-${third.url}`]);
     await expect(thirdLine.getByTestId("space-line-instance")).toHaveText(THIRD_HOST_NAME);
     await expect(thirdLine.getByTestId("space-line-at")).toHaveText(NAMESPACE_PATH);
     await expect(firstLine.getByTestId("space-line-state")).toHaveText(SYNCED_LINE);
-    await expect(place).toHaveAttribute("title", `Also place at ${SECOND_HOST_NAME}`);
-    await expect(place).toHaveAccessibleName(`Also place at ${SECOND_HOST_NAME}`);
+    const placeAgain = await rowEntry(page, KEY, "place");
+    await expect(placeAgain).toHaveText("Place at…", { timeout: 30_000 });
+    await expect(placeAgain).toHaveAttribute("title", `Also place at ${SECOND_HOST_NAME}`);
+    await expect(placeAgain).toHaveAccessibleName(`Also place at ${SECOND_HOST_NAME}`);
+    await closeMenu(page);
     const clone = clonePath(app.dataDir, KEY);
     const firstBare = bareOf(first, KEY);
     const thirdBare = bareOf(third, NAMESPACE_PATH);
     await expect.poll(() => headOf(thirdBare, "spex"), { timeout: 30_000 }).toBe(git(clone, "rev-parse", "spex"));
 
-    // Your namespace at the third, whose listing holds the placement,
-    // shows one line naming the row and the group it stands under, as
-    // the list heads it, with no control (space-1).
+    // Your namespace at the third, whose listing holds the placement
+    // but stands no row there, heads nothing and names no line
+    // (space-1).
     const thirdNamespace = instanceSection(page, third).getByTestId(`space-group-@${HOST_LOGIN}`);
-    const placed = thirdNamespace.getByTestId(`space-placed-${KEY}`);
-    await expect(placed).toHaveText(`demo-project-spex stands under Acme · ${HOST_GROUP} at Stand-in Git host`);
-    await expect(placed.getByRole("button")).toHaveCount(0);
+    await expect(thirdNamespace).toHaveCount(0);
+    await expect(instanceSection(page, third).locator('[data-testid^="space-placed-"]')).toHaveCount(0);
 
     // A session run on the page, not synced.
     await nav(page, "Projects").click();
@@ -1818,11 +1900,12 @@ test.describe("three instances", () => {
     await expect(page.getByTestId("captain-pane")).toContainText("/code finished");
     await settled(app);
     await showGroups(page);
+    await openRepository(page, KEY);
 
-    // "Leave…" on the placed project opens the choice of its placements,
-    // each by its display name, named "Remove from <display name>",
-    // focus on the first (space-89, space-28).
-    const leave = row.getByTestId(`space-row-leave-${KEY}`);
+    // "Leave…" in the placed project's "More" opens the choice of its
+    // placements, each by its display name, named "Remove from <display
+    // name>", focus on the first (space-89, space-28).
+    const leave = await rowEntry(page, KEY, "leave");
     await expect(leave).toHaveText("Leave…");
     await expect(leave).toHaveAccessibleName("Leave…");
     await leave.click();
@@ -1842,7 +1925,7 @@ test.describe("three instances", () => {
     await fit("Groups · the Leave choice open · 320");
 
     // The third chosen asks inline, Keep focused, and Escape keeps it,
-    // focus back on "Leave…" (space-89).
+    // focus back on the row's "More" (space-89).
     await leaveChoice.getByTestId(`space-leave-instance-${third.url}`).click();
     const confirm = row.getByTestId(`space-leave-confirm-${KEY}`);
     await expect(confirm).toHaveAttribute("data-stage", "first");
@@ -1850,34 +1933,35 @@ test.describe("three instances", () => {
     await expect(confirm.getByRole("button", { name: "Keep" })).toBeFocused();
     await page.keyboard.press("Escape");
     await expect(confirm).toHaveCount(0);
-    await expect(leave).toBeFocused();
+    await expect(more).toBeFocused();
     await expect(lines).toHaveCount(2);
 
-    // Remove sends the Leave, "Leaving…" until it stops: the session
-    // reached no remaining placement, so it asks again naming the count,
-    // Keep focused, and Keep leaves the placement held, the row saying
-    // how the Leave stopped (space-89, space-98, space-15).
-    await leave.click();
+    // Remove sends the Leave until it stops: the session reached no
+    // remaining placement, so it asks again naming the count, Keep
+    // focused, and Keep leaves the placement held, the row's phrase
+    // saying how the Leave stopped (space-89, space-98, space-15,
+    // space-87).
+    await rowAct(page, KEY, "leave");
     await leaveChoice.getByTestId(`space-leave-instance-${third.url}`).click();
-    const leaving = await watch(page, `[data-testid="space-row-leave-${KEY}"]`);
     await confirm.getByRole("button", { name: "Remove" }).click();
     await expect(confirm).toHaveAttribute("data-stage", "unreceived", { timeout: 30_000 });
     await expect(confirm).toContainText(`1 unit has reached no other instance yet. Remove from ${THIRD_HOST_NAME} anyway?`);
     await expect(confirm.getByRole("button", { name: "Keep" })).toBeFocused();
-    expect(await leaving()).toEqual(["Leave…", "Leaving…", "Leave…"]);
+    await expect(await rowEntry(page, KEY, "leave")).toHaveText("Leave…");
+    await closeMenu(page);
     await fit("Groups · Leave… asking again · 320");
     await confirm.getByRole("button", { name: "Keep" }).click();
     await expect(confirm).toHaveCount(0);
-    await expect(row.getByTestId(`space-row-caption-${KEY}`)).toHaveText("Check stopped — 1 record has reached no other placement");
+    await expect(phraseOf(page, KEY)).toHaveText("Check stopped — 1 record has reached no other placement");
     await expect(thirdLine).toHaveAttribute("data-attached", "true");
     expect(placementOf(repositoryOf(await app.core.command("space.get", {}), KEY), third.url).attached).toBe(true);
 
-    // Sync sends the session to both placements.
-    await row.getByTestId(`space-row-sync-${KEY}`).click();
+    // "Sync now" sends the session to both placements.
+    await rowAct(page, KEY, "sync");
     for (const line of [firstLine, thirdLine]) {
       await expect(line.getByTestId("space-line-state")).toHaveText(SENT_LINE, { timeout: 30_000 });
     }
-    await expect(row.getByTestId(`space-row-caption-${KEY}`)).toHaveCount(0);
+    await expect(phraseOf(page, KEY)).not.toContainText("stopped");
     for (const bare of [firstBare, thirdBare]) {
       await expect.poll(() => headOf(bare, "spex"), { timeout: 30_000 }).toBe(git(clone, "rev-parse", "spex"));
     }
@@ -1886,26 +1970,27 @@ test.describe("three instances", () => {
     // the first changing, and the clone moves to the third's path, the
     // row standing under your namespace there, opened as it was, with
     // the third's line alone, the live note saying so and focus on its
-    // "Leave…" (space-89, space-98, storage-38).
+    // "More", which holds its "Leave…" (space-89, space-98, storage-38).
     await openRepository(page, KEY);
     const atFirst = headOf(firstBare, "spex");
-    await leave.click();
+    await rowAct(page, KEY, "leave");
     await leaveChoice.getByTestId(`space-leave-instance-${first.url}`).click();
     await expect(confirm).toHaveAttribute("data-stage", "first");
     await expect(confirm).toContainText(`Remove from Stand-in Git host? Nothing at Stand-in Git host changes; these records stop syncing there.`);
     await confirm.getByRole("button", { name: "Remove" }).click();
     const moved = thirdNamespace.getByTestId(`space-row-${MOVED_KEY}`);
     await expect(moved).toHaveAttribute("data-state", "reachable", { timeout: 30_000 });
-    expect(await testIds(moved.getByTestId(`space-lines-${MOVED_KEY}`).locator(":scope > li"))).toEqual([`space-line-${third.url}`]);
-    await expect(thirdNamespace.getByTestId(`space-placed-${KEY}`)).toHaveCount(0);
+    await expect(thirdNamespace.getByRole("heading", { level: 3 })).toHaveText("Only you");
+    expect(await testIds(page.getByTestId(`space-lines-${MOVED_KEY}`).locator(":scope > li"))).toEqual([`space-line-${third.url}`]);
     await expect(page.getByTestId(`space-repo-${MOVED_KEY}`)).toHaveAttribute("aria-expanded", "true");
-    await expect(page.getByTestId("space-repository")).toHaveAttribute("aria-label", "demo-project-spex");
+    await expect(page.getByTestId("space-repository")).toHaveAttribute("aria-label", "demo-project");
     await expect(page.getByTestId("space-tab-sync")).toHaveAttribute("aria-selected", "true");
     await expect(page.getByTestId("space-live")).toHaveText("Removed from Stand-in Git host");
-    const leaveMoved = moved.getByTestId(`space-row-leave-${MOVED_KEY}`);
+    await expect(moved.getByTestId(`space-row-more-${MOVED_KEY}`)).toBeFocused();
+    const leaveMoved = await rowEntry(page, MOVED_KEY, "leave");
     await expect(leaveMoved).toHaveAccessibleName(`Remove from ${THIRD_HOST_NAME}`);
     await expect(leaveMoved).toHaveAttribute("title", `Remove from ${THIRD_HOST_NAME}`);
-    await expect(leaveMoved).toBeFocused();
+    await closeMenu(page);
     expect(existsSync(clonePath(app.dataDir, MOVED_KEY))).toBe(true);
     expect(existsSync(clone)).toBe(false);
     expect(headOf(firstBare, "spex")).toBe(atFirst);
@@ -1917,11 +2002,11 @@ test.describe("three instances", () => {
     // Leaving the last, titled and named for the third, asks first, then
     // again naming every unit, none being held by another placement; its
     // Remove drops it, nothing at the third changing, and the clone moves
-    // under your own group's folder, on this device only with "Pick a
-    // group", focused, still opened (space-89, space-98, storage-38,
+    // under your own group's folder, on this computer only with "Add to
+    // a group…", focused, still opened (space-89, space-98, storage-38,
     // space-61).
     const atThird = headOf(thirdBare, "spex");
-    await leaveMoved.click();
+    await rowAct(page, MOVED_KEY, "leave");
     const lastConfirm = moved.getByTestId(`space-leave-confirm-${MOVED_KEY}`);
     await expect(lastConfirm).toHaveAttribute("data-stage", "first");
     await expect(lastConfirm).toContainText(`Remove from ${THIRD_HOST_NAME}? Nothing at ${THIRD_HOST_NAME} changes; these records stop syncing there.`);
@@ -1931,14 +2016,16 @@ test.describe("three instances", () => {
     await lastConfirm.getByRole("button", { name: "Remove" }).click();
     const local = list.getByTestId("space-own").getByTestId(`space-row-${LOCAL_KEY}`);
     await expect(local).toHaveAttribute("data-state", "local-only", { timeout: 30_000 });
-    await expect(local.getByTestId(`space-repo-state-${LOCAL_KEY}`)).toHaveText("On this device only");
-    await expect(local.getByTestId(`space-row-pick-${LOCAL_KEY}`)).toHaveText("Pick a group");
+    await expect(local.getByTestId(`space-repo-state-${LOCAL_KEY}`)).toHaveText("On this computer only");
+    await expect(local.getByTestId(`space-row-pick-${LOCAL_KEY}`)).toHaveText("Add to a group…");
     await expect(local.getByTestId(`space-row-pick-${LOCAL_KEY}`)).toBeFocused();
-    await expect(local.getByTestId(`space-lines-${LOCAL_KEY}`)).toHaveCount(0);
-    await expect(local.getByTestId(`space-row-leave-${LOCAL_KEY}`)).toHaveCount(0);
-    await expect(local.getByTestId(`space-row-place-${LOCAL_KEY}`)).toHaveCount(0);
+    await expect(page.getByTestId(`space-lines-${LOCAL_KEY}`)).toHaveCount(0);
     await expect(page.getByTestId(`space-repo-${LOCAL_KEY}`)).toHaveAttribute("aria-expanded", "true");
     await expect(page.getByTestId("space-live")).toHaveText(`Removed from ${THIRD_HOST_NAME}`);
+    await expect(await rowEntry(page, LOCAL_KEY, "explore")).toBeVisible();
+    await expect(page.getByTestId(`space-row-leave-${LOCAL_KEY}`)).toHaveCount(0);
+    await expect(page.getByTestId(`space-row-place-${LOCAL_KEY}`)).toHaveCount(0);
+    await closeMenu(page);
     expect(existsSync(clonePath(app.dataDir, LOCAL_KEY))).toBe(true);
     expect(existsSync(clonePath(app.dataDir, MOVED_KEY))).toBe(false);
     expect(headOf(thirdBare, "spex")).toBe(atThird);
@@ -1985,31 +2072,30 @@ test.describe("one Git backend", () => {
 
     // Refresh reads every signed-in instance, the second's listing now
     // holding the project (space-1, git-host-5). The row stands in your
-    // namespace at the first with that one line; your namespace at the
-    // second, whose listing holds the same placement, stands no row for
-    // it and names it in one line with no control, as it and your
-    // namespace at the first name your own group's own repository
-    // (space-1, DR-128).
+    // namespace at the first, "Only you", with that one line in its Sync
+    // tab; your namespace at the second, whose listing holds the same
+    // placement and your own group's, stands no row and heads nothing
+    // (space-1, DR-128, DR-159).
     await page.getByTestId("space-refresh").click();
     await expect(page.getByTestId("space-refresh")).toHaveText("Refresh", { timeout: 30_000 });
-    const row = instanceSection(page, first).getByTestId(`space-group-@${HOST_LOGIN}`).getByTestId(`space-row-${KEY}`);
+    const firstNamespace = instanceSection(page, first).getByTestId(`space-group-@${HOST_LOGIN}`);
+    const row = firstNamespace.getByTestId(`space-row-${KEY}`);
     await expect(row).toHaveAttribute("data-state", "reachable", { timeout: 30_000 });
-    expect(await testIds(row.getByTestId(`space-lines-${KEY}`).locator(":scope > li"))).toEqual([`space-line-${first.url}`]);
+    await expect(firstNamespace.getByRole("heading", { level: 3 })).toHaveText("Only you");
+    await openRepository(page, KEY);
+    const lines = page.getByTestId(`space-lines-${KEY}`).locator(":scope > li");
+    expect(await testIds(lines)).toEqual([`space-line-${first.url}`]);
     const secondNamespace = instanceSection(page, second).getByTestId(`space-group-@${HOST_LOGIN}`);
-    await expect(secondNamespace.locator(`[data-testid^="space-row-"]`)).toHaveCount(0);
-    const placed = secondNamespace.getByTestId(`space-placed-${KEY}`);
-    await expect(placed).toHaveText(`demo-project-spex stands under ${HOST_LOGIN} at Stand-in Git host`);
-    await expect(placed.getByRole("button")).toHaveCount(0);
+    await expect(secondNamespace).toHaveCount(0);
+    await expect(instanceSection(page, second).locator(`[data-testid^="space-row-"]`)).toHaveCount(0);
     for (const host of [first, second]) {
-      const own = instanceSection(page, host).getByTestId(`space-group-@${HOST_LOGIN}`).getByTestId(`space-placed-${OWN_KEY}`);
-      await expect(own).toHaveText(`${OWN_NAME} stands under your own group`);
-      await expect(own.getByRole("button")).toHaveCount(0);
+      await expect(instanceSection(page, host).locator('[data-testid^="space-placed-"]')).toHaveCount(0);
     }
 
     // "Place at…" offers the third alone, titled and named for it, the
     // second holding that placement already: it opens the third's picker
     // with no choice, and Cancel closes it, choosing nothing (space-88).
-    const place = row.getByTestId(`space-row-place-${KEY}`);
+    const place = await rowEntry(page, KEY, "place");
     await expect(place).toHaveText("Place at…");
     await expect(place).toHaveAttribute("title", `Also place at ${THIRD_HOST_NAME}`);
     await expect(place).toHaveAccessibleName(`Also place at ${THIRD_HOST_NAME}`);
@@ -2020,12 +2106,12 @@ test.describe("one Git backend", () => {
     expect(await testIds(picker.locator('[data-testid^="space-pick-instance-"]'))).toEqual([`space-pick-instance-${third.url}`]);
     await picker.getByTestId(`space-pick-cancel-${KEY}`).click();
     await expect(picker).toHaveCount(0);
-    expect(await testIds(row.getByTestId(`space-lines-${KEY}`).locator(":scope > li"))).toEqual([`space-line-${first.url}`]);
+    expect(await testIds(lines)).toEqual([`space-line-${first.url}`]);
 
     // Placed at the third in your namespace there — its only member the
     // account, so no notice — the row holds both placements (space-88,
     // space-97, space-87).
-    await place.click();
+    await rowAct(page, KEY, "place");
     const section = await pickSection(picker, third, THIRD_HOST_NAME);
     await section.getByTestId(`space-pick-group-${entryKey(HOST_LOGIN)}`).click();
     await expect(picker).toHaveCount(0);
@@ -2035,10 +2121,10 @@ test.describe("one Git backend", () => {
     // host repository: the clone moves under the third, and the first's
     // listing stands as a row of no clone under the former key, closed;
     // the moved row stays open with its Sync tab, the live note says the
-    // placement left, and focus goes to the moved row's Leave… (space-89,
-    // space-98, storage-38).
+    // placement left, and focus goes to the moved row's "More", which
+    // holds its Leave… (space-89, space-98, storage-38).
     await openRepository(page, KEY);
-    await row.getByTestId(`space-row-leave-${KEY}`).click();
+    await rowAct(page, KEY, "leave");
     await row.getByTestId(`space-leave-choice-${KEY}`).getByTestId(`space-leave-instance-${first.url}`).click();
     const confirm = row.getByTestId(`space-leave-confirm-${KEY}`);
     await expect(confirm).toHaveAttribute("data-stage", "first");
@@ -2049,10 +2135,10 @@ test.describe("one Git backend", () => {
     await expect(former).toHaveAttribute("data-state", "absent");
     await expect(page.getByTestId(`space-repo-${KEY}`)).toHaveAttribute("aria-expanded", "false");
     await expect(page.getByTestId(`space-repo-${MOVED_KEY}`)).toHaveAttribute("aria-expanded", "true");
-    await expect(page.getByTestId("space-repository")).toHaveAttribute("aria-label", "demo-project-spex");
+    await expect(page.getByTestId("space-repository")).toHaveAttribute("aria-label", "demo-project");
     await expect(page.getByTestId("space-tab-sync")).toHaveAttribute("aria-selected", "true");
     await expect(page.getByTestId("space-live")).toHaveText("Removed from Stand-in Git host");
-    await expect(moved.getByTestId(`space-row-leave-${MOVED_KEY}`)).toBeFocused();
+    await expect(moved.getByTestId(`space-row-more-${MOVED_KEY}`)).toBeFocused();
     expect(existsSync(clonePath(app.dataDir, MOVED_KEY))).toBe(true);
   });
 });
@@ -2081,12 +2167,14 @@ test.describe("daily sync", () => {
     await openRepository(page, TEAM_KEY);
     const panel = page.getByTestId("space-repository");
     const tab = panel.getByTestId("space-sync-tab");
-    const counts = page.getByTestId(`space-repo-counts-${TEAM_KEY}`);
-    const sync = page.getByTestId(`space-row-sync-${TEAM_KEY}`);
+    // Ahead and behind ride the placement's line's title in the Sync tab
+    // (space-8, space-87).
+    const counts = placementLine(page, TEAM_KEY, host).getByTestId("space-line-state");
+    const sync = { click: () => rowAct(page, TEAM_KEY, "sync") };
 
     // Check host lists the peer's session and Settings as incoming, the
     // units changed on both sides marked, under the placement's instance,
-    // and the row reads behind (space-8).
+    // and the placement reads behind (space-8).
     await expect(tab.getByTestId("space-check")).toHaveText("Check host");
     await tab.getByTestId("space-check").click();
     const incoming = tab.getByTestId("space-incoming-list");
@@ -2101,8 +2189,7 @@ test.describe("daily sync", () => {
     const incomingIntent = incoming.locator('[data-testid^="space-unit-remote-intents/"]');
     await expect(incomingIntent).toHaveCount(1);
     await expect(incomingIntent).toContainText("Queued on the other laptop");
-    await expect(counts).toContainText("0 ahead");
-    await expect(counts).toContainText("1 behind");
+    await expect(counts).toHaveAttribute("title", /0 commits ahead, 1 commit behind/);
     // A unit the host changed too is a choice, not a local unit
     // (space-7): the local list leaves both out.
     await expect(tab.locator('[data-testid^="space-unit-mine-"]')).toHaveCount(0);
@@ -2139,23 +2226,30 @@ test.describe("daily sync", () => {
     expect(above!.y + above!.height).toBeLessThanOrEqual(below!.y + 1);
     await scanVocabulary(page, "needs your choice", words);
 
-    // "Take host's" for the session and "Keep mine" for Settings, by
-    // keyboard: each row is a radio group named by the unit's label,
-    // arrow keys moving within it (space-17).
+    // The row reads that the units changed here and at the instance,
+    // with Resolve (space-14, space-87).
+    await expect(phraseOf(page, TEAM_KEY)).toHaveText("Changed here and at Stand-in Git host");
+    await expect(page.getByTestId(`space-row-resolve-${TEAM_KEY}`)).toHaveText("Resolve");
+
+    // "Take Stand-in Git host's" for the session and "Keep what's here"
+    // for Settings, by keyboard: each row is a radio group named by the
+    // unit's label, arrow keys moving within it (space-17).
     const sessionGroup = picker.getByRole("radiogroup", { name: SESSION_TITLE });
     const settingsGroup = picker.getByRole("radiogroup", { name: "Settings changed" });
-    await expect(sessionGroup).toContainText(/Keep mine\s+updated/);
-    // The host's side names the placement's instance (space-17).
-    await expect(sessionGroup).toContainText(/Take host's\s+Stand-in Git host\s+·\s+updated/);
-    await sessionGroup.getByRole("radio", { name: /Keep mine/ }).focus();
+    const keep = /Keep what's here/;
+    // The other side names the placement's instance (space-17).
+    const take = /Take Stand-in Git host's/;
+    await expect(sessionGroup).toContainText(/Keep what's here\s+updated/);
+    await expect(sessionGroup).toContainText(/Take Stand-in Git host's\s+updated/);
+    await sessionGroup.getByRole("radio", { name: keep }).focus();
     await page.keyboard.press("ArrowDown");
-    await expect(sessionGroup.getByRole("radio", { name: /Take host's/ })).toBeChecked();
-    await expect(sessionGroup.getByRole("radio", { name: /Take host's/ })).toBeFocused();
+    await expect(sessionGroup.getByRole("radio", { name: take })).toBeChecked();
+    await expect(sessionGroup.getByRole("radio", { name: take })).toBeFocused();
     await expect(picker.getByTestId("space-chosen")).toHaveText("1 of 2 chosen");
     await expect(picker.getByTestId("space-apply")).toBeDisabled();
-    await settingsGroup.getByRole("radio", { name: /Take host's/ }).focus();
+    await settingsGroup.getByRole("radio", { name: take }).focus();
     await page.keyboard.press("ArrowUp");
-    await expect(settingsGroup.getByRole("radio", { name: /Keep mine/ })).toBeChecked();
+    await expect(settingsGroup.getByRole("radio", { name: keep })).toBeChecked();
     await expect(picker.getByTestId("space-chosen")).toHaveText("2 of 2 chosen");
     await expect(picker.getByTestId("space-apply")).toBeEnabled();
 
@@ -2169,8 +2263,8 @@ test.describe("daily sync", () => {
     await page.keyboard.press("Escape");
     await expect(confirm).toHaveCount(0);
     await expect(picker.getByTestId("space-chosen")).toHaveText("2 of 2 chosen");
-    await expect(sessionGroup.getByRole("radio", { name: /Take host's/ })).toBeChecked();
-    await expect(settingsGroup.getByRole("radio", { name: /Keep mine/ })).toBeChecked();
+    await expect(sessionGroup.getByRole("radio", { name: take })).toBeChecked();
+    await expect(settingsGroup.getByRole("radio", { name: keep })).toBeChecked();
     await picker.getByTestId("space-apply").click();
     await confirm.getByRole("button", { name: "Apply" }).click();
     const done = tab.getByTestId("space-done-line");
@@ -2178,8 +2272,7 @@ test.describe("daily sync", () => {
     // work need more than the generic UI assertion budget.
     await expect(done).toHaveText(/^Synced just now · 1 sent · 2 received$/, { timeout: 30_000 });
     await expect(tab.getByTestId("space-picker")).toHaveCount(0);
-    await expect(counts).toContainText("0 ahead");
-    await expect(counts).toContainText("0 behind");
+    await expect(counts).toHaveAttribute("title", /0 commits ahead, 0 commits behind/);
     await scanVocabulary(page, "synced", words);
     expect(git(bareOf(host, TEAM_KEY), "rev-parse", "spex")).toBe(git(clone, "rev-parse", "spex"));
     expect(readFileSync(join(clone, settingsUnit), "utf8")).toBe(LOCAL_PROJECT_CONFIG);
@@ -2197,7 +2290,7 @@ test.describe("daily sync", () => {
     expect(readFileSync(app.configPath, "utf8")).toContain(`model: ${LOCAL_MODEL}`);
 
     // The host's `spex` moves under the push: one automatic re-check,
-    // then "changed again" with the ahead count on the row; a second
+    // then "changed again" with the ahead count saved locally; a second
     // Sync pushes (space-15).
     await showGroups(page);
     await openRepository(page, TEAM_KEY);
@@ -2212,7 +2305,7 @@ test.describe("daily sync", () => {
     await expect(stopped.getByTestId("space-stopped-title")).toHaveText("Push stopped — The host changed again", { timeout: 30_000 });
     await expect(stopped).toContainText(/Your changes are saved locally \([1-9]\d* commits? ahead\)/);
     await expect(stopped.getByTestId("space-retry")).toBeVisible();
-    await expect(counts).toContainText(/[1-9]\d* ahead/);
+    await expect(phraseOf(page, TEAM_KEY)).toHaveText("Push stopped — The host changed again");
     await scanVocabulary(page, "changed again", words);
     await sync.click();
     await expect(done).toHaveText(/^Synced just now · 1 sent · 1 received$/);
@@ -2245,7 +2338,7 @@ test.describe("daily sync", () => {
     // space-87).
     const listed = host.script.repositories.find((repo) => `${repo.group.fullPath}/${repo.path}` === TEAM_PATH)!;
     listed.members.push(PEER_MEMBER);
-    const line = page.getByTestId(`space-row-${TEAM_KEY}`).getByTestId(`space-line-${host.url}`);
+    const line = placementLine(page, TEAM_KEY, host);
     await line.getByTestId("space-line-members").click();
     const members = line.getByTestId(`space-members-${TEAM_KEY}@${host.url}`);
     await expect(members.getByTestId(`space-member-${HOST_LOGIN}`)).toContainText("Ada Lovelace");
@@ -2309,7 +2402,7 @@ test.describe("exploring", () => {
     await openRepository(page, key);
     await page.getByTestId("space-tab-explore").click();
     const explore = page.getByTestId("space-explore-tab");
-    const tree = explore.getByRole("tree", { name: "Files in demo-project-spex" });
+    const tree = explore.getByRole("tree", { name: "Files in demo-project" });
     await expect(tree).toBeVisible();
     // The tree is the repository's clone (space-23).
     await expect(explore).toContainText(join("workspace", ...key.split("/")));
@@ -2520,7 +2613,7 @@ test.describe("fit", () => {
         name: "Explore",
         show: async () => {
           await page.getByTestId("space-tab-explore").click();
-          const tree = page.getByRole("tree", { name: "Files in demo-project-spex" });
+          const tree = page.getByRole("tree", { name: "Files in demo-project" });
           await tree.getByTestId("space-node-sessions").click();
           await tree.getByTestId(`space-node-session:${app.sessionId}`).click();
           await tree.getByTestId(`space-node-sessions/${app.sessionId}.json`).click();
@@ -2529,7 +2622,7 @@ test.describe("fit", () => {
           if ((await privacy.getAttribute("aria-expanded")) !== "true") await privacy.click();
         },
         ready: async () => {
-          await expect(page.getByRole("tree", { name: "Files in demo-project-spex" })).toBeVisible();
+          await expect(page.getByRole("tree", { name: "Files in demo-project" })).toBeVisible();
           await expect(page.getByTestId("space-preview-text")).toBeVisible();
         },
       },
@@ -2553,11 +2646,11 @@ test.describe("fit", () => {
         }
       }
     }
-    // "Leave…" asking beneath the row fits at the floor too (space-89,
-    // space-28).
+    // "Leave…", from the row's "More", asking beneath the row fits at
+    // the floor too (space-89, space-28).
     await setRail(page, false);
     await page.setViewportSize({ width: 320, height: TALL });
-    await page.getByTestId(`space-row-leave-${TEAM_KEY}`).click();
+    await rowAct(page, TEAM_KEY, "leave");
     const leaveConfirm = page.getByTestId(`space-leave-confirm-${TEAM_KEY}`);
     await expect(leaveConfirm).toBeVisible();
     record(`Groups · Leave… asking · sidebar collapsed · 320×${TALL}`, await measure(page, containers), defects);
@@ -2598,7 +2691,7 @@ test.describe("accessibility", () => {
       // named (space-1).
       await expect(page.getByRole("region", { name: "Your groups" })).toBeVisible();
       await expect(page.getByRole("group", { name: HOST_GROUP, exact: true })).toBeVisible();
-      await expect(page.getByRole("button", { name: "demo-project-spex", exact: true })).toHaveAttribute("aria-expanded", "false");
+      await expect(page.getByRole("button", { name: "demo-project", exact: true })).toHaveAttribute("aria-expanded", "false");
       found.push(...(await scan("Groups · list")));
       await openRepository(page, TEAM_KEY);
 
@@ -2607,14 +2700,14 @@ test.describe("accessibility", () => {
       await expect(tab.getByTestId("space-picker")).toBeVisible();
       await expect(tab.getByRole("radiogroup", { name: SESSION_TITLE })).toBeVisible();
       await expect(tab.getByRole("radiogroup", { name: "Settings changed" })).toBeVisible();
-      await expect(page.getByRole("tablist", { name: "Views of demo-project-spex" })).toBeVisible();
+      await expect(page.getByRole("tablist", { name: "Views of demo-project" })).toBeVisible();
       await expect(page.getByRole("tab", { name: "Sync" })).toHaveAttribute("aria-selected", "true");
       await expect(page.getByRole("tab", { name: "Explore" })).toBeVisible();
       found.push(...(await scan("Groups · Sync")));
 
       // The tree is named (space-23).
       await page.getByTestId("space-tab-explore").click();
-      const tree = page.getByRole("tree", { name: "Files in demo-project-spex" });
+      const tree = page.getByRole("tree", { name: "Files in demo-project" });
       await expect(tree).toBeVisible();
       await tree.getByTestId("space-node-sessions").click();
       await tree.getByTestId(`space-node-session:${app.sessionId}`).click();
@@ -2647,28 +2740,34 @@ test.describe("second device", () => {
     await showGroups(page);
     await signInThroughPage(page, app);
 
-    // After sign-in the group's row lists the project as "Not on this
-    // device" with Join (space-61).
+    // After sign-in the group's row lists the project not on this
+    // device, reading no phrase and no "Here", with "Open here"
+    // (space-61, space-111).
     const groupRows = page.getByTestId(`space-group-${HOST_GROUP}`);
     await expect(groupRows.getByTestId(`space-row-${key}`)).toHaveAttribute("data-state", "absent");
-    await expect(page.getByTestId(`space-repo-state-${key}`)).toHaveText("Not on this device");
-    const join_ = page.getByTestId(`space-row-join-${key}`);
-    await expect(join_).toHaveText("Join");
+    await expect(page.getByTestId(`space-repo-${key}`)).toHaveText("demo-project");
+    await expect(page.getByTestId(`space-repo-state-${key}`)).toHaveText("");
+    await expect(page.getByTestId(`space-row-here-${key}`)).toHaveCount(0);
+    const openHere = page.getByTestId(`space-row-open-${key}`);
+    await expect(openHere).toHaveText("Open here");
+    await expect(openHere).toHaveAttribute("data-entry", `space-row-open-here-${key}`);
 
-    // Join clones the spex repository and, the code remote a path this
-    // machine serves, the code into the folder the page names; the row
-    // reads reachable once the code is there, and the project lists in
-    // the sidebar with the peer's session and intent (space-63,
-    // space-61, space-20).
-    await join_.click();
+    // "Open here" clones the spex repository and, the code remote a path
+    // this machine serves, the code into the folder the page names; the
+    // row reads reachable once the code is there, "Here" on it, and the
+    // project lists in the sidebar with the peer's session and intent
+    // (space-63, space-61, space-20, space-111).
+    await openHere.click();
     const editor = page.getByTestId(`space-join-${key}`);
     await expect(editor).toContainText("Folder for its code on this device");
     await editor.getByTestId(`space-join-${key}-path`).fill(folder);
-    await editor.getByRole("button", { name: "Join", exact: true }).click();
+    await editor.getByRole("button", { name: "Open here", exact: true }).click();
     await expect(page.getByTestId(`space-row-${key}`)).toHaveAttribute("data-state", "reachable", { timeout: 30_000 });
     // The joined clone holds the host's `spex`: it reads synced at the
     // peer's last push, never "Never synced" (space-61).
     await expect(page.getByTestId(`space-repo-state-${key}`)).toHaveText(/^Synced (just now|\d+m ago)$/);
+    await expect(page.getByTestId(`space-row-here-${key}`)).toHaveText("Here");
+    await expect(page.getByTestId(`space-row-open-${key}`)).toHaveText("Show");
     expect(existsSync(join(clonePath(app.dataDir, key), "project.json"))).toBe(true);
     expect(existsSync(join(folder, "README.md"))).toBe(true);
     expect(git(folder, "remote", "get-url", "origin")).toBe(code);
@@ -2693,11 +2792,11 @@ test.describe("second device", () => {
     const sessionRow = local.locator('[data-testid^="space-unit-mine-sessions/"]');
     await expect(sessionRow).toContainText("Fix the token refresh in auth.ts");
     const ownSession = (await sessionRow.getAttribute("data-testid"))!.replace("space-unit-mine-sessions/", "");
-    await page.getByTestId(`space-row-sync-${key}`).click();
+    await rowAct(page, key, "sync");
     const notice = page.getByTestId("space-notice-confirm");
     // It leads with where the records go: the placement's path at its
     // instance, as its line names them (space-57, space-87).
-    const placed = page.getByTestId(`space-row-${key}`).getByTestId(`space-line-${host.url}`);
+    const placed = placementLine(page, key, host);
     const at = await placed.getByTestId("space-line-at").textContent();
     await expect(notice).toContainText(`Records go to ${at} at Stand-in Git host.`);
     await expect(notice).toContainText("Every session goes there whole — hidden parts and attachments included");

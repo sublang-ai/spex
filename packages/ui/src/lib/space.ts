@@ -24,6 +24,7 @@ import type {
 } from "@sublang/spex-core/protocol";
 
 import { i18n } from "../i18n.js";
+import { isLocalPlace, type Place } from "../state/store.js";
 import { keyPlacement, placementLastSync, waitingOf } from "./placements.js";
 import { absoluteTitle, relativeAge, shortMoment } from "./time.js";
 
@@ -116,21 +117,42 @@ function hostStatePhrase(state: "read-only" | "unreachable", reason: string | nu
     : i18n._({ id: "Unreachable", comment: "a spex repository's state: the host cannot be read for it" });
 }
 
+/** The server whose Space the surface shows at a seat's place, which
+ * every phrase naming this device names instead (space-112); none at
+ * this computer. */
+export function seatName(place: Place): string | undefined {
+  return isLocalPlace(place) ? undefined : (place.name ?? place.key);
+}
+
+/** "Not on this device", or at a seat's place "Not on <server>"
+ * (space-87, space-112): `seat` names the server where the surface shows
+ * a seat's place. */
+export function notHerePhrase(seat?: string): string {
+  return seat === undefined
+    ? i18n._("Not on this device")
+    : i18n._({
+        id: "Not on {place}",
+        values: { place: seat },
+        comment: "a spex repository or placement not at the team server whose Space is shown; {place} is the server's name",
+      });
+}
+
 /** What a spex repository's row reads for its state (space-61): the
  * core's aggregate over its placements, a reachable row reading its key
  * placement's last sync; a waiting step reads on its placement's line
- * instead (space-64, space-87). */
-export function repositoryStatePhrase(repo: RepositoryState, now: number): string {
+ * instead (space-64, space-87). `seat` names the server where the
+ * surface shows a seat's place (space-112). */
+export function repositoryStatePhrase(repo: RepositoryState, now: number, seat?: string): string {
   switch (repo.state) {
     case "local-only":
-      return i18n._("On this device only");
+      return i18n._({ id: "On this computer only", comment: "a project's records kept here alone, in no group" });
     case "reachable":
       return lastSyncPhrase(lastSyncOf(repo), now);
     case "read-only":
     case "unreachable":
       return hostStatePhrase(repo.state, repo.reason);
     case "absent":
-      return i18n._("Not on this device");
+      return notHerePhrase(seat);
     default:
       // A state the page does not know: the raw value is data.
       return repo.state;
@@ -176,14 +198,18 @@ export function lineOutcome(
  * being the sync phase the reader dismissed (space-12, space-15); else
  * its state, a reachable one reading its last sync (space-61) and a
  * read-only one carrying it beside the host's reason, one a placement
- * file names "Not on this device". Where its last check
- * counted them, its own ahead and behind ride the title of a sync's
- * outcome and of its state (space-8). */
+ * file names "Not on this device" — at a seat's place "Not on
+ * <server>" (space-112). `nameOf` names a line's instance, which a
+ * choice's phrase reads. Where its last check counted them, its own
+ * ahead and behind ride the title of a sync's outcome and of its state
+ * (space-8). */
 export function placementPhrase(
   repo: RepositoryState,
   line: PlacementState,
   now: number,
-  dismissed?: string,
+  dismissed: string | undefined,
+  nameOf: (line: PlacementState) => string,
+  seat?: string,
 ): LinePhrase {
   const counts = countsTitle(line.branch);
   const counted = (title: string): string => (counts ? `${title} · ${counts}` : title);
@@ -218,7 +244,7 @@ export function placementPhrase(
         return { text, title: counted(text), tone: "attention" };
       }
       case "choices": {
-        const text = i18n._("Needs your choice");
+        const text = changedOnBoth(nameOf(line));
         return { text, title: text, tone: "attention" };
       }
       case "unrelated": {
@@ -269,13 +295,135 @@ export function placementPhrase(
       };
     }
     case "absent": {
-      const text = i18n._("Not on this device");
+      const text = notHerePhrase(seat);
       return { text, title: text, tone: "idle" };
     }
     default:
       // A state the page does not know: the raw value is data.
       return { text: line.state, title: line.state, tone: "idle" };
   }
+}
+
+/** "Changed here and at <display name>" (space-14, space-87): units
+ * changed on both sides, choices owed for the placement at the instance
+ * named. */
+export function changedOnBoth(name: string): string {
+  return i18n._({
+    id: "Changed here and at {name}",
+    values: { name },
+    comment: "a project's row or placement line: a sync found units changed both here and at that instance, choices owed; {name} is the instance's display name; Resolve stands beside it",
+  });
+}
+
+/** "<step> stopped — <message>" (space-15). */
+export function stoppedPhrase(step: SyncStep, message: string): string {
+  return i18n._({
+    id: "{step} stopped — {message}",
+    values: { step: STEP_NAMES[step](), message },
+    comment: "{step} is the sync step's name; {message} is the cause the host gave",
+  });
+}
+
+/** The phrase a row reads (space-61, space-87, DR-159): its words, the
+ * fuller reading for its title, its tone, and the way forward beside it
+ * — Resolve for choices owed, "Merge histories…" for an unrelated
+ * history — with the placement it is for. */
+export interface RowPhrase extends LinePhrase {
+  act?: { kind: "resolve" | "merge"; placement: string | null };
+}
+
+/** A row's one phrase (space-87): the first in this order that any of
+ * its placements holds — the step in flight, "Opening…" while its join
+ * runs (space-61); the outcome the last sync left on a line — choices
+ * owed, an unrelated history, the notice owed, a stop — or, where no
+ * line carries it, on the row (space-15); then its state, a row not on
+ * this device reading nothing, a step waiting at the host reading on its
+ * line alone (space-61, space-64).
+ * Outcomes the reader dismissed and those that need nothing of him —
+ * synced, behind — leave the state's phrase. `nameOf` names an
+ * instance by its origin, the path placement's by null. */
+export function rowPhrase(
+  repo: RepositoryState,
+  now: number,
+  dismissed: string | undefined,
+  nameOf: (origin: string | null) => string,
+): RowPhrase {
+  const sync = repo.sync;
+  if (sync.phase === "running") {
+    const text =
+      sync.op === "join"
+        ? i18n._({ id: "Opening…", comment: "a project's row while it is opened here: its records and code clone" })
+        : STEP_LINES[sync.step]();
+    return { text, title: text, tone: "running" };
+  }
+  for (const line of repo.placements) {
+    if (!line.attached) continue;
+    const outcome = lineOutcome(repo, line, dismissed);
+    // A join of an unrelated history that ended in choices owes them
+    // (space-13, space-14).
+    if (outcome?.kind === "choices" || (sync.phase === "choices" && sync.placement === line.instance)) {
+      const text = changedOnBoth(nameOf(line.instance));
+      return { text, title: text, tone: "attention", act: { kind: "resolve", placement: line.instance } };
+    }
+    if (outcome?.kind === "unrelated" || (outcome === null && line.branch?.unrelated === true)) {
+      const text = i18n._("Unrelated history");
+      return { text, title: text, tone: "attention", act: { kind: "merge", placement: line.instance } };
+    }
+    if (outcome?.kind === "waiting") {
+      const text = i18n._({
+        id: "Waiting for you to continue",
+        comment: "a placement's line: its first push waits for the sharing notice to be seen; Continue stands beside it",
+      });
+      return { text, title: text, tone: "attention" };
+    }
+    if (outcome?.kind === "stopped") {
+      const text = stoppedPhrase(outcome.step, outcome.message);
+      return { text, title: outcome.guidance || text, tone: outcome.cause === "rejected" ? "attention" : "stopped" };
+    }
+  }
+  if (sync.phase === "choices") {
+    const text = changedOnBoth(nameOf(sync.placement));
+    return { text, title: text, tone: "attention", act: { kind: "resolve", placement: sync.placement } };
+  }
+  if (sync.phase === "unrelated") {
+    const text = i18n._("Unrelated history");
+    return { text, title: text, tone: "attention", act: { kind: "merge", placement: sync.placement } };
+  }
+  if (sync.phase === "stopped" && dismissed !== JSON.stringify(sync)) {
+    const text = stoppedPhrase(sync.step, sync.message);
+    return { text, title: sync.guidance || text, tone: sync.cause === "rejected" ? "attention" : "stopped" };
+  }
+  if (repo.state === "absent") return { text: "", title: "", tone: "idle" };
+  const text = repositoryStatePhrase(repo, now);
+  const last = lastSyncOf(repo);
+  const title =
+    repo.state === "read-only"
+      ? i18n._("{state} · new sessions stay on this device", { state: text })
+      : last && repo.state !== "reachable"
+        ? i18n._("{state} · last synced {at}", { state: text, at: absoluteTitle(last.at) })
+        : last
+          ? absoluteTitle(last.at)
+          : text;
+  return { text, title, tone: "idle" };
+}
+
+/** A project's name from its spex repository's (space-1, space-46):
+ * `<name>-spex` with its `-spex` dropped. */
+export function projectName(name: string): string {
+  return name.replace(/-spex$/i, "") || name;
+}
+
+/** A row's name (space-1, DR-159): the spex repository's with its
+ * `-spex` dropped, a group's own reading "Group sessions" and your own
+ * group's own "Your sessions". */
+export function rowName(group: { fullPath: string }, repo: RepositoryState): string {
+  if (repo.own) {
+    return i18n._({ id: "Your sessions", comment: "the row of your own group's own records: your sessions outside any project" });
+  }
+  if (isGroupRepository(group, repo)) {
+    return i18n._({ id: "Group sessions", comment: "the row of a group's own records: the group's sessions outside any project" });
+  }
+  return projectName(repo.name);
 }
 
 /** A group's own spex repository rather than a project's (DR-103):

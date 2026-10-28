@@ -8,9 +8,10 @@
 // their own, not in seat mode, so each takes a project registered by
 // folder. This computer and the first seat each hold a finished turn
 // nobody has read, the second seat a question, and the first seat a tool
-// approval waiting. The journey opens both seats from the Groups
-// surface and reads, through the page alone: each place's projects
-// under its own heading and the selector naming the three places; one
+// approval waiting. The journey opens both seats from the Space
+// surface, where their lines stand under their group, and reads,
+// through the page alone: each place's projects under its own heading
+// and the selector naming the three places; one
 // queue carrying the three cores' attention in each band's order, the
 // badge counting them, an entry opened at its own place; an approval
 // answered at its seat; a seat whose hello carries another protocol
@@ -24,6 +25,7 @@ import WebSocket from "ws";
 import { PROTOCOL_VERSION } from "@sublang/spex-core";
 
 import {
+  HOST_GROUP,
   expect,
   instanceSection,
   nav,
@@ -135,17 +137,18 @@ test("run-view-173: one desktop opens two seats and reads its places, its joined
   const tap = tapSockets(page);
   await open(page, app);
 
-  // [run-view-173] [run-view-170] the Groups surface lists both servers
-  // under the instance's heading, by name and group, each with Connect.
+  // [run-view-173] [run-view-170] the Space surface lists both servers
+  // as lines under their group's heading, by name, each with Connect.
   await nav(page, "Space").click();
-  const servers = instanceSection(page, host).getByTestId(`space-servers-${host.url}`);
+  const servers = instanceSection(page, host).getByTestId(`space-group-${HOST_GROUP}`).getByTestId(`space-group-servers-${HOST_GROUP}`);
   const rowOne = servers.getByTestId(`space-server-${one.place}`);
   const rowTwo = servers.getByTestId(`space-server-${two.place}`);
   await expect(rowOne).toContainText("lab-1");
-  await expect(rowOne).toContainText("acme");
   await expect(rowTwo).toContainText("lab-2");
   const controlOne = page.getByTestId(`space-server-control-${one.place}`);
   const controlTwo = page.getByTestId(`space-server-control-${two.place}`);
+  const moreOne = page.getByTestId(`space-server-more-${one.place}`);
+  const moreTwo = page.getByTestId(`space-server-more-${two.place}`);
   await expect(controlOne).toHaveText("Connect");
   await expect(controlTwo).toHaveText("Connect");
 
@@ -158,7 +161,10 @@ test("run-view-173: one desktop opens two seats and reads its places, its joined
   expect(opensSent(tap.sent)).toEqual([]);
   expect(one.hub.admissions).toEqual([]);
   await page.getByTestId(`space-server-consent-${one.place}`).getByText("I understand").click();
-  await expect(controlOne).toHaveText("Disconnect", { timeout: 30_000 });
+  // Open, the line's Connect gives way to its overflow, which holds
+  // Disconnect (run-view-170).
+  await expect(moreOne).toBeVisible({ timeout: 30_000 });
+  await expect(controlOne).toHaveCount(0);
   await expect.poll(() => opensSent(tap.sent)).toEqual([{ instance: host.url, serverId: one.server.id, consented: true }]);
   expect(one.hub.admissions.map((admission) => admission.status)).toEqual([200]);
   // [run-view-170] the seat, not signed in at the instance, signs in
@@ -172,7 +178,7 @@ test("run-view-173: one desktop opens two seats and reads its places, its joined
   await controlTwo.click();
   await expect(page.getByTestId(`space-server-contract-${two.place}`)).toContainText("Opening a seat places your sign-in on lab-2.");
   await page.getByTestId(`space-server-consent-${two.place}`).click();
-  await expect(controlTwo).toHaveText("Disconnect", { timeout: 30_000 });
+  await expect(moreTwo).toBeVisible({ timeout: 30_000 });
   await expect.poll(() => opensSent(tap.sent).at(-1)).toEqual({ instance: host.url, serverId: two.server.id, consented: true });
 
   // [run-view-173] [run-view-168] the selector names the three places.
@@ -257,7 +263,8 @@ test("run-view-173: one desktop opens two seats and reads its places, its joined
   // [run-view-173] [run-view-169] after Disconnect the seat's heading is gone
   // and its relay path refused.
   await nav(page, "Space").click();
-  await controlOne.click();
+  await moreOne.click();
+  await page.getByTestId(`space-server-disconnect-${one.place}`).click();
   await expect(controlOne).toHaveText("Connect", { timeout: 30_000 });
   await expect(sidebar.getByTestId("sidebar-place-heading")).toHaveText(["This computer", "lab-2"]);
   await expect(groupOf("lab-1")).toHaveCount(0);
@@ -267,7 +274,7 @@ test("run-view-173: one desktop opens two seats and reads its places, its joined
   const opens = opensSent(tap.sent).length;
   await controlOne.click();
   await expect(page.getByTestId(`space-server-contract-${one.place}`)).toHaveCount(0);
-  await expect(controlOne).toHaveText("Disconnect", { timeout: 30_000 });
+  await expect(moreOne).toBeVisible({ timeout: 30_000 });
   await expect.poll(() => opensSent(tap.sent).slice(opens)).toEqual([{ instance: host.url, serverId: one.server.id, consented: true }]);
   // The seat's heading is back, after the seat still open, as the core
   // now lists the seats (run-view-168).

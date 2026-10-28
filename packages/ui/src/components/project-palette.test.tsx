@@ -476,8 +476,9 @@ describe("projects-1, space-58: a folder added while signed in asks for its grou
     const sections = within(picker).getAllByTestId(/^space-pick-instance-/);
     expect(sections.map((section) => section.dataset.testid)).toEqual([`space-pick-instance-${HOST}`, `space-pick-instance-${SECOND}`]);
     expect(sections.map((section) => within(section).getByRole("heading", { level: 3 }).textContent)).toEqual(["Host", "Second"]);
+    // Your namespace reads "Only you", first (space-58, DR-159).
     for (const section of sections) {
-      expect(within(section).getAllByTestId(/^space-pick-group-/).map((option) => option.textContent)).toEqual(["ada", "acme"]);
+      expect(within(section).getAllByTestId(/^space-pick-group-/).map((option) => option.textContent)).toEqual(["Only you", "acme"]);
     }
     // Picking the second's acme creates there, by its id at the second.
     fireEvent.click(within(sections[1]!).getByTestId("space-pick-group-acme"));

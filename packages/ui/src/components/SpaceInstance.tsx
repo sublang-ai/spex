@@ -25,6 +25,7 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode 
 import type { GroupsState, InstanceState } from "@sublang/spex-core/protocol";
 
 import { usePlaceStore } from "../state/place-context.js";
+import { isLocalPlace } from "../state/store.js";
 import { i18n } from "../i18n.js";
 import { hostNameOf, instanceName, instanceOf, originOf } from "../lib/instances.js";
 import { absoluteTitle, relativeAge } from "../lib/time.js";
@@ -441,6 +442,8 @@ export function AddInstance({
   signIn: SignInFlow;
 }) {
   const [open, setOpen] = useState(false);
+  // A seat's place places your own group nowhere (space-102).
+  const remote = !isLocalPlace(usePlaceStore().place);
   // What the reader typed since the card opened; until then the field
   // holds the default instance's origin (space-3, storage-2).
   const [typed, setTyped] = useState<string>();
@@ -621,7 +624,7 @@ export function AddInstance({
     <div
       role="group"
       aria-labelledby={titleId}
-      aria-describedby={ownId}
+      aria-describedby={remote ? undefined : ownId}
       data-testid="space-add-card"
       className="flex min-w-0 flex-col gap-2"
       onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
@@ -637,17 +640,20 @@ export function AddInstance({
       {/* Your own group is placed at every instance the home signs in
           to (space-4, DR-128): the card for another instance says so
           before its sign-in, whatever its flow reads (space-3). The
-          header's card, the first sign-in, does not. */}
-      <p
-        id={ownId}
-        data-testid="space-add-own"
-        className="min-w-0 break-words text-sm text-neutral-600 dark:text-neutral-300"
-      >
-        {i18n._({
-          id: "Your own group's records will be kept there too.",
-          comment: "the sign-in card opened from \"Add instance…\": your own group's records are kept at every instance the home signs in to, this one included",
-        })}
-      </p>
+          header's card, the first sign-in, does not, nor does a seat's,
+          which places your own group nowhere (space-102, space-112). */}
+      {remote ? null : (
+        <p
+          id={ownId}
+          data-testid="space-add-own"
+          className="min-w-0 break-words text-sm text-neutral-600 dark:text-neutral-300"
+        >
+          {i18n._({
+            id: "Your own group's records will be kept there too.",
+            comment: "the sign-in card opened from \"Add instance…\": your own group's records are kept at every instance the home signs in to, this one included",
+          })}
+        </p>
+      )}
       {lines ? (
         <div
           data-testid="space-signin-body"

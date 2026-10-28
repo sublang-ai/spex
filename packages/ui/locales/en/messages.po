@@ -23,35 +23,20 @@ msgstr " — called /{playbookId}"
 msgid " — runs {role}"
 msgstr " — runs {role}"
 
-#. follows the project's name on a repair row
+#. follows the folder a repair remembers: how many sessions ran in it
 #: src/components/SpaceSync.tsx
-msgid " · {count, plural, one {# session} other {# sessions}} ran in {path}"
-msgstr " · {count, plural, one {# session} other {# sessions}} ran in {path}"
+msgid " · {count, plural, one {# session ran there} other {# sessions ran there}}"
+msgstr " · {count, plural, one {# session ran there} other {# sessions ran there}}"
 
 #. follows the issues heading: repairs the reader declined
 #: src/components/SpaceSync.tsx
 msgid " · {count} not added"
 msgstr " · {count} not added"
 
-#. follows a spex repository's name on a repair row: the group holding it
-#: src/components/SpaceSync.tsx
-msgid " · in {group}"
-msgstr " · in {group}"
-
 #. follows the project's name on a repair the reader declined
 #: src/components/SpaceSync.tsx
 msgid " · not added"
 msgstr " · not added"
-
-#. follows the count of commits this device is ahead by
-#: src/components/SpaceGroups.tsx
-msgid " ahead"
-msgstr " ahead"
-
-#. follows the count of commits this device is behind by
-#: src/components/SpaceGroups.tsx
-msgid " behind"
-msgstr " behind"
 
 #. how old the listed data is; follows the Sources summary
 #: src/components/SourcesTabs.tsx
@@ -475,16 +460,6 @@ msgstr "{name} settings for this conversation"
 msgid "{name} settings: {reading}"
 msgstr "{name} settings: {reading}"
 
-#. a line, with no control, under a group of an instance, or a login there, whose listing holds a placement of a spex repository standing elsewhere; {name} is that spex repository's name, {group} the group it stands under, read by its name, then ' · ' and its path where the two differ, or the login it stands under, and {instance} the display name of that group's instance
-#: src/lib/placements.ts
-msgid "{name} stands under {group} at {instance}"
-msgstr "{name} stands under {group} at {instance}"
-
-#. a line, with no control, under a group of an instance, or a login there, whose listing holds a placement of a spex repository standing under your own group; {name} is that spex repository's name
-#: src/lib/placements.ts
-msgid "{name} stands under your own group"
-msgstr "{name} stands under your own group"
-
 #: src/components/SpecGraph.tsx
 msgid "{name}, {items} items, cites {out}, cited by {in}"
 msgstr "{name}, {items} items, cites {out}, cited by {in}"
@@ -548,6 +523,16 @@ msgstr "{playbookId} state machine, {state} active"
 #: src/components/DraftRegisterTab.tsx
 msgid "{project} — the project"
 msgstr "{project} — the project"
+
+#. a repair row: the project's records are here, the working folder it ran in is not; {project} is the project's name, {group} the group holding it
+#: src/components/SpaceSync.tsx
+msgid "{project} in {group}: its folder on this computer is missing"
+msgstr "{project} in {group}: its folder on this computer is missing"
+
+#. a repair row of a project in no group: the project's records are here, the working folder it ran in is not
+#: src/components/SpaceSync.tsx
+msgid "{project}: its folder on this computer is missing"
+msgstr "{project}: its folder on this computer is missing"
 
 #: src/components/ProjectsSurface.tsx
 msgid "{reason} Remove anyway?"
@@ -614,12 +599,11 @@ msgstr "{span} ago"
 msgid "{stage} not found beside this playbook's module"
 msgstr "{stage} not found beside this playbook's module"
 
-#: src/components/SpaceGroups.tsx
 #: src/lib/space.ts
 msgid "{state} · last synced {at}"
 msgstr "{state} · last synced {at}"
 
-#: src/components/SpaceGroups.tsx
+#: src/lib/space.ts
 msgid "{state} · new sessions stay on this device"
 msgstr "{state} · new sessions stay on this device"
 
@@ -633,7 +617,6 @@ msgstr "{step} stopped"
 #. {step} is the sync step's name; {message} is the cause the host gave
 #. {step} is the sync step's name; {message} is the cause the host gave
 #. {step} is the sync step's name; {message} is the cause the host gave
-#: src/components/SpaceGroups.tsx
 #: src/components/SpaceSurface.tsx
 #: src/components/SpaceSync.tsx
 #: src/lib/space.ts
@@ -955,6 +938,11 @@ msgstr "Add"
 msgid "Add {id} with the neutral agent, then tune it here"
 msgstr "Add {id} with the neutral agent, then tune it here"
 
+#. the name of the group picker "Add to a group…" opens; {name} is the project's name
+#: src/components/SpaceGroups.tsx
+msgid "Add {name} to a group"
+msgstr "Add {name} to a group"
+
 #. on a team server's project whose code could not be cloned for want of the member's credential: open the server's Credentials settings
 #: src/components/SpaceGroups.tsx
 msgid "Add a credential"
@@ -1048,6 +1036,11 @@ msgstr "Add this project"
 #: src/components/Composer.tsx
 msgid "Add this to the project's Up next without sending it"
 msgstr "Add this to the project's Up next without sending it"
+
+#. on a project here in no group: opens the groups it may be put in, your own first
+#: src/components/SpaceGroups.tsx
+msgid "Add to a group…"
+msgstr "Add to a group…"
 
 #: src/components/CaptainHome.tsx
 #: src/components/Composer.tsx
@@ -1148,6 +1141,11 @@ msgstr "AI builds and reviews changes, with a record of each step"
 msgid "all {count}…"
 msgstr "all {count}…"
 
+#. choose the version at that instance for every conflict; {name} is the instance's display name
+#: src/components/SpaceSync.tsx
+msgid "All {name}'s"
+msgstr "All {name}'s"
+
 #: src/components/DashboardSurface.tsx
 msgid "All clear — nothing waiting, nothing queued to start."
 msgstr "All clear — nothing waiting, nothing queued to start."
@@ -1164,19 +1162,14 @@ msgstr "All clear across projects. Next up: <0>{title}</0> <1>({project})</1>"
 msgid "All clear. Next up: <0>{title}</0> <1>({project})</1>"
 msgstr "All clear. Next up: <0>{title}</0> <1>({project})</1>"
 
-#. choose the host's version for every conflict
+#. choose this place's version for every conflict
 #: src/components/SpaceSync.tsx
-msgid "All host's"
-msgstr "All host's"
+msgid "All here"
+msgstr "All here"
 
 #: src/components/SpaceSync.tsx
 msgid "All issues resolved."
 msgstr "All issues resolved."
-
-#. choose this device's version for every conflict
-#: src/components/SpaceSync.tsx
-msgid "All mine"
-msgstr "All mine"
 
 #: src/components/DashboardSurface.tsx
 msgid "All projects"
@@ -1328,7 +1321,14 @@ msgstr "Attach"
 msgid "Attach files"
 msgstr "Attach files"
 
+#. in a project's overflow: brings here its placement another device named at that instance, after the sharing notice; {name} is the instance's display name
+#: src/components/SpaceGroups.tsx
+msgid "Attach from {name}"
+msgstr "Attach from {name}"
+
 #. the Attach control while the placement is added and synced
+#. the Attach control while the placement is added and synced
+#: src/components/SpaceGroups.tsx
 #: src/components/SpacePlacements.tsx
 msgid "Attaching…"
 msgstr "Attaching…"
@@ -1445,11 +1445,12 @@ msgstr "Brings a file in as the source, then asks to adapt it"
 msgid "Brings back anything new; sends nothing"
 msgstr "Brings back anything new; sends nothing"
 
+#: src/components/SpaceGroups.tsx
 #: src/components/SpacePlacements.tsx
 msgid "Brings both histories into one and asks about anything that differs"
 msgstr "Brings both histories into one and asks about anything that differs"
 
-#. the Join control's title at a team server's seat: {place} is the server's name, which allocates the project's folder itself
+#. the title of a project's Open here at a team server's seat: {place} is the server's name, which allocates the project's folder itself
 #: src/components/SpaceGroups.tsx
 msgid "Brings it to {place}"
 msgstr "Brings it to {place}"
@@ -1663,6 +1664,11 @@ msgstr "changed for this conversation"
 msgid "Changed for this conversation"
 msgstr "Changed for this conversation"
 
+#. a project's row or placement line: a sync found units changed both here and at that instance, choices owed; {name} is the instance's display name; Resolve stands beside it
+#: src/lib/space.ts
+msgid "Changed here and at {name}"
+msgstr "Changed here and at {name}"
+
 #: src/components/SpaceSync.tsx
 msgid "Changed on both sides — choose which version to keep"
 msgstr "Changed on both sides — choose which version to keep"
@@ -1862,7 +1868,7 @@ msgstr "Clear the search (Escape)"
 msgid "client not connected"
 msgstr "client not connected"
 
-#. the title of 'Join again' on a team server's project whose code clone failed: {place} is the server's name
+#. the title of 'Try again' on a team server's project whose code clone failed: {place} is the server's name
 #: src/components/SpaceGroups.tsx
 msgid "Clones its code again into its folder on {place}"
 msgstr "Clones its code again into its folder on {place}"
@@ -2556,9 +2562,11 @@ msgstr "Disconnect"
 #. close the error strip above the composer
 #. put this outcome card away
 #. put this outcome card away
+#. put this outcome card away
 #: src/components/ApprovalInbox.tsx
 #: src/components/Composer.tsx
 #: src/components/DraftConversation.tsx
+#: src/components/SpaceGroups.tsx
 #: src/components/SpaceSync.tsx
 msgid "Dismiss"
 msgstr "Dismiss"
@@ -2572,11 +2580,6 @@ msgstr "Dismiss error"
 #: src/components/SettingsSurface.tsx
 msgid "Does"
 msgstr "Does"
-
-#. decline adding this folder as a project
-#: src/components/SpaceSync.tsx
-msgid "Don't add"
-msgstr "Don't add"
 
 #. compile phase: finished well
 #. history row: work carried through and confirmed
@@ -2931,6 +2934,11 @@ msgstr "Expand image {name}"
 #: src/components/SpaceSurface.tsx
 msgid "Explore"
 msgstr "Explore"
+
+#. open a project's records as an annotated tree, beneath the list
+#: src/components/SpaceGroups.tsx
+msgid "Explore records"
+msgstr "Explore records"
 
 #. export the environment's skills to the agents' folders again
 #: src/components/EnvironmentSection.tsx
@@ -3288,10 +3296,10 @@ msgstr "Go to Dashboard, Projects, Playbooks, Space, Settings"
 msgid "Group name"
 msgstr "Group name"
 
-#. where a group's own spex repository's code lives: it has none, holding the group's records
-#: src/components/SpaceGroups.tsx
-msgid "Group records"
-msgstr "Group records"
+#. the row of a group's own records: the group's sessions outside any project
+#: src/lib/space.ts
+msgid "Group sessions"
+msgstr "Group sessions"
 
 #. on an instance's heading where the person may not create a group there; {name} is the instance's display name; no link, no control
 #: src/components/SpaceInstance.tsx
@@ -3302,6 +3310,11 @@ msgstr "Groups are made by the people who run {name}"
 #: src/components/CaptainPane.tsx
 msgid "Handed to {player}"
 msgstr "Handed to {player}"
+
+#. a project's mark: it is open at the place shown
+#: src/components/SpaceGroups.tsx
+msgid "Here"
+msgstr "Here"
 
 #: src/components/SpecView.tsx
 msgid "Hidden: {groups}"
@@ -3582,25 +3595,10 @@ msgstr "Its specs/ tree holds an earlier layout's directories: the user/, dev/, 
 msgid "Its spex repository is not on this device."
 msgstr "Its spex repository is not on this device."
 
-#. confirm: join both histories into one
-#. confirm: join both histories into one
-#. confirm: join both histories into one
-#. confirm: join both histories into one
-#: src/components/SpaceGroups.tsx
-#: src/components/SpacePlacements.tsx
-msgid "Join"
-msgstr "Join"
-
-#. on a team server's project whose code clone failed: join it again, cloning its code into the folder the server allocated
 #. on a team server's project whose code clone failed: join it again, cloning its code into the folder the server allocated
 #: src/components/ProjectPalette.tsx
-#: src/components/SpaceGroups.tsx
 msgid "Join again"
 msgstr "Join again"
-
-#: src/components/SpaceSync.tsx
-msgid "Join both histories into one to sync."
-msgstr "Join both histories into one to sync."
 
 #: src/components/SpacePlacements.tsx
 msgid "Join both histories into one? Anything that differs will ask you to choose."
@@ -3608,13 +3606,7 @@ msgstr "Join both histories into one? Anything that differs will ask you to choo
 
 #. the Join control, while the join runs
 #. the Join control, while the join runs
-#. the Join control, while the join runs
-#. the Join control, while the join runs
-#. the Join control, while the join runs
-#. the Join control, while the join runs
 #: src/components/ProjectPalette.tsx
-#: src/components/SpaceGroups.tsx
-#: src/components/SpacePlacements.tsx
 msgid "Joining…"
 msgstr "Joining…"
 
@@ -3662,10 +3654,15 @@ msgstr "just now"
 msgid "Keep"
 msgstr "Keep"
 
-#. conflict choice: keep this device's version
+#. conflict choice: keep this place's version of the unit
 #: src/components/SpaceSync.tsx
-msgid "Keep mine"
-msgstr "Keep mine"
+msgid "Keep what's here"
+msgstr "Keep what's here"
+
+#. conflict choice on a team server's Space: keep the server's version of the unit; {place} is the server's name
+#: src/components/SpaceSync.tsx
+msgid "Keep what's on {place}"
+msgstr "Keep what's on {place}"
 
 #: src/components/SettingsSurface.tsx
 msgid "Keyboard shortcuts"
@@ -3704,7 +3701,7 @@ msgid "Leave…"
 msgstr "Leave…"
 
 #. the Leave… control while that placement is checked and removed
-#: src/components/SpacePlacementActs.tsx
+#: src/components/SpaceGroups.tsx
 msgid "Leaving…"
 msgstr "Leaving…"
 
@@ -3839,6 +3836,7 @@ msgstr "Media unavailable"
 
 #. list the people the host lets read a spex repository
 #. list the people the host lets read a spex repository
+#. list the people the host lets read a spex repository
 #: src/components/SpaceGroups.tsx
 #: src/components/SpacePlacements.tsx
 msgid "Members"
@@ -3847,6 +3845,25 @@ msgstr "Members"
 #: src/components/SpaceMembers.tsx
 msgid "Members of {name}"
 msgstr "Members of {name}"
+
+#. confirm: merge both histories into one
+#: src/components/SpacePlacements.tsx
+msgid "Merge"
+msgstr "Merge"
+
+#: src/components/SpaceSync.tsx
+msgid "Merge both histories into one to sync."
+msgstr "Merge both histories into one to sync."
+
+#. on an unrelated history: asks to merge both histories into one; its confirm follows
+#: src/components/SpacePlacements.tsx
+msgid "Merge histories…"
+msgstr "Merge histories…"
+
+#. the Merge histories… control while both histories are merged
+#: src/components/SpacePlacements.tsx
+msgid "Merging…"
+msgstr "Merging…"
 
 #: src/components/CaptainHome.tsx
 #: src/components/Composer.tsx
@@ -3898,10 +3915,20 @@ msgstr "Model list unavailable: {reason}"
 msgid "Models reported by the installed runtime."
 msgstr "Models reported by the installed runtime."
 
+#. the one overflow control of a Space row, a group's heading or a server's line: opens its other acts
+#: src/components/SpaceMenu.tsx
+msgid "More"
+msgstr "More"
+
 #: src/components/ApprovalInbox.tsx
 #: src/components/BrowserControl.tsx
 msgid "More details"
 msgstr "More details"
+
+#. the accessible name of the overflow control "More" on a Space row, a group's heading or a server's line; {name} is what it acts on
+#: src/components/SpaceMenu.tsx
+msgid "More for {name}"
+msgstr "More for {name}"
 
 #: src/components/SpaceGroups.tsx
 msgid "Move {name} to another group"
@@ -3912,16 +3939,22 @@ msgid "Move the focused Up next row"
 msgstr "Move the focused Up next row"
 
 #. move a spex repository into another group of the instance, or your own
+#. move a spex repository into another group of the instance, or your own
+#: src/components/SpaceGroups.tsx
 #: src/components/SpacePlacements.tsx
 msgid "Move to another group"
 msgstr "Move to another group"
 
 #. open the groups a spex repository may move to; its full name is 'Move to another group'
+#. open the groups a spex repository may move to; its full name is 'Move to another group'
+#: src/components/SpaceGroups.tsx
 #: src/components/SpacePlacements.tsx
 msgid "Move…"
 msgstr "Move…"
 
 #. the Move control, while the host moves the spex repository
+#. the Move control, while the host moves the spex repository
+#: src/components/SpaceGroups.tsx
 #: src/components/SpacePlacements.tsx
 msgid "Moving…"
 msgstr "Moving…"
@@ -3941,7 +3974,7 @@ msgstr "Name the folder on this device."
 msgid "Name the new spex repository."
 msgstr "Name the new spex repository."
 
-#. beside the heading 'Your own group' before sign-in: its name and path come from the login
+#. beside the heading 'Only you' before sign-in: its name and path come from the login
 #: src/components/SpaceGroups.tsx
 msgid "named after your login at sign-in"
 msgstr "named after your login at sign-in"
@@ -3970,7 +4003,6 @@ msgstr "needs your choice"
 
 #: src/components/SpaceSurface.tsx
 #: src/components/SpaceSync.tsx
-#: src/lib/space.ts
 msgid "Needs your choice"
 msgstr "Needs your choice"
 
@@ -4167,6 +4199,10 @@ msgstr "No project matches \"{query}\""
 msgid "No project specs yet"
 msgstr "No project specs yet"
 
+#: src/components/SpaceGroups.tsx
+msgid "No projects here yet"
+msgstr "No projects here yet"
+
 #: src/components/DashboardSurface.tsx
 msgid "No projects yet — register a repository in the <0>Projects</0> to put its work here."
 msgstr "No projects yet — register a repository in the <0>Projects</0> to put its work here."
@@ -4199,10 +4235,6 @@ msgstr "No spec packages requested yet"
 #: src/components/CaptainHome.tsx
 msgid "No spec packages yet"
 msgstr "No spec packages yet"
-
-#: src/components/SpaceGroups.tsx
-msgid "No spex repositories here yet"
-msgstr "No spex repositories here yet"
 
 #: src/components/SourcesTabs.tsx
 msgid "No unfinished intent records."
@@ -4306,9 +4338,17 @@ msgstr "Not in this runtime's list. Check the model ID."
 msgid "Not installed"
 msgstr "Not installed"
 
-#: src/components/SpaceGroups.tsx
-#: src/components/SpaceSurface.tsx
+#. a spex repository or placement not at the team server whose Space is shown; {place} is the server's name
+#: src/lib/space.ts
+msgid "Not on {place}"
+msgstr "Not on {place}"
+
+#. on a repair: answer that this project is not kept on this computer, so it stops counting as an issue
 #: src/components/SpaceSync.tsx
+msgid "Not on this computer"
+msgstr "Not on this computer"
+
+#: src/components/SpaceSurface.tsx
 #: src/lib/space.ts
 msgid "Not on this device"
 msgstr "Not on this device"
@@ -4465,13 +4505,20 @@ msgstr "On (current)"
 msgid "On (unsupported)"
 msgstr "On (unsupported)"
 
-#: src/lib/space.ts
-msgid "On this device only"
-msgstr "On this device only"
-
+#. a project's mark: it is open on that team server; {server} is the server's name
 #: src/components/SpaceGroups.tsx
-msgid "On this device only — shared once you sign in"
-msgstr "On this device only — shared once you sign in"
+msgid "On {server}"
+msgstr "On {server}"
+
+#. a project's records kept here alone, in no group
+#: src/lib/space.ts
+msgid "On this computer only"
+msgstr "On this computer only"
+
+#. your own records' row before any sign-in: kept here alone until a sign-in syncs them
+#: src/components/SpaceGroups.tsx
+msgid "On this computer only — synced once you sign in"
+msgstr "On this computer only — synced once you sign in"
 
 #. the picker's heading, inside one instance's section, over the spex repositories that instance lists for the folder's code
 #: src/components/SpaceGroups.tsx
@@ -4492,8 +4539,15 @@ msgstr "One spec item per state behavior, from the last compile"
 msgid "Only pairs with ≥ {field} {count, plural, one {citation} other {citations}}"
 msgstr "Only pairs with ≥ {field} {count, plural, one {citation} other {citations}}"
 
+#. the heading of your own records, and of your namespace at an instance: what no one else reads
+#: src/components/SpaceGroups.tsx
+msgid "Only you"
+msgstr "Only you"
+
+#. a project's primary control: opens the places it may be opened at
 #. open this authoring session's workspace
 #: src/components/LibrarySurface.tsx
+#: src/components/SpaceGroups.tsx
 msgid "Open"
 msgstr "Open"
 
@@ -4509,6 +4563,8 @@ msgstr "Open {id} in Specs"
 msgid "Open {id}: {title}"
 msgstr "Open {id}: {title}"
 
+#. the accessible name of a project's Open control, which lists the places to open it at; {name} is the project's name
+#: src/components/SpaceGroups.tsx
 #: src/components/TrustedMedia.tsx
 msgid "Open {name}"
 msgstr "Open {name}"
@@ -4544,8 +4600,10 @@ msgstr "Open Enable"
 msgid "Open folder…"
 msgstr "Open folder…"
 
+#. a project's Open entry for the place shown: clones its records and code here
 #. project palette: open a project of the member's groups on this computer, cloning it into the folder named beside
 #: src/components/ProjectPalette.tsx
+#: src/components/SpaceGroups.tsx
 msgid "Open here"
 msgstr "Open here"
 
@@ -4556,6 +4614,11 @@ msgstr "Open it again"
 #: src/components/PublishControl.tsx
 msgid "Open its page"
 msgstr "Open its page"
+
+#. a project's Open entry for a team server: opens the member's seat there where none is, then the project on it; {server} is the server's name
+#: src/components/SpaceGroups.tsx
+msgid "Open on {server}"
+msgstr "Open on {server}"
 
 #: src/components/SpaceSync.tsx
 msgid "Open project"
@@ -4633,10 +4696,21 @@ msgstr "Opened the decision records"
 msgid "Opening a seat places your sign-in on {server}. Whoever runs {server} can act as you: in your spaces, in your records, and with the account you sign in to {instance} with, wherever it reaches. Agents on {server} run on the sign-ins its administrator set up, unless you set your own. A credential you place on {server} stays there until you remove it. Retiring the server or revoking the seat under Devices stops new use; a credential already on the server lasts until it expires."
 msgstr "Opening a seat places your sign-in on {server}. Whoever runs {server} can act as you: in your spaces, in your records, and with the account you sign in to {instance} with, wherever it reaches. Agents on {server} run on the sign-ins its administrator set up, unless you set your own. A credential you place on {server} stays there until you remove it. Retiring the server or revoking the seat under Devices stops new use; a credential already on the server lasts until it expires."
 
+#. a project's row while it is opened on a team server: the seat opens, signs in, and joins it; {server} is the server's name
+#: src/components/SpaceGroups.tsx
+msgid "Opening on {server}…"
+msgstr "Opening on {server}…"
+
+#. a project's row while it is opened here: its records and code clone
+#. a project's row while it is opened here: its records and code clone
+#. a project's row while it is opened here: its records and code clone
+#. a project's row while it is opened here: its records and code clone
 #. an authoring session is being opened
 #. an authoring session is being opened
 #: src/components/CaptainHome.tsx
 #: src/components/LibrarySurface.tsx
+#: src/components/SpaceGroups.tsx
+#: src/lib/space.ts
 msgid "Opening…"
 msgstr "Opening…"
 
@@ -4754,16 +4828,6 @@ msgstr "Permission mode"
 msgid "Pick a folder inside {folder}"
 msgstr "Pick a folder inside {folder}"
 
-#. choose where on the Git host a project's records go
-#. choose where on the Git host a project's records go
-#: src/components/SpaceGroups.tsx
-msgid "Pick a group"
-msgstr "Pick a group"
-
-#: src/components/SpaceGroups.tsx
-msgid "Pick a group for {name}"
-msgstr "Pick a group for {name}"
-
 #: src/components/CaptainHome.tsx
 msgid "Pick a project first ({keys})"
 msgstr "Pick a project first ({keys})"
@@ -4807,7 +4871,7 @@ msgid "Places the six-line example as your first message"
 msgstr "Places the six-line example as your first message"
 
 #. the Place at… control while the placement is made and synced
-#: src/components/SpacePlacementActs.tsx
+#: src/components/SpaceGroups.tsx
 msgid "Placing…"
 msgstr "Placing…"
 
@@ -5485,6 +5549,11 @@ msgstr "Resize the graph pane"
 msgid "Resize the tree pane"
 msgstr "Resize the tree pane"
 
+#. beside "Changed here and at <display name>": opens the choices beneath the row
+#: src/components/SpaceGroups.tsx
+msgid "Resolve"
+msgstr "Resolve"
+
 #. resolve the changed requests into a new lock
 #: src/components/EnvironmentSection.tsx
 msgid "Resolve again"
@@ -5953,9 +6022,19 @@ msgstr "shared"
 msgid "Shared"
 msgstr "Shared"
 
+#. the heading of the projects another account at the instance shares with you; {login} is that account's login
+#: src/components/SpaceGroups.tsx
+msgid "Shared by @{login}"
+msgstr "Shared by @{login}"
+
 #: src/components/SettingsSurface.tsx
 msgid "Shared with the playbook CLI — edits made outside appear here"
 msgstr "Shared with the playbook CLI — edits made outside appear here"
+
+#. a project's Open entry where it is open at that place already: shows it on Projects
+#: src/components/SpaceGroups.tsx
+msgid "Show"
+msgstr "Show"
 
 #: src/components/PlayerPane.tsx
 msgid "Show {count} of {rest} earlier entries"
@@ -5988,6 +6067,11 @@ msgstr "Show in folder"
 #: src/components/CompileBand.tsx
 msgid "Show log"
 msgstr "Show log"
+
+#. a project's Open entry where it is open on that team server already: shows it there on Projects; {server} is the server's name
+#: src/components/SpaceGroups.tsx
+msgid "Show on {server}"
+msgstr "Show on {server}"
 
 #: src/components/NavRail.tsx
 msgid "Show sessions in {project}"
@@ -6054,6 +6138,11 @@ msgstr "Sign in to {who} again"
 #: src/components/PublishControl.tsx
 msgid "Sign in to publish at {name}"
 msgstr "Sign in to publish at {name}"
+
+#. the sign-in card on a team server's Space: what signing in brings there; {server} is the server's name
+#: src/components/SpaceSignIn.tsx
+msgid "Sign in to see your groups and open their projects on {server}."
+msgstr "Sign in to see your groups and open their projects on {server}."
 
 #: src/components/SpaceSignIn.tsx
 msgid "Sign in to see your groups and share each project's records with the people in them."
@@ -6242,6 +6331,11 @@ msgstr "Spex has no config file yet — playbooks are unavailable."
 #: src/components/SettingsSurface.tsx
 msgid "Spex itself follows your OS theme."
 msgstr "Spex itself follows your OS theme."
+
+#. the foot of a team server's Space: where its seat keeps its files; {place} is the server's name, {path} the home's path there
+#: src/components/SpaceSurface.tsx
+msgid "Spex keeps {place}'s files in {path}"
+msgstr "Spex keeps {place}'s files in {path}"
 
 #: src/components/SpaceSurface.tsx
 msgid "Spex keeps this device's files in {path}"
@@ -6432,11 +6526,14 @@ msgid "Switch to a ready agent"
 msgstr "Switch to a ready agent"
 
 #. tab and control: send and bring back changes
-#. tab and control: send and bring back changes
-#: src/components/SpaceGroups.tsx
 #: src/components/SpaceSurface.tsx
 msgid "Sync"
 msgstr "Sync"
+
+#. send what is here and bring back anything new, now
+#: src/components/SpaceGroups.tsx
+msgid "Sync now"
+msgstr "Sync now"
 
 #. catalog family: the mark of a repair this device acknowledged
 #: src/lib/space.ts
@@ -6493,10 +6590,10 @@ msgstr "System"
 msgid "System follows your device"
 msgstr "System follows your device"
 
-#. conflict choice: take the host's version
+#. conflict choice: take the version at that instance; {name} is the instance's display name
 #: src/components/SpaceSync.tsx
-msgid "Take host's"
-msgstr "Take host's"
+msgid "Take {name}'s"
+msgstr "Take {name}'s"
 
 #: src/components/Composer.tsx
 msgid "Take the task out of the message"
@@ -6913,6 +7010,8 @@ msgid "transcript could not be loaded: {reason}"
 msgstr "transcript could not be loaded: {reason}"
 
 #. error boundary: re-render the surface in place
+#. on a team server's project whose code clone failed: open it again, cloning its code into the folder the server allocated
+#: src/components/SpaceGroups.tsx
 #: src/main.tsx
 msgid "Try again"
 msgstr "Try again"
@@ -7034,6 +7133,11 @@ msgstr "unresolved"
 #: src/components/SpaceSignIn.tsx
 msgid "Until you do, everything stays on this device and nothing is contacted."
 msgstr "Until you do, everything stays on this device and nothing is contacted."
+
+#. the sign-in card on a team server's Space; {server} is the server's name
+#: src/components/SpaceSignIn.tsx
+msgid "Until you do, nothing on {server} is contacted."
+msgstr "Until you do, nothing on {server} is contacted."
 
 #. a session with no title of its own
 #: src/components/SpaceExplorer.tsx
@@ -7207,6 +7311,7 @@ msgid "Waiting for a member who can prepare its branch in {group}"
 msgstr "Waiting for a member who can prepare its branch in {group}"
 
 #. a placement's line: its first push waits for the sharing notice to be seen; Continue stands beside it
+#. a placement's line: its first push waits for the sharing notice to be seen; Continue stands beside it
 #: src/lib/space.ts
 msgid "Waiting for you to continue"
 msgstr "Waiting for you to continue"
@@ -7351,7 +7456,6 @@ msgstr "Your groups"
 #. switch: show your own group's playbooks
 #: src/components/DraftRegisterTab.tsx
 #: src/components/LibrarySurface.tsx
-#: src/components/SpaceGroups.tsx
 msgid "Your own group"
 msgstr "Your own group"
 
@@ -7372,3 +7476,8 @@ msgstr "your project"
 #: src/components/CaptainHome.tsx
 msgid "Your projects here come from the spex repositories of your groups"
 msgstr "Your projects here come from the spex repositories of your groups"
+
+#. the row of your own group's own records: your sessions outside any project
+#: src/lib/space.ts
+msgid "Your sessions"
+msgstr "Your sessions"

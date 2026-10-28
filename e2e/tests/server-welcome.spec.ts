@@ -120,13 +120,16 @@ for (const copy of COPY) {
       // (run-view-170): signed in at the same instance, it reads
       // Connected with no sign-in to approve (core-service-142).
       await surfaceEntry(page, "Space").click();
-      const control = instanceSection(page, host)
-        .getByTestId(`space-servers-${host.url}`)
-        .getByTestId(`space-server-control-${lab.place}`);
-      await control.click();
+      const line = instanceSection(page, host)
+        .getByTestId(`space-group-${HOST_GROUP}`)
+        .getByTestId(`space-server-${lab.place}`);
+      await line.getByTestId(`space-server-control-${lab.place}`).click();
       await page.getByTestId(`space-server-consent-${lab.place}`).click();
-      await expect(control).toHaveText(copy.disconnect, { timeout: 30_000 });
       await expect(page.getByTestId(`space-server-connected-${lab.place}`)).toHaveText(copy.connected, { timeout: 30_000 });
+      // Disconnect stands in the line's overflow (run-view-170).
+      await line.getByTestId(`space-server-more-${lab.place}`).click();
+      await expect(page.getByTestId(`space-server-disconnect-${lab.place}`)).toHaveText(copy.disconnect);
+      await page.keyboard.press("Escape");
       await expect(page.getByTestId(`space-server-approve-${lab.place}`)).toHaveCount(0);
 
       // [run-view-175] [run-view-168] the server's heading in the sidebar

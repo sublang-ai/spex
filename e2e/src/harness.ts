@@ -1550,10 +1550,11 @@ export function instanceSection(page: Page, host: StandinHost) {
 }
 
 /** A spex repository's line for its placement at a stand-in instance,
- * or its path placement's for null, beneath its row (space-87): found by
- * the instance's origin, as stand-ins share their host name. */
+ * or its path placement's for null, in its Sync tab (space-87, DR-159):
+ * found by the instance's origin, as stand-ins share their host name.
+ * The lines stand only while the row's name has opened its tabs. */
 export function placementLine(page: Page, key: string, host: StandinHost | null) {
-  return page.getByTestId(`space-row-${key}`).getByTestId(`space-line-${host?.url ?? "path"}`);
+  return page.getByTestId(`space-lines-${key}`).getByTestId(`space-line-${host?.url ?? "path"}`);
 }
 
 /**

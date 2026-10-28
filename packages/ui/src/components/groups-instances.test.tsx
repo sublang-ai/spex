@@ -7,12 +7,12 @@
 // group or the phrase, its read time and its read's failure, its
 // entries beneath it (space-1, git-host-5); "Sign in again" whose flow
 // reads on its heading (space-3); the rows of a signed-out instance
-// (space-61, space-11); the heading's fit (space-28); Pick a group
+// (space-61, space-11); the heading's fit (space-28); "Add to a group…"
 // offers each signed-in instance's namespace and groups under its
 // display name, and a choice names its instance (space-58, space-29);
-// Move… on a placement's line offers the groups of its instance alone
-// (space-78, space-87); Join
-// names the instance its row stands under (space-63, space-29);
+// Move… on a placement's line, in the row's Sync tab, offers the groups
+// of its instance alone (space-78, space-87); "Open here" names the
+// instance its row stands under (space-63, space-111, space-29);
 // "Add instance…" at the list's foot opens the sign-in card in its place,
 // saying your own group's records will be kept there too (space-1,
 // space-3, space-28); Forget on a signed-out heading removes the
@@ -115,9 +115,20 @@ const options = (section: HTMLElement, prefix: string): string[][] =>
     .getAllByTestId(new RegExp(`^${prefix}`))
     .map((option) => [option.dataset.testid!.slice(prefix.length), option.textContent ?? ""]);
 
-/** A row's placement line at an instance, by its origin (space-87). */
-const lineAt = (key: string, origin: string): HTMLElement =>
-  within(screen.getByTestId(`space-row-${key}`)).getByTestId(`space-line-${origin}`);
+/** A row's placement line at an instance, by its origin, in the row's
+ * Sync tab, which the row's name opens where it is not open (space-87,
+ * space-1). */
+const lineAt = (key: string, origin: string): HTMLElement => {
+  if (!screen.queryByTestId(`space-lines-${key}`)) fireEvent.click(screen.getByTestId(`space-repo-${key}`));
+  return within(screen.getByTestId(`space-lines-${key}`)).getByTestId(`space-line-${origin}`);
+};
+
+/** A row's overflow menu, "More", opened where it is not open
+ * (space-1). */
+const moreOf = (key: string): HTMLElement => {
+  if (!screen.queryByTestId(`space-row-more-${key}-menu`)) fireEvent.click(screen.getByTestId(`space-row-more-${key}`));
+  return screen.getByTestId(`space-row-more-${key}-menu`);
+};
 
 /** An instance's section of the groups list, by its origin. */
 const sectionOf = (origin: string): HTMLElement => screen.getByTestId(`space-instance-${origin}`);
@@ -182,20 +193,20 @@ describe("GROUPS: each instance under its heading (space-1, git-host-5, space-3,
     const phrase = second.getByTestId("space-groups-made-by");
     expect(phrase.textContent).toBe("Groups are made by the people who run Second Example");
     expect(phrase.querySelector("a, button")).toBeNull();
-    // Beneath each heading its own entries: every group in the order of
-    // their paths, then your namespace by your login, then another
-    // account's login, whatever order the state holds (space-1).
-    expect(first.getAllByRole("heading", { level: 3 }).map((heading) => heading.textContent)).toEqual(["Acme · acme", "jane"]);
+    // Beneath each heading its own entries: every group by its name in
+    // the order of their paths, then your namespace as "Only you" while it
+    // lists a project — none where it lists nothing — then another
+    // account's login as "Shared by @<login>", whatever order the state
+    // holds (space-1).
+    expect(first.getAllByRole("heading", { level: 3 }).map((heading) => heading.textContent)).toEqual(["Acme", "Only you"]);
     expect(second.getAllByRole("heading", { level: 3 }).map((heading) => heading.textContent)).toEqual([
-      "Acme Works · acme",
+      "Acme Works",
       "lab",
-      "jada",
-      "bob",
+      "Shared by @bob",
     ]);
     expect(second.getAllByTestId(/^space-group-[^-]+$/).map((entry) => entry.dataset.testid)).toEqual([
       "space-group-acme",
       "space-group-lab",
-      "space-group-@jada",
       "space-group-@bob",
     ]);
     // Each acme stands beneath its own instance, holding its own rows.
@@ -321,25 +332,24 @@ describe("GROUPS: each instance under its heading (space-1, git-host-5, space-3,
       [ownRepo({ governing: SECOND, branch: BRANCH })],
     );
     await renderGroups(signedOutAt(ORIGIN, {}, home), { open: false });
-    // Leave… stands on a project's row holding a placement at an
-    // instance, signed in or not (space-89): the controls below are the
-    // state's.
+    // Leave… stands in the overflow of a project's row holding a
+    // placement at an instance, signed in or not (space-89, space-1): the
+    // controls below are the state's, beside the row's "More".
     const controls = (key: string) =>
       within(screen.getByTestId(`space-row-${key}`))
         .getAllByRole("button")
-        .filter((button) => !button.dataset.testid?.startsWith("space-repo-") && !button.dataset.testid?.startsWith("space-row-leave-"));
+        .filter((button) => !button.dataset.testid?.startsWith("space-repo-") && !button.dataset.testid?.startsWith("space-row-more-"));
     // Signed out, a row at the instance offers no Retry, and no row a
     // sign-in: its heading's Sign in again is the one (space-61, space-3).
     expect(screen.getByTestId(`space-repo-state-${KEY}`).textContent).toBe("Unreachable: Sign in again");
     expect(controls(KEY)).toEqual([]);
-    expect(screen.getByTestId(`space-row-leave-${KEY}`).getAttribute("aria-label")).toBe("Remove from Spex Example");
-    // A row still read reachable there refuses Sync naming the instance,
-    // and its placement's line offers no Members and no Move (space-11,
-    // space-87).
-    const sync = screen.getByTestId(`space-row-sync-${stale}`) as HTMLButtonElement;
+    expect(within(moreOf(KEY)).getByTestId(`space-row-leave-${KEY}`).getAttribute("aria-label")).toBe("Remove from Spex Example");
+    // A row still read reachable there refuses "Sync now" naming the
+    // instance, the reason beside the disabled entry, and its placement's
+    // line offers no Members and no Move (space-11, space-87).
+    const sync = within(moreOf(stale)).getByTestId(`space-row-sync-${stale}`) as HTMLButtonElement;
     expect(sync.disabled).toBe(true);
-    expect(screen.getByTestId(`space-row-caption-${stale}`).textContent).toBe("Sign in to Spex Example first");
-    expect(sync.getAttribute("aria-describedby")).toBe(`space-row-caption-${stale}`);
+    expect(within(sync).getByText("Sign in to Spex Example first")).toBeTruthy();
     expect(within(lineAt(stale, ORIGIN)).queryByTestId("space-line-members")).toBeNull();
     expect(within(lineAt(stale, ORIGIN)).queryByTestId("space-line-move")).toBeNull();
     // A path remote is reached without the instance, so it retries.
@@ -349,9 +359,9 @@ describe("GROUPS: each instance under its heading (space-1, git-host-5, space-3,
     expect(controls("@second.example/acme/c-spex").map((button) => button.textContent)).toEqual(["Retry"]);
     expect(controls("@second.example/acme/c-spex")[0]!.title).toBe("Reads each signed-in instance again");
     // Your own group's own repository follows the signed-in instance
-    // governing it: Sync stands, and Members on its line (space-60,
+    // governing it: "Sync now" stands, and Members on its line (space-60,
     // space-1).
-    expect((screen.getByTestId(`space-row-sync-${OWN_REPO.key}`) as HTMLButtonElement).disabled).toBe(false);
+    expect((within(moreOf(OWN_REPO.key)).getByTestId(`space-row-sync-${OWN_REPO.key}`) as HTMLButtonElement).disabled).toBe(false);
     expect(within(lineAt(OWN_REPO.key, ORIGIN)).getByTestId("space-line-members")).toBeTruthy();
     cleanup();
 
@@ -362,8 +372,9 @@ describe("GROUPS: each instance under its heading (space-1, git-host-5, space-3,
       signedOutAt(SECOND, {}, signedOutAt(ORIGIN, {}, changed(home, ORIGIN, { displayName: null, readAt: null }))),
       { open: false },
     );
-    expect(screen.getByTestId(`space-row-caption-${OWN_REPO.key}`).textContent).toBe("Sign in to spex.example first");
-    expect((screen.getByTestId(`space-row-sync-${OWN_REPO.key}`) as HTMLButtonElement).disabled).toBe(true);
+    const ownSync = within(moreOf(OWN_REPO.key)).getByTestId(`space-row-sync-${OWN_REPO.key}`) as HTMLButtonElement;
+    expect(within(ownSync).getByText("Sign in to spex.example first")).toBeTruthy();
+    expect(ownSync.disabled).toBe(true);
     expect(within(lineAt(OWN_REPO.key, ORIGIN)).queryByTestId("space-line-members")).toBeNull();
   });
 
@@ -478,8 +489,8 @@ describe("GROUPS: each instance under its heading (space-1, git-host-5, space-3,
   });
 });
 
-describe("GROUPS: Pick a group at each instance (space-58, space-29)", () => {
-  test("space-58: the picker offers each signed-in instance's namespace, read as the login, and its groups under its display name, never another login; a choice names its instance; a clone keyed under an instance is offered that instance alone", async () => {
+describe("GROUPS: Add to a group… at each instance (space-58, space-29)", () => {
+  test("space-58: the picker offers each signed-in instance's namespace, reading Only you, and its groups under its display name, never another login; a choice names its instance; a clone keyed under an instance is offered that instance alone", async () => {
     await renderGroups(pickHome(), { open: false });
     const openPicker = (key: string): HTMLElement => {
       fireEvent.click(screen.getByTestId(`space-row-pick-${key}`));
@@ -490,21 +501,22 @@ describe("GROUPS: Pick a group at each instance (space-58, space-29)", () => {
     // One section per signed-in instance in the home's order, each
     // under its display name (space-58).
     const picker = openPicker(GAMMA);
-    expect(picker).toBe(screen.getByRole("group", { name: "Pick a group for gamma-spex" }));
+    expect(picker).toBe(screen.getByRole("group", { name: "Add gamma to a group" }));
     const sections = within(picker).getAllByTestId(/^space-pick-instance-/);
     expect(sections.map((each) => each.dataset.testid)).toEqual([`space-pick-instance-${ORIGIN}`, `space-pick-instance-${SECOND}`]);
     expect(sections.map((each) => within(each).getByRole("heading", { level: 3 }).textContent)).toEqual(["Spex Example", "Second Example"]);
     expect(within(picker).getByRole("group", { name: "Second Example" })).toBe(sections[1]);
-    // Under each, your namespace first, read by your login there, then
-    // every group it lists as the list reads it; another account's login
-    // is never offered — bob's at the first, nor a namespace named jane
-    // at the second, where your login is jada (space-58).
+    // Under each, your namespace first, reading "Only you", then every
+    // group it lists by its name with its path after it where the two
+    // differ; another account's login is never offered — bob's at the
+    // first, nor a namespace named jane at the second, where your login
+    // is jada (space-58).
     expect(options(sections[0]!, "space-pick-group-")).toEqual([
-      ["@jane", "jane"],
+      ["@jane", "Only you"],
       ["acme", "Acme · acme"],
     ]);
     expect(options(sections[1]!, "space-pick-group-")).toEqual([
-      ["@jada", "jada"],
+      ["@jada", "Only you"],
       ["acme", "Acme Works · acme"],
       ["lab", "lab"],
     ]);
@@ -578,7 +590,7 @@ describe("GROUPS: Pick a group at each instance (space-58, space-29)", () => {
     // offered the second alone (space-58, space-61).
     commandMock.mockClear();
     await renderGroups(signedOutAt(ORIGIN, {}, pickHome()), { open: false });
-    expect(screen.getByTestId(`space-repo-state-${KEY}`).textContent).toBe("On this device only");
+    expect(screen.getByTestId(`space-repo-state-${KEY}`).textContent).toBe("On this computer only");
     expect(screen.queryByTestId(`space-row-pick-${KEY}`)).toBeNull();
     const second = openPicker(GAMMA);
     expect(within(second).getAllByTestId(/^space-pick-instance-/).map((each) => each.dataset.testid)).toEqual([
@@ -639,7 +651,7 @@ describe("GROUPS: Move… within its placement's instance (space-78, space-87, s
   });
 });
 
-describe("GROUPS: Join at the row's instance (space-63, space-29)", () => {
+describe("GROUPS: Open here at the row's instance (space-63, space-111, space-29)", () => {
   const FIRST_DOCS = "@spex.example/acme/team/docs-spex";
   const SECOND_DOCS = "@second.example/acme/team/docs-spex";
 
@@ -655,12 +667,16 @@ describe("GROUPS: Join at the row's instance (space-63, space-29)", () => {
   }
 
   async function joinInto(key: string, folder: string): Promise<void> {
-    fireEvent.click(screen.getByTestId(`space-row-join-${key}`));
+    // This computer the only place, Open reads "Open here" alone
+    // (space-111).
+    const open = screen.getByTestId(`space-row-open-${key}`);
+    expect(open.textContent).toBe("Open here");
+    fireEvent.click(open);
     fireEvent.change(screen.getByTestId(`space-join-${key}-path`), { target: { value: folder } });
-    fireEvent.click(within(screen.getByTestId(`space-join-${key}`)).getByRole("button", { name: "Join" }));
+    fireEvent.click(within(screen.getByTestId(`space-join-${key}`)).getByRole("button", { name: "Open here" }));
   }
 
-  test("space-63, space-29: Join sends the instance its row stands under", async () => {
+  test("space-63, space-29: Open here sends the instance its row stands under", async () => {
     // The first instance's row joins at the first, with its id.
     await renderGroups(joinHome(), { open: false });
     await joinInto(FIRST_DOCS, "/Users/jane/code/docs");
@@ -1133,14 +1149,14 @@ describe("GROUPS: Forget a signed-out instance (space-82, space-29, space-66, sp
     // The heading reads its path, as the core says the folder no longer
     // bears this device's user name — the files standing or not (space-1,
     // space-30).
-    expect(heading().textContent).toBe("Your own group · jane");
+    expect(heading().textContent).toBe("Only you · @jane");
     expect(screen.queryByText(/named after your login at sign-in/)).toBeNull();
-    expect(screen.getByTestId(`space-repo-state-${OWN}`).textContent).toBe("On this device only — shared once you sign in");
+    expect(screen.getByTestId(`space-repo-state-${OWN}`).textContent).toBe("On this computer only — synced once you sign in");
     // Where the core says the folder still bears it — an account named
     // like this device's user, which names nothing — the key phrase
     // stands, those files standing too (space-1, space-30).
     deliver({ ...home, own: { ...home.own, named: true } });
-    expect(heading().textContent).toBe("Your own group · named after your login at sign-in");
+    expect(heading().textContent).toBe("Only you · named after your login at sign-in");
   });
 
   test("space-82: a refusal speaks of the sign-out it met: signed in again it goes, and a later sign-out reads none", async () => {

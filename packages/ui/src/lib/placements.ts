@@ -10,7 +10,7 @@
 
 import type { GroupsState, InstanceGroupState, InstanceState, PlacementState, RepositoryState } from "@sublang/spex-core/protocol";
 
-import { currentLocale, i18n } from "../i18n.js";
+import { currentLocale } from "../i18n.js";
 import type { SpaceLastAct } from "../state/store.js";
 import { governingOf, hostNameOf, instanceName, instanceOf, signedInInstances, standingOf } from "./instances.js";
 
@@ -211,35 +211,6 @@ export function standingEntry(state: GroupsState, repo: RepositoryState, line: P
  * name. */
 export function alsoPlacedAt(state: GroupsState, repo: RepositoryState, line: PlacementState): string[] {
   return repo.placedAt.filter((origin) => origin !== line.instance).map((origin) => instanceNameAt(state, origin));
-}
-
-/** The line a group or namespace shows for a row standing elsewhere one
- * of whose placements its listing holds (space-1, DR-128): the row's
- * name and the group it stands under, read as the list heads it — a
- * group by its name, then " · " and its path in the instance where the
- * two differ, a namespace by its login — at that group's instance, by
- * its display name as last read, else its host name; or your own group,
- * where the row stands under it. None where the state stands no row
- * under that key. */
-export function placedReading(state: GroupsState, placed: InstanceGroupState["placed"][number]): string | undefined {
-  const stands = standingOf(state, placed.key);
-  if (!stands) return undefined;
-  if (stands.own) {
-    return i18n._({
-      id: "{name} stands under your own group",
-      values: { name: placed.name },
-      comment:
-        "a line, with no control, under a group of an instance, or a login there, whose listing holds a placement of a spex repository standing under your own group; {name} is that spex repository's name",
-    });
-  }
-  const { login, name, fullPath } = stands.group;
-  const group = login ?? (fullPath !== name ? `${name} · ${fullPath}` : name);
-  return i18n._({
-    id: "{name} stands under {group} at {instance}",
-    values: { name: placed.name, group, instance: instanceName(stands.instance) },
-    comment:
-      "a line, with no control, under a group of an instance, or a login there, whose listing holds a placement of a spex repository standing elsewhere; {name} is that spex repository's name, {group} the group it stands under, read by its name, then ' · ' and its path where the two differ, or the login it stands under, and {instance} the display name of that group's instance",
-  });
 }
 
 /** Names joined as the interface language joins a list (localization-5):

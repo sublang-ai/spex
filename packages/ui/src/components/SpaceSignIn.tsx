@@ -23,7 +23,7 @@ import type { CommandResults, GroupsState } from "@sublang/spex-core/protocol";
 import { usePlaceStore } from "../state/place-context.js";
 import { i18n } from "../i18n.js";
 import { hostNameOf, instanceOf, originOf } from "../lib/instances.js";
-import { openExternalBridge } from "../lib/space.js";
+import { openExternalBridge, seatName } from "../lib/space.js";
 import { PRIMARY, SECONDARY, type Note } from "./SpaceSurface.js";
 
 type StartReply = CommandResults["space.signin.start"];
@@ -381,13 +381,35 @@ export function SignInCard({
 
   // The page the flow opens is named by the host name of the origin
   // being signed in to (space-3).
+  // At a seat's place, the server is named where this device would be
+  // (space-112).
+  const seat = seatName(usePlaceStore().place);
   const body = signInLines(signIn, hostNameOf(signIn.instance ?? url)) ?? (
-    <>
-      <p data-testid="space-signin-caption">
-        {i18n._("Sign in to see your groups and share each project's records with the people in them.")}
-      </p>
-      <p>{i18n._("Until you do, everything stays on this device and nothing is contacted.")}</p>
-    </>
+    seat === undefined ? (
+      <>
+        <p data-testid="space-signin-caption">
+          {i18n._("Sign in to see your groups and share each project's records with the people in them.")}
+        </p>
+        <p>{i18n._("Until you do, everything stays on this device and nothing is contacted.")}</p>
+      </>
+    ) : (
+      <>
+        <p data-testid="space-signin-caption">
+          {i18n._({
+            id: "Sign in to see your groups and open their projects on {server}.",
+            values: { server: seat },
+            comment: "the sign-in card on a team server's Space: what signing in brings there; {server} is the server's name",
+          })}
+        </p>
+        <p>
+          {i18n._({
+            id: "Until you do, nothing on {server} is contacted.",
+            values: { server: seat },
+            comment: "the sign-in card on a team server's Space; {server} is the server's name",
+          })}
+        </p>
+      </>
+    )
   );
 
   // A flow that ended failed offers the sign-in again; a start the core

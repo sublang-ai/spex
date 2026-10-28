@@ -4,10 +4,12 @@
 // One spex repository on the Groups surface over a mocked client
 // (DR-103): the issues list with its repairs (space-46..space-56), the
 // local and incoming lists with Open session and View diff (space-7,
-// space-8, space-10), Sync from the repository's row with its rail,
+// space-8, space-10), "Sync now" from the row's overflow with its rail,
 // Stop, stopped, done and unrelated cards (space-11..space-16), the
-// picker, its keyboard and the Apply confirm (space-9, space-17,
-// space-18), the explorer tree and previews (space-23..space-25),
+// placement's line in the Sync tab (space-87), the picker — in the Sync
+// tab and beneath the row by Resolve — its keyboard and the Apply
+// confirm (space-9, space-14, space-17, space-18), "Explore records"
+// and the explorer tree and previews (space-1, space-23..space-25),
 // reveal and copy (space-26), the copy law (space-27) and the roles
 // assistive technology needs (space-44). Every `space.*` call names
 // the repository it acts on by its key. The header, the groups list,
@@ -50,9 +52,20 @@ import {
   type RowOver,
 } from "../fixtures/groups.js";
 
-const syncControl = () => screen.getByTestId(`space-row-sync-${KEY}`) as HTMLButtonElement;
-/** The opened repository's placement line at the fixtures' instance. */
-const lineAt = (): HTMLElement => within(screen.getByTestId(`space-row-${KEY}`)).getByTestId(`space-line-${ORIGIN}`);
+/** The opened row's one overflow control, "More", opened where it
+ * stands closed (space-1, DR-159). */
+function openMore(key: string = KEY): HTMLElement {
+  const id = `space-row-more-${key}`;
+  if (!screen.queryByTestId(`${id}-menu`)) fireEvent.click(screen.getByTestId(id));
+  return screen.getByTestId(`${id}-menu`);
+}
+/** "Sync now" in the row's "More" (space-1, space-11). */
+const syncControl = (): HTMLButtonElement => within(openMore()).getByTestId(`space-row-sync-${KEY}`) as HTMLButtonElement;
+/** Its words, apart from a refusal standing beside them (space-11). */
+const syncWords = (): string => syncControl().firstElementChild?.textContent ?? "";
+/** The opened repository's placement line at the fixtures' instance, in
+ * its Sync tab (space-87). */
+const lineAt = (): HTMLElement => within(screen.getByTestId(`space-lines-${KEY}`)).getByTestId(`space-line-${ORIGIN}`);
 
 beforeEach(installClient);
 
@@ -72,7 +85,7 @@ describe("GROUPS: re-reads on events, never on a timer (space-2)", () => {
     const old = repoState({ sync: { phase: "running", op: "sync", step: "push", since: NOW, cancelable: true } });
     const done = repoState({ sync: { phase: "done", at: NOW, sent: 1, received: 0, pushed: true } });
     await renderGroups(old);
-    expect(syncControl().textContent).toBe("Syncing…");
+    expect(syncWords()).toBe("Syncing…");
     let resolve!: (state: GroupsState) => void;
     let response = new Promise<GroupsState>((settle) => { resolve = settle; });
     commandMock.mockImplementation((type: string, fields: Record<string, unknown> = {}) =>
@@ -85,7 +98,7 @@ describe("GROUPS: re-reads on events, never on a timer (space-2)", () => {
       await pending;
     });
     expect(useAppStore.getState().space).toBe(done);
-    expect(syncControl().textContent).toBe("Sync");
+    expect(syncWords()).toBe("Sync now");
     expect(syncControl().disabled).toBe(false);
 
     // No announcement overtakes this request: its reply still applies.
@@ -97,7 +110,7 @@ describe("GROUPS: re-reads on events, never on a timer (space-2)", () => {
       await pending;
     });
     expect(useAppStore.getState().space).toBe(current);
-    expect(syncControl().textContent).toBe("Sync");
+    expect(syncWords()).toBe("Sync now");
   });
 
   test("window focus re-reads; a space.state broadcast replaces the state wholesale, the opened repository staying open", async () => {
@@ -107,11 +120,11 @@ describe("GROUPS: re-reads on events, never on a timer (space-2)", () => {
       window.dispatchEvent(new Event("focus"));
     });
     await waitFor(() => expect(calls("space.get")).toHaveLength(2));
-    expect(screen.getByTestId(`space-repo-state-${KEY}`).textContent).toBe("On this device only");
+    expect(screen.getByTestId(`space-repo-state-${KEY}`).textContent).toBe("On this computer only");
     deliver(repoState());
     expect(screen.getByTestId(`space-repo-state-${KEY}`).textContent).toBe("Synced 2h ago");
     expect(screen.getByTestId("space-repository")).toBeTruthy();
-    expect(syncControl().textContent).toBe("Sync");
+    expect(syncWords()).toBe("Sync now");
     expect(useAppStore.getState().space?.instances[0]?.groups[0]?.repositories[0]?.state).toBe("reachable");
   });
 
@@ -198,12 +211,14 @@ describe("GROUPS: issues and repairs (space-1, space-46..space-56)", () => {
     fireEvent.click(screen.getByTestId("space-issues"));
     const row = screen.getByTestId("space-repair");
     expect(row.dataset.kind).toBe("repository");
-    expect(row.textContent).toContain("infra-spex");
-    expect(row.textContent).toContain("in jane");
-    expect(row.textContent).toContain("5 sessions ran in /code/infra");
+    // Named by the project and its group, the folder it remembers
+    // secondary (space-46, DR-159).
+    expect(within(row).getByTestId("space-repair-title").textContent).toBe("infra in jane: its folder on this computer is missing");
+    expect(row.textContent).not.toContain("infra-spex");
+    expect(within(row).getByTestId("space-repair-folder").textContent).toBe("/code/infra · 5 sessions ran there");
     expect(row.textContent).toContain("That folder is here and is a git repository. Add it as a project?");
     expect(within(row).getByRole("button", { name: "Choose folder…" })).toBeTruthy();
-    expect(within(row).getByRole("button", { name: "Don't add" })).toBeTruthy();
+    expect(within(row).getByRole("button", { name: "Not on this computer" })).toBeTruthy();
 
     // One gesture pairs the spex repository with the folder, its key
     // naming the project, the recorded folders riding as aliases.
@@ -292,7 +307,7 @@ describe("GROUPS: issues and repairs (space-1, space-46..space-56)", () => {
     const row = screen.getByTestId("space-repair");
     expect(row.textContent).toContain("That folder is no longer on this device.");
     expect(within(row).queryByRole("button", { name: "Add project" })).toBeNull();
-    expect(within(row).getByRole("button", { name: "Don't add" })).toBeTruthy();
+    expect(within(row).getByRole("button", { name: "Not on this computer" })).toBeTruthy();
   });
 
   test("a repair set aside stands in the list, marked, and counts no more (space-54, space-55)", async () => {
@@ -312,10 +327,10 @@ describe("GROUPS: issues and repairs (space-1, space-46..space-56)", () => {
     expect(screen.getByTestId("space-issues-list").className).not.toContain("amber");
     const row = screen.getByTestId("space-repair-declined");
     expect(row.textContent).toContain("not added");
-    expect(row.textContent).toContain("infra-spex");
+    expect(within(row).getByTestId("space-repair-title").textContent).toBe("infra in jane: its folder on this computer is missing · not added");
     // Declining strips nothing: the row still offers what it offered.
     expect(within(row).getByRole("button", { name: "Choose folder…" })).toBeTruthy();
-    expect(within(row).queryByRole("button", { name: "Don't add" })).toBeNull();
+    expect(within(row).queryByRole("button", { name: "Not on this computer" })).toBeNull();
     expect(screen.getByTestId("space-issues-list").textContent).toContain("1 not added");
   });
 
@@ -376,7 +391,7 @@ describe("GROUPS: issues and repairs (space-1, space-46..space-56)", () => {
     const [infra, , docs] = screen.getAllByTestId("space-repair");
 
     // A declined row keeps its place, and counts no more.
-    fireEvent.click(within(infra!).getByRole("button", { name: "Don't add" }));
+    fireEvent.click(within(infra!).getByRole("button", { name: "Not on this computer" }));
     await waitFor(() => expect(at(0).dataset.testid).toBe("space-repair-declined"));
     expect(at(0).textContent).toContain("infra");
     expect(at(0).textContent).toContain("not added");
@@ -499,12 +514,12 @@ describe("GROUPS: changes (space-7, space-8, space-10)", () => {
     await waitFor(() => expect(calls("space.cancel")).toEqual([{ repository: KEY }]));
     // Sync waits while a check runs.
     expect(syncControl().disabled).toBe(true);
-    // Ahead, behind and the check time update on the row (space-8).
+    // Ahead, behind and the check time update on the placement's line,
+    // in the Sync tab; the row carries no count of the records' Git
+    // (space-8, space-87, DR-159).
     deliver(repoState({ branch: { ...BRANCH, ahead: 0, behind: 3, checkedAt: NOW } }));
-    const counts = screen.getByTestId(`space-repo-counts-${KEY}`);
-    expect(counts.textContent).toContain("↑0");
-    expect(counts.textContent).toContain("↓3");
-    expect(counts.getAttribute("title")).toContain("0 commits ahead, 3 commits behind");
+    expect(within(lineAt()).getByTestId("space-line-state").getAttribute("title")).toContain("0 commits ahead, 3 commits behind");
+    expect(screen.queryByTestId(`space-repo-counts-${KEY}`)).toBeNull();
   });
 
   test("a host holding no records and an unrelated history read as such; a local-only repository offers no Check host", async () => {
@@ -512,12 +527,16 @@ describe("GROUPS: changes (space-7, space-8, space-10)", () => {
     expect(screen.getByText("The host holds no records yet; Sync will send these")).toBeTruthy();
     cleanup();
     await renderGroups(repoState({ branch: { ...BRANCH, unrelated: true }, incoming: [], sync: { phase: "unrelated", placement: ORIGIN } }));
-    expect(screen.getByTestId("space-unrelated").textContent).toContain("Join both histories into one");
+    expect(screen.getByTestId("space-unrelated").textContent).toContain("Merge both histories into one");
     expect(screen.queryByTestId(`space-repo-counts-${KEY}`)).toBeNull();
-    // The row keeps its Sync; Join stands on the placement's line
-    // (space-13, space-87).
-    expect(syncControl().textContent).toBe("Sync");
-    expect(within(lineAt()).getByTestId("space-line-join").textContent).toBe("Join");
+    // The row keeps its "Sync now"; "Merge histories…" stands on the
+    // placement's line and beside the row's phrase, never Join
+    // (space-13, space-87, DR-159).
+    expect(syncWords()).toBe("Sync now");
+    expect(within(lineAt()).getByTestId("space-line-join").textContent).toBe("Merge histories…");
+    expect(screen.getByTestId(`space-repo-state-${KEY}`).textContent).toBe("Unrelated history");
+    expect(screen.getByTestId(`space-row-merge-${KEY}`).textContent).toBe("Merge histories…");
+    expect(document.body.textContent).not.toMatch(/\bJoin\b/);
     cleanup();
     await renderGroups(base({}, [repo({ state: "local-only", remote: null, branch: null })]));
     expect((screen.getByTestId("space-check") as HTMLButtonElement).disabled).toBe(true);
@@ -528,11 +547,15 @@ describe("GROUPS: changes (space-7, space-8, space-10)", () => {
 describe("GROUPS: syncing from the row (space-11, space-12, space-15, space-16, space-57)", () => {
   test("Sync sends the command naming the repository and reads 'Syncing…' with the rail naming each step while it runs", async () => {
     await renderGroups(repoState());
+    // "Sync now" stands in the row's overflow, titled as what it does
+    // (space-1).
+    expect(syncWords()).toBe("Sync now");
     expect(syncControl().title).toBe("Sends what is here and brings back anything new");
+    expect(screen.queryByTestId(`space-row-sync-${KEY}`)?.closest("[role=menu]")).toBeTruthy();
     fireEvent.click(syncControl());
     await waitFor(() => expect(calls("space.sync")).toEqual([{ repository: KEY }]));
     deliver(repoState({ sync: { phase: "running", op: "sync", step: "compare", since: NOW, cancelable: false } }));
-    expect(syncControl().textContent).toBe("Syncing…");
+    expect(syncWords()).toBe("Syncing…");
     expect(syncControl().disabled).toBe(true);
     expect(screen.getByTestId("space-step-line").textContent).toBe("Comparing…");
     expect(screen.getByTestId("space-step-save").getAttribute("data-state")).toBe("done");
@@ -549,10 +572,10 @@ describe("GROUPS: syncing from the row (space-11, space-12, space-15, space-16, 
 
   test("Sync is refused before the first step with the reason beside the disabled control", async () => {
     await renderGroups(repoState({ mergePending: true }));
+    // The reason stands beside "Sync now" in the row's overflow.
     expect(syncControl().disabled).toBe(true);
-    const caption = screen.getByTestId(`space-row-caption-${KEY}`);
-    expect(caption.textContent).toBe("Finish or abort the merge in your terminal");
-    expect(syncControl().getAttribute("aria-describedby")).toBe(caption.id);
+    expect(syncWords()).toBe("Sync now");
+    expect(syncControl().lastElementChild?.textContent).toBe("Finish or abort the merge in your terminal");
     cleanup();
     // A displayed blocking diagnostic beneath this clone, perhaps stale
     // once its file is fixed, still shows under issues but leaves Sync
@@ -560,7 +583,7 @@ describe("GROUPS: syncing from the row (space-11, space-12, space-15, space-16, 
     await renderGroups(repoState({}, { diagnostics: [{ file: `workspace/${KEY}/intents/x.json`, reason: "malformed intent", blocking: true }] }));
     expect(screen.getByTestId("space-issues-list")).toBeTruthy();
     expect(syncControl().disabled).toBe(false);
-    expect(syncControl().getAttribute("aria-describedby")).toBeNull();
+    expect(syncControl().textContent).toBe("Sync now");
     fireEvent.click(syncControl());
     await waitFor(() => expect(calls("space.sync")).toEqual([{ repository: KEY }]));
   });
@@ -656,12 +679,15 @@ describe("GROUPS: syncing from the row (space-11, space-12, space-15, space-16, 
 
   test("unrelated histories offer Join on the placement's line, confirmed inline with Cancel focused; the row keeps Sync (space-13)", async () => {
     await renderGroups(repoState({ branch: { ...BRANCH, unrelated: true }, sync: { phase: "unrelated", placement: ORIGIN } }));
-    // The row's one Sync stands as ever (DR-128); Join says what it does
-    // in its title on the placement's line.
-    expect(syncControl().textContent).toBe("Sync");
+    // The row's one "Sync now" stands as ever (DR-128); "Merge
+    // histories…" says what it does in its title on the placement's
+    // line, never named Join (DR-159).
+    expect(syncWords()).toBe("Sync now");
     expect(syncControl().title).toBe("Sends what is here and brings back anything new");
+    fireEvent.keyDown(window, { key: "Escape" });
     const line = lineAt();
     const join = within(line).getByTestId("space-line-join");
+    expect(join.textContent).toBe("Merge histories…");
     expect(join.title).toBe("Brings both histories into one and asks about anything that differs");
     fireEvent.click(join);
     const confirm = within(line).getByTestId("space-line-join-confirm");
@@ -673,8 +699,22 @@ describe("GROUPS: syncing from the row (space-11, space-12, space-15, space-16, 
     expect(calls("space.sync")).toHaveLength(0);
     await waitFor(() => expect(document.activeElement).toBe(join));
     fireEvent.click(join);
-    fireEvent.click(within(within(line).getByTestId("space-line-join-confirm")).getByRole("button", { name: "Join" }));
+    fireEvent.click(within(within(line).getByTestId("space-line-join-confirm")).getByRole("button", { name: "Merge" }));
     // The join names its placement (space-29).
+    await waitFor(() => expect(calls("space.sync")).toEqual([{ repository: KEY, placement: ORIGIN, join: true }]));
+    cleanup();
+    commandMock.mockClear();
+    // The row offers the same beside its phrase: "Merge histories…",
+    // confirmed inline beneath the row, Cancel focused (space-13,
+    // space-87).
+    await renderGroups(repoState({ branch: { ...BRANCH, unrelated: true }, sync: { phase: "unrelated", placement: ORIGIN } }), { open: false });
+    const merge = screen.getByTestId(`space-row-merge-${KEY}`);
+    expect(screen.getByTestId(`space-repo-state-${KEY}`).textContent).toBe("Unrelated history");
+    fireEvent.click(merge);
+    const rowConfirm = screen.getByTestId(`space-row-merge-confirm-${KEY}`);
+    expect(rowConfirm.textContent).toContain("Join both histories into one?");
+    expect(document.activeElement).toBe(within(rowConfirm).getByRole("button", { name: "Cancel" }));
+    fireEvent.click(within(rowConfirm).getByRole("button", { name: "Merge" }));
     await waitFor(() => expect(calls("space.sync")).toEqual([{ repository: KEY, placement: ORIGIN, join: true }]));
   });
 
@@ -728,11 +768,12 @@ describe("GROUPS: syncing from the row (space-11, space-12, space-15, space-16, 
   test("controls are disabled while disconnected", async () => {
     await renderGroups(repoState());
     act(() => useAppStore.setState({ connection: "closed" }));
-    expect(syncControl().disabled).toBe(true);
+    // The row's overflow, which holds "Sync now", and its Open.
+    expect((screen.getByTestId(`space-row-more-${KEY}`) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByTestId(`space-row-open-${KEY}`) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByTestId("space-check") as HTMLButtonElement).disabled).toBe(true);
-    // The placement line's Members too (space-87).
-    const line = within(screen.getByTestId(`space-row-${KEY}`)).getByTestId(`space-line-${ORIGIN}`);
-    expect((within(line).getByTestId("space-line-members") as HTMLButtonElement).disabled).toBe(true);
+    // The placement line's Members too, in the Sync tab (space-87).
+    expect((within(lineAt()).getByTestId("space-line-members") as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByTestId("space-refresh") as HTMLButtonElement).disabled).toBe(true);
   });
 });
@@ -758,6 +799,18 @@ describe("GROUPS: choices (space-9, space-17, space-18)", () => {
     expect(incoming.compareDocumentPosition(picker) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Choose for 2 conflicts" })).toBeTruthy();
     expect(screen.getByTestId("space-status-dot").getAttribute("data-tone")).toBe("attention");
+    // The row reads the placement's outcome, with Resolve showing the
+    // same picker beneath the row, its choices the Sync tab's (space-14,
+    // space-87, DR-159).
+    expect(screen.getByTestId(`space-repo-state-${KEY}`).textContent).toBe("Changed here and at Spex Example");
+    fireEvent.click(screen.getByTestId(`space-row-resolve-${KEY}`));
+    const beneath = screen.getByTestId(`space-row-resolve-picker-${KEY}`);
+    expect(screen.getByTestId(`space-row-${KEY}`).contains(beneath)).toBe(true);
+    const tab = within(screen.getByTestId("space-repository")).getByTestId("space-picker");
+    fireEvent.click(within(within(beneath).getByRole("radiogroup", { name: "Fix the login redirect" })).getByLabelText(/Take Spex Example's/));
+    expect(within(beneath).getByTestId("space-chosen").textContent).toBe("1 of 2 chosen");
+    expect(within(tab).getByTestId("space-chosen").textContent).toBe("1 of 2 chosen");
+    expect((within(within(tab).getByRole("radiogroup", { name: "Fix the login redirect" })).getByLabelText(/Take Spex Example's/) as HTMLInputElement).checked).toBe(true);
   });
 
   test("each conflict is a radio group named by its label with nothing preselected; Apply waits for every choice", async () => {
@@ -769,22 +822,22 @@ describe("GROUPS: choices (space-9, space-17, space-18)", () => {
         expect((radio as HTMLInputElement).checked).toBe(false);
       }
     }
-    expect(within(session).getByLabelText(/Keep mine/).parentElement?.textContent).toContain("updated 2h ago · 12 turns");
-    expect(within(session).getByLabelText(/Take host's/).parentElement?.textContent).toContain("updated 5h ago · 9 turns");
+    expect(within(session).getByLabelText(/Keep what's here/).parentElement?.textContent).toContain("updated 2h ago · 12 turns");
+    expect(within(session).getByLabelText(/Take Spex Example's/).parentElement?.textContent).toContain("updated 5h ago · 9 turns");
     expect(within(settings).getAllByRole("button", { name: "View diff" })).toHaveLength(2);
     expect(within(session).queryByRole("button", { name: "View diff" })).toBeNull();
     const apply = screen.getByTestId("space-apply") as HTMLButtonElement;
     expect(apply.disabled).toBe(true);
     expect(screen.getByTestId("space-chosen").textContent).toBe("0 of 2 chosen");
-    fireEvent.click(within(session).getByLabelText(/Take host's/));
+    fireEvent.click(within(session).getByLabelText(/Take Spex Example's/));
     expect(screen.getByTestId("space-chosen").textContent).toBe("1 of 2 chosen");
     expect(apply.disabled).toBe(true);
-    fireEvent.click(within(settings).getByLabelText(/Keep mine/));
+    fireEvent.click(within(settings).getByLabelText(/Keep what's here/));
     expect(screen.getByTestId("space-chosen").textContent).toBe("2 of 2 chosen");
     expect(apply.disabled).toBe(false);
   });
 
-  test("arrow keys move within a group, and All mine / All host's fill every row", async () => {
+  test("arrow keys move within a group, and All here / All <display name>'s fill every row", async () => {
     await renderGroups(choicesState());
     const session = screen.getByRole("radiogroup", { name: "Fix the login redirect" });
     const [mine, remote] = within(session).getAllByRole("radio") as HTMLInputElement[];
@@ -796,21 +849,21 @@ describe("GROUPS: choices (space-9, space-17, space-18)", () => {
     expect(mine.checked).toBe(true);
     expect(document.activeElement).toBe(mine);
     expect(screen.getByTestId("space-chosen").textContent).toBe("1 of 2 chosen");
-    fireEvent.click(screen.getByRole("button", { name: "All host's" }));
+    fireEvent.click(screen.getByRole("button", { name: "All Spex Example's" }));
     expect(screen.getByTestId("space-chosen").textContent).toBe("2 of 2 chosen");
     for (const group of screen.getAllByRole("radiogroup")) {
-      expect((within(group).getByLabelText(/Take host's/) as HTMLInputElement).checked).toBe(true);
+      expect((within(group).getByLabelText(/Take Spex Example's/) as HTMLInputElement).checked).toBe(true);
     }
-    fireEvent.click(screen.getByRole("button", { name: "All mine" }));
+    fireEvent.click(screen.getByRole("button", { name: "All here" }));
     for (const group of screen.getAllByRole("radiogroup")) {
-      expect((within(group).getByLabelText(/Keep mine/) as HTMLInputElement).checked).toBe(true);
+      expect((within(group).getByLabelText(/Keep what's here/) as HTMLInputElement).checked).toBe(true);
     }
   });
 
   test("Apply asks one inline confirm with Cancel focused; Escape keeps the choices; confirming syncs with them", async () => {
     await renderGroups(choicesState());
-    fireEvent.click(within(screen.getByRole("radiogroup", { name: "Fix the login redirect" })).getByLabelText(/Take host's/));
-    fireEvent.click(within(screen.getByRole("radiogroup", { name: "Settings changed" })).getByLabelText(/Keep mine/));
+    fireEvent.click(within(screen.getByRole("radiogroup", { name: "Fix the login redirect" })).getByLabelText(/Take Spex Example's/));
+    fireEvent.click(within(screen.getByRole("radiogroup", { name: "Settings changed" })).getByLabelText(/Keep what's here/));
     fireEvent.click(screen.getByTestId("space-apply"));
     const confirm = screen.getByTestId("space-apply-confirm");
     expect(confirm.textContent).toContain("Replace 1 unit with the host's version?");
@@ -843,11 +896,15 @@ describe("GROUPS: choices (space-9, space-17, space-18)", () => {
     // offers Join beside the row's Sync (space-13).
     expect(screen.getByTestId("space-incoming-list")).toBeTruthy();
     expect(screen.getByTestId("space-unit-remote-sessions/s2").textContent).toContain("Draft the release notes");
+    // The row reads the choices it owes, not the history being merged
+    // (space-87, space-14).
+    expect(screen.getByTestId(`space-repo-state-${KEY}`).textContent).toBe("Changed here and at Spex Example");
+    expect(screen.getByTestId(`space-row-resolve-${KEY}`)).toBeTruthy();
     expect(screen.queryByText("Unrelated history")).toBeNull();
-    expect(syncControl().textContent).toBe("Sync");
-    expect(within(lineAt()).getByTestId("space-line-join")).toBeTruthy();
+    expect(syncWords()).toBe("Sync now");
+    expect(within(lineAt()).getByTestId("space-line-join").textContent).toBe("Merge histories…");
     expect(screen.queryByTestId(`space-repo-counts-${KEY}`)).toBeNull();
-    fireEvent.click(within(screen.getByRole("radiogroup", { name: "Settings changed" })).getByLabelText(/Keep mine/));
+    fireEvent.click(within(screen.getByRole("radiogroup", { name: "Settings changed" })).getByLabelText(/Keep what's here/));
     fireEvent.click(screen.getByTestId("space-apply"));
     fireEvent.click(within(screen.getByTestId("space-apply-confirm")).getByRole("button", { name: "Apply" }));
     // Apply carries the choices and the join, for that placement
@@ -870,8 +927,8 @@ describe("GROUPS: choices (space-9, space-17, space-18)", () => {
       }),
     );
     const group = screen.getByRole("radiogroup", { name: "Fix the login redirect" });
-    expect(within(group).getByLabelText(/Keep mine/).parentElement?.textContent).toContain("deleted");
-    expect(within(group).getByLabelText(/Take host's/).parentElement?.textContent).toContain("updated 1h ago · 13 turns");
+    expect(within(group).getByLabelText(/Keep what's here/).parentElement?.textContent).toContain("deleted");
+    expect(within(group).getByLabelText(/Take Spex Example's/).parentElement?.textContent).toContain("updated 1h ago · 13 turns");
   });
 
   test("a sync stopped at Apply keeps the picker with the refused unit marked, and Retry carries the choices", async () => {
@@ -891,7 +948,7 @@ describe("GROUPS: choices (space-9, space-17, space-18)", () => {
     );
     expect(screen.getByTestId("space-conflict-config/playbook.config.yaml").getAttribute("data-marked")).toBe("1");
     expect(screen.getByTestId("space-conflict-sessions/s1").getAttribute("data-marked")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "All mine" }));
+    fireEvent.click(screen.getByRole("button", { name: "All here" }));
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     await waitFor(() =>
       expect(calls("space.sync")).toEqual([
@@ -913,7 +970,7 @@ describe("GROUPS: the explorer (space-23, space-24, space-25)", () => {
   test("the tree is one ARIA tree over the repository's clone with a single focus stop, every entry annotated", async () => {
     await openExplore();
     expect(calls("space.tree")[0]).toEqual({ repository: KEY });
-    const tree = screen.getByRole("tree", { name: "Files in academy-spex" });
+    const tree = screen.getByRole("tree", { name: "Files in academy" });
     expect(screen.getByTestId("space-explore-tab").textContent).toContain(CLONE);
     const items = within(tree).getAllByRole("treeitem");
     expect(items.filter((item) => item.tabIndex === 0)).toHaveLength(1);
@@ -937,6 +994,17 @@ describe("GROUPS: the explorer (space-23, space-24, space-25)", () => {
     fireEvent.click(git);
     expect(calls("space.tree").some((fields) => fields.path === ".git")).toBe(false);
     expect(screen.getByTestId("space-preview").textContent).toContain("not shown");
+  });
+
+  test("space-1: Explore records in the row's overflow opens its Explore tab beneath the list, as its name opens its Sync tab", async () => {
+    await renderGroups(repoState(), { open: false });
+    fireEvent.click(within(openMore()).getByTestId(`space-row-explore-${KEY}`));
+    expect(await screen.findByTestId("space-tree")).toBeTruthy();
+    expect(screen.getByRole("tab", { name: "Explore" }).getAttribute("aria-selected")).toBe("true");
+    expect(calls("space.tree")[0]).toEqual({ repository: KEY });
+    cleanup();
+    await renderGroups(repoState());
+    expect(screen.getByRole("tab", { name: "Sync" }).getAttribute("aria-selected")).toBe("true");
   });
 
   test.each(["en", "zh"] as const)("space-23: `placements/<folder>.yaml` and its folder read 'placement', Shared (%s)", async (language) => {
@@ -999,7 +1067,7 @@ describe("GROUPS: the explorer (space-23, space-24, space-25)", () => {
 
   test("arrow keys move, disclose and collapse; a session's files group under one node titled by the session", async () => {
     const { onOpenSession } = await openExplore();
-    const tree = screen.getByRole("tree", { name: "Files in academy-spex" });
+    const tree = screen.getByRole("tree", { name: "Files in academy" });
     const sessions = screen.getByTestId("space-node-sessions");
     sessions.focus();
     fireEvent.keyDown(tree, { key: "ArrowRight" });
@@ -1171,12 +1239,17 @@ describe("GROUPS: copy and roles (space-27, space-28, space-44)", () => {
       repoState({ sync: { phase: "running", op: "sync", step: "push", since: NOW, cancelable: true } }),
       repoState({ sync: { phase: "stopped", op: "sync", step: "push", cause: "git", message: "x", guidance: "y", retry: true } }),
     ];
+    // DR-159 names these in its own words, past the budget: "Add to a
+    // group…", "Merge histories…", and the fill naming the instance the
+    // choices are for, "All <display name>'s" (space-17, space-58).
+    const named = new Set(["Add to a group…", "Merge histories…", "All Spex Example's"]);
     for (const state of states) {
       await renderGroups(state);
       for (const button of screen.getAllByRole("button")) {
         // A repository's row is a row, its words its own (space-28).
         if (button.dataset.testid?.startsWith("space-repo-")) continue;
         const text = (button.textContent ?? "").trim();
+        if (named.has(text)) continue;
         expect(text.length, `"${text}"`).toBeLessThanOrEqual(14);
       }
       cleanup();
@@ -1187,8 +1260,12 @@ describe("GROUPS: copy and roles (space-27, space-28, space-44)", () => {
     await renderGroups(repoState({ incoming: [SESSION_UNIT], conflicts: [CONFLICTS[0]], sync: { phase: "choices", placement: ORIGIN, savedCommit: null } }));
     expect(screen.getByRole("region", { name: "Space" })).toBeTruthy();
     expect(screen.getByRole("region", { name: "Your groups" })).toBeTruthy();
-    expect(screen.getByRole("group", { name: "Your own group" })).toBeTruthy();
-    expect(screen.getByRole("tablist", { name: "Views of academy-spex" })).toBeTruthy();
+    // Your own records head the list, "Only you", as your namespace at
+    // the instance does while it lists a project (space-1).
+    expect(screen.getAllByRole("group", { name: "Only you" })[0]).toBe(screen.getByTestId("space-own"));
+    // The panel is named by the row's name, its `-spex` dropped (space-1).
+    expect(screen.getByRole("region", { name: "academy" })).toBe(screen.getByTestId("space-repository"));
+    expect(screen.getByRole("tablist", { name: "Views of academy" })).toBeTruthy();
     const syncTab = screen.getByRole("tab", { name: "Sync" });
     const exploreTab = screen.getByRole("tab", { name: "Explore" });
     expect(syncTab.getAttribute("aria-selected")).toBe("true");
@@ -1199,7 +1276,7 @@ describe("GROUPS: copy and roles (space-27, space-28, space-44)", () => {
     fireEvent.keyDown(syncTab, { key: "ArrowRight" });
     expect(exploreTab.getAttribute("aria-selected")).toBe("true");
     expect(document.activeElement).toBe(exploreTab);
-    await screen.findByRole("tree", { name: "Files in academy-spex" });
+    await screen.findByRole("tree", { name: "Files in academy" });
     expect(screen.getByRole("tabpanel", { name: "Explore" })).toBeTruthy();
     expect(screen.getByRole("separator", { name: "Resize the tree pane" })).toBeTruthy();
   });

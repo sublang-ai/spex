@@ -6,9 +6,11 @@
 // a fake client of its own: the selector switches Settings, Playbooks —
 // with its Environments — and Groups between this computer's store and
 // a seat's, each surface reading and acting at the place it names; this
-// computer's Groups surface lists each server an instance lets the
-// person open, under that instance's heading, with Connect, or
-// "Connected" and Disconnect, by whether a seat is open there; the
+// computer's Space surface lists each server an instance lets the
+// person open, one line under its group's heading, with Connect, or
+// "Connected" and Disconnect in its overflow, by whether a seat is open
+// there; "Open on <server>" on a row opens the seat where none is and
+// sends that seat's core the join once it is signed in (space-111); the
 // first Connect on this device shows the instance's contract and sends
 // `server.open` with consent only on "I understand", a later Connect
 // sending it at once; while the open runs the line says so, and past
@@ -26,17 +28,20 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import type {
   ConfigState,
   GroupsState,
+  InstanceGroupState,
   ProjectInfo,
+  RepositoryState,
   SeatState,
   ServerListing,
 } from "@sublang/spex-core/protocol";
 
 import { App } from "./App.js";
-import { groupsState, instanceState } from "./fixtures/groups-state.js";
+import { NO_CAN, groupsState, instanceState, namespace, repositoryRow } from "./fixtures/groups-state.js";
 import { CONFIG_STATE, available, environment, specPackage } from "./fixtures/playbooks.js";
 import { activateLanguage } from "./i18n.js";
 import { SpexClient, SpexCommandError } from "./lib/client.js";
 import { usePlaces } from "./state/places.js";
+import { useServerOpens } from "./state/server-opens.js";
 import {
   createAppStore,
   setClientForTests,
@@ -83,10 +88,31 @@ function listing(open: { "43"?: boolean } = {}): ServerListing {
   };
 }
 
-/** This computer's Groups: two signed-in instances. */
+/** A project the instance lists in `acme/lab` that no place holds yet
+ * (space-61): its row offers Open, here and on each server. */
+const NOTES_KEY = "@spex.pub/acme/lab/notes-spex";
+const NOTES = repositoryRow(NOTES_KEY, {
+  instance: SPEX,
+  governing: SPEX,
+  id: "301",
+  state: "absent",
+  code: "https://git.example.com/acme/notes.git",
+  branch: null,
+});
+
+/** A group of the instance, as its read lists it. */
+function group(id: string, fullPath: string, repositories: RepositoryState[] = []): InstanceGroupState {
+  return { id, login: null, mine: false, fullPath, name: fullPath.split("/").pop()!, can: NO_CAN, placed: [], repositories };
+}
+
+/** This computer's Groups: two signed-in instances, the first listing
+ * the servers' groups, `acme/lab` holding a project no place holds. */
 const LOCAL_GROUPS: GroupsState = groupsState({
   instances: [
-    instanceState(SPEX, { displayName: "spex.pub" }),
+    instanceState(SPEX, {
+      displayName: "spex.pub",
+      groups: [group("61", "acme/infra"), group("62", "acme/lab", [NOTES]), namespace("me")],
+    }),
     instanceState(LAB, { displayName: "Lab" }),
   ],
 });
@@ -217,6 +243,9 @@ beforeEach(() => {
     },
   });
   activateLanguage("en");
+  // The servers' flows are the page's own, one per server: each test
+  // starts with none (state/server-opens).
+  useServerOpens.setState({ lines: {}, pending: {}, landed: 0 });
   local = fakeClient();
   alpha = fakeClient();
   beta = fakeClient();
@@ -350,6 +379,7 @@ describe("run-view-171: the selector switches Settings, Playbooks, Groups and En
     // seats, and the seat is never asked.
     expect(commandsOf(alpha)).not.toContain("server.list");
     expect(document.querySelector('[data-testid^="space-servers-"]')).toBeNull();
+    expect(document.querySelector('[data-testid^="space-server-"]')).toBeNull();
     // A seat's state touches no other place.
     expect(commandsOf(beta)).toEqual([]);
   });
@@ -375,12 +405,25 @@ describe("run-view-171: the selector switches Settings, Playbooks, Groups and En
 async function openGroups(): Promise<HTMLElement> {
   render(<App />);
   goTo("Space");
-  return await screen.findByTestId(`space-servers-${SPEX}`);
+  await screen.findByTestId(`space-server-${ALPHA.place}`);
+  return screen.getByRole("group", { name: "spex.pub" });
 }
 
 const row = (place: string): HTMLElement => screen.getByTestId(`space-server-${place}`);
+/** A server's Connect, where no seat is open at it (run-view-170). */
 const control = (place: string): HTMLButtonElement =>
   screen.getByTestId(`space-server-control-${place}`) as HTMLButtonElement;
+/** A server's overflow, where a seat is open at it (run-view-170). */
+const more = (place: string): HTMLButtonElement => screen.getByTestId(`space-server-more-${place}`) as HTMLButtonElement;
+/** Whether the line reads its seat open: "Connected" with Disconnect in
+ * its overflow, and no Connect. */
+const connectedLine = (place: string): boolean =>
+  screen.queryByTestId(`space-server-more-${place}`) !== null && screen.queryByTestId(`space-server-control-${place}`) === null;
+/** Disconnect, from the line's overflow (run-view-170). */
+function disconnect(place: string): void {
+  fireEvent.click(more(place));
+  fireEvent.click(screen.getByTestId(`space-server-disconnect-${place}`));
+}
 
 const CONTRACT =
   "Opening a seat places your sign-in on lab-box. Whoever runs lab-box can act as you: in your spaces, in your records, and with the account you sign in to spex.pub with, wherever it reaches. Agents on lab-box run on the sign-ins its administrator set up, unless you set your own. A credential you place on lab-box stays there until you remove it. Retiring the server or revoking the seat under Devices stops new use; a credential already on the server lasts until it expires.";
@@ -414,38 +457,74 @@ describe("run-view-168: a new playbook asked for at a seat", () => {
   });
 });
 
-describe("run-view-170: the servers under each instance's heading", () => {
-  test("each server by its name and group, Connect, or Connected and Disconnect, by whether a seat is open there", async () => {
-    const servers = await openGroups();
+describe("run-view-170: the servers under each group's heading", () => {
+  test("each server one line under its group by its name, Connect, or Connected and Disconnect in its overflow, by whether a seat is open there", async () => {
+    const instance = await openGroups();
     // [run-view-170] the listing is the local core's, read as the
     // surface opens.
     expect(callsOf(local, "server.list")).toHaveLength(1);
-    // [run-view-170] under the instance's heading.
-    const instance = screen.getByRole("group", { name: "spex.pub" });
-    expect(instance.contains(servers)).toBe(true);
+    // [run-view-170] [space-1] one line per server under the heading of
+    // its group, within the instance's section.
+    const infra = within(instance).getByTestId("space-group-acme/infra");
+    const lab = within(instance).getByTestId("space-group-acme/lab");
+    expect(within(infra).getByRole("heading", { level: 3 }).textContent).toBe("infra");
+    expect(
+      within(within(infra).getByTestId("space-group-servers-acme/infra"))
+        .getAllByRole("listitem")
+        .map((item) => item.getAttribute("data-testid")),
+    ).toEqual([`space-server-${ALPHA.place}`, `space-server-${BETA.place}`]);
+    expect(
+      within(within(lab).getByTestId("space-group-servers-acme/lab"))
+        .getAllByRole("listitem")
+        .map((item) => item.getAttribute("data-testid")),
+    ).toEqual([`space-server-${LAB_BOX}`]);
+    // [space-1] beneath the heading, before the group's rows.
+    const labServers = within(lab).getByTestId("space-group-servers-acme/lab");
+    const notes = within(lab).getByTestId(`space-row-${NOTES_KEY}`);
+    expect(labServers.compareDocumentPosition(notes) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // No flat list of servers stands at the instance's foot.
+    expect(screen.queryByTestId(`space-servers-${SPEX}`)).toBeNull();
+    // [run-view-170] by its name; "Connected" with Disconnect in its
+    // overflow where a seat is open and signed in, Connect where none is.
+    expect(row(ALPHA.place).textContent).toMatch(/^build-box · Connected/);
+    expect(row(ALPHA.place).textContent).not.toContain("acme/infra");
+    expect(screen.getByTestId(`space-server-connected-${ALPHA.place}`).textContent).toBe("Connected");
+    expect(connectedLine(ALPHA.place)).toBe(true);
+    expect(more(ALPHA.place).getAttribute("aria-label")).toBe("More for build-box");
+    fireEvent.click(more(ALPHA.place));
+    expect(within(screen.getByTestId(`space-server-more-${ALPHA.place}-menu`)).getAllByRole("menuitem").map((item) => item.textContent)).toEqual([
+      "Disconnect",
+    ]);
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.getByTestId(`space-server-connected-${BETA.place}`).textContent).toBe("Connected");
+    expect(connectedLine(BETA.place)).toBe(true);
+    expect(row(LAB_BOX).textContent).toContain("lab-box");
+    expect(control(LAB_BOX).textContent).toBe("Connect");
+    expect(screen.queryByTestId(`space-server-more-${LAB_BOX}`)).toBeNull();
+    expect(screen.queryByTestId(`space-server-connected-${LAB_BOX}`)).toBeNull();
+    // [run-view-170] one instance's failure stands under its own
+    // heading, hiding no other's servers.
+    const other = screen.getByRole("group", { name: "Lab" });
+    expect(within(other).getByRole("alert").textContent).toBe("Couldn't read the servers: Lab refused the request");
+    expect(within(other).queryAllByRole("listitem")).toEqual([]);
+    expect(within(instance).queryByRole("alert")).toBeNull();
+  });
+
+  test("a server whose group the instance's read does not list stands at the instance's foot with its group's path", async () => {
+    local.answers["space.get"] = groupsState({
+      instances: [instanceState(SPEX, { displayName: "spex.pub" }), instanceState(LAB, { displayName: "Lab" })],
+    });
+    render(<App />);
+    goTo("Space");
+    const servers = await screen.findByTestId(`space-servers-${SPEX}`);
+    expect(screen.getByRole("group", { name: "spex.pub" }).contains(servers)).toBe(true);
     expect(within(servers).getAllByRole("listitem").map((item) => item.getAttribute("data-testid"))).toEqual([
       `space-server-${ALPHA.place}`,
       `space-server-${BETA.place}`,
       `space-server-${LAB_BOX}`,
     ]);
-    // [run-view-170] by name and group; "Connected" with Disconnect
-    // where a seat is open and signed in, Connect where none is.
-    expect(row(ALPHA.place).textContent).toContain("build-box");
     expect(row(ALPHA.place).textContent).toContain("acme/infra");
-    expect(screen.getByTestId(`space-server-connected-${ALPHA.place}`).textContent).toBe("Connected");
-    expect(control(ALPHA.place).textContent).toBe("Disconnect");
-    expect(screen.getByTestId(`space-server-connected-${BETA.place}`).textContent).toBe("Connected");
-    expect(control(BETA.place).textContent).toBe("Disconnect");
-    expect(row(LAB_BOX).textContent).toContain("lab-box");
     expect(row(LAB_BOX).textContent).toContain("acme/lab");
-    expect(control(LAB_BOX).textContent).toBe("Connect");
-    expect(screen.queryByTestId(`space-server-connected-${LAB_BOX}`)).toBeNull();
-    // [run-view-170] one instance's failure stands under its own
-    // heading, hiding no other's servers.
-    const lab = screen.getByRole("group", { name: "Lab" });
-    expect(within(lab).getByRole("alert").textContent).toBe("Couldn't read the servers: Lab refused the request");
-    expect(within(lab).queryAllByRole("listitem")).toEqual([]);
-    expect(within(instance).queryByRole("alert")).toBeNull();
   });
 
   test("the first Connect shows the contract and sends server.open with consent only on I understand; a later Connect sends at once", async () => {
@@ -484,15 +563,15 @@ describe("run-view-170: the servers under each instance's heading", () => {
       `spex.serverContract:${LAB_BOX}`,
     ]);
     // [run-view-170] the listing is read again after the open, the
-    // server now reading Disconnect.
+    // server now reading Connected with Disconnect in its overflow.
     expect(callsOf(local, "server.list")).toHaveLength(2);
-    await waitFor(() => expect(control(LAB_BOX).textContent).toBe("Disconnect"));
+    await waitFor(() => expect(connectedLine(LAB_BOX)).toBe(true));
 
     // [run-view-170] once its seat is closed, a later Connect on this
     // device sends server.open at once, with no contract.
     local.answers["server.close"] = { closed: true };
     local.answers["server.list"] = listing({ "43": false });
-    fireEvent.click(control(LAB_BOX));
+    disconnect(LAB_BOX);
     await settle();
     await waitFor(() => expect(control(LAB_BOX).textContent).toBe("Connect"));
     fireEvent.click(control(LAB_BOX));
@@ -525,7 +604,7 @@ describe("run-view-170: the servers under each instance's heading", () => {
       ...listing(),
       servers: listing().servers.map((server) => (server.id === "41" ? { ...server, open: false } : server)),
     };
-    fireEvent.click(control(ALPHA.place));
+    disconnect(ALPHA.place);
     await settle();
     // [run-view-170] Disconnect sends server.close, with no contract, to the
     // local core alone.
@@ -557,7 +636,7 @@ describe("run-view-170: the servers under each instance's heading", () => {
     local.answers["server.close"] = () => {
       throw new SpexCommandError("not_found", "No seat is open on this server");
     };
-    fireEvent.click(control(ALPHA.place));
+    disconnect(ALPHA.place);
     await settle();
     expect(within(row(ALPHA.place)).getByRole("alert").textContent).toBe("No seat is open on this server");
   });
@@ -604,7 +683,7 @@ describe("run-view-170: a server's line while its seat opens and signs in", () =
       vi.useRealTimers();
     }
     // The open landed: the line no longer says it runs.
-    await waitFor(() => expect(control(LAB_BOX).textContent).toBe("Disconnect"));
+    await waitFor(() => expect(connectedLine(LAB_BOX)).toBe(true));
     expect(screen.queryByTestId(`space-server-connecting-${LAB_BOX}`)).toBeNull();
     expect(callsOf(local, "server.open")).toEqual([{ instance: SPEX, serverId: "43", consented: true }]);
   });
@@ -613,13 +692,16 @@ describe("run-view-170: a server's line while its seat opens and signs in", () =
     await openGroups();
     serverState({ ...ALPHA, signIn: running() }, BETA);
     // [run-view-170] the approval's link on the server's line, in place
-    // of Connected, Disconnect offered beside it.
+    // of Connected, Disconnect offered in its overflow.
     const link = screen.getByTestId(`space-server-approve-${ALPHA.place}`) as HTMLAnchorElement;
     expect(link.textContent).toBe("Approve Spex on build-box in your browser");
     expect(link.getAttribute("href")).toBe(APPROVE);
     expect(link.getAttribute("target")).toBe("_blank");
     expect(screen.queryByTestId(`space-server-connected-${ALPHA.place}`)).toBeNull();
-    expect(control(ALPHA.place).textContent).toBe("Disconnect");
+    expect(screen.queryByTestId(`space-server-control-${ALPHA.place}`)).toBeNull();
+    fireEvent.click(more(ALPHA.place));
+    expect(screen.getByTestId(`space-server-disconnect-${ALPHA.place}`).textContent).toBe("Disconnect");
+    fireEvent.keyDown(window, { key: "Escape" });
     // The other seat, signed in, reads Connected.
     expect(screen.getByTestId(`space-server-connected-${BETA.place}`).textContent).toBe("Connected");
     // Pending reads Connected; signed in, the link goes.
@@ -681,6 +763,176 @@ describe("run-view-170: a server's line while its seat opens and signs in", () =
     serverState({ ...ALPHA, signIn: running() }, BETA);
     expect(screen.queryByTestId(`space-server-signin-${ALPHA.place}`)).toBeNull();
     expect(screen.getByTestId(`space-server-approve-${ALPHA.place}`)).toBeTruthy();
+  });
+});
+
+/** The joins a fake core was sent (space-29). */
+const joinsOf = (fake: Fake): unknown[] => callsOf(fake, "space.join");
+
+/** The notes row's phrase on this computer's Space (space-87). */
+const notesPhrase = (): string => screen.getByTestId(`space-repo-state-${NOTES_KEY}`).textContent ?? "";
+
+/** Open the notes row's Open menu and read its entries (space-111). */
+function openMenu(): HTMLElement {
+  fireEvent.click(screen.getByTestId(`space-row-open-${NOTES_KEY}`));
+  return screen.getByTestId(`space-row-open-${NOTES_KEY}-menu`);
+}
+
+describe("run-view-171: Open on <server> on a row of this computer's Space", () => {
+  test("a seat open and signed in: no seat is opened, that seat's core is sent the join with no folder, and the row reads Opening on <server>… until the seat lists the project", async () => {
+    await openGroups();
+    // [space-111] the row's Open offers this computer first, then each
+    // server of the instance the member may open.
+    const open = screen.getByTestId(`space-row-open-${NOTES_KEY}`);
+    expect(open.getAttribute("aria-label")).toBe("Open notes");
+    const menu = openMenu();
+    expect(within(menu).getAllByRole("menuitem").map((item) => item.textContent)).toEqual([
+      "Open here",
+      "Open on build-box",
+      "Open on gpu-box",
+      "Open on lab-box",
+    ]);
+    fireEvent.click(within(menu).getByTestId(`space-row-open-at-${ALPHA.place}-${NOTES_KEY}`));
+    await settle();
+    // [run-view-171] [space-111] no seat opened — one is open there —
+    // and that seat's core alone sent `space.join` with no folder.
+    expect(callsOf(local, "server.open")).toEqual([]);
+    expect(joinsOf(alpha)).toEqual([{ instance: SPEX, hostId: "301" }]);
+    expect(joinsOf(local)).toEqual([]);
+    expect(joinsOf(beta)).toEqual([]);
+    // [space-111] the row reads "Opening on <server>…" meanwhile, its
+    // entry not offered twice.
+    expect(notesPhrase()).toBe("Opening on build-box…");
+    expect((within(openMenu()).getByTestId(`space-row-open-at-${ALPHA.place}-${NOTES_KEY}`) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.queryByTestId(`space-row-on-${ALPHA.place}-${NOTES_KEY}`)).toBeNull();
+
+    // [space-1] [space-111] the seat lists the project: the row reads
+    // "On <server>", and its entry "Show on <server>".
+    act(() => alphaStore.setState({ projects: [GPU, project(NOTES_KEY, "notes")] }));
+    await settle();
+    expect(notesPhrase()).toBe("");
+    expect(screen.getByTestId(`space-row-on-${ALPHA.place}-${NOTES_KEY}`).textContent).toBe("On build-box");
+    expect(screen.queryByTestId(`space-row-here-${NOTES_KEY}`)).toBeNull();
+    const shown = within(openMenu()).getByTestId(`space-row-show-at-${ALPHA.place}-${NOTES_KEY}`);
+    expect(shown.textContent).toBe("Show on build-box");
+    // [space-111] "Show on <server>" shows the project at that place.
+    fireEvent.click(shown);
+    await settle();
+    expect(alphaStore.getState().currentProjectId).toBe(NOTES_KEY);
+    expect(joinsOf(alpha)).toHaveLength(1);
+  });
+
+  test("a seat still signing in is sent nothing until it reads signed in", async () => {
+    useAppStore.setState({ seats: [{ ...ALPHA, signIn: running() }, BETA] });
+    await openGroups();
+    fireEvent.click(within(openMenu()).getByTestId(`space-row-open-at-${ALPHA.place}-${NOTES_KEY}`));
+    await settle();
+    // [run-view-171] [space-111] while the seat's sign-in runs, nothing
+    // is sent, the row saying it opens there, the server's line linking
+    // the approval (run-view-170).
+    expect(joinsOf(alpha)).toEqual([]);
+    expect(callsOf(local, "server.open")).toEqual([]);
+    expect(notesPhrase()).toBe("Opening on build-box…");
+    expect(screen.getByTestId(`space-server-approve-${ALPHA.place}`)).toBeTruthy();
+    serverState({ ...ALPHA, signIn: { state: "pending" } }, BETA);
+    await settle();
+    expect(joinsOf(alpha)).toEqual([]);
+    // Signed in, the join goes, once, to that seat alone.
+    serverState({ ...ALPHA, signIn: { state: "signedIn" } }, BETA);
+    await settle();
+    expect(joinsOf(alpha)).toEqual([{ instance: SPEX, hostId: "301" }]);
+    serverState({ ...ALPHA, signIn: { state: "signedIn" } }, BETA);
+    await settle();
+    expect(joinsOf(alpha)).toHaveLength(1);
+    expect(joinsOf(beta)).toEqual([]);
+    expect(joinsOf(local)).toEqual([]);
+  });
+
+  test("a seat whose sign-in fails leaves the open undone, its cause on the server's line", async () => {
+    useAppStore.setState({ seats: [{ ...ALPHA, signIn: running() }, BETA] });
+    await openGroups();
+    fireEvent.click(within(openMenu()).getByTestId(`space-row-open-at-${ALPHA.place}-${NOTES_KEY}`));
+    await settle();
+    serverState({ ...ALPHA, signIn: { state: "failed", cause: "The sign-in was denied at spex.pub" } }, BETA);
+    await settle();
+    // [space-111] the open is undone, the cause read on the line.
+    expect(screen.getByTestId(`space-server-signin-error-${ALPHA.place}`).textContent).toBe("The sign-in was denied at spex.pub.");
+    expect(notesPhrase()).toBe("");
+    serverState({ ...ALPHA, signIn: { state: "signedIn" } }, BETA);
+    await settle();
+    expect(joinsOf(alpha)).toEqual([]);
+  });
+
+  test("no seat open: the server's line shows the contract first, I understand sends server.open with consent, and the join goes to the seat once it is signed in", async () => {
+    const labSeat: SeatState = { ...ALPHA, serverId: "43", name: "lab-box", group: "acme/lab", place: LAB_BOX };
+    const lab = fakeClient();
+    await openGroups();
+    // [run-view-171] [run-view-170] the first open of a seat on this
+    // device shows the contract on the server's line, and sends nothing;
+    // declined, the open is undone.
+    fireEvent.click(within(openMenu()).getByTestId(`space-row-open-at-${LAB_BOX}-${NOTES_KEY}`));
+    await settle();
+    const contract = screen.getByTestId(`space-server-contract-${LAB_BOX}`);
+    expect(row(LAB_BOX).contains(contract)).toBe(true);
+    expect(within(contract).getByText(CONTRACT)).toBeTruthy();
+    expect(callsOf(local, "server.open")).toEqual([]);
+    expect(notesPhrase()).toBe("Opening on lab-box…");
+    fireEvent.click(within(contract).getByRole("button", { name: "Cancel" }));
+    await settle();
+    expect(screen.queryByTestId(`space-server-contract-${LAB_BOX}`)).toBeNull();
+    expect(notesPhrase()).toBe("");
+    expect(callsOf(local, "server.open")).toEqual([]);
+
+    // Asked again, "I understand" sends `server.open` with consent to the
+    // local core.
+    local.answers["server.open"] = { place: LAB_BOX, leaseExpiresAt: Date.now() + 3_600_000 };
+    local.answers["server.list"] = listing({ "43": true });
+    fireEvent.click(within(openMenu()).getByTestId(`space-row-open-at-${LAB_BOX}-${NOTES_KEY}`));
+    await settle();
+    fireEvent.click(screen.getByTestId(`space-server-consent-${LAB_BOX}`));
+    await settle();
+    expect(callsOf(local, "server.open")).toEqual([{ instance: SPEX, serverId: "43", consented: true }]);
+    expect(notesPhrase()).toBe("Opening on lab-box…");
+    expect([...kept.keys()]).toContain(`spex.serverContract:${LAB_BOX}`);
+
+    // The seat appears, its sign-in running: nothing goes yet.
+    serverState(ALPHA, BETA, { ...labSeat, signIn: running() });
+    const labStore = seatStore(labSeat, lab, { projects: [] });
+    act(() =>
+      usePlaces.setState({
+        seats: [
+          { seat: ALPHA, store: alphaStore },
+          { seat: BETA, store: betaStore },
+          { seat: labSeat, store: labStore },
+        ],
+      }),
+    );
+    await settle();
+    expect(joinsOf(lab)).toEqual([]);
+    // Signed in, the join goes to that seat alone, with no folder.
+    serverState(ALPHA, BETA, labSeat);
+    await settle();
+    expect(joinsOf(lab)).toEqual([{ instance: SPEX, hostId: "301" }]);
+    expect(joinsOf(local)).toEqual([]);
+    expect(joinsOf(alpha)).toEqual([]);
+    expect(joinsOf(beta)).toEqual([]);
+    // The seat was opened once, by the act that needed it.
+    expect(callsOf(local, "server.open")).toHaveLength(1);
+  });
+
+  test("a join the seat refuses reads on the row's caption", async () => {
+    alpha.answers["space.join"] = () => {
+      throw new SpexCommandError("invalid_request", "No longer shared with you");
+    };
+    await openGroups();
+    fireEvent.click(within(openMenu()).getByTestId(`space-row-open-at-${ALPHA.place}-${NOTES_KEY}`));
+    await settle();
+    // [space-111] the join failed: its cause on the row, the open
+    // offered again.
+    expect(screen.getByTestId(`space-row-caption-${NOTES_KEY}`).textContent).toContain("No longer shared with you");
+    expect(notesPhrase()).toBe("");
+    expect((within(openMenu()).getByTestId(`space-row-open-at-${ALPHA.place}-${NOTES_KEY}`) as HTMLButtonElement).disabled).toBe(false);
   });
 });
 

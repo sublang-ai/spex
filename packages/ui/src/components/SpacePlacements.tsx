@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// A spex repository's placements beneath its row (space-87, DR-128):
-// one line per placement in the order the core sends them — those its
+// A spex repository's placements in its Sync tab (space-87, DR-128,
+// DR-159), never on its row: one line per placement in the order the
+// core sends them — those its
 // clone holds in the order added, the path placement last, then each a
 // placement file names that no remote here holds, then each instance a
 // creation waits at — naming its instance's display name and its path
@@ -17,7 +18,8 @@
 // each acts on that placement at the instance governing it. The outcome
 // the last sync left carries its way forward: a placement owing its
 // sharing notice Continue, saying the notice beneath the line first
-// (space-57); an unrelated history Join, confirmed inline (space-13); a
+// (space-57); an unrelated history "Merge histories…", confirmed inline
+// (space-13); a
 // stop Retry (space-15); and an unreachable placement whose instance is
 // signed in, on a row still reachable, Retry reading the instances again
 // (space-61). A placement a file of the clone names and no remote here
@@ -40,7 +42,7 @@ import { i18n } from "../i18n.js";
 import type { SpexCommandError } from "../lib/client.js";
 import { instanceOf } from "../lib/instances.js";
 import { alsoPlacedAt, governingOfPlacement, placementName } from "../lib/placements.js";
-import { cloneHere, lineOutcome, placementPhrase, type LinePhrase } from "../lib/space.js";
+import { cloneHere, lineOutcome, placementPhrase, seatName, type LinePhrase } from "../lib/space.js";
 import { Icon } from "./Icon.js";
 import { InlineConfirm } from "./InlineConfirm.js";
 import { MovePicker } from "./SpaceGroups.js";
@@ -107,6 +109,29 @@ export function PlacementNotice({
   );
 }
 
+/** "Merge histories…" (space-13, DR-159): the join of an unrelated
+ * history, never named Join. */
+export const mergeHistoriesLabel = (): string =>
+  i18n._({ id: "Merge histories…", comment: "on an unrelated history: asks to merge both histories into one; its confirm follows" });
+
+/** The busy form of "Merge histories…". */
+export const mergingLabel = (): string =>
+  i18n._({ id: "Merging…", comment: "the Merge histories… control while both histories are merged" });
+
+/** The inline confirm of "Merge histories…" (space-13, DR-010 §4):
+ * both histories become one, and a unit present on both sides
+ * differently will ask for a choice. */
+export function MergeConfirm({ onConfirm, onCancel }: { onConfirm(): void; onCancel(): void }) {
+  return (
+    <InlineConfirm
+      question={i18n._("Join both histories into one? Anything that differs will ask you to choose.")}
+      confirmLabel={i18n._({ id: "Merge", comment: "confirm: merge both histories into one" })}
+      onConfirm={onConfirm}
+      onCancel={onCancel}
+    />
+  );
+}
+
 /** A line's phrase tone: the status palette's attention and stopped
  * words (DR-010 §8); everything else reads in the secondary tone. */
 const TONES: Record<LinePhrase["tone"], string> = {
@@ -123,6 +148,7 @@ export function PlacementLines({
   now,
   dismissed,
   movable,
+  rowName,
   connected,
   refreshes,
   onNote,
@@ -132,6 +158,8 @@ export function PlacementLines({
   now: number;
   /** The sync phase the reader dismissed on this row's Sync tab. */
   dismissed?: string;
+  /** The row's name, which its panels read (space-1). */
+  rowName: string;
   /** A project's row, whose placements may move to another group; a
    * group's own records stay in their group, and your own group's in
    * yours (space-78, DR-103). */
@@ -153,6 +181,7 @@ export function PlacementLines({
           now={now}
           dismissed={dismissed}
           movable={movable}
+          rowName={rowName}
           connected={connected}
           refreshes={refreshes}
           onNote={onNote}
@@ -177,12 +206,14 @@ function PlacementLine({
   now,
   dismissed,
   movable,
+  rowName,
   connected,
   refreshes,
   onNote,
 }: {
   groups: GroupsState;
   repo: RepositoryState;
+  rowName: string;
   line: PlacementState;
   now: number;
   dismissed?: string;
@@ -222,7 +253,7 @@ function PlacementLine({
   // The control the notice answers, which Cancel hands focus back to.
   const askedRef = useRef<HTMLButtonElement | null>(null);
   const name = placementName(groups, line);
-  const phrase = placementPhrase(repo, line, now, dismissed);
+  const phrase = placementPhrase(repo, line, now, dismissed, (each) => placementName(groups, each), seatName(store.place));
 
   const sync = repo.sync;
   const running = sync.phase === "running";
@@ -382,9 +413,9 @@ function PlacementLine({
   /** Run again what stopped (space-15): a stopped check checks again,
    * any other stop syncs again — as the join of the placement the page's
    * own join named, as the Sync tab's Retry does, and plainly otherwise,
-   * an unrelated history then offering Join again (space-13); an
-   * unreachable placement reads every signed-in instance again, as the
-   * row's Retry does (space-2). */
+   * an unrelated history then offering "Merge histories…" again
+   * (space-13); an unreachable placement reads every signed-in instance
+   * again, as the row's Retry does (space-2). */
   const retry = () => {
     if (!stoppedRetry) {
       void send("retry", () => spaceRefresh(), { holds: false });
@@ -421,7 +452,7 @@ function PlacementLine({
         () =>
           document
             .querySelector<HTMLElement>(
-              `[data-testid="space-row-${repo.key}"] [data-testid="space-line-${origin}"] [data-testid="space-line-move"]`,
+              `[data-testid="space-lines-${repo.key}"] [data-testid="space-line-${origin}"] [data-testid="space-line-move"]`,
             )
             ?.focus(),
         0,
@@ -537,9 +568,7 @@ function PlacementLine({
                 disabled={!connected || pending}
                 onClick={() => setOpened((was) => (was === "join" ? undefined : "join"))}
               >
-                {workingOn("join")
-                  ? i18n._({ id: "Joining…", comment: "the Join control, while the join runs" })
-                  : i18n._({ id: "Join", comment: "confirm: join both histories into one" })}
+                {workingOn("join") ? mergingLabel() : mergeHistoriesLabel()}
               </button>
             ) : null}
             {showRetry ? (
@@ -601,12 +630,7 @@ function PlacementLine({
       ) : null}
       {opened === "join" && showJoin ? (
         <div data-testid="space-line-join-confirm" className="px-2">
-          <InlineConfirm
-            question={i18n._("Join both histories into one? Anything that differs will ask you to choose.")}
-            confirmLabel={i18n._({ id: "Join", comment: "confirm: join both histories into one" })}
-            onConfirm={join}
-            onCancel={() => close(joinRef)}
-          />
+          <MergeConfirm onConfirm={join} onCancel={() => close(joinRef)} />
         </div>
       ) : null}
       {opened === "members" && showMembers && governing && line.instance !== null ? (
@@ -614,7 +638,7 @@ function PlacementLine({
           instance={governing}
           target={{ repository: repo.key, instance: line.instance }}
           id={`${repo.key}@${line.instance}`}
-          name={repo.name}
+          name={rowName}
           canManage={line.can.manageMembers}
           alsoPlacedAt={alsoPlacedAt(groups, repo, line)}
           connected={connected}
@@ -625,6 +649,7 @@ function PlacementLine({
       ) : null}
       {opened === "move" && showMove ? (
         <MovePicker
+          name={rowName}
           groups={groups}
           repo={repo}
           line={line}

@@ -2,27 +2,24 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // What a project's row does with its placements as a whole (space-88,
-// space-89, DR-128): "Place at…" keeps its records at another signed-in
-// instance too. It stands where the clone holds a placement with an
-// instance, the view lets the person manage the members of every one it
-// holds, and some signed-in instance holds none of them; titled and
-// named "Also place at <display name>" where one instance is offered,
-// it opens that instance's picker beneath the row (GroupPicker), and
-// otherwise opens the choice of them in place, each so named. It reads
-// "Placing…" from the pick until the operation it starts has run
-// (space-97). "Leave…" stops keeping the records at one instance: it
-// stands while the clone holds a placement with an instance, titled and
-// named "Remove from <display name>" where it holds one, and otherwise
-// opening the choice of them, each so named; the placement chosen is
-// asked about inline, Remove or Keep, Keep focused — again, naming the
-// count, where its Leave stopped for records no remaining placement
-// received, or saying what may be left behind where it could not read
-// that placement (space-98) — and it reads "Leaving…" until the Leave
-// has run. Each label keeps to the row's 14-character budget, the long
-// name its title and accessible name; a choice's options are a picker's
-// rows, the instance's name their words (space-28, DR-041).
+// space-89, DR-128), from its overflow (space-1, DR-159): "Place at…"
+// keeps its records at another signed-in instance too. It stands where
+// the clone holds a placement with an instance, the view lets the person
+// manage the members of every one it holds, and some signed-in instance
+// holds none of them; named "Also place at <display name>" where one
+// instance is offered, it opens that instance's picker beneath the row
+// (GroupPicker), and otherwise opens the choice of them in place, each
+// so named. "Leave…" stops keeping the records at one instance: it
+// stands while the clone holds a placement with an instance, named
+// "Remove from <display name>" where it holds one, and otherwise opening
+// the choice of them, each so named; the placement chosen is asked about
+// inline, Remove or Keep, Keep focused — again, naming the count, where
+// its Leave stopped for records no remaining placement received, or
+// saying what may be left behind where it could not read that placement
+// (space-98). A choice is named by the act that opened it, its options a
+// picker's rows, the instance's name their words (space-28, DR-041).
 
-import { useEffect, useRef, type KeyboardEvent, type RefObject } from "react";
+import { useEffect, useRef, type KeyboardEvent } from "react";
 import type { GroupsState, InstanceState, PlacementState } from "@sublang/spex-core/protocol";
 
 import { i18n } from "../i18n.js";
@@ -42,55 +39,21 @@ export function alsoPlaceAt(instance: InstanceState): string {
   });
 }
 
-/** "Place at…" on a project's row (space-88): its long name where one
- * instance is offered, its busy form while the Place runs. */
-export function PlaceControl({
-  repoKey,
-  id,
-  buttonRef,
-  offered,
-  placing,
-  expanded,
-  disabled,
-  onClick,
-}: {
-  repoKey: string;
-  /** The control's DOM id: its choice is named by it. */
-  id: string;
-  buttonRef: RefObject<HTMLButtonElement | null>;
-  /** The instances it offers; none while only its Place runs. */
-  offered: InstanceState[];
-  placing: boolean;
-  expanded: boolean;
-  disabled: boolean;
-  onClick(): void;
-}) {
-  // A running control's word says what it does (DR-069); one instance
-  // offered names it in full, as its title and accessible name.
-  const long = !placing && offered.length === 1 ? alsoPlaceAt(offered[0]!) : undefined;
-  return (
-    <button
-      ref={buttonRef}
-      id={id}
-      type="button"
-      data-testid={`space-row-place-${repoKey}`}
-      className={`${SECONDARY} shrink-0 whitespace-nowrap`}
-      title={long}
-      aria-label={long}
-      aria-expanded={expanded}
-      disabled={disabled}
-      onClick={onClick}
-    >
-      {placing
-        ? i18n._({ id: "Placing…", comment: "the Place at… control while the placement is made and synced" })
-        : i18n._({
-            id: "Place at…",
-            comment:
-              "on a project's row: opens another instance's picker to keep its records there too; its title and accessible name are \"Also place at <display name>\" where one instance is offered",
-          })}
-    </button>
-  );
-}
+/** The words of "Place at…" (space-88). */
+export const placeAtLabel = (): string =>
+  i18n._({
+    id: "Place at…",
+    comment:
+      "on a project's row: opens another instance's picker to keep its records there too; its title and accessible name are \"Also place at <display name>\" where one instance is offered",
+  });
+
+/** The words of "Leave…" (space-89). */
+export const leaveLabel = (): string =>
+  i18n._({
+    id: "Leave…",
+    comment:
+      "on a project's row: stop keeping its records at one instance; its title and accessible name are \"Remove from <display name>\" where one is held",
+  });
 
 /** The instances "Place at…" offers where it offers more than one
  * (space-88): each by its display name, named "Also place at <display
@@ -98,15 +61,12 @@ export function PlaceControl({
  * the first. Choosing one opens its picker. */
 export function PlaceChoice({
   repoKey,
-  labelledBy,
   offered,
   connected,
   onChoose,
   onCancel,
 }: {
   repoKey: string;
-  /** The DOM id of the control that opened it, which names it. */
-  labelledBy: string;
   offered: InstanceState[];
   connected: boolean;
   onChoose(instance: InstanceState): void;
@@ -121,7 +81,7 @@ export function PlaceChoice({
   return (
     <div
       role="group"
-      aria-labelledby={labelledBy}
+      aria-label={placeAtLabel()}
       data-testid={`space-place-choice-${repoKey}`}
       className="ml-6 flex min-w-0 flex-col gap-2 rounded border border-neutral-300 p-2 dark:border-neutral-700"
       onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
@@ -177,66 +137,6 @@ export function removedFrom(name: string): string {
   return i18n._({ id: "Removed from {name}", values: { name }, comment: "the live note once a placement is left; {name} is the instance's display name" });
 }
 
-/** "Leave…" on a project's row (space-89): its long name where one
- * placement with an instance is held, its busy form while the Leave
- * runs. */
-export function LeaveControl({
-  groups,
-  repoKey,
-  id,
-  buttonRef,
-  held,
-  leaving,
-  expanded,
-  disabled,
-  describedBy,
-  onClick,
-}: {
-  groups: GroupsState;
-  repoKey: string;
-  /** The control's DOM id: its choice is named by it. */
-  id: string;
-  buttonRef: RefObject<HTMLButtonElement | null>;
-  /** The placements with an instance it offers; none once the Leave
-   * running took the last. */
-  held: PlacementState[];
-  leaving: boolean;
-  expanded: boolean;
-  disabled: boolean;
-  /** The DOM id of the row's caption saying how its last Leave
-   * stopped, while it does. */
-  describedBy?: string;
-  onClick(): void;
-}) {
-  // A running control's word says what it does (DR-069); one placement
-  // held names it in full, as its title and accessible name.
-  const only = !leaving && held.length === 1 ? held[0]!.instance : null;
-  const long = only !== null ? removeFrom(instanceNameAt(groups, only)) : undefined;
-  return (
-    <button
-      ref={buttonRef}
-      id={id}
-      type="button"
-      data-testid={`space-row-leave-${repoKey}`}
-      className={`${SECONDARY} shrink-0 whitespace-nowrap`}
-      title={long}
-      aria-label={long}
-      aria-describedby={describedBy}
-      aria-expanded={expanded}
-      disabled={disabled}
-      onClick={onClick}
-    >
-      {leaving
-        ? i18n._({ id: "Leaving…", comment: "the Leave… control while that placement is checked and removed" })
-        : i18n._({
-            id: "Leave…",
-            comment:
-              "on a project's row: stop keeping its records at one instance; its title and accessible name are \"Remove from <display name>\" where one is held",
-          })}
-    </button>
-  );
-}
-
 /** The placements "Leave…" offers where the clone holds more than one
  * with an instance (space-89): each by its instance's display name and
  * its path there, named "Remove from <display name>", with Cancel,
@@ -245,7 +145,6 @@ export function LeaveControl({
 export function LeaveChoice({
   groups,
   repoKey,
-  labelledBy,
   held,
   connected,
   onChoose,
@@ -253,8 +152,6 @@ export function LeaveChoice({
 }: {
   groups: GroupsState;
   repoKey: string;
-  /** The DOM id of the control that opened it, which names it. */
-  labelledBy: string;
   held: PlacementState[];
   connected: boolean;
   onChoose(line: PlacementState): void;
@@ -269,7 +166,7 @@ export function LeaveChoice({
   return (
     <div
       role="group"
-      aria-labelledby={labelledBy}
+      aria-label={leaveLabel()}
       data-testid={`space-leave-choice-${repoKey}`}
       className="ml-6 flex min-w-0 flex-col gap-2 rounded border border-neutral-300 p-2 dark:border-neutral-700"
       onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
