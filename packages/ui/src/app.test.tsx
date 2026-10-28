@@ -369,7 +369,11 @@ describe("run-view-70: the sidebar navigates, the tabs hold what is open", () =>
 
   test("a project's Specs entry shows that project with its Specs tab", () => {
     render(<App />);
-    fireEvent.click(screen.getByTestId("sidebar-disclose-p2"));
+    // On the project's own row: shown on the current project, revealed
+    // on hover or focus elsewhere (run-view-67).
+    expect(screen.getByTestId("sidebar-specs-p1").className).not.toContain("opacity-0");
+    expect(screen.getByTestId("sidebar-specs-p2").className).toContain("opacity-0");
+    expect(screen.getByTestId("sidebar-specs-p2").className).toContain("group-hover:opacity-100");
     fireEvent.click(screen.getByTestId("sidebar-specs-p2"));
     // The specs are a sidebar's step away (run-view-67).
     expect(useAppStore.getState().currentProjectId).toBe("p2");

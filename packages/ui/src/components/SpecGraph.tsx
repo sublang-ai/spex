@@ -251,7 +251,7 @@ export function revealShift(
  * its group word. */
 const GROUP_TEXT: Record<SpecGroup, string> = {
   external: "text-sky-700 dark:text-sky-300",
-  internal: "text-lime-800 dark:text-lime-300",
+  internal: "text-lime-700 dark:text-lime-300",
   test: "text-teal-700 dark:text-teal-300",
 };
 
@@ -539,8 +539,8 @@ export interface SpecGraphProps {
   onOpenFile: (fileKey: string) => void;
   /** Activating empty space clears the selection. */
   onClearSelection?: () => void;
-  /** The control hiding the graph, heading its own line
-   * (spec-view-20). */
+  /** The control hiding the graph, ending its own line beside the
+   * divider (spec-view-20). */
   toggle?: ReactNode;
 }
 
@@ -1371,7 +1371,6 @@ export function SpecGraph({
         data-testid="graph-toolbar"
         className="flex h-9 shrink-0 items-center gap-1.5 overflow-hidden whitespace-nowrap pb-2 text-xs text-neutral-600 dark:text-neutral-400"
       >
-        {toggle}
         {selectedNode ? (
           <>
             <span data-testid="graph-threshold-selection" className="min-w-0 truncate">
@@ -1421,6 +1420,8 @@ export function SpecGraph({
             </span>
           </span>
         ) : null}
+        {/* Beside the divider the graph folds toward (spec-view-20). */}
+        {toggle ? <span className="ml-auto flex shrink-0 pl-1">{toggle}</span> : null}
       </div>
 
       <div ref={frameRef} data-testid="graph-frame" className="relative flex min-h-0 flex-1">

@@ -387,15 +387,6 @@ export function NavRail(props: NavRailProps) {
         });
       }
       rows.push({
-        key: placed(place, `p:${project.id}`),
-        kind: "action",
-        place,
-        projectRow,
-        projectId: project.id,
-        label: "",
-        activate: () => place.onOpenSpecs(project.id),
-      });
-      rows.push({
         key: placed(place, `n:${project.id}`),
         kind: "action",
         place,
@@ -635,7 +626,7 @@ export function NavRail(props: NavRailProps) {
           aria-label={projectRowName(project.name, worst)}
           className={`${rowClass(
             project.id === selectedProjectId && !shownSessionId,
-          )} pl-0.5`}
+          )} group pl-0.5`}
         >
           <button
             type="button"
@@ -675,6 +666,25 @@ export function NavRail(props: NavRailProps) {
               title={PROJECT_ATTENTION_WORDS[worst]()}
             />
           ) : null}
+          {/* The project's specs, a sidebar's step away: shown on the
+              current project, revealed on hover or focus elsewhere, and
+              reachable by Tab regardless (run-view-67). */}
+          <button
+            type="button"
+            data-testid={placed(place, `sidebar-specs-${project.id}`)}
+            aria-label={i18n._("Open the specs of {project}", { project: project.name })}
+            title={i18n._("Open the specs of {project}", { project: project.name })}
+            onClick={(event) => {
+              event.stopPropagation();
+              place.onOpenSpecs(project.id);
+            }}
+            onKeyDown={stop}
+            className={`-my-1 flex h-6 w-6 shrink-0 items-center justify-center rounded text-neutral-500 hover:bg-neutral-200 hover:text-neutral-800 focus:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 dark:text-neutral-400 dark:hover:bg-neutral-700 dark:hover:text-neutral-100 ${
+              project.id === place.currentProjectId ? "" : "opacity-0"
+            }`}
+          >
+            <Icon name="file" className="h-3.5 w-3.5" />
+          </button>
         </div>
         {open ? (
           <div role="group" className="flex flex-col">
@@ -842,21 +852,6 @@ export function NavRail(props: NavRailProps) {
                 {i18n._("all {count}…", { count: bucket.idle.length })}
               </div>
             ) : null}
-            {/* The project's specs, a sidebar's step away (run-view-67). */}
-            <div
-              role="treeitem"
-              aria-selected={false}
-              data-row={placed(place, `p:${project.id}`)}
-              data-testid={placed(place, `sidebar-specs-${project.id}`)}
-              tabIndex={focused === placed(place, `p:${project.id}`) ? 0 : -1}
-              onFocus={() => setFocusKey(placed(place, `p:${project.id}`))}
-              onClick={() => place.onOpenSpecs(project.id)}
-              aria-label={i18n._("Specs of {project}", { project: project.name })}
-              className={`${rowClass(false)} pl-6 text-neutral-500`}
-            >
-              <Icon name="file" className="h-3 w-3 shrink-0" />
-              {i18n._({ id: "Specs", comment: "the spec view's own heading" })}
-            </div>
             <div
               role="treeitem"
               aria-selected={false}

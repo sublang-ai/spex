@@ -42,12 +42,12 @@ import { Markdown } from "./Markdown.js";
 export const GROUP_CHIP: Record<SpecGroup, string> = {
   external: "text-sky-700 bg-sky-50 dark:text-sky-300 dark:bg-sky-950",
   internal:
-    "text-lime-800 bg-lime-50 dark:text-lime-300 dark:bg-lime-950",
+    "text-lime-700 bg-lime-100 dark:text-lime-300 dark:bg-lime-950",
   test: "text-teal-700 bg-teal-50 dark:text-teal-300 dark:bg-teal-950",
 };
 export const GROUP_TEXT: Record<SpecGroup, string> = {
   external: "text-sky-700 dark:text-sky-400",
-  internal: "text-lime-800 dark:text-lime-400",
+  internal: "text-lime-700 dark:text-lime-400",
   test: "text-teal-700 dark:text-teal-400",
 };
 

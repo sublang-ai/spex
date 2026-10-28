@@ -107,6 +107,10 @@ msgstr "· {age}检查过"
 msgid "· reads better as a conversation"
 msgstr "· 以对话形式阅读更佳"
 
+#: src/components/SpecView.tsx
+msgid "({count} steps)"
+msgstr "（共 {count} 步）"
+
 #. graph threshold at its lowest: every pair draws
 #: src/components/SpecGraph.tsx
 msgid "(all pairs)"
@@ -4527,6 +4531,10 @@ msgstr "打开项目的规约"
 msgid "Open the session this was captured from"
 msgstr "打开捕获它的会话"
 
+#: src/components/NavRail.tsx
+msgid "Open the specs of {project}"
+msgstr "打开 {project} 的规约"
+
 #: src/components/DashboardSurface.tsx
 msgid "Open to reply — the run is waiting."
 msgstr "打开以回复 — 运行正在等待。"
@@ -6100,17 +6108,11 @@ msgstr "规约包需求"
 #. tab name: the project's spec packages
 #. the spec view's own heading
 #. the spec view's own heading
-#. the spec view's own heading
 #: src/App.tsx
 #: src/components/CaptainHome.tsx
-#: src/components/NavRail.tsx
 #: src/components/SpecView.tsx
 msgid "Specs"
 msgstr "规约"
-
-#: src/components/NavRail.tsx
-msgid "Specs of {project}"
-msgstr "{project} 的规约"
 
 #: src/components/CaptainHome.tsx
 msgid "Specs use an older format"

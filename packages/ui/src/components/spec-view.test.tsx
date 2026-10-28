@@ -418,7 +418,7 @@ describe("SPECV-2: expanded file keeps document order with sections and topics",
     expect(screen.getByText("Collapse all items")).toBeTruthy();
     // The items bar stands between the intent and the items, stating
     // the count and naming each control for its object (spec-view-2).
-    const bar = screen.getByTestId(`items-bar-${AUTH}`);
+    const bar = screen.getByTestId(`items-head-${AUTH}`);
     expect(bar.textContent).toMatch(/^\d+ items/);
     expect(within(bar).getByTestId(`expand-all-${AUTH}`)).toBeTruthy();
   });
@@ -741,7 +741,7 @@ describe("citation entries: target-group color, hit target", () => {
     // GUARD-5 is internal: lime.
     expect(
       screen.getByTestId("link-GUARD-3-GUARD-5").className,
-    ).toContain("text-lime-800");
+    ).toContain("text-lime-700");
     // Hit target grows by padding, density kept by negative margin
     // (DR-010 §7).
     expect(g1.className).toContain("py-1");
@@ -764,7 +764,7 @@ describe("citation entries: target-group color, hit target", () => {
     fireEvent.click(screen.getByTestId("inbound-AUTH-8"));
     expect(
       screen.getByTestId("link-AUTH-8-GUARD-5").className,
-    ).toContain("text-lime-800");
+    ).toContain("text-lime-700");
   });
 });
 
@@ -1080,8 +1080,9 @@ describe("SPECV-6: jump return chip", () => {
     expect(chip).toBe(screen.getByTestId("jump-back"));
     // A second hop stacks: AUTH-2 → AUTH-1.
     fireEvent.click(screen.getByTestId("link-AUTH-2-AUTH-1"));
+    // Past one step, the control states how many it holds.
     expect(screen.getByTestId("jump-back").textContent).toBe(
-      "←back to AUTH-2",
+      "←back to AUTH-2(2 steps)",
     );
     // Pop lands back on AUTH-2 and uncovers the older origin.
     fireEvent.click(screen.getByTestId("jump-back"));
@@ -1091,6 +1092,19 @@ describe("SPECV-6: jump return chip", () => {
     fireEvent.keyDown(window, { key: "ArrowLeft", altKey: true });
     expect(document.activeElement).toBe(screen.getByTestId("item-CAT-1"));
     // The stack is empty: the chip leaves.
+    expect(screen.queryByTestId("jump-back")).toBeNull();
+  });
+
+  test("the record is one excursion: a repeat counts once, a selection clears it", () => {
+    render(<Harness />);
+    fireEvent.click(screen.getByTestId(`file-toggle-${CAT}`));
+    fireEvent.click(screen.getByTestId("item-toggle-CAT-1"));
+    fireEvent.click(screen.getByTestId("link-CAT-1-AUTH-2"));
+    fireEvent.click(screen.getByTestId("link-CAT-1-AUTH-2"));
+    // The same place twice records once (spec-view-6).
+    expect(screen.getByTestId("jump-back").textContent).toBe("←back to CAT-1");
+    // Selecting a package ends the excursion (spec-view-6).
+    fireEvent.click(screen.getByTestId(`file-toggle-${AUTH}`));
     expect(screen.queryByTestId("jump-back")).toBeNull();
   });
 
@@ -1775,14 +1789,13 @@ describe("spec-view-20: citation graph beside the outline", () => {
       fireEvent.click(toggle);
       expect(toggle.getAttribute("aria-expanded")).toBe("true");
 
-      // The graph's toggle heads the graph's own line while it shows,
-      // the filter row while it is hidden, and says what it does
-      // (spec-view-20).
+      // The graph's toggle ends the graph's own line, beside the divider
+      // it folds toward, while it shows, heads the filter row while it
+      // is hidden, and says what it does (spec-view-20).
       const graph = screen.getByTestId("view-graph");
       expect(graph.getAttribute("aria-label")).toBe("Hide the citation graph");
       expect(graph.getAttribute("aria-pressed")).toBe("true");
-      expect(graph.parentElement).toBe(screen.getByTestId("graph-toolbar"));
-      expect(graph.parentElement!.firstElementChild).toBe(graph);
+      expect(screen.getByTestId("graph-toolbar").lastElementChild!.contains(graph)).toBe(true);
       fireEvent.click(graph);
       const shown = screen.getByTestId("view-graph");
       expect(shown.getAttribute("aria-label")).toBe("Show the citation graph");
@@ -1792,10 +1805,10 @@ describe("spec-view-20: citation graph beside the outline", () => {
       // Each filter leads with a checkbox, filled when pressed and
       // empty when not (spec-view-4).
       const box = () => screen.getByTestId("filter-box-internal");
-      expect(box().className).toContain("bg-lime-700");
+      expect(box().className).toContain("bg-lime-600");
       expect(box().querySelector("svg")).toBeTruthy();
       fireEvent.click(screen.getByTestId("filter-internal"));
-      expect(box().className).not.toContain("bg-lime-700");
+      expect(box().className).not.toContain("bg-lime-600");
       expect(box().querySelector("svg")).toBeNull();
     } finally {
       restore();

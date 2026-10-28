@@ -108,7 +108,7 @@ const UNRESOLVED_CELL = "flex w-4 shrink-0 justify-end";
  * (spec-view-4). */
 const FILTER_BOX: Record<SpecGroup, string> = {
   external: "border-sky-700 bg-sky-700 dark:border-sky-400 dark:bg-sky-400",
-  internal: "border-lime-700 bg-lime-700 dark:border-lime-400 dark:bg-lime-400",
+  internal: "border-lime-600 bg-lime-600 dark:border-lime-400 dark:bg-lime-400",
   test: "border-teal-700 bg-teal-700 dark:border-teal-400 dark:bg-teal-400",
 };
 
@@ -246,6 +246,12 @@ type LinkSource = {
 /** Where an in-view jump left from: an item, or a package's intent
  * (spec-view-6). */
 type JumpOrigin = { item: string } | { intent: string };
+
+const JUMP_RETURN_LIMIT = 20;
+
+function sameOrigin(a: JumpOrigin, b: JumpOrigin): boolean {
+  return "item" in a ? "item" in b && a.item === b.item : "intent" in b && a.intent === b.intent;
+}
 
 function originOf(source: LinkSource): JumpOrigin | undefined {
   if (source.itemId) return { item: source.itemId };
@@ -515,6 +521,8 @@ export function SpecView(props: SpecViewProps) {
    * selection, the camera, or anything else (spec-view-42). */
   function toggleFile(key: string) {
     const opening = !isFileExpanded(key);
+    // Collapsing a package ends the reading excursion (spec-view-6).
+    if (!opening) setJumpOrigins([]);
     if (searching) {
       const next = new Map(searchOverrides);
       next.set(key, opening);
@@ -663,7 +671,13 @@ export function SpecView(props: SpecViewProps) {
     }
     if (origin) {
       const place = typeof origin === "string" ? { item: origin } : origin;
-      setJumpOrigins((stack) => [...stack, place]);
+      // One reading excursion: a jump from the place just recorded
+      // adds nothing, and only the latest places stay (spec-view-6).
+      setJumpOrigins((stack) => {
+        const last = stack[stack.length - 1];
+        if (last && sameOrigin(last, place)) return stack;
+        return [...stack, place].slice(-JUMP_RETURN_LIMIT);
+      });
     }
   }
 
@@ -682,6 +696,12 @@ export function SpecView(props: SpecViewProps) {
       );
     }
   }
+
+  // Selecting a package or changing the search ends the excursion
+  // (spec-view-6).
+  useEffect(() => {
+    setJumpOrigins([]);
+  }, [graphSelection, viewState.search]);
 
   // Alt+Left and the pointer's back button walk back too, while there
   // is somewhere to return to (spec-view-6).
@@ -1532,13 +1552,14 @@ export function SpecView(props: SpecViewProps) {
                 {file.path}: {file.error}
               </div>
             ) : null}
-            {/* The items bar: between the intent and the items, so its
-                controls read as acting on the items and the file, never
-                on the intent above (spec-view-2). */}
+            {/* The items' heading: a rule above it alone sets it off from
+                the intent, so it heads the list below rather than standing
+                as a row of its own, and its controls read as acting on the
+                items and the file (spec-view-2). */}
             {(allIds.length > 0 && items.length > 0) || canEdit ? (
               <div
-                data-testid={`items-bar-${key}`}
-                className="my-1 flex flex-wrap items-center gap-x-4 gap-y-1 border-y border-neutral-200 py-1.5 dark:border-neutral-800"
+                data-testid={`items-head-${key}`}
+                className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-neutral-200 pt-2 dark:border-neutral-800"
               >
                 <span className="mr-auto text-xs text-neutral-500">
                   {i18n._("{count, plural, one {# item} other {# items}}", {
@@ -1557,10 +1578,7 @@ export function SpecView(props: SpecViewProps) {
                     onClick={() => setAllItems(file, !allExpanded)}
                     className={`flex items-center gap-1 text-xs ${LINK_CLASS}`}
                   >
-                    <Icon
-                      name="caretDown"
-                      className={`h-3.5 w-3.5 ${allExpanded ? "rotate-180" : ""}`}
-                    />
+                    <Icon name={allExpanded ? "collapseAll" : "expandAll"} className="h-3.5 w-3.5" />
                     {allExpanded ? i18n._("Collapse all items") : i18n._("Expand all items")}
                   </button>
                 ) : null}
@@ -1871,7 +1889,7 @@ export function SpecView(props: SpecViewProps) {
                 : "text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
             }`}
           >
-            <Icon name="sidebar" />
+            <Icon name={viewState.graph ? "paneFold" : "paneOpen"} />
           </button>
         );
         // The walk back from in-view jumps, at the outline's head where
@@ -1893,6 +1911,11 @@ export function SpecView(props: SpecViewProps) {
                     tree.files.find((file) => file.key === lastOrigin.intent)?.basename ??
                     lastOrigin.intent,
                 })}
+            {jumpOrigins.length > 1 ? (
+              <span className="text-neutral-500">
+                {i18n._("({count} steps)", { count: jumpOrigins.length })}
+              </span>
+            ) : null}
           </button>
         ) : null;
         const outlineControls = (

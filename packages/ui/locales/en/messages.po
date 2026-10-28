@@ -107,6 +107,10 @@ msgstr "· checked {age}"
 msgid "· reads better as a conversation"
 msgstr "· reads better as a conversation"
 
+#: src/components/SpecView.tsx
+msgid "({count} steps)"
+msgstr "({count} steps)"
+
 #. graph threshold at its lowest: every pair draws
 #: src/components/SpecGraph.tsx
 msgid "(all pairs)"
@@ -4527,6 +4531,10 @@ msgstr "Open the project's Specs"
 msgid "Open the session this was captured from"
 msgstr "Open the session this was captured from"
 
+#: src/components/NavRail.tsx
+msgid "Open the specs of {project}"
+msgstr "Open the specs of {project}"
+
 #: src/components/DashboardSurface.tsx
 msgid "Open to reply — the run is waiting."
 msgstr "Open to reply — the run is waiting."
@@ -6100,17 +6108,11 @@ msgstr "spec package requests"
 #. tab name: the project's spec packages
 #. the spec view's own heading
 #. the spec view's own heading
-#. the spec view's own heading
 #: src/App.tsx
 #: src/components/CaptainHome.tsx
-#: src/components/NavRail.tsx
 #: src/components/SpecView.tsx
 msgid "Specs"
 msgstr "Specs"
-
-#: src/components/NavRail.tsx
-msgid "Specs of {project}"
-msgstr "Specs of {project}"
 
 #: src/components/CaptainHome.tsx
 msgid "Specs use an older format"
