@@ -1575,6 +1575,7 @@ msgstr "Can't reach the Spex core at {endpoint} — retrying every second. On a 
 #. leave the editor without changing anything
 #. leave the editor without changing anything
 #. leave the editor without changing anything
+#. leave the editor without changing anything
 #. stop the running compile
 #: src/components/AgentEditor.tsx
 #: src/components/AgentSettings.tsx
@@ -1583,6 +1584,7 @@ msgstr "Can't reach the Spex core at {endpoint} — retrying every second. On a 
 #: src/components/DraftSourceTab.tsx
 #: src/components/InlineConfirm.tsx
 #: src/components/ProjectGroup.tsx
+#: src/components/ProjectPalette.tsx
 #: src/components/PublishControl.tsx
 #: src/components/SpaceGroups.tsx
 #: src/components/SpaceInstance.tsx
@@ -3117,6 +3119,7 @@ msgstr "Fix the file in your editor; Spex reloads it live."
 msgid "Fix the player in Settings"
 msgstr "Fix the player in Settings"
 
+#: src/components/ProjectPalette.tsx
 #: src/components/SpaceGroups.tsx
 msgid "Folder for its code on this device"
 msgstr "Folder for its code on this device"
@@ -3129,6 +3132,7 @@ msgstr "Folder inside {folder}"
 msgid "Folder inside it (optional)"
 msgstr "Folder inside it (optional)"
 
+#: src/components/ProjectPalette.tsx
 #: src/components/SpaceGroups.tsx
 msgid "Folder its sessions run in on this device"
 msgstr "Folder its sessions run in on this device"
@@ -3213,6 +3217,11 @@ msgstr "from the compile before this change"
 #: src/components/SpaceSync.tsx
 msgid "From the host ({count})"
 msgstr "From the host ({count})"
+
+#. project palette: heading over the projects of the member's groups this computer can open
+#: src/components/ProjectPalette.tsx
+msgid "From your groups"
+msgstr "From your groups"
 
 #. project palette: heading over the spex repositories of the member's groups a team server can open; {place} is the server's name
 #: src/components/ProjectPalette.tsx
@@ -3602,6 +3611,7 @@ msgstr "Join both histories into one? Anything that differs will ask you to choo
 #. the Join control, while the join runs
 #. the Join control, while the join runs
 #. the Join control, while the join runs
+#. the Join control, while the join runs
 #: src/components/ProjectPalette.tsx
 #: src/components/SpaceGroups.tsx
 #: src/components/SpacePlacements.tsx
@@ -3921,6 +3931,7 @@ msgstr "Moving…"
 msgid "Name"
 msgstr "Name"
 
+#: src/components/ProjectPalette.tsx
 #: src/components/SpaceGroups.tsx
 #: src/components/SpaceSync.tsx
 msgid "Name the folder on this device."
@@ -4360,7 +4371,7 @@ msgstr "Nothing in {project} needs attention."
 msgid "Nothing is repeated"
 msgstr "Nothing is repeated"
 
-#. project palette: a team server's groups list no spex repository it lacks
+#. project palette: a place's groups list no spex repository it lacks
 #: src/components/ProjectPalette.tsx
 msgid "Nothing more to open from your groups"
 msgstr "Nothing more to open from your groups"
@@ -4514,7 +4525,8 @@ msgstr "Open {title} — {reason}"
 msgid "Open {title} — running in {project}"
 msgstr "Open {title} — running in {project}"
 
-#. primary action of the welcome page at a team server: opens the project palette listing your groups' projects there
+#. welcome page action: opens the project palette at the projects of your groups that place can open
+#. welcome page action: opens the project palette at the projects of your groups that place can open
 #: src/components/CaptainHome.tsx
 msgid "Open a project from your groups"
 msgstr "Open a project from your groups"
@@ -4531,6 +4543,11 @@ msgstr "Open Enable"
 #: src/components/SpaceSync.tsx
 msgid "Open folder…"
 msgstr "Open folder…"
+
+#. project palette: open a project of the member's groups on this computer, cloning it into the folder named beside
+#: src/components/ProjectPalette.tsx
+msgid "Open here"
+msgstr "Open here"
 
 #: src/components/SpaceSignIn.tsx
 msgid "Open it again"
@@ -6041,6 +6058,11 @@ msgstr "Sign in to publish at {name}"
 #: src/components/SpaceSignIn.tsx
 msgid "Sign in to see your groups and share each project's records with the people in them."
 msgstr "Sign in to see your groups and share each project's records with the people in them."
+
+#. welcome page action while this computer is signed in to no instance: shows the Space surface, where the sign-in is
+#: src/components/CaptainHome.tsx
+msgid "Sign in to your Space"
+msgstr "Sign in to your Space"
 
 #. sign this device out of the instance whose heading carries it
 #: src/components/SpaceInstance.tsx

@@ -511,3 +511,73 @@ describe("projects-1, space-58: a folder added while signed in asks for its grou
     expect(screen.queryByTestId(`space-picker-${ADDED.id}`)).toBeNull();
   });
 });
+
+describe("run-view-168: this computer's From your groups", () => {
+  const SPEX = "https://spex.pub";
+  const ABSENT = repositoryRow("@spex.pub/acme/gamma-spex", { instance: SPEX, governing: SPEX, id: "301", state: "absent", branch: null });
+  const acme = (repositories: RepositoryState[]) => ({
+    id: "7", login: null, mine: false, fullPath: "acme", name: "acme", can: NO_CAN, placed: [], repositories,
+  });
+  const signedIn = (repositories: RepositoryState[], signed = true) =>
+    groupsState({ instances: [instanceState(SPEX, { signedIn: signed, groups: [namespace("me"), acme(repositories)] })] });
+  const pristine = useAppStore.getState();
+  afterEach(() => {
+    useAppStore.setState({ space: pristine.space, connection: pristine.connection, spaceJoin: pristine.spaceJoin, loadSpace: pristine.loadSpace });
+  });
+
+  test("it stands only once this computer's groups read it signed in, and never in the add form", () => {
+    useAppStore.setState({ connection: "open", space: undefined, loadSpace: vi.fn(async () => {}) });
+    renderPalette();
+    // Unread: nothing stands until the read says where it is signed in.
+    expect(screen.queryByTestId("palette-groups-local")).toBeNull();
+    expect(useAppStore.getState().loadSpace).toHaveBeenCalledOnce();
+    cleanup();
+    useAppStore.setState({ space: signedIn([ABSENT], false) });
+    renderPalette();
+    expect(screen.queryByTestId("palette-groups-local")).toBeNull();
+    cleanup();
+    // [run-view-168] signed in, with nothing this computer lacks.
+    useAppStore.setState({ space: signedIn([]) });
+    renderPalette();
+    expect(screen.getByTestId("palette-groups-note-local").textContent).toBe("Nothing more to open from your groups");
+    cleanup();
+    // [projects-22] the add form keeps to adding a local project.
+    useAppStore.setState({ space: signedIn([ABSENT]) });
+    renderPalette({ addProjectOnly: true, onPickFolder: vi.fn(async () => null) });
+    expect(screen.queryByTestId("palette-groups-local")).toBeNull();
+  });
+
+  test("the arrows reach its rows from the filter, and Enter on one asks its folder in place where no picker exists", async () => {
+    const spaceJoin = vi.fn(async () => {});
+    useAppStore.setState({ connection: "open", space: signedIn([ABSENT]), spaceJoin });
+    renderPalette();
+    const search = screen.getByTestId("palette-search");
+    // Two projects, then the group's.
+    fireEvent.keyDown(search, { key: "ArrowDown" });
+    fireEvent.keyDown(search, { key: "ArrowDown" });
+    const row = screen.getByTestId(`palette-join-${ABSENT.key}`);
+    expect(row.className).toContain("bg-neutral-100");
+    fireEvent.keyDown(search, { key: "Enter" });
+    const field = screen.getByTestId(`palette-join-folder-${ABSENT.key}-path`);
+    expect(document.activeElement).toBe(field);
+    fireEvent.change(field, { target: { value: "/work/gamma" } });
+    fireEvent.keyDown(field, { key: "Enter" });
+    await vi.waitFor(() => expect(spaceJoin).toHaveBeenCalledWith(SPEX, "301", "/work/gamma"));
+  });
+
+  test("opened at it, the first row takes focus over the add flow's folder action", async () => {
+    const spaceJoin = vi.fn(async () => {});
+    const onPickFolder = vi.fn(async () => "/work/gamma");
+    useAppStore.setState({ connection: "open", space: signedIn([ABSENT]), spaceJoin });
+    const { onClose } = renderPalette({ projects: [], sessions: [], groupsAt: "local", onPickFolder });
+    const row = screen.getByTestId(`palette-join-${ABSENT.key}`);
+    // [run-view-172] the palette opens at "From your groups".
+    expect(document.activeElement).toBe(row);
+    expect(row.className).toContain("bg-neutral-100");
+    expect(screen.getByTestId("palette-academy").className).not.toContain("bg-neutral-100");
+    fireEvent.click(row);
+    await vi.waitFor(() => expect(spaceJoin).toHaveBeenCalledWith(SPEX, "301", "/work/gamma"));
+    expect(onPickFolder).toHaveBeenCalledOnce();
+    await vi.waitFor(() => expect(onClose).toHaveBeenCalled());
+  });
+});

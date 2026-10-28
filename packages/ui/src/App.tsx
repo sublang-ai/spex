@@ -404,6 +404,7 @@ function WorkspaceSurface({
   onOpenAgentSettings,
   onOpenPalette,
   onOpenOwnProject,
+  onOpenFromGroups,
   attentionBySession,
   pendingFocus,
   onFocusHandled,
@@ -421,6 +422,9 @@ function WorkspaceSurface({
   onOpenAgentSettings: (agentId: string) => void;
   onOpenPalette: () => void;
   onOpenOwnProject: () => void;
+  /** The palette at the shown place's "From your groups" (run-view-172,
+   * run-view-174). */
+  onOpenFromGroups: () => void;
   /** Per-project spec view state, held above the workspace so a
    * draft under edit survives every surface (spec-view-51), keyed by
    * place and project (run-view-168). */
@@ -637,6 +641,7 @@ function WorkspaceSurface({
       onRecheckReadiness={refreshReadiness}
       onOpenPalette={onOpenPalette}
       onOpenOwnProject={onOpenOwnProject}
+      onOpenFromGroups={onOpenFromGroups}
       onNavigate={(surface) => onNavigate(surface)}
       onSaveCaptain={(patch) => setCaptain(patch, store.getClient())}
       next={
@@ -1083,12 +1088,22 @@ export function App() {
   }, []);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [paletteAddProject, setPaletteAddProject] = useState(false);
+  // The place whose "From your groups" the palette opens at, by its key
+  // (run-view-172, run-view-174).
+  const [paletteGroupsAt, setPaletteGroupsAt] = useState<string>();
   const openPalette = () => {
     setPaletteAddProject(false);
+    setPaletteGroupsAt(undefined);
     setPaletteOpen(true);
   };
   const openAddProject = () => {
     setPaletteAddProject(true);
+    setPaletteGroupsAt(undefined);
+    setPaletteOpen(true);
+  };
+  const openFromGroups = (place: string) => {
+    setPaletteAddProject(false);
+    setPaletteGroupsAt(place);
     setPaletteOpen(true);
   };
   const configState = useAppStore((state) => state.configState);
@@ -1387,6 +1402,7 @@ export function App() {
         if (event.key.toLowerCase() === "p") {
           event.preventDefault();
           setPaletteAddProject(false);
+          setPaletteGroupsAt(undefined);
           setPaletteOpen((open) => !open);
           return;
         }
@@ -1587,6 +1603,7 @@ export function App() {
       {paletteOpen ? (
         <ProjectPalette
           addProjectOnly={paletteAddProject}
+          groupsAt={paletteGroupsAt}
           projects={local.projects}
           sessions={local.sessions}
           attention={attentionAt(LOCAL_PLACE_KEY)}
@@ -1625,6 +1642,7 @@ export function App() {
           onClose={() => {
             setPaletteOpen(false);
             setPaletteAddProject(false);
+            setPaletteGroupsAt(undefined);
           }}
         />
       ) : null}
@@ -1709,9 +1727,11 @@ export function App() {
                 }}
                 onOpenPalette={openPalette}
                 // This computer's welcome adds a local project; a seat's
-                // greets the member with its server form, opening the
-                // palette at its groups (run-view-174).
+                // greets the member with its server form. Either opens
+                // the palette at its place's groups (run-view-172,
+                // run-view-174).
                 onOpenOwnProject={openAddProject}
+                onOpenFromGroups={() => openFromGroups(shown.place.key)}
                 attentionBySession={attentionBySession}
                 pendingFocus={pendingFocus}
                 onFocusHandled={() => setPendingFocus(undefined)}

@@ -24,7 +24,7 @@ import { treeCounts } from "../lib/spec-view-model.js";
 import { isLocalPlace, placeLabel, useAppStore, type StagedIntent } from "../state/store.js";
 import { usePlaceStore } from "../state/place-context.js";
 import { usePlaces } from "../state/places.js";
-import { instanceNameAt } from "../lib/instances.js";
+import { anySignedIn, instanceNameAt } from "../lib/instances.js";
 import { ApprovalLink } from "./SpaceServers.js";
 import { SlashMenuList, slashMatches } from "./SlashMenu.js";
 import { AgentChip, agentChipText, fastModeWord, readinessWord } from "./AgentChip.js";
@@ -71,8 +71,14 @@ export interface CaptainHomeProps {
   /** The welcome page's own-project path opens the palette without
    * repeating the Academy choice. */
   onOpenOwnProject?: () => void;
+  /** The welcome page's "Open a project from your groups" opens the
+   * palette at this place's "From your groups" (run-view-172,
+   * run-view-174); the plain palette where absent. */
+  onOpenFromGroups?: () => void;
   /** Go to a surface at the place this home shows (run-view-168):
-   * the server form's "Open Groups" opens Groups there (run-view-174). */
+   * the server form's "Open Space" opens Space there (run-view-174),
+   * and the local form's "Sign in to your Space" the Space surface's
+   * sign-in (run-view-172). */
   onNavigate: (surface: "Settings" | "Playbooks" | "Space") => void;
   /** Apply a merge patch to the Captain's block (captain.set). */
   onSaveCaptain: (patch: AgentPatch) => Promise<unknown>;
@@ -204,7 +210,9 @@ function WelcomeFrame({
           ))}
         </ol>
         {notice ? <div className="mt-6 max-w-lg text-sm leading-6 text-neutral-700 dark:text-neutral-200">{notice}</div> : null}
-        <div className={`${notice ? "mt-4" : "mt-8"} flex flex-col items-start gap-3 sm:flex-row sm:items-center`}>
+        {/* The actions stand in one row where they fit and wrap where
+            they do not, never past the page's measure (DR-041). */}
+        <div className={`${notice ? "mt-4" : "mt-8"} flex flex-col items-start gap-3 sm:flex-row sm:flex-wrap sm:items-center`}>
           {actions}
         </div>
         {children}
@@ -244,7 +252,17 @@ export function CaptainHome(props: CaptainHomeProps) {
   // (run-view-174, core-service-142).
   const seat = usePlaces((state) => (local ? undefined : state.seats.find((entry) => entry.seat.place === store.place.key)?.seat));
   const localGroups = useAppStore((state) => state.space);
+  const loadLocalSpace = useAppStore((state) => state.loadSpace);
   const [seeding, setSeeding] = useState(false);
+  // This computer's welcome page offers the groups' projects while the
+  // home is signed in to an instance and the sign-in while it is not
+  // (run-view-172): its Groups state is read where nothing has read it
+  // yet, the action waiting on that read.
+  const localWelcome = local && !props.hasProject && !props.hasProjects;
+  const groupsUnread = localGroups === undefined;
+  useEffect(() => {
+    if (localWelcome && connected && groupsUnread) void loadLocalSpace().catch(() => {});
+  }, [localWelcome, connected, groupsUnread, loadLocalSpace]);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const chipRef = useRef<HTMLButtonElement>(null);
 
@@ -436,6 +454,34 @@ export function CaptainHome(props: CaptainHomeProps) {
                   ? i18n._("Opening…")
                   : i18n._("Open the Academy example")}
               </button>
+              {/* Beside them, the member's groups (run-view-172): their
+                  projects while the home is signed in to an instance,
+                  the Space surface's sign-in while it is not. */}
+              {localGroups === undefined ? null : anySignedIn(localGroups) ? (
+                <button
+                  type="button"
+                  data-testid="home-open-from-groups"
+                  onClick={props.onOpenFromGroups ?? props.onOpenPalette}
+                  className={WELCOME_SECONDARY}
+                >
+                  {i18n._({
+                    id: "Open a project from your groups",
+                    comment: "welcome page action: opens the project palette at the projects of your groups that place can open",
+                  })}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  data-testid="home-sign-in"
+                  onClick={() => props.onNavigate("Space")}
+                  className={WELCOME_SECONDARY}
+                >
+                  {i18n._({
+                    id: "Sign in to your Space",
+                    comment: "welcome page action while this computer is signed in to no instance: shows the Space surface, where the sign-in is",
+                  })}
+                </button>
+              )}
             </>
           ) : (
             // A seat's projects are its member's groups' spex
@@ -445,12 +491,12 @@ export function CaptainHome(props: CaptainHomeProps) {
               <button
                 type="button"
                 data-testid="home-open-from-groups"
-                onClick={props.onOpenPalette}
+                onClick={props.onOpenFromGroups ?? props.onOpenPalette}
                 className={WELCOME_PRIMARY}
               >
                 {i18n._({
                   id: "Open a project from your groups",
-                  comment: "primary action of the welcome page at a team server: opens the project palette listing your groups' projects there",
+                  comment: "welcome page action: opens the project palette at the projects of your groups that place can open",
                 })}
               </button>
               <button

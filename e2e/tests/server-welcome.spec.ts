@@ -163,7 +163,9 @@ for (const copy of COPY) {
       const palette = page.getByTestId("project-palette");
       await expect(palette).toBeVisible();
       const row = palette.getByTestId(`palette-join-${key}@${lab.place}`);
-      await expect(row).toContainText("lab-notes-spex", { timeout: 30_000 });
+      // Named as its code is, never as its spex repository (DR-159).
+      await expect(row).toContainText("lab-notes", { timeout: 30_000 });
+      await expect(row).not.toContainText("lab-notes-spex");
       await row.click();
       const relay = `/seats/${encodeURIComponent(lab.place)}`;
       const sentToSeat = () =>
