@@ -99,7 +99,7 @@ test.describe("a browser that asks for Chinese", () => {
     const meta = readFileSync(join(app.projectDir, "specs", "meta.md"), "utf8");
     expect(meta).toContain("Authoring language: zh");
     await page.getByRole("tab", { name: /^规约/ }).click();
-    await page.getByRole("button", { name: "meta", exact: true }).click();
+    await page.getByRole("button", { name: "meta.md 规约格式", exact: true }).click();
     await expect(page.getByText("Authoring language: zh", { exact: true })).toBeVisible();
   });
 

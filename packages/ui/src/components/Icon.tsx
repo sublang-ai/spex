@@ -60,6 +60,12 @@ const PATHS: Record<string, ReactNode> = {
       <path d="M6.5 3v10" />
     </>
   ),
+  // A left pane folding left, or opening right (spec-view-20).
+  paneFold: <path d="M8 4 4 8l4 4M12 4 8 8l4 4" />,
+  paneOpen: <path d="M4 4l4 4-4 4M8 4l4 4-4 4" />,
+  // Every row at once, apart from one row's disclosure chevron.
+  expandAll: <path d="M5 6 8 3l3 3M5 10l3 3 3-3" />,
+  collapseAll: <path d="M5 3l3 3 3-3M5 13l3-3 3 3" />,
   // The house names the Space surface — the Spex home (DR-057).
   home: (
     <path d="M2.5 8.2 8 3.2l5.5 5M4 6.9V13h8V6.9M6.6 13V9.6h2.8V13" />

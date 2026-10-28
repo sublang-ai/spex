@@ -440,21 +440,25 @@ async function assertSurfaceMatrix(
         await expect(page.getByTestId("specv-live")).toBeVisible();
         // The graph half fills the split's box beside the outline, or
         // its own floor where that is taller, and the drawing surface
-        // fills the half less its legend (spec-view-59). A pane whose height
+        // fills the half less its controls and key (spec-view-59). A pane whose height
         // fails to resolve is exactly as tall as its legend plus the
         // 150px an svg falls back to, so the half is measured against
         // the box it owes its height to, never against itself.
         const fill = await page.getByTestId("spec-graph").evaluate((pane) => {
-          const svg = pane.querySelector("svg");
+          const svg = pane.querySelector("svg[role=application]");
           const others = Array.from(pane.children)
-            .filter((child) => child !== svg)
+            .filter((child) => !child.contains(svg))
             .reduce((sum, child) => sum + child.getBoundingClientRect().height, 0);
           const half = pane.parentElement!;
           const split = half.parentElement!;
           const box = split.parentElement!;
           const paneBox = pane.getBoundingClientRect();
+          const outline = split.lastElementChild as HTMLElement;
           return {
             pane: paneBox.height,
+            width: paneBox.width,
+            outlineWidth: outline.getBoundingClientRect().width,
+            rem: Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16,
             svg: svg?.getBoundingClientRect().height ?? 0,
             others,
             besideOutline: paneBox.width < split.getBoundingClientRect().width - 1,
@@ -462,6 +466,18 @@ async function assertSurfaceMatrix(
             floor: Number.parseFloat(getComputedStyle(half).minHeight) || 0,
           };
         });
+        // Beside the outline, the graph keeps 320px and the outline
+        // 28rem; a box holding less stacks them (spec-view-20).
+        if (fill.besideOutline) {
+          expect(fill.width, `the graph beside the outline is ${fill.width}px wide`).toBeGreaterThanOrEqual(319);
+          expect(
+            fill.outlineWidth,
+            `the outline beside the graph is ${fill.outlineWidth}px wide`,
+          ).toBeGreaterThanOrEqual(28 * fill.rem - 1);
+        }
+        // The package rows' columns hold under their heading row, and a
+        // nonzero unresolved count stays shown (spec-view-2, spec-view-1).
+        await expect(page.getByTestId("outline-columns")).toBeVisible();
         const owed = Math.max(fill.floor, fill.besideOutline ? fill.box : 0);
         expect(
           fill.pane,

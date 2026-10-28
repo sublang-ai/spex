@@ -25,17 +25,64 @@ export const GROUP_ORDER: readonly SpecGroup[] = [
   "test",
 ];
 
-/** A group's word where it stands inside a phrase — the row's label,
- * a count's accessible name, a filter's title (spec-view-2). A thunk,
+/** A group's full name where it stands inside a phrase — a count's
+ * accessible name, a filter's title (spec-view-2, DR-158). A thunk,
  * never a string: a table read at module load would freeze the
  * language it was imported in (localization-4). */
 export const GROUP_WORD: Record<SpecGroup, () => string> = {
   external: () =>
-    i18n._({ id: "external", comment: "item group: External Behavior, inside a phrase" }),
+    i18n._({ id: "external behavior", comment: "item group: External Behavior, inside a phrase" }),
   internal: () =>
-    i18n._({ id: "internal", comment: "item group: Internal Behavior, inside a phrase" }),
+    i18n._({ id: "internal behavior", comment: "item group: Internal Behavior, inside a phrase" }),
   test: () => i18n._({ id: "test", comment: "item group: Verification, inside a phrase" }),
 };
+
+/** A group's full name standing alone — a filter, a column heading, a
+ * section heading (spec-view-2, spec-view-4). */
+export const GROUP_NAME: Record<SpecGroup, () => string> = {
+  external: () =>
+    i18n._({ id: "External behavior", comment: "item group: External Behavior, standing alone" }),
+  internal: () =>
+    i18n._({ id: "Internal behavior", comment: "item group: Internal Behavior, standing alone" }),
+  test: () => i18n._({ id: "Tests", comment: "item group: Verification" }),
+};
+
+/** A group's short name, where a narrow outline has no room for the
+ * full one (spec-view-2). */
+export const GROUP_SHORT: Record<SpecGroup, () => string> = {
+  external: () =>
+    i18n._({ id: "Ext", comment: "item group: External Behavior, abbreviated for a narrow column" }),
+  internal: () =>
+    i18n._({ id: "Int", comment: "item group: Internal Behavior, abbreviated for a narrow column" }),
+  test: () =>
+    i18n._({ id: "Test", comment: "item group: Verification, abbreviated for a narrow column" }),
+};
+
+/** What each group holds, in one line — a filter's title
+ * (spec-view-4). */
+export const GROUP_DEFINITION: Record<SpecGroup, () => string> = {
+  external: () =>
+    i18n._("What the package promises its users — people or other packages"),
+  internal: () =>
+    i18n._("How the package behaves inside, hidden from its users"),
+  test: () => i18n._("Tests verifying the two kinds above"),
+};
+
+/** The group a `##` section heading names under the package grammar
+ * (meta-30); undefined for a section outside it, which keeps its own
+ * words (spec-view-2). */
+export function sectionGroup(section: string): SpecGroup | undefined {
+  switch (section.trim().toLowerCase()) {
+    case "external behavior":
+      return "external";
+    case "internal behavior":
+      return "internal";
+    case "verification":
+      return "test";
+    default:
+      return undefined;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // View state (lifted to the host so it survives project switches)
@@ -78,10 +125,10 @@ export interface SpecEditorState {
   caretLine?: number;
 }
 
-/** The split's bounds: neither pane may be squeezed past reading
- * (spec-view-20). */
-export const MIN_GRAPH_WIDTH = 0.25;
-export const MAX_GRAPH_WIDTH = 0.65;
+/** The persisted share's range; the panes' pixel floors bound it
+ * further where the split is drawn (spec-view-20). */
+export const MIN_GRAPH_WIDTH = 0.15;
+export const MAX_GRAPH_WIDTH = 0.8;
 
 export const initialSpecViewState: SpecViewState = {
   filters: { external: true, internal: true, test: true },
@@ -325,7 +372,7 @@ export interface ItemLocation {
 
 /** Item ID → location, for citation jumps. */
 export function buildItemIndex(
-  files: SpecFileInfo[],
+  files: readonly SpecFileInfo[],
 ): Map<string, ItemLocation> {
   const index = new Map<string, ItemLocation>();
   for (const file of files) {
@@ -358,16 +405,24 @@ export interface CitationModel {
   inbound: Map<string, string[]>;
   /** File key → cross-file citation totals: only citations whose
    * source and target items live in different files count, so
-   * intra-file wiring never inflates a file row. A dead outbound
-   * target still counts out (the citation exists); inbound accrues
-   * only to items the file actually has. Files with neither
-   * direction are absent. */
+   * intra-file wiring never inflates a file row. A citation of an ID
+   * the tree does not carry counts in neither direction — it lands in
+   * `unresolved` instead. Files with neither direction are absent. */
   rollups: Map<string, { out: number; in: number }>;
+  /** File key → citations of IDs absent from the tree (spec-view-19). */
+  unresolved: Map<string, number>;
+  /** "citing cited" file-key pair → cross-file citation count: the
+   * one index the graph's edges and totals read, so the two
+   * projections agree on every pair (spec-view-23). */
+  pairs: Map<string, number>;
 }
 
-/** Index every citation in the tree: complete backlinks on the cited
- * target, cross-file-only totals on the per-file rollups (SPECV-19). */
-export function buildCitationModel(files: SpecFileInfo[]): CitationModel {
+/** Index every citation in the tree by item ID: complete backlinks on
+ * the cited target, and the cross-file pair counts and per-file
+ * rollups both projections share (spec-view-19, spec-view-23). */
+export function buildCitationModel(
+  files: readonly SpecFileInfo[],
+): CitationModel {
   const fileOf = new Map<string, string>();
   const inbound = new Map<string, string[]>();
   for (const file of files) {
@@ -380,22 +435,31 @@ export function buildCitationModel(files: SpecFileInfo[]): CitationModel {
       }
     }
   }
+  const pairs = new Map<string, number>();
+  const unresolved = new Map<string, number>();
   const rollups = new Map<string, { out: number; in: number }>();
+  const rollup = (key: string) => {
+    let entry = rollups.get(key);
+    if (!entry) rollups.set(key, (entry = { out: 0, in: 0 }));
+    return entry;
+  };
   for (const file of files) {
-    let out = 0;
-    let inn = 0;
     for (const item of file.items) {
       for (const target of item.cites) {
-        // A dead target has no file, so the mismatch counts it out.
-        if (fileOf.get(target) !== file.key) out += 1;
-      }
-      for (const citer of inbound.get(item.id) ?? []) {
-        if (fileOf.get(citer) !== file.key) inn += 1;
+        const targetFile = fileOf.get(target);
+        if (targetFile === undefined) {
+          unresolved.set(file.key, (unresolved.get(file.key) ?? 0) + 1);
+          continue;
+        }
+        if (targetFile === file.key) continue;
+        const pair = `${file.key} ${targetFile}`;
+        pairs.set(pair, (pairs.get(pair) ?? 0) + 1);
+        rollup(file.key).out += 1;
+        rollup(targetFile).in += 1;
       }
     }
-    if (out > 0 || inn > 0) rollups.set(file.key, { out, in: inn });
   }
-  return { inbound, rollups };
+  return { inbound, rollups, unresolved, pairs };
 }
 
 /** "cites N · cited by M" — the collapsed-row hint and the file-header

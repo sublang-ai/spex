@@ -750,6 +750,10 @@ try {
   assert(report, "npm start printed no acceptance report");
   assert(report.acceptance.rootChildren > 0, "the desktop rendered an empty root");
   assert(
+    report.acceptance.minimumWidth === 600,
+    `the main window's minimum width is ${report.acceptance.minimumWidth}, not 600px (app-shell-40)`,
+  );
+  assert(
     report.consoleErrors.length === 0,
     `the render logged console errors:\n${report.consoleErrors.join("\n")}`,
   );

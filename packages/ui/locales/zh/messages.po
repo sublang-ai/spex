@@ -70,6 +70,11 @@ msgstr "— 在 {path} 生成"
 msgid "— seeds a sample project"
 msgstr "— 生成一个示例项目"
 
+#. list separator
+#: src/components/SpecView.tsx
+msgid ", "
+msgstr "、"
+
 #: src/App.tsx
 msgid ", {count, plural, one {# spec item} other {# spec items}}"
 msgstr "，{count} 个规约条目"
@@ -102,10 +107,24 @@ msgstr "· {age}检查过"
 msgid "· reads better as a conversation"
 msgstr "· 以对话形式阅读更佳"
 
+#: src/components/SpecView.tsx
+msgid "({count} steps)"
+msgstr "（共 {count} 步）"
+
+#. graph threshold at its lowest: every pair draws
+#: src/components/SpecGraph.tsx
+msgid "(all pairs)"
+msgstr "（全部）"
+
 #. effort choice: leave the adapter's own default
 #: src/components/AgentEditor.tsx
 msgid "(default)"
 msgstr "（默认）"
+
+#. graph threshold at its highest: only each package's heaviest pair draws
+#: src/components/SpecGraph.tsx
+msgid "(each package's strongest only)"
+msgstr "（每个包只留最强一条）"
 
 #: src/components/Markdown.tsx
 msgid "[external image blocked: {alt}]"
@@ -175,9 +194,9 @@ msgstr "{count, plural, other {，# 次}}"
 msgid "{count, plural, one {# change} other {# changes}}"
 msgstr "{count, plural, other {# 项更改}}"
 
-#: src/components/SpecGraph.tsx
-msgid "{count, plural, one {# citation} other {# citations}}"
-msgstr "{count, plural, other {# 条引用}}"
+#: src/components/SpecView.tsx
+msgid "{count, plural, one {# citation names an item} other {# citations name items}} absent from the tree"
+msgstr "{count, plural, other {未解析引用 # 条}}：指向的条目不存在"
 
 #: src/components/SpaceExplorer.tsx
 msgid "{count, plural, one {# entry} other {# entries}}"
@@ -200,8 +219,9 @@ msgid "{count, plural, one {# issue} other {# issues}} left."
 msgstr "{count, plural, other {剩余 # 个问题}}。"
 
 #: src/components/SpecGraph.tsx
-msgid "{count, plural, one {# item} other {# items}} in total"
-msgstr "共 {count, plural, other {# 个条目}}"
+#: src/components/SpecView.tsx
+msgid "{count, plural, one {# item} other {# items}}"
+msgstr "{count} 个条目"
 
 #: src/components/SpaceGroups.tsx
 msgid "{count, plural, one {# local change} other {# local changes}}"
@@ -223,11 +243,17 @@ msgstr "{count, plural, other {# 项需要你}}"
 msgid "{count, plural, one {# needs your attention} other {# need your attention}}"
 msgstr "{count, plural, other {# 项需要关注}}"
 
+#. graph sentence while a package is selected: the packages its lines reach
+#: src/components/SpecGraph.tsx
+msgid "{count, plural, one {# package} other {# packages}} sharing citations with {name}"
+msgstr "与 {name} 有引用关系的 {count} 个规约包"
+
 #: src/App.tsx
 msgid "{count, plural, one {# playbook} other {# playbooks}}"
 msgstr "{count, plural, other {# 个规程}}"
 
 #: src/components/SpaceExplorer.tsx
+#: src/components/SpecView.tsx
 msgid "{count, plural, one {# record} other {# records}}"
 msgstr "{count, plural, other {# 条记录}}"
 
@@ -325,6 +351,15 @@ msgstr "{first} 和 {second}"
 #: src/components/EnvironmentSection.tsx
 msgid "{folder} holds a folder of yours by that name"
 msgstr "{folder} 中已有你放置的同名文件夹"
+
+#. graph edge card: one package's citations of another
+#: src/components/SpecGraph.tsx
+msgid "{from} cites {to} {count, plural, one {# time} other {# times}}"
+msgstr "{from} 引用 {to} {count} 次"
+
+#: src/components/SpecView.tsx
+msgid "{group} ({count})"
+msgstr "「{group}」{count} 条"
 
 #. what failed, then what the agent said about it
 #: src/lib/failure-catalogue.ts
@@ -467,6 +502,14 @@ msgstr "{name}，有会话在等待你的回复"
 #: src/components/NavRail.tsx
 msgid "{name}, a session is waiting for your verdict"
 msgstr "{name}，有会话在等待你的裁定"
+
+#: src/components/SpecGraph.tsx
+msgid "{name}: cites {selected} {in}, cited by {selected} {out}"
+msgstr "{name}：引用 {selected} {in} 次，被 {selected} 引用 {out} 次"
+
+#: src/components/SpecGraph.tsx
+msgid "{name}'s citation list"
+msgstr "{name} 的引用列表"
 
 #: src/components/SpecView.tsx
 msgid "{packages, plural, one {# package} other {# packages}} · {items} items"
@@ -677,12 +720,16 @@ msgid "/path/to/new-project"
 msgstr "/path/to/new-project"
 
 #: src/components/SpecView.tsx
-msgid "← Back"
-msgstr "← 返回"
-
-#: src/components/SpecView.tsx
 msgid "← Back to {surface}"
 msgstr "← 返回{surface}"
+
+#: src/components/SpecView.tsx
+msgid "← Back to decision records"
+msgstr "← 返回决策记录"
+
+#: src/components/SpecView.tsx
+msgid "← Back to specs"
+msgstr "← 返回规约"
 
 #. act: jump to the end of the transcript; ↓ stays as it is
 #. act: jump to the end of the transcript; ↓ stays as it is
@@ -1227,11 +1274,6 @@ msgstr "仅允许此次"
 msgid "Approved once; native execution is reported separately."
 msgstr "已允许此次操作；原生执行结果将单独报告。"
 
-#. graph legend: an arrow points from the citing package to the cited one
-#: src/components/SpecGraph.tsx
-msgid "arrow — cites"
-msgstr "箭头 — 引用"
-
 #: src/components/AuthoringWorkspace.tsx
 msgid "as the last run left them, not compiled"
 msgstr "保持上次运行留下的样子，未编译成功"
@@ -1339,6 +1381,10 @@ msgstr "自动：智能体在仓库内自主工作，并启用适配器自带的
 #: src/components/SpecView.tsx
 msgid "back to {id}"
 msgstr "返回 {id}"
+
+#: src/components/SpecView.tsx
+msgid "back to {name}'s intent"
+msgstr "返回 {name} 的介绍"
 
 #: src/components/AuthoringWorkspace.tsx
 msgid "Back to the playbook list — the session stays as it is"
@@ -1725,9 +1771,28 @@ msgstr "选择由哪个智能体答复"
 msgid "Choose which session player answers {role}"
 msgstr "选择由哪个会话 Player 担任 {role}"
 
+#. package card: opens the list of packages sharing citations with the selected one
+#: src/components/SpecGraph.tsx
+msgid "Citation list ({count, plural, one {# package} other {# packages}})"
+msgstr "引用列表（{count} 个规约包）"
+
+#: src/components/SpecView.tsx
+msgid "Citations across packages: cites · cited by"
+msgstr "跨包引用：引用 · 被引用"
+
+#: src/components/SpecItemRows.tsx
+msgid "Citations of {id}"
+msgstr "{id} 的引用"
+
 #: src/components/SpecView.tsx
 msgid "Citations: {summary}"
 msgstr "引用：{summary}"
+
+#. summary card heading over the items citing this one
+#: src/components/CitationPreview.tsx
+#: src/components/SpecGraph.tsx
+msgid "cited by"
+msgstr "被引用"
 
 #. how many items cite this one
 #. how many items cite this one
@@ -1737,13 +1802,21 @@ msgid "cited by {in}"
 msgstr "被引用 {in}"
 
 #: src/components/SpecGraph.tsx
-msgid "cited by packages"
-msgstr "被规约包引用"
+msgid "cited by other packages"
+msgstr "被其他包引用"
 
 #. row label over the items this one cites
+#. row label over the items this one cites
+#: src/components/CitationPreview.tsx
+#: src/components/SpecGraph.tsx
 #: src/components/SpecItemRows.tsx
 msgid "cites"
 msgstr "引用"
+
+#. outline column heading: citations between packages, out and in
+#: src/components/SpecView.tsx
+msgid "cites · cited by"
+msgstr "引用 · 被引用"
 
 #. how many items this one cites
 #: src/lib/spec-view-model.ts
@@ -1754,6 +1827,11 @@ msgstr "引用 {out}"
 #: src/lib/spec-view-model.ts
 msgid "cites {out} · cited by {in}"
 msgstr "引用 {out} · 被引用 {in}"
+
+#. graph key after the selection sentence: the line hue of the packages citing the selected one
+#: src/components/SpecGraph.tsx
+msgid "cites it"
+msgstr "引用它"
 
 #: src/components/AgentSettings.tsx
 msgid "Clear the fast-mode choice; this adapter does not accept it."
@@ -1770,10 +1848,6 @@ msgstr "清除搜索"
 #: src/components/SpecView.tsx
 msgid "Clear the search (Escape)"
 msgstr "清除搜索（Esc）"
-
-#: src/components/SpecGraph.tsx
-msgid "click opens · drag moves · scroll zooms"
-msgstr "单击打开 · 拖动移动 · 滚动缩放"
 
 #: src/state/store.ts
 msgid "client not connected"
@@ -1835,6 +1909,10 @@ msgstr "代码不在远程仓库"
 msgid "code remote"
 msgstr "代码远程仓库"
 
+#: src/components/SpecGraph.tsx
+msgid "Collapse {name}'s citation list"
+msgstr "收起 {name} 的引用列表"
+
 #: src/components/PlayerPane.tsx
 msgid "Collapse {player}"
 msgstr "折叠 {player}"
@@ -1848,8 +1926,8 @@ msgid "Collapse {run}"
 msgstr "折叠 {run}"
 
 #: src/components/SpecView.tsx
-msgid "Collapse all"
-msgstr "全部折叠"
+msgid "Collapse all items"
+msgstr "收起全部条目"
 
 #: src/components/SpecView.tsx
 msgid "Collapse all items in {name}"
@@ -2290,14 +2368,14 @@ msgstr "仪表盘"
 msgid "deciding"
 msgstr "决策中"
 
-#. outline branch holding the decision records
+#. heading of the decision records' list
 #: src/components/SpecView.tsx
-msgid "decisions"
+msgid "Decision records"
 msgstr "决策记录"
 
 #: src/components/SpecView.tsx
-msgid "Decisions, {count} records"
-msgstr "决策记录，共 {count} 条"
+msgid "decision records {count}"
+msgstr "决策记录 {count}"
 
 #. confirm: delete the group on the Git host
 #. confirm: delete this session for good
@@ -2581,9 +2659,12 @@ msgstr "例如 Apache-2.0"
 msgid "e.g. triage"
 msgstr "例如 triage"
 
+#: src/components/SpecView.tsx
+msgid "Each record states a design decision's context and reasons; spec items cite them by their DR number."
+msgstr "每条记录写下一个设计决定的背景和理由；规约条目以 DR 编号引用它们。"
+
 #. editor mode: the plain text field
 #. open the whole-file editor on the source
-#. open this file in the editor
 #. open this file in the editor
 #. open this file in the editor
 #. row menu item: edit this intent's text and files
@@ -2614,6 +2695,11 @@ msgstr "编辑 {path}"
 #: src/components/ProjectGroup.tsx
 msgid "Edit intent text"
 msgstr "编辑意图文本"
+
+#. open this package's spec file in the editor
+#: src/components/SpecView.tsx
+msgid "Edit spec file"
+msgstr "编辑规约文件"
 
 #: src/components/SettingsSurface.tsx
 msgid "Edit the Captain"
@@ -2780,6 +2866,10 @@ msgstr "已有项目"
 msgid "Existing specs: {packages, plural, one {# package} other {# packages}} · {items, plural, one {# item} other {# items}}"
 msgstr "已有规约：{packages} 个规约包 · {items} 个条目"
 
+#: src/components/SpecGraph.tsx
+msgid "Expand {name}'s citation list"
+msgstr "展开 {name} 的引用列表"
+
 #: src/components/PlayerPane.tsx
 msgid "Expand {player}"
 msgstr "展开 {player}"
@@ -2793,8 +2883,8 @@ msgid "Expand {run}"
 msgstr "展开 {run}"
 
 #: src/components/SpecView.tsx
-msgid "Expand all"
-msgstr "全部展开"
+msgid "Expand all items"
+msgstr "展开全部条目"
 
 #: src/components/SpecView.tsx
 msgid "Expand all items in {name}"
@@ -2832,17 +2922,20 @@ msgstr "导出的技能"
 msgid "Exporting…"
 msgstr "导出中…"
 
+#. item group: External Behavior, abbreviated for a narrow column
+#: src/lib/spec-view-model.ts
+msgid "Ext"
+msgstr "对外"
+
 #. item group: External Behavior, inside a phrase
 #: src/lib/spec-view-model.ts
-msgid "external"
-msgstr "外部"
+msgid "external behavior"
+msgstr "对外行为"
 
-#. item group: External Behavior
-#. item group: External Behavior
-#: src/components/SpecGraph.tsx
-#: src/components/SpecView.tsx
-msgid "External"
-msgstr "外部"
+#. item group: External Behavior, standing alone
+#: src/lib/spec-view-model.ts
+msgid "External behavior"
+msgstr "对外行为"
 
 #: src/components/TrustedMedia.tsx
 msgid "External reference"
@@ -2926,6 +3019,10 @@ msgstr "{name} 中的文件"
 msgid "Files must be 100 MiB or smaller."
 msgstr "每个文件不得超过 100 MiB。"
 
+#: src/components/SpecView.tsx
+msgid "Filter — number or title…"
+msgstr "筛选 — 编号或标题…"
+
 #: src/components/DashboardSurface.tsx
 msgid "Filter by project"
 msgstr "按项目筛选"
@@ -2933,6 +3030,10 @@ msgstr "按项目筛选"
 #: src/components/DashboardSurface.tsx
 msgid "Filter by project (visibility only)"
 msgstr "按项目筛选（仅影响显示）"
+
+#: src/components/SpecView.tsx
+msgid "Filter decision records by number or title"
+msgstr "按编号或标题筛选决策记录"
 
 #: src/components/SpecView.tsx
 msgid "Filter items — ID or text…"
@@ -2970,8 +3071,12 @@ msgstr "已完成 — 确认？"
 
 #. control: show the whole graph at once
 #: src/components/SpecGraph.tsx
-msgid "Fit"
-msgstr "全览"
+msgid "Fit to window"
+msgstr "适应窗口"
+
+#: src/components/SpecGraph.tsx
+msgid "Fit to window (0)"
+msgstr "适应窗口（0）"
 
 #: src/lib/labels.ts
 msgid "Fix the adapter in Settings"
@@ -3142,11 +3247,6 @@ msgstr "请先为该 Player 设置 id。"
 msgid "Go to Dashboard, Projects, Playbooks, Space, Settings"
 msgstr "前往仪表盘、项目、规程、空间、设置"
 
-#. toggle: show the citation graph
-#: src/components/SpecView.tsx
-msgid "Graph"
-msgstr "图谱"
-
 #. the field naming a new group on the Git host
 #: src/components/SpaceMembers.tsx
 msgid "Group name"
@@ -3168,8 +3268,8 @@ msgid "Handed to {player}"
 msgstr "交给 {player}"
 
 #: src/components/SpecView.tsx
-msgid "Hide {group} items"
-msgstr "隐藏{group}条目"
+msgid "Hidden: {groups}"
+msgstr "已隐藏：{groups}"
 
 #: src/components/SpaceSync.tsx
 msgid "Hide diff"
@@ -3178,6 +3278,10 @@ msgstr "隐藏差异"
 #: src/components/NavRail.tsx
 msgid "Hide sessions in {project}"
 msgstr "隐藏 {project} 中的会话"
+
+#: src/components/SpecView.tsx
+msgid "Hide the citation graph"
+msgstr "隐藏引用图谱"
 
 #. tab note: a conversation this core cannot continue
 #. tab note: a conversation this core cannot continue
@@ -3203,6 +3307,10 @@ msgstr "历史，无法继续"
 #: src/components/SettingsSurface.tsx
 msgid "Host name"
 msgstr "主机名"
+
+#: src/lib/spec-view-model.ts
+msgid "How the package behaves inside, hidden from its users"
+msgstr "使用者看不到的实现行为"
 
 #. accepting a team server's contract, which opens the seat
 #: src/components/SpaceServers.tsx
@@ -3309,6 +3417,11 @@ msgstr "安装中…"
 msgid "Instance"
 msgstr "实例"
 
+#. item group: Internal Behavior, abbreviated for a narrow column
+#: src/lib/spec-view-model.ts
+msgid "Int"
+msgstr "内部"
+
 #. catalog family: one intent's file
 #. chip on a queued message: it carries a queued intent
 #: src/components/Composer.tsx
@@ -3346,15 +3459,13 @@ msgstr "界面语言"
 
 #. item group: Internal Behavior, inside a phrase
 #: src/lib/spec-view-model.ts
-msgid "internal"
-msgstr "内部"
+msgid "internal behavior"
+msgstr "内部行为"
 
-#. item group: Internal Behavior
-#. item group: Internal Behavior
-#: src/components/SpecGraph.tsx
-#: src/components/SpecView.tsx
-msgid "Internal"
-msgstr "内部"
+#. item group: Internal Behavior, standing alone
+#: src/lib/spec-view-model.ts
+msgid "Internal behavior"
+msgstr "内部行为"
 
 #. draft state chip, at most 14 characters: Spex closed while the draft compiled
 #: src/lib/drafts.ts
@@ -3403,6 +3514,11 @@ msgstr "问题（{count}）"
 #: src/lib/failure-catalogue.ts
 msgid "it can't run now"
 msgstr "当前无法执行"
+
+#. graph key after the selection sentence: the line hue of the packages the selected one cites
+#: src/components/SpecGraph.tsx
+msgid "it cites"
+msgstr "它引用"
 
 #: src/components/DraftRegisterTab.tsx
 msgid "It gives no player for {roles}."
@@ -3633,6 +3749,10 @@ msgstr "本地更改（{count}）"
 msgid "Login at {host}"
 msgstr "{host} 上的用户名"
 
+#: src/components/SpecGraph.tsx
+msgid "Lower the threshold"
+msgstr "降低门槛"
+
 #: src/lib/drafts.ts
 msgid "Lowercase letters and digits in words joined by single hyphens, at most 64 characters"
 msgstr "由单个连字符连接的小写字母和数字，最多 64 个字符"
@@ -3657,6 +3777,11 @@ msgstr "产生了多次提交"
 #: src/lib/space.ts
 msgid "manifest"
 msgstr "清单"
+
+#. spec view footer link: the tree's index file
+#: src/components/SpecView.tsx
+msgid "map.md index"
+msgstr "map.md 索引"
 
 #: src/components/DashboardSurface.tsx
 msgid "Mark {title} reviewed"
@@ -3691,10 +3816,20 @@ msgstr "{name} 的成员"
 msgid "Message the Captain…"
 msgstr "给 Captain 发消息…"
 
+#. spec view footer link: the file defining how specs are written
+#: src/components/SpecView.tsx
+msgid "meta.md spec format"
+msgstr "meta.md 规约格式"
+
 #. a file family that stays on this device
 #: src/lib/space.ts
 msgid "migration receipts and inputs"
 msgstr "迁移回执与输入文件"
+
+#. graph threshold field: the fewest citations a drawn package pair has
+#: src/components/SpecGraph.tsx
+msgid "Minimum citations per pair"
+msgstr "每对关系的最少引用数"
 
 #: src/components/EnvironmentSection.tsx
 msgid "Missing on this device: {path}"
@@ -3867,14 +4002,9 @@ msgstr "新项目路径"
 msgid "new session"
 msgstr "新会话"
 
-#: src/components/NavRail.tsx
 #: src/components/RunView.tsx
 msgid "New session"
 msgstr "新建会话"
-
-#: src/components/NavRail.tsx
-msgid "New session in {project}"
-msgstr "在 {project} 中新建会话"
 
 #: src/components/SpaceSurface.tsx
 msgid "New sessions stay on this device"
@@ -3886,12 +4016,17 @@ msgid "New subgroup"
 msgstr "新建子群组"
 
 #: src/App.tsx
+#: src/components/NavRail.tsx
 msgid "New task"
 msgstr "新任务"
 
 #: src/App.tsx
 msgid "New task ({keys})"
 msgstr "新任务（{keys}）"
+
+#: src/components/NavRail.tsx
+msgid "New task in {project}"
+msgstr "在 {project} 中开始新任务"
 
 #: src/components/SourcesTabs.tsx
 msgid "Next page"
@@ -3921,9 +4056,17 @@ msgstr "尚未使用任何适配器 — 为 Captain 或某个规程角色指定�
 msgid "no automatic check for this adapter — verify sign-in yourself"
 msgstr "此适配器无自动检查 — 请自行确认登录状态"
 
+#: src/components/SpecGraph.tsx
+msgid "No citations with other packages"
+msgstr "与其他包无引用关系"
+
 #: src/components/SettingsSurface.tsx
 msgid "No config file"
 msgstr "没有配置文件"
+
+#: src/components/SpecView.tsx
+msgid "No decision record matches."
+msgstr "没有匹配的决策记录。"
 
 #: src/components/SpaceSync.tsx
 msgid "No difference"
@@ -4077,8 +4220,8 @@ msgid "Not checked yet"
 msgstr "尚未检查"
 
 #: src/components/SpecGraph.tsx
-msgid "not cited by packages"
-msgstr "未被规约包引用"
+msgid "not cited by other packages"
+msgstr "未被其他包引用"
 
 #: src/lib/client.ts
 msgid "not connected"
@@ -4306,6 +4449,11 @@ msgstr "每个状态行为一条规范规约条目 — 编译器的中间阶段"
 msgid "One spec item per state behavior, from the last compile"
 msgstr "每个状态行为一条规约条目，来自上次编译"
 
+#. graph threshold sentence; {field} is the number field holding {count}
+#: src/components/SpecGraph.tsx
+msgid "Only pairs with ≥ {field} {count, plural, one {citation} other {citations}}"
+msgstr "只显示 ≥ {field} {count, plural, other {条引用的关系}}"
+
 #. open a seat on a team server
 #. open this authoring session's workspace
 #: src/components/LibrarySurface.tsx
@@ -4414,6 +4562,10 @@ msgstr "打开项目的规约"
 msgid "Open the session this was captured from"
 msgstr "打开捕获它的会话"
 
+#: src/components/NavRail.tsx
+msgid "Open the specs of {project}"
+msgstr "打开 {project} 的规约"
+
 #: src/components/DashboardSurface.tsx
 msgid "Open to reply — the run is waiting."
 msgstr "打开以回复 — 运行正在等待。"
@@ -4429,6 +4581,10 @@ msgstr "打开以重试或放弃该运行。"
 #: src/components/SpecView.tsx
 msgid "Opened {id}"
 msgstr "已打开 {id}"
+
+#: src/components/SpecView.tsx
+msgid "Opened the decision records"
+msgstr "已打开决策记录"
 
 #. the instance's contract, in the words its record fixes, shown before a seat's first open on this device; {server} is the server's name, {instance} the instance's; Devices is the instance's page of devices
 #: src/components/SpaceServers.tsx
@@ -4847,6 +5003,10 @@ msgstr "排队提交失败：{reason}"
 msgid "Queuing…"
 msgstr "排队中…"
 
+#: src/components/SpecGraph.tsx
+msgid "Raise the threshold"
+msgstr "提高门槛"
+
 #. act: ask the agents whether they are ready now
 #: src/components/CaptainHome.tsx
 msgid "Re-check"
@@ -4872,6 +5032,11 @@ msgstr "{age}读取"
 #: src/components/SpaceInstance.tsx
 msgid "Read {age}"
 msgstr "{age}已读取"
+
+#. the specs tree was just re-read on request
+#: src/components/SpecView.tsx
+msgid "read again"
+msgstr "已重新读取"
 
 #. a spex repository's state: the host lets this account only read it
 #: src/lib/space.ts
@@ -4977,6 +5142,11 @@ msgstr "上次同步后推送到 {name} 的记录可能会被留下。仍要移�
 #: src/lib/failure-catalogue.ts
 msgid "Recover them from your editor's history, if it keeps one"
 msgstr "若编辑器保留历史，可从中恢复"
+
+#. spec view footer's label, before the records beside the specs
+#: src/components/SpecView.tsx
+msgid "Reference:"
+msgstr "参考："
 
 #. re-read the groups and the Git host
 #. sync step: re-reading the spex repository
@@ -5375,6 +5545,10 @@ msgstr "重试浏览器支持检查"
 msgid "Retrying…"
 msgstr "重试中…"
 
+#: src/components/SpecView.tsx
+msgid "Return (Alt+Left)"
+msgstr "返回（Alt+←）"
+
 #. the built-in /review playbook's intent, as its registry entry states it
 #: src/lib/playbook-intent.ts
 msgid "review a supplied scope of committed work until no unsettled findings remain"
@@ -5520,6 +5694,10 @@ msgstr "搜索中…"
 #: src/components/CaptainHome.tsx
 msgid "Seat"
 msgstr "席位"
+
+#: src/components/CitationPreview.tsx
+msgid "See all {count}"
+msgstr "查看全部 {count} 条"
 
 #: src/components/CaptainHome.tsx
 msgid "See how to start"
@@ -5741,13 +5919,14 @@ msgstr "与 playbook CLI 共用 — 在外部所做的编辑会显示在这里"
 msgid "Show {count} of {rest} earlier entries"
 msgstr "显示更早的 {rest} 条中的 {count} 条"
 
-#: src/components/SpecView.tsx
-msgid "Show {group} items"
-msgstr "显示{group}条目"
-
 #: src/components/DraftConversation.tsx
 msgid "Show {shown} of {total} earlier entries"
 msgstr "显示更早的 {total} 条中的 {shown} 条"
+
+#. turn every item group back on
+#: src/components/SpecView.tsx
+msgid "Show all"
+msgstr "全部显示"
 
 #: src/components/NavRail.tsx
 msgid "Show all {count} sessions in {project}"
@@ -5773,8 +5952,8 @@ msgid "Show sessions in {project}"
 msgstr "显示 {project} 的会话"
 
 #: src/components/SpecView.tsx
-msgid "Show the citation graph beside the outline"
-msgstr "在大纲旁显示引用图谱"
+msgid "Show the citation graph"
+msgstr "显示引用图谱"
 
 #: src/components/DraftConversation.tsx
 msgid "Show the message"
@@ -5787,10 +5966,6 @@ msgstr "显示侧栏"
 #: src/components/NavRail.tsx
 msgid "Show the sidebar ({keys})"
 msgstr "显示侧栏（{keys}）"
-
-#: src/components/SpecGraph.tsx
-msgid "Show the whole graph (0)"
-msgstr "显示完整图谱（0）"
 
 #: src/components/SpaceExplorer.tsx
 msgid "Showing the first {lines} lines; the file is longer."
@@ -5874,11 +6049,6 @@ msgstr "登录 {host}"
 #: src/components/SpaceInstance.tsx
 msgid "Signs this device out of {host}; every record stays here"
 msgstr "让此设备退出 {host}；所有记录仍保留在此"
-
-#. graph legend: a node's size counts its items
-#: src/components/SpecGraph.tsx
-msgid "size — items"
-msgstr "大小 — 条目数"
 
 #. a spec package's artifact kind: an Agent Skills folder
 #: src/lib/environments.ts
@@ -6306,12 +6476,19 @@ msgstr "终端窗格主题（仅 CLI）"
 msgid "test"
 msgstr "测试"
 
+#. item group: Verification, abbreviated for a narrow column
+#: src/lib/spec-view-model.ts
+msgid "Test"
+msgstr "测试"
+
 #. item group: Verification
-#. item group: Verification
-#: src/components/SpecGraph.tsx
-#: src/components/SpecView.tsx
+#: src/lib/spec-view-model.ts
 msgid "Tests"
 msgstr "测试"
+
+#: src/lib/spec-view-model.ts
+msgid "Tests verifying the two kinds above"
+msgstr "验证上面两类行为的测试"
 
 #: src/components/SpaceSync.tsx
 msgid "That folder already belongs to {owner}."
@@ -6790,6 +6967,13 @@ msgstr "历史互不相关"
 msgid "Unrelated history"
 msgstr "历史互不相关"
 
+#. this citation names an item absent from the tree
+#. this citation names an item absent from the tree
+#: src/components/CitationPreview.tsx
+#: src/components/SpecItemRows.tsx
+msgid "unresolved"
+msgstr "未解析"
+
 #: src/components/SpaceSignIn.tsx
 msgid "Until you do, everything stays on this device and nothing is contacted."
 msgstr "在此之前，一切都只保存在此设备上，不会联系任何服务。"
@@ -6990,6 +7174,10 @@ msgstr "等待你的裁定"
 msgid "What should change?"
 msgstr "想做什么改动？"
 
+#: src/lib/spec-view-model.ts
+msgid "What the package promises its users — people or other packages"
+msgstr "包对使用者（人或其他包）承诺的行为"
+
 #: src/components/CaptainHome.tsx
 msgid "What would you change in {project}?"
 msgstr "你想对 {project} 做什么改动？"
@@ -7018,11 +7206,6 @@ msgstr "本设备上哪个文件夹是 {name}？"
 #: src/lib/space.ts
 msgid "which process is writing right now"
 msgstr "当前正在写入的进程"
-
-#. graph legend: an edge's width counts its citations
-#: src/components/SpecGraph.tsx
-msgid "width — citations"
-msgstr "宽度 — 引用数"
 
 #. headline of the welcome page at a team server where you have no project yet; {server} is the server's name
 #: src/components/CaptainHome.tsx

@@ -110,6 +110,8 @@ export interface NavPlace {
   onPickProject(projectId: string): void;
   onActivateSession(sessionId: string): void;
   onNewSession(projectId: string): void;
+  /** Show that project with its Specs tab (run-view-67). */
+  onOpenSpecs(projectId: string): void;
   /** Delete an idle session this core owns (DR-038); rejects with
    * the core's reason, which the row shows. */
   onDeleteSession(sessionId: string): Promise<void>;
@@ -624,7 +626,7 @@ export function NavRail(props: NavRailProps) {
           aria-label={projectRowName(project.name, worst)}
           className={`${rowClass(
             project.id === selectedProjectId && !shownSessionId,
-          )} pl-0.5`}
+          )} group pl-0.5`}
         >
           <button
             type="button"
@@ -664,6 +666,27 @@ export function NavRail(props: NavRailProps) {
               title={PROJECT_ATTENTION_WORDS[worst]()}
             />
           ) : null}
+          {/* The project's specs, a sidebar's step away for the
+              pointer: shown on the current project, revealed on hover
+              or the row's focus elsewhere; outside the tree's one tab
+              stop, as the disclosure is, the keyboard reaching the
+              specs by the Specs shortcut (run-view-67). */}
+          <button
+            type="button"
+            tabIndex={-1}
+            data-testid={placed(place, `sidebar-specs-${project.id}`)}
+            aria-label={i18n._("Open the specs of {project}", { project: project.name })}
+            title={i18n._("Open the specs of {project}", { project: project.name })}
+            onClick={(event) => {
+              event.stopPropagation();
+              place.onOpenSpecs(project.id);
+            }}
+            className={`-my-1 flex h-6 w-6 shrink-0 items-center justify-center rounded text-neutral-500 hover:bg-neutral-200 hover:text-neutral-800 focus:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 dark:text-neutral-400 dark:hover:bg-neutral-700 dark:hover:text-neutral-100 ${
+              project.id === place.currentProjectId ? "" : "opacity-0"
+            }`}
+          >
+            <Icon name="file" className="h-3.5 w-3.5" />
+          </button>
         </div>
         {open ? (
           <div role="group" className="flex flex-col">
@@ -839,13 +862,13 @@ export function NavRail(props: NavRailProps) {
               tabIndex={focused === placed(place, `n:${project.id}`) ? 0 : -1}
               onFocus={() => setFocusKey(placed(place, `n:${project.id}`))}
               onClick={() => place.onNewSession(project.id)}
-              aria-label={i18n._("New session in {project}", {
+              aria-label={i18n._("New task in {project}", {
                 project: project.name,
               })}
               className={`${rowClass(false)} pl-6 text-neutral-500`}
             >
               <Icon name="plus" className="h-3 w-3 shrink-0" />
-              {i18n._("New session")}
+              {i18n._("New task")}
             </div>
           </div>
         ) : null}

@@ -31,7 +31,12 @@ import type {
 } from "@sublang/spex-core/protocol";
 import { SpecEditor } from "./SpecEditor.js";
 import { SpecGraph } from "./SpecGraph.js";
-import { CitationPreview, useCitationPreview } from "./CitationPreview.js";
+import {
+  CitationPreview,
+  CitationSummaryCard,
+  useCitationPreview,
+  type SummaryEntry,
+} from "./CitationPreview.js";
 
 import {
   ancestorKeys,
@@ -53,7 +58,10 @@ import {
   searchDigest,
   treeCounts,
   visibleFileItems,
+  GROUP_DEFINITION,
+  GROUP_NAME,
   GROUP_ORDER,
+  GROUP_SHORT,
   GROUP_WORD,
   MAX_GRAPH_WIDTH,
   MIN_GRAPH_WIDTH,
@@ -69,25 +77,51 @@ import { Markdown } from "./Markdown.js";
 import { RecordRow } from "./RecordRow.js";
 import { Rich } from "./Rich.js";
 import {
+  citationsDomId,
   itemDomId,
   SpecItemRows,
   GROUP_CHIP,
+  GROUP_TEXT,
   LINK_CLASS,
 } from "./SpecItemRows.js";
 
 export { initialSpecViewState };
 export type { SpecViewState };
 
-/** Filter toggle labels (DR-015); thunks, read at render, so the
- * table never freezes the language it was imported in. */
-const FILTER_LABEL: Record<SpecGroup, () => string> = {
-  external: () => i18n._({ id: "External", comment: "item group: External Behavior" }),
-  internal: () => i18n._({ id: "Internal", comment: "item group: Internal Behavior" }),
-  test: () => i18n._({ id: "Tests", comment: "item group: Verification" }),
+/** A package row's count columns and their heading cells share one
+ * width, so the numerals align under their names (spec-view-2): room
+ * for four digits and a separator, and for a full name on two lines. */
+/** The split's pixel floors (spec-view-20): the graph's width, the
+ * outline's in rem, and the divider between them. */
+const GRAPH_FLOOR_PX = 320;
+const OUTLINE_FLOOR_REM = 28;
+const DIVIDER_PX = 17;
+
+const COUNT_CELL = "w-7 shrink-0 text-right @xs:w-10 @md:w-[4.5rem]";
+/** The cross-package rollup's column (spec-view-19). */
+const ROLLUP_CELL =
+  "hidden w-24 shrink-0 whitespace-nowrap text-right @md:block";
+/** The unresolved mark's narrow slot, under no heading and held on
+ * every row so the columns before it never shift (spec-view-19). */
+const UNRESOLVED_CELL = "flex w-4 shrink-0 justify-end";
+/** A pressed filter's checkbox, filled in its group's color
+ * (spec-view-4). */
+const FILTER_BOX: Record<SpecGroup, string> = {
+  external: "border-sky-700 bg-sky-700 dark:border-sky-400 dark:bg-sky-400",
+  internal: "border-lime-600 bg-lime-600 dark:border-lime-400 dark:bg-lime-400",
+  test: "border-teal-700 bg-teal-700 dark:border-teal-400 dark:bg-teal-400",
 };
 
-const MUTED_CHIP =
-  "bg-neutral-100 text-neutral-500 dark:bg-neutral-800 dark:text-neutral-500";
+/** How long a requested re-read turns its icon at least, and how long
+ * the label then says so (spec-view-8). */
+const REFRESH_TURN_MS = 600;
+const REFRESH_SAID_MS = 2000;
+
+/** A count as the columns print it: tabular numerals with the
+ * locale's separators, a zero as a dash (spec-view-2). */
+function countText(count: number): string {
+  return count === 0 ? "—" : count.toLocaleString(i18n.locale);
+}
 
 const COPY_BUTTON_CLASS =
   "rounded-md border border-neutral-300 px-2 py-0.5 text-xs text-neutral-600 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800";
@@ -150,7 +184,8 @@ export interface SpecViewProps {
   loading?: boolean;
   /** Load failure; rendered with a Retry (DR-010 §5). */
   error?: string;
-  onRefresh: () => void;
+  /** Settles once the re-read has landed or failed (spec-view-8). */
+  onRefresh: () => Promise<void> | void;
   /** Fetch one file's text (specs.read) — a bare string is a read
    * that carries no token. */
   onReadRecord: (path: string) => Promise<string | SpecRead>;
@@ -203,9 +238,46 @@ const ORIGIN_NAMES: Record<RecordOrigin["surface"], () => string> = {
 type LinkSource = {
   sourcePath: string;
   itemId?: string;
+  /** The package whose intent holds the link, when an intent does. */
+  intentOf?: string;
   focusId: string;
   noteKey: string;
+  /** The records reader's body: an item citation leaves the reader,
+   * a record link keeps its Back (spec-view-7). */
+  inReader?: true;
 };
+
+/** Where an in-view jump left from: an item, or a package's intent
+ * (spec-view-6). */
+type JumpOrigin = { item: string } | { intent: string };
+
+const JUMP_RETURN_LIMIT = 20;
+
+/** A record's number, for newest-first order (spec-view-7). */
+function recordNumber(id: string): number {
+  return Number(/\d+/.exec(id)?.[0] ?? -1);
+}
+
+/** Each decision record's summary from map.md's decisions table:
+ * `| [DR-158](decisions/…) | file | summary |` (spec-view-7). */
+function mapSummaries(markdown: string): ReadonlyMap<string, string> {
+  const summaries = new Map<string, string>();
+  for (const line of markdown.split("\n")) {
+    const row = /^\|\s*\[(DR-\d+)\]\([^)]*\)\s*\|[^|]*\|\s*(.+?)\s*\|\s*$/.exec(line);
+    if (row) summaries.set(row[1]!, row[2]!);
+  }
+  return summaries;
+}
+
+function sameOrigin(a: JumpOrigin, b: JumpOrigin): boolean {
+  return "item" in a ? "item" in b && a.item === b.item : "intent" in b && a.intent === b.intent;
+}
+
+function originOf(source: LinkSource): JumpOrigin | undefined {
+  if (source.itemId) return { item: source.itemId };
+  if (source.intentOf) return { intent: source.intentOf };
+  return undefined;
+}
 
 /** The DOM id of a package row's toggle, where focus returns from a
  * record its intent opened (DR-010 §6). */
@@ -248,6 +320,21 @@ export function SpecView(props: SpecViewProps) {
   // permanent and the graph joins it under one persisted toggle. The
   // selection is shared, so both projections point at one file.
   const [graphSelection, setGraphSelection] = useState<string | null>(null);
+  // The heading row's measured height: an expanded package's header
+  // pins beneath it, and a revealed row lands clear of it (spec-view-2,
+  // spec-view-43).
+  const [headHeight, setHeadHeight] = useState(0);
+  const headObserver = useRef<ResizeObserver | null>(null);
+  const headRef = useCallback((element: HTMLDivElement | null) => {
+    headObserver.current?.disconnect();
+    headObserver.current = null;
+    if (!element) return;
+    const measure = () => setHeadHeight(element.getBoundingClientRect().height);
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    headObserver.current = new ResizeObserver(measure);
+    headObserver.current.observe(element);
+  }, []);
   // The split's live fraction while the divider is under the pointer;
   // committed to the view state on release.
   const splitRef = useRef<HTMLDivElement | null>(null);
@@ -266,9 +353,49 @@ export function SpecView(props: SpecViewProps) {
   >(new Map());
   // Jump origins, newest last: every in-view jump pushes its citing
   // item so the floating chip can walk back one level at a time.
-  const [jumpOrigins, setJumpOrigins] = useState<readonly string[]>([]);
+  const [jumpOrigins, setJumpOrigins] = useState<readonly JumpOrigin[]>([]);
+  // A requested re-read acknowledged however fast it lands: the icon
+  // turns for at least REFRESH_TURN_MS, then — the read having
+  // succeeded — the label says the tree was read again for
+  // REFRESH_SAID_MS; a failure stops the turn and leaves its error
+  // standing (spec-view-8). Only the latest request settles it.
+  const [refresh, setRefresh] = useState<"idle" | "reading" | "done">("idle");
+  const refreshFrom = useRef({ at: 0, request: 0 });
+  const [refreshSettled, setRefreshSettled] = useState(0);
+  const startRefresh = () => {
+    const request = refreshFrom.current.request + 1;
+    refreshFrom.current = { at: Date.now(), request };
+    setRefresh("reading");
+    const settle = () => setRefreshSettled(request);
+    void Promise.resolve(props.onRefresh()).then(settle, settle);
+  };
+  const readLanded = refreshSettled === refreshFrom.current.request;
+  useEffect(() => {
+    if (refresh === "reading" && readLanded) {
+      const left = Math.max(0, REFRESH_TURN_MS - (Date.now() - refreshFrom.current.at));
+      const next = props.error === undefined ? "done" : "idle";
+      const timer = setTimeout(() => setRefresh(next), left);
+      return () => clearTimeout(timer);
+    }
+    if (refresh === "done") {
+      const timer = setTimeout(() => setRefresh("idle"), REFRESH_SAID_MS);
+      return () => clearTimeout(timer);
+    }
+    return undefined;
+  }, [refresh, readLanded, props.error]);
   const [reader, setReader] = useState<ReaderState | null>(null);
+  // The decision records' list, standing over the specs like the
+  // reader; its filter and each record's summary from map.md
+  // (spec-view-7).
+  const [recordsOpen, setRecordsOpen] = useState(false);
+  const [recordsFilter, setRecordsFilter] = useState("");
+  const [summaries, setSummaries] = useState<ReadonlyMap<string, string>>(new Map());
+  const recordsBackRef = useRef<HTMLButtonElement | null>(null);
+  const recordsReturn = useRef(false);
   const [pendingJump, setPendingJump] = useState<string>();
+  // An item whose summary was activated: once expanded, its citation
+  // block scrolls into view and takes focus (spec-view-60).
+  const [pendingCitations, setPendingCitations] = useState<string>();
   const [copiedId, setCopiedId] = useTransient(1500);
   const [copyFailedId, setCopyFailedId] = useTransient(2000);
   const [notFoundKey, setNotFoundKey] = useTransient(2000);
@@ -310,6 +437,9 @@ export function SpecView(props: SpecViewProps) {
   // Backlinks and cross-file per-file citation rollups (SPECV-19).
   const citations = useMemo(() => buildCitationModel(tree.files), [tree]);
   const totals = useMemo(() => treeCounts(tree.files), [tree]);
+  // The unresolved slot is held on every row only where some package
+  // has one, so a clean tree spends no width on it (spec-view-19).
+  const anyUnresolved = citations.unresolved.size > 0;
   const searching = viewState.search.trim().length > 0;
   const search = useMemo(
     () => searchDigest(tree.files, viewState),
@@ -378,6 +508,17 @@ export function SpecView(props: SpecViewProps) {
     document.getElementById(returnId)?.focus();
   }, [readerPath]);
 
+  // The list takes focus on its Back when it opens and hands it back
+  // to the footer's entry when it closes (§6).
+  useEffect(() => {
+    if (recordsOpen) {
+      recordsBackRef.current?.focus({ preventScroll: true });
+    } else if (recordsReturn.current) {
+      recordsReturn.current = false;
+      document.getElementById("specv-records-decisions")?.focus();
+    }
+  }, [recordsOpen]);
+
   // After a citation jump commits its expansion, scroll the target
   // into view, move focus onto its row (§6), and flash it.
   useEffect(() => {
@@ -390,6 +531,16 @@ export function SpecView(props: SpecViewProps) {
     setFlashId(pendingJump);
     setPendingJump(undefined);
   }, [pendingJump, setFlashId]);
+
+  useEffect(() => {
+    if (!pendingCitations) return;
+    const element = document.getElementById(citationsDomId(pendingCitations));
+    if (element && typeof element.scrollIntoView === "function") {
+      element.scrollIntoView({ block: "nearest" });
+    }
+    element?.focus({ preventScroll: true });
+    setPendingCitations(undefined);
+  }, [pendingCitations]);
 
   // Chevron overrides are search-scoped: they die with the search so a
   // cleared box restores the persisted expansion untouched.
@@ -415,6 +566,8 @@ export function SpecView(props: SpecViewProps) {
    * selection, the camera, or anything else (spec-view-42). */
   function toggleFile(key: string) {
     const opening = !isFileExpanded(key);
+    // Collapsing a package ends the reading excursion (spec-view-6).
+    if (!opening) setJumpOrigins([]);
     if (searching) {
       const next = new Map(searchOverrides);
       next.set(key, opening);
@@ -432,6 +585,26 @@ export function SpecView(props: SpecViewProps) {
       ? viewState.expandedItems.filter((entry) => entry !== id)
       : [...viewState.expandedItems, id];
     onViewState({ ...viewState, expandedItems: next });
+  }
+
+  /** A summary's activation: the item opens onto its citation block
+   * (spec-view-60). */
+  function openCitations(id: string) {
+    if (!expandedItems.has(id)) {
+      onViewState({
+        ...viewState,
+        expandedItems: [...viewState.expandedItems, id],
+      });
+    }
+    setPendingCitations(id);
+  }
+
+  /** Every group back on, from the hidden-groups line (spec-view-4). */
+  function showAllGroups() {
+    onViewState({
+      ...viewState,
+      filters: { external: true, internal: true, test: true },
+    });
   }
 
   function setAllItems(file: SpecFileInfo, expand: boolean) {
@@ -528,11 +701,11 @@ export function SpecView(props: SpecViewProps) {
     return true;
   }
 
-  /** Citation jump (DR-011): land on the target, remembering the
-   * citing item so the floating chip can walk back — never navigate;
-   * a dead ID says "not found" next to the clicked link. A package's
-   * intent cites from no item, so its jump leaves no return. */
-  function jumpTo(linkKey: string, targetId: string, originId?: string) {
+  /** Citation jump (DR-011): land on the target, remembering the place
+   * it left — a citing item, or a package's intent — so the return
+   * control can walk back; never navigate. A dead ID says "not found"
+   * next to the clicked link (spec-view-6). */
+  function jumpTo(linkKey: string, targetId: string, origin?: JumpOrigin | string) {
     // The jump answers the entry the card was previewing: the card
     // has nothing left to say (spec-view-61).
     preview.close();
@@ -541,16 +714,71 @@ export function SpecView(props: SpecViewProps) {
       setLiveNote(i18n._("{id} not found", { id: targetId }));
       return;
     }
-    if (originId) setJumpOrigins((stack) => [...stack, originId]);
+    if (origin) {
+      const place = typeof origin === "string" ? { item: origin } : origin;
+      // One reading excursion: a jump from the place just recorded
+      // adds nothing, and only the latest places stay (spec-view-6).
+      setJumpOrigins((stack) => {
+        const last = stack[stack.length - 1];
+        if (last && sameOrigin(last, place)) return stack;
+        return [...stack, place].slice(-JUMP_RETURN_LIMIT);
+      });
+    }
   }
 
-  /** The floating chip pops one origin and lands back on it. */
+  /** The return pops one origin and lands back on it: an item as a
+   * jump lands, an intent on its package's row (spec-view-6). */
   function popJumpOrigin() {
     const origin = jumpOrigins[jumpOrigins.length - 1];
     if (!origin) return;
     setJumpOrigins((stack) => stack.slice(0, -1));
-    revealTarget(origin);
+    if ("item" in origin) {
+      revealTarget(origin.item);
+    } else {
+      revealFile(origin.intent);
+      requestAnimationFrame(() =>
+        document.getElementById(fileDomId(origin.intent))?.focus({ preventScroll: true }),
+      );
+    }
   }
+
+  // Selecting a package or changing the search ends the excursion
+  // (spec-view-6).
+  useEffect(() => {
+    setJumpOrigins([]);
+  }, [graphSelection, viewState.search]);
+
+  // Alt+Left and the pointer's back button walk back too, while there
+  // is somewhere to return to (spec-view-6).
+  // Not while a record, the records' list or the editor stands over
+  // the specs, nor from a text field, where Alt+Left moves by word.
+  const popRef = useRef(popJumpOrigin);
+  popRef.current = popJumpOrigin;
+  const returnHeld = useRef(false);
+  returnHeld.current = Boolean(reader || recordsOpen || editor);
+  const canReturn = jumpOrigins.length > 0;
+  useEffect(() => {
+    if (!canReturn) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (!event.altKey || event.key !== "ArrowLeft" || event.metaKey || event.ctrlKey) return;
+      if (event.defaultPrevented || returnHeld.current) return;
+      const target = event.target as HTMLElement | null;
+      if (target?.closest?.("input, textarea, select, [contenteditable]:not([contenteditable='false'])")) return;
+      event.preventDefault();
+      popRef.current();
+    };
+    const onPointer = (event: MouseEvent) => {
+      if (event.button !== 3 || event.defaultPrevented || returnHeld.current) return;
+      event.preventDefault();
+      popRef.current();
+    };
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("mouseup", onPointer);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("mouseup", onPointer);
+    };
+  }, [canReturn]);
 
   /** Swap to the records reader; returnFocusId names the DOM id that
    * takes focus back when the reader closes (§6) — absent on the
@@ -579,6 +807,21 @@ export function SpecView(props: SpecViewProps) {
             : current,
         ),
       );
+  }
+
+  /** The footer's decision records entry: their list over the specs,
+   * each row's summary read from map.md (spec-view-7). */
+  function openRecordsList() {
+    setRecordsOpen(true);
+    setLiveNote(i18n._("Opened the decision records"));
+    readSpec(MAP_RECORD.path)
+      .then(({ markdown }) => setSummaries(mapSummaries(markdown)))
+      .catch(() => setSummaries(new Map()));
+  }
+
+  function closeRecordsList() {
+    recordsReturn.current = true;
+    setRecordsOpen(false);
   }
 
   /** One file's text with its token; a host serving bare strings
@@ -690,6 +933,7 @@ export function SpecView(props: SpecViewProps) {
   function intentSource(fileKey: string): LinkSource {
     return {
       sourcePath: `packages/${fileKey}.md`,
+      intentOf: fileKey,
       focusId: fileDomId(fileKey),
       noteKey: `intent:${fileKey}`,
     };
@@ -708,7 +952,12 @@ export function SpecView(props: SpecViewProps) {
     const candidates = linkItemTargets(anchor.textContent ?? "", href);
     const target = candidates.find((c) => itemIndex.has(c)) ?? candidates[0];
     if (target && itemIndex.has(target)) {
-      jumpTo(`${source.noteKey}:${target}`, target, source.itemId);
+      if (source.inReader) {
+        readerReturnId.current = null;
+        setReader(null);
+        setRecordsOpen(false);
+      }
+      jumpTo(`${source.noteKey}:${target}`, target, originOf(source));
       return;
     }
     // The citing file's specs/-relative path anchors the href
@@ -723,7 +972,8 @@ export function SpecView(props: SpecViewProps) {
       MAP_RECORD,
     ]);
     if (record) {
-      openRecord(record, source.focusId);
+      if (source.inReader) openRecord(record, undefined, reader?.origin);
+      else openRecord(record, source.focusId);
       return;
     }
     // A citation-shaped link that is neither a live item nor a
@@ -732,7 +982,7 @@ export function SpecView(props: SpecViewProps) {
     // is citation-shaped too. The source's prefix keeps the note off
     // the identically keyed citation rows.
     if (target) {
-      jumpTo(`${source.noteKey}:${target}`, target, source.itemId);
+      jumpTo(`${source.noteKey}:${target}`, target, originOf(source));
       return;
     }
     // Anything else (sibling spec files, map.md) is inert: no
@@ -837,13 +1087,16 @@ export function SpecView(props: SpecViewProps) {
   // Records reader swaps the whole view (DR-011).
   // -------------------------------------------------------------------------
 
-  if (reader) {
-    return (
+  // A record or the decision records' list stands over the specs
+  // rather than replacing them, so returning finds the selection,
+  // expansion, scroll and camera as they were (spec-view-7).
+  const readerView = reader ? (
       <div
         className="relative mx-auto flex w-full min-h-0 max-w-3xl flex-1 flex-col gap-3 overflow-y-auto p-6"
         data-testid="record-reader"
       >
-        {liveRegion}
+        {/* Over the specs, their live region speaks for it. */}
+        {!tree.present || tree.legacy ? liveRegion : null}
         <div className="flex items-center gap-2">
           <button
             ref={readerBackRef}
@@ -862,7 +1115,9 @@ export function SpecView(props: SpecViewProps) {
               ? i18n._("← Back to {surface}", {
                   surface: ORIGIN_NAMES[reader.origin.surface](),
                 })
-              : i18n._("← Back")}
+              : recordsOpen
+                ? i18n._("← Back to decision records")
+                : i18n._("← Back to specs")}
           </button>
           {canEdit && !reader.loading && !reader.error ? (
             <button
@@ -902,83 +1157,26 @@ export function SpecView(props: SpecViewProps) {
             </button>
           </div>
         ) : (
-          <div className="relative overflow-x-auto">
+          <div
+            className="relative overflow-x-auto"
+            data-testid="reader-body"
+            onClick={(event) =>
+              followLink(
+                {
+                  sourcePath: reader.record.path,
+                  focusId: "",
+                  noteKey: "reader",
+                  inReader: true,
+                },
+                event,
+              )
+            }
+          >
             <Markdown text={reader.markdown ?? ""} hideComments />
           </div>
         )}
       </div>
-    );
-  }
-
-  /** The decision records as the outline's last branch: rows that
-   * open the reader, not tree nodes to expand (spec-view-7). Its own
-   * collapse key cannot collide with a collection directory, which
-   * always carries the "packages/" prefix (meta-31). */
-  const DECISIONS_KEY = "\u0000decisions";
-  // Closed by default: the records are an annex to the packages, and
-  // a search opens the branch to show what it matched.
-  const renderDecisions = (): ReactNode => {
-    const open = searching || collapsedDirs.has(DECISIONS_KEY);
-    const shown = searching
-      ? tree.decisions.filter(
-          (record) =>
-            record.id.toLowerCase().includes(viewState.search.trim().toLowerCase()) ||
-            record.title
-              .toLowerCase()
-              .includes(viewState.search.trim().toLowerCase()),
-        )
-      : tree.decisions;
-    if (searching && shown.length === 0) return null;
-    return (
-      <li key={DECISIONS_KEY} data-testid="decisions-branch">
-        <button
-          type="button"
-          data-testid="decisions-toggle"
-          aria-expanded={open}
-          aria-label={i18n._("Decisions, {count} records", {
-            count: tree.decisions.length,
-          })}
-          onClick={() =>
-            setCollapsedDirs((current) => {
-              // The set holds the branch when it is OPEN, since the
-              // branch is the one node that starts closed.
-              const next = new Set(current);
-              if (next.has(DECISIONS_KEY)) next.delete(DECISIONS_KEY);
-              else next.add(DECISIONS_KEY);
-              return next;
-            })
-          }
-          className="flex items-center gap-1.5 rounded px-1 py-0.5 text-xs font-medium text-neutral-600 hover:bg-neutral-50 dark:text-neutral-300 dark:hover:bg-neutral-900"
-        >
-          <Icon
-            name="caretDown"
-            className={`h-3 w-3 text-neutral-500 transition-transform ${
-              open ? "" : "-rotate-90"
-            }`}
-          />
-          {i18n._({ id: "decisions", comment: "outline branch holding the decision records" })}
-          <span className="text-neutral-500">{tree.decisions.length}</span>
-        </button>
-        {open ? (
-          <ul className="ml-[7px] flex flex-col border-l border-neutral-200 pl-3 dark:border-neutral-800">
-            {/* The one record row (dashboard-40): the chip the package
-             * rows wear, the title, hover and pointer. */}
-            {shown.map((record) => (
-              <li key={record.path} className="flex">
-                <RecordRow
-                  id={`specv-record-${record.id}`}
-                  data-testid={`record-${record.id}`}
-                  record={record}
-                  onClick={() => openRecord(record, `specv-record-${record.id}`)}
-                  className="flex-1 py-0.5 text-xs"
-                />
-              </li>
-            ))}
-          </ul>
-        ) : null}
-      </li>
-    );
-  };
+  ) : null;
 
   // -------------------------------------------------------------------------
   // Empty and degraded whole-view states (DR-011: never blank).
@@ -1003,6 +1201,8 @@ export function SpecView(props: SpecViewProps) {
       </button>
     </div>
   );
+
+  if (readerView && !tree.present) return readerView;
 
   if (!tree.present) {
     if (props.loading) {
@@ -1065,10 +1265,158 @@ export function SpecView(props: SpecViewProps) {
     );
   }
 
+  /** The tree's two documents, in the outline pane's footer outside
+   * its scroll, named by file and use; every tree form carries the
+   * same footer (spec-view-7). */
+  const recordsFooter = (placement: string): ReactNode => (
+    <div
+      data-testid="records-footer"
+      className={`flex flex-wrap items-center gap-x-1.5 border-neutral-200 text-xs text-neutral-500 dark:border-neutral-800 ${placement}`}
+    >
+      <span className="-mr-0.5">
+        {i18n._({ id: "Reference:", comment: "spec view footer's label, before the records beside the specs" })}
+      </span>
+      {tree.decisions.length > 0 ? (
+        <>
+          <button
+            id="specv-records-decisions"
+            type="button"
+            data-testid="records-decisions"
+            onClick={openRecordsList}
+            className="hover:text-neutral-700 dark:hover:text-neutral-300"
+          >
+            {i18n._("decision records {count}", { count: tree.decisions.length })}
+          </button>
+          <span aria-hidden="true">·</span>
+        </>
+      ) : null}
+      <button
+        id="specv-records-map"
+        type="button"
+        data-testid="records-map"
+        onClick={() => openRecord(MAP_RECORD, "specv-records-map")}
+        className="hover:text-neutral-700 dark:hover:text-neutral-300"
+      >
+        {i18n._({
+          id: "map.md index",
+          comment: "spec view footer link: the tree's index file",
+        })}
+      </button>
+      <span aria-hidden="true">·</span>
+      <button
+        id="specv-records-meta"
+        type="button"
+        data-testid="records-meta"
+        onClick={() => openRecord(META_RECORD, "specv-records-meta")}
+        className="hover:text-neutral-700 dark:hover:text-neutral-300"
+      >
+        {i18n._({
+          id: "meta.md spec format",
+          comment: "spec view footer link: the file defining how specs are written",
+        })}
+      </button>
+    </div>
+  );
+
+  /** The decision records' list (spec-view-7): newest first, filtered
+   * by ID and title, each row with its summary from map.md. */
+  const recordsQuery = recordsFilter.trim().toLowerCase();
+  const listedRecords = [...tree.decisions]
+    .sort((a, b) => recordNumber(b.id) - recordNumber(a.id))
+    .filter(
+      (record) =>
+        !recordsQuery ||
+        record.id.toLowerCase().includes(recordsQuery) ||
+        record.title.toLowerCase().includes(recordsQuery),
+    );
+  const recordsView = recordsOpen ? (
+    <div
+      className="relative mx-auto flex w-full min-h-0 max-w-3xl flex-1 flex-col gap-3 overflow-y-auto p-6"
+      data-testid="records-list"
+    >
+      <div>
+        <button
+          ref={recordsBackRef}
+          type="button"
+          data-testid="records-back"
+          onClick={closeRecordsList}
+          className="rounded-md border border-neutral-300 px-2.5 py-1 text-xs text-neutral-600 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
+        >
+          {i18n._("← Back to specs")}
+        </button>
+      </div>
+      <div>
+        <h1 className="text-lg font-semibold">
+          {i18n._({ id: "Decision records", comment: "heading of the decision records' list" })}
+          <span className="ml-2 text-sm font-normal text-neutral-500">
+            {i18n._("{count, plural, one {# record} other {# records}}", {
+              count: tree.decisions.length,
+            })}
+          </span>
+        </h1>
+        <p className="mt-1 text-xs text-neutral-500">
+          {i18n._(
+            "Each record states a design decision's context and reasons; spec items cite them by their DR number.",
+          )}
+        </p>
+      </div>
+      <input
+        type="search"
+        data-testid="records-filter"
+        value={recordsFilter}
+        onChange={(event) => setRecordsFilter(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Escape" && recordsFilter) {
+            event.preventDefault();
+            setRecordsFilter("");
+          }
+        }}
+        placeholder={i18n._("Filter — number or title…")}
+        aria-label={i18n._("Filter decision records by number or title")}
+        className="rounded border border-neutral-300 bg-white px-2 py-1 text-sm dark:border-neutral-700 dark:bg-neutral-950"
+      />
+      <ul className="flex flex-col">
+        {listedRecords.map((record) => {
+          const summary = summaries.get(record.id);
+          const open = () => openRecord(record, `specv-record-${record.id}`);
+          return (
+            <li
+              key={record.path}
+              className="border-b border-neutral-200 py-1 dark:border-neutral-800"
+            >
+              {/* The one record row (dashboard-40), its summary beneath. */}
+              <RecordRow
+                id={`specv-record-${record.id}`}
+                data-testid={`record-${record.id}`}
+                record={record}
+                onClick={open}
+                className="w-full py-0.5 text-sm"
+              />
+              {summary ? (
+                <div
+                  data-testid={`record-summary-${record.id}`}
+                  onClick={open}
+                  className="cursor-pointer truncate pl-1 text-xs text-neutral-500"
+                >
+                  {summary}
+                </div>
+              ) : null}
+            </li>
+          );
+        })}
+      </ul>
+      {listedRecords.length === 0 ? (
+        <p className="text-sm text-neutral-500">{i18n._("No decision record matches.")}</p>
+      ) : null}
+    </div>
+  ) : null;
+  const overlay = readerView ?? recordsView;
+
   // A legacy layout — user/dev/test group directories or a
   // compositions/ collection — renders migration guidance instead of
   // a tree (SPECV-18).
   if (tree.legacy) {
+    if (overlay) return overlay;
     return (
       <div
         className="relative m-auto flex max-h-full max-w-md flex-col gap-3 overflow-y-auto p-6 text-center text-sm text-neutral-500"
@@ -1092,31 +1440,9 @@ export function SpecView(props: SpecViewProps) {
         </p>
         {copyCommand("npx @sublang/spex scaffold --update")}
         {/* A legacy tree parses no packages, but its records are read
-            all the same and stay reachable (spec-view-18). */}
-        <div className="flex items-center justify-center gap-1.5 border-t border-neutral-200 pt-3 text-xs text-neutral-500 dark:border-neutral-800">
-          <button
-            id="specv-records-meta"
-            type="button"
-            data-testid="records-meta"
-            onClick={() => openRecord(META_RECORD, "specv-records-meta")}
-            className="hover:text-neutral-700 dark:hover:text-neutral-300"
-          >
-            meta
-          </button>
-          <span aria-hidden="true">·</span>
-          <button
-            id="specv-records-map"
-            type="button"
-            data-testid="records-map"
-            onClick={() => openRecord(MAP_RECORD, "specv-records-map")}
-            className="hover:text-neutral-700 dark:hover:text-neutral-300"
-          >
-            map
-          </button>
-        </div>
-        {tree.decisions.length > 0 ? (
-          <ul className="flex flex-col text-left">{renderDecisions()}</ul>
-        ) : null}
+            all the same and stay reachable, through the same footer
+            (spec-view-18, spec-view-7). */}
+        {recordsFooter("justify-center border-t pt-3")}
       </div>
     );
   }
@@ -1137,26 +1463,48 @@ export function SpecView(props: SpecViewProps) {
       allIds.length > 0 && allIds.every((id) => expandedItems.has(id));
     // Cross-file citation rollup, carried on every file row —
     // collapsed included — so the outline reads as a dependency map at
-    // a glance; intra-file wiring never counts (SPECV-19).
+    // a glance; intra-file wiring never counts, and a citation of an
+    // absent ID stands apart as the unresolved count (SPECV-19).
     const fileCites = citations.rollups.get(key);
     const rollup = fileCites
       ? citationSummary(fileCites.out, fileCites.in)
       : undefined;
+    const unresolved = citations.unresolved.get(key) ?? 0;
+    const unresolvedSays = i18n._(
+      "{count, plural, one {# citation names an item} other {# citations name items}} absent from the tree",
+      { count: unresolved },
+    );
 
     return (
       // The row fits its own width (spec-view-1, DR-041): the intent
       // yields first, the identifier chip then truncates, and below
-      // @md the counts print numbers alone with the rollup riding the
-      // row's title.
-      <li key={key} data-testid={`file-${key}`} className="@container">
+      // @md the rollup rides the row's title while an unresolved count
+      // stays as a compact mark.
+      <li
+        key={key}
+        data-testid={`file-${key}`}
+        className="@container"
+        style={{ scrollMarginTop: headHeight }}
+      >
+        {/* Expanded, the header pins beneath the heading row while its
+            contents scroll, so the package's name stays in sight; the
+            selection's outline is drawn inside the row so no scroll box
+            clips it (spec-view-2, spec-view-42). The whole row is the
+            package's one target: a click anywhere on it acts as its
+            button does, and the button's keyboard focus rings the row. */}
         <div
+          data-testid={`file-row-${key}`}
+          onClick={() => activateFile(key)}
           title={rollup ? i18n._("Citations: {summary}", { summary: rollup }) : undefined}
-          className={`flex items-center gap-2 rounded px-1 py-1 ${
-            dimmed ? "opacity-50" : ""
-          } ${
+          style={expanded ? { top: graphful ? headHeight : `calc(${headHeight}px - 1.5rem)` } : undefined}
+          className={`flex cursor-pointer items-center gap-1 rounded px-1 py-1 @xs:gap-2 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-inset has-[:focus-visible]:ring-brand-600 dark:has-[:focus-visible]:ring-brand-400 ${
+            expanded ? "sticky z-[1]" : ""
+          } ${dimmed ? "opacity-50" : ""} ${
             selected
-              ? "bg-brand-50 ring-1 ring-brand-600 dark:bg-brand-950 dark:ring-brand-400"
-              : ""
+              ? "bg-neutral-200 ring-1 ring-inset ring-neutral-700 dark:bg-neutral-800 dark:ring-neutral-300"
+              : expanded
+                ? "bg-neutral-50 hover:bg-neutral-100 dark:bg-neutral-950 dark:hover:bg-neutral-900"
+                : "hover:bg-neutral-100 dark:hover:bg-neutral-900"
           }`}
         >
           {/* The chevron arranges and nothing else; it is a pointer
@@ -1185,7 +1533,6 @@ export function SpecView(props: SpecViewProps) {
             aria-expanded={expanded}
             aria-current={selected ? "true" : undefined}
             aria-label={file.basename}
-            onClick={() => selectFile(key)}
             onKeyDown={(event) => {
               // Arranging by keyboard, never selecting (spec-view-42).
               if (event.key === "ArrowRight" && !expanded) {
@@ -1196,7 +1543,10 @@ export function SpecView(props: SpecViewProps) {
                 toggleFile(key);
               }
             }}
-            className="flex min-w-0 flex-1 items-center gap-2 rounded text-left hover:bg-neutral-50 dark:hover:bg-neutral-900"
+            // The row wears this button's focus ring; the app-wide
+            // outline would frame the name alone.
+            style={{ outline: "none" }}
+            className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded text-left"
           >
             {/* The package identifier is the basename (META-10). */}
             <span
@@ -1208,18 +1558,31 @@ export function SpecView(props: SpecViewProps) {
             {/* Collapsed keeps the truncated intent; expanded yields
              * to the full prose block below. */}
             {file.intent && !expanded ? (
+              // The first thing to yield: below 28rem it leaves the row
+              // rather than standing as a fragment (spec-view-1).
               <span
-                className="min-w-0 flex-1 truncate text-xs text-neutral-500 dark:text-neutral-400"
+                className="hidden min-w-0 flex-1 truncate text-xs text-neutral-500 @md:inline dark:text-neutral-400"
                 title={linksAsText(file.intent)}
               >
                 {linksAsText(file.intent)}
               </span>
             ) : null}
           </button>
-          <span className="flex shrink-0 items-center gap-1">
-            {GROUP_ORDER.map((group) => (
+          {searching && !search.fileKeys.has(key) && selected ? (
+            <span
+              data-testid={`retained-${key}`}
+              className="shrink-0 rounded-full bg-white px-1.5 py-0.5 text-xs text-neutral-700 dark:bg-neutral-900 dark:text-neutral-200"
+            >
+              {i18n._("shown despite search")}
+            </span>
+          ) : null}
+          {/* Numerals in aligned columns under the heading row, one
+              column per group still on (spec-view-2). */}
+          {GROUP_ORDER.filter((group) => viewState.filters[group]).map(
+            (group) => (
               <span
                 key={group}
+                data-testid={`count-${key}-${group}`}
                 aria-label={i18n._("{count} {group} items", {
                   count: counts[group],
                   group: GROUP_WORD[group](),
@@ -1228,34 +1591,54 @@ export function SpecView(props: SpecViewProps) {
                   count: counts[group],
                   group: GROUP_WORD[group](),
                 })}
-                className={`whitespace-nowrap rounded-full px-1.5 py-0.5 text-xs ${
-                  counts[group] > 0 && viewState.filters[group]
-                    ? GROUP_CHIP[group]
-                    : MUTED_CHIP
+                className={`${COUNT_CELL} text-xs tabular-nums ${
+                  counts[group] > 0
+                    ? `font-semibold ${GROUP_TEXT[group]}`
+                    : "text-neutral-400 dark:text-neutral-600"
                 }`}
               >
-                {counts[group]}
-                <span className="hidden @md:inline"> {GROUP_WORD[group]()}</span>
+                {countText(counts[group])}
               </span>
-            ))}
-            {searching && !search.fileKeys.has(key) && selected ? (
-              <span
-                data-testid={`retained-${key}`}
-                className="shrink-0 rounded-full bg-brand-50 px-1.5 py-0.5 text-xs text-brand-700 dark:bg-brand-950 dark:text-brand-300"
-              >
-                {i18n._("shown despite search")}
-              </span>
-            ) : null}
-            {rollup ? (
-              <span
-                data-testid={`rollup-${key}`}
-                aria-label={i18n._("Citations: {summary}", { summary: rollup })}
-                className="ml-1 hidden whitespace-nowrap text-xs text-neutral-500 @md:inline"
-              >
-                {rollup}
-              </span>
-            ) : null}
+            ),
+          )}
+          <span
+            data-testid={`rollup-${key}`}
+            aria-label={
+              rollup ? i18n._("Citations: {summary}", { summary: rollup }) : undefined
+            }
+            className={`${ROLLUP_CELL} whitespace-nowrap text-xs tabular-nums text-neutral-500`}
+          >
+            {fileCites ? (
+              <>
+                {countText(fileCites.out)}
+                <span aria-hidden="true" className="text-neutral-400 dark:text-neutral-600"> · </span>
+                {countText(fileCites.in)}
+              </>
+            ) : (
+              <span className="text-neutral-400 dark:text-neutral-600">—</span>
+            )}
           </span>
+          {/* Never yields: a package whose only citations name absent
+              items must not look uncited (spec-view-19, spec-view-1). */}
+          {anyUnresolved ? (
+            <span className={UNRESOLVED_CELL}>
+              {unresolved > 0 ? (
+                // A quality warning, not a property every package has:
+                // a neutral mark whose name carries the count, so it
+                // stays apart from every hue the page uses
+                // (spec-view-19, spec-view-1).
+                <span
+                  data-testid={`unresolved-${key}`}
+                  role="img"
+                  aria-label={unresolvedSays}
+                  title={unresolvedSays}
+                  className="flex h-3.5 w-3.5 items-center justify-center rounded-full border border-neutral-400 text-[9px] font-bold leading-none text-neutral-500 dark:border-neutral-500 dark:text-neutral-400"
+                >
+                  !
+                </span>
+              ) : null}
+            </span>
+          ) : null}
         </div>
         {expanded ? (
           <div className="ml-[7px] flex flex-col gap-1 border-l border-neutral-200 py-1 pl-4 dark:border-neutral-800">
@@ -1300,8 +1683,20 @@ export function SpecView(props: SpecViewProps) {
                 {file.path}: {file.error}
               </div>
             ) : null}
+            {/* The items' heading: a rule above it alone sets it off from
+                the intent, so it heads the list below rather than standing
+                as a row of its own, and its controls read as acting on the
+                items and the file (spec-view-2). */}
             {(allIds.length > 0 && items.length > 0) || canEdit ? (
-              <div className="flex flex-wrap items-center gap-3">
+              <div
+                data-testid={`items-head-${key}`}
+                className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-neutral-200 pt-2 dark:border-neutral-800"
+              >
+                <span className="mr-auto text-xs text-neutral-500">
+                  {i18n._("{count, plural, one {# item} other {# items}}", {
+                    count: allIds.length,
+                  })}
+                </span>
                 {allIds.length > 0 && items.length > 0 ? (
                   <button
                     type="button"
@@ -1312,9 +1707,10 @@ export function SpecView(props: SpecViewProps) {
                         : i18n._("Expand all items in {name}", { name: file.basename })
                     }
                     onClick={() => setAllItems(file, !allExpanded)}
-                    className={`text-xs ${LINK_CLASS}`}
+                    className={`flex items-center gap-1 text-xs ${LINK_CLASS}`}
                   >
-                    {allExpanded ? i18n._("Collapse all") : i18n._("Expand all")}
+                    <Icon name={allExpanded ? "collapseAll" : "expandAll"} className="h-3.5 w-3.5" />
+                    {allExpanded ? i18n._("Collapse all items") : i18n._("Expand all items")}
                   </button>
                 ) : null}
                 {canEdit ? (
@@ -1325,9 +1721,10 @@ export function SpecView(props: SpecViewProps) {
                     onClick={() =>
                       openEditor(`file:${key}`, `packages/${key}.md`)
                     }
-                    className={`text-xs ${LINK_CLASS}`}
+                    className={`flex items-center gap-1 text-xs ${LINK_CLASS}`}
                   >
-                    {i18n._({ id: "Edit", comment: "open this file in the editor" })}
+                    <Icon name="edit" className="h-3.5 w-3.5" />
+                    {i18n._({ id: "Edit spec file", comment: "open this package's spec file in the editor" })}
                   </button>
                 ) : null}
                 {openFailure?.anchor === `file:${key}` ? (
@@ -1363,6 +1760,7 @@ export function SpecView(props: SpecViewProps) {
               copyFailedId={copyFailedId}
               flashId={flashId}
               notFoundKey={notFoundKey}
+              onOpenCitations={openCitations}
               onToggleItem={toggleItem}
               onCopy={copyText}
               onJump={jumpTo}
@@ -1452,7 +1850,26 @@ export function SpecView(props: SpecViewProps) {
   const previewLocation = preview.open
     ? itemIndex.get(preview.open.target)
     : undefined;
-  const previewCard = preview.open ? (
+  // A summary's card lists the item's citations both ways; an entry's
+  // previews the one item it names (spec-view-60, spec-view-61).
+  const summaryOf = preview.open?.key.startsWith("summary:")
+    ? itemIndex.get(preview.open.key.slice("summary:".length))
+    : undefined;
+  const entry = (id: string): SummaryEntry => {
+    const location = itemIndex.get(id);
+    return {
+      id,
+      item: location?.item,
+      chipClass: location ? GROUP_CHIP[location.group] : undefined,
+    };
+  };
+  const previewCard = !preview.open ? null : summaryOf ? (
+    <CitationSummaryCard
+      open={preview.open}
+      cites={summaryOf.item.cites.map(entry)}
+      citedBy={(citations.inbound.get(summaryOf.item.id) ?? []).map(entry)}
+    />
+  ) : (
     <CitationPreview
       open={preview.open}
       item={previewLocation?.item}
@@ -1460,7 +1877,7 @@ export function SpecView(props: SpecViewProps) {
         previewLocation ? GROUP_CHIP[previewLocation.group] : undefined
       }
     />
-  ) : null;
+  );
 
   /** Reveal: the one write a selection is allowed to make beyond its
    * own axis, and additive only — it opens and scrolls, never
@@ -1487,347 +1904,485 @@ export function SpecView(props: SpecViewProps) {
     revealFile(fileKey);
   };
 
+  /** A package row's activation: the selected row, expanded, folds
+   * as a file tree's does, the selection standing; otherwise it
+   * selects (spec-view-42). */
+  const activateFile = (fileKey: string) => {
+    if (graphSelection === fileKey && isFileExpanded(fileKey)) toggleFile(fileKey);
+    else selectFile(fileKey);
+  };
+
   return (
-    <div
-      ref={surfaceRef}
-      onKeyDown={(event) => {
-        // The citation card is a rung of its own, above the selection
-        // (spec-view-61, spec-view-42).
-        if (event.key === "Escape" && !event.defaultPrevented && preview.open) {
-          event.preventDefault();
-          preview.close();
-          return;
-        }
-        // Last rung: whatever had something to dismiss has already
-        // claimed the key (spec-view-42).
-        if (
-          event.key === "Escape" &&
-          !event.defaultPrevented &&
-          graphSelection !== null
-        ) {
-          event.preventDefault();
-          setGraphSelection(null);
-        }
-      }}
-      // The surface root is the box the Specs tab scrolls in (DR-041
-      // §9): height-constrained, and the containing block for its own
-      // positioned content, so the page itself never scrolls. With the
-      // graph shown the outline and the canvas scroll inside it.
-      className={
-        graphful
-          ? "relative flex min-h-0 w-full flex-1 flex-col gap-3 overflow-hidden p-6"
-          : "relative mx-auto flex w-full min-h-0 max-w-3xl flex-1 flex-col gap-3 overflow-y-auto p-6"
-      }
-    >
+    <div className="relative flex min-h-0 w-full flex-1 flex-col">
+      {/* Outside the inert specs, so it speaks for whatever stands
+          over them too (DR-010 §7). */}
       {liveRegion}
-      <div className="flex flex-wrap items-center gap-2">
-        <h1 className="text-lg font-semibold">
-          {props.projectName ?? i18n._({ id: "Specs", comment: "the spec view's own heading" })}
-        </h1>
-        <span className="text-xs text-neutral-500">
-          {i18n._(
-            "{packages, plural, one {# package} other {# packages}} · {items} items",
-            { packages: totals.packages, items: totals.items },
-          )}
-        </span>
-        <span className="ml-auto flex items-center gap-1.5">
-          {/* One toggle, not a mode set: the outline never leaves, so
-              there is no state where nothing is shown (spec-view-20). */}
-          <button
-            type="button"
-            data-testid="view-graph"
-            aria-pressed={viewState.graph}
-            title={i18n._("Show the citation graph beside the outline")}
-            onClick={() =>
-              onViewState({ ...viewState, graph: !viewState.graph })
-            }
-            className={`rounded border px-2 py-0.5 text-xs ${
-              viewState.graph
-                ? "border-brand-600 bg-brand-50 text-brand-700 dark:border-brand-400 dark:bg-brand-950 dark:text-brand-300"
-                : "border-neutral-300 text-neutral-600 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
-            }`}
-          >
-            {i18n._({ id: "Graph", comment: "toggle: show the citation graph" })}
-          </button>
-          <button
-            type="button"
-            aria-label={i18n._("Refresh specs")}
-            title={i18n._("Re-read the specs/ tree")}
-            disabled={props.loading}
-            onClick={props.onRefresh}
-            className="flex h-6 w-6 items-center justify-center rounded text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 disabled:opacity-40 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
-          >
-            <Icon name="refresh" />
-          </button>
+      {overlay ? (
+        <div className="absolute inset-0 z-20 flex flex-col bg-neutral-50 dark:bg-neutral-950">
+          {overlay}
+        </div>
+      ) : null}
+      <div
+        inert={overlay ? true : undefined}
+        ref={surfaceRef}
+        onKeyDown={(event) => {
+          // The citation card is a rung of its own, above the selection
+          // (spec-view-61, spec-view-42).
+          if (event.key === "Escape" && !event.defaultPrevented && preview.open) {
+            event.preventDefault();
+            preview.close();
+            return;
+          }
+          // Last rung: whatever had something to dismiss has already
+          // claimed the key (spec-view-42).
+          if (
+            event.key === "Escape" &&
+            !event.defaultPrevented &&
+            graphSelection !== null
+          ) {
+            event.preventDefault();
+            setGraphSelection(null);
+          }
+        }}
+        // The surface root is the box the Specs tab scrolls in (DR-041
+        // §9): height-constrained, and the containing block for its own
+        // positioned content, so the page itself never scrolls. With the
+        // graph shown the outline and the canvas scroll inside it.
+        className={
+          graphful
+            ? "relative flex min-h-0 w-full flex-1 flex-col gap-3 overflow-hidden p-6"
+            : "relative mx-auto flex w-full min-h-0 max-w-3xl flex-1 flex-col gap-3 overflow-y-auto p-6"
+        }
+      >
+        <div className="flex flex-wrap items-center gap-2">
+          <h1 className="text-lg font-semibold">
+            {props.projectName ?? i18n._({ id: "Specs", comment: "the spec view's own heading" })}
+          </h1>
           <span className="text-xs text-neutral-500">
-            {props.loading
-              ? i18n._({ id: "reading…", comment: "the specs tree is being re-read" })
-              : i18n._("read {age}", { age: relativeReadTime(tree.readAt, now) })}
+            {i18n._(
+              "{packages, plural, one {# package} other {# packages}} · {items} items",
+              { packages: totals.packages, items: totals.items },
+            )}
           </span>
-        </span>
-      </div>
-
-      {props.error ? (
-        <ErrorStrip error={props.error} onRetry={props.onRefresh} />
-      ) : null}
-
-      {tree.notices.length > 0 ? (
-        <div className="text-xs text-neutral-500">
-          {tree.notices.join(" · ")}
-        </div>
-      ) : null}
-
-      {(() => {
-        // Item filters and search govern the outline alone, so they
-        // ride inside its pane rather than over the whole surface
-        // (spec-view-29).
-        const outlineControls = (
-          <div className="flex shrink-0 flex-wrap items-center gap-2 pb-2">
-            {GROUP_ORDER.map((group) => {
-              const on = viewState.filters[group];
-              return (
-                <button
-                  key={group}
-                  type="button"
-                  data-testid={`filter-${group}`}
-                  aria-pressed={on}
-                  title={
-                    on
-                      ? i18n._("Hide {group} items", { group: GROUP_WORD[group]() })
-                      : i18n._("Show {group} items", { group: GROUP_WORD[group]() })
-                  }
-                  onClick={() => toggleFilter(group)}
-                  className={`rounded-full border px-2.5 py-0.5 text-xs ${
-                    on
-                      ? `border-transparent ${GROUP_CHIP[group]}`
-                      : "border-neutral-200 text-neutral-500 dark:border-neutral-700 dark:text-neutral-500"
-                  }`}
-                >
-                  {FILTER_LABEL[group]()}{" "}
-                  <span
-                    aria-label={i18n._("{count} {group} items", {
-                      count: totals.perGroup[group],
-                      group: GROUP_WORD[group](),
-                    })}
-                    className={on ? "font-semibold" : "opacity-60"}
-                  >
-                    {totals.perGroup[group]}
-                  </span>
-                </button>
-              );
-            })}
-            <input
-              type="search"
-              value={viewState.search}
-              onChange={(event) =>
-                onViewState({ ...viewState, search: event.target.value })
-              }
-              onKeyDown={(event) => {
-                // Live search has nothing to submit; Escape is the
-                // standard way out of a search field.
-                if (event.key === "Escape" && viewState.search) {
-                  event.preventDefault();
-                  onViewState({ ...viewState, search: "" });
-                }
-              }}
-              placeholder={i18n._("Filter items — ID or text…")}
-              aria-label={i18n._("Filter items by ID or text")}
-              className="min-w-40 flex-1 rounded border border-neutral-300 bg-white px-2 py-1 text-sm dark:border-neutral-700 dark:bg-neutral-950"
-            />
-            {searching ? (
-              <button
-                type="button"
-                data-testid="search-clear"
-                aria-label={i18n._("Clear the search")}
-                title={i18n._("Clear the search (Escape)")}
-                onClick={() => onViewState({ ...viewState, search: "" })}
-                className="flex h-6 w-6 items-center justify-center rounded text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
-              >
-                ✕
-              </button>
-            ) : null}
-            {searching ? (
-              <span
-                data-testid="match-count"
-                className="text-xs text-neutral-500"
-              >
-                {i18n._("{count, plural, one {# match} other {# matches}}", {
-                  count: search.count,
-                })}
-              </span>
-            ) : null}
-          </div>
-        );
-
-        const decisionsBranch =
-          tree.decisions.length > 0 ? renderDecisions() : null;
-        const outline =
-          tree.files.length > 0 ? (
-            <>
-              {outlineRoot.dirs.filter(dirMatches).map((child) => renderDir(child))}
-              {outlineRoot.files.filter(fileMatches).map(renderFile)}
-            </>
-          ) : null;
-
-        // The outline is permanent; the graph joins it beside
-        // (spec-view-20). Both panes scroll independently, and the
-        // graph's own affordances live on the graph pane.
-        const share = dragSplit ?? viewState.graphWidth;
-        const commitSplit = (fraction: number) => {
-          const clamped = Math.min(
-            MAX_GRAPH_WIDTH,
-            Math.max(MIN_GRAPH_WIDTH, fraction),
-          );
-          setDragSplit(null);
-          onViewState({ ...viewState, graphWidth: clamped });
-        };
-        const fractionAt = (clientX: number): number | null => {
-          const box = splitRef.current?.getBoundingClientRect();
-          if (!box || !box.width) return null;
-          return Math.min(
-            MAX_GRAPH_WIDTH,
-            Math.max(MIN_GRAPH_WIDTH, (clientX - box.left) / box.width),
-          );
-        };
-
-        return graphful ? (
-          // The split answers its own pane's width, not the window's
-          // (DR-041): side by side from the @2xl step, stacked below
-          // it. Each half keeps a readable floor and the split itself
-          // scrolls when the surface cannot hold both, so neither is
-          // squeezed to nothing under the root's clip (spec-view-59).
-          // Beside the outline the split takes the box's own height,
-          // and the graph's half is a column its pane grows in, so the
-          // drawing surface fills the half in either arrangement
-          // instead of resting at an svg's default height. The half's
-          // floor holds in both arrangements: a box shorter than it
-          // scrolls, as it does for the outline's floor.
-          <div
-            ref={outlineBoxRef}
-            className="@container relative flex min-h-0 flex-1 items-start overflow-y-auto"
-          >
-          <div
-            ref={splitRef}
-            className="flex min-h-full w-full flex-col gap-4 @2xl:h-full @2xl:flex-row @2xl:gap-0"
-          >
-            <div
-              className="flex min-h-72 flex-1 flex-col @2xl:h-full @2xl:w-[var(--graph-share)] @2xl:flex-none"
-              style={{ ["--graph-share" as string]: `${share * 100}%` }}
+          <span className="ml-auto flex items-center gap-1.5">
+            <button
+              type="button"
+              data-testid="specs-refresh"
+              aria-label={i18n._("Refresh specs")}
+              title={i18n._("Re-read the specs/ tree")}
+              disabled={props.loading || refresh !== "idle"}
+              onClick={startRefresh}
+              className="flex h-6 w-6 items-center justify-center rounded text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 disabled:opacity-60 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
             >
-              <SpecGraph
-                files={tree.files}
-                selectedKey={graphSelection}
-                matchedKeys={search.fileKeys}
-                searching={searching}
-                onClearSelection={() => setGraphSelection(null)}
-                onOpenFile={selectFile}
+              <Icon
+                name="refresh"
+                className={`h-4 w-4 ${props.loading || refresh === "reading" ? "animate-spin" : ""}`}
               />
-            </div>
-            {/* The reader sets the balance, within bounds that keep
-                both panes readable (spec-view-20). */}
-            <div
-              role="separator"
-              aria-orientation="vertical"
-              aria-label={i18n._("Resize the graph pane")}
-              aria-valuenow={Math.round((dragSplit ?? viewState.graphWidth) * 100)}
-              aria-valuemin={Math.round(MIN_GRAPH_WIDTH * 100)}
-              aria-valuemax={Math.round(MAX_GRAPH_WIDTH * 100)}
-              tabIndex={0}
-              data-testid="graph-split"
-              className="group hidden shrink-0 cursor-col-resize items-stretch px-2 @2xl:flex"
-              onPointerDown={(event) => {
-                (event.currentTarget as Element).setPointerCapture?.(
-                  event.pointerId,
-                );
-              }}
-              onPointerMove={(event) => {
-                if (!event.currentTarget.hasPointerCapture?.(event.pointerId)) {
-                  return;
-                }
-                const next = fractionAt(event.clientX);
-                if (next !== null) setDragSplit(next);
-              }}
-              onPointerUp={(event) => {
-                const next = fractionAt(event.clientX);
-                commitSplit(next ?? share);
-              }}
-              onKeyDown={(event) => {
-                if (event.key === "ArrowLeft") {
-                  event.preventDefault();
-                  commitSplit(share - 0.05);
-                } else if (event.key === "ArrowRight") {
-                  event.preventDefault();
-                  commitSplit(share + 0.05);
-                }
-              }}
-            >
-              <span className="w-px bg-neutral-200 transition-colors group-hover:bg-brand-600 dark:bg-neutral-800 dark:group-hover:bg-brand-400" />
-            </div>
-            <div className="flex min-h-40 min-w-0 flex-1 flex-col">
-              {outlineControls}
-              <ul
-                data-testid="specs-outline"
-                className="relative flex min-h-0 flex-col overflow-y-auto pr-1"
-              >
-                {outline}
-                {decisionsBranch}
-              </ul>
-            </div>
-          </div>
-          {/* The card belongs to the box that scrolls the split, so it
-              is placed against what the reader can see (spec-view-61). */}
-          {previewCard}
-          </div>
-        ) : (
-          <div className="flex flex-col">
-            {outlineControls}
-            <ul data-testid="specs-outline" className="flex flex-col">
-              {outline}
-              {decisionsBranch}
-            </ul>
-            {previewCard}
-          </div>
-        );
-      })()}
-      {tree.files.length === 0 ? (
-        <div className="text-sm text-neutral-500">
-          {i18n._("specs/ is present but holds no spec files yet.")}
+            </button>
+            <span data-testid="specs-read-age" className="text-xs text-neutral-500">
+              {props.loading || refresh === "reading"
+                ? i18n._({ id: "reading…", comment: "the specs tree is being re-read" })
+                : refresh === "done"
+                  ? i18n._({ id: "read again", comment: "the specs tree was just re-read on request" })
+                  : i18n._("read {age}", { age: relativeReadTime(tree.readAt, now) })}
+            </span>
+          </span>
         </div>
-      ) : null}
 
-      {/* The footer keeps only the two tree-wide documents; the
-          decision records live in the outline now (spec-view-7). */}
-      <div className="mt-2 flex shrink-0 items-center gap-1.5 border-t border-neutral-200 pt-2 text-xs text-neutral-500 dark:border-neutral-800">
-        <button
-          id="specv-records-meta"
-          type="button"
-          data-testid="records-meta"
-          onClick={() => openRecord(META_RECORD, "specv-records-meta")}
-          className="hover:text-neutral-700 dark:hover:text-neutral-300"
-        >
-          meta
-        </button>
-        <span aria-hidden="true">·</span>
-        <button
-          id="specv-records-map"
-          type="button"
-          data-testid="records-map"
-          onClick={() => openRecord(MAP_RECORD, "specv-records-map")}
-          className="hover:text-neutral-700 dark:hover:text-neutral-300"
-        >
-          map
-        </button>
+        {props.error ? (
+          <ErrorStrip error={props.error} onRetry={props.onRefresh} />
+        ) : null}
+
+        {tree.notices.length > 0 ? (
+          <div className="text-xs text-neutral-500">
+            {tree.notices.join(" · ")}
+          </div>
+        ) : null}
+
+        {(() => {
+          // Item filters and search govern the outline alone, so they
+          // ride inside its pane rather than over the whole surface
+          // (spec-view-29).
+          // One toggle, not a mode set: the outline never leaves, so there
+          // is no state where nothing is shown. It heads the graph's own
+          // line while the graph shows and the outline's filter row while
+          // it is hidden, named for its act (spec-view-20).
+          const graphToggle = (
+            <button
+              type="button"
+              data-testid="view-graph"
+              aria-pressed={viewState.graph}
+              aria-label={
+                viewState.graph
+                  ? i18n._("Hide the citation graph")
+                  : i18n._("Show the citation graph")
+              }
+              title={
+                viewState.graph
+                  ? i18n._("Hide the citation graph")
+                  : i18n._("Show the citation graph")
+              }
+              onClick={() => onViewState({ ...viewState, graph: !viewState.graph })}
+              // The glyph says which way the graph goes; no fill marks a
+              // pressed state the direction already tells (spec-view-20).
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-100"
+            >
+              <Icon name={viewState.graph ? "paneFold" : "paneOpen"} className="h-5 w-5" />
+            </button>
+          );
+          // The walk back from in-view jumps, at the outline's head where
+          // the reader looks after landing (spec-view-6).
+          const lastOrigin = jumpOrigins[jumpOrigins.length - 1];
+          const jumpBack = lastOrigin ? (
+            <button
+              type="button"
+              data-testid="jump-back"
+              onClick={popJumpOrigin}
+              title={i18n._("Return (Alt+Left)")}
+              className={`mb-2 flex shrink-0 items-center gap-1 self-start rounded px-1 py-0.5 text-xs ${LINK_CLASS}`}
+            >
+              <span aria-hidden="true">←</span>
+              {"item" in lastOrigin
+                ? i18n._("back to {id}", { id: lastOrigin.item })
+                : i18n._("back to {name}'s intent", {
+                    name:
+                      tree.files.find((file) => file.key === lastOrigin.intent)?.basename ??
+                      lastOrigin.intent,
+                  })}
+              {jumpOrigins.length > 1 ? (
+                <span className="text-neutral-500">
+                  {i18n._("({count} steps)", { count: jumpOrigins.length })}
+                </span>
+              ) : null}
+            </button>
+          ) : null;
+          const outlineControls = (
+            <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 pb-2">
+              {graphful ? null : graphToggle}
+              {GROUP_ORDER.map((group) => {
+                const on = viewState.filters[group];
+                return (
+                  // A filter, read as one: a checkbox filled in the
+                  // group's color with a check when pressed, an empty box
+                  // beside a muted name when not; the title says what the
+                  // group holds (spec-view-4).
+                  <button
+                    key={group}
+                    type="button"
+                    data-testid={`filter-${group}`}
+                    aria-pressed={on}
+                    title={GROUP_DEFINITION[group]()}
+                    onClick={() => toggleFilter(group)}
+                    className={`flex items-center gap-1.5 rounded py-0.5 text-xs ${
+                      on ? `font-medium ${GROUP_TEXT[group]}` : "text-neutral-500 dark:text-neutral-400"
+                    }`}
+                  >
+                    <span
+                      aria-hidden="true"
+                      data-testid={`filter-box-${group}`}
+                      className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-[3px] border ${
+                        on ? FILTER_BOX[group] : "border-neutral-400 bg-white dark:border-neutral-500 dark:bg-neutral-900"
+                      }`}
+                    >
+                      {on ? (
+                        <Icon name="check" className="h-3 w-3 text-white dark:text-neutral-950" />
+                      ) : null}
+                    </span>
+                    <span className="@md:hidden">{GROUP_SHORT[group]()}</span>
+                    <span className="hidden @md:inline">{GROUP_NAME[group]()}</span>
+                    <span
+                      aria-label={i18n._("{count} {group} items", {
+                        count: totals.perGroup[group],
+                        group: GROUP_WORD[group](),
+                      })}
+                      className="tabular-nums"
+                    >
+                      {totals.perGroup[group].toLocaleString(i18n.locale)}
+                    </span>
+                  </button>
+                );
+              })}
+              <input
+                type="search"
+                value={viewState.search}
+                onChange={(event) =>
+                  onViewState({ ...viewState, search: event.target.value })
+                }
+                onKeyDown={(event) => {
+                  // Live search has nothing to submit; Escape is the
+                  // standard way out of a search field.
+                  if (event.key === "Escape" && viewState.search) {
+                    event.preventDefault();
+                    onViewState({ ...viewState, search: "" });
+                  }
+                }}
+                placeholder={i18n._("Filter items — ID or text…")}
+                aria-label={i18n._("Filter items by ID or text")}
+                className="min-w-40 flex-1 rounded border border-neutral-300 bg-white px-2 py-1 text-sm dark:border-neutral-700 dark:bg-neutral-950"
+              />
+              {searching ? (
+                <button
+                  type="button"
+                  data-testid="search-clear"
+                  aria-label={i18n._("Clear the search")}
+                  title={i18n._("Clear the search (Escape)")}
+                  onClick={() => onViewState({ ...viewState, search: "" })}
+                  className="flex h-6 w-6 items-center justify-center rounded text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
+                >
+                  ✕
+                </button>
+              ) : null}
+              {searching ? (
+                <span
+                  data-testid="match-count"
+                  className="text-xs text-neutral-500"
+                >
+                  {i18n._("{count, plural, one {# match} other {# matches}}", {
+                    count: search.count,
+                  })}
+                </span>
+              ) : null}
+            </div>
+          );
+
+          // What a filter hides is said where the filters stand, with
+          // one way back (spec-view-4).
+          const hiddenGroups = GROUP_ORDER.filter(
+            (group) => !viewState.filters[group],
+          );
+          const hiddenLine =
+            hiddenGroups.length > 0 ? (
+              <div
+                data-testid="hidden-groups"
+                className="flex shrink-0 flex-wrap items-center gap-x-2 pb-2 text-xs text-neutral-500"
+              >
+                <span>
+                  {i18n._("Hidden: {groups}", {
+                    groups: hiddenGroups
+                      .map((group) =>
+                        i18n._("{group} ({count})", {
+                          group: GROUP_NAME[group](),
+                          count: totals.perGroup[group],
+                        }),
+                      )
+                      .join(i18n._({ id: ", ", comment: "list separator" })),
+                  })}
+                </span>
+                <button
+                  type="button"
+                  data-testid="show-all-groups"
+                  onClick={showAllGroups}
+                  className={LINK_CLASS}
+                >
+                  {i18n._({ id: "Show all", comment: "turn every item group back on" })}
+                </button>
+              </div>
+            ) : null;
+
+          // One heading row over the package rows' columns, pinned while
+          // they scroll (spec-view-2). The chevron and name take the
+          // slack, so the cells line up with the rows' own.
+          const columnHeads =
+            tree.files.length > 0 ? (
+              <div
+                ref={headRef}
+                data-testid="outline-columns"
+                // Pinned at the scroll box's own edge: alone, the outline
+                // scrolls in the padded surface root, so the heading row
+                // rides up over that padding rather than letting rows
+                // show above it.
+                className={`sticky ${graphful ? "top-0" : "-top-6"} z-[2] flex items-end gap-1 @xs:gap-2 border-b border-neutral-200 bg-neutral-50 px-1 pb-1 pt-0.5 text-xs leading-tight text-neutral-500 dark:border-neutral-800 dark:bg-neutral-950`}
+              >
+                <span className="min-w-0 flex-1" />
+                {GROUP_ORDER.filter((group) => viewState.filters[group]).map(
+                  (group) => (
+                    <span
+                      key={group}
+                      data-testid={`column-${group}`}
+                      title={GROUP_NAME[group]()}
+                      aria-label={GROUP_NAME[group]()}
+                      className={`${COUNT_CELL} ${GROUP_TEXT[group]}`}
+                    >
+                      <span className="@md:hidden">{GROUP_SHORT[group]()}</span>
+                      <span className="hidden @md:inline">{GROUP_NAME[group]()}</span>
+                    </span>
+                  ),
+                )}
+                <span
+                  data-testid="column-rollup"
+                  title={i18n._("Citations across packages: cites · cited by")}
+                  className={ROLLUP_CELL}
+                >
+                  {i18n._({
+                    id: "cites · cited by",
+                    comment: "outline column heading: citations between packages, out and in",
+                  })}
+                </span>
+                {anyUnresolved ? (
+                  <span aria-hidden="true" className={UNRESOLVED_CELL} />
+                ) : null}
+              </div>
+            ) : null;
+
+          const outline =
+            tree.files.length > 0 ? (
+              <>
+                {outlineRoot.dirs.filter(dirMatches).map((child) => renderDir(child))}
+                {outlineRoot.files.filter(fileMatches).map(renderFile)}
+              </>
+            ) : null;
+
+          // The outline is permanent; the graph joins it beside
+          // (spec-view-20). Both panes scroll independently, and the
+          // graph's own affordances live on the graph pane.
+          const share = dragSplit ?? viewState.graphWidth;
+          /** The share bounded by the panes' pixel floors — a 320px graph,
+           * a 28rem outline beside the divider — within the persisted
+           * share's own range (spec-view-20). */
+          const boundShare = (fraction: number): number => {
+            const width = splitRef.current?.getBoundingClientRect().width ?? 0;
+            const rem = parseFloat(
+              getComputedStyle(document.documentElement).fontSize || "16",
+            ) || 16;
+            const low = width > 0 ? Math.max(MIN_GRAPH_WIDTH, GRAPH_FLOOR_PX / width) : MIN_GRAPH_WIDTH;
+            const high =
+              width > 0
+                ? Math.min(MAX_GRAPH_WIDTH, 1 - (OUTLINE_FLOOR_REM * rem + DIVIDER_PX) / width)
+                : MAX_GRAPH_WIDTH;
+            return Math.min(Math.max(low, high), Math.max(low, fraction));
+          };
+          const commitSplit = (fraction: number) => {
+            setDragSplit(null);
+            onViewState({ ...viewState, graphWidth: boundShare(fraction) });
+          };
+          const fractionAt = (clientX: number): number | null => {
+            const box = splitRef.current?.getBoundingClientRect();
+            if (!box || !box.width) return null;
+            return boundShare((clientX - box.left) / box.width);
+          };
+
+          return graphful ? (
+            // The split answers its own pane's width, not the window's
+            // (DR-041): side by side while it holds both pixel floors
+            // (spec-view-20), stacked below
+            // it. Each half keeps a readable floor and the split itself
+            // scrolls when the surface cannot hold both, so neither is
+            // squeezed to nothing under the root's clip (spec-view-59).
+            // Beside the outline the split takes the box's own height,
+            // and the graph's half is a column its pane grows in, so the
+            // drawing surface fills the half in either arrangement
+            // instead of resting at an svg's default height. The half's
+            // floor holds in both arrangements: a box shorter than it
+            // scrolls, as it does for the outline's floor.
+            <div
+              ref={outlineBoxRef}
+              className="@container/split relative flex min-h-0 flex-1 items-start overflow-y-auto"
+            >
+            <div
+              ref={splitRef}
+              className="flex min-h-full w-full flex-col gap-4 @min-[49rem]:h-full @min-[49rem]:flex-row @min-[49rem]:gap-0"
+            >
+              {/* Side by side only while the box holds a 320px graph
+                  beside a 28rem outline; the share is clamped between
+                  those floors whatever was persisted (spec-view-20). */}
+              <div
+                className="flex min-h-[34rem] flex-1 flex-col @min-[49rem]:h-full @min-[49rem]:w-[clamp(320px,var(--graph-share),calc(100%-28rem-17px))] @min-[49rem]:flex-none"
+                style={{ ["--graph-share" as string]: `${share * 100}%` }}
+              >
+                <SpecGraph
+                  files={tree.files}
+                  selectedKey={graphSelection}
+                  matchedKeys={search.fileKeys}
+                  searching={searching}
+                  onClearSelection={() => setGraphSelection(null)}
+                  onOpenFile={selectFile}
+                  toggle={graphToggle}
+                />
+              </div>
+              {/* The reader sets the balance, within bounds that keep
+                  both panes readable (spec-view-20). */}
+              <div
+                role="separator"
+                aria-orientation="vertical"
+                aria-label={i18n._("Resize the graph pane")}
+                aria-valuenow={Math.round((dragSplit ?? viewState.graphWidth) * 100)}
+                aria-valuemin={Math.round(MIN_GRAPH_WIDTH * 100)}
+                aria-valuemax={Math.round(MAX_GRAPH_WIDTH * 100)}
+                tabIndex={0}
+                data-testid="graph-split"
+                className="group hidden shrink-0 cursor-col-resize items-stretch px-2 @min-[49rem]:flex"
+                onPointerDown={(event) => {
+                  (event.currentTarget as Element).setPointerCapture?.(
+                    event.pointerId,
+                  );
+                }}
+                onPointerMove={(event) => {
+                  if (!event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+                    return;
+                  }
+                  const next = fractionAt(event.clientX);
+                  if (next !== null) setDragSplit(next);
+                }}
+                onPointerUp={(event) => {
+                  const next = fractionAt(event.clientX);
+                  commitSplit(next ?? share);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "ArrowLeft") {
+                    event.preventDefault();
+                    commitSplit(share - 0.05);
+                  } else if (event.key === "ArrowRight") {
+                    event.preventDefault();
+                    commitSplit(share + 0.05);
+                  }
+                }}
+              >
+                <span className="w-px bg-neutral-200 transition-colors group-hover:bg-brand-600 dark:bg-neutral-800 dark:group-hover:bg-brand-400" />
+              </div>
+              <div className="@container flex min-h-[22rem] min-w-0 flex-1 flex-col @min-[49rem]:min-h-40">
+                {outlineControls}
+                {jumpBack}
+                {hiddenLine}
+                {/* Its own scroll box only beside the graph; stacked, the
+                    split scrolls as one and the heading row pins to it. */}
+                <div className="relative min-h-0 pr-1 @min-[49rem]/split:overflow-y-auto">
+                  {columnHeads}
+                  <ul data-testid="specs-outline" className="flex flex-col">
+                    {outline}
+                  </ul>
+                </div>
+                {recordsFooter("mt-auto shrink-0 border-t pt-2")}
+              </div>
+            </div>
+            {/* The card belongs to the box that scrolls the split, so it
+                is placed against what the reader can see (spec-view-61). */}
+            {previewCard}
+            </div>
+          ) : (
+            <div className="@container flex flex-col">
+              {outlineControls}
+              {jumpBack}
+              {hiddenLine}
+              {columnHeads}
+              <ul data-testid="specs-outline" className="flex flex-col">
+                {outline}
+              </ul>
+              {tree.files.length === 0 ? (
+                <div className="text-sm text-neutral-500">
+                  {i18n._("specs/ is present but holds no spec files yet.")}
+                </div>
+              ) : null}
+              {previewCard}
+              {/* Below the outline's scroll, held at the surface's foot
+                  while it scrolls (spec-view-7). */}
+              {recordsFooter(
+                "sticky -bottom-6 z-[1] -mx-6 mt-2 border-t bg-neutral-50 px-6 py-2 dark:bg-neutral-950",
+              )}
+            </div>
+          );
+        })()}
+
       </div>
-      {jumpOrigins.length > 0 ? (
-        <button
-          type="button"
-          data-testid="jump-back"
-          onClick={popJumpOrigin}
-          className="sticky bottom-2 z-10 self-center rounded-full border border-neutral-300 bg-white px-3 py-1 text-xs text-neutral-600 shadow-md hover:bg-neutral-50 dark:border-neutral-600 dark:bg-neutral-900 dark:text-neutral-300 dark:hover:bg-neutral-800"
-        >
-          {i18n._("back to {id}", { id: jumpOrigins[jumpOrigins.length - 1] })}
-        </button>
-      ) : null}
     </div>
   );
 }

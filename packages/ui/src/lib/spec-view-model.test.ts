@@ -166,9 +166,15 @@ describe("buildCitationModel: backlinks and rollups (SPECV-19)", () => {
     // AUTH-9 → AUTH-1 is intra-file, so identity/auth cites nothing
     // outward; its cross-file citers are CAT-1 and GUARD-1.
     expect(model.rollups.get("identity/auth")).toEqual({ out: 0, in: 2 });
-    // The dead outbound target GONE-1 counts (the citation exists);
-    // a dead inbound target has no item to carry it.
-    expect(model.rollups.get("catalog/courses")).toEqual({ out: 2, in: 1 });
+    // The dead target GONE-1 counts in neither direction; it stands
+    // apart as the file's unresolved count (spec-view-19).
+    expect(model.rollups.get("catalog/courses")).toEqual({ out: 1, in: 1 });
+    expect(model.unresolved.get("catalog/courses")).toBe(1);
+    expect(model.unresolved.has("guard")).toBe(false);
+    // The same index carries the pair counts the graph reads
+    // (spec-view-23).
+    expect(model.pairs.get("catalog/courses identity/auth")).toBe(1);
+    expect(model.pairs.get("guard catalog/courses")).toBe(1);
     expect(model.rollups.get("guard")).toEqual({ out: 2, in: 0 });
   });
 

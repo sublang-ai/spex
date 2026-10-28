@@ -256,3 +256,86 @@ export function CitationPreview({
     </div>
   );
 }
+
+/** How many items the summary card lists in each direction before it
+ * counts the rest (spec-view-60). */
+export const SUMMARY_LIMIT = 5;
+
+/** One cited or citing item as the summary card lists it. */
+export interface SummaryEntry {
+  id: string;
+  /** Absent when the tree carries no such ID. */
+  item?: SpecItemInfo;
+  chipClass?: string;
+}
+
+/** The summary card an item's citation summary raises: up to five
+ * items in each direction, each by its chip and first line, a longer
+ * direction closing with a line counting them all (spec-view-60). It
+ * shares the entry card's box, placement, and one-card rule. */
+export function CitationSummaryCard({
+  open,
+  cites,
+  citedBy,
+}: {
+  open: CitationPreviewOpen;
+  cites: SummaryEntry[];
+  citedBy: SummaryEntry[];
+}) {
+  const section = (
+    heading: string,
+    entries: SummaryEntry[],
+    testId: string,
+  ) =>
+    entries.length > 0 ? (
+      <div data-testid={testId}>
+        <div className="text-xs font-medium text-neutral-500">{heading}</div>
+        <ul className="mt-0.5 space-y-0.5">
+          {entries.slice(0, SUMMARY_LIMIT).map((entry) => (
+            <li key={entry.id} className="flex min-w-0 items-center gap-2">
+              <span
+                className={`shrink-0 rounded px-1.5 py-0.5 font-mono text-xs font-semibold ${
+                  entry.chipClass ??
+                  "bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300"
+                }`}
+              >
+                {entry.id}
+              </span>
+              <span className="min-w-0 flex-1 truncate text-xs text-neutral-700 dark:text-neutral-200">
+                {entry.item
+                  ? entry.item.firstLine
+                  : i18n._({ id: "unresolved", comment: "this citation names an item absent from the tree" })}
+              </span>
+            </li>
+          ))}
+        </ul>
+        {entries.length > SUMMARY_LIMIT ? (
+          <div className="mt-0.5 text-xs text-neutral-500">
+            {i18n._("See all {count}", { count: entries.length })}
+          </div>
+        ) : null}
+      </div>
+    ) : null;
+  return (
+    <div
+      id={PREVIEW_CARD_ID}
+      role="tooltip"
+      data-testid="citation-summary"
+      className={`pointer-events-none absolute z-20 flex max-h-80 w-72 max-w-[calc(100%-1rem)] flex-col gap-2 overflow-hidden rounded-lg border border-neutral-200 bg-white p-2.5 shadow-lg dark:border-neutral-700 dark:bg-neutral-900 ${
+        open.above ? "-translate-y-full" : ""
+      }`}
+      style={{ left: open.left, top: open.top }}
+    >
+      {section(
+        i18n._({ id: "cites", comment: "row label over the items this one cites" }),
+        cites,
+        "summary-cites",
+      )}
+      {section(
+        i18n._({ id: "cited by", comment: "summary card heading over the items citing this one" }),
+        citedBy,
+        "summary-cited-by",
+      )}
+    </div>
+  );
+}

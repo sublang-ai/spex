@@ -8,6 +8,7 @@
 Accepted.
 Extends [DR-010](010-interface-craft.md)'s interface principles to data graphics, occasioned by the spec citation graph.
 §4's viewport rule and §7's emphasis precedence are amended by [DR-027](027-linked-views-contract.md): the presentation may fill the pane within a stated bound, and inspection never takes the emphasis.
+§1's edge-width count, §4's always-on labels and layout-bounded camera, §5's direction at rest, §6's placement of isolated packages, §2's hue budget, §7's dimming-only emphasis and card on any focus, and §8's split bounds and graph affordances are amended by [DR-158](158-a-legible-graph-and-outline.md): orange joins the budget for the selection's own citations and the internal group's hue turns lime, the resting graph draws an undirected backbone at a threshold the reader sets, counts are written beside names, a label without room waits for inspection, unlinked packages stand in a row of their own, the selection hides the edges it does not touch, the card answers hover and keyboard focus alone, the camera is bounded by the fitted frame, the split holds pixel floors, and the pane's controls stand above the graph and its key below.
 
 ## Context
 

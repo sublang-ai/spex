@@ -971,7 +971,7 @@ function WorkspaceSurface({
           tree={specTrees[project.id]}
           loading={!specTrees[project.id] && !specErrors[project.id]}
           error={specErrors[project.id]}
-          onRefresh={() => void loadSpecs(project.id)}
+          onRefresh={() => loadSpecs(project.id)}
           onReadRecord={(path) => readSpecRecord(project.id, path)}
           onWriteSpec={(path, content, baseVersion) =>
             writeSpec(project.id, path, content, baseVersion)
@@ -1523,6 +1523,12 @@ export function App() {
       const state = store.getState();
       state.setCurrentProject(projectId);
       state.setWorkspaceTab(projectId, "start");
+      showPlace(store);
+    },
+    onOpenSpecs: (projectId) => {
+      const state = store.getState();
+      state.setCurrentProject(projectId);
+      state.setWorkspaceTab(projectId, "specs");
       showPlace(store);
     },
     onDeleteSession: (sessionId) => store.getState().deleteSession(sessionId),
