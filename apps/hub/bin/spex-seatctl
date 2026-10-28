@@ -6,7 +6,8 @@
 # the sudoers fragment beside the units (hub-4). Exactly one of
 #
 #   create <id>  make the account spex-<id>, in the group spex-seats,
-#                its home readable by that account alone
+#                its home readable by that account alone and empty,
+#                no login skeleton copied into it
 #   start <id>   write the handshake token read from standard input
 #                where the hub and the seat alone read it, then start
 #                the unit spex-seat@<id>
@@ -74,12 +75,17 @@ seat_dir="$RUN_DIR/$seat_id"
 
 case "$command" in
   create)
-    if getent passwd "$account" >/dev/null; then
-      exit 0
+    if ! getent passwd "$account" >/dev/null; then
+      useradd --no-create-home --home-dir "$HOME_BASE/$account" --user-group \
+        --groups "$SEATS_GROUP" --shell /bin/bash --comment "Spex seat $seat_id" "$account"
     fi
-    useradd --create-home --home-dir "$HOME_BASE/$account" --user-group \
-      --groups "$SEATS_GROUP" --shell /bin/bash --comment "Spex seat $seat_id" "$account"
-    chmod 0700 "$HOME_BASE/$account"
+    # The home is made empty, the host's login skeleton not copied, so a
+    # first admission costs what a later one does (DR-159); made where a
+    # creation cut short left the account without one, so a creation
+    # asked again finishes it (hub-4), and left as it is where it stands.
+    if [ ! -d "$HOME_BASE/$account" ]; then
+      install -d -m 0700 -o "$account" -g "$account" "$HOME_BASE/$account"
+    fi
     ;;
   start)
     if ! getent passwd "$account" >/dev/null; then

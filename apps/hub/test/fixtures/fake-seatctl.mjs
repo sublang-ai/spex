@@ -15,7 +15,9 @@
 // writes the token but launches no stub seat; `nocreate: [<id>]` and
 // `nostop: [<id>]` refuse `create` and `stop` with exit 70, touching
 // nothing; `holdstop: {<id>: <path>}` holds `stop` until that file
-// exists, up to 20 seconds.
+// exists, up to 20 seconds; `slowcreate: {<id>: <ms>}` makes `create`
+// take that long before it makes the home, as a host copying a large
+// login skeleton does.
 
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -48,7 +50,7 @@ const endAudit = command === "stop" && process.env.FAKE_LEASE_STATE
   ? (() => {
     const lease = JSON.parse(readFileSync(process.env.FAKE_LEASE_STATE, "utf8"))[id];
     return {
-      leaseEnded: lease.bearer_hash === null && lease.stop_owed === true,
+      leaseEnded: Array.isArray(lease.bearer_hashes) && lease.bearer_hashes.length === 0 && lease.stop_owed === true,
       relayEnded: existsSync(join(process.env.FAKE_RELAY_END_DIR, id)),
     };
   })()
@@ -87,10 +89,15 @@ function runningPid() {
 }
 
 switch (command) {
-  case "create":
-    if ((script().nocreate ?? []).includes(id)) refuse("create");
+  case "create": {
+    const { nocreate = [], slowcreate = {} } = script();
+    if (nocreate.includes(id)) refuse("create");
+    if (typeof slowcreate[id] === "number") {
+      await new Promise((resolveWait) => setTimeout(resolveWait, slowcreate[id]));
+    }
     mkdirSync(join(homes, id), { recursive: true, mode: 0o700 });
     break;
+  }
   case "start": {
     // A running unit is left as it is, its token with it.
     if (runningPid() !== undefined) break;
