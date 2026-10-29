@@ -3,8 +3,10 @@
 
 // A core running as a seat on a team server (core-service-125,
 // core-service-127, DR-132), against the stand-in instance: the device
-// request names the server and the person under the server's name; a
-// sign-in as another account, or a denied code, stores nothing; your own
+// request names the server and the person under the server's name, and
+// the ticket a start names, its reply naming the interval, a ticket
+// refused off a seat (DR-161); a sign-in as another account, or a denied
+// code, stores nothing; your own
 // group is placed at no instance and offered no pick or remote; every
 // command naming a working folder is refused; a seat opens no seat on a
 // team server, asking nothing; and an intent holding no runtime runs
@@ -49,6 +51,30 @@ test("core-service-127, git-host-27: a seat's device request names the server an
   assert.deepEqual(host.script.deviceRequests, [{ label: "Spex on lab-1", serverId: SEAT.serverId, personId: SEAT.personId }]);
   assert.equal(Home.load(home.dataDir).instance(host.url)?.account?.id, SEAT.personId);
   assert.ok(existsSync(credentialsPath(home.dataDir)), "the person's token is stored");
+});
+
+test("git-host-27, git-host-28: a seat's start naming a ticket carries it in the device request, its reply naming the interval the stand-in set; off a seat a start naming a ticket is refused invalid_request, asking nothing", async (t) => {
+  const host = await startHost();
+  host.script.deviceInterval = 2;
+  const home = await startHome("seat-ticket", { host, project: false, extra: { seat: SEAT } });
+  t.after(() => home.stop());
+  const started = await home.client.expectOk("space.signin.start", { url: host.url, ticket: "spext_presented" });
+  if (started.flow !== "device") return assert.fail("a seat signs in through the device flow");
+  // The reply names the interval the instance set (git-host-3).
+  assert.equal(started.interval, 2);
+  // The request carries the ticket beside the server and the person
+  // (git-host-27).
+  assert.deepEqual(host.script.deviceRequests, [{ label: "Spex on lab-1", serverId: SEAT.serverId, personId: SEAT.personId, ticket: "spext_presented" }]);
+  assert.deepEqual(await home.client.expectOk("space.signin.cancel", {}), { stopped: true });
+
+  // Off a seat, a start naming a ticket is refused before anything is
+  // asked (git-host-27).
+  const member = await startHome("seat-ticket-member", { host, project: false });
+  t.after(() => member.stop());
+  const asked = host.script.requests.length;
+  await member.client.expectError("space.signin.start", { url: host.url, ticket: "spext_presented" }, "invalid_request", /^A ticket is taken only on a server's seat$/);
+  assert.equal(host.script.requests.length, asked, "nothing is asked of the instance");
+  assert.equal(host.script.deviceRequests.length, 1);
 });
 
 test("core-service-127, git-host-27: on a seat a sign-in as another account, and a denied code, each end failed storing nothing", async (t) => {

@@ -6450,8 +6450,10 @@ msgstr "已以 @{login} 登录"
 msgid "Signed out of {host}"
 msgstr "已退出 {host} 的登录"
 
+#. a team server's line while its seat signs in at the instance, before any page asks the person to approve it; {instance} is the instance's name
 #. project palette: under a team server's groups while the seat signs in at the instance, before which it lists nothing; {instance} is the instance's name
 #: src/components/ProjectPalette.tsx
+#: src/components/SpaceServers.tsx
 msgid "Signing in to {instance}…"
 msgstr "正在登录 {instance}…"
 

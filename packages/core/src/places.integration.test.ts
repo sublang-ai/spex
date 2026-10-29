@@ -27,12 +27,16 @@
 // client's connection. The admission's wait outlasts a hub answering
 // after seventy seconds and ends unreachable at ninety. The seat's
 // sign-in (core-service-142), against a core in seat mode: the open
-// starts it once — pending, running with the instance's page, signed
-// in once approved, failed with the seat's cause where denied —
-// `server.signin` starting a second flow after a failure and none while
-// one runs, nothing restarting it on its own, a seat signed in before
-// the open reading signed in with no flow, and no app token of the
-// seat's in any frame to the client.
+// starts it once with the ticket it presented — pending, then signed in
+// with no running between where the instance grants on the ticket;
+// where it keeps its page, pending through the first poll interval,
+// running with the instance's page, signed in once approved, failed with
+// the seat's cause where denied — `server.signin` starting a second flow
+// with no ticket after a failure and none while one runs, nothing
+// restarting it on its own, a seat signed in before the open reading
+// signed in with no flow, a core restarted over its seat starting its
+// sign-in with no ticket, and no app token of the seat's and no ticket
+// in any frame to the client.
 
 import { test, type TestContext } from "node:test";
 import assert from "node:assert/strict";
@@ -892,7 +896,24 @@ async function runningCode(home: Home, host: StandinHost, from: number): Promise
   return code;
 }
 
-test("core-service-130, core-service-142: the open starts the seat's sign-in — pending, running with the stand-in's page, signed in once approved — server.signin starts none while it runs, a seat signed in before the open reads signed in with no flow, and no app token reaches the client", async (t) => {
+/** Every ticket the instance minted, none of which a frame to the
+ * client may carry (core-service-128). */
+function assertNoTicket(home: Home, host: StandinHost): void {
+  const frames = JSON.stringify(home.client.messages);
+  for (const minted of host.script.tickets) assert.ok(!frames.includes(minted.ticket), "no frame carries the ticket");
+}
+
+/** Wait until the seat's own sign-in runs no more. */
+async function seatFlowEnded(seat: Home): Promise<void> {
+  let phase = "running";
+  for (let tries = 0; tries < 200 && phase === "running"; tries += 1) {
+    phase = (await seat.client.expectOk("space.get", {})).signIn.phase;
+    if (phase === "running") await new Promise((resolveWait) => setTimeout(resolveWait, 25));
+  }
+  assert.notEqual(phase, "running", "the seat's flow ended");
+}
+
+test("core-service-130, core-service-142: the open starts the seat's sign-in with the ticket it presented — pending, then signed in with no running between where the instance grants on it — a seat signed in before the open reads signed in with no flow, and no app token or ticket reaches the client", async (t) => {
   const host = await startHost();
   const { seat, hub } = await startSeatMode(t, host, SERVER, "lab-1");
   const home = await startHome("places-signin", { host, project: false, extra: { serverCertificateAuthorities: [hub.ca] } });
@@ -901,15 +922,71 @@ test("core-service-130, core-service-142: the open starts the seat's sign-in —
   const place = `${host.url}#${SERVER}`;
   const target = { instance: host.url, serverId: SERVER };
   const requests = host.script.deviceRequests.length;
+  const grants = host.script.tokenGrants.length;
 
   // The open: the seat's hello read, its Groups state lists the instance
   // not signed in, and the core starts the seat's sign-in there once,
-  // the seat's own request naming the server and the person
-  // (git-host-27).
+  // the seat's own request naming the server, the person and the ticket
+  // the open presented (git-host-27); the instance grants on it, so the
+  // seat reads signed in with no page shown.
   const from = home.client.mark();
   await home.client.expectOk("server.open", { ...target, consented: true });
+  await seatsAfter(() => home.client.messages, from, (seats) => seats[0]?.signIn.state === "signedIn");
+  const ticket = host.script.tickets.at(-1);
+  assert.ok(ticket?.spent, "the open's ticket was spent at the admission");
+  assert.deepEqual(host.script.deviceRequests.slice(requests), [{ label: "Spex on lab-1", serverId: SERVER, personId: "1001", ticket: ticket.ticket }]);
+  assert.deepEqual(signInsOf(home.client.messages, from, place).map((state) => state.state), ["pending", "signedIn"]);
+  assert.deepEqual(host.script.tokenGrants.slice(grants).filter((grant) => grant.ok).map((grant) => grant.ticket), [true], "granted on the ticket");
+  assert.equal(instanceOf(await seat.client.expectOk("space.get", {}), host.url)?.signedIn, true, "the seat itself reads signed in");
+
+  // Closed and opened again, the seat signed in already: signed in with
+  // no flow started.
+  await home.client.expectOk("server.close", target);
+  const again = home.client.mark();
+  await home.client.expectOk("server.open", { ...target, consented: true });
+  await seatsAfter(() => home.client.messages, again, (seats) => seats[0]?.signIn.state === "signedIn");
+  assert.deepEqual(signInsOf(home.client.messages, again, place).map((state) => state.state), ["pending", "signedIn"]);
+  // server.signin of a seat signed in reads it anew and starts no flow.
+  const anew = home.client.mark();
+  assert.deepEqual(await home.client.expectOk("server.signin", target), { started: true });
+  await seatsAfter(() => home.client.messages, anew, (seats) => seats[0]?.signIn.state === "signedIn");
+  assert.equal(host.script.deviceRequests.length, requests + 1, "no flow for a seat signed in");
+  // A place with no seat open is refused.
+  await home.client.expectError("server.signin", { instance: host.url, serverId: "srv_none" }, "not_found", /^No seat is open on this server$/);
+
+  // Nothing of the seat's app token nor the ticket reached the client:
+  // the four states alone.
+  const { access, refresh } = seatToken(seat, host.url);
+  const frames = JSON.stringify(home.client.messages);
+  assert.ok(!frames.includes(access) && !frames.includes(refresh), "no frame carries the seat's app token");
+  assertNoTicket(home, host);
+  for (const state of signInsOf(home.client.messages, 0, place)) {
+    assert.ok(["pending", "running", "signedIn", "failed"].includes(state.state), JSON.stringify(state));
+  }
+});
+
+test("core-service-130, core-service-142: where the instance keeps its page, the seat's sign-in reads pending through the first poll interval, then running with the stand-in's page, signed in once approved, and server.signin starts none while it runs", async (t) => {
+  const host = await startHost();
+  host.script.ticketGrants = false;
+  const { seat, hub } = await startSeatMode(t, host, SERVER, "lab-1");
+  const home = await startHome("places-signin-page", { host, project: false, extra: { serverCertificateAuthorities: [hub.ca] } });
+  t.after(() => home.stop());
+  await signIn(home, host);
+  const place = `${host.url}#${SERVER}`;
+  const target = { instance: host.url, serverId: SERVER };
+  const requests = host.script.deviceRequests.length;
+  const grants = host.script.tokenGrants.length;
+
+  const from = home.client.mark();
+  await home.client.expectOk("server.open", { ...target, consented: true });
+  const opened = Date.now();
   const code = await runningCode(home, host, from);
-  assert.deepEqual(host.script.deviceRequests.slice(requests), [{ label: "Spex on lab-1", serverId: SERVER, personId: "1001" }]);
+  // Pending through the first poll interval and the margin, the seat
+  // polling meanwhile (core-service-142).
+  const waited = Date.now() - opened;
+  assert.ok(waited >= host.script.deviceInterval * 1000 + 2000, `running after ${waited} ms`);
+  assert.ok(host.script.tokenGrants.slice(grants).some((grant) => grant.error === "authorization_pending"), "the seat polled while pending");
+  assert.deepEqual(host.script.deviceRequests.slice(requests), [{ label: "Spex on lab-1", serverId: SERVER, personId: "1001", ticket: host.script.tickets.at(-1)?.ticket }]);
   const flow = (await seatsAfter(() => home.client.messages, from, (seats) => seats[0]?.signIn.state === "running"))[0]?.signIn;
   assert.ok(flow?.state === "running");
   // Running with the instance's page, the code carried in it.
@@ -927,36 +1004,19 @@ test("core-service-130, core-service-142: the open starts the seat's sign-in —
   assert.deepEqual(signInsOf(home.client.messages, from, place).map((state) => state.state), ["pending", "running", "signedIn"]);
   assert.equal(instanceOf(await seat.client.expectOk("space.get", {}), host.url)?.signedIn, true, "the seat itself reads signed in");
   assert.equal(host.script.deviceRequests.length, requests + 1, "one flow for one open");
-
-  // Closed and opened again, the seat signed in already: signed in with
-  // no flow started.
-  await home.client.expectOk("server.close", target);
-  const again = home.client.mark();
-  await home.client.expectOk("server.open", { ...target, consented: true });
-  await seatsAfter(() => home.client.messages, again, (seats) => seats[0]?.signIn.state === "signedIn");
-  assert.deepEqual(signInsOf(home.client.messages, again, place).map((state) => state.state), ["pending", "signedIn"]);
-  // server.signin of a seat signed in reads it anew and starts no flow.
-  const anew = home.client.mark();
-  assert.deepEqual(await home.client.expectOk("server.signin", target), { started: true });
-  await seatsAfter(() => home.client.messages, anew, (seats) => seats[0]?.signIn.state === "signedIn");
-  assert.equal(host.script.deviceRequests.length, requests + 1, "no flow for a seat signed in");
-  // A place with no seat open is refused.
-  await home.client.expectError("server.signin", { instance: host.url, serverId: "srv_none" }, "not_found", /^No seat is open on this server$/);
-
-  // Nothing of the seat's app token reached the client: the four states
-  // alone.
+  assert.ok(host.script.tokenGrants.every((grant) => !grant.ticket), "nothing granted on the ticket");
   const { access, refresh } = seatToken(seat, host.url);
   const frames = JSON.stringify(home.client.messages);
   assert.ok(!frames.includes(access) && !frames.includes(refresh), "no frame carries the seat's app token");
-  for (const state of signInsOf(home.client.messages, 0, place)) {
-    assert.ok(["pending", "running", "signedIn", "failed"].includes(state.state), JSON.stringify(state));
-  }
+  assertNoTicket(home, host);
 });
 
-test("core-service-130, core-service-142: a denied sign-in reads failed with the seat's cause and nothing restarts it on its own; server.signin starts a second flow; a close cancels a flow still running, so the next open starts afresh", async (t) => {
+test("core-service-130, core-service-142: a denied sign-in reads failed with the seat's cause and nothing restarts it on its own; server.signin starts a second flow with no ticket; a close cancels a flow still running, so the next open starts afresh; a core restarted over its seat starts its sign-in with no ticket", async (t) => {
   const host = await startHost();
+  host.script.ticketGrants = false;
   const { seat, hub } = await startSeatMode(t, host, SERVER, "lab-1");
-  const home = await startHome("places-signin-denied", { host, project: false, extra: { serverCertificateAuthorities: [hub.ca] } });
+  const extra = { serverCertificateAuthorities: [hub.ca] };
+  const home = await startHome("places-signin-denied", { host, project: false, extra });
   t.after(() => home.stop());
   await signIn(home, host);
   const place = `${host.url}#${SERVER}`;
@@ -984,31 +1044,46 @@ test("core-service-130, core-service-142: a denied sign-in reads failed with the
   assert.equal(host.script.deviceRequests.length, requests + 1, "a failure is not restarted on its own");
   assert.ok(signInsOf(home.client.messages, dropped, place).every((state) => state.state === "failed"), "the seat still reads failed");
 
-  // server.signin starts a second flow after the failure.
+  // server.signin starts a second flow after the failure, with no
+  // ticket: the page at once.
   const retried = home.client.mark();
   assert.deepEqual(await home.client.expectOk("server.signin", target), { started: true });
   const second = await runningCode(home, host, retried);
   assert.equal(host.script.deviceRequests.length, requests + 2);
-  assert.deepEqual(host.script.deviceRequests.slice(requests).map((request) => [request.serverId, request.personId]), [[SERVER, "1001"], [SERVER, "1001"]]);
+  const [first] = host.script.tickets;
+  assert.deepEqual(host.script.deviceRequests.slice(requests).map((request) => [request.serverId, request.personId, request.ticket]), [[SERVER, "1001", first?.ticket], [SERVER, "1001", undefined]]);
 
   // A close while that flow runs cancels it at the seat, so the next
-  // open finds no sign-in in its way and starts afresh.
+  // open finds no sign-in in its way and starts afresh, with its own
+  // ticket.
   await home.client.expectOk("server.close", target);
-  let phase = "running";
-  for (let tries = 0; tries < 200 && phase === "running"; tries += 1) {
-    phase = (await seat.client.expectOk("space.get", {})).signIn.phase;
-    if (phase === "running") await new Promise((resolveWait) => setTimeout(resolveWait, 25));
-  }
-  assert.notEqual(phase, "running", "the seat's flow ended with the close");
+  await seatFlowEnded(seat);
   const last = home.client.mark();
   await home.client.expectOk("server.open", { ...target, consented: true });
   const third = await runningCode(home, host, last);
   assert.notEqual(third, second);
   assert.equal(host.script.deviceRequests.length, requests + 3);
-  host.script.approveDevice(third);
-  await seatsAfter(() => home.client.messages, last, (seats) => seats[0]?.signIn.state === "signedIn");
-  assert.deepEqual(signInsOf(home.client.messages, last, place).map((state) => state.state), ["pending", "running", "signedIn"]);
+  assert.equal(host.script.deviceRequests.at(-1)?.ticket, host.script.tickets.at(-1)?.ticket);
+  assertNoTicket(home, host);
+
+  // A core restarted over its seat reopens it and starts its sign-in
+  // with no ticket: even an instance granting on tickets asks for its
+  // page, at once.
+  await home.stop();
+  await seatFlowEnded(seat);
+  host.script.ticketGrants = true;
+  const restarted = await startHome("places-signin-denied", { host, project: false, extra, dataDir: home.dataDir });
+  t.after(() => restarted.stop());
+  const fourth = await runningCode(restarted, host, 0);
+  assert.equal(host.script.deviceRequests.length, requests + 4);
+  assert.equal(host.script.deviceRequests.at(-1)?.ticket, undefined, "a reopened seat's sign-in carries no ticket");
+  host.script.approveDevice(fourth);
+  await seatsAfter(() => restarted.client.messages, 0, (seats) => seats[0]?.signIn.state === "signedIn");
+  assert.deepEqual(signInsOf(restarted.client.messages, 0, place).map((state) => state.state), ["pending", "running", "signedIn"]);
   const { access, refresh } = seatToken(seat, host.url);
-  const frames = JSON.stringify(home.client.messages);
-  assert.ok(!frames.includes(access) && !frames.includes(refresh), "no frame carries the seat's app token");
+  for (const core of [home, restarted]) {
+    const frames = JSON.stringify(core.client.messages);
+    assert.ok(!frames.includes(access) && !frames.includes(refresh), "no frame carries the seat's app token");
+    assertNoTicket(core, host);
+  }
 });

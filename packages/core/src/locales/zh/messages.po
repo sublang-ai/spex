@@ -903,6 +903,11 @@ msgstr "会话、意图和编写会话不提供文本差异"
 msgid "A sign-in is already running"
 msgstr "已有一个登录正在进行"
 
+#. Refusal of a sign-in naming a team server's ticket on a machine of one's own: only a team server's seat signs in with the ticket its member's client presented
+#: src/service.ts
+msgid "A ticket is taken only on a server's seat"
+msgstr "只有服务器上的席位才接受票据"
+
 #. Refusal: an authoring transcript with no session file holds the id a new playbook asked for
 #: src/drafts.ts
 msgid "a transcript of {id} stands without its session file; move it aside or delete it first"

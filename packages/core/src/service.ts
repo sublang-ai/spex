@@ -336,6 +336,13 @@ const credentialsOffSeat = (): CoreError => new CoreError("invalid_request", i18
   comment: "Refusal of a credentials command on a machine of one's own: Spex keeps a member's code-host and agent credentials only on a team server's seat",
 }));
 
+/** The refusal off a seat of a sign-in naming a ticket (git-host-27):
+ * only a seat's device request carries one. */
+const ticketOffSeat = (): CoreError => new CoreError("invalid_request", i18n._({
+  id: "A ticket is taken only on a server's seat",
+  comment: "Refusal of a sign-in naming a team server's ticket on a machine of one's own: only a team server's seat signs in with the ticket its member's client presented",
+}));
+
 // A credential command's fields, each checked before anything is written
 // (settings-48); a refusal never repeats what was given, which may hold
 // a secret.
@@ -3615,6 +3622,9 @@ export class CoreService {
       case "space.refresh":
         return this.requireSpace().refresh();
       case "space.signin.start":
+        // A ticket goes with a seat's device request alone; off a seat it
+        // is refused before anything is asked (git-host-27).
+        if (command.ticket !== undefined && !this.seat) throw ticketOffSeat();
         return this.requireSpace().signInStart(command.url, command.reportCompletion ? {
           owner: client,
           id: command.id,
@@ -3629,7 +3639,7 @@ export class CoreService {
               }
             });
           },
-        } : undefined);
+        } : undefined, command.ticket);
       case "space.signin.cancel":
         return { stopped: this.requireSpace().signInCancel(client, command.startId) };
       // Each command names the instance it acts at by its origin

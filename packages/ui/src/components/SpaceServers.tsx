@@ -14,9 +14,10 @@
 // open sends it at once. While the open runs the line says so, and past
 // ten seconds that a seat's first start can take a minute; once the
 // seat is open and until its sign-in at the instance completes
-// (core-service-142), the line links the page where the person approves
-// it, the desktop having opened it, and a sign-in that failed reads its
-// cause with "Sign in again". A refusal reads the core's relayed cause
+// (core-service-142), the line reads "Signing in to <instance>…" and,
+// where the instance asks for its page, links that page where the person
+// approves it, the desktop having opened it, and a sign-in that failed
+// reads its cause with "Sign in again" (DR-161). A refusal reads the core's relayed cause
 // on the line. A server whose group the instance's read does not list
 // stands at the foot of the instance's section, as does a listing's
 // failure. The listing is read as the surface opens, again after an open
@@ -270,7 +271,8 @@ function ServerLine({
   const host = instanceName(instance);
   const signIn = server.open ? seat?.signIn : undefined;
   // What the line reads beside the server (run-view-170): the open while
-  // it runs, the seat's sign-in until it completes, else "Connected"
+  // it runs, the seat's sign-in until it completes — the instance named
+  // while it is pending, its page linked while it runs — else "Connected"
   // where a seat is open.
   let status: ReactNode = null;
   if (acting === "open") {
@@ -295,6 +297,16 @@ function ServerLine({
         <ApprovalLink href={signIn.verificationUri} testId={`space-server-approve-${place}`}>
           {approveLabel(name)}
         </ApprovalLink>
+      </span>
+    );
+  } else if (signIn?.state === "pending") {
+    status = (
+      <span data-testid={`space-server-signing-${place}`} role="status" className="min-w-0 text-xs text-neutral-500">
+        {i18n._({
+          id: "Signing in to {instance}…",
+          values: { instance: host },
+          comment: "a team server's line while its seat signs in at the instance, before any page asks the person to approve it; {instance} is the instance's name",
+        })}
       </span>
     );
   } else if (server.open && signIn?.state !== "failed") {

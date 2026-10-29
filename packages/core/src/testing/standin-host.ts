@@ -20,7 +20,9 @@
 // servers (servers-5..7, DR-133), the servers listing and the tickets,
 // each call recorded with the bearer it carried, a server left out of
 // the listing, scripted faults of the listing or the ticket route alone,
-// and a ticket spent as a server's admission spends it. Like Spex Space
+// a ticket spent as a server's admission spends it, and a seat's device
+// code granted on that ticket without its page (git-host-12, DR-161)
+// unless scripted to keep the page. Like Spex Space
 // (DR-120) it answers every path relative to the instance's root, keeps
 // no group of its own, hides the service identity a root creation adds
 // as an Owner, and answers no page URL. Several run at once as several
@@ -41,8 +43,9 @@ import { RELAY_HEADERS } from "./standin-registry.js";
 
 export interface StandinPerson { id: string; login: string; displayName: string | null }
 
-/** A device request as the stand-in admitted it (auth-71). */
-export interface StandinDeviceRequest { label: string; serverId: string | null; personId: string | null }
+/** A device request as the stand-in admitted it (auth-71), with the
+ * ticket a seat's request carried where it carried one (DR-161). */
+export interface StandinDeviceRequest { label: string; serverId: string | null; personId: string | null; ticket?: string }
 
 /** What the stand-in lets the person do in a group (host-4): create a
  * subgroup, manage its members, rename it, delete it. */
@@ -118,8 +121,10 @@ export type StandinServersFault =
 export interface StandinServerCall { method: string; path: string; bearer: string | null }
 
 /** A ticket this instance minted (servers-6), for the server it is bound
- * to, until its expiry in Unix milliseconds, spent at most once. */
-export interface StandinTicket { ticket: string; serverId: string; expiresAt: number; spent: boolean }
+ * to, asked by the account `personId` names, until its expiry in Unix
+ * milliseconds, spent at most once — when, in Unix milliseconds — and
+ * whether a device was signed in on it (git-host-12). */
+export interface StandinTicket { ticket: string; serverId: string; personId: string; expiresAt: number; spent: boolean; spentAt: number | null; signedIn: boolean }
 
 /** A ticket's redemption as the instance answers a server's admission
  * (servers-7): the person and the server with the lease's expiry, or the
@@ -199,13 +204,19 @@ export interface StandinScript {
   accessTtlMs: number;
   /** Refuse every refresh grant with `invalid_grant`. */
   refuseRefresh: boolean;
+  /** Grant a seat's pending device code on the ticket its request
+   * carried (git-host-12, DR-161); false keeps the page, as an older
+   * instance does. */
+  ticketGrants: boolean;
   /** Every request, in arrival order. */
   requests: StandinRequest[];
-  /** Every token grant, in order. */
-  tokenGrants: { grantType: string; ok: boolean; error: string | null }[];
+  /** Every token grant, in order, and whether it was granted on a
+   * ticket (git-host-12). */
+  tokenGrants: { grantType: string; ok: boolean; error: string | null; ticket: boolean }[];
   /** Every device request admitted (auth-71), in order: its label and,
    * from a seat, the server's id and the person's id it named, which the
-   * stand-in accepts unchecked as the instance does; null where absent. */
+   * stand-in accepts unchecked as the instance does, null where absent,
+   * and the ticket where it carried one. */
   deviceRequests: StandinDeviceRequest[];
   /** Every `POST /api/v1/host/repositories` body admitted, as it came,
    * in order (host-6). */
@@ -409,6 +420,9 @@ const MOVING_ROLE = "Owner";
 const USER_CODE_ALPHABET = "BCDFGHJKLMNPQRSTVWXZ";
 /** A ticket's life, in seconds (servers-6). */
 const TICKET_TTL_S = 120;
+/** How long after its redemption a ticket grants a seat's device code
+ * (git-host-12, DR-161). */
+const TICKET_GRANT_WINDOW_MS = 10 * 60_000;
 /** An execution lease's length from an admission (servers-7). */
 const LEASE_MS = 60 * 60_000;
 const CODE_TTL_MS = 10 * 60_000;
@@ -436,6 +450,10 @@ interface DeviceCode {
   lastPoll: number;
   expiresAt: number;
   consumed: boolean;
+  /** A seat's request: its server, its person and its ticket. */
+  serverId: string | null;
+  personId: string | null;
+  ticket: string | null;
 }
 
 interface HeldSignIn { redirectUri: string; state: string; challenge: string; label: string }
@@ -1053,6 +1071,7 @@ export async function startStandinHost(opts: StandinHostOptions): Promise<Standi
     deviceExpiresIn: 600,
     accessTtlMs: 3_600_000,
     refuseRefresh: false,
+    ticketGrants: true,
     requests: [],
     tokenGrants: [],
     deviceRequests: [],
@@ -1070,6 +1089,7 @@ export async function startStandinHost(opts: StandinHostOptions): Promise<Standi
       const minted = script.tickets.find((entry) => entry.ticket === ticket);
       if (!minted || minted.spent || minted.expiresAt <= Date.now()) return { status: 401, code: "ticket_invalid", message: "The ticket is not valid." };
       minted.spent = true;
+      minted.spentAt = Date.now();
       const server = script.servers.find((entry) => entry.id === minted.serverId);
       return {
         person: { ...script.person },
@@ -1297,7 +1317,10 @@ export async function startStandinHost(opts: StandinHostOptions): Promise<Standi
     if (serverId === false || personId === false || (serverId === null) !== (personId === null)) {
       return envelope(res, 400, "invalid_request", "A server_id and a person_id of at most 64 characters come together or not at all.");
     }
-    script.deviceRequests.push({ label: body.label, serverId, personId });
+    // A seat's ticket comes with its server and person (DR-161).
+    const ticket = body.ticket === undefined ? null : typeof body.ticket === "string" && body.ticket.length > 0 && serverId !== null ? body.ticket : false;
+    if (ticket === false) return envelope(res, 400, "invalid_request", "A ticket comes with a server_id and a person_id.");
+    script.deviceRequests.push({ label: body.label, serverId, personId, ...(ticket !== null ? { ticket } : {}) });
     const deviceCode = secret("");
     const code = userCode();
     const now = performance.now();
@@ -1309,6 +1332,9 @@ export async function startStandinHost(opts: StandinHostOptions): Promise<Standi
       lastPoll: now,
       expiresAt: Date.now() + script.deviceExpiresIn * 1000,
       consumed: false,
+      serverId,
+      personId,
+      ticket,
     });
     const verification = `${url}/login/device`;
     json(res, 200, {
@@ -1325,11 +1351,11 @@ export async function startStandinHost(opts: StandinHostOptions): Promise<Standi
     const body = await readJson(req);
     const grantType = isRecord(body) && typeof body.grant_type === "string" ? body.grant_type : "";
     const refuse = (code: string, message: string): void => {
-      script.tokenGrants.push({ grantType, ok: false, error: code });
+      script.tokenGrants.push({ grantType, ok: false, error: code, ticket: false });
       envelope(res, 400, code, message);
     };
-    const grant = (device: Device): void => {
-      script.tokenGrants.push({ grantType, ok: true, error: null });
+    const grant = (device: Device, onTicket = false): void => {
+      script.tokenGrants.push({ grantType, ok: true, error: null, ticket: onTicket });
       json(res, 200, tokenBody(device));
     };
     if (!isRecord(body) || grantType === "") return refuse("invalid_request", "The body must be a JSON object naming grant_type.");
@@ -1380,9 +1406,30 @@ export async function startStandinHost(opts: StandinHostOptions): Promise<Standi
     const tooSoon = now - entry.lastPoll < floorMs - POLL_TOLERANCE_MS;
     entry.lastPoll = now;
     if (tooSoon) return refuse("slow_down", "Polling too fast.");
+    const minted = entry.status === "pending" ? ticketGrant(entry) : null;
+    if (minted) {
+      // Granted on the ticket, without the page; the ticket signs no
+      // other device in (git-host-12, DR-161).
+      minted.signedIn = true;
+      entry.status = "approved";
+    }
     if (entry.status === "pending") return refuse("authorization_pending", "The sign-in is not approved yet.");
     entry.consumed = true;
-    return grant(issue(entry.label).device);
+    return grant(issue(entry.label).device, minted !== null);
+  }
+
+  /** The ticket a seat's pending device code is granted on, as Spex
+   * Space grants it (git-host-12, DR-161): one this instance minted,
+   * spent by a server's admission within the last ten minutes, bound to
+   * the code's server, asked by the account its person names, that has
+   * signed no device in; null where none, or where scripted to keep the
+   * page. */
+  function ticketGrant(entry: DeviceCode): StandinTicket | null {
+    if (!script.ticketGrants || entry.ticket === null) return null;
+    const minted = script.tickets.find((candidate) => candidate.ticket === entry.ticket);
+    if (!minted || minted.spentAt === null || Date.now() - minted.spentAt > TICKET_GRANT_WINDOW_MS) return null;
+    if (minted.serverId !== entry.serverId || minted.personId !== entry.personId || minted.signedIn) return null;
+    return minted;
   }
 
   function revoke(req: IncomingMessage, res: ServerResponse): void {
@@ -1434,7 +1481,7 @@ export async function startStandinHost(opts: StandinHostOptions): Promise<Standi
       const server = script.servers.find((s) => s.id === decodeURIComponent(ticketMatch[1]));
       if (!server) return envelope(res, 404, "not_found", "no server has this id");
       const ticket = secret("spext_");
-      script.tickets.push({ ticket, serverId: server.id, expiresAt: Date.now() + TICKET_TTL_S * 1000, spent: false });
+      script.tickets.push({ ticket, serverId: server.id, personId: script.person.id, expiresAt: Date.now() + TICKET_TTL_S * 1000, spent: false, spentAt: null, signedIn: false });
       return json(res, 201, { ticket, expires_in: TICKET_TTL_S, server: { id: server.id, name: server.name, address: server.address } });
     }
     const groupOnly = /^\/api\/v1\/host\/groups\/([^/]+)$/.exec(path);

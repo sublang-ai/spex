@@ -6450,8 +6450,10 @@ msgstr "Signed in as @{login}"
 msgid "Signed out of {host}"
 msgstr "Signed out of {host}"
 
+#. a team server's line while its seat signs in at the instance, before any page asks the person to approve it; {instance} is the instance's name
 #. project palette: under a team server's groups while the seat signs in at the instance, before which it lists nothing; {instance} is the instance's name
 #: src/components/ProjectPalette.tsx
+#: src/components/SpaceServers.tsx
 msgid "Signing in to {instance}…"
 msgstr "Signing in to {instance}…"
 

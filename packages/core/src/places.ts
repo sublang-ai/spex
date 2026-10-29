@@ -34,11 +34,14 @@
 // hello, and at `server.signin`, a connection of the core's own reads
 // the seat's Groups state as any client does and, where the seat is not
 // signed in at its instance, starts the seat's sign-in there — the
-// device flow, the seat's request naming the server and the person —
-// carrying it as the seat's `signIn` in `server.state`: pending, running
-// with the page where the person approves it, signed in, or failed with
-// the seat's cause. Nothing starts a flow again on its own; the seat's
-// app token stays on the server.
+// device flow, the seat's request naming the server and the person and,
+// at the first hello of an open this core made, the ticket that open
+// presented, held in memory until then and no longer (DR-161) — carrying
+// it as the seat's `signIn` in `server.state`: pending, running with the
+// page where the person approves it — for a start carrying the ticket,
+// only once the first poll interval passed with no grant — signed in, or
+// failed with the seat's cause. Nothing starts a flow again on its own;
+// the seat's app token stays on the server.
 //
 // The bearer and the endpoint never leave this module and the seats
 // file: no reply, event, error message or log line carries either, nor
@@ -74,6 +77,12 @@ const LEASE_END = 4401;
 const WATCH_ID = "spex-watch-ledger";
 /** The ids of the sign-in connection's own commands (core-service-142). */
 const SIGNIN_ID = "spex-seat-signin";
+/** The poll interval a seat's start is read with where its reply names
+ * none, in seconds, as the device flow polls (git-host-3). */
+const DEFAULT_POLL_INTERVAL_S = 5;
+/** The margin past a start's first poll interval within which a grant
+ * on the ticket keeps the page unshown (core-service-142). */
+const TICKET_GRANT_MARGIN_MS = 2_000;
 
 /** What the places need of the core (DR-133). */
 export interface PlacesHost {
@@ -323,8 +332,10 @@ interface Pipe { client: WebSocket; upstream: WebSocket }
  * its state, its watch, the seat's last read badge and the client
  * connections piped to the seat; and the seat's sign-in at its instance
  * (core-service-142) — its state, held in memory alone, the connection
- * reading or running it, the id of the flow that connection started and
- * whether the relay's first hello asked it. */
+ * reading or running it, the id of the flow that connection started,
+ * whether the relay's first hello asked it, the ticket the open presented
+ * until that hello's start takes it, and the timer holding a running
+ * flow's page while an instance may still grant on that ticket. */
 interface Relay {
   entry: SeatEntry;
   state: SeatRelayState;
@@ -337,6 +348,8 @@ interface Relay {
   signInSocket?: WebSocket;
   signInFlow?: string;
   signInAsked: boolean;
+  ticket?: string;
+  signInHold?: NodeJS.Timeout;
 }
 
 /** Whether a seat's Groups state lists the instance at `origin` signed
@@ -366,6 +379,13 @@ function runningOf(result: unknown): SeatSignIn | null {
     return { state: "running", verificationUri: result.url, expiresAt: Date.now() + BROWSER_SIGN_IN_TIMEOUT_MS };
   }
   return null;
+}
+
+/** The seconds between polls a started sign-in's reply names
+ * (git-host-3), five where it names none (core-service-142). */
+function intervalOf(result: unknown): number {
+  const interval = isRecord(result) ? result.interval : undefined;
+  return typeof interval === "number" && Number.isFinite(interval) && interval > 0 ? interval : DEFAULT_POLL_INTERVAL_S;
 }
 
 /** A refusal's words from the seat — a reply's or a completion's error —
@@ -556,7 +576,7 @@ export class Places {
    * a server it does not name no longer shared, no ticket asked — a
    * ticket asked for, presented at that address, the admission awaited
    * ninety seconds, and the seat kept, its relay started and announced,
-   * the relay's first hello starting the seat's sign-in
+   * the relay's first hello starting the seat's sign-in with the ticket
    * (core-service-142); the reply carries the place and the expiry
    * alone. Without consent nothing is asked. A seat opens none: the
    * service refuses it before this (core-service-125).
@@ -605,7 +625,7 @@ export class Places {
       if (expected) this.stopRelay(place);
       // An admission answered while the core stops keeps its seat in the
       // file for the next start, its relay not started (DR-133).
-      if (!this.stopping) this.startRelay(place, entry);
+      if (!this.stopping) this.startRelay(place, entry, ticket.ticket);
       this.announce();
       return { place, leaseExpiresAt: entry.leaseExpiresAt };
     });
@@ -728,11 +748,13 @@ export class Places {
   /**
    * The relay of an open seat starts here: its path is admitted, and its
    * watch connects, the place reading connecting until the watch reads
-   * the seat's hello (core-service-129).
+   * the seat's hello (core-service-129). An open's ticket is kept on it,
+   * in memory alone, for the sign-in that hello starts (core-service-142);
+   * a seat reopened at start has none.
    */
-  private startRelay(place: string, entry: SeatEntry): void {
+  private startRelay(place: string, entry: SeatEntry, ticket?: string): void {
     this.stopRelay(place);
-    const relay: Relay = { entry, state: "connecting", badge: 0, pipes: new Set(), ended: false, signIn: { state: "pending" }, signInAsked: false };
+    const relay: Relay = { entry, state: "connecting", badge: 0, pipes: new Set(), ended: false, signIn: { state: "pending" }, signInAsked: false, ...(ticket ? { ticket } : {}) };
     this.relays.set(place, relay);
     this.watch(place, relay);
   }
@@ -747,8 +769,10 @@ export class Places {
     const relay = this.relays.get(place);
     if (!relay) return;
     relay.ended = true;
+    relay.ticket = undefined;
     this.relays.delete(place);
     if (relay.timer) clearTimeout(relay.timer);
+    clearTimeout(relay.signInHold);
     if (relay.watch) closeSocket(relay.watch, 1000);
     const signIn = relay.signInSocket;
     if (signIn) {
@@ -812,9 +836,10 @@ export class Places {
         }
         this.relayState(relay, "open");
         askBadge();
-        // The relay's first hello starts the seat's sign-in; a watch
-        // reconnecting starts none (core-service-142).
-        if (!relay.signInAsked) this.seatSignIn(place, relay);
+        // The relay's first hello starts the seat's sign-in, with the
+        // open's ticket where one is kept; a watch reconnecting starts
+        // none (core-service-142).
+        if (!relay.signInAsked) this.seatSignIn(place, relay, relay.ticket);
         return;
       }
       if (message.type === "intents.changed") {
@@ -865,13 +890,19 @@ export class Places {
    * to the seat, as any client's, reads the seat's Groups state and,
    * where the seat's instance is not signed in there, starts the seat's
    * sign-in at the instance's origin over that connection — the device
-   * flow, the seat's request naming the server and the person
-   * (git-host-27) — and hears its end there. Every state is announced;
-   * the connection closes with the outcome, and one that closes before
-   * it reads the seat out of reach. Nothing here starts a flow again on
-   * its own: only a relay's first hello and `server.signin` call this.
+   * flow, the seat's request naming the server and the person and the
+   * `ticket` where the relay's first hello passes the open's
+   * (git-host-27) — and hears its end there. The relay holds its ticket
+   * no longer, whoever calls. A start carrying the ticket reads pending
+   * through its first poll interval and the margin, when an instance
+   * granting on it answers, and running only past them; one with none
+   * reads running at once. Every state is announced; the connection
+   * closes with the outcome, and one that closes before it reads the
+   * seat out of reach. Nothing here starts a flow again on its own: only
+   * a relay's first hello and `server.signin` call this.
    */
-  private seatSignIn(place: string, relay: Relay): void {
+  private seatSignIn(place: string, relay: Relay, ticket?: string): void {
+    relay.ticket = undefined;
     const at = splitPlace(place);
     if (relay.ended || relay.signInSocket || !at) return;
     relay.signInAsked = true;
@@ -894,6 +925,7 @@ export class Places {
     let settled = false;
     const settle = (state: SeatSignIn | null): void => {
       settled = true;
+      clearTimeout(relay.signInHold);
       if (relay.signInSocket === socket) relay.signInSocket = undefined;
       relay.signInFlow = undefined;
       if (state) this.signInState(relay, state);
@@ -923,7 +955,7 @@ export class Places {
         else if (signedInThere(message.result, at.origin)) settle({ state: "signedIn" });
         else {
           relay.signInFlow = startId;
-          socket.send(JSON.stringify({ type: "space.signin.start", id: startId, url: at.origin, reportCompletion: true }));
+          socket.send(JSON.stringify({ type: "space.signin.start", id: startId, url: at.origin, reportCompletion: true, ...(ticket ? { ticket } : {}) }));
         }
         return;
       }
@@ -933,8 +965,15 @@ export class Places {
           return;
         }
         const running = runningOf(message.result);
-        if (running) this.signInState(relay, running);
-        else {
+        if (running && !ticket) this.signInState(relay, running);
+        else if (running) {
+          // Started on the ticket: pending still, the page shown only
+          // where no grant came by the first poll and the margin
+          // (core-service-142, DR-161).
+          relay.signInHold = setTimeout(() => {
+            if (!settled && !relay.ended && relay.signInSocket === socket) this.signInState(relay, running);
+          }, intervalOf(message.result) * 1000 + TICKET_GRANT_MARGIN_MS);
+        } else {
           // A start no page answers: the flow is cancelled at the seat.
           socket.send(JSON.stringify({ type: "space.signin.cancel", id: `${startId}-cancel`, startId }));
           settle(unreachable);
@@ -948,6 +987,7 @@ export class Places {
     socket.on("close", () => {
       if (relay.signInSocket === socket) relay.signInSocket = undefined;
       if (settled || relay.ended) return;
+      clearTimeout(relay.signInHold);
       // Closed before the outcome: the seat's answer is out of reach,
       // and the person may start the sign-in again (core-service-142).
       relay.signInFlow = undefined;

@@ -1310,8 +1310,10 @@ export const commandSchema = z.discriminatedUnion("type", [
   // reply `accepted` at once and report their outcome as `space.state`.
   z.object({ type: z.literal("space.get"), id }).strict(),
   z.object({ type: z.literal("space.refresh"), id }).strict(),
-  /** `url`: the instance's URL as the reader gave it, held by its origin. */
-  z.object({ type: z.literal("space.signin.start"), id, url: z.string().min(1), reportCompletion: z.boolean().optional() }).strict(),
+  /** `url`: the instance's URL as the reader gave it, held by its origin;
+   * `ticket`, on a seat alone, the ticket the member's client presented
+   * for it (git-host-27, DR-161). */
+  z.object({ type: z.literal("space.signin.start"), id, url: z.string().min(1), reportCompletion: z.boolean().optional(), ticket: z.string().min(1).optional() }).strict(),
   z.object({ type: z.literal("space.signin.cancel"), id, startId: z.string().min(1).optional() }).strict(),
   z.object({ type: z.literal("space.signout"), id, instance: instanceOriginSchema }).strict(),
   /** `instance`: the signed-out instance to remove from the home (space-82). */
@@ -1615,7 +1617,7 @@ export interface CommandResults {
   "space.refresh": { accepted: true };
   "space.signin.start":
     | { flow: "browser"; url: string }
-    | { flow: "device"; userCode: string; verificationUri: string; expiresAt: number };
+    | { flow: "device"; userCode: string; verificationUri: string; expiresAt: number; interval: number };
   "space.signin.cancel": { stopped: boolean };
   "space.signout": GroupsState;
   "space.forget": GroupsState;

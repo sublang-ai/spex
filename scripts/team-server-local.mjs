@@ -32,14 +32,17 @@
 // --agents=real, which needs real credentials in --agents-env.
 //
 // Sign-ins use the device flow: approve each code at the stand-in's
-// device page, or pass --auto-approve. A stand-in signs in exactly one
-// person, so --members=2 starts a second stand-in instance for bob over
-// the first one's Git backend, the server registered at both: its
-// `acme` group is a separate container, so the two members share no
-// group project in that mode. Everything lives in one /tmp/spex-tsl-*
-// directory, short enough for the seats' socket paths, removed at Ctrl-C
-// unless --keep; the stop retires the server through the hub, which
-// stops and wipes every seat.
+// device page, or pass --auto-approve. A seat's sign-in needs neither:
+// the stand-in grants it on the ticket its open presented (DR-161), so
+// --auto-approve approves a code only once Spex would show its page, a
+// seat's past the first poll interval and its margin. A stand-in signs
+// in exactly one person, so --members=2 starts a second stand-in
+// instance for bob over the first one's Git backend, the server
+// registered at both: its `acme` group is a separate container, so the
+// two members share no group project in that mode. Everything lives in
+// one /tmp/spex-tsl-* directory, short enough for the seats' socket
+// paths, removed at Ctrl-C unless --keep; the stop retires the server
+// through the hub, which stops and wipes every seat.
 
 import { spawn, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
@@ -78,6 +81,11 @@ const PROJECT = "demo-project";
 /** The second member, signed in by the second stand-in instance. */
 const SECOND_PERSON = { id: "1002", login: "bob", displayName: "Bob" };
 const AGENT_MODES = ["captain", "demo", "real"];
+/** How long a code waits before --auto-approve approves it: past a
+ * seat's first poll interval, one second at the stand-in, and the two
+ * seconds' margin within which a grant on the ticket keeps the page
+ * unshown (core-service-142), with a second to spare. */
+const APPROVE_AFTER_MS = 4_000;
 /** The lease the front renews for (Spex Space servers-8). */
 const RENEW_MS = 60 * 60 * 1000;
 /** Bounds on each stage of the start and the stop. */
@@ -533,9 +541,14 @@ export class LocalTeamServer {
     }
 
     if (this.autoApprove) {
+      // Each code approved as its person would, once Spex shows its page.
+      const seen = new Map();
       const approve = () => {
+        const now = Date.now();
         for (const host of this.hosts) {
           for (const code of host.script.pendingDevices()) {
+            if (!seen.has(code)) seen.set(code, now);
+            if (now - seen.get(code) < APPROVE_AFTER_MS) continue;
             host.script.approveDevice(code);
             this.note("instance", `approved device sign-in ${code} at ${host.url}`);
           }
@@ -543,6 +556,19 @@ export class LocalTeamServer {
       };
       this.timers.push(setInterval(approve, 200));
     }
+    // A seat's sign-in granted on its ticket, with no page (DR-161).
+    const granted = new Map(this.hosts.map((host) => [host, 0]));
+    this.timers.push(
+      setInterval(() => {
+        for (const host of this.hosts) {
+          const grants = host.script.tokenGrants;
+          for (const grant of grants.slice(granted.get(host))) {
+            if (grant.ticket) this.note("instance", `granted a seat's device sign-in on its ticket at ${host.url}`);
+          }
+          granted.set(host, grants.length);
+        }
+      }, 200),
+    );
     this.tailSeats();
 
     // One served shell per member: the member's own core, as a browser
@@ -743,7 +769,9 @@ const USAGE = `usage: node scripts/team-server-local.mjs [options]
                        the seats' agents (default captain)
   --agents-env=<file>  the shared credential file the seats read
                        (KEY=value lines; for --agents=real)
-  --auto-approve       approve every device sign-in at the instance
+  --auto-approve       approve every device sign-in at the instance once
+                       Spex shows its page; a seat's is granted on its
+                       ticket without one
   --hub-port=<n>       the hub's https port (default 8443)
   --keep               keep the /tmp/spex-tsl-* directory at the stop`;
 
