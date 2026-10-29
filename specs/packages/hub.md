@@ -115,7 +115,7 @@ Where a stand-in instance answers the servers routes, a fake helper at a configu
 
 Where the local simulation runs the hub on one macOS or Linux host with no root and no service manager — a stand-in instance whose front answers the servers routes, the hub attached and serving the fixture TLS pair, a fake helper starting the real server shell in seat mode as the current user per admitted person, and a served shell per member whose core trusts that certificate — the suite shall assert over real connections:
 
-- a member's core, signed in by the device flow, lists the server, and its open is admitted with the seat started through the helper and listening on its socket in the run directory beside its token [[hub-2](#hub-2)] [[hub-4](#hub-4)];
+- a member's core, signed in by the device flow, lists the server, and its open is admitted with the seat started through the helper and listening on its socket in the run directory beside its token [[hub-2](#hub-2)] [[hub-4](#hub-4)], the seat then signed in at the instance on the ticket the open presented, with no approval page;
 - the member's relay of the seat opens and the seat's core answers `session.list` through it [[hub-3](#hub-3)];
 - `retire` at the stop stops and wipes the seat, and no process of the hub, the seat or the member's shell remains [[hub-6](#hub-6)].
 

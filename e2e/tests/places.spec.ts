@@ -6,7 +6,8 @@
 // servers, each a stand-in hub over TLS relaying to a further core
 // standing as the person's seat — plain served cores on scratch roots of
 // their own, not in seat mode, so each takes a project registered by
-// folder. This computer and the first seat each hold a finished turn
+// folder, and signed in at the instance already, since a core not in
+// seat mode takes no ticket to sign in on (git-host-27). This computer and the first seat each hold a finished turn
 // nobody has read, the second seat a question, and the first seat a tool
 // approval waiting. The journey opens both seats from the Space
 // surface, where their lines stand under their group, and reads,
@@ -57,6 +58,8 @@ test.use({
       {
         name: "lab-1",
         seat: {
+          host: true,
+          signedIn: true,
           approvalRules: [
             {
               match: `Implement: ${APPROVAL_TURN}`,
@@ -65,7 +68,7 @@ test.use({
           ],
         },
       },
-      { name: "lab-2" },
+      { name: "lab-2", seat: { host: true, signedIn: true } },
     ],
   },
 });
@@ -167,11 +170,10 @@ test("run-view-173: one desktop opens two seats and reads its places, its joined
   await expect(controlOne).toHaveCount(0);
   await expect.poll(() => opensSent(tap.sent)).toEqual([{ instance: host.url, serverId: one.server.id, consented: true }]);
   expect(one.hub.admissions.map((admission) => admission.status)).toEqual([200]);
-  // [run-view-170] the seat, not signed in at the instance, signs in
-  // there as it opens: its line links the instance's page where the
-  // person approves it, the code carried in it (core-service-142).
-  const devicePage = new RegExp(`^${host.url.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/login/device\\?user_code=`);
-  await expect(page.getByTestId(`space-server-approve-${one.place}`)).toHaveAttribute("href", devicePage, { timeout: 30_000 });
+  // [run-view-170] the seat, signed in at the instance, reads Connected
+  // with no page to approve (core-service-142).
+  await expect(page.getByTestId(`space-server-connected-${one.place}`)).toHaveText("Connected", { timeout: 30_000 });
+  await expect(page.getByTestId(`space-server-approve-${one.place}`)).toHaveCount(0);
 
   // The second server's first Connect on this device shows its own
   // contract (run-view-170): understood, it opens too.
@@ -286,6 +288,9 @@ test("run-view-173: one desktop opens two seats and reads its places, its joined
   // the page reaches each seat at its relay path alone.
   const local = app.origin.replace(/^http/, "ws");
   expect(tap.urls.filter((url) => !url.startsWith(`${local}/`))).toEqual([]);
+  // Nor any ticket the instance minted (core-service-128).
+  expect(host.script.tickets).toHaveLength(3);
+  for (const { ticket } of host.script.tickets) expect(tap.received.filter((frame) => frame.includes(ticket))).toEqual([]);
   const issued = [...one.hub.admissions, ...two.hub.admissions].filter((admission) => admission.status === 200);
   expect(issued).toHaveLength(3);
   expect(tap.received.length).toBeGreaterThan(0);

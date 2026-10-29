@@ -903,6 +903,11 @@ msgstr "a session, an intent or an authoring session offers no text diff"
 msgid "A sign-in is already running"
 msgstr "A sign-in is already running"
 
+#. Refusal of a sign-in naming a team server's ticket on a machine of one's own: only a team server's seat signs in with the ticket its member's client presented
+#: src/service.ts
+msgid "A ticket is taken only on a server's seat"
+msgstr "A ticket is taken only on a server's seat"
+
 #. Refusal: an authoring transcript with no session file holds the id a new playbook asked for
 #: src/drafts.ts
 msgid "a transcript of {id} stands without its session file; move it aside or delete it first"

@@ -5070,8 +5070,9 @@ export class SpaceManager {
   /** Start the configured sign-in flow at the instance `url` names, by
    * its origin (git-host-2, git-host-3): its shape goes back at once, and
    * its end sets the home up for the account there (space-4). At most
-   * one sign-in runs, whichever instance it names. */
-  async signInStart(url: string, reporter?: SignInReporter): Promise<{ flow: "browser"; url: string } | { flow: "device"; userCode: string; verificationUri: string; expiresAt: number }> {
+   * one sign-in runs, whichever instance it names. A seat's `ticket` goes
+   * with its device request (git-host-27). */
+  async signInStart(url: string, reporter?: SignInReporter, ticket?: string): Promise<{ flow: "browser"; url: string } | { flow: "device"; userCode: string; verificationUri: string; expiresAt: number; interval: number }> {
     const origin = this.signInOrigin(url);
     if (this.flow || (this.flowReport && !this.flowReport.settled) || this.signInState.phase === "running" || [...this.instances.values()].some((entry) => entry.client.signingIn())) {
       throw new CoreError("busy", signInRunning());
@@ -5088,7 +5089,7 @@ export class SpaceManager {
     try {
       started = kind === "browser"
         ? { kind, flow: await client.startBrowserSignIn({ pages: callbackPages(), admit }) }
-        : { kind, flow: await client.startDeviceSignIn({ admit }) };
+        : { kind, flow: await client.startDeviceSignIn({ admit, ...(ticket ? { ticket } : {}) }) };
     } catch (error) {
       if (error instanceof SignInBusyError) {
         const busy = new CoreError("busy", signInRunning());
@@ -5117,7 +5118,7 @@ export class SpaceManager {
     );
     return started.kind === "browser"
       ? { flow: "browser", url: started.flow.url }
-      : { flow: "device", userCode: started.flow.userCode, verificationUri: started.flow.verificationUri, expiresAt: started.flow.expiresAt };
+      : { flow: "device", userCode: started.flow.userCode, verificationUri: started.flow.verificationUri, expiresAt: started.flow.expiresAt, interval: started.flow.interval };
   }
 
   /** Whether a sign-in's person may stand as the account of the

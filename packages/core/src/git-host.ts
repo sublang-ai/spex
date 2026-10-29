@@ -473,6 +473,8 @@ export interface DeviceSignIn {
   verificationUri: string;
   /** Unix milliseconds. */
   expiresAt: number;
+  /** The seconds between polls the host named (git-host-3). */
+  interval: number;
   done: Promise<HostAccount>;
   cancel(): void;
 }
@@ -683,14 +685,19 @@ export class GitHostClient {
    * The device flow (git-host-3): the host's user code and verification
    * URL, completed with the code where the host gives it, then polling the token endpoint at its interval, five seconds
    * slower on each `slow_down`, until the token, a denial or the expiry.
+   * On a seat, `ticket` is the one the member's client presented for it,
+   * on which the host may grant the code without its page (git-host-27).
    */
-  async startDeviceSignIn(options: { admit?: AdmitAccount } = {}): Promise<DeviceSignIn> {
+  async startDeviceSignIn(options: { admit?: AdmitAccount; ticket?: string } = {}): Promise<DeviceSignIn> {
     const { slot, expected } = await this.beginSignIn();
     let start: { deviceCode: string; userCode: string; verificationUri: string; expiresIn: number; interval: number };
     try {
       // A seat names its server and the person it was opened for, both
-      // or neither (git-host-27).
-      const seat = this.server ? { server_id: this.server.id, person_id: this.server.personId } : {};
+      // or neither, and the ticket where its start named one; off a seat
+      // no ticket is sent (git-host-27).
+      const seat = this.server
+        ? { server_id: this.server.id, person_id: this.server.personId, ...(options.ticket ? { ticket: options.ticket } : {}) }
+        : {};
       const answer = await this.send("POST", "/api/v1/auth/device", { body: { client_id: this.clientId, label: this.label, ...seat } });
       if (answer.status !== 200) throw answerError(answer);
       const body = record(answer.json);
@@ -788,6 +795,7 @@ export class GitHostClient {
       userCode: start.userCode,
       verificationUri: start.verificationUri,
       expiresAt,
+      interval: start.interval,
       done,
       cancel: () => end({ error: signInError("stopped") }),
     };

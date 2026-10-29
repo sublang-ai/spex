@@ -691,7 +691,7 @@ describe("run-view-170: a server's line while its seat opens and signs in", () =
     expect(callsOf(local, "server.open")).toEqual([{ instance: SPEX, serverId: "43", consented: true }]);
   });
 
-  test("a seat whose sign-in runs reads Approve Spex on <server> in your browser with the approval's link until it completes", async () => {
+  test("a seat whose sign-in runs reads Approve Spex on <server> in your browser with the approval's link, one pending reads Signing in to <instance>…, until it completes", async () => {
     await openGroups();
     serverState({ ...ALPHA, signIn: running() }, BETA);
     // [run-view-170] the approval's link on the server's line, in place
@@ -702,15 +702,21 @@ describe("run-view-170: a server's line while its seat opens and signs in", () =
     expect(link.getAttribute("target")).toBe("_blank");
     expect(screen.queryByTestId(`space-server-connected-${ALPHA.place}`)).toBeNull();
     expect(screen.queryByTestId(`space-server-control-${ALPHA.place}`)).toBeNull();
+    expect(screen.queryByText(/^Signing in to/)).toBeNull();
     fireEvent.click(more(ALPHA.place));
     expect(screen.getByTestId(`space-server-disconnect-${ALPHA.place}`).textContent).toBe("Disconnect");
     fireEvent.keyDown(window, { key: "Escape" });
     // The other seat, signed in, reads Connected.
     expect(screen.getByTestId(`space-server-connected-${BETA.place}`).textContent).toBe("Connected");
-    // Pending reads Connected; signed in, the link goes.
+    // [run-view-170] pending — the instance not asking for its page —
+    // reads Signing in to <instance>… with no link and no Connected;
+    // signed in, Connected.
     serverState({ ...ALPHA, signIn: { state: "pending" } }, BETA);
-    expect(screen.getByTestId(`space-server-connected-${ALPHA.place}`).textContent).toBe("Connected");
+    expect(screen.getByTestId(`space-server-signing-${ALPHA.place}`).textContent).toBe("Signing in to spex.pub…");
+    expect(screen.queryByTestId(`space-server-approve-${ALPHA.place}`)).toBeNull();
+    expect(screen.queryByTestId(`space-server-connected-${ALPHA.place}`)).toBeNull();
     serverState({ ...ALPHA, signIn: { state: "signedIn" } }, BETA);
+    expect(screen.queryByTestId(`space-server-signing-${ALPHA.place}`)).toBeNull();
     expect(screen.queryByTestId(`space-server-approve-${ALPHA.place}`)).toBeNull();
     expect(screen.getByTestId(`space-server-connected-${ALPHA.place}`).textContent).toBe("Connected");
   });

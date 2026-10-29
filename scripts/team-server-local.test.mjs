@@ -4,9 +4,10 @@
 // The local team server end to end (scripts/team-server-local.mjs): a
 // member's served shell signs in at the stand-in instance, lists the
 // server, opens a seat through the real hub over TLS — the fake helper
-// starting the real server shell in seat mode — and relays it to the
-// seat's core; the stop retires the server and leaves no process and no
-// scratch directory.
+// starting the real server shell in seat mode — the seat signing in at
+// the instance on the ticket the open presented, with no approval page
+// (hub-11), and relays it to the seat's core; the stop retires the
+// server and leaves no process and no scratch directory.
 
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
@@ -103,6 +104,26 @@ test("a member's core signs in, lists the server, opens a seat through the real 
         message.seats.some((seat) => seat.place === opened.place && seat.relay === "open"),
       30_000,
     );
+    // [hub-11] the seat signs in at the instance on the ticket the open
+    // presented, which the instance front's redemption spent: pending,
+    // then signed in, with no approval page between.
+    await core.waitFor(
+      (message) =>
+        message.type === "server.state" &&
+        message.seats.some((seat) => seat.place === opened.place && seat.signIn.state === "signedIn"),
+      30_000,
+    );
+    const signIns = core.messages
+      .filter((message) => message.type === "server.state")
+      .flatMap((message) => message.seats.filter((seat) => seat.place === opened.place).map((seat) => seat.signIn.state));
+    assert.ok(!signIns.includes("running"), `no approval page: ${signIns.join(", ")}`);
+    const { script } = server.hosts[0];
+    const [ticket] = script.tickets;
+    assert.ok(ticket?.spent && ticket.signedIn, "the minted ticket was spent at the admission and signed the seat in");
+    assert.equal(script.deviceRequests.at(-1)?.ticket, ticket.ticket, "the seat's request carried the open's ticket");
+    assert.ok(script.tokenGrants.some((grant) => grant.ok && grant.ticket), "granted on the ticket");
+    assert.equal(lines.filter((line) => line.includes("approved device sign-in")).length, 1, "the member's own sign-in alone was approved");
+
     const seatDir = join(server.runDir, "1001");
     assert.ok(existsSync(join(seatDir, "core.sock")), "the seat listens on its socket in the hub's run directory");
     assert.ok(existsSync(join(seatDir, "token")), "the helper wrote the seat's token there");
