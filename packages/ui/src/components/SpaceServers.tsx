@@ -17,7 +17,7 @@
 // (core-service-142), the line reads "Signing in to <instance>…" and,
 // where the instance asks for its page, links that page where the person
 // approves it, the desktop having opened it, and a sign-in that failed
-// reads its cause with "Sign in again" (DR-161). A refusal reads the core's relayed cause
+// reads its cause with "Sign in again" (DR-164). A refusal reads the core's relayed cause
 // on the line. A server whose group the instance's read does not list
 // stands at the foot of the instance's section, as does a listing's
 // failure. The listing is read as the surface opens, again after an open

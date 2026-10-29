@@ -1312,7 +1312,7 @@ export const commandSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("space.refresh"), id }).strict(),
   /** `url`: the instance's URL as the reader gave it, held by its origin;
    * `ticket`, on a seat alone, the ticket the member's client presented
-   * for it (git-host-27, DR-161). */
+   * for it (git-host-27, DR-164). */
   z.object({ type: z.literal("space.signin.start"), id, url: z.string().min(1), reportCompletion: z.boolean().optional(), ticket: z.string().min(1).optional() }).strict(),
   z.object({ type: z.literal("space.signin.cancel"), id, startId: z.string().min(1).optional() }).strict(),
   z.object({ type: z.literal("space.signout"), id, instance: instanceOriginSchema }).strict(),

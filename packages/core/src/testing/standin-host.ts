@@ -21,7 +21,7 @@
 // each call recorded with the bearer it carried, a server left out of
 // the listing, scripted faults of the listing or the ticket route alone,
 // a ticket spent as a server's admission spends it, and a seat's device
-// code granted on that ticket without its page (git-host-12, DR-161)
+// code granted on that ticket without its page (git-host-12, DR-164)
 // unless scripted to keep the page. Like Spex Space
 // (DR-120) it answers every path relative to the instance's root, keeps
 // no group of its own, hides the service identity a root creation adds
@@ -44,7 +44,7 @@ import { RELAY_HEADERS } from "./standin-registry.js";
 export interface StandinPerson { id: string; login: string; displayName: string | null }
 
 /** A device request as the stand-in admitted it (auth-71), with the
- * ticket a seat's request carried where it carried one (DR-161). */
+ * ticket a seat's request carried where it carried one (DR-164). */
 export interface StandinDeviceRequest { label: string; serverId: string | null; personId: string | null; ticket?: string }
 
 /** What the stand-in lets the person do in a group (host-4): create a
@@ -205,7 +205,7 @@ export interface StandinScript {
   /** Refuse every refresh grant with `invalid_grant`. */
   refuseRefresh: boolean;
   /** Grant a seat's pending device code on the ticket its request
-   * carried (git-host-12, DR-161); false keeps the page, as an older
+   * carried (git-host-12, DR-164); false keeps the page, as an older
    * instance does. */
   ticketGrants: boolean;
   /** Every request, in arrival order. */
@@ -421,7 +421,7 @@ const USER_CODE_ALPHABET = "BCDFGHJKLMNPQRSTVWXZ";
 /** A ticket's life, in seconds (servers-6). */
 const TICKET_TTL_S = 120;
 /** How long after its redemption a ticket grants a seat's device code
- * (git-host-12, DR-161). */
+ * (git-host-12, DR-164). */
 const TICKET_GRANT_WINDOW_MS = 10 * 60_000;
 /** An execution lease's length from an admission (servers-7). */
 const LEASE_MS = 60 * 60_000;
@@ -1317,7 +1317,7 @@ export async function startStandinHost(opts: StandinHostOptions): Promise<Standi
     if (serverId === false || personId === false || (serverId === null) !== (personId === null)) {
       return envelope(res, 400, "invalid_request", "A server_id and a person_id of at most 64 characters come together or not at all.");
     }
-    // A seat's ticket comes with its server and person (DR-161).
+    // A seat's ticket comes with its server and person (DR-164).
     const ticket = body.ticket === undefined ? null : typeof body.ticket === "string" && body.ticket.length > 0 && serverId !== null ? body.ticket : false;
     if (ticket === false) return envelope(res, 400, "invalid_request", "A ticket comes with a server_id and a person_id.");
     script.deviceRequests.push({ label: body.label, serverId, personId, ...(ticket !== null ? { ticket } : {}) });
@@ -1409,7 +1409,7 @@ export async function startStandinHost(opts: StandinHostOptions): Promise<Standi
     const minted = entry.status === "pending" ? ticketGrant(entry) : null;
     if (minted) {
       // Granted on the ticket, without the page; the ticket signs no
-      // other device in (git-host-12, DR-161).
+      // other device in (git-host-12, DR-164).
       minted.signedIn = true;
       entry.status = "approved";
     }
@@ -1419,7 +1419,7 @@ export async function startStandinHost(opts: StandinHostOptions): Promise<Standi
   }
 
   /** The ticket a seat's pending device code is granted on, as Spex
-   * Space grants it (git-host-12, DR-161): one this instance minted,
+   * Space grants it (git-host-12, DR-164): one this instance minted,
    * spent by a server's admission within the last ten minutes, bound to
    * the code's server, asked by the account its person names, that has
    * signed no device in; null where none, or where scripted to keep the

@@ -36,7 +36,7 @@
 // signed in at its instance, starts the seat's sign-in there — the
 // device flow, the seat's request naming the server and the person and,
 // at the first hello of an open this core made, the ticket that open
-// presented, held in memory until then and no longer (DR-161) — carrying
+// presented, held in memory until then and no longer (DR-164) — carrying
 // it as the seat's `signIn` in `server.state`: pending, running with the
 // page where the person approves it — for a start carrying the ticket,
 // only once the first poll interval passed with no grant — signed in, or
@@ -969,7 +969,7 @@ export class Places {
         else if (running) {
           // Started on the ticket: pending still, the page shown only
           // where no grant came by the first poll and the margin
-          // (core-service-142, DR-161).
+          // (core-service-142, DR-164).
           relay.signInHold = setTimeout(() => {
             if (!settled && !relay.ended && relay.signInSocket === socket) this.signInState(relay, running);
           }, intervalOf(message.result) * 1000 + TICKET_GRANT_MARGIN_MS);

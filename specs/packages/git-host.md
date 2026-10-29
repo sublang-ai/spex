@@ -232,7 +232,7 @@ When an instance answers a call 429, the core shall hold, for that instance alon
 
 #### git-host-27
 
-Where the core runs as a seat [[core-service-125](core-service.md#core-service-125)], when the device flow runs [[git-host-3](#git-host-3)], the request shall carry `server_id` and `person_id` beside the client id and the label "Spex on <server name>", and `ticket` where `space.signin.start` named one — the ticket the member's client presented for this seat, on which the instance may grant the code without its page — and the sign-in shall end `failed` with `denied` where the instance denies the code and `failed` naming another account where the person read bears another permanent id than the person's, storing nothing either way ([DR-132](../decisions/132-team-servers.md), [DR-161](../decisions/161-the-seat-signs-in-on-its-ticket.md)):
+Where the core runs as a seat [[core-service-125](core-service.md#core-service-125)], when the device flow runs [[git-host-3](#git-host-3)], the request shall carry `server_id` and `person_id` beside the client id and the label "Spex on <server name>", and `ticket` where `space.signin.start` named one — the ticket the member's client presented for this seat, on which the instance may grant the code without its page — and the sign-in shall end `failed` with `denied` where the instance denies the code and `failed` naming another account where the person read bears another permanent id than the person's, storing nothing either way ([DR-132](../decisions/132-team-servers.md), [DR-164](../decisions/164-the-seat-signs-in-on-its-ticket.md)):
 
 - off a seat, a `space.signin.start` naming a `ticket` is refused `invalid_request` and asks nothing.
 

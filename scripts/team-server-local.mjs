@@ -33,7 +33,7 @@
 //
 // Sign-ins use the device flow: approve each code at the stand-in's
 // device page, or pass --auto-approve. A seat's sign-in needs neither:
-// the stand-in grants it on the ticket its open presented (DR-161), so
+// the stand-in grants it on the ticket its open presented (DR-164), so
 // --auto-approve approves a code only once Spex would show its page, a
 // seat's past the first poll interval and its margin. A stand-in signs
 // in exactly one person, so --members=2 starts a second stand-in
@@ -556,7 +556,7 @@ export class LocalTeamServer {
       };
       this.timers.push(setInterval(approve, 200));
     }
-    // A seat's sign-in granted on its ticket, with no page (DR-161).
+    // A seat's sign-in granted on its ticket, with no page (DR-164).
     const granted = new Map(this.hosts.map((host) => [host, 0]));
     this.timers.push(
       setInterval(() => {

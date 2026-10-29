@@ -5,7 +5,7 @@
 // core-service-127, DR-132), against the stand-in instance: the device
 // request names the server and the person under the server's name, and
 // the ticket a start names, its reply naming the interval, a ticket
-// refused off a seat (DR-161), and the stand-in granting a pending code
+// refused off a seat (DR-164), and the stand-in granting a pending code
 // on a spent ticket as Spex Space does; a sign-in as another account, or
 // a denied code, stores nothing; your own group is placed at no instance
 // and offered no pick or remote; every
