@@ -147,9 +147,11 @@ interface Frontmatter {
 /** The top-level string fields of a SKILL.md's YAML frontmatter that
  * matter here — `name` and `description` — read from the common YAML
  * forms: plain, single- or double-quoted, and `|` or `>` blocks. A field
- * of another form reads as absent. */
+ * of another form reads as absent. The frontmatter is found as a
+ * release's readers find it, from the text's first character: nothing
+ * before `---`, a byte order mark included, is skipped. */
 export function skillFrontmatter(text: string): Frontmatter {
-  const match = /^---\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/.exec(text.replace(/^﻿/, ""));
+  const match = /^---\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/.exec(text);
   if (!match) return {};
   const lines = match[1]!.split(/\r?\n/);
   const out: Frontmatter = {};
@@ -259,7 +261,12 @@ function readSkill(argument: string, cwd: string): SkillSource {
   };
   walk("");
   if (!files.includes("SKILL.md")) refuse(`--skill ${argument} holds no SKILL.md.`);
-  const frontmatter = skillFrontmatter(readFileSync(join(folder, "SKILL.md"), "utf8"));
+  const text = readFileSync(join(folder, "SKILL.md"), "utf8");
+  // A release's readers find the frontmatter from the first byte, so a
+  // byte order mark would hide the name from the app and the registry.
+  if (text.startsWith("\uFEFF"))
+    refuse(`--skill ${argument}: its SKILL.md begins with a byte order mark, which hides its frontmatter from a package's readers; save it as UTF-8 without one.`);
+  const frontmatter = skillFrontmatter(text);
   if (frontmatter.unreadable)
     refuse(`--skill ${argument}: its SKILL.md frontmatter is no YAML, so its name cannot be read: the ${frontmatter.unreadable} holds ": " unquoted; put the value in quotes.`);
   if (frontmatter.name === undefined || !isName(frontmatter.name))

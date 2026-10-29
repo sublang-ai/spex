@@ -210,6 +210,8 @@ describe("spex package init", () => {
     writeFileSync(join(dir, ".claude/skills/undescribed/SKILL.md"), "---\nname: undescribed\n---\n");
     mkdirSync(join(dir, ".claude/skills/demo-pack"));
     writeFileSync(join(dir, ".claude/skills/demo-pack/SKILL.md"), "---\nname: demo-pack\ndescription: Same id as the spec\n---\n");
+    mkdirSync(join(dir, ".claude/skills/bommed"));
+    writeFileSync(join(dir, ".claude/skills/bommed/SKILL.md"), "\uFEFF---\nname: bommed\ndescription: Behind a byte order mark\n---\n");
     mkdirSync(join(dir, ".claude/skills/unquoted"));
     writeFileSync(join(dir, ".claude/skills/unquoted/SKILL.md"), "---\nname: unquoted\ndescription: Use it: always\n---\n");
     writeFileSync(join(dir, "specs/packages/other.md"), "# other\n\n## Intent\n\nOther.\n");
@@ -235,6 +237,9 @@ describe("spex package init", () => {
       ["a missing skill folder", ["acme/demo-pack", "--skill", ".claude/skills/missing"], /no folder holding a SKILL\.md/],
       ["a SKILL.md name that is no Agent Skills name", ["acme/demo-pack", "--skill", ".claude/skills/spaced"], /Agent Skills name/],
       ["a SKILL.md frontmatter YAML refuses", ["acme/demo-pack", "--skill", ".claude/skills/unquoted"], /no YAML.*quotes/],
+      // The core's and the registry's readers find no frontmatter behind a
+      // byte order mark, so the folder would be no release.
+      ["a SKILL.md behind a byte order mark", ["acme/demo-pack", "--skill", ".claude/skills/bommed"], /byte order mark.*without one/],
       ["two skills of one id", ["acme/demo-pack", "--skill", ...skill, "--skill", ".claude/skills/twin"], /Two skills declare the id release-notes/],
       ["a skill of the spec's id", ["acme/demo-pack", "--skill", ".claude/skills/demo-pack", "--spec", "specs/packages/demo-pack.md"], /spec's id demo-pack/],
       ["a spec of another basename", ["acme/demo-pack", "--spec", "specs/packages/other.md"], /must be named demo-pack\.md/],

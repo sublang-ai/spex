@@ -72,7 +72,7 @@ When `spex package init <org>/<name>` is invoked with `--skill <folder>` once or
 | `meta.yaml` | `format: 2`, `org`, `name`, `version: 0.1.0`, `description`, `license`, and under `artifacts` each skill as `{kind: skill, language}` under its id and the spec as `{kind: spec, language}` under `<name>` |
 | `README.md` | a heading naming `<org>/<name>` and the description |
 | `LICENSE` | the project's root `LICENSE`, copied where the current directory holds one |
-| `skills/<language>/<id>/` | each `--skill` folder's regular files and folders, copied, or moved with `--move`, under the `name` its `SKILL.md` frontmatter declares |
+| `skills/<language>/<id>/` | each `--skill` folder's regular files and folders, copied, or moved with `--move`, under the `name` its `SKILL.md` frontmatter declares when read as a release's [[environments-1](environments.md#environments-1)] |
 | `specs/<language>/<name>.md` | the `--spec` file, copied |
 
 - `<language>` is `--language`, else `en`; the description is `--description`, else the first skill's `SKILL.md` `description`, else the spec's first paragraph under its Intent heading; the license is `--license`, else `Apache-2.0` where the project's `LICENSE` begins with "Apache License" past a byte order mark and whitespace, `MIT` where it begins with "MIT License", else `Apache-2.0`;
