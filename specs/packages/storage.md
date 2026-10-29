@@ -47,6 +47,7 @@ The store shall persist core-owned data in Spex home using these locations:
 | `local/credentials.yaml` | each instance's app token [[storage-19](#storage-19)] | — |
 | `local/code-credentials.yaml` | on a seat, the code-host tokens and agent credentials the member placed [[storage-44](#storage-44)] | — |
 | `local/seats.yaml` | the seats this desktop opened on team servers [[storage-45](#storage-45)] | — |
+| `local/endpoint.json` | the access URL, with its token, and the process id of the core serving this home at a loopback endpoint, owner-only [[core-service-143](core-service.md#core-service-143)] ([DR-163](../decisions/163-the-cli-finds-the-running-app.md)) | — |
 | `local/migrations/` | migration receipts and retained inputs [[storage-9](#storage-9)] [[storage-30](#storage-30)] | — |
 | `local/former-home.git`, `local/forge-cache.json` | the former home's Git history kept aside [[storage-9](#storage-9)]; the rebuildable forge cache | — |
 | `.lease/`, `.lease.stage.<token>/`, `.lease.retired/<token>/` | the root lease held by the one process serving this home [[storage-14](#storage-14)], its staging and its permanent retirement records [[storage-26](#storage-26)] | — |
