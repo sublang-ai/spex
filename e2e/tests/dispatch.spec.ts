@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The Captain dispatches in plain sight (run-view-193, DR-159): the real
+// The Captain dispatches in plain sight (run-view-193, DR-160): the real
 // Captain shell runs the built-in /dev on substitute agents that decide
 // before they code, and the page says, from the records alone, which
 // player runs which step, what each call came back with, and — when the

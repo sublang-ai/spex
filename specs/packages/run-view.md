@@ -88,7 +88,7 @@ When the session record stream delivers a tool-use event for a visible player, t
 - a command a runner wrapped as `<shell> -lc <command>` — a login-shell wrapper with its quoting — presents the inner command as it was typed, and a runner's wire name for its shell tool reads "shell" with the wire name in the label's tooltip, so the coder's rows read as commands whichever agent runs them;
 - the expanded body prints each string-valued field — a command, a patch, an old and new string, a file's content, the result's text — verbatim under the field's name, and only a value that is not a string as JSON, every line wrapping inside the card so it never widens the pane;
 - a delivered result's span uses the run view's duration vocabulary [[run-view-145](#run-view-145)] ([DR-010](../decisions/010-interface-craft.md) §2);
-- while the lane's call is open, a card with no result yet reads at work, collapsed or not: the running mark stands where the ending's mark will, followed by "running · ⟨elapsed⟩" since the tool's use, ticking in the duration vocabulary [[run-view-145](#run-view-145)], on a tinted row, and the card takes its ending's mark once its result arrives ([DR-159](../decisions/159-the-captain-dispatches-in-plain-sight.md)).
+- while the lane's call is open, a card with no result yet reads at work, collapsed or not: the running mark stands where the ending's mark will, followed by "running · ⟨elapsed⟩" since the tool's use, ticking in the duration vocabulary [[run-view-145](#run-view-145)], on a tinted row, and the card takes its ending's mark once its result arrives ([DR-160](../decisions/160-the-captain-dispatches-in-plain-sight.md)).
 
 #### run-view-83
 
@@ -107,7 +107,7 @@ When a player call completes, that player's pane shall report the call's usage o
 
 | The call reported | The pane shows |
 | --- | --- |
-| tokens | the call's token totals as "⟨in⟩→⟨out⟩ token", taken as given because they are inclusive of cached reads ([DR-159](../decisions/159-the-captain-dispatches-in-plain-sight.md)) |
+| tokens | the call's token totals as "⟨in⟩→⟨out⟩ token", taken as given because they are inclusive of cached reads ([DR-160](../decisions/160-the-captain-dispatches-in-plain-sight.md)) |
 | a cost, with or without tokens | nothing for it — no amount in any currency, whatever its provenance |
 | neither | no usage line — an unreported figure is silence, never a zero nobody measured |
 
@@ -215,7 +215,7 @@ The run view shall show one player pane for each player of the session's bound r
 - while no pane stands — before the session's first call, or for a roster with no players — the Captain column stands alone at the Captain home's reading width with no divider, a division with nothing on its far side reading as a pane that failed to load, and the first pane's arrival restores the divider at the split's setting;
 - the pane's header names the lane and the role its latest call served [[run-view-79](#run-view-79)] — "coder · dev.coder" — with the lane's agent chip beside it, which is also the control that tunes that agent for this session [[run-view-139](#run-view-139)] [[run-view-138](#run-view-138)] and owns the header's slack: a reading longer than the pane can hold ends in an ellipsis with its whole in its tooltip, so the header and the transcript never widen past the pane ([DR-041](../decisions/041-chrome-that-fits.md));
 - while the lane's call is open, the header carries "⟨role⟩ running · ⟨elapsed⟩" beside the running mark — the span since the call's prompt, ticking each second in the duration vocabulary [[run-view-145](#run-view-145)] — so a minutes-long call never reads as a hang ([DR-010](../decisions/010-interface-craft.md) §5); as the pane narrows, the live reading remains after the resting active-time phrase has yielded [[run-view-143](#run-view-143)], then yields before the lane identity and header controls at the pane floor ([DR-041](../decisions/041-chrome-that-fits.md));
-- while the lane's call is open, the pane's foot holds one line below the transcript, wherever the reader has scrolled, with the running mark and what the player is doing now, read from the open call's latest entry — a tool card at work gives "⟨tool⟩ · ⟨elapsed⟩" and its subject, a reply streaming gives "Writing a reply", and anything else "Thinking…" — a long tool name truncates within half the line, whole in its tooltip, so the elapsed time and the subject keep their room, the line reads aloud as one phrase with its parts set apart, and the line leaves when the call closes ([DR-159](../decisions/159-the-captain-dispatches-in-plain-sight.md)).
+- while the lane's call is open, the pane's foot holds one line below the transcript, wherever the reader has scrolled, with the running mark and what the player is doing now, read from the open call's latest entry — a tool card at work gives "⟨tool⟩ · ⟨elapsed⟩" and its subject, a reply streaming gives "Writing a reply", and anything else "Thinking…" — a long tool name truncates within half the line, whole in its tooltip, so the elapsed time and the subject keep their room, the line reads aloud as one phrase with its parts set apart, and the line leaves when the call closes ([DR-160](../decisions/160-the-captain-dispatches-in-plain-sight.md)).
 
 #### run-view-116
 

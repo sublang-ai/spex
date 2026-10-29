@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // The substitute agents behind a real /dev run that decides before it
-// codes (run-view-193, DR-159): the real Captain shell starts the built-in
+// codes (run-view-193, DR-160): the real Captain shell starts the built-in
 // `dev`, whose analyst picks the decide-then-code path; `decide` asks the
 // coder and the reviewer for proposals in parallel, the coder merges
 // them into one commit, the nested review passes, and `code` commits
