@@ -11,11 +11,13 @@ import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
 import {
   chmodSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
   realpathSync,
   rmSync,
+  statSync,
   symlinkSync,
   unlinkSync,
   utimesSync,
@@ -219,6 +221,25 @@ test("the core signs in by the device flow and runs Git's helper on the shell's 
     await running.close();
     await host.close();
   }
+});
+
+test("on a loopback host the home's endpoint file names the access URL while the shell serves (core-service-143)", async () => {
+  const options = tempOptions();
+  const file = join(options.dataDir, "local", "endpoint.json");
+  const running = await startServer(options);
+  try {
+    assert.deepEqual(JSON.parse(readFileSync(file, "utf8")), {
+      format: 1,
+      url: running.url,
+      pid: process.pid,
+    });
+    assert.equal(statSync(file).mode & 0o777, 0o600, "owner-only");
+    const hello = await wsHello(running.url.replace(/^http/, "ws"), `http://127.0.0.1:${running.port}`);
+    assert.equal(hello.type, "hello");
+  } finally {
+    await running.close();
+  }
+  assert.equal(existsSync(file), false, "the stop removes the file");
 });
 
 test("one port serves the bundle and the core endpoint (SERVER-SHELL-9)", async () => {
@@ -823,12 +844,17 @@ test("startup refusals: public plaintext, lone TLS half, empty token (SERVER-SHE
     /--tls-cert is missing/,
   );
 
-  const running = await startServer(
-    tempOptions({ host: "0.0.0.0", insecure: true }),
-  );
+  const publicOptions = tempOptions({ host: "0.0.0.0", insecure: true });
+  const running = await startServer(publicOptions);
   try {
     const page = await fetch(`http://127.0.0.1:${running.port}/`);
     assert.equal(page.status, 200);
+    // A bind to any host but loopback leaves no endpoint file for the
+    // CLI (core-service-143).
+    assert.equal(
+      existsSync(join(publicOptions.dataDir, "local", "endpoint.json")),
+      false,
+    );
   } finally {
     await running.close();
   }

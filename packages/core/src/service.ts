@@ -83,7 +83,7 @@ import { StartedProcesses, StopBound } from "./process-tree.js";
 import { readStoredLanguage, Store, type SpexRepository } from "./store.js";
 import { UPLOAD_STAGING } from "./storage-git.js";
 import { foldDiagnostics, StorageFormatError, type RepairChecked, type StorageDiagnostic } from "./app-storage.js";
-import { fileVersion, listed, readVersioned, UUID, VersionConflictError } from "./files.js";
+import { fileVersion, listed, readVersioned, UUID, VersionConflictError, writeApplicationBytes } from "./files.js";
 import { prepareStorageGitFiles } from "./storage-git.js";
 import {
   GitHubForgeAdapter,
@@ -694,6 +694,9 @@ export class CoreService {
   private reloading?: Promise<void>;
   private readonly migrationDiagnostics: {file: string; reason: string; blocking: boolean}[] = [];
   private stopping = false;
+  /** The endpoint file this process wrote under the home
+   * (core-service-143), removed at stop; unset while none stands. */
+  private endpointFile?: string;
   /** Tracked so shutdown cannot race an automatic continuation opening. */
   private readonly advancing = new Set<Promise<void>>();
   /** A settled lane whose one automatic handoff is being decided. */
@@ -1808,6 +1811,8 @@ export class CoreService {
 
   async stop(): Promise<void> {
     this.stopping = true;
+    // No CLI finds an endpoint that is going away (core-service-143).
+    this.withdrawEndpoint();
     this.sessions.beginShutdown();
     // The stop is bounded (core-service-39, DR-134): every active turn
     // is aborted as admission closes; once those turns have settled, or
@@ -2380,6 +2385,41 @@ export class CoreService {
     return this.authToken;
   }
 
+  /**
+   * Keep the loopback access URL this home is served at in
+   * `local/endpoint.json`, owner-only, as `{format: 1, url, pid}`, so the
+   * CLI finds the running app (core-service-143, DR-163). The core calls
+   * it for the socket it binds itself; a shell serving the core on a
+   * loopback host calls it with its access URL once it listens, and one
+   * bound to any other host never does. A seat writes none. A file a
+   * process that died left is replaced; the stop removes this one.
+   */
+  announceEndpoint(url: string): void {
+    if (this.options.seat || this.stopping) return;
+    const dir = join(this.store.dir, "local");
+    const file = join(dir, "endpoint.json");
+    try {
+      mkdirSync(dir, { recursive: true, mode: 0o700 });
+      writeApplicationBytes(file, `${JSON.stringify({ format: 1, url, pid: process.pid })}\n`);
+      this.endpointFile = file;
+    } catch (error) {
+      // The app serves without it; only the CLI's discovery is lost.
+      console.error(`spex: the endpoint file ${file} was not written: ${(error as NodeJS.ErrnoException).code ?? String(error)}`);
+    }
+  }
+
+  /** Remove the endpoint file this process wrote, if it still stands. */
+  private withdrawEndpoint(): void {
+    const file = this.endpointFile;
+    if (!file) return;
+    this.endpointFile = undefined;
+    try {
+      rmSync(file, { force: true });
+    } catch (error) {
+      console.error(`spex: the endpoint file ${file} was not removed: ${(error as NodeJS.ErrnoException).code ?? String(error)}`);
+    }
+  }
+
   /** The origins of every instance the home lists and of the one a
    * running sign-in names: those whose sign-in pages a shell may open in
    * the system browser (app-shell-37, app-shell-20). */
@@ -2452,6 +2492,9 @@ export class CoreService {
       this.wss?.once("listening", resolveListen);
       this.wss?.once("error", rejectListen);
     });
+    // Its own loopback socket listens: the CLI finds it there
+    // (core-service-143).
+    this.announceEndpoint(`ws://127.0.0.1:${this.port()}/?token=${encodeURIComponent(this.authToken)}`);
   }
 
   /** A browser Origin naming the host the request itself addressed. */
