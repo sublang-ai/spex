@@ -135,7 +135,8 @@ describe("spex package init", () => {
       "skills/en/release-notes/SKILL.md", "skills/en/release-notes/scripts/collect.sh",
       "specs/en/demo-pack.md",
     ]);
-    assert.equal(release.files.find((f) => f.path.endsWith("collect.sh"))?.executable, true, "the script stays executable");
+    // Windows keeps no executable bit, so the fixture's script carries none there.
+    if (process.platform !== "win32") assert.equal(release.files.find((f) => f.path.endsWith("collect.sh"))?.executable, true, "the script stays executable");
     assert.equal(readFileSync(join(folder, "README.md"), "utf8"), "# acme/demo-pack\n\nWrites release notes: from the changelog\n");
     assert.equal(readFileSync(join(folder, "LICENSE"), "utf8"), APACHE);
     assert.equal(readFileSync(join(folder, "skills/en/release-notes/SKILL.md"), "utf8"), SKILL_MD);
@@ -195,7 +196,7 @@ describe("spex package init", () => {
     assert.deepEqual(release.files.map((f) => f.path), [
       "LICENSE", "README.md", "meta.yaml", "skills/en/release-notes/SKILL.md", "skills/en/release-notes/scripts/collect.sh",
     ]);
-    assert.equal(statSync(join(dir, "spex-packages/notes/skills/en/release-notes/scripts/collect.sh")).mode & 0o111, 0o111);
+    if (process.platform !== "win32") assert.equal(statSync(join(dir, "spex-packages/notes/skills/en/release-notes/scripts/collect.sh")).mode & 0o111, 0o111);
   });
 
   it("refuses each rule before writing anything", async () => {
