@@ -4,14 +4,14 @@
 // The Playbooks surface (playbook-library, DR-104): a view over the
 // environments of the current project and your own group. A switch
 // picks the side; each side shows that spex repository's environment —
-// the spec packages it requests and what it got — above the playbooks
-// it exports, each with its spec package and version, its roles bound
-// to session players, and where it is enabled. Enabling writes that
-// side's config with a player per role; a project's entry names
-// players alone, your own group's may tune each role. On the
-// project's side the authoring sessions follow the playbooks, then the
-// ways to add a spec package; the example closes the surface. An
-// authoring session opened here replaces the list with its workspace.
+// the spec packages it requests and what it got, the ways to add one
+// beneath them — above the playbooks it exports, each with its spec
+// package and version, its roles bound to session players, and where
+// it is enabled. Enabling writes that side's config with a player per
+// role; a project's entry names players alone, your own group's may
+// tune each role. On the project's side the authoring sessions follow
+// the playbooks; the example closes the surface. An authoring session
+// opened here replaces the list with its workspace.
 
 import { type KeyboardEvent as ReactKeyboardEvent, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -1495,14 +1495,17 @@ export function LibrarySurface({
         {project ? (
           <div
             role="group"
-            aria-label={i18n._("Spex repository shown")}
+            aria-label={i18n._({ id: "Playbooks of", comment: "name of the switch between the project's playbooks and your own group's" })}
             data-testid="playbooks-switch"
             className="ml-auto flex min-w-0 flex-wrap items-center gap-1 rounded-md border border-neutral-200 p-0.5 dark:border-neutral-800"
           >
             {(
               [
-                ["project", project.name, i18n._("The project's spex repository: {repository}", { repository: project.id })],
-                ["own", i18n._({ id: "Your own group", comment: "switch: show your own group's playbooks" }), ownKey ?? ""],
+                // The project by its name, never its spex repository
+                // (DR-159): the title holds the whole name a long one
+                // truncates.
+                ["project", project.name, project.name],
+                ["own", i18n._({ id: "Your own group", comment: "switch: show your own group's playbooks" }), ""],
               ] as const
             ).map(([key, label, title]) => (
               <button
@@ -1530,7 +1533,18 @@ export function LibrarySurface({
         </div>
       ) : null}
 
-      {repository ? <EnvironmentSection repository={repository} onNavigate={onNavigate} /> : null}
+      {repository ? (
+        // The ways to add a spec package stand directly beneath the
+        // environment's list, above the playbooks (playbook-library-92).
+        <div className="flex flex-col gap-3">
+          <EnvironmentSection
+            repository={repository}
+            project={side === "project" ? project?.name : undefined}
+            onNavigate={onNavigate}
+          />
+          <AddSpecPackages repository={repository} />
+        </div>
+      ) : null}
 
       <section data-testid="playbooks-enabled" className="flex flex-col gap-2">
         <h2 className="text-sm font-semibold text-neutral-500">
@@ -1567,10 +1581,9 @@ export function LibrarySurface({
       ) : null}
 
       {side === "project" && project ? (
-        // Authoring stands between the playbooks and the ways to add a
-        // spec package, the way to a new playbook at its foot
-        // (playbook-library-50/51); with no session the section is
-        // absent and the field stands alone.
+        // Authoring follows the playbooks, the way to a new playbook at
+        // its foot (playbook-library-50/51); with no session the section
+        // is absent and the field stands alone.
         projectDrafts.length > 0 ? (
           <section data-testid="drafts-section" className="flex flex-col gap-2">
             <h2 className="text-sm font-semibold text-neutral-500">{i18n._({ id: "Authoring", comment: "section heading: playbooks being written in this project" })}</h2>
@@ -1613,10 +1626,6 @@ export function LibrarySurface({
           <h2 className="text-sm font-semibold text-neutral-500">{i18n._({ id: "New playbook", comment: "start writing a playbook of one's own" })}</h2>
           {newPlaybook}
         </section>
-      ) : null}
-
-      {repository ? (
-        <AddSpecPackages repository={repository} />
       ) : null}
 
       <section className="flex flex-col gap-2">

@@ -11,7 +11,10 @@
 // lock is stale; the newer built-in release's line with Update; what
 // the last export left out with Export again; Remove behind Remove or
 // Keep; and every control waiting while that spex repository syncs,
-// naming the sync (playbook-library-1, playbook-library-92).
+// naming the sync; each side headed by the project's name or by your
+// own group, never by a spex repository, with the ways to add a spec
+// package beneath its list and above the playbooks
+// (playbook-library-1, playbook-library-92).
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
@@ -156,9 +159,30 @@ describe("playbook-library-94: each side's environment", () => {
   test("lists its spec packages with versions, sources, artifacts, languages, fallback marks and installed state", async () => {
     await renderSurface();
     const section = screen.getByTestId("environment-section");
-    // The word stands as the section's heading, with the repository.
-    expect(within(section).getByRole("heading").textContent).toBe("Environment");
-    expect(section.textContent).toContain(PROJECT_ID);
+    // The word stands as the section's heading, naming the project by
+    // its name and never its spex repository (DR-159).
+    expect(within(section).getByRole("heading").textContent).toBe(`Environment of ${PROJECT.name}`);
+    expect(section.textContent).not.toContain(PROJECT_ID);
+    expect(section.textContent).not.toContain("-spex");
+    // The switch names the project and your own group, with no key in
+    // a label or a tooltip.
+    const sides = screen.getByRole("group", { name: "Playbooks of" });
+    expect(within(sides).getByTestId("side-project").textContent).toBe(PROJECT.name);
+    expect(within(sides).getByTestId("side-project").title).toBe(PROJECT.name);
+    expect(within(sides).getByTestId("side-own").textContent).toBe("Your own group");
+    expect(within(sides).getByTestId("side-own").hasAttribute("title")).toBe(false);
+    expect(sides.outerHTML).not.toContain("-spex");
+
+    // [playbook-library-92] the ways to add a spec package stand
+    // directly beneath the environment's list, above the playbooks.
+    const add = screen.getByTestId("add-packages");
+    expect(
+      screen.getByTestId("environment-packages").compareDocumentPosition(add) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      add.compareDocumentPosition(screen.getAllByTestId(/^playbook-card-/)[0]!) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(add.compareDocumentPosition(screen.getByTestId("playbooks-enabled")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
     // [playbook-library-92] a requested package: its source and its
     // resolved version, its artifacts with their languages.
@@ -202,7 +226,15 @@ describe("playbook-library-94: each side's environment", () => {
     // Your own group's side shows its own environment.
     fireEvent.click(screen.getByTestId("side-own"));
     await screen.findByTestId("env-package-sublang/playbooks");
-    expect(screen.getByTestId("environment-section").textContent).toContain(OWN_KEY);
+    const own = screen.getByTestId("environment-section");
+    expect(within(own).getByRole("heading").textContent).toBe("Environment of your own group");
+    expect(own.textContent).not.toContain(OWN_KEY);
+    expect(own.textContent).not.toContain("-spex");
+    // Its ways to add stand above its playbooks too.
+    expect(
+      screen.getByTestId("add-packages").compareDocumentPosition(screen.getAllByTestId(/^playbook-card-/)[0]!) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
     expect(screen.queryByTestId("env-package-acme/triage")).toBeNull();
     expect(screen.getByTestId("env-source-sublang/playbooks").textContent).toBe("registry ^17.4.1");
     expect(commandMock).toHaveBeenCalledWith("environment.get", { repository: OWN_KEY });

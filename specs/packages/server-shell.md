@@ -57,7 +57,7 @@ Where the server shell starts as a seat — `--seat` with `--server-id`, `--serv
 
 #### server-shell-4
 
-When an HTTP request arrives, the server shell shall serve only the staged UI bundle, read-only:
+When an HTTP request arrives, the server shell shall hand a request under `/applets/` to the attached core [[applets-4](applets.md#applets-4)] ([DR-161](../decisions/161-an-applet-is-a-page-the-ide-serves.md)) and otherwise serve only the staged UI bundle, read-only:
 
 - a method other than GET or HEAD yields 405 and an empty body;
 - an undecodable URL path yields 400 and an empty body;

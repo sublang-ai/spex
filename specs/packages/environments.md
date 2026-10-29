@@ -27,7 +27,7 @@ When the core reads a release — from the registry, a Git commit, a path source
 | `specs/<language>/<pkg>.md` | the one spec file, with its sections, item ids and citations kept whole |
 | `skills/<language>/<id>/` | an Agent Skills folder [[1]] whose `SKILL.md` name is `<id>` |
 | `playbooks/<language>/<id>/` | a playbook in Playbook's native layout: the text the compiler reads, its compiled module and what the compiler wrote beside them, except its `.slc/` build history and `.slc-verify/` verifier support, which a folder read as a release leaves out wherever they stand in it |
-| `applets/<id>/` | a browser-server application in its native layout |
+| `applets/<id>/` | a static web application entered at `index.html`, a regular file at the folder's root, every file beside it served as it is ([DR-161](../decisions/161-an-applet-is-a-page-the-ide-serves.md)); a folder without that entry is refused naming the applet |
 
 | `meta.yaml` field | Content |
 | --- | --- |

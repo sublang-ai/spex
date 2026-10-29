@@ -3011,11 +3011,19 @@ msgid "Enter to send · Shift+Enter for a new line"
 msgstr "Enter to send · Shift+Enter for a new line"
 
 #. heading over a spex repository's spec package requests and lock
-#. section heading: the spec packages one spex repository installs
-#: src/components/EnvironmentSection.tsx
 #: src/lib/space.ts
 msgid "Environment"
 msgstr "Environment"
+
+#. section heading: the spec packages a project installs; {project} is the project's name
+#: src/components/EnvironmentSection.tsx
+msgid "Environment of {project}"
+msgstr "Environment of {project}"
+
+#. section heading: the spec packages your own group installs
+#: src/components/EnvironmentSection.tsx
+msgid "Environment of your own group"
+msgstr "Environment of your own group"
 
 #. stands where a failed call named no reason
 #: src/components/PlayerPane.tsx
@@ -5147,6 +5155,11 @@ msgstr "Playbooks"
 msgid "Playbooks need a valid config — fix it in <0>Settings</0>."
 msgstr "Playbooks need a valid config — fix it in <0>Settings</0>."
 
+#. name of the switch between the project's playbooks and your own group's
+#: src/components/LibrarySurface.tsx
+msgid "Playbooks of"
+msgstr "Playbooks of"
+
 #: src/components/DraftRegisterTab.tsx
 #: src/components/LibrarySurface.tsx
 msgid "Player for {role}"
@@ -6633,10 +6646,6 @@ msgstr "Spex keeps this device's files in {path}"
 msgid "Spex navigation"
 msgstr "Spex navigation"
 
-#: src/components/LibrarySurface.tsx
-msgid "Spex repository shown"
-msgstr "Spex repository shown"
-
 #: src/components/ProjectPalette.tsx
 msgid "Spex will create this folder and set up Git."
 msgstr "Spex will create this folder and set up Git."
@@ -7066,7 +7075,6 @@ msgstr "The original text stands"
 msgid "The project's spec packages ({keys})"
 msgstr "The project's spec packages ({keys})"
 
-#: src/components/LibrarySurface.tsx
 #: src/components/ProjectsSurface.tsx
 msgid "The project's spex repository: {repository}"
 msgstr "The project's spex repository: {repository}"

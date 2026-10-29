@@ -10,11 +10,14 @@
 // the conflict report, Resolve again and Install where they apply, the
 // built-in release this app ships where the lock runs an older one with
 // Update resolving again, what the last export left out with Export
-// again installing, and Remove behind the inline confirm. The
-// ways to add a spec package — from the registry, a folder or Git —
-// stand apart at the surface's foot. A sync, a resolve or an install running beside them refuses
-// nothing (DR-111): its progress shows by the heading, and a change the
-// core refuses shows its cause in place.
+// again installing, and Remove behind the inline confirm. The heading
+// names whose environment it is — the project by its name, or your own
+// group — never the spex repository behind it (DR-159). The ways to add
+// a spec package — from the registry, a folder or Git — stand directly
+// beneath the list, above the playbooks. A sync, a resolve or an
+// install running beside them refuses nothing (DR-111): its progress
+// shows by the heading, and a change the core refuses shows its cause
+// in place.
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type {
@@ -238,12 +241,16 @@ function PackageRow({
   );
 }
 
-/** The environment of one spex repository (playbook-library-92). */
+/** The environment of one spex repository (playbook-library-92),
+ * headed by the project's name or by your own group. */
 export function EnvironmentSection({
   repository,
+  project,
   onNavigate,
 }: {
   repository: string;
+  /** The project's name on its side; absent on your own group's. */
+  project?: string;
   onNavigate?: (surface: "Settings" | "Space") => void;
 }) {
   const store = usePlaceStore();
@@ -257,6 +264,14 @@ export function EnvironmentSection({
   const [error, setError] = useState<string>();
   const [pending, setPending] = useState<"resolve" | "update" | "install" | "export">();
   const progress = progressOf(state);
+  const heading =
+    project !== undefined
+      ? i18n._({
+          id: "Environment of {project}",
+          comment: "section heading: the spec packages a project installs; {project} is the project's name",
+          values: { project },
+        })
+      : i18n._({ id: "Environment of your own group", comment: "section heading: the spec packages your own group installs" });
 
   function act(kind: "resolve" | "update" | "install" | "export"): void {
     setPending(kind);
@@ -442,12 +457,9 @@ export function EnvironmentSection({
   return (
     <section data-testid="environment-section" className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2">
-        <h2 className="text-sm font-semibold text-neutral-500">
-          {i18n._({ id: "Environment", comment: "section heading: the spec packages one spex repository installs" })}
+        <h2 className="min-w-0 truncate text-sm font-semibold text-neutral-500" title={heading}>
+          {heading}
         </h2>
-        <span className="min-w-0 truncate font-mono text-xs text-neutral-500" title={repository}>
-          {repository}
-        </span>
         {progress ? (
           <span className="ml-auto flex items-center gap-1 text-xs text-neutral-500">
             <RunningMark running />

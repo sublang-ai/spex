@@ -336,6 +336,12 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Changed
 
+- On Playbooks, **Add from registry**, **Add from folder** and **Add from
+  Git** stand directly beneath the environment's list of spec packages,
+  above the playbooks, instead of at the page's foot. The environment's
+  heading names the project — "Environment of demo" — or "Environment of
+  your own group", and no longer shows a `<name>-spex` key
+  ([DR-159](specs/decisions/159-projects-in-groups-opened-where-you-work.md)).
 - A first-run config takes the agents Playbook seeds for this machine's
   sign-ins ([DR-154](specs/decisions/154-the-seed-follows-playbooks-rule.md)):
   with only Codex signed in, the Captain and every player run Codex; with
