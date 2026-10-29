@@ -45,7 +45,7 @@ export function ownRepositoryKey(
   space: GroupsState | undefined,
   own: readonly PlaybookAvailability[] | undefined,
 ): string | undefined {
-  return space?.own.repositories.find((entry) => entry.own)?.key ?? own?.[0]?.repository;
+  return space?.own?.repositories?.find((entry) => entry.own)?.key ?? own?.[0]?.repository;
 }
 
 /** One spex repository as Space last read it. */
@@ -134,7 +134,7 @@ export function artifactKindWord(kind: EnvironmentPackage["artifacts"][number]["
     case "playbook":
       return i18n._({ id: "playbook", comment: "a spec package's artifact kind: a playbook" });
     case "applet":
-      return i18n._({ id: "applet", comment: "a spec package's artifact kind: a browser-server application" });
+      return i18n._({ id: "applet", comment: "a spec package's artifact kind: a static web page the IDE shows in a tab" });
   }
 }
 
