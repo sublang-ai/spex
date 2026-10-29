@@ -76,7 +76,7 @@ When `spex package init <org>/<name>` is invoked with `--skill <folder>` once or
 | `specs/<language>/<name>.md` | the `--spec` file, copied |
 
 - `<language>` is `--language`, else `en`; the description is `--description`, else the first skill's `SKILL.md` `description`, else the spec's first paragraph under its Intent heading; the license is `--license`, else `Apache-2.0` where the project's `LICENSE` begins with "Apache License" past a byte order mark and whitespace, `MIT` where it begins with "MIT License", else `Apache-2.0`;
-- refused before anything is written, naming the rule: a name that is not `<org>/<name>` in lowercase kebab-case of at most 64 characters each; no artifact named; an existing `spex-packages/<name>/`; a skill folder without a `SKILL.md` whose `name` is an Agent Skills name, or two skills of one id; a spec file whose basename is not `<name>.md`; a skill folder holding a link; no description from any source;
+- refused before anything is written, naming the rule: a name that is not `<org>/<name>` in lowercase kebab-case of at most 64 characters each; no artifact named; an existing `spex-packages/<name>/`; a skill folder without a `SKILL.md` whose `name` is an Agent Skills name, two skills of one id, or a skill of the spec's id `<name>`; a spec file whose basename is not `<name>.md`; a skill folder holding a link or a special file, or, with `--move`, the destination; no description from any source;
 - the command ends naming the folder and the next steps: Playbooks → Add from folder with `<org>/<name>` and `spex-packages/<name>` then Publish on its row in the IDE, or `spex package add <org>/<name> --path spex-packages/<name>` and `spex package publish spex-packages/<name> --dry-run` from the CLI.
 
 ### attached-cli-5
