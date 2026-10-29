@@ -904,6 +904,13 @@ describe("run-view-171: opening a group's project at a seat", () => {
     expect(callsOf(beta, "space.join")).toEqual([]);
     expect(pickDirectory).not.toHaveBeenCalled();
     expect(screen.queryByTestId("project-palette")).toBeNull();
+    // [run-view-171] the project is that seat's current one at once, and
+    // the Projects surface shows that place.
+    expect(alphaStore.getState().currentProjectId).toBe(FAILED_KEY);
+    expect(useAppStore.getState().currentProjectId).not.toBe(FAILED_KEY);
+    expect(
+      within(screen.getByTestId("sidebar")).getByRole("group", { name: ALPHA.name }).querySelector('[data-testid="sidebar-place-heading"]')?.getAttribute("aria-current"),
+    ).toBe("location");
   });
 
   test("a seat that connects while the palette is open has its groups read then", async () => {
@@ -973,6 +980,10 @@ describe("run-view-171: opening a group's project on this computer", () => {
     expect(callsOf(beta, "space.join")).toEqual([]);
     // Accepted, the palette closes; the join reports on the Space row.
     expect(screen.queryByTestId("project-palette")).toBeNull();
+    // [run-view-171] the project is this computer's current one at once,
+    // by its row's key, which it bears once the core lists it.
+    expect(useAppStore.getState().currentProjectId).toBe(ABSENT_KEY);
+    expect(alphaStore.getState().currentProjectId).not.toBe(ABSENT_KEY);
   });
 
   test("a picker closed with no folder sends nothing; a refusal reads the core's words in the palette", async () => {

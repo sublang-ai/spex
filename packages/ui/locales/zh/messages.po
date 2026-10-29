@@ -4937,10 +4937,13 @@ msgstr "正在 {server} 上打开…"
 #. a project's row while it is opened here: its records and code clone
 #. a project's row while it is opened here: its records and code clone
 #. a project's row while it is opened here: its records and code clone
+#. a project's row while it is opened here: its records and code clone
+#. a project's row while it is opened here: its records and code clone
 #. an authoring session is being opened
 #. an authoring session is being opened
 #: src/components/CaptainHome.tsx
 #: src/components/LibrarySurface.tsx
+#: src/components/NavRail.tsx
 #: src/components/SpaceGroups.tsx
 #: src/lib/space.ts
 msgid "Opening…"

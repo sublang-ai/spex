@@ -19,12 +19,14 @@
 // the selector naming the server.
 
 import { join, dirname } from "node:path";
+import { mkdirSync } from "node:fs";
 import { seedDemoProject } from "@sublang/spex-core/testing";
 
 import {
   HOST_GROUP,
   canonicalOrigin,
   expect,
+  git,
   hostKey,
   instanceSection,
   openTranslated,
@@ -158,6 +160,18 @@ for (const copy of COPY) {
       // [run-view-175] it fits the desktop and the 320px sidebar floor.
       await expectOnboardingFit(page, `server welcome ${copy.lang}`);
 
+      // [run-view-175] [run-view-168] the secondary action shows the Groups
+      // surface, the selector naming the server.
+      await secondary.click();
+      await expect(surfaceEntry(page, "Space")).toHaveAttribute("aria-current", "page");
+      await expect(page.getByTestId("space-surface")).toBeVisible();
+      const selector = page.getByTestId("place-selector");
+      await expect(selector).toHaveValue(lab.place);
+      await expect(selector.locator("option:checked")).toHaveText("lab-3");
+      // The server's heading shows its welcome page again (run-view-168).
+      await heading.click();
+      await expect(welcome).toBeVisible();
+
       // [run-view-175] [run-view-174] the primary action opens the palette,
       // which lists the group's spex repository at that place; opening it
       // there sends the seat's core a join with no folder (run-view-169),
@@ -178,17 +192,29 @@ for (const copy of COPY) {
       await expect.poll(sentToSeat).toEqual([{ type: "space.join", instance: canonicalOrigin(host.url), hostId: repo.id }]);
       expect(sentHere()).toEqual([]);
       await expect(page.getByTestId("palette-error")).toHaveCount(0);
-      await page.keyboard.press("Escape");
+      // [run-view-175] [run-view-168] accepted, the palette closes and the
+      // project is the seat's current one: named over the join's step
+      // until the seat's core lists it, then its own task start, its row
+      // under the server's heading selected.
       await expect(palette).toBeHidden();
-
-      // [run-view-175] [run-view-168] the secondary action shows the Groups
-      // surface, the selector naming the server.
-      await secondary.click();
-      await expect(surfaceEntry(page, "Space")).toHaveAttribute("aria-current", "page");
-      await expect(page.getByTestId("space-surface")).toBeVisible();
-      const selector = page.getByTestId("place-selector");
-      await expect(selector).toHaveValue(lab.place);
-      await expect(selector.locator("option:checked")).toHaveText("lab-3");
+      // The stand-in seat clones the records; a seat allocates the folder
+      // its code runs in (space-103), which the journey stands in for.
+      const cloned = await lab.seat.core.waitSpace(
+        0,
+        (state) => rowsOf(state).some((each) => each.key === key && each.placements.some((placement) => placement.attached)),
+        60_000,
+      );
+      expect(rowsOf(cloned).find((each) => each.key === key)?.folder).toBeNull();
+      const folder = join(dirname(lab.seat.dataDir), "seat-projects", "lab-notes");
+      mkdirSync(dirname(folder), { recursive: true });
+      git(dirname(folder), "clone", "-q", code, folder);
+      await lab.seat.core.command("project.rebind", { projectId: key, path: folder });
+      // Listed by the seat's core, the project's own task start and its
+      // row under the server's heading, selected, replace the welcome page.
+      await expect(page.getByTestId("project-task-start")).toContainText("lab-notes", { timeout: 30_000 });
+      await expect(sidebar.getByTestId(`sidebar-project-${key}@${lab.place}`)).toHaveAttribute("aria-selected", "true");
+      await expect(page.getByTestId("welcome-home")).toHaveCount(0);
+      await expect(page.getByTestId("project-opening")).toHaveCount(0);
     });
   });
 }

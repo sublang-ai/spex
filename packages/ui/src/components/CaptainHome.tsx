@@ -25,6 +25,7 @@ import { isLocalPlace, placeLabel, useAppStore, type StagedIntent } from "../sta
 import { usePlaceStore } from "../state/place-context.js";
 import { usePlaces } from "../state/places.js";
 import { anySignedIn, instanceNameAt } from "../lib/instances.js";
+import { STEP_LINES, stoppedPhrase, type OpeningProject } from "../lib/space.js";
 import { ApprovalLink } from "./SpaceServers.js";
 import { SlashMenuList, slashMatches } from "./SlashMenu.js";
 import { AgentChip, agentChipText, fastModeWord, readinessWord } from "./AgentChip.js";
@@ -66,6 +67,10 @@ export interface CaptainHomeProps {
   onDraftChange?: (draft: string) => void;
   /** Re-check agent readiness at hand (DR-009). */
   onRecheckReadiness?: () => Promise<unknown>;
+  /** The current project while this place opens it (run-view-168):
+   * its name over the join's step, or the join's cause where it
+   * stopped, in place of the welcome page and the greeting. */
+  opening?: OpeningProject;
   /** Enter with no project opens the palette (DR-011). */
   onOpenPalette: () => void;
   /** The welcome page's own-project path opens the palette without
@@ -363,6 +368,48 @@ export function CaptainHome(props: CaptainHomeProps) {
   // A fresh Captain canvas centers the task guidance and composer.
   // Any real content reverts to the IM bottom-docked layout (DR-010 §8).
   const emptyCanvas = !configBroken && !error;
+
+  // The project this place is opening (run-view-168): named over the
+  // step in flight until its core lists it, when its own home takes
+  // over; a join that stopped reads its cause here, the Space row
+  // holding the way on (space-63).
+  if (!props.hasProject && props.opening) {
+    const { name, step, stopped } = props.opening;
+    return (
+      <section
+        data-testid="project-opening"
+        className="mx-auto flex w-full min-h-0 max-w-2xl flex-1 flex-col justify-center p-6"
+      >
+        {stopped === undefined ? (
+          <p className="text-sm text-neutral-500 dark:text-neutral-400">
+            {i18n._({ id: "Opening…", comment: "a project's row while it is opened here: its records and code clone" })}
+          </p>
+        ) : null}
+        <h1 className="mt-1 text-2xl font-semibold leading-tight tracking-tight text-neutral-900 dark:text-neutral-100">
+          {name}
+        </h1>
+        <p
+          role="status"
+          data-testid="project-opening-step"
+          className={`mt-3 text-sm leading-6 ${stopped === undefined ? "text-neutral-600 dark:text-neutral-300" : "text-red-700 dark:text-red-300"}`}
+        >
+          {stopped === undefined ? STEP_LINES[step]() : stoppedPhrase(step, stopped)}
+        </p>
+        {stopped !== undefined ? (
+          <div className="mt-6">
+            <button
+              type="button"
+              data-testid="project-opening-space"
+              onClick={() => props.onNavigate("Space")}
+              className={WELCOME_SECONDARY}
+            >
+              {i18n._("Open Space")}
+            </button>
+          </div>
+        ) : null}
+      </section>
+    );
+  }
 
   if (!props.hasProject && !props.hasProjects) {
     // The third step reads the same at every place.

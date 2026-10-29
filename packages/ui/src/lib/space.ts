@@ -14,6 +14,7 @@
 // would freeze the language this module was imported in.
 
 import type {
+  GroupsState,
   PlacementBranch,
   PlacementState,
   RepositoryState,
@@ -419,6 +420,51 @@ export function rowPhrase(
  * `<name>-spex` with its `-spex` dropped. */
 export function projectName(name: string): string {
   return name.replace(/-spex$/i, "") || name;
+}
+
+/** A project opening at a place (run-view-168, space-63): a spex
+ * repository whose join runs there, named as its code is, with the step
+ * in flight — or one whose join stopped, with its cause. Its id is the
+ * row's key, which the project bears once that place's core lists it. */
+export interface OpeningProject {
+  id: string;
+  name: string;
+  step: SyncStep;
+  /** The cause the join stopped with; absent while it runs. */
+  stopped?: string;
+}
+
+/** What a row says of its open (run-view-168): the join running or
+ * stopped on it; nothing for any other row. */
+export function openingOf(repo: RepositoryState | undefined): OpeningProject | undefined {
+  if (!repo) return undefined;
+  const sync = repo.sync;
+  if (sync.phase === "running" && sync.op === "join") return { id: repo.key, name: projectName(repo.name), step: sync.step };
+  if (sync.phase === "stopped" && sync.op === "join") return { id: repo.key, name: projectName(repo.name), step: sync.step, stopped: sync.message };
+  return undefined;
+}
+
+/** Every row a Groups state lists; a state read in part lists what it
+ * holds. */
+function rowsOf(state: GroupsState): RepositoryState[] {
+  return [...(state.own?.repositories ?? []), ...(state.instances ?? []).flatMap((instance) => instance.groups.flatMap((group) => group.repositories))];
+}
+
+/** The projects opening at a place (run-view-168): every row of its
+ * Groups state whose join runs, left out once its core lists the
+ * project. */
+export function openingProjects(state: GroupsState | undefined, projects: readonly { id: string }[]): OpeningProject[] {
+  if (!state) return [];
+  return rowsOf(state)
+    .map((repo) => openingOf(repo))
+    .filter((entry): entry is OpeningProject => entry !== undefined && entry.stopped === undefined && !projects.some((project) => project.id === entry.id));
+}
+
+/** What a place says of opening the project keyed `id` (run-view-168):
+ * its join running or stopped, nothing otherwise. */
+export function openingAt(state: GroupsState | undefined, id: string | undefined): OpeningProject | undefined {
+  if (!state || id === undefined) return undefined;
+  return openingOf(rowsOf(state).find((repo) => repo.key === id));
 }
 
 /** A row's name (space-1, DR-159): the spex repository's with its

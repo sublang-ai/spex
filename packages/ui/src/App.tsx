@@ -68,6 +68,7 @@ import {
 type PendingRecord = { place: string; projectId: string; path: string; origin: RecordOrigin };
 import { editorDirty, treeCounts } from "./lib/spec-view-model.js";
 import { isHistory } from "./lib/sessions.js";
+import { openingAt, openingProjects } from "./lib/space.js";
 import { Icon } from "./components/Icon.js";
 import { homeAttachmentKey, sessionAttachmentKey, useComposerAttachments } from "./lib/useComposerAttachments.js";
 
@@ -499,6 +500,12 @@ function WorkspaceSurface({
   const tabRefs = useRef(new Map<string, HTMLButtonElement>());
 
   const project = projects.find((entry) => entry.id === currentProjectId);
+  // A project this place is still opening is current before its core
+  // lists it (run-view-168): the start view names it over the join's
+  // step, and its specs and config are read once it is listed.
+  const registeredId = project?.id;
+  const space = store((state) => state.space);
+  const opening = project === undefined ? openingAt(space, currentProjectId) : undefined;
   // The working set (run-view-48): the sessions this project has open,
   // working and idle alike — never derived from liveness, so a turn
   // settling leaves its transcript exactly where the eye already is.
@@ -529,9 +536,9 @@ function WorkspaceSurface({
   // before anyone opens the reader. The Specs tab itself still re-reads
   // on activation and focus (DR-011).
   useEffect(() => {
-    if (connection !== "open" || !currentProjectId || tab === "specs" || projectSpecTree || projectSpecError) return;
-    void loadSpecs(currentProjectId);
-  }, [connection, currentProjectId, tab, projectSpecTree, projectSpecError, loadSpecs]);
+    if (connection !== "open" || !registeredId || tab === "specs" || projectSpecTree || projectSpecError) return;
+    void loadSpecs(registeredId);
+  }, [connection, registeredId, tab, projectSpecTree, projectSpecError, loadSpecs]);
 
   // The last-viewed marker is a standing condition, not an event
   // (run-view-134): while the workspace shows a session with its
@@ -555,13 +562,13 @@ function WorkspaceSurface({
   // Spec freshness (DR-011): re-read on tab activation and window
   // focus while the Specs tab is up; turn ends refresh via the store.
   useEffect(() => {
-    if (tab !== "specs" || !currentProjectId) return;
-    void loadSpecs(currentProjectId);
-    const onFocus = () => void loadSpecs(currentProjectId);
+    if (tab !== "specs" || !registeredId) return;
+    void loadSpecs(registeredId);
+    const onFocus = () => void loadSpecs(registeredId);
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, currentProjectId]);
+  }, [tab, registeredId]);
 
   const summary =
     configState?.status === "valid" ? configState.summary : undefined;
@@ -573,9 +580,9 @@ function WorkspaceSurface({
   const projectConfigs = store((state) => state.projectConfigs);
   const loadProjectConfig = store((state) => state.loadProjectConfig);
   useEffect(() => {
-    if (connection !== "open" || !currentProjectId) return;
-    void loadProjectConfig(currentProjectId).catch(() => {});
-  }, [connection, currentProjectId, loadProjectConfig]);
+    if (connection !== "open" || !registeredId) return;
+    void loadProjectConfig(registeredId).catch(() => {});
+  }, [connection, registeredId, loadProjectConfig]);
   const playbooksOf = (projectId: string | undefined) => {
     const composed = projectId ? projectConfigs[projectId] : undefined;
     return composed?.status === "valid"
@@ -620,6 +627,7 @@ function WorkspaceSurface({
     <CaptainHome
       hasProject={Boolean(project)}
       hasProjects={projects.length > 0}
+      opening={opening}
       projectName={project?.name}
       projectId={project?.id}
       specTree={projectSpecTree}
@@ -1521,6 +1529,9 @@ export function App() {
     key: store.place.key,
     label: placeLabel(store.place),
     projects: value.projects,
+    // The projects its core is opening, read from its Groups state
+    // (run-view-168).
+    opening: openingProjects(value.space, value.projects),
     sessions: value.sessions,
     attention: attentionAt(store.place.key),
     currentProjectId: value.currentProjectId,
@@ -1637,6 +1648,9 @@ export function App() {
           }
           onPick={(projectId) => pickProject(projectId)}
           onPickAt={(place, projectId) => pickProject(projectId, place)}
+          // A group's project opened at a place is current there at
+          // once, the Projects surface showing that place (run-view-168).
+          onOpened={(place, projectId) => pickProject(projectId, place)}
           onAddPath={addProjectByPath}
           onCreatePath={(path, scaffold) => createProject(path, scaffold)}
           onClose={() => {
