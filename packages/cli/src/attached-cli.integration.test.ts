@@ -11,6 +11,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { createRequire } from "node:module";
 import { once } from "node:events";
 import { randomUUID } from "node:crypto";
+import { createServer as createNetServer, type AddressInfo } from "node:net";
 import { PROTOCOL_VERSION, ATTACHED_CLI_VERSION } from "./generated-protocol.js";
 
 const ROOT = resolve(fileURLToPath(new URL("..", import.meta.url)));
@@ -19,6 +20,9 @@ const CORE = resolve(ROOT, "../core");
 const { WebSocketServer } = createRequire(join(CORE, "package.json"))("ws");
 const SCRATCH = realpathSync(mkdtempSync(join(tmpdir(), "spex-attached-cli-")));
 const PROJECT = join(SCRATCH, "project");
+// A home without the running app's endpoint file: no case here reaches
+// the reader's own app by accident (attached-cli-1).
+const NO_APP_HOME = join(SCRATCH, "no-app-home");
 const TOKEN = "fixture-private-access-capability";
 let CLI: string;
 const commands: any[] = [];
@@ -34,7 +38,7 @@ function npm(args: string[], cwd: string): string {
   return result.stdout;
 }
 function child(args: string[], env: Record<string, string | undefined> = {}) {
-  const proc = spawn(process.execPath, [CLI, ...args], { cwd: PROJECT, env: { ...process.env, SPEX_SERVER_URL: undefined, ...env }, stdio: ["ignore", "pipe", "pipe"] });
+  const proc = spawn(process.execPath, [CLI, ...args], { cwd: PROJECT, env: { ...process.env, SPEX_SERVER_URL: undefined, SPEX_HOME: NO_APP_HOME, ...env }, stdio: ["ignore", "pipe", "pipe"] });
   let stdout = "", stderr = "";
   proc.stdout.on("data", (data) => { stdout += String(data); });
   proc.stderr.on("data", (data) => { stderr += String(data); });
@@ -65,7 +69,7 @@ function standard(message: any, socket: any) {
 }
 
 before(() => {
-  mkdirSync(PROJECT);
+  mkdirSync(PROJECT); mkdirSync(NO_APP_HOME);
   const packed = JSON.parse(npm(["pack", "--json", "--pack-destination", SCRATCH], ROOT))[0];
   assert(packed.files.some((f: any) => f.path === "dist/generated-protocol.js"));
   assert(!packed.files.some((f: any) => /(?:\.test\.|src\/|scripts\/)/.test(f.path)));
@@ -126,6 +130,49 @@ describe("attached packed CLI", () => {
     const server = await fixture(standard);
     try { const result = await child(["project", "list", "--server", server.url.replace(TOKEN, "wrong")]).done; assert.equal(result.code, 1); assert(!result.stderr.includes("wrong")); }
     finally { await server.stop(); }
+  });
+
+  it("finds the running app through the home's endpoint file unless a URL is named", async () => {
+    const app = await fixture(standard);
+    const named = await fixture(standard);
+    const home = (content: string | null): string => {
+      const dir = mkdtempSync(join(SCRATCH, "home-"));
+      if (content !== null) { mkdirSync(join(dir, "local")); writeFileSync(join(dir, "local/endpoint.json"), content, { mode: 0o600 }); }
+      return dir;
+    };
+    const file = (url: string) => JSON.stringify({ format: 1, url, pid: process.pid });
+    const probe = createNetServer().listen(0, "127.0.0.1");
+    await once(probe, "listening");
+    const closed = `ws://127.0.0.1:${(probe.address() as AddressInfo).port}/?token=${TOKEN}`;
+    await new Promise<void>((done) => probe.close(() => done()));
+    const quiet = (result: { stdout: string; stderr: string }) => {
+      for (const output of [result.stdout, result.stderr]) { assert(!output.includes(TOKEN)); assert(!output.includes("127.0.0.1:")); }
+    };
+    try {
+      // The server shell's http form and the desktop's ws form alike.
+      for (const url of [app.url, app.url.replace("http:", "ws:")]) {
+        const found = await child(["project", "list"], { SPEX_HOME: home(file(url)) }).done;
+        assert.equal(found.code, 0, found.stderr); assert.match(found.stdout, /Fixture/); quiet(found);
+      }
+      assert.equal(app.connections(), 2);
+      // An explicit URL wins over the file: --server, then SPEX_SERVER_URL.
+      const appHome = home(file(app.url));
+      for (const run of [child(["project", "list", "--server", named.url], { SPEX_HOME: appHome }), child(["project", "list"], { SPEX_HOME: appHome, SPEX_SERVER_URL: named.url })]) {
+        const result = await run.done; assert.equal(result.code, 0, result.stderr);
+      }
+      assert.equal(named.connections(), 2); assert.equal(app.connections(), 2);
+      // A foreign address in the file is refused before any connection.
+      const foreign = await child(["project", "list"], { SPEX_HOME: home(file(app.url.replace("127.0.0.1", "example.com"))) }).done;
+      assert.equal(foreign.code, 1); assert.match(foreign.stderr, /no loopback access URL/); quiet(foreign);
+      // Absent, unreadable as JSON, of another shape, or naming a closed
+      // port: each names that the app must be running.
+      for (const content of [null, "not json", JSON.stringify({ format: 2, url: app.url, pid: process.pid }), JSON.stringify({ format: 1, url: app.url }), file(closed)]) {
+        const result = await child(["project", "list"], { SPEX_HOME: home(content) }).done;
+        assert.equal(result.code, 1, String(content)); assert.match(result.stderr, /Spex app must be running on this computer/, String(content));
+        assert.match(result.stderr, /--server <access-url> or set SPEX_SERVER_URL/); quiet(result);
+      }
+      assert.equal(app.connections(), 2, "no refused file reaches a server");
+    } finally { await app.stop(); await named.stop(); }
   });
 
   it("maps project and package commands and waits for each request's terminal receipt", async () => {

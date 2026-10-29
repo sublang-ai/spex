@@ -10,8 +10,9 @@
 *The essential spec layer AI agents need to build software reliably.*
 
 Scaffolds a `specs/` directory so AI coding agents can read and follow
-your project's requirements and design. It also attaches to a running local
-Spex server for project, Space sign-in and package operations.
+your project's requirements and design. It makes a spec package folder from
+a skill or a spec you already have, and attaches to the running Spex app for
+project, Space sign-in and package operations.
 
 ## Install
 
@@ -25,19 +26,56 @@ Or run once without installing:
 npx @sublang/spex scaffold
 ```
 
-## Use a running Spex server
+## Make a package folder
 
-These commands require Node.js 22 or later and a local Spex App server from
-0.9.0-beta.18 or later, with attached CLI version 1 support and a matching
-protocol.
-Start the server from a Spex checkout with `npm run start:server`. Copy its
-private access URL into `SPEX_SERVER_URL`, or pass it with `--server` on a
-command. Keep the URL private: it grants access to that server's home.
-The CLI connects only to literal loopback addresses; it starts no server and
-stores no separate credentials or package state.
+`spex package init` turns a skill folder or a spec file you already have into
+a spec package folder ready to add and publish. It needs no running app.
+From your project's root:
 
 ```sh
-export SPEX_SERVER_URL='<access URL printed by the local server>'
+spex package init my-org/my-skill --skill .claude/skills/my-skill --move
+spex package init my-org/my-spec --spec specs/packages/my-spec.md
+```
+
+It writes `spex-packages/<name>/` holding `meta.yaml` (format 2, version
+`0.1.0`), a `README.md`, the project's `LICENSE` where there is one, each
+`--skill` folder under `skills/<language>/<id>/` — `<id>` being the `name`
+its `SKILL.md` declares — and the `--spec` file under
+`specs/<language>/<name>.md`. Give `--skill` once per skill; a package holds
+at most one spec, whose file must be named `<name>.md`.
+`--move` moves the skill folders instead of copying them: once the package is
+added, Spex exports the skills back to your agents.
+
+| Option | Default |
+| --- | --- |
+| `--language <tag>` | `en` |
+| `--description <text>` | the first skill's `SKILL.md` description, else the first paragraph under the spec's Intent heading |
+| `--license <id>` | `MIT` where `./LICENSE` begins with "MIT License", else `Apache-2.0` |
+
+Every rule is checked before anything is written; a refusal writes nothing
+and names the rule. It ends with the next steps: in the app, **Playbooks →
+Add from folder** with the name and `spex-packages/<name>`, then **Publish**
+on its row; or with the CLI, as below,
+`spex package add <org>/<name> --path spex-packages/<name>` and
+`spex package publish spex-packages/<name> --dry-run`.
+
+## Use the running Spex app
+
+These commands require Node.js 22 or later and the Spex app from
+0.9.0-beta.18 or later — the desktop app or the server shell — with attached
+CLI version 1 support and a matching protocol.
+Keep the app running on this computer: the CLI finds it through the
+`local/endpoint.json` file the app keeps in its home, `SPEX_HOME` or
+`~/.spex`, while it serves on a loopback address. Pass
+`--server <access-url>` or set `SPEX_SERVER_URL` only to use another
+server; either wins over the file. App 0.9.0-beta.18 keeps no such file and
+needs that URL, which its server shell started with `npm run start:server`
+prints. Keep the URL private: it grants access to that server's home.
+The CLI connects only to literal loopback addresses; it starts no server and
+stores no separate credentials or package state. Without a running app it
+says so and exits 1.
+
+```sh
 spex project add /absolute/path/to/project
 cd /absolute/path/to/project
 spex project list
@@ -62,12 +100,13 @@ spex package remove my-org/toolkit
 ```
 
 `install` uses the existing lock. `resolve` selects versions again and installs.
-For a package you are authoring inside the project, request its relative folder:
+For a package you are authoring inside the project, such as one
+`spex package init` made, request its relative folder:
 
 ```sh
-spex package add my-org/toolkit --path packages/toolkit
-spex package publish packages/toolkit --dry-run
-spex package publish packages/toolkit
+spex package add my-org/toolkit --path spex-packages/toolkit
+spex package publish spex-packages/toolkit --dry-run
+spex package publish spex-packages/toolkit
 ```
 
 `add` requires exactly one of `--version` or `--path`. Core validates package
@@ -85,7 +124,8 @@ an unknown result: the operation may still complete. Inspect its state before
 manually retrying; the CLI never reconnects or resends mutations.
 Ctrl+C exits 130: package work may continue, while sign-in requests cancellation
 of its own attempt where still connected. Neither promises rollback.
-Use `spex --help` for command forms. Scaffold and lint remain usable without a server.
+Use `spex --help` for command forms. Scaffold, lint and `package init` remain
+usable without a server.
 
 ## Usage
 

@@ -30,7 +30,7 @@ Where the core service is started by a host shell, when startup completes, the c
 
 While the core service serves a home at a loopback endpoint — the socket it binds itself, or a shell-supplied server bound to a loopback host [[core-service-1](#core-service-1)] — it shall keep `local/endpoint.json` under the home [[storage-1](storage.md#storage-1)], owner-only, holding `{ format: 1, url, pid }` — the access URL with the endpoint's token, and this process's id — written once the endpoint listens and removed when the service stops, so the CLI finds the running app [[attached-cli-1](attached-cli.md#attached-cli-1)] ([DR-163](../decisions/163-the-cli-finds-the-running-app.md)):
 
-- a seat [[core-service-125](#core-service-125)], and a shell-supplied server bound to any other host, write no file;
+- the URL of a shell-supplied server is the one its shell announces once the server listens; a seat [[core-service-125](#core-service-125)], and a shell-supplied server bound to any other host, whose shell announces none, write no file;
 - a file left by a process that died is replaced by the next start.
 
 #### core-service-24
@@ -1208,6 +1208,10 @@ Where the core service attaches to a test-supplied HTTP server [[core-service-1]
 - a handshake with a wrong or missing token is rejected;
 - a token-bearing handshake from a foreign web origin is rejected;
 - a token-bearing handshake with no Origin, and one from a `file://` origin, each succeed.
+
+#### core-service-144
+
+Where the core service binds its own loopback socket over a home whose `local/endpoint.json` a dead process left, and where it attaches to a test-supplied HTTP server, the integration suite shall assert the endpoint file of [[core-service-143](#core-service-143)]: the bound socket's file replaces the stale one, holding `{ format: 1, url, pid }` with this process's id, owner-only, its URL answering the handshake; the attached core writes none until the suite announces a URL, then that URL's file; and each file is gone once the service stops.
 
 ### Readiness Dedup Coverage
 

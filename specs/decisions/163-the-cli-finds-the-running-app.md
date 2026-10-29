@@ -28,4 +28,4 @@ Amends [DR-157](157-a-cli-attached-to-the-local-core.md) in how the CLI learns t
 
 ## Consequences
 
-- `storage-1` lists the file; `core-service` states its writing and removal; `attached-cli-1` states the order the CLI tries; the guides tell a desktop user to run the CLI beside the app, the server shell no longer a prerequisite.
+- `storage-1` lists the file; `core-service` states its writing and removal; `server-shell` states the shell's announcement on a loopback bind; `attached-cli-1` states the order the CLI tries; the guides tell a desktop user to run the CLI beside the app, the server shell no longer a prerequisite.

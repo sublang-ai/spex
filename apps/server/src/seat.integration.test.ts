@@ -218,6 +218,8 @@ test("a seat started from code clears a stale socket, listens group-accessible o
     assert.deepEqual(await handshake(scratch.socket, TOKEN), { hello: "hello" });
     const refused = await handshake(scratch.socket);
     assert.ok("refused" in refused && /401/.test(refused.refused), JSON.stringify(refused));
+    // A seat leaves no endpoint file for a CLI (server-shell-27, SERVER-SHELL-28).
+    assert.equal(existsSync(join(scratch.dataDir, "local", "endpoint.json")), false);
 
     // A live seat's socket is no stale one: a second start is refused.
     const second = seatScratch();

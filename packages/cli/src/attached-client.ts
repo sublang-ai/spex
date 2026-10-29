@@ -2,6 +2,9 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { PROTOCOL_VERSION, ATTACHED_CLI_VERSION } from "./generated-protocol.js";
 
 export class CliFailure extends Error {
@@ -10,11 +13,41 @@ export class CliFailure extends Error {
 type Message = Record<string, any>;
 type Pending = { resolve: (value: any) => void; reject: (error: Error) => void };
 
+/** What a failure to find or reach the running app tells the reader. */
+export const APP_GUIDANCE = "The Spex app must be running on this computer: start it, then run this again. To use another server, pass --server <access-url> or set SPEX_SERVER_URL.";
+const EXPLICIT_GUIDANCE = "Use --server <loopback access-url> or SPEX_SERVER_URL from a running Spex server.";
+
+/** The access URL an invocation connects to: `--server`, else
+ * `SPEX_SERVER_URL`, else the URL the running app keeps in the home's
+ * `local/endpoint.json` (attached-cli-1, DR-163). Each is held to the
+ * same loopback rule before any socket opens; the file's URL is never
+ * repeated in a failure. */
+export function selectEndpoint(server: string | undefined, env: NodeJS.ProcessEnv): { url: string; token: string; fromApp: boolean } {
+  if (server !== undefined) return { ...accessEndpoint(server), fromApp: false };
+  const named = env.SPEX_SERVER_URL;
+  if (named !== undefined && named !== "") return { ...accessEndpoint(named), fromApp: false };
+  return { ...appEndpoint(env), fromApp: true };
+}
+
+/** The running app's endpoint file under the home `SPEX_HOME` names,
+ * else `~/.spex`, read as `{format: 1, url, pid}` (core-service-143). */
+function appEndpoint(env: NodeJS.ProcessEnv): { url: string; token: string } {
+  const home = env.SPEX_HOME?.trim() ? env.SPEX_HOME : join(homedir(), ".spex");
+  let doc: unknown;
+  try { doc = JSON.parse(readFileSync(join(home, "local", "endpoint.json"), "utf8")); }
+  catch { throw new CliFailure(1, `No running Spex app was found. ${APP_GUIDANCE}`); }
+  const file = doc as Record<string, unknown> | null;
+  if (!file || typeof file !== "object" || Array.isArray(file) || file.format !== 1 || typeof file.url !== "string" ||
+      typeof file.pid !== "number" || !Number.isSafeInteger(file.pid) || file.pid <= 0)
+    throw new CliFailure(1, `The running Spex app's endpoint file is not one this CLI reads. ${APP_GUIDANCE}`);
+  try { return accessEndpoint(file.url); }
+  catch { throw new CliFailure(1, `The running Spex app's endpoint file names no loopback access URL, so it was not used. ${APP_GUIDANCE}`); }
+}
+
 /** Validate before opening a socket; WHATWG normalization must not admit
  * numeric aliases, wildcard addresses or DNS names other than localhost. */
 export function accessEndpoint(input: string | undefined): { url: string; token: string } {
-  const guidance = "Use --server <loopback access-url> or SPEX_SERVER_URL from the running local Spex server.";
-  if (!input) throw new CliFailure(1, guidance);
+  if (!input) throw new CliFailure(1, EXPLICIT_GUIDANCE);
   try {
     const rawHost = /^[a-z]+:\/\/(\[[^\]]+\]|[^/:?#]+)(?::[0-9]+)?(?:[/?#]|$)/i.exec(input)?.[1]?.toLowerCase();
     const url = new URL(input);
@@ -25,7 +58,7 @@ export function accessEndpoint(input: string | undefined): { url: string; token:
     const token = url.searchParams.get("token")!;
     url.protocol = url.protocol === "http:" ? "ws:" : url.protocol === "https:" ? "wss:" : url.protocol;
     return { url: url.href, token };
-  } catch { throw new CliFailure(1, `Invalid server access URL. ${guidance}`); }
+  } catch { throw new CliFailure(1, `Invalid server access URL. ${EXPLICIT_GUIDANCE}`); }
 }
 
 /** One invocation, one connection. Core owns validation and operation state. */
@@ -36,24 +69,30 @@ export class AttachedClient {
   private completion = new Map<string, Pending>();
   private earlyCompletion = new Map<string, Message>();
   private sent = false;
+  private opened = false;
   private stopped = false;
   private failure?: CliFailure;
   private timer?: ReturnType<typeof setTimeout>;
   signInId?: string;
 
-  constructor(private readonly endpoint: string, private readonly timeoutMs: number) {}
+  /** `unreachable` replaces the failure of a connection that never
+   * opened: for the running app's own endpoint, that the app must be
+   * running (attached-cli-1). */
+  constructor(private readonly endpoint: string, private readonly timeoutMs: number, private readonly unreachable?: string) {}
 
   async connect(): Promise<void> {
     if (typeof globalThis.WebSocket !== "function") throw new CliFailure(1, "This Node.js runtime needs WebSocket support. Use Node.js 22 or later without disabling WebSocket.");
     this.timer = setTimeout(() => this.fail(this.observationFailure("Observation timed out")), this.timeoutMs);
     await new Promise<void>((resolve, reject) => {
       this.ready = { resolve, reject };
+      const lost = (reason: string) => this.fail(!this.opened && this.unreachable ? new CliFailure(1, this.unreachable) : this.observationFailure(reason));
       try { this.socket = new WebSocket(this.endpoint); }
-      catch { this.fail(new CliFailure(1, "Could not connect. Check the running server and its access URL.")); return; }
+      catch { this.fail(new CliFailure(1, this.unreachable ?? "Could not connect. Check the running server and its access URL.")); return; }
+      this.socket.addEventListener("open", () => { this.opened = true; });
       this.socket.addEventListener("message", (event) => this.message(event.data));
-      this.socket.addEventListener("error", () => this.fail(this.observationFailure("Connection failed; check the running server and its access URL")));
+      this.socket.addEventListener("error", () => lost("Connection failed; check the running server and its access URL"));
       this.socket.addEventListener("close", () => {
-        if (!this.stopped) this.fail(this.observationFailure("Connection closed"));
+        if (!this.stopped) lost("Connection closed");
       });
     });
   }

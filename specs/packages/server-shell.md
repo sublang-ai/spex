@@ -53,6 +53,12 @@ Where the server shell starts as a seat — `--seat` with `--server-id`, `--serv
 - the socket's directory is made by whoever starts the shell, the hub's helper [[hub-4](hub.md#hub-4)]; the shell removes a stale socket file there before listening — one that refuses a connection — refuses startup at a socket that answers, "in use", or at a path holding another kind of file, and makes the socket it binds group-accessible;
 - a socket that cannot be bound refuses startup naming the cause, as the flag mistakes do.
 
+#### server-shell-27
+
+Where the bound host is a loopback address, when the shell's port listens, the server shell shall announce the access URL it prints [[server-shell-1](#server-shell-1)] to the core it booted, which keeps it in the home's endpoint file so the CLI finds the running app [[core-service-143](core-service.md#core-service-143)] ([DR-163](../decisions/163-the-cli-finds-the-running-app.md)):
+
+- a bind to any other host, and a seat [[server-shell-25](#server-shell-25)], announce none, so no file stands.
+
 ### Serving
 
 #### server-shell-4
@@ -183,6 +189,12 @@ Where a startup precondition is violated, the test suite shall assert each refus
 #### server-shell-12
 
 Where the server shell runs as a real child process, the test suite shall assert that the access URL it prints matches its bound endpoint [[server-shell-1](#server-shell-1)] and that on SIGTERM the process exits cleanly with its port closed [[server-shell-6](#server-shell-6)]; where its fixture agent ignores SIGTERM mid-turn and the bounds are shortened through the seams [[server-shell-20](#server-shell-20)], that the process exits within the bound with the agent's processes gone and the session restorable on the same home afterwards [[server-shell-6](#server-shell-6)].
+
+### Endpoint File Coverage
+
+#### server-shell-28
+
+Where the server shell runs on a loopback host, on a public host with `--insecure`, and as a seat, the test suite shall assert the endpoint file of [[server-shell-27](#server-shell-27)]: on the loopback host the home's `local/endpoint.json` names the printed access URL, owner-only, and that URL answers the token-bearing handshake, the file gone once the shell stops; the public bind and the seat leave none.
 
 ### Page Connection Coverage
 
