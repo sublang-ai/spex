@@ -258,6 +258,10 @@ test("one port serves the bundle and the core endpoint (SERVER-SHELL-9)", async 
       ),
       "CSP names the serving origin",
     );
+    // A frame the page shows loads and navigates at this origin alone
+    // (SERVER-SHELL-4, applets-9).
+    assert.match(html, /frame-src 'self'"/, "CSP frames 'self' alone");
+    assert.doesNotMatch(html, /frame-src [^;"]*\*/, "no loopback wildcard survives in frame-src");
     // The page carries the shell's version for the Settings surface
     // (SERVER-SHELL-4): the manifest's, never a dev placeholder.
     const manifest = JSON.parse(
@@ -291,6 +295,20 @@ test("one port serves the bundle and the core endpoint (SERVER-SHELL-9)", async 
     const posted = await fetch(`${base}/`, { method: "POST" });
     assert.equal(posted.status, 405);
     assert.equal((await posted.arrayBuffer()).byteLength, 0);
+
+    // A request under `/applets/` is the attached core's (SERVER-SHELL-4,
+    // applets-4): an unknown capability answers the core's empty 404,
+    // with its headers, and a POST there the core's 405 — never the
+    // bundle's.
+    const applet = await fetch(`${base}/applets/${"A".repeat(43)}/?token=secret`);
+    assert.equal(applet.status, 404);
+    assert.equal(applet.headers.get("cache-control"), "no-store");
+    assert.equal(applet.headers.get("x-content-type-options"), "nosniff");
+    assert.equal((await applet.arrayBuffer()).byteLength, 0);
+    const appletPost = await fetch(`${base}/applets/${"A".repeat(43)}/`, { method: "POST" });
+    assert.equal(appletPost.status, 405);
+    assert.equal(appletPost.headers.get("allow"), "GET, HEAD");
+    assert.equal((await appletPost.arrayBuffer()).byteLength, 0);
 
     const hello = await wsHello(`${base.replace("http", "ws")}/?token=secret`, base);
     assert.equal(hello.type, "hello");

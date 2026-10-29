@@ -346,13 +346,16 @@ describe("run-view-171: the selector switches Settings, Playbooks, Groups and En
     expect(commandsOf(local)).not.toContain("config.edit");
 
     // Playbooks and its Environments: the place stays picked across the
-    // four surfaces, each read from the seat's core alone.
+    // four surfaces, each read from the seat's core alone. This
+    // computer's workspace read its own lists for its applet tabs
+    // (applets-1) before; Playbooks asks it nothing more.
+    const localLists = callsOf(local, "environment.playbooks").length;
     goTo("Playbooks");
     await settle();
     // [run-view-171] Playbooks reads the seat's lists for its project.
     expect(shownPlace()).toBe("build-box");
     expect(callsOf(alpha, "environment.playbooks")).toContainEqual({ projectId: "p2" });
-    expect(callsOf(local, "environment.playbooks")).toEqual([]);
+    expect(callsOf(local, "environment.playbooks").slice(localLists)).toEqual([]);
     // [run-view-171] Environments reads the seat's environment.
     expect(callsOf(alpha, "environment.get")).toContainEqual({ repository: "p2" });
     await waitFor(() => expect(screen.getByText("acme/gpu-tools")).toBeTruthy());

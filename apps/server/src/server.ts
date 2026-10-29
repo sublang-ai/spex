@@ -43,7 +43,7 @@ import {
   gzipSync,
 } from "node:zlib";
 
-import { CoreService, moduleDirectoriesAbove, suppliedScaffold, type CoreServiceOptions, type SeatOptions } from "@sublang/spex-core";
+import { CONTENT_TYPES, CoreService, moduleDirectoriesAbove, suppliedScaffold, type CoreServiceOptions, type SeatOptions } from "@sublang/spex-core";
 
 /**
  * A seat of a team server (server-shell-25, DR-132): the core's seat
@@ -344,19 +344,6 @@ export function formatHost(host: string): string {
   return host.includes(":") ? `[${host}]` : host;
 }
 
-const CONTENT_TYPES: Record<string, string> = {
-  ".html": "text/html; charset=utf-8",
-  ".js": "text/javascript; charset=utf-8",
-  ".css": "text/css; charset=utf-8",
-  ".json": "application/json",
-  ".map": "application/json",
-  ".png": "image/png",
-  ".svg": "image/svg+xml",
-  ".ico": "image/x-icon",
-  ".txt": "text/plain; charset=utf-8",
-  ".woff2": "font/woff2",
-};
-
 const COMPRESSIBLE_EXTENSIONS = new Set([
   ".html",
   ".js",
@@ -448,10 +435,14 @@ function cachedEncodedBody(
   return body;
 }
 
-// The built page's CSP names only localhost connect targets — right
-// for the desktop's file:// copy, wrong here. Retarget connect-src to
-// the serving origin (SERVER-SHELL-4) so the page may open WebSockets
-// to this origin and to no other host.
+// The built page's CSP names only localhost connect and frame targets
+// — right for the desktop's file:// copy, wrong here. Retarget
+// connect-src to the serving origin (SERVER-SHELL-4) so the page may
+// open WebSockets to this origin and to no other host, and frame-src to
+// 'self' so a frame the page shows — an applet's, served by the
+// attached core at this very origin — loads and navigates here alone
+// (applets-9): a parent's frame-src governs every navigation of its
+// child frames, the framed page's own policy none of them.
 export function retargetCsp(
   page: string,
   hostHeader: string | undefined,
@@ -461,10 +452,12 @@ export function retargetCsp(
       ? hostHeader
       : undefined;
   if (!host) return page;
-  return page.replace(
-    /connect-src [^;"]*/,
-    `connect-src 'self' ws://${host} wss://${host}`,
-  );
+  return page
+    .replace(
+      /connect-src [^;"]*/,
+      `connect-src 'self' ws://${host} wss://${host}`,
+    )
+    .replace(/frame-src [^;"]*/, "frame-src 'self'");
 }
 
 function serveBundle(
@@ -632,15 +625,20 @@ function checkToken(token: string): void {
   }
 }
 
-/** The shell's own HTTP(S) server, serving the staged bundle. */
+/** The shell's own HTTP(S) server, serving the staged bundle and
+ * handing a request under `/applets/` to the attached core once it
+ * runs (server-shell-4, applets-4). */
 function createShellServer(
   options: ServerShellOptions,
   tls: boolean,
+  attached: { core?: CoreService },
 ): HttpServer | HttpsServer {
   const bundleDir = realpathSync(options.uiDist);
   const encodedBodyCache: EncodedBodyCache = new Map();
-  const handler = (req: IncomingMessage, res: ServerResponse) =>
+  const handler = (req: IncomingMessage, res: ServerResponse) => {
+    if (attached.core?.handleAppletRequest(req, res)) return;
     serveBundle(bundleDir, encodedBodyCache, req, res);
+  };
   return tls
     ? createHttpsServer(
         {
@@ -654,16 +652,19 @@ function createShellServer(
 
 /** Boot the core attached to the shell's server, then listen; a failed
  * listen stops the core again and refuses startup with its cause. While
- * the server binds, the shell's listener alone hears its errors: the
- * core's WebSocket server forwards the server's errors and, having no
- * listener of its own, would throw a bind failure past that refusal. */
+ * the server binds, the shell's listener alone hears its errors, so no
+ * other listener on the server takes a bind failure past that refusal. */
 async function bootCore(
   options: ServerShellOptions,
   server: HttpServer | HttpsServer,
   listen: () => Promise<void>,
+  attached: { core?: CoreService },
 ): Promise<CoreService> {
   mkdirSync(options.dataDir, { recursive: true });
   const service = await CoreService.start(serverCoreOptions(options, server));
+  // The core answers its applets' reads before the server listens
+  // (server-shell-4).
+  attached.core = service;
   const forwarded = server.rawListeners("error") as ((error: Error) => void)[];
   server.removeAllListeners("error");
   const restore = () => {
@@ -713,7 +714,8 @@ export async function startServer(
         `--tls-cert/--tls-key, or --insecure to accept a plaintext public bind`,
     );
   }
-  const server = createShellServer(options, tls);
+  const attached: { core?: CoreService } = {};
+  const server = createShellServer(options, tls, attached);
   const service = await bootCore(
     options,
     server,
@@ -722,6 +724,7 @@ export async function startServer(
         server.once("error", rejectListen);
         server.listen(options.port, options.host, resolveListen);
       }),
+    attached,
   );
   const port = (server.address() as AddressInfo).port;
   const scheme = tls ? "https" : "http";
@@ -847,7 +850,8 @@ export async function startSeat(options: ServerShellOptions): Promise<RunningSea
   }
   checkSocketPath(seat.socket);
   await clearStaleSocket(seat.socket);
-  const server = createShellServer(options, false) as HttpServer;
+  const attached: { core?: CoreService } = {};
+  const server = createShellServer(options, false, attached) as HttpServer;
   const service = await bootCore(
     options,
     server,
@@ -870,6 +874,7 @@ export async function startSeat(options: ServerShellOptions): Promise<RunningSea
           }
         });
       }),
+    attached,
   );
   return { service, server, socket: seat.socket, close: stopper(server, service) };
 }

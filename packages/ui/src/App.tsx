@@ -8,7 +8,7 @@
 
 import { ApprovalInbox, ApprovalFeedback } from "./components/ApprovalInbox.js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { IntentInfo, LedgerState, SessionInfo } from "@sublang/spex-core/protocol";
+import type { EnvironmentState, GroupsState, IntentInfo, LedgerState, PlaybookAvailability, SessionInfo } from "@sublang/spex-core/protocol";
 
 import type { ProjectInfo } from "@sublang/spex-core/protocol";
 import {
@@ -70,6 +70,9 @@ import { editorDirty, treeCounts } from "./lib/spec-view-model.js";
 import { isHistory } from "./lib/sessions.js";
 import { openingAt, openingProjects } from "./lib/space.js";
 import { Icon } from "./components/Icon.js";
+import { AppletTab } from "./components/AppletTab.js";
+import { appletTabs, isAppletTab, type AppletTab as AppletTabEntry } from "./lib/applets.js";
+import { ownRepositoryKey } from "./lib/environments.js";
 import { homeAttachmentKey, sessionAttachmentKey, useComposerAttachments } from "./lib/useComposerAttachments.js";
 
 export type { Surface };
@@ -96,6 +99,27 @@ const TAB_WORDS: Record<AttentionItem["kind"], () => string> = {
   review: () =>
     i18n._({ id: "unread turn", comment: "tab name: a turn nobody has read" }),
 };
+
+/** The applet tabs of a place's project (applets-1): from the
+ * project's environment and your own group's as the place last read
+ * them, on this computer alone — a seat's relay carries the protocol
+ * alone (DR-161). */
+function projectApplets(
+  state: {
+    environments: Record<string, EnvironmentState>;
+    space?: GroupsState;
+    playbookLists?: { own: PlaybookAvailability[] };
+  },
+  local: boolean,
+  projectId: string | undefined,
+): AppletTabEntry[] {
+  if (!local || !projectId) return [];
+  const own = ownRepositoryKey(state.space, state.playbookLists?.own);
+  return appletTabs([
+    state.environments[projectId],
+    own !== undefined && own !== projectId ? state.environments[own] : undefined,
+  ]);
+}
 
 function pinnedTab(tab: string | undefined): "start" | "specs" | "overview" | undefined {
   if (tab === "repo") return "overview";
@@ -498,6 +522,11 @@ function WorkspaceSurface({
     Record<string, string | undefined>
   >({});
   const tabRefs = useRef(new Map<string, HTMLButtonElement>());
+  const environments = store((state) => state.environments);
+  const playbookLists = store((state) => state.playbookLists);
+  const loadEnvironment = store((state) => state.loadEnvironment);
+  const loadPlaybookLists = store((state) => state.loadPlaybookLists);
+  const coreUrl = store((state) => state.coreUrl);
 
   const project = projects.find((entry) => entry.id === currentProjectId);
   // A project this place is still opening is current before its core
@@ -506,6 +535,22 @@ function WorkspaceSurface({
   const registeredId = project?.id;
   const space = store((state) => state.space);
   const opening = project === undefined ? openingAt(space, currentProjectId) : undefined;
+  // A tab per installed applet of the project's environment and your
+  // own group's (applets-1), read as the core last reported them.
+  const localPlace = isLocalPlace(store.place);
+  const ownKey = ownRepositoryKey(space, playbookLists?.own);
+  const applets = useMemo(
+    () => projectApplets({ environments, space, playbookLists }, localPlace, registeredId),
+    [environments, space, playbookLists, localPlace, registeredId],
+  );
+  useEffect(() => {
+    if (connection !== "open" || !localPlace || !registeredId) return;
+    void loadEnvironment(registeredId).catch(() => {});
+    // Your own group's key comes with Space or the playbook lists; the
+    // lists are read for it where neither is.
+    if (ownKey === undefined) void loadPlaybookLists(registeredId).catch(() => {});
+    else if (ownKey !== registeredId) void loadEnvironment(ownKey).catch(() => {});
+  }, [connection, localPlace, registeredId, ownKey, loadEnvironment, loadPlaybookLists]);
   // The working set (run-view-48): the sessions this project has open,
   // working and idle alike — never derived from liveness, so a turn
   // settling leaves its transcript exactly where the eye already is.
@@ -519,13 +564,35 @@ function WorkspaceSurface({
   const remembered = currentProjectId
     ? workspaceTabs[currentProjectId]
     : undefined;
+  const appletShown = isAppletTab(remembered)
+    ? applets.find((entry) => entry.tab === remembered)
+    : undefined;
   const tab =
     pinnedTab(remembered) ??
-    (remembered && open.some((session) => session.id === remembered)
-      ? remembered
-      : (open.find((session) => session.id === activeSessionId)?.id ??
-        open[0]?.id ??
-        "start"));
+    appletShown?.tab ??
+    (isAppletTab(remembered)
+      ? "overview"
+      : remembered && open.some((session) => session.id === remembered)
+        ? remembered
+        : (open.find((session) => session.id === activeSessionId)?.id ??
+          open[0]?.id ??
+          "start"));
+  // An applet whose package leaves takes its tab with it (applets-1):
+  // the reader lands on its neighbour, as a closed tab lands
+  // (run-view-47) — the applet tab before it, else Overview.
+  const shownApplets = useRef<AppletTabEntry[]>([]);
+  useEffect(() => {
+    const before = shownApplets.current;
+    shownApplets.current = applets;
+    if (!currentProjectId || !isAppletTab(remembered) || appletShown) return;
+    const index = before.findIndex((entry) => entry.tab === remembered);
+    if (index < 0) return;
+    const neighbour = before
+      .slice(0, index)
+      .reverse()
+      .find((entry) => applets.some((current) => current.tab === entry.tab));
+    setWorkspaceTab(currentProjectId, neighbour?.tab ?? "overview");
+  }, [applets, remembered, appletShown, currentProjectId, setWorkspaceTab]);
   const projectSpecTree = currentProjectId ? specTrees[currentProjectId] : undefined;
   const projectSpecError = currentProjectId ? specErrors[currentProjectId] : undefined;
   const projectSpecItemCount = projectSpecTree?.present && !projectSpecTree.legacy && !projectSpecError
@@ -546,7 +613,7 @@ function WorkspaceSurface({
   // however the reader arrived, and whether or not this core could
   // continue the conversation. Re-asserted whenever the fold moves, so
   // a write a Space operation refused is simply taken again.
-  const shownView = pinnedTab(tab) ? undefined : views[tab];
+  const shownView = pinnedTab(tab) || isAppletTab(tab) ? undefined : views[tab];
   useEffect(() => {
     if (!shownView || shownView.loading) return;
     markViewed(tab);
@@ -609,6 +676,8 @@ function WorkspaceSurface({
     const pinned = pinnedTab(next);
     if (pinned) {
       setWorkspaceTab(currentProjectId, pinned);
+    } else if (isAppletTab(next)) {
+      setWorkspaceTab(currentProjectId, next);
     } else {
       void focusSession(next);
     }
@@ -723,6 +792,7 @@ function WorkspaceSurface({
     "start",
     "specs",
     "overview",
+    ...applets.map((entry) => entry.tab),
   ];
   function walkTabs(event: React.KeyboardEvent, id: string): void {
     const index = tabOrder.indexOf(id);
@@ -745,7 +815,7 @@ function WorkspaceSurface({
     return <div className="flex min-h-0 flex-1 flex-col">{startView}</div>;
   }
 
-  const view = pinnedTab(tab) ? undefined : views[tab];
+  const view = pinnedTab(tab) || isAppletTab(tab) ? undefined : views[tab];
   const activeSession = open.find((session) => session.id === tab);
   const composer = activeSession
     ? (composers[activeSession.id] ?? { queued: [] })
@@ -969,6 +1039,45 @@ function WorkspaceSurface({
           )}
         </button>
       ))}
+      {applets.map((entry) => (
+        <button
+          key={entry.tab}
+          type="button"
+          role="tab"
+          aria-selected={tab === entry.tab}
+          tabIndex={tab === entry.tab ? 0 : -1}
+          data-testid={`workspace-tab-${entry.tab}`}
+          ref={(element) => {
+            if (element) tabRefs.current.set(entry.tab, element);
+            else tabRefs.current.delete(entry.tab);
+          }}
+          // The tab is named by the applet's id; its spec package and
+          // version describe it, so two of one id stand apart
+          // (applets-1).
+          title={
+            entry.version
+              ? i18n._({
+                  id: "Applet from {name} {version}",
+                  comment: "an applet tab's description: the spec package and version the applet comes from",
+                  values: { name: entry.package, version: entry.version },
+                })
+              : i18n._({
+                  id: "Applet from {name}",
+                  comment: "an applet tab's description, for a spec package with no version",
+                  values: { name: entry.package },
+                })
+          }
+          onKeyDown={(event) => walkTabs(event, entry.tab)}
+          onClick={() => pickTab(entry.tab)}
+          className={`max-w-[14rem] shrink-0 truncate rounded-t-md px-3 py-1.5 text-sm ${
+            tab === entry.tab
+              ? "border border-b-0 border-neutral-200 bg-white font-medium dark:border-neutral-800 dark:bg-neutral-900"
+              : "text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200"
+          }`}
+        >
+          {entry.id}
+        </button>
+      ))}
     </div>
   );
 
@@ -1022,6 +1131,21 @@ function WorkspaceSurface({
           }
           onRecordOpened={onRecordOpened}
           onReturn={onReturn}
+        />
+      ) : appletShown ? (
+        <AppletTab
+          key={appletShown.tab}
+          applet={appletShown}
+          project={project.id}
+          client={() => {
+            try {
+              return store.getClient();
+            } catch {
+              return undefined;
+            }
+          }}
+          coreUrl={coreUrl}
+          connected={connection === "open"}
         />
       ) : tab === "overview" ? (
         <OverviewTab
@@ -1456,7 +1580,13 @@ export function App() {
           // The cycle walks the working set in strip order, pinned
           // tabs included (run-view-49).
           const openIds = state.openTabs[projectId] ?? [];
-          const order = [...openIds, "start", "specs", "overview"];
+          const order = [
+            ...openIds,
+            "start",
+            "specs",
+            "overview",
+            ...projectApplets(state, isLocalPlace(shown.place), projectId).map((entry) => entry.tab),
+          ];
           event.preventDefault();
           setSurface("Workspace");
           const remembered = state.workspaceTabs[projectId];
@@ -1518,7 +1648,7 @@ export function App() {
   ): string | undefined => {
     if (surface !== "Workspace" || !projectId) return undefined;
     const tab = workspaceTabs[projectId];
-    if (!tab || pinnedTab(tab)) return undefined;
+    if (!tab || pinnedTab(tab) || isAppletTab(tab)) return undefined;
     return tab;
   };
 

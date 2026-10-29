@@ -55,6 +55,7 @@ import {
   lockStoreKeys,
   moduleLocations,
   ownFolderIssue,
+  packageRoot,
   ownPathIssue,
   parseLock,
   parseManifestText,
@@ -100,6 +101,19 @@ import type { PlaybookModules } from "./config.js";
 import type { EnvironmentPackage, EnvironmentRequest, EnvironmentRequestSummary, EnvironmentState, PublishedPackage, PublishPreview } from "./protocol.js";
 import { CoreError } from "./session.js";
 import type { Store } from "./store.js";
+
+/** An applet an environment installs, as `applet.open` and its
+ * serving read it (applets-3, applets-4). */
+export interface InstalledApplet {
+  /** The spec package it comes from, `<org>/<pkg>`. */
+  package: string;
+  version: string | null;
+  /** Its folder on this device; null where a path source has no path
+   * root here. */
+  dir: string | null;
+  /** Its files stand on this device (environments-14). */
+  present: boolean;
+}
 
 export interface EnvironmentManagerOptions {
   store: Store;
@@ -1193,6 +1207,36 @@ export class EnvironmentManager {
     try { return readLockSync(join(dir, "spex.lock")); } catch { return null; }
   }
 
+  /** An applet a spex repository's environment installs (applets-3,
+   * DR-161): the first spec package of its lock, by name, that selects
+   * an applet of that id — the one artifact kind a lock records with no
+   * language (environments-3) — with its version and its folder on this
+   * device: the installed copy under the clone's `packages/`, or a path
+   * source's folder where its path resolves (environments-2); `present`
+   * where that folder stands, installed as the lock locks it
+   * (environments-14). Undefined where the lock selects no such applet;
+   * an unknown repository is refused `not_found`. */
+  applet(key: string, id: string): InstalledApplet | undefined {
+    const dir = this.cloneDir(key);
+    const lock = this.lockOf(key);
+    if (!lock) return undefined;
+    const pathRoot = this.pathRoot(key);
+    for (const name of Object.keys(lock.packages).sort()) {
+      const resolution = lock.packages[name]!;
+      if (resolution.artifacts[id]?.language !== null) continue;
+      const root = packageRoot(name, resolution, join(dir, "packages"), pathRoot);
+      const folder = root === null ? null : join(root, "applets", id);
+      const standing = folder !== null && isDirectory(folder);
+      const present = standing && (isPathSource(resolution.source) || installedPackages(dir, lock).has(name));
+      let version = resolutionVersion(resolution) ?? null;
+      if (version === null && root !== null && existsSync(join(root, "meta.yaml"))) {
+        try { version = parseManifestText(readFileSync(join(root, "meta.yaml"), "utf8")).manifest?.version ?? null; } catch { version = null; }
+      }
+      return { package: name, version, dir: folder, present };
+    }
+    return undefined;
+  }
+
   /** Each playbook a clone's environment exports, by exported name. */
   locations(key: string): Map<string, ModuleLocation> {
     const dir = this.store.repository(key)?.dir;
@@ -1291,6 +1335,9 @@ export class EnvironmentManager {
           const place = placeOf(file.path, pkg);
           if (place && !place.root && place.id === id) return place.kind;
         }
+        // A lock records an applet alone with no language (environments-3):
+        // a path source missing here keeps its applet's kind.
+        if (resolution.artifacts[id]?.language === null) return "applet";
         return "playbook";
       };
       const builtin = name === BUILTIN_PACKAGE_NAME && isRegistrySource(source);

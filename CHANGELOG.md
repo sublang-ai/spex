@@ -16,6 +16,22 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Added
 
+- Applets in the IDE ([DR-161](specs/decisions/161-an-applet-is-a-page-the-ide-serves.md)).
+  A spec package's applet is a static web page entered at
+  `applets/<id>/index.html`; a folder without that entry is refused.
+  Once the project's environment or your own group's installs one, the
+  project's workspace shows a tab named by the applet's id after
+  Overview, and the page opens in an embedded frame under a line naming
+  its spec package and version, with Reload. The page reads its own
+  files and, read-only, the project's working folder — a file at
+  `~/<path>`, a folder's listing at `~/<folder>/` — from the core's own
+  endpoint under a secret path, never the home where the working folder
+  holds it. Its requests, forms and the frame's own navigation stay at
+  that endpoint, the served page's policy and the desktop shell refusing
+  the rest; it reaches neither the IDE nor its token, keeps no storage,
+  and its tab leaves with its package. A project open on a team server
+  shows no applet tab for now.
+
 - The package CLI can attach to an explicitly selected local Spex server
   for project registration, Space sign-in, package search, installation
   and publication. Package commands report their own completion and

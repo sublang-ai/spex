@@ -453,6 +453,12 @@ export function checkRelease(dir: string | ReadReleaseFile, manifest: Manifest, 
       if (artifact.language !== undefined) issues.push({ path: at, rule: "language", message: `applet ${id} has a language; an applet has none` });
       if (![...folders.values()].some((p) => p.kind === "applet" && p.id === id)) {
         issues.push({ path: `applets/${id}`, rule: "folder", message: `applet ${id} has no folder` });
+      } else if (!paths.has(`applets/${id}/index.html`)) {
+        // A static web application entered at `index.html`, a regular
+        // file at the folder's root (environments-1, DR-161): the list
+        // holds regular files alone, so a link or a folder there is no
+        // entry.
+        issues.push({ path: `applets/${id}/index.html`, rule: "applet-entry", message: `applet ${id} has no index.html at its folder's root` });
       }
     } else {
       const languages = languagesOf(artifact.kind, id);

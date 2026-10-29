@@ -9,6 +9,7 @@
 // boundary (CORE-8/14).
 
 import { canonicalOrigin } from "./instance.js";
+import { AppletServer, isAppletPath } from "./applets.js";
 import { ApprovalBroker } from "./approvals.js";
 import {
   cpSync,
@@ -31,8 +32,9 @@ import { parse as parseYaml } from "yaml";
 import { resolveMachineIdentity } from "@sublang/playbook/machine-identity";
 import { WebSocketServer, WebSocket } from "ws";
 import type { AddressInfo } from "node:net";
-import type { Server as HttpServer } from "node:http";
+import { createServer as createHttpServer, type IncomingMessage, type Server as HttpServer, type ServerResponse } from "node:http";
 import type { Server as HttpsServer } from "node:https";
+import type { Duplex } from "node:stream";
 
 import {
   checkAdapterReadiness,
@@ -657,6 +659,13 @@ export class CoreService {
   private authToken = "";
   readonly events: CoreServiceEvents = {};
   private wss?: WebSocketServer;
+  /** The HTTP server the endpoint stands on: the shell's, or the
+   * loopback one this core binds itself (core-service-1). */
+  private endpoint?: HttpServer | HttpsServer;
+  /** The endpoint's upgrade listener, taken off the server at stop. */
+  private upgradeListener?: (req: IncomingMessage, socket: Duplex, head: Buffer) => void;
+  /** The applets open on the endpoint, by capability (applets-3). */
+  private readonly applets: AppletServer;
   private watcher?: FSWatcher;
   /** One watcher per clone's `sessions/` (storage-14). */
   private readonly sessionsWatchers = new Map<string, FSWatcher>();
@@ -857,6 +866,16 @@ export class CoreService {
       broadcast: (repository, state) => this.broadcast({ type: "environment.state", repository, state }),
       changed: (repository) => this.environmentChanged(repository),
     });
+    // Each request reads the applet's folder and the project's working
+    // folder as they stand (applets-4): a package removed, or a folder
+    // unpaired, serves nothing; the home is never read through `~/`.
+    this.applets = new AppletServer((ask) => {
+      let applet;
+      try { applet = this.environments.applet(ask.repository, ask.applet); } catch { return null; }
+      const workingFolder = this.environments.workingFolder(ask.project);
+      if (!applet?.present || applet.dir === null || workingFolder === null) return null;
+      return { applet: applet.dir, workingFolder };
+    }, store.dir);
     // A working folder unpaired from its project keeps nothing the
     // exports wrote there (environments-8).
     this.store.onProjectRemoving = (key, folder) => this.environments.removeExportsFor(key, folder);
@@ -1754,7 +1773,7 @@ export class CoreService {
   }
 
   port(): number {
-    const address = this.wss?.address() as AddressInfo | null;
+    const address = this.endpoint?.address() as AddressInfo | null | undefined;
     if (!address || typeof address === "string") {
       throw new Error("service is not listening");
     }
@@ -1866,9 +1885,19 @@ export class CoreService {
       await bound.within(this.authors.stopAll());
       await this.media.close();
       for (const client of this.clients) client.socket.close();
+      if (this.endpoint && this.upgradeListener) this.endpoint.removeListener("upgrade", this.upgradeListener);
       await bound.within(new Promise<void>((resolveClose) =>
         this.wss ? this.wss.close(() => resolveClose()) : resolveClose(),
       ));
+      // The loopback server this core bound goes with it; a shell's
+      // server is the shell's to close.
+      if (this.endpoint && !this.options.httpServer) {
+        const own = this.endpoint;
+        await bound.within(new Promise<void>((resolveClose) => {
+          own.close(() => resolveClose());
+          own.closeIdleConnections();
+        }));
+      }
       // An agent SIGTERM reached ends, or SIGKILL ends it, before the
       // home's lease goes.
       await bound.drain();
@@ -2454,9 +2483,25 @@ export class CoreService {
       const query = new URL(info.req.url ?? "/", "ws://127.0.0.1").searchParams;
       return query.get("token") === this.authToken;
     };
-    this.wss = this.options.httpServer
-      ? new WebSocketServer({ server: this.options.httpServer, verifyClient })
-      : new WebSocketServer({ host: "127.0.0.1", port, verifyClient });
+    // The endpoint is an HTTP server: the shell's, or one this core
+    // binds on loopback alone, answering its own HTTP requests with the
+    // applets' reads and every other path 404 (core-service-1, applets-4).
+    const server = this.options.httpServer ?? createHttpServer((req, res) => {
+      if (!this.handleAppletRequest(req, res)) res.writeHead(404, { "content-length": 0 }).end();
+    });
+    this.endpoint = server;
+    const wss = new WebSocketServer({ noServer: true, verifyClient });
+    this.wss = wss;
+    // A handshake under `/applets/` is refused 404 with an empty body
+    // (applets-4); every other one is the WebSocket endpoint's to admit.
+    this.upgradeListener = (req, socket, head) => {
+      if (isAppletPath(req.url)) {
+        this.applets.refuseUpgrade(req, socket);
+        return;
+      }
+      wss.handleUpgrade(req, socket, head, (ws) => wss.emit("connection", ws, req));
+    };
+    server.on("upgrade", this.upgradeListener);
     this.wss.on("connection", (socket, req) => {
       // A relay path's connection is the seat's: piped there, frames
       // unread, with no word of this core's (core-service-129).
@@ -2489,12 +2534,23 @@ export class CoreService {
     });
     if (this.options.httpServer) return; // the shell listens
     await new Promise<void>((resolveListen, rejectListen) => {
-      this.wss?.once("listening", resolveListen);
-      this.wss?.once("error", rejectListen);
+      const refuse = (error: Error) => rejectListen(error);
+      server.once("error", refuse);
+      server.listen(port, "127.0.0.1", () => {
+        server.removeListener("error", refuse);
+        resolveListen();
+      });
     });
     // Its own loopback socket listens: the CLI finds it there
     // (core-service-143).
     this.announceEndpoint(`ws://127.0.0.1:${this.port()}/?token=${encodeURIComponent(this.authToken)}`);
+  }
+
+  /** Answer an HTTP request under `/applets/` on the endpoint
+   * (applets-4, server-shell-4): false, answering nothing, for any
+   * other path, which the shell serves itself. */
+  handleAppletRequest(req: IncomingMessage, res: ServerResponse): boolean {
+    return this.applets.handle(req, res);
   }
 
   /** A browser Origin naming the host the request itself addressed. */
@@ -3919,7 +3975,38 @@ export class CoreService {
       }
       case "environment.playbooks":
         return this.playbookAvailability(command.projectId);
+      case "applet.open":
+        return this.openApplet(command.repository, command.applet, command.project);
     }
+  }
+
+  /** `applet.open` (applets-3): the path of the applet's capability for
+   * the project, once the applet is installed, the project pairs a
+   * working folder on this device, and the applet's files stand here. */
+  private openApplet(repository: string, applet: string, project: string): CommandResults["applet.open"] {
+    const installed = this.environments.applet(repository, applet);
+    if (!installed) {
+      throw new CoreError("not_found", i18n._({
+        id: "the environment of {repository} installs no applet {applet}",
+        comment: "Refusal: an applet tab asked for an applet the spex repository's environment does not install",
+        values: { repository, applet },
+      }));
+    }
+    if (!this.store.repository(project) || this.environments.workingFolder(project) === null) {
+      throw new CoreError("not_found", i18n._({
+        id: "project {project} has no working folder on this device",
+        comment: "Refusal: an applet reads the project's working folder, and none is paired here",
+        values: { project },
+      }));
+    }
+    if (!installed.present) {
+      throw new CoreError("invalid_request", i18n._({
+        id: "the files of applet {applet} are not on this device",
+        comment: "Refusal: the applet is in the lock, but its installed or path-source folder is missing here",
+        values: { applet },
+      }));
+    }
+    return { path: this.applets.path({ repository, applet, project }) };
   }
 
   /** A playbook's installed module on this device, from any spex

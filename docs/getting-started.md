@@ -178,6 +178,19 @@ from registry**, then enable its playbooks or use its exported skills.
 The [HTTP publishing guide](https://spex.sublang.ai/llms.txt) is also
 available for automation.
 
+## Show a page with an applet
+
+A package can carry an applet: a small static web page at
+`applets/<id>/index.html` with its scripts and styles beside it. Once the
+package is installed, the project shows a tab named `<id>` with the page
+in it, after Start, Specs and Overview. From the page, `./~/<path>` reads
+one file of the project folder and `./~/<folder>/` lists a folder as JSON,
+read-only, so a playbook can write a report into the project and the
+applet can show it. The page runs in a sandbox: it reaches neither the
+network nor Spex itself, and its frame stays at Spex's own address. Add
+the folder and its `{ kind: applet }` entry in `meta.yaml` by hand;
+`spex package init` does not add applets.
+
 ## Optionally sync project records
 
 Package installation does not require placing project records in a group.
