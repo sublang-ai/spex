@@ -26,6 +26,7 @@ import { LOCAL_PLACE_KEY } from "../state/store.js";
 import { i18n } from "../i18n.js";
 import { isHistory } from "../lib/sessions.js";
 import { keyLabel } from "../lib/shortcuts.js";
+import { STEP_LINES, type OpeningProject } from "../lib/space.js";
 import { absoluteTitle, compactAge, relativeAge } from "../lib/time.js";
 import { Icon, type IconName } from "./Icon.js";
 import { InlineConfirm } from "./InlineConfirm.js";
@@ -90,6 +91,10 @@ export interface NavPlace {
   /** What the place is shown by: "This computer", or the server's name. */
   label: string;
   projects: ProjectInfo[];
+  /** The projects opening at this place (run-view-168): each listed
+   * after the projects, reading "Opening…" until the place's core lists
+   * it, selected while it is the current project. */
+  opening?: OpeningProject[];
   sessions: SessionInfo[];
   /** Non-idle attention by session id, the same derivation the badge
    * and the tab dots use (run-view-73). */
@@ -394,6 +399,20 @@ export function NavRail(props: NavRailProps) {
         projectId: project.id,
         label: "",
         activate: () => place.onNewSession(project.id),
+      });
+    }
+    // A project opening at the place (run-view-168): a row with no
+    // sessions yet, reached and activated as a project's is.
+    for (const entry of place.opening ?? []) {
+      const projectRow = placed(place, `o:${entry.id}`);
+      rows.push({
+        key: projectRow,
+        kind: "project",
+        place,
+        projectRow,
+        projectId: entry.id,
+        label: entry.name,
+        activate: () => place.onPickProject(entry.id),
       });
     }
   }
@@ -876,9 +895,42 @@ export function NavRail(props: NavRailProps) {
     );
   };
 
-  /** One place's project nodes. */
-  const placeNodes = (place: NavPlace) =>
-    place.projects.map((project) => projectNode(place, project));
+  /** A project opening at its place (run-view-168): its name as its
+   * code's, "Opening…" beside it and the step in flight as its title,
+   * selected while it is the place's current project; it discloses
+   * nothing, holding no session yet. */
+  const openingNode = (place: NavPlace, entry: OpeningProject) => {
+    const projectRow = placed(place, `o:${entry.id}`);
+    const selected = entry.id === selectedProjectOf(place) && !shownSessionOf(place);
+    const opening = i18n._({ id: "Opening…", comment: "a project's row while it is opened here: its records and code clone" });
+    return (
+      <div
+        key={projectRow}
+        role="treeitem"
+        aria-selected={selected}
+        data-row={projectRow}
+        data-testid={placed(place, `sidebar-opening-${entry.id}`)}
+        tabIndex={focused === projectRow ? 0 : -1}
+        onFocus={() => setFocusKey(projectRow)}
+        onClick={() => place.onPickProject(entry.id)}
+        title={STEP_LINES[entry.step]()}
+        aria-label={`${entry.name}, ${opening}`}
+        // The folder icon aligns with a project row's, past the width
+        // its disclosure control takes.
+        className={`${rowClass(selected)} pl-8`}
+      >
+        <Icon name="folder" className="h-3.5 w-3.5 shrink-0" />
+        <span className="min-w-0 flex-1 truncate">{entry.name}</span>
+        <span className="shrink-0 text-xs text-neutral-500 dark:text-neutral-400">{opening}</span>
+      </div>
+    );
+  };
+
+  /** One place's project nodes, the projects opening there after them. */
+  const placeNodes = (place: NavPlace) => [
+    ...place.projects.map((project) => projectNode(place, project)),
+    ...(place.opening ?? []).map((entry) => openingNode(place, entry)),
+  ];
 
   const tree = (
     <div

@@ -569,8 +569,9 @@ describe("run-view-168: this computer's From your groups", () => {
   test("opened at it, the first row takes focus over the add flow's folder action", async () => {
     const spaceJoin = vi.fn(async () => {});
     const onPickFolder = vi.fn(async () => "/work/gamma");
+    const onOpened = vi.fn();
     useAppStore.setState({ connection: "open", space: signedIn([ABSENT]), spaceJoin });
-    const { onClose } = renderPalette({ projects: [], sessions: [], groupsAt: "local", onPickFolder });
+    const { onClose } = renderPalette({ projects: [], sessions: [], groupsAt: "local", onPickFolder, onOpened });
     const row = screen.getByTestId(`palette-join-${ABSENT.key}`);
     // [run-view-172] the palette opens at "From your groups".
     expect(document.activeElement).toBe(row);
@@ -580,5 +581,9 @@ describe("run-view-168: this computer's From your groups", () => {
     await vi.waitFor(() => expect(spaceJoin).toHaveBeenCalledWith(SPEX, "301", "/work/gamma"));
     expect(onPickFolder).toHaveBeenCalledOnce();
     await vi.waitFor(() => expect(onClose).toHaveBeenCalled());
+    // [run-view-168] accepted, the project is handed back as this
+    // computer's current one by its row's key, before the palette closes.
+    expect(onOpened).toHaveBeenCalledWith("local", ABSENT.key);
+    expect(onOpened.mock.invocationCallOrder[0]).toBeLessThan(onClose.mock.invocationCallOrder[0]);
   });
 });

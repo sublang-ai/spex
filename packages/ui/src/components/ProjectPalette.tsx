@@ -46,7 +46,7 @@ import {
   signedInInstances,
 } from "../lib/instances.js";
 import { waitingOf } from "../lib/placements.js";
-import { awaitsFolder } from "../lib/space.js";
+import { awaitsFolder, projectName } from "../lib/space.js";
 import { Icon } from "./Icon.js";
 import { GroupPicker } from "./SpaceGroups.js";
 
@@ -144,7 +144,7 @@ interface JoinSection {
 /** A project of the member's groups as the palette names it: as its
  * code is, never by its `<name>-spex` (DR-159). */
 function projectNameOf(repo: RepositoryState): string {
-  return repo.name.replace(/-spex$/, "") || repo.name;
+  return projectName(repo.name);
 }
 
 export interface ProjectPaletteProps {
@@ -160,6 +160,10 @@ export interface ProjectPaletteProps {
   onPick: (projectId: string) => void;
   /** Pick a seat's project, at its place. */
   onPickAt?: (place: string, projectId: string) => void;
+  /** A group's project opened at a place (run-view-168): accepted, it
+   * becomes that place's current project by its row's key, which the
+   * project bears once the place's core lists it. */
+  onOpened?: (place: string, projectId: string) => void;
   /** Register an existing repository by path (store's addProjectByPath). */
   onAddPath: (path: string) => Promise<ProjectInfo>;
   onCreatePath: (path: string, scaffold: boolean) => Promise<ProjectInfo>;
@@ -580,8 +584,9 @@ export function ProjectPalette(props: ProjectPaletteProps) {
    * as its Space row's Join sends it (space-63); at a seat with none,
    * again where its code clone failed, its core cloning the code into
    * the folder it allocated (space-103, run-view-169). Accepted, the
-   * palette closes, the join reporting on the place's Space row
-   * (space-63); a refusal is thrown to the caller. */
+   * project becomes its place's current one and the palette closes, the
+   * join reporting there and on the place's Space row (space-63); a
+   * refusal is thrown to the caller. */
   async function sendJoin(entry: PaletteJoin, folder?: string): Promise<void> {
     if (entry.repo.id === null) return;
     setBusy(true);
@@ -590,6 +595,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
     try {
       if (entry.seat) await entry.seat.onJoin?.(entry.instance, entry.repo.id);
       else await spaceJoin(entry.instance, entry.repo.id, folder);
+      props.onOpened?.(entry.seat?.key ?? LOCAL_PLACE_KEY, entry.repo.key);
       props.onClose();
     } finally {
       setBusy(false);

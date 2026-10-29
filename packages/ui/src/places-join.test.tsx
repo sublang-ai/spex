@@ -21,15 +21,17 @@ import { act, cleanup, fireEvent, render, screen, within } from "@testing-librar
 import type {
   ApprovalState,
   AttentionEntry,
+  InstanceGroupState,
   LedgerState,
   PendingApproval,
   ProjectInfo,
+  RepositoryState,
   SeatState,
   SessionInfo,
 } from "@sublang/spex-core/protocol";
 
 import { App } from "./App.js";
-import { groupsState } from "./fixtures/groups-state.js";
+import { NO_CAN, groupsState, instanceState, namespace, repositoryRow } from "./fixtures/groups-state.js";
 import { activateLanguage } from "./i18n.js";
 import type { SpexClient } from "./lib/client.js";
 import { usePlaces } from "./state/places.js";
@@ -305,6 +307,72 @@ describe("run-view-171: the sidebar holds a heading per place", () => {
     expect(useAppStore.getState().currentProjectId).toBe("p1");
     expect(screen.getByTestId(`sidebar-project-p2@${BETA.place}`).getAttribute("aria-selected")).toBe("true");
     expect(screen.getByTestId("sidebar-project-p1").getAttribute("aria-selected")).toBe("false");
+  });
+});
+
+describe("run-view-171: a project opened from the palette is current while it opens", () => {
+  const SPEX = "https://spex.pub";
+  const KEY = "@spex.pub/acme/gamma-spex";
+  const acme = (repositories: RepositoryState[]): InstanceGroupState => ({
+    id: "7", login: null, mine: false, fullPath: "acme", name: "acme", can: NO_CAN, placed: [], repositories,
+  });
+  const groups = (repositories: RepositoryState[]) =>
+    groupsState({ instances: [instanceState(SPEX, { signedIn: true, groups: [namespace("me"), acme(repositories)] })] });
+  /** The group's project as this computer's Groups state lists it while
+   * no clone is here, its join standing as `sync` says. */
+  const listed = (sync: RepositoryState["sync"]) =>
+    repositoryRow(KEY, { instance: SPEX, governing: SPEX, id: "301", state: "absent", branch: null, sync });
+
+  test("the sidebar lists it reading Opening…, the Projects surface names it over the step, and its own view replaces them once listed", () => {
+    useAppStore.setState({
+      space: groups([listed({ phase: "running", op: "join", step: "code", since: Date.now(), cancelable: false })]),
+      currentProjectId: KEY,
+    });
+    render(<App />);
+    const home = groupOf("local");
+    // [run-view-168] under this computer, after its projects, named as
+    // its code is, "Opening…" beside it, the step as its title, selected.
+    const row = within(home).getByTestId(`sidebar-opening-${KEY}`);
+    expect(row.textContent).toContain("gamma");
+    expect(row.textContent).not.toContain("gamma-spex");
+    expect(row.textContent).toContain("Opening…");
+    expect(row.getAttribute("title")).toBe("Cloning code…");
+    expect(row.getAttribute("aria-selected")).toBe("true");
+    expect(row.compareDocumentPosition(within(home).getByTestId("sidebar-project-p1")) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
+    expect(within(home).getByTestId("sidebar-project-p1").getAttribute("aria-selected")).toBe("false");
+    expect(within(groupOf(ALPHA.place)).queryByTestId(`sidebar-opening-${KEY}@${ALPHA.place}`)).toBeNull();
+    // [run-view-168] the Projects surface names it over the step, with
+    // no task start and no greeting.
+    const opening = screen.getByTestId("project-opening");
+    expect(opening.textContent).toContain("gamma");
+    expect(screen.getByTestId("project-opening-step").textContent).toBe("Cloning code…");
+    expect(screen.queryByTestId("project-task-start")).toBeNull();
+    expect(screen.queryByTestId("welcome-home")).toBeNull();
+    // Neither its specs nor its config are read before the core lists it.
+    expect(commandsOf(local)).not.toContain("specs.get");
+    expect(local.command.mock.calls.filter(([type, fields]) => type === "config.get" && (fields as { projectId?: string })?.projectId === KEY)).toEqual([]);
+    // [run-view-168] listed by the core, its own view and row replace them.
+    act(() => useAppStore.setState({ space: groups([]), projects: [HOME, project(KEY, "gamma")] }));
+    expect(within(home).queryByTestId(`sidebar-opening-${KEY}`)).toBeNull();
+    expect(within(home).getByTestId(`sidebar-project-${KEY}`).getAttribute("aria-selected")).toBe("true");
+    expect(screen.queryByTestId("project-opening")).toBeNull();
+    expect(screen.getByTestId("project-task-start").textContent).toContain("gamma");
+  });
+
+  test("an open that stopped reads its cause with Open Space, and stands in no sidebar row", () => {
+    useAppStore.setState({
+      space: groups([listed({ phase: "stopped", op: "join", step: "code", cause: "refused", message: "the code host refused the clone", guidance: "", retry: true })]),
+      currentProjectId: KEY,
+    });
+    render(<App />);
+    expect(within(groupOf("local")).queryByTestId(`sidebar-opening-${KEY}`)).toBeNull();
+    // [run-view-168] the cause in the row's own words, and the way to
+    // its row.
+    expect(screen.getByTestId("project-opening").textContent).toContain("gamma");
+    expect(screen.getByTestId("project-opening-step").textContent).toBe("Code stopped — the code host refused the clone");
+    fireEvent.click(screen.getByTestId("project-opening-space"));
+    expect(screen.getByTestId("space-surface")).toBeTruthy();
+    expect(screen.queryByTestId("project-opening")).toBeNull();
   });
 });
 
