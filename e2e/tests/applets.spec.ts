@@ -4,14 +4,17 @@
 // An applet in the IDE (applets-8, DR-161): a release holding an applet
 // whose page lists the working folder through `~/` and shows its README
 // is requested through Add from registry; its tab stands after
-// Overview, the frame it shows is sandboxed and confined, Reload reads
-// the README again, and Remove takes the tab away.
+// Overview, the frame it shows is sandboxed and confined — a navigation
+// of the frame off the endpoint's origin refused — Reload reads the
+// README again, and Remove takes the tab away.
 
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import { join } from "node:path";
 import { APPLET_ID, APPLET_PACKAGE, APPLET_VERSION, publishAppletRelease } from "@sublang/spex-core/testing";
 
-import { expect, nav, open, test } from "../src/harness";
+import { expect, nav, open, test, uiDist } from "../src/harness";
 
 test.use({ appOptions: { project: true, host: { registry: true } } });
 
@@ -85,17 +88,45 @@ test("applets-8: an applet installed from the registry stands as a tab, shows th
     }
   })).toBe("threw");
 
+  // The frame navigates nowhere but the endpoint's origin (applets-9):
+  // the page's own script sending its frame to a sink at another
+  // loopback port, the README's text in the URL, is refused — the sink
+  // hears nothing, no frame stands at the sink's origin, the page's
+  // console names `frame-src`, and the Reload that follows brings the
+  // page back. Chromium commits its own refusal page in the frame.
+  expect(refusals).toEqual([]);
+  const hits: string[] = [];
+  const sink = createServer((req, res) => {
+    hits.push(req.url ?? "");
+    res.end("ok");
+  });
+  await new Promise<void>((resolve) => sink.listen(0, "127.0.0.1", resolve));
+  try {
+    const sinkPort = (sink.address() as AddressInfo).port;
+    await applet.evaluate((port) => {
+      location.assign(`http://127.0.0.1:${port}/?d=${encodeURIComponent(document.getElementById("readme")?.textContent ?? "")}`);
+    }, sinkPort).catch(() => undefined);
+    await page.waitForTimeout(1500);
+    expect(hits).toEqual([]);
+    expect(page.frames().map((candidate) => candidate.url())).not.toContainEqual(expect.stringContaining(`127.0.0.1:${sinkPort}`));
+    expect(refusals.some((line) => /frame-src/.test(line))).toBe(true);
+  } finally {
+    sink.close();
+  }
+
   // After an edit to the README, Reload shows the new text (applets-2).
   const edited = "Applet journey: the README after an edit.\n";
   writeFileSync(join(app.projectDir, "README.md"), edited);
   await page.getByTestId("applet-reload").click();
   await expect(frame.locator("#readme")).toHaveText(edited.trim());
 
-  // The served page's policy admits the frame (applets-6): it loaded,
-  // and nothing was refused framing.
+  // The served page's policy frames `'self'` alone (applets-9), and the
+  // staged bundle's page — the desktop's `file://` copy as built —
+  // the loopback origins (applets-6).
   const policy = await page.locator('meta[http-equiv="Content-Security-Policy"]').getAttribute("content");
-  expect(policy).toContain("frame-src 'self' http://127.0.0.1:* http://localhost:*");
-  expect(refusals).toEqual([]);
+  expect(policy).toMatch(/frame-src 'self'$/);
+  const built = readFileSync(join(uiDist, "index.html"), "utf8");
+  expect(built).toContain("frame-src 'self' http://127.0.0.1:* http://localhost:*");
 
   // Remove of the spec package takes the tab away (applets-1).
   await nav(page, "Playbooks").click();

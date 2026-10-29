@@ -237,6 +237,10 @@ test("one port serves the bundle and the core endpoint (SERVER-SHELL-9)", async 
       ),
       "CSP names the serving origin",
     );
+    // A frame the page shows loads and navigates at this origin alone
+    // (SERVER-SHELL-4, applets-9).
+    assert.match(html, /frame-src 'self'"/, "CSP frames 'self' alone");
+    assert.doesNotMatch(html, /frame-src [^;"]*\*/, "no loopback wildcard survives in frame-src");
     // The page carries the shell's version for the Settings surface
     // (SERVER-SHELL-4): the manifest's, never a dev placeholder.
     const manifest = JSON.parse(

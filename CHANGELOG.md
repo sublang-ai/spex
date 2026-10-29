@@ -25,9 +25,12 @@ and `npm start` (desktop) or `npm run start:server` (server).
   its spec package and version, with Reload. The page reads its own
   files and, read-only, the project's working folder — a file at
   `~/<path>`, a folder's listing at `~/<folder>/` — from the core's own
-  endpoint under a secret path; it reaches neither the IDE nor the
-  network, keeps no storage, and its tab leaves with its package. A
-  project open on a team server shows no applet tab for now.
+  endpoint under a secret path, never the home where the working folder
+  holds it. Its requests, forms and the frame's own navigation stay at
+  that endpoint, the served page's policy and the desktop shell refusing
+  the rest; it reaches neither the IDE nor its token, keeps no storage,
+  and its tab leaves with its package. A project open on a team server
+  shows no applet tab for now.
 
 - The package CLI can attach to an explicitly selected local Spex server
   for project registration, Space sign-in, package search, installation

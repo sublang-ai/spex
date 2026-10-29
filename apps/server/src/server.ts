@@ -435,10 +435,14 @@ function cachedEncodedBody(
   return body;
 }
 
-// The built page's CSP names only localhost connect targets — right
-// for the desktop's file:// copy, wrong here. Retarget connect-src to
-// the serving origin (SERVER-SHELL-4) so the page may open WebSockets
-// to this origin and to no other host.
+// The built page's CSP names only localhost connect and frame targets
+// — right for the desktop's file:// copy, wrong here. Retarget
+// connect-src to the serving origin (SERVER-SHELL-4) so the page may
+// open WebSockets to this origin and to no other host, and frame-src to
+// 'self' so a frame the page shows — an applet's, served by the
+// attached core at this very origin — loads and navigates here alone
+// (applets-9): a parent's frame-src governs every navigation of its
+// child frames, the framed page's own policy none of them.
 export function retargetCsp(
   page: string,
   hostHeader: string | undefined,
@@ -448,10 +452,12 @@ export function retargetCsp(
       ? hostHeader
       : undefined;
   if (!host) return page;
-  return page.replace(
-    /connect-src [^;"]*/,
-    `connect-src 'self' ws://${host} wss://${host}`,
-  );
+  return page
+    .replace(
+      /connect-src [^;"]*/,
+      `connect-src 'self' ws://${host} wss://${host}`,
+    )
+    .replace(/frame-src [^;"]*/, "frame-src 'self'");
 }
 
 function serveBundle(

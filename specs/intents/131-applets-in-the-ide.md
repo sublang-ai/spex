@@ -5,7 +5,7 @@
 
 ## Status
 
-Implemented on its branch; focused, suite and journey verification passed locally; CI, the desktop shell's framing on a packaged app, and review pending.
+Implemented on its branch; review found the frame's own navigation unconfined and the `~/` window reaching a home held by the working folder, both closed spec-first; focused, suite and journey verification passed locally; CI and the desktop shell's frame guard in a running Electron pending.
 
 ## Intent
 
@@ -17,13 +17,15 @@ Show an installed applet as a tab of the project's workspace, served by the core
 - [x] `applet.open` minting one in-memory capability per applet and project, with its refusals.
 - [x] The core's endpoint answering `GET`/`HEAD` under `/applets/<capability>/` by the served-path table, with the policy and the refusals; the self-bound endpoint as an HTTP server of the core's own, the server shell handing those paths to its core.
 - [x] A workspace tab per installed applet after Overview, its sandboxed frame, Reload and refusal; none on a seat; the UI page's `frame-src`.
-- [x] The integration suite of applets-7, the browser journey of applets-8, and the server shell's hand-off check.
+- [x] The frame confined to the endpoint's origin: the served page's `frame-src` retargeted to `'self'`, the desktop's `will-frame-navigate` guard; the home refused through `~/` where the working folder holds it.
+- [x] The integration suite of applets-7, the browser journey of applets-8, the server shell's hand-off check, and the desktop's frame-guard check.
 
 ## Tasks
 
 1. Format rule, `applet.open`, the core's applet serving and the shell's hand-off, with their integration coverage.
 2. The workspace's applet tabs, the frame and the UI page's policy, with their catalogs.
 3. The browser journey, this record and the changelog.
+4. The review's findings: the home refused through `~/`, the frame's navigation confined on both shells, their coverage, the records corrected.
 
 ## Verification
 
@@ -34,4 +36,13 @@ Run on the branch after the merge of `main` (2026-10-29):
 - `apps/server` `server.integration.test.js`: 13/13, the `/applets/` hand-off among them.
 - `packages/ui` under Node 22: 1280/1280 in 60 files.
 - `e2e` `tests/applets.spec.ts`: 1/1; `tests/library.spec.ts`: 3/3; `npm run typecheck -w e2e` clean.
+- `spex lint`: 0 errors; `npm run prepush`: clean.
+
+Run again after the review's fixes (2026-10-29):
+
+- `npm run build`: every workspace built.
+- `packages/core` `applets.integration.test.js`: 1/1 with the home case; the whole core suite: 936/941, the five failing — two of `environments.integration`, three of `space-sync.integration` — the same five as before these fixes.
+- `apps/server` `server.integration.test.js`: 13/13, the served page's `frame-src 'self'` among them.
+- `apps/desktop`: 24/24 across the suite's files but `compiler-runtime.test.js`, which downloads Electron and did not finish in this environment; `frame-navigation.test.js` 1/1 among the 24.
+- `e2e` `tests/applets.spec.ts`: 1/1 with the sink probe; `npm run typecheck -w e2e` clean.
 - `spex lint`: 0 errors; `npm run prepush`: clean.

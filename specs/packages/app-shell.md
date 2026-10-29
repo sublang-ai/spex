@@ -97,6 +97,10 @@ When the user opens the About dialog, the app shall display the application name
 
 When the user activates an external link anywhere in the app, the shell shall open it in the system browser and keep the app window on the app — the window shall never navigate to a remote page or open one in a child window.
 
+#### app-shell-41
+
+While the main window shows a frame inside the page — an applet's [[applets-2](applets.md#applets-2)] — when the framed page navigates that frame, by script, a link or a form, the shell shall let the navigation proceed only at the in-app core endpoint's origin, `http://127.0.0.1:<port>`, and otherwise prevent it before any request leaves, nothing opening in the system browser, so a page the IDE frames carries what it read nowhere else ([DR-161](../decisions/161-an-applet-is-a-page-the-ide-serves.md)); the window's own navigation keeps its rule [[app-shell-21](#app-shell-21)].
+
 ### App Icon
 
 #### app-shell-23
@@ -272,6 +276,10 @@ Where the fresh-install smoke ([DR-086](../decisions/086-tests-in-tiers.md)) has
 #### app-shell-38
 
 When the desktop's test suite starts a real core through the shell's own option builder with a home listing the first of two stand-in instances and drives the open-URL channel while a sign-in to the second runs, the test suite shall assert that the core was started with the browser sign-in flow and the Electron binary as the helper's runtime [[app-shell-15](#app-shell-15)], that the channel opens the core's own browser sign-in URL at the second instance and a URL at the first [[app-shell-37](#app-shell-37)], and that it refuses one at an origin the home neither lists nor is signing in to — the first's host at another port among them — one carrying a credential, and, once that sign-in is cancelled, one at the second, returning false and opening nothing [[app-shell-37](#app-shell-37)] [[app-shell-20](#app-shell-20)].
+
+#### app-shell-42
+
+When the desktop's test suite starts a real core through the shell's own option builder and drives the frame guard with that core's endpoint, the test suite shall assert that a sub-frame navigation to a capability path, to a path under `~/` there and to the endpoint's root is allowed, that one to another loopback port, to `localhost` at the endpoint's port, to an `https` origin, to a `file:` URL, to `about:blank`, to a `javascript:` or `data:` URL and to no URL is prevented, and that the main window hands every sub-frame navigation to that guard with the endpoint it loaded the page against [[app-shell-41](#app-shell-41)].
 
 ### Release Coverage
 
