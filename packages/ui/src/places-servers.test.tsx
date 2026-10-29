@@ -699,6 +699,7 @@ describe("run-view-170: a server's line while its seat opens and signs in", () =
     expect(link.getAttribute("target")).toBe("_blank");
     expect(screen.queryByTestId(`space-server-connected-${ALPHA.place}`)).toBeNull();
     expect(screen.queryByTestId(`space-server-control-${ALPHA.place}`)).toBeNull();
+    expect(screen.queryByText(/^Signing in to/)).toBeNull();
     fireEvent.click(more(ALPHA.place));
     expect(screen.getByTestId(`space-server-disconnect-${ALPHA.place}`).textContent).toBe("Disconnect");
     fireEvent.keyDown(window, { key: "Escape" });

@@ -13,7 +13,7 @@ import type { AgentCapabilities, ApprovalDecision, ApprovalRequest, BrowserSetup
 import type { SessionRecord as RuntimeRecord } from "@sublang/playbook/session-assets";
 import { LANGUAGES, type Language } from "./language.js";
 
-export const PROTOCOL_VERSION = 28;
+export const PROTOCOL_VERSION = 29;
 export const ATTACHED_CLI_VERSION = 1;
 
 /** The compile pipeline's phases and their human names, shared so the

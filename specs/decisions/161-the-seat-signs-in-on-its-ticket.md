@@ -21,11 +21,11 @@ Amends, under [DR-046](046-decision-record-evolution.md):
 ## Decision
 
 - The local core keeps the ticket it presented at the server with the seat's relay, in memory alone, until the relay's first hello starts the seat's sign-in; it hands the ticket to the seat in that start and holds it no longer.
-  A sign-in started again by the person, or by a relay reopened at the core's start, carries no ticket and meets the page as before.
+  A sign-in started again by the person, or by a relay reopened at the core's start, carries no ticket and meets the page as before, at once.
 - On a seat, the device request carries the ticket beside the server and the person where the start named one; off a seat, a start naming a ticket is refused.
-- The seat's sign-in reads as running — the page opened by the desktop shell, its link on the server's line — only where the grant has not come by the end of the first poll interval the seat's reply names, plus a short margin; a sign-in the space grants on the ticket passes from pending to signed in with no page opened.
+- A sign-in started with the ticket reads as running — the page opened by the desktop shell, its link on the server's line — only where the grant has not come by the end of the first poll interval the seat's reply names, plus a short margin; a sign-in the space grants on the ticket passes from pending to signed in with no page opened.
   Until then the server's line reads "Signing in to <instance>…".
-- The stand-in instance grants on the ticket as Spex Space does — minted by it, spent by a server's admission within the last ten minutes, for that server and the person who asked it, once — and can be scripted to keep the page, so the suites and the local simulation walk both paths.
+- The stand-in instance grants on the ticket as Spex Space does — minted by it, spent by a server's admission within the last ten minutes, for that server and the person who asked it, once — and can be scripted to keep the page, so the core's suite walks both paths and the local simulation the grant.
 
 ### Considered and declined
 
@@ -36,8 +36,8 @@ Amends, under [DR-046](046-decision-record-evolution.md):
 ## Consequences
 
 - `core-service` changes in the open keeping the ticket for the seat's sign-in and in the sign-in's states; `git-host` in the seat's request, the start's reply naming the interval and the stand-in's grant; `run-view` in the server line's words while the seat signs in; `hub` in the local simulation reaching Connected with no page; the tests of each.
-- The protocol's `space.signin.start` gains an optional `ticket`, and its device reply the `interval`; nothing is lost.
-- The local simulation and the browser journeys that connect a seat see it signed in with no approval link; one journey keeps the page by scripting the stand-in.
+- The protocol's `space.signin.start` gains an optional `ticket`, and its device reply the `interval`; nothing is lost, but a seat of an earlier release refuses a key it does not know, so the protocol version bumps and such a seat reads mismatched until its server is updated.
+- The local simulation sees the seat signed in with no approval link; the browser journeys' seats, plain cores standing in for seats, boot signed in; the core's suite keeps the page by scripting the stand-in.
 
 ## References
 

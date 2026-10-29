@@ -2986,7 +2986,7 @@ test("space-110: reported sign-in owns its completion and matched cancellation",
   const home = await startHome("reported-signin", { host, extra: { signIn: "browser" } });
   t.after(() => home.stop());
   const hello = home.client.messages.find((message) => message.type === "hello");
-  assert.ok(hello?.type === "hello" && hello.protocolVersion === 28 && hello.attachedCliVersion === 1);
+  assert.ok(hello?.type === "hello" && hello.protocolVersion === 29 && hello.attachedCliVersion === 1);
   const begin = async (target: typeof home) => {
     const from = target.client.mark();
     const start = await target.client.expectOk("space.signin.start", { url: host.url, reportCompletion: true });

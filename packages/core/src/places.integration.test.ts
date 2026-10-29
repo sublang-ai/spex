@@ -1047,8 +1047,11 @@ test("core-service-130, core-service-142: a denied sign-in reads failed with the
   // server.signin starts a second flow after the failure, with no
   // ticket: the page at once.
   const retried = home.client.mark();
+  const retriedAt = Date.now();
   assert.deepEqual(await home.client.expectOk("server.signin", target), { started: true });
   const second = await runningCode(home, host, retried);
+  const retriedElapsed = Date.now() - retriedAt;
+  assert.ok(retriedElapsed < host.script.deviceInterval * 1000 + 2000, `running at once with no ticket, after ${retriedElapsed} ms (core-service-142)`);
   assert.equal(host.script.deviceRequests.length, requests + 2);
   const [first] = host.script.tickets;
   assert.deepEqual(host.script.deviceRequests.slice(requests).map((request) => [request.serverId, request.personId, request.ticket]), [[SERVER, "1001", first?.ticket], [SERVER, "1001", undefined]]);
@@ -1072,9 +1075,12 @@ test("core-service-130, core-service-142: a denied sign-in reads failed with the
   await home.stop();
   await seatFlowEnded(seat);
   host.script.ticketGrants = true;
+  const restartedAt = Date.now();
   const restarted = await startHome("places-signin-denied", { host, project: false, extra, dataDir: home.dataDir });
   t.after(() => restarted.stop());
   const fourth = await runningCode(restarted, host, 0);
+  const restartedElapsed = Date.now() - restartedAt;
+  assert.ok(restartedElapsed < host.script.deviceInterval * 1000 + 2000, `running at once with no ticket, after ${restartedElapsed} ms (core-service-142)`);
   assert.equal(host.script.deviceRequests.length, requests + 4);
   assert.equal(host.script.deviceRequests.at(-1)?.ticket, undefined, "a reopened seat's sign-in carries no ticket");
   host.script.approveDevice(fourth);

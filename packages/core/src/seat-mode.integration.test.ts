@@ -5,9 +5,10 @@
 // core-service-127, DR-132), against the stand-in instance: the device
 // request names the server and the person under the server's name, and
 // the ticket a start names, its reply naming the interval, a ticket
-// refused off a seat (DR-161); a sign-in as another account, or a denied
-// code, stores nothing; your own
-// group is placed at no instance and offered no pick or remote; every
+// refused off a seat (DR-161), and the stand-in granting a pending code
+// on a spent ticket as Spex Space does; a sign-in as another account, or
+// a denied code, stores nothing; your own group is placed at no instance
+// and offered no pick or remote; every
 // command naming a working folder is refused; a seat opens no seat on a
 // team server, asking nothing; and an intent holding no runtime runs
 // nowhere there.
@@ -75,6 +76,98 @@ test("git-host-27, git-host-28: a seat's start naming a ticket carries it in the
   await member.client.expectError("space.signin.start", { url: host.url, ticket: "spext_presented" }, "invalid_request", /^A ticket is taken only on a server's seat$/);
   assert.equal(host.script.requests.length, asked, "nothing is asked of the instance");
   assert.equal(host.script.deviceRequests.length, 1);
+});
+
+test("git-host-28, git-host-12: the stand-in grants a pending code on a minted ticket a server's admission spent, for that server and person, once; otherwise and while scripted to keep its page it answers authorization_pending", async () => {
+  const host = await startHost();
+  // A poll right after the request is not refused slow_down.
+  host.script.devicePollFloor = 0;
+  const DEVICE_GRANT = "urn:ietf:params:oauth:grant-type:device_code";
+
+  /** A device request as a seat sends it, with the ticket where named. */
+  async function device(fields: { ticket?: string; serverId?: string; personId?: string }): Promise<{ status: number; body: Record<string, unknown> }> {
+    const response = await fetch(`${host.url}/api/v1/auth/device`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ client_id: "spex", label: "Spex on lab-1", server_id: fields.serverId, person_id: fields.personId, ticket: fields.ticket }),
+    });
+    return { status: response.status, body: (await response.json()) as Record<string, unknown> };
+  }
+  /** One poll of the token endpoint for a device code. */
+  async function poll(deviceCode: unknown): Promise<{ status: number; body: Record<string, unknown> }> {
+    const response = await fetch(`${host.url}/api/v1/auth/token`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ grant_type: DEVICE_GRANT, client_id: "spex", device_code: deviceCode }),
+    });
+    return { status: response.status, body: (await response.json()) as Record<string, unknown> };
+  }
+  /** A ticket the stand-in minted, spent by a server's admission where
+   * `spent`, `spentAgoMs` back. */
+  function mint(ticket: string, { spent = true, serverId = SEAT.serverId, personId = SEAT.personId, spentAgoMs = 0 } = {}): void {
+    host.script.tickets.push({ ticket, serverId, personId, expiresAt: Date.now() + 600_000, spent: false, spentAt: null, signedIn: false });
+    if (!spent) return;
+    const redeemed = host.script.redeemTicket(ticket);
+    assert.ok(!("code" in redeemed && redeemed.code === "ticket_invalid"), `the admission spends ${ticket}`);
+    const entry = host.script.tickets.find((candidate) => candidate.ticket === ticket);
+    if (spentAgoMs > 0 && entry) entry.spentAt = Date.now() - spentAgoMs;
+  }
+  /** A fresh device code for a seat's request carrying `ticket`, the
+   * request recorded with it (git-host-12, git-host-28). */
+  async function codeFor(ticket: string, { serverId = SEAT.serverId, personId = SEAT.personId } = {}): Promise<unknown> {
+    const started = await device({ ticket, serverId, personId });
+    assert.equal(started.status, 200);
+    assert.deepEqual(host.script.deviceRequests.at(-1), { label: "Spex on lab-1", serverId, personId, ticket });
+    return started.body.device_code;
+  }
+  const assertPending = async (deviceCode: unknown, why: string): Promise<void> => {
+    const polled = await poll(deviceCode);
+    assert.equal(polled.status, 400, why);
+    assert.equal((polled.body.error as { code?: string } | undefined)?.code, "authorization_pending", why);
+  };
+  const assertGranted = async (deviceCode: unknown, why: string): Promise<void> => {
+    const polled = await poll(deviceCode);
+    assert.equal(polled.status, 200, why);
+    assert.equal(typeof polled.body.access_token, "string", why);
+    assert.deepEqual(host.script.tokenGrants.at(-1), { grantType: DEVICE_GRANT, ok: true, error: null, ticket: true }, why);
+  };
+
+  // A ticket the stand-in minted and a server's admission spent, for that
+  // server and person: the first poll grants, without the page
+  // (git-host-12).
+  mint("spext_spent");
+  await assertGranted(await codeFor("spext_spent"), "granted on a spent ticket");
+  // Once: a second code carrying that ticket is not granted on it.
+  await assertPending(await codeFor("spext_spent"), "a ticket signs one device in");
+  // Minted but unspent: no admission spent it.
+  mint("spext_unspent", { spent: false });
+  await assertPending(await codeFor("spext_unspent"), "an unspent ticket grants nothing");
+  // Spent, but the code names another server, or another person.
+  mint("spext_other_server");
+  await assertPending(await codeFor("spext_other_server", { serverId: "srv_other" }), "another server's code");
+  mint("spext_other_person");
+  await assertPending(await codeFor("spext_other_person", { personId: "1002" }), "another person's code");
+  // Spent more than ten minutes ago.
+  mint("spext_stale", { spentAgoMs: 10 * 60_000 + 1 });
+  await assertPending(await codeFor("spext_stale"), "a ticket spent over ten minutes ago");
+  // A ticket the stand-in never minted.
+  await assertPending(await codeFor("spext_unknown"), "an unminted ticket");
+
+  // Scripted to keep its page, as an older instance does: pending; the
+  // switch keeps the page only while set (git-host-12).
+  host.script.ticketGrants = false;
+  mint("spext_kept");
+  const kept = await codeFor("spext_kept");
+  await assertPending(kept, "the page kept");
+  host.script.ticketGrants = true;
+  await assertGranted(kept, "granted once the switch is cleared");
+
+  // A ticket comes with the server and the person, or is refused.
+  const requests = host.script.deviceRequests.length;
+  const alone = await device({ ticket: "spext_alone" });
+  assert.equal(alone.status, 400);
+  assert.equal((alone.body.error as { code?: string } | undefined)?.code, "invalid_request");
+  assert.equal(host.script.deviceRequests.length, requests, "nothing is recorded");
 });
 
 test("core-service-127, git-host-27: on a seat a sign-in as another account, and a denied code, each end failed storing nothing", async (t) => {
