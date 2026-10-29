@@ -90,7 +90,9 @@ export const LIVE = process.env.SPEX_E2E_LIVE === "1";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(here, "..", "..");
-const uiDist = join(repoRoot, "apps", "server", "ui-dist");
+/** The staged UI bundle the shell serves: the built page as the
+ * desktop's `file://` copy carries it, before the shell's retargeting. */
+export const uiDist = join(repoRoot, "apps", "server", "ui-dist");
 
 export interface AppOptions {
   /** Additional native-style provider rules for approval journeys. */

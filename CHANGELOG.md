@@ -16,12 +16,42 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Added
 
+- Applets in the IDE ([DR-161](specs/decisions/161-an-applet-is-a-page-the-ide-serves.md)).
+  A spec package's applet is a static web page entered at
+  `applets/<id>/index.html`; a folder without that entry is refused.
+  Once the project's environment or your own group's installs one, the
+  project's workspace shows a tab named by the applet's id after
+  Overview, and the page opens in an embedded frame under a line naming
+  its spec package and version, with Reload. The page reads its own
+  files and, read-only, the project's working folder — a file at
+  `~/<path>`, a folder's listing at `~/<folder>/` — from the core's own
+  endpoint under a secret path, never the home where the working folder
+  holds it. Its requests, forms and the frame's own navigation stay at
+  that endpoint, the served page's policy and the desktop shell refusing
+  the rest; it reaches neither the IDE nor its token, keeps no storage,
+  and its tab leaves with its package. A project open on a team server
+  shows no applet tab for now.
+
 - The package CLI can attach to an explicitly selected local Spex server
   for project registration, Space sign-in, package search, installation
   and publication. Package commands report their own completion and
   publication destination; a disconnected client reports uncertainty
   without replaying the operation. Existing UI commands remain unchanged
   ([DR-157](specs/decisions/157-a-cli-attached-to-the-local-core.md)).
+- The CLI finds the running app by itself ([DR-163](specs/decisions/163-the-cli-finds-the-running-app.md)).
+  While the core serves its home on a loopback address — the desktop's
+  own listener, or the server shell bound to a loopback host — it keeps
+  `local/endpoint.json` there, owner-only, with the access URL and the
+  process id, and removes it when it stops; a seat and a public bind
+  write none. The CLI reads it when given no `--server` or
+  `SPEX_SERVER_URL`, so a desktop user runs the CLI beside the app.
+- `spex package init` makes a package folder from what you already have
+  ([DR-162](specs/decisions/162-a-package-folder-from-what-you-already-have.md)).
+  Given a skill folder, such as one under `.claude/skills/`, or a spec
+  file, it writes `spex-packages/<name>/` with its manifest, README and
+  the project's license, offline, and names the next steps: Playbooks →
+  Add from folder then Publish, or `spex package add --path` and
+  `spex package publish --dry-run`.
 
 - Players read by name ([DR-155](specs/decisions/155-players-named-delegated-and-recovered.md)).
   A player reads as the last segment of its id — `dev.reviewer` as
@@ -336,6 +366,12 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Changed
 
+- On Playbooks, **Add from registry**, **Add from folder** and **Add from
+  Git** stand directly beneath the environment's list of spec packages,
+  above the playbooks, instead of at the page's foot. The environment's
+  heading names the project — "Environment of demo" — or "Environment of
+  your own group", and no longer shows a `<name>-spex` key
+  ([DR-159](specs/decisions/159-projects-in-groups-opened-where-you-work.md)).
 - A first-run config takes the agents Playbook seeds for this machine's
   sign-ins ([DR-154](specs/decisions/154-the-seed-follows-playbooks-rule.md)):
   with only Codex signed in, the Captain and every player run Codex; with

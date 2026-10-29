@@ -11,11 +11,13 @@ import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
 import {
   chmodSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
   realpathSync,
   rmSync,
+  statSync,
   symlinkSync,
   unlinkSync,
   utimesSync,
@@ -221,6 +223,25 @@ test("the core signs in by the device flow and runs Git's helper on the shell's 
   }
 });
 
+test("on a loopback host the home's endpoint file names the access URL while the shell serves (server-shell-27, SERVER-SHELL-28)", async () => {
+  const options = tempOptions();
+  const file = join(options.dataDir, "local", "endpoint.json");
+  const running = await startServer(options);
+  try {
+    assert.deepEqual(JSON.parse(readFileSync(file, "utf8")), {
+      format: 1,
+      url: running.url,
+      pid: process.pid,
+    });
+    assert.equal(statSync(file).mode & 0o777, 0o600, "owner-only");
+    const hello = await wsHello(running.url.replace(/^http/, "ws"), `http://127.0.0.1:${running.port}`);
+    assert.equal(hello.type, "hello");
+  } finally {
+    await running.close();
+  }
+  assert.equal(existsSync(file), false, "the stop removes the file");
+});
+
 test("one port serves the bundle and the core endpoint (SERVER-SHELL-9)", async () => {
   const running = await startServer(tempOptions());
   try {
@@ -237,6 +258,10 @@ test("one port serves the bundle and the core endpoint (SERVER-SHELL-9)", async 
       ),
       "CSP names the serving origin",
     );
+    // A frame the page shows loads and navigates at this origin alone
+    // (SERVER-SHELL-4, applets-9).
+    assert.match(html, /frame-src 'self'"/, "CSP frames 'self' alone");
+    assert.doesNotMatch(html, /frame-src [^;"]*\*/, "no loopback wildcard survives in frame-src");
     // The page carries the shell's version for the Settings surface
     // (SERVER-SHELL-4): the manifest's, never a dev placeholder.
     const manifest = JSON.parse(
@@ -270,6 +295,20 @@ test("one port serves the bundle and the core endpoint (SERVER-SHELL-9)", async 
     const posted = await fetch(`${base}/`, { method: "POST" });
     assert.equal(posted.status, 405);
     assert.equal((await posted.arrayBuffer()).byteLength, 0);
+
+    // A request under `/applets/` is the attached core's (SERVER-SHELL-4,
+    // applets-4): an unknown capability answers the core's empty 404,
+    // with its headers, and a POST there the core's 405 — never the
+    // bundle's.
+    const applet = await fetch(`${base}/applets/${"A".repeat(43)}/?token=secret`);
+    assert.equal(applet.status, 404);
+    assert.equal(applet.headers.get("cache-control"), "no-store");
+    assert.equal(applet.headers.get("x-content-type-options"), "nosniff");
+    assert.equal((await applet.arrayBuffer()).byteLength, 0);
+    const appletPost = await fetch(`${base}/applets/${"A".repeat(43)}/`, { method: "POST" });
+    assert.equal(appletPost.status, 405);
+    assert.equal(appletPost.headers.get("allow"), "GET, HEAD");
+    assert.equal((await appletPost.arrayBuffer()).byteLength, 0);
 
     const hello = await wsHello(`${base.replace("http", "ws")}/?token=secret`, base);
     assert.equal(hello.type, "hello");
@@ -823,12 +862,17 @@ test("startup refusals: public plaintext, lone TLS half, empty token (SERVER-SHE
     /--tls-cert is missing/,
   );
 
-  const running = await startServer(
-    tempOptions({ host: "0.0.0.0", insecure: true }),
-  );
+  const publicOptions = tempOptions({ host: "0.0.0.0", insecure: true });
+  const running = await startServer(publicOptions);
   try {
     const page = await fetch(`http://127.0.0.1:${running.port}/`);
     assert.equal(page.status, 200);
+    // A bind to any host but loopback leaves no endpoint file for the
+    // CLI (server-shell-27, SERVER-SHELL-28).
+    assert.equal(
+      existsSync(join(publicOptions.dataDir, "local", "endpoint.json")),
+      false,
+    );
   } finally {
     await running.close();
   }

@@ -1304,6 +1304,11 @@ export const commandSchema = z.discriminatedUnion("type", [
    * (playbook-library-93). */
   z.object({ type: z.literal("environment.publish"), id, repository: repositoryKeySchema, path: z.string().min(1), dryRun: z.boolean().optional(), wait: z.boolean().optional() }).strict(),
   z.object({ type: z.literal("environment.playbooks"), id, projectId: repositoryKeySchema.optional() }).strict(),
+  // Applets (applets-3, DR-161): the path the core serves an installed
+  // applet under for one project — `repository` the spex repository
+  // whose environment installs it, `applet` its id, `project` the spex
+  // repository of the project whose tab shows it.
+  z.object({ type: z.literal("applet.open"), id, repository: repositoryKeySchema, applet: z.string().min(1), project: repositoryKeySchema }).strict(),
   // Groups (space-29, DR-103): the core performs every Git operation,
   // one spex repository at a time, `repository` naming it by its key
   // and `instance` an instance by its origin (DR-127); long commands
@@ -1606,6 +1611,8 @@ export interface CommandResults {
   "environment.publish":
     | { accepted: true; preview?: PublishPreview; completed?: never; published?: never }
     | { completed: true; published: PublishedPackage; accepted?: never; preview?: never };
+  /** `/applets/<capability>/` on the core's own endpoint (applets-3). */
+  "applet.open": { path: string };
   "environment.playbooks": {
     project: PlaybookAvailability[] | null;
     own: PlaybookAvailability[];

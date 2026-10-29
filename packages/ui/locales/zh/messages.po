@@ -448,6 +448,11 @@ msgstr "{minutes} 分 {seconds} 秒"
 msgid "{minutes}m ago"
 msgstr "{minutes} 分钟前"
 
+#. the line above an applet's frame, for a spec package with no version: its name, then the applet's id
+#: src/components/AppletTab.tsx
+msgid "{name} · applet {id}"
+msgstr "{name} · 小应用 {id}"
+
 #: src/components/SpaceSync.tsx
 msgid "{name} · now a project at {path}"
 msgstr "{name} · 已成为项目，位于 {path}"
@@ -455,6 +460,11 @@ msgstr "{name} · 已成为项目，位于 {path}"
 #: src/components/SpaceSync.tsx
 msgid "{name} · now a project at {path}, {count, plural, one {# session} other {# sessions}} listed"
 msgstr "{name} · 已成为项目，位于 {path}，已列出 {count, plural, other {# 个会话}}"
+
+#. the line above an applet's frame: the spec package and version it comes from, then the applet's id
+#: src/components/AppletTab.tsx
+msgid "{name} {version} · applet {id}"
+msgstr "{name} {version} · 小应用 {id}"
 
 #: src/components/DraftRegisterTab.tsx
 #: src/components/LibrarySurface.tsx
@@ -1322,10 +1332,25 @@ msgstr "任意字母"
 msgid "app state failed to load: {reason}"
 msgstr "应用状态加载失败：{reason}"
 
-#. a spec package's artifact kind: a browser-server application
+#. a spec package's artifact kind: a static web page the IDE shows in a tab
 #: src/lib/environments.ts
 msgid "applet"
 msgstr "小应用"
+
+#. the accessible name of the frame an applet's page shows in
+#: src/components/AppletTab.tsx
+msgid "Applet {id}"
+msgstr "小应用 {id}"
+
+#. an applet tab's description, for a spec package with no version
+#: src/App.tsx
+msgid "Applet from {name}"
+msgstr "来自 {name} 的小应用"
+
+#. an applet tab's description: the spec package and version the applet comes from
+#: src/App.tsx
+msgid "Applet from {name} {version}"
+msgstr "来自 {name} {version} 的小应用"
 
 #. confirm: apply the chosen versions
 #. confirm: apply the chosen versions
@@ -3011,11 +3036,19 @@ msgid "Enter to send · Shift+Enter for a new line"
 msgstr "Enter 发送 · Shift+Enter 换行"
 
 #. heading over a spex repository's spec package requests and lock
-#. section heading: the spec packages one spex repository installs
-#: src/components/EnvironmentSection.tsx
 #: src/lib/space.ts
 msgid "Environment"
 msgstr "环境"
+
+#. section heading: the spec packages a project installs; {project} is the project's name
+#: src/components/EnvironmentSection.tsx
+msgid "Environment of {project}"
+msgstr "{project} 的环境"
+
+#. section heading: the spec packages your own group installs
+#: src/components/EnvironmentSection.tsx
+msgid "Environment of your own group"
+msgstr "你自己的群组的环境"
 
 #. stands where a failed call named no reason
 #: src/components/PlayerPane.tsx
@@ -4933,6 +4966,11 @@ msgstr "打开席位会把你的登录放到 {server} 上。运行 {server} 的�
 msgid "Opening on {server}…"
 msgstr "正在 {server} 上打开…"
 
+#. while the core answers an applet's path
+#: src/components/AppletTab.tsx
+msgid "Opening the applet…"
+msgstr "正在打开小应用…"
+
 #. a project's row while it is opened here: its records and code clone
 #. a project's row while it is opened here: its records and code clone
 #. a project's row while it is opened here: its records and code clone
@@ -5146,6 +5184,11 @@ msgstr "规程"
 #: src/components/LibrarySurface.tsx
 msgid "Playbooks need a valid config — fix it in <0>Settings</0>."
 msgstr "规程需要有效的配置 — 请在<0>设置</0>中修复。"
+
+#. name of the switch between the project's playbooks and your own group's
+#: src/components/LibrarySurface.tsx
+msgid "Playbooks of"
+msgstr "显示谁的规程"
 
 #: src/components/DraftRegisterTab.tsx
 #: src/components/LibrarySurface.tsx
@@ -5556,8 +5599,10 @@ msgstr "注册表 {requirement}"
 msgid "rejected the findings"
 msgstr "驳回审查意见"
 
+#. button: load an applet's page again
 #. confirm: re-read the file from disk
 #. confirm: re-read the file from disk
+#: src/components/AppletTab.tsx
 #: src/components/SpecEditor.tsx
 msgid "Reload"
 msgstr "重新加载"
@@ -6635,10 +6680,6 @@ msgstr "Spex 将此设备的文件保存在 {path}"
 msgid "Spex navigation"
 msgstr "Spex 导航"
 
-#: src/components/LibrarySurface.tsx
-msgid "Spex repository shown"
-msgstr "显示的 spex 仓库"
-
 #: src/components/ProjectPalette.tsx
 msgid "Spex will create this folder and set up Git."
 msgstr "Spex 会创建此文件夹并设置 Git。"
@@ -7068,7 +7109,6 @@ msgstr "保留原文"
 msgid "The project's spec packages ({keys})"
 msgstr "项目的规约包（{keys}）"
 
-#: src/components/LibrarySurface.tsx
 #: src/components/ProjectsSurface.tsx
 msgid "The project's spex repository: {repository}"
 msgstr "项目的 spex 仓库：{repository}"

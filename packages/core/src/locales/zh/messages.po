@@ -2222,6 +2222,11 @@ msgstr "前缀"
 msgid "profiles is retired (playbook 3.0): agents carry their settings inline"
 msgstr "profiles 已废弃（playbook 3.0）：智能体的设置改为内联携带"
 
+#. Refusal: an applet reads the project's working folder, and none is paired here
+#: src/service.ts
+msgid "project {project} has no working folder on this device"
+msgstr "项目 {project} 在本设备上没有工作文件夹"
+
 #. Refusal: the project's own folder is not on this device
 #: src/specs.ts
 msgid "project directory is missing"
@@ -2712,10 +2717,20 @@ msgstr "核心服务正在停止。"
 msgid "the environment of {repository} can request this spec package by path only from inside its own working folder; enable it in the project, or publish it and add it from the registry"
 msgstr "{repository} 的环境只能按路径请求它自己工作文件夹内的规约包；请在项目中启用它，或发布后从注册中心添加"
 
+#. Refusal: an applet tab asked for an applet the spex repository's environment does not install
+#: src/service.ts
+msgid "the environment of {repository} installs no applet {applet}"
+msgstr "{repository} 的环境未安装小应用 {applet}"
+
 #. Media transfer refusal
 #: src/media-transfers.ts
 msgid "The file has not finished uploading."
 msgstr "文件尚未上传完成。"
+
+#. Refusal: the applet is in the lock, but its installed or path-source folder is missing here
+#: src/service.ts
+msgid "the files of applet {applet} are not on this device"
+msgstr "小应用 {applet} 的文件不在本设备上"
 
 #. Refusal of a remote the reader named under the Git host's own origin
 #: src/space.ts

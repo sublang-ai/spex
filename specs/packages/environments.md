@@ -27,7 +27,7 @@ When the core reads a release — from the registry, a Git commit, a path source
 | `specs/<language>/<pkg>.md` | the one spec file, with its sections, item ids and citations kept whole |
 | `skills/<language>/<id>/` | an Agent Skills folder [[1]] whose `SKILL.md` name is `<id>` |
 | `playbooks/<language>/<id>/` | a playbook in Playbook's native layout: the text the compiler reads, its compiled module and what the compiler wrote beside them, except its `.slc/` build history and `.slc-verify/` verifier support, which a folder read as a release leaves out wherever they stand in it |
-| `applets/<id>/` | a browser-server application in its native layout |
+| `applets/<id>/` | a static web application entered at `index.html`, a regular file at the folder's root, every file beside it served as it is ([DR-161](../decisions/161-an-applet-is-a-page-the-ide-serves.md)); a folder without that entry is refused naming the applet |
 
 | `meta.yaml` field | Content |
 | --- | --- |
@@ -311,7 +311,7 @@ The core package shall ship a stand-in registry for its own tests and the browse
 
 #### environments-19
 
-When an integration suite reads releases from a fixture directory, it shall assert the format's acceptance and refusals [[environments-1](#environments-1)]: a release with every kind and two languages accepted whole; a manifest without `format: 2`, an unknown field, a file under no artifact, a folder without a manifest entry, a skill whose `SKILL.md` name differs from its id, a skill and a playbook sharing an id, a translation whose item ids differ, a non-portable path and a link each refused naming the reason.
+When an integration suite reads releases from a fixture directory, it shall assert the format's acceptance and refusals [[environments-1](#environments-1)]: a release with every kind and two languages accepted whole; a manifest without `format: 2`, an unknown field, a file under no artifact, a folder without a manifest entry, a skill whose `SKILL.md` name differs from its id, a skill and a playbook sharing an id, a translation whose item ids differ, an applet without `index.html` at its folder's root, a non-portable path and a link each refused naming the reason.
 
 #### environments-20
 

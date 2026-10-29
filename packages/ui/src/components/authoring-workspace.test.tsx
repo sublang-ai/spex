@@ -410,14 +410,15 @@ describe("playbook-library-50: the Authoring section", () => {
     render(<LibrarySurface />);
     const section = screen.getByTestId("drafts-section");
     expect(within(section).getByRole("heading").textContent).toBe("Authoring");
-    // Between the playbooks and the ways to add a spec package.
+    // After the playbooks, the ways to add a spec package standing
+    // above them with the environment (playbook-library-92).
     const playbooks = await screen.findByTestId("playbooks-available");
     expect(
       playbooks.compareDocumentPosition(section) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     expect(
       section.compareDocumentPosition(screen.getByTestId("add-packages")) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
+        Node.DOCUMENT_POSITION_PRECEDING,
     ).toBeTruthy();
     expect(within(section).queryByTestId("draft-row-elsewhere")).toBeNull();
     // An enabled playbook's session stays, its chip saying so.

@@ -10,6 +10,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.2.0] - 2026-10-29
+
+### Added
+
+- `spex package init <org>/<name>` makes `spex-packages/<name>/` from
+  `--skill` folders and/or a `--spec` file, with a format 2 manifest, a
+  README and the project's LICENSE, and prints the next steps in the app
+  and the CLI. It needs no server; `--move` moves the skill folders
+  instead of copying them, and every refusal writes nothing.
+- Attached commands find the running Spex app — desktop or server shell —
+  through the `local/endpoint.json` file it keeps in `SPEX_HOME` or
+  `~/.spex`. `--server` and `SPEX_SERVER_URL` still win; without either
+  and without a running app, the command says the app must be running.
+
 ## [4.1.0] - 2026-10-27
 
 ### Added
@@ -375,7 +389,8 @@ into this release. npm users upgrade straight from 0.3.0.
 - Integration tests exercising the CLI binary end-to-end
 - RELEASE spec package with package hygiene and pre-release checks
 
-[Unreleased]: https://github.com/sublang-ai/spex/compare/cli-v4.1.0...HEAD
+[Unreleased]: https://github.com/sublang-ai/spex/compare/cli-v4.2.0...HEAD
+[4.2.0]: https://github.com/sublang-ai/spex/compare/cli-v4.1.0...cli-v4.2.0
 [4.1.0]: https://github.com/sublang-ai/spex/compare/cli-v4.0.1...cli-v4.1.0
 [4.0.1]: https://github.com/sublang-ai/spex/compare/cli-v4.0.0...cli-v4.0.1
 [4.0.0]: https://github.com/sublang-ai/spex/compare/v3.0.0...cli-v4.0.0

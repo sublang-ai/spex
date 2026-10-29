@@ -292,6 +292,12 @@ test("environments-19: the format accepts a whole release and refuses each broke
       files["playbooks/en/Build_It/Build_It.md"] = "# Build\n";
     } },
     { label: "a language folder that is no BCP 47 tag", rule: "language", change: (_manifest, files) => { files["sources/not_a_tag/brief/SOURCE.md"] = "# x\n"; } },
+    // An applet is entered at `index.html` at its folder's root
+    // (DR-161): one elsewhere in the folder is no entry.
+    { label: "an applet without index.html at its folder's root", rule: "applet-entry", change: (_manifest, files) => {
+      delete files["applets/viewer/index.html"];
+      files["applets/viewer/pages/index.html"] = "<!doctype html>\n";
+    } },
   ];
   for (const { label, rule, change } of cases) {
     const manifest = widgetsManifest();
@@ -303,6 +309,20 @@ test("environments-19: the format accepts a whole release and refuses each broke
       assert.ok(error.issues.some((issue) => issue.rule === rule), `${label} is refused as ${rule}: ${JSON.stringify(error.issues)}`);
       return true;
     }, label);
+  }
+  // An applet's missing entry is refused naming the applet, a link
+  // standing in its place too (environments-1).
+  for (const entry of [undefined, { symlink: "other.html" }] as const) {
+    const files = widgetsFiles();
+    delete files["applets/viewer/index.html"];
+    files["applets/viewer/other.html"] = "<!doctype html>\n";
+    if (entry) files["applets/viewer/index.html"] = entry;
+    const dir = await makeRelease(join(scratchDir("spex-format-"), "widgets"), widgetsManifest(), files);
+    await assert.rejects(readRelease(dir), (error: unknown) => {
+      assert.ok(error instanceof FormatError);
+      assert.ok(error.issues.some((issue) => issue.rule === "applet-entry" && /applet viewer/.test(issue.message)), JSON.stringify(error.issues));
+      return true;
+    });
   }
 
   // Paths unique only before NFC and case folding are refused, here and

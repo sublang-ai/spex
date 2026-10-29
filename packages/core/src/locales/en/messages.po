@@ -2222,6 +2222,11 @@ msgstr "Prefix"
 msgid "profiles is retired (playbook 3.0): agents carry their settings inline"
 msgstr "profiles is retired (playbook 3.0): agents carry their settings inline"
 
+#. Refusal: an applet reads the project's working folder, and none is paired here
+#: src/service.ts
+msgid "project {project} has no working folder on this device"
+msgstr "project {project} has no working folder on this device"
+
 #. Refusal: the project's own folder is not on this device
 #: src/specs.ts
 msgid "project directory is missing"
@@ -2712,10 +2717,20 @@ msgstr "The core is stopping."
 msgid "the environment of {repository} can request this spec package by path only from inside its own working folder; enable it in the project, or publish it and add it from the registry"
 msgstr "the environment of {repository} can request this spec package by path only from inside its own working folder; enable it in the project, or publish it and add it from the registry"
 
+#. Refusal: an applet tab asked for an applet the spex repository's environment does not install
+#: src/service.ts
+msgid "the environment of {repository} installs no applet {applet}"
+msgstr "the environment of {repository} installs no applet {applet}"
+
 #. Media transfer refusal
 #: src/media-transfers.ts
 msgid "The file has not finished uploading."
 msgstr "The file has not finished uploading."
+
+#. Refusal: the applet is in the lock, but its installed or path-source folder is missing here
+#: src/service.ts
+msgid "the files of applet {applet} are not on this device"
+msgstr "the files of applet {applet} are not on this device"
 
 #. Refusal of a remote the reader named under the Git host's own origin
 #: src/space.ts

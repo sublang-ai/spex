@@ -5,7 +5,7 @@
 
 ## Intent
 
-This package defines the published `spex` executable's local-server client commands under [DR-157](../decisions/157-a-cli-attached-to-the-local-core.md).
+This package defines the published `spex` executable's local-server client commands under [DR-157](../decisions/157-a-cli-attached-to-the-local-core.md), and its `package init` command, which makes a spec package folder from a skill or a spec with no server under [DR-162](../decisions/162-a-package-folder-from-what-you-already-have.md).
 Scaffolding and linting retain their separate contracts.
 The selected server owns its home, credentials and project files; this client starts no core and mutates no Spex storage directly.
 
@@ -13,10 +13,10 @@ The selected server owns its home, credentials and project files; this client st
 
 ### attached-cli-1
 
-When an attached command is invoked, the CLI shall connect only to an explicit `--server <access-url>` or, when absent, `SPEX_SERVER_URL`, using the authenticated endpoint [[core-service-24](core-service.md#core-service-24)] and waiting for both matching protocol version and `attachedCliVersion: 1` in hello [[core-service-1](core-service.md#core-service-1)] before any command:
+When an attached command is invoked, the CLI shall connect only to an explicit `--server <access-url>`, else `SPEX_SERVER_URL`, else the `url` of `local/endpoint.json` in the home `SPEX_HOME` names or `~/.spex` [[storage-1](storage.md#storage-1)] — the file the running app keeps [[core-service-143](core-service.md#core-service-143)] ([DR-163](../decisions/163-the-cli-finds-the-running-app.md)) — using the authenticated endpoint [[core-service-24](core-service.md#core-service-24)] and waiting for both matching protocol version and `attachedCliVersion: 1` in hello [[core-service-1](core-service.md#core-service-1)] before any command:
 
-- Accept HTTP, HTTPS, WS or WSS URLs with literal loopback host `localhost`, `127.0.0.1` or `::1`, path `/` and one nonempty `token`; convert HTTP(S) to WS(S), refusing userinfo, fragments, other query fields and other addresses or paths before connection.
-- Missing connection information, failed authentication and incompatible hello produce an actionable nonzero failure without discovery, server startup, mutation replay or automatic reconnect.
+- Accept HTTP, HTTPS, WS or WSS URLs with literal loopback host `localhost`, `127.0.0.1` or `::1`, path `/` and one nonempty `token`; convert HTTP(S) to WS(S), refusing userinfo, fragments, other query fields and other addresses or paths before connection, from the file as from an explicit URL.
+- With no explicit URL, a missing or unreadable file, a file not in that shape, and a connection refused at its URL each fail naming that the Spex app must be running on this computer; failed authentication and incompatible hello produce an actionable nonzero failure; none starts a server, replays a mutation or reconnects, and no discovery but the file is made.
 - The capability never appears in normal output or diagnostics and is not persisted by the CLI.
 - Help and existing scaffold/lint commands require no server.
 - An attached command observes for 600 seconds by default; an optional `--timeout <seconds>` overrides it with a finite positive duration fitting the platform timer range, validated with all flags before connecting.
@@ -63,6 +63,22 @@ When a package command is used for the selected project [[attached-cli-2](#attac
 | `spex package publish <relative-folder>` | `environment.publish` with `wait: true`, directly reporting its actual publication receipt and destination, without a confirmation prompt or preview binding [[environments-10](environments.md#environments-10)]. |
 
 
+### attached-cli-12
+
+When `spex package init <org>/<name>` is invoked with `--skill <folder>` once or more and/or `--spec <file>`, and optionally `--language <tag>`, `--description <text>`, `--license <id>` and `--move`, the CLI shall make `spex-packages/<name>/` in the current directory as a release folder [[environments-1](environments.md#environments-1)] holding the artifacts named, connecting to no server and touching no Spex storage ([DR-162](../decisions/162-a-package-folder-from-what-you-already-have.md)):
+
+| Written | Content |
+| --- | --- |
+| `meta.yaml` | `format: 2`, `org`, `name`, `version: 0.1.0`, `description`, `license`, and under `artifacts` each skill as `{kind: skill, language}` under its id and the spec as `{kind: spec, language}` under `<name>` |
+| `README.md` | a heading naming `<org>/<name>` and the description |
+| `LICENSE` | the project's root `LICENSE`, copied where the current directory holds one |
+| `skills/<language>/<id>/` | each `--skill` folder's regular files and folders, copied, or moved with `--move`, under the `name` its `SKILL.md` frontmatter declares when read as a release's [[environments-1](environments.md#environments-1)] |
+| `specs/<language>/<name>.md` | the `--spec` file, copied |
+
+- `<language>` is `--language`, else `en`; the description is `--description`, else the first skill's `SKILL.md` `description`, else the spec's first paragraph under its Intent heading; the license is `--license`, else `Apache-2.0` where the project's `LICENSE` begins with "Apache License" past a byte order mark and whitespace, `MIT` where it begins with "MIT License", else `Apache-2.0`;
+- refused before anything is written, naming the rule: a name that is not `<org>/<name>` in lowercase kebab-case of at most 64 characters each; no artifact named; an existing `spex-packages/<name>/`; a skill folder without a `SKILL.md` whose `name` is an Agent Skills name, two skills of one id, or a skill of the spec's id `<name>`; a spec file whose basename is not `<name>.md`; a skill folder holding a link or a special file, or, with `--move`, the destination; no description from any source;
+- the command ends naming the folder and the next steps: Playbooks → Add from folder with `<org>/<name>` and `spex-packages/<name>` then Publish on its row in the IDE, or `spex package add <org>/<name> --path spex-packages/<name>` and `spex package publish spex-packages/<name> --dry-run` from the CLI.
+
 ### attached-cli-5
 
 When an attached command finishes or loses observation, the CLI shall report only that invocation's known outcome:
@@ -83,7 +99,11 @@ When the CLI package builds, its staging step shall derive only `PROTOCOL_VERSIO
 
 ### attached-cli-6
 
-When the packed CLI connects to a real local fixture server across valid, missing-token, foreign-address and incompatible-hello cases, the integration suite shall assert that only the admitted compatible connection sends commands, secrets stay absent from output, and help/scaffold/lint require no server [[attached-cli-1](#attached-cli-1)]; the package-build integration asserts canonical constant values and refusal of missing or ambiguous source declarations [[attached-cli-11](#attached-cli-11)].
+When the packed CLI connects to a real local fixture server across valid, missing-token, foreign-address and incompatible-hello cases, the integration suite shall assert that only the admitted compatible connection sends commands, secrets stay absent from output, and help/scaffold/lint require no server [[attached-cli-1](#attached-cli-1)]; that with neither `--server` nor `SPEX_SERVER_URL` a scratch home's `local/endpoint.json` naming the fixture server connects, one naming a foreign address is refused, and an absent file, one of another shape and one naming a closed port each fail naming that the app must be running, an explicit URL winning over the file [[attached-cli-1](#attached-cli-1)]; the package-build integration asserts canonical constant values and refusal of missing or ambiguous source declarations [[attached-cli-11](#attached-cli-11)].
+
+### attached-cli-13
+
+When the packed CLI runs `package init` in a scratch Git working folder holding an Apache-2.0 `LICENSE`, a skill folder under `.claude/skills/` and a spec file, the integration suite shall assert: the folder written from the skill and the spec, with its manifest, README, copied LICENSE, the skill under its declared `name` and the spec under `<name>.md`, reads as a release the core accepts [[attached-cli-12](#attached-cli-12)]; the description and license default as specified and `--description`, `--license` and `--language` override them [[attached-cli-12](#attached-cli-12)]; `--move` leaves the skill's original folder gone and a plain run leaves it standing [[attached-cli-12](#attached-cli-12)]; each refusal of the list writes nothing [[attached-cli-12](#attached-cli-12)]; the printed next steps name the folder, the IDE path and the two CLI commands [[attached-cli-12](#attached-cli-12)]; and no server is contacted [[attached-cli-12](#attached-cli-12)].
 
 ### attached-cli-7
 

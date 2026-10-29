@@ -27,6 +27,7 @@ import { captureLoginShellEnv, mergeEnv } from "./shell-env.js";
 import { desktopCoreOptions } from "./core-options.js";
 import { speak } from "./i18n.js";
 import { notificationFor } from "./notifications.js";
+import { frameNavigationAllowed } from "./frame-navigation.js";
 import { openInstanceUrl } from "./open-external.js";
 import { resolveRevealTarget } from "./reveal-path.js";
 
@@ -291,6 +292,14 @@ async function main(): Promise<void> {
       event.preventDefault();
       if (/^https?:/i.test(url)) void shell.openExternal(url);
     }
+  });
+  // A frame inside the page — an applet's — navigates only at the
+  // in-app core endpoint's origin; anywhere else is prevented and opens
+  // nothing, so what the page read leaves in no URL (app-shell-41,
+  // DR-161). The main frame keeps the rule above.
+  const endpointOrigin = `http://127.0.0.1:${service.port()}`;
+  window.webContents.on("will-frame-navigate", (event) => {
+    if (!event.isMainFrame && !frameNavigationAllowed(endpointOrigin, event.url)) event.preventDefault();
   });
 
   // Acceptance mode (SPEX_ACCEPTANCE=<png path>): render, report the

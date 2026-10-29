@@ -448,6 +448,11 @@ msgstr "{minutes}m {seconds}s"
 msgid "{minutes}m ago"
 msgstr "{minutes}m ago"
 
+#. the line above an applet's frame, for a spec package with no version: its name, then the applet's id
+#: src/components/AppletTab.tsx
+msgid "{name} · applet {id}"
+msgstr "{name} · applet {id}"
+
 #: src/components/SpaceSync.tsx
 msgid "{name} · now a project at {path}"
 msgstr "{name} · now a project at {path}"
@@ -455,6 +460,11 @@ msgstr "{name} · now a project at {path}"
 #: src/components/SpaceSync.tsx
 msgid "{name} · now a project at {path}, {count, plural, one {# session} other {# sessions}} listed"
 msgstr "{name} · now a project at {path}, {count, plural, one {# session} other {# sessions}} listed"
+
+#. the line above an applet's frame: the spec package and version it comes from, then the applet's id
+#: src/components/AppletTab.tsx
+msgid "{name} {version} · applet {id}"
+msgstr "{name} {version} · applet {id}"
 
 #: src/components/DraftRegisterTab.tsx
 #: src/components/LibrarySurface.tsx
@@ -1322,10 +1332,25 @@ msgstr "any letter"
 msgid "app state failed to load: {reason}"
 msgstr "app state failed to load: {reason}"
 
-#. a spec package's artifact kind: a browser-server application
+#. a spec package's artifact kind: a static web page the IDE shows in a tab
 #: src/lib/environments.ts
 msgid "applet"
 msgstr "applet"
+
+#. the accessible name of the frame an applet's page shows in
+#: src/components/AppletTab.tsx
+msgid "Applet {id}"
+msgstr "Applet {id}"
+
+#. an applet tab's description, for a spec package with no version
+#: src/App.tsx
+msgid "Applet from {name}"
+msgstr "Applet from {name}"
+
+#. an applet tab's description: the spec package and version the applet comes from
+#: src/App.tsx
+msgid "Applet from {name} {version}"
+msgstr "Applet from {name} {version}"
 
 #. confirm: apply the chosen versions
 #. confirm: apply the chosen versions
@@ -3011,11 +3036,19 @@ msgid "Enter to send · Shift+Enter for a new line"
 msgstr "Enter to send · Shift+Enter for a new line"
 
 #. heading over a spex repository's spec package requests and lock
-#. section heading: the spec packages one spex repository installs
-#: src/components/EnvironmentSection.tsx
 #: src/lib/space.ts
 msgid "Environment"
 msgstr "Environment"
+
+#. section heading: the spec packages a project installs; {project} is the project's name
+#: src/components/EnvironmentSection.tsx
+msgid "Environment of {project}"
+msgstr "Environment of {project}"
+
+#. section heading: the spec packages your own group installs
+#: src/components/EnvironmentSection.tsx
+msgid "Environment of your own group"
+msgstr "Environment of your own group"
 
 #. stands where a failed call named no reason
 #: src/components/PlayerPane.tsx
@@ -4933,6 +4966,11 @@ msgstr "Opening a seat places your sign-in on {server}. Whoever runs {server} ca
 msgid "Opening on {server}…"
 msgstr "Opening on {server}…"
 
+#. while the core answers an applet's path
+#: src/components/AppletTab.tsx
+msgid "Opening the applet…"
+msgstr "Opening the applet…"
+
 #. a project's row while it is opened here: its records and code clone
 #. a project's row while it is opened here: its records and code clone
 #. a project's row while it is opened here: its records and code clone
@@ -5146,6 +5184,11 @@ msgstr "Playbooks"
 #: src/components/LibrarySurface.tsx
 msgid "Playbooks need a valid config — fix it in <0>Settings</0>."
 msgstr "Playbooks need a valid config — fix it in <0>Settings</0>."
+
+#. name of the switch between the project's playbooks and your own group's
+#: src/components/LibrarySurface.tsx
+msgid "Playbooks of"
+msgstr "Playbooks of"
 
 #: src/components/DraftRegisterTab.tsx
 #: src/components/LibrarySurface.tsx
@@ -5556,8 +5599,10 @@ msgstr "registry {requirement}"
 msgid "rejected the findings"
 msgstr "rejected the findings"
 
+#. button: load an applet's page again
 #. confirm: re-read the file from disk
 #. confirm: re-read the file from disk
+#: src/components/AppletTab.tsx
 #: src/components/SpecEditor.tsx
 msgid "Reload"
 msgstr "Reload"
@@ -6635,10 +6680,6 @@ msgstr "Spex keeps this device's files in {path}"
 msgid "Spex navigation"
 msgstr "Spex navigation"
 
-#: src/components/LibrarySurface.tsx
-msgid "Spex repository shown"
-msgstr "Spex repository shown"
-
 #: src/components/ProjectPalette.tsx
 msgid "Spex will create this folder and set up Git."
 msgstr "Spex will create this folder and set up Git."
@@ -7068,7 +7109,6 @@ msgstr "The original text stands"
 msgid "The project's spec packages ({keys})"
 msgstr "The project's spec packages ({keys})"
 
-#: src/components/LibrarySurface.tsx
 #: src/components/ProjectsSurface.tsx
 msgid "The project's spex repository: {repository}"
 msgstr "The project's spex repository: {repository}"

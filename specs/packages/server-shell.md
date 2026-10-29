@@ -53,11 +53,17 @@ Where the server shell starts as a seat — `--seat` with `--server-id`, `--serv
 - the socket's directory is made by whoever starts the shell, the hub's helper [[hub-4](hub.md#hub-4)]; the shell removes a stale socket file there before listening — one that refuses a connection — refuses startup at a socket that answers, "in use", or at a path holding another kind of file, and makes the socket it binds group-accessible;
 - a socket that cannot be bound refuses startup naming the cause, as the flag mistakes do.
 
+#### server-shell-27
+
+Where the bound host is a loopback address, when the shell's port listens, the server shell shall announce the access URL it prints [[server-shell-1](#server-shell-1)] to the core it booted, which keeps it in the home's endpoint file so the CLI finds the running app [[core-service-143](core-service.md#core-service-143)] ([DR-163](../decisions/163-the-cli-finds-the-running-app.md)):
+
+- a bind to any other host, and a seat [[server-shell-25](#server-shell-25)], announce none, so no file stands.
+
 ### Serving
 
 #### server-shell-4
 
-When an HTTP request arrives, the server shell shall serve only the staged UI bundle, read-only:
+When an HTTP request arrives, the server shell shall hand a request under `/applets/` to the attached core [[applets-4](applets.md#applets-4)] ([DR-161](../decisions/161-an-applet-is-a-page-the-ide-serves.md)) and otherwise serve only the staged UI bundle, read-only:
 
 - a method other than GET or HEAD yields 405 and an empty body;
 - an undecodable URL path yields 400 and an empty body;
@@ -65,7 +71,7 @@ When an HTTP request arrives, the server shell shall serve only the staged UI bu
 - a lexical escape, a missing path, a non-file path, or a real path outside the bundle, including through a symlink, yields 404 and an empty body;
 - if GET cannot materialize a successfully resolved response body because reading or encoding fails, it yields 500 with an empty body, writes one standard-error diagnostic naming the resolved path and failure cause, and remains isolated to that request, leaving the HTTP and core endpoints available;
 - after successful path resolution, HEAD neither reads nor encodes representation bytes, sends no body, and any advertised `Content-Length` matches the corresponding GET representation;
-- a successfully contained file has index semantics when either its lexically resolved requested path or its real path is the bundle's `index.html`: a successful index response carries `Cache-Control: no-store`, and, when its resolved extension is `.html`, its `connect-src` policy is retargeted to the serving origin so the page may open WebSockets to this origin and to no other host, and its head element gains a `spex-version` meta element carrying the shell's own version from its package manifest — the served page's counterpart to the desktop's `?version=` query — so a served page never reads as a dev build;
+- a successfully contained file has index semantics when either its lexically resolved requested path or its real path is the bundle's `index.html`: a successful index response carries `Cache-Control: no-store`, and, when its resolved extension is `.html`, its `connect-src` policy is retargeted to the serving origin so the page may open WebSockets to this origin and to no other host, its `frame-src` to `'self'` so a frame the page shows loads and navigates at this origin alone, where the attached core's applets stand [[applets-9](applets.md#applets-9)], and its head element gains a `spex-version` meta element carrying the shell's own version from its package manifest — the served page's counterpart to the desktop's `?version=` query — so a served page never reads as a dev build;
 - apart from that policy substitution and version stamp, every successful GET body is byte-identical, after removal of any HTTP content coding, to the staged bundle bytes from which the selected representation was materialized [[server-shell-18](#server-shell-18)];
 - a successful response maps the resolved file extension to its content type, with `application/octet-stream` as the fallback:
 
@@ -161,10 +167,11 @@ When the server shell serves bundle representations, it shall avoid repeated syn
 
 Where the server shell runs on a loopback port with a temporary config and store, the test suite shall assert over real HTTP and WebSocket connections that:
 
-- `GET /` serves the UI page with `Cache-Control: no-store`, its `connect-src` policy naming the serving origin, and the shell's manifest version stamped in its head, the 400 and 405 cases reject with empty bodies, and the empty-body 404 cases cover a lexical escape, a missing path, a contained non-file path, and a real path outside the bundle [[server-shell-4](#server-shell-4)];
+- `GET /` serves the UI page with `Cache-Control: no-store`, its `connect-src` policy naming the serving origin, its `frame-src` reading `'self'`, and the shell's manifest version stamped in its head, the 400 and 405 cases reject with empty bodies, and the empty-body 404 cases cover a lexical escape, a missing path, a contained non-file path, and a real path outside the bundle [[server-shell-4](#server-shell-4)];
 - requested-path and real-path classification retain HTML index semantics [[server-shell-4](#server-shell-4)] through post-retarget content coding [[server-shell-16](#server-shell-16)], while a non-HTML index target retains its mapped content type and exact bytes [[server-shell-4](#server-shell-4)] under its type-selected coding [[server-shell-16](#server-shell-16)];
 - unreadable index, identity, and cold encoded representations each yield an empty 500 response and one standard-error diagnostic naming the resolved path and failure cause, after which successful HTTP and WebSocket requests prove that the failure stayed local [[server-shell-4](#server-shell-4)];
 - a temporary bundle fixture covers every content-type table row and the fallback with byte-identical identity bodies, and a successful HEAD response sends no body with any advertised length matching GET [[server-shell-4](#server-shell-4)];
+- a request under `/applets/` reaches the attached core: an unknown capability answers the core's empty `404` with `Cache-Control: no-store` and `X-Content-Type-Options: nosniff`, and a `POST` there the core's `405` [[server-shell-4](#server-shell-4)];
 - a WebSocket handshake presenting the access URL's token from the page's own origin reaches the core's hello, on the same port that served the page [[server-shell-1](#server-shell-1)].
 
 #### server-shell-10
@@ -182,6 +189,12 @@ Where a startup precondition is violated, the test suite shall assert each refus
 #### server-shell-12
 
 Where the server shell runs as a real child process, the test suite shall assert that the access URL it prints matches its bound endpoint [[server-shell-1](#server-shell-1)] and that on SIGTERM the process exits cleanly with its port closed [[server-shell-6](#server-shell-6)]; where its fixture agent ignores SIGTERM mid-turn and the bounds are shortened through the seams [[server-shell-20](#server-shell-20)], that the process exits within the bound with the agent's processes gone and the session restorable on the same home afterwards [[server-shell-6](#server-shell-6)].
+
+### Endpoint File Coverage
+
+#### server-shell-28
+
+Where the server shell runs on a loopback host, on a public host with `--insecure`, and as a seat, the test suite shall assert the endpoint file of [[server-shell-27](#server-shell-27)]: on the loopback host the home's `local/endpoint.json` names the printed access URL, owner-only, and that URL answers the token-bearing handshake, the file gone once the shell stops; the public bind and the seat leave none.
 
 ### Page Connection Coverage
 
