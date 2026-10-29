@@ -7,6 +7,7 @@ export * from "./demo.js";
 export * from "./authoring.js";
 export * from "./stub-slc.js";
 export * from "./compiled-run.js";
+export * from "./develop-run.js";
 // The stand-in Git host for host-client coverage and journeys (git-host-12).
 export * from "./standin-host.js";
 // The managed Git rules writer, for fixtures that stand in for a peer

@@ -18,6 +18,7 @@ Amended by [DR-095](095-a-subagents-effort-and-the-agents-own-model.md): five, w
 The tri-state encoding, the player/binding ownership split, and the editor fork are used there unchanged.
 Amended by [DR-146](146-a-lane-appears-with-its-first-call.md): a pane stands for each player a call has reached, from its first call record on, rather than for each player the bindings reference.
 Amended by [DR-155](155-players-named-delegated-and-recovered.md): a player reads by its short name and a letter mark on every surface, its id in a tooltip.
+Amended by [DR-160](160-the-captain-dispatches-in-plain-sight.md): a lane's call names the playbook and step it runs, leading back to its delegation line.
 
 ## Context
 

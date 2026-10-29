@@ -87,7 +87,8 @@ When the session record stream delivers a tool-use event for a visible player, t
 - a subject is presented as one line — outer whitespace trimmed, inner whitespace runs collapsed to single spaces, elided where the card's width ends — so the collapsed card carries what the call acts on and never its payload;
 - a command a runner wrapped as `<shell> -lc <command>` — a login-shell wrapper with its quoting — presents the inner command as it was typed, and a runner's wire name for its shell tool reads "shell" with the wire name in the label's tooltip, so the coder's rows read as commands whichever agent runs them;
 - the expanded body prints each string-valued field — a command, a patch, an old and new string, a file's content, the result's text — verbatim under the field's name, and only a value that is not a string as JSON, every line wrapping inside the card so it never widens the pane;
-- a delivered result's span uses the run view's duration vocabulary [[run-view-145](#run-view-145)] ([DR-010](../decisions/010-interface-craft.md) §2).
+- a delivered result's span uses the run view's duration vocabulary [[run-view-145](#run-view-145)] ([DR-010](../decisions/010-interface-craft.md) §2);
+- while the lane's call is open, a card with no result yet reads at work, collapsed or not: the running mark stands where the ending's mark will, followed by "running · ⟨elapsed⟩" since the tool's use, ticking in the duration vocabulary [[run-view-145](#run-view-145)], on a tinted row, and the card takes its ending's mark once its result arrives ([DR-160](../decisions/160-the-captain-dispatches-in-plain-sight.md)).
 
 #### run-view-83
 
@@ -106,7 +107,7 @@ When a player call completes, that player's pane shall report the call's usage o
 
 | The call reported | The pane shows |
 | --- | --- |
-| tokens | the call's token totals, taken as given because they are inclusive of cached reads |
+| tokens | the call's token totals as "⟨in⟩→⟨out⟩ token", taken as given because they are inclusive of cached reads ([DR-160](../decisions/160-the-captain-dispatches-in-plain-sight.md)) |
 | a cost, with or without tokens | nothing for it — no amount in any currency, whatever its provenance |
 | neither | no usage line — an unreported figure is silence, never a zero nobody measured |
 
@@ -128,7 +129,7 @@ Wherever the run view names a session player — its lane's header and rail [[ru
 
 #### run-view-178
 
-When a session's records hold a player call — its first record a prompt — whose player no earlier call reached, or whose adapter or model differs from that player's previous call, the Captain pane shall show one delegation line at that record's place in the thread, outside every machine card, naming the player [[run-view-177](#run-view-177)] and what the call runs ([DR-155](../decisions/155-players-named-delegated-and-recovered.md)):
+When a session's records hold a player call — its traced start [[run-view-183](#run-view-183)], or for a call no trace starts, its prompt — the Captain pane shall show one delegation line at that record's place in the thread, outside every machine card, naming the player [[run-view-177](#run-view-177)] and the call's step [[run-view-188](#run-view-188)], and also what the call runs where the call's player no earlier call reached or its adapter or model differs from that player's previous call ([DR-155](../decisions/155-players-named-delegated-and-recovered.md), [DR-160](../decisions/160-the-captain-dispatches-in-plain-sight.md)):
 
 | The call's model reads | Where |
 | --- | --- |
@@ -140,8 +141,9 @@ When a session's records hold a player call — its first record a prompt — wh
 - the adapter is the player's in that execution context: the `session_context` record its `contextSeq` names, else the latest before it;
 - two calls differ where their adapters or configured models differ, or where both reported a model and the reports differ — a call with no report never differs from one with a report by the report alone;
 - the session summary's latest model per agent is never read, so a later model change leaves earlier lines as they were;
-- activating the line brings the player's lane into view;
-- a call whose player recorded nothing puts no line, and its failure stands in the thread alone;
+- activating the line brings the player's lane into view at the call's own entry [[run-view-186](#run-view-186)];
+- the line's accessible name reads its parts in order, each set apart, the dots between them drawn only;
+- a traced call that failed before its player recorded anything still puts its line, which leads nowhere, its failure standing in the thread [[run-view-147](#run-view-147)];
 - every line derives from stored records alone, so reopening the session shows the same lines.
 
 #### run-view-179
@@ -161,6 +163,41 @@ Where a failure line or card in the Captain pane [[run-view-2](#run-view-2)] [[r
 - "Change ⟨name⟩ in Settings" opens Settings at that agent's row editor [[settings-52](settings.md#settings-52)], where a change applies to new sessions;
 - nothing changes an agent's adapter or model without the reader.
 
+#### run-view-183
+
+While trace records fold into the run view's state [[run-view-14](#run-view-14)], the run view shall hold each traced player call — one per `player.call.started`, identified by its trace session and call id, a call id counting within one trace session only — with its state, role, player, start and finish, and the outcome and repository identity matched to it as follows ([DR-160](../decisions/160-the-captain-dispatches-in-plain-sight.md)):
+
+| Concern | Rule |
+| --- | --- |
+| its outcome | the first `outcome.accepted` of its trace session after the call finished whose source is the call's state, until a later call of that state in that session starts; a call of another state never takes or cuts off another's outcome, and a transition's source is not read |
+| a transition's outcomes | the `outcome.accepted` records following that transition's `fsm.transition`, until the same trace session's next trace record of another type; each trace session collects its own, so another session's records — its transitions and its disposal among them — and the state telemetry between them end nothing, and the turn's end ends a collection with no identity |
+| its repository identity | the fields the step table names for its step [[run-view-188](#run-view-188)] in the event output of the transition that accepted its outcome, each a revision read short, and only where that transition's collection ended and held that one `outcome.accepted` alone, one no call took counting |
+| judging | the call came back with no outcome yet, and none of these has happened: its run ended or moved to its failure state with the transition that did so collected, its trace session was disposed, a later call of its state started, the turn ended |
+| unconfirmed | the call came back, and one of those happened with no outcome matched |
+| failed | the call came back, and its run moved to its failure state, with a cause other than the Boss's stop, before an outcome was matched |
+| lost | the call never finished when the turn ended or a restore moved the runs to their recorded position [[run-view-74](#run-view-74)]: the process died in it, so it is open no more, takes no prompt record and puts no return line |
+| its lane entry | the earliest of its player's open calls not yet matched takes that player's next prompt record, since one player's calls run one at a time and each prompt follows its call's start |
+
+- every matching reads stored records alone, so a reopened session holds the calls the live one held.
+
+#### run-view-184
+
+When a traced call [[run-view-183](#run-view-183)] finishes having come back or been stopped, the Captain pane shall show one return line at that record's place in the thread, outside every machine card, naming the player [[run-view-177](#run-view-177)] and saying what the call came back with, how long it ran in the duration vocabulary [[run-view-145](#run-view-145)], and its reply's first line, the whole reply opening in place ([DR-160](../decisions/160-the-captain-dispatches-in-plain-sight.md)):
+
+| The call | The line reads |
+| --- | --- |
+| came back, judging | "← ⟨name⟩ handed back", marked "judging" |
+| came back, unconfirmed | "← ⟨name⟩ handed back", marked "unconfirmed" |
+| came back, failed | "← ⟨name⟩ handed back", marked "failed" |
+| came back with an outcome | "← ⟨name⟩ ⟨the outcome's words⟩" [[run-view-188](#run-view-188)] and its repository identity where one is matched |
+| came back asking the Boss | "← ⟨name⟩ asks you", marked "waiting for you" while that question waits [[run-view-9](#run-view-9)], with no first line and no reply to open, the question reaching the Boss in the Captain's words alone ([DR-085](../decisions/085-boss-talks-through-captain.md)) |
+| was stopped | "← ⟨name⟩ aborted" |
+
+- a failed call puts no return line, its failure standing in the thread [[run-view-147](#run-view-147)];
+- activating the line brings the player's lane into view at that call [[run-view-186](#run-view-186)];
+- the line's accessible name reads its head with its identity, its mark and its duration in order, each set apart, the dots between them drawn only;
+- the reply reads in the language the player wrote it in.
+
 ### Pane Visibility
 
 #### run-view-7
@@ -177,7 +214,8 @@ The run view shall show one player pane for each player of the session's bound r
 - a pane still lying beyond the grid's edge is said, not cut: the grid fades whichever edge hides one, and retires that edge's fade once nothing lies beyond it ([DR-041](../decisions/041-chrome-that-fits.md));
 - while no pane stands — before the session's first call, or for a roster with no players — the Captain column stands alone at the Captain home's reading width with no divider, a division with nothing on its far side reading as a pane that failed to load, and the first pane's arrival restores the divider at the split's setting;
 - the pane's header names the lane and the role its latest call served [[run-view-79](#run-view-79)] — "coder · dev.coder" — with the lane's agent chip beside it, which is also the control that tunes that agent for this session [[run-view-139](#run-view-139)] [[run-view-138](#run-view-138)] and owns the header's slack: a reading longer than the pane can hold ends in an ellipsis with its whole in its tooltip, so the header and the transcript never widen past the pane ([DR-041](../decisions/041-chrome-that-fits.md));
-- while the lane's call is open, the header carries "⟨role⟩ working · ⟨elapsed⟩" beside the running mark — the span since the call's prompt, ticking each second in the duration vocabulary [[run-view-145](#run-view-145)] — so a minutes-long call never reads as a hang ([DR-010](../decisions/010-interface-craft.md) §5); as the pane narrows, the live reading remains after the resting active-time phrase has yielded [[run-view-143](#run-view-143)], then yields before the lane identity and header controls at the pane floor ([DR-041](../decisions/041-chrome-that-fits.md)).
+- while the lane's call is open, the header carries "⟨role⟩ running · ⟨elapsed⟩" beside the running mark — the span since the call's prompt, ticking each second in the duration vocabulary [[run-view-145](#run-view-145)] — so a minutes-long call never reads as a hang ([DR-010](../decisions/010-interface-craft.md) §5); as the pane narrows, the live reading remains after the resting active-time phrase has yielded [[run-view-143](#run-view-143)], then yields before the lane identity and header controls at the pane floor ([DR-041](../decisions/041-chrome-that-fits.md));
+- while the lane's call is open, the pane's foot holds one line below the transcript, wherever the reader has scrolled, with the running mark and what the player is doing now, read from the open call's latest entry — a tool card at work gives "⟨tool⟩ · ⟨elapsed⟩" and its subject, a reply streaming gives "Writing a reply", and anything else "Thinking…" — a long tool name truncates within half the line, whole in its tooltip, so the elapsed time and the subject keep their room, the line reads aloud as one phrase with its parts set apart, and the line leaves when the call closes ([DR-160](../decisions/160-the-captain-dispatches-in-plain-sight.md)).
 
 #### run-view-116
 
@@ -195,6 +233,13 @@ While a lane's pane is collapsed, when that lane's call opens, the run view shal
 - the rule holds whether or not the session's tab is shown when the call opens;
 - a lane folded while its call is already open stays folded, its rail wearing the running mark, until its next call opens.
 
+#### run-view-186
+
+While a player pane holds a traced call's entry [[run-view-183](#run-view-183)], that entry shall open with the call's place — its playbook and its step, "decide › Merge the proposals" [[run-view-188](#run-view-188)], with "round ⟨N⟩" after the step where the run walks that step again — and the whole path from the root run, "dev › decide › Merge the proposals", in its tooltip ([DR-160](../decisions/160-the-captain-dispatches-in-plain-sight.md)):
+
+- activating the place brings the call's delegation line into view in the Captain pane, lit briefly [[run-view-178](#run-view-178)];
+- a delegation line, a return line or a working chip that leads to this call [[run-view-178](#run-view-178)] [[run-view-184](#run-view-184)] [[run-view-37](#run-view-37)] unfolds the lane where it stands as a rail, brings it into view and scrolls only the lane's own transcript to the entry, lit briefly.
+
 #### run-view-79
 
 While a player pane holds a call the core resolved to a role [[core-service-36](core-service.md#core-service-36)], that call shall be labelled with its role where the call opens ([DR-032](../decisions/032-session-players.md)), so a lane several roles share reads as a sequence of calls rather than one voice:
@@ -209,7 +254,7 @@ While a session tab is shown, the run view shall present each agent's core-folde
 
 - the Captain and every roster player read only their own entry from the summary, and the run view never derives active time from records;
 - an absent entry produces no phrase and no zero, while a measured zero reads `active · <1s`;
-- while a player's call is open, its existing `⟨role⟩ working · ⟨elapsed⟩` reading [[run-view-7](#run-view-7)] occupies the same at-a-glance slot; summaries update the cached resting value whether they arrive before or after `player_finished`, closing the live reading reveals the latest received phrase or silence, and a later summary updates it in place;
+- while a player's call is open, its existing `⟨role⟩ running · ⟨elapsed⟩` reading [[run-view-7](#run-view-7)] occupies the same at-a-glance slot; summaries update the cached resting value whether they arrive before or after `player_finished`, closing the live reading reveals the latest received phrase or silence, and a later summary updates it in place;
 - the Captain's phrase remains a completed-call total rather than ticking while `Captain is thinking…` supplies the turn's non-player progress signal; the indicator itself does not advance the figure, which changes only with a new folded summary [[run-view-37](#run-view-37)];
 - the phrase's title and accessible description read `Completed active time this session: ⟨duration⟩ · parallel calls overlap`;
 - the phrase stands apart from the agent-settings chip [[run-view-139](#run-view-139)], carries no combined total, share, ranking or cost, appears nowhere in the transcript, and leaves each player's per-call token usage on its result line [[run-view-6](#run-view-6)];
@@ -515,7 +560,13 @@ The run view shall keep cross-project attention and playbook creation at hand:
 
 #### run-view-37
 
-While a turn is active and the Captain is not streaming speech, the Captain thread shall show a working indicator naming what runs — "⟨role⟩ working · ⟨elapsed⟩" while any player runs, the roles of the running lanes' latest calls [[run-view-7](#run-view-7)] and the span since the earliest open call's prompt ticking each second in the duration vocabulary [[run-view-145](#run-view-145)], "Captain is thinking…" otherwise — so the thread is never inert mid-turn and a long call reports its progress ([DR-010](../decisions/010-interface-craft.md) §5).
+While a turn is active and the Captain is not streaming speech, the Captain thread shall show what runs, so the thread is never inert mid-turn and a long call reports its progress ([DR-010](../decisions/010-interface-craft.md) §5, [DR-160](../decisions/160-the-captain-dispatches-in-plain-sight.md)):
+
+| While | The thread shows |
+| --- | --- |
+| a traced call runs [[run-view-183](#run-view-183)] | one chip per open traced call — the player's mark and name [[run-view-177](#run-view-177)], the call's step [[run-view-188](#run-view-188)] and the span since the call started, ticking each second in the duration vocabulary [[run-view-145](#run-view-145)] — each activating to its lane at that call [[run-view-186](#run-view-186)], appearing as its call starts and leaving as it ends |
+| a player runs with no traced call | "⟨role⟩ running · ⟨elapsed⟩", the roles of the running lanes' latest calls [[run-view-7](#run-view-7)] and the span since the earliest open call's prompt, ticking likewise |
+| neither | "Captain is thinking…" |
 
 #### run-view-38
 
@@ -545,10 +596,11 @@ The Captain thread shall keep every moment legible in time: visible time separat
 
 #### run-view-59
 
-The session state chip shall show a human-readable label (amber while waiting on the Boss, red for failure) with the raw state id in its tooltip, never as the primary copy ([DR-010](../decisions/010-interface-craft.md) §2):
+The session state chip shall show a human-readable label in the status vocabulary [[run-view-189](#run-view-189)] with the raw state id in its tooltip, never as the primary copy ([DR-010](../decisions/010-interface-craft.md) §2):
 
-- while a turn is active and the state names no leaf — no state yet, or the shell's own rest state — the chip reads "working" while a player runs and "deciding" while the Captain has the floor, never "idle";
-- while no turn is active, no reply is owed the Boss [[run-view-9](#run-view-9)], and a playbook run underway [[run-view-74](#run-view-74)] stands in its recoverable failure state — the deepest such run, the leaf that failed — the chip reads the failure label in red with that run's own state id in its tooltip, the session's last reported state being whichever machine reported it last and never the leaf's answer ([DR-061](../decisions/061-run-state-from-frames.md)).
+- while a reply is owed the Boss, the chip reads "waiting for you";
+- while a turn is active and the state names no leaf — no state yet, or the shell's own rest state — the chip reads "running" while a player runs and "deciding" while the Captain has the floor, never "idle";
+- while no turn is active, no reply is owed the Boss [[run-view-9](#run-view-9)], and a playbook run underway [[run-view-74](#run-view-74)] stands in its recoverable failure state — the deepest such run, the leaf that failed — the chip reads "failed", or "aborted" where the Boss's stop parked it there [[run-view-189](#run-view-189)], with that run's own state id in its tooltip, the session's last reported state being whichever machine reported it last and never the leaf's answer ([DR-061](../decisions/061-run-state-from-frames.md)).
 
 #### run-view-46
 
@@ -584,17 +636,24 @@ While a playbook run's trace records flow in a live session, the Captain pane sh
 
 While a machine card is live, the Captain pane shall show the run's state through the status palette, one voice per state kind ([DR-031](../decisions/031-machine-call-tree.md)):
 
-- the active state carries the running emphasis with the app's one running mark — the pulsing dot the sidebar's running rows wear [[run-view-73](#run-view-73)], worn identically by the running player's pane — static under the reduced-motion preference;
-- a parked state awaiting the Boss carries the attention emphasis and a failed state the failure emphasis, the derivations of the attention count [[run-view-34](#run-view-34)], and every other state stays quiet ink;
+- every active state — the run's one state, or each step a parallel state holds active [[run-view-185](#run-view-185)] — carries the running emphasis with the app's one running mark — the pulsing dot the sidebar's running rows wear [[run-view-73](#run-view-73)], worn identically by the running player's pane — static under the reduced-motion preference;
+- a parked state awaiting the Boss carries the attention emphasis and a failed state the failure emphasis, the derivations of the attention count [[run-view-34](#run-view-34)], save a failure state the Boss's stop parked the run in, which stays quiet [[run-view-187](#run-view-187)], and every other state stays quiet ink;
 - a firing transition flashes once and decays in well under a second, instantly under reduced motion;
 - every transition shows its direction at rest with a constant-size glyph, drawn lines and exit labels alike [[run-view-76](#run-view-76)];
-- the active state names the player it runs — the role the machine asked for and the player answering it — and shows that player's running activity, when the trace attributes one; where the pair does not fit its box, the caption falls back to the role alone with the pair in the box's tooltip.
+- an active state names the player it runs — the role the machine asked for and the player answering it, by name [[run-view-177](#run-view-177)], once where the two read alike — and shows that player's running activity, when the trace attributes one; where the pair does not fit its box, the caption falls back to the role alone with the pair in the box's tooltip.
+
+#### run-view-185
+
+While a machine card is drawn, every state whose calls reach a player shall wear that player's mark and name [[run-view-177](#run-view-177)] — the player its latest call reached, else the player the configuration recorded with the run's context binds its role to, so a run reopened after the bindings changed keeps its own — the mark standing at the head of the state's caption and serving as its running mark while that call runs ([DR-031](../decisions/031-machine-call-tree.md), [DR-160](../decisions/160-the-captain-dispatches-in-plain-sight.md)):
+
+- while a run stands in a parallel state, each step the state's value holds active — the value's leaves, never the parallel state or its regions the runtime's active ids also list — stands active with its own call and its own player, so two players proposing at once read as two running steps;
+- a step drawn from the trace alone, where no definition is served [[run-view-64](#run-view-64)], is matched by the calls the run made from it.
 
 #### run-view-62
 
 When a playbook run's trace settles, the Captain pane shall settle that run where it belongs — a child run as a strip under its calling state's position, in invocation order among that state's calls, a root run into the thread at the position of the record that settled it [[run-view-75](#run-view-75)] — and shall empty the live region of that frame ([DR-031](../decisions/031-machine-call-tree.md)):
 
-- the settled run carries its own reported final status: a finished run "done", a failed one "failed", and "stopped" reserved for a run that ended unfinished;
+- the settled run carries its own reported final status in the status vocabulary [[run-view-189](#run-view-189)]: a finished run "done", a failed one "failed", and "aborted" reserved for a run that ended unfinished;
 - a disposal report closes only a frame still open, with that same status rule.
 
 #### run-view-63
@@ -648,6 +707,63 @@ Where a frame's trace names a caller the pane does not know, the frame's card sh
 #### run-view-65
 
 When the session record stream delivers a captain turn result reporting an error, the Captain pane shall display the synthesized failure line naming the underlying cause [[core-service-30](core-service.md#core-service-30)] as a ◆ failure line [[run-view-2](#run-view-2)], never only the captain's composed reply.
+
+#### run-view-187
+
+Where a playbook run stands in its recoverable failure state with the runtime's `aborted` cause — the Boss stopped it — the run view shall read that run as aborted rather than failed, in quiet colours, on its machine card [[run-view-61](#run-view-61)], its failure card [[run-view-147](#run-view-147)] — "/⟨command⟩ aborted at ⟨step⟩" — and its parked-run notice [[run-view-128](#run-view-128)] — "The /⟨command⟩ workflow is aborted." — the notice keeping the controls the session summary publishes for it, and shall show no failure line for the runtime's error repeating the turn's abort reason just before the turn's aborted line, where that reason is one the core stops a turn with — the Boss's abort or Spex closing — a runtime failure ending its turn with its own error keeping its line ([DR-160](../decisions/160-the-captain-dispatches-in-plain-sight.md)).
+
+#### run-view-188
+
+Wherever the run view names a traced call's step or outcome [[run-view-178](#run-view-178)] [[run-view-184](#run-view-184)] [[run-view-186](#run-view-186)] [[run-view-37](#run-view-37)], it shall read the step table's words for a built-in playbook's player step and outcome, and the words of the id otherwise, the table also naming which outcome fields the runtime writes from the repository ([DR-160](../decisions/160-the-captain-dispatches-in-plain-sight.md)):
+
+| Playbook | Step | Words | Repository fields |
+| --- | --- | --- | --- |
+| dev | planAnalysis | Choose the approach | — |
+| decide | askCoderProposal, askReviewerProposal | Propose a design | — |
+| decide | synthesizeCommit | Merge the proposals | latestCommit |
+| code | firstPhase | Implement | latestCommit |
+| code | irTaskPhase | Implement an IR task | latestCommit |
+| review | firstReview | Review | evaluatedRevision |
+| review | fixFindings | Fix the findings | latestCommit |
+| review | reviewAfterFix | Review the fixes | evaluatedRevision |
+| review | reviewAfterRejection | Review again | evaluatedRevision |
+| branch | createBranch | Create a branch | baseRevision |
+| pr | openPullRequest | Open a pull request | — |
+| inspect | inspecting | Inspect | — |
+
+| Outcome | Words |
+| --- | --- |
+| directCommit, committed | committed |
+| irCommit | committed an IR |
+| moreTasks | committed a task |
+| finalTask | committed the last task |
+| hasFindings | found problems |
+| noFindings | found no problems |
+| rejectedAll | rejected the findings |
+| proposed | proposed a design |
+| discussionComplete | closed the discussion |
+| code | chose /code |
+| decideThenCode | chose /decide, then /code |
+| codeViaPullRequest | chose /code with a pull request |
+| decideThenCodeViaPullRequest | chose /decide, then /code with a pull request |
+| branched | created the branch |
+| refused | refused |
+| opened | opened the pull request |
+| notPublished | did not publish |
+| completed | finished the inspection |
+| unavailable | could not inspect |
+| needsBossReply | asks you |
+
+- the words render in the interface language [[localization-4](localization.md#localization-4)];
+- a step the table does not list shows no repository identity.
+
+#### run-view-189
+
+Wherever the run view says where a run, a step, a lane or a call stands — a machine card's badge and states [[run-view-61](#run-view-61)] [[run-view-62](#run-view-62)], a lane's frame and header [[run-view-7](#run-view-7)], a call's result line, the state chip [[run-view-59](#run-view-59)], a return line [[run-view-184](#run-view-184)] — it shall use one vocabulary of five words, each in one colour: "running" (green), "done" (quiet), "aborted" (quiet), "failed" (red) and "waiting for you" (amber), the Captain's own "deciding" and "Captain is thinking…" standing apart ([DR-160](../decisions/160-the-captain-dispatches-in-plain-sight.md)):
+
+- a live run's badge reads "failed" in its failure state, "aborted" where the Boss's stop parked it there [[run-view-187](#run-view-187)], "waiting for you" where it waits on the Boss, and "running" otherwise;
+- a live run that would read "running" while a run it called still stands open reads as that called run where the called run, or one it called in turn, reads otherwise, so no caller reads running over a stopped call;
+- a lane's frame is green while its call is open and red where its last call failed.
 
 ### Session Home
 
@@ -992,6 +1108,44 @@ Where a fixture stream calls `dev.coder` and then `dev.reviewer` twice, the seco
 
 Where failures arrive for the Captain's own turn and for causes naming `dev.reviewer` — an expired sign-in, a rate limit, a command not installed, an unknown adapter and an unrecognized message — the test suite shall assert each line names its agent by name and offers exactly the entries of [[run-view-179](#run-view-179)]'s table; that "Adjust reviewer" brings the reviewer's lane into view, highlights its chip and opens its popover there, and opens it from the failure where no lane stands; that "Adjust Captain" opens the popover from the Captain pane's chip and is absent where the Captain's chip is; and that "Change reviewer in Settings" asks for Settings at that player's row [[run-view-179](#run-view-179)].
 
+#### run-view-190
+
+Where a fixture stream recorded from the real runtime on substitute agents runs `/dev`, whose analyst picks deciding before coding, through `decide` — the coder's and the reviewer's proposals in parallel, the reviewer's ending later, the coder merging and committing, its nested review passing — and then `code`, whose commit its own review passes, the test suite shall assert, rendering it from its records taken one at a time, as live, and again from the stored records at once, with the same lines, labels and cards:
+
+- one delegation line per call naming its player and step, the model only at each player's first call [[run-view-178](#run-view-178)] [[run-view-188](#run-view-188)];
+- one return line per call with its outcome's words, the merge's and the code step's commits matching the receipts their transitions carry and the reviews' evaluated revisions likewise, and the merge's reply's first line [[run-view-183](#run-view-183)] [[run-view-184](#run-view-184)];
+- before the merge's outcome arrives, its line reads "← coder handed back" marked "judging" with no commit [[run-view-183](#run-view-183)] [[run-view-184](#run-view-184)];
+- the coder's lane names its three calls "decide › Propose a design", "decide › Merge the proposals" and "code › Implement", the merge's tooltip naming "dev › decide › Merge the proposals" [[run-view-186](#run-view-186)];
+- while both proposals run, the `decide` card holds both proposal steps active, each wearing its own player's running mark, and the thread shows one chip per proposal [[run-view-185](#run-view-185)] [[run-view-37](#run-view-37)];
+- activating a delegation line brings the lane into view, and activating the call's place lights its delegation line [[run-view-178](#run-view-178)] [[run-view-186](#run-view-186)];
+- the merge's delegation line is named "Handed to coder, Merge the proposals" and its return line "← coder committed ⟨commit⟩, ⟨duration⟩" [[run-view-178](#run-view-178)] [[run-view-184](#run-view-184)];
+- rendered with Chinese resolved, the merge's delegation line reads "交给 coder · 合并方案", its return line "← coder 已提交", and the coder's lane "decide › 写方案", "decide › 合并方案" and "code › 实现" [[run-view-188](#run-view-188)].
+
+#### run-view-191
+
+Where a fixture stream recorded from the real runtime on substitute agents runs `/dev` into `decide`'s parallel proposals and the Boss aborts the turn after the coder's proposal came back and while the reviewer's runs, the test suite shall assert that the `decide` card's badge, the state chip, the parked-run notice and the failure card read aborted and no failure line stands [[run-view-187](#run-view-187)] [[run-view-189](#run-view-189)], that the reviewer's return line reads "← reviewer aborted", and that the coder's reads "← coder handed back" marked "unconfirmed" [[run-view-184](#run-view-184)].
+
+#### run-view-192
+
+Where synthetic trace streams pose what a recording cannot, the test suite shall assert each case [[run-view-183](#run-view-183)] [[run-view-184](#run-view-184)]:
+
+| Case | Asserted |
+| --- | --- |
+| review walks its first step twice | each round's return line takes its own round's outcome, and the reviewer's lane names the second call's step with "round 2" [[run-view-186](#run-view-186)] |
+| two branches start and end apart | each branch's line takes its own step's outcome, a sibling's later call cutting off neither |
+| one transition accepts two outcomes, another run's record and the state telemetry between them | both lines read their outcome's words and neither names a commit |
+| a transition's outcomes are never followed by another record of their run | the line reads its outcome's words and names no commit |
+| a run ends with a call back and no outcome for it | the line reads "unconfirmed" |
+| a call's judgment fails and its run moves to its failure state | the line reads "failed" |
+| a call comes back asking the Boss | its line reads "← coder asks you", marked "waiting for you", without the question's words |
+| a traced call fails before its player records anything | its delegation line stands and leads nowhere, no lane appears, and no return line follows [[run-view-178](#run-view-178)] |
+| a playbook the step table does not list | its step and outcome read as their ids' words and no commit is named [[run-view-188](#run-view-188)] |
+| another run's transition and disposal come between a transition and its outcome | the line names its own transition's commit |
+| a transition accepts an outcome no call takes beside one a call takes | the line reads its outcome's words and names no commit |
+| the process dies in a call and a restore follows | the call runs no more, and its player's next prompt goes to that player's next call |
+| a runtime failure ends its turn with its own error | its failure line stands [[run-view-187](#run-view-187)] |
+| a run's step not called yet, the bindings changed since the run started | the step wears the player the run's context bound [[run-view-185](#run-view-185)] |
+
 ### Pane Management
 
 #### run-view-18
@@ -1070,7 +1224,7 @@ Where a fixture stream carries a playbook run's trace records — an invocation 
 - a state's unwalked exits into rest states fold to one counted marker listing them, unfolding while the box is hovered, while an exit into a working state stays a label [[run-view-76](#run-view-76)];
 - the child's settled finish lands as a strip under its calling state, and the root's settles into the thread as a strip whose expansion shows the final drawing [[run-view-62](#run-view-62)] [[run-view-75](#run-view-75)];
 - the post-terminal reports open no frame and change no settled card — exactly one card per run, its outcome "done" [[run-view-74](#run-view-74)] [[run-view-62](#run-view-62)];
-- a second fixture run that ends by disposal alone, without a terminal transition, settles exactly one card with the outcome "stopped" [[run-view-62](#run-view-62)] [[run-view-74](#run-view-74)];
+- a second fixture run that ends by disposal alone, without a terminal transition, settles exactly one card with the outcome "aborted" [[run-view-62](#run-view-62)] [[run-view-74](#run-view-74)];
 - a fixture child naming an unknown caller renders at the top level [[run-view-78](#run-view-78)];
 - removing the module or changing current configuration leaves the stored graph unchanged; with no historical definition, the same replay renders observed states alone [[run-view-64](#run-view-64)];
 - a fixture captain reply record renders as Captain speech in the thread [[run-view-1](#run-view-1)];
@@ -1167,6 +1321,16 @@ Where the run view renders a player grid whose panes are wider than its box, the
 #### run-view-53
 
 While a fixture turn is active, the test suite shall assert the Captain thread shows the working indicator — the Captain thinking while no player runs, and a running player's role with the ticking span since its prompt, the same span in that player's pane header [[run-view-37](#run-view-37)] [[run-view-7](#run-view-7)] — queued entries render in full with the sends-when-this-turn-ends caption [[run-view-38](#run-view-38)] inside a frame kept at its end that the composer's own box holds its place beside [[run-view-106](#run-view-106)], the composer renders a store-provided draft — disabled while the turn runs, editable once it settles, reporting edits to the store [[run-view-39](#run-view-39)] [[run-view-8](#run-view-8)] — and activating Abort disables it with an "Aborting…" label [[run-view-40](#run-view-40)].
+
+#### run-view-194
+
+While a fixture turn's player call is open with a tool use whose result has not arrived, when the stream is replayed into the run view, the test suite shall assert that the lane reads at work with its tool cards folded:
+
+- the card with no result stays collapsed, wears the running mark and reads "running · 12s" twelve seconds after its use, ticking to "running · 13s" a second later, with no ending mark [[run-view-4](#run-view-4)];
+- the pane's foot reads the tool, its span and its subject, "Bash · 12s" beside `rm -rf build` [[run-view-7](#run-view-7)];
+- a long tool name in the foot truncates within half the line and keeps its whole name as the tooltip, while the span and the subject keep their room, and the foot's text reads "running: Bash · 12s, rm -rf build" with its parts apart [[run-view-7](#run-view-7)];
+- once the result arrives the card takes its ending's mark and leaves its running reading, and the foot reads "Thinking…" [[run-view-4](#run-view-4)] [[run-view-7](#run-view-7)];
+- a finished call leaves no card running and no foot, and its usage reads "120→30 token" [[run-view-7](#run-view-7)] [[run-view-6](#run-view-6)].
 
 #### run-view-54
 
@@ -1474,6 +1638,14 @@ Where the harness boots with the demo project registered, when the journey leave
 #### run-view-132
 
 Where the harness boots with the demo project registered and a scripted workflow that parks in its recoverable failure state with no control captured for it, the test suite shall assert the Drop-alone round trip through the page [[run-view-128](#run-view-128)]: the notice appears naming the failed workflow by its command with the raw state in its title, and stands through the turn's settlement [[run-view-128](#run-view-128)], the settled turn leaving the state chip reading the failure in red with the parked run's state in its tooltip rather than the Captain shell's rest state [[run-view-59](#run-view-59)], the notice drawing no recovery and naming the composer as the way on [[run-view-128](#run-view-128)], a control the opened run cannot satisfy refusing with its cause, leaving the notice, the transcript and the composer intact, and Drop's confirm backing out having sent nothing [[run-view-130](#run-view-130)] [[run-view-112](#run-view-112)]; and that at a 320-pixel viewport with the rail collapsed [[run-view-71](#run-view-71)] every control the notice draws sits under its words, none overlapping them nor each other nor leaving the notice's box [[run-view-128](#run-view-128)], with the page still not scrolling sideways [[run-view-119](#run-view-119)] ([DR-041](../decisions/041-chrome-that-fits.md): a simulated document cannot measure layout).
+
+#### run-view-193
+
+Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell with the demo project registered and the real Captain shell running the built-in `/dev` on substitute agents that decide before coding, the reviewer's proposal running longer than the coder's, the test suite shall assert through the page:
+
+- while both proposals run, two chips name coder and reviewer each with "Propose a design", the `decide` card holds both proposal steps with their players' marks running, and activating the reviewer's chip brings its lane into view [[run-view-37](#run-view-37)] [[run-view-185](#run-view-185)];
+- once the run finishes, every call has its delegation and return line, the coder's code-step return line naming the commit the project's repository holds at HEAD, and the coder's lane names "decide › Merge the proposals", whose activation lights its delegation line [[run-view-178](#run-view-178)] [[run-view-184](#run-view-184)] [[run-view-186](#run-view-186)];
+- in a second session whose reviewer's proposal the Boss aborts, the card, the chip and the notice read aborted and no control reads "Retry" of its own making [[run-view-187](#run-view-187)].
 
 #### run-view-149
 

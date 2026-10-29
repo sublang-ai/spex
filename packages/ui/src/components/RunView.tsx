@@ -41,7 +41,7 @@ import { PlayerPane } from "./PlayerPane.js";
 import { AgentSettingsPopover } from "./AgentSettings.js";
 import { sessionAgents } from "../lib/session-agents.js";
 import { WorkingLine } from "./WorkingLine.js";
-import { parkedRun } from "../lib/machine-frames.js";
+import { parkedRun, type MachineFrame } from "../lib/machine-frames.js";
 import type { FailureContext } from "./FailureCard.js";
 import {
   causeAdapterMessage,
@@ -56,6 +56,45 @@ import { playerNamer } from "../lib/player-names.js";
 /** The cause the last failure the thread reported carried
  * (run-view-147): the notices say why from the same reading the card
  * draws, so no two surfaces explain one failure differently. */
+/** Whether the failure a run stands parked on is the Boss's own stop
+ * (run-view-186): the runtime moved it there with its `aborted` cause. */
+function abortedPark(frame: MachineFrame): boolean {
+  return frame.active === "failed" && frame.failureCode === "aborted";
+}
+
+/** The player a step's role is bound to in the run's configuration
+ * (run-view-185): the catalog's binding for that playbook and role. */
+function boundPlayer(configuration: unknown, playbookId: string, role: string): string | undefined {
+  const catalog = configuration && typeof configuration === "object"
+    ? (configuration as { catalog?: unknown }).catalog
+    : undefined;
+  const playbook = catalog && typeof catalog === "object"
+    ? (catalog as Record<string, unknown>)[playbookId]
+    : undefined;
+  const roles = playbook && typeof playbook === "object" ? (playbook as { roles?: unknown }).roles : undefined;
+  const binding = roles && typeof roles === "object" ? (roles as Record<string, unknown>)[role] : undefined;
+  const playerId = binding && typeof binding === "object" ? (binding as { playerId?: unknown }).playerId : undefined;
+  return typeof playerId === "string" && playerId ? playerId : undefined;
+}
+
+/** Scroll a pane's own scroll box to put `target` in its upper third,
+ * moving no other scroll (run-view-7), and light it briefly. */
+function bringIntoBox(target: HTMLElement | null | undefined): void {
+  if (!target) return;
+  let box: HTMLElement | null = target.parentElement;
+  while (box && !(box.scrollHeight > box.clientHeight && /(auto|scroll)/.test(getComputedStyle(box).overflowY))) {
+    box = box.parentElement;
+  }
+  if (box) {
+    const offset = target.getBoundingClientRect().top - box.getBoundingClientRect().top;
+    box.scrollTop += offset - box.clientHeight / 3;
+  }
+  target.dataset.flash = "1";
+  setTimeout(() => {
+    delete target.dataset.flash;
+  }, 1600);
+}
+
 function latestFailureCause(
   lines: readonly CaptainLine[],
 ): FailureCause | undefined {
@@ -544,11 +583,22 @@ export function RunView({
   /** The reader asked for a lane (run-view-178/179): the grid scrolls
    * to it as above, and in the stacked form the column scrolls to the
    * grid, since the reader's own act asked to go there. */
-  const showLane = (playerId: string): void => {
+  const showLane = (playerId: string, callKey?: string): void => {
     const grid = gridRef.current;
     if (!grid) return;
+    if (collapsed.has(playerId)) setLaneCollapsed(session.id, playerId, false);
     const pane = scrollLaneIntoGrid(grid, playerId);
     pane?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+    // At the call the line stands for (run-view-182, run-view-183).
+    if (callKey) {
+      setTimeout(() => bringIntoBox(
+        gridRef.current?.querySelector<HTMLElement>(`[data-call-block="${callKey}"]`),
+      ), 0);
+    }
+  };
+  /** A call's label leads back to its delegation line (run-view-181). */
+  const showDispatch = (callKey: string): void => {
+    bringIntoBox(document.querySelector<HTMLElement>(`[data-call-dispatch="${callKey}"]`));
   };
   // The fade must return with the content it hides (run-view-7): the
   // grid's box changes with the divider and the rail, and a lane
@@ -738,6 +788,24 @@ export function RunView({
     };
   };
   const failureCause = latestFailureCause(activityView.captain);
+  // What a card reads beyond its frame (run-view-185, run-view-186):
+  // the player each step reaches, and whether a failure park is the
+  // Boss's own stop.
+  const card = {
+    names,
+    stepPlayer: (frame: MachineFrame, stateId: string, role: string | undefined) =>
+      frame.stepPlayers?.[stateId] ??
+      // A step not called yet reads the binding its run started with,
+      // not one the session made since.
+      (role
+        ? boundPlayer(
+            "historicalExecution" in frame ? frame.historicalExecution : activityView.latestExecution,
+            frame.playbookId,
+            role,
+          )
+        : undefined),
+    aborted: abortedPark,
+  };
 
   return (
     <MediaOwnerProvider owner={{ kind: "session", id: session.id }}>
@@ -807,6 +875,8 @@ export function RunView({
             names={names}
             onShowLane={showLane}
             recovery={recovery}
+            lanes={lanes}
+            card={card}
           />
           {!readOnly ? (
             // The working line (run-view-90) with its Drop
@@ -882,6 +952,7 @@ export function RunView({
               state={parked.frame.active ?? undefined}
               parked={session.parked}
               cause={failureCause}
+              aborted={parked.reason === "failure" && abortedPark(parked.frame)}
               connected={connected}
               turnActive={view.turnActive}
               onControl={async ({ kind, actionId }) => {
@@ -1001,6 +1072,8 @@ export function RunView({
                   }
                   name={names(playerId)}
                   chipHighlighted={highlightedChip === playerId}
+                  calls={activityView.stepCalls}
+                  onShowDispatch={showDispatch}
                 />
               ))}
             </div>

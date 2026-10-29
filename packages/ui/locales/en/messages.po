@@ -149,6 +149,14 @@ msgid "{chosen} of {total} chosen"
 msgstr "{chosen} of {total} chosen"
 
 #: src/components/FailureCard.tsx
+msgid "{command} aborted"
+msgstr "{command} aborted"
+
+#: src/components/FailureCard.tsx
+msgid "{command} aborted at {step}"
+msgstr "{command} aborted at {step}"
+
+#: src/components/FailureCard.tsx
 msgid "{command} failed"
 msgstr "{command} failed"
 
@@ -397,10 +405,10 @@ msgstr "{id} is already a playbook of {package}"
 msgid "{id} not found"
 msgstr "{id} not found"
 
-#. a call's tokens in and out; tok is short for tokens
+#. a call's tokens in and out; token stays as it is
 #: src/components/PlayerPane.tsx
-msgid "{input}→{output} tok"
-msgstr "{input}→{output} tok"
+msgid "{input}→{output} token"
+msgstr "{input}→{output} token"
 
 #: src/components/DeliveryCard.tsx
 msgid "{kind} {ref}"
@@ -545,6 +553,11 @@ msgstr "{playbookId} state machine"
 msgid "{playbookId} state machine, {state} active"
 msgstr "{playbookId} state machine, {state} active"
 
+#. a working chip: the player, the step it runs, and how long its call has run
+#: src/components/CallLines.tsx
+msgid "{player} · {step} · {span}"
+msgstr "{player} · {step} · {span}"
+
 #: src/components/DraftRegisterTab.tsx
 msgid "{project} — the project"
 msgstr "{project} — the project"
@@ -658,6 +671,11 @@ msgstr "{step} stopped"
 msgid "{step} stopped — {message}"
 msgstr "{step} stopped — {message}"
 
+#. a step a run walks again: its name and which time this is
+#: src/components/CallLines.tsx
+msgid "{step}, round {round}"
+msgstr "{step}, round {round}"
+
 #: src/components/ForgeItemRow.tsx
 msgid "{text} ({state})"
 msgstr "{text} ({state})"
@@ -694,17 +712,17 @@ msgstr "{who} failed"
 #. who is at work and how long the open call has run
 #: src/components/CaptainPane.tsx
 #: src/components/PlayerPane.tsx
-msgid "{who} working · {span}"
-msgstr "{who} working · {span}"
+msgid "{who} running · {span}"
+msgstr "{who} running · {span}"
 
 #: src/components/PlayerPane.tsx
-msgid "{who} working since {since}"
-msgstr "{who} working since {since}"
+msgid "{who} running since {since}"
+msgstr "{who} running since {since}"
 
 #. who is at work, with no span to report yet
 #: src/components/CaptainPane.tsx
-msgid "{who} working…"
-msgstr "{who} working…"
+msgid "{who} running…"
+msgstr "{who} running…"
 
 #: src/components/SpaceMembers.tsx
 msgid "@{login} added as {role}"
@@ -738,6 +756,21 @@ msgstr "/path/to/existing-project"
 #: src/components/ProjectPalette.tsx
 msgid "/path/to/new-project"
 msgstr "/path/to/new-project"
+
+#. a return line: the named player came back with this outcome; ← stays as it is
+#: src/components/CallLines.tsx
+msgid "← {player} {outcome}"
+msgstr "← {player} {outcome}"
+
+#. a return line: the named player's call was stopped before it finished; ← stays as it is
+#: src/components/CallLines.tsx
+msgid "← {player} aborted"
+msgstr "← {player} aborted"
+
+#. a return line: the named player's call came back, its outcome not yet accepted; ← stays as it is
+#: src/components/CallLines.tsx
+msgid "← {player} handed back"
+msgstr "← {player} handed back"
 
 #: src/components/SpecView.tsx
 msgid "← Back to {surface}"
@@ -800,8 +833,8 @@ msgstr "✓ compiled and registered — see Configured playbooks"
 
 #. how a player's call ended; ✓ stays as it is
 #: src/components/PlayerPane.tsx
-msgid "✓ finished"
-msgstr "✓ finished"
+msgid "✓ done"
+msgstr "✓ done"
 
 #. a failed call and what it said; ✗ stays as it is
 #: src/components/PlayerPane.tsx
@@ -922,6 +955,19 @@ msgstr "Abort"
 #: src/state/store.ts
 msgid "abort failed: {reason}"
 msgstr "abort failed: {reason}"
+
+#. a status word: it was stopped before it finished
+#. a status word: it was stopped before it finished
+#. a status word: it was stopped before it finished
+#: src/components/MachineCard.tsx
+#: src/lib/labels.ts
+#: src/lib/status-words.ts
+msgid "aborted"
+msgstr "aborted"
+
+#: src/components/FailureCard.tsx
+msgid "Aborted at {step}"
+msgstr "Aborted at {step}"
 
 #. the abort request is in flight
 #: src/components/Composer.tsx
@@ -1332,6 +1378,11 @@ msgstr "Asked permission to use {tool}; historical permission event; no live ans
 #: src/components/DraftConversation.tsx
 msgid "Asked to compile"
 msgstr "Asked to compile"
+
+#. a call's outcome: the player asked the Boss a question
+#: src/lib/step-words.ts
+msgid "asks you"
+msgstr "asks you"
 
 #. where a running machine stands
 #. where a running machine stands
@@ -1813,6 +1864,11 @@ msgstr "Choose folder…"
 msgid "Choose for {count, plural, one {# conflict} other {# conflicts}}"
 msgstr "Choose for {count, plural, one {# conflict} other {# conflicts}}"
 
+#. a step: the analyst chooses which workflows the request takes
+#: src/lib/step-words.ts
+msgid "Choose the approach"
+msgstr "Choose the approach"
+
 #: src/components/DraftConversation.tsx
 msgid "Choose which agent answers"
 msgstr "Choose which agent answers"
@@ -1820,6 +1876,26 @@ msgstr "Choose which agent answers"
 #: src/components/LibrarySurface.tsx
 msgid "Choose which session player answers {role}"
 msgstr "Choose which session player answers {role}"
+
+#. a call's outcome: the analyst chose the code path
+#: src/lib/step-words.ts
+msgid "chose /code"
+msgstr "chose /code"
+
+#. a call's outcome: the analyst chose to code and deliver by pull request
+#: src/lib/step-words.ts
+msgid "chose /code with a pull request"
+msgstr "chose /code with a pull request"
+
+#. a call's outcome: the analyst chose to decide before coding
+#: src/lib/step-words.ts
+msgid "chose /decide, then /code"
+msgstr "chose /decide, then /code"
+
+#. a call's outcome: the analyst chose to decide, then code and deliver by pull request
+#: src/lib/step-words.ts
+msgid "chose /decide, then /code with a pull request"
+msgstr "chose /decide, then /code with a pull request"
 
 #. package card: opens the list of packages sharing citations with the selected one
 #: src/components/SpecGraph.tsx
@@ -1933,6 +2009,11 @@ msgstr "Close this intent as dropped — the turn keeps running"
 msgid "Close this tab — the session stays in the sidebar"
 msgstr "Close this tab — the session stays in the sidebar"
 
+#. a call's outcome: no repository work follows
+#: src/lib/step-words.ts
+msgid "closed the discussion"
+msgstr "closed the discussion"
+
 #. heading over the file naming where a project's code lives
 #. join step: cloning the project's code
 #: src/lib/space.ts
@@ -2011,13 +2092,34 @@ msgstr "Commit or discard them"
 msgid "Commit or discard what is left"
 msgstr "Commit or discard what is left"
 
+#. a call's outcome: it committed its change
+#. a call's outcome: it committed its change
+#: src/lib/step-words.ts
+msgid "committed"
+msgstr "committed"
+
 #: src/lib/failure-catalogue.ts
 msgid "Committed {oid} but left changes uncommitted"
 msgstr "Committed {oid} but left changes uncommitted"
 
+#. a call's outcome: it committed one task, more remain
+#: src/lib/step-words.ts
+msgid "committed a task"
+msgstr "committed a task"
+
+#. a call's outcome: it committed a new intent record
+#: src/lib/step-words.ts
+msgid "committed an IR"
+msgstr "committed an IR"
+
 #: src/lib/failure-catalogue.ts
 msgid "Committed nothing"
 msgstr "Committed nothing"
+
+#. a call's outcome: it committed the final task
+#: src/lib/step-words.ts
+msgid "committed the last task"
+msgstr "committed the last task"
 
 #: src/lib/failure-catalogue.ts
 msgid "Committed, but left changes uncommitted"
@@ -2288,6 +2390,11 @@ msgstr "Copy path"
 msgid "Could not answer {tool} for {actor}: {reason}"
 msgstr "Could not answer {tool} for {actor}: {reason}"
 
+#. a call's outcome: the inspection could not run
+#: src/lib/step-words.ts
+msgid "could not inspect"
+msgstr "could not inspect"
+
 #: src/components/SpecView.tsx
 msgid "Could not open {path}"
 msgstr "Could not open {path}"
@@ -2372,6 +2479,11 @@ msgstr "Couldn't undo: {reason}"
 msgid "Create"
 msgstr "Create"
 
+#. a step: the coder creates the work branch
+#: src/lib/step-words.ts
+msgid "Create a branch"
+msgstr "Create a branch"
+
 #: src/components/ProjectPalette.tsx
 msgid "Create a new project…"
 msgstr "Create a new project…"
@@ -2392,6 +2504,11 @@ msgstr "Create project"
 #: src/components/SettingsSurface.tsx
 msgid "Created a starter config at <0>{path}</0>"
 msgstr "Created a starter config at <0>{path}</0>"
+
+#. a call's outcome: the branch exists
+#: src/lib/step-words.ts
+msgid "created the branch"
+msgstr "created the branch"
 
 #. the Create control, while the host creates the group
 #: src/components/SpaceMembers.tsx
@@ -2548,6 +2665,11 @@ msgstr "Describe your goal. AI helps write specs for how the system should work 
 msgid "desktop"
 msgstr "desktop"
 
+#. a call's outcome: no pull request was opened
+#: src/lib/step-words.ts
+msgid "did not publish"
+msgstr "did not publish"
+
 #. stop offering this playbook in this config
 #. stop offering this playbook in this config
 #: src/components/LibrarySurface.tsx
@@ -2616,13 +2738,15 @@ msgstr "Dismiss error"
 msgid "Does"
 msgstr "Does"
 
+#. a status word: it finished its work
+#. a status word: it finished its work
 #. compile phase: finished well
 #. history row: work carried through and confirmed
 #. history row: work carried through and confirmed
-#. how a run ended: it finished its work
 #: src/components/CompileBand.tsx
 #: src/components/MachineCard.tsx
 #: src/components/ProjectGroup.tsx
+#: src/lib/status-words.ts
 msgid "done"
 msgstr "done"
 
@@ -3017,8 +3141,10 @@ msgstr "External reference"
 #. a piece of work's state: it failed
 #. a piece of work's state: it failed
 #. a piece of work's state: it failed
+#. a status word: it failed
+#. a status word: it failed
+#. a status word: it failed
 #. compile phase: stopped on an error
-#. how a run ended: it failed
 #. how a tool call ended: it failed
 #. last resort: a failure with no words
 #: src/App.tsx
@@ -3029,6 +3155,7 @@ msgstr "External reference"
 #: src/components/NavRail.tsx
 #: src/components/PlayerPane.tsx
 #: src/lib/labels.ts
+#: src/lib/status-words.ts
 msgid "failed"
 msgstr "failed"
 
@@ -3141,6 +3268,11 @@ msgstr "Finished"
 msgid "finished — confirm?"
 msgstr "finished — confirm?"
 
+#. a call's outcome: the inspection is done
+#: src/lib/step-words.ts
+msgid "finished the inspection"
+msgstr "finished the inspection"
+
 #. control: show the whole graph at once
 #: src/components/SpecGraph.tsx
 msgid "Fit to window"
@@ -3157,6 +3289,11 @@ msgstr "Fix the adapter in Settings"
 #: src/components/SettingsSurface.tsx
 msgid "Fix the file in your editor; Spex reloads it live."
 msgstr "Fix the file in your editor; Spex reloads it live."
+
+#. a step: the coder fixes what the review found
+#: src/lib/step-words.ts
+msgid "Fix the findings"
+msgstr "Fix the findings"
 
 #: src/lib/labels.ts
 msgid "Fix the player in Settings"
@@ -3222,6 +3359,16 @@ msgstr "Forgets {host} on this device; every record stays here"
 #: src/components/SpaceInstance.tsx
 msgid "Forgot {host}"
 msgstr "Forgot {host}"
+
+#. a call's outcome: the review raised nothing
+#: src/lib/step-words.ts
+msgid "found no problems"
+msgstr "found no problems"
+
+#. a call's outcome: the review raised findings
+#: src/lib/step-words.ts
+msgid "found problems"
+msgstr "found problems"
 
 #. label before the spec package a playbook comes from
 #: src/components/LibrarySurface.tsx
@@ -3347,7 +3494,7 @@ msgid "Groups are made by the people who run {name}"
 msgstr "Groups are made by the people who run {name}"
 
 #. a delegation line: the Captain gave this call to the named player
-#: src/components/CaptainPane.tsx
+#: src/components/CallLines.tsx
 msgid "Handed to {player}"
 msgstr "Handed to {player}"
 
@@ -3430,10 +3577,20 @@ msgstr "idle, held a failure"
 msgid "image"
 msgstr "image"
 
+#. a step: the coder implements the request
+#: src/lib/step-words.ts
+msgid "Implement"
+msgstr "Implement"
+
 #. the built-in /code playbook's intent, as its registry entry states it
 #: src/lib/playbook-intent.ts
 msgid "implement a coding intent in reviewed, one-commit phases, using an intent record when needed"
 msgstr "implement a coding intent in reviewed, one-commit phases, using an intent record when needed"
+
+#. a step: the coder implements the next task of an intent record
+#: src/lib/step-words.ts
+msgid "Implement an IR task"
+msgstr "Implement an IR task"
 
 #: src/App.tsx
 #: src/components/NavRail.tsx
@@ -3452,6 +3609,11 @@ msgstr "Inherit the player (off)"
 #: src/components/BindingEditor.tsx
 msgid "Inherit the player (on)"
 msgstr "Inherit the player (on)"
+
+#. a step: the inspector investigates the request
+#: src/lib/step-words.ts
+msgid "Inspect"
+msgstr "Inspect"
 
 #. the built-in /inspect playbook's intent, as its registry entry states it
 #: src/lib/playbook-intent.ts
@@ -3654,6 +3816,11 @@ msgstr "Join both histories into one? Anything that differs will ask you to choo
 #: src/components/ProjectPalette.tsx
 msgid "Joining…"
 msgstr "Joining…"
+
+#. a return line's tag: the Captain is judging what the call came back with
+#: src/components/CallLines.tsx
+msgid "judging"
+msgstr "judging"
 
 #: src/components/SpecView.tsx
 msgid "Jumped to {id}"
@@ -3905,6 +4072,11 @@ msgstr "Merge both histories into one to sync."
 msgid "Merge histories…"
 msgstr "Merge histories…"
 
+#. a step: the coder merges both proposals into specs and commits
+#: src/lib/step-words.ts
+msgid "Merge the proposals"
+msgstr "Merge the proposals"
+
 #. the Merge histories… control while both histories are merged
 #: src/components/SpacePlacements.tsx
 msgid "Merging…"
@@ -4027,11 +4199,6 @@ msgstr "named after your login at sign-in"
 #: src/components/SettingsSurface.tsx
 msgid "Named by {project}, not set up here"
 msgstr "Named by {project}, not set up here"
-
-#. session status: the run failed and waits for the Boss
-#: src/lib/labels.ts
-msgid "needs attention"
-msgstr "needs attention"
 
 #: src/components/DashboardSurface.tsx
 msgid "Needs attention"
@@ -4642,6 +4809,11 @@ msgstr "Open {title} — running in {project}"
 msgid "Open a project from your groups"
 msgstr "Open a project from your groups"
 
+#. a step: the coder opens the pull request
+#: src/lib/step-words.ts
+msgid "Open a pull request"
+msgstr "Open a pull request"
+
 #: src/components/DashboardSurface.tsx
 msgid "Open and send a message to pick it up."
 msgstr "Open and send a message to pick it up."
@@ -4745,6 +4917,11 @@ msgstr "Opened {id}"
 #: src/components/SpecView.tsx
 msgid "Opened the decision records"
 msgstr "Opened the decision records"
+
+#. a call's outcome: the pull request exists
+#: src/lib/step-words.ts
+msgid "opened the pull request"
+msgstr "opened the pull request"
 
 #. the instance's contract, in the words its record fixes, shown before a seat's first open on this device; {server} is the server's name, {instance} the instance's; Devices is the instance's page of devices
 #: src/components/SpaceServers.tsx
@@ -5051,6 +5228,17 @@ msgstr "Projects and sessions"
 msgid "Prompt"
 msgstr "Prompt"
 
+#. a step: a player writes its own design proposal
+#. a step: a player writes its own design proposal
+#: src/lib/step-words.ts
+msgid "Propose a design"
+msgstr "Propose a design"
+
+#. a call's outcome: it gave its design proposal
+#: src/lib/step-words.ts
+msgid "proposed a design"
+msgstr "proposed a design"
+
 #: src/components/DraftConversation.tsx
 msgid "Proposed enabling"
 msgstr "Proposed enabling"
@@ -5346,6 +5534,11 @@ msgstr "Refresh status and GitHub data"
 msgid "Refreshing…"
 msgstr "Refreshing…"
 
+#. a call's outcome: the player declined the step
+#: src/lib/step-words.ts
+msgid "refused"
+msgstr "refused"
+
 #. a spec package's source: the registry
 #: src/lib/environments.ts
 msgid "registry"
@@ -5354,6 +5547,11 @@ msgstr "registry"
 #: src/lib/environments.ts
 msgid "registry {requirement}"
 msgstr "registry {requirement}"
+
+#. a call's outcome: the coder rejected every finding
+#: src/lib/step-words.ts
+msgid "rejected the findings"
+msgstr "rejected the findings"
 
 #. confirm: re-read the file from disk
 #. confirm: re-read the file from disk
@@ -5720,14 +5918,29 @@ msgstr "Retrying…"
 msgid "Return (Alt+Left)"
 msgstr "Return (Alt+Left)"
 
+#. a step: the reviewer reviews the change
+#: src/lib/step-words.ts
+msgid "Review"
+msgstr "Review"
+
 #. the built-in /review playbook's intent, as its registry entry states it
 #: src/lib/playbook-intent.ts
 msgid "review a supplied scope of committed work until no unsettled findings remain"
 msgstr "review a supplied scope of committed work until no unsettled findings remain"
 
+#. a step: the reviewer reviews again after the coder rejected the findings
+#: src/lib/step-words.ts
+msgid "Review again"
+msgstr "Review again"
+
 #: src/components/CaptainHome.tsx
 msgid "review committed changes"
 msgstr "review committed changes"
+
+#. a step: the reviewer reviews the coder's fixes
+#: src/lib/step-words.ts
+msgid "Review the fixes"
+msgstr "Review the fixes"
 
 #. attention row control: say this turn has been read
 #: src/components/DashboardSurface.tsx
@@ -5747,14 +5960,16 @@ msgstr "Role"
 msgid "roles: {roles}"
 msgstr "roles: {roles}"
 
+#. a status word: at work now
+#. a status word: at work now
 #. compile phase: under way
 #. session row: a turn is in flight
 #. the aliveness mark's own word: this thing is at work
-#. the aliveness mark's own word: this thing is at work
 #: src/components/CompileBand.tsx
-#: src/components/MachineCard.tsx
 #: src/components/NavRail.tsx
 #: src/components/RunningMark.tsx
+#: src/lib/labels.ts
+#: src/lib/status-words.ts
 msgid "running"
 msgstr "running"
 
@@ -5768,6 +5983,11 @@ msgstr "running"
 #: src/components/PlayerPane.tsx
 msgid "Running"
 msgstr "Running"
+
+#. a tool call still at work and how long it has run
+#: src/components/PlayerPane.tsx
+msgid "running · {span}"
+msgstr "running · {span}"
 
 #: src/components/ParkedRun.tsx
 msgid "Running the workflow's control"
@@ -6539,11 +6759,6 @@ msgstr "Stop"
 msgid "Stop requesting this spec package"
 msgstr "Stop requesting this spec package"
 
-#. how a run ended: it was stopped
-#: src/components/MachineCard.tsx
-msgid "stopped"
-msgstr "stopped"
-
 #: src/lib/failure-catalogue.ts
 msgid "Stopped before it finished"
 msgstr "Stopped before it finished"
@@ -6740,6 +6955,10 @@ msgid "The /{command} workflow failed and is waiting for you."
 msgstr "The /{command} workflow failed and is waiting for you."
 
 #: src/components/ParkedRun.tsx
+msgid "The /{command} workflow is aborted."
+msgstr "The /{command} workflow is aborted."
+
+#: src/components/ParkedRun.tsx
 msgid "The /{command} workflow is waiting for your answer."
 msgstr "The /{command} workflow is waiting for your answer."
 
@@ -6915,12 +7134,20 @@ msgid "The workflow failed and is waiting for you."
 msgstr "The workflow failed and is waiting for you."
 
 #: src/components/ParkedRun.tsx
+msgid "The workflow is aborted."
+msgstr "The workflow is aborted."
+
+#: src/components/ParkedRun.tsx
 msgid "The workflow is waiting for your answer."
 msgstr "The workflow is waiting for your answer."
 
 #: src/components/PlaybookStages.tsx
 msgid "The workflow markdown the playbook was compiled from"
 msgstr "The workflow markdown the playbook was compiled from"
+
+#: src/components/FailureCard.tsx
+msgid "The workflow was aborted"
+msgstr "The workflow was aborted"
 
 #. a placement's members panel; {names} lists the other instances the records are kept at, by display name
 #: src/components/SpaceMembers.tsx
@@ -6936,6 +7163,11 @@ msgstr "these sessions"
 #: src/components/PlayerPane.tsx
 msgid "Thinking"
 msgstr "Thinking"
+
+#. the lane's foot: the player is between steps, its model at work
+#: src/components/PlayerPane.tsx
+msgid "Thinking…"
+msgstr "Thinking…"
 
 #: src/lib/useBrowserTools.ts
 msgid "This agent cannot ask for tool approval in this conversation."
@@ -7147,6 +7379,11 @@ msgstr "uncommitted changes"
 #: src/lib/failure-catalogue.ts
 msgid "Uncommitted changes you had were lost"
 msgstr "Uncommitted changes you had were lost"
+
+#. a return line's tag: no outcome was accepted for the call
+#: src/components/CallLines.tsx
+msgid "unconfirmed"
+msgstr "unconfirmed"
 
 #. put the row just removed back where it was
 #. put the row just removed back where it was
@@ -7385,6 +7622,13 @@ msgstr "Waiting for a member who can create it in {group}"
 msgid "Waiting for a member who can prepare its branch in {group}"
 msgstr "Waiting for a member who can prepare its branch in {group}"
 
+#. a status word: it waits for the Boss to act
+#. a status word: it waits for the Boss to act
+#: src/lib/labels.ts
+#: src/lib/status-words.ts
+msgid "waiting for you"
+msgstr "waiting for you"
+
 #. a placement's line: its first push waits for the sharing notice to be seen; Continue stands beside it
 #. a placement's line: its first push waits for the sharing notice to be seen; Continue stands beside it
 #: src/lib/space.ts
@@ -7396,9 +7640,7 @@ msgid "waiting for your queued message"
 msgstr "waiting for your queued message"
 
 #. session row: the run parked on a question
-#. session status: a player asked the Boss a question
 #: src/components/NavRail.tsx
-#: src/lib/labels.ts
 msgid "waiting for your reply"
 msgstr "waiting for your reply"
 
@@ -7463,9 +7705,7 @@ msgid "Workflow waiting for you"
 msgstr "Workflow waiting for you"
 
 #. captured artifact's state: a turn is running for it
-#. session status: a player is running its step
 #: src/components/ForgeItemRow.tsx
-#: src/lib/labels.ts
 msgid "working"
 msgstr "working"
 
@@ -7504,6 +7744,11 @@ msgstr "Writable paths (comma-separated)"
 #: src/components/CaptainHome.tsx
 msgid "Write clear specs. Build with playbooks."
 msgstr "Write clear specs. Build with playbooks."
+
+#. the lane's foot: the player is writing its reply
+#: src/components/PlayerPane.tsx
+msgid "Writing a reply"
+msgstr "Writing a reply"
 
 #. the source is being written to disk
 #: src/components/DraftSourceTab.tsx

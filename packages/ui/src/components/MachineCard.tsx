@@ -16,8 +16,12 @@ import {
   STATE_BASE_H,
   edgeCrossesBox,
   layoutMachine,
+  hasVisited,
   observedGraph,
+  playerAt,
   routeEdges,
+  standsIn,
+  traceStateId,
   type MachineFrame,
   type RoutedEdge,
 } from "../lib/machine-frames.js";
@@ -38,6 +42,8 @@ import {
 import { humanizeId } from "../lib/labels.js";
 import { i18n } from "../i18n.js";
 import { RunningMark } from "./RunningMark.js";
+import { markLetter } from "../lib/player-names.js";
+import { STATUS_PILL, STATUS_WORDS, type Status } from "../lib/status-words.js";
 import { Icon } from "./Icon.js";
 
 /** Fired-edge flash decay; a CSS transition absorbs rapid streams and
@@ -65,6 +71,14 @@ export interface MachineCardProps {
    * (run-view-75), so the only drawing never folds the moment it
    * calls. */
   onlyRoot?: boolean;
+  /** The player a state's calls reach — the one its latest call
+   * reached, else the one its role is bound to — and how that player
+   * reads (run-view-185). */
+  stepPlayer?: (frame: MachineFrame, stateId: string, role: string | undefined) => string | undefined;
+  names?: (id: string) => string;
+  /** The run was stopped by the Boss while parked in its failure
+   * state (run-view-186). */
+  aborted?: (frame: MachineFrame) => boolean;
 }
 
 /** How a settled run ended, in words: the runtime's closed outcome set,
@@ -74,15 +88,28 @@ const OUTCOME_WORDS: Record<
   () => string
 > = {
   done: () =>
-    i18n._({ id: "done", comment: "how a run ended: it finished its work" }),
+    i18n._({ id: "done", comment: "a status word: it finished its work" }),
   failed: () =>
-    i18n._({ id: "failed", comment: "how a run ended: it failed" }),
+    i18n._({ id: "failed", comment: "a status word: it failed" }),
   stopped: () =>
-    i18n._({ id: "stopped", comment: "how a run ended: it was stopped" }),
+    i18n._({ id: "aborted", comment: "a status word: it was stopped before it finished" }),
 };
 
 function outcomeWord(frame: MachineFrame): string {
   return OUTCOME_WORDS[frame.outcome ?? "done"]();
+}
+
+/** Where a run stands, in the one status vocabulary (run-view-186): a
+ * live run parked in its failure state has failed — or, stopped by the
+ * Boss, is aborted — one parked on the Boss waits for him, and a
+ * settled run reads its own outcome. */
+export function runStatus(frame: MachineFrame, settled: boolean, aborted: boolean): Status {
+  if (settled) {
+    return frame.outcome === "failed" ? "failed" : frame.outcome === "stopped" ? "aborted" : "done";
+  }
+  if (frame.active === "failed") return aborted ? "aborted" : "failed";
+  if (frame.activeTags.includes("playbook.parked") && frame.active !== "ready") return "waiting";
+  return "running";
 }
 
 /** An edge with no event of its own: it is walked as soon as its state
@@ -97,10 +124,13 @@ function stateTone(
   frame: MachineFrame,
   id: string,
   settled: boolean,
+  aborted: boolean,
+  /** The run it called has stopped, so this run is not at work. */
+  held = false,
 ): { box: string; label: string } {
-  const active = !settled && frame.active === id;
+  const active = !settled && !held && standsIn(frame, id);
   const finalOutcome =
-    settled && frame.active === id ? frame.outcome ?? "done" : undefined;
+    settled && standsIn(frame, id) ? frame.outcome ?? "done" : undefined;
   const delegating = !settled && frame.delegating?.stateId === id;
   if (delegating) {
     // The call voice: this state is running another machine.
@@ -112,6 +142,13 @@ function stateTone(
   if (active || finalOutcome) {
     const parked =
       frame.activeTags.includes("playbook.parked") && id !== "failed";
+    // A run the Boss stopped is aborted, not failed (run-view-186).
+    if (finalOutcome === "stopped" || (aborted && id === "failed")) {
+      return {
+        box: "fill-neutral-100 stroke-neutral-600 dark:fill-neutral-800 dark:stroke-neutral-300",
+        label: "fill-neutral-700 dark:fill-neutral-200",
+      };
+    }
     if (id === "failed" || finalOutcome === "failed") {
       return {
         box: "fill-red-50 stroke-red-600 dark:fill-red-950 dark:stroke-red-400",
@@ -129,7 +166,7 @@ function stateTone(
       label: "fill-emerald-700 dark:fill-emerald-300",
     };
   }
-  const visited = frame.visited.includes(id);
+  const visited = hasVisited(frame, id);
   // Both rest states clear the 3:1 non-text floor on the card's own
   // ground (DR-026 §3); the unvisited state is distinguished by a
   // dashed border — "not yet walked" — never by dropping below it.
@@ -202,8 +239,26 @@ export function MachineCard({
   openChildren = [],
   openFrames = [],
   onlyRoot = false,
+  stepPlayer,
+  names,
+  aborted: abortedOf,
 }: MachineCardProps) {
   const running = !settled;
+  const aborted = abortedOf?.(frame) ?? false;
+  // A caller waiting on a run that stopped stands where that run stands:
+  // it is not running while its call is parked (run-view-189).
+  const calleeStatus = (caller: MachineFrame): Status | undefined => {
+    for (const child of openFrames.filter((f) => f.parentSessionId === caller.traceSessionId)) {
+      const own = runStatus(child, false, abortedOf?.(child) ?? false);
+      if (own !== "running") return own;
+      const deeper = calleeStatus(child);
+      if (deeper) return deeper;
+    }
+    return undefined;
+  };
+  const ownStatus = runStatus(frame, settled, aborted);
+  const status = ownStatus === "running" ? calleeStatus(frame) ?? ownStatus : ownStatus;
+  const passed = { stepPlayer, names, aborted: abortedOf };
   // Disclosure is the reader's arrangement axis (DR-027): component
   // state only, never folded, so a replay renders the same either way.
   const [override, setOverride] = useState<boolean>();
@@ -239,11 +294,18 @@ export function MachineCard({
   // the boxes then take the width their column's longest label needs
   // (run-view-60), which a new caption may widen once.
   const layout = useMemo(() => layoutMachine(drawn), [drawn]);
+  // The name of the player each step's calls reach (run-view-185).
+  // An observed drawing carries no roles, so a step is matched by the
+  // calls the run made from it as well as by its role.
+  const performerOf = (node: { id: string; role?: string }): string | undefined => {
+    const id = stepPlayer?.(frame, traceStateId(node.id), node.role);
+    return id ? names?.(id) ?? id : undefined;
+  };
   const captionKey = drawn.nodes
-    .map((node) => stateCaption(node, frame)?.text ?? "")
+    .map((node) => stateCaption(node, frame, performerOf(node))?.text ?? "")
     .join("\0");
   const widened = useMemo(
-    () => widenLayout(layout, drawn, frame),
+    () => widenLayout(layout, drawn, frame, performerOf),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [layout, drawn, captionKey],
   );
@@ -287,6 +349,7 @@ export function MachineCard({
           graphs={graphs}
           openFrames={openFrames}
           settled
+          {...passed}
         />
       ))}
       {openChildren.map((child) => (
@@ -300,6 +363,7 @@ export function MachineCard({
           openChildren={openFrames.filter(
             (f) => f.parentSessionId === child.traceSessionId,
           )}
+          {...passed}
         />
       ))}
     </>
@@ -324,15 +388,17 @@ export function MachineCard({
           className="h-3 w-3"
         />
       </button>
-      {running ? (
+      {status === "running" ? (
         <RunningMark running data-testid={`machine-running-${frame.traceSessionId}`} />
       ) : (
         <span
           aria-hidden
           className={`h-2 w-2 shrink-0 rounded-full border-2 ${
-            frame.outcome === "failed"
+            status === "failed"
               ? "border-red-500"
-              : "border-neutral-500"
+              : status === "waiting"
+                ? "border-amber-500"
+                : "border-neutral-500"
           }`}
         />
       )}
@@ -366,20 +432,10 @@ export function MachineCard({
       </span>
       <span
         data-testid={`machine-outcome-${frame.traceSessionId}`}
-        className={`shrink-0 rounded-full px-1 py-0.5 text-xs @sm:px-2 ${
-          running
-            ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
-            : frame.outcome === "failed"
-              ? "bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300"
-              : "bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300"
-        }`}
+        data-status={status}
+        className={`shrink-0 rounded-full px-1 py-0.5 text-xs @sm:px-2 ${STATUS_PILL[status]}`}
       >
-        {running
-          ? i18n._({
-              id: "running",
-              comment: "the aliveness mark's own word: this thing is at work",
-            })
-          : outcomeWord(frame)}
+        {STATUS_WORDS[status]()}
       </span>
     </div>
   );
@@ -498,22 +554,23 @@ export function MachineCard({
             {drawn.nodes.map((node) => {
               const place = widened.nodes.get(node.id);
               if (!place) return null;
-              const tone = stateTone(frame, node.id, settled);
-              const active = frame.active === node.id;
+              const tone = stateTone(frame, node.id, settled, aborted, status !== ownStatus);
+              const active = standsIn(frame, node.id);
               const delegating =
                 running && frame.delegating?.stateId === node.id;
               const call = [...frame.calls]
                 .reverse()
                 .find((entry) => entry.stateId === node.id);
-              const player =
-                frame.activePlayer && frame.activePlayer.stateId === node.id
-                  ? frame.activePlayer
-                  : undefined;
+              const player = running ? playerAt(frame, node.id) : undefined;
+              // The step a player runs wears that player's mark and
+              // name (run-view-185).
+              const performer = stepPlayer?.(frame, traceStateId(node.id), node.role);
+              const performerName = performer ? names?.(performer) ?? performer : undefined;
               // From the call onward the calling state names its callee
               // (run-view-63); a running call names the role the machine
               // asked for and the player answering it (DR-032). The
               // caption falls back before it spills (run-view-61).
-              const caption = stateCaption(node, frame);
+              const caption = stateCaption(node, frame, performerName);
               const captionText = caption
                 ? fitCaption(caption, place.width)
                 : undefined;
@@ -633,7 +690,36 @@ export function MachineCard({
                       {captionText}
                     </text>
                   ) : null}
-                  {player?.running ? (
+                  {performerName ? (
+                    // The performer's mark stands at the caption's head,
+                    // and while its call runs it is the running mark
+                    // (run-view-61, run-view-185).
+                    <g
+                      data-testid={`machine-performer-${frame.traceSessionId}-${node.id}`}
+                      data-player={performer}
+                      data-running={player?.running ? "true" : undefined}
+                    >
+                      <title>{performer}</title>
+                      <circle
+                        cx={place.x + 15}
+                        cy={place.y + 29}
+                        r={7}
+                        className={player?.running
+                          ? "fill-emerald-600 motion-safe:animate-pulse dark:fill-emerald-500"
+                          : "fill-neutral-500 dark:fill-neutral-600"}
+                      />
+                      <text
+                        x={place.x + 15}
+                        y={place.y + 32.5}
+                        textAnchor="middle"
+                        fontSize={10}
+                        fontWeight={700}
+                        className="fill-white"
+                      >
+                        {markLetter(performerName)}
+                      </text>
+                    </g>
+                  ) : player?.running ? (
                     <circle
                       cx={place.x + 13}
                       cy={place.y + 29.5}

@@ -1077,7 +1077,7 @@ describe("playbook-library-53: the conversation pane", () => {
     expect(lines).toContain("◇ Compiled — roles: Triager, Verifier");
     const compileLine = within(thread).getAllByTestId("system-line").find((line) => line.textContent === "◇ Compiling — asked by the agent")!;
     expect(cards[0].compareDocumentPosition(compileLine) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(within(thread).getAllByTestId("player-result")[0].textContent).toBe("✓ finished");
+    expect(within(thread).getAllByTestId("player-result")[0].textContent).toBe("✓ done");
     // Open Enable lands on the tab.
     expect(within(cards[1]).getByTestId("open-enable").textContent).toBe("Open Enable");
     fireEvent.click(within(cards[1]).getByTestId("open-enable"));

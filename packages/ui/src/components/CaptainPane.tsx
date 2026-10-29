@@ -29,8 +29,9 @@ import {
 } from "./AgentActiveTime.js";
 import type { SessionAgent } from "../lib/session-agents.js";
 import { SourceChip } from "./DeliveryCard.js";
-import { AgentMark } from "./AgentMark.js";
-import { providerDefaultReading } from "../lib/session-agents.js";
+import type { StepCallState } from "../lib/step-calls.js";
+import { DispatchLine, DispatchStrip, ReturnLine } from "./CallLines.js";
+import type { MachineCardProps } from "./MachineCard.js";
 import type { IntentSource, MachineGraph } from "@sublang/spex-core/protocol";
 
 /** A node the thread hosts after a given line — the run view anchors
@@ -82,6 +83,10 @@ export function ThreadLine({
   names,
   onShowLane,
   recovery,
+  calls,
+  lanes,
+  asking = false,
+  card,
 }: {
   line: CaptainLine;
   graphs?: Record<string, MachineGraph | null>;
@@ -97,11 +102,19 @@ export function ThreadLine({
   failure?: FailureContext;
   /** How a player id reads over the session's roster (run-view-177). */
   names?: (id: string) => string;
-  /** A delegation line brings its player's lane into view
-   * (run-view-178). */
-  onShowLane?: (playerId: string) => void;
+  /** A delegation or return line brings its player's lane into view,
+   * at the call it stands for (run-view-178, run-view-182). */
+  onShowLane?: (playerId: string, callKey?: string) => void;
   /** A failure's ways back to the agent it names (run-view-179). */
   recovery?: ReactNode;
+  /** The traced calls the dispatch lines read (run-view-180). */
+  calls?: StepCallState;
+  /** The players whose lanes stand (run-view-7). */
+  lanes?: readonly string[];
+  /** A player's question waits for the Boss (run-view-182). */
+  asking?: boolean;
+  /** What a settled card reads beyond its frame (run-view-185/186). */
+  card?: Pick<MachineCardProps, "stepPlayer" | "names" | "aborted">;
 }) {
   const time = new Date(line.at).toLocaleString(currentLocale());
   // A failure the runtime reported draws as the card, wherever the
@@ -150,6 +163,7 @@ export function ThreadLine({
             graph={graphs?.[line.frame.playbookId]}
             graphs={graphs}
             settled
+            {...card}
           />
         </div>
       ) : (
@@ -254,37 +268,39 @@ export function ThreadLine({
         </div>
       );
     case "delegation": {
-      // Who a call went to and what it runs (run-view-178): a system
-      // line of its own, outside every machine card.
+      // Who a call went to, on which step, and what it runs
+      // (run-view-178): a system line of its own, outside every card.
       const delegation = line.delegation;
       if (!delegation) return null;
-      const name = names?.(delegation.player) ?? delegation.player;
-      const model = delegation.reported ??
-        (delegation.model === false ? providerDefaultReading() : delegation.model);
-      const runs = [delegation.adapter, model].filter((part): part is string => !!part);
+      const call = line.callKey ? calls?.calls.find((entry) => entry.key === line.callKey) : undefined;
+      const lane = lanes ? lanes.includes(delegation.player) && (!line.callKey || call?.promptSeq !== undefined) : true;
       return (
-        <button
-          type="button"
-          data-testid={`delegation-line-${delegation.player}`}
-          onClick={() => onShowLane?.(delegation.player)}
-          title={`${delegation.player} · ${time}`}
-          className="flex items-center gap-1.5 self-start rounded text-left text-xs leading-5 text-neutral-600 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100"
-        >
-          <AgentMark player={name} size="sm" />
-          <span>
-            {i18n._({
-              id: "Handed to {player}",
-              values: { player: name },
-              comment: "a delegation line: the Captain gave this call to the named player",
-            })}
-            {runs.map((part) => (
-              <span key={part}>
-                <span aria-hidden="true" className="text-neutral-400"> · </span>
-                <span className="font-mono">{part}</span>
-              </span>
-            ))}
-          </span>
-        </button>
+        <DispatchLine
+          line={line}
+          call={call}
+          name={names?.(delegation.player) ?? delegation.player}
+          time={time}
+          lane={lane}
+          onShow={() => onShowLane?.(delegation.player, line.callKey)}
+        />
+      );
+    }
+    case "return": {
+      // What the call came back with (run-view-182).
+      const call = calls?.calls.find((entry) => entry.key === line.callKey);
+      if (!call) return null;
+      const player = call.playerId;
+      const latest = [...(calls?.calls ?? [])].reverse()
+        .find((entry) => entry.sessionId === call.sessionId && entry.stateId === call.stateId);
+      return (
+        <ReturnLine
+          call={call}
+          name={player ? names?.(player) ?? player : call.role ?? call.stateId}
+          time={time}
+          asking={asking && latest === call}
+          lane={!!player && (lanes?.includes(player) ?? true) && call.promptSeq !== undefined}
+          onShow={() => player && onShowLane?.(player, call.key)}
+        />
       );
     }
     default:
@@ -419,13 +435,19 @@ export function CaptainPane({
   names,
   onShowLane,
   recovery,
+  lanes,
+  card,
 }: {
   view: SessionView;
   /** How a player id reads over the session's roster (run-view-177). */
   names?: (id: string) => string;
-  /** A delegation line brings its player's lane into view
-   * (run-view-178). */
-  onShowLane?: (playerId: string) => void;
+  /** A delegation or return line, or a working chip, brings its
+   * player's lane into view at the call (run-view-178, run-view-183). */
+  onShowLane?: (playerId: string, callKey?: string) => void;
+  /** The players whose lanes stand (run-view-7). */
+  lanes?: readonly string[];
+  /** What a card reads beyond its frame (run-view-185/186). */
+  card?: Pick<import("./MachineCard.js").MachineCardProps, "stepPlayer" | "names" | "aborted">;
   /** A failure line's ways back to the agent it names (run-view-179). */
   recovery?: (line: CaptainLine, index: number) => ReactNode;
   /** The core-folded completed active time for the Captain. */
@@ -525,6 +547,8 @@ export function CaptainPane({
       at: latestCall(playerView)?.at,
     }));
   const anyPlayerRunning = working.length > 0;
+  // The traced calls at work, one chip each (run-view-183).
+  const openCalls = view.stepCalls.calls.filter((call) => call.status === "running");
   const since = working
     .map((entry) => entry.at)
     .filter((at): at is number => at !== undefined)
@@ -532,13 +556,17 @@ export function CaptainPane({
       (earliest, at) => (earliest === undefined ? at : Math.min(earliest, at)),
       undefined,
     );
-  const now = useClock(anyPlayerRunning && since !== undefined);
+  const now = useClock((anyPlayerRunning && since !== undefined) || openCalls.length > 0);
   const status = stateLabel(view.fsmState, {
     pendingQuestion: view.pendingQuestion !== undefined,
     // The leaf answers for the leaf (DR-061): the reported state is
     // whichever machine reported it last, and the Captain shell's own
     // controller writes that topic after the run parks.
     parkedFailure: parkedFailure(view.frames)?.active ?? undefined,
+    parkedAborted: (() => {
+      const frame = parkedFailure(view.frames);
+      return frame ? card?.aborted?.(frame) ?? false : false;
+    })(),
     turnActive: view.turnActive,
     playersRunning: Object.values(view.players).some(
       (playerView) => playerView.running,
@@ -656,6 +684,10 @@ export function CaptainPane({
                       names={names}
                       onShowLane={onShowLane}
                       recovery={recovery?.(line, index)}
+                      calls={view.stepCalls}
+                      lanes={lanes}
+                      asking={view.pendingQuestion !== undefined}
+                      card={card}
                     />
                   </div>
                   {extras
@@ -694,6 +726,7 @@ export function CaptainPane({
                         other.parentSessionId === frame.traceSessionId,
                     )}
                     onlyRoot={roots.length === 1}
+                    {...card}
                   />
                 ))}
               </div>
@@ -704,6 +737,15 @@ export function CaptainPane({
                   <Markdown text={view.captainDraft} links="web-only" />
                 </div>
               </div>
+            ) : view.turnActive && openCalls.length > 0 ? (
+              // Who is at work on which step, each chip a way to its
+              // lane (run-view-183, DR-010 §3).
+              <DispatchStrip
+                calls={openCalls}
+                names={names ?? ((id) => id)}
+                now={now}
+                onShow={(call) => call.playerId && onShowLane?.(call.playerId, call.key)}
+              />
             ) : view.turnActive ? (
               // Life sign while agents work and the Captain is silent
               // (DR-010 §3): the thread is never inert mid-turn.
@@ -721,7 +763,7 @@ export function CaptainPane({
                     {anyPlayerRunning
                       ? since !== undefined
                         ? i18n._({
-                            id: "{who} working · {span}",
+                            id: "{who} running · {span}",
                             values: {
                               who: working.map((entry) => entry.who).join(", "),
                               span: duration(now - since),
@@ -730,7 +772,7 @@ export function CaptainPane({
                               "who is at work and how long the open call has run",
                           })
                         : i18n._({
-                            id: "{who} working…",
+                            id: "{who} running…",
                             values: {
                               who: working.map((entry) => entry.who).join(", "),
                             },

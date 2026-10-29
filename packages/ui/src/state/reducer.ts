@@ -22,6 +22,14 @@ import { i18n } from "../i18n.js";
 import { plainFailure } from "../lib/labels.js";
 import { readRecordFailure } from "../lib/failure-catalogue.js";
 import { storedAsset, type MediaOrigin } from "../lib/media.js";
+import {
+  claimPrompt,
+  closeTurn,
+  foldCallTrace,
+  initialStepCalls,
+  type StepCallState,
+  callKey as callKeyOf,
+} from "../lib/step-calls.js";
 
 /** What one call reported spending, in tokens and tool uses. Every
  * figure is optional because cligent 0.22 reports each independently,
@@ -67,7 +75,13 @@ export interface SegmentMeta {
 
 export type TranscriptSegment = SegmentMeta &
   (
-    | { kind: "prompt"; text: string; role?: string }
+    | {
+        kind: "prompt";
+        text: string;
+        role?: string;
+        /** The traced call this prompt began (run-view-181). */
+        callKey?: string;
+      }
     | { kind: "text"; text: string; streaming: boolean }
     | { kind: "thinking"; summary: string }
     | { kind: "media"; media: { mimeType: string; uri?: string; name?: string }; origin: MediaOrigin }
@@ -140,17 +154,23 @@ export interface CaptainLine {
   /** boss: the user's own message, echoed into the thread (RUN-30).
    * question: a player asking the Boss — a first-class incoming
    * message, not a log line (RUN-9, DR-010 §1). */
-  kind: "status" | "speech" | "error" | "boss" | "question" | "machine" | "media" | "delegation";
+  kind: "status" | "speech" | "error" | "boss" | "question" | "machine" | "media" | "delegation" | "return";
   /** A delegation line (run-view-178): the player one call went to and
    * what that call runs — `model` is the configured model, `false` a
    * confirmed provider default, absent where the call's role did not
-   * confirm one; `reported` is what its `init` event said it ran. */
+   * confirm one; `reported` is what its `init` event said it ran;
+   * `showRuns` where it is the player's first call or runs otherwise
+   * than the previous one. */
   delegation?: {
     player: string;
     adapter?: string;
     model?: string | false;
     reported?: string;
+    showRuns: boolean;
   };
+  /** delegation and return lines: the traced call the line stands for
+   * (run-view-181, run-view-182). */
+  callKey?: string;
   /** error lines: the agent whose own failure this is, where the
    * record says so — the Captain's failed turn (run-view-179). */
   agent?: string;
@@ -224,13 +244,15 @@ export interface SessionView {
   /** Per player, its current call's delegation and the reading its
    * previous call ended with (run-view-178). */
   delegations: Record<string, DelegationTrack>;
+  /** The traced player calls and their outcomes (run-view-180). */
+  stepCalls: StepCallState;
 }
 
 /** One player's delegation bookkeeping (run-view-178). */
 interface DelegationTrack {
   /** The open call: its reading, its line where it put one, and the
    * thread line it stands after where it has not yet. */
-  call: { adapter?: string; model?: string | false; reported?: string; line?: CaptainLine; after?: CaptainLine; turnId: number | null; at: number };
+  call: { adapter?: string; model?: string | false; reported?: string; line: CaptainLine; turnId: number | null; at: number };
   /** What the player's previous call ran. */
   previous?: DelegationReading;
 }
@@ -256,6 +278,7 @@ export function initialSessionView(
     lastSeq: 0,
     executions: {},
     delegations: {},
+    stepCalls: initialStepCalls(),
   };
 }
 
@@ -336,6 +359,20 @@ export function resolvePlayerId(
 ): string | undefined {
   if (!player) return undefined;
   return Object.keys(view.players).find((id) => id === player) ?? player;
+}
+
+/** The configuration recorded with a record's context, if any. */
+function recordedExecution(view: SessionView, contextSeq: unknown): { recorded: boolean; configuration?: unknown } {
+  return typeof contextSeq === "number" && Object.hasOwn(view.executions, contextSeq)
+    ? { recorded: true, configuration: view.executions[contextSeq] }
+    : { recorded: false };
+}
+
+/** The reasons the core stops a turn with — the Boss's abort and Spex
+ * closing (core's `isStoppedTurnReason`) — as against a runtime failure
+ * ending its turn with its own error. */
+function stoppedReason(reason: unknown): boolean {
+  return reason === "aborted by the Boss" || reason === "interrupted when Spex closed";
 }
 
 /** Abort reasons are runtime plumbing; put the known ones in words.
@@ -551,7 +588,7 @@ function callSettings(
 type DelegationReading = { adapter?: string; model?: string | false; reported?: string };
 
 /** What one call ran, for comparing it with the player's previous one. */
-function delegationReading(call: DelegationTrack["call"]): DelegationReading {
+function delegationReading(call: Omit<DelegationTrack["call"], "line">): DelegationReading {
   return {
     ...(call.adapter ? { adapter: call.adapter } : {}),
     ...(call.model !== undefined ? { model: call.model } : {}),
@@ -571,27 +608,31 @@ function sameReading(a: DelegationReading | undefined, b: DelegationReading): bo
 
 function delegationLine(
   playerId: string,
-  call: DelegationTrack["call"],
+  call: Omit<DelegationTrack["call"], "line">,
+  showRuns: boolean,
   turnId: number | null,
   at: number,
+  callKey: string | undefined,
 ): CaptainLine {
   return {
     kind: "delegation",
     text: playerId,
     turnId,
     at,
+    ...(callKey ? { callKey } : {}),
     delegation: {
       player: playerId,
       ...(call.adapter ? { adapter: call.adapter } : {}),
       ...(call.model !== undefined ? { model: call.model } : {}),
       ...(call.reported ? { reported: call.reported } : {}),
+      showRuns,
     },
   };
 }
 
-/** A call's first record (run-view-178): the previous call's reading is
- * settled, and the new call puts its line where it is the player's
- * first or reads differently from the previous one. */
+/** A call's start (run-view-178): every call puts its line, which
+ * names what the call runs where it is the player's first or reads
+ * differently from the previous one. */
 function openDelegation(
   view: SessionView,
   playerId: string,
@@ -599,45 +640,56 @@ function openDelegation(
   contextSeq: unknown,
   turnId: number | null,
   at: number,
+  callKey?: string,
 ): void {
   const configuration = typeof contextSeq === "number" && Object.hasOwn(view.executions, contextSeq)
     ? view.executions[contextSeq]
     : view.latestExecution;
   const track = view.delegations[playerId];
   const previous = track ? delegationReading(track.call) : undefined;
-  const call: DelegationTrack["call"] = { ...callSettings(configuration, playerId, role), turnId, at };
-  if (!sameReading(previous, delegationReading(call))) {
-    call.line = delegationLine(playerId, call, turnId, at);
-    view.captain.push(call.line);
-  } else {
-    call.after = view.captain[view.captain.length - 1];
-  }
-  view.delegations[playerId] = { call, ...(previous ? { previous } : {}) };
+  const settings = { ...callSettings(configuration, playerId, role), turnId, at };
+  const line = delegationLine(playerId, settings, !sameReading(previous, delegationReading(settings)), turnId, at, callKey);
+  view.captain.push(line);
+  view.delegations[playerId] = { call: { ...settings, line }, ...(previous ? { previous } : {}) };
 }
 
 /** The call's `init` named the model it ran (run-view-178): the line
- * reads it, and whether the call needs a line at all is decided again
+ * reads it, and whether it names what the call runs is decided again
  * against the player's previous call. */
 function reportDelegation(view: SessionView, playerId: string, reported: string): void {
   const track = view.delegations[playerId];
   if (!track) return;
   const call = track.call;
   call.reported = reported;
-  const differs = !sameReading(track.previous, delegationReading(call));
-  if (call.line) {
-    if (call.line.delegation) call.line.delegation.reported = reported;
-    if (!differs && track.previous) {
-      const index = view.captain.indexOf(call.line);
-      if (index >= 0) {
-        call.after = view.captain[index - 1];
-        view.captain.splice(index, 1);
-      }
-      call.line = undefined;
-    }
-  } else if (differs) {
-    call.line = delegationLine(playerId, call, call.turnId, call.at);
-    const anchorIndex = call.after ? view.captain.indexOf(call.after) : -1;
-    view.captain.splice(anchorIndex + 1, 0, call.line);
+  const delegation = call.line.delegation;
+  if (!delegation) return;
+  delegation.reported = reported;
+  delegation.showRuns = !sameReading(track.previous, delegationReading(call));
+}
+
+/** The thread lines a traced call puts (run-view-178, run-view-182):
+ * its delegation line at its start, and where it came back or was
+ * stopped, its return line — a failed call's failure stands alone. */
+function traceCallLines(
+  view: SessionView,
+  payload: unknown,
+  contextSeq: unknown,
+  turnId: number | null,
+  at: number,
+): void {
+  const trace = (payload ?? {}) as { type?: unknown; sessionId?: unknown; callId?: unknown };
+  if (trace.type !== "player.call.started" && trace.type !== "player.call.finished") return;
+  const key = typeof trace.sessionId === "string" && typeof trace.callId === "string"
+    ? callKeyOf(trace.sessionId, trace.callId)
+    : undefined;
+  const call = key ? view.stepCalls.calls.find((entry) => entry.key === key) : undefined;
+  if (!call) return;
+  if (trace.type === "player.call.started") {
+    if (call.playerId) openDelegation(view, call.playerId, call.role, contextSeq, turnId, at, call.key);
+    return;
+  }
+  if (call.status === "returned" || call.status === "aborted") {
+    view.captain.push({ kind: "return", text: call.playerId ?? call.stateId, callKey: call.key, turnId, at });
   }
 }
 
@@ -691,10 +743,20 @@ export function applyRecord(
     }
     case "turn_finished": {
       view.turnActive = false;
+      closeTurn(view.stepCalls);
       break;
     }
     case "turn_aborted": {
       view.turnActive = false;
+      closeTurn(view.stepCalls);
+      // The Boss's stop is said by this line: the runtime's error that
+      // carried the same reason just before it is no failure of its own
+      // (run-view-186).
+      const last = view.captain[view.captain.length - 1];
+      if (stoppedReason(r.reason) && last?.kind === "error" && last.turnId === r.turnId &&
+        (last.raw ?? last.text) === String(r.reason)) {
+        view.captain.pop();
+      }
       // One whole line per case (localization-4).
       pushCaptain(view, {
         kind: "status",
@@ -721,7 +783,10 @@ export function applyRecord(
       break;
     }
     case "player_prompt": {
-      openDelegation(view, String(r.playerId), role, r.contextSeq, r.turnId, r.timestamp);
+      // A traced call put its line at its start; a prompt no traced
+      // call claims puts its own (run-view-178).
+      const claimed = claimPrompt(view.stepCalls, String(r.playerId), seq);
+      if (!claimed) openDelegation(view, String(r.playerId), role, r.contextSeq, r.turnId, r.timestamp);
       const target = player(view, String(r.playerId));
       target.running = true;
       target.turnUsage = undefined;
@@ -730,6 +795,7 @@ export function applyRecord(
         kind: "prompt",
         text: String(r.prompt),
         ...(role !== undefined ? { role } : {}),
+        ...(claimed ? { callKey: claimed.key } : {}),
       });
       break;
     }
@@ -914,9 +980,12 @@ export function applyRecord(
         // The call the process died in no longer runs: no lane reads as
         // working on it (run-view-74, run-view-7).
         for (const lane of Object.values(view.players)) lane.running = false;
+        closeTurn(view.stepCalls);
         const graphs = typeof r.contextSeq === "number" ? view.contexts[r.contextSeq] : undefined;
+        const execution = recordedExecution(view, r.contextSeq);
         const bind = (frame: MachineFrame): void => {
           if (!("historicalGraph" in frame)) frame.historicalGraph = graphs?.[frame.playbookId] ?? null;
+          if (!("historicalExecution" in frame) && execution.recorded) frame.historicalExecution = execution.configuration;
           for (const child of frame.settledCalls) bind(child);
         };
         for (const frame of [...fold.open, ...fold.closed]) bind(frame);
@@ -968,6 +1037,11 @@ export function applyRecord(
           view.pendingQuestionPlayer = undefined;
         }
       } else if (topic === "playbook.trace") {
+        // The traced player calls (run-view-180): each call's start
+        // puts its delegation line, and a call that came back puts its
+        // return line, which reads the call's outcome as it arrives.
+        foldCallTrace(view.stepCalls, r.payload, r.timestamp);
+        traceCallLines(view, r.payload, r.contextSeq, r.turnId, r.timestamp);
         // The structured trace opens, moves, and settles the machine
         // frames the pane draws (run-view-60..63); folding is pure so
         // a replay reproduces the same cards (run-view-14).
@@ -979,8 +1053,10 @@ export function applyRecord(
           r.turnId,
         );
         const graphs = typeof r.contextSeq === "number" ? view.contexts[r.contextSeq] : undefined;
+        const execution = recordedExecution(view, r.contextSeq);
         const bind = (frame: MachineFrame): void => {
           if (!("historicalGraph" in frame)) frame.historicalGraph = graphs?.[frame.playbookId] ?? null;
+          if (!("historicalExecution" in frame) && execution.recorded) frame.historicalExecution = execution.configuration;
           for (const child of frame.settledCalls) bind(child);
         };
         for (const frame of fold.open) bind(frame);

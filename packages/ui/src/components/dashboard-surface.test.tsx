@@ -1656,7 +1656,8 @@ describe("dashboard-28: the Now band reads the live lane", () => {
     if (surface === "Dashboard") renderSurface();
     else renderOverview();
     const row = screen.getByTestId("now-session-me/alpha-spex");
-    expect(within(row).getByText(transcript === "player running" ? "working" : "deciding")).toBeTruthy();
+    // The mark says "running" to a screen reader as the label does.
+    expect(within(row).getAllByText(transcript === "player running" ? "running" : "deciding").length).toBeGreaterThan(0);
     expect(row.querySelector('[data-running="true"]')).toBeTruthy();
 
     // A stale active transcript cannot keep the mark or label running
@@ -1666,7 +1667,7 @@ describe("dashboard-28: the Now band reads the live lane", () => {
       views: transcript === "missing" ? {} : { "s-live": { ...view, turnActive: true } },
     }));
     expect(within(row).queryByText("deciding")).toBeNull();
-    expect(within(row).queryByText("working")).toBeNull();
+    expect(within(row).queryByText("running")).toBeNull();
     expect(row.querySelector('[data-running="false"]')).toBeTruthy();
     expect(within(row).getAllByText("idle")).toHaveLength(2);
   });
@@ -1760,7 +1761,7 @@ describe("dashboard-28: the Now band reads the live lane", () => {
     renderSurface();
     const row = screen.getByTestId("now-session-me/alpha-spex");
     expect(row.textContent).not.toContain("no playbook");
-    expect(row.textContent).toContain("working");
+    expect(row.textContent).toContain("running");
     expect(row.textContent).not.toContain("idle");
   });
 
@@ -2035,7 +2036,7 @@ describe("dashboard-50: the Running band lists what is working", () => {
     expect(row.textContent).toContain("Add a README badge");
     expect(row.textContent).toContain("dev.coder");
     expect(screen.getByTestId("running-state-s-run").textContent).toBe(
-      "working",
+      "running",
     );
     // The turn's span, with the moment it began in the tooltip.
     expect(row.textContent).toContain("12m");

@@ -54,6 +54,9 @@ import {
   failingScript,
   askingScript,
   compiledRunScript,
+  developRunScript,
+  DEVELOP_CONFIG,
+  type DevelopRunOptions,
   prepareStorageGitFiles,
   STUB_SLC_RELEASE_FILE,
   startStandinHost,
@@ -257,6 +260,14 @@ export interface AppOptions {
    * repository to commit in.
    */
   compiled?: boolean;
+  /**
+   * The real Captain shell running the built-in /dev on substitute
+   * agents (run-view-193): the analyst picks decide then code,
+   * `decide` asks the coder and the reviewer in parallel and the coder
+   * merges and commits, then `code` commits with its review passing.
+   * The config binds every role the path reaches. Needs `project`.
+   */
+  develop?: DevelopRunOptions;
   /**
    * A compile player (DR-086, release-25): the config is written
    * before boot as the installed template's text with one more roster
@@ -941,6 +952,8 @@ async function arrangeApp(
   }
   if (options.compiler) {
     writeFileSync(configPath, compilerConfig(options.compiler));
+  } else if (options.develop) {
+    writeFileSync(configPath, DEVELOP_CONFIG);
   } else if ((options.config ?? "demo") === "demo") {
     writeFileSync(configPath, DEMO_CONFIG);
   }
@@ -1029,6 +1042,8 @@ async function arrangeApp(
             ? fakeAdapterImports(failingScript({ delayMs: options.agentDelayMs ?? 1 })).imports
             : options.compiled
             ? fakeAdapterImports(compiledScript(options)).imports
+            : options.develop
+            ? fakeAdapterImports(developRunScript({ delayMs: options.agentDelayMs ?? 400, ...options.develop })).imports
             : options.ask
             ? fakeAdapterImports(askingScript({ delayMs: options.agentDelayMs ?? 1 })).imports
             : options.realCaptain
@@ -1036,7 +1051,7 @@ async function arrangeApp(
             : heldDemoImports(adapterScript(options), waitForPlayer),
           adapterRuntime: () => ({ usable: true }),
           discoverAgentModels: options.discoverAgentModels ?? (async (adapter) => fixtureModelDiscovery(adapter)),
-          ...(options.realCaptain || options.park || options.failPlayer || options.ask || options.compiled ? {} : { captainFactory: async (_composed: unknown, sessionId: string) => demoCaptain(sessionId, { governedCompletion: options.governedCompletion }) }),
+          ...(options.realCaptain || options.park || options.failPlayer || options.ask || options.compiled || options.develop ? {} : { captainFactory: async (_composed: unknown, sessionId: string) => demoCaptain(sessionId, { governedCompletion: options.governedCompletion }) }),
           env,
           home,
           own: E2E_OWN,

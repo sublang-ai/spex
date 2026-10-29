@@ -76,7 +76,7 @@ test("run-view-132: the failed workflow's notice stands, refuses with its cause,
   // state last, on the very topic the leaf used, so only the run's
   // frames can still answer for the run.
   const chip = page.getByTestId("state-chip");
-  await expect(chip).toHaveText("needs attention");
+  await expect(chip).toHaveText("failed");
   await expect(chip).toHaveClass(/red/);
   await expect(chip).toHaveAttribute("title", "state: failed");
 

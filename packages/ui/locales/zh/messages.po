@@ -149,6 +149,14 @@ msgid "{chosen} of {total} chosen"
 msgstr "已选 {chosen}/{total}"
 
 #: src/components/FailureCard.tsx
+msgid "{command} aborted"
+msgstr "{command} 已中止"
+
+#: src/components/FailureCard.tsx
+msgid "{command} aborted at {step}"
+msgstr "{command} 在 {step} 中止"
+
+#: src/components/FailureCard.tsx
 msgid "{command} failed"
 msgstr "{command} 失败"
 
@@ -397,10 +405,10 @@ msgstr "{id} 已是 {package} 中的规程"
 msgid "{id} not found"
 msgstr "未找到 {id}"
 
-#. a call's tokens in and out; tok is short for tokens
+#. a call's tokens in and out; token stays as it is
 #: src/components/PlayerPane.tsx
-msgid "{input}→{output} tok"
-msgstr "{input}→{output} tok"
+msgid "{input}→{output} token"
+msgstr "{input}→{output} token"
 
 #: src/components/DeliveryCard.tsx
 msgid "{kind} {ref}"
@@ -545,6 +553,11 @@ msgstr "{playbookId} 状态机"
 msgid "{playbookId} state machine, {state} active"
 msgstr "{playbookId} 状态机，当前处于 {state}"
 
+#. a working chip: the player, the step it runs, and how long its call has run
+#: src/components/CallLines.tsx
+msgid "{player} · {step} · {span}"
+msgstr "{player} · {step} · {span}"
+
 #: src/components/DraftRegisterTab.tsx
 msgid "{project} — the project"
 msgstr "{project} — 本项目"
@@ -658,6 +671,11 @@ msgstr "{step}已停止"
 msgid "{step} stopped — {message}"
 msgstr "{step}已停止 — {message}"
 
+#. a step a run walks again: its name and which time this is
+#: src/components/CallLines.tsx
+msgid "{step}, round {round}"
+msgstr "{step} · 第 {round} 轮"
+
 #: src/components/ForgeItemRow.tsx
 msgid "{text} ({state})"
 msgstr "{text}（{state}）"
@@ -694,17 +712,17 @@ msgstr "{who} 失败"
 #. who is at work and how long the open call has run
 #: src/components/CaptainPane.tsx
 #: src/components/PlayerPane.tsx
-msgid "{who} working · {span}"
-msgstr "{who} 工作中 · {span}"
+msgid "{who} running · {span}"
+msgstr "{who} 运行中 · {span}"
 
 #: src/components/PlayerPane.tsx
-msgid "{who} working since {since}"
-msgstr "{who} 自 {since} 起工作中"
+msgid "{who} running since {since}"
+msgstr "{who} 自 {since} 起运行"
 
 #. who is at work, with no span to report yet
 #: src/components/CaptainPane.tsx
-msgid "{who} working…"
-msgstr "{who} 工作中…"
+msgid "{who} running…"
+msgstr "{who} 运行中…"
 
 #: src/components/SpaceMembers.tsx
 msgid "@{login} added as {role}"
@@ -738,6 +756,21 @@ msgstr "/path/to/existing-project"
 #: src/components/ProjectPalette.tsx
 msgid "/path/to/new-project"
 msgstr "/path/to/new-project"
+
+#. a return line: the named player came back with this outcome; ← stays as it is
+#: src/components/CallLines.tsx
+msgid "← {player} {outcome}"
+msgstr "← {player} {outcome}"
+
+#. a return line: the named player's call was stopped before it finished; ← stays as it is
+#: src/components/CallLines.tsx
+msgid "← {player} aborted"
+msgstr "← {player} 已中止"
+
+#. a return line: the named player's call came back, its outcome not yet accepted; ← stays as it is
+#: src/components/CallLines.tsx
+msgid "← {player} handed back"
+msgstr "← {player} 已交回"
 
 #: src/components/SpecView.tsx
 msgid "← Back to {surface}"
@@ -800,7 +833,7 @@ msgstr "✓ 已编译并注册 — 见“已配置的规程”"
 
 #. how a player's call ended; ✓ stays as it is
 #: src/components/PlayerPane.tsx
-msgid "✓ finished"
+msgid "✓ done"
 msgstr "✓ 已完成"
 
 #. a failed call and what it said; ✗ stays as it is
@@ -922,6 +955,19 @@ msgstr "中止"
 #: src/state/store.ts
 msgid "abort failed: {reason}"
 msgstr "中止失败：{reason}"
+
+#. a status word: it was stopped before it finished
+#. a status word: it was stopped before it finished
+#. a status word: it was stopped before it finished
+#: src/components/MachineCard.tsx
+#: src/lib/labels.ts
+#: src/lib/status-words.ts
+msgid "aborted"
+msgstr "已中止"
+
+#: src/components/FailureCard.tsx
+msgid "Aborted at {step}"
+msgstr "在 {step} 中止"
 
 #. the abort request is in flight
 #: src/components/Composer.tsx
@@ -1332,6 +1378,11 @@ msgstr "曾请求使用 {tool}；这是历史权限事件，当前无法答复"
 #: src/components/DraftConversation.tsx
 msgid "Asked to compile"
 msgstr "已请求编译"
+
+#. a call's outcome: the player asked the Boss a question
+#: src/lib/step-words.ts
+msgid "asks you"
+msgstr "向你提问"
 
 #. where a running machine stands
 #. where a running machine stands
@@ -1813,6 +1864,11 @@ msgstr "选择文件夹…"
 msgid "Choose for {count, plural, one {# conflict} other {# conflicts}}"
 msgstr "为 {count, plural, other {# 处冲突}}选择"
 
+#. a step: the analyst chooses which workflows the request takes
+#: src/lib/step-words.ts
+msgid "Choose the approach"
+msgstr "判断怎么做"
+
 #: src/components/DraftConversation.tsx
 msgid "Choose which agent answers"
 msgstr "选择由哪个智能体答复"
@@ -1820,6 +1876,26 @@ msgstr "选择由哪个智能体答复"
 #: src/components/LibrarySurface.tsx
 msgid "Choose which session player answers {role}"
 msgstr "选择由哪个会话 Player 担任 {role}"
+
+#. a call's outcome: the analyst chose the code path
+#: src/lib/step-words.ts
+msgid "chose /code"
+msgstr "选择 /code"
+
+#. a call's outcome: the analyst chose to code and deliver by pull request
+#: src/lib/step-words.ts
+msgid "chose /code with a pull request"
+msgstr "选择 /code 并开 PR"
+
+#. a call's outcome: the analyst chose to decide before coding
+#: src/lib/step-words.ts
+msgid "chose /decide, then /code"
+msgstr "选择先 /decide 再 /code"
+
+#. a call's outcome: the analyst chose to decide, then code and deliver by pull request
+#: src/lib/step-words.ts
+msgid "chose /decide, then /code with a pull request"
+msgstr "选择先 /decide 再 /code 并开 PR"
 
 #. package card: opens the list of packages sharing citations with the selected one
 #: src/components/SpecGraph.tsx
@@ -1933,6 +2009,11 @@ msgstr "将该意图记为已放弃并关闭 — 本轮继续运行"
 msgid "Close this tab — the session stays in the sidebar"
 msgstr "关闭此标签页 — 会话仍留在侧栏"
 
+#. a call's outcome: no repository work follows
+#: src/lib/step-words.ts
+msgid "closed the discussion"
+msgstr "结束讨论"
+
 #. heading over the file naming where a project's code lives
 #. join step: cloning the project's code
 #: src/lib/space.ts
@@ -2011,13 +2092,34 @@ msgstr "提交或丢弃它们"
 msgid "Commit or discard what is left"
 msgstr "提交或丢弃剩余更改"
 
+#. a call's outcome: it committed its change
+#. a call's outcome: it committed its change
+#: src/lib/step-words.ts
+msgid "committed"
+msgstr "已提交"
+
 #: src/lib/failure-catalogue.ts
 msgid "Committed {oid} but left changes uncommitted"
 msgstr "已提交 {oid}，但仍有更改未提交"
 
+#. a call's outcome: it committed one task, more remain
+#: src/lib/step-words.ts
+msgid "committed a task"
+msgstr "已提交一项任务"
+
+#. a call's outcome: it committed a new intent record
+#: src/lib/step-words.ts
+msgid "committed an IR"
+msgstr "已提交 IR"
+
 #: src/lib/failure-catalogue.ts
 msgid "Committed nothing"
 msgstr "未做任何提交"
+
+#. a call's outcome: it committed the final task
+#: src/lib/step-words.ts
+msgid "committed the last task"
+msgstr "已提交最后一项任务"
 
 #: src/lib/failure-catalogue.ts
 msgid "Committed, but left changes uncommitted"
@@ -2288,6 +2390,11 @@ msgstr "复制路径"
 msgid "Could not answer {tool} for {actor}: {reason}"
 msgstr "无法答复 {actor} 的 {tool} 请求：{reason}"
 
+#. a call's outcome: the inspection could not run
+#: src/lib/step-words.ts
+msgid "could not inspect"
+msgstr "无法调查"
+
 #: src/components/SpecView.tsx
 msgid "Could not open {path}"
 msgstr "无法打开 {path}"
@@ -2372,6 +2479,11 @@ msgstr "无法撤销：{reason}"
 msgid "Create"
 msgstr "新建"
 
+#. a step: the coder creates the work branch
+#: src/lib/step-words.ts
+msgid "Create a branch"
+msgstr "建分支"
+
 #: src/components/ProjectPalette.tsx
 msgid "Create a new project…"
 msgstr "创建新项目…"
@@ -2392,6 +2504,11 @@ msgstr "创建项目"
 #: src/components/SettingsSurface.tsx
 msgid "Created a starter config at <0>{path}</0>"
 msgstr "已在 <0>{path}</0> 创建初始配置"
+
+#. a call's outcome: the branch exists
+#: src/lib/step-words.ts
+msgid "created the branch"
+msgstr "已建分支"
 
 #. the Create control, while the host creates the group
 #: src/components/SpaceMembers.tsx
@@ -2548,6 +2665,11 @@ msgstr "说说你的目标。AI 帮你把系统该做什么、怎样检查结果
 msgid "desktop"
 msgstr "桌面通知"
 
+#. a call's outcome: no pull request was opened
+#: src/lib/step-words.ts
+msgid "did not publish"
+msgstr "未发布"
+
 #. stop offering this playbook in this config
 #. stop offering this playbook in this config
 #: src/components/LibrarySurface.tsx
@@ -2616,15 +2738,17 @@ msgstr "忽略错误"
 msgid "Does"
 msgstr "功能"
 
+#. a status word: it finished its work
+#. a status word: it finished its work
 #. compile phase: finished well
 #. history row: work carried through and confirmed
 #. history row: work carried through and confirmed
-#. how a run ended: it finished its work
 #: src/components/CompileBand.tsx
 #: src/components/MachineCard.tsx
 #: src/components/ProjectGroup.tsx
+#: src/lib/status-words.ts
 msgid "done"
-msgstr "完成"
+msgstr "已完成"
 
 #: src/components/TrustedMedia.tsx
 msgid "Download {name}"
@@ -3017,8 +3141,10 @@ msgstr "外部引用"
 #. a piece of work's state: it failed
 #. a piece of work's state: it failed
 #. a piece of work's state: it failed
+#. a status word: it failed
+#. a status word: it failed
+#. a status word: it failed
 #. compile phase: stopped on an error
-#. how a run ended: it failed
 #. how a tool call ended: it failed
 #. last resort: a failure with no words
 #: src/App.tsx
@@ -3029,6 +3155,7 @@ msgstr "外部引用"
 #: src/components/NavRail.tsx
 #: src/components/PlayerPane.tsx
 #: src/lib/labels.ts
+#: src/lib/status-words.ts
 msgid "failed"
 msgstr "失败"
 
@@ -3141,6 +3268,11 @@ msgstr "已完成"
 msgid "finished — confirm?"
 msgstr "已完成 — 确认？"
 
+#. a call's outcome: the inspection is done
+#: src/lib/step-words.ts
+msgid "finished the inspection"
+msgstr "已完成调查"
+
 #. control: show the whole graph at once
 #: src/components/SpecGraph.tsx
 msgid "Fit to window"
@@ -3157,6 +3289,11 @@ msgstr "在设置中修复适配器"
 #: src/components/SettingsSurface.tsx
 msgid "Fix the file in your editor; Spex reloads it live."
 msgstr "请在编辑器中修复该文件；Spex 会实时重新加载。"
+
+#. a step: the coder fixes what the review found
+#: src/lib/step-words.ts
+msgid "Fix the findings"
+msgstr "按审查意见修改"
 
 #: src/lib/labels.ts
 msgid "Fix the player in Settings"
@@ -3222,6 +3359,16 @@ msgstr "在此设备上忘记 {host}；所有记录仍保留在此"
 #: src/components/SpaceInstance.tsx
 msgid "Forgot {host}"
 msgstr "已忘记 {host}"
+
+#. a call's outcome: the review raised nothing
+#: src/lib/step-words.ts
+msgid "found no problems"
+msgstr "未发现问题"
+
+#. a call's outcome: the review raised findings
+#: src/lib/step-words.ts
+msgid "found problems"
+msgstr "发现问题"
 
 #. label before the spec package a playbook comes from
 #: src/components/LibrarySurface.tsx
@@ -3347,7 +3494,7 @@ msgid "Groups are made by the people who run {name}"
 msgstr "群组由运营 {name} 的人创建"
 
 #. a delegation line: the Captain gave this call to the named player
-#: src/components/CaptainPane.tsx
+#: src/components/CallLines.tsx
 msgid "Handed to {player}"
 msgstr "交给 {player}"
 
@@ -3430,10 +3577,20 @@ msgstr "空闲，有失败未处理"
 msgid "image"
 msgstr "图片"
 
+#. a step: the coder implements the request
+#: src/lib/step-words.ts
+msgid "Implement"
+msgstr "实现"
+
 #. the built-in /code playbook's intent, as its registry entry states it
 #: src/lib/playbook-intent.ts
 msgid "implement a coding intent in reviewed, one-commit phases, using an intent record when needed"
 msgstr "分阶段实现编码意图，每个阶段经审阅、形成一个提交，必要时使用意图记录"
+
+#. a step: the coder implements the next task of an intent record
+#: src/lib/step-words.ts
+msgid "Implement an IR task"
+msgstr "实现 IR 任务"
 
 #: src/App.tsx
 #: src/components/NavRail.tsx
@@ -3452,6 +3609,11 @@ msgstr "继承 Player（关闭）"
 #: src/components/BindingEditor.tsx
 msgid "Inherit the player (on)"
 msgstr "继承 Player（开启）"
+
+#. a step: the inspector investigates the request
+#: src/lib/step-words.ts
+msgid "Inspect"
+msgstr "调查"
 
 #. the built-in /inspect playbook's intent, as its registry entry states it
 #: src/lib/playbook-intent.ts
@@ -3654,6 +3816,11 @@ msgstr "将两段历史合并为一段？有差异的内容会让你选择。"
 #: src/components/ProjectPalette.tsx
 msgid "Joining…"
 msgstr "加入中…"
+
+#. a return line's tag: the Captain is judging what the call came back with
+#: src/components/CallLines.tsx
+msgid "judging"
+msgstr "判定中"
 
 #: src/components/SpecView.tsx
 msgid "Jumped to {id}"
@@ -3905,6 +4072,11 @@ msgstr "将两段历史合并为一段后即可同步。"
 msgid "Merge histories…"
 msgstr "合并历史…"
 
+#. a step: the coder merges both proposals into specs and commits
+#: src/lib/step-words.ts
+msgid "Merge the proposals"
+msgstr "合并方案"
+
 #. the Merge histories… control while both histories are merged
 #: src/components/SpacePlacements.tsx
 msgid "Merging…"
@@ -4027,11 +4199,6 @@ msgstr "登录后以你的用户名命名"
 #: src/components/SettingsSurface.tsx
 msgid "Named by {project}, not set up here"
 msgstr "{project} 指定，此处尚未设置"
-
-#. session status: the run failed and waits for the Boss
-#: src/lib/labels.ts
-msgid "needs attention"
-msgstr "需要关注"
 
 #: src/components/DashboardSurface.tsx
 msgid "Needs attention"
@@ -4642,6 +4809,11 @@ msgstr "打开 {title} — 正在 {project} 中运行"
 msgid "Open a project from your groups"
 msgstr "从群组打开项目"
 
+#. a step: the coder opens the pull request
+#: src/lib/step-words.ts
+msgid "Open a pull request"
+msgstr "开 PR"
+
 #: src/components/DashboardSurface.tsx
 msgid "Open and send a message to pick it up."
 msgstr "打开并发送一条消息即可接续。"
@@ -4745,6 +4917,11 @@ msgstr "已打开 {id}"
 #: src/components/SpecView.tsx
 msgid "Opened the decision records"
 msgstr "已打开决策记录"
+
+#. a call's outcome: the pull request exists
+#: src/lib/step-words.ts
+msgid "opened the pull request"
+msgstr "已开 PR"
 
 #. the instance's contract, in the words its record fixes, shown before a seat's first open on this device; {server} is the server's name, {instance} the instance's; Devices is the instance's page of devices
 #: src/components/SpaceServers.tsx
@@ -5051,6 +5228,17 @@ msgstr "项目与会话"
 msgid "Prompt"
 msgstr "提示词"
 
+#. a step: a player writes its own design proposal
+#. a step: a player writes its own design proposal
+#: src/lib/step-words.ts
+msgid "Propose a design"
+msgstr "写方案"
+
+#. a call's outcome: it gave its design proposal
+#: src/lib/step-words.ts
+msgid "proposed a design"
+msgstr "已提出方案"
+
 #: src/components/DraftConversation.tsx
 msgid "Proposed enabling"
 msgstr "拟定的启用信息"
@@ -5346,6 +5534,11 @@ msgstr "刷新状态和 GitHub 数据"
 msgid "Refreshing…"
 msgstr "刷新中…"
 
+#. a call's outcome: the player declined the step
+#: src/lib/step-words.ts
+msgid "refused"
+msgstr "拒绝执行"
+
 #. a spec package's source: the registry
 #: src/lib/environments.ts
 msgid "registry"
@@ -5354,6 +5547,11 @@ msgstr "注册表"
 #: src/lib/environments.ts
 msgid "registry {requirement}"
 msgstr "注册表 {requirement}"
+
+#. a call's outcome: the coder rejected every finding
+#: src/lib/step-words.ts
+msgid "rejected the findings"
+msgstr "驳回审查意见"
 
 #. confirm: re-read the file from disk
 #. confirm: re-read the file from disk
@@ -5720,14 +5918,29 @@ msgstr "重试中…"
 msgid "Return (Alt+Left)"
 msgstr "返回（Alt+←）"
 
+#. a step: the reviewer reviews the change
+#: src/lib/step-words.ts
+msgid "Review"
+msgstr "审查"
+
 #. the built-in /review playbook's intent, as its registry entry states it
 #: src/lib/playbook-intent.ts
 msgid "review a supplied scope of committed work until no unsettled findings remain"
 msgstr "审阅给定范围内已提交的工作，直到没有未解决的审阅意见"
 
+#. a step: the reviewer reviews again after the coder rejected the findings
+#: src/lib/step-words.ts
+msgid "Review again"
+msgstr "复审"
+
 #: src/components/CaptainHome.tsx
 msgid "review committed changes"
 msgstr "审阅已提交改动"
+
+#. a step: the reviewer reviews the coder's fixes
+#: src/lib/step-words.ts
+msgid "Review the fixes"
+msgstr "复审修改"
 
 #. attention row control: say this turn has been read
 #: src/components/DashboardSurface.tsx
@@ -5747,14 +5960,16 @@ msgstr "角色"
 msgid "roles: {roles}"
 msgstr "角色：{roles}"
 
+#. a status word: at work now
+#. a status word: at work now
 #. compile phase: under way
 #. session row: a turn is in flight
 #. the aliveness mark's own word: this thing is at work
-#. the aliveness mark's own word: this thing is at work
 #: src/components/CompileBand.tsx
-#: src/components/MachineCard.tsx
 #: src/components/NavRail.tsx
 #: src/components/RunningMark.tsx
+#: src/lib/labels.ts
+#: src/lib/status-words.ts
 msgid "running"
 msgstr "运行中"
 
@@ -5768,6 +5983,11 @@ msgstr "运行中"
 #: src/components/PlayerPane.tsx
 msgid "Running"
 msgstr "运行中"
+
+#. a tool call still at work and how long it has run
+#: src/components/PlayerPane.tsx
+msgid "running · {span}"
+msgstr "运行中 · {span}"
 
 #: src/components/ParkedRun.tsx
 msgid "Running the workflow's control"
@@ -6539,11 +6759,6 @@ msgstr "停止"
 msgid "Stop requesting this spec package"
 msgstr "不再请求此规约包"
 
-#. how a run ended: it was stopped
-#: src/components/MachineCard.tsx
-msgid "stopped"
-msgstr "已停止"
-
 #: src/lib/failure-catalogue.ts
 msgid "Stopped before it finished"
 msgstr "未完成即被停止"
@@ -6740,6 +6955,10 @@ msgid "The /{command} workflow failed and is waiting for you."
 msgstr "/{command} 工作流失败，正在等待你处理。"
 
 #: src/components/ParkedRun.tsx
+msgid "The /{command} workflow is aborted."
+msgstr "/{command} 流程已中止。"
+
+#: src/components/ParkedRun.tsx
 msgid "The /{command} workflow is waiting for your answer."
 msgstr "/{command} 工作流正在等待你的答复。"
 
@@ -6915,12 +7134,20 @@ msgid "The workflow failed and is waiting for you."
 msgstr "工作流失败，正在等待你处理。"
 
 #: src/components/ParkedRun.tsx
+msgid "The workflow is aborted."
+msgstr "流程已中止。"
+
+#: src/components/ParkedRun.tsx
 msgid "The workflow is waiting for your answer."
 msgstr "工作流正在等待你的答复。"
 
 #: src/components/PlaybookStages.tsx
 msgid "The workflow markdown the playbook was compiled from"
 msgstr "规程编译所用的工作流 markdown"
+
+#: src/components/FailureCard.tsx
+msgid "The workflow was aborted"
+msgstr "流程已中止"
 
 #. a placement's members panel; {names} lists the other instances the records are kept at, by display name
 #: src/components/SpaceMembers.tsx
@@ -6936,6 +7163,11 @@ msgstr "这些会话"
 #: src/components/PlayerPane.tsx
 msgid "Thinking"
 msgstr "思考过程"
+
+#. the lane's foot: the player is between steps, its model at work
+#: src/components/PlayerPane.tsx
+msgid "Thinking…"
+msgstr "思考中…"
 
 #: src/lib/useBrowserTools.ts
 msgid "This agent cannot ask for tool approval in this conversation."
@@ -7147,6 +7379,11 @@ msgstr "未提交的更改"
 #: src/lib/failure-catalogue.ts
 msgid "Uncommitted changes you had were lost"
 msgstr "你原有的未提交更改已丢失"
+
+#. a return line's tag: no outcome was accepted for the call
+#: src/components/CallLines.tsx
+msgid "unconfirmed"
+msgstr "未确认"
 
 #. put the row just removed back where it was
 #. put the row just removed back where it was
@@ -7385,6 +7622,13 @@ msgstr "等待能在 {group} 中创建它的成员"
 msgid "Waiting for a member who can prepare its branch in {group}"
 msgstr "等待能在 {group} 中准备其分支的成员"
 
+#. a status word: it waits for the Boss to act
+#. a status word: it waits for the Boss to act
+#: src/lib/labels.ts
+#: src/lib/status-words.ts
+msgid "waiting for you"
+msgstr "等待处理"
+
 #. a placement's line: its first push waits for the sharing notice to be seen; Continue stands beside it
 #. a placement's line: its first push waits for the sharing notice to be seen; Continue stands beside it
 #: src/lib/space.ts
@@ -7396,9 +7640,7 @@ msgid "waiting for your queued message"
 msgstr "等待你已排队的消息"
 
 #. session row: the run parked on a question
-#. session status: a player asked the Boss a question
 #: src/components/NavRail.tsx
-#: src/lib/labels.ts
 msgid "waiting for your reply"
 msgstr "等待你的回复"
 
@@ -7463,9 +7705,7 @@ msgid "Workflow waiting for you"
 msgstr "工作流等待你处理"
 
 #. captured artifact's state: a turn is running for it
-#. session status: a player is running its step
 #: src/components/ForgeItemRow.tsx
-#: src/lib/labels.ts
 msgid "working"
 msgstr "工作中"
 
@@ -7504,6 +7744,11 @@ msgstr "可写路径（逗号分隔）"
 #: src/components/CaptainHome.tsx
 msgid "Write clear specs. Build with playbooks."
 msgstr "写清规约，按规程开发。"
+
+#. the lane's foot: the player is writing its reply
+#: src/components/PlayerPane.tsx
+msgid "Writing a reply"
+msgstr "正在写回复"
 
 #. the source is being written to disk
 #: src/components/DraftSourceTab.tsx

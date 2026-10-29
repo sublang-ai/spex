@@ -8,6 +8,7 @@
 Accepted (2026-10-26) for the owner's P0-2 refinement.
 Amends [DR-032](032-session-players.md) in how a player is named on every surface: by a short name and a letter mark, its id in a tooltip.
 Amends [DR-075](075-a-failure-says-what-and-what-now.md) in a failure's "what now": a failure naming its agent offers the way to that agent's settings.
+Amended by [DR-160](160-the-captain-dispatches-in-plain-sight.md) in its delegation lines: every call puts its line at its traced start, naming its step, and a return line follows it.
 
 ## Context
 

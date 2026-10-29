@@ -166,7 +166,7 @@ describe("run-view-180: a player reads by its name and mark", () => {
   });
 });
 
-describe("run-view-181: a delegation line per first call and per changed model", () => {
+describe("run-view-181: a delegation line per call, naming the model per first call and per changed model", () => {
   const lines = () => screen.queryAllByTestId(/^delegation-line-/).map((line) => line.textContent);
 
   test("each line reads its own call's model and survives a later change", () => {
@@ -175,6 +175,9 @@ describe("run-view-181: a delegation line per first call and per changed model",
       // Reported in `init`, so the runtime's model.
       "CHanded to coder · claude · claude-opus-5-5-20261001",
       "RHanded to reviewer · codex · gpt-6-sol",
+      // A later call running as the previous one did names no model.
+      "CHanded to coder",
+      "RHanded to reviewer",
       "RHanded to reviewer · codex · gpt-6-mini",
       // Two bindings disagree on the role: no model is claimed.
       "AHanded to analyst · claude",

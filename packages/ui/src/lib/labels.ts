@@ -22,16 +22,11 @@ const idle = (): string =>
   i18n._({ id: "idle", comment: "session status: nothing is running" });
 
 const STATE_LABELS: Record<string, () => string> = {
+  // The one status vocabulary (run-view-186).
   awaitBossReply: () =>
-    i18n._({
-      id: "waiting for your reply",
-      comment: "session status: a player asked the Boss a question",
-    }),
+    i18n._({ id: "waiting for you", comment: "a status word: it waits for the Boss to act" }),
   failed: () =>
-    i18n._({
-      id: "needs attention",
-      comment: "session status: the run failed and waits for the Boss",
-    }),
+    i18n._({ id: "failed", comment: "a status word: it failed" }),
   idle,
   ready: () =>
     i18n._({ id: "ready", comment: "session status: ready to be told what to do" }),
@@ -97,6 +92,8 @@ export function stateLabel(
     /** The state id of the run standing parked in its recoverable
      * failure state, where one stands (run-view-59). */
     parkedFailure?: string;
+    /** That park is the Boss's own stop (run-view-186). */
+    parkedAborted?: boolean;
     turnActive?: boolean;
     playersRunning?: boolean;
   },
@@ -111,6 +108,13 @@ export function stateLabel(
   // A live turn keeps its own voice, so the parked leaf speaks only
   // once the turn settles — where the reported state is the shell's.
   const parked = options?.turnActive ? undefined : options?.parkedFailure;
+  if (parked && options?.parkedAborted) {
+    return {
+      text: i18n._({ id: "aborted", comment: "a status word: it was stopped before it finished" }),
+      tone: "neutral",
+      state: parked,
+    };
+  }
   if (fsmState === "failed" || parked) {
     return {
       text: STATE_LABELS.failed(),
@@ -123,8 +127,8 @@ export function stateLabel(
     return {
       text: options.playersRunning
         ? i18n._({
-            id: "working",
-            comment: "session status: a player is running its step",
+            id: "running",
+            comment: "a status word: at work now",
           })
         : i18n._({
             id: "deciding",

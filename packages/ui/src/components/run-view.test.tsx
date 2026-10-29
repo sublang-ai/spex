@@ -350,7 +350,7 @@ describe("RUN-19: pane structure from the fixture stream", () => {
     // a provider-reported cost, and no pane shows a currency sign or
     // an estimate mark (run-view-6, DR-044).
     const coder = screen.getByTestId("player-pane-dev.coder").textContent ?? "";
-    expect(coder).toContain("120→30 tok");
+    expect(coder).toContain("120→30 token");
     expect(coder).not.toMatch(/[$≈]/);
     expect(document.body.textContent).not.toMatch(/[$≈]/);
   });
@@ -529,7 +529,7 @@ describe("RUN-37: the thread stays alive while a turn runs", () => {
     try {
       renderRun(entries);
       const indicator = screen.getByTestId("working-indicator");
-      expect(indicator.textContent).toContain("coder working · 2m 13s");
+      expect(indicator.textContent).toContain("coder running · 2m 13s");
       // The running lane's header names the role beside the lane and
       // says the same span, beside its mark (run-view-7).
       // The role is the name again, so it reads once (run-view-177).
@@ -537,14 +537,14 @@ describe("RUN-37: the thread stays alive while a turn runs", () => {
         "coder",
       );
       expect(screen.getByTestId("player-working").textContent).toBe(
-        "coder working · 2m 13s",
+        "coder running · 2m 13s",
       );
       act(() => {
         vi.advanceTimersByTime(1_000);
       });
-      expect(indicator.textContent).toContain("coder working · 2m 14s");
+      expect(indicator.textContent).toContain("coder running · 2m 14s");
       expect(screen.getByTestId("player-working").textContent).toBe(
-        "coder working · 2m 14s",
+        "coder running · 2m 14s",
       );
     } finally {
       vi.useRealTimers();
@@ -624,9 +624,9 @@ describe("run-view-143/144: cumulative active time stays with its agent", () => 
 
     // Per-call tokens remain on the result line exactly once; the
     // cumulative header adds no second usage metric or money.
-    expect(screen.getAllByText("120→30 tok")).toHaveLength(1);
+    expect(screen.getAllByText("120→30 token")).toHaveLength(1);
     const coderHeader = screen.getByTestId("player-pane-dev.coder").querySelector("header")!;
-    expect(coderHeader.textContent).not.toContain("tok");
+    expect(coderHeader.textContent).not.toContain("token");
     expect(document.body.textContent).not.toMatch(/[$≈]/);
 
     fireEvent.click(within(screen.getByTestId("player-pane-dev.coder"))
@@ -810,7 +810,7 @@ describe("run-view-143/144: cumulative active time stays with its agent", () => 
       finish(1_700_000_000_023);
       expect(screen.getByTestId("agent-active-dev.coder").textContent)
         .toBe("active · 2s");
-      expect(screen.getAllByText("120→30 tok")).toHaveLength(1);
+      expect(screen.getAllByText("120→30 token")).toHaveLength(1);
 
       // Finish first: restore the prior resting value until a later
       // summary replaces it; no terminal duration is accumulated.
@@ -820,7 +820,7 @@ describe("run-view-143/144: cumulative active time stays with its agent", () => 
       finish(1_700_000_000_026);
       expect(screen.getByTestId("agent-active-dev.coder").textContent)
         .toBe("active · 2s");
-      expect(screen.getAllByText("40→10 tok")).toHaveLength(1);
+      expect(screen.getAllByText("40→10 token")).toHaveLength(1);
       summary({ "dev.coder": 3_000 });
       expect(screen.getByTestId("agent-active-dev.coder").textContent)
         .toBe("active · 3s");
@@ -830,7 +830,7 @@ describe("run-view-143/144: cumulative active time stays with its agent", () => 
       prompt(1_700_000_000_027, "dev.reviewer");
       done(1_700_000_000_028, 5, 1, "dev.reviewer");
       expect(within(screen.getByTestId("player-pane-dev.reviewer"))
-        .getByTestId("player-working").textContent).toContain("working");
+        .getByTestId("player-working").textContent).toContain("running");
       expect(screen.queryByTestId("agent-active-dev.reviewer")).toBeNull();
       expect(screen.queryByTestId("agent-active-description-dev.reviewer")).toBeNull();
       finish(1_700_000_000_029, "dev.reviewer");
@@ -1112,7 +1112,7 @@ describe("run-view-66: the machine call tree from the trace", () => {
     renderRun(MACHINE_STOPPED);
     expect(screen.getAllByTestId(/^machine-card-/)).toHaveLength(1);
     expect(screen.getByTestId("machine-outcome-t-halt").textContent).toBe(
-      "stopped",
+      "aborted",
     );
   });
 
@@ -1169,7 +1169,9 @@ describe("run-view-60/76/81: the card's words and its fit to the pane", () => {
     const caption = within(running).getByTestId(
       "machine-caption-t-code-firstPhase",
     );
-    expect(caption.textContent).toBe("coder · dev.coder");
+    // The player reads by its name (run-view-177), and a name that is
+    // the role again reads once.
+    expect(caption.textContent).toBe("coder");
     expect(caption.getAttribute("font-size")).toBe("12");
     cleanup();
 
@@ -1193,7 +1195,7 @@ describe("run-view-60/76/81: the card's words and its fit to the pane", () => {
             payload: {
               stateId: "firstPhase",
               roleId: "coder",
-              playerId: "security.compliance.reviewer.lane",
+              playerId: "security-compliance-reviewer-lane",
             },
           },
         } as unknown as TmuxPlayRecord,
@@ -1205,7 +1207,7 @@ describe("run-view-60/76/81: the card's words and its fit to the pane", () => {
       within(state).getByTestId("machine-caption-t-code-firstPhase").textContent,
     ).toBe("coder");
     expect(state.querySelector("title")!.textContent).toContain(
-      "coder · security.compliance.reviewer.lane",
+      "coder · security-compliance-reviewer-lane",
     );
     expect(Number(state.querySelector("rect")!.getAttribute("width"))).toBeLessThanOrEqual(240);
   });
@@ -2425,6 +2427,71 @@ describe("run-view-50: color is never the only channel in a player pane", () => 
   });
 });
 
+describe("run-view-194: a lane at work says so without opening a card", () => {
+  test("a tool card awaiting its result runs, and the lane's foot names it", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(5 + 12_000);
+    try {
+      renderRun(TOOL_FATES.slice(0, 5));
+      const card = screen.getAllByText("Bash").map((el) => el.closest("details")).find(Boolean)!;
+      expect(card.open).toBe(false);
+      expect(card.dataset.running).toBe("true");
+      expect(within(card).getByTestId("tool-running-5").textContent).toMatch(/running · 12s$/);
+      expect(within(card).queryByTestId(/^tool-status-/)).toBeNull();
+      const foot = screen.getByTestId("player-working-line");
+      expect(foot.textContent).toBe("running: Bash · 12s, rm -rf build");
+      act(() => {
+        vi.advanceTimersByTime(1_000);
+      });
+      expect(within(card).getByTestId("tool-running-5").textContent).toMatch(/running · 13s$/);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test("an ended card stops running, and the foot reads the player thinking", () => {
+    renderRun(TOOL_FATES.slice(0, 6));
+    const card = screen.getAllByText("Bash").map((el) => el.closest("details")).find(Boolean)!;
+    expect(card.dataset.running).toBeUndefined();
+    expect(within(card).queryByTestId("tool-running-5")).toBeNull();
+    expect(within(card).getByTestId(/^tool-status-/).textContent).toBe("✗failed");
+    expect(screen.getByTestId("player-working-line").textContent).toBe("running: Thinking…");
+  });
+
+  test("a long tool name gives way in the foot, keeping its span and subject", () => {
+    const name = "mcp__playwright__browser_take_screenshot_of_the_whole_page";
+    renderRun([
+      ...TOOL_FATES.slice(0, 4),
+      {
+        seq: 5,
+        record: {
+          type: "player_event",
+          turnId: 1,
+          timestamp: 5,
+          playerId: "dev.coder",
+          event: {
+            type: "tool_use",
+            payload: { toolName: name, toolUseId: "tu9", input: "rm -rf build" },
+          },
+        },
+      },
+    ] as unknown as typeof FULL_RUN);
+    const foot = screen.getByTestId("player-working-line");
+    const tool = within(foot).getByTitle(name);
+    expect(tool.className).toMatch(/\btruncate\b/);
+    expect(tool.className).toContain("max-w-[50%]");
+    expect(within(foot).getByText(/^· \S/).className).toContain("shrink-0");
+    expect(within(foot).getByTitle("rm -rf build").className).toContain("flex-1");
+  });
+
+  test("a finished call leaves no running card and no foot", () => {
+    renderRun(TURN_ONE);
+    expect(screen.queryByTestId("player-working-line")).toBeNull();
+    expect(screen.queryByTestId(/^tool-running-/)).toBeNull();
+    expect(screen.getAllByText("120→30 token")).toHaveLength(1);
+  });
+});
+
 describe("run-view-83/87: links leave the page, never replace it", () => {
   afterEach(() => {
     useAppStore.setState({ ledger: undefined });
@@ -3493,10 +3560,10 @@ describe("run-view-131: the failed-workflow notice and its recovery request", ()
     // core's record the card would go on running the coder's call the
     // process died in, and no notice would stand.
     const interrupted = applyRecords(initialSessionView(PLAYERS), MACHINE_INTERRUPTED);
-    expect(interrupted.frames.map((frame) => [frame.active, frame.activePlayer?.running])).toEqual([["firstPhase", true]]);
+    expect(interrupted.frames.map((frame) => [frame.active, frame.activePlayers?.[0]?.running])).toEqual([["firstPhase", true]]);
     expect(interrupted.players["dev.coder"]?.running).toBe(true);
     const view = applyRecords(initialSessionView(PLAYERS), [...MACHINE_INTERRUPTED, ...machineRestored()]);
-    expect(view.frames.map((frame) => [frame.traceSessionId, frame.active, frame.activePlayer])).toEqual([["t-stop", "failed", undefined]]);
+    expect(view.frames.map((frame) => [frame.traceSessionId, frame.active, frame.activePlayers])).toEqual([["t-stop", "failed", undefined]]);
     // The call the process died in no longer runs on its lane either
     // (run-view-74): no running mark, no working reading.
     expect(Object.values(view.players).filter((lane) => lane.running)).toEqual([]);
@@ -3818,11 +3885,11 @@ describe("run-view-133: at rest the chip reads the leaf, not the last reporter",
     expect(view.fsmState).toBe("hub");
     const { rerender } = render(<RunView {...props(view)} />);
     const parked = screen.getByTestId("state-chip");
-    expect(parked.textContent).toBe("needs attention");
+    expect(parked.textContent).toBe("failed");
     expect(parked.className).toContain("red");
     expect(parked.getAttribute("title")).toBe("state: failed");
     rerender(<RunView {...props(viewOf(MACHINE_ANSWERED))} />);
-    expect(screen.getByTestId("state-chip").textContent).toBe("needs attention");
+    expect(screen.getByTestId("state-chip").textContent).toBe("failed");
     rerender(<RunView {...props(viewOf(MACHINE_ANSWERED, MACHINE_RECOVERED))} />);
     const chip = screen.getByTestId("state-chip");
     expect(chip.textContent).toBe("first phase");

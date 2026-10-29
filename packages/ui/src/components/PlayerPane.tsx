@@ -26,6 +26,8 @@ import { StoredMedia, assetReference, DeferredToolOutput } from "./StoredMedia.j
 import { Markdown } from "./Markdown.js";
 import { RunningMark } from "./RunningMark.js";
 import { AgentMark } from "./AgentMark.js";
+import { callPlace } from "./CallLines.js";
+import type { StepCall, StepCallState } from "../lib/step-calls.js";
 
 const RENDER_WINDOW = 200;
 
@@ -43,12 +45,12 @@ function Usage({ usage }: { usage: UsageView }) {
   return (
     <span className="text-xs text-neutral-500">
       {i18n._({
-        id: "{input}→{output} tok",
+        id: "{input}→{output} token",
         values: {
           input: (usage.inputTokens ?? 0).toLocaleString(currentLocale()),
           output: (usage.outputTokens ?? 0).toLocaleString(currentLocale()),
         },
-        comment: "a call's tokens in and out; tok is short for tokens",
+        comment: "a call's tokens in and out; token stays as it is",
       })}
     </span>
   );
@@ -81,6 +83,22 @@ export function latestCall(
     }
   }
   return undefined;
+}
+
+/** The seq of the open call's prompt: every tool card after it with
+ * no result yet is still at work (run-view-4). */
+function openCallSeq(view: PlayerView): number | undefined {
+  if (!view.running) return undefined;
+  for (let i = view.segments.length - 1; i >= 0; i -= 1) {
+    const segment = view.segments[i];
+    if (segment.kind === "prompt") return segment.seq;
+  }
+  return undefined;
+}
+
+function pendingTool(segment: TranscriptSegment, openSeq: number | undefined): boolean {
+  return openSeq !== undefined && segment.kind === "tool" &&
+    segment.status === undefined && segment.seq > openSeq;
 }
 
 function toolSubject(input: unknown): string | undefined {
@@ -123,11 +141,39 @@ export function toolLabel(name: string): string {
 /** One transcript segment as the pane draws it (run-view-3/4):
  * exported so the authoring thread renders the agent's segments with
  * the same cards (playbook-library-53). */
-export function Segment({ segment }: { segment: TranscriptSegment }) {
+export function Segment({
+  segment,
+  call,
+  onShowDispatch,
+  now,
+}: {
+  segment: TranscriptSegment;
+  /** Set only on a tool card still at work in the open call: the
+   * clock its running span reads against (run-view-4). */
+  now?: number;
+  /** The traced call a prompt began, whose step it names (run-view-181). */
+  call?: StepCall;
+  onShowDispatch?: (callKey: string) => void;
+}) {
   const [expanded, setExpanded] = useState(false);
   switch (segment.kind) {
-    case "prompt":
+    case "prompt": {
+      const place = call ? callPlace(call) : undefined;
       return (
+        <div data-call-block={segment.callKey} className="flex flex-col gap-1">
+        {call && place ? (
+          // Which playbook's which step this call runs, leading back to
+          // the Captain's delegation line (run-view-181).
+          <button
+            type="button"
+            data-testid={`call-label-${segment.seq}`}
+            onClick={() => onShowDispatch?.(call.key)}
+            title={place.full}
+            className="self-start rounded text-left text-xs font-medium text-neutral-700 hover:text-brand-600 dark:text-neutral-300 dark:hover:text-brand-300"
+          >
+            {place.short}
+          </button>
+        ) : null}
         <details
           title={timeTitle(segment.at)}
           className="rounded border border-neutral-200 bg-neutral-100/60 px-2 py-1 text-xs text-neutral-600 dark:border-neutral-800 dark:bg-neutral-900/60 dark:text-neutral-400"
@@ -160,7 +206,9 @@ export function Segment({ segment }: { segment: TranscriptSegment }) {
             {segment.text}
           </pre>
         </details>
+        </div>
       );
+    }
     case "text":
       return (
         <div>
@@ -219,8 +267,20 @@ export function Segment({ segment }: { segment: TranscriptSegment }) {
                   tone: "text-red-600 dark:text-red-400",
                 }
               : undefined;
+      // A card still at work says so on its own row, collapsed or not:
+      // the running mark where the ending's mark will stand, and its
+      // ticking span, on a tinted ground (run-view-4).
+      const working = now !== undefined && !outcome;
       return (
-        <details onToggle={(event) => setExpanded(event.currentTarget.open)} className="rounded border border-neutral-200 bg-white px-2 py-1 text-xs dark:border-neutral-800 dark:bg-neutral-900">
+        <details
+          data-running={working ? "true" : undefined}
+          onToggle={(event) => setExpanded(event.currentTarget.open)}
+          className={`rounded border px-2 py-1 text-xs ${
+            working
+              ? "border-emerald-300 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/40"
+              : "border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900"
+          }`}
+        >
           <summary className="min-w-0 cursor-pointer select-none font-mono">
             {/* Long tool names wrap in narrow lanes; the subject takes
                 remaining room and elides without widening the pane. */}
@@ -234,6 +294,19 @@ export function Segment({ segment }: { segment: TranscriptSegment }) {
               <span className="min-w-0 max-w-full [overflow-wrap:anywhere]" title={segment.toolName}>
                 {toolLabel(segment.toolName)}
               </span>
+              {working ? (
+                <span
+                  data-testid={`tool-running-${segment.seq}`}
+                  className="inline-flex shrink-0 items-center gap-1 self-center font-sans text-emerald-700 dark:text-emerald-400"
+                >
+                  <RunningMark running aria-hidden="true" />
+                  {i18n._({
+                    id: "running · {span}",
+                    values: { span: duration(Math.max(0, now - segment.at)) },
+                    comment: "a tool call still at work and how long it has run",
+                  })}
+                </span>
+              ) : null}
               {outcome ? (
                 <span
                   data-testid={`tool-status-${segment.seq}`}
@@ -336,13 +409,13 @@ export function Segment({ segment }: { segment: TranscriptSegment }) {
               segment.status === "ok"
                 ? "text-emerald-700 dark:text-emerald-400"
                 : segment.status === "aborted"
-                  ? "text-amber-600 dark:text-amber-400"
+                  ? "text-neutral-600 dark:text-neutral-400"
                   : "text-red-600 dark:text-red-400"
             }
           >
             {segment.status === "ok"
               ? i18n._({
-                  id: "✓ finished",
+                  id: "✓ done",
                   comment: "how a player's call ended; ✓ stays as it is",
                 })
               : segment.status === "aborted"
@@ -374,6 +447,62 @@ export function Segment({ segment }: { segment: TranscriptSegment }) {
   }
 }
 
+/** The lane's foot while its call is open (run-view-7): what the
+ * player is doing now, read from the open call's latest entry, so a
+ * reader scrolled anywhere in the transcript sees the lane at work. */
+function WorkingLine({
+  view,
+  openSeq,
+  now,
+}: {
+  view: PlayerView;
+  openSeq: number | undefined;
+  now: number;
+}) {
+  const last = view.segments[view.segments.length - 1];
+  const open = last !== undefined && openSeq !== undefined && last.seq > openSeq ? last : undefined;
+  let doing: string;
+  let span: string | undefined;
+  let subject: string | undefined;
+  if (open && pendingTool(open, openSeq) && open.kind === "tool") {
+    doing = toolLabel(open.toolName);
+    span = duration(Math.max(0, now - open.at));
+    subject = toolSubject(open.input);
+  } else if (open?.kind === "text" && open.streaming) {
+    doing = i18n._({
+      id: "Writing a reply",
+      comment: "the lane's foot: the player is writing its reply",
+    });
+  } else {
+    doing = i18n._({
+      id: "Thinking…",
+      comment: "the lane's foot: the player is between steps, its model at work",
+    });
+  }
+  return (
+    <div
+      data-testid="player-working-line"
+      className="flex min-w-0 items-center gap-1.5 border-t border-emerald-200 bg-emerald-50/70 px-3 py-1 text-xs text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300"
+    >
+      <RunningMark running />
+      {/* Read aloud as one line: the mark's word, then each part apart. */}
+      <span className="sr-only">: </span>
+      {/* A long tool name, such as an MCP tool's, gives way before the span
+          and keeps half the line for the subject; its title holds it whole. */}
+      <span title={doing} className="min-w-0 max-w-[50%] truncate font-mono">
+        {doing}
+      </span>
+      {span ? <span className="shrink-0 whitespace-pre font-mono">{` · ${span}`}</span> : null}
+      {subject ? (
+        <span title={subject} className="min-w-0 flex-1 truncate font-mono text-neutral-500 dark:text-neutral-400">
+          <span className="sr-only">, </span>
+          {subject}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
 export function PlayerPane({
   view,
   meta,
@@ -387,6 +516,8 @@ export function PlayerPane({
   onCollapsedChange,
   name = view.id,
   chipHighlighted = false,
+  calls,
+  onShowDispatch,
 }: {
   view: PlayerView;
   meta?: SessionInfo["players"][number];
@@ -410,6 +541,9 @@ export function PlayerPane({
   /** A failure's "Adjust" points at the chip before its popover opens
    * (run-view-179). */
   chipHighlighted?: boolean;
+  /** The traced calls the lane's call labels read (run-view-181). */
+  calls?: StepCallState;
+  onShowDispatch?: (callKey: string) => void;
 }) {
   const [windowSize, setWindowSize] = useState(RENDER_WINDOW);
   const { scrollRef, contentRef, onScroll, newBelow, jump, revealAbove } = useStickToBottom(
@@ -513,11 +647,20 @@ export function PlayerPane({
   }
 
   const segments = view.segments.slice(-windowSize);
+  const openSeq = openCallSeq(view);
+  // The lane's frame wears its status (run-view-186): running while its
+  // call is open, failed where its last call failed.
+  const lastResult = [...view.segments].reverse().find((segment) => segment.kind === "result");
+  const laneTone = view.running
+    ? "border-emerald-400 dark:border-emerald-700"
+    : lastResult?.kind === "result" && lastResult.status === "error"
+      ? "border-red-300 dark:border-red-900"
+      : "border-neutral-200 dark:border-neutral-800";
 
   return (
     <section
       data-testid={`player-pane-${view.id}`}
-      className="@container grid min-h-min min-w-[280px] flex-1 grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(min-content,1fr)] rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900"
+      className={`@container grid min-h-min min-w-[280px] flex-1 grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(min-content,1fr)_auto] rounded-lg border bg-white dark:bg-neutral-900 ${laneTone}`}
     >
       {/* One line at any pane width: identity and controls remain;
           cumulative time yields before a live elapsed reading. */}
@@ -599,14 +742,14 @@ export function PlayerPane({
               {call ? (
                 <span
                   data-testid="player-working"
-                  title={i18n._("{who} working since {since}", {
+                  title={i18n._("{who} running since {since}", {
                     who,
                     since: absoluteTitle(call.at),
                   })}
                   className="hidden whitespace-nowrap text-xs text-neutral-500 @md:inline dark:text-neutral-400"
                 >
                   {i18n._({
-                    id: "{who} working · {span}",
+                    id: "{who} running · {span}",
                     values: { who, span: duration(now - call.at) },
                     comment: "who is at work and how long the open call has run",
                   })}
@@ -657,7 +800,15 @@ export function PlayerPane({
               </button>
             ) : null}
             {segments.map((segment) => (
-              <Segment key={segment.seq} segment={segment} />
+              <Segment
+                key={segment.seq}
+                segment={segment}
+                call={segment.kind === "prompt" && segment.callKey
+                  ? calls?.calls.find((entry) => entry.key === segment.callKey)
+                  : undefined}
+                onShowDispatch={onShowDispatch}
+                {...(pendingTool(segment, openSeq) ? { now } : {})}
+              />
             ))}
           </div>
         </div>
@@ -670,6 +821,7 @@ export function PlayerPane({
           </button>
         ) : null}
       </div>
+      {view.running ? <WorkingLine view={view} openSeq={openSeq} now={now} /> : null}
     </section>
   );
 }
