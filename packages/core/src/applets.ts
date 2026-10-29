@@ -88,6 +88,26 @@ export function appletPolicy(origin: string): string {
   ].join("; ");
 }
 
+/** The headers every answer under `/applets/` carries, a refusal
+ * included (applets-4, applets-5): the policy names the scheme the
+ * request arrived by and the host it addressed, `'none'` where its Host
+ * names no origin. */
+function answerHeaders(req: IncomingMessage): OutgoingHttpHeaders {
+  const host = req.headers.host;
+  const scheme = (req.socket as Partial<TLSSocket>).encrypted ? "https" : "http";
+  return {
+    "cache-control": "no-store",
+    "x-content-type-options": "nosniff",
+    // A page's `dns-prefetch` hint resolves no host name (DR-161).
+    "x-dns-prefetch-control": "off",
+    // The sandboxed page's origin is opaque, so each read of its own
+    // paths is a cross-origin read, a refusal read as one too
+    // (applets-4).
+    "access-control-allow-origin": "*",
+    "content-security-policy": appletPolicy(host && HOST_RE.test(host) ? `${scheme}://${host}` : "'none'"),
+  };
+}
+
 /** Whether `path` is `root` or lies below it. */
 function within(root: string, path: string): boolean {
   return path === root || path.startsWith(root.endsWith(sep) ? root : root + sep);
@@ -147,11 +167,12 @@ export class AppletServer {
   }
 
   /** Refuse a WebSocket handshake under `/applets/` (applets-4): `404`
-   * with an empty body. */
-  refuseUpgrade(socket: Duplex): void {
+   * with an empty body and the headers of every answer there. */
+  refuseUpgrade(req: IncomingMessage, socket: Duplex): void {
+    const headers = Object.entries(answerHeaders(req)).map(([name, value]) => `${name}: ${String(value)}\r\n`).join("");
     socket.on("error", () => socket.destroy());
     socket.once("finish", () => socket.destroy());
-    socket.end("HTTP/1.1 404 Not Found\r\nConnection: close\r\nContent-Length: 0\r\n\r\n");
+    socket.end(`HTTP/1.1 404 Not Found\r\nConnection: close\r\n${headers}Content-Length: 0\r\n\r\n`);
   }
 
   /** Answer an HTTP request under `/applets/` (applets-4, applets-5);
@@ -159,14 +180,7 @@ export class AppletServer {
   handle(req: IncomingMessage, res: ServerResponse): boolean {
     const path = pathOf(req.url);
     if (!path.startsWith(APPLETS_PATH)) return false;
-    const base: OutgoingHttpHeaders = {
-      "cache-control": "no-store",
-      "x-content-type-options": "nosniff",
-      // The sandboxed page's origin is opaque, so each read of its own
-      // paths is a cross-origin read, a refusal read as one too
-      // (applets-4).
-      "access-control-allow-origin": "*",
-    };
+    const base = answerHeaders(req);
     const refuse = (status: 404 | 405): void => {
       res.writeHead(status, { ...base, ...(status === 405 ? { allow: "GET, HEAD" } : {}), "content-length": 0 }).end();
     };
@@ -244,13 +258,7 @@ export class AppletServer {
       refuse(404);
       return true;
     }
-    const scheme = (req.socket as Partial<TLSSocket>).encrypted ? "https" : "http";
-    res.writeHead(200, {
-      ...base,
-      "content-type": type,
-      "content-length": body.length,
-      "content-security-policy": appletPolicy(`${scheme}://${host}`),
-    });
+    res.writeHead(200, { ...base, "content-type": type, "content-length": body.length });
     res.end(req.method === "HEAD" ? undefined : body);
     return true;
   }

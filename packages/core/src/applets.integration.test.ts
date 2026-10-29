@@ -123,8 +123,8 @@ function fetchRaw(port: number, path: string, options: { method?: string; host?:
 }
 
 /** A WebSocket handshake under `path`: the status it was refused with,
- * and the refusal's body. */
-function handshake(port: number, path: string): Promise<{ status: number; body: string }> {
+ * the refusal's headers and its body. */
+function handshake(port: number, path: string): Promise<{ status: number; headers: IncomingHttpHeaders; body: string }> {
   return new Promise((resolve, reject) => {
     const socket = new WebSocket(`ws://127.0.0.1:${port}${path}`);
     socket.on("open", () => {
@@ -134,7 +134,7 @@ function handshake(port: number, path: string): Promise<{ status: number; body: 
     socket.on("unexpected-response", (_req, res) => {
       const chunks: Buffer[] = [];
       res.on("data", (chunk: Buffer) => chunks.push(chunk));
-      res.on("end", () => resolve({ status: res.statusCode ?? 0, body: Buffer.concat(chunks).toString("utf8") }));
+      res.on("end", () => resolve({ status: res.statusCode ?? 0, headers: res.headers, body: Buffer.concat(chunks).toString("utf8") }));
     });
     socket.on("error", () => { /* the unexpected response carries the answer */ });
   });
@@ -214,6 +214,7 @@ test("applets-7: applet.open answers each capability, the core's endpoint serves
     assert.equal(answer.headers["content-type"], type, `[applets-4] ${at}'s content type`);
     assert.equal(answer.headers["cache-control"], "no-store", "[applets-4] no-store");
     assert.equal(answer.headers["x-content-type-options"], "nosniff", "[applets-4] nosniff");
+    assert.equal(answer.headers["x-dns-prefetch-control"], "off", "[applets-4] DNS prefetching off");
     assert.equal(answer.headers["access-control-allow-origin"], "*", "[applets-4] the opaque page reads its own paths");
     assert.equal(answer.headers["content-security-policy"], appletPolicy(`http://${host ?? `127.0.0.1:${port}`}`), "[applets-5] the policy names the request's scheme and Host");
     return answer;
@@ -229,6 +230,7 @@ test("applets-7: applet.open answers each capability, the core's endpoint serves
   assert.equal(listing.headers["content-type"], "application/json");
   assert.equal(listing.headers["cache-control"], "no-store");
   assert.equal(listing.headers["x-content-type-options"], "nosniff");
+  assert.equal(listing.headers["x-dns-prefetch-control"], "off");
   assert.equal(listing.headers["access-control-allow-origin"], "*", "[applets-4] the listing reads across origins");
   assert.equal(listing.headers["content-security-policy"], appletPolicy(`http://127.0.0.1:${port}`));
   const { entries } = JSON.parse(listing.body.toString("utf8")) as { entries: { name: string; kind: string; size: number; modified: number }[] };
@@ -243,17 +245,20 @@ test("applets-7: applet.open answers each capability, the core's endpoint serves
   const head = await fetchRaw(port, path, { method: "HEAD" });
   assert.equal(head.status, 200);
   assert.equal(head.body.length, 0, "[applets-4] HEAD sends no body");
-  for (const header of ["content-type", "cache-control", "x-content-type-options", "content-security-policy", "content-length"]) {
+  for (const header of ["content-type", "cache-control", "x-content-type-options", "x-dns-prefetch-control", "content-security-policy", "content-length"]) {
     assert.equal(head.headers[header], entry.headers[header], `[applets-4] HEAD's ${header} is GET's`);
   }
 
-  // Refused as the table says, each with an empty body (applets-4).
+  // Refused as the table says, each with an empty body, DNS
+  // prefetching off (applets-4) and the policy (applets-5).
   const refused = async (at: string, status: number, method?: string): Promise<void> => {
     const answer = await fetchRaw(port, at, method ? { method } : {});
     assert.equal(answer.status, status, `[applets-4] ${method ?? "GET"} ${at} is refused ${status}`);
     assert.equal(answer.body.length, 0, `[applets-4] ${at}'s refusal has an empty body`);
     // The opaque page reads a refusal as one, not as a failed read.
     assert.equal(answer.headers["access-control-allow-origin"], "*", `[applets-4] ${at}'s refusal reads across origins`);
+    assert.equal(answer.headers["x-dns-prefetch-control"], "off", `[applets-4] ${at}'s refusal turns DNS prefetching off`);
+    assert.equal(answer.headers["content-security-policy"], appletPolicy(`http://127.0.0.1:${port}`), `[applets-5] ${at}'s refusal carries the policy`);
   };
   await refused(`${path}../index.html`, 404);
   await refused(`${path}../../meta.yaml`, 404);
@@ -273,7 +278,16 @@ test("applets-7: applet.open answers each capability, the core's endpoint serves
   await refused(path, 405, "POST");
   await refused(`${path}~/README.md`, 405, "PUT");
   const upgrade = await handshake(port, `${path}?token=test`);
-  assert.deepEqual(upgrade, { status: 404, body: "" }, "[applets-4] a WebSocket handshake under the path is refused 404, empty");
+  assert.deepEqual({ status: upgrade.status, body: upgrade.body }, { status: 404, body: "" }, "[applets-4] a WebSocket handshake under the path is refused 404, empty");
+  assert.equal(upgrade.headers["x-dns-prefetch-control"], "off", "[applets-4] the handshake's refusal turns DNS prefetching off");
+  assert.equal(upgrade.headers["content-security-policy"], appletPolicy(`http://127.0.0.1:${port}`), "[applets-5] the handshake's refusal carries the policy");
+  // A Host fit to name no origin is refused, its policy naming none
+  // (applets-5).
+  const hostless = await fetchRaw(port, path, { host: "bad_host" });
+  assert.equal(hostless.status, 404, "[applets-4] a Host naming no origin is refused");
+  assert.equal(hostless.body.length, 0);
+  assert.equal(hostless.headers["x-dns-prefetch-control"], "off");
+  assert.equal(hostless.headers["content-security-policy"], appletPolicy("'none'"), "[applets-5] the policy names 'none' where the Host names no origin");
   // The endpoint's token admits nothing under the path.
   await refused(`/applets/${"A".repeat(43)}/?token=test`, 404);
   await refused(`/applets/test/?token=test`, 404);

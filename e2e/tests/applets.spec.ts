@@ -62,6 +62,7 @@ test("applets-8: an applet installed from the registry stands as a tab, shows th
   await expect(page.getByTestId("applet-source")).toHaveText(`${APPLET_PACKAGE} ${APPLET_VERSION} · applet ${APPLET_ID}`);
   const iframe = page.locator("iframe[sandbox]");
   await expect(iframe).toHaveAttribute("sandbox", "allow-scripts allow-forms allow-modals allow-downloads");
+  await expect(iframe).toHaveAttribute("referrerpolicy", "no-referrer");
   await expect(iframe).toHaveAttribute("src", /^http:\/\/127\.0\.0\.1:\d+\/applets\/[A-Za-z0-9_-]{43}\/$/);
   const frame = page.frameLocator("iframe[sandbox]");
   await expect(frame.locator("#readme")).toHaveText(readme.trim());
@@ -87,6 +88,10 @@ test("applets-8: an applet installed from the registry stands as a tab, shows th
       return "threw";
     }
   })).toBe("threw");
+  // Sent no referrer, the page learns nothing of the IDE page's address
+  // (applets-2) — on the served shell the frame's address shares that
+  // page's origin, so a referrer would carry its whole address.
+  expect(await applet.evaluate(() => document.referrer)).toBe("");
 
   // The frame navigates nowhere but the endpoint's origin (applets-9):
   // the page's own script sending its frame to a sink at another

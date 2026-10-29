@@ -2496,7 +2496,7 @@ export class CoreService {
     // (applets-4); every other one is the WebSocket endpoint's to admit.
     this.upgradeListener = (req, socket, head) => {
       if (isAppletPath(req.url)) {
-        this.applets.refuseUpgrade(socket);
+        this.applets.refuseUpgrade(req, socket);
         return;
       }
       wss.handleUpgrade(req, socket, head, (ws) => wss.emit("connection", ws, req));

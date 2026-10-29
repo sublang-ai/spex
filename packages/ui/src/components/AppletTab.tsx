@@ -5,7 +5,8 @@
 // applet's capability path and fills the pane with an embedded browser
 // frame there, sandboxed so the page's origin is opaque — it reaches
 // neither this page nor its token, keeps no storage, and reads only its
-// capability's own paths. One line above names the spec package and
+// capability's own paths — and sent no referrer, so it learns nothing
+// of this page's address. One line above names the spec package and
 // version and offers Reload; a refusal shows its cause in the frame's
 // place.
 
@@ -111,6 +112,7 @@ export function AppletTab({
           })}
           src={source}
           sandbox={APPLET_SANDBOX}
+          referrerPolicy="no-referrer"
           data-testid="applet-frame"
           className="min-h-0 w-full flex-1 border-0 bg-white"
         />
